@@ -5,9 +5,11 @@ namespace Elsa.Persistence.EntityFramework;
 /// <summary>
 /// What <see cref="EfSchemaFamilyCatalog.Discover"/> read off one <see cref="EfSchemaFamilyAttribute"/> declaration: the
 /// family, the canonical name of its owning EF module as that module's <see cref="EfModuleAttribute"/> spells it, the
-/// version this build writes, and the assembly that declared it.
+/// version this build writes, and the assembly that declared it. <see cref="Module"/> is <see langword="null"/> for a
+/// family shared by no single EF module: one whose declaration named none, because shared mapping code owns it rather
+/// than one module's own assembly.
 /// </summary>
-public sealed record EfSchemaFamilyDescriptor(string Name, string Module, string CurrentVersion, Assembly Assembly)
+public sealed record EfSchemaFamilyDescriptor(string Name, string? Module, string CurrentVersion, Assembly Assembly)
 {
     /// <summary>
     /// The versions this declaration can read, as opaque labels in chain order ending at <see cref="CurrentVersion"/>

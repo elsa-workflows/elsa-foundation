@@ -94,6 +94,18 @@ public sealed class EfSchemaReadabilitySourceTests : IDisposable
         Assert.Empty(generations.ReadableVersions);
     }
 
+    /// <summary>A family shared by no single EF module (spec 180, FR-001) reports an entry that names none, end to end
+    /// through <see cref="ReadabilityEntry.EfModule"/>, rather than a sentinel value a B5 or fleet-view consumer might
+    /// mistake for a real module name.</summary>
+    [Fact]
+    public void A_shared_family_reports_an_entry_naming_no_module()
+    {
+        var entry = Assert.Single(EfSchemaReadabilitySource.Read([Declaration("Finalization", "1", module: null)]).Entries);
+
+        Assert.Null(entry.EfModule);
+        Assert.Equal(["1"], entry.ReadableVersions);
+    }
+
     [Fact]
     public void Declarations_that_disagree_on_the_owning_module_report_no_readable_version_and_log_the_disagreement()
     {
@@ -112,6 +124,19 @@ public sealed class EfSchemaReadabilitySourceTests : IDisposable
         Assert.Contains("'Sales'", error.Message, StringComparison.Ordinal);
         Assert.Contains("'Billing'", error.Message, StringComparison.Ordinal);
         Assert.Contains("Orders", error.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>A declaration naming a module disagreeing with one declaring the family shared (no module) is the same
+    /// isolation path as two disagreeing modules: it still picks a deterministic (here, <see langword="null"/>) module
+    /// for the entry rather than failing the whole report.</summary>
+    [Fact]
+    public void A_declaration_naming_a_module_disagreeing_with_a_shared_declaration_still_picks_a_module_deterministically()
+    {
+        var section = EfSchemaReadabilitySource.Read([Declaration("Orders", "1", "Sales"), Declaration("Orders", "1", module: null)]);
+
+        var entry = Assert.Single(section.Entries);
+        Assert.Null(entry.EfModule);
+        Assert.Empty(entry.ReadableVersions);
     }
 
     /// <summary>Bite-proof: an implementation that drops a malformed family instead of isolating it still passes every
@@ -173,7 +198,7 @@ public sealed class EfSchemaReadabilitySourceTests : IDisposable
 
     private static ReadabilityEntry[] Ordered(IEnumerable<ReadabilityEntry> entries) => [.. entries.OrderBy(entry => entry.Family, StringComparer.Ordinal)];
 
-    private static EfSchemaFamilyDescriptor Declaration(string family, string version, string module = "Sales") =>
+    private static EfSchemaFamilyDescriptor Declaration(string family, string version, string? module = "Sales") =>
         new(family, module, version, typeof(EfSchemaReadabilitySourceTests).Assembly);
 
     private Assembly LoadPackage(string module, SyntheticFamily family)

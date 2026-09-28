@@ -71,7 +71,7 @@ public sealed class EfSchemaFamilyCatalogTests : IDisposable
     /// <summary>
     /// Shared mapping code - #2120's <c>SchemaFinalization</c> is the first case - has no single owning EF module. The
     /// two-argument declaration in an assembly with no <c>[EfModule]</c> of its own is accepted, and reads as
-    /// <see cref="EfSchemaFamilyAttribute.SharedModule"/> rather than a module name.
+    /// <see langword="null"/> rather than a module name.
     /// </summary>
     [Fact]
     public void A_shared_family_in_an_assembly_that_declares_no_module_is_accepted()
@@ -81,12 +81,13 @@ public sealed class EfSchemaFamilyCatalogTests : IDisposable
         var family = Assert.Single(EfSchemaFamilyCatalog.Discover([mapping]));
 
         Assert.Equal("SchemaFinalization", family.Name);
-        Assert.Equal(EfSchemaFamilyAttribute.SharedModule, family.Module);
+        Assert.Null(family.Module);
         Assert.Equal("1", family.CurrentVersion);
     }
 
     /// <summary>Several loaded copies of the same shared declaration are still two descriptors naming the same
-    /// (shared) owner, exactly as two copies of an owned family are (combining them is the reader's decision).</summary>
+    /// (shared, null) owner, exactly as two copies of an owned family are (combining them is the reader's
+    /// decision).</summary>
     [Fact]
     public void Two_shared_declarations_of_the_same_family_are_both_discovered_naming_the_shared_owner()
     {
@@ -96,7 +97,7 @@ public sealed class EfSchemaFamilyCatalogTests : IDisposable
         var families = EfSchemaFamilyCatalog.Discover([first, second]);
 
         Assert.Equal(2, families.Count);
-        Assert.All(families, family => Assert.Equal(EfSchemaFamilyAttribute.SharedModule, family.Module));
+        Assert.All(families, family => Assert.Null(family.Module));
     }
 
     /// <summary>

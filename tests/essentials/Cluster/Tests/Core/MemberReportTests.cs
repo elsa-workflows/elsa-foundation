@@ -22,6 +22,7 @@ public sealed class MemberReportTests
     [
         new("customers", "OrdersModule", ["1", "2"], "db-a"),
         new("orders", "SalesModule", ["1", "2"], "db-a"),
+        new("orders", null, ["1", "2"], "db-a"),
         new("orders", "OrdersModule", ["2", "1"], "db-a"),
         new("orders", "OrdersModule", ["1"], "db-a"),
         new("orders", "OrdersModule", ["1", "2"], "db-b"),
@@ -43,13 +44,27 @@ public sealed class MemberReportTests
     }
 
     [Fact]
-    public void An_entry_needs_a_family_a_module_and_non_blank_version_labels()
+    public void An_entry_needs_a_family_and_non_blank_version_labels_but_its_module_may_be_blank_only_by_being_null()
     {
         Assert.ThrowsAny<ArgumentException>(() => new ReadabilityEntry(" ", "OrdersModule", ["1"]));
         Assert.ThrowsAny<ArgumentException>(() => new ReadabilityEntry("orders", "", ["1"]));
+        Assert.ThrowsAny<ArgumentException>(() => new ReadabilityEntry("orders", " ", ["1"]));
         Assert.ThrowsAny<ArgumentException>(() => new ReadabilityEntry("orders", "OrdersModule", ["1", " "]));
         Assert.ThrowsAny<ArgumentException>(() => new ReadabilityEntry("orders", "OrdersModule", ["1"], " "));
         Assert.ThrowsAny<ArgumentException>(() => new ReadabilityEntry("orders", "OrdersModule", ["1"], observedFinalizedVersion: " "));
+    }
+
+    /// <summary>A family shared by no single EF module (spec 180, FR-001) reports <see langword="null"/> rather than
+    /// throwing: the null-module invariant is "blank is refused", not "absent is refused".</summary>
+    [Fact]
+    public void An_entry_may_name_no_module_for_a_family_shared_by_none()
+    {
+        var shared = new ReadabilityEntry("finalization", null, ["1"]);
+
+        Assert.Null(shared.EfModule);
+        Assert.Equal(new ReadabilityEntry("finalization", null, ["1"]), shared);
+        Assert.Equal(new ReadabilityEntry("finalization", null, ["1"]).GetHashCode(), shared.GetHashCode());
+        Assert.NotEqual(Orders, shared);
     }
 
     [Fact]

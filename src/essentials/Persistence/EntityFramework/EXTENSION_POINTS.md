@@ -68,7 +68,8 @@ family and every conflicting declaration. Every other family is still reported n
 Shared mapping code - code that is not itself an `[EfModule]` but writes rows into several EF modules' contexts, such
 as `modelBuilder.MapXyz(...)` called from every module's `OnModelCreating` - has no single module to name as the
 family's owner. `[EfSchemaFamily(name, currentVersion)]`, the two-argument constructor, declares exactly that: its
-`Module` reads `EfSchemaFamilyAttribute.SharedModule` rather than a module name.
+`Module` reads `null` rather than a module name, on both the attribute and the descriptor `EfSchemaFamilyCatalog`
+reads off it, and on the `ReadabilityEntry` the readability report carries it into.
 `EfSchemaFamilyCatalog.Discover` accepts it only in an assembly that declares no `[EfModule]` of its own, so a module
 that owns its family still names its module explicitly rather than reaching for the shared form to avoid the "exactly
 one EF module" rule. Several loaded copies of one shared declaration - two generations of a package, or the same

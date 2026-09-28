@@ -22,10 +22,11 @@ public static class EfSchemaFamilyCatalog
     /// Enumerates every <see cref="EfSchemaFamilyAttribute"/> declared on <paramref name="assemblies"/>, one
     /// <see cref="EfSchemaFamilyDescriptor"/> per declaration. Refuses discovery, naming the assembly, when a declaration
     /// has no name or no current version, when its module is not one the same assembly declares with
-    /// <see cref="EfModuleAttribute"/>, when a family declared shared (<see cref="EfSchemaFamilyAttribute.SharedModule"/>)
-    /// sits in an assembly that declares an <see cref="EfModuleAttribute"/> of its own, or when one assembly declares a
-    /// family twice. The same family declared by two assemblies, such as two generations of one package, is two
-    /// descriptors: combining them is the caller's decision.
+    /// <see cref="EfModuleAttribute"/>, when a family declared shared - owned by no single EF module, so
+    /// <see cref="EfSchemaFamilyDescriptor.Module"/> reads <see langword="null"/> - sits in an assembly that declares an
+    /// <see cref="EfModuleAttribute"/> of its own, or when one assembly declares a family twice. The same family
+    /// declared by two assemblies, such as two generations of one package, is two descriptors: combining them is the
+    /// caller's decision.
     /// </summary>
     public static IReadOnlyList<EfSchemaFamilyDescriptor> Discover(IEnumerable<Assembly> assemblies)
     {
@@ -63,7 +64,7 @@ public static class EfSchemaFamilyCatalog
         // The two-argument constructor (name, currentVersion) declares a family shared by no single EF module; the
         // three-argument one (name, module, currentVersion) names its owner explicitly.
         var shared = declaration.ConstructorArguments.Count < 3;
-        var module = shared ? EfSchemaFamilyAttribute.SharedModule : Argument(declaration, 1);
+        var module = shared ? null : Argument(declaration, 1);
         var currentVersion = Argument(declaration, shared ? 1 : 2);
 
         if (string.IsNullOrWhiteSpace(name))
@@ -79,7 +80,7 @@ public static class EfSchemaFamilyCatalog
                     $"{string.Join(", ", modules.Select(declared => $"'{declared}'"))}. An assembly that owns an [EfModule] names it as the family's " +
                     "owner instead of declaring the family shared.");
 
-            return new EfSchemaFamilyDescriptor(name, EfSchemaFamilyAttribute.SharedModule, currentVersion, assembly);
+            return new EfSchemaFamilyDescriptor(name, null, currentVersion, assembly);
         }
 
         var owner = modules.FirstOrDefault(declared => StringComparer.OrdinalIgnoreCase.Equals(declared, module));

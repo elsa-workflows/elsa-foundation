@@ -4,19 +4,21 @@ namespace Elsa.Cluster.Core.Models;
 /// What this host can read of one schema family (FR-019): the family, the EF module that owns it, its readable set as
 /// an ordered list of opaque version labels, the per-database identity of the finalization record the host read
 /// most recently, and the finalized version the host observed in that record (spec 181, FR-010; spec 186, MR-001). An
-/// entry that names no database identity counts for every database.
+/// entry that names no database identity counts for every database. <see cref="EfModule"/> is <see langword="null"/>
+/// for a family shared by no single EF module (spec 180, FR-001).
 /// </summary>
 public sealed record ReadabilityEntry
 {
     public ReadabilityEntry(
         string family,
-        string efModule,
+        string? efModule,
         IEnumerable<string> readableVersions,
         string? databaseIdentity = null,
         string? observedFinalizedVersion = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(family);
-        ArgumentException.ThrowIfNullOrWhiteSpace(efModule);
+        if (efModule is not null)
+            ArgumentException.ThrowIfNullOrWhiteSpace(efModule);
         ArgumentNullException.ThrowIfNull(readableVersions);
         if (databaseIdentity is not null)
             ArgumentException.ThrowIfNullOrWhiteSpace(databaseIdentity);
@@ -36,7 +38,9 @@ public sealed record ReadabilityEntry
 
     public string Family { get; }
 
-    public string EfModule { get; }
+    /// <summary>The EF module that owns the family, as its <c>[EfModule]</c> declares its name, or
+    /// <see langword="null"/> for a family shared by no single EF module.</summary>
+    public string? EfModule { get; }
 
     public IReadOnlyList<string> ReadableVersions { get; }
 

@@ -21,13 +21,14 @@ namespace Elsa.Cluster.Readability;
 /// </para>
 /// <para>
 /// When several declarations of one family are loaded, as an old and a new generation of a package are during a reload,
-/// the entry holds only the versions all of them read (FR-021). They must name the same owning EF module; if they do
-/// not, that one family is isolated rather than let it take the whole report down with it (FR-020): its entry names
-/// one of the disagreeing modules, credits no version, and an error is logged naming the family and every conflicting
-/// declaration, so <see cref="ReadsSchemaVersion"/> counts the host for that family and fails it — the conservative
-/// direction — while every other family is still reported normally. A declaration <see cref="EfSchemaFamilyCatalog"/>
-/// refuses still fails the whole report: a family left out of it would let a version finalize that this host cannot
-/// read.
+/// the entry holds only the versions all of them read (FR-021). They must name the same owning EF module - or agree
+/// that the family is shared, owned by none (spec 180, FR-001) - if they do not, that one family is isolated rather
+/// than let it take the whole report down with it (FR-020): its entry names one of the disagreeing modules, which may
+/// be <see langword="null"/> when a shared declaration disagrees with an owned one, credits no version, and an error
+/// is logged naming the family and every conflicting declaration, so <see cref="ReadsSchemaVersion"/> counts the host
+/// for that family and fails it — the conservative direction — while every other family is still reported normally. A
+/// declaration <see cref="EfSchemaFamilyCatalog"/> refuses still fails the whole report: a family left out of it would
+/// let a version finalize that this host cannot read.
 /// </para>
 /// <para>
 /// The database identity and the observed finalized version come from spec 181's finalization record, which B5 (#2101)
@@ -68,11 +69,11 @@ public sealed class EfSchemaReadabilitySource(ILogger<EfSchemaReadabilitySource>
             // version - the conservative direction, since ReadsSchemaVersion then counts and fails this host for it -
             // and the disagreement is logged so it is still visible.
             logger.LogError(
-                "Schema family '{Family}' is declared under more than one EF module: {Declarations}. A family belongs to " +
-                "exactly one EF module (spec 180, FR-001); this host reports it as reading no version until its " +
-                "declarations agree.",
+                "Schema family '{Family}' is declared under more than one EF module: {Declarations}. A family's " +
+                "declarations must agree on its owning EF module, owned or shared (spec 180, FR-001); this host " +
+                "reports it as reading no version until its declarations agree.",
                 declarations.Key,
-                string.Join(", ", declarations.Select(declaration => $"'{declaration.Module}' in {declaration.Assembly.GetName().Name}")));
+                string.Join(", ", declarations.Select(declaration => $"'{declaration.Module ?? "no module (shared)"}' in {declaration.Assembly.GetName().Name}")));
 
             return new ReadabilityEntry(declarations.Key, modules.Order(StringComparer.Ordinal).First(), []);
         }
