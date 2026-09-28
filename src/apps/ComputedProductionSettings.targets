@@ -1,0 +1,34 @@
+<Project>
+
+  <!--
+    Shared by every host under src/apps/ that declares Elsa shares only when it is built with computed package
+    versions (ADR 0067, #2084, #2126): Elsa.Workbench.csproj and Elsa.Foundation.Host.csproj both import this file.
+
+    The production configuration depends on how the importing host was built. A build with computed package
+    versions, the CI image among them, records every Elsa package in its deps.json at the version the feed
+    carries, so it ships ComputedVersions/appsettings.Production.json as its appsettings.Production.json: the
+    committed file plus a Nuplane:HostProvidedPackages list declaring the shares, which makes Nuplane refuse a
+    feed package needing a newer one. A source build records them at the dev version, so it ships the committed
+    file, which leaves them undeclared. ElsaVersionComputationCommit is the switch because it is what makes the
+    versions computed: the calculator's pack-properties file sets it, ahead of the importing project. Both
+    copies are Always, so an output directory that one kind of build wrote never keeps its file through the
+    other. HostProvidedPackagesGuardTests proves each way.
+
+    Every relative path below is bare, on purpose: MSBuild evaluates an Item's Include/Update/Remove relative to
+    the importing project's own directory, not this file's, so the same paths reach each host's own
+    appsettings.Production.json and ComputedVersions/appsettings.Production.json.
+  -->
+  <ItemGroup>
+    <Content Remove="ComputedVersions/**" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(ElsaVersionComputationCommit)' == ''">
+    <Content Update="appsettings.Production.json" CopyToOutputDirectory="Always" CopyToPublishDirectory="Always" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(ElsaVersionComputationCommit)' != ''">
+    <Content Remove="appsettings.Production.json" />
+    <Content Include="ComputedVersions/appsettings.Production.json" Link="appsettings.Production.json" CopyToOutputDirectory="Always" CopyToPublishDirectory="Always" />
+  </ItemGroup>
+
+</Project>

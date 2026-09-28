@@ -97,16 +97,19 @@ public sealed class DockerBuildContextGuardTests
     }
 
     /// <summary>
-    /// The same silent failure one level down (#2084). A Workbench image built with computed package versions gives its
+    /// The same silent failure one level down (#2084, #2126). A host image built with computed package versions gives its
     /// no-restore publish the calculator's pack-properties file, and <c>deps.json</c> takes a project reference's version
     /// from the restore, not the build: a publish whose restore was not given the file too stamps the computed versions
     /// into the assemblies and still records the dev versions in <c>deps.json</c>, which is what Nuplane checks a feed
-    /// package's range against. So the <c>RUN</c> that publishes restores first, with every property it publishes with.
+    /// package's range against. So the <c>RUN</c> that publishes restores first, with every property it publishes with -
+    /// true of both hosts that carry computed versions, Elsa.Workbench and Elsa.Foundation.Host.
     /// </summary>
-    [Fact]
-    public void The_workbench_publish_restores_with_every_property_it_publishes_with()
+    [Theory]
+    [InlineData("Elsa.Workbench")]
+    [InlineData("Elsa.Foundation.Host")]
+    public void The_host_publish_restores_with_every_property_it_publishes_with(string host)
     {
-        var dockerfile = File.ReadAllText(Path.Join(RepoRoot, "src", "apps", "Elsa.Workbench", "Dockerfile"));
+        var dockerfile = File.ReadAllText(Path.Join(RepoRoot, "src", "apps", host, "Dockerfile"));
 
         Assert.Contains("-p:CustomBeforeDirectoryBuildProps=", PublishInstruction(dockerfile), StringComparison.Ordinal);
         Assert.Empty(PublishPropertiesItsRestoreLacks(dockerfile));

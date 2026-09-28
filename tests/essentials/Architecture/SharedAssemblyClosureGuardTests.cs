@@ -51,10 +51,12 @@ public sealed class SharedAssemblyClosureGuardTests
         Assert.NotEmpty(Examined(workbench));
         Assert.Equal(workbench.Where(ProjectGraph.IsElsa), Examined(workbench));
 
-        // Elsa.Foundation.Host shares only its three CShells.*.Abstractions contracts today, so its closure holds
-        // with nothing to examine. That is stated here rather than skipped: once it shares an Elsa assembly this
-        // fails, and the theory above then checks that share's closure.
-        Assert.Empty(Examined(SharedAssemblies(ReadNuplane("Elsa.Foundation.Host"))));
+        // Elsa.Foundation.Host shares exactly Line A's ten contracts (#2126) beside its three CShells.*.Abstractions
+        // ones, and Line A is closed under its own dependencies by definition (ADR 0067), so the theory above holds
+        // with every one of the ten examined and none of them reaching outside the set.
+        var foundationHost = SharedAssemblies(ReadNuplane("Elsa.Foundation.Host"));
+        Assert.NotEmpty(Examined(foundationHost));
+        Assert.Equal(foundationHost.Where(ProjectGraph.IsElsa), Examined(foundationHost));
 
         // The edge behind the original bug, resolved from the real csproj files.
         Assert.Contains("Elsa.Events.Core", ElsaReferences["Elsa.Serialization.Core"]);

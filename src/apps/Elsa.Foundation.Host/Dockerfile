@@ -6,8 +6,10 @@
 # configuration (Directory.Build.props, Directory.Packages.props, NuGet.config).
 # Every feature still arrives at runtime as a .nupkg through the Nuplane
 # directory feed at /app/packages. The host has one compile-time infrastructure
-# reference for shared endpoint metadata, so its project and sources must also
-# be present in the Docker build context. Example:
+# reference for shared endpoint metadata, plus Line A, the ten cross-cutting
+# contract projects every host shares with every feature (ADR 0067, #2126) —
+# neither brings a feature implementation into this host — so its project and
+# their sources must also be present in the Docker build context. Example:
 #
 #   docker build -f src/apps/Elsa.Foundation.Host/Dockerfile \
 #                -t elsa-foundation-host:local-<sha> .
@@ -29,23 +31,79 @@ WORKDIR /src
 # ignores a missing import -- see the same step in the Workbench Dockerfile.
 COPY *.props *.targets NuGet.config ./
 
-# Restore inputs: the host plus its shared endpoint-metadata project.
+# Restore inputs: the host, its shared endpoint-metadata project, Line A, and the computed-production-settings
+# swap Elsa.Foundation.Host.csproj imports from src/apps/ (shared with Elsa.Workbench.csproj, #2126) -- MSBuild
+# treats a missing <Import> as an error, not a no-op the way it does for the root files above, so this one has
+# to be copied before restore too, or restore fails outright with MSB4019 rather than silently.
+COPY src/apps/ComputedProductionSettings.targets src/apps/
 COPY src/apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj src/apps/Elsa.Foundation.Host/
 COPY src/essentials/Api/AspNetCore/Elsa.Api.AspNetCore.csproj src/essentials/Api/AspNetCore/
+COPY src/essentials/Attention/Core/Elsa.Attention.Core.csproj src/essentials/Attention/Core/
+COPY src/essentials/Caching/Core/Elsa.Caching.Core.csproj src/essentials/Caching/Core/
+COPY src/essentials/Events/Core/Elsa.Events.Core.csproj src/essentials/Events/Core/
+COPY src/essentials/Expressions/Core/Elsa.Expressions.Core.csproj src/essentials/Expressions/Core/
+COPY src/essentials/Locking/Core/Elsa.Locking.Core.csproj src/essentials/Locking/Core/
+COPY src/essentials/Mediator/Core/Elsa.Mediator.Core.csproj src/essentials/Mediator/Core/
+COPY src/essentials/Pipelines/Core/Elsa.Pipelines.Core.csproj src/essentials/Pipelines/Core/
+COPY src/essentials/Primitives/Primitives/Elsa.Primitives.csproj src/essentials/Primitives/Primitives/
+COPY src/essentials/Serialization/Core/Elsa.Serialization.Core.csproj src/essentials/Serialization/Core/
+COPY src/essentials/Tasks/Core/Elsa.Tasks.Core.csproj src/essentials/Tasks/Core/
 # NU1603: tolerate a restore-only warning when a transitive preview dependency
 # resolves to a newer available version; does not relax real code warnings.
 RUN dotnet restore src/apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj \
     -p:WarningsNotAsErrors=NU1603
 
-# Now the host and shared infrastructure sources; publish framework-dependent
-# and portable.
+# Now the host and shared infrastructure sources.
 COPY src/apps/Elsa.Foundation.Host/ src/apps/Elsa.Foundation.Host/
 COPY src/essentials/Api/AspNetCore/ src/essentials/Api/AspNetCore/
-RUN dotnet publish src/apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj \
-    -c Release \
-    --no-restore \
-    -p:WarningsNotAsErrors=NU1603 \
-    -o /app/publish
+COPY src/essentials/Attention/Core/ src/essentials/Attention/Core/
+COPY src/essentials/Caching/Core/ src/essentials/Caching/Core/
+COPY src/essentials/Events/Core/ src/essentials/Events/Core/
+COPY src/essentials/Expressions/Core/ src/essentials/Expressions/Core/
+COPY src/essentials/Locking/Core/ src/essentials/Locking/Core/
+COPY src/essentials/Mediator/Core/ src/essentials/Mediator/Core/
+COPY src/essentials/Pipelines/Core/ src/essentials/Pipelines/Core/
+COPY src/essentials/Primitives/Primitives/ src/essentials/Primitives/Primitives/
+COPY src/essentials/Serialization/Core/ src/essentials/Serialization/Core/
+COPY src/essentials/Tasks/Core/ src/essentials/Tasks/Core/
+
+# Package versions (ADR 0067, spec 150, #2084, #2126). The Docker Images workflow passes
+# ELSA_PACKAGE_VERSIONS: the pack-properties file the version calculator writes for this
+# commit, gzipped and base64-encoded onto one line, because the builder takes build args
+# one per line. Both commands below read it through -p:CustomBeforeDirectoryBuildProps,
+# which gives every Elsa assembly, and every Elsa package in the deps.json, the version
+# the feed carries, and makes Elsa.Foundation.Host.csproj ship
+# ComputedVersions/appsettings.Production.json, which declares the Line A shares
+# host-provided. The restore has to see it too: deps.json takes a project reference's
+# version from the restore, not the build, so a publish alone would stamp the assemblies
+# and still record the dev versions. The restore above stays free of it and keeps its
+# cache; this one only rewrites the assets file from the packages that stage downloaded.
+#
+# Left at its default, source-build, the image is built as a source build: dev versions
+# and the committed appsettings.Production.json, which leaves the Line A shares
+# undeclared, since every feed package's range excludes a dev version. That is what
+# `docker build` does directly. An empty value is refused: it is what the workflow passes
+# when it lost the versions, and building on would ship an image that looks right and
+# checks nothing.
+ARG ELSA_PACKAGE_VERSIONS=source-build
+
+RUN set -- \
+    && case "$ELSA_PACKAGE_VERSIONS" in \
+        source-build) ;; \
+        "") echo "ELSA_PACKAGE_VERSIONS is empty. Pass the computed versions, or leave it unset for a source build." >&2; exit 1 ;; \
+        *) mkdir -p /tmp/elsa \
+            && printf '%s' "$ELSA_PACKAGE_VERSIONS" | base64 -d | gunzip > /tmp/elsa/package-versions.props \
+            && set -- -p:CustomBeforeDirectoryBuildProps=/tmp/elsa/package-versions.props ;; \
+    esac \
+    && dotnet restore src/apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj \
+        -p:WarningsNotAsErrors=NU1603 \
+        "$@" \
+    && dotnet publish src/apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj \
+        -c Release \
+        --no-restore \
+        -p:WarningsNotAsErrors=NU1603 \
+        "$@" \
+        -o /app/publish
 
 # ---- Runtime stage ----------------------------------------------------------
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
