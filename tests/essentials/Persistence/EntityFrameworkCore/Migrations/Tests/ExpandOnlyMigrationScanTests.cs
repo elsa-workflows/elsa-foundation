@@ -170,7 +170,7 @@ public sealed class ExpandOnlyMigrationScanTests
     [Fact]
     public void FreezeManifestReader_parses_baseline_ids_per_module_and_provider()
     {
-        var path = Path.Combine(Path.GetTempPath(), $"expand-only-guard-{Guid.NewGuid():N}.json");
+        var path = Path.Join(Path.GetTempPath(), $"expand-only-guard-{Guid.NewGuid():N}.json");
         File.WriteAllText(path, """{"Secrets":{"Sqlite":["20260910210210_Initial"]}}""");
         try
         {

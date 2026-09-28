@@ -204,9 +204,14 @@ internal static class ExpandOnlyMigrationScanner
                     // FR-004: what EF will execute, never source text. FR-005: Down is never read.
                     operations = assembly.CreateMigration(migrationType, EfRelationalProviderBinding.ExpectedProviderName(provider)).UpOperations;
                 }
-                catch (Exception exception)
+                catch (Exception exception) when (exception is not OutOfMemoryException)
                 {
-                    // FR-017: a migration the guard cannot build fails the guard, naming it. Never skipped.
+                    // FR-017: a migration the guard cannot build fails the guard, naming it. Never skipped. A
+                    // migration's Up() body is arbitrary user code reached only through reflection
+                    // (CreateMigration), so this cannot be narrowed to a specific exception type without risking
+                    // a legitimate build failure crashing the whole scan instead of being reported against the
+                    // one migration that caused it. The filter still lets a fatal OutOfMemoryException propagate
+                    // rather than being recorded as an ordinary scan failure.
                     failures.Add($"{descriptor.Name}/{provider} {id}: could not be built without a database ({exception.Message}).");
                     continue;
                 }
@@ -277,8 +282,7 @@ internal static class ExpandOnlyMigrationScanner
             if (!Directory.Exists(directory))
                 continue;
             foreach (var file in Directory.EnumerateFiles(directory, "*.cs", SearchOption.AllDirectories))
-                foreach (Match match in pattern.Matches(File.ReadAllText(file)))
-                    names.Add(match.Groups[1].Value);
+                names.UnionWith(pattern.Matches(File.ReadAllText(file)).Select(match => match.Groups[1].Value));
         }
 
         return names;
