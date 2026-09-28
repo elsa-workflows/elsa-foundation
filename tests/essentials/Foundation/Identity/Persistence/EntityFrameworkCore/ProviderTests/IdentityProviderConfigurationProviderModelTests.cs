@@ -1,6 +1,7 @@
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Persistence.EntityFramework;
+using Elsa.Persistence.EntityFramework.Tests;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
@@ -40,7 +41,7 @@ public sealed class IdentityProviderConfigurationProviderModelTests
 
         Assert.Equal(expectedProvider, context.Database.ProviderName);
         // The module's own tables; the finalization tables every module maps are pinned by the migration guards.
-        var entityTypes = context.Model.GetEntityTypes().Where(entity => !EfSchemaFinalization.Maps(entity.ClrType)).ToArray();
+        var entityTypes = context.Model.GetEntityTypes().ExcludingSchemaFinalization().ToArray();
         Assert.Equal(2, entityTypes.Length);
         Assert.Contains(entityTypes, entity => entity.ClrType == typeof(TenantProviderConfigurationEntity));
         Assert.Contains(entityTypes, entity => entity.ClrType == typeof(GlobalProviderConfigurationEntity));

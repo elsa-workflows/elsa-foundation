@@ -2,7 +2,7 @@ using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Persistence.EntityFrameworkCore;
 using Elsa.Activities.Design.Persistence.EntityFrameworkCore.Entities;
-using Elsa.Persistence.EntityFramework;
+using Elsa.Persistence.EntityFramework.Tests;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
@@ -22,7 +22,7 @@ public sealed class ActivitiesDesignScopeIdentityModelTests
         using var db = new ActivitiesDesignSqliteDbContext(options);
 
         // The finalization tables every module maps are keyed by schema family, not by tenant.
-        foreach (var type in db.Model.GetEntityTypes().Where(x => !x.IsOwned() && !x.ClrType.IsAbstract && !EfSchemaFinalization.Maps(x.ClrType)))
+        foreach (var type in db.Model.GetEntityTypes().Where(x => !x.IsOwned() && !x.ClrType.IsAbstract).ExcludingSchemaFinalization())
         {
             var key = type.FindPrimaryKey()!;
             if (type.ClrType == typeof(ActivityAvailabilitySettingsRecord))

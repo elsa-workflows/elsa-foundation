@@ -77,7 +77,9 @@ Not an extension point: every first-party EF module maps the finalization tables
 `modelBuilder.MapSchemaFinalization(<its history module name>)` after its own tables and before its provider
 configuration, so its own baseline migration creates them beside its history table
 ([spec 181](../../../../specs/181-schema-finalization-gate/spec.md), FR-002), and a third-party module does the
-same. The tables belong to their own schema family, `SchemaFinalization`, whatever module maps them;
+same. Secrets is the exception: its migration chain already shipped before spec 181, so it keeps that chain and
+gets the finalization tables from an incremental `SchemaFinalization` migration instead of its baseline. The
+tables belong to their own schema family, `SchemaFinalization`, whatever module maps them;
 `EfSchemaVersionMaterializationInterceptor` leaves them to `EfSchemaFinalizationStore`, which checks their stamp
 before it reads anything else. The store works on any context that maps them and holds no unsaved changes of its own.
 

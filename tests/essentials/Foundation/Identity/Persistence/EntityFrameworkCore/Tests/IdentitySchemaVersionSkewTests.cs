@@ -72,7 +72,7 @@ public sealed class IdentitySchemaVersionSkewTests : IAsyncLifetime
     public async Task Every_row_is_stamped_with_the_family_version_when_written()
     {
         // The finalization tables belong to their own family, and their store stamps them.
-        foreach (var entityType in Context.Model.GetEntityTypes().Where(entityType => !EfSchemaFinalization.Maps(entityType.ClrType)))
+        foreach (var entityType in Context.Model.GetEntityTypes().ExcludingSchemaFinalization())
         {
             var rows = await ((IQueryable<object>)typeof(DbContext).GetMethod(nameof(DbContext.Set), Type.EmptyTypes)!
                     .MakeGenericMethod(entityType.ClrType).Invoke(Context, null)!)

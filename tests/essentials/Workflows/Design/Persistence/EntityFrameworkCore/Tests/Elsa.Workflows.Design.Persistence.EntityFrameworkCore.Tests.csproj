@@ -21,5 +21,7 @@
     <Compile Include="..\..\..\..\..\Persistence\EntityFramework\Tests\EfSchemaVersionSkewTestSupport.cs" Link="EfSchemaVersionSkewTestSupport.cs" />
     <!-- Injects provider failures, such as a deadlock wrapped by SQL Server's execution strategy. -->
     <Compile Include="..\..\..\..\..\Persistence\EntityFramework\Tests\ProviderFailures.cs" Link="ProviderFailures.cs" />
+    <!-- Excludes the finalization tables every module maps from own-table assertions. -->
+    <Compile Include="..\..\..\..\..\Persistence\EntityFramework\Tests\EfSchemaFinalizationTestFilter.cs" Link="EfSchemaFinalizationTestFilter.cs" />
   </ItemGroup>
 </Project>
