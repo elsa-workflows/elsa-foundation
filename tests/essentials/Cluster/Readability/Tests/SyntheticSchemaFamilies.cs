@@ -60,7 +60,11 @@ internal sealed class PackageLoadContext() : AssemblyLoadContext($"readability-p
 {
     private static readonly Assembly HostPersistence = typeof(EfSchemaFamilyAttribute).Assembly;
 
-    public Assembly Load(byte[] image) => LoadFromStream(new MemoryStream(image));
+    public Assembly Load(byte[] image)
+    {
+        using var stream = new MemoryStream(image);
+        return LoadFromStream(stream);
+    }
 
     protected override Assembly? Load(AssemblyName assemblyName) =>
         assemblyName.Name == HostPersistence.GetName().Name ? LoadFromAssemblyPath(HostPersistence.Location) : null;
