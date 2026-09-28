@@ -222,7 +222,10 @@ the build fails each time with a message naming the family and versions.
   version and its ordered chain of upcasters, in the owning EF module's assembly. The declaration MUST be readable
   from assembly metadata without composing a shell or a container, as `[EfModule]` is (ADR 0076, D2), so the
   `dotnet elsa persistence` worker, the activation checks of spec 181 and B3's readability report
-  ([#2099](https://github.com/elsa-workflows/elsa-foundation/issues/2099)) all read the same facts.
+  ([#2099](https://github.com/elsa-workflows/elsa-foundation/issues/2099)) all read the same facts. A family whose
+  tables are mapped by shared persistence code into every EF module - for example the finalization record (#2120) -
+  is declared once, in the assembly that defines that shared mapping, which declares no `[EfModule]` of its own, and
+  has no owning module.
 - **FR-002**: A family's identity MUST be one declared value that every call site references. Call sites MUST NOT
   restate it as a string literal.
 - **FR-003**: An upcaster MUST transform exactly one version of one family into its immediate successor. It lives in
@@ -450,3 +453,6 @@ this. Q2's "fifteen stamped families" is corrected to twenty-six here rather tha
 requirement and Q2's skew rule, both written for the ten EF modules and two Publishing tables this spec's Current
 state describes as unstamped at this spec's writing, should be checked against what #2131 already shipped before
 this spec's implementation starts.
+
+**2026-09-28 note.** FR-001 gains the shared-family exception, needed for spec 181's finalization record (#2120), found
+while building B3 (#2099); lands with its PR, whose merge is the owner's approval.

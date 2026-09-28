@@ -45,6 +45,38 @@ module author declares one on their own assembly with no Elsa PR required.
 that provider is unsupported for the module rather than a missing case. See the package README's table for
 both types.
 
+## Schema family declaration
+
+An assembly-level `[EfSchemaFamily(name, module, currentVersion)]` (`AllowMultiple`) is a schema family's one
+declaration ([spec 180](../../../../specs/180-schema-upcaster-chain/spec.md), FR-001): the family its skew check names,
+the `[EfModule]` of the same assembly that owns it, and the version this build stamps and reads. A module that stamps
+rows declares one per family, passing the family's `SchemaFamily` and version constants.
+`EfSchemaFamilyCatalog.Discover(assemblies)` is the one place that reads it, as metadata matched by type name, so a
+package loaded with its own copy of this assembly is still read. A host's readability report
+([spec 183](../../../../specs/183-cluster-membership/spec.md), FR-020) is derived from these declarations alone, and
+`EfSchemaFamilyDeclarationGuardTests` fails the build when a family the stores check is undeclared or declared at
+another version. The upcaster chain of spec 180 (B4) joins this declaration; until then a build reads its current
+version only.
+
+A family whose loaded declarations disagree on the owning module is isolated rather than taking the rest of the host's
+readability report down with it: its own entry credits no readable version - a host is counted for it and never for a
+version it cannot read, the conservative direction (FR-020) - and `EfSchemaReadabilitySource` logs an error naming the
+family and every conflicting declaration. Every other family is still reported normally.
+
+### Shared families (no single owning module)
+
+Shared mapping code - code that is not itself an `[EfModule]` but writes rows into several EF modules' contexts, such
+as `modelBuilder.MapXyz(...)` called from every module's `OnModelCreating` - has no single module to name as the
+family's owner. `[EfSchemaFamily(name, currentVersion)]`, the two-argument constructor, declares exactly that: its
+`Module` reads `null` rather than a module name, on both the attribute and the descriptor `EfSchemaFamilyCatalog`
+reads off it, and on the `ReadabilityEntry` the readability report carries it into.
+`EfSchemaFamilyCatalog.Discover` accepts it only in an assembly that declares no `[EfModule]` of its own, so a module
+that owns its family still names its module explicitly rather than reaching for the shared form to avoid the "exactly
+one EF module" rule. Several loaded copies of one shared declaration - two generations of a package, or the same
+mapping assembly loaded through two load contexts - are still read and intersected exactly like several copies of an
+owned family. `EfSchemaFamilyDeclarationGuardTests` reads a declaration's version from its *last* constructor
+argument, so it resolves both the two-argument shared form and the three-argument owned form the same way.
+
 ## Apply policy
 
 `EfMigratePolicy.AutoMigrate` runs `Database.MigrateAsync` (EF 9+ lock).

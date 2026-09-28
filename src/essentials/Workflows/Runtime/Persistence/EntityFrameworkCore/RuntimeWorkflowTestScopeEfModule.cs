@@ -5,6 +5,7 @@ public static class RuntimeWorkflowTestScopeEfModule
 {
     public const string TableName = "elsa_runtime_workflow_test_scope";
     public const string SchemaVersion = "1.0.0";
+    public const string SchemaFamily = "RuntimeWorkflowTestScope";
     public const int IdentityMaximumLength = 128;
     public const int TenantMaximumLength = 256;
     public const int IdentityProjectionMaximumLength = 450;

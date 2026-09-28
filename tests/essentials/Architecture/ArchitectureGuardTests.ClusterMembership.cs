@@ -71,6 +71,7 @@ public sealed partial class ArchitectureGuardTests
     [InlineData("Elsa.Cluster.EntityFrameworkCore", "src/essentials/Cluster/EntityFrameworkCore/Elsa.Cluster.EntityFrameworkCore.csproj", true)]
     [InlineData("Elsa.Cluster.Orleans", "src/extensions/Orleans/src/Cluster/Elsa.Cluster.Orleans.csproj", true)]
     [InlineData("Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore", "src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj", true)]
+    [InlineData("Elsa.Cluster.Readability", "src/essentials/Cluster/Readability/Elsa.Cluster.Readability.csproj", true)]
     [InlineData(InProcessClusterMembership, "src/essentials/Cluster/InProcess/Elsa.Cluster.InProcess.csproj", false)]
     [InlineData("Elsa.Primitives", "src/essentials/Primitives/Primitives/Elsa.Primitives.csproj", false)]
     public void Membership_provider_projects_are_recognized(string name, string path, bool isProvider) =>
@@ -96,8 +97,8 @@ public sealed partial class ArchitectureGuardTests
             string.Join(Environment.NewLine, violations));
     }
 
-    /// <summary>Every cluster project but the contract and the in-process default is a provider, as is any concrete
-    /// persistence provider.</summary>
+    /// <summary>Every cluster project but the contract and the in-process default is a provider, or reaches one as the
+    /// readability source reaches EF Core, and so is any concrete persistence provider.</summary>
     private static bool IsMembershipProviderProject(string name, string relativePath) =>
         name.StartsWith("Elsa.Cluster.", StringComparison.Ordinal) && name is not ClusterMembershipContract and not InProcessClusterMembership ||
         PersistenceProviderNeutralityBoundary.IsConcreteProviderProject(name, relativePath);

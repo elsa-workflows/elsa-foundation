@@ -6,6 +6,7 @@ public static class RuntimeWorkflowAlterationEfModule
     public const string PlanTableName = "elsa_runtime_workflow_alteration_plan";
     public const string JobTableName = "elsa_runtime_workflow_alteration_job";
     public const string SchemaVersion = "1.0.0";
+    public const string SchemaFamily = "RuntimeWorkflowAlteration";
     public const int IdentityMaximumLength = 128;
     public const int TenantMaximumLength = 256;
     public const int IdentityProjectionMaximumLength = 450;
