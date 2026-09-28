@@ -1,9 +1,9 @@
 ---
 status: accepted
 date: 2026-09-22
-amended: 2026-09-27
+amended: 2026-09-28
 decision_context: Questions raised at the 2026-09-21 demo and relayed in the Teams thread on this programme; decided by Sipke Schoorstra on issues #1945, #1946 and #1947, which record the options and the evidence behind each.
-amendment_context: 2026-09-23, the fifteenth module's declared schema version was wired up — stamped on write and checked first on read in the publication-policy and projection-intent stores — so every count of checking read paths in this ADR now reads fifteen rather than fourteen. 2026-09-24, the destination changed from additive-only to the cluster version gate of ADR 0078, decided by Sipke Schoorstra, after additive-only was found to burden versions that have already shipped and to lose data when an older writer rewrites a newer row. 2026-09-27, the unit this ADR checks was corrected from "EF module" to schema family, and the description of a pre-load `IPackageActivationGate` gate that was never built was corrected to the enable-time guard that exists, both per the drift noted on #2096; accepted by Sipke Schoorstra on 2026-09-27 on issue #2096, matching the rollout decisions recorded on #2093.
+amendment_context: 2026-09-23, the fifteenth module's declared schema version was wired up — stamped on write and checked first on read in the publication-policy and projection-intent stores — so every count of checking read paths in this ADR now reads fifteen rather than fourteen. 2026-09-24, the destination changed from additive-only to the cluster version gate of ADR 0078, decided by Sipke Schoorstra, after additive-only was found to burden versions that have already shipped and to lose data when an older writer rewrites a newer row. 2026-09-27, the unit this ADR checks was corrected from "EF module" to schema family, and the description of a pre-load `IPackageActivationGate` gate that was never built was corrected to the enable-time guard that exists, both per the drift noted on #2096; accepted by Sipke Schoorstra on 2026-09-27 on issue #2096, matching the rollout decisions recorded on #2093. 2026-09-28, #2119 stamped every EF content table's schema version, so every count of schema families in this ADR now reads twenty-six rather than fifteen; approved by Sipke Schoorstra.
 ---
 
 # A module upgrades in place only when its persisted schema is unchanged
@@ -27,8 +27,8 @@ over time.
 **There is no compatibility rule today. There is an unstated assumption of a single writer version**,
 and two mechanisms that enforce it by accident rather than by design.
 
-**A version a reader does not recognise is reported as corruption.** Fifteen schema families declare a
-schema-version constant, and all fifteen now check it on a read path: twelve runtime families, inside
+**A version a reader does not recognise is reported as corruption.** Twenty-six schema families declare a
+schema-version constant, and all twenty-six now check it on a read path: twelve runtime families, inside
 the `Workflows.Runtime` EF module (`BookmarkStateEfModule`, `RuntimeActivationSlotEfModule`,
 `RuntimeActivityExecutionEfModule`, `RuntimeArtifactEfModule`, `RuntimeOperationalStateEfModule`,
 `RuntimePostCommitOutboxEfModule`, `RuntimeSchedulerPoisonEfModule`, `RuntimeTriggerBindingEfModule`,
@@ -56,12 +56,16 @@ operator meeting this during a deploy sees a data-incident message for what is a
 
 *Amended 2026-09-27.* This ADR first called these fifteen constants "EF modules". They are schema
 families instead: what a row's `SchemaVersion` carries, and what the mismatch check above compares.
-Fifteen families live inside three of the thirteen EF modules ADR 0076 D3 names, not one family per
+Twenty-six families live inside three of the thirteen EF modules ADR 0076 D3 names, not one family per
 module. Decided by Sipke Schoorstra on [#2093](https://github.com/elsa-workflows/elsa-foundation/issues/2093)
 (2026-09-27), settling drift the acceptance review on
 [#2096](https://github.com/elsa-workflows/elsa-foundation/issues/2096) found between this text and the
 code. Enable-time refusals stay per EF module ([ADR 0076](0076-persistence-tooling-runs-inside-the-host-closure.md)
 D9): a guard maps a feature to the module it depends on, not to one family inside it.
+
+*Amended 2026-09-28.* [#2119](https://github.com/elsa-workflows/elsa-foundation/issues/2119) (PR
+[#2131](https://github.com/elsa-workflows/elsa-foundation/pull/2131)) stamped every EF content table's
+schema version, growing the checked count from fifteen to twenty-six. Approved by Sipke Schoorstra.
 
 **The default migrate policy opens the skew window automatically.** `EfMigrateOptions.DefaultPolicy`
 is `EfMigratePolicy.AutoMigrate`, and `EfDatabaseMigrator.ApplyAsync` migrates in-process. The
@@ -180,4 +184,4 @@ activate stops mattering and runtime installation works on a cluster.
 - [ADR 0067](0067-package-versioning-uses-two-lines-with-computed-patch.md) — the versioning this rule constrains
 - [ADR 0076](0076-persistence-tooling-runs-inside-the-host-closure.md) — D9's activation guards, which this relies on
 - [ADR 0073](0073-ef-core-is-the-only-first-party-persistence-family.md) — the persistence family this applies to
-- Issues: #1945 (this rule), #1946 (hot reload), #1947 (multi-pod), #1144 (FR-1), #2093 (cluster rollout program), #2096 (this acceptance and the family/module and gate corrections)
+- Issues: #1945 (this rule), #1946 (hot reload), #1947 (multi-pod), #1144 (FR-1), #2093 (cluster rollout program), #2096 (this acceptance and the family/module and gate corrections), #2119 (schema family count correction, fifteen to twenty-six)
