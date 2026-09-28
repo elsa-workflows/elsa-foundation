@@ -57,7 +57,7 @@ on:
 # FR-020: every run from main - each push, each manual run, the bootstrap - is serialized on one group from its plan to
 # its write-back, so no two runs compute against the same record. A run in progress is never cancelled. GitHub drops a
 # queued run when a newer one queues, which FR-020 allows: the newer run publishes every change the dropped one would
-# have. The repair workflow (#2083) writes publish-state too, and must join this group. Every other run has its own.
+# have. publish-repair.yml writes publish-state too, and joins this same group. Every other run has its own.
 concurrency:
   group: ${{ github.ref == 'refs/heads/main' && 'publish-state' || format('packages-{0}', github.run_id) }}
   cancel-in-progress: false

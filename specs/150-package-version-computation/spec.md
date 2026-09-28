@@ -424,8 +424,8 @@ Recorded when #2079 implemented the calculator, `tools/versioning/Elsa.Versionin
   partial-publish edge case applied to a line that moves as one.
 - **A rewritten `main` stops publishing until the record names a commit of the new history.** The record's
   latest publish is no longer an ancestor of the rebuilt commits, so FR-021 refuses rather than renumbering
-  silently; the renumbering the edge case describes follows only once the record is settled, which FR-019
-  (written per package) does not yet say how to do for `last_publish_commit`.
+  silently; the renumbering the edge case describes follows only once the record is settled, which the repair
+  workflow's `last_publish_commit` reset mode does (Decisions, 2026-09-28).
 - **A dependency map that does not describe its commit is refused** — a project without a node, or a Line A
   that disagrees with `VersionLines.props` — since a project the map misses would own nothing and never
   publish.
@@ -494,3 +494,19 @@ Recorded when #2081 and #2082 made `packages.yml` publish through `tools/version
   it replaces stamped a global `/p:Version` and pushed with `--skip-duplicate` to feedz.io and nuget.org, which FR-005
   and FR-011 forbid, and a stable `4.0.0` on either feed would sort above every computed `4.0.N-preview`. Failing is the
   loud choice: a release that quietly published nothing, or published the old way, would each look like success.
+
+Recorded 2026-09-28, when #2083 gave the repair workflow its `last_publish_commit` reset mode
+([README, Repair](../../tools/versioning/README.md#repair)).
+
+- **The reset names a commit on `main` directly, with a reason.** An operator runs the repair workflow with
+  `--main-commit`, which resets `last_publish_commit` to that commit and records why in the write-back, rather than
+  computing it from anything the feed or the record already holds — a rewritten `main` leaves nothing else to compute
+  it from.
+- **A commit that is not on `main`'s history, at the commit the workflow runs from, is refused.** `--main-commit` must
+  be an ancestor of, or equal to, `--commit` — the commit the repair workflow runs from, `main`'s tip — or the run
+  refuses rather than pointing the record at history it does not descend from. Unlike a package's entry, which a
+  repair never lowers (FR-012), the reset may move `last_publish_commit` backwards: that is exactly how an operator
+  undoes a forward move a rewrite invalidated.
+- **The write is non-forced, in the `publish-state` concurrency group.** The reset pushes onto the tip the run read
+  (FR-017) the same way a publish's write-back does, so a write that lands while the run is in flight is never
+  overwritten, and it joins the group every run from `main` shares (FR-020).
