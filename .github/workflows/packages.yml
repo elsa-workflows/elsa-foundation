@@ -96,8 +96,9 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-nuget-
 
+      # Restore is locked (#2122) against the publisher's own committed lock file.
       - name: Build the publisher
-        run: dotnet build tools/versioning/Elsa.Versioning.Publisher -c Release
+        run: dotnet build tools/versioning/Elsa.Versioning.Publisher -c Release -p:RestoreLockedMode=true
 
       - name: Plan
         # Writes plan.json, computation.json, package-versions.props and packages.slnf (the affected set) under
@@ -116,10 +117,13 @@ jobs:
 
       # Restore, build and pack the affected set alone (FR-006a), each through the computed pack-properties file, which
       # PackageVersioning.props reads for every package's version and input fingerprint. No global /p:Version (FR-005).
+      # The restore is locked (#2122). The computed versions change the project-reference versions a lock file records,
+      # but locked mode compares a project reference by name alone, so it passes and rewrites nothing
+      # (docs/reference/nuget-lock-files.md).
       - name: Restore
         if: ${{ steps.plan.outputs.affected != '0' }}
         run: >-
-          dotnet restore "$RUNNER_TEMP/versions/packages.slnf"
+          dotnet restore "$RUNNER_TEMP/versions/packages.slnf" --locked-mode
           -p:CustomBeforeDirectoryBuildProps="$RUNNER_TEMP/versions/package-versions.props" -p:WarningsNotAsErrors=NU1603
 
       - name: Build
@@ -168,8 +172,9 @@ jobs:
         with:
           dotnet-version: 10.x
 
+      # Restore is locked (#2122) against the publisher's own committed lock file.
       - name: Build the publisher
-        run: dotnet build tools/versioning/Elsa.Versioning.Publisher -c Release
+        run: dotnet build tools/versioning/Elsa.Versioning.Publisher -c Release -p:RestoreLockedMode=true
 
       - name: Download packages
         uses: actions/download-artifact@v4
