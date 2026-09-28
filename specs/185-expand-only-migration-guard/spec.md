@@ -472,3 +472,6 @@ Recorded 2026-09-28, when the owner answered Q26 on #2093.
   before it is safe. The opt-out now also names the schema family and the version whose finalization makes the
   removal safe (FR-023), and `EfModuleMigrator` and the activation guard refuse to apply it, or to enable a feature
   that would, before then (FR-024, FR-025).
+
+*2026-09-28:* operations that carry no table (raw SQL, database-level alterations, unknown kinds) are named by their
+operation kind alone, found while building #2104; lands with its PR, whose merge is the owner's approval.

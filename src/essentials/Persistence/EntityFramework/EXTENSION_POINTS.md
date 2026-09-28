@@ -133,6 +133,11 @@ provider each module context is configured for, and `EfProviderBindingValidator`
 `Prepare` phase ahead of every migrator (and as the first `IHostedService` on a plain host). There is no extension
 point here: a module opts in by registering its migrations, and the validator reads what that registration recorded.
 
+A module composed once on the host container rather than by a shell feature, such as cluster membership, registers
+with `AddEfModuleHostMigrations<TContext>` instead: the same migrator and validation, run only as a plain-host hosted
+service. CShells copies every root registration into each shell, so the shell hook would otherwise migrate the module
+again on every shell activation, from the shell's configuration rather than the host's.
+
 ## Shared transactions
 
 `EfSharedTransaction` is the owner a cross-module write uses when several module contexts must commit
@@ -140,6 +145,15 @@ as one unit. It constructs fresh instances of the configured contexts, shares on
 transaction between them, commits or rolls back once, and refuses contexts that name different providers
 or connection strings. Module atomic writers join it through their transaction-factory seam
 (`EfSharedTransaction.BeginOperationAsync`); a writer that rolls back makes the owner rollback-only.
+
+## Expand-only migration guard
+
+Not an extension point in the usual sense: `ExpandOnlyMigrationGuard.Classify`/`Evaluate` read a
+migration's `Up` operations against a closed allowed list, and `ExpandOnlyMigrationOptOutAttribute` is
+the reviewed, per-migration permission for exactly the destructive operations it lists
+([spec 185](../../../../specs/185-expand-only-migration-guard/spec.md), #2104). Both types are public
+so a third-party module can run the same check from its own tests; the guard's own enforcement runs
+only over first-party modules. See the package README's table for both types.
 
 ## Ordinal string collation
 
