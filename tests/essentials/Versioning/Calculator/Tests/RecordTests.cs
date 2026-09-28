@@ -128,16 +128,39 @@ public sealed class RecordTests : SyntheticHistory
         Assert.All(computation.Packages, package => Assert.Equal("4.0.0", package.Version.Numeric));
     }
 
-    /// <summary>Spec 149: a dependency map with a schema version this calculator was not written for is refused, not half-read.</summary>
-    [Fact]
-    public void A_dependency_map_with_an_unknown_schema_version_is_refused()
+    /// <summary>
+    /// Spec 149: a dependency map with a schema version this calculator was not written for is refused, not half-read —
+    /// version 1 included, which records no pinned-transitive edges and so cannot say which packages a pin reaches.
+    /// </summary>
+    [Theory]
+    [InlineData(1)]
+    [InlineData(3)]
+    public void A_dependency_map_with_an_unknown_schema_version_is_refused(int schemaVersion)
     {
-        Repo.MapSchemaVersion = 2;
+        Repo.MapSchemaVersion = schemaVersion;
         var commit = Repo.Commit();
 
         var exception = Assert.Throws<InvalidOperationException>(() => Compute(commit));
 
-        Assert.Contains("schema version 2", exception.Message, StringComparison.Ordinal);
+        Assert.Contains($"schema version {schemaVersion}", exception.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A record entry naming a commit whose map predates the pinned-transitive edges is refused too, rather than read as
+    /// "this package reached no pin then" and compared against what it reaches now.
+    /// </summary>
+    [Fact]
+    public void A_record_entry_whose_commit_has_a_schema_1_map_is_refused()
+    {
+        Repo.MapSchemaVersion = 1;
+        var old = Repo.Commit("A map from before the pinned-transitive edges");
+        var record = new PublishedVersions(old, Record.Packages.Select(entry => entry with { Commit = old }));
+        Repo.MapSchemaVersion = 2;
+        var commit = Repo.Commit("Regenerate the map");
+
+        var exception = Assert.Throws<InvalidOperationException>(() => Compute(commit, record));
+
+        Assert.Contains($"at {old} has schema version 1", exception.Message, StringComparison.Ordinal);
     }
 
     /// <summary>

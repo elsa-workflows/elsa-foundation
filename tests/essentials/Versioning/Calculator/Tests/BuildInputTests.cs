@@ -5,16 +5,20 @@ namespace Elsa.Versioning.Calculator.Tests;
 /// <summary>Spec 150 US3, FR-003, FR-004 and SC-004: inputs that sit outside every project.</summary>
 public sealed class BuildInputTests : SyntheticHistory
 {
-    /// <summary>US3 scenario 1, SC-004: a third-party bump advances exactly the projects with an external edge to it.</summary>
+    /// <summary>
+    /// US3 scenario 1, SC-004: a third-party bump advances exactly the projects whose nuspec lists it — the one that
+    /// references it, and the one that reaches it through that project, whose nuspec transitive pinning writes it into.
+    /// </summary>
     [Fact]
-    public void A_third_party_bump_advances_exactly_the_projects_that_reference_it()
+    public void A_third_party_bump_advances_exactly_the_projects_whose_nuspec_lists_it()
     {
         Repo.PackageVersions["Cronos"] = "0.14.0";
 
         var computation = CommitAndCompute("Bump Cronos");
 
-        Assert.Equal(["Elsa.Tasks"], computation.Affected);
+        Assert.Equal(["Elsa.Tasks", "Elsa.Tasks.Schedules"], computation.Affected);
         Assert.Equal(["Directory.Packages.props: Cronos (changed)"], computation["Elsa.Tasks"].Reasons);
+        Assert.Equal(["Directory.Packages.props: Cronos, pinned transitively (changed)"], computation["Elsa.Tasks.Schedules"].Reasons);
     }
 
     /// <summary>A bump of a package only test projects reference advances no package.</summary>
@@ -24,18 +28,6 @@ public sealed class BuildInputTests : SyntheticHistory
         Repo.PackageVersions["xunit"] = "2.9.4";
 
         Assert.Empty(CommitAndCompute("Bump xunit").Affected);
-    }
-
-    /// <summary>
-    /// FR-003 as written: an entry no project references directly — a transitive pin — belongs to no project's edges,
-    /// so bumping it advances nothing.
-    /// </summary>
-    [Fact]
-    public void A_transitive_pin_bump_advances_nothing()
-    {
-        Repo.PackageVersions["Microsoft.OpenApi"] = "2.1.1";
-
-        Assert.Empty(CommitAndCompute("Bump a transitive pin").Affected);
     }
 
     /// <summary>US3 scenario 3: comments and layout in <c>Directory.Packages.props</c> advance nothing.</summary>

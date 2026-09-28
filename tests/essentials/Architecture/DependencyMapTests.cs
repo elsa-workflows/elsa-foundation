@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text.Json;
+using System.Xml.Linq;
 using Xunit;
 using static Elsa.Architecture.Tests.RepoPaths;
 
@@ -12,7 +13,8 @@ namespace Elsa.Architecture.Tests;
 /// <remarks>
 /// Freshness is the maps check's concern: it byte-compares the committed dataset with a regeneration. This class
 /// pins that the dataset answers correctly: ownership by the longest matching project directory (FR-006, SC-001),
-/// and a package id and version line on every packable node (FR-003, FR-004).
+/// a package id and version line on every packable node (FR-003, FR-004), and pinned-transitive edges that carry the
+/// pins they name (FR-012).
 /// </remarks>
 public sealed class DependencyMapTests
 {
@@ -85,6 +87,27 @@ public sealed class DependencyMapTests
             Nodes.Where(node => node.Line == "A").Select(node => node.Name).Order(StringComparer.Ordinal));
     }
 
+    /// <summary>
+    /// FR-012, as spec 150's calculator relies on it: a pinned-transitive edge sits on a packable node, names a package
+    /// <c>Directory.Packages.props</c> pins, at that pin, and never a package the node references directly.
+    /// </summary>
+    [Fact]
+    public void Pinned_transitive_edges_carry_the_pin_of_a_package_the_node_does_not_reference()
+    {
+        var pins = XDocument.Load(Path.Join(RepoRoot, "Directory.Packages.props")).Descendants("PackageVersion")
+            .ToDictionary(pin => (string)pin.Attribute("Include")!, pin => (string?)pin.Attribute("Version"), StringComparer.OrdinalIgnoreCase);
+        var edges = Nodes.SelectMany(node => node.Edges.Where(edge => edge.Type == "pinned-transitive").Select(edge => (Node: node, Edge: edge))).ToArray();
+
+        var violations = edges
+            .Where(pinned => !pinned.Node.Packable || pins.GetValueOrDefault(pinned.Edge.Id) != pinned.Edge.Version ||
+                             pinned.Node.Edges.Any(edge => edge.Type != "pinned-transitive" && string.Equals(edge.Id, pinned.Edge.Id, StringComparison.OrdinalIgnoreCase)))
+            .Select(pinned => $"{pinned.Node.Path}: {pinned.Edge.Id} {pinned.Edge.Version}")
+            .ToArray();
+
+        Assert.NotEmpty(edges);
+        Assert.True(violations.Length == 0, string.Join(Environment.NewLine, violations));
+    }
+
     /// <summary>FR-006 as a consumer implements it: the node whose directory is the longest prefix of the path.</summary>
     private static Node? OwningProject(string relativePath) =>
         Nodes.Where(node => relativePath.StartsWith(node.Directory, StringComparison.Ordinal)).MaxBy(node => node.Directory.Length);
@@ -131,16 +154,18 @@ public sealed class DependencyMapTests
         var dataset = JsonSerializer.Deserialize<Dataset>(File.ReadAllText(Path.Join(RepoRoot, "docs", "maps", "dependency-map.json")), JsonOptions)
                       ?? throw new InvalidOperationException("docs/maps/dependency-map.json is empty.");
 
-        return dataset.SchemaVersion == 1
+        return dataset.SchemaVersion == 2
             ? dataset.Nodes
-            : throw new InvalidOperationException($"docs/maps/dependency-map.json has schema version {dataset.SchemaVersion}; these tests read version 1.");
+            : throw new InvalidOperationException($"docs/maps/dependency-map.json has schema version {dataset.SchemaVersion}; these tests read version 2.");
     }
 
     private sealed record Dataset(int SchemaVersion, IReadOnlyList<Node> Nodes);
 
-    private sealed record Node(string Path, string Name, string Kind, bool Packable, string? PackageId, string? Line)
+    private sealed record Node(string Path, string Name, string Kind, bool Packable, string? PackageId, string? Line, IReadOnlyList<Edge> Edges)
     {
         /// <summary>The project's directory with its trailing slash, so a sibling sharing a name prefix never matches.</summary>
         public string Directory { get; } = Path[..(Path.LastIndexOf('/') + 1)];
     }
+
+    private sealed record Edge(string Type, string Id, string? Version);
 }

@@ -82,7 +82,7 @@ public sealed class PackageVersionBuildCheckTests : IDisposable
     }
 
     /// <summary>
-    /// packages.yml still stamps one /p:Version on every package until #2082 rewrites it, so without computed input a
+    /// A local pack may still name its version with /p:Version (packages.yml passes none), so without computed input a
     /// global Version becomes the package version; the dev version never overrides it.
     /// </summary>
     [Fact]

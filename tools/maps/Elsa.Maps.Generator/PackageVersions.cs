@@ -52,6 +52,13 @@ public sealed partial class PackageVersions
         return selected.Length > 0 ? selected : null;
     }
 
+    /// <summary>Every central version that applies to <paramref name="projectName"/>, by package id.</summary>
+    public IReadOnlyDictionary<string, string> For(string projectName) =>
+        _central.Select(entry => entry.Id).Distinct(StringComparer.Ordinal)
+            .Select(id => (Id: id, Version: Resolve(id, string.Empty, projectName)))
+            .Where(entry => entry.Version is not null)
+            .ToDictionary(entry => entry.Id, entry => entry.Version!, StringComparer.OrdinalIgnoreCase);
+
     /// <summary>
     /// Evaluates the only condition shapes the repo uses today: equality and inequality on
     /// <c>MSBuildProjectName</c>. Anything else is treated as non-matching rather than guessed at.

@@ -35,7 +35,7 @@ Core's current version rather than its own.
 3. **Given** a Line A contract change, **When** the pipeline runs, **Then** every Line A package
    moves to the same new version and no Line B version changes.
 4. **Given** any produced package, **When** its dependency ranges are inspected, **Then** each range
-   carries an upper bound at the next major.
+   on an Elsa package carries an upper bound at the next major (FR-007).
 
 ---
 
@@ -69,25 +69,30 @@ version; then merge two branches that both touch one package and confirm no vers
 ### User Story 3 - Bump a third-party dependency and have dependents reflect it (Priority: P2)
 
 A maintainer raises a third-party package version in `Directory.Packages.props`. The Elsa packages
-that reference it advance, because their published nuspec content genuinely changed. Packages that do
-not reference it stay where they are.
+whose nuspec lists it advance, because their published nuspec content genuinely changed: those that
+reference it, and those that reach it only through their other dependencies, whose nuspec central
+transitive pinning writes it into. Packages whose nuspec does not list it stay where they are.
 
 **Why this priority**: `Directory.Packages.props` sits at the repository root and is owned by no
 project, so change detection over owned files alone would miss it entirely and publish changed
 content at an unchanged version.
 
 **Independent Test**: Bump one third-party package used by a small number of projects, and confirm
-exactly those projects advance.
+exactly the projects whose packed nuspec lists it advance.
 
 **Acceptance Scenarios**:
 
 1. **Given** a commit raising one `PackageVersion` entry, **When** the pipeline runs, **Then** every
-   project with an external edge to that package advances and no other project does.
+   project with an external or pinned-transitive edge to that package (spec 149) advances and no other
+   project does.
 2. **Given** a commit changing `Directory.Build.props` or `NuGet.config`, **When** the pipeline runs,
    **Then** every project advances, because those inputs affect all of them and no edge exists to be
    precise with.
 3. **Given** a commit editing only a comment in `Directory.Packages.props`, **When** the pipeline
    runs, **Then** no project advances.
+4. **Given** a commit raising only the pin of a package no project references directly, such as a
+   security fix to `Microsoft.OpenApi`, **When** the pipeline runs, **Then** exactly the projects whose
+   nuspec lists it advance, so every published nuspec that names it carries the fixed floor.
 
 ---
 
@@ -109,7 +114,8 @@ versions and their floors did not move.
    `<major>.<minor>.<patch>-preview` with no run-number counter, and the patch is computed per
    FR-002.
 2. **Given** a build from a branch, **When** packages are produced, **Then** each carries a
-   branch-scoped prerelease label that cannot collide with a future `main` version.
+   branch-scoped prerelease label that cannot collide with a future `main` version, and none is
+   pushed to a feed.
 3. **Given** two consecutive `main` builds where one package changed, **When** the feed is inspected,
    **Then** only that package has a new version and the rest are unchanged.
 
@@ -191,8 +197,14 @@ versions and their floors did not move.
   that if a file kind starts shipping it stops being excluded. A README packed through
   `PackageReadmeFile` is the worked example: no project sets that property today, so READMEs ship
   nothing; were one to set it, that project's README would become package-affecting.
-- **FR-003**: A change to an entry in `Directory.Packages.props` MUST advance every project that has
-  an external edge to the affected package, and only those projects.
+- **FR-003**: A change to an entry in `Directory.Packages.props` MUST advance every project whose
+  nuspec lists the affected package, and only those projects: each with an external edge to it, and
+  each with a pinned-transitive edge to it, a package it reaches only through its other dependencies
+  whose pin central transitive pinning writes into its nuspec (spec 149 FR-012). A project whose set
+  of pinned-transitive edges changes MUST advance too, since its nuspec changed. A publish MAY also
+  name packages to advance although none of their inputs changed (force-advance), with a stated
+  reason that the computation records on each of them; a forced package advances exactly as a
+  changed one does, and FR-012 holds for it.
 - **FR-004**: A change to a repository-wide build input that has no external edge, specifically
   `Directory.Build.props` and `NuGet.config`, MUST advance every project.
 - **FR-005**: No `.csproj` under `src/` may declare a literal `<Version>`, and the packaging workflow
@@ -207,9 +219,11 @@ versions and their floors did not move.
   references has advanced. Its published artifact already declares a floor that the newer dependency
   satisfies, so repacking it would publish different content at an unchanged version and would raise
   its floor for no reason.
-- **FR-007**: Every nuspec dependency range MUST carry an upper bound at the next major.
+- **FR-007**: Every range on an Elsa package in a nuspec MUST carry an upper bound at the next major.
+  A third party's range carries none.
 - **FR-008**: While the 4.0 line is unreleased, every produced package MUST carry a `-preview` label
-  with no counter. Builds from a branch MUST carry a branch-scoped label instead.
+  with no counter. Builds from a branch MUST carry a branch-scoped label instead; they pack for CI
+  artifacts and MUST never push to a feed.
 - **FR-009**: Version computation MUST be deterministic for a given commit and a given revision of the
   last-published record (FR-014), independent of machine, clock, build number and working-directory
   state.
@@ -290,7 +304,7 @@ versions and their floors did not move.
   deleted, or the package id was renamed — stays in the file, so an id that returns continues from
   its last published version rather than restarting.
 - **Affected set**: the packages changed since their last-published record, per FR-002's change
-  detection plus the repository-wide input rules.
+  detection plus the repository-wide input rules, and the packages a force-advance names (FR-003).
 
 ## Success Criteria *(mandatory)*
 
@@ -300,7 +314,8 @@ versions and their floors did not move.
 - **SC-002**: No produced nuspec declares a dependency floor higher than the referenced package's
   actual current version.
 - **SC-003**: Building the same commit twice produces identical versions for every package.
-- **SC-004**: A third-party version bump advances exactly the projects that reference it.
+- **SC-004**: A third-party version bump advances exactly the projects whose nuspec lists it, whether
+  they reference it or reach it only transitively.
 - **SC-005**: Two pull requests touching the same package merge without a version conflict, and
   neither turns `main` red at publish.
 - **SC-006**: A preview build republishes no package whose owned files did not change.
@@ -375,21 +390,27 @@ Recorded when #2079 implemented the calculator, `tools/versioning/Elsa.Versionin
   files import — which is how `VersionLines.props` counts. Comments and layout in them take no part, as
   US3 scenario 3 has it for `Directory.Packages.props`. An import that cannot be resolved statically is
   refused rather than guessed at.
-- **FR-003 is applied as written, and a transitive pin advances nothing — pending the owner's decision.**
-  With `CentralPackageTransitivePinningEnabled`, NuGet writes a pinned package into the nuspec of every
-  project whose graph reaches it, even when the pin does not raise its version (checked by packing a
-  scratch project). So a bump also changes the nuspec of projects that reference the package only
-  transitively, and a pure pin such as `Microsoft.OpenApi` changes no project's edges at all. The
-  dependency map records no transitive edges, so the calculator advances no package for such a bump; the
-  only alternative available to it today is advancing every package, Line A included, which is the floor
-  inflation ADR 0067 exists to prevent. The plain consequence: a transitive-pin bump alone — including a
-  security-motivated one, such as a CVE fix landing in `Microsoft.OpenApi` — advances no package, so no
-  published nuspec carries the patched floor until an unrelated change repacks the package. This is left
-  for the owner to choose among: (a) accept it; (b) disable `CentralPackageTransitivePinningEnabled`; (c)
-  record transitive edges in the dependency map, so the packages whose nuspec actually changes advance; or
-  (d) a manual "force-advance" of named packages at publish time. The calculator's behavior stays exactly
-  as described above until that choice is made. Everything else in `Directory.Packages.props` advances
-  every package (FR-004).
+- **FR-003 follows the nuspec, transitive pins included, with a force-advance beside it** — the owner's
+  decision of 2026-09-27 on #2092, options (c) and (d) of the four put to them, which #2117 implements. With
+  `CentralPackageTransitivePinningEnabled`, NuGet writes a pinned package into the nuspec of every
+  project whose graph reaches it, through a package or a project reference, even when the pin does not
+  raise its version. Spec 149's dataset records those as pinned-transitive edges (its FR-012, read from
+  the list pack itself reads), and a package's inputs hold the `Directory.Packages.props` entries of every
+  package it has an external or pinned-transitive edge to. So a bump of a pure pin such as
+  `Microsoft.OpenApi`, a security fix among them, advances exactly the packages whose nuspec lists it, and
+  Line A moves when one of its members' nuspecs does: that is the truthful outcome, since the member's
+  package content changed. A package whose set of pinned-transitive edges changes advances although no
+  pin moved — for instance when a package it references starts referencing a pinned package — which
+  narrows FR-006a as a major advance does: its own files are unchanged, but its nuspec is not. The tool
+  package `dotnet-elsa` declares no dependencies; its pinned-transitive edges are the pinned packages whose
+  assemblies it carries, which change its content the same way. A widely used pin reaches most packages.
+  Measured on 2026-09-27, `Microsoft.Extensions.Primitives` reaches 76 of the 129 packages and
+  `Microsoft.Extensions.DependencyInjection.Abstractions` 92. Both reach Line A, so bumping either one
+  alone advances 85 and 97 packages respectively. The force-advance is the escape
+  hatch at publish time for a change no input shows: the calculator's `--force-advance` names packages and
+  `--force-reason` says why; each advances as a changed package does, with the reason among its reasons in
+  the output, and a name the commit has no package for is refused rather than advancing nothing. Everything
+  else in `Directory.Packages.props` advances every package (FR-004).
 - **A tool package's inputs include everything it carries.** `dotnet-elsa` packs as a tool, which carries
   the builds of the projects it references, `Elsa.Cli.Worker` among them, instead of declaring ranges on
   them, so FR-006a's reasoning does not reach it. Its inputs are the files of its whole reference closure,
@@ -412,15 +433,14 @@ Recorded when #2079 implemented the calculator, `tools/versioning/Elsa.Versionin
 Recorded when #2080 made packing read the calculator's output
 ([README, Packing](../../tools/versioning/README.md#packing)).
 
-- **FR-007 is applied to this repository's own ranges — a project reference, and any package the dependency map
-  records as one this repository produces. Third-party bounding is pending the owner's decision.** It says "every
-  nuspec dependency range", and an unbounded third-party range fails silently — NuGet may select a new major nobody
-  built against — where a bounded one fails loudly, as `NU1608` or `NU1107` for a consumer who moves past it on the
-  next .NET major. The trade-off is between that guidance and expressing a band this repository has actually tested
-  against; #2080 packs FR-007 for this repository's own ranges only, and leaves every third-party range exactly as
-  central package management restores it until the owner chooses. The bound, where it applies, is `(x+1).0.0`
-  exclusive, as FR-007 and ADR 0067 write it; NuGet orders a prerelease of the next major, such as `5.0.0-preview`,
-  below `5.0.0`, so such a range still admits it. Bounding at `(x+1).0.0-0` would not.
+- **FR-007 bounds every range on an Elsa package, and no other** — the owner's decision of 2026-09-27 on #2092. An
+  Elsa package is a project reference, or any package the dependency map records as one this repository produces.
+  A third party's range is left exactly as central package management restores it. Bounding it would fail loudly, as
+  `NU1608` or `NU1107` for a consumer who moves past the bound on the next .NET major, where leaving it open lets
+  NuGet select a new major nobody built against; NuGet's own guidance is not to cap third-party packages, and the
+  band ADR 0067 bounds is this repository's own. The bound is `(x+1).0.0` exclusive, as FR-007 and ADR 0067 write
+  it; NuGet orders a prerelease of the next major, such as `5.0.0-preview`, below `5.0.0`, so such a range still
+  admits it, and the owner kept that form the same day rather than bounding at `(x+1).0.0-0`.
 - **A package keeps the recorded version of each package it references that is not being published** — label
   included, so a branch build's range on an unchanged package starts at the version on the feed, not at one carrying
   the branch's label (SC-002).
@@ -428,6 +448,10 @@ Recorded when #2080 made packing read the calculator's output
   `preview` until the lines are released and empty after; a branch's is `branch-` and its sanitized name. Unlike the
   two line properties, the label is ordinary content, so emptying it advances every package; the release itself is
   #2085's to shape.
+- **Branch builds pack for CI artifacts and never push** — the owner's decision of 2026-09-27 on #2092. A branch label
+  names the branch, not the commit, so two commits on one branch compute one version with different contents, and a
+  feed would hold one of them behind a version the other also claims. Previews come from `main`. `packages.yml` packs
+  a branch build for its run's artifact and pushes nothing.
 - **A computed build stamps the package version on its assemblies too; a dev build does not.** With the calculator's
   output, `Version` is the package version, as `packages.yml`'s `/p:Version` makes it today. Without it only the
   package version is `<major.minor>.0-dev`: CLR activity versions and assembly-qualified names derive from the
@@ -435,3 +459,38 @@ Recorded when #2080 made packing read the calculator's output
 - **FR-018's fingerprint is a file in the package**, `elsa-input-fingerprint.json` at its root, because NuGet has no
   custom nuspec metadata and silently drops an element it does not know; "in its metadata" is met by the source
   commit, which is the nuspec's `repository` `commit`, and by the fingerprint travelling in the package itself.
+
+Recorded when #2081 and #2082 made `packages.yml` publish through `tools/versioning/Elsa.Versioning.Publisher`
+([README, Publishing](../../tools/versioning/README.md#publishing)).
+
+- **Whether `publish-state` exists decides what a push to `main` does.** Before it exists, a push to `main` packs every
+  package at the bootstrap's versions as a dry run, and publishes nothing; its job summary says the bootstrap is
+  pending. The bootstrap is a manual run of the workflow from `main` with `bootstrap: true`, because the owner's
+  decision of 2026-09-27 on #2092 makes the first publish wait for their go. It refuses when `publish-state` exists,
+  and while the feed holds, for any package it would push, a version that does not sort below the one it would push:
+  the old `4.0.0-preview.N` and branch builds sort above `4.0.0-preview` or beside it, and the owner removes them
+  first. A feed that cannot list a package's versions refuses it too. A bootstrap that stops part way records what it
+  pushed, so the next push to `main` publishes the rest as first publishes.
+- **A publish pushes in dependency order and stops at its first failure**, so no package reaches the feed with a range
+  on a version the feed does not hold as computed; what did land is recorded, per the partial-publish edge case.
+- **A push FR-018 confirms is recorded at the commit being built**, not at the feed copy's source commit: the equal
+  fingerprint shows the two commits hold the same inputs, so change detection against either agrees, and FR-013 keeps
+  the feed from supplying anything the record holds. The recovery needs no intervention when the next run sees the
+  same inputs for the unrecorded package, as a re-run or any later commit that leaves the package alone does. A later
+  commit that changes the package before any run records it computes the version the feed already holds, from other
+  inputs, and FR-018 fails the publish for the repair workflow (FR-019).
+- **The publish job re-establishes what the pack job assumed**: it asks the remote for `publish-state` again and
+  refuses when a publish finds it moved since the versions were computed, or the bootstrap finds it existing; and it
+  recomputes and requires the pack job's exact output, which runs FR-021 again. The write-back is one commit on top of
+  the tip the plan named, pushed without force, so a branch that moved anyway rejects it and fails the run, and the
+  next run records the packages through FR-018.
+- **FR-020 serializes the whole run, not only the push**: every run from `main` shares the concurrency group
+  `publish-state` from its plan to its write-back, since two runs computing against one record revision is the race
+  FR-020 exists to prevent. The repair workflow writes `publish-state` too, and joins the group.
+- **A branch build computes against the newest record revision whose latest publish it descends from**, or an empty
+  record when none is. FR-021 would otherwise refuse every branch cut before `main`'s latest publish, and a branch
+  build pushes nothing for the gate to protect.
+- **A GitHub Release publishes nothing until the 4.0 release cut, #2085**; its job fails and says so. The release path
+  it replaces stamped a global `/p:Version` and pushed with `--skip-duplicate` to feedz.io and nuget.org, which FR-005
+  and FR-011 forbid, and a stable `4.0.0` on either feed would sort above every computed `4.0.N-preview`. Failing is the
+  loud choice: a release that quietly published nothing, or published the old way, would each look like success.

@@ -2,8 +2,8 @@
 
   <!--
     Spec 090 adds source/binary-compatible default interface members to this public Core package.
-    This is a MINOR-compatible API expansion. Package versions are injected globally by
-    .github/workflows/packages.yml via /p:Version; do not add a project-local Version here.
+    This is a MINOR-compatible API expansion. Package versions are computed per package by
+    tools/versioning (spec 150); do not add a project-local Version here.
   -->
 
   <ItemGroup>

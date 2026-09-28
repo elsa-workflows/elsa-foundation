@@ -10,13 +10,14 @@ namespace Elsa.Versioning.Calculator;
 /// <remarks>
 /// This is the calculator's only source of those facts; it never scans a project file for them (spec 149 SC-005).
 /// The shape is checked when it is read, as spec 149 leaves to its consumers: a schema version this code was not
-/// written for is refused rather than half-understood.
+/// written for is refused rather than half-understood. That includes version 1, which predates the pinned-transitive
+/// edges: read as version 2, it would claim no package reaches any pin transitively.
 /// </remarks>
 internal sealed class DependencyMapDataset
 {
     public const string RelativePath = "docs/maps/dependency-map.json";
 
-    public const int SupportedSchemaVersion = 1;
+    public const int SupportedSchemaVersion = 2;
 
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower };
 
@@ -90,9 +91,11 @@ internal sealed class DependencyMapDataset
     {
         public MapEdge Validate(string source, string node) => Type switch
         {
-            "internal" when !string.IsNullOrEmpty(Path) => new MapEdge(true, Id ?? string.Empty, Path, null),
-            "external" when !string.IsNullOrEmpty(Id) => new MapEdge(false, Id, null, Version),
-            _ => throw new InvalidOperationException($"{source}: {node} has an edge that is neither an internal edge with a path nor an external edge with an id.")
+            "internal" when !string.IsNullOrEmpty(Path) => new MapEdge(MapEdgeKind.Internal, Id ?? string.Empty, Path, null),
+            "external" when !string.IsNullOrEmpty(Id) => new MapEdge(MapEdgeKind.External, Id, null, Version),
+            "pinned-transitive" when !string.IsNullOrEmpty(Id) && !string.IsNullOrEmpty(Version) => new MapEdge(MapEdgeKind.PinnedTransitive, Id, null, Version),
+            _ => throw new InvalidOperationException(
+                $"{source}: {node} has an edge that is not an internal edge with a path, an external edge with an id, or a pinned-transitive edge with an id and a version.")
         };
     }
 }
@@ -105,5 +108,19 @@ internal sealed record MapNode(string Path, string Name, bool Packable, string? 
     public string Directory { get; } = Path[..(Path.LastIndexOf('/') + 1)];
 }
 
-/// <summary>A dependency: on another project in this repository (internal), or on an external package.</summary>
-internal sealed record MapEdge(bool Internal, string Id, string? Path, string? Version);
+/// <summary>
+/// A dependency: on another project in this repository (internal), on an external package the project references
+/// (external), or on one central package management pins for it because it reaches that package only transitively
+/// (pinned-transitive), which its nuspec lists all the same.
+/// </summary>
+internal sealed record MapEdge(MapEdgeKind Kind, string Id, string? Path, string? Version)
+{
+    public bool Internal => Kind == MapEdgeKind.Internal;
+}
+
+internal enum MapEdgeKind
+{
+    Internal,
+    External,
+    PinnedTransitive
+}
