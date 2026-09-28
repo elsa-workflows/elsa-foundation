@@ -182,6 +182,23 @@ public sealed class EfSchemaVersionOrderingGuardTests
         }
     }
 
+    /// <summary>
+    /// #2120: the finalization store every EF module maps checks a record row's stamp with <c>EnsureReadable</c> and then
+    /// parses its JSON through a receiverless <c>Deserialize</c> helper. The guard must see both, or the ordering rule
+    /// would pass over it vacuously.
+    /// </summary>
+    [Fact]
+    public void Widened_guard_examines_the_finalization_store()
+    {
+        var store = Directory.EnumerateFiles(Path.Join(RepoRoot, "src"), "EfSchemaFinalizationStore.cs", SearchOption.AllDirectories)
+            .Where(file => !IsBuildOutput(file))
+            .Select(File.ReadAllText)
+            .Single();
+
+        Assert.True(CountCalls(store) > 0, "Expected the guard to find an EfSchemaVersion check in the finalization store.");
+        Assert.True(CountDeserializeCalls(store) > 0, "Expected the guard to find a deserialize call in the finalization store.");
+    }
+
     [Theory]
     [MemberData(nameof(DeserializeBeforeCheckFixtures))]
     public void Widened_detector_flags_a_deserialize_call_earlier_in_the_method_than_the_version_check(string name, string source)

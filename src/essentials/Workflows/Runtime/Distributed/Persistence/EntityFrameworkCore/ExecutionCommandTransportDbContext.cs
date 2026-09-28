@@ -17,6 +17,7 @@ public abstract class ExecutionCommandTransportDbContext(DbContextOptions option
         modelBuilder.HasElsaDefaultSchema(this);
         modelBuilder.ApplyConfiguration(new ExecutionCommandStreamHeadEntityConfiguration());
         modelBuilder.ApplyConfiguration(new ExecutionCommandTransportItemEntityConfiguration());
+        modelBuilder.MapSchemaFinalization(ExecutionCommandTransportEfModule.HistoryModuleName);
         ConfigureProvider(modelBuilder);
         // Installed unconditionally, so this context reads a frame whatever wrote it. Nothing here enables an
         // encoder: with no codec configured these columns are written exactly as they were before.

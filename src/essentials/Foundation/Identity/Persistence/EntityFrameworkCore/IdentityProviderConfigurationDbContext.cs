@@ -22,6 +22,7 @@ public abstract class IdentityProviderConfigurationDbContext(DbContextOptions op
         modelBuilder.HasElsaDefaultSchema(this);
         modelBuilder.ApplyConfiguration(new TenantProviderConfigurationEntityConfiguration());
         modelBuilder.ApplyConfiguration(new GlobalProviderConfigurationEntityConfiguration());
+        modelBuilder.MapSchemaFinalization(IdentityProviderConfigurationEfModule.HistoryModuleName);
         ConfigureProvider(modelBuilder);
         modelBuilder.IndexSchemaVersionStamps();
     }

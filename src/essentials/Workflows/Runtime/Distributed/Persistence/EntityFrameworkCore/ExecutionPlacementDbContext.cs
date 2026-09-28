@@ -15,6 +15,7 @@ public abstract class ExecutionPlacementDbContext(DbContextOptions options) : Db
         // The host's optional schema; nothing changes when none is configured.
         modelBuilder.HasElsaDefaultSchema(this);
         modelBuilder.ApplyConfiguration(new ExecutionPlacementLeaseEntityConfiguration());
+        modelBuilder.MapSchemaFinalization(ExecutionPlacementEfModule.HistoryModuleName);
         ConfigureProvider(modelBuilder);
         modelBuilder.IndexSchemaVersionStamps();
     }

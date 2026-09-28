@@ -3,6 +3,7 @@ using Elsa.Foundation.Identity.Core.Ownership;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Persistence.EntityFramework;
+using Elsa.Persistence.EntityFramework.Tests;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.EntityFrameworkCore;
@@ -53,7 +54,7 @@ internal static class IdentityIamProviderSmoke
                 typeof(UserNameReservationEntity), typeof(EmailReservationEntity), typeof(RoleNameReservationEntity),
                 typeof(MutationReceiptEntity)
             }.OrderBy(type => type.FullName),
-            context.Model.GetEntityTypes().Select(entity => entity.ClrType).OrderBy(type => type.FullName));
+            context.Model.GetEntityTypes().ExcludingSchemaFinalization().Select(entity => entity.ClrType).OrderBy(type => type.FullName));
         await IdentityEfProviderDatabaseProvisioning.EnsureModuleTablesAsync(
             context,
             provider,

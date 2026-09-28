@@ -17,3 +17,10 @@ using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore;
 // Mirrors the [EfModule] name above into elsa-package.json's extensions.efModules (spec 171 slice 11,
 // #1881); EfModuleDescriptorTests guards that the two never drift apart.
 [assembly: ManifestExtension("efModules", "Workflows.Publishing")]
+
+// The schema families this module owns (spec 180, FR-001), each at the version its skew check reads. A host's
+// readability report is derived from these alone (spec 183, FR-020); EfSchemaFamilyDeclarationGuardTests fails the
+// build when a family the stores check is not declared here, or is declared at another version.
+[assembly: EfSchemaFamily(PublishingLedgerEfModule.SchemaFamily, "Workflows.Publishing", PublishingLedgerEfModule.ContentSchemaVersion)]
+[assembly: EfSchemaFamily(PublishingPolicyProjectionEfModule.SchemaFamily, "Workflows.Publishing", PublishingPolicyProjectionEfModule.SchemaVersion)]
+[assembly: EfSchemaFamily(PublishingSnapshotReviewEfModule.SchemaFamily, "Workflows.Publishing", PublishingSnapshotReviewEfModule.SchemaVersion)]

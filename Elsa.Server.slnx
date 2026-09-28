@@ -119,6 +119,7 @@
     <Project Path="src/essentials/Cluster/Core/Elsa.Cluster.Core.csproj" />
     <Project Path="src/essentials/Cluster/EntityFrameworkCore/Elsa.Cluster.EntityFrameworkCore.csproj" />
     <Project Path="src/essentials/Cluster/InProcess/Elsa.Cluster.InProcess.csproj" />
+    <Project Path="src/essentials/Cluster/Readability/Elsa.Cluster.Readability.csproj" />
   </Folder>
   <Folder Name="/src/essentials/Cli/">
     <Project Path="src/essentials/Cli/Elsa.Cli.csproj" />
@@ -387,6 +388,9 @@
     <Project Path="tests/essentials/Cluster/EntityFrameworkCore/ProviderTests/Elsa.Cluster.EntityFrameworkCore.ProviderTests.csproj" />
     <Project Path="tests/essentials/Cluster/EntityFrameworkCore/Testing/Elsa.Cluster.EntityFrameworkCore.Testing.csproj" />
     <Project Path="tests/essentials/Cluster/EntityFrameworkCore/Tests/Elsa.Cluster.EntityFrameworkCore.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/essentials/Cluster/Readability/">
+    <Project Path="tests/essentials/Cluster/Readability/Tests/Elsa.Cluster.Readability.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/essentials/Cli/">
     <Project Path="tests/essentials/Cli/Tests/Elsa.Cli.Tests.csproj" />

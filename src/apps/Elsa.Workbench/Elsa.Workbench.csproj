@@ -38,28 +38,8 @@
 		</Content>
 	</ItemGroup>
 
-	<!--
-		The production configuration depends on how this host was built (#2084). A build with computed package versions,
-		the CI image among them, records every Elsa package in its deps.json at the version the feed carries, so it ships
-		ComputedVersions/appsettings.Production.json as its appsettings.Production.json: the committed file plus a
-		Nuplane:HostProvidedPackages list declaring the Elsa shares, which makes Nuplane refuse a feed package needing a
-		newer one. A source build records them at the dev version, so it ships the committed file, which leaves them
-		undeclared. ElsaVersionComputationCommit is the switch because it is what makes the versions computed: the
-		calculator's pack-properties file sets it, ahead of this project. Both copies are Always, so an output directory
-		that one kind of build wrote never keeps its file through the other. HostProvidedPackagesGuardTests proves each way.
-	-->
-	<ItemGroup>
-		<Content Remove="ComputedVersions/**" />
-	</ItemGroup>
-
-	<ItemGroup Condition="'$(ElsaVersionComputationCommit)' == ''">
-		<Content Update="appsettings.Production.json" CopyToOutputDirectory="Always" CopyToPublishDirectory="Always" />
-	</ItemGroup>
-
-	<ItemGroup Condition="'$(ElsaVersionComputationCommit)' != ''">
-		<Content Remove="appsettings.Production.json" />
-		<Content Include="ComputedVersions/appsettings.Production.json" Link="appsettings.Production.json" CopyToOutputDirectory="Always" CopyToPublishDirectory="Always" />
-	</ItemGroup>
+	<!-- The computed-vs-source-build production configuration swap this host shares with Elsa.Foundation.Host (#2084, #2126). -->
+	<Import Project="$(MSBuildThisFileDirectory)../ComputedProductionSettings.targets" />
 
 	<ItemGroup>
 		<ProjectReference Include="..\..\essentials\Activities\Scheduling\Elsa.Activities.Scheduling.csproj" />
@@ -96,6 +76,7 @@
 		<ProjectReference Include="..\..\essentials\Activities\Primitives\Elsa.Activities.Primitives.csproj" />
 		<ProjectReference Include="..\..\essentials\Activities\Sequence\Elsa.Activities.Sequence.csproj" />
 		<ProjectReference Include="..\..\essentials\Api\Capabilities\Elsa.Api.Capabilities.csproj" />
+		<ProjectReference Include="..\..\essentials\Cluster\Readability\Elsa.Cluster.Readability.csproj" />
 		<ProjectReference Include="..\..\essentials\Expressions\JavaScript\Elsa.Expressions.JavaScript.csproj" />
 		<ProjectReference Include="..\..\essentials\Expressions\JavaScript\Jint\Elsa.Expressions.JavaScript.Jint.csproj" />
 		<ProjectReference Include="..\..\essentials\Expressions\JavaScript\Rendering\Elsa.Expressions.JavaScript.Rendering.csproj" />

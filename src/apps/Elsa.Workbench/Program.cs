@@ -25,6 +25,7 @@ using Elsa.Api.Capabilities;
 using Elsa.Attention.Api;
 using Elsa.Caching.Memory;
 using Elsa.Cluster.Hosting;
+using Elsa.Cluster.Readability;
 using Elsa.Diagnostics.ConsoleLogStreaming;
 using Elsa.Diagnostics.OpenTelemetry;
 using Elsa.Diagnostics.StructuredLogs;
@@ -208,9 +209,12 @@ builder.Services.TryAddScoped<IShellReloader, NullShellReloader>();
 // Composed on the host container, before AddCShellsAspNetCore, per the extension's own requirement: it must be
 // registered before any EF feature is enabled (ADR 0076 D9), which is why an EF feature cannot bring it itself.
 builder.Services.AddEfPendingMigrationActivationGuard();
-// Cluster membership is selected once per host, here on the host container and never per shell (ADR 0078; spec 183,
-// FR-024). Nothing is registered unless the Elsa:Cluster:Membership section enables the durable EF provider, so a
-// Workbench that configures nothing stays a cluster of one; enabling it requires an explicit Elsa:Cluster:Membership:HostId.
+// Membership is selected per host, never per shell (spec 183, Decisions, Q20), so this host's readability report is
+// composed here, on the host container. It brings the in-process default, so an unclustered Workbench is a cluster of
+// one that reports the schema families it has loaded without any further configuration.
+builder.Services.AddEfSchemaReadability();
+// The durable EF provider replaces that default only when the Elsa:Cluster:Membership section enables it (ADR 0078;
+// spec 183, FR-024), and then requires an explicit Elsa:Cluster:Membership:HostId. It publishes the same report.
 builder.Services.AddConfiguredClusterMembership(configuration);
 builder.Services.AddDynamicEndpointApiExplorerRefresh();
 

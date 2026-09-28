@@ -85,7 +85,12 @@ internal static class Elsa3ImportNativeSmoke
             foreach (var context in new DbContext[] { import, activities, workflows })
                 EfProviderGuard.Ensure(context, expectedProvider);
             Assert.Equal(
-                [Elsa3ImportEfModule.CollectionTable, Elsa3ImportEfModule.DefinitionBindingTable, Elsa3ImportEfModule.ReceiptTable],
+                new[]
+                {
+                    Elsa3ImportEfModule.CollectionTable, Elsa3ImportEfModule.DefinitionBindingTable, Elsa3ImportEfModule.ReceiptTable,
+                    EfSchemaFinalization.RecordTableName(Elsa3ImportEfModule.HistoryModuleName),
+                    EfSchemaFinalization.DatabaseIdentityTableName(Elsa3ImportEfModule.HistoryModuleName)
+                }.Order(StringComparer.Ordinal),
                 import.Model.GetEntityTypes().Select(entity => entity.GetTableName()!).Order(StringComparer.Ordinal));
         }
         await db.CreateSchemaAsync();

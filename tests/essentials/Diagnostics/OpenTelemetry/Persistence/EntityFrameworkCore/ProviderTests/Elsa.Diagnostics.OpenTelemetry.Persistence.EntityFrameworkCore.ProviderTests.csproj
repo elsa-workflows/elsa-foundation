@@ -28,4 +28,9 @@
     <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Diagnostics\OpenTelemetry\Persistence\EntityFrameworkCore\Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Diagnostics\OpenTelemetry\Elsa.Diagnostics.OpenTelemetry.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <!-- Excludes the finalization tables every module maps from own-table assertions. -->
+    <Compile Include="..\..\..\..\..\Persistence\EntityFramework\Tests\EfSchemaFinalizationTestFilter.cs" Link="EfSchemaFinalizationTestFilter.cs" />
+  </ItemGroup>
 </Project>

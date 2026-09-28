@@ -26,7 +26,7 @@ and a durable provider is composed once on the host container, never per shell.
 - **Signature:** `ValueTask<TSection> ReadAsync(CancellationToken ct)`, where `TSection` is a `MemberReportSection` the contract defines. Today that is `ReadabilitySection`.
 - **Register:** as `IMemberReportSource<TSection>` on the host container, beside the provider, so every shell publishes the same report.
 - **Consumed by:** every provider, through `MemberReportComposition`, each time it publishes. Two sources for one section refuse the provider when it is constructed.
-- **Known implementations:** none yet. The readability source arrives with B3 ([#2099](https://github.com/elsa-workflows/elsa-foundation/issues/2099)).
+- **Known implementations:** `EfSchemaReadabilitySource` (`Elsa.Cluster.Readability`, B3, [#2099](https://github.com/elsa-workflows/elsa-foundation/issues/2099)) for `ReadabilitySection`: one entry per schema family whose `[EfSchemaFamily]` declaration is loaded in the process, from any load context, at the versions every loaded declaration of it reads. A host composes it with `AddEfSchemaReadability()`, which also registers the in-process default, so an unclustered host reports its readability with nothing else composed.
 
 ---
 

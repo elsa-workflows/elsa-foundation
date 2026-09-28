@@ -15,6 +15,7 @@ public static class RuntimeOperationalStateEfModule
     public const string RecurringScheduleTableName = "elsa_runtime_recurring_trigger_schedule";
     public const string RecurringScheduleProjectionStateTableName = "elsa_runtime_recurring_schedule_projection_state";
     public const string SchemaVersion = "1.0.0";
+    public const string SchemaFamily = "RuntimeOperationalState";
     public const int IdentityMaximumLength = 128;
     public const int IdentityProjectionMaximumLength = ((IdentityMaximumLength * sizeof(char) + 2) / 3) * 4;
     public const int CompositeIdentityMaximumLength = IdentityMaximumLength * 2 + 8;
