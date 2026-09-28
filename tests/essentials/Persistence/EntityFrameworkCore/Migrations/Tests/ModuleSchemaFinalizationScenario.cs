@@ -54,6 +54,20 @@ internal static class ModuleSchemaFinalizationScenario
         Assert.Equal(identities.Count, identities.Distinct(StringComparer.Ordinal).Count());
     }
 
+    /// <summary>
+    /// The enable-time guard finds each module's record table through the engine's own catalog, never the migrations
+    /// history (spec 171, FR-069): absent before the module's migrations run, present after, on every engine.
+    /// </summary>
+    public static async Task AssertRecordTablesAsync(string provider, string connectionString, bool expected, string? schema = null)
+    {
+        foreach (var type in ModuleContextCatalog.Contexts(provider))
+        {
+            await using var context = ModuleContextCatalog.Create(type, connectionString, schema: schema);
+            Assert.True(expected == await EfSchemaFinalizationCheck.RecordTableExistsAsync(context),
+                $"{type.Name}: expected its finalization record table to {(expected ? "exist" : "be absent")}.");
+        }
+    }
+
     private static SchemaFinalizationRecord Applied(Type context, SchemaFinalizationWrite write)
     {
         Assert.True(write.Applied, $"{context.Name}: an uncontended write lost its compare-and-set.");
