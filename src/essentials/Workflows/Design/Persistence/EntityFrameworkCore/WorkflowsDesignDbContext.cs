@@ -43,9 +43,7 @@ public abstract class WorkflowsDesignDbContext(DbContextOptions options) : DbCon
 
     protected abstract void ConfigureProvider(ModelBuilder modelBuilder);
 
-    string IEfSchemaVersionedContext.SchemaFamily => WorkflowsDesignEfModule.SchemaFamily;
-
-    string IEfSchemaVersionedContext.SchemaVersion => WorkflowsDesignEfModule.SchemaVersion;
+    EfSchemaChain IEfSchemaVersionedContext.SchemaChain => WorkflowsDesignEfModule.Chain;
 
     /// <summary>Every instance checks its rows' stamps, however its options were built.</summary>
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder) =>

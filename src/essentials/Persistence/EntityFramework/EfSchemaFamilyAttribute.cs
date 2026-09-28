@@ -14,8 +14,9 @@ namespace Elsa.Persistence.EntityFramework;
 /// <see langword="null"/>.
 /// </para>
 /// <para>
-/// Spec 180's upcaster chain (B4, #2100) joins this declaration. Until it does, a build reads only its
-/// <see cref="CurrentVersion"/>, which is what <see cref="EfSchemaFamilyDescriptor.ReadableVersions"/> reports.
+/// <see cref="Upcasters"/> is the family's ordered chain (spec 180, FR-001 and FR-004): the build reads its
+/// <see cref="CurrentVersion"/> and every predecessor the chain reaches without a gap, which is what
+/// <see cref="EfSchemaFamilyDescriptor.ReadableVersions"/> reports and what every store's read accepts.
 /// </para>
 /// <para>
 /// A family owned by shared mapping code that several EF modules' contexts call into - <c>modelBuilder.MapXyz(...)</c>
@@ -54,8 +55,20 @@ public sealed class EfSchemaFamilyAttribute : Attribute
     public string? Module { get; }
 
     /// <summary>
-    /// The version this build stamps on the family's rows and compares their stamps against: the same constant its
-    /// skew check passes to <see cref="EfSchemaVersion"/>.
+    /// The version this build stamps on the family's rows: the same constant its stores stamp, and the last version of
+    /// the chain.
     /// </summary>
     public string CurrentVersion { get; }
+
+    /// <summary>
+    /// The family's upcasters in chain order, oldest first: each a concrete <see cref="IEfSchemaUpcaster"/> carrying
+    /// <see cref="EfSchemaUpcasterAttribute"/>, each starting at the version the one before it produces, the last one
+    /// producing <see cref="CurrentVersion"/>. Empty for a family that has only ever had one version.
+    /// </summary>
+    /// <remarks>
+    /// A chain with a gap, a duplicate version, a branch or a cycle, or one that does not end at the current version,
+    /// fails the build (<c>EfSchemaFamilyDeclarationGuardTests</c>) and the family's registration at startup (FR-005).
+    /// A read never bridges a gap: a row stamped below one is skew.
+    /// </remarks>
+    public Type[] Upcasters { get; set; } = [];
 }

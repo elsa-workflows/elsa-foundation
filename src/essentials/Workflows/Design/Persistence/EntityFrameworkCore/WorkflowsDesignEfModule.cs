@@ -23,6 +23,9 @@ public static class WorkflowsDesignEfModule
     /// property that <see cref="EfSchemaVersionMaterializationInterceptor"/> writes and checks.
     /// </summary>
     public const string SchemaFamily = "WorkflowsDesign";
+    /// <summary>The family's one chain, from this assembly's declaration: what every reader of the family checks and
+    /// upcasts through (spec 180, FR-010).</summary>
+    public static readonly EfSchemaChain Chain = EfSchemaChain.Of(typeof(WorkflowsDesignEfModule).Assembly, SchemaFamily);
 
     public static string HistoryTableName => EfMigrationsHistory.TableName(HistoryModuleName);
 }

@@ -365,6 +365,13 @@ internal static class EfIdentityStoreSupport
         return IdentityApplicationSetCodec.Serialize(values);
     }
 
+    /// <summary>
+    /// An id-set content column of an Identity IAM row, upcast from the row's stamp to the current version before it is
+    /// parsed (spec 180, FR-009): the column <paramref name="column"/> of <paramref name="table"/>.
+    /// </summary>
+    public static IReadOnlySet<string> ReadSet(string? schemaVersion, string table, string column, string? json) =>
+        DeserializeSet(IdentityIamEfModule.Chain.Upcast(schemaVersion, table, column, json));
+
     public static IReadOnlySet<string> DeserializeSet(string? json)
     {
         if (string.IsNullOrWhiteSpace(json))

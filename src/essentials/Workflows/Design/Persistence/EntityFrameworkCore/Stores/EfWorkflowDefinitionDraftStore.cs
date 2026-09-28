@@ -100,7 +100,8 @@ public sealed class EfWorkflowDefinitionDraftStore(WorkflowsDesignDbContext db, 
         EfDesignSupport.EnsureExactIdentity(draftId, result.Draft.Id, "workflow draft with layout lookup");
         if (result.LayoutDraftId is not null)
         {
-            EfSchemaVersion.EnsureReadable(WorkflowsDesignEfModule.SchemaFamily, result.LayoutSchemaVersion, WorkflowsDesignEfModule.SchemaVersion);
+            // Current version only, as the interceptor reads this family's materialized rows: it declares no upcasters.
+            EfSchemaVersion.EnsureCurrent(WorkflowsDesignEfModule.Chain, result.LayoutSchemaVersion);
             EfDesignSupport.EnsureExactIdentity(draftId, result.LayoutDraftId, "workflow draft layout lookup");
             if (!StringComparer.Ordinal.Equals(result.Draft.TenantId, result.LayoutTenantId))
                 throw new InvalidOperationException("The workflow draft layout lookup returned a row from a different persistence scope.");

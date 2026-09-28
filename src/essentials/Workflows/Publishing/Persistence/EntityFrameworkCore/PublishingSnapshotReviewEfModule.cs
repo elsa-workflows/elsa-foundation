@@ -12,6 +12,9 @@ public static class PublishingSnapshotReviewEfModule
 
     /// <summary>The schema family this module's rows belong to, checked against when a row is read.</summary>
     public const string SchemaFamily = "PublishingSnapshotReview";
+    /// <summary>The family's one chain, from this assembly's declaration: what every reader of the family checks and
+    /// upcasts through (spec 180, FR-010).</summary>
+    public static readonly EfSchemaChain Chain = EfSchemaChain.Of(typeof(PublishingSnapshotReviewEfModule).Assembly, SchemaFamily);
     public const string ExpiryIndexName = "IX_elsa_publication_snapshot_reviews_expiresAt_preflightToken";
     public const int IdentityMaximumLength = 256;
     public const int CandidateHashMaximumLength = 128;

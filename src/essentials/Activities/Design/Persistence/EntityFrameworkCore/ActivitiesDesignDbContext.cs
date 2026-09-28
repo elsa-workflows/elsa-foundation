@@ -170,9 +170,7 @@ public abstract class ActivitiesDesignDbContext(DbContextOptions options) : DbCo
 
     protected abstract void ConfigureProvider(ModelBuilder modelBuilder);
 
-    string IEfSchemaVersionedContext.SchemaFamily => ActivitiesDesignEfModule.SchemaFamily;
-
-    string IEfSchemaVersionedContext.SchemaVersion => ActivitiesDesignEfModule.SchemaVersion;
+    EfSchemaChain IEfSchemaVersionedContext.SchemaChain => ActivitiesDesignEfModule.Chain;
 
     /// <summary>Every instance checks its rows' stamps, however its options were built.</summary>
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder) =>

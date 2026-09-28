@@ -285,12 +285,12 @@ public sealed class EfWorkflowExecutionStateStore(
 
     private static WorkflowExecutionState ReadCheckedCore(WorkflowExecutionStateEntity row, string scope, string expectedId)
     {
-        if (EfSchemaVersion.NotReadable("RuntimeWorkflowExecution", row.SchemaVersion, RuntimeWorkflowExecutionEfModule.SchemaVersion) || row.Id != CreateId(scope, expectedId) || row.ScopeKey != Encode(scope) || row.ScopeKeyHash != Hash(scope) || row.Revision <= 0)
+        if (EfSchemaVersion.NotReadable(RuntimeWorkflowExecutionEfModule.Chain, row.SchemaVersion) || row.Id != CreateId(scope, expectedId) || row.ScopeKey != Encode(scope) || row.ScopeKeyHash != Hash(scope) || row.Revision <= 0)
             throw new InvalidDataException("The persisted workflow execution state envelope is corrupt.");
         WorkflowExecutionState state;
         try
         {
-            state = RuntimeArtifactJson.Deserialize<WorkflowExecutionState>(row.ContentJson);
+            state = RuntimeArtifactJson.Deserialize<WorkflowExecutionState>(RuntimeWorkflowExecutionEfModule.Chain.Upcast(row.SchemaVersion, RuntimeWorkflowExecutionEfModule.TableName, nameof(row.ContentJson), row.ContentJson));
         }
         catch (Exception exception) when (exception is JsonException or ArgumentException or InvalidOperationException or NotSupportedException)
         {

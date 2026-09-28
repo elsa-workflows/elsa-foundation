@@ -31,6 +31,12 @@ namespace Elsa.Cluster.Readability;
 /// let a version finalize that this host cannot read.
 /// </para>
 /// <para>
+/// Each declaration credits its readable set (spec 180, FR-004): its current version and every predecessor its upcaster
+/// chain reaches without a gap, computed by the same function a store's read uses to decide which rows it accepts, so a
+/// host never reports a version its reads refuse. A chain with a fault the build and the family's registration refuse
+/// (FR-005) still credits only what it reaches, never a version below a gap, and the fault is logged as an error.
+/// </para>
+/// <para>
 /// The database identity and the observed finalized version come from spec 181's finalization record, which B5 (#2101)
 /// adds. Until then the host has read no record, so both are <see langword="null"/>, and an entry that names no
 /// database counts for every database: the conservative direction (FR-019; Decisions, Q19).
@@ -77,6 +83,15 @@ public sealed class EfSchemaReadabilitySource(ILogger<EfSchemaReadabilitySource>
 
             return new ReadabilityEntry(declarations.Key, modules.Order(StringComparer.Ordinal).First(), []);
         }
+
+        foreach (var declaration in declarations.Where(declaration => declaration.Defects.Count > 0))
+            logger.LogError(
+                "Schema family '{Family}' declared in {Assembly} has an upcaster chain this build refuses (spec 180, FR-005): {Defects} " +
+                "This host reports only the versions the chain still reaches: {Readable}.",
+                declarations.Key,
+                declaration.Assembly.GetName().Name,
+                string.Join(" ", declaration.Defects),
+                string.Join(", ", declaration.ReadableVersions.Select(version => $"'{version}'")));
 
         var readable = declarations
             .Select(declaration => declaration.ReadableVersions.AsEnumerable())

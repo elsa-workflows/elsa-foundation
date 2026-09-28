@@ -41,9 +41,9 @@ internal static class WorkflowTestScopeEfSupport
         string accessScope,
         string? expectedScopeId = null)
     {
-        if (EfSchemaVersion.NotReadable("RuntimeWorkflowTestScope", row.SchemaVersion, RuntimeWorkflowTestScopeEfModule.SchemaVersion))
+        if (EfSchemaVersion.NotReadable(RuntimeWorkflowTestScopeEfModule.Chain, row.SchemaVersion))
             throw new InvalidDataException("The workflow test-scope projections do not match its durable content.");
-        var record = RuntimeArtifactJson.Deserialize<WorkflowTestScopeRecord>(row.ContentJson);
+        var record = RuntimeArtifactJson.Deserialize<WorkflowTestScopeRecord>(RuntimeWorkflowTestScopeEfModule.Chain.Upcast(row.SchemaVersion, RuntimeWorkflowTestScopeEfModule.TableName, nameof(row.ContentJson), row.ContentJson));
         var tenant = record.Scope.TenantId;
         var partition = record.Scope.Partition.Value;
         var valid =
@@ -78,6 +78,7 @@ internal static class WorkflowTestScopeEfSupport
         row.ExpiresAtUtcTicks = record.Scope.ExpiresAt.UtcTicks;
         row.Revision = revision;
         row.ContentJson = RuntimeArtifactJson.Serialize(record);
+        row.SchemaVersion = RuntimeWorkflowTestScopeEfModule.SchemaVersion;
     }
 
     /// <summary>Stages the provider-neutral revision touch used by test-scoped admission.</summary>

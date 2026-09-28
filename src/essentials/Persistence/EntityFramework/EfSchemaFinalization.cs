@@ -29,8 +29,14 @@ public static class EfSchemaFinalization
     /// <summary>The schema family both finalization tables belong to, in every module.</summary>
     public const string SchemaFamily = "SchemaFinalization";
 
-    /// <summary>The version this build stamps on every finalization row it writes and reads without skew.</summary>
+    /// <summary>The version this build stamps on every finalization row it writes.</summary>
     public const string SchemaVersion = "1.0.0";
+
+    /// <summary>
+    /// The family's one chain, from this assembly's declaration: what the finalization store checks and upcasts every
+    /// row through.
+    /// </summary>
+    public static readonly EfSchemaChain Chain = EfSchemaChain.Of(typeof(EfSchemaFinalization).Assembly, SchemaFamily);
 
     /// <summary>The per-family record table's name, before the history module name.</summary>
     public const string RecordTablePrefix = "__ElsaSchemaFinalization_";

@@ -28,6 +28,40 @@ public sealed class EfSchemaFamilyCatalogTests : IDisposable
     public void A_build_reads_exactly_its_current_version_until_the_chain_declares_predecessors() =>
         Assert.Equal(["3"], Assert.Single(EfSchemaFamilyCatalog.Discover([Declare("Sales", ["Sales"], new SyntheticFamily("Orders", "Sales", "3"))])).ReadableVersions);
 
+    /// <summary>
+    /// FR-001 and FR-004: the chain is part of the declaration, read from metadata alone, each step's versions off its
+    /// upcaster's own attribute, and the build reads the current version and every predecessor the chain reaches.
+    /// </summary>
+    [Fact]
+    public void A_chain_is_read_from_metadata_alone()
+    {
+        var sales = Declare("Sales", ["Sales"], new SyntheticFamily("Orders", "Sales", "3",
+            [new SyntheticUpcaster("Sales.OrdersOneToTwo", "1", "2"), new SyntheticUpcaster("Sales.OrdersTwoToThree", "2", "3")]));
+
+        var family = Assert.Single(EfSchemaFamilyCatalog.Discover([sales]));
+
+        Assert.Equal([("1", "2"), ("2", "3")], family.Upcasters.Select(upcaster => (upcaster.From, upcaster.To)));
+        Assert.All(family.Upcasters, upcaster => Assert.Null(upcaster.Refusal));
+        Assert.Equal(["1", "2", "3"], family.ReadableVersions);
+        Assert.Empty(family.Defects);
+    }
+
+    /// <summary>
+    /// A fault in the chain does not refuse discovery, which would drop every other family from the report; it hides the
+    /// versions it leaves unreachable and is reported for the build and the family's registration to refuse.
+    /// </summary>
+    [Fact]
+    public void A_chain_step_that_names_no_versions_hides_every_version_below_it()
+    {
+        var sales = Declare("Sales", ["Sales"], new SyntheticFamily("Orders", "Sales", "3",
+            [new SyntheticUpcaster("Sales.OrdersOneToTwo", "1", "2"), new SyntheticUpcaster("Sales.OrdersUnnamed", null, null)]));
+
+        var family = Assert.Single(EfSchemaFamilyCatalog.Discover([sales]));
+
+        Assert.Equal(["3"], family.ReadableVersions);
+        Assert.Contains(family.Defects, defect => defect.Contains("Sales.OrdersUnnamed", StringComparison.Ordinal));
+    }
+
     [Fact]
     public void The_owning_module_is_reported_as_its_EfModule_declaration_spells_it() =>
         Assert.Equal("Sales.Orders", Assert.Single(EfSchemaFamilyCatalog.Discover([Declare("Sales", ["Sales.Orders"], new SyntheticFamily("Orders", "sales.orders", "1"))])).Module);

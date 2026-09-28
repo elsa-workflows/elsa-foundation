@@ -179,7 +179,7 @@ public sealed class EfPublicationPolicyStore(
     {
         // Whether this build can read the row at all is settled before whether the row is consistent:
         // a row written by another module version may legitimately fail checks that describe this shape.
-        EfSchemaVersion.EnsureReadable("PublishingPolicyProjection", row.SchemaVersion, PublishingPolicyProjectionEfModule.SchemaVersion);
+        EfSchemaVersion.EnsureReadable(PublishingPolicyProjectionEfModule.Chain, row.SchemaVersion);
         var policyKey = EfPublishingStoreSupport.DecodeValue(row.PolicyKey, PublishingPolicyProjectionEfModule.PolicyKeyMaximumLength, nameof(row.PolicyKey));
         var tenantId = EfPublishingStoreSupport.DecodeNullableIdentity(row.TenantId, nameof(row.TenantId));
         if (!StringComparer.Ordinal.Equals(row.TenantIdHash, EfPublishingStoreSupport.TenantHash(tenantId)) ||

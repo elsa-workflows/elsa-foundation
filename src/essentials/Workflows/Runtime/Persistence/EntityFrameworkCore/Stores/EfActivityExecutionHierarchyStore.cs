@@ -378,6 +378,7 @@ public sealed class EfActivityExecutionHierarchyStore(
 
     private static ActivityExecutionHierarchyRecord ReadCheckedCore(ActivityExecutionHierarchyEntity row, string scope, string? expectedWorkflow, string? expectedActivity)
     {
+        EfSchemaVersion.EnsureReadable(RuntimeActivityExecutionEfModule.Chain, row.SchemaVersion);
         var workflow = ActivityExecutionEfSupport.Decode(row.WorkflowExecutionId);
         var activity = ActivityExecutionEfSupport.Decode(row.ActivityExecutionId);
         ActivityExecutionEfSupport.EnsureRowEnvelope(row.SchemaVersion, row.ScopeKey, scope, row.ScopeKeyHash,
@@ -395,7 +396,7 @@ public sealed class EfActivityExecutionHierarchyStore(
             throw new InvalidDataException("The persisted activity execution hierarchy parent projection is incomplete.");
         if (parent is not null && row.ParentActivityExecutionIdHash != ActivityExecutionEfSupport.Hash(parent))
             throw new InvalidDataException("The persisted activity execution hierarchy parent projection is corrupt.");
-        var record = RuntimeArtifactJson.Deserialize<ActivityExecutionHierarchyRecord>(row.ContentJson);
+        var record = RuntimeArtifactJson.Deserialize<ActivityExecutionHierarchyRecord>(RuntimeActivityExecutionEfModule.Chain.Upcast(row.SchemaVersion, RuntimeActivityExecutionEfModule.ActivityExecutionHierarchyTableName, nameof(row.ContentJson), row.ContentJson));
         ActivityExecutionEfSupport.Validate(record);
         if (!StringComparer.Ordinal.Equals(record.WorkflowExecutionId, workflow) || !StringComparer.Ordinal.Equals(record.ActivityExecutionId, activity) ||
             !StringComparer.Ordinal.Equals(record.ExecutionScopeId, executionScope) || !StringComparer.Ordinal.Equals(record.ParentActivityExecutionId, parent) ||

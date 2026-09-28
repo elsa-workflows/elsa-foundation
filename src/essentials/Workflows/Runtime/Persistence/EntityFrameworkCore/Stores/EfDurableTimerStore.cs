@@ -401,7 +401,7 @@ public sealed class EfDurableTimerStore(
         string? expectedWorkflowExecutionId = null,
         string? expectedTimerId = null)
     {
-        if (EfSchemaVersion.NotReadable("RuntimeOperationalState", row.SchemaVersion, RuntimeOperationalStateEfModule.SchemaVersion) ||
+        if (EfSchemaVersion.NotReadable(RuntimeOperationalStateEfModule.Chain, row.SchemaVersion) ||
             row.Revision <= 0 ||
             row.ScopeKey != EfRuntimeOperationalStoreSupport.Encode(scope) ||
             row.ScopeKeyHash != EfRuntimeOperationalStoreSupport.Hash(scope))
@@ -435,7 +435,8 @@ public sealed class EfDurableTimerStore(
     {
         try
         {
-            return RuntimeArtifactJson.Deserialize<DurableTimer>(row.ContentJson);
+            return RuntimeArtifactJson.Deserialize<DurableTimer>(RuntimeOperationalStateEfModule.Chain.Upcast(
+                row.SchemaVersion, RuntimeOperationalStateEfModule.DurableTimerTableName, nameof(row.ContentJson), row.ContentJson));
         }
         catch (Exception exception) when (exception is JsonException or ArgumentException or InvalidOperationException or NotSupportedException)
         {

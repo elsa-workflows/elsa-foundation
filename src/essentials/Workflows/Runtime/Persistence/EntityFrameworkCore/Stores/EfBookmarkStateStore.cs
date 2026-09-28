@@ -309,7 +309,7 @@ public sealed class EfBookmarkStateStore(
     {
         try
         {
-            if (EfSchemaVersion.NotReadable("BookmarkState", row.SchemaVersion, BookmarkStateEfModule.SchemaVersion) || EfRelationalIdentity.Decode(row.ScopeKey) != scope || row.ScopeKeyHash != Hash(scope) ||
+            if (EfSchemaVersion.NotReadable(BookmarkStateEfModule.Chain, row.SchemaVersion) || EfRelationalIdentity.Decode(row.ScopeKey) != scope || row.ScopeKeyHash != Hash(scope) ||
                 row.Id != (expectedId ?? CreateId(scope, row.WorkflowExecutionId, row.BookmarkId)) ||
                 row.WorkflowExecutionIdHash != Hash(row.WorkflowExecutionId) || row.BookmarkIdHash != Hash(row.BookmarkId) ||
                 row.WorkflowExecutionIdOrderKey != OrdinalKey(row.WorkflowExecutionId) || row.BookmarkIdOrderKey != OrdinalKey(row.BookmarkId) ||
@@ -317,7 +317,8 @@ public sealed class EfBookmarkStateStore(
                 (expectedBookmark is not null && row.BookmarkId != expectedBookmark) || string.IsNullOrWhiteSpace(row.MetadataJson) || row.Revision <= 0)
                 throw new InvalidDataException("The persisted EF bookmark row is corrupt.");
 
-            var state = JsonSerializer.Deserialize<BookmarkState>(row.ContentJson, Json)
+            var content = BookmarkStateEfModule.Chain.Upcast(row.SchemaVersion, BookmarkStateEfModule.TableName, nameof(row.ContentJson), row.ContentJson);
+            var state = JsonSerializer.Deserialize<BookmarkState>(content, Json)
                         ?? throw new JsonException("Bookmark content was null.");
             var projectedPayload = DeserializePayload(row.PayloadJson);
             var contentPayloadMatchesProjection = SerializePayload(state.Payload) == row.PayloadJson ||

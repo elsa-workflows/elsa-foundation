@@ -24,6 +24,13 @@ public static class IdentityEntityFrameworkAdapterSupport
 
     public static IReadOnlySet<string> DeserializeSet(string? json) => EfIdentityStoreSupport.DeserializeSet(json);
 
+    /// <summary>
+    /// An id-set content column of an Identity IAM row, upcast through the family's one chain before it is parsed, so an
+    /// adapter outside the owning module reads an older row exactly as the module's own stores do (spec 180, FR-010).
+    /// </summary>
+    public static IReadOnlySet<string> ReadSet(string? schemaVersion, string table, string column, string? json) =>
+        EfIdentityStoreSupport.ReadSet(schemaVersion, table, column, json);
+
     public static Task<T> ReadAsync<T>(DbContext context, string operation, Func<Task<T>> readAsync) =>
         EfIdentityStoreSupport.ReadAsync(context, operation, readAsync);
 
@@ -32,7 +39,7 @@ public static class IdentityEntityFrameworkAdapterSupport
     /// of it, so the adapter applies the family's own check rather than restating the family or its version.
     /// </summary>
     public static void EnsureReadable(string? schemaVersion) =>
-        EfSchemaVersion.EnsureReadable(IdentityIamEfModule.SchemaFamily, schemaVersion, IdentityIamEfModule.SchemaVersion);
+        EfSchemaVersion.EnsureReadable(IdentityIamEfModule.Chain, schemaVersion);
 }
 
 /// <summary>Scoped revision-stamp integration surface for first-party Identity framework adapters.</summary>

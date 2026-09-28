@@ -75,6 +75,9 @@ public static class EfModuleMigrationServiceCollectionExtensions
         var descriptor = EfModuleCatalog.Discover([typeof(TContext).Assembly])
             .SingleOrDefault(candidate => candidate.ContextType == typeof(TContext));
         var module = descriptor?.Name ?? typeof(TContext).Name;
+        // A schema family whose upcaster chain has a gap, a duplicate, a branch or a cycle, or that does not end at its
+        // current version, is refused here, while the host is wiring itself up (spec 180, FR-005).
+        EfSchemaChain.EnsureSound(typeof(TContext).Assembly, module);
         var migration = new EfModuleMigration<TContext>(
             EfRelationalProviderBinding.ExpectedProviderName(provider),
             module,

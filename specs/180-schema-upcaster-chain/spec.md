@@ -456,3 +456,9 @@ this spec's implementation starts.
 
 **2026-09-28 note.** FR-001 gains the shared-family exception, needed for spec 181's finalization record (#2120), found
 while building B3 (#2099); lands with its PR, whose merge is the owner's approval.
+
+**2026-09-28 note.** Found while building B4 (#2100): two families, `ActivitiesDesign` and `WorkflowsDesign`, are read by
+EF materializing domain types directly, so their value converters deserialize the content before FR-009's upcast could
+run. Their read path cannot meet FR-006 with a chain longer than one, so it accepts their current version alone, and
+each declares no upcasters until its content moves to store code that upcasts before it deserializes; the build
+enforces both. Lands with the B4 PR, whose merge is the owner's approval.

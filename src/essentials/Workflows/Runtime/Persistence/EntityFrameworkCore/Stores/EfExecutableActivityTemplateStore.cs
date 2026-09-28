@@ -311,13 +311,14 @@ public sealed class EfExecutableActivityTemplateStore(
 
     private static ExecutableActivityTemplate Read(ExecutableActivityTemplateEntity row, TemplateIdentity identity)
     {
-        if (EfSchemaVersion.NotReadable("RuntimeArtifact", row.SchemaVersion, RuntimeArtifactEfModule.SchemaVersion) ||
+        if (EfSchemaVersion.NotReadable(RuntimeArtifactEfModule.Chain, row.SchemaVersion) ||
             identity.TemplateId is null || row.Id != CreateId(identity.Scope, identity.TemplateId) || row.ScopeKey != Encode(identity.Scope) || row.ScopeKeyHash != Hash(identity.Scope) ||
             row.TemplateId != Encode(identity.TemplateId) || row.TemplateIdHash != Hash(identity.TemplateId) || row.TemplateHashHash != Hash(row.TemplateHash) || row.TemplateIdOrderKey != OrderKey(identity.TemplateId) || row.Revision <= 0 || string.IsNullOrWhiteSpace(row.IncarnationId))
             throw new InvalidDataException("The persisted executable activity template row is corrupt.");
         try
         {
-            var envelope = JsonNode.Parse(row.ContentJson)?.AsObject() ?? throw new InvalidDataException("The persisted executable activity template envelope is empty.");
+            var content = RuntimeArtifactEfModule.Chain.Upcast(row.SchemaVersion, RuntimeArtifactEfModule.ExecutableActivityTemplateTableName, nameof(row.ContentJson), row.ContentJson);
+            var envelope = JsonNode.Parse(content)?.AsObject() ?? throw new InvalidDataException("The persisted executable activity template envelope is empty.");
             if (!StringComparer.Ordinal.Equals(ReadString(envelope, "collection"), "executableActivityTemplate") || !StringComparer.Ordinal.Equals(Decode(ReadString(envelope, "templateHash")), row.TemplateHash) || envelope["template"] is null)
                 throw new InvalidDataException("The persisted executable activity template envelope projection is corrupt.");
             var value = RuntimeArtifactJson.Deserialize<ExecutableActivityTemplate>(envelope["template"]!.ToJsonString());
@@ -333,13 +334,14 @@ public sealed class EfExecutableActivityTemplateStore(
 
     private static HashClaim ReadClaim(ExecutableActivityTemplateHashClaimEntity row, TemplateIdentity identity)
     {
-        if (EfSchemaVersion.NotReadable("RuntimeArtifact", row.SchemaVersion, RuntimeArtifactEfModule.SchemaVersion) ||
+        if (EfSchemaVersion.NotReadable(RuntimeArtifactEfModule.Chain, row.SchemaVersion) ||
             identity.TemplateHash is null || row.Id != HashClaimId(identity.Scope, identity.TemplateHash) || row.ScopeKey != Encode(identity.Scope) || row.ScopeKeyHash != Hash(identity.Scope) ||
             row.TemplateHash != identity.TemplateHash || row.TemplateHashHash != Hash(identity.TemplateHash) || string.IsNullOrWhiteSpace(row.TemplateId) || row.TemplateId.Length > RuntimeArtifactEfModule.IdentityProjectionMaximumLength || row.Revision <= 0 || string.IsNullOrWhiteSpace(row.IncarnationId))
             throw new InvalidDataException("The persisted executable activity template hash claim is corrupt.");
         try
         {
-            var claim = RuntimeArtifactJson.Deserialize<HashClaim>(row.ContentJson);
+            var claim = RuntimeArtifactJson.Deserialize<HashClaim>(RuntimeArtifactEfModule.Chain.Upcast(
+                row.SchemaVersion, RuntimeArtifactEfModule.ExecutableActivityTemplateHashClaimTableName, nameof(row.ContentJson), row.ContentJson));
             if (claim.TemplateHash != identity.TemplateHash || claim.TemplateId != Decode(row.TemplateId))
                 throw new InvalidDataException("The persisted executable activity template hash claim projection is corrupt.");
             return claim;

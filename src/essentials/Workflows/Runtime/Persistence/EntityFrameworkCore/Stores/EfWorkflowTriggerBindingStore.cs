@@ -312,12 +312,12 @@ public sealed class EfWorkflowTriggerBindingStore(
     { Validate(x); e.ScopeKey = Encode(scope); e.ScopeKeyHash = Hash(scope); e.TriggerBindingId = Encode(x.TriggerBindingId); e.TriggerBindingIdHash = Hash(x.TriggerBindingId); e.TriggerBindingIdOrderKey = Order(x.TriggerBindingId); e.ArtifactId = Encode(x.ArtifactId); e.ArtifactIdHash = Hash(x.ArtifactId); e.ArtifactIdOrderKey = Order(x.ArtifactId); e.DefinitionId = Encode(x.DefinitionId); e.ArtifactVersion = Encode(x.ArtifactVersion); e.ArtifactHash = Encode(x.ArtifactHash); e.ExecutableNodeId = Encode(x.ExecutableNodeId); e.StimulusType = Encode(x.StimulusType); e.StimulusHash = Encode(x.StimulusHash); e.StimulusLookupKey = Lookup(x.StimulusType, x.StimulusHash); e.StimulusTypeLookupKey = Lookup(x.StimulusType); e.CorrelationScope = x.CorrelationScope is null ? null : Encode(x.CorrelationScope); e.ActivationId = x.ActivationId is null ? null : Encode(x.ActivationId); e.ActivationIdHash = x.ActivationId is null ? null : Hash(x.ActivationId); e.ActivationIdOrderKey = x.ActivationId is null ? null : Order(x.ActivationId); e.SlotId = x.SlotId is null ? null : Encode(x.SlotId); e.Cardinality = (int)x.Cardinality; e.IsActive = x.IsActive; e.CreatedAtUtcTicks = x.CreatedAt.UtcTicks; e.CreatedAtOffsetMinutes = (int)x.CreatedAt.Offset.TotalMinutes; e.ContentJson = RuntimeArtifactJson.Serialize(x); e.SchemaVersion = RuntimeTriggerBindingEfModule.SchemaVersion; e.Revision = revision; }
     private static WorkflowTriggerBinding Read(WorkflowTriggerBindingEntity e, string scope, string? expectedId = null)
     {
-        if (EfSchemaVersion.NotReadable("RuntimeTriggerBinding", e.SchemaVersion, RuntimeTriggerBindingEfModule.SchemaVersion) || e.Id != Id(scope, Decode(e.TriggerBindingId)) || e.ScopeKey != Encode(scope) || e.ScopeKeyHash != Hash(scope) || expectedId is not null && e.TriggerBindingId != Encode(expectedId) || e.Revision <= 0)
+        if (EfSchemaVersion.NotReadable(RuntimeTriggerBindingEfModule.Chain, e.SchemaVersion) || e.Id != Id(scope, Decode(e.TriggerBindingId)) || e.ScopeKey != Encode(scope) || e.ScopeKeyHash != Hash(scope) || expectedId is not null && e.TriggerBindingId != Encode(expectedId) || e.Revision <= 0)
             throw new InvalidDataException("The persisted EF trigger-binding row does not match its identity envelope.");
         WorkflowTriggerBinding x;
         try
         {
-            x = RuntimeArtifactJson.Deserialize<WorkflowTriggerBinding>(e.ContentJson);
+            x = RuntimeArtifactJson.Deserialize<WorkflowTriggerBinding>(RuntimeTriggerBindingEfModule.Chain.Upcast(e.SchemaVersion, RuntimeTriggerBindingEfModule.TableName, nameof(e.ContentJson), e.ContentJson));
         }
         catch (Exception exception) when (exception is JsonException or NotSupportedException or ArgumentException or InvalidOperationException or FormatException)
         {
@@ -332,22 +332,24 @@ public sealed class EfWorkflowTriggerBindingStore(
     private static void Validate(WorkflowTriggerBinding x) { ArgumentNullException.ThrowIfNull(x); WorkflowTriggerBinding.ValidateId(x.TriggerBindingId); foreach (var value in new[] { x.ArtifactId, x.DefinitionId, x.ArtifactVersion, x.ArtifactHash, x.ExecutableNodeId, x.StimulusType, x.StimulusHash }) ArgumentException.ThrowIfNullOrWhiteSpace(value); if (x.StimulusType.Length > RuntimeTriggerBindingEfModule.StimulusTypeMaximumLength) throw new ArgumentException($"Stimulus type cannot exceed {RuntimeTriggerBindingEfModule.StimulusTypeMaximumLength} characters.", nameof(x)); if (x.StimulusHash.Length > RuntimeTriggerBindingEfModule.IdentityMaximumLength) throw new ArgumentException($"Stimulus hash cannot exceed {RuntimeTriggerBindingEfModule.IdentityMaximumLength} characters.", nameof(x)); if (!Enum.IsDefined(x.Cardinality)) throw new ArgumentOutOfRangeException(nameof(x.Cardinality)); ArgumentNullException.ThrowIfNull(x.Metadata); if (x.ActivationId is null && x.SlotId is not null) throw new ArgumentException("A trigger binding slot requires an activation.", nameof(x)); }
     // Invariant: every caller reaches SetActive only after ProjectionMatches has already called Read
     // (eagerly, via .ToArray()) on this same row, so the version check has already passed and this
-    // Deserialize call cannot observe a skewed row's changed shape as corruption.
-    private static void SetActive(WorkflowTriggerBindingEntity row, bool active) { var binding = RuntimeArtifactJson.Deserialize<WorkflowTriggerBinding>(row.ContentJson); row.IsActive = active; row.ContentJson = RuntimeArtifactJson.Serialize(binding with { IsActive = active }); row.Revision = checked(row.Revision + 1); }
+    // Deserialize call cannot observe a skewed row's changed shape as corruption. The content is rewritten at the
+    // current version, so the stamp moves with it: a row read at an older version is upgraded here.
+    private static void SetActive(WorkflowTriggerBindingEntity row, bool active) { var binding = RuntimeArtifactJson.Deserialize<WorkflowTriggerBinding>(RuntimeTriggerBindingEfModule.Chain.Upcast(row.SchemaVersion, RuntimeTriggerBindingEfModule.TableName, nameof(row.ContentJson), row.ContentJson)); row.IsActive = active; row.ContentJson = RuntimeArtifactJson.Serialize(binding with { IsActive = active }); row.SchemaVersion = RuntimeTriggerBindingEfModule.SchemaVersion; row.Revision = checked(row.Revision + 1); }
     private static void ValidateActivation(string id, IReadOnlyCollection<WorkflowTriggerBinding> xs) { ArgumentException.ThrowIfNullOrWhiteSpace(id); ArgumentNullException.ThrowIfNull(xs); var ids = new HashSet<string>(StringComparer.Ordinal); foreach (var x in xs) { Validate(x); if (x.ActivationId != id || string.IsNullOrWhiteSpace(x.SlotId) || !ids.Add(x.TriggerBindingId)) throw new ArgumentException("Activation bindings must have matching activation, slot, and unique binding ids.", nameof(xs)); } }
     private static bool ProjectionsEqual(IEnumerable<WorkflowTriggerBindingEntity> rows, IEnumerable<WorkflowTriggerBinding> xs, string scope) => Fingerprint(rows.Select(x => Read(x, scope))) == Fingerprint(xs);
     private static bool ProjectionMatches(WorkflowTriggerBindingProjectionStateEntity state, IEnumerable<WorkflowTriggerBindingEntity> rows, string scope, string activation)
     {
         var bindings = rows.Select(row => Read(row, scope)).ToArray();
         var fingerprint = Fingerprint(bindings);
-        return EfSchemaVersion.Readable("RuntimeTriggerBinding", state.SchemaVersion, RuntimeTriggerBindingEfModule.SchemaVersion) &&
+        return EfSchemaVersion.Readable(RuntimeTriggerBindingEfModule.Chain, state.SchemaVersion) &&
                state.Id == ProjectionId(scope, activation) &&
                state.ScopeKey == Encode(scope) && state.ScopeKeyHash == Hash(scope) &&
                state.ActivationId == Encode(activation) && state.ActivationIdHash == Hash(activation) &&
                state.ActivationIdOrderKey == Order(activation) &&
                state.Revision > 0 &&
                state.BindingCount == bindings.Length &&
-               state.ProjectionFingerprint == fingerprint && state.ContentJson == fingerprint &&
+               state.ProjectionFingerprint == fingerprint &&
+               RuntimeTriggerBindingEfModule.Chain.Upcast(state.SchemaVersion, RuntimeTriggerBindingEfModule.ProjectionStateTableName, nameof(state.ContentJson), state.ContentJson) == fingerprint &&
                bindings.All(binding => binding.ActivationId == activation && binding.IsActive == state.IsActive);
     }
     private static void EnsureProjection(WorkflowTriggerBindingProjectionStateEntity state, IEnumerable<WorkflowTriggerBindingEntity> rows, string scope, string activation) { if (!ProjectionMatches(state, rows, scope, activation)) throw new InvalidDataException($"Trigger-binding activation projection '{activation}' does not match its rows."); }

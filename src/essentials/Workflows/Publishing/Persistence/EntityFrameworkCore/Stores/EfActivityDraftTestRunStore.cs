@@ -200,21 +200,22 @@ public sealed class EfActivityDraftTestRunStore(
         row.ReceiptExpiresAtOffsetMinutes = expiry.OffsetMinutes;
         row.Status = receipt.Status.ToString();
         row.Content = PublishingEfJson.Serialize(receipt);
+        row.SchemaVersion = PublishingLedgerEfModule.ContentSchemaVersion;
         row.Revision = receipt.Revision;
     }
 
     private static ActivityDraftTestRunReceipt ToModel(ActivityDraftTestRunEntity row, string? scope)
     {
+        EfSchemaVersion.EnsureReadable(PublishingLedgerEfModule.Chain, row.SchemaVersion);
         var testRunId = EfPublishingStoreSupport.DecodeIdentity(row.TestRunId, nameof(row.TestRunId));
         if (!StringComparer.Ordinal.Equals(row.Id, EfPublishingStoreSupport.PhysicalId(scope, testRunId)) ||
             !StringComparer.Ordinal.Equals(row.TenantId, EfPublishingStoreSupport.EncodeNullable(scope)) ||
             !StringComparer.Ordinal.Equals(row.TenantIdHash, EfPublishingStoreSupport.TenantHash(scope)))
             throw new InvalidOperationException("The persisted activity Test Run receipt scope projection is corrupt.");
         EfPublishingStoreSupport.EnsureProjection(testRunId, row.TestRunIdHash, row.TestRunIdOrderKey, nameof(row.TestRunId));
-        if (EfSchemaVersion.NotReadable("PublishingLedger", row.SchemaVersion, PublishingLedgerEfModule.ContentSchemaVersion))
-            throw new InvalidOperationException($"Malformed persisted publication state: activity Test Run receipt schema version '{row.SchemaVersion}' is not supported.");
 
-        var receipt = PublishingEfJson.Deserialize<ActivityDraftTestRunReceipt>(row.Content, "activity Test Run receipt");
+        var content = PublishingLedgerEfModule.Chain.Upcast(row.SchemaVersion, PublishingLedgerEfModule.ActivityDraftTestRunTableName, nameof(row.Content), row.Content);
+        var receipt = PublishingEfJson.Deserialize<ActivityDraftTestRunReceipt>(content, "activity Test Run receipt");
         var expiry = EfPublishingStoreSupport.DateTimeOffset(row.ReceiptExpiresAtUtcTicks, row.ReceiptExpiresAtOffsetMinutes);
         if (!StringComparer.Ordinal.Equals(receipt.TestRunId, testRunId) ||
             receipt.Revision != row.Revision ||

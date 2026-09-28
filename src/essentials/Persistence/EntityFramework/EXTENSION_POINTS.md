@@ -47,21 +47,43 @@ both types.
 
 ## Schema family declaration
 
-An assembly-level `[EfSchemaFamily(name, module, currentVersion)]` (`AllowMultiple`) is a schema family's one
-declaration ([spec 180](../../../../specs/180-schema-upcaster-chain/spec.md), FR-001): the family its skew check names,
-the `[EfModule]` of the same assembly that owns it, and the version this build stamps and reads. A module that stamps
-rows declares one per family, passing the family's `SchemaFamily` and version constants.
+An assembly-level `[EfSchemaFamily(name, module, currentVersion, Upcasters = ...)]` (`AllowMultiple`) is a schema
+family's one declaration ([spec 180](../../../../specs/180-schema-upcaster-chain/spec.md), FR-001): the family its
+checks name, the `[EfModule]` of the same assembly that owns it, the version this build stamps, and its upcaster chain,
+oldest first. A module that stamps rows declares one per family, passing the family's `SchemaFamily` and version
+constants, and its module class holds the family's one chain handle,
+`public static readonly EfSchemaChain Chain = EfSchemaChain.Of(typeof(<class>).Assembly, SchemaFamily)`, which every
+store and every reader outside the module checks and upcasts through (FR-002, FR-010).
 `EfSchemaFamilyCatalog.Discover(assemblies)` is the one place that reads it, as metadata matched by type name, so a
-package loaded with its own copy of this assembly is still read. A host's readability report
-([spec 183](../../../../specs/183-cluster-membership/spec.md), FR-020) is derived from these declarations alone, and
-`EfSchemaFamilyDeclarationGuardTests` fails the build when a family the stores check is undeclared or declared at
-another version. The upcaster chain of spec 180 (B4) joins this declaration; until then a build reads its current
-version only.
+package loaded with its own copy of this assembly is still read. The family's readable set is its current version and
+every predecessor the chain reaches without a gap (FR-004), computed by one function for both the host's readability
+report ([spec 183](../../../../specs/183-cluster-membership/spec.md), FR-020) and every read, so a host never reports a
+version its reads refuse. `EfSchemaFamilyDeclarationGuardTests` fails the build when a family the stores check is
+undeclared, a check names its family by anything but its chain handle, a chain is unsound, or a write stamps anything
+but the declared current version or rewrites content without restamping.
 
 A family whose loaded declarations disagree on the owning module is isolated rather than taking the rest of the host's
 readability report down with it: its own entry credits no readable version - a host is counted for it and never for a
 version it cannot read, the conservative direction (FR-020) - and `EfSchemaReadabilitySource` logs an error naming the
 family and every conflicting declaration. Every other family is still reported normally.
+
+### Upcasters
+
+An upcaster is the extension point a module author adds when a family's stored content changes: a concrete
+`IEfSchemaUpcaster` with a public parameterless constructor and no injected services (FR-003), in the owning module's
+assembly beside the family's store code, carrying `[EfSchemaUpcaster(from, to)]` and listed at the end of the family's
+`Upcasters`. It is a pure, total function of the decoded content it is given (`EfSchemaContent`: the table, the
+column, the value) and returns content it has no change for as it received it (FR-019, FR-012). `EfSchemaChain.Upcast`
+runs the steps from a row's stamp to the current version, runs none at the current version (FR-021), refuses an
+unreadable stamp as skew, and reports a failing upcaster as corruption (FR-009). A chain with a gap, a duplicate, a
+branch or a cycle, or one that does not end at the current version, fails the build and is refused when the module
+registers (`AddEfModuleMigrations`), and a read never bridges a gap (FR-005). A family whose context EF materializes
+directly (`IEfSchemaVersionedContext`) declares no upcasters: its value converters deserialize the content before any
+upcaster could run, so `EfSchemaVersionMaterializationInterceptor` accepts its current version alone.
+
+`EfSchemaWriteRefusedException` is the write refusal (FR-016a): a write whose value needs a version later than the
+version the host may write. It carries a stable code, the family and both versions, and spec 182 derives from it for
+dormant-feature writes. Nothing raises it until spec 181's gate lets a host write an older finalized version.
 
 ### Shared families (no single owning module)
 
@@ -74,8 +96,10 @@ reads off it, and on the `ReadabilityEntry` the readability report carries it in
 that owns its family still names its module explicitly rather than reaching for the shared form to avoid the "exactly
 one EF module" rule. Several loaded copies of one shared declaration - two generations of a package, or the same
 mapping assembly loaded through two load contexts - are still read and intersected exactly like several copies of an
-owned family. `EfSchemaFamilyDeclarationGuardTests` reads a declaration's version from its *last* constructor
-argument, so it resolves both the two-argument shared form and the three-argument owned form the same way.
+owned family. `EfSchemaFamilyDeclarationGuardTests` reads a declaration's version from its *last* positional
+argument, so it resolves both the two-argument shared form and the three-argument owned form the same way. A module's
+registration checks the chains of the families it owns and of the shared families this package declares, since every
+module's context maps them.
 
 ## Apply policy
 

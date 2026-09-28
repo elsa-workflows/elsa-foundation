@@ -217,7 +217,7 @@ public sealed class EfPublicationProjectionIntentStore(
     {
         // Whether this build can read the row at all is settled before whether the row is consistent:
         // a row written by another module version may legitimately fail checks that describe this shape.
-        EfSchemaVersion.EnsureReadable("PublishingPolicyProjection", row.SchemaVersion, PublishingPolicyProjectionEfModule.SchemaVersion);
+        EfSchemaVersion.EnsureReadable(PublishingPolicyProjectionEfModule.Chain, row.SchemaVersion);
         var intentId = EfPublishingStoreSupport.DecodeIdentity(row.IntentId, nameof(row.IntentId));
         var publicationId = EfPublishingStoreSupport.DecodeIdentity(row.PublicationId, nameof(row.PublicationId));
         var projectionKind = EfPublishingStoreSupport.DecodeIdentity(row.ProjectionKind, nameof(row.ProjectionKind));
