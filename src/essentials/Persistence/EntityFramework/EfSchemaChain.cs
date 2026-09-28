@@ -160,7 +160,10 @@ public sealed class EfSchemaChain
                 value = _upcasters[step].Upcast(new EfSchemaContent(table, column, value)) ??
                         throw new InvalidDataException("The upcaster returned no content.");
             }
-            catch (Exception exception)
+            // An upcaster is arbitrary module code (FR-009): whatever it throws means this row cannot be trusted, so it
+            // becomes corruption rather than propagating. Only OutOfMemoryException is let through, since it is not the
+            // upcaster's data that is unsound.
+            catch (Exception exception) when (exception is not OutOfMemoryException)
             {
                 throw new InvalidDataException(
                     $"Schema family '{Family}' could not upcast {table}.{column} from '{from}' to '{to}' on a row stamped " +
@@ -208,7 +211,9 @@ public sealed class EfSchemaChain
         {
             return (IEfSchemaUpcaster)Activator.CreateInstance(upcaster.Type)!;
         }
-        catch (Exception exception)
+        catch (Exception exception) when (exception is TargetInvocationException or MissingMethodException
+                                               or MemberAccessException or ArgumentException or NotSupportedException
+                                               or TypeLoadException or InvalidOperationException)
         {
             throw new InvalidOperationException(
                 $"Schema family '{declaration.Name}' cannot construct its upcaster '{upcaster.Type.FullName}' from " +

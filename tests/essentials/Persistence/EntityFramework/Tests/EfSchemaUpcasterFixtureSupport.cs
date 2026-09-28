@@ -127,7 +127,7 @@ internal static class EfSchemaUpcasterFixtureSupport
 
         string Read(string role)
         {
-            var path = Path.Combine(directory, $"{table}.{column}.{role}.json");
+            var path = Path.Join(directory, $"{table}.{column}.{role}.json");
             Assert.True(File.Exists(path), $"Missing the committed upcaster fixture '{path}' (spec 180, FR-022).");
             return File.ReadAllText(path);
         }
@@ -151,7 +151,7 @@ internal static class EfSchemaUpcasterFixtureSupport
     }
 
     private static string FixtureDirectory(string family, string from, string to) =>
-        Path.Combine(AppContext.BaseDirectory, "Fixtures", "SchemaUpcasters", family, $"{from}-to-{to}");
+        Path.Join(AppContext.BaseDirectory, "Fixtures", "SchemaUpcasters", family, $"{from}-to-{to}");
 
     private static string Canonical(JsonNode? node) => node?.ToJsonString(new JsonSerializerOptions { WriteIndented = true }) ?? "null";
 }
