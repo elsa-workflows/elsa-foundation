@@ -293,7 +293,12 @@ public sealed class EfSchemaModuleGate
                     await RefreshAsync(context, stopping);
                 }, stopping);
             }
-            catch (Exception exception) when (!stopping.IsCancellationRequested)
+            catch (Exception) when (stopping.IsCancellationRequested)
+            {
+                // Stopping, as the shell or host is: whatever the round was doing is abandoned, not failed.
+                return;
+            }
+            catch (Exception exception)
             {
                 _logger.LogWarning(exception, "The finalization gate of EF module {Module} could not evaluate or refresh; it tries again on schedule.", Module);
             }

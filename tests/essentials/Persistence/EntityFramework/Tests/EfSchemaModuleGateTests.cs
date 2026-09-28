@@ -314,6 +314,30 @@ public sealed class EfSchemaModuleGateTests : IAsyncLifetime
         Assert.Equal(new EfSchemaFamilyObservation(null, null), observations.Find(Family));
     }
 
+    /// <summary>
+    /// A shell or host that stops, or a partial generation CShells disposes, stops the loop mid-round: that ends it, and
+    /// is never reported as a failure that would mask the reason the container was disposed.
+    /// </summary>
+    [Fact]
+    public async Task Stopping_the_loop_mid_round_ends_it_without_an_exception()
+    {
+        var gate = Gate(Families("1"), Fleet("host-a", "1"));
+        await gate.ActivateAsync(Context());
+        using var stopping = new CancellationTokenSource();
+        var inRound = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var loop = gate.RunAsync(async (_, token) =>
+        {
+            inRound.TrySetResult();
+            await Task.Delay(Timeout.Infinite, token);
+        }, stopping.Token);
+        await inRound.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        await stopping.CancelAsync();
+
+        await loop.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.True(loop.IsCompletedSuccessfully);
+    }
+
     private FakeFleet Fleet(string hostId, params string[] readable)
     {
         var member = fleet.Add(new FakeMember(hostId).Reading(Family, readable).Reading(OtherFamily, "1"));

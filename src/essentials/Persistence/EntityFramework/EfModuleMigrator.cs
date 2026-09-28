@@ -122,8 +122,16 @@ public sealed class EfModuleMigrator<TContext>(
     {
         if (!_stopping.IsCancellationRequested)
             await _stopping.CancelAsync();
-        if (_gateLoop is { } loop)
+        if (_gateLoop is not { } loop)
+            return;
+        try
+        {
             await loop;
+        }
+        catch (OperationCanceledException)
+        {
+            // The loop was stopped mid-round; a shell or host that is disposing is not failing.
+        }
     }
 }
 
