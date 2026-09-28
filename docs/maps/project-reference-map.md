@@ -6,9 +6,9 @@ Records direct project references only.
 
 ## Summary
 
-- Source projects: 132
-- Test projects: 120
-- Direct project references: 1171
+- Source projects: 134
+- Test projects: 122
+- Direct project references: 1177
 
 ## Projects
 
@@ -46,6 +46,8 @@ Records direct project references only.
 | [Elsa.Caching.Memory](../../src/essentials/Caching/Memory/Elsa.Caching.Memory.csproj) | source | Elsa.Caching | - | true | Elsa.Caching.Core |
 | [Elsa.Cli](../../src/essentials/Cli/Elsa.Cli.csproj) | source | Elsa.Cli | - | true | Elsa.Cli.Worker<br>Elsa.Modularity.Planning |
 | [Elsa.Cli.Worker](../../src/essentials/Cli/Worker/Elsa.Cli.Worker.csproj) | source | Elsa.Cli | - | false | - |
+| [Elsa.Cluster.Core](../../src/essentials/Cluster/Core/Elsa.Cluster.Core.csproj) | source | Elsa.Cluster | - | true | - |
+| [Elsa.Cluster.InProcess](../../src/essentials/Cluster/InProcess/Elsa.Cluster.InProcess.csproj) | source | Elsa.Cluster | - | true | Elsa.Cluster.Core |
 | [Elsa.Diagnostics.ConsoleLogStreaming](../../src/essentials/Diagnostics/ConsoleLogStreaming/Elsa.Diagnostics.ConsoleLogStreaming.csproj) | source | Elsa.Diagnostics | - | true | - |
 | [Elsa.Diagnostics.OpenTelemetry.Core](../../src/essentials/Diagnostics/OpenTelemetry/Core/Elsa.Diagnostics.OpenTelemetry.Core.csproj) | source | Elsa.Diagnostics | - | true | - |
 | [Elsa.Diagnostics.OpenTelemetry](../../src/essentials/Diagnostics/OpenTelemetry/Elsa.Diagnostics.OpenTelemetry.csproj) | source | Elsa.Diagnostics | - | true | Elsa.Api.AspNetCore<br>Elsa.Diagnostics.OpenTelemetry.Core<br>Elsa.Foundation.Identity<br>Elsa.Foundation.Identity.Core<br>Elsa.Primitives |
@@ -172,7 +174,7 @@ Records direct project references only.
 | [Elsa.Api.Capabilities.Tests](../../tests/essentials/Api/Capabilities/Tests/Elsa.Api.Capabilities.Tests.csproj) | test | Elsa.Api | - | false | Elsa.Api.Capabilities<br>Elsa.Foundation.Identity<br>Elsa.Foundation.Identity.Core<br>Elsa.Foundation.Identity.Oidc<br>Elsa.Testing |
 | [Elsa.Api.Compatibility.Testing](../../tests/essentials/Api/Compatibility/Testing/Elsa.Api.Compatibility.Testing.csproj) | test | Elsa.Api | - | false | Elsa.Api.AspNetCore<br>Elsa.Foundation.Identity<br>Elsa.Foundation.Identity.Core |
 | [Elsa.Api.Compatibility.Testing.Tests](../../tests/essentials/Api/Compatibility/Testing/Tests/Elsa.Api.Compatibility.Testing.Tests.csproj) | test | Elsa.Api | - | false | Elsa.Api.AspNetCore<br>Elsa.Api.Compatibility.Testing<br>Elsa.Foundation.Identity<br>Elsa.Foundation.Identity.Core |
-| [Elsa.Architecture.Tests](../../tests/essentials/Architecture/Elsa.Architecture.Tests.csproj) | test | Elsa.Architecture | - | false | Elsa.Activities.Bpmn.Interchange<br>Elsa.Activities.Design.Api<br>Elsa.Activities.Graph.Design<br>Elsa.Agent.Api<br>Elsa.Agent.Core<br>Elsa.Api.AspNetCore<br>Elsa.Api.Capabilities<br>Elsa.Api.Compatibility.Testing<br>Elsa.Attention.Api<br>Elsa.Diagnostics.OpenTelemetry<br>Elsa.Diagnostics.StructuredLogs<br>Elsa.Diagnostics.StructuredLogs.Core<br>Elsa.Events<br>Elsa.Expressions<br>Elsa.Expressions.Api<br>Elsa.Expressions.JavaScript.Rendering<br>Elsa.Expressions.JavaScript.Rendering.Core<br>Elsa.Foundation.Identity.Api<br>Elsa.Foundation.Identity.AspNetCoreIdentity<br>Elsa.Http<br>Elsa.Http.Core<br>Elsa.Mediator<br>Elsa.Modularity.Api<br>Elsa.Modularity.Core<br>Elsa.Primitives.Hosting<br>Elsa.Secrets.Core<br>Elsa.Serialization.Newtonsoft<br>Elsa.Studio.Preferences.Api<br>Elsa.Studio.Preferences.Core<br>Elsa.Tasks<br>Elsa.Workflows.Dashboard<br>Elsa.Workflows.Design.Api<br>Elsa.Workflows.ExecutionEvidence<br>Elsa.Workflows.Publishing<br>Elsa.Workflows.Publishing.Api<br>Elsa.Workflows.Runtime.Api<br>Elsa.Workflows.Runtime.Core<br>Elsa.Workflows.Runtime.JavaScript<br>Elsa.Workflows.Runtime.Reconciliation.Core<br>Elsa3.Activities.Design.Import<br>Elsa3.Mapping<br>Elsa3.Models |
+| [Elsa.Architecture.Tests](../../tests/essentials/Architecture/Elsa.Architecture.Tests.csproj) | test | Elsa.Architecture | - | false | Elsa.Activities.Bpmn.Interchange<br>Elsa.Activities.Design.Api<br>Elsa.Activities.Graph.Design<br>Elsa.Agent.Api<br>Elsa.Agent.Core<br>Elsa.Api.AspNetCore<br>Elsa.Api.Capabilities<br>Elsa.Api.Compatibility.Testing<br>Elsa.Attention.Api<br>Elsa.Cluster.Core<br>Elsa.Diagnostics.OpenTelemetry<br>Elsa.Diagnostics.StructuredLogs<br>Elsa.Diagnostics.StructuredLogs.Core<br>Elsa.Events<br>Elsa.Expressions<br>Elsa.Expressions.Api<br>Elsa.Expressions.JavaScript.Rendering<br>Elsa.Expressions.JavaScript.Rendering.Core<br>Elsa.Foundation.Identity.Api<br>Elsa.Foundation.Identity.AspNetCoreIdentity<br>Elsa.Http<br>Elsa.Http.Core<br>Elsa.Mediator<br>Elsa.Modularity.Api<br>Elsa.Modularity.Core<br>Elsa.Primitives.Hosting<br>Elsa.Secrets.Core<br>Elsa.Serialization.Newtonsoft<br>Elsa.Studio.Preferences.Api<br>Elsa.Studio.Preferences.Core<br>Elsa.Tasks<br>Elsa.Workflows.Dashboard<br>Elsa.Workflows.Design.Api<br>Elsa.Workflows.ExecutionEvidence<br>Elsa.Workflows.Publishing<br>Elsa.Workflows.Publishing.Api<br>Elsa.Workflows.Runtime.Api<br>Elsa.Workflows.Runtime.Core<br>Elsa.Workflows.Runtime.JavaScript<br>Elsa.Workflows.Runtime.Reconciliation.Core<br>Elsa3.Activities.Design.Import<br>Elsa3.Mapping<br>Elsa3.Models |
 | [Elsa.Architecture.ExtensionBoundary.Tests](../../tests/essentials/Architecture/ExtensionBoundary/Tests/Elsa.Architecture.ExtensionBoundary.Tests.csproj) | test | Elsa.Architecture | - | false | - |
 | [Elsa.Attention.Api.Tests](../../tests/essentials/Attention/Api/Tests/Elsa.Attention.Api.Tests.csproj) | test | Elsa.Attention | - | false | Elsa.Attention.Api<br>Elsa.Testing |
 | [Elsa.Attention.Core.Tests](../../tests/essentials/Attention/Core/Tests/Elsa.Attention.Core.Tests.csproj) | test | Elsa.Attention | - | false | Elsa.Attention.Core |
@@ -194,6 +196,8 @@ Records direct project references only.
 | [Acme.Widgets](../../tests/essentials/Cli/Fixtures/Widgets/Acme.Widgets.csproj) | test | Other | - | false | Elsa.Persistence.EntityFramework |
 | [Elsa.Cli.Fixtures.WorkerContextHost](../../tests/essentials/Cli/Fixtures/WorkerContextHost/Elsa.Cli.Fixtures.WorkerContextHost.csproj) | test | Elsa.Cli | - | false | - |
 | [Elsa.Cli.Tests](../../tests/essentials/Cli/Tests/Elsa.Cli.Tests.csproj) | test | Elsa.Cli | - | false | Acme.Widgets<br>Elsa.Cli<br>Elsa.Cli.Fixtures.CollisionHost<br>Elsa.Cli.Fixtures.Host<br>Elsa.Cli.Fixtures.LegacyHost<br>Elsa.Cli.Fixtures.MinimalHost<br>Elsa.Cli.Fixtures.NuplaneCapabilityHost<br>Elsa.Cli.Fixtures.NuplaneHost<br>Elsa.Cli.Fixtures.PartialContextHost<br>Elsa.Cli.Fixtures.ResourceAwareLiveHost<br>Elsa.Cli.Fixtures.ShellsHost<br>Elsa.Cli.Fixtures.UnsupportedContextHost<br>Elsa.Cli.Fixtures.WorkerContextHost<br>Elsa.Modularity.Planning |
+| [Elsa.Cluster.Testing](../../tests/essentials/Cluster/Testing/Elsa.Cluster.Testing.csproj) | test | Elsa.Cluster | - | false | Elsa.Cluster.Core |
+| [Elsa.Cluster.Tests](../../tests/essentials/Cluster/Tests/Elsa.Cluster.Tests.csproj) | test | Elsa.Cluster | - | false | Elsa.Cluster.Core<br>Elsa.Cluster.InProcess<br>Elsa.Cluster.Testing |
 | [Elsa.Diagnostics.ConsoleLogStreaming.Tests](../../tests/essentials/Diagnostics/ConsoleLogStreaming/Tests/Elsa.Diagnostics.ConsoleLogStreaming.Tests.csproj) | test | Elsa.Diagnostics | - | false | Elsa.Diagnostics.ConsoleLogStreaming |
 | [Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.ProviderTests](../../tests/essentials/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.ProviderTests.csproj) | test | Elsa.Diagnostics | net10.0 | false | Elsa.Diagnostics.OpenTelemetry<br>Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore |
 | [Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.Tests](../../tests/essentials/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/Tests/Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.Tests.csproj) | test | Elsa.Diagnostics | net10.0 | false | Elsa.Diagnostics.OpenTelemetry.Core<br>Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore |
@@ -278,6 +282,7 @@ Records direct project references only.
 | Elsa.Attention | 2 | 2 |
 | Elsa.Caching | 2 | 1 |
 | Elsa.Cli | 2 | 15 |
+| Elsa.Cluster | 2 | 2 |
 | Elsa.Diagnostics | 8 | 8 |
 | Elsa.Events | 3 | 1 |
 | Elsa.Expressions | 9 | 3 |

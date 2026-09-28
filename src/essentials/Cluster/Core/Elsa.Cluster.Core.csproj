@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The cluster membership contract (spec 183, ADR 0078). Layer 1: abstractions and models only. It takes no
+    provider dependency - no EF Core, database engine or actor framework - and
+    ArchitectureGuardTests.ClusterMembership keeps it that way (FR-002).
+  -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Options" />
+    <PackageReference Include="Microsoft.Extensions.Primitives" />
+  </ItemGroup>
+
+</Project>
