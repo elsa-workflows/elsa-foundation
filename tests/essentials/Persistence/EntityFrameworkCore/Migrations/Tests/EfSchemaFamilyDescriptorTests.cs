@@ -65,7 +65,7 @@ public sealed class EfSchemaFamilyDescriptorTests
         {
             var chain = EfSchemaChain.Of(family.Assembly, family.Name);
             var skew = Assert.Throws<EfSchemaVersionSkewException>(() => chain.Upcast(stamp, "any", "Content", "not-json"));
-            Assert.Equal(family.Name, skew.Module);
+            Assert.Equal(family.Name, skew.Family);
             Assert.Equal(chain.ReadableVersions, skew.ReadableVersions);
         });
 }

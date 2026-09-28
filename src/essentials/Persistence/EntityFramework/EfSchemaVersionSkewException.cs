@@ -16,7 +16,7 @@ public sealed class EfSchemaVersionSkewException(string family, string? found, s
     : Exception(BuildMessage(family, found, expected, readableVersions))
 {
     /// <summary>The schema family whose row carries the unreadable version.</summary>
-    public string Module { get; } = family;
+    public string Family { get; } = family;
 
     /// <summary>The schema version found on the row, or null when the row carried none.</summary>
     public string? Found { get; } = found;

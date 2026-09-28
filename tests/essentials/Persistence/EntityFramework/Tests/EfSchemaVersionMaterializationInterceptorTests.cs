@@ -45,7 +45,7 @@ public sealed class EfSchemaVersionMaterializationInterceptorTests : IDisposable
         var query = tracked ? context.Rows : context.Rows.AsNoTracking();
         var skew = Assert.Throws<EfSchemaVersionSkewException>(() => query.Single());
 
-        Assert.Equal(StampedContext.Family, skew.Module);
+        Assert.Equal(StampedContext.Family, skew.Family);
         Assert.Equal("2.0.0", skew.Found);
         Assert.Equal(StampedContext.Version, skew.Expected);
     }

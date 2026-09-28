@@ -81,7 +81,9 @@ registers (`AddEfModuleMigrations`), and a read never bridges a gap (FR-005). A 
 directly (`IEfSchemaVersionedContext`) declares no upcasters: its value converters deserialize the content before any
 upcaster could run, so `EfSchemaVersionMaterializationInterceptor` accepts its current version alone. Every upcaster
 ships a committed fixture pair under `Fixtures/SchemaUpcasters/<family>/<from>-to-<to>/` in its module's test project,
-frozen by `tests/essentials/Architecture/Baselines/schema-upcaster-fixtures.sha256` (FR-022).
+frozen by `tests/essentials/Architecture/Baselines/schema-upcaster-fixtures.sha256`, and a test class deriving directly
+from `EfSchemaUpcasterProof<TUpcaster, TValue>(family, store)`, which runs FR-022's three proofs over every pair of its
+step; the build fails without either (FR-022).
 
 `EfSchemaWriteRefusedException` is the write refusal (FR-016a): a write whose value needs a version later than the
 version the host may write. It carries a stable code, the family and both versions, and spec 182 derives from it for

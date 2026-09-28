@@ -197,7 +197,7 @@ public sealed class EfWorkflowTriggerBindingStoreTests
 
         var skew = await Assert.ThrowsAsync<EfSchemaVersionSkewException>(
             () => store.ListByStimulusTypeAsync(new WorkflowTriggerBindingTypePageQuery("Event")).AsTask());
-        Assert.Equal("RuntimeTriggerBinding", skew.Module);
+        Assert.Equal("RuntimeTriggerBinding", skew.Family);
         Assert.Equal("2", skew.Found);
         Assert.Equal(RuntimeTriggerBindingEfModule.SchemaVersion, skew.Expected);
     }

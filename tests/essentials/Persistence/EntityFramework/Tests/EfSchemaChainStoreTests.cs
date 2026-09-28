@@ -1,41 +1,32 @@
 using System.Text.Json;
-using System.Text.Json.Nodes;
-using Microsoft.EntityFrameworkCore;
 using Xunit;
 using static Elsa.Persistence.EntityFramework.Tests.SchemaChains;
+using static Elsa.Persistence.EntityFramework.Tests.SyntheticOrders;
 
 namespace Elsa.Persistence.EntityFramework.Tests;
 
 /// <summary>
-/// Spec 180's read and write paths end to end, through a store written the way every first-party store now is, over a
-/// synthetic family whose content has moved twice: version 2 added a currency, with a projection column of its own, and
-/// version 3 added order lines. A row stamped 1 is read through the chain, left untouched by the read, and upgraded when
-/// it is next written; rows the chain cannot place are skew, and a readable row whose content is damaged is corruption.
+/// Spec 180's read and write paths end to end, through a store written the way every first-party store now is, over the
+/// <see cref="SyntheticOrders"/> family. A row stamped 1 is read through the chain, left untouched by the read, and
+/// upgraded when it is next written; rows the chain cannot place are skew, and a readable row whose content is damaged
+/// is corruption. FR-022's fixture proofs for its two upcasters are <see cref="AddCurrencyProof"/> and
+/// <see cref="AddLinesProof"/>.
 /// </summary>
 public sealed class EfSchemaChainStoreTests : IAsyncDisposable
 {
-    private const string Table = "orders";
-    private static readonly EfSchemaChain Orders = Declare("SyntheticOrders", "3", Step<AddCurrency>(), Step<AddLines>());
     private static readonly Order Expected = new("order-1", 42, "EUR", []);
 
-    private readonly TemporarySqliteDatabase database = new("schema-chain");
-    private readonly List<OrdersContext> contexts = [];
-
-    public EfSchemaChainStoreTests()
-    {
-        using var context = new OrdersContext(new DbContextOptionsBuilder<OrdersContext>().UseSqlite(database.ConnectionString).Options);
-        context.Database.EnsureCreated();
-    }
+    private readonly SyntheticOrdersDatabase orders = new();
 
     /// <summary>US1, scenario 1: a version-1 row reads as the domain value the version-3 row of the same order does.</summary>
     [Fact]
     public async Task A_row_two_versions_behind_reads_as_the_current_version_would()
     {
-        await InsertAsync("order-1", "1", null, """{"Id":"order-1","Total":42}""");
-        await InsertAsync("order-3", "3", "EUR", """{"Id":"order-3","Total":42,"Currency":"EUR","Lines":[]}""");
+        await orders.PutAsync("order-1", "1", null, """{"Id":"order-1","Total":42}""");
+        await orders.PutAsync("order-3", "3", "EUR", """{"Id":"order-3","Total":42,"Currency":"EUR","Lines":[]}""");
 
-        Assert.Equal(Expected, await Store().ReadAsync("order-1"));
-        Assert.Equal(Expected with { Id = "order-3" }, await Store().ReadAsync("order-3"));
+        Assert.Equal(Expected, await orders.Store().ReadAsync("order-1"));
+        Assert.Equal(Expected with { Id = "order-3" }, await orders.Store().ReadAsync("order-3"));
     }
 
     /// <summary>US1, scenario 2: a read never rewrites a row, so its stamp and its stored content stay exactly as they were.</summary>
@@ -43,11 +34,11 @@ public sealed class EfSchemaChainStoreTests : IAsyncDisposable
     public async Task Reading_an_older_row_leaves_its_stamp_and_bytes_unchanged()
     {
         const string stored = """{"Id":"order-1","Total":42}""";
-        await InsertAsync("order-1", "1", null, stored);
+        await orders.PutAsync("order-1", "1", null, stored);
 
-        _ = await Store().ReadAsync("order-1");
+        _ = await orders.Store().ReadAsync("order-1");
 
-        Assert.Equal(("1", (string?)null, stored), await RawAsync("order-1"));
+        Assert.Equal(("1", (string?)null, stored), await orders.RawAsync("order-1"));
     }
 
     /// <summary>
@@ -57,17 +48,17 @@ public sealed class EfSchemaChainStoreTests : IAsyncDisposable
     [Fact]
     public async Task A_row_read_two_versions_behind_is_upgraded_when_it_is_next_written()
     {
-        await InsertAsync("order-1", "1", null, """{"Id":"order-1","Total":42}""");
+        await orders.PutAsync("order-1", "1", null, """{"Id":"order-1","Total":42}""");
 
-        var read = await Store().ReadAsync("order-1");
-        await Store().SaveAsync(read with { Total = 43 });
+        var read = await orders.Store().ReadAsync("order-1");
+        await orders.Store().SaveAsync(read with { Total = 43 });
 
-        var (stamp, currency, content) = await RawAsync("order-1");
-        Assert.Equal(Orders.CurrentVersion, stamp);
+        var (stamp, currency, content) = await orders.RawAsync("order-1");
+        Assert.Equal(Chain.CurrentVersion, stamp);
         Assert.Equal("EUR", currency);
         Assert.Equal(Expected with { Total = 43 }, JsonSerializer.Deserialize<Order>(content));
         var calls = UpcasterCalls.Snapshot();
-        Assert.Equal(Expected with { Total = 43 }, await Store().ReadAsync("order-1"));
+        Assert.Equal(Expected with { Total = 43 }, await orders.Store().ReadAsync("order-1"));
         Assert.Equal(calls, UpcasterCalls.Snapshot());
     }
 
@@ -75,10 +66,10 @@ public sealed class EfSchemaChainStoreTests : IAsyncDisposable
     [Fact]
     public async Task A_row_at_the_current_version_runs_no_upcaster()
     {
-        await InsertAsync("order-3", "3", "EUR", """{"Id":"order-3","Total":42,"Currency":"EUR","Lines":[]}""");
+        await orders.PutAsync("order-3", "3", "EUR", """{"Id":"order-3","Total":42,"Currency":"EUR","Lines":[]}""");
         var calls = UpcasterCalls.Snapshot();
 
-        _ = await Store().ReadAsync("order-3");
+        _ = await orders.Store().ReadAsync("order-3");
 
         Assert.Equal(calls, UpcasterCalls.Snapshot());
     }
@@ -90,11 +81,11 @@ public sealed class EfSchemaChainStoreTests : IAsyncDisposable
     [InlineData("")]
     public async Task A_row_the_chain_cannot_place_is_skew_and_never_corruption(string stamp)
     {
-        await InsertAsync("order-x", stamp, "EUR", "not-json");
+        await orders.PutAsync("order-x", stamp, "EUR", "not-json");
 
-        var skew = await Assert.ThrowsAsync<EfSchemaVersionSkewException>(() => Store().ReadAsync("order-x"));
+        var skew = await Assert.ThrowsAsync<EfSchemaVersionSkewException>(() => orders.Store().ReadAsync("order-x"));
 
-        Assert.Equal("SyntheticOrders", skew.Module);
+        Assert.Equal(Family, skew.Family);
         Assert.Equal(stamp, skew.Found);
         Assert.Equal(["1", "2", "3"], skew.ReadableVersions);
     }
@@ -103,21 +94,21 @@ public sealed class EfSchemaChainStoreTests : IAsyncDisposable
     [Fact]
     public async Task A_row_below_a_gap_is_skew_while_one_above_it_still_reads()
     {
-        var gapped = Declare("SyntheticOrders", "3", Step<CurrencyFromNothing>(), Step<AddLines>());
-        await InsertAsync("order-1", "1", null, """{"Id":"order-1","Total":42}""");
-        await InsertAsync("order-2", "2", "EUR", """{"Id":"order-2","Total":42,"Currency":"EUR"}""");
+        var gapped = Declare(Family, "3", Step<CurrencyFromNothing>(), Step<AddLines>());
+        await orders.PutAsync("order-1", "1", null, """{"Id":"order-1","Total":42}""");
+        await orders.PutAsync("order-2", "2", "EUR", """{"Id":"order-2","Total":42,"Currency":"EUR"}""");
 
-        await Assert.ThrowsAsync<EfSchemaVersionSkewException>(() => Store(gapped).ReadAsync("order-1"));
-        Assert.Equal(Expected with { Id = "order-2" }, await Store(gapped).ReadAsync("order-2"));
+        await Assert.ThrowsAsync<EfSchemaVersionSkewException>(() => orders.Store(gapped).ReadAsync("order-1"));
+        Assert.Equal(Expected with { Id = "order-2" }, await orders.Store(gapped).ReadAsync("order-2"));
     }
 
     /// <summary>US2, scenario 4: a readable version whose content is not that version's shape is a damaged row.</summary>
     [Fact]
     public async Task A_readable_row_whose_content_is_damaged_is_corruption()
     {
-        await InsertAsync("order-1", "1", null, "not-json");
+        await orders.PutAsync("order-1", "1", null, "not-json");
 
-        await Assert.ThrowsAsync<InvalidDataException>(() => Store().ReadAsync("order-1"));
+        await Assert.ThrowsAsync<InvalidDataException>(() => orders.Store().ReadAsync("order-1"));
     }
 
     /// <summary>
@@ -129,9 +120,9 @@ public sealed class EfSchemaChainStoreTests : IAsyncDisposable
     [InlineData("2", null, """{"Id":"order-1","Total":42,"Currency":"EUR"}""")]
     public async Task A_projection_is_checked_against_the_definition_of_the_rows_stamped_version(string stamp, string? currency, string content)
     {
-        await InsertAsync("order-1", stamp, currency, content);
+        await orders.PutAsync("order-1", stamp, currency, content);
 
-        await Assert.ThrowsAsync<InvalidDataException>(() => Store().ReadAsync("order-1"));
+        await Assert.ThrowsAsync<InvalidDataException>(() => orders.Store().ReadAsync("order-1"));
     }
 
     /// <summary>FR-018: a write never overwrites a row whose stamp it cannot read, so a newer row's content is never lost.</summary>
@@ -139,227 +130,26 @@ public sealed class EfSchemaChainStoreTests : IAsyncDisposable
     public async Task A_write_refuses_to_replace_a_row_it_cannot_read()
     {
         const string newer = """{"Id":"order-1","Total":42,"Currency":"EUR","Lines":[],"Gift":true}""";
-        await InsertAsync("order-1", "4", "EUR", newer);
+        await orders.PutAsync("order-1", "4", "EUR", newer);
 
-        await Assert.ThrowsAsync<EfSchemaVersionSkewException>(() => Store().SaveAsync(Expected));
+        await Assert.ThrowsAsync<EfSchemaVersionSkewException>(() => orders.Store().SaveAsync(Expected));
 
-        Assert.Equal(("4", "EUR", newer), await RawAsync("order-1"));
+        Assert.Equal(("4", "EUR", newer), await orders.RawAsync("order-1"));
     }
 
     [Fact]
     public async Task Concurrent_readers_of_an_older_row_all_see_the_current_value_and_leave_the_row_as_it_was()
     {
         const string stored = """{"Id":"order-1","Total":42}""";
-        await InsertAsync("order-1", "1", null, stored);
+        await orders.PutAsync("order-1", "1", null, stored);
 
-        var reads = await Task.WhenAll(Enumerable.Range(0, 16).Select(_ => Task.Run(() => Store().ReadAsync("order-1"))));
+        var reads = await Task.WhenAll(Enumerable.Range(0, 16).Select(_ => Task.Run(() => orders.Store().ReadAsync("order-1"))));
 
         Assert.All(reads, read => Assert.Equal(Expected, read));
-        Assert.Equal(("1", (string?)null, stored), await RawAsync("order-1"));
+        Assert.Equal(("1", (string?)null, stored), await orders.RawAsync("order-1"));
     }
 
-    public static TheoryData<string, string> Steps() => new() { { "1", "2" }, { "2", "3" } };
-
-    /// <summary>FR-022, first proof: each upcaster turns its committed source fixture into its committed expected fixture.</summary>
-    [Theory]
-    [MemberData(nameof(Steps))]
-    public void Each_upcaster_turns_its_source_fixture_into_its_expected_fixture(string from, string to) =>
-        EfSchemaUpcasterFixtureSupport.AssertUpcasts(from == "1" ? new AddCurrency() : new AddLines(), Fixture(from, to));
-
-    /// <summary>
-    /// FR-022, second proof, the old-format round trip that enforces expand-only content (FR-027): writing the expected
-    /// value in the source version's format, with every member the target version introduced left unset, reproduces the
-    /// source fixture. A renamed or retyped member would not.
-    /// </summary>
-    [Theory]
-    [MemberData(nameof(Steps))]
-    public void Writing_the_expected_value_at_the_source_version_reproduces_the_source_fixture(string from, string to)
-    {
-        var fixture = Fixture(from, to);
-        var expected = JsonSerializer.Deserialize<Order>(Orders.Upcast(to, Table, nameof(OrderRow.ContentJson), fixture.Expected))!;
-
-        EfSchemaUpcasterFixtureSupport.AssertSemanticallyEqual(fixture.Source, FormatAt(expected, from), $"Writing the '{to}' fixture at '{from}'");
-    }
-
-    /// <summary>
-    /// FR-022, third proof: the source fixture, stored as a row at its version and read through the store's own read
-    /// path, is the same domain value as the expected fixture stored at its version.
-    /// </summary>
-    [Theory]
-    [MemberData(nameof(Steps))]
-    public async Task Reading_the_source_fixture_through_the_store_equals_reading_the_expected_fixture(string from, string to)
-    {
-        var fixture = Fixture(from, to);
-        await InsertAsync("order-1", from, Orders.IsAtOrAfter(from, "2") ? "EUR" : null, fixture.Source);
-        var source = await Store().ReadAsync("order-1");
-
-        await using (var context = new OrdersContext(new DbContextOptionsBuilder<OrdersContext>().UseSqlite(database.ConnectionString).Options))
-        {
-            var row = await context.Orders.SingleAsync(order => order.Id == "order-1");
-            row.SchemaVersion = to;
-            row.Currency = Orders.IsAtOrAfter(to, "2") ? "EUR" : null;
-            row.ContentJson = fixture.Expected;
-            await context.SaveChangesAsync();
-        }
-
-        Assert.Equal(source, await Store().ReadAsync("order-1"));
-    }
-
-    private static EfSchemaUpcasterFixture Fixture(string from, string to) =>
-        EfSchemaUpcasterFixtureSupport.Load("SyntheticOrders", from, to, Table, nameof(OrderRow.ContentJson));
-
-    /// <summary>The order in <paramref name="version"/>'s format: every member a later version introduced left unset.</summary>
-    private static string FormatAt(Order order, string version)
-    {
-        var content = new JsonObject { ["Id"] = order.Id, ["Total"] = order.Total };
-        if (Orders.IsAtOrAfter(version, "2"))
-            content["Currency"] = order.Currency;
-        if (Orders.IsAtOrAfter(version, "3"))
-            content["Lines"] = new JsonArray([.. order.Lines.Select(line => JsonValue.Create(line))]);
-        return content.ToJsonString();
-    }
-
-    public async ValueTask DisposeAsync()
-    {
-        foreach (var context in contexts)
-            await context.DisposeAsync();
-        await database.DisposeAsync();
-    }
-
-    private OrderStore Store(EfSchemaChain? chain = null)
-    {
-        var context = new OrdersContext(new DbContextOptionsBuilder<OrdersContext>().UseSqlite(database.ConnectionString).Options);
-        lock (contexts)
-            contexts.Add(context);
-        return new OrderStore(context, chain ?? Orders);
-    }
-
-    private async Task InsertAsync(string id, string stamp, string? currency, string content)
-    {
-        await using var context = new OrdersContext(new DbContextOptionsBuilder<OrdersContext>().UseSqlite(database.ConnectionString).Options);
-        context.Orders.Add(new OrderRow { Id = id, SchemaVersion = stamp, Currency = currency, ContentJson = content });
-        await context.SaveChangesAsync();
-    }
-
-    private async Task<(string Stamp, string? Currency, string Content)> RawAsync(string id)
-    {
-        await using var context = new OrdersContext(new DbContextOptionsBuilder<OrdersContext>().UseSqlite(database.ConnectionString).Options);
-        var row = await context.Orders.AsNoTracking().SingleAsync(order => order.Id == id);
-        return (row.SchemaVersion, row.Currency, row.ContentJson);
-    }
-
-    /// <summary>
-    /// The read and write paths of spec 180 in their prescribed order: version check, integrity clauses for the stamped
-    /// version, upcast, deserialize, current validation; and a write that checks the stored row, then stamps the current
-    /// version on the current format.
-    /// </summary>
-    private sealed class OrderStore(OrdersContext context, EfSchemaChain chain)
-    {
-        public async Task<Order> ReadAsync(string id) => Read(await context.Orders.AsNoTracking().SingleAsync(order => order.Id == id), id);
-
-        public async Task SaveAsync(Order order)
-        {
-            var row = await context.Orders.SingleOrDefaultAsync(candidate => candidate.Id == order.Id);
-            if (row is null)
-                context.Orders.Add(row = new OrderRow { Id = order.Id });
-            else
-                _ = Read(row, order.Id);
-            row.ContentJson = JsonSerializer.Serialize(order);
-            row.Currency = order.Currency;
-            row.SchemaVersion = chain.CurrentVersion;
-            await context.SaveChangesAsync();
-        }
-
-        private Order Read(OrderRow row, string id)
-        {
-            if (EfSchemaVersion.NotReadable(chain, row.SchemaVersion) || row.Id != id)
-                throw new InvalidDataException("The order row's identity is corrupt.");
-            var hasCurrency = chain.IsAtOrAfter(row.SchemaVersion, "2");
-            if (hasCurrency != row.Currency is not null)
-                throw new InvalidDataException("The order row's currency projection does not match its stamped version.");
-
-            Order order;
-            try
-            {
-                order = JsonSerializer.Deserialize<Order>(chain.Upcast(row.SchemaVersion, Table, nameof(row.ContentJson), row.ContentJson))
-                        ?? throw new InvalidDataException("The order content is empty.");
-            }
-            catch (JsonException exception)
-            {
-                throw new InvalidDataException("The order content is not valid.", exception);
-            }
-
-            if (order.Id != row.Id || order.Currency is null || order.Lines is null || hasCurrency && order.Currency != row.Currency)
-                throw new InvalidDataException("The order content does not match its projections.");
-            return order;
-        }
-    }
-
-    private sealed class OrdersContext(DbContextOptions<OrdersContext> options) : DbContext(options)
-    {
-        public DbSet<OrderRow> Orders => Set<OrderRow>();
-
-        protected override void OnModelCreating(ModelBuilder modelBuilder)
-        {
-            var order = modelBuilder.Entity<OrderRow>();
-            order.ToTable(Table);
-            order.HasKey(row => row.Id);
-            order.Property(row => row.SchemaVersion).HasMaxLength(32).IsRequired();
-        }
-    }
-
-    private sealed class OrderRow
-    {
-        public string Id { get; set; } = "";
-        public string SchemaVersion { get; set; } = "";
-        public string? Currency { get; set; }
-        public string ContentJson { get; set; } = "";
-    }
-
-    private sealed record Order(string Id, int Total, string Currency, string[] Lines)
-    {
-        public bool Equals(Order? other) =>
-            other is not null && Id == other.Id && Total == other.Total && Currency == other.Currency && Lines.SequenceEqual(other.Lines);
-
-        public override int GetHashCode() => HashCode.Combine(Id, Total, Currency);
-    }
-
-    /// <summary>How often each upcaster has run: a test-only observation; the upcasters stay pure functions of their input.</summary>
-    private static class UpcasterCalls
-    {
-        private static int currency;
-        private static int lines;
-
-        public static void Currency() => Interlocked.Increment(ref currency);
-
-        public static void Lines() => Interlocked.Increment(ref lines);
-
-        public static (int Currency, int Lines) Snapshot() => (Volatile.Read(ref currency), Volatile.Read(ref lines));
-    }
-
-    [EfSchemaUpcaster("1", "2")]
-    private sealed class AddCurrency : IEfSchemaUpcaster
-    {
-        public string Upcast(EfSchemaContent content)
-        {
-            UpcasterCalls.Currency();
-            var order = JsonNode.Parse(content.Value)!.AsObject();
-            order["Currency"] = "EUR";
-            return order.ToJsonString();
-        }
-    }
-
-    [EfSchemaUpcaster("2", "3")]
-    private sealed class AddLines : IEfSchemaUpcaster
-    {
-        public string Upcast(EfSchemaContent content)
-        {
-            UpcasterCalls.Lines();
-            var order = JsonNode.Parse(content.Value)!.AsObject();
-            order["Lines"] = new JsonArray();
-            return order.ToJsonString();
-        }
-    }
+    public ValueTask DisposeAsync() => orders.DisposeAsync();
 
     /// <summary>An upcaster into a version below the gap, so the chain declares something under it that must stay unused.</summary>
     [EfSchemaUpcaster("0", "1")]

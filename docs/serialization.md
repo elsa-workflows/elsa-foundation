@@ -118,9 +118,16 @@ From 4.0 on, a change to what a family stores is a new version of that family ([
    (`<Module>.Chain.IsAtOrAfter(row.SchemaVersion, "<version>")`), since an older writer left it unset (FR-008).
 4. Commit the upcaster's fixture pair under `Fixtures/SchemaUpcasters/<family>/<from>-to-<to>/` in the module's
    test project, record it in `tests/essentials/Architecture/Baselines/schema-upcaster-fixtures.sha256`, and prove the
-   upcast, the old-format round trip and the store's read of the source fixture (FR-022), as
-   `EfSchemaChainStoreTests` does for its synthetic family with `EfSchemaUpcasterFixtureSupport`. The build fails for
-   an upcaster without a pair, and for a recorded fixture that is edited or deleted.
+   upcast, the old-format round trip and the store's read of the source fixture (FR-022) with a test class deriving
+   directly from `EfSchemaUpcasterProof<TUpcaster, TValue>(family, store)`, compiled in from
+   `EfSchemaUpcasterFixtureSupport.cs`. The base class holds all three proofs; the module supplies only the store's
+   half, as `SyntheticOrders.cs` does for the synthetic family. The build fails for an upcaster without a pair or
+   without such a class, for a committed pair no such class proves, and for a recorded fixture that is edited or
+   deleted.
+5. When the upcaster reaches a column the stores edit in place, as Identity's coordinators edit a user's registries,
+   the write upgrades the whole row first, upcasting every content column and restamping it, so a stamped row is never
+   partly in an older format (FR-014); `EfSchemaFamilyDeclarationGuardTests` fails an in-place content write that does
+   not restamp its row, directly or through a helper that does.
 
 ## Cross-execution stimulus routing (W7, E3-1 / E3-5)
 

@@ -56,7 +56,7 @@ public sealed class EfSchemaVersionTests
     {
         var exception = Assert.Throws<EfSchemaVersionSkewException>(() => EfSchemaVersion.EnsureReadable(Orders, "4"));
 
-        Assert.Equal("Orders", exception.Module);
+        Assert.Equal("Orders", exception.Family);
         Assert.Equal("4", exception.Found);
         Assert.Equal("3", exception.Expected);
         Assert.Equal(["1", "2", "3"], exception.ReadableVersions);

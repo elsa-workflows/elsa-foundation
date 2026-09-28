@@ -57,7 +57,7 @@ public sealed class EfSchemaChainTests
     {
         var skew = Assert.Throws<EfSchemaVersionSkewException>(() => Orders.Upcast(stamp, "orders", "Content", "{}"));
 
-        Assert.Equal("Orders", skew.Module);
+        Assert.Equal("Orders", skew.Family);
         Assert.Equal(stamp, skew.Found);
         Assert.Equal(["1", "2", "3"], skew.ReadableVersions);
         Assert.False(Orders.IsReadable(stamp));

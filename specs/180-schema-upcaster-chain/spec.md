@@ -29,9 +29,9 @@ The code uses "module" for two different units, and this program has to keep the
 - **EF module**: an `[EfModule]` declaration (ADR 0076, D2). It owns one migrations-history table, `[UsesEfModule]`
   names it, and the activation guard refuses it. The tree declares 13.
 - **Schema family**: the set of tables whose rows stamp one persisted-schema version constant. The skew check names
-  a family, for example `RuntimeOperationalState`. ADR 0077's Context calls the fifteen families "EF modules", and
-  `EfSchemaVersionSkewException.Module` holds a family name, so the word "module" in those places means a family.
-  Each family belongs to exactly one EF module.
+  a family, for example `RuntimeOperationalState`. ADR 0077's Context calls the fifteen families "EF modules", so the
+  word "module" there means a family; `EfSchemaVersionSkewException` named its family property `Module` until this
+  spec renamed it `Family`. Each family belongs to exactly one EF module.
 - **Stamp**: the persisted-schema version a row carries in its `SchemaVersion` column.
 - **Readable set**: the versions of a family a build can read. It holds the build's current version and every
   predecessor the declared chain reaches without a gap.

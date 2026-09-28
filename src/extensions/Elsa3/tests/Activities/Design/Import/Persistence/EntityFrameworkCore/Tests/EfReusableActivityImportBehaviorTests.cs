@@ -453,7 +453,7 @@ public sealed class EfReusableActivityImportBehaviorTests : IAsyncLifetime
             async () => await store.FindCollectionAsync(upload.CollectionHandle, Scope));
 
         var skew = Assert.IsType<EfSchemaVersionSkewException>(wrapped.InnerException);
-        Assert.Equal("Elsa3Import", skew.Module);
+        Assert.Equal("Elsa3Import", skew.Family);
         Assert.Equal("2.0.0", skew.Found);
         Assert.Equal(Elsa3ImportEfModule.SchemaVersion, skew.Expected);
         Assert.DoesNotContain("corrupt", skew.Message, StringComparison.OrdinalIgnoreCase);

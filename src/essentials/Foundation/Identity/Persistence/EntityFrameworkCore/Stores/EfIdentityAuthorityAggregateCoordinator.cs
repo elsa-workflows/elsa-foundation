@@ -55,7 +55,12 @@ public sealed class EfIdentityAuthorityAggregateCoordinator(
                     context.Users.Add(existing);
                 }
                 else
+                {
+                    // Apply rewrites two of the row's content columns and stamps it; the registries it carries over
+                    // must be current too, or the stamp would claim a format they are not in (spec 180, FR-014).
+                    EfIdentityStoreSupport.Upgrade(existing);
                     existing.Revision = checked(existing.Revision + 1);
+                }
 
                 Apply(existing, user);
                 applyWithinAtomic?.Invoke(existing);
@@ -121,7 +126,11 @@ public sealed class EfIdentityAuthorityAggregateCoordinator(
                     context.Roles.Add(existing);
                 }
                 else
+                {
+                    // As for a user: the claim and user-link registries are carried over, so they are upgraded first.
+                    EfIdentityStoreSupport.Upgrade(existing);
                     existing.Revision = checked(existing.Revision + 1);
+                }
                 Apply(existing, role);
                 applyWithinAtomic?.Invoke(existing);
                 CanonicalizeLookupKeys(existing);
@@ -174,11 +183,11 @@ public sealed class EfIdentityAuthorityAggregateCoordinator(
                     return Conflict(id);
 
                 EfIdentityStoreSupport.EnsureUserIdentity(user, tenantId, userId);
-                var claimIds = ReadRegistry(user.ClaimIdsJson, "user claims");
-                var loginIds = ReadRegistry(user.LoginIdsJson, "external logins");
-                var roleLinkIds = ReadRegistry(user.RoleLinkIdsJson, "user-role links");
-                var tokenIds = ReadRegistry(user.TokenIdsJson, "user tokens");
-                var membershipIds = ReadRegistry(user.TenantMembershipIdsJson, "tenant memberships");
+                var claimIds = ReadRegistry(user.SchemaVersion, IdentityIamEfModule.UserTableName, nameof(user.ClaimIdsJson), user.ClaimIdsJson, "user claims");
+                var loginIds = ReadRegistry(user.SchemaVersion, IdentityIamEfModule.UserTableName, nameof(user.LoginIdsJson), user.LoginIdsJson, "external logins");
+                var roleLinkIds = ReadRegistry(user.SchemaVersion, IdentityIamEfModule.UserTableName, nameof(user.RoleLinkIdsJson), user.RoleLinkIdsJson, "user-role links");
+                var tokenIds = ReadRegistry(user.SchemaVersion, IdentityIamEfModule.UserTableName, nameof(user.TokenIdsJson), user.TokenIdsJson, "user tokens");
+                var membershipIds = ReadRegistry(user.SchemaVersion, IdentityIamEfModule.UserTableName, nameof(user.TenantMembershipIdsJson), user.TenantMembershipIdsJson, "tenant memberships");
                 EnsureAggregateRelationshipCapacity(claimIds, loginIds, roleLinkIds, tokenIds, membershipIds);
 
                 var claimRows = await EfIdentityChildRows.LoadAsync(claimIds, context.UserClaims, x => x.Id, token);
@@ -232,7 +241,10 @@ public sealed class EfIdentityAuthorityAggregateCoordinator(
                         "linked role",
                         link.RoleId);
                     EfIdentityStoreSupport.EnsureRoleIdentity(role, tenantId, link.RoleId);
-                    role.UserLinkIdsJson = RemoveId(role.UserLinkIdsJson, link.Id);
+                    EfIdentityStoreSupport.Upgrade(role);
+                    role.UserLinkIdsJson = RemoveId(
+                        EfIdentityStoreSupport.ReadSet(role.SchemaVersion, IdentityIamEfModule.RoleTableName, nameof(role.UserLinkIdsJson), role.UserLinkIdsJson),
+                        link.Id);
                     role.Revision = checked(role.Revision + 1);
                     context.UserRoles.Remove(link);
                 }
@@ -286,8 +298,8 @@ public sealed class EfIdentityAuthorityAggregateCoordinator(
                     return Conflict(id);
 
                 EfIdentityStoreSupport.EnsureRoleIdentity(role, tenantId, roleId);
-                var claimIds = ReadRegistry(role.ClaimIdsJson, "role claims");
-                var roleLinkIds = ReadRegistry(role.UserLinkIdsJson, "user-role links");
+                var claimIds = ReadRegistry(role.SchemaVersion, IdentityIamEfModule.RoleTableName, nameof(role.ClaimIdsJson), role.ClaimIdsJson, "role claims");
+                var roleLinkIds = ReadRegistry(role.SchemaVersion, IdentityIamEfModule.RoleTableName, nameof(role.UserLinkIdsJson), role.UserLinkIdsJson, "user-role links");
                 EnsureAggregateRelationshipCapacity(claimIds, roleLinkIds);
 
                 var claimRows = await EfIdentityChildRows.LoadAsync(claimIds, context.RoleClaims, x => x.Id, token);
@@ -315,8 +327,13 @@ public sealed class EfIdentityAuthorityAggregateCoordinator(
                         "linked user",
                         link.UserId);
                     EfIdentityStoreSupport.EnsureUserIdentity(user, tenantId, link.UserId);
-                    user.RoleLinkIdsJson = RemoveId(user.RoleLinkIdsJson, link.Id);
-                    user.RoleIdsJson = RemoveEquivalentId(user.RoleIdsJson, link.RoleId);
+                    EfIdentityStoreSupport.Upgrade(user);
+                    user.RoleLinkIdsJson = RemoveId(
+                        EfIdentityStoreSupport.ReadSet(user.SchemaVersion, IdentityIamEfModule.UserTableName, nameof(user.RoleLinkIdsJson), user.RoleLinkIdsJson),
+                        link.Id);
+                    user.RoleIdsJson = RemoveEquivalentId(
+                        EfIdentityStoreSupport.ReadSet(user.SchemaVersion, IdentityIamEfModule.UserTableName, nameof(user.RoleIdsJson), user.RoleIdsJson),
+                        link.RoleId);
                     user.Revision = checked(user.Revision + 1);
                     context.UserRoles.Remove(link);
                 }
@@ -534,9 +551,13 @@ public sealed class EfIdentityAuthorityAggregateCoordinator(
         entity.SchemaVersion = IdentityIamEfModule.SchemaVersion;
     }
 
-    private static IReadOnlyList<string> ReadRegistry(string? json, string owner)
+    /// <summary>
+    /// A registry of the row being deleted, read through the family's chain from the row's stamp (spec 180, FR-009). The
+    /// row is removed rather than written, so it is read as stored and never upgraded.
+    /// </summary>
+    private static IReadOnlyList<string> ReadRegistry(string? schemaVersion, string table, string column, string json, string owner)
     {
-        var values = EfIdentityStoreSupport.DeserializeSet(json)
+        var values = EfIdentityStoreSupport.ReadSet(schemaVersion, table, column, json)
             .OrderBy(value => value, StringComparer.Ordinal)
             .ToArray();
         if (values.Length > EfIdentityStoreSupport.MaximumMaterializedListEntries)
@@ -585,17 +606,11 @@ public sealed class EfIdentityAuthorityAggregateCoordinator(
             _ => EfIdentityAuthorityConflict.None
         };
 
-    private static string RemoveId(string json, string id)
-    {
-        var values = EfIdentityStoreSupport.DeserializeSet(json).Where(x => !string.Equals(x, id, StringComparison.Ordinal)).ToHashSet(StringComparer.Ordinal);
-        return EfIdentityStoreSupport.SerializeSet(values);
-    }
+    private static string RemoveId(IReadOnlySet<string> ids, string id) =>
+        EfIdentityStoreSupport.SerializeSet(ids.Where(x => !string.Equals(x, id, StringComparison.Ordinal)).ToHashSet(StringComparer.Ordinal));
 
-    private static string RemoveEquivalentId(string json, string id)
-    {
-        var values = EfIdentityStoreSupport.DeserializeSet(json).Where(x => !Same(x, id)).ToHashSet(StringComparer.Ordinal);
-        return EfIdentityStoreSupport.SerializeSet(values);
-    }
+    private static string RemoveEquivalentId(IReadOnlySet<string> ids, string id) =>
+        EfIdentityStoreSupport.SerializeSet(ids.Where(x => !Same(x, id)).ToHashSet(StringComparer.Ordinal));
 
     private static bool CanWrite(long? current, long? expected) => expected is null || (current is null ? expected == 0 : current == expected);
     private static bool Same(string? left, string? right) => string.Equals(EfIdentityStoreSupport.Normalize(left), EfIdentityStoreSupport.Normalize(right), StringComparison.Ordinal);

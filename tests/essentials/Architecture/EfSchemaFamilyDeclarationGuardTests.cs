@@ -21,11 +21,15 @@ namespace Elsa.Architecture.Tests;
 /// <item>a family EF materializes directly, through <c>IEfSchemaVersionedContext</c>, declares no upcasters, since its
 /// content is deserialized before any upcaster could run;</item>
 /// <item>every write that stamps a constant stamps the version its family's declaration names current (FR-013);</item>
-/// <item>every write that rewrites a row's content in place stamps the row again, so its stamp always describes its
-/// content: a row read at an older version and written back is upgraded, never left claiming the old version over
-/// content now in the current format (FR-014);</item>
+/// <item>every write that rewrites a row's content in place stamps the row again in the same member, itself or through a
+/// helper that does, so its stamp always describes its content: a row read at an older version and written back is
+/// upgraded, never left claiming the old version over content now in the current format (FR-014). A content column is
+/// one the tree names as such, or one any store reads through its family's chain;</item>
+/// <item>every read of an Identity content column goes through the family's chain (FR-009);</item>
 /// <item>every upcaster ships a committed fixture pair, and a committed fixture is frozen: editing, deleting or adding
-/// one without recording it in <c>Baselines/schema-upcaster-fixtures.sha256</c> fails the build (FR-022, SC-005).</item>
+/// one without recording it in <c>Baselines/schema-upcaster-fixtures.sha256</c> fails the build (FR-022, SC-005);</item>
+/// <item>every upcaster, and every committed fixture pair, is proven by a test class deriving from
+/// <c>EfSchemaUpcasterProof&lt;TUpcaster, TValue&gt;</c>, which runs FR-022's three proofs (FR-022).</item>
 /// </list>
 /// </summary>
 /// <remarks>
@@ -126,6 +130,97 @@ public sealed class EfSchemaFamilyDeclarationGuardTests
 
     private const string Pair = "tests/Module/Fixtures/SchemaUpcasters/Orders/1-to-2/";
 
+    /// <summary>Every source that can ship an upcaster or prove one: the production tree and every test tree.</summary>
+    private static SchemaFamilyScan Proving { get; } = SchemaFamilyScan.Of(
+        new[] { "src", "tests" }
+            .SelectMany(root => Directory.EnumerateFiles(Path.Join(RepoRoot, root), "*.cs", SearchOption.AllDirectories))
+            .Where(file => !IsBuildOutput(file) && !HasSegment(RepoRoot, file, "Migrations"))
+            .Select(file => (Path: Path.GetRelativePath(RepoRoot, file), Text: File.ReadAllText(file)))
+            .Where(source => source.Text.Contains("EfSchemaUpcaster", StringComparison.Ordinal)));
+
+    /// <summary>
+    /// FR-022 asks for three proofs per upcaster, not only a fixture pair. They are fixed in
+    /// <c>EfSchemaUpcasterProof&lt;TUpcaster, TValue&gt;</c>, so the build needs only to find a concrete class deriving from it
+    /// for each upcaster that ships, and for each fixture pair committed, including the synthetic family's.
+    /// </summary>
+    [Fact]
+    public void Every_upcaster_ships_its_three_proofs_and_every_fixture_pair_is_proven() =>
+        AssertNone(
+            UpcasterProofRules.Violations(
+                Production.ShippedUpcasters(),
+                Proving.Proofs.Select(proof => (proof.Location, proof.Path, proof.Upcaster, Proving.Resolve(proof.Family) ?? Production.Resolve(proof.Family))).ToArray(),
+                Proving.UpcasterVersions(),
+                UpcasterFixtureRules.Pairs(UpcasterFixtures.Select(fixture => fixture.Path))),
+            "Every upcaster ships FR-022's three proofs - the upcast, the old-format round trip and the read through the store - as " +
+            "a test class deriving from EfSchemaUpcasterProof<TUpcaster, TValue>(family, store), and every committed fixture pair " +
+            "is proven by one (spec 180, FR-022):");
+
+    /// <summary>The proof rule passes vacuously if the scan stops finding proofs, so it must find the synthetic family's two.</summary>
+    [Fact]
+    public void Proof_scan_finds_the_synthetic_familys_proofs()
+    {
+        Assert.Contains(Proving.Proofs, proof => proof.Upcaster == "AddCurrency" && Proving.Resolve(proof.Family) == "SyntheticOrders");
+        Assert.Contains(Proving.Proofs, proof => proof.Upcaster == "AddLines" && Proving.Resolve(proof.Family) == "SyntheticOrders");
+        Assert.True(UpcasterFixtureRules.Pairs(UpcasterFixtures.Select(fixture => fixture.Path)).Count >= 2, "Expected the synthetic family's two fixture pairs.");
+    }
+
+    [Theory]
+    [MemberData(nameof(UnprovenUpcasters))]
+    public void Proof_detector_flags_an_unproven_upcaster_or_fixture_pair(string name, bool shipped, string? provenUpcaster, string? provenFamily, string expected)
+    {
+        var violations = UpcasterProofRules.Violations(
+            shipped ? [("Upcasters.cs(1)", "Orders", "OneToTwo", "1", "2")] : [],
+            provenUpcaster is null ? [] : [("Proof.cs(1)", "Proof.cs", provenUpcaster, provenFamily)],
+            [("Upcasters.cs", "OneToTwo", "1", "2")],
+            [(Pair.TrimEnd('/'), "Orders", "1", "2")]);
+
+        Assert.True(violations.Any(violation => violation.Contains(expected, StringComparison.Ordinal)),
+            $"The proof detector missed '{name}'. It reported: {string.Join("; ", violations)}");
+    }
+
+    [Fact]
+    public void Proof_detector_accepts_an_upcaster_proven_for_its_family() =>
+        Assert.Empty(UpcasterProofRules.Violations(
+            [("Upcasters.cs(1)", "Orders", "OneToTwo", "1", "2")],
+            [("Proof.cs(1)", "Proof.cs", "OneToTwo", "Orders")],
+            [("Upcasters.cs", "OneToTwo", "1", "2")],
+            [(Pair.TrimEnd('/'), "Orders", "1", "2")]));
+
+    public static TheoryData<string, bool, string?, string?, string> UnprovenUpcasters() => new()
+    {
+        { "an upcaster with no proof class", true, null, null, "ships without FR-022's proofs" },
+        { "a proof naming another family", true, "OneToTwo", "Invoices", "ships without FR-022's proofs" },
+        { "a fixture pair no proof proves", false, null, null, "no EfSchemaUpcasterProof proves the 'Orders' fixture pair from '1' to '2'" },
+        { "a proof whose family cannot be resolved", false, "OneToTwo", null, "for a family this guard cannot resolve" },
+        { "a proof of a type that is no upcaster", false, "Helper", "Orders", "cannot resolve to one type carrying [EfSchemaUpcaster(from, to)]" }
+    };
+
+    /// <summary>
+    /// The scan reads a proof's upcaster and family from its base, however it passes them, and skips an abstract class,
+    /// whose proofs run only through a concrete one the rule must see.
+    /// </summary>
+    [Fact]
+    public void Proof_scan_reads_the_upcaster_and_family_a_proof_class_names()
+    {
+        var scan = Scan(
+            """
+            public static class Orders { public const string SchemaFamily = "Orders"; }
+
+            public sealed class Primary() : Tests.EfSchemaUpcasterProof<Sales.OneToTwo, Order>(Orders.SchemaFamily, new Store());
+
+            public sealed class Explicit : EfSchemaUpcasterProof<TwoToThree, Order>
+            {
+                public Explicit() : base("Orders", new Store()) { }
+            }
+
+            public abstract class Shared : EfSchemaUpcasterProof<ThreeToFour, Order>;
+            """);
+
+        Assert.Equal(
+            [("OneToTwo", (string?)"Orders"), ("TwoToThree", "Orders")],
+            scan.Proofs.Select(proof => (proof.Upcaster, scan.Resolve(proof.Family))).ToArray());
+    }
+
     public static TheoryData<string, string[], string, string[], string> ViolatingFixtureSets() => new()
     {
         { "an upcaster with no fixture pair", [], "", ["Orders/1/2"], "'Orders' upcaster from '1' to '2' ships no fixture pair" },
@@ -154,6 +249,84 @@ public sealed class EfSchemaFamilyDeclarationGuardTests
             "stamps the row with the current version in the same member; left at an older stamp, the next read would upcast " +
             "content that is already current (spec 180, FR-014):");
 
+    /// <summary>Every Identity source: its entities, its stores and its adapters', read whether or not they mention a stamp.</summary>
+    private static SchemaFamilyScan Identity { get; } = SchemaFamilyScan.Of(
+        Directory.EnumerateFiles(Path.Join(RepoRoot, "src", "essentials", "Foundation", "Identity"), "*.cs", SearchOption.AllDirectories)
+            .Where(file => !IsBuildOutput(file) && !HasSegment(RepoRoot, file, "Migrations"))
+            .Select(file => (Path: Path.GetRelativePath(RepoRoot, file), Text: File.ReadAllText(file))));
+
+    /// <summary>
+    /// The two reads of the caller's new tenant-membership row, not a stored one: EfTenantMembershipStore serializes its
+    /// sets in the current format, and it carries no stamp until the coordinator prepares it, so there is nothing to upcast.
+    /// </summary>
+    private static readonly IReadOnlySet<(string File, string Member, string Receiver)> IdentityIncomingRowReads =
+        new HashSet<(string, string, string)>
+        {
+            ("EfIdentityAuthorityRelationshipCoordinator.cs", "MutateMembershipAsync", "membership"),
+            ("EfIdentityAuthorityRelationshipCoordinator.cs", "Apply", "source")
+        };
+
+    /// <summary>
+    /// Identity's coordinators read a user's and a role's registries outside any mapper, and one that read a registry
+    /// past the chain passed every store test, because Identity has only ever had one version (#2100 review). Every read
+    /// of an Identity content column - every string column its entities map whose name ends in Json - goes through the
+    /// family's chain (spec 180, FR-009). IdentityIamContentUpgradeTests proves the upgrade those writes call covers every
+    /// such column.
+    /// </summary>
+    /// <remarks>
+    /// Scoped to Identity on purpose: a tree-wide rule would have to know which columns are content, and the tree does not
+    /// say. The same column name is a content document in one family and a projection a query compares in SQL in another;
+    /// an integrity clause reads a row's stored bytes before any upcast, by design (FR-008); and telling a stored row from
+    /// a freshly built replacement copied into it takes data flow this syntax-only guard does not have. Identity's
+    /// entities carry none of that ambiguity: each such column is an id or permission set, read and written only here.
+    /// </remarks>
+    [Fact]
+    public void Every_Identity_content_column_is_read_through_its_chain()
+    {
+        var (violations, columns, reads) = Identity.ContentReads(IsIdentityEntityFile, IsIdentityStoreFile, IdentityIncomingRowReads);
+
+        AssertNone(violations, "An Identity content column is read through its family's chain, from the row's stamp, so an older row " +
+            "is upcast before it is parsed (spec 180, FR-009):");
+        Assert.True(columns.Count >= 14, $"Expected Identity's fourteen content column names; found {columns.Count}: {string.Join(", ", columns)}.");
+        Assert.True(reads >= 40, $"Expected the Identity stores to keep reading their content columns; found {reads} reads.");
+    }
+
+    [Fact]
+    public void Content_read_detector_flags_a_registry_read_past_the_chain()
+    {
+        var scan = SchemaFamilyScan.Of(
+        [
+            ("Entities/Row.cs", """public sealed class Row { public string SchemaVersion { get; set; } = ""; public string ClaimIdsJson { get; set; } = "[]"; public string Name { get; set; } = ""; }"""),
+            ("Stores/Store.cs",
+                """
+                public sealed class Store
+                {
+                    Set Raw(Row row) => Parse(row.ClaimIdsJson);
+                    Set Through(Row row) => ReadSet(row.SchemaVersion, "rows", nameof(row.ClaimIdsJson), row.ClaimIdsJson);
+                    Set Incoming(Row caller) => Parse(caller.ClaimIdsJson);
+                    void Write(Row row, Set ids) { Upgrade(row); row.ClaimIdsJson = Serialize(ids); }
+                    static Set ReadSet(string? stamp, string table, string column, string json) => Parse(Orders.Chain.Upcast(stamp, table, column, json));
+                    static void Upgrade(Row row) { row.ClaimIdsJson = Orders.Chain.Upcast(row.SchemaVersion, "rows", nameof(row.ClaimIdsJson), row.ClaimIdsJson); row.SchemaVersion = Orders.Chain.CurrentVersion; }
+                }
+                """)
+        ]);
+
+        var (violations, columns, _) = scan.ContentReads(
+            path => path.StartsWith("Entities/", StringComparison.Ordinal),
+            path => path.StartsWith("Stores/", StringComparison.Ordinal),
+            new HashSet<(string, string, string)> { ("Store.cs", "Incoming", "caller") });
+
+        Assert.Equal(["ClaimIdsJson"], columns);
+        var violation = Assert.Single(violations);
+        Assert.StartsWith("Stores/Store.cs(3): reads 'row.ClaimIdsJson'", violation);
+    }
+
+    private static bool IsIdentityEntityFile(string path) =>
+        path.Replace(Path.DirectorySeparatorChar, '/').StartsWith("src/essentials/Foundation/Identity/Persistence/EntityFrameworkCore/Entities/", StringComparison.Ordinal);
+
+    private static bool IsIdentityStoreFile(string path) =>
+        path.Replace(Path.DirectorySeparatorChar, '/').Contains("/EntityFrameworkCore/Stores/", StringComparison.Ordinal);
+
     /// <summary>
     /// The rules pass vacuously if the scan stops finding what they judge, so pin floors rather than counts: the
     /// twenty-seven declared families, the checks and stamps of their stores, and a chain handle for each family.
@@ -168,6 +341,10 @@ public sealed class EfSchemaFamilyDeclarationGuardTests
         Assert.True(Production.Stamps.Count >= 60, $"Expected the EF stores to keep stamping their families' constants; found {Production.Stamps.Count} stamps.");
         Assert.True(Production.MaterializedFamilies.Count >= 2, $"Expected the two design contexts EF materializes directly; found {Production.MaterializedFamilies.Count}.");
         Assert.True(Production.ContentRewrites.Count >= 20, $"Expected the EF stores' in-place content rewrites; found {Production.ContentRewrites.Count}.");
+        Assert.Superset(
+            new HashSet<string> { "ClaimIdsJson", "LoginIdsJson", "RoleLinkIdsJson", "TokenIdsJson", "TenantMembershipIdsJson", "UserLinkIdsJson", "RoleIdsJson" },
+            Production.ContentColumns.ToHashSet());
+        Assert.Contains(("Upgrade", 1, 0), Production.StampingMethods);
     }
 
     [Theory]
@@ -268,6 +445,28 @@ public sealed class EfSchemaFamilyDeclarationGuardTests
                 var row = new Row { Id = order.Id, SchemaVersion = Orders.SchemaVersion };
                 row.ContentJson = Serialize(order);
                 return row;
+            }
+
+            Set Claims(Row row) => ReadSet(row.SchemaVersion, "orders", nameof(row.ClaimIdsJson), row.ClaimIdsJson);
+
+            static Set ReadSet(string? stamp, string table, string column, string json) => Parse(Orders.Chain.Upcast(stamp, table, column, json));
+
+            static void Upgrade(Row row)
+            {
+                row.ClaimIdsJson = Orders.Chain.Upcast(row.SchemaVersion, "orders", nameof(row.ClaimIdsJson), row.ClaimIdsJson);
+                row.SchemaVersion = Orders.Chain.CurrentVersion;
+            }
+
+            static void SetClaims(Row row, Set ids)
+            {
+                Upgrade(row);
+                row.ClaimIdsJson = Serialize(ids);
+            }
+
+            void AddClaim(Row row, Set ids)
+            {
+                SetClaims(row, ids);
+                row.ClaimIdsJson = Serialize(ids);
             }
         }
         """;
@@ -469,6 +668,24 @@ public sealed class EfSchemaFamilyDeclarationGuardTests
             "rewrites 'row.ContentJson' but never stamps 'row'"
         },
         {
+            "a registry declared content by the chain helper that reads it, then rewritten without its stamp",
+            """
+            public sealed class Store
+            {
+                Set Read(Row row) => ReadSet(row.SchemaVersion, "users", nameof(row.ClaimIdsJson), row.ClaimIdsJson);
+
+                static Set ReadSet(string? stamp, string table, string column, string json) => Parse(Users.Chain.Upcast(stamp, table, column, json));
+
+                void Edit(Row row, Set ids)
+                {
+                    row.ClaimIdsJson = Serialize(ids);
+                    row.Revision++;
+                }
+            }
+            """,
+            "rewrites 'row.ClaimIdsJson' but never stamps 'row'"
+        },
+        {
             "a stamp of a constant no declaration names current",
             """
             [assembly: EfSchemaFamily(Orders.SchemaFamily, "Sales", Orders.SchemaVersion)]
@@ -504,7 +721,7 @@ public sealed class EfSchemaFamilyDeclarationGuardTests
 
         private readonly Dictionary<string, string?> _constants = new(StringComparer.Ordinal);
         private readonly List<(string Location, string Class, string Value)> _familyConstants = [];
-        private readonly List<(string Location, string Class, ExpressionSyntax? From, ExpressionSyntax? To)> _upcasters = [];
+        private readonly List<(string Location, string Path, string Class, ExpressionSyntax? From, ExpressionSyntax? To)> _upcasters = [];
 
         public List<(string Location, ExpressionSyntax Family)> Checks { get; } = [];
 
@@ -516,11 +733,102 @@ public sealed class EfSchemaFamilyDeclarationGuardTests
 
         public List<(string Location, string Context, string? FamilyClass)> MaterializedFamilies { get; } = [];
 
-        /// <summary>In-place writes of a content column: the receiver, the column, and whether the same member restamps it.</summary>
-        public List<(string Location, string Row, string Column, bool Restamped)> ContentRewrites { get; } = [];
+        /// <summary>
+        /// Every concrete class deriving directly from <c>EfSchemaUpcasterProof&lt;TUpcaster, TValue&gt;(family, store)</c>:
+        /// where it is, the upcaster it proves, and the family it names.
+        /// </summary>
+        public List<(string Location, string Path, string Upcaster, ExpressionSyntax? Family)> Proofs { get; } = [];
+
+        /// <summary>Every upcaster type seen, with the versions its <c>[EfSchemaUpcaster(from, to)]</c> resolves to.</summary>
+        public IReadOnlyList<(string Path, string Class, string? From, string? To)> UpcasterVersions() =>
+            _upcasters.Select(upcaster => (upcaster.Path, upcaster.Class, Resolve(upcaster.From), Resolve(upcaster.To))).ToArray();
 
         /// <summary>The columns a family's stores keep their content document in, by the names the tree gives them.</summary>
-        private static readonly string[] ContentColumns = ["ContentJson", "PayloadJson", "Content", "Payload", "ValueJson", "OutcomeJson"];
+        private static readonly string[] NamedContentColumns = ["ContentJson", "PayloadJson", "Content", "Payload", "ValueJson", "OutcomeJson"];
+
+        private readonly List<(string Path, CompilationUnitSyntax Root)> _roots = [];
+        private readonly List<(string Location, string Row, string Column, SyntaxNode? Member)> _columnWrites = [];
+        private readonly List<(string Name, int Arity, string[] Parameters, SyntaxNode Node)> _methods = [];
+        private IReadOnlySet<(string Name, int Arity)>? _upcastingMethods;
+        private IReadOnlySet<(string Name, int Arity, int Parameter)>? _stampingMethods;
+        private IReadOnlySet<string>? _contentColumns;
+
+        /// <summary>
+        /// Every method that hands one of its parameters to a chain's <c>Upcast</c>, directly or through another such
+        /// method, by name and arity: the store helpers a content column is read through, such as Identity IAM's
+        /// <c>ReadSet</c>.
+        /// </summary>
+        public IReadOnlySet<(string Name, int Arity)> UpcastingMethods => _upcastingMethods ??= Fixpoint<(string Name, int Arity)>(
+            [("Upcast", 4)],
+            (method, known) => method.Node.DescendantNodes().OfType<InvocationExpressionSyntax>().Any(invocation =>
+                known.Contains((InvokedName(invocation), invocation.ArgumentList.Arguments.Count)) &&
+                invocation.ArgumentList.Arguments.Any(argument => argument.Expression is IdentifierNameSyntax identifier && method.Parameters.Contains(identifier.Identifier.ValueText)))
+                ? [(method.Name, method.Parameters.Length)]
+                : []);
+
+        /// <summary>
+        /// Every method that stamps the row one of its parameters holds, directly or through another such method, by name,
+        /// arity and the parameter's position: <c>Upgrade(row)</c>, a <c>Prepare(row, ...)</c>, or a helper calling either.
+        /// </summary>
+        public IReadOnlySet<(string Name, int Arity, int Parameter)> StampingMethods => _stampingMethods ??= Fixpoint<(string Name, int Arity, int Parameter)>(
+            [],
+            (method, known) => method.Parameters
+                .Select((parameter, index) => (parameter, index))
+                .Where(item => StampsRow(method.Node, item.parameter, known))
+                .Select(item => (method.Name, method.Parameters.Length, item.index))
+                .ToArray());
+
+        /// <summary>
+        /// The content columns this rule knows: the names the tree gives its content documents, and every column a store
+        /// names, by <c>nameof</c>, when it reads the column through its family's chain. A column one store upcasts is
+        /// content wherever it is written.
+        /// </summary>
+        public IReadOnlySet<string> ContentColumns => _contentColumns ??= NamedContentColumns
+            .Concat(_roots.SelectMany(source => source.Root.DescendantNodes().OfType<InvocationExpressionSyntax>())
+                .Where(invocation => UpcastingMethods.Contains((InvokedName(invocation), invocation.ArgumentList.Arguments.Count)))
+                .SelectMany(invocation => invocation.ArgumentList.Arguments)
+                .Select(argument => NameOf(argument.Expression))
+                .OfType<string>())
+            .ToHashSet(StringComparer.Ordinal);
+
+        /// <summary>In-place writes of a content column: the receiver, the column, and whether the same member restamps it.</summary>
+        public IReadOnlyList<(string Location, string Row, string Column, bool Restamped)> ContentRewrites =>
+            _columnWrites
+                .Where(write => ContentColumns.Contains(write.Column))
+                .Select(write => (write.Location, write.Row, write.Column, Restamped: write.Member is not null && StampsRow(write.Member, write.Row, StampingMethods)))
+                .ToArray();
+
+        /// <summary>
+        /// Every read of a content column of the entities in the files <paramref name="isEntityFile"/> accepts, in the
+        /// files <paramref name="isStoreFile"/> accepts, that does not go through the family's chain: one that is not an
+        /// argument of an upcasting method, a <c>nameof</c>, or the target of a write, and that
+        /// <paramref name="exempt"/> does not name by file, member and receiver. A content column there is every string
+        /// property whose name ends in <c>Json</c>.
+        /// </summary>
+        public (IReadOnlyList<string> Violations, IReadOnlySet<string> Columns, int Reads) ContentReads(
+            Func<string, bool> isEntityFile,
+            Func<string, bool> isStoreFile,
+            IReadOnlySet<(string File, string Member, string Receiver)> exempt)
+        {
+            var columns = _roots.Where(source => isEntityFile(source.Path))
+                .SelectMany(source => source.Root.DescendantNodes().OfType<PropertyDeclarationSyntax>())
+                .Where(property => property.Type is PredefinedTypeSyntax { Keyword.ValueText: "string" } &&
+                                   property.Identifier.ValueText.EndsWith("Json", StringComparison.Ordinal))
+                .Select(property => property.Identifier.ValueText)
+                .ToHashSet(StringComparer.Ordinal);
+            var reads = _roots.Where(source => isStoreFile(source.Path))
+                .SelectMany(source => source.Root.DescendantNodes().OfType<MemberAccessExpressionSyntax>()
+                    .Where(access => columns.Contains(access.Name.Identifier.ValueText) && !IsWriteTarget(access) && NameOf(access.Parent?.Parent?.Parent as ExpressionSyntax) is null)
+                    .Select(access => (source.Path, Access: access)))
+                .ToArray();
+            var violations = reads
+                .Where(read => !(read.Access.Parent is ArgumentSyntax { Parent.Parent: InvocationExpressionSyntax invocation } &&
+                                 UpcastingMethods.Contains((InvokedName(invocation), invocation.ArgumentList.Arguments.Count))))
+                .Where(read => !exempt.Contains((Path.GetFileName(read.Path), MemberName(read.Access), read.Access.Expression.ToString())))
+                .Select(read => $"{Locate(read.Path, read.Access)}: reads '{read.Access}' without its family's chain; pass it to the chain's Upcast, or a " +
+                                "helper that does, with the row's stamp (spec 180, FR-009).");
+            return (Ordered(violations), columns, reads.Length);
+        }
 
         /// <summary>Every family a check names through a handle, or a <c>SchemaFamily</c> constant holds.</summary>
         public IReadOnlySet<string> NamedFamilies =>
@@ -544,14 +852,18 @@ public sealed class EfSchemaFamilyDeclarationGuardTests
 
         /// <summary>Every declared chain's steps, resolved: the family, and the versions each upcaster reads and produces.</summary>
         public IEnumerable<(string Location, string Family, string From, string To)> UpcasterSteps() =>
+            ShippedUpcasters().Select(step => (step.Location, step.Family, step.From, step.To));
+
+        /// <summary>Every declared chain's steps, with the upcaster type each is.</summary>
+        public IEnumerable<(string Location, string Family, string Upcaster, string From, string To)> ShippedUpcasters() =>
             Declared()
                 .Where(declaration => declaration.Family is not null)
                 .SelectMany(declaration => declaration.Upcasters
                     .Select(name => _upcasters.FirstOrDefault(upcaster => upcaster.Class == name))
                     .Where(upcaster => upcaster.Class is not null)
-                    .Select(upcaster => (upcaster.Location, Family: declaration.Family!, From: Resolve(upcaster.From), To: Resolve(upcaster.To))))
+                    .Select(upcaster => (upcaster.Location, Family: declaration.Family!, upcaster.Class, From: Resolve(upcaster.From), To: Resolve(upcaster.To))))
                 .Where(step => step.From is not null && step.To is not null)
-                .Select(step => (step.Location, step.Family, step.From!, step.To!));
+                .Select(step => (step.Location, step.Family, step.Class, step.From!, step.To!));
 
         public IReadOnlyList<string> RestampViolations() =>
             Ordered(ContentRewrites
@@ -666,6 +978,18 @@ public sealed class EfSchemaFamilyDeclarationGuardTests
 
         private void Read(string path, CompilationUnitSyntax root)
         {
+            _roots.Add((path, root));
+            foreach (var node in root.DescendantNodes())
+            {
+                var (name, parameters) = node switch
+                {
+                    MethodDeclarationSyntax method => (method.Identifier.ValueText, method.ParameterList),
+                    LocalFunctionStatementSyntax local => (local.Identifier.ValueText, local.ParameterList),
+                    _ => ((string?)null, (ParameterListSyntax?)null)
+                };
+                if (name is not null && parameters is not null)
+                    _methods.Add((name, parameters.Parameters.Count, parameters.Parameters.Select(parameter => parameter.Identifier.ValueText).ToArray(), node));
+            }
             var constants = root.DescendantNodes()
                 .OfType<VariableDeclaratorSyntax>()
                 .Select(variable => StringConstant(path, variable))
@@ -712,7 +1036,7 @@ public sealed class EfSchemaFamilyDeclarationGuardTests
                 if (upcaster is not null)
                 {
                     var arguments = upcaster.ArgumentList?.Arguments ?? default;
-                    _upcasters.Add((Locate(path, type), type.Identifier.ValueText, arguments.Count == 2 ? arguments[0].Expression : null, arguments.Count == 2 ? arguments[1].Expression : null));
+                    _upcasters.Add((Locate(path, type), Normalize(path), type.Identifier.ValueText, arguments.Count == 2 ? arguments[0].Expression : null, arguments.Count == 2 ? arguments[1].Expression : null));
                 }
 
                 if (type.BaseList?.Types.Any(baseType => Rightmost(baseType.Type) == "IEfSchemaVersionedContext") == true)
@@ -720,6 +1044,18 @@ public sealed class EfSchemaFamilyDeclarationGuardTests
                     var chain = type.Members.OfType<PropertyDeclarationSyntax>()
                         .FirstOrDefault(property => property.Identifier.ValueText == "SchemaChain")?.ExpressionBody?.Expression;
                     MaterializedFamilies.Add((Locate(path, type), type.Identifier.ValueText, chain is MemberAccessExpressionSyntax { Name.Identifier.ValueText: "Chain" } handle ? Rightmost(handle.Expression) : null));
+                }
+
+                if (!type.Modifiers.Any(SyntaxKind.AbstractKeyword) &&
+                    type.BaseList?.Types.FirstOrDefault(baseType => ProofBase(baseType.Type) is not null) is { } proof)
+                {
+                    // The family is the base's first argument: a primary constructor's, or a constructor's ': base(...)'.
+                    var family = proof is PrimaryConstructorBaseTypeSyntax primary
+                        ? primary.ArgumentList.Arguments.FirstOrDefault()?.Expression
+                        : type.Members.OfType<ConstructorDeclarationSyntax>()
+                            .Select(constructor => constructor.Initializer)
+                            .FirstOrDefault(initializer => initializer?.IsKind(SyntaxKind.BaseConstructorInitializer) == true)?.ArgumentList.Arguments.FirstOrDefault()?.Expression;
+                    Proofs.Add((Locate(path, type), Normalize(path), Rightmost(ProofBase(proof.Type)!.TypeArgumentList.Arguments[0]) ?? "", family));
                 }
             }
 
@@ -743,29 +1079,71 @@ public sealed class EfSchemaFamilyDeclarationGuardTests
                     return (Locate(path, variable), owner, assemblyOf, family);
                 }));
 
-            foreach (var assignment in root.DescendantNodes().OfType<AssignmentExpressionSyntax>()
-                         .Where(assignment => assignment.IsKind(SyntaxKind.SimpleAssignmentExpression) &&
-                                              assignment.Left is MemberAccessExpressionSyntax { Name.Identifier.ValueText: var column } &&
-                                              ContentColumns.Contains(column, StringComparer.Ordinal)))
-            {
-                var target = (MemberAccessExpressionSyntax)assignment.Left;
-                var row = target.Expression.ToString();
-                var member = assignment.Ancestors().FirstOrDefault(node => node is MemberDeclarationSyntax or LocalFunctionStatementSyntax);
-                var restamped = member is not null && (
-                    member.DescendantNodes().OfType<AssignmentExpressionSyntax>().Any(stamp =>
-                        stamp.Left is MemberAccessExpressionSyntax { Name.Identifier.ValueText: "SchemaVersion" } stamped && stamped.Expression.ToString() == row) ||
-                    member.DescendantNodes().OfType<VariableDeclaratorSyntax>().Any(variable =>
-                        variable.Identifier.ValueText == row &&
-                        variable.Initializer?.Value is BaseObjectCreationExpressionSyntax { Initializer: { } initializer } &&
-                        initializer.Expressions.OfType<AssignmentExpressionSyntax>().Any(stamp => Rightmost(stamp.Left) == "SchemaVersion")));
-                ContentRewrites.Add((Locate(path, assignment), row, target.Name.Identifier.ValueText, restamped));
-            }
+            // A column is known to be content only once every source is read, so every write that may be one is kept.
+            _columnWrites.AddRange(root.DescendantNodes().OfType<AssignmentExpressionSyntax>()
+                .Where(assignment => assignment.IsKind(SyntaxKind.SimpleAssignmentExpression) &&
+                                     assignment.Left is MemberAccessExpressionSyntax { Name.Identifier.ValueText: var column } &&
+                                     (column.EndsWith("Json", StringComparison.Ordinal) || NamedContentColumns.Contains(column, StringComparer.Ordinal)))
+                .Select(assignment => (
+                    Locate(path, assignment),
+                    ((MemberAccessExpressionSyntax)assignment.Left).Expression.ToString(),
+                    ((MemberAccessExpressionSyntax)assignment.Left).Name.Identifier.ValueText,
+                    assignment.Ancestors().FirstOrDefault(node => node is MemberDeclarationSyntax or LocalFunctionStatementSyntax))));
 
             Stamps.AddRange(root.DescendantNodes()
                 .OfType<AssignmentExpressionSyntax>()
                 .Where(assignment => assignment.IsKind(SyntaxKind.SimpleAssignmentExpression) && Rightmost(assignment.Left) == "SchemaVersion")
                 .Select(assignment => (Locate(path, assignment), assignment.Right)));
         }
+
+        /// <summary>
+        /// True when <paramref name="member"/> stamps <paramref name="row"/>: assigns its <c>SchemaVersion</c>, creates it
+        /// with one, or passes it to a method of <paramref name="stamping"/> in the position that method stamps.
+        /// </summary>
+        private static bool StampsRow(SyntaxNode member, string row, IReadOnlySet<(string Name, int Arity, int Parameter)> stamping) =>
+            member.DescendantNodes().OfType<AssignmentExpressionSyntax>().Any(stamp =>
+                stamp.Left is MemberAccessExpressionSyntax { Name.Identifier.ValueText: "SchemaVersion" } stamped && stamped.Expression.ToString() == row) ||
+            member.DescendantNodes().OfType<VariableDeclaratorSyntax>().Any(variable =>
+                variable.Identifier.ValueText == row &&
+                variable.Initializer?.Value is BaseObjectCreationExpressionSyntax { Initializer: { } initializer } &&
+                initializer.Expressions.OfType<AssignmentExpressionSyntax>().Any(stamp => Rightmost(stamp.Left) == "SchemaVersion")) ||
+            member.DescendantNodes().OfType<InvocationExpressionSyntax>().Any(invocation =>
+                invocation.ArgumentList.Arguments.Select((argument, index) => (argument, index)).Any(item =>
+                    item.argument.Expression.ToString() == row &&
+                    stamping.Contains((InvokedName(invocation), invocation.ArgumentList.Arguments.Count, item.index))));
+
+        /// <summary>Grows a set of methods to a fixpoint: each pass adds what <paramref name="step"/> finds in any method.</summary>
+        private IReadOnlySet<T> Fixpoint<T>(IEnumerable<T> seed, Func<(string Name, int Arity, string[] Parameters, SyntaxNode Node), IReadOnlySet<T>, IEnumerable<T>> step)
+        {
+            var known = seed.ToHashSet();
+            while (_methods.SelectMany(method => step(method, known)).ToArray() is var found && found.Any(item => !known.Contains(item)))
+                known.UnionWith(found);
+            return known;
+        }
+
+        private static string InvokedName(InvocationExpressionSyntax invocation) => invocation.Expression switch
+        {
+            MemberAccessExpressionSyntax access => access.Name.Identifier.ValueText,
+            SimpleNameSyntax name => name.Identifier.ValueText,
+            _ => ""
+        };
+
+        /// <summary>The member name <c>nameof(x.Member)</c> takes, or null when <paramref name="expression"/> is no <c>nameof</c>.</summary>
+        private static string? NameOf(ExpressionSyntax? expression) =>
+            expression is InvocationExpressionSyntax { Expression: IdentifierNameSyntax { Identifier.ValueText: "nameof" }, ArgumentList.Arguments: [var argument] }
+                ? Rightmost(argument.Expression) ?? (argument.Expression as IdentifierNameSyntax)?.Identifier.ValueText
+                : null;
+
+        private static bool IsWriteTarget(ExpressionSyntax expression) =>
+            expression.Parent is AssignmentExpressionSyntax assignment && assignment.Left == expression;
+
+        private static string MemberName(SyntaxNode node) =>
+            node.Ancestors().OfType<MemberDeclarationSyntax>().FirstOrDefault() switch
+            {
+                MethodDeclarationSyntax method => method.Identifier.ValueText,
+                PropertyDeclarationSyntax property => property.Identifier.ValueText,
+                _ => ""
+            };
 
         /// <summary>A chain handle names its family through its class's <c>SchemaFamily</c> constant: <c>Module.Chain</c>.</summary>
         private string? FamilyOfHandle(ExpressionSyntax expression) =>
@@ -788,7 +1166,17 @@ public sealed class EfSchemaFamilyDeclarationGuardTests
                 ? new StringConstantSyntax(Locate(path, variable), $"{type.Identifier.ValueText}.{variable.Identifier.ValueText}", literal.Token.ValueText)
                 : null;
 
-        private string? Resolve(ExpressionSyntax? expression) => expression switch
+        /// <summary>The <c>EfSchemaUpcasterProof&lt;...&gt;</c> a base type names, however qualified, or null.</summary>
+        private static GenericNameSyntax? ProofBase(TypeSyntax type) => type switch
+        {
+            GenericNameSyntax { Identifier.ValueText: "EfSchemaUpcasterProof", TypeArgumentList.Arguments.Count: > 0 } generic => generic,
+            QualifiedNameSyntax { Right: GenericNameSyntax right } => ProofBase(right),
+            _ => null
+        };
+
+        private static string Normalize(string path) => path.Replace(Path.DirectorySeparatorChar, '/');
+
+        public string? Resolve(ExpressionSyntax? expression) => expression switch
         {
             LiteralExpressionSyntax literal when literal.IsKind(SyntaxKind.StringLiteralExpression) => literal.Token.ValueText,
             MemberAccessExpressionSyntax access => _constants.GetValueOrDefault(Key(access) ?? ""),
@@ -870,8 +1258,65 @@ public sealed class EfSchemaFamilyDeclarationGuardTests
             return violations.Order(StringComparer.Ordinal).ToArray();
         }
 
+        /// <summary>The fixture pairs the committed fixtures form: each step directory a family's fixtures sit in.</summary>
+        public static IReadOnlyList<(string Directory, string Family, string From, string To)> Pairs(IEnumerable<string> paths) =>
+            paths.Select(path => (Path: path, Match: Named.Match("/" + path)))
+                .Where(fixture => fixture.Match.Success)
+                .Select(fixture => (
+                    Directory: fixture.Path[..fixture.Path.LastIndexOf('/')],
+                    Family: fixture.Match.Groups["family"].Value,
+                    From: fixture.Match.Groups["from"].Value,
+                    To: fixture.Match.Groups["to"].Value))
+                .Distinct()
+                .ToArray();
+
         /// <summary>SHA-256 of the fixture with line endings normalized, so a checkout's line-ending conversion is no edit.</summary>
         public static string Hash(string text) =>
             Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text.Replace("\r\n", "\n", StringComparison.Ordinal)))).ToLowerInvariant();
+    }
+
+    /// <summary>
+    /// FR-022's proof rules over the shipped upcasters, the proof classes, every upcaster type seen and the committed
+    /// fixture pairs, so the detector can be pinned on sets that never touch the tree. A proof is a concrete class
+    /// deriving directly from <c>EfSchemaUpcasterProof&lt;TUpcaster, TValue&gt;(family, store)</c>, whose three proofs
+    /// are fixed in that base class: naming the upcaster and its family is all a module can do, so it cannot ship one
+    /// proof without the other two.
+    /// </summary>
+    internal static class UpcasterProofRules
+    {
+        public static IReadOnlyList<string> Violations(
+            IEnumerable<(string Location, string Family, string Upcaster, string From, string To)> shipped,
+            IReadOnlyList<(string Location, string Path, string Upcaster, string? Family)> proofs,
+            IReadOnlyList<(string Path, string Class, string? From, string? To)> upcasters,
+            IEnumerable<(string Directory, string Family, string From, string To)> fixturePairs)
+        {
+            var violations = new List<string>();
+            violations.AddRange(proofs.Where(proof => proof.Family is null)
+                .Select(proof => $"{proof.Location}: proves '{proof.Upcaster}' for a family this guard cannot resolve; name the family with a literal or a constant."));
+
+            var proven = proofs.Where(proof => proof.Family is not null)
+                .Select(proof => (proof.Location, proof.Upcaster, Family: proof.Family!, Step: StepOf(proof.Path, proof.Upcaster, upcasters)))
+                .ToArray();
+            violations.AddRange(proven.Where(proof => proof.Step is null)
+                .Select(proof => $"{proof.Location}: proves '{proof.Upcaster}', which this guard cannot resolve to one type carrying [EfSchemaUpcaster(from, to)]."));
+            violations.AddRange(shipped
+                .Where(step => !proven.Any(proof => proof.Upcaster == step.Upcaster && proof.Family == step.Family))
+                .Select(step => $"{step.Location}: the '{step.Family}' upcaster '{step.Upcaster}' from '{step.From}' to '{step.To}' ships without " +
+                                $"FR-022's proofs; derive a test class from EfSchemaUpcasterProof<{step.Upcaster}, ...>(\"{step.Family}\", ...)."));
+            violations.AddRange(fixturePairs
+                .Where(pair => !proven.Any(proof => proof.Family == pair.Family && proof.Step == (pair.From, pair.To)))
+                .Select(pair => $"{pair.Directory}: no EfSchemaUpcasterProof proves the '{pair.Family}' fixture pair from '{pair.From}' to '{pair.To}', " +
+                                "so nothing checks its upcast, its old-format round trip or its read through the store."));
+            return violations.Order(StringComparer.Ordinal).ToArray();
+        }
+
+        /// <summary>The step of the upcaster a proof names: the one in the proof's own file, else the only one by that name.</summary>
+        private static (string From, string To)? StepOf(string path, string upcaster, IReadOnlyList<(string Path, string Class, string? From, string? To)> upcasters)
+        {
+            var named = upcasters.Where(candidate => candidate.Class == upcaster).ToArray();
+            var local = named.Where(candidate => candidate.Path == path).ToArray();
+            var match = local.Length == 1 ? local[0] : named.Length == 1 ? named[0] : default;
+            return match is { From: { } from, To: { } to } ? (from, to) : null;
+        }
     }
 }

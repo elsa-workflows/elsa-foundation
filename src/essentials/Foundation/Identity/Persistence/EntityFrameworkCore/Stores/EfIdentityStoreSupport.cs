@@ -367,10 +367,51 @@ internal static class EfIdentityStoreSupport
 
     /// <summary>
     /// An id-set content column of an Identity IAM row, upcast from the row's stamp to the current version before it is
-    /// parsed (spec 180, FR-009): the column <paramref name="column"/> of <paramref name="table"/>.
+    /// parsed (spec 180, FR-009): the column <paramref name="column"/> of <paramref name="table"/>. Every read of an
+    /// Identity IAM content column goes through here or through the chain directly, including a read of a row
+    /// <see cref="Upgrade(UserEntity)"/> has already brought current, where the chain runs nothing (FR-021).
     /// </summary>
     public static IReadOnlySet<string> ReadSet(string? schemaVersion, string table, string column, string? json) =>
         DeserializeSet(IdentityIamEfModule.Chain.Upcast(schemaVersion, table, column, json));
+
+    /// <summary>
+    /// Brings a stored user row to the current version in place, before a write edits it or writes it back: every
+    /// content column is upcast from the row's stamp, then the row is stamped current (spec 180, FR-013 and FR-014). A
+    /// write that only stamped the row would leave the registries it does not rewrite in their old format under a stamp
+    /// that claims the current one, and the next read would upcast them from the wrong version. At the current stamp it
+    /// changes nothing (FR-021).
+    /// </summary>
+    public static void Upgrade(UserEntity user) => Upgrade(user, IdentityIamEfModule.Chain);
+
+    /// <summary>Brings a stored role row to the current version in place, as <see cref="Upgrade(UserEntity)"/> does a user row.</summary>
+    public static void Upgrade(RoleEntity role) => Upgrade(role, IdentityIamEfModule.Chain);
+
+    /// <summary>
+    /// <see cref="Upgrade(UserEntity)"/> over <paramref name="chain"/>. Identity IAM has only ever had one version, so
+    /// its tests prove the upgrade, and that it covers every content column the model maps, over a chain of their own.
+    /// </summary>
+    internal static void Upgrade(UserEntity user, EfSchemaChain chain)
+    {
+        const string table = IdentityIamEfModule.UserTableName;
+        user.RoleIdsJson = chain.Upcast(user.SchemaVersion, table, nameof(user.RoleIdsJson), user.RoleIdsJson);
+        user.DirectPermissionsJson = chain.Upcast(user.SchemaVersion, table, nameof(user.DirectPermissionsJson), user.DirectPermissionsJson);
+        user.ClaimIdsJson = chain.Upcast(user.SchemaVersion, table, nameof(user.ClaimIdsJson), user.ClaimIdsJson);
+        user.LoginIdsJson = chain.Upcast(user.SchemaVersion, table, nameof(user.LoginIdsJson), user.LoginIdsJson);
+        user.RoleLinkIdsJson = chain.Upcast(user.SchemaVersion, table, nameof(user.RoleLinkIdsJson), user.RoleLinkIdsJson);
+        user.TokenIdsJson = chain.Upcast(user.SchemaVersion, table, nameof(user.TokenIdsJson), user.TokenIdsJson);
+        user.TenantMembershipIdsJson = chain.Upcast(user.SchemaVersion, table, nameof(user.TenantMembershipIdsJson), user.TenantMembershipIdsJson);
+        user.SchemaVersion = chain.CurrentVersion;
+    }
+
+    /// <summary><see cref="Upgrade(RoleEntity)"/> over <paramref name="chain"/>, for the same reason as the user overload.</summary>
+    internal static void Upgrade(RoleEntity role, EfSchemaChain chain)
+    {
+        const string table = IdentityIamEfModule.RoleTableName;
+        role.PermissionsJson = chain.Upcast(role.SchemaVersion, table, nameof(role.PermissionsJson), role.PermissionsJson);
+        role.ClaimIdsJson = chain.Upcast(role.SchemaVersion, table, nameof(role.ClaimIdsJson), role.ClaimIdsJson);
+        role.UserLinkIdsJson = chain.Upcast(role.SchemaVersion, table, nameof(role.UserLinkIdsJson), role.UserLinkIdsJson);
+        role.SchemaVersion = chain.CurrentVersion;
+    }
 
     public static IReadOnlySet<string> DeserializeSet(string? json)
     {
