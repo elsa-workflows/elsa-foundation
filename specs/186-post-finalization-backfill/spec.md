@@ -40,7 +40,7 @@ addition:
 - **Completion version**: the version a finish record names. No row of the family below it remains in that database.
 - **Content-addressed row**: a row whose identity is derived from its stored content, so rewriting it would change or
   forge its identity: a workflow executable or an executable activity template (ADR 0038). A family declares which of
-  its tables hold them (FR-010).
+  its tables hold them (FR-010b).
 - **Rewriter**: a family's operation that reads one row through the family's read path and writes it back through its
   write path (FR-004).
 - **Upgrade pass**, **verification pass**: the two scans of one run (FR-005, FR-013). The first rewrites; the second
@@ -106,7 +106,7 @@ It holds through seven mechanisms, each tested separately (Success Criteria):
    integrity clauses apply, and writes through the write path, so the stamp is the write version and every write is a
    compare-and-set on the row's revision.
 3. **Content-addressed rows are never rewritten, and a family that holds any below V is never recorded complete at V**
-   (FR-010, FR-011). Completeness is therefore never claimed over rows nothing may upgrade.
+   (FR-010a, FR-011a). Completeness is therefore never claimed over rows nothing may upgrade.
 4. **The settle condition comes before verification** (FR-012). Every counted member has reported observing the
    finalized version, and a margin has passed for writes already in flight.
 5. **Completion is recorded only from a verification pass that found nothing** (FR-013, FR-014), by compare-and-set.
@@ -328,14 +328,15 @@ after one run with no membership table.
 
 **Content-addressed rows**
 
-- **FR-010**: The backfill MUST NOT rewrite a content-addressed row (Q5 on #2093; spec 180, FR-020 and FR-028). Each
-  family's declaration (spec 180, FR-001) MUST name its content-addressed tables, and an architecture test MUST fail the
-  build when a table holding executables or executable activity templates is not named. Such rows keep their stamps
-  and are read through the chain every time.
-- **FR-011**: A family with any content-addressed row below version V MUST NOT be recorded complete at V. Its status
-  MUST say that content-addressed rows below V remain and cannot be upgraded. A feature that declares a completeness
-  requirement (spec 182, FR-005) on a family that names content-addressed tables MUST fail the build, because it could
-  never leave dormancy.
+- **FR-010a**: The backfill MUST NOT rewrite a content-addressed row (Q5 on #2093; spec 180, FR-020 and FR-028). Such
+  rows keep their stamps and are read through the chain every time.
+- **FR-010b**: Each family's declaration (spec 180, FR-001) MUST name its content-addressed tables, and an
+  architecture test MUST fail the build when a table holding executables or executable activity templates is not
+  named.
+- **FR-011a**: A family with any content-addressed row below version V MUST NOT be recorded complete at V.
+- **FR-011b**: Its status MUST say that content-addressed rows below V remain and cannot be upgraded.
+- **FR-011c**: A feature that declares a completeness requirement (spec 182, FR-005) on a family that names
+  content-addressed tables MUST fail the build, because it could never leave dormancy.
 
 **Recording completion**
 
