@@ -7,9 +7,10 @@ namespace Elsa.Versioning.Calculator;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Each <c>PackageVersion</c> entry is read per package id and belongs only to the projects with an external edge to
-/// that id (FR-003), so a bump advances exactly those projects (SC-004). An entry no project references directly — a
-/// transitive pin — therefore advances nothing, as FR-003 is written.
+/// Each <c>PackageVersion</c> entry is read per package id and belongs only to the projects whose nuspec lists that id:
+/// those with an external edge to it, and those with a pinned-transitive edge, whose nuspec
+/// <c>CentralPackageTransitivePinningEnabled</c> writes it into (FR-003). So a bump advances exactly those projects
+/// (SC-004), and an entry no package reaches advances nothing.
 /// </para>
 /// <para>
 /// Everything else in the file — its properties and any other items — is a repository-wide input (FR-004): it can

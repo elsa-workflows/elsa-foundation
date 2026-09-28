@@ -66,6 +66,20 @@ jobs:
         with:
           dotnet-version: 10.x
 
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/Directory.Packages.props', '**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      # The dependency map's pinned-transitive edges are read from each packable project's restore output (spec 149
+      # FR-012), so the check needs a restore of the tree it checks. A fresh one here means the check never compares
+      # the committed map against restore output older than the commit.
+      - name: Restore
+        run: dotnet restore Elsa.Server.slnx -p:WarningsNotAsErrors=NU1603
+
       - name: Check generated maps against the tree
         run: dotnet run --project tools/maps/Elsa.Maps.Generator -c Release -- check
 
@@ -82,6 +96,7 @@ jobs:
           the files that would change. To fix it:
 
           ```bash
+          dotnet restore Elsa.Server.slnx
           dotnet run --project tools/maps/Elsa.Maps.Generator -- all
           ```
 

@@ -9,7 +9,8 @@ publishing (#2082) read its output; it packs, pushes and records nothing itself.
 ```bash
 dotnet run --project tools/versioning/Elsa.Versioning.Calculator -- \
   --record-ref origin/publish-state [--commit HEAD] [--output computation.json] \
-  [--pack-properties package-versions.props --branch main]
+  [--pack-properties package-versions.props --branch main] \
+  [--force-advance Elsa.Tasks,Elsa.Http --force-reason "<why>"]
 
 dotnet run --project tools/versioning/Elsa.Versioning.Calculator -- \
   --record published-versions.json [--commit <revision>] [--repo <dir>] [--output <file>]
@@ -18,19 +19,24 @@ dotnet run --project tools/versioning/Elsa.Versioning.Calculator -- \
 `--record-ref` reads `published-versions.json` (or `--record-path`) from a revision without checking it out;
 `--record` reads a file. `--commit` defaults to `HEAD`, `--repo` to the current directory, and the JSON goes to
 standard output unless `--output` names a file. `--pack-properties` also writes the MSBuild file that packs the
-computation from the branch `--branch` names ([Packing](#packing)); the two go together.
+computation from the branch `--branch` names ([Packing](#packing)); the two go together. `--force-advance` and
+`--force-reason` advance named packages whose inputs did not change ([Force-advance](#force-advance)); they go
+together too.
 
 | Exit | Meaning |
 |---|---|
 | 0 | Computed. |
 | 1 | A publish gate refused: monotonicity (FR-012), or forward-only (FR-021), which includes a latest publish missing from the repository. Nothing may be published. |
-| 2 | Invalid input: usage, an unreadable record, a stale or unknown-schema dependency map, a record entry whose commit is missing, an import it cannot resolve. |
+| 2 | Invalid input: usage, an unreadable record, a stale or unknown-schema dependency map, a record entry whose commit is missing, an import it cannot resolve, a force-advance naming no package, a package twice, a package the commit lacks, or no reason. |
 
 ## What it reads
 
 Only git objects: the commit being built, the commit each record entry names, and the
 [dependency map](../../docs/maps/dependency-map.json) committed in each of them, which is its sole source of
-package ids, version lines, project paths and ownership. It never reads the working tree, a clock, the
+package ids, version lines, project paths, ownership and the packages each nuspec lists. It reads schema version 2
+of the map and refuses any other, version 1 included: that one records no pinned-transitive edges, so it cannot say
+which packages a pin reaches, and a record entry naming a commit that carries it stops the computation rather than
+comparing against an empty set. It never reads the working tree, a clock, the
 environment or a feed, and it can run only the read-only git commands `cat-file`, `ls-tree`, `merge-base` and
 `rev-parse`, so the same commit and record revision give byte-identical output on any machine (FR-009, SC-008).
 A shallow clone lacks the commits it compares; fetch full history.
@@ -89,9 +95,25 @@ fingerprint to stamp into the package (FR-018): a SHA-256 over exactly the input
 A package is changed when its package-affecting inputs differ from those at the commit its record entry names —
 compared as two trees, each read through its own dependency map, so a move is a change and never runs a version
 backwards (SC-010). Its inputs are the files its project owns, the build files every build of it reads, and the
-`Directory.Packages.props` entries of the packages it references. Spec 150's
-[Decisions](../../specs/150-package-version-computation/spec.md#decisions) record exactly which files those are, and
-the rules on top: Line A moving as one, tool packages, and a major change reaching the packages that reference it.
+`Directory.Packages.props` entries of every external package its nuspec lists (FR-003): each it references
+directly, and each the dependency map records as a pinned-transitive edge, a package it reaches only through its other
+dependencies whose pin `CentralPackageTransitivePinningEnabled` writes into its nuspec. So a pin bump advances exactly
+the packages whose nuspec lists that package, and a package whose set of pinned-transitive edges changes advances
+although no pin moved; a reason such as `Directory.Packages.props: Microsoft.OpenApi, pinned transitively (changed)`
+names the edge. Spec 150's [Decisions](../../specs/150-package-version-computation/spec.md#decisions) record exactly
+which files those are, and the rules on top: Line A moving as one, tool packages, and a major change reaching the
+packages that reference it.
+
+## Force-advance
+
+`--force-advance` names packages to advance although none of their inputs changed, separated by commas or whitespace,
+and `--force-reason` says why: the escape hatch at publish time for a change no input shows (FR-003). Each named
+package advances exactly as a changed one does — to one past its recorded patch, with Line A moving as one and a tool
+carrying it moving too — and carries `force-advanced: <reason>` among its `reasons` in the output, beside any input
+that did change, so it still advances once. The monotonicity gate (FR-012) holds for it like any other package.
+Package ids compare case-insensitively; a name the commit has no packable project for, a name given twice, or a blank
+reason is refused with exit 2 rather than advancing nothing. The force is not recorded anywhere but the output: the
+next computation, without it, compares the package against the record as usual.
 
 ## Packing
 
@@ -124,11 +146,12 @@ because the calculator refuses an import whose path it cannot resolve statically
   branch carries `branch-<name>`: a leading `refs/heads/` dropped, lowercased, every run of characters other than
   `a-z` and `0-9` made one `-`, `-` trimmed from both ends, cut to 40 characters and trimmed again. `feat/Issue_2080`
   gives `4.0.9-branch-feat-issue-2080`. No `main` build carries that prefix, and it sorts below `preview`.
-  [`PrereleaseLabel`](Elsa.Versioning.Calculator/PrereleaseLabel.cs) is the one implementation.
-- **Ranges (FR-007), on this repository's own packages.** Every range on a project reference stops below its floor's
+  [`PrereleaseLabel`](Elsa.Versioning.Calculator/PrereleaseLabel.cs) is the one implementation. A branch build packs
+  for CI artifacts and never pushes: its label names the branch, not the commit.
+- **Ranges (FR-007), on Elsa packages only.** Every range on a project reference stops below its floor's
   next major, `[x.y.z, (x+1).0.0)`; the floor is the referenced package's version above. A third party's range is left
   exactly as central package management restores it - the plain version `Directory.Packages.props` names, with no
-  upper bound - pending the owner's decision (spec 150 Decisions). After pack writes the nuspec, a last check fails
+  upper bound - as the owner decided (spec 150 Decisions). After pack writes the nuspec, a last check fails
   the pack and deletes the package when a range on one of this repository's own packages is bounded anywhere else.
   Every one of these effects is gated on this file's own `ElsaVersionComputationCommit`: a pack that does not import
   it - a dev pack, or a pack with only a global `/p:Version`, which is what `packages.yml` still runs until #2082
@@ -149,6 +172,8 @@ the package version, because `packages.yml` still stamps one on every package un
 ## Tests
 
 `tests/essentials/Versioning/Calculator/Tests` builds synthetic histories in throwaway repositories — moves, renames,
-deletions, re-adds, reverts, a rewritten `main`, partial publishes — and runs in CI's fast test job, as do the label and
-pack-properties tests beside them. `tests/essentials/Architecture/PackageVersionBuildCheckTests.cs` and
-`PackageVersioningPackTests.cs` prove the MSBuild side against real builds and packs.
+deletions, re-adds, reverts, a rewritten `main`, partial publishes, pins reached only transitively, force-advances —
+and runs in CI's fast test job, as do the label and pack-properties tests beside them.
+`tests/essentials/Architecture/PackageVersionBuildCheckTests.cs` and `PackageVersioningPackTests.cs` prove the MSBuild
+side against real builds and packs, and `PinnedTransitivePackTests.cs` that pack writes exactly the pinned-transitive
+packages restore lists, which is what the dependency map records.

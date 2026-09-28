@@ -50,6 +50,17 @@ public sealed class CliTests : SyntheticHistory
         Assert.Equal(Compute(commit).ToJson(), File.ReadAllText(outputFile));
     }
 
+    /// <summary>FR-003's force-advance: the ids and the reason reach the computation, and the reason reaches the output.</summary>
+    [Fact]
+    public void The_cli_passes_a_force_advance_to_the_computation()
+    {
+        const string reason = "republish with a patched floor";
+
+        Assert.Equal(0, Run("--repo", Repo.Root, "--record", recordFile, "--output", outputFile, "--force-advance", "Elsa.Tasks, Elsa.Http", "--force-reason", reason));
+        Assert.Equal(Compute(forced: new ForcedAdvance(["Elsa.Tasks", "Elsa.Http"], reason)).ToJson(), File.ReadAllText(outputFile));
+        Assert.Contains(ForcedAdvance.ReasonPrefix + reason, File.ReadAllText(outputFile), StringComparison.Ordinal);
+    }
+
     /// <summary>A commit whose packages no label can be made for writes neither output.</summary>
     [Fact]
     public void The_cli_exits_2_and_writes_nothing_when_no_label_can_be_made()
@@ -82,6 +93,10 @@ public sealed class CliTests : SyntheticHistory
     [InlineData("--record")]
     [InlineData("--record", "RECORD", "--pack-properties", "package-versions.props")]
     [InlineData("--record", "RECORD", "--branch", "main")]
+    [InlineData("--record", "RECORD", "--force-advance", "Elsa.Tasks")]
+    [InlineData("--record", "RECORD", "--force-reason", "a reason")]
+    [InlineData("--record", "RECORD", "--force-advance", "Elsa.Taks", "--force-reason", "a reason")]
+    [InlineData("--record", "RECORD", "--force-advance", ",", "--force-reason", "a reason")]
     public void The_cli_exits_2_on_invalid_input(params string[] arguments) =>
         Assert.Equal(2, Run(["--repo", Repo.Root, .. arguments.Select(argument => argument == "RECORD" ? recordFile : argument)]));
 
