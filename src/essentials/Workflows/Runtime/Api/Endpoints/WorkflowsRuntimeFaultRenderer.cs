@@ -17,8 +17,7 @@ namespace Elsa.Workflows.Runtime.Api.Endpoints;
 /// Renders every dispatch failure for the Runtime owner's endpoints, reproducing the hand-written
 /// mapper's per-endpoint catch ladders: endpoint signals first, then the family the endpoint's
 /// shape marker names. Cancellation never reaches this renderer — the pipeline rethrows it. Every
-/// shape, and an endpoint of none, answers a schema write refusal with a 409 carrying its code
-/// (spec 180, FR-016a).
+/// shape answers a schema write refusal with a 409 carrying its code (spec 180, FR-016a).
 /// </summary>
 internal sealed class WorkflowsRuntimeFaultRenderer : IEndpointFaultRenderer
 {
@@ -129,14 +128,6 @@ internal sealed class WorkflowsRuntimeFaultRenderer : IEndpointFaultRenderer
                     await RuntimeProblemWriting.ProblemAsync(context, StatusCodes.Status500InternalServerError, "Unexpected error occurred.");
                     return true;
             }
-        }
-
-        // An endpoint of no shape leaves the rest to translation, but WorkflowsRuntimeProblemWriter keeps only a
-        // problem's first message, which would drop a refusal's code.
-        if (exception is SchemaWriteRefusedException unshaped)
-        {
-            await RuntimeProblemWriting.SchemaWriteRefusedAsync(context, unshaped);
-            return true;
         }
 
         return false;
