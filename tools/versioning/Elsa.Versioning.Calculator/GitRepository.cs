@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -91,35 +90,10 @@ public sealed partial class GitRepository
     private static byte[] Require(GitResult result, string what) =>
         result.ExitCode == 0 ? result.Output : throw new InvalidOperationException($"git {what} failed: {result.Error}");
 
-    private GitResult Run(params string[] arguments)
-    {
-        if (!ReadOnlyCommands.Contains(arguments[0]))
-            throw new InvalidOperationException($"git {arguments[0]} is not a read-only command the calculator may run.");
-
-        var startInfo = new ProcessStartInfo("git")
-        {
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            StandardErrorEncoding = Encoding.UTF8
-        };
-        foreach (var argument in (string[])["-C", Directory, .. arguments])
-            startInfo.ArgumentList.Add(argument);
-
-        using var process = Process.Start(startInfo)
-                            ?? throw new InvalidOperationException("Failed to start git; the calculator reads history through it.");
-
-        // Drain both pipes at once: reading one to the end first deadlocks when git fills the other's buffer.
-        using var output = new MemoryStream();
-        var outputTask = process.StandardOutput.BaseStream.CopyToAsync(output);
-        var errorTask = process.StandardError.ReadToEndAsync();
-        process.WaitForExit();
-        outputTask.GetAwaiter().GetResult();
-
-        return new GitResult(process.ExitCode, output.ToArray(), errorTask.GetAwaiter().GetResult().Trim());
-    }
-
-    private sealed record GitResult(int ExitCode, byte[] Output, string Error);
+    private GitResult Run(params string[] arguments) =>
+        ReadOnlyCommands.Contains(arguments[0])
+            ? GitProcess.Run(Directory, arguments)
+            : throw new InvalidOperationException($"git {arguments[0]} is not a read-only command the calculator may run.");
 
     [GeneratedRegex("^(?:[0-9a-f]{40}|[0-9a-f]{64})$", RegexOptions.CultureInvariant)]
     private static partial Regex ObjectIdPattern();

@@ -6,9 +6,8 @@
     PackageVersioning.props, which selects and checks the version this file bounds ranges from.
 
     Every effect below is gated on computed input alone (ElsaVersionComputationCommit set), not on
-    $(_ElsaPackageVersion): a dev build (no computed input, no /p:Version) and a plain /p:Version pack - exactly
-    what packages.yml runs today - carry no bounded range and no nuspec check, so the next merge to main does not
-    change what packages.yml already publishes. #2082 is what will make computed input packages.yml's own path.
+    $(_ElsaPackageVersion): a dev build (no computed input, no /p:Version) and a local plain /p:Version pack carry no
+    bounded range and no nuspec check. packages.yml packs with computed input only.
 
     Bounding reaches only the packages this repository produces, not a third party's: a dependency this repo's own
     packages.yml pack has never bounded before, and bounding it would trade a silent NuGet resolution for a loud

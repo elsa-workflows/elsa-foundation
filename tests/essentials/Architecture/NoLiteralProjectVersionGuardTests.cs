@@ -23,14 +23,14 @@ namespace Elsa.Architecture.Tests;
 /// setter in a build file outside this scan.
 /// </para>
 /// <para>
-/// These literals never reached a published package: <c>packages.yml</c> passes a global
-/// <c>/p:Version</c> when it packs, which overrides any project-local value at that step. Every other
+/// These literals never reached a published package: <c>packages.yml</c> passed a global
+/// <c>/p:Version</c> when it packed, which overrode any project-local value at that step. Every other
 /// build used the literal — local builds, CI's build-and-test job, Docker images — so it set the
 /// assembly version of every artifact those produce. #2076 removed the eighteen <c>&lt;Version&gt;</c>
 /// elements that had accumulated; like every other project, those projects now take the package version
 /// <c>PackageVersioning.props</c> derives, and the SDK's default assembly version outside a computed build.
-/// This guard keeps the count at zero. FR-005's other clause — the packaging workflow's global
-/// <c>/p:Version</c> — is removed and guarded separately, in #2082.
+/// This guard keeps the count at zero. FR-005's other clause — no global <c>/p:Version</c> from the packaging
+/// workflow — was met by #2082 and is guarded by <c>PackagesWorkflowTests</c> in the publisher's tests.
 /// </para>
 /// </summary>
 public sealed class NoLiteralProjectVersionGuardTests
