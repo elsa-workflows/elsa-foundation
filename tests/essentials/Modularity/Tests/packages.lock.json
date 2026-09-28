@@ -1099,7 +1099,10 @@
         }
       },
       "elsa.cluster.core": {
-        "type": "Project"
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Primitives": "[4.0.0-dev, )"
+        }
       },
       "elsa.cluster.entityframeworkcore": {
         "type": "Project",
@@ -1453,6 +1456,7 @@
           "CShells.AspNetCore.Abstractions": "[0.0.30-preview.159, )",
           "Elsa.Api.AspNetCore": "[4.0.0-dev, )",
           "Elsa.Attention.Core": "[4.0.0-dev, )",
+          "Elsa.Cluster.Core": "[4.0.0-dev, )",
           "Elsa.Foundation.Identity": "[4.0.0-dev, )",
           "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )",
           "Elsa.Modularity.Core": "[4.0.0-dev, )",

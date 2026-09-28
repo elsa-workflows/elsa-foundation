@@ -2,7 +2,7 @@
 
 **Feature Branch**: `claude/2093-rollout-specs`
 **Created**: 2026-09-27
-**Status**: Approved
+**Status**: In progress — B6 ([#2102](https://github.com/elsa-workflows/elsa-foundation/issues/2102)) built the shared dormancy check, the refusal, the catalog, Attention and `/capabilities` reporting; `Elsa.Foundation.Host` does not yet compose the observation the check reads, as it composes no membership (see the 2026-09-29 note).
 **Input**: Workstream B6, [issue #2102](https://github.com/elsa-workflows/elsa-foundation/issues/2102), of the
 cluster-safe schema rollout program [#2093](https://github.com/elsa-workflows/elsa-foundation/issues/2093). A feature
 that needs data only a new persisted-schema version can hold stays dormant until that version is finalized. A dormant
@@ -359,3 +359,37 @@ Recorded 2026-09-27, when the owner answered this spec's open questions on #2093
 - **Q16 — Where the shared check lives.** In the foundation package that holds the finalization and membership
   contracts (spec 181, spec 183), not in a package of its own (FR-003).
 - **Q17 — The refusal code.** Each API owns its codes, as Publishing's do. `schema-version-not-finalized` stays.
+
+**2026-09-29 note.** Found while building B6 (#2102); lands with the B6 PR, whose merge is the owner's approval.
+
+- **Where the check lives.** B5 built the finalization gate inside `Elsa.Persistence.EntityFramework`, which references
+  EF Core, so the only foundation package that holds a finalization or membership contract and is free of EF Core and
+  of any provider is `Elsa.Cluster.Core`, the membership contract. `ISchemaDormancyCheck`, its default
+  `SchemaDormancyCheck` holding the one rule, `[RequiresSchemaVersion]` and the source contract
+  `IObservedSchemaFinalization` live there (FR-001, FR-003). The source over the EF gates, `EfObservedSchemaFinalization`,
+  lives in `Elsa.Cluster.Readability`, which already bridges persistence and membership so that neither depends on the
+  other. `AddEfSchemaDormancy()` composes both, and `AddEfSchemaReadability()` calls it.
+- **The refusal and its code.** The check is EF-free, so its refusal, `SchemaDormancyRefusedException`, lives in
+  `Elsa.Primitives` beside `SchemaWriteRefusedException` and derives from it, not from the EF
+  `EfSchemaWriteRefusedException`. That is what every domain API already answers with 409 (spec 181's 2026-09-28
+  note), so FR-015 holds for it without a new mapping; the shared envelope adds `feature` and `reason`. It carries the
+  code spec 180's write refusal shipped with, `schema-write-refused`, as FR-013 requires ("the same stable code"). Q17's
+  `schema-version-not-finalized` predates B4 naming that code, and would have given the two refusals different codes.
+- **A hold's own words reach operators only.** A domain API's refusal says the version is held by an operator, not the
+  hold's reason or who placed it, because an operator's words may name hosts (FR-011). The catalog and Attention, which
+  are operator surfaces, carry both, as FR-008 asks.
+- **More ways to be unmet than FR-008's three.** Besides waiting for hosts, a hold and completeness, a requirement is
+  unmet while this host has not adopted a finalized version because its membership lapsed (spec 181, FR-018), while this
+  host has read no record of the family (for instance because nothing composes the observation), when this build does
+  not read the version, and when the family's finalized version is one this host cannot read (spec 181, FR-012, which
+  Attention also reports as critical). Each refuses; none is ever read as available.
+- **`Elsa.Foundation.Host` observes nothing yet.** It composes no membership (spec 181's 2026-09-28 note) and no
+  observation of schema finalization, and its shells take every feature from a feed, so no feature there can compose
+  the EF-bound source for it. On it, every declared requirement is reported unmet because the host cannot tell, which is
+  refused and shown, never served. Composing `AddEfSchemaDormancy()` there belongs with composing membership there. The
+  mechanism itself needs no reload on either host kind: the check reads each gate's observation live.
+- **A feature this host has no class for** (a package not loaded) has no requirement the catalog can read, so its
+  availability is left unset rather than claimed.
+- **Nothing is dormant today.** Every chain has one version until 4.0 ships, so no first-party feature declares a
+  requirement, no background task derives new-version data (FR-018), and no capability source marks one dormant
+  (FR-007). The tests use a family whose build is at version 2 against a database finalized at 1.
