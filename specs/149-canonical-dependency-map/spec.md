@@ -129,8 +129,10 @@ check fails naming the dataset.
   reference, whose version `Directory.Packages.props` pins: exactly the dependencies that
   `CentralPackageTransitivePinningEnabled` makes pack write into its nuspec beyond its direct ones, so
   that spec 150 advances every package whose nuspec a pin reaches. Generation MUST read them from the
-  list pack itself reads, the project's restore output, and MUST refuse restore output older than the
-  project's pins or references rather than record it.
+  project's committed NuGet lock file, with no restore, and MUST refuse a lock file older than the
+  project's pins or references rather than record it. Because pack reads another list, restore's
+  `centralTransitiveDependencyGroups`, a test MUST hold the recorded edges to that list wherever a
+  restore has already run.
 
 ### Key Entities
 
@@ -164,8 +166,9 @@ check fails naming the dataset.
   FR-006 codifies.
 - External package versions are available from `Directory.Packages.props` through central package
   management.
-- The tree has been restored before generation and before the freshness check, so each packable
-  project's `obj/project.assets.json` exists (FR-012). The `Maps` workflow restores first.
+- Each project's NuGet lock file is committed beside it, and CI restores in locked mode, so a lock
+  file describes the tree it is committed in (FR-012, #2122). Neither generation nor the freshness
+  check restores.
 
 ## Out of Scope
 
@@ -222,3 +225,28 @@ FR-003 as the owner decided it on 2026-09-27 (#2092).
 - **`schema_version` is 2.** A consumer written for version 1 would read "no pinned-transitive edges" as
   "no package reaches any pin", which is exactly the silent case the edges exist to end, so spec 150's
   calculator refuses version 1.
+
+Recorded when #2122 committed NuGet lock files and moved generation onto them, as the owner decided on
+2026-09-27 (#2092). It supersedes the first and third #2117 entries above; the dataset did not change by
+a byte.
+
+- **Pinned-transitive edges are read from each packable project's `packages.lock.json`.** Generation is
+  a scan of the tree again, and the `Maps` workflow no longer restores. The lock file does not hold the
+  list pack reads: it types `CentralTransitive` every pinned package the project reaches and does not
+  reference, including one it reaches only through a `PrivateAssets="all"` reference, which NuGet
+  leaves out of `centralTransitiveDependencyGroups` and so out of the nuspec. So the edges are the
+  `CentralTransitive` entries reachable, over the lock file's own dependency lists, from a direct
+  reference the project file does not declare private. On 2026-09-28 every `CentralTransitive` entry
+  of all 131 packable projects was reached publicly, and the dataset regenerated from the lock files
+  was byte-identical to the one read from restore output.
+- **The Architecture suite holds the edges to NuGet's own list.** Reading the lock file is a second
+  reading of NuGet's graph, the weakness #2117 named, and a reading that drifted from NuGet's would
+  regenerate the same wrong dataset the freshness check compares with, and pass. So
+  `NuGetLockFileTests` compares every packable node's committed edges with its restore output after
+  CI's restore, and `PinnedTransitivePackTests` packs a fixture holding both lists and the nuspec to
+  each other, the private case included. A direct reference the project file does not declare, such as
+  the analyzer `Directory.Build.props` gives Line A, counts as public; none today reaches a pin.
+- **A lock file the tree has moved past is refused**, on the rules NuGet's locked mode applies: one
+  missing a package the project references, locking one at another version, pinning one at another
+  version than `Directory.Packages.props` holds, leaving unpinned one that file now pins, or listing
+  other projects than the project's references reach. A missing lock file is refused too.

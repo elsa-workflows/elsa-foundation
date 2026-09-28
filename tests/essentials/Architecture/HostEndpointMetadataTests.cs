@@ -59,6 +59,10 @@ public sealed class HostEndpointMetadataTests
             "Elsa.Api.AspNetCore.csproj");
     }
 
+    /// <summary>
+    /// Every project the host restores reaches the restore layer with its committed lock file (#2122): the restores are
+    /// locked, and a locked restore of a project with no lock file writes one and carries on, unlocked, without a word.
+    /// </summary>
     [Fact]
     public void Foundation_host_Dockerfile_includes_its_project_reference_graph()
     {
@@ -67,12 +71,12 @@ public sealed class HostEndpointMetadataTests
         var projectReferences = DiscoverProjectReferences(projectPath);
 
         Assert.NotEmpty(projectReferences);
-        foreach (var referencedProjectPath in projectReferences)
+        foreach (var restoredProjectPath in projectReferences.Append(Path.GetFullPath(projectPath)))
         {
-            var relativeProjectPath = Path.GetRelativePath(RepoRoot, referencedProjectPath).Replace('\\', '/');
+            var relativeProjectPath = Path.GetRelativePath(RepoRoot, restoredProjectPath).Replace('\\', '/');
             var relativeProjectDirectory = Path.GetDirectoryName(relativeProjectPath)!.Replace('\\', '/');
 
-            Assert.Contains($"COPY {relativeProjectPath} {relativeProjectDirectory}/", dockerfile, StringComparison.Ordinal);
+            Assert.Contains($"COPY {relativeProjectPath} {relativeProjectDirectory}/packages.lock.json {relativeProjectDirectory}/", dockerfile, StringComparison.Ordinal);
             Assert.Contains($"COPY {relativeProjectDirectory}/ {relativeProjectDirectory}/", dockerfile, StringComparison.Ordinal);
         }
     }

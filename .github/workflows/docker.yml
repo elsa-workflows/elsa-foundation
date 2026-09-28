@@ -169,9 +169,10 @@ jobs:
         with:
           dotnet-version: 10.x
 
+      # Restore is locked (#2122) against the publisher's own committed lock file.
       - name: Build the publisher
         if: github.event_name == 'pull_request'
-        run: dotnet build tools/versioning/Elsa.Versioning.Publisher -c Release
+        run: dotnet build tools/versioning/Elsa.Versioning.Publisher -c Release -p:RestoreLockedMode=true
 
       - name: Plan
         if: github.event_name == 'pull_request'

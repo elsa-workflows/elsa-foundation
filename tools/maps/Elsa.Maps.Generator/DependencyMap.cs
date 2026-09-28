@@ -18,10 +18,10 @@ namespace Elsa.Maps.Generator;
 /// </para>
 /// <para>
 /// Every edge but one kind comes from the project files. A packable node's pinned-transitive edges — the packages its
-/// nuspec lists because central package management pins them for it transitively — come from its restore output
-/// (<see cref="PinnedTransitiveDependencies"/>), so generating this map, and checking it, needs a restore first. They
-/// are a function of the tree and of the dependencies the exact versions it pins declare, which a NuGet feed does not let
-/// a published version change.
+/// nuspec lists because central package management pins them for it transitively — come from the NuGet lock file
+/// committed beside it (<see cref="PinnedTransitiveDependencies"/>), so generating this map, and checking it, needs no
+/// restore. They are a function of the tree, lock files included, which record the dependencies the exact versions it
+/// pins declare, and a NuGet feed does not let a published version change those.
 /// </para>
 /// <para>
 /// <c>schema_version</c> changes when the shape does in a way a consumer could misread: version 2 added the

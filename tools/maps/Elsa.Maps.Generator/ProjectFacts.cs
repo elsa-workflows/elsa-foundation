@@ -42,6 +42,13 @@ public sealed record ProjectFacts(
     /// <summary>Directly referenced external packages, ordered by id and version.</summary>
     [JsonIgnore]
     public IEnumerable<ExternalEdge> Packages => Edges.OfType<ExternalEdge>();
+
+    /// <summary>
+    /// The ids of the direct references, package or project, the project file declares <c>PrivateAssets="all"</c>: what
+    /// they bring in stays out of the project's nuspec (<see cref="PinnedTransitiveDependencies"/>).
+    /// </summary>
+    [JsonIgnore]
+    public IReadOnlySet<string> PrivateReferences { get; init; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 }
 
 /// <summary>A direct dependency on a package identity, typed by whether the target is a project in this repository.</summary>
@@ -86,6 +93,9 @@ public sealed record PinnedTransitiveEdge(string Id, string Version) : Dependenc
 /// </remarks>
 public static class ProjectGraph
 {
+    /// <summary>Every asset kind <c>PrivateAssets</c> can name; listing them all suppresses as <c>all</c> does.</summary>
+    private static readonly string[] AllAssets = ["runtime", "compile", "build", "contentFiles", "native", "analyzers", "buildTransitive"];
+
     /// <summary>Reads every source and test project, in ordinal path order.</summary>
     public static IReadOnlyList<ProjectFacts> Read(RepoContext repo)
     {
@@ -104,6 +114,7 @@ public static class ProjectGraph
             var kind = RepoLayout.Kind(file.RelativePath);
             var domain = DomainGroup(file.Name);
             var packable = ProjectFile.IsPackable(repo, file, inheritedProperties);
+            var internalEdges = InternalEdges(repo, file, byPath).ToArray();
 
             return new ProjectFacts(
                 file.RelativePath,
@@ -116,7 +127,10 @@ public static class ProjectGraph
                 packable,
                 packable ? file.PackageIdentity : null,
                 packable ? ProjectFile.LineOf(file.Name, lineAMembers) : null,
-                [.. InternalEdges(repo, file, byPath), .. ExternalEdges(file, packages)]);
+                [.. internalEdges, .. ExternalEdges(file, packages)])
+            {
+                PrivateReferences = PrivateReferences(repo, file, internalEdges)
+            };
         }).ToArray();
     }
 
@@ -158,22 +172,13 @@ public static class ProjectGraph
     /// publishing reads these edges, so a dangling one would be wrong versions rather than a stale document.
     /// A target outside <c>src/</c> and <c>tests/</c> (a tool or a sample) is still internal, but has no node.
     /// </remarks>
-    private static IEnumerable<InternalEdge> InternalEdges(RepoContext repo, ProjectFile file, IReadOnlyDictionary<string, ProjectFile> byPath)
-    {
-        var directory = Path.GetDirectoryName(repo.Absolute(file.RelativePath))!;
-
-        return file.Items("ProjectReference")
+    private static IEnumerable<InternalEdge> InternalEdges(RepoContext repo, ProjectFile file, IReadOnlyDictionary<string, ProjectFile> byPath) =>
+        file.Items("ProjectReference")
             .Select(item => item.Attribute("Include")?.Value)
             .OfType<string>()
             .Select(include =>
             {
-                if (include.Contains("$(", StringComparison.Ordinal))
-                    throw new InvalidOperationException($"{file.RelativePath}: ProjectReference '{include}' uses an MSBuild property, which the maps generator cannot resolve.");
-
-                var target = Path.GetRelativePath(repo.Root, Path.GetFullPath(include.Replace('\\', Path.DirectorySeparatorChar), directory)).Replace('\\', '/');
-                if (target.StartsWith("../", StringComparison.Ordinal) || Path.IsPathRooted(target))
-                    throw new InvalidOperationException($"{file.RelativePath}: ProjectReference '{include}' resolves outside the repository.");
-
+                var target = ReferencedPath(repo, file, include);
                 if (byPath.TryGetValue(target, out var node))
                     return new InternalEdge(node.PackageIdentity, node.RelativePath);
 
@@ -184,6 +189,48 @@ public static class ProjectGraph
             })
             .DistinctBy(edge => edge.RelativePath, StringComparer.Ordinal)
             .OrderBy(edge => edge.RelativePath, StringComparer.Ordinal);
+
+    /// <summary>A <c>ProjectReference</c>'s repo-relative target, resolved against the referencing project's directory.</summary>
+    private static string ReferencedPath(RepoContext repo, ProjectFile file, string include)
+    {
+        if (include.Contains("$(", StringComparison.Ordinal))
+            throw new InvalidOperationException($"{file.RelativePath}: ProjectReference '{include}' uses an MSBuild property, which the maps generator cannot resolve.");
+
+        var directory = Path.GetDirectoryName(repo.Absolute(file.RelativePath))!;
+        var target = Path.GetRelativePath(repo.Root, Path.GetFullPath(include.Replace('\\', Path.DirectorySeparatorChar), directory)).Replace('\\', '/');
+        if (target.StartsWith("../", StringComparison.Ordinal) || Path.IsPathRooted(target))
+            throw new InvalidOperationException($"{file.RelativePath}: ProjectReference '{include}' resolves outside the repository.");
+
+        return target;
+    }
+
+    /// <summary>
+    /// The package ids of the <c>PackageReference</c> items, and of the projects the <c>ProjectReference</c> items name,
+    /// that declare <c>PrivateAssets</c> suppressing every asset, as an attribute or as metadata: NuGet leaves out of the
+    /// nuspec a pinned package the project reaches only through such references.
+    /// </summary>
+    private static HashSet<string> PrivateReferences(RepoContext repo, ProjectFile file, IReadOnlyList<InternalEdge> internalEdges)
+    {
+        var privateProjects = file.Items("ProjectReference").Where(SuppressesAllAssets)
+            .Select(item => item.Attribute("Include")?.Value).OfType<string>()
+            .Select(include => ReferencedPath(repo, file, include))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        return file.Items("PackageReference").Where(SuppressesAllAssets)
+            .Select(item => item.Attribute("Include")?.Value).OfType<string>()
+            .Concat(internalEdges.Where(edge => privateProjects.Contains(edge.RelativePath)).Select(edge => edge.Id))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Whether an item's <c>PrivateAssets</c> is <c>all</c>, or lists every asset kind, as NuGet reads it. Nothing else
+    /// keeps a pinned package out of the nuspec.
+    /// </summary>
+    private static bool SuppressesAllAssets(XElement item)
+    {
+        var value = item.Attribute("PrivateAssets")?.Value ?? item.Elements().LastOrDefault(metadata => metadata.Name.LocalName == "PrivateAssets")?.Value;
+        var assets = (value ?? string.Empty).Split(';', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return assets.Contains("all") || AllAssets.All(assets.Contains);
     }
 
     /// <summary>Every <c>PackageReference</c> with its resolved version, deduplicated and ordered by id then version.</summary>
