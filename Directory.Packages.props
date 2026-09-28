@@ -16,7 +16,7 @@
     <PackageVersion Include="Bpmn.Interchange" Version="0.1.1-preview.19" />
     <PackageVersion Include="Bpmn.Model" Version="0.1.1-preview.19" />
     <PackageVersion Include="coverlet.collector" Version="6.0.2" />
-    <PackageVersion Include="ConsoleLogStreaming.AspNetCore" Version="1.0.0-preview.13" />
+    <PackageVersion Include="ConsoleLogStreaming.AspNetCore" Version="1.0.0" />
     <PackageVersion Include="Cronos" Version="0.13.0" />
     <PackageVersion Include="CShells" Version="0.0.30-preview.159" />
     <PackageVersion Include="CShells.Abstractions" Version="0.0.30-preview.159" />

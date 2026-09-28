@@ -80,6 +80,9 @@
     <ProjectReference Include="..\..\..\src\extensions\Elsa3\src\Activities\Design\Import\Elsa3.Activities.Design.Import.csproj" />
     <ProjectReference Include="..\..\..\src\extensions\Elsa3\src\Mapping\Elsa3.Mapping.csproj" />
     <ProjectReference Include="..\..\..\src\extensions\Elsa3\src\Models\Elsa3.Models.csproj" />
+    <!-- PinnedTransitivePackTests runs the maps generator's own pinned-transitive reader over a real fixture,
+         the way Elsa.Versioning.Publisher.Tests references the publisher it proves (#2122). -->
+    <ProjectReference Include="..\..\..\tools\maps\Elsa.Maps.Generator\Elsa.Maps.Generator.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -2642,7 +2642,7 @@
         {
           "type": "external",
           "id": "ConsoleLogStreaming.AspNetCore",
-          "version": "1.0.0-preview.13"
+          "version": "1.0.0"
         }
       ]
     },
@@ -11879,6 +11879,11 @@
           "type": "internal",
           "id": "Elsa.Api.Compatibility.Testing",
           "path": "tests/essentials/Api/Compatibility/Testing/Elsa.Api.Compatibility.Testing.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Maps.Generator",
+          "path": "tools/maps/Elsa.Maps.Generator/Elsa.Maps.Generator.csproj"
         },
         {
           "type": "external",

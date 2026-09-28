@@ -4,7 +4,7 @@
     "net10.0": {
       "ConsoleLogStreaming.AspNetCore": {
         "type": "Direct",
-        "requested": "[1.0.0-preview.13, )",
+        "requested": "[1.0.0, )",
         "resolved": "1.0.0",
         "contentHash": "CRcExzprTyaVfQ0KLhWKfVkaZSD9S9vRgZZovf8Q+0gxe95uYnVjlAzNtBzWdkTC9q9TG34FrnqEnfZGixhwrw==",
         "dependencies": {

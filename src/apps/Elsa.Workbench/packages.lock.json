@@ -1166,7 +1166,7 @@
       "elsa.diagnostics.consolelogstreaming": {
         "type": "Project",
         "dependencies": {
-          "ConsoleLogStreaming.AspNetCore": "[1.0.0-preview.13, )"
+          "ConsoleLogStreaming.AspNetCore": "[1.0.0, )"
         }
       },
       "elsa.diagnostics.opentelemetry": {
@@ -2008,7 +2008,7 @@
       },
       "ConsoleLogStreaming.AspNetCore": {
         "type": "CentralTransitive",
-        "requested": "[1.0.0-preview.13, )",
+        "requested": "[1.0.0, )",
         "resolved": "1.0.0",
         "contentHash": "CRcExzprTyaVfQ0KLhWKfVkaZSD9S9vRgZZovf8Q+0gxe95uYnVjlAzNtBzWdkTC9q9TG34FrnqEnfZGixhwrw==",
         "dependencies": {

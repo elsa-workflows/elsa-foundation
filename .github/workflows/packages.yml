@@ -96,8 +96,9 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-nuget-
 
+      # Restore is locked (#2122) against the publisher's own committed lock file.
       - name: Build the publisher
-        run: dotnet build tools/versioning/Elsa.Versioning.Publisher -c Release
+        run: dotnet build tools/versioning/Elsa.Versioning.Publisher -c Release -p:RestoreLockedMode=true
 
       - name: Plan
         # Writes plan.json, computation.json, package-versions.props and packages.slnf (the affected set) under
@@ -171,8 +172,9 @@ jobs:
         with:
           dotnet-version: 10.x
 
+      # Restore is locked (#2122) against the publisher's own committed lock file.
       - name: Build the publisher
-        run: dotnet build tools/versioning/Elsa.Versioning.Publisher -c Release
+        run: dotnet build tools/versioning/Elsa.Versioning.Publisher -c Release -p:RestoreLockedMode=true
 
       - name: Download packages
         uses: actions/download-artifact@v4

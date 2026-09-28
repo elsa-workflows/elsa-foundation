@@ -71,7 +71,7 @@ jobs:
 
       - name: Validate committed integration filter
         run: |
-          dotnet run --project tools/maps/Elsa.Maps.Generator -c Release -- solution-filters-check
+          dotnet run --project tools/maps/Elsa.Maps.Generator -c Release -p:RestoreLockedMode=true -- solution-filters-check
           dotnet run --project tools/maps/Elsa.Maps.Generator -c Release --no-build -- solution-filters-self-test
 
       - name: Restore

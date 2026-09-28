@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using System.Text.Json;
 using System.Xml.Linq;
+using Elsa.Maps.Generator;
 using Xunit;
 using static Elsa.Architecture.Tests.RepoPaths;
 
@@ -13,7 +14,10 @@ namespace Elsa.Architecture.Tests;
 /// and the lock file lists those same packages as <c>CentralTransitive</c>, together with the pinned packages the project
 /// reaches only through a <c>PrivateAssets="all"</c> reference, which pack leaves out. The maps generator reads the lock
 /// file for the dependency map and leaves those out as pack does, and the calculator versions packages from the map; were
-/// NuGet to write something else, the map would stop describing the nuspecs, and this fails instead.
+/// NuGet to write something else, the map would stop describing the nuspecs, and this fails instead. The production
+/// reader, <see cref="PinnedTransitiveDependencies.Attach"/>, runs over the same fixture's committed lock file, so a
+/// reading that drifted from NuGet's own output would fail here too, not only against the live tree in
+/// <c>NuGetLockFileTests</c>.
 /// </summary>
 /// <remarks>
 /// <c>Fixture.App</c> references <c>Fixture.Lib</c>, which references <c>Microsoft.Extensions.Options</c>, so App reaches
@@ -36,12 +40,15 @@ public sealed class PinnedTransitivePackTests : IDisposable
     private static readonly string[] ReachedOnlyPrivately = ["Microsoft.Extensions.Caching.Abstractions", "Microsoft.Extensions.Logging.Abstractions"];
 
     private readonly DirectoryInfo root = Directory.CreateTempSubdirectory(nameof(PinnedTransitivePackTests));
+    private readonly Dictionary<string, string> pinVersions;
 
     public PinnedTransitivePackTests()
     {
         MsBuildFixture.CopyRootBuildFiles(root.FullName);
         var pins = XDocument.Load(Path.Join(RepoRoot, "Directory.Packages.props")).Descendants("PackageVersion")
-            .Where(pin => Pinned.Contains((string?)pin.Attribute("Include")));
+            .Where(pin => Pinned.Contains((string?)pin.Attribute("Include")))
+            .ToArray();
+        pinVersions = pins.ToDictionary(pin => (string)pin.Attribute("Include")!, pin => (string)pin.Attribute("Version")!, StringComparer.Ordinal);
         Write("Directory.Packages.props", $"""
             <Project>
               <PropertyGroup>
@@ -54,6 +61,9 @@ public sealed class PinnedTransitivePackTests : IDisposable
               </ItemGroup>
             </Project>
             """);
+        // RepoContext.Discover's marker; PinnedTransitiveDependencies.Attach never lists files through it, only
+        // resolves paths under root, so this fixture needs no git checkout.
+        Write("Elsa.Server.slnx", "<Solution></Solution>");
         Write("src/Lib/Fixture.Lib.csproj", """
             <Project Sdk="Microsoft.NET.Sdk">
               <ItemGroup><PackageReference Include="Microsoft.Extensions.Options" /></ItemGroup>
@@ -90,6 +100,30 @@ public sealed class PinnedTransitivePackTests : IDisposable
 
         Assert.Empty(restored.Except(locked));
         Assert.Equal(ReachedOnlyPrivately, locked.Except(restored).Select(pin => pin.Id));
+
+        // The production reader (spec 149 FR-012) reads the same committed lock file, tracing reachability itself to
+        // leave out the privately reached pin, as pack does: it must equal what pack actually wrote, not the lock
+        // file's own superset.
+        var repo = RepoContext.Discover(root.FullName);
+        var lib = new ProjectFacts(
+            "src/Lib/Fixture.Lib.csproj", "Fixture.Lib", "source", "Fixture", "Lib", "feature/implementation",
+            null, false, null, null,
+            [new ExternalEdge("Microsoft.Extensions.Options", pinVersions["Microsoft.Extensions.Options"])]);
+        var app = new ProjectFacts(
+            "src/App/Fixture.App.csproj", "Fixture.App", "source", "Fixture", "App", "feature/implementation",
+            null, true, "Fixture.App", null,
+            [
+                new InternalEdge("Fixture.Lib", "src/Lib/Fixture.Lib.csproj"),
+                new ExternalEdge("Microsoft.Extensions.Caching.Memory", pinVersions["Microsoft.Extensions.Caching.Memory"])
+            ])
+        {
+            PrivateReferences = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Microsoft.Extensions.Caching.Memory" }
+        };
+        var attached = PinnedTransitiveDependencies.Attach(repo, [lib, app]);
+        var read = attached.Single(project => project.Name == "Fixture.App").Edges.OfType<PinnedTransitiveEdge>()
+            .Select(edge => (edge.Id, edge.Version)).Order().ToArray();
+
+        Assert.Equal(restored, read);
     }
 
     public void Dispose() => root.Delete(recursive: true);

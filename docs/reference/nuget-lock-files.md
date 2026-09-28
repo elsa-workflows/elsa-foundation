@@ -46,8 +46,10 @@ resolves them, with an empty package folder and no HTTP cache:
 NUGET_PACKAGES="$(mktemp -d)" dotnet restore Elsa.Server.slnx --force-evaluate --no-http-cache
 ```
 
-The first lock files were written this way. They lock `ConsoleLogStreaming.AspNetCore` at `1.0.0`, what CI had been
-resolving, because nuget.org no longer serves the `1.0.0-preview.13` that `Directory.Packages.props` pins.
+The first lock files were written this way. They locked `ConsoleLogStreaming.AspNetCore` at `1.0.0`, what CI had
+already been resolving through the tolerated `NU1603`, because nuget.org no longer served the `1.0.0-preview.13` that
+`Directory.Packages.props` pinned at the time. `Directory.Packages.props` now pins `1.0.0` directly (spec 149 FR-005),
+so that mismatch, and the warning it produced, are both gone; the pin and the lock files agree.
 
 **A new project** gets its lock file from its first restore; commit it with the project. A locked restore of a project
 with no lock file does not fail: NuGet writes one and carries on, unlocked. So
@@ -62,11 +64,20 @@ project beside it.
   workflow's pack. `tools/architecture/restore-ci-project-graph.sh` passes its arguments through, and CI calls it with
   `--locked-mode`. Its Release and Debug restores share each project's lock file, which works because no project
   conditions a reference on the configuration.
-- Commands that restore implicitly are not locked: `dotnet run --project tools/maps/Elsa.Maps.Generator` and
-  `dotnet build tools/versioning/Elsa.Versioning.Publisher`. They restore tool projects whose lock files CI's locked
-  solution restore checks for the same commit, and a plain restore of a project whose lock file matches it takes the
-  locked versions anyway.
+- Every `dotnet run`, `dotnet build`, `dotnet test`, `dotnet pack` and `dotnet publish` step is locked too, either
+  because a locked `dotnet restore` step already ran earlier and it passes `--no-restore` (or `--no-build`, which
+  implies it), or because the command carries `-p:RestoreLockedMode=true` itself: `dotnet run --project
+  tools/maps/Elsa.Maps.Generator` and `dotnet build tools/versioning/Elsa.Versioning.Publisher`, the tool projects a
+  workflow builds and runs with no separate restore step, restore themselves locked against their own committed lock
+  file this way. `WorkflowRestoreLockTests` (`tests/essentials/Architecture`) scans every workflow for one of these
+  four markers on the same command and fails on a new step that restores unlocked.
 - Local restores are not locked, so the restore after a change is what updates the lock files.
+- **The one place CI does not restore locked**: Elsa.Workbench's Dockerfile restores its RID-specific ReadyToRun
+  publish (`dotnet restore -r <rid>`) without `--locked-mode`. A locked restore requires each lock file to lock
+  exactly one runtime, and one committed lock file cannot hold `linux-x64`, `linux-arm64` and CI's runtime-less
+  restore at once; the Dockerfile's own comment on that step and [Container images](#container-images) below explain
+  why. Its preceding runtime-less restore is still locked, so every package version this restore can land on is one
+  that restore has already shown the feed still serves at the pinned version.
 
 ## Computed versions
 

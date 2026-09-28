@@ -681,6 +681,9 @@
       "elsa.locking.core": {
         "type": "Project"
       },
+      "elsa.maps.generator": {
+        "type": "Project"
+      },
       "elsa.mediator": {
         "type": "Project",
         "dependencies": {

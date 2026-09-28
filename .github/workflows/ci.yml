@@ -95,7 +95,7 @@ jobs:
         run: |
           container_roots_file=$(mktemp)
           trap 'rm -f "$container_roots_file"' EXIT
-          dotnet run --project tools/maps/Elsa.Maps.Generator -c Release -v:q -- \
+          dotnet run --project tools/maps/Elsa.Maps.Generator -c Release -p:RestoreLockedMode=true -v:q -- \
             solution-filter-roots Elsa.Server.Persistence.Integration.slnf \
             > "$container_roots_file"
 
@@ -166,7 +166,7 @@ jobs:
           dotnet-version: 10.x
 
       - name: Verify selector contract
-        run: dotnet run --project tools/maps/Elsa.Maps.Generator -c Release -v:q -- ef-suites-self-test
+        run: dotnet run --project tools/maps/Elsa.Maps.Generator -c Release -p:RestoreLockedMode=true -v:q -- ef-suites-self-test
 
       - name: Select affected suites
         id: select

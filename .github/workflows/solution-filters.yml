@@ -26,11 +26,13 @@ jobs:
         with:
           dotnet-version: 10.x
 
+      # The generator tool restores implicitly to run; that restore is locked (RestoreLockedMode=true) against its own
+      # committed lock file (#2122), the same as maps.yml's freshness check.
       - name: Check generated filters against the project graph
-        run: dotnet run --project tools/maps/Elsa.Maps.Generator -c Release -- solution-filters-check
+        run: dotnet run --project tools/maps/Elsa.Maps.Generator -c Release -p:RestoreLockedMode=true -- solution-filters-check
 
       - name: Exercise generator contracts
-        run: dotnet run --project tools/maps/Elsa.Maps.Generator -c Release -- solution-filters-self-test
+        run: dotnet run --project tools/maps/Elsa.Maps.Generator -c Release --no-build -- solution-filters-self-test
 
       - name: Validate filters with the .NET CLI
         shell: bash

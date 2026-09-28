@@ -68,12 +68,13 @@ jobs:
 
       # No restore of the tree: the dependency map's pinned-transitive edges (spec 149 FR-012) are read from the NuGet lock
       # files committed beside each project (#2122), so the check is a scan of the checkout alone. A lock file the tree
-      # has moved past is refused by name, and CI's locked restores fail on it too.
+      # has moved past is refused by name, and CI's locked restores fail on it too. The generator tool itself still
+      # restores implicitly to run, so that restore is locked (RestoreLockedMode=true) against its own lock file.
       - name: Check generated maps against the tree
-        run: dotnet run --project tools/maps/Elsa.Maps.Generator -c Release -- check
+        run: dotnet run --project tools/maps/Elsa.Maps.Generator -c Release -p:RestoreLockedMode=true -- check
 
       - name: Exercise project facts contract
-        run: dotnet run --project tools/maps/Elsa.Maps.Generator -c Release -- project-facts-self-test
+        run: dotnet run --project tools/maps/Elsa.Maps.Generator -c Release --no-build -- project-facts-self-test
 
       - name: Explain how to refresh
         if: failure()
