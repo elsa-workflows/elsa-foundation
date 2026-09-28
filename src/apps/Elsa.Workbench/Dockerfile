@@ -84,6 +84,27 @@ FROM restore AS build
 # One root carries everything the Workbench composes: src/essentials, src/extensions and src/apps (#1815).
 COPY src/ ./src/
 
+# Package versions (ADR 0067, spec 150, #2084). The Docker Images workflow passes
+# ELSA_PACKAGE_VERSIONS: the pack-properties file the version calculator writes for
+# this commit, gzipped and base64-encoded onto one line, because the builder takes
+# build args one per line. Both commands below read it through
+# -p:CustomBeforeDirectoryBuildProps, which gives every Elsa assembly, and every
+# Elsa package in the deps.json, the version the feed carries, and makes
+# Elsa.Workbench.csproj ship ComputedVersions/appsettings.Production.json, which
+# declares the Elsa shares host-provided. The restore has to see it too: deps.json
+# takes a project reference's version from the restore, not the build, so a
+# publish alone would stamp the assemblies and still record the dev versions.
+# The restore stage above stays free of it and keeps its cache; this one only
+# rewrites the assets files from the packages that stage downloaded.
+#
+# Left at its default, source-build, the image is built as a source build: dev
+# versions and the committed appsettings.Production.json, which leaves the Elsa
+# shares undeclared, since every feed package's range excludes a dev version. That
+# is what `docker build` and docker compose do. An empty value is refused: it is
+# what the workflow passes when it lost the versions, and building on would ship an
+# image that looks right and checks nothing.
+ARG ELSA_PACKAGE_VERSIONS=source-build
+
 # ReadyToRun publish (spec 134): framework-dependent, RID-targeted, crossgen'd.
 # TieredCompilation and TieredPGO are left at their .NET 10 defaults (both already
 # on) — R2R images still participate in tiered compilation, so the defaults are
@@ -91,6 +112,19 @@ COPY src/ ./src/
 # is deliberately NOT enabled: the host does auth + culture-sensitive work, so
 # dropping ICU is unsafe (see specs/134-container-readytorun-publish/research.md).
 RUN RID="linux-$(echo "${TARGETARCH:-amd64}" | sed 's/amd64/x64/')" \
+    && set -- \
+    && case "$ELSA_PACKAGE_VERSIONS" in \
+        source-build) ;; \
+        "") echo "ELSA_PACKAGE_VERSIONS is empty. Pass the computed versions, or leave it unset for a source build." >&2; exit 1 ;; \
+        *) mkdir -p /tmp/elsa \
+            && printf '%s' "$ELSA_PACKAGE_VERSIONS" | base64 -d | gunzip > /tmp/elsa/package-versions.props \
+            && set -- -p:CustomBeforeDirectoryBuildProps=/tmp/elsa/package-versions.props ;; \
+    esac \
+    && dotnet restore src/apps/Elsa.Workbench/Elsa.Workbench.csproj \
+        -r "$RID" \
+        -p:PublishReadyToRun=true \
+        -p:WarningsNotAsErrors=NU1603 \
+        "$@" \
     && dotnet publish src/apps/Elsa.Workbench/Elsa.Workbench.csproj \
         -c Release \
         -r "$RID" \
@@ -98,6 +132,7 @@ RUN RID="linux-$(echo "${TARGETARCH:-amd64}" | sed 's/amd64/x64/')" \
         --no-restore \
         -p:PublishReadyToRun=true \
         -p:WarningsNotAsErrors=NU1603 \
+        "$@" \
         -o /app/publish
 
 # ---- Runtime stage ----------------------------------------------------------
