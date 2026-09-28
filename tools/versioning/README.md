@@ -289,7 +289,8 @@ deletions, re-adds, reverts, a rewritten `main`, partial publishes, pins reached
 and runs in CI's fast test job, as do the label and pack-properties tests beside them.
 `tests/essentials/Architecture/PackageVersionBuildCheckTests.cs` and `PackageVersioningPackTests.cs` prove the MSBuild
 side against real builds and packs, and `PinnedTransitivePackTests.cs` that pack writes exactly the pinned-transitive
-packages restore lists, which is what the dependency map records.
+packages restore lists; `NuGetLockFileTests.cs` beside them holds the dependency map, which reads them from the committed
+lock files, to that list.
 
 `tests/essentials/Versioning/Publisher/Tests` runs the publisher's plan and publish over the same synthetic histories,
 with a bare repository as the remote holding `publish-state` and an in-memory feed that answers 201, 409 with the

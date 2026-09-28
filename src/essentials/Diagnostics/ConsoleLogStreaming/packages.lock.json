@@ -1,0 +1,48 @@
+{
+  "version": 2,
+  "dependencies": {
+    "net10.0": {
+      "ConsoleLogStreaming.AspNetCore": {
+        "type": "Direct",
+        "requested": "[1.0.0-preview.13, )",
+        "resolved": "1.0.0",
+        "contentHash": "CRcExzprTyaVfQ0KLhWKfVkaZSD9S9vRgZZovf8Q+0gxe95uYnVjlAzNtBzWdkTC9q9TG34FrnqEnfZGixhwrw==",
+        "dependencies": {
+          "ConsoleLogStreaming.Endpoints.MinimalApi": "1.0.0",
+          "ConsoleLogStreaming.SignalR": "1.0.0"
+        }
+      },
+      "ConsoleLogStreaming.Contracts": {
+        "type": "Transitive",
+        "resolved": "1.0.0",
+        "contentHash": "opKn6xVebqhv0Rz1A76atcHVIpIJfPU1g5sOTxJ13YVR96+jC0kS8SDFbr/YBixyhCS0PNP2dCx8ZJMBQ1uxPg==",
+        "dependencies": {
+          "ConsoleLogStreaming.Core": "1.0.0"
+        }
+      },
+      "ConsoleLogStreaming.Core": {
+        "type": "Transitive",
+        "resolved": "1.0.0",
+        "contentHash": "AAyzQaldHY5hM29Sl+4QszvicOgQ/SazR2uzTJXZNJ4jtzubOhYfdfjtESoZ8hN5D3vH0IyvZbVglTBSpjONYw=="
+      },
+      "ConsoleLogStreaming.Endpoints.MinimalApi": {
+        "type": "Transitive",
+        "resolved": "1.0.0",
+        "contentHash": "JnRDL6G8Zso4DG08Jx5dpX4sigvDsCPhXmJABGZPzeQS37/Il8qPKAbz/B5I4eo6u9aITHrjaBJHJSmsnryYlA==",
+        "dependencies": {
+          "ConsoleLogStreaming.Contracts": "1.0.0",
+          "ConsoleLogStreaming.Core": "1.0.0"
+        }
+      },
+      "ConsoleLogStreaming.SignalR": {
+        "type": "Transitive",
+        "resolved": "1.0.0",
+        "contentHash": "pXG/uyrsqM39Xt7LJwS2Kl9N2U/H3UyIiTtAEsOZbb+OHyrhGMcDroJINV+znLfYfiqlRMeor0zo3R86GyRRxA==",
+        "dependencies": {
+          "ConsoleLogStreaming.Contracts": "1.0.0",
+          "ConsoleLogStreaming.Core": "1.0.0"
+        }
+      }
+    }
+  }
+}

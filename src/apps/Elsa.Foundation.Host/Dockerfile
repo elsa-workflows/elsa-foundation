@@ -35,22 +35,27 @@ COPY *.props *.targets NuGet.config ./
 # swap Elsa.Foundation.Host.csproj imports from src/apps/ (shared with Elsa.Workbench.csproj, #2126) -- MSBuild
 # treats a missing <Import> as an error, not a no-op the way it does for the root files above, so this one has
 # to be copied before restore too, or restore fails outright with MSB4019 rather than silently.
+# Each project comes with its committed NuGet lock file, and both restores below are locked (#2122): they
+# restore exactly the versions those files name, and fail when one no longer matches its project or names a
+# version the feed no longer has. A project whose lock file is missing would restore unlocked without a word,
+# which is why HostEndpointMetadataTests requires each one here. See docs/reference/nuget-lock-files.md.
 COPY src/apps/ComputedProductionSettings.targets src/apps/
-COPY src/apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj src/apps/Elsa.Foundation.Host/
-COPY src/essentials/Api/AspNetCore/Elsa.Api.AspNetCore.csproj src/essentials/Api/AspNetCore/
-COPY src/essentials/Attention/Core/Elsa.Attention.Core.csproj src/essentials/Attention/Core/
-COPY src/essentials/Caching/Core/Elsa.Caching.Core.csproj src/essentials/Caching/Core/
-COPY src/essentials/Events/Core/Elsa.Events.Core.csproj src/essentials/Events/Core/
-COPY src/essentials/Expressions/Core/Elsa.Expressions.Core.csproj src/essentials/Expressions/Core/
-COPY src/essentials/Locking/Core/Elsa.Locking.Core.csproj src/essentials/Locking/Core/
-COPY src/essentials/Mediator/Core/Elsa.Mediator.Core.csproj src/essentials/Mediator/Core/
-COPY src/essentials/Pipelines/Core/Elsa.Pipelines.Core.csproj src/essentials/Pipelines/Core/
-COPY src/essentials/Primitives/Primitives/Elsa.Primitives.csproj src/essentials/Primitives/Primitives/
-COPY src/essentials/Serialization/Core/Elsa.Serialization.Core.csproj src/essentials/Serialization/Core/
-COPY src/essentials/Tasks/Core/Elsa.Tasks.Core.csproj src/essentials/Tasks/Core/
+COPY src/apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj src/apps/Elsa.Foundation.Host/packages.lock.json src/apps/Elsa.Foundation.Host/
+COPY src/essentials/Api/AspNetCore/Elsa.Api.AspNetCore.csproj src/essentials/Api/AspNetCore/packages.lock.json src/essentials/Api/AspNetCore/
+COPY src/essentials/Attention/Core/Elsa.Attention.Core.csproj src/essentials/Attention/Core/packages.lock.json src/essentials/Attention/Core/
+COPY src/essentials/Caching/Core/Elsa.Caching.Core.csproj src/essentials/Caching/Core/packages.lock.json src/essentials/Caching/Core/
+COPY src/essentials/Events/Core/Elsa.Events.Core.csproj src/essentials/Events/Core/packages.lock.json src/essentials/Events/Core/
+COPY src/essentials/Expressions/Core/Elsa.Expressions.Core.csproj src/essentials/Expressions/Core/packages.lock.json src/essentials/Expressions/Core/
+COPY src/essentials/Locking/Core/Elsa.Locking.Core.csproj src/essentials/Locking/Core/packages.lock.json src/essentials/Locking/Core/
+COPY src/essentials/Mediator/Core/Elsa.Mediator.Core.csproj src/essentials/Mediator/Core/packages.lock.json src/essentials/Mediator/Core/
+COPY src/essentials/Pipelines/Core/Elsa.Pipelines.Core.csproj src/essentials/Pipelines/Core/packages.lock.json src/essentials/Pipelines/Core/
+COPY src/essentials/Primitives/Primitives/Elsa.Primitives.csproj src/essentials/Primitives/Primitives/packages.lock.json src/essentials/Primitives/Primitives/
+COPY src/essentials/Serialization/Core/Elsa.Serialization.Core.csproj src/essentials/Serialization/Core/packages.lock.json src/essentials/Serialization/Core/
+COPY src/essentials/Tasks/Core/Elsa.Tasks.Core.csproj src/essentials/Tasks/Core/packages.lock.json src/essentials/Tasks/Core/
 # NU1603: tolerate a restore-only warning when a transitive preview dependency
 # resolves to a newer available version; does not relax real code warnings.
 RUN dotnet restore src/apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj \
+    --locked-mode \
     -p:WarningsNotAsErrors=NU1603
 
 # Now the host and shared infrastructure sources.
@@ -96,6 +101,7 @@ RUN set -- \
             && set -- -p:CustomBeforeDirectoryBuildProps=/tmp/elsa/package-versions.props ;; \
     esac \
     && dotnet restore src/apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj \
+        --locked-mode \
         -p:WarningsNotAsErrors=NU1603 \
         "$@" \
     && dotnet publish src/apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj \

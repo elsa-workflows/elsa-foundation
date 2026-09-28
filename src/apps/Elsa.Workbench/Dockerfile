@@ -61,8 +61,22 @@ COPY *.props *.targets NuGet.config Elsa.Server.slnx ./
 
 # Copy only restore inputs while preserving their source-tree paths. Ordinary source
 # changes no longer invalidate the expensive RID-specific restore layer. The recursive
-# patterns cover the complete project graph without a manually maintained file list.
-COPY --parents src/**/*.csproj src/**/*.targets ./
+# patterns cover the complete project graph without a manually maintained file list,
+# each project's committed NuGet lock file included (#2122).
+COPY --parents src/**/*.csproj src/**/*.targets src/**/packages.lock.json ./
+
+# Locked, and without a runtime identifier (#2122): restores exactly the versions the
+# committed lock files name, and fails when one no longer matches its project or names a
+# version the feed no longer has. The RID-specific restores below cannot be locked: -r
+# applies to every project in the graph, so each would need a lock file for exactly that
+# one runtime, and one committed lock file cannot hold linux-x64, linux-arm64 and the
+# runtime-less restore CI locks. They resolve afresh instead. NuGet takes the lowest
+# version each range admits, which is what the lock files recorded, so they land on the
+# versions this restore has just shown the feed still serves.
+# See docs/reference/nuget-lock-files.md.
+RUN dotnet restore src/apps/Elsa.Workbench/Elsa.Workbench.csproj \
+    --locked-mode \
+    -p:WarningsNotAsErrors=NU1603
 
 # Restore only the server host; project references are pulled in transitively.
 #

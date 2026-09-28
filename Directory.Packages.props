@@ -1,7 +1,14 @@
 <Project>
+  <!--
+    Every project restores against a packages.lock.json committed beside it, and CI restores in locked mode, so a
+    dependency change lands only as a reviewed lock-file diff (#2122). After changing a version here, or adding or
+    removing a reference, run a plain `dotnet restore Elsa.Server.slnx`, review and commit the lock files it rewrote, and
+    regenerate the maps. See docs/reference/nuget-lock-files.md.
+  -->
   <PropertyGroup>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
     <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
   </PropertyGroup>
 
   <ItemGroup>

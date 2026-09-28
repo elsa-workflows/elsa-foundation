@@ -116,10 +116,13 @@ jobs:
 
       # Restore, build and pack the affected set alone (FR-006a), each through the computed pack-properties file, which
       # PackageVersioning.props reads for every package's version and input fingerprint. No global /p:Version (FR-005).
+      # The restore is locked (#2122). The computed versions change the project-reference versions a lock file records,
+      # but locked mode compares a project reference by name alone, so it passes and rewrites nothing
+      # (docs/reference/nuget-lock-files.md).
       - name: Restore
         if: ${{ steps.plan.outputs.affected != '0' }}
         run: >-
-          dotnet restore "$RUNNER_TEMP/versions/packages.slnf"
+          dotnet restore "$RUNNER_TEMP/versions/packages.slnf" --locked-mode
           -p:CustomBeforeDirectoryBuildProps="$RUNNER_TEMP/versions/package-versions.props" -p:WarningsNotAsErrors=NU1603
 
       - name: Build

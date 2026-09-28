@@ -126,7 +126,11 @@ jobs:
       - name: Restore
         # Includes the isolated Debug dependency graph required by the Architecture
         # tests in the container-free filter while preserving ordinary Release assets.
-        run: bash tools/architecture/restore-ci-project-graph.sh -p:WarningsNotAsErrors=NU1603
+        # Every restore in CI is locked (#2122): it restores exactly the versions the committed
+        # packages.lock.json files name and fails when one no longer matches its project, so a
+        # dependency change lands only as a reviewed lock-file diff. See
+        # docs/reference/nuget-lock-files.md.
+        run: bash tools/architecture/restore-ci-project-graph.sh --locked-mode -p:WarningsNotAsErrors=NU1603
 
       - name: Restore repository-local .NET tools
         run: dotnet tool restore
@@ -218,7 +222,7 @@ jobs:
         run: echo "${{ matrix.require }}=1" >> "$GITHUB_ENV"
 
       - name: Restore
-        run: dotnet restore ${{ matrix.project }} -p:WarningsNotAsErrors=NU1603
+        run: dotnet restore ${{ matrix.project }} --locked-mode -p:WarningsNotAsErrors=NU1603
 
       - name: Test
         run: dotnet test ${{ matrix.project }} -c Release --no-restore -p:WarningsNotAsErrors=NU1603
@@ -300,7 +304,7 @@ jobs:
           done
 
       - name: Restore the Secrets EF PostgreSQL shell proof
-        run: dotnet restore tests/essentials/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests.csproj -p:WarningsNotAsErrors=NU1603
+        run: dotnet restore tests/essentials/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests.csproj --locked-mode -p:WarningsNotAsErrors=NU1603
 
       # Configuration-driven CShells composition, migration/validation, CRUD/OCC, runtime
       # resolution, restart persistence, and the packed-module child-host proof. Npgsql is
@@ -344,7 +348,7 @@ jobs:
             ${{ runner.os }}-nuget-
 
       - name: Restore the evaluated source dependency graphs
-        run: bash tools/architecture/restore-ci-project-graph.sh -p:WarningsNotAsErrors=NU1603
+        run: bash tools/architecture/restore-ci-project-graph.sh --locked-mode -p:WarningsNotAsErrors=NU1603
 
       - name: Run the architecture guards
         run: dotnet test tests/essentials/Architecture/Elsa.Architecture.Tests.csproj -c Release --no-restore -p:WarningsNotAsErrors=NU1603
@@ -384,7 +388,7 @@ jobs:
             ${{ runner.os }}-nuget-
 
       - name: Restore
-        run: dotnet restore Elsa.Server.Core.slnf -p:WarningsNotAsErrors=NU1603
+        run: dotnet restore Elsa.Server.Core.slnf --locked-mode -p:WarningsNotAsErrors=NU1603
 
       - name: Build (core only)
         run: dotnet build Elsa.Server.Core.slnf -c Release --no-restore -p:WarningsNotAsErrors=NU1603
