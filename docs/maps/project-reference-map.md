@@ -8,7 +8,7 @@ Records direct project references only.
 
 - Source projects: 136
 - Test projects: 126
-- Direct project references: 1211
+- Direct project references: 1212
 
 ## Projects
 
@@ -199,7 +199,7 @@ Records direct project references only.
 | [Elsa.Cli.Fixtures.WorkerContextHost](../../tests/essentials/Cli/Fixtures/WorkerContextHost/Elsa.Cli.Fixtures.WorkerContextHost.csproj) | test | Elsa.Cli | - | false | - |
 | [Elsa.Cli.Tests](../../tests/essentials/Cli/Tests/Elsa.Cli.Tests.csproj) | test | Elsa.Cli | - | false | Acme.Widgets<br>Elsa.Cli<br>Elsa.Cli.Fixtures.CollisionHost<br>Elsa.Cli.Fixtures.Host<br>Elsa.Cli.Fixtures.LegacyHost<br>Elsa.Cli.Fixtures.MinimalHost<br>Elsa.Cli.Fixtures.NuplaneCapabilityHost<br>Elsa.Cli.Fixtures.NuplaneHost<br>Elsa.Cli.Fixtures.PartialContextHost<br>Elsa.Cli.Fixtures.ResourceAwareLiveHost<br>Elsa.Cli.Fixtures.ShellsHost<br>Elsa.Cli.Fixtures.UnsupportedContextHost<br>Elsa.Cli.Fixtures.WorkerContextHost<br>Elsa.Modularity.Planning |
 | [Elsa.Cluster.EntityFrameworkCore.ProviderTests](../../tests/essentials/Cluster/EntityFrameworkCore/ProviderTests/Elsa.Cluster.EntityFrameworkCore.ProviderTests.csproj) | test | Elsa.Cluster | - | false | Elsa.Cluster.EntityFrameworkCore.Testing |
-| [Elsa.Cluster.EntityFrameworkCore.Testing](../../tests/essentials/Cluster/EntityFrameworkCore/Testing/Elsa.Cluster.EntityFrameworkCore.Testing.csproj) | test | Elsa.Cluster | - | false | Elsa.Cluster.EntityFrameworkCore<br>Elsa.Cluster.Testing |
+| [Elsa.Cluster.EntityFrameworkCore.Testing](../../tests/essentials/Cluster/EntityFrameworkCore/Testing/Elsa.Cluster.EntityFrameworkCore.Testing.csproj) | test | Elsa.Cluster | - | false | Elsa.Cluster.EntityFrameworkCore<br>Elsa.Cluster.Readability<br>Elsa.Cluster.Testing |
 | [Elsa.Cluster.EntityFrameworkCore.Tests](../../tests/essentials/Cluster/EntityFrameworkCore/Tests/Elsa.Cluster.EntityFrameworkCore.Tests.csproj) | test | Elsa.Cluster | - | false | Elsa.Cluster.EntityFrameworkCore.Testing |
 | [Elsa.Cluster.Readability.Tests](../../tests/essentials/Cluster/Readability/Tests/Elsa.Cluster.Readability.Tests.csproj) | test | Elsa.Cluster | - | false | Elsa.Cluster.Readability<br>Elsa.Testing<br>Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore |
 | [Elsa.Cluster.Testing](../../tests/essentials/Cluster/Testing/Elsa.Cluster.Testing.csproj) | test | Elsa.Cluster | - | false | Elsa.Cluster.Core<br>Elsa.Serialization.SystemText<br>Elsa.Workflows.Runtime.Distributed |

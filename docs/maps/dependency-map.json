@@ -13028,6 +13028,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Cluster.Readability",
+          "path": "src/essentials/Cluster/Readability/Elsa.Cluster.Readability.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Cluster.Testing",
           "path": "tests/essentials/Cluster/Testing/Elsa.Cluster.Testing.csproj"
         },
