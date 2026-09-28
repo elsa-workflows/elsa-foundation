@@ -50,6 +50,11 @@ public sealed class HostProvidedPackagesGuardTests
         "package's range excludes, so declaring this one would refuse every Elsa feed package that depends on it. A build " +
         "with computed versions, the CI image among them, declares it (ADR 0067, #1144, #2084).";
 
+    private const string FoundationHostSourceBuildVersion =
+        "A source-built Elsa.Foundation.Host records its Elsa packages at their line's dev version (x.y.0-dev), which " +
+        "every Elsa feed package's range excludes, so declaring this one would refuse every Elsa feed package that " +
+        "depends on it. A build with computed versions, the CI image among them, declares it (ADR 0067, #1144, #2126).";
+
     /// <summary>
     /// Shared assemblies a host's source build deliberately leaves undeclared, per host, each with the reason. Nothing
     /// else may be shared without a declaration, and nothing at all by a build with computed versions.
@@ -78,6 +83,19 @@ public sealed class HostProvidedPackagesGuardTests
                 ["Elsa.Workflows.Design.Persistence.Core"] = WorkbenchSourceBuildVersion,
                 ["Elsa.Workflows.Design.Validations.Core"] = WorkbenchSourceBuildVersion,
                 ["Elsa.Workflows.Runtime.Core"] = WorkbenchSourceBuildVersion
+            },
+            ["Elsa.Foundation.Host"] = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Elsa.Attention.Core"] = FoundationHostSourceBuildVersion,
+                ["Elsa.Caching.Core"] = FoundationHostSourceBuildVersion,
+                ["Elsa.Events.Core"] = FoundationHostSourceBuildVersion,
+                ["Elsa.Expressions.Core"] = FoundationHostSourceBuildVersion,
+                ["Elsa.Locking.Core"] = FoundationHostSourceBuildVersion,
+                ["Elsa.Mediator.Core"] = FoundationHostSourceBuildVersion,
+                ["Elsa.Pipelines.Core"] = FoundationHostSourceBuildVersion,
+                ["Elsa.Primitives"] = FoundationHostSourceBuildVersion,
+                ["Elsa.Serialization.Core"] = FoundationHostSourceBuildVersion,
+                ["Elsa.Tasks.Core"] = FoundationHostSourceBuildVersion
             }
         };
 
