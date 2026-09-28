@@ -649,10 +649,10 @@ public sealed class DockerBuildContextGuardTests
     private static string JoinRelative(string directory, string relative)
     {
         var segments = new List<string>();
-        foreach (var segment in (directory.Length == 0 ? relative : $"{directory}/{relative}").Split('/'))
+        foreach (var segment in (directory.Length == 0 ? relative : $"{directory}/{relative}")
+                     .Split('/', StringSplitOptions.RemoveEmptyEntries)
+                     .Where(segment => segment != "."))
         {
-            if (segment is "." or "")
-                continue;
             if (segment == ".." && segments.Count > 0)
                 segments.RemoveAt(segments.Count - 1);
             else
