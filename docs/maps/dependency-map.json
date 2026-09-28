@@ -8027,6 +8027,16 @@
       "edges": [
         {
           "type": "internal",
+          "id": "Elsa.Cluster.Core",
+          "path": "src/essentials/Cluster/Core/Elsa.Cluster.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Cluster.InProcess",
+          "path": "src/essentials/Cluster/InProcess/Elsa.Cluster.InProcess.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Tasks.Core",
           "path": "src/essentials/Tasks/Core/Elsa.Tasks.Core.csproj"
         },
@@ -13169,6 +13179,16 @@
           "path": "src/essentials/Cluster/Core/Elsa.Cluster.Core.csproj"
         },
         {
+          "type": "internal",
+          "id": "Elsa.Serialization.SystemText",
+          "path": "src/essentials/Serialization/SystemText/Elsa.Serialization.SystemText.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Runtime.Distributed",
+          "path": "src/essentials/Workflows/Runtime/Distributed/Elsa.Workflows.Runtime.Distributed.csproj"
+        },
+        {
           "type": "external",
           "id": "Xunit.SkippableFact",
           "version": "1.5.23"
@@ -17920,6 +17940,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Tasks",
+          "path": "src/essentials/Tasks/Elsa.Tasks.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Workflows.Runtime.Api",
           "path": "src/essentials/Workflows/Runtime/Api/Elsa.Workflows.Runtime.Api.csproj"
         },
@@ -17934,14 +17959,14 @@
           "path": "src/essentials/Workflows/Runtime/Distributed/Elsa.Workflows.Runtime.Distributed.csproj"
         },
         {
-          "type": "external",
-          "id": "Microsoft.Extensions.DependencyInjection",
-          "version": "10.0.10"
+          "type": "internal",
+          "id": "Elsa.Cluster.Testing",
+          "path": "tests/essentials/Cluster/Testing/Elsa.Cluster.Testing.csproj"
         },
         {
           "type": "external",
-          "id": "Microsoft.Extensions.Logging",
-          "version": "10.0.10"
+          "id": "CShells",
+          "version": "0.0.30-preview.159"
         },
         {
           "type": "external",

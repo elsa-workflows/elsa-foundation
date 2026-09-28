@@ -22,8 +22,15 @@ public interface IExecutionPlacementService
     /// </summary>
     ValueTask<ExecutionPlacementClaimResult> TryClaimAsync(string workflowExecutionId, CancellationToken cancellationToken = default);
 
-    /// <summary>Releases a placement lease this node holds, matched on owner id + placement token.</summary>
-    ValueTask ReleaseAsync(ExecutionPlacementLease lease, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Renews a placement lease this node still holds under exactly <paramref name="lease"/>'s placement token, as a
+    /// compare-and-set that never grants (spec 184, FR-014). Returns the renewed lease, or <see langword="null"/> when
+    /// the lease expired, was released or was taken by another member since.
+    /// </summary>
+    ValueTask<ExecutionPlacementLease?> TryRenewAsync(ExecutionPlacementLease lease, CancellationToken cancellationToken = default);
+
+    /// <summary>Releases a placement lease, matched on owner id + placement token. Returns whether this call released it.</summary>
+    ValueTask<bool> ReleaseAsync(ExecutionPlacementLease lease, CancellationToken cancellationToken = default);
 
     /// <summary>Returns the current placement lease for the execution, or <see langword="null"/> when unplaced.</summary>
     ValueTask<ExecutionPlacementLease?> FindOwnerAsync(string workflowExecutionId, CancellationToken cancellationToken = default);

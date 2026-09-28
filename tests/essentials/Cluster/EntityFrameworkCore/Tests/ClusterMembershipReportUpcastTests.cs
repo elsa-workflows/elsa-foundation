@@ -19,7 +19,7 @@ namespace Elsa.Cluster.EntityFrameworkCore.Tests;
 public sealed class ClusterMembershipReportUpcastTests
 {
     private const string Report =
-        """{"readability":{"entries":[{"family":"F","efModule":"M","readableVersions":["1"],"databaseIdentity":null,"observedFinalizedVersion":null}]}}""";
+        """{"readability":{"entries":[{"family":"F","efModule":"M","readableVersions":["1"],"databaseIdentity":null,"observedFinalizedVersion":null}]},"runnability":null}""";
 
     /// <summary>
     /// The decision under test, in both directions that would look like success: a throw would fail the whole membership

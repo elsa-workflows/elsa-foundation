@@ -34,7 +34,8 @@ namespace Elsa.Cluster.EntityFrameworkCore.Testing;
 /// </remarks>
 public sealed class EfClusterMembershipConformanceFixture(EfClusterMembershipTestStore store) : IClusterMembershipConformanceFixture
 {
-    private readonly FakeTimeProvider _clock = new();
+    // After 2020: the runtime tier composes the distributed runtime on these clocks, and its identities need one.
+    private readonly FakeTimeProvider _clock = new(new DateTimeOffset(2026, 9, 28, 12, 0, 0, TimeSpan.Zero));
     private readonly List<Member> _created = [];
     private readonly Dictionary<string, Member> _waiting = new(StringComparer.Ordinal);
     private ServiceProvider? _root;
@@ -163,7 +164,7 @@ public sealed class EfClusterMembershipConformanceFixture(EfClusterMembershipTes
         _clock.GetUtcNow().UtcTicks,
         Timings.ExpiryPeriod.Ticks,
         LeftAtUtcTicks: null,
-        """{"readability":null}""",
+        """{"readability":null,"runnability":null}""",
         SchemaVersion: ClusterMembershipEfModule.SchemaVersion);
 
     /// <summary>Inserts a row directly, bypassing the provider, as another provider version or a damaged store would.</summary>
@@ -194,7 +195,7 @@ public sealed class EfClusterMembershipConformanceFixture(EfClusterMembershipTes
     public async ValueTask RunCleanupAsync(CancellationToken cancellationToken = default)
     {
         await EnsureReadyAsync(cancellationToken);
-        await NewMembership("janitor", _clock, readability: null, Root.GetRequiredService<IServiceScopeFactory>()).CleanupAsync(cancellationToken);
+        await NewMembership("janitor", _clock, readability: null, runnability: null, Root.GetRequiredService<IServiceScopeFactory>()).CleanupAsync(cancellationToken);
     }
 
     /// <summary>Reads the membership table directly, bypassing every provider judgement.</summary>
@@ -258,18 +259,25 @@ public sealed class EfClusterMembershipConformanceFixture(EfClusterMembershipTes
     {
         var clock = new FakeTimeProvider(_clock.GetUtcNow() + setup.ClockOffset);
         var readability = setup.Readability is null ? null : new ConformanceReadabilitySource(setup.Readability);
-        var member = new Member(clock, readability);
-        member.Membership = NewMembership(setup.HostId, clock, readability, new IsolatableScopes(Root.GetRequiredService<IServiceScopeFactory>(), member));
+        var runnability = setup.Runnability is null ? null : new ConformanceRunnabilitySource(setup.Runnability);
+        var member = new Member(clock, readability, runnability);
+        member.Membership = NewMembership(setup.HostId, clock, readability, runnability, new IsolatableScopes(Root.GetRequiredService<IServiceScopeFactory>(), member));
         _created.Add(member);
         return member;
     }
 
-    private EfClusterMembership NewMembership(string hostId, TimeProvider clock, IMemberReportSource<ReadabilitySection>? readability, IServiceScopeFactory scopes) =>
+    private EfClusterMembership NewMembership(
+        string hostId,
+        TimeProvider clock,
+        IMemberReportSource<ReadabilitySection>? readability,
+        IMemberReportSource<RunnabilitySection>? runnability,
+        IServiceScopeFactory scopes) =>
         new(
             scopes,
             Options.Create(Timed(new ClusterMembershipOptions { HostId = hostId })),
             Settings,
             readability is null ? [] : [readability],
+            runnability is null ? [] : [runnability],
             clock,
             NullLogger<EfClusterMembership>.Instance);
 
@@ -298,7 +306,7 @@ public sealed class EfClusterMembershipConformanceFixture(EfClusterMembershipTes
     }
 
     /// <summary>One member of the fleet: one process, with its own clock and its own reach to the store.</summary>
-    public sealed class Member(FakeTimeProvider clock, ConformanceReadabilitySource? readability) : IConformanceMember
+    public sealed class Member(FakeTimeProvider clock, ConformanceReadabilitySource? readability, ConformanceRunnabilitySource? runnability) : IConformanceMember
     {
         public EfClusterMembership Membership { get; internal set; } = null!;
 
@@ -320,6 +328,9 @@ public sealed class EfClusterMembershipConformanceFixture(EfClusterMembershipTes
 
         public void SetReadability(params ReadabilityEntry[] entries) =>
             (readability ?? throw new InvalidOperationException("This member has no readability source.")).Set(entries);
+
+        public void SetRunnability(params RunnabilityEntry[] entries) =>
+            (runnability ?? throw new InvalidOperationException("This member has no runnability source.")).Set(entries);
 
         public ValueTask ActivateAsync() => new(Membership.ActivateAsync());
 

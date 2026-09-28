@@ -671,7 +671,8 @@ public sealed class RegistrationTests
     {
         public ValueTask<ExecutionPlacementLease?> FindAsync(string workflowExecutionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public ValueTask<ExecutionPlacementClaimResult> TryClaimAsync(ExecutionPlacementClaim claim, DateTimeOffset now, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public ValueTask ReleaseAsync(ExecutionPlacementLease lease, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<ExecutionPlacementLease?> TryRenewAsync(ExecutionPlacementLease held, DateTimeOffset now, DateTimeOffset expiresAt, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<bool> ReleaseAsync(ExecutionPlacementLease lease, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public ValueTask<IReadOnlyList<ExecutionPlacementLease>> ListOwnedAsync(ExecutionPlacementLeaseListRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 
@@ -680,7 +681,11 @@ public sealed class RegistrationTests
         public ValueTask<ExecutionCommandTransportItem> SendAsync(string workflowExecutionId, WorkflowExecutionCommandEnvelope envelope, DateTimeOffset now, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public ValueTask<IReadOnlyList<ExecutionCommandTransportItem>> LeaseAsync(string workflowExecutionId, string ownerId, DateTimeOffset now, TimeSpan leaseDuration, int maxItems, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public ValueTask<bool> AckAsync(string workflowExecutionId, string transportItemId, string ownerId, long leaseToken, DateTimeOffset now, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<bool> ReleaseLeaseAsync(string workflowExecutionId, string transportItemId, string ownerId, long leaseToken, DateTimeOffset now, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<IReadOnlyList<ExecutionCommandTransportItem>> PeekAsync(string workflowExecutionId, DateTimeOffset now, int maxItems, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<IReadOnlyList<ExecutionCommandTransportItem>> ListLeasedAsync(string ownerId, DateTimeOffset now, int maxItems, string? workflowExecutionId = null, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public ValueTask<IReadOnlyCollection<string>> ListPendingExecutionIdsAsync(DateTimeOffset now, int maxItems, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<IReadOnlyCollection<string>> ListPendingExecutionIdsAsync(DateTimeOffset now, int maxItems, int skip, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public ValueTask<int> CountPendingAsync(string workflowExecutionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 }

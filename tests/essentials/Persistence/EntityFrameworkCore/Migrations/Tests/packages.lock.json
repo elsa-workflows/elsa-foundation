@@ -512,6 +512,12 @@
           "Microsoft.Extensions.Logging.Abstractions": "[10.0.10, )"
         }
       },
+      "elsa.cluster.inprocess": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Cluster.Core": "[4.0.0-dev, )"
+        }
+      },
       "elsa.diagnostics.opentelemetry": {
         "type": "Project",
         "dependencies": {
@@ -959,6 +965,8 @@
         "type": "Project",
         "dependencies": {
           "CShells.Abstractions": "[0.0.30-preview.159, )",
+          "Elsa.Cluster.Core": "[4.0.0-dev, )",
+          "Elsa.Cluster.InProcess": "[4.0.0-dev, )",
           "Elsa.Tasks.Core": "[4.0.0-dev, )",
           "Elsa.Tasks.Schedules": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime": "[4.0.0-dev, )",

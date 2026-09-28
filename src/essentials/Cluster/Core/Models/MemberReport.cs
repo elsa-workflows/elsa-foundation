@@ -14,15 +14,17 @@ public sealed record MemberReport
     public static MemberReport Empty { get; } = new();
 
     /// <summary>The report of an entry the reader cannot interpret.</summary>
-    public static MemberReport Unknown { get; } = new(readability: null, isUnknown: true);
+    public static MemberReport Unknown { get; } = new(readability: null, runnability: null, isUnknown: true);
 
-    public MemberReport(ReadabilitySection? readability = null) : this(readability, isUnknown: false)
+    public MemberReport(ReadabilitySection? readability = null, RunnabilitySection? runnability = null)
+        : this(readability, runnability, isUnknown: false)
     {
     }
 
-    private MemberReport(ReadabilitySection? readability, bool isUnknown)
+    private MemberReport(ReadabilitySection? readability, RunnabilitySection? runnability, bool isUnknown)
     {
         Readability = readability;
+        Runnability = runnability;
         IsUnknown = isUnknown;
     }
 
@@ -34,4 +36,10 @@ public sealed record MemberReport
     /// one cannot say what it reads, so a counting query treats it like an unknown report.
     /// </summary>
     public ReadabilitySection? Readability { get; }
+
+    /// <summary>
+    /// The runnability section (spec 184, FR-008), or <see langword="null"/> when the member has no runnability source.
+    /// A member without one cannot say what its runtime activates, so it meets no runnability requirement.
+    /// </summary>
+    public RunnabilitySection? Runnability { get; }
 }

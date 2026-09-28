@@ -2,9 +2,12 @@ using Elsa.Attention.Core;
 
 namespace Elsa.Workflows.Runtime.Attention;
 
-public sealed class WorkflowRuntimeAttentionContributor(IWorkflowRuntimeAttentionQuery query) : IAttentionContributor
+public sealed class WorkflowRuntimeAttentionContributor(
+    IWorkflowRuntimeAttentionQuery query,
+    IEnumerable<IWorkflowRuntimePlacementAttention>? placementAttention = null) : IAttentionContributor
 {
     private const int MaximumItems = 5;
+    private readonly IWorkflowRuntimePlacementAttention[] _placementAttention = placementAttention?.ToArray() ?? [];
 
     public AttentionContributorDescriptor Descriptor { get; } = new(
         "workflows.runtime",
@@ -23,14 +26,45 @@ public sealed class WorkflowRuntimeAttentionContributor(IWorkflowRuntimeAttentio
         if (snapshot.TotalCount < snapshot.Records.Count)
             throw new InvalidOperationException("Workflow runtime attention total cannot be smaller than the returned record count.");
 
+        var unplaceable = new List<UnplaceableWorkReport>();
+        foreach (var source in _placementAttention)
+            unplaceable.AddRange(await source.ListUnplaceableWorkAsync(cancellationToken));
+
+        var totalCount = snapshot.TotalCount + unplaceable.Count;
         var items = snapshot.Records
-            .OrderBy(record => SeverityOrder(record.Kind))
-            .ThenByDescending(record => record.LastObservedAt)
-            .Take(MaximumItems)
             .Select(Map)
+            .Concat(unplaceable.Select(MapUnplaceable))
+            .OrderBy(item => item.Severity == AttentionSeverity.Critical ? 0 : 1)
+            .ThenByDescending(item => item.LastObservedAt)
+            .Take(MaximumItems)
             .ToArray();
 
-        return AttentionContribution.Ready(items, snapshot.TotalCount, snapshot.TotalCount > items.Length);
+        return AttentionContribution.Ready(items, totalCount, totalCount > items.Length);
+    }
+
+    /// <summary>
+    /// Spec 184, FR-017: a warning naming what the waiting executions need and how many wait, without naming a host.
+    /// Its identity is the requirement, so the same condition keeps one item while its count moves.
+    /// </summary>
+    private static AttentionItem MapUnplaceable(UnplaceableWorkReport report)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(report.Requirement);
+        if (report.WaitingExecutions < 1)
+            throw new ArgumentOutOfRangeException(nameof(report), "An unplaceable-work report must count at least one waiting execution.");
+
+        var key = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(report.Requirement)))[..16];
+        return new(
+            $"placement:{key}",
+            $"{key}:{report.WaitingExecutions}",
+            AttentionSeverity.Warning,
+            "Work is waiting for a member that can run it",
+            $"{report.WaitingExecutions} workflow execution(s) waiting: {report.Requirement}.",
+            report.FirstObservedAt,
+            report.LastObservedAt < report.FirstObservedAt ? report.FirstObservedAt : report.LastObservedAt,
+            report.WaitingExecutions,
+            new("/workflows/instances", "Inspect workflow runs"),
+            [],
+            AttentionSensitivity.Restricted);
     }
 
     private static AttentionItem Map(WorkflowRuntimeAttentionRecord record)
@@ -74,7 +108,4 @@ public sealed class WorkflowRuntimeAttentionContributor(IWorkflowRuntimeAttentio
         WorkflowRuntimeAttentionKind.FaultedExecution or WorkflowRuntimeAttentionKind.BlockingIncident => AttentionSeverity.Critical,
         _ => AttentionSeverity.Warning
     };
-
-    private static int SeverityOrder(WorkflowRuntimeAttentionKind kind) =>
-        ToSeverity(kind) == AttentionSeverity.Critical ? 0 : 1;
 }

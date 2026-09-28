@@ -26,6 +26,32 @@ public sealed class ExecutionCommandTransportTests
         Assert.All(leased, i => Assert.Equal(1, i.DeliveryAttemptCount));
     }
 
+    /// <summary>Spec 184, FR-019 and FR-024: an early release is a holder- and token-matched compare-and-set; the item is
+    /// visible at once, the released holder's ack is refused, and the next lease issues a greater token.</summary>
+    [Fact]
+    public async Task ReleaseLease_MakesTheItemVisibleAtOnce_RefusesTheOldAck_AndLeasesAgainUnderAGreaterToken()
+    {
+        var transport = new InMemoryExecutionCommandTransport();
+        await transport.SendAsync(ExecutionId, Envelope("env-1"), _now);
+        await transport.SendAsync(ExecutionId, Envelope("env-2"), _now);
+        var held = Assert.Single(await transport.LeaseAsync(ExecutionId, NodeA, _now, LeaseDuration, maxItems: 1));
+
+        Assert.Equal("env-2", Assert.Single(await transport.PeekAsync(ExecutionId, _now, 10)).Envelope.EnvelopeId);
+        Assert.Single(await transport.ListLeasedAsync(NodeA, _now, 10, ExecutionId));
+        Assert.Empty(await transport.ListLeasedAsync(NodeB, _now, 10));
+        Assert.False(await transport.ReleaseLeaseAsync(ExecutionId, held.TransportItemId, NodeB, held.LeaseToken!.Value, _now));
+        Assert.False(await transport.ReleaseLeaseAsync(ExecutionId, held.TransportItemId, NodeA, held.LeaseToken.Value + 1, _now));
+
+        Assert.True(await transport.ReleaseLeaseAsync(ExecutionId, held.TransportItemId, NodeA, held.LeaseToken.Value, _now));
+
+        Assert.False(await transport.ReleaseLeaseAsync(ExecutionId, held.TransportItemId, NodeA, held.LeaseToken.Value, _now));
+        Assert.Equal(2, (await transport.PeekAsync(ExecutionId, _now, 10)).Count);
+        Assert.False(await transport.AckAsync(ExecutionId, held.TransportItemId, NodeA, held.LeaseToken.Value, _now));
+        var releasedAgain = Assert.Single(await transport.LeaseAsync(ExecutionId, NodeB, _now, LeaseDuration, maxItems: 1));
+        Assert.True(releasedAgain.LeaseToken > held.LeaseToken);
+        Assert.Equal("env-1", releasedAgain.Envelope.EnvelopeId);
+    }
+
     [Fact]
     public async Task Lease_HidesItemsFromOtherNodesUntilExpiry()
     {

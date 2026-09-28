@@ -42,6 +42,7 @@ public sealed class EfClusterMembership : IClusterMembership
     private readonly TimeSpan _skewAllowance;
     private readonly TimeSpan _cleanupPeriod;
     private readonly IMemberReportSource<ReadabilitySection>? _readability;
+    private readonly IMemberReportSource<RunnabilitySection>? _runnability;
     private readonly TimeProvider _clock;
     private readonly ILogger _logger;
 
@@ -68,6 +69,7 @@ public sealed class EfClusterMembership : IClusterMembership
         IOptions<ClusterMembershipOptions> options,
         EfClusterMembershipOptions settings,
         IEnumerable<IMemberReportSource<ReadabilitySection>> readabilitySources,
+        IEnumerable<IMemberReportSource<RunnabilitySection>> runnabilitySources,
         TimeProvider clock,
         ILogger<EfClusterMembership> logger)
     {
@@ -84,6 +86,7 @@ public sealed class EfClusterMembership : IClusterMembership
         _skewAllowance = membership.SkewAllowance;
         _cleanupPeriod = settings.CleanupPeriod;
         _readability = MemberReportComposition.SingleSource(readabilitySources);
+        _runnability = MemberReportComposition.SingleSource(runnabilitySources);
         _clock = clock ?? throw new ArgumentNullException(nameof(clock));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _store = new EfClusterMembershipStore(scopes);
@@ -568,7 +571,7 @@ public sealed class EfClusterMembership : IClusterMembership
     }
 
     private async Task<MemberReport> ComposeReportAsync(CancellationToken cancellationToken) =>
-        await MemberReportComposition.ComposeAsync(_readability, cancellationToken);
+        await MemberReportComposition.ComposeAsync(_readability, _runnability, cancellationToken);
 
     private ClusterMemberIdentity CurrentIdentity()
     {

@@ -44,7 +44,7 @@ public sealed class EfClusterMembershipStoreTests : IAsyncDisposable
     [Fact]
     public Task A_report_with_a_field_this_build_does_not_know_is_returned_as_unknown_rather_than_read_in_part() =>
         AssertStoredReportReadsAsUnknownAsync(
-            $$$"""{"readability":{"entries":[{"family":"{{{Family}}}","efModule":"M","readableVersions":["1"],"databaseIdentity":null,"observedFinalizedVersion":null,"excludes":["1"]}]}}""");
+            $$$"""{"readability":{"entries":[{"family":"{{{Family}}}","efModule":"M","readableVersions":["1"],"databaseIdentity":null,"observedFinalizedVersion":null,"excludes":["1"]}]},"runnability":null}""");
 
     /// <summary>
     /// Every writer writes every entry field, so a document without one was not written by this envelope. Reading the
@@ -54,36 +54,68 @@ public sealed class EfClusterMembershipStoreTests : IAsyncDisposable
     [Fact]
     public Task A_report_missing_an_entry_field_is_returned_as_unknown_rather_than_read_with_a_default() =>
         AssertStoredReportReadsAsUnknownAsync(
-            $$$"""{"readability":{"entries":[{"family":"{{{Family}}}","efModule":"M","readableVersions":["1"],"databaseIdentity":null}]}}""");
+            $$$"""{"readability":{"entries":[{"family":"{{{Family}}}","efModule":"M","readableVersions":["1"],"databaseIdentity":null}]},"runnability":null}""");
 
     /// <summary>
-    /// The stored envelope names <see cref="ReadabilityEntry"/>'s fields one by one, so a field the entry gains would be
+    /// Runnability entries are held to the same strictness (spec 184, FR-008): a consumer with a field this build does not
+    /// know, an entry missing a field, a null consumer, and a report without the runnability section at all were not
+    /// written by this envelope, and reading any of them in part could place work on a member that never said it can run
+    /// it.
+    /// </summary>
+    [Theory]
+    [InlineData("""{"readability":null,"runnability":{"entries":[{"consumers":[{"consumerKey":"clr","schemaVersions":["1"],"since":"2"}],"storageDrivers":[],"activityTypes":[],"databaseIdentity":null}]}}""")]
+    [InlineData("""{"readability":null,"runnability":{"entries":[{"consumers":[],"storageDrivers":[],"activityTypes":[]}]}}""")]
+    [InlineData("""{"readability":null,"runnability":{"entries":[{"consumers":[null],"storageDrivers":[],"activityTypes":[],"databaseIdentity":null}]}}""")]
+    [InlineData("""{"readability":null}""")]
+    public Task A_runnability_section_this_build_cannot_read_whole_makes_the_report_unknown(string reportJson) =>
+        AssertStoredReportReadsAsUnknownAsync(reportJson);
+
+    /// <summary>
+    /// The stored envelope names every field of a section's entries one by one, so a field an entry gains would be
     /// dropped on write and read back as its default: a report that looks whole but says less than the member published.
-    /// An entry with every constructor parameter set must come back with every public property equal.
+    /// An entry built with every constructor parameter set, all the way down, must come back with every public property
+    /// equal.
     /// </summary>
     [Fact]
     public async Task Every_readability_entry_field_round_trips_through_the_stored_report()
     {
-        var constructor = Assert.Single(typeof(ReadabilityEntry).GetConstructors());
-        var parameters = constructor.GetParameters();
-        var properties = typeof(ReadabilityEntry).GetProperties(BindingFlags.Public | BindingFlags.Instance);
-        Assert.All(parameters, parameter => Assert.Contains(properties, property => string.Equals(property.Name, parameter.Name, StringComparison.OrdinalIgnoreCase)));
-        var published = (ReadabilityEntry)constructor.Invoke(parameters.Select(SampleArgument).ToArray());
-
+        var published = (ReadabilityEntry)Sample(typeof(ReadabilityEntry), "readability");
         var reader = await StartAsync("reader");
         var subject = await StartAsync("subject", published);
-        var read = Assert.Single((await SeenAsync(reader, Identity(subject)))!.Report.Readability!.Entries);
 
-        Assert.All(properties, property =>
-        {
-            var expected = property.GetValue(published);
-            var actual = property.GetValue(read);
-            Assert.False(expected is null || expected is IEnumerable<string> values && !values.Any(), $"{nameof(ReadabilityEntry)}.{property.Name} is not set in the sample entry, so this test cannot prove it round-trips.");
-            if (expected is IEnumerable<string> sequence)
-                Assert.Equal(sequence, Assert.IsAssignableFrom<IEnumerable<string>>(actual));
-            else
-                Assert.Equal(expected, actual);
-        });
+        AssertEveryFieldRoundTripped(published, Assert.Single((await SeenAsync(reader, Identity(subject)))!.Report.Readability!.Entries));
+    }
+
+    /// <summary>The same for the runnability section, its entries and their consumers (spec 184, FR-008).</summary>
+    [Fact]
+    public async Task Every_runnability_section_and_entry_field_round_trips_through_the_stored_report()
+    {
+        var published = (RunnabilitySection)Sample(typeof(RunnabilitySection), "runnability");
+        var reader = await StartAsync("reader");
+        var subject = await StartAsync("subject", runs: published.Entries);
+
+        AssertEveryFieldRoundTripped(published, (await SeenAsync(reader, Identity(subject)))!.Report.Runnability!);
+    }
+
+    /// <summary>
+    /// A populated runnability section, beside a readability section, reads back equal: several entries, one naming a
+    /// database and one naming none, consumers at several schema versions, drivers and activity types.
+    /// </summary>
+    [Fact]
+    public async Task A_populated_runnability_section_round_trips_beside_the_readability_section()
+    {
+        RunnabilityEntry[] runnability =
+        [
+            new([new RunnableConsumer("clr", ["1", "2"]), new RunnableConsumer("acme.approvals", ["3"])], ["json", "blob"], ["Acme.Approve", "Elsa.WriteLine"], "db-a"),
+            new([new RunnableConsumer("clr", ["1"])], [], ["Elsa.WriteLine"])
+        ];
+        var reader = await StartAsync("reader");
+        var subject = await StartAsync("subject", Reads("1", "2"), runnability);
+
+        var seen = (await SeenAsync(reader, Identity(subject)))!;
+
+        Assert.False(seen.Report.IsUnknown);
+        Assert.Equal(new MemberReport(new ReadabilitySection([Reads("1", "2")]), new RunnabilitySection(runnability)), seen.Report);
     }
 
     /// <summary>
@@ -201,12 +233,69 @@ public sealed class EfClusterMembershipStoreTests : IAsyncDisposable
 
     private static ReadabilityEntry Reads(params string[] versions) => new(Family, "StoreModule", versions);
 
-    /// <summary>A distinct, non-default argument for each of <see cref="ReadabilityEntry"/>'s constructor parameters.</summary>
-    private static object SampleArgument(ParameterInfo parameter) =>
-        parameter.ParameterType == typeof(string) ? $"{parameter.Name}-sample"
-        : parameter.ParameterType == typeof(IEnumerable<string>) ? new[] { $"{parameter.Name}-1", $"{parameter.Name}-2" }
-        : throw new InvalidOperationException(
-            $"{nameof(ReadabilityEntry)} gained parameter '{parameter.Name}' of type {parameter.ParameterType}. Give it a sample here, and map it in MemberReportJson.");
+    /// <summary>
+    /// A distinct, non-default value of <paramref name="type"/>: a string, a sequence of samples, or a report model built
+    /// through its one public constructor with every parameter sampled, all the way down. Every parameter must surface as
+    /// a property of the same name, which is what <see cref="AssertEveryFieldRoundTripped"/> compares.
+    /// </summary>
+    private static object Sample(Type type, string name)
+    {
+        if (type == typeof(string))
+            return $"{name}-sample";
+        if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(IEnumerable<>))
+        {
+            var element = type.GenericTypeArguments[0];
+            var samples = Array.CreateInstance(element, 2);
+            for (var index = 0; index < samples.Length; index++)
+                samples.SetValue(Sample(element, $"{name}-{index + 1}"), index);
+            return samples;
+        }
+
+        if (type.Namespace != typeof(MemberReport).Namespace)
+            throw new InvalidOperationException(
+                $"A report model gained parameter '{name}' of type {type}. Give it a sample here, and map it in MemberReportJson.");
+
+        var constructor = Assert.Single(type.GetConstructors());
+        var properties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance);
+        Assert.All(constructor.GetParameters(), parameter =>
+            Assert.Contains(properties, property => string.Equals(property.Name, parameter.Name, StringComparison.OrdinalIgnoreCase)));
+        return constructor.Invoke(constructor.GetParameters().Select(parameter => Sample(parameter.ParameterType, parameter.Name!)).ToArray());
+    }
+
+    /// <summary>Every public property of <paramref name="read"/> equals <paramref name="published"/>'s, recursing into report
+    /// models and sequences, and each was set in the sample, so the comparison proves that the field round-trips.</summary>
+    private static void AssertEveryFieldRoundTripped(object published, object read)
+    {
+        foreach (var property in published.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance))
+        {
+            var field = $"{published.GetType().Name}.{property.Name}";
+            var expected = property.GetValue(published);
+            var actual = property.GetValue(read);
+            Assert.False(expected is null || expected is IEnumerable<object> values && !values.Any(), $"{field} is not set in the sample, so this test cannot prove it round-trips.");
+            switch (expected)
+            {
+                case string:
+                    Assert.Equal(expected, actual);
+                    break;
+                case IEnumerable<object> sequence:
+                    var expectedItems = sequence.ToArray();
+                    var actualItems = Assert.IsAssignableFrom<IEnumerable<object>>(actual).ToArray();
+                    Assert.Equal(expectedItems.Length, actualItems.Length);
+                    foreach (var (expectedItem, actualItem) in expectedItems.Zip(actualItems))
+                    {
+                        if (expectedItem is string)
+                            Assert.Equal(expectedItem, actualItem);
+                        else
+                            AssertEveryFieldRoundTripped(expectedItem, actualItem);
+                    }
+
+                    break;
+                default:
+                    Assert.Fail($"{field} is of type {property.PropertyType}, which this test does not compare. Teach it to, and map the field in MemberReportJson.");
+                    break;
+            }
+        }
+    }
 
     /// <summary>A row holding <paramref name="reportJson"/> is returned with an unknown report and counted as a failure.</summary>
     private async Task AssertStoredReportReadsAsUnknownAsync(string reportJson)
@@ -223,8 +312,8 @@ public sealed class EfClusterMembershipStoreTests : IAsyncDisposable
 
     private static ClusterMemberIdentity Identity(IConformanceMember member) => member.Membership.GetLocalStanding().Identity;
 
-    private async Task<IConformanceMember> StartAsync(string name, ReadabilityEntry? reads = null) =>
-        await _fixture.StartMemberAsync(new ConformanceMemberSetup(NewHostId(name), reads is null ? [] : [reads]));
+    private async Task<IConformanceMember> StartAsync(string name, ReadabilityEntry? reads = null, IReadOnlyList<RunnabilityEntry>? runs = null) =>
+        await _fixture.StartMemberAsync(new ConformanceMemberSetup(NewHostId(name), reads is null ? [] : [reads], Runnability: runs));
 
     private static async Task<FleetView> FreshAsync(IConformanceMember reader) => await reader.Membership.ReadFleetAsync(FleetReadMode.Fresh);
 

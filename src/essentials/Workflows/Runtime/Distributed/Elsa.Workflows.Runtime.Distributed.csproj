@@ -9,6 +9,9 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Placement is a membership query (ADR 0078, invariant 3; spec 184): the contract and its in-process default. -->
+    <ProjectReference Include="..\..\..\Cluster\Core\Elsa.Cluster.Core.csproj" />
+    <ProjectReference Include="..\..\..\Cluster\InProcess\Elsa.Cluster.InProcess.csproj" />
     <ProjectReference Include="..\Core\Elsa.Workflows.Runtime.Core.csproj" />
     <ProjectReference Include="..\Elsa.Workflows.Runtime.csproj" />
     <ProjectReference Include="..\..\..\Tasks\Core\Elsa.Tasks.Core.csproj" />

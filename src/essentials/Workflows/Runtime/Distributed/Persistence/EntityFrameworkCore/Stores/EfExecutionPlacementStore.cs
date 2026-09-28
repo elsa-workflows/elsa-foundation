@@ -137,8 +137,58 @@ public sealed class EfExecutionPlacementStore(
     }
 
     /// <inheritdoc/>
+    /// <exception cref="ExecutionPlacementEntityFrameworkPersistenceException">The EF provider cannot complete the renewal or bounded contention does not settle.</exception>
+    public async ValueTask<ExecutionPlacementLease?> TryRenewAsync(
+        ExecutionPlacementLease held,
+        DateTimeOffset now,
+        DateTimeOffset expiresAt,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(held);
+        DistributedRuntimeIdentityConstraints.Validate(held.WorkflowExecutionId, nameof(held.WorkflowExecutionId));
+        DistributedRuntimeIdentityConstraints.Validate(held.OwnerId, nameof(held.OwnerId));
+        cancellationToken.ThrowIfCancellationRequested();
+        var scope = RequireScope();
+        var id = EfDistributedIdentity.CreateId(scope, held.WorkflowExecutionId);
+        var renewed = new ExecutionPlacementLease(held.WorkflowExecutionId, held.OwnerId, checked(held.PlacementToken + 1), now, expiresAt);
+        var stagedRevision = 0L;
+
+        return await CompareAndSwapAsync<ExecutionPlacementLease?>(ReleaseRetry, "renewing", held.WorkflowExecutionId, async () =>
+        {
+            var current = await context.PlacementLeases.SingleOrDefaultAsync(
+                row => row.Id == id,
+                cancellationToken);
+            if (current is null)
+                return null;
+            EnsureIdentity(current, scope, held.WorkflowExecutionId, id);
+
+            // An attempt reported as lost may have committed; its own write settles the call rather than a replay
+            // that would find the token already moved and report the renewal as refused.
+            if (stagedRevision != 0 && IsStagedWrite(current, stagedRevision, renewed))
+                return renewed;
+
+            // Compare-and-set against the lease as the caller held it: a released, expired or re-owned lease is never
+            // renewed, so a renewal cannot take back what a reclaim or another member's claim already moved (FR-014).
+            if (!IsLive(current, now) ||
+                !StringComparer.Ordinal.Equals(current.OwnerId, held.OwnerId) ||
+                current.PlacementToken != held.PlacementToken)
+                return null;
+
+            current.PlacementToken = renewed.PlacementToken;
+            current.AcquiredAt = renewed.AcquiredAt;
+            current.ExpiresAtUtcTicks = renewed.ExpiresAt.UtcTicks;
+            current.ExpiresAtOffsetMinutes = checked((int)renewed.ExpiresAt.Offset.TotalMinutes);
+            current.SchemaVersion = ExecutionPlacementEfModule.SchemaVersion;
+            current.Revision = checked(current.Revision + 1);
+            stagedRevision = current.Revision;
+            await context.SaveChangesAsync(cancellationToken);
+            return renewed;
+        }, cancellationToken);
+    }
+
+    /// <inheritdoc/>
     /// <exception cref="ExecutionPlacementEntityFrameworkPersistenceException">The EF provider cannot complete the release or bounded contention does not settle.</exception>
-    public async ValueTask ReleaseAsync(
+    public async ValueTask<bool> ReleaseAsync(
         ExecutionPlacementLease lease,
         CancellationToken cancellationToken = default)
     {
@@ -148,8 +198,9 @@ public sealed class EfExecutionPlacementStore(
         cancellationToken.ThrowIfCancellationRequested();
         var scope = RequireScope();
         var id = EfDistributedIdentity.CreateId(scope, lease.WorkflowExecutionId);
+        var stagedRevision = 0L;
 
-        _ = await CompareAndSwapAsync(ReleaseRetry, "releasing", lease.WorkflowExecutionId, async () =>
+        return await CompareAndSwapAsync(ReleaseRetry, "releasing", lease.WorkflowExecutionId, async () =>
         {
             var current = await context.PlacementLeases.SingleOrDefaultAsync(
                 row => row.Id == id,
@@ -157,6 +208,12 @@ public sealed class EfExecutionPlacementStore(
             if (current is null)
                 return false;
             EnsureIdentity(current, scope, lease.WorkflowExecutionId, id);
+
+            // A lost race around the commit may hide this call's own release; finding it settles the call as released.
+            if (stagedRevision != 0 && current.Revision == stagedRevision && current.IsReleased &&
+                StringComparer.Ordinal.Equals(current.OwnerId, lease.OwnerId) && current.PlacementToken == lease.PlacementToken)
+                return true;
+
             if (current.IsReleased ||
                 !StringComparer.Ordinal.Equals(current.OwnerId, lease.OwnerId) ||
                 current.PlacementToken != lease.PlacementToken)
@@ -164,6 +221,7 @@ public sealed class EfExecutionPlacementStore(
 
             current.IsReleased = true;
             current.Revision = checked(current.Revision + 1);
+            stagedRevision = current.Revision;
             await context.SaveChangesAsync(cancellationToken);
             return true;
         }, cancellationToken);

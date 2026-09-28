@@ -45,6 +45,36 @@ public sealed class EfExecutionPlacementStoreTests
         Assert.Null(await reopened.Store.FindAsync("wf-ä"));
     }
 
+    /// <summary>
+    /// Spec 184, FR-014: renewal is a compare-and-set on the lease as held and never grants; a release reports whether it
+    /// released, so a reclaim can count what it did (FR-028).
+    /// </summary>
+    [Fact]
+    public async Task Renewal_extends_only_the_live_lease_held_under_the_same_token_and_never_grants()
+    {
+        await using var fixture = await Fixture.CreateAsync("scope-a");
+        var held = (await fixture.Store.TryClaimAsync(Claim("node-a", "wf-1"), Now)).Lease;
+
+        var renewed = await fixture.Store.TryRenewAsync(held, Now.AddSeconds(10), Now.AddSeconds(40));
+        Assert.NotNull(renewed);
+        Assert.Equal(held.PlacementToken + 1, renewed.PlacementToken);
+        AssertLeaseEqual(renewed, await fixture.Store.FindAsync("wf-1"));
+        Assert.Null(await fixture.Store.TryRenewAsync(held, Now.AddSeconds(10), Now.AddSeconds(40)));
+
+        Assert.True(await fixture.Store.ReleaseAsync(renewed));
+        Assert.False(await fixture.Store.ReleaseAsync(renewed));
+        Assert.Null(await fixture.Store.TryRenewAsync(renewed, Now.AddSeconds(11), Now.AddSeconds(41)));
+        Assert.Null(await fixture.Store.FindAsync("wf-1"));
+
+        var successor = (await fixture.Store.TryClaimAsync(Claim("node-b", "wf-1", Now.AddSeconds(12)), Now.AddSeconds(12))).Lease;
+        Assert.Null(await fixture.Store.TryRenewAsync(renewed, Now.AddSeconds(13), Now.AddSeconds(43)));
+        AssertLeaseEqual(successor, await fixture.Store.FindAsync("wf-1"));
+        Assert.Null(await fixture.Store.TryRenewAsync(successor, successor.ExpiresAt, successor.ExpiresAt.AddSeconds(30)));
+
+        await using var reopened = await fixture.ReopenAsync("scope-a");
+        AssertLeaseEqual(successor, await reopened.Store.FindAsync("wf-1"));
+    }
+
     [Fact]
     public async Task A_row_with_a_newer_schema_reports_skew_on_every_read_and_before_a_claim_or_release_rewrites_it()
     {
@@ -60,6 +90,7 @@ public sealed class EfExecutionPlacementStoreTests
             () => fixture.Store.FindAsync("wf-1").AsTask(),
             () => fixture.Store.ListOwnedAsync(new("node-a", Now)).AsTask(),
             () => fixture.Store.TryClaimAsync(Claim("node-b", "wf-1", Now.AddMinutes(1)), Now.AddMinutes(1)).AsTask(),
+            () => fixture.Store.TryRenewAsync(claimed.Lease, Now, Now.AddSeconds(30)).AsTask(),
             () => fixture.Store.ReleaseAsync(claimed.Lease).AsTask()
         ];
         foreach (var operation in operations)

@@ -150,6 +150,71 @@ public abstract partial class ClusterMembershipConformanceTests
         AssertIdentities([identity], (await AskAsync(member, MemberQuery.Placement(otherFamily))).Failures.Select(failure => failure.Member));
     }
 
+    /// <summary>
+    /// Spec 184, FR-010: a placement query with runnability requirements returns only members one of whose runnability
+    /// entries satisfies every requirement, never places a member that publishes no section, an unknown report or a
+    /// displaced incarnation, and fails a member whose entries each meet only part of the requirement.
+    /// </summary>
+    [SkippableFact]
+    public async Task FR010_a_placement_query_with_runnability_requirements_returns_only_members_whose_section_satisfies_it()
+    {
+        RequireMultipleMembers();
+        var upgraded = await Fixture.StartMemberAsync(Setup("upgraded") with { Runnability = [Runs("Acme.Approve")], ClockOffset = DisplacedButStillLiveObserverOffset });
+        var old = await Fixture.StartMemberAsync(Setup("old") with { Runnability = [Runs("Elsa.WriteLine")] });
+        var split = await Fixture.StartMemberAsync(Setup("split") with { Runnability = [Runs("Acme.Approve", driver: "blob"), Runs("Elsa.WriteLine")] });
+        var silent = await Fixture.StartMemberAsync(Setup("silent"));
+        var displaced = await Fixture.StartMemberAsync(Setup("displaced") with { Runnability = [Runs("Acme.Approve")] });
+        await KillAndAdvanceToDisplaceableAsync(upgraded, displaced);
+        var restarted = await Fixture.StartMemberAsync(Restart(displaced) with { Runnability = [Runs("Elsa.WriteLine")] });
+        var unknownHost = NewHostId("newer");
+        await Fixture.PlantUninterpretableEntryAsync(unknownHost);
+        var needsApprove = new ResolvesActivityType("Acme.Approve");
+        var needsJson = new HasStorageDriver("json");
+
+        var answer = await AskAsync(old, MemberQuery.Placement(new ActivatesRuntimeConsumer("clr", "1"), needsApprove, needsJson));
+
+        AssertIdentities([Identity(upgraded)], answer.Matches);
+        Assert.Equal(
+            new[] { Identity(old), Identity(split), Identity(silent), Identity(restarted) }.Select(identity => identity.ToString()).Order(StringComparer.Ordinal),
+            answer.Failures.Select(failure => failure.Member.Identity.ToString()).Order(StringComparer.Ordinal));
+        Assert.Equal(needsApprove, answer.Failures.Single(failure => failure.Member.Identity == Identity(old)).Requirement);
+        Assert.Equal(needsJson, answer.Failures.Single(failure => failure.Member.Identity == Identity(split)).Requirement);
+        Assert.DoesNotContain(answer.Failures, failure => failure.Member.HostId == unknownHost);
+    }
+
+    [SkippableFact]
+    public async Task FR010_a_runnability_entry_matches_the_database_it_names_or_every_database_when_it_names_none()
+    {
+        RequireMultipleMembers();
+        var namesIt = await Fixture.StartMemberAsync(Setup("names-it") with { Runnability = [Runs("Acme.Approve", databaseIdentity: "db-a")] });
+        var namesNone = await Fixture.StartMemberAsync(Setup("names-none") with { Runnability = [Runs("Acme.Approve")] });
+        var namesAnother = await Fixture.StartMemberAsync(Setup("names-another") with { Runnability = [Runs("Acme.Approve", databaseIdentity: "db-b")] });
+
+        var answer = await AskAsync(namesIt, MemberQuery.Placement(new ResolvesActivityType("Acme.Approve", "db-a")));
+
+        AssertIdentities([Identity(namesIt), Identity(namesNone)], answer.Matches);
+        AssertIdentities([Identity(namesAnother)], answer.Failures.Select(failure => failure.Member));
+    }
+
+    [SkippableFact]
+    public async Task FR010_a_member_matches_its_own_runnability_section_and_follows_it_when_it_changes()
+    {
+        var member = await Fixture.StartMemberAsync(Setup("self") with { Runnability = [Runs("Elsa.WriteLine")] });
+        var needsApprove = MemberQuery.Placement(new ResolvesActivityType("Acme.Approve"));
+        Assert.Empty((await AskAsync(member, needsApprove)).Matches);
+
+        member.SetRunnability(Runs("Acme.Approve"));
+        await member.Membership.PublishReportAsync();
+
+        AssertIdentities([Identity(member)], (await AskAsync(member, needsApprove)).Matches);
+        AssertIdentities([Identity(member)], (await AskAsync(member, MemberQuery.Placement(new ActivatesRuntimeConsumer("clr", "1"), new HasStorageDriver("json")))).Matches);
+        AssertIdentities([Identity(member)], (await AskAsync(member, MemberQuery.Placement(new HasStorageDriver("blob")))).Failures.Select(failure => failure.Member));
+    }
+
+    /// <summary>One runnability entry: the "clr" consumer at schema version 1, one storage driver, and one activity type.</summary>
+    protected static RunnabilityEntry Runs(string activityType, string driver = "json", string? databaseIdentity = null) =>
+        new([new RunnableConsumer("clr", ["1"])], [driver], [activityType], databaseIdentity);
+
     private static Action<IServiceCollection>[][] BothOrders(Action<IServiceCollection> first, Action<IServiceCollection> second) =>
         [[first, second], [second, first]];
 

@@ -80,6 +80,27 @@ public sealed class ExecutionCommandTransportItem
     /// <summary>An item is visible (available to lease) when it is unleased or its lease has expired.</summary>
     public bool IsVisible(DateTimeOffset now) => LeasedByOwnerId is null || LeaseExpiresAt is null || LeaseExpiresAt.Value <= now;
 
+    /// <summary>
+    /// Returns a copy whose lease ends at <paramref name="now"/>, so the item is visible again at once (spec 184, FR-019
+    /// and FR-024). The holder and the attempt count stay, so the lease token is not reused: the next lease issues a
+    /// greater one, and the released holder's acknowledgement is refused because the item is visible.
+    /// </summary>
+    public ExecutionCommandTransportItem ReleaseLease(DateTimeOffset now)
+    {
+        if (LeasedByOwnerId is null)
+            throw new InvalidOperationException("Only a leased transport item can have its lease released.");
+
+        return new(
+            TransportItemId,
+            WorkflowExecutionId,
+            Envelope,
+            Sequence,
+            EnqueuedAt,
+            DeliveryAttemptCount,
+            LeasedByOwnerId,
+            now);
+    }
+
     /// <summary>Returns a copy leased by <paramref name="ownerId"/> until <paramref name="leaseExpiresAt"/>, bumping the attempt count and derived lease token.</summary>
     public ExecutionCommandTransportItem Lease(string ownerId, DateTimeOffset leaseExpiresAt) => new(
         TransportItemId,

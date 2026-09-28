@@ -207,7 +207,19 @@ adapters validate and translate the selected context at their own persistence bo
 - **Kind:** Replacement (one service owns a single system-wide resumption sweep pass for a runtime composition).
 - **Signature:** `SweepAsync(RuntimeResumptionSweepRequest request, CancellationToken cancellationToken = default)`.
 - **Usage:** one sweep pass re-delivers stranded post-commit outbox items system-wide (`ProcessAsync(workflowExecutionId: null, intentKind: null)`) across all contributed kinds, unions durable scheduler-queue backlog (`IWorkflowSchedulerWorkQueue.ListPendingWorkflowExecutionIdsAsync`) with `IRuntimeRecoveryScanner` candidates, and re-drives each discovered execution by enqueueing a `RunSchedulerWork` envelope through the actor mailbox — preserving single-writer discipline. The request bounds each sweep (`MaxExecutionsPerSweep`) and skips executions the caller is backing off (`ExcludedWorkflowExecutionIds`). Re-drive failures surface on the result and do not abort the sweep; callers own logging and backoff. It is not registered by the runtime API feature — only the `WorkflowsRuntimeResumption` shell feature registers it and drives it from a recurring pump.
-- **Default implementation:** `RuntimeResumptionService` *(registered by the feature-gated `Elsa.Workflows.Runtime.Resumption` package)*.
+- **Default implementation:** `RuntimeResumptionService` *(registered by the feature-gated `Elsa.Workflows.Runtime.Resumption` package)*. It also re-drives the candidates every registered `IRuntimeRecoveryCandidateSource` supplies, beside the backlog, and settles those it dealt with.
+
+### `IRuntimeRecoveryCandidateSource` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Contributor (any number; each supplies recovery candidates for the current persistence scope).
+- **Signature:** `ListAsync(int limit, CancellationToken)`, `SettleAsync(IReadOnlyCollection<string> workflowExecutionIds, CancellationToken)`.
+- **Usage:** the recovery sweep re-drives the listed executions at once, before any execution lease or heartbeat times out, and settles each it re-drove into a mailbox or the durable transport, or found terminal; a candidate whose re-drive faulted or was rejected is listed again. A candidate is an accelerator over the durable execution lease, never the record of what is owed, so a source may keep its candidates in memory.
+- **Known implementations:** `ReclaimedRecoveryCandidateSource` (`Elsa.Workflows.Runtime.Distributed`): the executions whose execution lease or heartbeat a reclaim found held under a departed host id, or under this process's predecessor (spec 184, FR-024 and FR-027).
+
+### `IWorkflowRuntimePlacementAttention` *(Runtime — `Elsa.Workflows.Runtime.Attention`)*
+- **Kind:** Contributor (any number; each reports the current persistence scope's unplaceable work).
+- **Signature:** `ListUnplaceableWorkAsync(CancellationToken)`, returning `UnplaceableWorkReport(Requirement, WaitingExecutions, FirstObservedAt, LastObservedAt)`.
+- **Usage:** `WorkflowRuntimeAttentionContributor` turns each report into a warning beside the runtime's faulted runs and incidents, naming what the waiting executions need and how many wait, never a host (spec 184, FR-017). Refusing such work is placement's decision, not a runtime fault, so it is never an incident.
+- **Known implementations:** `UnplaceableWorkAttention` (`Elsa.Workflows.Runtime.Distributed`), over the work the placement pump found waiting because no active member satisfies its placement requirement or the requirement could not be resolved.
 
 ### `IRuntimeDomainRetryPolicy` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one policy decides workflow/activity domain retry behavior for a runtime composition).
@@ -551,7 +563,8 @@ Leaf-owned contracts for clustered workflow-execution placement and cross-node c
 
 ### `IExecutionLivenessStateStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one store owns split continuation state for runtime operational coordination in a runtime composition).
-- **Signature:** `SaveAsync(ExecutionLivenessState state, ...)`, `TrySaveAsync(ExecutionLivenessState state, long expectedRevision, ...)`, `FindAsync(...)`, `FindVersionedAsync(...)`, `ListAsync(...)`, `ListAllAsync(...)`.
+- **Signature:** `SaveAsync(ExecutionLivenessState state, ...)`, `TrySaveAsync(ExecutionLivenessState state, long expectedRevision, ...)`, `FindAsync(...)`, `FindVersionedAsync(...)`, `ListAsync(...)`, `ListAllAsync(...)`, `ListOwnedPageAsync(string ownerId, RuntimeStorePageRequest, ...)`.
+- **Owner listing:** `ListOwnedPageAsync` pages the scope's states whose execution lease or heartbeat names one owner, for the distributed runtime's reclaim (spec 184, FR-024). It runs only when a host id departs or a process starts, so a store may answer it with a scope-bounded scan; a store that does not support it throws `NotSupportedException`, and those executions are then recovered when their leases time out.
 - **Usage:** stores `ExecutionLivenessState` keyed by `WorkflowExecutionId` and `OperationalStateId`. Revision `0` means create-only and a positive revision means compare-and-swap, allowing ownership allocation, heartbeat, and release to converge across independent clients without an adapter-instance lock. The in-memory checkpoint writer projects operational state upserts from accepted checkpoint commits into this store. Recovery scanning, outbox delivery processing, domain retry, and actor-provider lease enforcement remain separate runtime surfaces.
 - **Default implementation:** `InMemoryExecutionLivenessStateStore` *(single-node in-memory default for the current runtime slice)*.
 
