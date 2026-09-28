@@ -18,11 +18,11 @@ public sealed class EfSchemaModuleFamilies
     private readonly ConcurrentDictionary<Type, EfSchemaChain?> _byEntityType = new();
     private readonly IReadOnlyList<EfSchemaFamilyDescriptor> _declarations;
 
-    private EfSchemaModuleFamilies(string module, IReadOnlyList<EfSchemaFamilyDescriptor> declarations)
+    private EfSchemaModuleFamilies(string module, IReadOnlyList<EfSchemaFamilyDescriptor> declarations, IReadOnlyList<EfSchemaChain> chains)
     {
         Module = module;
         _declarations = declarations;
-        Chains = declarations.Select(declaration => EfSchemaChain.Of(declaration.Assembly, declaration.Name)).ToArray();
+        Chains = chains;
     }
 
     /// <summary>The EF module's canonical name, as its <see cref="EfModuleAttribute"/> spells it.</summary>
@@ -56,11 +56,23 @@ public sealed class EfSchemaModuleFamilies
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(module);
         ArgumentNullException.ThrowIfNull(assembly);
-        return new EfSchemaModuleFamilies(
-            module,
-            EfSchemaFamilyCatalog.Discover([assembly])
-                .Where(family => family.Module is not null && StringComparer.OrdinalIgnoreCase.Equals(family.Module, module))
-                .ToArray());
+        var declarations = EfSchemaFamilyCatalog.Discover([assembly])
+            .Where(family => family.Module is not null && StringComparer.OrdinalIgnoreCase.Equals(family.Module, module))
+            .ToArray();
+        // The families' own cached chains, the same instances every store of the module checks and upcasts through.
+        return new EfSchemaModuleFamilies(module, declarations, declarations.Select(declaration => EfSchemaChain.Of(declaration.Assembly, declaration.Name)).ToArray());
+    }
+
+    /// <summary>
+    /// The families <paramref name="declarations"/> describe, as a module that no assembly declares owns them: for a
+    /// test, or a tool, that builds its declarations itself. Each chain is built from its declaration, uncached.
+    /// </summary>
+    public static EfSchemaModuleFamilies FromDeclarations(string module, IEnumerable<EfSchemaFamilyDescriptor> declarations)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(module);
+        ArgumentNullException.ThrowIfNull(declarations);
+        var declared = declarations.ToArray();
+        return new EfSchemaModuleFamilies(module, declared, declared.Select(EfSchemaChain.For).ToArray());
     }
 
     /// <summary>

@@ -74,7 +74,8 @@ public sealed class EfSchemaWriteGateInterceptor : SaveChangesInterceptor
     /// <summary>Checks every pending write of <paramref name="context"/>; completes synchronously when <paramref name="synchronous"/>.</summary>
     internal static async ValueTask CheckAsync(DbContext context, bool synchronous, CancellationToken cancellationToken)
     {
-        if (EfSchemaModuleFamilies.ForContext(context.GetType()) is not { } families)
+        var gate = FindGate(context);
+        if ((gate?.Families ?? EfSchemaModuleFamilies.ForContext(context.GetType())) is not { } families)
             return;
         if (context.ChangeTracker.AutoDetectChangesEnabled)
             context.ChangeTracker.DetectChanges();
@@ -86,7 +87,6 @@ public sealed class EfSchemaWriteGateInterceptor : SaveChangesInterceptor
         if (writes.Length == 0)
             return;
 
-        var gate = FindGate(context, families.Module);
         // One write version per family for the whole save, so every row of a family this save writes carries the same
         // stamp (spec 180, FR-017).
         var versions = new Dictionary<string, EfSchemaFamilyWriteState>(StringComparer.Ordinal);
@@ -144,7 +144,7 @@ public sealed class EfSchemaWriteGateInterceptor : SaveChangesInterceptor
         return at < 0 || at > SchemaVersionChain.PositionOf(readable, writeVersion);
     }
 
-    private static EfSchemaModuleGate? FindGate(DbContext context, string module) =>
+    private static EfSchemaModuleGate? FindGate(DbContext context) =>
         context.GetService<IDbContextOptions>().FindExtension<CoreOptionsExtension>()?.ApplicationServiceProvider?
-            .GetService<EfSchemaFinalizationGates>()?.Find(module);
+            .GetService<EfSchemaFinalizationGates>()?.FindForContext(context.GetType());
 }
