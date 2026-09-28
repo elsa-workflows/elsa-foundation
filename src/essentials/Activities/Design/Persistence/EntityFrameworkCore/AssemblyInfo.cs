@@ -25,11 +25,8 @@ using Elsa.Specifications.PackageManifest.Generator.Hints;
 // family the stores check is not declared here, or is declared at another version.
 [assembly: EfSchemaFamily(ActivitiesDesignEfModule.SchemaFamily, "Activities.Design", ActivitiesDesignEfModule.SchemaVersion)]
 
-// The family's content columns (spec 180, FR-009 and FR-014). EF materializes this context's rows directly, so its
-// value converters deserialize these documents as it reads a row: the materialization interceptor accepts the
-// family's current version alone, and the context stamps every row it writes, which is why the family declares no
-// upcasters. Every document column of the family's tables is declared here, content or integrity;
-// EfSchemaContentDeclarationTests fails the build when one is not, or when one declared is not in the model.
+// Content and integrity columns: see EXTENSION_POINTS.md, "Content and integrity columns" (spec 180, FR-008, FR-009
+// and FR-014). EF materializes this context's rows directly, so the family declares no upcasters (same section).
 // An atomic write's receipt replays its authoritative result, deserialized, and compares its mutated units with the
 // replayed request's serialization; an upgrade plan and its apply receipt are deserialized and compared with the
 // serialization of the plan being applied. Each is content, so each comparison is between two documents in one format

@@ -498,3 +498,10 @@ under their old stamp. A full rewrite from a freshly prepared row could restamp 
 revision bump, could not without first filling the columns a later version adds, or FR-008 would check those columns
 on a row that lacks them. Every family has one version today, so no row is at risk until one ships a second. Lands
 with the B4b PR, whose merge is the owner's approval.
+
+**2026-09-28 note.** The owner answered the question above, on #2093: a full rewrite of a row restamps it, and a
+revision-only bump (no data change) keeps its stamp. FR-014's reading is amended to exactly that. The guard is
+extended so that a write assigning every mapped non-key column of a stamped row, or replacing the row, must set the
+stamp, while a write that only bumps a concurrency revision need not; Identity's child rows (claims, tokens, role
+links, external logins) are rewritten by that rule, so their full-rewrite paths now restamp to the write version.
+Lands with #2140's follow-up.

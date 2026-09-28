@@ -35,10 +35,8 @@ using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 [assembly: EfSchemaFamily(RuntimeWorkflowExecutionEfModule.SchemaFamily, "Workflows.Runtime", RuntimeWorkflowExecutionEfModule.SchemaVersion)]
 [assembly: EfSchemaFamily(RuntimeWorkflowTestScopeEfModule.SchemaFamily, "Workflows.Runtime", RuntimeWorkflowTestScopeEfModule.SchemaVersion)]
 
-// Each family's content columns (spec 180, FR-009 and FR-014): the documents a read upcasts through the family's chain
-// before it deserializes them, and a write that changes them restamps. Every document column of these tables is
-// declared here; EfSchemaContentDeclarationTests fails the build when one is not, or when one declared is not in the
-// model, and EfSchemaFamilyDeclarationGuardTests holds every read and write of them to the chain and the stamp.
+// Content and integrity columns: see EXTENSION_POINTS.md, "Content and integrity columns" (spec 180, FR-008, FR-009
+// and FR-014).
 // BookmarkState's payload and metadata, and the checkpoint marker's and the recurring-schedule projection's id sets,
 // restate parts of the row's content document, but each is deserialized and returned or compared with the upcast
 // content, so each is content too (#2140).

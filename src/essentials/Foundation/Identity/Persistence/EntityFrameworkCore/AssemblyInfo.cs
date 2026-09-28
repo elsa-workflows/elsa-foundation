@@ -38,10 +38,8 @@ using Elsa.Specifications.PackageManifest.Generator.Hints;
 [assembly: EfSchemaFamily(IdentityIamEfModule.SchemaFamily, "Identity.Iam", IdentityIamEfModule.SchemaVersion)]
 [assembly: EfSchemaFamily(IdentityProviderConfigurationEfModule.SchemaFamily, "Identity.ProviderConfiguration", IdentityProviderConfigurationEfModule.SchemaVersion)]
 
-// Each family's content columns (spec 180, FR-009 and FR-014): the documents a read upcasts through the family's chain
-// before it deserializes them, and a write that changes them restamps. Every document column of these families' tables is
-// declared here; EfSchemaContentDeclarationTests fails the build when one is not, or when one declared is not in the
-// model, and EfSchemaFamilyDeclarationGuardTests holds every read and write of them to the chain and the stamp.
+// Content and integrity columns: see EXTENSION_POINTS.md, "Content and integrity columns" (spec 180, FR-008, FR-009
+// and FR-014).
 // The child rows - claims, tokens, role links, external logins, reservations - carry no document column, so they
 // declare none (#2140).
 [assembly: EfSchemaContent(IdentityIamEfModule.SchemaFamily, typeof(UserEntity),
