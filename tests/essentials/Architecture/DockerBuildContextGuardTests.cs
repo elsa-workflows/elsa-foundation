@@ -20,7 +20,11 @@ namespace Elsa.Architecture.Tests;
 /// <c>Directory.Packages.props</c> and (if it exists) <c>Directory.Build.targets</c>, every
 /// <c>&lt;Import Project="$(MSBuildThisFileDirectory)…"/&gt;</c> is followed transitively. Any other import
 /// form found in a reachable file is not skipped - it fails the test, naming the file, because this guard
-/// cannot resolve where it points and must be extended to.
+/// cannot resolve where it points and must be extended to. Per Dockerfile, the same walk also starts from
+/// the application project(s) it restores or publishes - the <c>.csproj</c> named on its <c>dotnet restore</c>
+/// line(s) - because a csproj's own imports (for example a sibling <c>.targets</c> file, #2126) are just as
+/// load-bearing for restore as the repo-root ones, and MSBuild treats a missing one as an error, not the
+/// no-op it treats a missing repo-root import as.
 /// </para>
 /// <para>
 /// For each Dockerfile under <c>src/</c>, every required file must be copied - by a non-<c>--from=</c>
@@ -70,14 +74,22 @@ public sealed class DockerBuildContextGuardTests
         foreach (var dockerfile in dockerfiles)
         {
             var label = RelativePath(dockerfile);
-            var (copies, missingRestore) = CopyInstructionsBeforeRestore(File.ReadAllText(dockerfile));
+            var text = File.ReadAllText(dockerfile);
+            var (copies, missingRestore) = CopyInstructionsBeforeRestore(text);
             if (missingRestore is not null)
             {
                 violations.Add($"{label}: {missingRestore}");
                 continue;
             }
 
-            violations.AddRange(UncoveredRequiredFiles(copies, Required.Files)
+            var (applicationFiles, unresolvable) = ResolveRequiredFilesForDockerfile(RepoRoot, text);
+            violations.AddRange(unresolvable.Select(entry => $"{label}: {entry}"));
+
+            var requiredFiles = Required.Files
+                .Concat(applicationFiles)
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+            violations.AddRange(UncoveredRequiredFiles(copies, requiredFiles)
                 .Select(file => $"{label}: {file} is not copied before dotnet restore"));
         }
 
@@ -131,6 +143,45 @@ public sealed class DockerBuildContextGuardTests
             """;
 
         Assert.Equal(lacking is null ? [] : [lacking], PublishPropertiesItsRestoreLacks(dockerfile));
+    }
+
+    /// <summary>
+    /// The gap this finding fixes (#2126): a Dockerfile that copies its application project but never the
+    /// sibling <c>.targets</c> file the project imports must be flagged, the same way a missing repo-root
+    /// import is - even though nothing outside the project graph itself names that file.
+    /// </summary>
+    [Fact]
+    public void A_dockerfile_restoring_a_project_that_imports_an_uncopied_sibling_targets_file_is_flagged()
+    {
+        var root = Path.Join(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Join(root, "src", "apps", "Fixture"));
+        File.WriteAllText(Path.Join(root, "src", "apps", "Sibling.targets"), "<Project />");
+        File.WriteAllText(Path.Join(root, "src", "apps", "Fixture", "Fixture.csproj"), """
+            <Project>
+              <Import Project="$(MSBuildThisFileDirectory)../Sibling.targets" />
+            </Project>
+            """);
+
+        try
+        {
+            const string dockerfile = """
+                FROM mcr.microsoft.com/dotnet/sdk:10.0
+                COPY src/apps/Fixture/Fixture.csproj src/apps/Fixture/
+                RUN dotnet restore src/apps/Fixture/Fixture.csproj
+                """;
+
+            var (copies, missingRestore) = CopyInstructionsBeforeRestore(dockerfile);
+            Assert.Null(missingRestore);
+
+            var (applicationFiles, unresolvable) = ResolveRequiredFilesForDockerfile(root, dockerfile);
+            Assert.Empty(unresolvable);
+            Assert.Contains("src/apps/Sibling.targets", applicationFiles);
+            Assert.Contains("src/apps/Sibling.targets", UncoveredRequiredFiles(copies, applicationFiles));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
     }
 
     [Fact]
@@ -282,6 +333,31 @@ public sealed class DockerBuildContextGuardTests
         if (File.Exists(Path.Join(repoRoot, "Directory.Build.targets")))
             start.Add("Directory.Build.targets");
 
+        return ResolveTransitiveImports(repoRoot, start);
+    }
+
+    /// <summary>
+    /// The same transitive-import walk as <see cref="ResolveRequiredFiles"/>, started instead from the
+    /// application project(s) <paramref name="dockerfileText"/> restores or publishes - the <c>.csproj</c>
+    /// named on its <c>dotnet restore</c>/<c>dotnet publish</c> line(s) (#2126). A csproj is itself a starting
+    /// point, not merely a required file reached from one, so its own imports (for example a sibling
+    /// <c>.targets</c> file one directory up) are followed too.
+    /// </summary>
+    private static (IReadOnlyList<string> Files, IReadOnlyList<string> Unresolvable) ResolveRequiredFilesForDockerfile(string repoRoot, string dockerfileText) =>
+        ResolveTransitiveImports(repoRoot, ApplicationProjectsOf(dockerfileText));
+
+    /// <summary>The distinct <c>.csproj</c> path(s) named on a <c>dotnet restore</c> or <c>dotnet publish</c> line.</summary>
+    private static IReadOnlyList<string> ApplicationProjectsOf(string dockerfileText) =>
+        [.. Regex.Matches(string.Join(' ', LogicalInstructions(dockerfileText)), @"dotnet (?:restore|publish) (\S+\.csproj)")
+            .Select(match => match.Groups[1].Value)
+            .Distinct(StringComparer.Ordinal)];
+
+    /// <summary>
+    /// Follows every <c>$(MSBuildThisFileDirectory)</c> import from each of <paramref name="start"/>, transitively.
+    /// Any other import form is collected as unresolvable rather than skipped.
+    /// </summary>
+    private static (IReadOnlyList<string> Files, IReadOnlyList<string> Unresolvable) ResolveTransitiveImports(string repoRoot, IEnumerable<string> start)
+    {
         var files = new List<string>();
         var seen = new HashSet<string>(StringComparer.Ordinal);
         var unresolvable = new List<string>();
@@ -537,8 +613,26 @@ public sealed class DockerBuildContextGuardTests
         return slash < 0 ? "" : relativePath[..slash];
     }
 
-    private static string JoinRelative(string directory, string relative) =>
-        directory.Length == 0 ? relative : $"{directory}/{relative}";
+    /// <summary>
+    /// Joins <paramref name="directory"/> and <paramref name="relative"/> and collapses <c>.</c>/<c>..</c>
+    /// segments, so a $(MSBuildThisFileDirectory)-relative import that climbs out of its own directory
+    /// (<c>../ComputedProductionSettings.targets</c>, #2126) resolves to the file's actual repo-relative path.
+    /// </summary>
+    private static string JoinRelative(string directory, string relative)
+    {
+        var segments = new List<string>();
+        foreach (var segment in (directory.Length == 0 ? relative : $"{directory}/{relative}").Split('/'))
+        {
+            if (segment is "." or "")
+                continue;
+            if (segment == ".." && segments.Count > 0)
+                segments.RemoveAt(segments.Count - 1);
+            else
+                segments.Add(segment);
+        }
+
+        return string.Join('/', segments);
+    }
 
     private static string RelativePath(string path) =>
         Path.GetRelativePath(RepoRoot, path).Replace(Path.DirectorySeparatorChar, '/');
