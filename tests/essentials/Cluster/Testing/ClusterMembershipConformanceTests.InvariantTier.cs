@@ -161,6 +161,10 @@ public abstract partial class ClusterMembershipConformanceTests
             using var host = await StartHostAsync(hostId, compositions);
             return null;
         }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
         catch (Exception exception)
         {
             var messages = new List<string>();

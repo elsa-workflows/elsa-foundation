@@ -280,10 +280,10 @@ public abstract partial class ClusterMembershipConformanceTests
             }
         }
 
-        Assert.NotNull(terminal);
-        Assert.Equal(identity.HostId, terminal!.HostId);
-        Assert.Equal(MemberConditionKind.DuplicateHostId, terminal.Condition.Kind);
-        Assert.Contains(identity.HostId, terminal.Condition.HostIds);
+        var refusal = Assert.IsType<ClusterMembershipDuplicateHostIdException>(terminal);
+        Assert.Equal(identity.HostId, refusal.HostId);
+        Assert.Equal(MemberConditionKind.DuplicateHostId, refusal.Condition.Kind);
+        Assert.Contains(identity.HostId, refusal.Condition.HostIds);
 
         var standing = first.Membership.GetLocalStanding();
         Assert.Equal(identity, standing.Identity);
