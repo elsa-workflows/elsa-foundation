@@ -143,6 +143,30 @@ tables belong to their own schema family, `SchemaFinalization`, whatever module 
 `EfSchemaVersionMaterializationInterceptor` leaves them to `EfSchemaFinalizationStore`, which checks their stamp
 before it reads anything else. The store works on any context that maps them and holds no unsaved changes of its own.
 
+## Schema finalization gate
+
+The gate itself is not an extension point: `EfModuleMigrator<TContext>` admits every module through an
+`EfSchemaModuleGate` once its migrations are current and its post-migration actions audited, under both migrate
+policies, and `EfModuleBinding.Apply` adds `EfSchemaWriteGateInterceptor.Instance` to every module context, so no
+module opts in and none can opt out ([spec 181](../../../../specs/181-schema-finalization-gate/spec.md)). What a
+module and a host decide:
+
+- **A module that owns several families** names, in each `[EfSchemaFamily]`, the entity types whose rows stamp it
+  (`Entities = [typeof(...)]`). A module that owns one family names none: every stamped table of its context is that
+  family's. `ModuleFinalizationGateTests` fails the build when a stamped table belongs to no family, or to several.
+- **A store writes its family's write version.** Today every chain has one version, so that is the family's current
+  version whenever writes are allowed. The write check refuses a row stamped with any other version
+  (`EfSchemaWriteRefusedException`), and every write to a family whose finalized version this host cannot read
+  (`EfSchemaFamilyWritesRefusedException`, spec 181 FR-012). A store that one day writes an older version's format
+  reads the write version from its module's gate (`EfSchemaFinalizationGates.FindForContext(...).StateOf(family)`).
+- **`IEfSchemaFleet`** is the gate's view of cluster membership. `Elsa.Cluster.Readability` implements it over the
+  host's one membership provider (`AddEfSchemaReadability`). A host that composes none has gates that never finalize
+  a version past the one each record was created at: the conservative direction, which only ever delays.
+- **`EfSchemaFinalizationObservations`**, registered once by instance on the host container, is what the gates read
+  and what the readability report names (spec 183, FR-019).
+- **Timings** come from `Elsa:Persistence:EntityFramework:Finalization` (`EvaluationInterval`, default 30 seconds;
+  `RefreshInterval`, 15 seconds; `IntentWaitBound`, 2 minutes; `IntentPollInterval`, 1 second).
+
 ## Schema and pooling
 
 Neither is an extension point: a module opts in by passing its `Schema` and `Pooling` options through
