@@ -355,10 +355,8 @@ public sealed class EfSchemaModuleGate
         var deadline = _time.GetUtcNow() + _options.IntentWaitBound;
         while (true)
         {
-            if (!chain.IsReadable(record.FinalizedVersion))
-                throw Refuse(chain, EfSchemaActivationRefusal.FinalizedUnreadable, record.FinalizedVersion);
-            if (record.Finish is { } finish && !chain.IsReadable(finish.CompletionVersion))
-                throw Refuse(chain, EfSchemaActivationRefusal.CompletionUnreadable, finish.CompletionVersion);
+            if (EfSchemaFinalizationCheck.Refusal(Module, chain, record) is { } refusal)
+                throw refusal;
             if (record.Intent is not { } intent || chain.IsReadable(intent.Version))
                 return record;
 
