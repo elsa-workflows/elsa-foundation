@@ -83,6 +83,25 @@ The issue's proposed experience and acceptance criteria are the starting point f
 - **"Keep credentials out of process arguments"** is not true of the tooling that exists today: `module-migrate.sh apply`/`validate` take the connection string as **positional argument 3** ([`tools/ef/module-migrate.sh:46`](../../tools/ef/module-migrate.sh)). This spec's D7 (`--connection-env`/`--connection-stdin` only, no `--connection` flag) is what actually satisfies the issue's own requirement; the existing script does not, yet.
 - **The issue's acceptance test — "starting Elsa with migration validation succeeds after the artifact is applied" — cannot honestly pass for Secrets** until the post-migration slice (Elsa slice 7 below) lands, because Secrets' projection reindex is not yet expressed as a migration-adjacent, auditable step; today it is a hand-wired call inside `SecretsEfMigrationHostedService` that this tool's `apply`/`validate` commands do not know about.
 
+## Decisions
+
+*Settled Decisions above is the original D1 to D13, fixed on #1861 and not reopened. This section records later amendments to it, dated as they land.*
+
+Recorded 2026-09-27, when the owner answered Q10 on #2093.
+
+- **Q10 — Does the activation guard read the finalization record under `AutoMigrate` too, once spec 181 exists?** Yes.
+  FR-068 and FR-069 are narrowed so that under both `Migrate:Policy=Validate` and `Migrate:Policy=AutoMigrate` the
+  guard also reads spec 181's finalization record for every schema family in a mapped module's database, and refuses
+  when a family's finalized version is outside the host's readable set. Before this narrowing, `AutoMigrate` opened no
+  database at all and passed unconditionally (D9, D13); it now opens the database, but only to read that record — it
+  still never reads the migrations-history table or evaluates pending migrations under that policy. This is built by
+  [spec 181](../181-schema-finalization-gate/spec.md)'s FR-016, not by any slice of this spec; until spec 181 exists,
+  the guard behaves as FR-068 and FR-069's unnarrowed text describes. Amended 2026-09-28: FR-071's cross-reference to
+  FR-068 was stale — the finalization check this narrowing adds lives in FR-069's text — and FR-071 itself describes
+  an Elsa `IPackageActivationGate` implementation that ADR 0076's "Drift corrected" section
+  ([#2118](https://github.com/elsa-workflows/elsa-foundation/pull/2118)) records was never built; today the refusal
+  at enable time is the `IFeatureActivationGuard` path.
+
 ---
 
 ## User Scenarios & Testing *(mandatory)*
@@ -327,7 +346,7 @@ Slice 7 MUST keep `MigratePolicy` on `SecretsEntityFrameworkCoreFeature` for one
 - **FR-068**: Under `Migrate:Policy=AutoMigrate`, the guard MUST pass without blocking activation. Narrowed on 2026-09-27, together with FR-069: it still passes a feature whose module has pending migrations, which the module's own migrator applies at Prepare, but it refuses when FR-069's finalization check does.
 - **FR-069**: Under `Migrate:Policy=Validate`, if the guard cannot open a mapped module's database or cannot read its migrations-history table, it MUST treat every migration as pending and refuse (fail closed) rather than allow; the refusal message MUST say the database could not be reached and name the feature and its module, per FR-061 never the connection. Under `Migrate:Policy=AutoMigrate`, the guard MUST NOT open the database at all and MUST pass — except that a provider engine that cannot bind MUST still be a refusal regardless of migrate policy, reusing `EfRelationalProviderBinding.DescribeBindingFailure` for the message. Narrowed on 2026-09-27 (owner decision Q10 on [#2093](https://github.com/elsa-workflows/elsa-foundation/issues/2093); [spec 181](../181-schema-finalization-gate/spec.md), FR-016): under **both** policies the guard MUST also read the finalization record of every schema family in a mapped module's database, and MUST refuse, with the refusal spec 181's FR-017 describes, when a family's finalized version is outside the host's readable set. Under `AutoMigrate` it therefore opens the database, but only to read that record: it still never reads the migrations-history table or evaluates pending migrations under that policy. A record table that does not exist yet means nothing has been finalized, and passes, because the module's own migrator creates it at Prepare, where spec 181's FR-015 applies the same check again. A database that cannot be reached, or a record that exists but cannot be read, is refused under `AutoMigrate` as it is under `Validate` — fail closed, with the same unreachable-database message and the same FR-061 rule — because saving a request that Prepare will refuse is exactly the half-applied state this guard exists to prevent. This narrowing is built by spec 181 (B5, [#2101](https://github.com/elsa-workflows/elsa-foundation/issues/2101)); until it is, the guard behaves as the text before the narrowing describes.
 - **FR-070**: When the guard is not composed into a host at all, the existing `Validate`-policy exception thrown at CShells' Prepare phase MUST remain the fallback refusal — occurring, as today, only after `shells.json` has already been saved. This spec does not change that ordering for hosts that omit the guard; it only adds the guard as the preferred, earlier refusal point.
-- **FR-071**: The Elsa implementation of the Nuplane `IPackageActivationGate` contract (U3) MUST read `[EfModule]` metadata off the package without loading it, then look in the host's shell configuration for an enabled feature mapped to that module through `[UsesEfModule]`; it MUST return `Allow` when no enabled feature uses the module, and MUST return `Allow` under `Migrate:Policy=AutoMigrate`, matching the Elsa guard's own `AutoMigrate` behavior (FR-068).
+- **FR-071**: The Elsa implementation of the Nuplane `IPackageActivationGate` contract (U3) MUST read `[EfModule]` metadata off the package without loading it, then look in the host's shell configuration for an enabled feature mapped to that module through `[UsesEfModule]`; it MUST return `Allow` when no enabled feature uses the module, and MUST return `Allow` under `Migrate:Policy=AutoMigrate`, matching the Elsa guard's own `AutoMigrate` behavior (FR-069). Amended 2026-09-28: (a) under `AutoMigrate`, this gate MUST apply the same finalization check FR-069 does, and MUST refuse whenever FR-069's finalization check refuses; (b) an Elsa implementation of this pre-load gate was never built, as ADR 0076's "Drift corrected" section ([#2118](https://github.com/elsa-workflows/elsa-foundation/pull/2118)) records — the refusal at enable time today is the `IFeatureActivationGuard` path (D9/FR-067 through FR-069), not this gate.
 
 **Upstream Nuplane requirements (U1–U4 delivered 2026-09-20)**
 
