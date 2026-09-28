@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The cluster membership conformance kit (spec 183, FR-044 to FR-060): the provider-neutral suite every membership
+    provider runs by supplying a fixture. A shared test-support library, not a test project itself: each provider's
+    test project derives ClusterMembershipConformanceTests once, with its own fixture.
+  -->
+  <PropertyGroup>
+    <IsTestProject>false</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Host.CreateEmptyApplicationBuilder: the startup-ordering tests run a real host, so the startup check is proven to
+         run before any hosted service joins. -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit" />
+    <PackageReference Include="Xunit.SkippableFact" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\src\essentials\Cluster\Core\Elsa.Cluster.Core.csproj" />
+  </ItemGroup>
+
+</Project>

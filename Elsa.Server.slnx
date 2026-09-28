@@ -115,6 +115,10 @@
     <Project Path="src/essentials/Caching/Core/Elsa.Caching.Core.csproj" />
     <Project Path="src/essentials/Caching/Memory/Elsa.Caching.Memory.csproj" />
   </Folder>
+  <Folder Name="/src/essentials/Cluster/">
+    <Project Path="src/essentials/Cluster/Core/Elsa.Cluster.Core.csproj" />
+    <Project Path="src/essentials/Cluster/InProcess/Elsa.Cluster.InProcess.csproj" />
+  </Folder>
   <Folder Name="/src/essentials/Cli/">
     <Project Path="src/essentials/Cli/Elsa.Cli.csproj" />
     <Project Path="src/essentials/Cli/Worker/Elsa.Cli.Worker.csproj" />
@@ -373,6 +377,10 @@
   </Folder>
   <Folder Name="/tests/essentials/Caching/">
     <Project Path="tests/essentials/Caching/Tests/Elsa.Caching.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/essentials/Cluster/">
+    <Project Path="tests/essentials/Cluster/Testing/Elsa.Cluster.Testing.csproj" />
+    <Project Path="tests/essentials/Cluster/Tests/Elsa.Cluster.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/essentials/Cli/">
     <Project Path="tests/essentials/Cli/Tests/Elsa.Cli.Tests.csproj" />
