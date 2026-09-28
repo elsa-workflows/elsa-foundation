@@ -444,7 +444,9 @@ for identical fleets.
   EF module, its readable set as an ordered list of opaque version labels (spec 180, FR-004), and the opaque
   per-database identity of the finalization record it read most recently, when it has read one. An entry with no
   identity yet counts for every database, which keeps the conservative direction until the host has read the record
-  (spec 181, FR-001; Decisions, Q19).
+  (spec 181, FR-001; Decisions, Q19). Amended 2026-09-28 (Decisions): the entry also carries the member's observed
+  finalized version for the family (spec 181, FR-010), when it has read one, so spec 186's settle condition can see
+  what every counted member has observed without a database round trip (spec 186, MR-001).
 - **FR-020**: The report MUST be derived only from the family declarations of spec 180's FR-001, read from every
   assembly loaded in the process, across every load context. No configuration can change it (MR-002). A publish
   recomputes it, so a package loaded through Nuplane is reported by the first publish after its assembly loads.
@@ -686,3 +688,10 @@ Recorded 2026-09-27, when the owner answered this spec's open questions on #2093
 - **Q24 — The default host id source.** The machine name for the in-process provider. An explicit host id is
   REQUIRED whenever a durable provider is composed (FR-003a); starting one without an explicit id is refused at
   startup. Two live processes that claim the same id are refused rather than displacing each other (FR-004b).
+
+Recorded 2026-09-28, as a minimal amendment for spec 186 (B9).
+
+- **The readability entry gains the member's observed finalized version.** Spec 186's settle condition needs to see
+  what every counted member has observed without a database round trip, and the member already reads that version
+  (spec 181, FR-010), so it is one more field on the entry it already publishes (FR-019; spec 186, MR-001), not a new
+  report source.

@@ -2,7 +2,7 @@
 
 **Feature Branch**: `claude/2093-specs-b7-b9`
 **Created**: 2026-09-27
-**Status**: Draft
+**Status**: Approved
 **Input**: Workstream B9, [issue #2116](https://github.com/elsa-workflows/elsa-foundation/issues/2116), of the
 cluster-safe schema rollout program [#2093](https://github.com/elsa-workflows/elsa-foundation/issues/2093). Rows that
 are written once and never written again are never reached by "upgrade on next write", so a family could never retire
@@ -392,7 +392,7 @@ after one run with no membership table.
 - **FR-023**: Performance is stated qualitatively, because performance measurement is retired (#1668,
   [ADR 0073](../../docs/adr/0073-ef-core-is-the-only-first-party-persistence-family.md)). A run costs one read and one
   write per row below the target version, once, in throttled batches. The audit costs one selection by stamp per
-  interval. Selecting by stamp is cheap only where the stamp column is indexed (Open questions, Q27).
+  interval. Selecting by stamp is cheap only where the stamp column is indexed, which FR-025 requires.
 
 **Tests**
 
@@ -401,6 +401,15 @@ after one run with no membership table.
   withdraws on a straggler and leaves the record alone without one; content-addressed rows are untouched while the rest
   of their family is upgraded; a host whose readable set excludes the completion version is refused and one that
   includes it activates.
+
+**Indexing**
+
+- **FR-025**: Every stamped table MUST carry a non-unique index on its `SchemaVersion` column, in the same 4.0
+  baseline change that stamps the table (spec 180, FR-026; [#2119](https://github.com/elsa-workflows/elsa-foundation/issues/2119)).
+  Without it, the upgrade pass, the verification pass and every hourly audit (FR-018) select by a full scan of each
+  stamped table, repeated for as long as the family exists. Adding the index after the freeze is still possible, as an
+  expand-only migration per table (spec 185), but landing it in the 4.0 baseline avoids that later, separate migration
+  for the fifteen families that stamp today and the tables spec 180's FR-026 stamps for the first time.
 
 ### Requirements on membership (B3) and the gate (B5)
 
@@ -457,6 +466,9 @@ after one run with no membership table.
   with MR-001.
 - **Spec 182** (B6, [#2102](https://github.com/elsa-workflows/elsa-foundation/issues/2102)) is the consumer of FR-017
   and FR-022.
+- **[#2119](https://github.com/elsa-workflows/elsa-foundation/issues/2119)**, which stamps every unstamped table in
+  the 4.0 baselines (spec 180, FR-026) and, with it, adds FR-025's non-unique `SchemaVersion` index to every stamped
+  table.
 
 ## Out of Scope
 
@@ -467,15 +479,6 @@ after one run with no membership table.
 - Operator commands to start, pause or throttle a run beyond its settings. The CLI's status subcommand (spec 181,
   FR-020) prints what FR-021 carries.
 - Data changes that a migration would express. A migration never rewrites rows (spec 185).
-
-## Open questions
-
-- **Q27 — An index on each stamp column, in the 4.0 baselines.** The upgrade pass, the verification pass and every audit
-  select rows by stamp. Without an index each is a full scan of every table in the family, and the audit repeats it
-  every hour for as long as the family exists. Adding the index after the freeze is an expand-only migration per table
-  (spec 185), so it can come later, but the 4.0 baselines are being rewritten anyway: #2119 is adding a stamp column to
-  every unstamped table. **Recommendation: add a non-unique index on `SchemaVersion` to every stamped table in the same
-  4.0 baseline change, and keep the audit's one-hour default.**
 
 ## Decisions
 
@@ -504,3 +507,12 @@ own, and merging the spec approves them.
 - **This backfill is the one background writer spec 180's FR-014 allows.** FR-014 says no background task rewrites rows
   "as a side effect". The backfill's rewrite is its purpose, done through the same write path, and spec 180's FR-024
   and Q4 assign it here.
+
+Recorded 2026-09-28, when the owner answered Q27 on #2093.
+
+- **Q27 — An index on each stamp column, in the 4.0 baselines.** Decided by the owner: a non-unique `SchemaVersion`
+  index on every stamped table, in the 4.0 baselines (#2119), and the audit's one-hour default is kept (FR-025). The
+  upgrade pass, the verification pass and every audit select rows by stamp; without the index each is a full scan,
+  repeated hourly for as long as the family exists. The baselines were already being rewritten to stamp every
+  unstamped table (spec 180, FR-026), so the index lands with them instead of as a later, separate expand-only
+  migration (spec 185).

@@ -2,13 +2,15 @@
 
 **Feature Branch**: `claude/2093-specs-b7-b9`
 **Created**: 2026-09-27
-**Status**: Draft
+**Status**: Approved
 **Input**: Workstream B8, [issue #2104](https://github.com/elsa-workflows/elsa-foundation/issues/2104), of the
 cluster-safe schema rollout program [#2093](https://github.com/elsa-workflows/elsa-foundation/issues/2093). A migration
 added after [#1976](https://github.com/elsa-workflows/elsa-foundation/issues/1976) freezes the 4.0 baselines may only
 add: nullable columns, tables and indexes. The build fails when such a migration drops, renames or retypes anything,
 unless an explicit, reviewed opt-out names its reason. That is what keeps hosts still on the previous version working
-against the migrated schema during a rolling upgrade: phase 1, "Expand", of the rollout #2093 describes.
+against the migrated schema during a rolling upgrade: phase 1, "Expand", of the rollout #2093 describes. B8 also
+refuses to apply a contracting (opted-out) migration before it is safe: until no finalized version still reads what it
+removes, under both migrate policies.
 
 Decisions of record: [ADR 0078](../../docs/adr/0078-workflow-executions-are-virtual-actors-and-cluster-membership-is-a-foundation-contract.md)
 ("The first consumers", "The schema version gate": "While a version awaits finalization, migrations are expand-only:
@@ -16,15 +18,18 @@ nothing is dropped, renamed or retyped until no finalized version still reads it
 and [ADR 0077](../../docs/adr/0077-a-module-upgrades-in-place-only-when-its-persisted-schema-is-unchanged.md) ("How
 this composes with runtime module installation": "An additive migration leaves the older version working"). Both are
 accepted through B0 ([#2096](https://github.com/elsa-workflows/elsa-foundation/issues/2096), PR #2118). The owner's
-decision Q3 on #2093 (2026-09-27) binds this spec: B8 stays a migration guard, and content-shape changes are enforced by
-spec 180's round-trip fixture, not here. The module declaration it reads is
+decision Q3 on #2093 (2026-09-27) binds this spec: content-shape changes are enforced by spec 180's round-trip
+fixture, not here. The owner's decision Q26 on #2093 (2026-09-28) also binds this spec: B8's scope is not build-time
+only; it also refuses, at apply time, a contracting migration that arrives before finalization makes it safe. The
+module declaration it reads is
 [ADR 0076](../../docs/adr/0076-persistence-tooling-runs-inside-the-host-closure.md)'s D2 (`[EfModule]`).
 
 Companion specs: [spec 180](../180-schema-upcaster-chain/spec.md) (B4) relies on this guard for the rule that a new
 column is nullable, so a predecessor's writes leave it unset ("Writing the predecessor format"), and owns the matching
-rule for JSON content (FR-022, FR-027). [Spec 181](../181-schema-finalization-gate/spec.md) (B5) assumes it
-(Assumptions). [Spec 186](../186-post-finalization-backfill/spec.md) (B9) is where rows are upgraded after
-finalization, which is why a migration here never rewrites data.
+rule for JSON content (FR-022, FR-027). [Spec 181](../181-schema-finalization-gate/spec.md) (B5) assumes the build-time
+guard (Assumptions) and supplies the finalization record the apply-time refusal reads (FR-023 to FR-025). [Spec
+186](../186-post-finalization-backfill/spec.md) (B9) is where rows are upgraded after finalization, which is why a
+migration here never rewrites data.
 
 ## Terms
 
@@ -41,7 +46,8 @@ Spec 180's Terms apply, notably EF module. In addition:
   form of FR-011.
 - **Opt-out**: a reviewed declaration on one migration that permits exactly the violations it lists (FR-012).
 - **Contracting migration**: the second half of a change split across two versions (spec 180, FR-027): a migration
-  that removes what a later version no longer reads. It always needs an opt-out.
+  that removes what a later version no longer reads. It always needs an opt-out. Applying one is refused until spec
+  181's finalization record shows it safe (FR-023 to FR-025).
 
 ## Current state
 
@@ -66,8 +72,9 @@ The inventory, with paths, counts and the EF Core operation types the classifica
 
 **Invariant.** Applying a post-freeze migration of a first-party EF module never breaks a read or a write that a host on
 the previous release makes, unless a reviewed opt-out on that migration names the exact operations that may, and why.
+Applying a contracting migration's opted-out removal never breaks a read that a host still finalized below it makes.
 
-It holds through four mechanisms, each tested separately (Success Criteria):
+It holds through five mechanisms, each tested separately (Success Criteria):
 
 1. **Operations, not source text, are inspected** (FR-004). The guard classifies what EF will execute, the same list
    `dotnet elsa persistence script` and `apply` turn into SQL, so a helper method or a reformatted file cannot hide a
@@ -79,6 +86,10 @@ It holds through four mechanisms, each tested separately (Success Criteria):
 4. **The scan cannot pass by examining nothing** (FR-003, FR-018 to FR-020). It reports what it examined, and its floors fail
    when an independent enumeration finds a module, a provider context or a migration it skipped, or when the freeze
    manifest is missing.
+5. **Applying an opted-out migration is checked again, against the database it targets** (FR-023 to FR-025). The build
+   guard decides what may merge; this mechanism decides what may run, by reading spec 181's finalization record for
+   every family the migration's violations name, wherever `EfModuleMigrator` and `EfDatabaseMigrator` apply or validate
+   migrations, and wherever the activation guard runs under spec 181's FR-016.
 
 Why "additive" is the rule, per operation, is in "Why each operation is classified as it is" below.
 
@@ -172,6 +183,40 @@ nowhere.
    the guard fails naming the module.
 3. **Given** the freeze manifest is missing, **When** the real scan runs, **Then** it fails naming the path it expected,
    and never treats every migration as pre-freeze.
+
+---
+
+### User Story 5 - Applying a contracting migration too early is refused, not merely allowed to merge (Priority: P1)
+
+A release ships the contracting migration for a change split across two versions: its opt-out names the schema family
+and the version whose finalization retires the column it drops. An operator deploys that release to a fleet where the
+family's finalized version in the target database is still the earlier one. Under `AutoMigrate`, `EfModuleMigrator`
+refuses to apply the migration at `LifecyclePhase.Prepare` instead of running it; under `Validate`, the activation
+guard refuses the feature-enable request the same way it refuses a pending migration. Once the family finalizes past
+the required version, the same migration applies normally.
+
+**Why this priority**: This is Q26 on #2093: the build guard decides what may merge, but nothing stopped an early
+upgraded pod from applying a contracting migration while an older pod still read what it removes. Folding the check
+into B8 closes that gap at the point the migration actually runs.
+
+**Independent Test**: A fixture opt-out naming a family and a required version, run against a finalization record
+below that version and then at or above it, through `EfModuleMigrator`'s Prepare-phase step under both migrate
+policies and through the activation guard.
+
+**Acceptance Scenarios**:
+
+1. **Given** a contracting migration whose opt-out names family F and version V, and F's finalized version in the
+   target database is below V, **When** `EfModuleMigrator` reaches Prepare under `AutoMigrate`, **Then** it refuses to
+   apply the migration, naming the family, the migration, the finalized version and V, and `EfDatabaseMigrator` runs
+   no operation from it.
+2. **Given** the same migration, **When** an operator enables, under `Validate`, a feature that `[UsesEfModule]` maps
+   to the migration's module, **Then** the activation guard refuses the request with the same facts, mapped to HTTP
+   409, and nothing is saved.
+3. **Given** F's finalized version reaches V, **When** the same host next reaches Prepare or the same enable request is
+   retried, **Then** the migration applies, or the feature enables, normally.
+4. **Given** a migration whose opt-out names no family and version because it is not a contracting migration under
+   spec 181 (for instance, a drop on a table no stamped family covers), **When** it is applied, **Then** this check
+   does not run and the migration applies as any post-freeze migration does.
 
 ---
 
@@ -288,6 +333,25 @@ nowhere.
 - **FR-022**: The fixtures MUST run through the same classifier as the real scan, so a passing fixture proves the real
   scan's logic and not a copy of it.
 
+**Applying a contracting migration**
+
+- **FR-023**: An opt-out (FR-012) on a contracting migration MUST also name the schema family and the version whose
+  finalization, in spec 181's finalization record, makes the removal safe: the version by which no finalized version
+  still reads what the migration removes. An opt-out on a migration that removes nothing a stamped schema family
+  covers carries no such family and version, and FR-024 and FR-025 do not apply to it.
+- **FR-024**: Before `EfModuleMigrator` applies a migration under `Migrate:Policy=AutoMigrate`, or reports it as
+  pending under `Validate`, at `LifecyclePhase.Prepare`, and before `dotnet elsa persistence apply` runs it directly
+  (spec 171), the check MUST read spec 181's finalization record for the family FR-023 names, in the migration's
+  target database, and MUST refuse to apply the migration when the record's finalized version for that family is
+  below the version FR-023 names. The refusal names the family, the migration, the finalized version and the version
+  required, and no operation of the migration runs against the database. This runs alongside, and does not replace,
+  the build-time check of FR-001 to FR-020.
+- **FR-025**: The activation guard (spec 171's `EfPendingMigrationActivationGuard`, narrowed by spec 181's FR-016)
+  MUST apply FR-024's check under both `Validate` and `AutoMigrate` at feature-enable time, for every feature that
+  `[UsesEfModule]` maps to the migration's module, returning the same refusal the Modularity API renders as HTTP 409,
+  with nothing saved. This keeps a feature-enable request that would apply a contracting migration too early from
+  being saved and failing later, exactly as spec 181's FR-016 does for an unreadable finalized version.
+
 ### Requirement on #1976
 
 - **RQ-001**: The freeze manifest MUST record, for each EF module and provider context, which migrations make up its
@@ -299,7 +363,8 @@ nowhere.
 - **Baseline**: per EF module and provider context, the frozen migrations #1976 records.
 - **Post-freeze migration**: any other migration of a first-party EF module.
 - **Violation**: an operation outside the allowed list, in canonical form.
-- **Opt-out**: reason, review reference and the exact violations permitted, on one migration class.
+- **Opt-out**: reason, review reference and the exact violations permitted, on one migration class; on a contracting
+  migration, also the schema family and the version whose finalization makes the removal safe.
 
 ## Why each operation is classified as it is
 
@@ -333,6 +398,9 @@ model does not know.
 - **SC-004**: With the freeze manifest absent, the real scan fails; it never reports success over zero migrations.
 - **SC-005**: A post-freeze migration generated from an additive model change passes on all four providers with no
   opt-out.
+- **SC-006**: A contracting migration whose opt-out names family F and version V is refused, naming F and V, wherever
+  `EfModuleMigrator` would apply or validate it and wherever the activation guard checks it, while F's finalized
+  version in the target database is below V, and applies or enables normally once it reaches V.
 
 ## Assumptions
 
@@ -350,26 +418,17 @@ model does not know.
 - The migrations test project (`tests/essentials/Persistence/EntityFrameworkCore/Migrations/Tests`), whose
   `ModuleContextCatalog`, `OrdinalCollationMigrationTests` and `SyntheticEfModules` already provide the module
   contexts, the operation-reading path and synthetic module fixtures ([research.md](./research.md)).
+- **Spec 181** (B5, [#2101](https://github.com/elsa-workflows/elsa-foundation/issues/2101)), for the finalization
+  record FR-024 and FR-025 read, and for `EfPendingMigrationActivationGuard`'s narrowing under both migrate policies
+  (FR-016) that FR-025 builds on.
 
 ## Out of Scope
 
 - Content-shape changes to stored JSON: spec 180, FR-022 and FR-027.
 - Upgrading rows: spec 186.
 - The #1976 guard against editing, renaming or deleting a shipped migration, which is #1976's own.
-- Refusing, at apply time, a contracting migration that arrives before it is safe (Open questions, Q26).
 - Running the guard over third-party EF modules. The classifier and the opt-out attribute are public, so an author can
   run the same check from their own tests.
-
-## Open questions
-
-- **Q26 — Refusing an early contracting migration at apply time.** The guard decides what may merge. It cannot stop a
-  host from applying a contracting migration under `AutoMigrate` while an older host still reads what it removes: the
-  first upgraded pod migrates, and the older pods break. The opt-out's reason is where an author records why the
-  removal is safe, but nothing checks it when the migration is applied. The opt-out could also name the schema family
-  and version whose finalization makes the removal safe, and `EfModuleMigrator` could refuse to apply the migration
-  before the finalization record reaches it. **Recommendation: keep B8 to the build guard, as #2104 scopes it, and file
-  the apply-time refusal as a follow-up before the first contracting migration ships.** No contracting migration can
-  exist until a release after 4.0 has split a change across two versions.
 
 ## Decisions
 
@@ -393,3 +452,12 @@ and merging the spec approves them.
   from the migration and would not serve a third-party module.
 - **A missing freeze manifest fails the real scan.** The alternative, treating everything as pre-freeze, is the
   failure that looks like success. The classifier and fixtures can still land before #1976.
+
+Recorded 2026-09-28, when the owner answered Q26 on #2093.
+
+- **Q26 — Refusing an early contracting migration at apply time.** Folded into B8 (FR-023 to FR-025), rather than kept
+  to the build guard alone. The build guard decides what may merge; it cannot stop a host from applying a contracting
+  migration under `AutoMigrate` while an older host still reads what it removes, or being enabled under `Validate`
+  before it is safe. The opt-out now also names the schema family and the version whose finalization makes the
+  removal safe (FR-023), and `EfModuleMigrator` and the activation guard refuse to apply it, or to enable a feature
+  that would, before then (FR-024, FR-025).

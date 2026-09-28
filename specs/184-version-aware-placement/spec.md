@@ -2,7 +2,7 @@
 
 **Feature Branch**: `claude/2093-specs-b7-b9`
 **Created**: 2026-09-27
-**Status**: Draft
+**Status**: Approved
 **Input**: Workstream B7, [issue #2103](https://github.com/elsa-workflows/elsa-foundation/issues/2103), of the
 cluster-safe schema rollout program [#2093](https://github.com/elsa-workflows/elsa-foundation/issues/2093). Work that
 needs a module version is placed only on hosts that can run it, and placement becomes a query on cluster membership.
@@ -312,7 +312,7 @@ fleet view, the leases and the database.
   FR-018a). Processes on different machines have different host ids and route correctly by lease expiry. Processes on
   one machine share the machine-name host id and therefore one routing identity, so each treats the other's leases as
   its own. The fence refuses the stale writer, so no data is lost, but work is repeated and refused commits are
-  logged. Nothing detects this (Decisions, Q8 and Q18 on #2093; Open questions, Q25).
+  logged. Nothing detects this (Decisions, Q8, Q18 and Q25).
 - **A drain that outlasts the host's shutdown timeout.** It is interrupted as a crash would be. If the host writes left,
   survivors reclaim at once; if it does not get that far, its entry expires and survivors reclaim then.
 - **A host with the distributed runtime but without the resumption feature.** Recovery candidates are re-driven by the
@@ -554,21 +554,19 @@ are already met.
   such a requirement from (Decisions).
 - An actor-framework provider. FR-006's kinds are what such a provider would translate (spec 183, FR-061).
 
-## Open questions
-
-- **Q25 — The routing identity under the in-process provider.** FR-001 makes the routing identity the host id, which
-  under the in-process provider is the machine name. Two processes on one machine that share a runtime database while
-  each composes the in-process provider — two Workbench processes against one PostgreSQL, say — then share one routing
-  identity, where today their process ids keep them apart. The fence keeps that safe, but work is repeated and refused
-  commits are logged. **Recommendation: accept it.** It is the misconfigured cluster Q8 and Q18 decided not to detect,
-  a durable provider fixes it, and keeping a process-derived identity only under the in-process provider would give
-  single hosts no restart benefit (User Story 7) and split the rule in two.
-
 ## Decisions
 
 Recorded 2026-09-27, when this spec was drafted. The first is the owner's, on #2093; the rest are this draft's own,
 and merging the spec approves them.
 
+- **Q25 — The routing identity under the in-process provider.** Decided by the owner on #2093 (2026-09-28), consistent
+  with Q8: accepted. FR-001 makes the routing identity the host id, which under the in-process provider is the machine
+  name. Two processes on one machine that share a runtime database while each composes the in-process provider — two
+  Workbench processes against one PostgreSQL, say — then share one routing identity, where today their process ids
+  keep them apart. Fencing keeps that safe; the known limit is its cost: work is repeated and refused commits are
+  logged (Edge Cases). It is the misconfigured cluster Q8 and Q18 decided not to detect, a durable provider fixes it,
+  and keeping a process-derived identity only under the in-process provider would give single hosts no restart benefit
+  (User Story 7) and split the rule in two.
 - **Failover and draining belong to placement.** Decided by the owner on #2093, and recorded in ADR 0078's
   2026-09-27 amendment: membership publishes status and incarnation, and placement, which already consumes the member
   query, acts on them.
