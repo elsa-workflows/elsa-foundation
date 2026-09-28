@@ -121,6 +121,13 @@ public sealed class EfSchemaFinalizationStore
         return row is null ? null : Read(row);
     }
 
+    /// <summary>Every family's record in this module's database, in one read, keyed by family.</summary>
+    public async Task<IReadOnlyDictionary<string, SchemaFinalizationRecord>> ListAsync(CancellationToken cancellationToken = default)
+    {
+        var rows = await Records.AsNoTracking().ToListAsync(cancellationToken);
+        return rows.ToDictionary(row => row.Family, Read, StringComparer.Ordinal);
+    }
+
     /// <summary>
     /// <see cref="FindAsync"/> for a caller on a synchronous path, such as a synchronous <c>SaveChanges</c> that must
     /// re-read a finalized version before it writes (spec 180, FR-015). It tracks nothing, so it leaves a context's

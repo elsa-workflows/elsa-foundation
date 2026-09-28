@@ -139,12 +139,13 @@ public sealed class EfSchemaModuleGate
 
         var member = _fleet.GetLocalStanding().Member;
         var store = new EfSchemaFinalizationStore(context, _time);
+        // One read of every family's record, since nearly every round finds nothing to do.
+        var current = await store.ListAsync(cancellationToken);
         foreach (var chain in Families.Chains)
         {
             if (StateOf(chain.Family) is { WritesRefused: true })
                 continue;
-            var record = await store.FindAsync(chain.Family, cancellationToken);
-            if (record is null || !chain.IsReadable(record.FinalizedVersion))
+            if (!current.TryGetValue(chain.Family, out var record) || !chain.IsReadable(record.FinalizedVersion))
                 continue;
             if (record.Intent is not null)
             {
@@ -185,10 +186,11 @@ public sealed class EfSchemaModuleGate
 
         var mayAdvance = await MayAdvanceAsync(context, cancellationToken);
         var store = new EfSchemaFinalizationStore(context, _time);
+        var current = await store.ListAsync(cancellationToken);
         var records = new Dictionary<string, SchemaFinalizationRecord>(StringComparer.Ordinal);
         foreach (var chain in Families.Chains)
         {
-            if (await store.FindAsync(chain.Family, cancellationToken) is { } record)
+            if (current.TryGetValue(chain.Family, out var record))
                 records[chain.Family] = record;
             else
                 _logger.LogError(
@@ -531,7 +533,13 @@ public sealed class EfSchemaModuleGate
             // unpublished report refuses nothing yet: the next refresh admits again.
             if (refusal.Refusal is EfSchemaActivationRefusal.FinalizedUnreadable && refusal.Version is { } finalized)
                 RefuseWrites(refusal.Family, finalized);
-            _logger.LogWarning(refusal, "EF module {Module} could not be admitted again by its finalization gate; it adopts no newer finalized version.", Module);
+            // A member that has not joined yet, such as the membership module's own before its join, cannot publish; that
+            // is expected until it joins, not worth a warning each round.
+            _logger.Log(
+                refusal.Refusal is EfSchemaActivationRefusal.ReportNotPublished ? LogLevel.Debug : LogLevel.Warning,
+                refusal,
+                "EF module {Module} could not be admitted again by its finalization gate; it adopts no newer finalized version.",
+                Module);
             return false;
         }
     }
