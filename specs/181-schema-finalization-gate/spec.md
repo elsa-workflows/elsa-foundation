@@ -250,7 +250,9 @@ after each one.
   identity, created once when the record is first written and never derived from a connection string; the finalized
   version; at most one in-flight intent (a version, the member that wrote it, and when); the active holds; and an
   append-only history of transitions. Each history entry names the member (host id and incarnation) or the operator
-  responsible.
+  responsible. Amended 2026-09-28 (spec 186, Decisions): the record also carries a finish record, per spec 186's FR-014
+  to FR-016: the completion version, the verification pass's start and end instants, and the member (host id and
+  incarnation) that ran it, with its own append-only history of completion and withdrawal.
 - **FR-002**: The record MUST live in the database that holds the family's tables, beside its EF module's
   migrations-history table, whichever membership provider is active (ADR 0078, "The first consumers"). It is created
   through the same migration mechanism as the module's own tables, so `Validate` refuses a module whose database
@@ -303,13 +305,16 @@ after each one.
   the host MUST refuse the module. The check runs in the Prepare-phase initializer that `EfModuleMigrator` occupies,
   and in its hosted-service form on plain hosts, after migrations are applied or validated and after the
   post-migration audit, and before any shell task, seeder or store touches the module's tables. It throws a typed
-  refusal, so the shell does not activate, as a pending migration under `Validate` does today.
+  refusal, so the shell does not activate, as a pending migration under `Validate` does today. Amended 2026-09-28
+  (spec 186, Decisions): the same check MUST also refuse the module when a family's finish record names a completion
+  version outside the host's readable set (spec 186, FR-020), for the same reason and at the same point.
 - **FR-016**: At enable time, under both `Validate` and `AutoMigrate`, an `IFeatureActivationGuard` MUST read the
   finalization record and apply the same check to every feature that `[UsesEfModule]` maps to the module, returning a
-  `FeatureActivationRefusal` that the Modularity API renders as 409, with nothing saved. This narrows spec 171's
-  FR-069 (Dependencies), which today has the guard open no database and pass under `AutoMigrate`, following spec
-  171's FR-068. Saving an enable request that will fail at Prepare is exactly the half-applied state this design
-  exists to avoid. Until spec 171's FR-069 is amended, FR-015 remains the refusal point under `AutoMigrate`.
+  `FeatureActivationRefusal` that the Modularity API renders as 409, with nothing saved. This is the narrowing spec
+  171's FR-068 and FR-069 state (Dependencies): before this spec is built, the guard opens no database and passes
+  under `AutoMigrate`, following the pre-narrowing text those requirements describe, and FR-015 remains the refusal
+  point under `AutoMigrate` until then. Saving an enable request that will fail at Prepare is exactly the half-applied
+  state this design exists to avoid.
 - **FR-017**: A refusal MUST name the feature where there is one, the EF module, the family, the finalized version
   and the host's readable set, and give the remedy: run a version that can read the finalized version, or restore a
   pre-finalization backup. Like every activation refusal, it MUST NOT contain a connection string or any other
@@ -422,9 +427,10 @@ design of membership.
 - **B2** ([#2098](https://github.com/elsa-workflows/elsa-foundation/issues/2098)), the durable membership provider,
   for any clustered test or deployment.
 - **Spec 180** (B4, #2100), for the family declaration, readable sets and the write path.
-- [**Spec 171**](../171-persistence-script-cli/spec.md) (persistence CLI), whose FR-069 needs narrowing so
-  `EfPendingMigrationActivationGuard` reads the finalization record under both `AutoMigrate` and `Validate`
-  (FR-016; Decisions, Q10). This spec states the requirement; it does not edit spec 171.
+- [**Spec 171**](../171-persistence-script-cli/spec.md) (persistence CLI), whose FR-068 and FR-069 are narrowed, by
+  this program (#2093), so `EfPendingMigrationActivationGuard` reads the finalization record under both `AutoMigrate`
+  and `Validate` (FR-016; Decisions, Q10). That narrowing is recorded in spec 171's own text; this spec's FR-015 and
+  FR-016 are what it defers to for the check.
 
 ## Out of Scope
 
@@ -452,11 +458,18 @@ Recorded 2026-09-27, when the owner answered this spec's open questions on #2093
 - **Q9 — An HTTP surface for hold and release.** Yes, as a second step, under the existing `module-management.manage`
   host-control permission (FR-020a). The CLI stays the pre-host path (FR-020).
 - **Q10 — Enable-time refusal under `AutoMigrate`.** The check reads the finalization record under both policies
-  (FR-016), narrowing spec 171's FR-069. That amendment belongs to spec 171 (Dependencies); this spec does not edit
-  it.
+  (FR-016), narrowing spec 171's FR-068 and FR-069, amended by this program (#2093) (Dependencies).
 - **Q11 — Database identity in reports.** Yes: an opaque identity, created once in the finalization record (FR-001).
   Evaluation counts only members whose readability report names it or names none (FR-006; Terms, Counted member).
 - **Q12 — Default intervals.** Evaluation every 30 seconds, refresh every 15 seconds, and a joining host's wait bound
   of 2 minutes (FR-005, FR-010, FR-014).
 - **Q13 — Landing the record table.** In every EF module's 4.0 baseline, before #1976 freezes the `Initial`
   migrations (FR-002).
+
+Recorded 2026-09-28, as a minimal amendment for spec 186 (B9), which builds fields onto this spec's approved record
+rather than a record of its own.
+
+- **The finalization record gains a finish record.** Spec 186's completeness proof lives inside this record, per
+  database and family, so it shares the record's identity, migration and history mechanism (FR-001). Activation and
+  enable-time refusal (FR-015, FR-016) gain the matching condition: a family whose finish record names a completion
+  version outside the host's readable set refuses the module, the same way an unreadable finalized version does.

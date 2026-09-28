@@ -173,36 +173,56 @@ compare the answer and its list of blockers with the expected set.
 
 ### User Story 4 - A restarted host is a new member, and a live host id is never taken from under it (Priority: P2)
 
-A host crashes and restarts within its expiry period, under a host id whose source is stable across restarts (a VM, a
-bare-metal machine, a Kubernetes `StatefulSet` pod). Its new incarnation joins under the same host id, and the earlier
-incarnation is displaced at that moment because it is no longer live. Placement stops treating the earlier incarnation
-as a candidate at once. The gate keeps counting it until its own entry expires. On a host whose id source is not
-stable (a Kubernetes `Deployment` pod, whose hostname changes every restart), a restart instead joins under a new host
-id; the old entry is never displaced, and drops out of counting only when it expires on its own (FR-003, FR-007).
-Separately, if two live processes are ever configured with the same host id, for instance two Elsa processes on one
-development machine, the second's join MUST be refused rather than displacing the first.
+A host crashes and restarts under a host id whose source is stable across restarts (a VM, a bare-metal machine, a
+Kubernetes `StatefulSet` pod). If it restarts before its earlier incarnation's entry has expired, the join is refused,
+and the joiner watches that incarnation for one full liveness window — its expiry period plus the skew allowance (35
+seconds by default), measured from when the joiner first observed it as live — issuing a warning naming the host id
+and the live incarnation it is waiting on for each refused attempt in the meantime. If the earlier incarnation never
+renews during that window, it was a crash: its entry expires, the join then succeeds, and the earlier incarnation is
+marked displaced; placement stops treating it as a candidate at once, and the gate keeps counting it until its own
+entry expires. If instead the earlier incarnation renews during that window, it is a live duplicate, not a crash: the
+joiner reports the duplicate host id (FR-039), naming the host id and both processes as far as known, and refuses to
+start — it never keeps retrying silently. On a host whose id source is not stable (a Kubernetes `Deployment` pod,
+whose hostname changes every restart), a restart instead joins under a new host id; the old entry is never displaced,
+and drops out of counting only when it expires on its own (FR-003, FR-007). Separately, if two live processes are ever
+configured with the same host id, for instance two Elsa processes on one development machine, whichever joins second
+observes the first renew within one liveness window and refuses to start with the duplicate host id diagnostic,
+rather than retrying forever.
 
-**Why this priority**: ADR 0078 makes "a restarted host is a new member" part of the contract, and that a crashed
-host's leases must not wait out their own timeouts. The same mechanism must never let a second live process seize a
-host id already in use. FR-003a now requires an explicit host id whenever a durable provider is composed, which
-removes the case where the machine-name default alone caused this collision; FR-004b's refusal is the backstop for
-the remaining case, an operator explicitly configuring two live processes with the same id.
+**Why this priority**: ADR 0078 makes "a restarted host is a new member" part of the contract, but a live incarnation
+must never be displaced by another. FR-003a now requires an explicit host id whenever a durable provider is composed,
+which removes the case where the machine-name default alone caused an accidental collision; FR-004b's watch-then-decide
+is the backstop both for a restart that outruns its earlier incarnation's expiry and for an operator explicitly
+configuring two live processes with the same id. A crash-restart under a stable host id is therefore delayed by up to
+the expiry period plus the skew allowance before it rejoins; a live duplicate refuses to start within that same window
+rather than displacing the survivor or retrying forever.
 
-**Independent Test**: With the EF provider and a controllable clock, start a host, kill it, start it again with the
-same host id, and read the fleet view for both purposes. Separately, start two hosts configured with the same host id
-while both are live, and assert the second is refused rather than displacing the first.
+**Independent Test**: With the EF provider and a controllable clock, start a host, kill it, restart it with the same
+host id before its entry has expired, and confirm the new incarnation's join is refused while it watches the earlier
+entry; advance the clock past the liveness window without renewing that entry and confirm the join then succeeds.
+Repeat after the entry has already expired and confirm the join succeeds at once. Separately, start two hosts
+configured with the same host id while both are live, let the earlier one keep heartbeating, and assert the second
+observes a renewal within one liveness window, reports the duplicate host id diagnostic (FR-039) naming both, and
+refuses to start rather than retrying forever.
 
 **Acceptance Scenarios**:
 
-1. **Given** an earlier incarnation of host H that is no longer live, **When** a new incarnation of H joins, **Then**
-   the fleet view shows the earlier one as displaced and the new one as H's current incarnation.
-2. **Given** that fleet view, **When** a placement query runs, **Then** only the current incarnation can match.
-3. **Given** that fleet view, **When** the readability query runs before the displaced entry expires, **Then** the
-   displaced incarnation is still counted.
-4. **Given** two live processes, **When** the second is configured with the host id the first is still live under,
-   **Then** the second's join is refused with a diagnostic naming the host id, the first keeps its incarnation
+1. **Given** an earlier incarnation of host H that is no longer live (FR-006), **When** a new incarnation of H joins,
+   **Then** the fleet view shows the earlier one as displaced and the new one as H's current incarnation.
+2. **Given** an earlier incarnation of host H that is still live and never renews again, **When** a new incarnation of
+   H attempts to join, **Then** the join is refused while the joiner watches the earlier incarnation, and it succeeds
+   only once the earlier incarnation's entry has gone unrenewed for one full liveness window — its expiry period plus
+   the skew allowance, measured from when the joiner first observed it as live.
+3. **Given** the fleet view of scenario 1, **When** a placement query runs, **Then** only the current incarnation can
+   match.
+4. **Given** the fleet view of scenario 1, **When** the readability query runs before the displaced entry expires,
+   **Then** the displaced incarnation is still counted.
+5. **Given** two live processes, **When** the second is configured with the host id the first is still live under and
+   the first keeps renewing, **Then** the second's join is refused, and once the second observes the first renew
+   within one liveness window of first observing it, the second reports the duplicate host id diagnostic (FR-039),
+   naming the host id and both processes as far as known, and refuses to start; the first keeps its incarnation
    undisturbed, and nothing is displaced.
-5. **Given** a host whose id source changes on every restart, **When** the process restarts, **Then** it joins under a
+6. **Given** a host whose id source changes on every restart, **When** the process restarts, **Then** it joins under a
    new host id, and the old entry is neither displaced nor treated as the same host; it only stops being counted once
    it expires.
 
@@ -275,9 +295,11 @@ for identical fleets.
 - **A host id that is too long, blank or malformed.** Configuration is refused at startup with a diagnostic.
 - **A durable provider composed with no explicit host id.** Refused at startup with a diagnostic (FR-003a;
   Decisions, Q24), before any join is attempted.
-- **Two live durable-provider processes explicitly configured with the same host id.** The second's join is refused
-  at startup with a diagnostic naming the host id and instructing the operator to configure a distinct one (FR-004b).
-  The first is undisturbed.
+- **Two live durable-provider processes explicitly configured with the same host id.** The second's join is refused,
+  and it watches the first for one full liveness window (FR-004b); when the first renews within that window, the
+  second reports the duplicate host id diagnostic (FR-039), naming the host id and both processes, and refuses to
+  start rather than retrying forever, and an operator must configure a distinct host id to resolve it. The first is
+  undisturbed.
 - **An ephemeral pod restarts under a new host id.** The old entry is never displaced, because no incarnation joins
   under its host id again. It is counted until its own entry expires, which only delays counting, and never lets two
   live incarnations be mistaken for one host (FR-003, FR-007).
@@ -354,15 +376,28 @@ for identical fleets.
   collision refusal to catch a mistake (Decisions, Q24).
 - **FR-004**: A member's incarnation MUST be new each time the host process starts and each time it rejoins after a
   lapse. It is an opaque, unique value that consumers compare only for equality.
-- **FR-004a**: When an incarnation joins under a host id whose most recently joined incarnation is not live (it has
-  expired or left), that earlier incarnation MUST be marked displaced. Only a restart of the same host — one where
-  the earlier incarnation has stopped heartbeating, left, or expired — may displace it.
-- **FR-004b**: When an incarnation joins under a host id whose most recently joined incarnation is still live
-  (heartbeating and not expired), the join MUST instead be refused at startup with a diagnostic naming the host id and
-  instructing the operator to configure a distinct one; the existing live incarnation MUST NOT be displaced or
-  otherwise disturbed. A race where two joins are concurrently in flight for one host id MUST resolve
-  to at most one live incarnation surviving; if both observe the other as live and both are refused, that is
-  acceptable, but a live incarnation MUST NOT ever be silently displaced by another live one.
+- **FR-004a**: When an incarnation joins under a host id whose most recently joined incarnation is not live by FR-006's
+  liveness rule (it has expired or left), that earlier incarnation MUST be marked displaced. Only a restart of the
+  same host — one where the earlier incarnation has stopped heartbeating, left, or expired — may displace it, and
+  never one that is still live (FR-004b).
+- **FR-004b**: When an incarnation attempts to join under a host id whose most recently joined incarnation is still
+  live (heartbeating and not expired, FR-006), the join MUST be refused, and the joiner MUST watch that incarnation for
+  one full liveness window — its expiry period plus the skew allowance (35 seconds by default), measured from when the
+  joiner first observed it as live. Each refused attempt while the joiner waits MUST be visible as a warning naming the
+  host id and the live incarnation it is waiting on. If, before the window elapses, the joiner observes that
+  incarnation's entry renew, the case MUST be concluded to be a live duplicate, not a crash: the joiner MUST report the
+  duplicate host id (FR-039), naming the host id and both processes as far as known, and MUST refuse to start — it MUST
+  NOT keep retrying silently. If the window elapses with no renewal observed, the incarnation has crashed: the join
+  MUST then proceed and displace it (FR-004a). The existing live incarnation MUST NOT be displaced or otherwise
+  disturbed at any point before its own entry expires. A crash-restart under a host id whose source is stable across
+  restarts is therefore delayed by up to that liveness window before it rejoins; a live duplicate refuses to start,
+  within that same window, rather than displacing the survivor or retrying forever. If two processes are ever
+  explicitly configured with the same host id while both stay live, for instance two Elsa processes on one development
+  machine, whichever joins second detects the first's renewal within its liveness window, reports the duplicate host
+  id, and refuses to start; an operator must configure a distinct host id to resolve it. A race where two joins are
+  concurrently in flight for one host id MUST resolve so that a live incarnation is never silently displaced by
+  another live one: each side that observes the other renewing during its own window refuses to start rather than
+  displacing it.
 - **FR-005**: A member's status MUST move only forward within an incarnation: joining, then active, then draining, then
   left. A member is joining from when it joins until the host has started, draining from when the host begins to stop,
   and left once it has stopped. A crashed member never writes left; it expires.
@@ -376,8 +411,10 @@ for identical fleets.
   expiry period has passed since the start of its last successful heartbeat, measured as the larger of wall-clock and
   monotonic elapsed time; its entry is missing from the store; or its incarnation has been displaced (MR-005). A lapsed
   member rejoins as a new incarnation. A displaced one never rejoins, because another process now holds its host id: it
-  stays lapsed and reports the displacement (FR-038), as a duplicate host id (FR-039) if its own heartbeats were still
-  succeeding when it learned of it.
+  stays lapsed and reports the displacement (FR-038). Because FR-004b never displaces an incarnation while it is still
+  live, a member is only ever displaced after its own entry has already gone unrenewed for a full liveness window, so
+  this path never coincides with heartbeats that were still succeeding; the duplicate-host-id diagnostic (FR-039) is
+  raised instead by the joiner that finds a live duplicate, before it starts (FR-004b).
 - **FR-008**: The skew allowance MUST make mechanism 2 hold: for any skew between two clocks within the allowance, a
   member concludes that it lapsed no later than any other member judges it expired. It holds by construction, because
   the heartbeat time a member writes is taken from its own clock at the start of the heartbeat from which it measures
@@ -399,9 +436,13 @@ for identical fleets.
   error. It never returns a truncated or empty view in place of a failure. An entry the reader cannot interpret MUST
   be returned with an unknown report, never skipped.
 - **FR-013**: A consumer MUST be able to learn of changes to the fleet: a join, a status change, a new report, a lapse,
-  a displacement, a departure or an expiry. The provider raises in-process events (§2.6.1) when it observes a change,
-  and a consumer can also compare successive reads. Events are an accelerator; a consumer MUST NOT depend on them as
-  its only way to learn of a change (spec 181, FR-005).
+  a displacement, a departure or an expiry. `IClusterMembership` MUST expose a host-level change signal — a change
+  token or subscription — that a consumer can wait on or subscribe to, with no dependency on the Events feature:
+  membership is selected per host (Decisions, Q20), while `IEventPublisher` is shell-scoped, so a shell-scoped event
+  cannot stand for a host-level fleet change. A shell that wants shell-scoped events adapts the signal itself. A
+  consumer can also compare successive reads. The signal is an accelerator; a consumer MUST tolerate a missed signal
+  and MUST NOT depend on it as its only way to learn of a change — it MUST still re-read to find the current state
+  (spec 181, FR-005).
 
 **The member report and member queries**
 
@@ -444,7 +485,9 @@ for identical fleets.
   EF module, its readable set as an ordered list of opaque version labels (spec 180, FR-004), and the opaque
   per-database identity of the finalization record it read most recently, when it has read one. An entry with no
   identity yet counts for every database, which keeps the conservative direction until the host has read the record
-  (spec 181, FR-001; Decisions, Q19).
+  (spec 181, FR-001; Decisions, Q19). Amended 2026-09-28 (Decisions): the entry also carries the member's observed
+  finalized version for the family (spec 181, FR-010), when it has read one, so spec 186's settle condition can see
+  what every counted member has observed without a database round trip (spec 186, MR-001).
 - **FR-020**: The report MUST be derived only from the family declarations of spec 180's FR-001, read from every
   assembly loaded in the process, across every load context. No configuration can change it (MR-002). A publish
   recomputes it, so a package loaded through Nuplane is reported by the first publish after its assembly loads.
@@ -514,8 +557,10 @@ single requirement:
 
 - **FR-037**: A member MUST report a lapse (FR-007).
 - **FR-038**: A member MUST report a displacement (FR-004a).
-- **FR-039**: A member MUST report a duplicate host id: a displacement while its own heartbeats were still succeeding
-  (FR-007).
+- **FR-039**: A joiner MUST report a duplicate host id: the live incarnation it is watching under FR-004b's liveness
+  window renews before that window elapses, so its own join is refused as a live duplicate rather than a crash. The
+  report MUST name the host id and both processes as far as known, and the joiner MUST refuse to start rather than
+  keep retrying.
 - **FR-040**: A member MUST report clock skew, naming both hosts (FR-029).
 - **FR-041**: A member MUST report an entry it cannot interpret (FR-012).
 - **FR-042**: A member MUST report a failed fresh read.
@@ -626,6 +671,10 @@ Spec 181's Q8 (a misconfigured cluster) and Q11 (fleets that span databases) are
   resolve to at most one live incarnation (FR-004b), as SC-006 exercises for two opt-in providers.
 - **SC-010**: A readability query given a database identity counts only members whose entry for the family names it
   or names none; a member serving a different database never contributes to that answer.
+- **SC-011**: Two durable-provider processes explicitly configured with the same host id, both live: the second
+  observes the first renew within one liveness window of first observing it — at most the expiry period plus the skew
+  allowance from when the attempt began — reports the duplicate host id diagnostic (FR-039) naming both, and refuses
+  to start; the first's incarnation is never displaced or disturbed.
 
 ## Assumptions
 
@@ -686,3 +735,41 @@ Recorded 2026-09-27, when the owner answered this spec's open questions on #2093
 - **Q24 — The default host id source.** The machine name for the in-process provider. An explicit host id is
   REQUIRED whenever a durable provider is composed (FR-003a); starting one without an explicit id is refused at
   startup. Two live processes that claim the same id are refused rather than displacing each other (FR-004b).
+
+Recorded 2026-09-28, as a minimal amendment for spec 186 (B9).
+
+- **The readability entry gains the member's observed finalized version.** Spec 186's settle condition needs to see
+  what every counted member has observed without a database round trip, and the member already reads that version
+  (spec 181, FR-010), so it is one more field on the entry it already publishes (FR-019; spec 186, MR-001), not a new
+  report source.
+
+Recorded 2026-09-28, when the owner amended FR-013 and the rejoin rule on #2093.
+
+- **FR-013 drops its dependency on the Events feature.** Membership is selected per host (Q20), while
+  `IEventPublisher` is shell-scoped, so a shell-scoped event cannot stand for a host-level fleet change.
+  `IClusterMembership` instead exposes its own host-level change signal — a change token or subscription — and a
+  shell that wants shell-scoped events adapts the signal itself. Consumers still tolerate a missed signal by
+  re-reading, as FR-013 already required.
+- **Rejoin waits for expiry, and a live incarnation is never displaced.** FR-004a already conditioned displacement on
+  the earlier incarnation being not live by FR-006's rule; this amendment tightens FR-004b so a join under a
+  still-live host id is refused and retried until that incarnation expires (at most the expiry period plus the skew
+  allowance, 35 seconds by default), rather than treated as a one-shot refusal that presumes a misconfiguration. A
+  crash-restart under a stable host id is delayed by up to that long before it rejoins; that delay is the accepted
+  cost of never displacing a live duplicate. User Story 4's scenarios, and spec 184's User Story 3 and its research,
+  are corrected to match: a same-host-id restart while the earlier incarnation is still live gains nothing over a
+  survivor's own expiry-triggered reclaim.
+
+Recorded 2026-09-28, implementing the rejoin decision above; not a new decision.
+
+- **FR-039 moves from the displaced member to the joiner, because the rejoin amendment made its old trigger
+  unreachable.** FR-004b already stopped a live incarnation from ever being displaced, so a member can no longer be
+  both displaced and still heartbeating: FR-007's cross-reference to FR-039 for "a displacement while its own
+  heartbeats were still succeeding" described a case that can no longer occur. FR-004b is restated so a joiner that
+  finds a live latest incarnation retries while watching it for one full liveness window, measured from when it first
+  observed it live: if that incarnation never renews within the window, the join proceeds as a crash-restart (FR-004a);
+  if it renews within the window, the joiner concludes it is a live duplicate, raises the duplicate-host-id diagnostic
+  (FR-039) naming the host id and both processes, and refuses to start rather than retrying silently forever. Each
+  refused attempt before that point is also visible, as a warning naming the live incarnation the joiner is waiting
+  on. FR-007's cross-reference to FR-039 is corrected to match. User Story 4's scenarios, and SC-009/SC-011, are
+  amended so a live duplicate's outcome is "startup refused with FR-039 within one liveness window," not an unbounded
+  retry.
