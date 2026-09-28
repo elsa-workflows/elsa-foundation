@@ -27,8 +27,8 @@ namespace Elsa.Workflows.Runtime.Distributed.Placement;
 /// check (FR-026): stopping it would turn a membership outage into an execution outage.
 /// </para>
 /// <para>
-/// Spec 181's refusal of writes to a Runtime family (FR-012) is not evaluated: spec 181 is not built yet, and this gate
-/// is where that exclusion belongs once it is.
+/// A member whose writes to a family of the Runtime EF module spec 181 refuses (its FR-012) claims and renews nothing
+/// either (FR-012), so the pump hands what it holds off: it cannot commit a checkpoint anyway.
 /// </para>
 /// </remarks>
 public sealed class ExecutionPlacementGate
@@ -38,6 +38,7 @@ public sealed class ExecutionPlacementGate
     private readonly JoinSweepLedger _ledger;
     private readonly DistributedRuntimeShell _shell;
     private readonly ExecutionPlacementRequirementResolver _resolver;
+    private readonly IRuntimeSchemaFinalization? _schemaFinalization;
     private readonly ILogger _logger;
     private readonly ConcurrentDictionary<string, string> _loggedRefusals = new(StringComparer.Ordinal);
 
@@ -46,7 +47,8 @@ public sealed class ExecutionPlacementGate
         JoinSweepLedger ledger,
         DistributedRuntimeShell shell,
         ExecutionPlacementRequirementResolver resolver,
-        ILogger<ExecutionPlacementGate>? logger = null)
+        ILogger<ExecutionPlacementGate>? logger = null,
+        IRuntimeSchemaFinalization? schemaFinalization = null)
     {
         ArgumentNullException.ThrowIfNull(membership);
         ArgumentNullException.ThrowIfNull(ledger);
@@ -56,6 +58,7 @@ public sealed class ExecutionPlacementGate
         _ledger = ledger;
         _shell = shell;
         _resolver = resolver;
+        _schemaFinalization = schemaFinalization;
         _logger = logger ?? NullLogger<ExecutionPlacementGate>.Instance;
     }
 
@@ -77,6 +80,8 @@ public sealed class ExecutionPlacementGate
         var standing = _membership.GetLocalStanding();
         if (standing.Status != MemberStatus.Active)
             return PlacementDecision.Refused(PlacementRefusalKind.MemberNotActive, $"this member is {standing.Status.ToString().ToLowerInvariant()}");
+        if (_schemaFinalization?.WritesRefusedReason is { } refused)
+            return PlacementDecision.Refused(PlacementRefusalKind.RuntimeWritesRefused, refused);
         return _ledger.IsComplete(standing.Identity.HostId, _shell.Name)
             ? null
             : PlacementDecision.Refused(PlacementRefusalKind.JoinSweepPending, "this member has not finished reclaiming its predecessor's leases");
@@ -99,7 +104,7 @@ public sealed class ExecutionPlacementGate
             return refused;
 
         var requirement = await _resolver.ResolveAsync(workflowExecutionId, services, inHand, pending, cancellationToken);
-        return Check(requirement, services);
+        return Check(requirement, services, _schemaFinalization?.DatabaseIdentity);
     }
 
     /// <summary>
@@ -134,7 +139,7 @@ public sealed class ExecutionPlacementGate
             decision.Reason);
     }
 
-    private static PlacementDecision Check(ExecutionPlacementRequirement requirement, IServiceProvider services)
+    private static PlacementDecision Check(ExecutionPlacementRequirement requirement, IServiceProvider services, string? databaseIdentity)
     {
         if (!requirement.IsResolved)
             return PlacementDecision.Refused(PlacementRefusalKind.RequirementUnresolved, $"its placement requirement cannot be resolved: {requirement.UnresolvedReason}");
@@ -142,7 +147,7 @@ public sealed class ExecutionPlacementGate
             return PlacementDecision.Runnable([]);
 
         var check = services.GetRequiredService<IRuntimeRequirementChecker>().Check(subject);
-        var requirements = ExecutionPlacementRequirement.ToMemberRequirements(check);
+        var requirements = ExecutionPlacementRequirement.ToMemberRequirements(check, databaseIdentity);
         if (check.ActivityTypes.Any(entry => string.IsNullOrWhiteSpace(entry.TypeAlias)))
         {
             var nodes = string.Join(", ", check.ActivityTypes.Where(entry => string.IsNullOrWhiteSpace(entry.TypeAlias)).SelectMany(entry => entry.NodeIds));

@@ -199,6 +199,8 @@ internal static class RuntimeEfContextRegistration
         Binding.AddContext<TContext>(services, options.Pooling, (serviceProvider, builder) =>
             Binding.Apply(builder, serviceProvider, options.Provider, options.ConnectionString, options.ConnectionName, options.Schema));
         services.TryAddScoped<RuntimeDbContext>(serviceProvider => serviceProvider.GetRequiredService<TContext>());
+        // What the module's finalization gate says, for the runtime's placement (spec 184, FR-008 and FR-012).
+        services.TryAddSingleton<IRuntimeSchemaFinalization, EfRuntimeSchemaFinalization>();
         return services.Skip(start).ToArray();
     }
 }

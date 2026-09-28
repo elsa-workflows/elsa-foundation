@@ -15,7 +15,10 @@ public enum PlacementRefusalKind
     RequirementUnmet,
 
     /// <summary>The execution's placement requirement could not be resolved (FR-016).</summary>
-    RequirementUnresolved
+    RequirementUnresolved,
+
+    /// <summary>Spec 181 refuses this member's writes to a family of the Runtime EF module (FR-012).</summary>
+    RuntimeWritesRefused
 }
 
 /// <summary>
