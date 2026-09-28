@@ -83,6 +83,21 @@ The issue's proposed experience and acceptance criteria are the starting point f
 - **"Keep credentials out of process arguments"** is not true of the tooling that exists today: `module-migrate.sh apply`/`validate` take the connection string as **positional argument 3** ([`tools/ef/module-migrate.sh:46`](../../tools/ef/module-migrate.sh)). This spec's D7 (`--connection-env`/`--connection-stdin` only, no `--connection` flag) is what actually satisfies the issue's own requirement; the existing script does not, yet.
 - **The issue's acceptance test — "starting Elsa with migration validation succeeds after the artifact is applied" — cannot honestly pass for Secrets** until the post-migration slice (Elsa slice 7 below) lands, because Secrets' projection reindex is not yet expressed as a migration-adjacent, auditable step; today it is a hand-wired call inside `SecretsEfMigrationHostedService` that this tool's `apply`/`validate` commands do not know about.
 
+## Decisions
+
+*Settled Decisions above is the original D1 to D13, fixed on #1861 and not reopened. This section records later amendments to it, dated as they land.*
+
+Recorded 2026-09-27, when the owner answered Q10 on #2093.
+
+- **Q10 — Does the activation guard read the finalization record under `AutoMigrate` too, once spec 181 exists?** Yes.
+  FR-068 and FR-069 are narrowed so that under both `Migrate:Policy=Validate` and `Migrate:Policy=AutoMigrate` the
+  guard also reads spec 181's finalization record for every schema family in a mapped module's database, and refuses
+  when a family's finalized version is outside the host's readable set. Before this narrowing, `AutoMigrate` opened no
+  database at all and passed unconditionally (D9, D13); it now opens the database, but only to read that record — it
+  still never reads the migrations-history table or evaluates pending migrations under that policy. This is built by
+  [spec 181](../181-schema-finalization-gate/spec.md)'s FR-016, not by any slice of this spec; until spec 181 exists,
+  the guard behaves as FR-068 and FR-069's unnarrowed text describes.
+
 ---
 
 ## User Scenarios & Testing *(mandatory)*

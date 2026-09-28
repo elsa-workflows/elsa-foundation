@@ -83,7 +83,7 @@ It holds through five mechanisms, each tested separately (Success Criteria):
    has never seen and raw SQL. A new kind of operation fails the build until someone decides where it belongs.
 3. **An opt-out must match exactly** (FR-013). It permits the violations it lists and no others, and a listed
    violation that does not occur fails too, so an opt-out never becomes a blanket permission.
-4. **The scan cannot pass by examining nothing** (FR-003, FR-018 to FR-020). It reports what it examined, and its floors fail
+4. **The scan cannot pass by examining nothing** (FR-003, FR-018 to FR-020b). It reports what it examined, and its floors fail
    when an independent enumeration finds a module, a provider context or a migration it skipped, or when the freeze
    manifest is missing.
 5. **Applying an opted-out migration is checked again, against the database it targets** (FR-023 to FR-025). The build
@@ -217,6 +217,11 @@ policies and through the activation guard.
 4. **Given** a migration whose opt-out names no family and version because it is not a contracting migration under
    spec 181 (for instance, a drop on a table no stamped family covers), **When** it is applied, **Then** this check
    does not run and the migration applies as any post-freeze migration does.
+5. **Given** a module's pending batch for one provider context of two migrations — a safe, additive one and, after it,
+   the contracting migration of scenario 1, whose family is below the required version — **When** `EfModuleMigrator`
+   reaches Prepare under `AutoMigrate` and `EfDatabaseMigrator` would apply the batch through one `MigrateAsync` call,
+   **Then** the refusal withholds the whole batch: neither migration runs, and the safe one is not applied ahead of
+   the refusal.
 
 ---
 
@@ -319,9 +324,10 @@ policies and through the activation guard.
 - **FR-019**: The set of EF modules the scan examined MUST equal each of two independent enumerations, and the guard
   fails naming any difference: the `[assembly: EfModule(...)]` declarations found by scanning the source of all three
   roots of FR-001, and the modules the freeze manifest names.
-- **FR-020**: For every module, every supported provider context MUST have a baseline in the manifest, and the number
-  of post-freeze migrations the scan classified MUST equal the number of migrations the provider context contains
-  minus its baseline. Either mismatch fails.
+- **FR-020a**: For every module, every supported provider context MUST have a baseline in the manifest. A provider
+  context with none fails.
+- **FR-020b**: The number of post-freeze migrations the scan classified MUST equal the number of migrations the
+  provider context contains minus its baseline. A mismatch fails.
 
 **Fixtures**
 
@@ -345,7 +351,12 @@ policies and through the activation guard.
   target database, and MUST refuse to apply the migration when the record's finalized version for that family is
   below the version FR-023 names. The refusal names the family, the migration, the finalized version and the version
   required, and no operation of the migration runs against the database. This runs alongside, and does not replace,
-  the build-time check of FR-001 to FR-020.
+  the build-time check of FR-001 to FR-020b. `EfDatabaseMigrator` applies a module's pending migrations for one
+  provider context as a single operation (`DbContext.Database.MigrateAsync`, one transaction per provider's
+  capability): it has no way to apply some of a context's pending migrations and withhold others. A refusal under this
+  requirement therefore refuses the whole pending batch for that context, not only the not-yet-safe contracting
+  migration: any safe migrations queued ahead of or behind it in the same batch are withheld along with it, until the
+  refusal clears.
 - **FR-025**: The activation guard (spec 171's `EfPendingMigrationActivationGuard`, narrowed by spec 181's FR-016)
   MUST apply FR-024's check under both `Validate` and `AutoMigrate` at feature-enable time, for every feature that
   `[UsesEfModule]` maps to the migration's module, returning the same refusal the Modularity API renders as HTTP 409,
