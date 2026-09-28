@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="YamlDotNet" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\..\tools\versioning\Elsa.Versioning.Publisher\Elsa.Versioning.Publisher.csproj" />
+  </ItemGroup>
+
+  <!-- The calculator's synthetic histories: the publisher publishes exactly what the calculator computes from them. -->
+  <ItemGroup>
+    <Compile Include="..\..\Calculator\Tests\Support\SyntheticRepository.cs" Link="Support\SyntheticRepository.cs" />
+    <Compile Include="..\..\Calculator\Tests\Support\SyntheticHistory.cs" Link="Support\SyntheticHistory.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+</Project>

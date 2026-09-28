@@ -450,8 +450,8 @@ Recorded when #2080 made packing read the calculator's output
   #2085's to shape.
 - **Branch builds pack for CI artifacts and never push** — the owner's decision of 2026-09-27 on #2092. A branch label
   names the branch, not the commit, so two commits on one branch compute one version with different contents, and a
-  feed would hold one of them behind a version the other also claims. Previews come from `main`. `packages.yml` still
-  pushes feature-branch builds until #2082 rewrites it.
+  feed would hold one of them behind a version the other also claims. Previews come from `main`. `packages.yml` packs
+  a branch build for its run's artifact and pushes nothing.
 - **A computed build stamps the package version on its assemblies too; a dev build does not.** With the calculator's
   output, `Version` is the package version, as `packages.yml`'s `/p:Version` makes it today. Without it only the
   package version is `<major.minor>.0-dev`: CLR activity versions and assembly-qualified names derive from the
@@ -459,3 +459,38 @@ Recorded when #2080 made packing read the calculator's output
 - **FR-018's fingerprint is a file in the package**, `elsa-input-fingerprint.json` at its root, because NuGet has no
   custom nuspec metadata and silently drops an element it does not know; "in its metadata" is met by the source
   commit, which is the nuspec's `repository` `commit`, and by the fingerprint travelling in the package itself.
+
+Recorded when #2081 and #2082 made `packages.yml` publish through `tools/versioning/Elsa.Versioning.Publisher`
+([README, Publishing](../../tools/versioning/README.md#publishing)).
+
+- **Whether `publish-state` exists decides what a push to `main` does.** Before it exists, a push to `main` packs every
+  package at the bootstrap's versions as a dry run, and publishes nothing; its job summary says the bootstrap is
+  pending. The bootstrap is a manual run of the workflow from `main` with `bootstrap: true`, because the owner's
+  decision of 2026-09-27 on #2092 makes the first publish wait for their go. It refuses when `publish-state` exists,
+  and while the feed holds, for any package it would push, a version that does not sort below the one it would push:
+  the old `4.0.0-preview.N` and branch builds sort above `4.0.0-preview` or beside it, and the owner removes them
+  first. A feed that cannot list a package's versions refuses it too. A bootstrap that stops part way records what it
+  pushed, so the next push to `main` publishes the rest as first publishes.
+- **A publish pushes in dependency order and stops at its first failure**, so no package reaches the feed with a range
+  on a version the feed does not hold as computed; what did land is recorded, per the partial-publish edge case.
+- **A push FR-018 confirms is recorded at the commit being built**, not at the feed copy's source commit: the equal
+  fingerprint shows the two commits hold the same inputs, so change detection against either agrees, and FR-013 keeps
+  the feed from supplying anything the record holds. The recovery needs no intervention when the next run sees the
+  same inputs for the unrecorded package, as a re-run or any later commit that leaves the package alone does. A later
+  commit that changes the package before any run records it computes the version the feed already holds, from other
+  inputs, and FR-018 fails the publish for the repair workflow (FR-019).
+- **The publish job re-establishes what the pack job assumed**: it asks the remote for `publish-state` again and
+  refuses when a publish finds it moved since the versions were computed, or the bootstrap finds it existing; and it
+  recomputes and requires the pack job's exact output, which runs FR-021 again. The write-back is one commit on top of
+  the tip the plan named, pushed without force, so a branch that moved anyway rejects it and fails the run, and the
+  next run records the packages through FR-018.
+- **FR-020 serializes the whole run, not only the push**: every run from `main` shares the concurrency group
+  `publish-state` from its plan to its write-back, since two runs computing against one record revision is the race
+  FR-020 exists to prevent. The repair workflow writes `publish-state` too, and joins the group.
+- **A branch build computes against the newest record revision whose latest publish it descends from**, or an empty
+  record when none is. FR-021 would otherwise refuse every branch cut before `main`'s latest publish, and a branch
+  build pushes nothing for the gate to protect.
+- **A GitHub Release publishes nothing until the 4.0 release cut, #2085**; its job fails and says so. The release path
+  it replaces stamped a global `/p:Version` and pushed with `--skip-duplicate` to feedz.io and nuget.org, which FR-005
+  and FR-011 forbid, and a stable `4.0.0` on either feed would sort above every computed `4.0.N-preview`. Failing is the
+  loud choice: a release that quietly published nothing, or published the old way, would each look like success.
