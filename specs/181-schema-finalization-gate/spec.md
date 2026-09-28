@@ -505,3 +505,7 @@ rather than a record of its own.
 - **The write check refuses deletes as well** while a family's writes are refused (FR-012), and it covers every
   write through `SaveChanges`. `ExecuteUpdate` and `ExecuteDelete` bypass it; no first-party store writes a stamp
   that way.
+- **Spec 184's two requirements on this gate are built with it.** The Runtime EF module exposes its gate to the
+  runtime as `IRuntimeSchemaFinalization`: the runnability entry names the database identity the gate read (spec 184,
+  FR-008), a member whose writes to a Runtime family the gate refuses claims nothing and hands off what it holds
+  (spec 184, FR-012), and a placement query names the database its execution lives in (spec 184, FR-009).
