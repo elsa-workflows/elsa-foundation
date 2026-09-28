@@ -7,6 +7,7 @@ using CShells.Lifecycle;
 using Elsa.Locking.Core;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Persistence.EntityFramework.SchemaFinalization;
+using Elsa.Persistence.EntityFramework.Tests;
 using Elsa.Tasks;
 using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -106,10 +107,7 @@ public sealed class RuntimeEntityFrameworkCoreFeatureTests : IDisposable
         Assert.Equal(record.DatabaseIdentity, finalization.DatabaseIdentity);
         Assert.Null(finalization.WritesRefusedReason);
 
-        string[] newer = [RuntimeArtifactEfModule.SchemaVersion, "2.0.0"];
-        var member = new SchemaFinalizationMember("newer-host", "newer");
-        record = (await store.RecordIntentAsync(RuntimeArtifactEfModule.SchemaFamily, record.Revision, "2.0.0", newer, member)).Record;
-        await store.CommitIntentAsync(RuntimeArtifactEfModule.SchemaFamily, record.Revision, newer, member);
+        await EfSchemaFinalizationTestSupport.FinalizeAsync(store, RuntimeArtifactEfModule.SchemaFamily, [RuntimeArtifactEfModule.SchemaVersion, "2.0.0"], "2.0.0");
         await migrator.Gate!.RefreshAsync(context);
 
         Assert.Contains($"schema family '{RuntimeArtifactEfModule.SchemaFamily}' is finalized at '2.0.0'", finalization.WritesRefusedReason);

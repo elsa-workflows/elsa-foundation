@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Persistence.EntityFramework.SchemaFinalization;
+using Elsa.Persistence.EntityFramework.Tests;
 using Elsa.Studio.Preferences.Core;
 using Elsa.Studio.Preferences.Core.Contracts;
 using Elsa.Studio.Preferences.Core.Models;
@@ -123,11 +124,9 @@ public sealed class ModuleFinalizationGateTests : IAsyncLifetime
     private async Task FinalizeNewerAsync()
     {
         await using var scope = _host.CreateAsyncScope();
-        var store = new EfSchemaFinalizationStore(scope.ServiceProvider.GetRequiredService<StudioPreferencesDbContext>());
-        var member = new SchemaFinalizationMember("newer-host", "newer");
-        var record = await store.GetOrCreateAsync(StudioPreferencesEfModule.SchemaFamily, NewerChain[0], NewerChain, SchemaFinalizationActor.Of(member));
-        record = (await store.RecordIntentAsync(StudioPreferencesEfModule.SchemaFamily, record.Revision, "2.0.0", NewerChain, member)).Record;
-        Assert.True((await store.CommitIntentAsync(StudioPreferencesEfModule.SchemaFamily, record.Revision, NewerChain, member)).Applied);
+        await EfSchemaFinalizationTestSupport.FinalizeAsync(
+            new EfSchemaFinalizationStore(scope.ServiceProvider.GetRequiredService<StudioPreferencesDbContext>()),
+            StudioPreferencesEfModule.SchemaFamily, NewerChain, "2.0.0");
     }
 
     /// <summary>Every row of every table, as text. The file's bytes are no measure: EF's own migration lock writes to it.</summary>

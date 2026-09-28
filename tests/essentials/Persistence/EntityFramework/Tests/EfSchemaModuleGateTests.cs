@@ -143,10 +143,8 @@ public sealed class EfSchemaModuleGateTests : IAsyncLifetime
     public async Task A_host_that_cannot_read_the_completion_version_is_refused_although_it_reads_the_finalized_one()
     {
         // Created at 1, so complete at 1, then finalized at 3: rows at 1 may still exist.
-        var created = await StoreRecordAsync("1", ["1", "2", "3"]);
-        var store = new EfSchemaFinalizationStore(Context());
-        var intended = (await store.RecordIntentAsync(Family, created.Revision, "3", ["1", "2", "3"], new("host-x", "i"))).Record;
-        await store.CommitIntentAsync(Family, intended.Revision, ["1", "2", "3"], new("host-x", "i"));
+        await StoreRecordAsync("1", ["1", "2", "3"]);
+        await EfSchemaFinalizationTestSupport.FinalizeAsync(new EfSchemaFinalizationStore(Context()), Family, ["1", "2", "3"], "3", new("host-x", "i"));
         var before = await SnapshotAsync();
 
         var retired = EfSchemaModuleFamilies.FromDeclarations(Module, [Declaration(Family, "2-3") with { Entities = [typeof(GateRow)] }]);

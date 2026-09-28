@@ -17,6 +17,7 @@ public sealed class EfSchemaWriteGateInterceptorTests : IAsyncLifetime
     private readonly FakeFleetState fleet = new();
     private readonly EfSchemaFinalizationGates gates = new();
     private readonly List<DbContext> contexts = [];
+    private static readonly SchemaFinalizationMember HostB = new("host-b", "b");
 
     public async Task InitializeAsync() => await Context().Database.EnsureCreatedAsync();
 
@@ -143,20 +144,14 @@ public sealed class EfSchemaWriteGateInterceptorTests : IAsyncLifetime
     {
         var store = new EfSchemaFinalizationStore(Context());
         var record = (await store.FindAsync(Family))!;
-        record = (await store.ReleaseHoldAsync(Family, record.Revision, null, "ops")).Record;
-        record = (await store.RecordIntentAsync(Family, record.Revision, "2", ["1", "2", "3"], new("host-b", "b"))).Record;
-        await store.CommitIntentAsync(Family, record.Revision, ["1", "2", "3"], new("host-b", "b"));
+        await store.ReleaseHoldAsync(Family, record.Revision, null, "ops");
+        await EfSchemaFinalizationTestSupport.FinalizeAsync(store, Family, ["1", "2", "3"], "2", HostB);
         if (refresh)
             await gate.RefreshAsync(Context());
     }
 
-    private async Task FinalizeElsewhereAsync(string version)
-    {
-        var store = new EfSchemaFinalizationStore(Context());
-        var record = (await store.FindAsync(Family))!;
-        record = (await store.RecordIntentAsync(Family, record.Revision, version, ["1", "2", "3"], new("host-b", "b"))).Record;
-        await store.CommitIntentAsync(Family, record.Revision, ["1", "2", "3"], new("host-b", "b"));
-    }
+    private Task FinalizeElsewhereAsync(string version) =>
+        EfSchemaFinalizationTestSupport.FinalizeAsync(new EfSchemaFinalizationStore(Context()), Family, ["1", "2", "3"], version, HostB);
 
     private async Task InsertRawAsync(string id, string stamp)
     {

@@ -387,9 +387,7 @@ public sealed class EfSchemaModuleGate
                          ?? throw new InvalidOperationException($"The finalization record of '{chain.Family}' vanished while EF module '{Module}' was activating.");
             if (reread.Intent is { } still && !chain.IsReadable(still.Version) && reread.Revision == record.Revision)
             {
-                if (_time.GetUtcNow() >= deadline)
-                    throw Refuse(chain, EfSchemaActivationRefusal.IntentUnresolved, still.Version);
-                await Task.Delay(_options.IntentPollInterval, _time, cancellationToken);
+                await (PollWithinBound(deadline, cancellationToken) ?? throw Refuse(chain, EfSchemaActivationRefusal.IntentUnresolved, still.Version));
                 reread = await store.FindAsync(chain.Family, cancellationToken) ?? reread;
             }
 
@@ -603,17 +601,22 @@ public sealed class EfSchemaModuleGate
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
-                if (_time.GetUtcNow() >= deadline)
-                {
-                    var chain = Families.Chains[0];
-                    throw new EfSchemaActivationRefusedException(Module, chain.Family, EfSchemaActivationRefusal.ReportNotPublished, null, chain.ReadableVersions);
-                }
-
+                var poll = PollWithinBound(deadline, cancellationToken)
+                           ?? throw new EfSchemaActivationRefusedException(
+                               Module, Families.Chains[0].Family, EfSchemaActivationRefusal.ReportNotPublished, null, Families.Chains[0].ReadableVersions);
                 _logger.LogDebug(exception, "EF module {Module} waits to publish this host's readability report before reading its finalization records.", Module);
-                await Task.Delay(_options.IntentPollInterval, _time, cancellationToken);
+                await poll;
             }
         }
     }
+
+    /// <summary>
+    /// One round of a wait bounded by <see cref="EfSchemaFinalizationOptions.IntentWaitBound"/>: the
+    /// <see cref="EfSchemaFinalizationOptions.IntentPollInterval"/> to wait before trying again, or null once
+    /// <paramref name="deadline"/> has passed, when the caller refuses instead.
+    /// </summary>
+    private Task? PollWithinBound(DateTimeOffset deadline, CancellationToken cancellationToken) =>
+        _time.GetUtcNow() >= deadline ? null : Task.Delay(_options.IntentPollInterval, _time, cancellationToken);
 
     private async Task PublishQuietlyAsync(CancellationToken cancellationToken)
     {

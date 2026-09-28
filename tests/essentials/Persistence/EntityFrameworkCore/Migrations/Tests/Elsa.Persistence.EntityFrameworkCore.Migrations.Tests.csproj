@@ -15,6 +15,10 @@
     <PackageReference Include="coverlet.collector" PrivateAssets="all" />
   </ItemGroup>
   <ItemGroup>
+    <!-- Stages a finalization by another build. -->
+    <Compile Include="..\..\..\EntityFramework\Tests\EfSchemaFinalizationTestSupport.cs" Link="EfSchemaFinalizationTestSupport.cs" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\..\..\..\..\..\src\essentials\Activities\Design\Persistence\EntityFrameworkCore\Elsa.Activities.Design.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\essentials\Cluster\EntityFrameworkCore\Elsa.Cluster.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\extensions\Elsa3\src\Activities\Design\Import\Persistence\EntityFrameworkCore\Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.csproj" />

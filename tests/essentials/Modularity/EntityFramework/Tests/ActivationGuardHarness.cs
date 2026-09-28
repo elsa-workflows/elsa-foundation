@@ -1,5 +1,7 @@
 using Elsa.Modularity.Core.Models;
 using Elsa.Persistence.EntityFramework;
+using Elsa.Persistence.EntityFramework.SchemaFinalization;
+using Elsa.Persistence.EntityFramework.Tests;
 using Elsa.Secrets.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Design.Persistence.EntityFrameworkCore;
@@ -172,13 +174,7 @@ internal sealed class ActivationGuardHarness : IDisposable
         var builder = (DbContextOptionsBuilder)Activator.CreateInstance(typeof(DbContextOptionsBuilder<>).MakeGenericType(contextType))!;
         EfRelationalProviderBinding.UseSqlite(builder, connection, descriptor.HistoryTableName, descriptor.Assembly.GetName().Name);
         await using var context = (DbContext)Activator.CreateInstance(contextType, builder.Options)!;
-        var store = new Elsa.Persistence.EntityFramework.SchemaFinalization.EfSchemaFinalizationStore(context);
-        var member = new Elsa.Persistence.EntityFramework.SchemaFinalization.SchemaFinalizationMember("newer-host", "newer");
-        var record = await store.GetOrCreateAsync(family, chain[0], chain, Elsa.Persistence.EntityFramework.SchemaFinalization.SchemaFinalizationActor.Of(member));
-        if (record.FinalizedVersion == finalized)
-            return;
-        record = (await store.RecordIntentAsync(family, record.Revision, finalized, chain, member)).Record;
-        await store.CommitIntentAsync(family, record.Revision, chain, member);
+        await EfSchemaFinalizationTestSupport.FinalizeAsync(new EfSchemaFinalizationStore(context), family, chain, finalized);
     }
 
     public void Dispose()
