@@ -336,6 +336,24 @@ public sealed class EfCoreDependencyGuardTests
         Assert.True(offenders.Length == 0, Report("drift from the reviewed readability-source EF closure", offenders));
     }
 
+    [Fact]
+    public void Every_admitted_cluster_membership_project_resolves_only_its_reviewed_EF_closure()
+    {
+        var offenders = Adr0078ClusterMembershipEf.ExpectedEfPackagesByProject
+            .SelectMany(project => RestoreConfigurations.SelectMany(configuration =>
+            {
+                var resolved = ReadProjectEfPackages(project.Key, configuration);
+                return FindUnexpectedEfPackages(resolved, project.Value)
+                    .Select(package => $"{project.Key} ({configuration}) unexpectedly resolves {package}")
+                    .Concat(FindUnexpectedEfPackages(project.Value, resolved)
+                        .Select(package => $"{project.Key} ({configuration}) no longer resolves reviewed package {package}"));
+            }))
+            .Order(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        Assert.True(offenders.Length == 0, Report("drift from the reviewed cluster membership EF closure", offenders));
+    }
+
     /// <summary>
     /// The adapter's reviewed closure is exact, so a provider engine appearing in it is flagged rather than
     /// absorbed — proved here against the record itself, because a passing guard cannot show what it would
@@ -644,7 +662,8 @@ public sealed class EfCoreDependencyGuardTests
                     Adr0073ActivitiesDesignEf.IsProjectPath(relativePath) ||
                     Adr0073Elsa3ImportEf.IsProjectPath(relativePath) ||
                     Adr0076ActivationGuardEf.IsProjectPath(relativePath) ||
-                    Spec183ReadabilityEf.IsProjectPath(relativePath)));
+                    Spec183ReadabilityEf.IsProjectPath(relativePath) ||
+                    Adr0078ClusterMembershipEf.IsProjectPath(relativePath)));
         }
         return projects;
     }
@@ -791,6 +810,7 @@ public sealed class EfCoreDependencyGuardTests
                Adr0073Elsa3ImportEf.IsSurfacePath(relativePath) ||
                Adr0076ActivationGuardEf.IsSurfacePath(relativePath) ||
                Spec183ReadabilityEf.IsSurfacePath(relativePath) ||
+               Adr0078ClusterMembershipEf.IsSurfacePath(relativePath) ||
                OpenIddictPersistenceArchitectureTests.IsWorkbenchVendorEfSource(relativePath);
     }
 
@@ -1387,6 +1407,48 @@ public sealed class EfCoreDependencyGuardTests
 
         public static bool IsProjectPath(string relativePath) =>
             ExpectedEfPackagesByProject.ContainsKey(relativePath);
+
+        private static string[] CorePackages() =>
+        [
+            "Microsoft.EntityFrameworkCore",
+            "Microsoft.EntityFrameworkCore.Abstractions",
+            "Microsoft.EntityFrameworkCore.Analyzers",
+            "Microsoft.EntityFrameworkCore.Relational"
+        ];
+    }
+
+    /// <summary>
+    /// The opt-in EF Core cluster membership provider (spec 183, B2, #2098; ADR 0078). The module is provider-neutral:
+    /// a host composes it once on its own container and brings the engine; provider engines stay in its focused tests,
+    /// SQLite in the fast suite and the three container engines in its provider legs.
+    /// </summary>
+    internal static class Adr0078ClusterMembershipEf
+    {
+        public static readonly string[] SurfacePathPrefixes =
+        [
+            "src/essentials/Cluster/EntityFrameworkCore/",
+            "tests/essentials/Cluster/EntityFrameworkCore/"
+        ];
+
+        public static readonly IReadOnlyDictionary<string, string[]> ExpectedEfPackagesByProject =
+            new Dictionary<string, string[]>(StringComparer.Ordinal)
+            {
+                ["src/essentials/Cluster/EntityFrameworkCore/Elsa.Cluster.EntityFrameworkCore.csproj"] = CorePackages(),
+                // The shared conformance fixture and scenarios: engine-neutral, each test project supplies the engine.
+                ["tests/essentials/Cluster/EntityFrameworkCore/Testing/Elsa.Cluster.EntityFrameworkCore.Testing.csproj"] = CorePackages(),
+                ["tests/essentials/Cluster/EntityFrameworkCore/Tests/Elsa.Cluster.EntityFrameworkCore.Tests.csproj"] =
+                    [.. CorePackages(), "Microsoft.EntityFrameworkCore.Sqlite", "Microsoft.EntityFrameworkCore.Sqlite.Core"],
+                ["tests/essentials/Cluster/EntityFrameworkCore/ProviderTests/Elsa.Cluster.EntityFrameworkCore.ProviderTests.csproj"] =
+                    [.. CorePackages(), "Microsoft.EntityFrameworkCore.SqlServer", "MySql.EntityFrameworkCore", "Npgsql.EntityFrameworkCore.PostgreSQL"]
+            };
+
+        public static IEnumerable<string> ProjectPaths => ExpectedEfPackagesByProject.Keys;
+
+        public static bool IsSurfacePath(string relativePath) =>
+            SurfacePathPrefixes.Any(prefix => relativePath.StartsWith(prefix, StringComparison.Ordinal));
+
+        public static bool IsProjectPath(string relativePath) =>
+            ProjectPaths.Contains(relativePath, StringComparer.Ordinal);
 
         private static string[] CorePackages() =>
         [

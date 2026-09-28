@@ -24,6 +24,7 @@ using Elsa.Api.AspNetCore;
 using Elsa.Api.Capabilities;
 using Elsa.Attention.Api;
 using Elsa.Caching.Memory;
+using Elsa.Cluster.Hosting;
 using Elsa.Cluster.Readability;
 using Elsa.Diagnostics.ConsoleLogStreaming;
 using Elsa.Diagnostics.OpenTelemetry;
@@ -216,6 +217,9 @@ builder.Services.AddEfSchemaReadability();
 // Beside it, on the same host container: what each shell's workflow runtime can activate (spec 184, FR-008), so the
 // host's member report carries one runnability entry per shell that runs the distributed runtime.
 builder.Services.AddWorkflowRuntimeRunnabilityReport();
+// The durable EF provider replaces that default only when the Elsa:Cluster:Membership section enables it (ADR 0078;
+// spec 183, FR-024), and then requires an explicit Elsa:Cluster:Membership:HostId. It publishes the same report.
+builder.Services.AddConfiguredClusterMembership(configuration);
 builder.Services.AddDynamicEndpointApiExplorerRefresh();
 
 builder.Services.AddCShellsAspNetCore(shells =>

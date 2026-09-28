@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The EF membership provider's side of the conformance kit (spec 183, FR-033, FR-044): the fixture that runs
+    ClusterMembershipConformanceTests over one real membership table, and the user story 2 and 4 scenarios on a
+    controllable clock. Engine-neutral: each test project supplies the engine and the connection, so the same suites run
+    on SQLite in the fast gate and on SQL Server, PostgreSQL and MySQL in the container legs.
+  -->
+  <PropertyGroup>
+    <IsTestProject>false</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="Xunit.SkippableFact" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Testing\Elsa.Cluster.Testing.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\essentials\Cluster\EntityFrameworkCore\Elsa.Cluster.EntityFrameworkCore.csproj" />
+  </ItemGroup>
+
+</Project>
