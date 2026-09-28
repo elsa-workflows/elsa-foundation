@@ -31,9 +31,8 @@ and two mechanisms that enforce it by accident rather than by design.
 [ADR 0076](0076-persistence-tooling-runs-inside-the-host-closure.md) D3's thirteen-name vocabulary now
 stamps at least one schema family, and every declared family checks its `SchemaVersion` (or, for
 `PublishingLedgerEfModule`, `ContentSchemaVersion`) constant on a read path. The authoritative list of
-families is the code — each `EfModule` class's `SchemaFamily` constant names the family it stamps, for
-example `RuntimeOperationalStateEfModule.SchemaVersion` below checks the version — not a count kept here.
-All are `1.0.0` except `ContentSchemaVersion`, which is `1`. Only fourteen checked it when this ADR was
+families is the code, not a count kept here. All are `1.0.0` except `ContentSchemaVersion`, which is
+`1`. Only fourteen checked it when this ADR was
 written: the fifteenth,
 `PublishingPolicyProjectionEfModule.SchemaVersion`, was declared but neither written nor read, so
 `elsa_publication_policies` and `elsa_publication_projection_intents` carried no version column at all

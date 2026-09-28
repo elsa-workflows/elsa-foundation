@@ -54,7 +54,7 @@ clauses" for the checks the code's messages call the row envelope.
 Every EF module now stamps its schema families in its rows, delivered by
 [#2119](https://github.com/elsa-workflows/elsa-foundation/issues/2119) (PR
 [#2131](https://github.com/elsa-workflows/elsa-foundation/pull/2131)); the authoritative list of families is the
-code — the `SchemaFamily` constants — not a count kept here. At this spec's writing (2026-09-27), fifteen
+code, not a count kept here. At this spec's writing (2026-09-27), fifteen
 schema families across three EF modules (`Workflows.Runtime`, `Workflows.Publishing`,
 `Elsa3.Activities.Design.Import`) stamped their rows; ten other EF modules and two Publishing tables carried no
 stamp — the gap FR-026 below was written to close.
