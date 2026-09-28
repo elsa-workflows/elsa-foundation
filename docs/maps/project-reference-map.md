@@ -8,7 +8,7 @@ Records direct project references only.
 
 - Source projects: 136
 - Test projects: 126
-- Direct project references: 1212
+- Direct project references: 1214
 
 ## Projects
 
@@ -38,7 +38,7 @@ Records direct project references only.
 | [Elsa.Activities.Scheduling](../../src/essentials/Activities/Scheduling/Elsa.Activities.Scheduling.csproj) | source | Elsa.Activities | - | true | Elsa.Activities.Runtime.Core<br>Elsa.Primitives<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Activities.Scripting](../../src/essentials/Activities/Scripting/Elsa.Activities.Scripting.csproj) | source | Elsa.Activities | - | true | Elsa.Activities.Runtime.Core<br>Elsa.Expressions.JavaScript.Core<br>Elsa.Primitives |
 | [Elsa.Activities.Sequence](../../src/essentials/Activities/Sequence/Elsa.Activities.Sequence.csproj) | source | Elsa.Activities | - | true | Elsa.Activities.Runtime.Core<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Runtime.Core |
-| [Elsa.Api.AspNetCore](../../src/essentials/Api/AspNetCore/Elsa.Api.AspNetCore.csproj) | source | Elsa.Api | - | true | - |
+| [Elsa.Api.AspNetCore](../../src/essentials/Api/AspNetCore/Elsa.Api.AspNetCore.csproj) | source | Elsa.Api | - | true | Elsa.Primitives |
 | [Elsa.Api.Capabilities](../../src/essentials/Api/Capabilities/Elsa.Api.Capabilities.csproj) | source | Elsa.Api | - | true | Elsa.Api.AspNetCore<br>Elsa.Events.Core<br>Elsa.Foundation.Identity<br>Elsa.Foundation.Identity.Core |
 | [Elsa.Attention.Api](../../src/essentials/Attention/Api/Elsa.Attention.Api.csproj) | source | Elsa.Attention | - | true | Elsa.Api.AspNetCore<br>Elsa.Attention.Core<br>Elsa.Foundation.Identity<br>Elsa.Foundation.Identity.Core |
 | [Elsa.Attention.Core](../../src/essentials/Attention/Core/Elsa.Attention.Core.csproj) | source | Elsa.Attention | - | true | - |
@@ -92,7 +92,7 @@ Records direct project references only.
 | [Elsa.Modularity.EntityFramework](../../src/essentials/Modularity/EntityFramework/Elsa.Modularity.EntityFramework.csproj) | source | Elsa.Modularity | - | true | Elsa.Modularity.Core<br>Elsa.Persistence.EntityFramework |
 | [Elsa.Modularity.Nuplane](../../src/essentials/Modularity/Nuplane/Elsa.Modularity.Nuplane.csproj) | source | Elsa.Modularity | - | true | Elsa.Modularity.Core |
 | [Elsa.Modularity.Planning](../../src/essentials/Modularity/Planning/Elsa.Modularity.Planning.csproj) | source | Elsa.Modularity | - | true | - |
-| [Elsa.Persistence.EntityFramework](../../src/essentials/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj) | source | Elsa.Persistence | - | true | - |
+| [Elsa.Persistence.EntityFramework](../../src/essentials/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj) | source | Elsa.Persistence | - | true | Elsa.Primitives |
 | [Elsa.Pipelines.Core](../../src/essentials/Pipelines/Core/Elsa.Pipelines.Core.csproj) | source | Elsa.Pipelines | - | true | - |
 | [Elsa.Primitives.Hosting](../../src/essentials/Primitives/Hosting/Elsa.Primitives.Hosting.csproj) | source | Elsa.Primitives | - | true | Elsa.Primitives |
 | [Elsa.Primitives](../../src/essentials/Primitives/Primitives/Elsa.Primitives.csproj) | source | Elsa.Primitives | - | true | - |

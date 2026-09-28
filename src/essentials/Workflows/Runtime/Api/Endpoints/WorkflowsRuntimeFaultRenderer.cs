@@ -94,7 +94,7 @@ internal sealed class WorkflowsRuntimeFaultRenderer : IEndpointFaultRenderer
                     await RuntimeProblemWriting.AlterationProblemAsync(context, alteration.ArgumentCode, alteration.ArgumentMessage);
                     return true;
                 case SchemaWriteRefusedException refusal:
-                    await RuntimeProblemWriting.AlterationProblemAsync(context, refusal.Code, refusal.Message, StatusCodes.Status409Conflict);
+                    await RuntimeProblemWriting.AlterationProblemAsync(context, refusal.Code, refusal.Message, SchemaWriteRefusalProblem.StatusCode);
                     return true;
                 default:
                     LogUnexpected(context, exception, alteration.Operation);

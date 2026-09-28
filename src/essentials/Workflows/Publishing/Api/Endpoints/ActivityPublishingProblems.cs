@@ -1,5 +1,6 @@
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Core.Services;
+using Elsa.Api.AspNetCore;
 using Elsa.Primitives.Diagnostics;
 using Elsa.Primitives.Exceptions;
 using Elsa.Workflows.Publishing.Api.Models;
@@ -37,7 +38,7 @@ internal static class ActivityPublishingProblems
     public static ActivityPublishingProblemDetails SchemaWriteRefused(SchemaWriteRefusedException refusal, HttpContext context) => new(
         Type(refusal.Code),
         "Schema write refused",
-        StatusCodes.Status409Conflict,
+        SchemaWriteRefusalProblem.StatusCode,
         refusal.Message,
         context.Request.Path.Value ?? string.Empty,
         refusal.Code,

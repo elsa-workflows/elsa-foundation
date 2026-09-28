@@ -502,6 +502,12 @@ rather than a record of its own.
 - **FR-020a, the Modularity API's hold, release and status, is the second step and is not built here.** The CLI
   (FR-020) is. So is the gate's status as an in-process API (`EfSchemaModuleGate.ReadStatusAsync`), which spec 182
   carries to the feature catalog and Attention.
+- **Every domain API answers both write refusals with a 409** (spec 180, FR-016a), carrying the code, the family and
+  both versions. An API resolves no EF Core, so both refusals derive from `Elsa.Primitives`'
+  `SchemaWriteRefusedException`, and `Elsa.Api.AspNetCore`'s `SchemaWriteRefusalProblem` is the one place the
+  refusal's part of every envelope is decided. Stores that wrap a failed save in a failure of their own (today
+  Identity's, OpenTelemetry's, Structured Logs' and the Elsa 3 import's) still turn the refusal into that failure's
+  status; letting it leave as itself is follow-up work.
 - **The write check refuses deletes as well** while a family's writes are refused (FR-012), and it covers every
   write through `SaveChanges`. `ExecuteUpdate` and `ExecuteDelete` bypass it; no first-party store writes a stamp
   that way.

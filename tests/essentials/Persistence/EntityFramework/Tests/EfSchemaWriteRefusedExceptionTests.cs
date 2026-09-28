@@ -1,3 +1,4 @@
+using Elsa.Primitives.Exceptions;
 using Xunit;
 
 namespace Elsa.Persistence.EntityFramework.Tests;
@@ -33,6 +34,23 @@ public sealed class EfSchemaWriteRefusedExceptionTests
         Assert.Contains("'Orders'", Refusal.Message, StringComparison.Ordinal);
         Assert.Contains("'1'", Refusal.Message, StringComparison.Ordinal);
         Assert.Contains("'2'", Refusal.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// An API resolves no EF Core, so it answers the refusal as the persistence-agnostic base both EF refusals derive
+    /// from; a refusal that did not derive from it would reach every API's default arm, a 500.
+    /// </summary>
+    [Fact]
+    public void Both_refusals_are_the_base_every_domain_api_answers()
+    {
+        SchemaWriteRefusedException[] refusals =
+        [
+            Refusal,
+            new SchemaFinalization.EfSchemaFamilyWritesRefusedException("Orders", "1", "3", ["1", "2"])
+        ];
+
+        Assert.All(refusals, refusal => Assert.Equal(SchemaWriteRefusedException.RefusalCode, refusal.Code));
+        Assert.Equal("schema-write-refused", SchemaWriteRefusedException.RefusalCode);
     }
 
     /// <summary>Spec 182 extends the refusal with a feature and a reason; the extension keeps the code and the versions.</summary>

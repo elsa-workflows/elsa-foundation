@@ -21,6 +21,18 @@ module's own wire shapes; the unkeyed registration remains the single-module fal
 | `IEndpointExceptionTranslator` | Enumerable; register keyed by owner id (unkeyed = fallback). | Consulted in registration order after renderers decline; the first non-null `EndpointProblem` wins. Exception-to-status mapping is domain knowledge and stays with the module that defines the exceptions. | `WorkflowDesignExceptionTranslator` (Workflows Design), `WorkflowPublishingExceptionTranslator` (Publishing) |
 | `IEndpointProblemWriter` | Single per owner; register keyed by owner id (unkeyed = fallback). | Writes every `EndpointProblem` — binder failures included — in the owner's established error shape, which is part of its published contract. | `WorkflowDesignProblemWriter`, `WorkflowPublishingProblemWriter`, `ActivitiesDesignProblemWriter` |
 
+### Schema write refusals
+
+Every owner answers a `SchemaWriteRefusedException` (`Elsa.Primitives`; spec 180, FR-016a) with a 409 in its own
+envelope, carrying the refusal's code, and its family and both versions as entries where the envelope keys its errors
+(its detail names them in any case). `AddElsaEndpoints` registers one unkeyed translator
+that turns the refusal into `SchemaWriteRefusalProblem.For`'s problem, so an owner whose renderers decline it needs
+nothing of its own. A fault renderer that owns a shape end to end answers the refusal in that shape, from
+`SchemaWriteRefusalProblem.For` or with the code in the shape's own code member. An operation mapped with
+`containFailures: false` is answered by `MapUnboundOperation` itself, the only seam allowed to map one. The
+architecture guard `SchemaWriteRefusalMappingGuardTests` runs the refusal through every endpoint of each owner that
+registers failure services of its own, and fails when an owner registers them without being checked.
+
 ## Endpoint composition contracts
 
 | Contract | Kind and registration | Purpose | Known implementations |

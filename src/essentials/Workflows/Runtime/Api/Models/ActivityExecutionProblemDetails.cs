@@ -1,3 +1,4 @@
+using Elsa.Api.AspNetCore;
 using Elsa.Primitives.Diagnostics;
 using Elsa.Primitives.Exceptions;
 using Elsa.Workflows.Runtime.Api;
@@ -81,7 +82,7 @@ internal static class ActivityExecutionProblemDetails
     public static Task SchemaWriteRefusedAsync(HttpContext context, SchemaWriteRefusedException refusal, CancellationToken cancellationToken) =>
         WriteAsync(
             context,
-            StatusCodes.Status409Conflict,
+            SchemaWriteRefusalProblem.StatusCode,
             refusal.Code,
             "Schema write refused",
             refusal.Message,

@@ -87,7 +87,10 @@ step; the build fails without either (FR-022).
 
 `EfSchemaWriteRefusedException` is the write refusal (FR-016a): a write whose value needs a version later than the
 version the host may write. It carries a stable code, the family and both versions, and spec 182 derives from it for
-dormant-feature writes. Nothing raises it until spec 181's gate lets a host write an older finalized version.
+dormant-feature writes. It derives from `Elsa.Primitives`' `SchemaWriteRefusedException`, which is what every domain
+API answers with a 409 in its own envelope (`Elsa.Api.AspNetCore`'s `SchemaWriteRefusalProblem`), since an API
+resolves no EF Core. A store lets it leave as itself, as it does the skew exception: a store that wraps it in a
+failure of its own turns the 409 into that failure's status.
 
 ### Shared families (no single owning module)
 

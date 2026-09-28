@@ -53,11 +53,13 @@ public sealed class SchemaWriteRefusalMappingGuardTests
         (typeof(Elsa3ImportActivitiesFeature), "src/extensions/Elsa3/src/Activities/Design/Import/Elsa3ImportActivitiesFeature.cs")
     ];
 
+    /// <summary>A registration of one of the three failure contracts, generic or by <c>typeof</c>.</summary>
     private static readonly Regex FailureServiceRegistration = new(
-        @"Add\w*<\s*(?:NativeEndpoints\.)?IEndpoint(?:FaultRenderer|ExceptionTranslator|ProblemWriter)\s*,",
+        @"(?:Add\w*|ServiceDescriptor\.\w+)<\s*(?:NativeEndpoints\.)?IEndpoint(?:FaultRenderer|ExceptionTranslator|ProblemWriter)\b" +
+        @"|typeof\(\s*(?:NativeEndpoints\.)?IEndpoint(?:FaultRenderer|ExceptionTranslator|ProblemWriter)\s*\)",
         RegexOptions.Compiled);
 
-    public static TheoryData<Type> Owners => [.. OwnersWithTheirOwnFailureShapes()];
+    public static TheoryData<Type> Owners => [.. OwnersWithTheirOwnFailureServices.Select(owner => owner.Feature)];
 
     /// <summary>
     /// Each endpoint's failure runs the way the pipeline runs it (Elsa.Api.AspNetCore's EXTENSION_POINTS.md, "Failure
@@ -107,11 +109,10 @@ public sealed class SchemaWriteRefusalMappingGuardTests
     [Fact]
     public void Every_owner_that_registers_its_own_failure_services_is_checked_endpoint_by_endpoint()
     {
-        var registering = Directory.EnumerateFiles(Path.Join(RepoRoot, "src"), "*.cs", SearchOption.AllDirectories)
-            .Where(path => !IsBuildOutput(path))
-            .Select(path => Path.GetRelativePath(RepoRoot, path).Replace(Path.DirectorySeparatorChar, '/'))
-            .Where(path => !path.StartsWith("src/essentials/Api/AspNetCore/", StringComparison.Ordinal))
-            .Where(path => FailureServiceRegistration.IsMatch(File.ReadAllText(Path.Join(RepoRoot, path))))
+        var registering = SourceFiles()
+            .Where(file => !file.Path.StartsWith("src/essentials/Api/AspNetCore/", StringComparison.Ordinal))
+            .Where(file => FailureServiceRegistration.IsMatch(file.Text))
+            .Select(file => file.Path)
             .Order(StringComparer.Ordinal)
             .ToArray();
 
@@ -169,10 +170,9 @@ public sealed class SchemaWriteRefusalMappingGuardTests
     public void Only_MapUnboundOperation_maps_an_operation_outside_the_failure_pipeline()
     {
         const string seam = "src/essentials/Api/AspNetCore/ElsaEndpointGroupExtensions.cs";
-        var elsewhere = Directory.EnumerateFiles(Path.Join(RepoRoot, "src"), "*.cs", SearchOption.AllDirectories)
-            .Where(path => !IsBuildOutput(path))
-            .Select(path => Path.GetRelativePath(RepoRoot, path).Replace(Path.DirectorySeparatorChar, '/'))
-            .Where(path => path != seam && File.ReadAllText(Path.Join(RepoRoot, path)).Contains("ContainFailures", StringComparison.Ordinal))
+        var elsewhere = SourceFiles()
+            .Where(file => file.Path != seam && file.Text.Contains("ContainFailures", StringComparison.Ordinal))
+            .Select(file => file.Path)
             .ToArray();
 
         Assert.Contains("ContainFailures = containFailures", File.ReadAllText(Path.Join(RepoRoot, seam)), StringComparison.Ordinal);
@@ -192,7 +192,11 @@ public sealed class SchemaWriteRefusalMappingGuardTests
         return (app, endpoints);
     }
 
-    private static IEnumerable<Type> OwnersWithTheirOwnFailureShapes() => OwnersWithTheirOwnFailureServices.Select(owner => owner.Feature);
+    /// <summary>Every C# source under <c>src/</c>, all three roots, by repository-relative path.</summary>
+    private static IEnumerable<(string Path, string Text)> SourceFiles() =>
+        Directory.EnumerateFiles(Path.Join(RepoRoot, "src"), "*.cs", SearchOption.AllDirectories)
+            .Where(path => !IsBuildOutput(path))
+            .Select(path => (Path.GetRelativePath(RepoRoot, path).Replace(Path.DirectorySeparatorChar, '/'), File.ReadAllText(path)));
 
     private static bool CarriesTheRefusal(string body) =>
         body.Contains(SchemaWriteRefusedException.RefusalCode, StringComparison.Ordinal) &&
