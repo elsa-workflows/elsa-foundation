@@ -176,7 +176,7 @@ public sealed class EfCredentialStore(
         entity.ExpiresAt);
 
     private static bool Matches(CredentialEntity entity, string tenantId, string credentialId) =>
-        EfSchemaVersion.Readable("IdentityIam", entity.SchemaVersion, IdentityIamEfModule.SchemaVersion) &&
+        EfSchemaVersion.Readable(IdentityIamEfModule.SchemaFamily, entity.SchemaVersion, IdentityIamEfModule.SchemaVersion) &&
         string.Equals(entity.Id, StorageId(tenantId, credentialId), StringComparison.Ordinal) &&
         string.Equals(entity.TenantLookupKey, IdentityEntityFrameworkKey.Normalize(tenantId), StringComparison.Ordinal) &&
         string.Equals(entity.CredentialLookupKey, IdentityEntityFrameworkKey.Normalize(credentialId), StringComparison.Ordinal) &&

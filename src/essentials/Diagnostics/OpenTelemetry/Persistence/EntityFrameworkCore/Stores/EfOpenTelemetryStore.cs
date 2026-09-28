@@ -408,7 +408,7 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
                         var ledger = await db.CaptureLedger.SingleOrDefaultAsync(x => x.ScopeKey == binding.ScopeKey && x.BatchId == item.BatchId.Value, cancellationToken);
                         if (ledger is not null)
                         {
-                            EfSchemaVersion.EnsureReadable("OpenTelemetry", ledger.SchemaVersion, EfOpenTelemetryModule.SchemaVersion);
+                            EfSchemaVersion.EnsureReadable(EfOpenTelemetryModule.SchemaFamily, ledger.SchemaVersion, EfOpenTelemetryModule.SchemaVersion);
                             if (ledger.IssuedAtTicks != item.BatchId.IssuedAt.UtcTicks ||
                                 !StringComparer.Ordinal.Equals(ledger.Fingerprint, fingerprints[index]))
                                 throw new OpenTelemetryPersistenceConflictException(operation, "The OpenTelemetry capture operation was reused with different metadata or content.", ScopeContext(), new InvalidOperationException("Capture identity metadata or fingerprint differs."));
@@ -634,7 +634,7 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
             var projection = ToResourceEntity(item.Resource);
             if (row is null)
                 db.Resources.Add(projection);
-            else if (EfSchemaVersion.Readable("OpenTelemetry", row.SchemaVersion, EfOpenTelemetryModule.SchemaVersion) &&
+            else if (EfSchemaVersion.Readable(EfOpenTelemetryModule.SchemaFamily, row.SchemaVersion, EfOpenTelemetryModule.SchemaVersion) &&
                      projection.LastSeenTicks >= row.LastSeenTicks)
                 Copy(projection, row);
         }
@@ -647,7 +647,7 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
             var projection = ToInstrumentEntity(item.Instrument, item.LastSeen);
             if (row is null)
                 db.Instruments.Add(projection);
-            else if (EfSchemaVersion.Readable("OpenTelemetry", row.SchemaVersion, EfOpenTelemetryModule.SchemaVersion) &&
+            else if (EfSchemaVersion.Readable(EfOpenTelemetryModule.SchemaFamily, row.SchemaVersion, EfOpenTelemetryModule.SchemaVersion) &&
                      projection.LastSeenTicks >= row.LastSeenTicks)
                 Copy(projection, row);
         }
@@ -794,14 +794,14 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
     {
         var summaries = await db.TraceSummaries.Where(x => x.ScopeKey == binding.ScopeKey && keys.Contains(x.TraceKey)).ToListAsync(ct);
         foreach (var summary in summaries)
-            EfSchemaVersion.EnsureReadable("OpenTelemetry", summary.SchemaVersion, EfOpenTelemetryModule.SchemaVersion);
+            EfSchemaVersion.EnsureReadable(EfOpenTelemetryModule.SchemaFamily, summary.SchemaVersion, EfOpenTelemetryModule.SchemaVersion);
         return summaries.ToDictionary(x => x.TraceKey, StringComparer.Ordinal);
     }
 
     /// <summary>A resource's service name, read only once the row's schema version is settled.</summary>
     private static string ServiceName(OpenTelemetryResourceEntity row)
     {
-        EfSchemaVersion.EnsureReadable("OpenTelemetry", row.SchemaVersion, EfOpenTelemetryModule.SchemaVersion);
+        EfSchemaVersion.EnsureReadable(EfOpenTelemetryModule.SchemaFamily, row.SchemaVersion, EfOpenTelemetryModule.SchemaVersion);
         return row.ServiceName;
     }
 
@@ -1129,7 +1129,7 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
     private static void Copy(OpenTelemetryMetricInstrumentEntity from, OpenTelemetryMetricInstrumentEntity to) { to.Id = from.Id; to.IdSearchKey = from.IdSearchKey; to.IdOrderKey = from.IdOrderKey; to.ResourceId = from.ResourceId; to.ResourceIdSearchKey = from.ResourceIdSearchKey; to.Name = from.Name; to.NameSearchKey = from.NameSearchKey; to.LastSeenTicks = from.LastSeenTicks; to.LastSeenOffsetMinutes = from.LastSeenOffsetMinutes; to.PayloadJson = from.PayloadJson; to.SchemaVersion = from.SchemaVersion; }
     private static TelemetryResource ToResource(OpenTelemetryResourceEntity x) => ValidatePersisted("resource", () =>
     {
-        EfSchemaVersion.EnsureReadable("OpenTelemetry", x.SchemaVersion, EfOpenTelemetryModule.SchemaVersion);
+        EfSchemaVersion.EnsureReadable(EfOpenTelemetryModule.SchemaFamily, x.SchemaVersion, EfOpenTelemetryModule.SchemaVersion);
         var payload = Deserialize<TelemetryResource>(x.PayloadJson);
         RequirePersisted(payload.Attributes is not null, nameof(payload.Attributes));
         var idSearchKey = OpenTelemetrySearchKeys.ResourceId(payload.Id);
@@ -1147,7 +1147,7 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
 
     private static TelemetryTrace ToTraceRecord(OpenTelemetryTraceEntity x) => ValidatePersisted("trace record", () =>
     {
-        EfSchemaVersion.EnsureReadable("OpenTelemetry", x.SchemaVersion, EfOpenTelemetryModule.SchemaVersion);
+        EfSchemaVersion.EnsureReadable(EfOpenTelemetryModule.SchemaFamily, x.SchemaVersion, EfOpenTelemetryModule.SchemaVersion);
         var payload = Deserialize<TelemetryTrace>(x.PayloadJson);
         RequirePersisted(payload.ResourceIds is not null, nameof(payload.ResourceIds));
         RequirePersisted(payload.WorkflowInstanceIds is not null, nameof(payload.WorkflowInstanceIds));
@@ -1173,7 +1173,7 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
 
     private static TelemetryTrace ToTrace(OpenTelemetryTraceSummaryEntity x) => ValidatePersisted("trace summary", () =>
     {
-        EfSchemaVersion.EnsureReadable("OpenTelemetry", x.SchemaVersion, EfOpenTelemetryModule.SchemaVersion);
+        EfSchemaVersion.EnsureReadable(EfOpenTelemetryModule.SchemaFamily, x.SchemaVersion, EfOpenTelemetryModule.SchemaVersion);
         var payload = Deserialize<TelemetryTrace>(x.PayloadJson);
         var resourceIds = payload.ResourceIds ?? throw new InvalidDataException("The persisted OpenTelemetry trace summary has no resource identities.");
         var workflowInstanceIds = payload.WorkflowInstanceIds ?? throw new InvalidDataException("The persisted OpenTelemetry trace summary has no workflow identities.");
@@ -1199,7 +1199,7 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
     });
     private static TelemetrySpan ToSpan(OpenTelemetrySpanEntity x) => ValidatePersisted("span", () =>
     {
-        EfSchemaVersion.EnsureReadable("OpenTelemetry", x.SchemaVersion, EfOpenTelemetryModule.SchemaVersion);
+        EfSchemaVersion.EnsureReadable(EfOpenTelemetryModule.SchemaFamily, x.SchemaVersion, EfOpenTelemetryModule.SchemaVersion);
         var payload = Deserialize<TelemetrySpan>(x.PayloadJson);
         RequirePersisted(payload.Attributes is not null, nameof(payload.Attributes));
         var events = payload.Events ?? throw new InvalidDataException("The persisted OpenTelemetry span has no event collection.");
@@ -1245,7 +1245,7 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
 
     private static MetricInstrument ToInstrument(OpenTelemetryMetricInstrumentEntity x) => ValidatePersisted("metric instrument", () =>
     {
-        EfSchemaVersion.EnsureReadable("OpenTelemetry", x.SchemaVersion, EfOpenTelemetryModule.SchemaVersion);
+        EfSchemaVersion.EnsureReadable(EfOpenTelemetryModule.SchemaFamily, x.SchemaVersion, EfOpenTelemetryModule.SchemaVersion);
         var payload = Deserialize<MetricInstrument>(x.PayloadJson);
         RequirePersisted(payload.Attributes is not null, nameof(payload.Attributes));
         RequirePersisted(StringComparer.Ordinal.Equals(x.Id, payload.Id), nameof(x.Id));
@@ -1262,7 +1262,7 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
 
     private static MetricPoint ToMetricPoint(OpenTelemetryMetricPointEntity x) => ValidatePersisted("metric point", () =>
     {
-        EfSchemaVersion.EnsureReadable("OpenTelemetry", x.SchemaVersion, EfOpenTelemetryModule.SchemaVersion);
+        EfSchemaVersion.EnsureReadable(EfOpenTelemetryModule.SchemaFamily, x.SchemaVersion, EfOpenTelemetryModule.SchemaVersion);
         var payload = Deserialize<MetricPoint>(x.PayloadJson);
         RequirePersisted(payload.Attributes is not null, nameof(payload.Attributes));
         RequirePersisted(x.Sequence > 0, nameof(x.Sequence));
@@ -1286,7 +1286,7 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
 
     private static OtlpLogRecord ToLog(OpenTelemetryLogEntity x) => ValidatePersisted("log record", () =>
     {
-        EfSchemaVersion.EnsureReadable("OpenTelemetry", x.SchemaVersion, EfOpenTelemetryModule.SchemaVersion);
+        EfSchemaVersion.EnsureReadable(EfOpenTelemetryModule.SchemaFamily, x.SchemaVersion, EfOpenTelemetryModule.SchemaVersion);
         var payload = Deserialize<OtlpLogRecord>(x.PayloadJson);
         RequirePersisted(payload.Attributes is not null, nameof(payload.Attributes));
         RequirePersisted(x.Sequence > 0, nameof(x.Sequence));

@@ -514,7 +514,7 @@ public sealed class EfExecutionCommandTransport(
         ExecutionCommandTransportItemEntity row,
         string scope)
     {
-        EfSchemaVersion.EnsureReadable("ExecutionCommandTransport", row.SchemaVersion, ExecutionCommandTransportEfModule.SchemaVersion);
+        EfSchemaVersion.EnsureReadable(ExecutionCommandTransportEfModule.SchemaFamily, row.SchemaVersion, ExecutionCommandTransportEfModule.SchemaVersion);
         EnsureItemIdentity(row, scope);
         var item = Deserialize<ExecutionCommandTransportItem>(row.PayloadJson);
         var rowEnqueuedAt = ReadTimestamp(row.EnqueuedAtUtcTicks, row.EnqueuedAtOffsetMinutes);
@@ -552,7 +552,7 @@ public sealed class EfExecutionCommandTransport(
 
     private static void EnsureHead(ExecutionCommandStreamHeadEntity row, string scope, string expectedWorkflowExecutionId)
     {
-        if (EfSchemaVersion.NotReadable("ExecutionCommandTransport", row.SchemaVersion, ExecutionCommandTransportEfModule.SchemaVersion) ||
+        if (EfSchemaVersion.NotReadable(ExecutionCommandTransportEfModule.SchemaFamily, row.SchemaVersion, ExecutionCommandTransportEfModule.SchemaVersion) ||
             !StringComparer.Ordinal.Equals(row.ScopeKey, EfDistributedIdentity.EncodeScope(scope)) ||
             !StringComparer.Ordinal.Equals(row.ScopeKeyHash, EfDistributedIdentity.Hash(scope)) ||
             !StringComparer.Ordinal.Equals(row.WorkflowExecutionId, expectedWorkflowExecutionId) ||

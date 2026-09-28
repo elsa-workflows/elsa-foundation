@@ -169,7 +169,7 @@ public sealed class EfSchemaVersionOrderingGuardTests
             "EfStructuredLogStore.cs",
             "EfOpenTelemetryStore.cs",
             "EfExecutionCommandTransport.cs",
-            "EfIdentityStoreSupport.cs",
+            "IdentityEntityFrameworkAdapterSupport.cs",
             "EfApplicationStore.cs",
             "EfProviderConfigurationStore.cs"
         ];

@@ -60,7 +60,7 @@ public sealed class EfTenantMembershipStore(
 
     private static TenantMembershipRecord Map(TenantMembershipEntity row)
     {
-        EfSchemaVersion.EnsureReadable("IdentityIam", row.SchemaVersion, IdentityIamEfModule.SchemaVersion);
+        EfSchemaVersion.EnsureReadable(IdentityIamEfModule.SchemaFamily, row.SchemaVersion, IdentityIamEfModule.SchemaVersion);
         return new(row.TenantId, row.UserId, (TenantMembershipStatus)row.Status, EfIdentityStoreSupport.DeserializeSet(row.RoleIdsJson), EfIdentityStoreSupport.DeserializeSet(row.DirectPermissionsJson));
     }
 

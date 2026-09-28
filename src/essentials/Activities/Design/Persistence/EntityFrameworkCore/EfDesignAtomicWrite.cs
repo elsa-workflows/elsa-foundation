@@ -226,6 +226,12 @@ public sealed class EfDesignAtomicWrite(
                 if (winner is not null)
                     return Resolve(winner, request, tenantId, true);
             }
+            catch (Exception readException) when (readException is InvalidDataException or JsonException or EfSchemaVersionSkewException)
+            {
+                // A marker a newer module version wrote does not become readable by retrying;
+                // surface the skew rather than misreporting it as an ambiguous commit.
+                throw;
+            }
             catch (Exception readException) when (EfPersistenceCleanup.IsCatchable(readException))
             {
                 // Reconciliation is best effort; preserve the original operation failure when

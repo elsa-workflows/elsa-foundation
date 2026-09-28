@@ -445,6 +445,65 @@ public sealed class ActivitiesDesignEntityFrameworkCoreTests
         Assert.Empty(await db.ActivityDesignOperations.ToListAsync());
     }
 
+    /// <summary>
+    /// A commit can durably succeed while its acknowledgement is lost, so the atomic writer re-reads the operation
+    /// marker to resolve the ambiguity. A marker a newer module version wrote does not become readable by retrying,
+    /// so its skew must surface as itself rather than be misreported as an ambiguous commit.
+    /// </summary>
+    [Fact]
+    public async Task Sqlite_atomic_writer_reports_a_marker_with_a_newer_schema_as_skew_rather_than_an_ambiguous_commit()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        var options = new DbContextOptionsBuilder<ActivitiesDesignSqliteDbContext>().UseSqlite(connection).Options;
+        await using var db = new ActivitiesDesignSqliteDbContext(options);
+        await db.Database.EnsureCreatedAsync();
+        var writer = new EfDesignAtomicWrite(db, transactionFactory: async ct =>
+        {
+            var real = await db.Database.BeginTransactionAsync(ct);
+            return new CommitDurablyThenReportAmbiguousFailureTransaction(real, () =>
+                db.Database.ExecuteSqlRaw(
+                    "UPDATE \"elsa_activity_design_operations\" SET \"SchemaVersion\" = {0}",
+                    EfSchemaVersionSkewTestSupport.SkewedSchemaVersion));
+        });
+
+        var skew = await Assert.ThrowsAsync<EfSchemaVersionSkewException>(() => writer.ExecuteAsync(
+            new EfDesignAtomicWriteRequest(new EfDesignOperationIdentity("activity.test", "ack-lost-newer-marker"), "request-a", ["definitions"]),
+            (context, _) =>
+            {
+                context.Db.ActivityDefinitions.Add(new ActivityDefinition { Id = "d1", TenantId = "tenant-a", ActivityTypeKey = "Acme.Test", Category = "Tests" });
+                return Task.FromResult(EfDesignAtomicWriteStageResult.Accepted("result-a", "{\"ok\":true}"));
+            }));
+
+        EfSchemaVersionSkewTestSupport.AssertSchemaVersionSkew(skew, "ActivitiesDesign", ActivitiesDesignEfModule.SchemaVersion);
+    }
+
+    /// <summary>
+    /// Commits a real, owned transaction and then reports a generic ambiguous-outcome failure, so the atomic writer's
+    /// reconciliation read runs against durably committed data - the same shape a provider that acknowledged a commit
+    /// failure after actually committing would produce. A no-op rollback keeps the reconciliation read from tripping
+    /// over a transaction object the provider already finished with.
+    /// </summary>
+    private sealed class CommitDurablyThenReportAmbiguousFailureTransaction(
+        Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction inner,
+        Action afterCommit) : Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction
+    {
+        public Guid TransactionId => inner.TransactionId;
+        public void Commit() => throw new NotSupportedException();
+
+        public async Task CommitAsync(CancellationToken cancellationToken = default)
+        {
+            await inner.CommitAsync(cancellationToken);
+            afterCommit();
+            throw new InvalidOperationException("commit acknowledgement lost");
+        }
+
+        public void Rollback() { }
+        public Task RollbackAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public void Dispose() => inner.Dispose();
+        public ValueTask DisposeAsync() => inner.DisposeAsync();
+    }
+
     [Fact]
     public async Task Sqlite_concurrent_contexts_reject_a_stale_mutation()
     {

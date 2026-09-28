@@ -55,7 +55,7 @@ public sealed class EfPublicationSnapshotReviewStore(
         if (entity is null)
             return null;
 
-        EfSchemaVersion.EnsureReadable("PublishingSnapshotReview", entity.SchemaVersion, PublishingSnapshotReviewEfModule.SchemaVersion);
+        EfSchemaVersion.EnsureReadable(PublishingSnapshotReviewEfModule.SchemaFamily, entity.SchemaVersion, PublishingSnapshotReviewEfModule.SchemaVersion);
         EnsureAuthorizedTenant(accessContextAccessor, entity.TenantId);
         EnsureIncarnation(entity);
         var review = ToModel(entity);
@@ -71,7 +71,7 @@ public sealed class EfPublicationSnapshotReviewStore(
         if (entity is null)
             return false;
 
-        EfSchemaVersion.EnsureReadable("PublishingSnapshotReview", entity.SchemaVersion, PublishingSnapshotReviewEfModule.SchemaVersion);
+        EfSchemaVersion.EnsureReadable(PublishingSnapshotReviewEfModule.SchemaFamily, entity.SchemaVersion, PublishingSnapshotReviewEfModule.SchemaVersion);
         EnsureAuthorizedTenant(accessContextAccessor, entity.TenantId);
         EnsureIncarnation(entity);
         _ = ToModel(entity);
@@ -103,7 +103,7 @@ public sealed class EfPublicationSnapshotReviewStore(
             if (entity is null)
                 continue;
 
-            EfSchemaVersion.EnsureReadable("PublishingSnapshotReview", entity.SchemaVersion, PublishingSnapshotReviewEfModule.SchemaVersion);
+            EfSchemaVersion.EnsureReadable(PublishingSnapshotReviewEfModule.SchemaFamily, entity.SchemaVersion, PublishingSnapshotReviewEfModule.SchemaVersion);
             EnsureAuthorizedTenant(accessContextAccessor, entity.TenantId);
             EnsureIncarnation(entity);
             _ = ToModel(entity);

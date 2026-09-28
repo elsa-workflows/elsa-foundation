@@ -84,7 +84,7 @@ public sealed class EfClaimMappingStore(
         {
             var id = Id(rule.TenantId, rule.Provider, rule.Id);
             var row = await context.ClaimMappings.SingleOrDefaultAsync(x => x.Id == id, token);
-            if (row is not null) EfSchemaVersion.EnsureReadable("IdentityIam", row.SchemaVersion, IdentityIamEfModule.SchemaVersion);
+            if (row is not null) EfSchemaVersion.EnsureReadable(IdentityIamEfModule.SchemaFamily, row.SchemaVersion, IdentityIamEfModule.SchemaVersion);
             if (createOnly && row is not null) return Conflict(id);
             if (expectedVersion is > 0 && (row is null || row.Revision != expectedVersion)) return row is null ? NotFound(id) : Conflict(id);
             if (expectedVersion == 0 && !createOnly && row is null) return NotFound(id);
@@ -108,7 +108,7 @@ public sealed class EfClaimMappingStore(
 
     private static ClaimMappingRule Map(ClaimMappingEntity row)
     {
-        EfSchemaVersion.EnsureReadable("IdentityIam", row.SchemaVersion, IdentityIamEfModule.SchemaVersion);
+        EfSchemaVersion.EnsureReadable(IdentityIamEfModule.SchemaFamily, row.SchemaVersion, IdentityIamEfModule.SchemaVersion);
         return new(row.RuleId, row.TenantId, row.Provider, row.MatchClaimType, row.MatchValue, EfIdentityStoreSupport.DeserializeSet(row.GrantRolesJson), EfIdentityStoreSupport.DeserializeSet(row.GrantPermissionsJson), row.Order, row.StopOnMatch);
     }
 

@@ -153,7 +153,7 @@ public sealed class EfApplicationStore(
             IdentityApplicationSetCodec.Deserialize(entity.ScopesJson));
 
     private static bool Matches(ApplicationEntity entity, string tenantId, string applicationId) =>
-        EfSchemaVersion.Readable("IdentityIam", entity.SchemaVersion, IdentityIamEfModule.SchemaVersion) &&
+        EfSchemaVersion.Readable(IdentityIamEfModule.SchemaFamily, entity.SchemaVersion, IdentityIamEfModule.SchemaVersion) &&
         string.Equals(entity.Id, IdentityEntityFrameworkKey.TenantRecordId(tenantId, applicationId), StringComparison.Ordinal) &&
         string.Equals(IdentityEntityFrameworkKey.Normalize(entity.TenantId), IdentityEntityFrameworkKey.Normalize(tenantId), StringComparison.Ordinal) &&
         string.Equals(IdentityEntityFrameworkKey.Normalize(entity.ApplicationId), IdentityEntityFrameworkKey.Normalize(applicationId), StringComparison.Ordinal);

@@ -32,7 +32,7 @@ public static class IdentityEntityFrameworkAdapterSupport
     /// of it, so the adapter applies the family's own check rather than restating the family or its version.
     /// </summary>
     public static void EnsureReadable(string? schemaVersion) =>
-        EfSchemaVersion.EnsureReadable("IdentityIam", schemaVersion, IdentityIamEfModule.SchemaVersion);
+        EfSchemaVersion.EnsureReadable(IdentityIamEfModule.SchemaFamily, schemaVersion, IdentityIamEfModule.SchemaVersion);
 }
 
 /// <summary>Scoped revision-stamp integration surface for first-party Identity framework adapters.</summary>

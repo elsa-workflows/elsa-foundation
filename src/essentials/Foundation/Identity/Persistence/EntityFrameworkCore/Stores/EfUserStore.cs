@@ -47,7 +47,7 @@ public sealed class EfUserStore(
                 () => context.Users.AsNoTracking().Where(x => x.TenantLookupKey == EfIdentityStoreSupport.TenantLookup(tenantId) && x.NormalizedEmailKey == key).OrderBy(x => x.Id).Take(2).ToListAsync(cancellationToken));
             if (rows.Count != 1)
                 return null;
-            return EfSchemaVersion.Readable("IdentityIam", rows[0].SchemaVersion, IdentityIamEfModule.SchemaVersion) &&
+            return EfSchemaVersion.Readable(IdentityIamEfModule.SchemaFamily, rows[0].SchemaVersion, IdentityIamEfModule.SchemaVersion) &&
                    string.Equals(EfIdentityStoreSupport.Normalize(rows[0].Email), EfIdentityStoreSupport.Normalize(email), StringComparison.Ordinal)
                 ? Map(rows[0])
                 : null;
@@ -103,7 +103,7 @@ public sealed class EfUserStore(
 
     private static UserRecord Map(UserEntity entity)
     {
-        EfSchemaVersion.EnsureReadable("IdentityIam", entity.SchemaVersion, IdentityIamEfModule.SchemaVersion);
+        EfSchemaVersion.EnsureReadable(IdentityIamEfModule.SchemaFamily, entity.SchemaVersion, IdentityIamEfModule.SchemaVersion);
         return new(
             entity.UserId, entity.TenantId, entity.UserName, entity.Email, entity.DisplayName,
             (UserStatus)entity.Status, (ResourceOwnership)entity.Ownership,
@@ -111,7 +111,7 @@ public sealed class EfUserStore(
     }
 
     private static bool Matches(UserEntity entity, string tenantId, string userId) =>
-        EfSchemaVersion.Readable("IdentityIam", entity.SchemaVersion, IdentityIamEfModule.SchemaVersion) &&
+        EfSchemaVersion.Readable(IdentityIamEfModule.SchemaFamily, entity.SchemaVersion, IdentityIamEfModule.SchemaVersion) &&
         string.Equals(entity.Id, EfIdentityStoreSupport.RecordId(tenantId, userId), StringComparison.Ordinal) &&
         string.Equals(EfIdentityStoreSupport.Normalize(entity.TenantId), EfIdentityStoreSupport.Normalize(tenantId), StringComparison.Ordinal) &&
         string.Equals(EfIdentityStoreSupport.Normalize(entity.UserId), EfIdentityStoreSupport.Normalize(userId), StringComparison.Ordinal);

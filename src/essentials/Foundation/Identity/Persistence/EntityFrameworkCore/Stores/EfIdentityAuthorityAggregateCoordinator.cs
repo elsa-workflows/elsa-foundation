@@ -170,7 +170,7 @@ public sealed class EfIdentityAuthorityAggregateCoordinator(
                 var user = await context.Users.SingleOrDefaultAsync(x => x.Id == id, token);
                 if (user is null)
                     return NotFound(id);
-                if (EfSchemaVersion.NotReadable("IdentityIam", user.SchemaVersion, IdentityIamEfModule.SchemaVersion) || user.Revision != expectedVersion)
+                if (EfSchemaVersion.NotReadable(IdentityIamEfModule.SchemaFamily, user.SchemaVersion, IdentityIamEfModule.SchemaVersion) || user.Revision != expectedVersion)
                     return Conflict(id);
 
                 EfIdentityStoreSupport.EnsureUserIdentity(user, tenantId, userId);
@@ -282,7 +282,7 @@ public sealed class EfIdentityAuthorityAggregateCoordinator(
                 var role = await context.Roles.SingleOrDefaultAsync(x => x.Id == id, token);
                 if (role is null)
                     return NotFound(id);
-                if (EfSchemaVersion.NotReadable("IdentityIam", role.SchemaVersion, IdentityIamEfModule.SchemaVersion) || role.Revision != expectedVersion)
+                if (EfSchemaVersion.NotReadable(IdentityIamEfModule.SchemaFamily, role.SchemaVersion, IdentityIamEfModule.SchemaVersion) || role.Revision != expectedVersion)
                     return Conflict(id);
 
                 EfIdentityStoreSupport.EnsureRoleIdentity(role, tenantId, roleId);

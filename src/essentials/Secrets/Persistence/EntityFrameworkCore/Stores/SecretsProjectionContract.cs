@@ -156,7 +156,7 @@ public static class SecretsProjectionContract
     {
         // Settled before the payload is parsed: a row a newer module version wrote reports skew here rather than a
         // projection or payload fault.
-        EfSchemaVersion.EnsureReadable("Secrets", record.SchemaVersion, SecretsEfModule.SchemaVersion);
+        EfSchemaVersion.EnsureReadable(SecretsEfModule.SchemaFamily, record.SchemaVersion, SecretsEfModule.SchemaVersion);
         SecretDocument stored;
         SecretDocument current;
         try

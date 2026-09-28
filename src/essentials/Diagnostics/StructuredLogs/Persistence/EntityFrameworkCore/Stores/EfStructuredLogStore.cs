@@ -277,7 +277,7 @@ public sealed class EfStructuredLogStore : IStructuredLogStore, IDiagnosticsPers
                 .SingleOrDefaultAsync(operation => operation.ScopeKey == ScopeKey && operation.BatchId == batchId, cancellationToken);
             if (existingOperation is not null)
             {
-                EfSchemaVersion.EnsureReadable("StructuredLogs", existingOperation.SchemaVersion, StructuredLogsEfModule.SchemaVersion);
+                EfSchemaVersion.EnsureReadable(StructuredLogsEfModule.SchemaFamily, existingOperation.SchemaVersion, StructuredLogsEfModule.SchemaVersion);
                 ValidateBinding(existingOperation.TenantId, existingOperation.ScopeId, existingOperation.StreamId);
                 if (existingOperation.IssuedAtTicks != batch.Id.IssuedAt.UtcTicks)
                     throw new StructuredLogsException("The structured log append operation identity was reused with a different issue time.");
@@ -566,7 +566,7 @@ public sealed class EfStructuredLogStore : IStructuredLogStore, IDiagnosticsPers
     /// </summary>
     private void ValidateRecord(StructuredLogRecord row)
     {
-        EfSchemaVersion.EnsureReadable("StructuredLogs", row.SchemaVersion, StructuredLogsEfModule.SchemaVersion);
+        EfSchemaVersion.EnsureReadable(StructuredLogsEfModule.SchemaFamily, row.SchemaVersion, StructuredLogsEfModule.SchemaVersion);
         ValidateBinding(row.TenantId, row.ScopeId, row.StreamId);
     }
 
@@ -574,7 +574,7 @@ public sealed class EfStructuredLogStore : IStructuredLogStore, IDiagnosticsPers
     {
         if (state is null)
             return;
-        EfSchemaVersion.EnsureReadable("StructuredLogs", state.SchemaVersion, StructuredLogsEfModule.SchemaVersion);
+        EfSchemaVersion.EnsureReadable(StructuredLogsEfModule.SchemaFamily, state.SchemaVersion, StructuredLogsEfModule.SchemaVersion);
         ValidateBinding(state.TenantId, state.ScopeId, state.StreamId);
     }
 
