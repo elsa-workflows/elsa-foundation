@@ -479,6 +479,42 @@ public sealed class EfReusableActivityImportBehaviorTests : IAsyncLifetime
         await Assert.ThrowsAsync<ReusableActivityImportPersistenceException>(async () => await unavailable.TryCreateCollectionAsync(collection));
     }
 
+    /// <summary>
+    /// A schema write refusal raised while a collection upload saves must reach the caller as itself, never wrapped in
+    /// <see cref="ReusableActivityImportPersistenceException"/> (#2101).
+    /// </summary>
+    [Fact]
+    public async Task A_schema_write_refusal_while_creating_a_collection_reaches_the_caller_unwrapped()
+    {
+        var interceptor = new ProviderFailures.FailingSaveInterceptor(() => new EfSchemaWriteRefusedException("Elsa3Import", "1", "2"));
+        var store = new EfReusableActivityImportOperationStore(Db.Import(interceptor), access);
+        var collection = new ReusableActivityImportCollectionHandle(
+            "handle-refused", Scope, Now, Now.AddHours(1), 1, new ReusableActivityImportCollection("handle-refused", [Workflow("a", "a-v1", 1, true, Leaf("root"))]));
+
+        var refusal = await Assert.ThrowsAsync<EfSchemaWriteRefusedException>(() => store.TryCreateCollectionAsync(collection).AsTask());
+
+        Assert.Equal("Elsa3Import", refusal.Family);
+    }
+
+    /// <summary>
+    /// A schema write refusal raised while the atomic apply commits must reach the caller as itself, never wrapped in
+    /// <see cref="ReusableActivityImportPersistenceException"/> (#2101).
+    /// </summary>
+    [Fact]
+    public async Task A_schema_write_refusal_during_the_atomic_apply_reaches_the_caller_unwrapped()
+    {
+        var failing = Db.Command(access, activitiesInterceptors: [new ThrowingSaveInterceptor<ActivityManagementProjectionSnapshot>(
+            () => new EfSchemaWriteRefusedException("Elsa3Import", "1", "2"))]);
+        var service = Db.Service(access, command: failing);
+        var (upload, planId) = await UploadAsync(service, Scope, Workflow("a", "a-v1", 1, true, Leaf("a-root")));
+
+        var refusal = await Assert.ThrowsAsync<EfSchemaWriteRefusedException>(async () =>
+            await service.ApplyAsync(upload.CollectionHandle, planId, ["a-v1"], "refused", Scope));
+
+        Assert.Equal("Elsa3Import", refusal.Family);
+        Assert.True((await Db.CountAsync()).HasNoImportWrites);
+    }
+
     [Fact]
     public async Task Scoped_identity_collision_fails_without_writing_a_second_receipt()
     {

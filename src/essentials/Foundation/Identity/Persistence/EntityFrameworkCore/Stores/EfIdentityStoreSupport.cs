@@ -3,6 +3,7 @@ using Elsa.Foundation.Identity.Core.Iam;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Exceptions;
 using Elsa.Persistence.EntityFramework;
+using Elsa.Primitives.Exceptions;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Microsoft.EntityFrameworkCore;
 
@@ -482,7 +483,7 @@ public static class EfIdentityStoreSupport
     /// </summary>
     public static IdentityEntityFrameworkPersistenceException Failure(string message, Exception exception)
     {
-        if (exception is EfSchemaVersionSkewException)
+        if (exception is EfSchemaVersionSkewException or SchemaWriteRefusedException)
             ExceptionDispatchInfo.Throw(exception);
         return new(message, exception);
     }

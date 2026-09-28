@@ -24,6 +24,8 @@
     <Compile Include="..\..\..\..\..\Persistence\EntityFramework\Tests\UnorderedRowLimitGuard.cs" Link="UnorderedRowLimitGuard.cs" />
     <!-- Arranges and asserts a newer-schema row that must report skew, not corruption. -->
     <Compile Include="..\..\..\..\..\Persistence\EntityFramework\Tests\EfSchemaVersionSkewTestSupport.cs" Link="EfSchemaVersionSkewTestSupport.cs" />
+    <!-- Wrapped provider failures this suite injects without a real server. -->
+    <Compile Include="..\..\..\..\..\Persistence\EntityFramework\Tests\ProviderFailures.cs" Link="ProviderFailures.cs" />
   </ItemGroup>
 
 </Project>

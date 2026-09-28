@@ -12,6 +12,7 @@ using Elsa.Diagnostics.StructuredLogs.Core.Models;
 using Elsa.Diagnostics.StructuredLogs.Core.Options;
 using Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Persistence.EntityFramework;
+using Elsa.Primitives.Exceptions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -94,6 +95,9 @@ public sealed class EfStructuredLogStore : IStructuredLogStore, IDiagnosticsPers
         }
         catch (DiagnosticsDrainException exception)
         {
+            // The gate's refusal must reach the caller as itself, never wrapped by the drain's own failure.
+            if (exception.InnerException is SchemaWriteRefusedException refusal)
+                throw refusal;
             throw new StructuredLogsException("The structured log append could not be committed.", exception);
         }
     }
@@ -505,6 +509,10 @@ public sealed class EfStructuredLogStore : IStructuredLogStore, IDiagnosticsPers
             }
             // Skew is not an operation failure, so it leaves as itself (ADR 0077).
             catch (EfSchemaVersionSkewException)
+            {
+                throw;
+            }
+            catch (SchemaWriteRefusedException)
             {
                 throw;
             }

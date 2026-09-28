@@ -23,6 +23,8 @@
     <!-- Fails any unordered Skip or Take (EF warning 10102) in this suite. -->
     <Compile Include="..\..\..\..\..\..\..\..\..\..\tests\essentials\Persistence\EntityFramework\Tests\UnorderedRowLimitGuard.cs" Link="UnorderedRowLimitGuard.cs" />
     <Compile Include="..\..\..\..\..\..\..\..\..\..\tests\essentials\Persistence\EntityFramework\Tests\TemporarySqliteDatabase.cs" Link="TemporarySqliteDatabase.cs" />
+    <!-- Wrapped provider failures this suite injects without a real server. -->
+    <Compile Include="..\..\..\..\..\..\..\..\..\..\tests\essentials\Persistence\EntityFramework\Tests\ProviderFailures.cs" Link="ProviderFailures.cs" />
   </ItemGroup>
 
 </Project>

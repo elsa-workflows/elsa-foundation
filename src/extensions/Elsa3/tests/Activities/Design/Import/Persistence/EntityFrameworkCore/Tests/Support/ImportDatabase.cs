@@ -200,6 +200,18 @@ internal sealed class SaveFailureInterceptor<TEntity>(int failures = int.MaxValu
     }
 }
 
+/// <summary>Throws <paramref name="failure"/> when a save stages a row of <typeparamref name="TEntity"/>.</summary>
+internal sealed class ThrowingSaveInterceptor<TEntity>(Func<Exception> failure) : SaveChangesInterceptor where TEntity : class
+{
+    public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
+        DbContextEventData eventData,
+        InterceptionResult<int> result,
+        CancellationToken cancellationToken = default) =>
+        eventData.Context!.ChangeTracker.Entries<TEntity>().Any(entry => entry.State is EntityState.Added or EntityState.Modified)
+            ? throw failure()
+            : ValueTask.FromResult(result);
+}
+
 /// <summary>Records the physical connection and transaction behind every command a context executes.</summary>
 internal sealed class CommandCapture : DbCommandInterceptor
 {

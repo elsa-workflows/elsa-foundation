@@ -474,6 +474,62 @@ public sealed class EfOpenTelemetryDurabilityTests
         }
     }
 
+    /// <summary>
+    /// A schema write refusal raised while a capture commits must reach the caller as itself, the same way a schema
+    /// version skew already does, never wrapped in <see cref="OpenTelemetryPersistenceException"/> (#2101).
+    /// </summary>
+    [Fact]
+    public async Task A_schema_write_refusal_during_commit_reaches_the_caller_unwrapped()
+    {
+        var directory = Path.Join(Path.GetTempPath(), "elsa-otel-write-refusal-" + Guid.NewGuid().ToString("N"));
+        var path = Path.Join(directory, "opentelemetry.db");
+        Directory.CreateDirectory(directory);
+        try
+        {
+            var interceptor = new ProviderFailures.FailingSaveInterceptor(() => new EfSchemaWriteRefusedException("OpenTelemetry", "1", "2"));
+            await using var provider = OpenTelemetryEntityFrameworkCoreFixture.BuildInterceptingProvider(path, interceptor);
+            await OpenTelemetryEntityFrameworkCoreFixture.EnsureCreatedAsync(provider);
+            var store = provider.GetRequiredService<EfOpenTelemetryStore>();
+
+            var refusal = await Assert.ThrowsAsync<EfSchemaWriteRefusedException>(
+                () => store.WriteAsync(DiagnosticsDrainBatchId.New(), TelemetryTestData.Batch("write-refusal")).AsTask());
+
+            Assert.Equal("OpenTelemetry", refusal.Family);
+        }
+        finally
+        {
+            if (Directory.Exists(directory))
+                Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>The drain-queued entry point unwraps the same refusal from the <see cref="DiagnosticsDrainException"/> it acknowledges through.</summary>
+    [Fact]
+    public async Task A_schema_write_refusal_off_the_drain_queued_entry_point_reaches_the_caller_unwrapped()
+    {
+        var directory = Path.Join(Path.GetTempPath(), "elsa-otel-write-refusal-queued-" + Guid.NewGuid().ToString("N"));
+        var path = Path.Join(directory, "opentelemetry.db");
+        Directory.CreateDirectory(directory);
+        try
+        {
+            var interceptor = new ProviderFailures.FailingSaveInterceptor(() => new EfSchemaWriteRefusedException("OpenTelemetry", "1", "2"));
+            await using var provider = OpenTelemetryEntityFrameworkCoreFixture.BuildInterceptingProvider(path, interceptor);
+            await OpenTelemetryEntityFrameworkCoreFixture.EnsureCreatedAsync(provider);
+            var store = provider.GetRequiredService<EfOpenTelemetryStore>();
+            store.Start();
+
+            var refusal = await Assert.ThrowsAsync<EfSchemaWriteRefusedException>(
+                () => store.WriteAsync(TelemetryTestData.Batch("write-refusal-queued")).AsTask());
+
+            Assert.Equal("OpenTelemetry", refusal.Family);
+        }
+        finally
+        {
+            if (Directory.Exists(directory))
+                Directory.Delete(directory, recursive: true);
+        }
+    }
+
     [Fact]
     public void Registration_rejects_an_unknown_provider_at_the_feature_boundary()
     {

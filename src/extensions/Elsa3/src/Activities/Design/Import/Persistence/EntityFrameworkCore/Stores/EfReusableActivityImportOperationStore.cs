@@ -1,4 +1,5 @@
 using Elsa.Persistence.EntityFramework;
+using Elsa.Primitives.Exceptions;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa3.Activities.Design.Import.Contracts;
 using Elsa3.Activities.Design.Import.Models;
@@ -44,6 +45,10 @@ public sealed class EfReusableActivityImportOperationStore(
             return false;
         }
         catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (SchemaWriteRefusedException)
         {
             throw;
         }
