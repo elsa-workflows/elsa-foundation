@@ -40,6 +40,8 @@ public sealed class SchemaWriteRefusalMappingGuardTests
     private const string ProbeFamily = "Probe.Family";
     private const string ProbeWriteVersion = "7.0.0";
     private const string ProbeRequiredVersion = "8.0.0";
+    private const string ProbeFeature = "Probe.DormantFeature";
+    private const string ProbeReason = "It becomes available once every host can read version '8.0.0' of schema family 'Probe.Family'.";
 
     /// <summary>Every first-party feature that registers failure services for its owner, with the file that registers them.</summary>
     private static readonly (Type Feature, string Source)[] OwnersWithTheirOwnFailureServices =
@@ -82,6 +84,29 @@ public sealed class SchemaWriteRefusalMappingGuardTests
         }
 
         Assert.True(wrong.Count == 0, $"{feature.Name}: {wrong.Count} of {endpoints.Length} endpoints do not answer a schema write refusal with 409 and its code:{Environment.NewLine}{string.Join(Environment.NewLine, wrong)}");
+    }
+
+    /// <summary>
+    /// Spec 182, FR-015: the dormancy refusal the shared dormancy check raises is answered the same way by every endpoint,
+    /// with its code, and with the feature and the reason it adds, which its message carries into every shape.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(Owners))]
+    public async Task Every_endpoint_of_an_owner_with_its_own_failure_shapes_answers_a_dormancy_refusal_with_409_its_code_feature_and_reason(Type feature)
+    {
+        var (app, endpoints) = Map(feature);
+        var wrong = new List<string>();
+        await using (app)
+        {
+            foreach (var endpoint in endpoints)
+            {
+                var (status, body) = await FailAsync(app.Services, endpoint, DormancyProbe());
+                if (status != StatusCodes.Status409Conflict || !CarriesTheRefusal(body) || !CarriesTheDormancy(body))
+                    wrong.Add($"{endpoint.DisplayName} ({endpoint.RoutePattern.RawText}) answered {status}: {body}");
+            }
+        }
+
+        Assert.True(wrong.Count == 0, $"{feature.Name}: {wrong.Count} of {endpoints.Length} endpoints do not answer a dormancy refusal with 409, its code, feature and reason:{Environment.NewLine}{string.Join(Environment.NewLine, wrong)}");
     }
 
     /// <summary>
@@ -153,6 +178,16 @@ public sealed class SchemaWriteRefusalMappingGuardTests
         Assert.Contains(("writeVersion", ProbeWriteVersion), pairs);
         Assert.Contains(("requiredVersion", ProbeRequiredVersion), pairs);
 
+        // A dormancy refusal adds its feature and its caller-neutral reason as entries of their own (spec 182, FR-013).
+        var (dormantStatus, dormant) = await host.GetAsync("/contained/dormant");
+        Assert.Equal(HttpStatusCode.Conflict, dormantStatus);
+        var dormantErrors = dormant.GetProperty("errors");
+        Assert.Equal(SchemaWriteRefusedException.RefusalCode, dormantErrors.GetProperty("code")[0].GetString());
+        Assert.Equal(ProbeFeature, dormantErrors.GetProperty("feature")[0].GetString());
+        Assert.Equal(ProbeReason, dormantErrors.GetProperty("reason")[0].GetString());
+        Assert.False(errors.TryGetProperty("feature", out _), "A store's refusal names no feature.");
+        Assert.False(errors.TryGetProperty("reason", out _), "A store's refusal carries no dormancy reason.");
+
         // Any other failure keeps its way out: the pipeline's sanitized 500, and the host's own handling outside it.
         var (otherContainedStatus, _) = await host.GetAsync("/contained/other");
         Assert.Equal(HttpStatusCode.InternalServerError, otherContainedStatus);
@@ -198,6 +233,10 @@ public sealed class SchemaWriteRefusalMappingGuardTests
             .Where(path => !IsBuildOutput(path))
             .Select(path => (Path.GetRelativePath(RepoRoot, path).Replace(Path.DirectorySeparatorChar, '/'), File.ReadAllText(path)));
 
+    private static bool CarriesTheDormancy(string body) =>
+        body.Contains(ProbeFeature, StringComparison.Ordinal) &&
+        body.Contains(ProbeReason, StringComparison.Ordinal);
+
     private static bool CarriesTheRefusal(string body) =>
         body.Contains(SchemaWriteRefusedException.RefusalCode, StringComparison.Ordinal) &&
         body.Contains(ProbeFamily, StringComparison.Ordinal) &&
@@ -240,6 +279,10 @@ public sealed class SchemaWriteRefusalMappingGuardTests
         return (context.Response.StatusCode, await new StreamReader(context.Response.Body).ReadToEndAsync());
     }
 
+    /// <summary>A dormancy refusal as the shared dormancy check raises one (spec 182, FR-013).</summary>
+    private static SchemaDormancyRefusedException DormancyProbe() =>
+        new(ProbeFamily, ProbeWriteVersion, ProbeRequiredVersion, ProbeFeature, ProbeReason);
+
     /// <summary>A refusal as a store raises one, without the EF Core an API never resolves.</summary>
     private sealed class ProbeRefusal() : SchemaWriteRefusedException(
         ProbeFamily, ProbeWriteVersion, ProbeRequiredVersion,
@@ -258,6 +301,7 @@ public sealed class SchemaWriteRefusalMappingGuardTests
             var app = builder.Build();
             var api = app.MapEndpointGroup("Tests.SchemaWriteRefusalProbe", RefusalProbeJsonContext.Default);
             Map(api, "/contained/refusal", () => throw new ProbeRefusal(), contain: true);
+            Map(api, "/contained/dormant", () => throw DormancyProbe(), contain: true);
             Map(api, "/contained/other", () => throw new InvalidOperationException("Not a refusal."), contain: true);
             Map(api, "/uncontained/refusal", () => throw new ProbeRefusal(), contain: false);
             Map(api, "/uncontained/other", () => throw new InvalidOperationException("Not a refusal."), contain: false);

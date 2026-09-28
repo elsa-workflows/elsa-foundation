@@ -50,6 +50,10 @@ Elsa.Primitives.Exceptions.EntityNotFoundException.EntityNotFoundException(strin
 Elsa.Primitives.Exceptions.FeatureConfigurationException
 Elsa.Primitives.Exceptions.FeatureConfigurationException.FeatureConfigurationException() -> void
 Elsa.Primitives.Exceptions.FeatureConfigurationException.FeatureConfigurationException(string? message) -> void
+Elsa.Primitives.Exceptions.SchemaDormancyRefusedException
+Elsa.Primitives.Exceptions.SchemaDormancyRefusedException.FeatureId.get -> string?
+Elsa.Primitives.Exceptions.SchemaDormancyRefusedException.Reason.get -> string!
+Elsa.Primitives.Exceptions.SchemaDormancyRefusedException.SchemaDormancyRefusedException(string! family, string! observedVersion, string! requiredVersion, string? featureId, string! reason) -> void
 Elsa.Primitives.Exceptions.SchemaWriteRefusedException
 Elsa.Primitives.Exceptions.SchemaWriteRefusedException.Code.get -> string!
 Elsa.Primitives.Exceptions.SchemaWriteRefusedException.Family.get -> string!
