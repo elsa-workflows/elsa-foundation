@@ -20,4 +20,7 @@ public sealed class ExecutionCommandTransportItemEntity
     public int LeaseExpiresAtOffsetMinutes { get; set; }
     public string PayloadJson { get; set; } = null!;
     public long Revision { get; set; }
+
+    /// <summary>The persisted-schema version of this row: <see cref="ExecutionCommandTransportEfModule.SchemaVersion"/>.</summary>
+    public string SchemaVersion { get; set; } = null!;
 }

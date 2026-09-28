@@ -33,6 +33,7 @@ public abstract class Elsa3ImportDbContext(DbContextOptions options) : DbContext
         modelBuilder.UseElsaPayloadColumns(
             this,
             "ContentJson");
+        modelBuilder.IndexSchemaVersionStamps();
     }
 
     protected abstract void ConfigureProvider(ModelBuilder modelBuilder);

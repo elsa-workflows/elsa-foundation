@@ -38,6 +38,11 @@ namespace Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.Migrat
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("ScopeId")
                         .IsRequired()
                         .HasMaxLength(64)
@@ -54,6 +59,8 @@ namespace Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.Migrat
                         .HasColumnType("TEXT");
 
                     b.HasKey("ScopeKey", "BatchId");
+
+                    b.HasIndex("SchemaVersion");
 
                     b.HasIndex("ScopeKey", "IssuedAtTicks");
 
@@ -86,6 +93,11 @@ namespace Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.Migrat
                         .HasMaxLength(32)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("ScopeId")
                         .IsRequired()
                         .HasMaxLength(64)
@@ -113,6 +125,8 @@ namespace Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.Migrat
                         .HasColumnType("INTEGER");
 
                     b.HasKey("ScopeKey", "Position");
+
+                    b.HasIndex("SchemaVersion");
 
                     b.HasIndex("ScopeKey", "ReplayToken")
                         .IsUnique()
@@ -142,6 +156,11 @@ namespace Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.Migrat
                     b.Property<long>("HighWater")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("ScopeId")
                         .IsRequired()
                         .HasMaxLength(64)
@@ -167,6 +186,8 @@ namespace Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.Migrat
                         .HasColumnType("TEXT");
 
                     b.HasKey("ScopeKey");
+
+                    b.HasIndex("SchemaVersion");
 
                     b.ToTable("elsa_structured_log_stream_states", (string)null);
                 });

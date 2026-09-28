@@ -37,10 +37,17 @@ namespace Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.Migrati
                     b.Property<long>("IssuedAtTicks")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
                     b.Property<int>("Status")
                         .HasColumnType("INTEGER");
 
                     b.HasKey("ScopeKey", "BatchId");
+
+                    b.HasIndex("SchemaVersion");
 
                     b.HasIndex("ScopeKey", "IssuedAtTicks");
 
@@ -95,6 +102,11 @@ namespace Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.Migrati
                         .IsUnicode(false)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("ServiceName")
                         .HasColumnType("TEXT");
 
@@ -137,6 +149,8 @@ namespace Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.Migrati
                         .HasColumnType("TEXT");
 
                     b.HasKey("ScopeKey", "Sequence");
+
+                    b.HasIndex("SchemaVersion");
 
                     b.HasIndex("ScopeKey", "TimestampTicks", "IdOrderKey");
 
@@ -194,7 +208,14 @@ namespace Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.Migrati
                         .IsUnicode(false)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
                     b.HasKey("ScopeKey", "IdOrderKey");
+
+                    b.HasIndex("SchemaVersion");
 
                     b.HasIndex("ScopeKey", "IdOrderKey");
 
@@ -261,6 +282,11 @@ namespace Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.Migrati
                         .IsUnicode(false)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("ServiceName")
                         .HasColumnType("TEXT");
 
@@ -275,6 +301,8 @@ namespace Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.Migrati
                         .HasColumnType("INTEGER");
 
                     b.HasKey("ScopeKey", "Sequence");
+
+                    b.HasIndex("SchemaVersion");
 
                     b.HasIndex("ScopeKey", "TimestampTicks", "IdOrderKey");
 
@@ -312,6 +340,11 @@ namespace Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.Migrati
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("ServiceName")
                         .IsRequired()
                         .HasMaxLength(512)
@@ -332,6 +365,8 @@ namespace Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.Migrati
                         .HasColumnType("INTEGER");
 
                     b.HasKey("ScopeKey", "IdOrderKey");
+
+                    b.HasIndex("SchemaVersion");
 
                     b.HasIndex("ScopeKey", "LastSeenTicks", "IdOrderKey");
 
@@ -395,6 +430,11 @@ namespace Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.Migrati
                         .IsUnicode(false)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("SpanId")
                         .IsRequired()
                         .HasMaxLength(128)
@@ -437,6 +477,8 @@ namespace Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.Migrati
                         .HasColumnType("TEXT");
 
                     b.HasKey("ScopeKey", "Sequence");
+
+                    b.HasIndex("SchemaVersion");
 
                     b.HasIndex("ScopeKey", "TraceKey", "StartTimeTicks", "SpanIdOrderKey", "Sequence");
 
@@ -489,6 +531,11 @@ namespace Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.Migrati
                     b.Property<string>("RootSpanId")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
                     b.Property<int>("SpanCount")
                         .HasColumnType("INTEGER");
 
@@ -518,6 +565,8 @@ namespace Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.Migrati
                         .HasColumnType("TEXT");
 
                     b.HasKey("ScopeKey", "Sequence");
+
+                    b.HasIndex("SchemaVersion");
 
                     b.HasIndex("ScopeKey", "StartTimeTicks", "TraceKey");
 
@@ -558,6 +607,11 @@ namespace Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.Migrati
                     b.Property<string>("RootSpanId")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("ServiceMembershipJson")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -595,6 +649,8 @@ namespace Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.Migrati
 
                     b.HasKey("ScopeKey", "TraceKey");
 
+                    b.HasIndex("SchemaVersion");
+
                     b.HasIndex("ScopeKey", "StartTimeTicks", "TraceKey");
 
                     b.ToTable("elsa_otel_trace_summaries", (string)null);
@@ -617,6 +673,11 @@ namespace Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.Migrati
                         .HasMaxLength(64)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Value")
                         .IsRequired()
                         .HasMaxLength(512)
@@ -628,6 +689,8 @@ namespace Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.Migrati
                         .HasColumnType("TEXT");
 
                     b.HasKey("ScopeKey", "TraceKey", "Kind", "ValueKey");
+
+                    b.HasIndex("SchemaVersion");
 
                     b.HasIndex("ScopeKey", "Kind", "ValueKey", "TraceKey");
 

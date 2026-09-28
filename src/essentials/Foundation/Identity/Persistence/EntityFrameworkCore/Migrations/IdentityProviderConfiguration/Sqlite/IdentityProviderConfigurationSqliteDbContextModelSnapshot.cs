@@ -49,6 +49,11 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
                         .IsConcurrencyToken()
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("SettingsJson")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -83,6 +88,8 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("SchemaVersion");
 
                     b.ToTable("identity_global_provider_configurations", (string)null);
                 });
@@ -120,6 +127,11 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
                         .IsConcurrencyToken()
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("SettingsJson")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -156,6 +168,8 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("SchemaVersion");
 
                     b.ToTable("identity_provider_configurations", (string)null);
                 });

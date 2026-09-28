@@ -16,6 +16,7 @@ public abstract class ExecutionPlacementDbContext(DbContextOptions options) : Db
         modelBuilder.HasElsaDefaultSchema(this);
         modelBuilder.ApplyConfiguration(new ExecutionPlacementLeaseEntityConfiguration());
         ConfigureProvider(modelBuilder);
+        modelBuilder.IndexSchemaVersionStamps();
     }
 
     protected abstract void ConfigureProvider(ModelBuilder modelBuilder);

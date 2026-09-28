@@ -11,7 +11,11 @@ public sealed class StudioPreferenceRecord
     public string TenantId { get; set; } = "";
     public string StudioHostId { get; set; } = "";
     public string Namespace { get; set; } = "";
-    public int SchemaVersion { get; set; }
+    /// <summary>The preference namespace's own schema version, as the client wrote the value.</summary>
+    public int PreferenceSchemaVersion { get; set; }
+
+    /// <summary>The persisted-schema version of this row: <see cref="StudioPreferencesEfModule.SchemaVersion"/>.</summary>
+    public string SchemaVersion { get; set; } = null!;
     public string ValueJson { get; set; } = "{}";
     public DateTimeOffset UpdatedAt { get; set; }
     public long Revision { get; set; }

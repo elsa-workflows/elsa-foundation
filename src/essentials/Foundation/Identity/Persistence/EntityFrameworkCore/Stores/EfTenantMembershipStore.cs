@@ -1,5 +1,6 @@
 using Elsa.Foundation.Identity.Core.Iam;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Entities;
+using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Microsoft.EntityFrameworkCore;
 
@@ -57,7 +58,12 @@ public sealed class EfTenantMembershipStore(
             () => context.TenantMemberships.AsNoTracking().SingleOrDefaultAsync(x => x.Id == EfIdentityStoreSupport.RecordId(tenantId, userId), cancellationToken));
     }
 
-    private static TenantMembershipRecord Map(TenantMembershipEntity row) => new(row.TenantId, row.UserId, (TenantMembershipStatus)row.Status, EfIdentityStoreSupport.DeserializeSet(row.RoleIdsJson), EfIdentityStoreSupport.DeserializeSet(row.DirectPermissionsJson));
+    private static TenantMembershipRecord Map(TenantMembershipEntity row)
+    {
+        EfSchemaVersion.EnsureReadable(IdentityIamEfModule.SchemaFamily, row.SchemaVersion, IdentityIamEfModule.SchemaVersion);
+        return new(row.TenantId, row.UserId, (TenantMembershipStatus)row.Status, EfIdentityStoreSupport.DeserializeSet(row.RoleIdsJson), EfIdentityStoreSupport.DeserializeSet(row.DirectPermissionsJson));
+    }
+
     private void Prepare(string tenantId, CancellationToken cancellationToken) { Validate(tenantId, nameof(tenantId)); EfIdentityStoreSupport.EnsureTenant(accessContextAccessor, tenantId); context.EnsureProviderBinding(); cancellationToken.ThrowIfCancellationRequested(); }
     private static void Validate(string value, string parameter) { ArgumentNullException.ThrowIfNull(value); if (value.Length > IdentityProviderConfigurationCanonicalizer.MaximumIdentityLength) throw new ArgumentException($"Identity key values cannot exceed {IdentityProviderConfigurationCanonicalizer.MaximumIdentityLength} UTF-16 code units.", parameter); }
 }

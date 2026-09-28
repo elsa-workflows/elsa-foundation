@@ -345,6 +345,7 @@ internal static class AuthorityEntityConfiguration
             UserEntityConfiguration.ConfigureTechnical(builder.Property<string>(nameof(UserEntity.TenantLookupKey)), true);
         }
         builder.Property<long>("Revision").IsRequired().IsConcurrencyToken();
+        builder.Property<string>(nameof(UserEntity.SchemaVersion)).HasMaxLength(32).IsRequired();
     }
 
     private static void ConfigureText(PropertyBuilder<string> property, bool required) =>

@@ -125,6 +125,7 @@ public sealed class EfExecutionPlacementStore(
                 current.ExpiresAtUtcTicks = lease.ExpiresAt.UtcTicks;
                 current.ExpiresAtOffsetMinutes = checked((int)lease.ExpiresAt.Offset.TotalMinutes);
                 current.IsReleased = false;
+                current.SchemaVersion = ExecutionPlacementEfModule.SchemaVersion;
                 current.Revision = checked(current.Revision + 1);
                 stagedRevision = current.Revision;
             }
@@ -238,8 +239,9 @@ public sealed class EfExecutionPlacementStore(
         string? expectedWorkflowExecutionId = null,
         string? expectedOwnerId = null)
     {
-        if (expectedWorkflowExecutionId is not null &&
-            !StringComparer.Ordinal.Equals(row.WorkflowExecutionId, expectedWorkflowExecutionId))
+        if (EfSchemaVersion.NotReadable(ExecutionPlacementEfModule.SchemaFamily, row.SchemaVersion, ExecutionPlacementEfModule.SchemaVersion) ||
+            (expectedWorkflowExecutionId is not null &&
+             !StringComparer.Ordinal.Equals(row.WorkflowExecutionId, expectedWorkflowExecutionId)))
             throw new InvalidOperationException("The placement identity digest maps to a different execution identity.");
 
         if (expectedOwnerId is not null &&
@@ -253,7 +255,8 @@ public sealed class EfExecutionPlacementStore(
 
     private static void EnsureIdentity(ExecutionPlacementLeaseEntity row, string scope, string workflowExecutionId, string id)
     {
-        if (!StringComparer.Ordinal.Equals(row.Id, id) ||
+        if (EfSchemaVersion.NotReadable(ExecutionPlacementEfModule.SchemaFamily, row.SchemaVersion, ExecutionPlacementEfModule.SchemaVersion) ||
+            !StringComparer.Ordinal.Equals(row.Id, id) ||
             !StringComparer.Ordinal.Equals(EfDistributedIdentity.DecodeScope(row.ScopeKey), scope) ||
             !StringComparer.Ordinal.Equals(row.WorkflowExecutionId, workflowExecutionId))
             throw new InvalidOperationException("The placement identity digest maps to a different scope or execution identity.");
@@ -326,7 +329,8 @@ public sealed class EfExecutionPlacementStore(
         ExpiresAtUtcTicks = lease.ExpiresAt.UtcTicks,
         ExpiresAtOffsetMinutes = checked((int)lease.ExpiresAt.Offset.TotalMinutes),
         IsReleased = false,
-        Revision = revision
+        Revision = revision,
+        SchemaVersion = ExecutionPlacementEfModule.SchemaVersion
     };
 
     private static ExecutionPlacementEntityFrameworkPersistenceException NormalizeProviderFailure(

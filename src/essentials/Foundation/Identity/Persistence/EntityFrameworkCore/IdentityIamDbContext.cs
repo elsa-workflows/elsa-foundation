@@ -49,6 +49,7 @@ public abstract class IdentityIamDbContext(DbContextOptions options) : DbContext
         modelBuilder.ApplyConfiguration(new RoleNameReservationEntityConfiguration());
         modelBuilder.ApplyConfiguration(new MutationReceiptEntityConfiguration());
         ConfigureProvider(modelBuilder);
+        modelBuilder.IndexSchemaVersionStamps();
     }
 
     protected abstract void ConfigureProvider(ModelBuilder modelBuilder);

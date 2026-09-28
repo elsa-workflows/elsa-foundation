@@ -89,6 +89,8 @@ namespace Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.Migrati
 
                     b.HasKey("TenantKey", "UserIdHash", "HandleHash");
 
+                    b.HasIndex("SchemaVersion");
+
                     b.ToTable("elsa3_reusable_import_collections", (string)null);
                 });
 
@@ -176,6 +178,8 @@ namespace Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.Migrati
 
                     b.HasKey("TenantKey", "BindingIdHash");
 
+                    b.HasIndex("SchemaVersion");
+
                     b.ToTable("elsa3_reusable_import_definition_bindings", (string)null);
                 });
 
@@ -255,6 +259,8 @@ namespace Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.Migrati
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.HasKey("TenantKey", "UserIdHash", "ReceiptIdHash");
+
+                    b.HasIndex("SchemaVersion");
 
                     b.ToTable("elsa3_reusable_import_receipts", (string)null);
                 });

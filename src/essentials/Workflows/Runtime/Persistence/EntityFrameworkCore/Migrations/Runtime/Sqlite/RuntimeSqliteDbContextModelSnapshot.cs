@@ -95,6 +95,8 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
 
                     b.HasKey("Id");
 
+                    b.HasIndex("SchemaVersion");
+
                     b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "ExecutionSequence");
 
                     b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "ExecutionScopeIdHash", "IsScopeRoot", "ExecutionSequence");
@@ -178,6 +180,8 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("SchemaVersion");
 
                     b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "SummaryExecutionSequence", "SummaryScheduledAtUtcTicks");
 
@@ -268,6 +272,8 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("SchemaVersion");
 
                     b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash");
 
@@ -390,6 +396,8 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
 
                     b.HasKey("Id");
 
+                    b.HasIndex("SchemaVersion");
+
                     b.HasIndex("ScopeKeyHash", "StimulusLookupKey");
 
                     b.HasIndex("ScopeKeyHash", "StimulusTypeLookupKey");
@@ -509,6 +517,8 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
 
                     b.HasKey("Id");
 
+                    b.HasIndex("SchemaVersion");
+
                     b.HasIndex("ScopeKeyHash", "ClaimOrderKey");
 
                     b.HasIndex("ScopeKeyHash", "DueTimeUtcTicks", "TimerIdOrderKey");
@@ -582,6 +592,8 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
 
                     b.HasKey("Id");
 
+                    b.HasIndex("SchemaVersion");
+
                     b.HasIndex("ScopeKeyHash", "DurableValueIdOrderKey");
 
                     b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "DurableValueIdHash")
@@ -651,6 +663,8 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
 
                     b.HasKey("Id");
 
+                    b.HasIndex("SchemaVersion");
+
                     b.HasIndex("ScopeKeyHash", "TemplateHashHash", "TemplateHash");
 
                     b.HasIndex("ScopeKeyHash", "TemplateIdHash", "TemplateId")
@@ -709,6 +723,8 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("SchemaVersion");
 
                     b.HasIndex("ScopeKeyHash", "TemplateHashHash", "TemplateHash")
                         .IsUnique();
@@ -803,6 +819,8 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
 
                     b.HasKey("Id");
 
+                    b.HasIndex("SchemaVersion");
+
                     b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "OperationalStateIdHash")
                         .IsUnique();
 
@@ -891,6 +909,8 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("SchemaVersion");
 
                     b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "IncidentIdHash")
                         .IsUnique();
@@ -1012,6 +1032,8 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
 
                     b.HasKey("Id");
 
+                    b.HasIndex("SchemaVersion");
+
                     b.HasIndex("ScopeKeyHash", "ScheduleIdHash")
                         .IsUnique();
 
@@ -1101,6 +1123,8 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
 
                     b.HasKey("Id");
 
+                    b.HasIndex("SchemaVersion");
+
                     b.HasIndex("ScopeKeyHash", "ActivationIdHash", "ActivationId")
                         .IsUnique();
 
@@ -1180,6 +1204,8 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("SchemaVersion");
 
                     b.HasIndex("ScopeKeyHash", "CommitIdHash")
                         .IsUnique();
@@ -1272,6 +1298,8 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
 
                     b.HasKey("Id");
 
+                    b.HasIndex("SchemaVersion");
+
                     b.HasIndex("ScopeKeyHash", "OutboxItemIdHash");
 
                     b.HasIndex("ScopeKeyHash", "DeliverableAtUtcTicks", "RecordedAtUtcTicks");
@@ -1335,6 +1363,8 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("SchemaVersion");
 
                     b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdOrderKey");
 
@@ -1433,6 +1463,8 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("SchemaVersion");
 
                     b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "WorkItemIdHash")
                         .IsUnique();
@@ -1553,6 +1585,8 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
 
                     b.HasKey("Id");
 
+                    b.HasIndex("SchemaVersion");
+
                     b.HasIndex("ScopeKeyHash", "ActiveActivationUniquenessKey")
                         .IsUnique();
 
@@ -1662,6 +1696,8 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
 
                     b.HasKey("Id");
 
+                    b.HasIndex("SchemaVersion");
+
                     b.HasIndex("ScopeKeyHash", "CheckpointCommitIdHash", "CheckpointCommitId");
 
                     b.HasIndex("ScopeKeyHash", "JobIdHash", "JobId")
@@ -1753,6 +1789,8 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("SchemaVersion");
 
                     b.HasIndex("ScopeKeyHash", "PlanIdHash", "PlanId")
                         .IsUnique();
@@ -1896,6 +1934,8 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
 
                     b.HasKey("Id");
 
+                    b.HasIndex("SchemaVersion");
+
                     b.HasIndex("ScopeKeyHash", "DispatchIdHash")
                         .IsUnique();
 
@@ -1956,6 +1996,8 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
 
                     b.HasKey("Id");
 
+                    b.HasIndex("SchemaVersion");
+
                     b.HasIndex("ScopeKeyHash", "ArtifactIdHash", "ArtifactId")
                         .IsUnique();
 
@@ -2013,6 +2055,8 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("SchemaVersion");
 
                     b.HasIndex("ScopeKeyHash", "ArtifactIdHash", "ArtifactId")
                         .IsUnique();
@@ -2115,6 +2159,8 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("SchemaVersion");
 
                     b.HasIndex("ScopeKeyHash", "ArtifactIdHash", "ArtifactId");
 
@@ -2230,6 +2276,8 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
 
                     b.HasKey("Id");
 
+                    b.HasIndex("SchemaVersion");
+
                     b.HasIndex("ScopeKeyHash", "ArtifactIdHash");
 
                     b.HasIndex("ScopeKeyHash", "SortTimestampUtcTicks", "WorkflowExecutionIdOrderKey");
@@ -2301,6 +2349,8 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("SchemaVersion");
 
                     b.HasIndex("ScopeKeyHash", "ControlPlaneStateIdHash")
                         .IsUnique();
@@ -2391,6 +2441,8 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
 
                     b.HasKey("Id");
 
+                    b.HasIndex("SchemaVersion");
+
                     b.HasIndex("ScopeKeyHash", "StartedAtUtcTicks", "WorkflowExecutionIdOrderKey");
 
                     b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "WorkflowExecutionId")
@@ -2471,6 +2523,8 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("SchemaVersion");
 
                     b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "WorkItemIdHash")
                         .IsUnique();
@@ -2554,6 +2608,8 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("SchemaVersion");
 
                     b.HasIndex("AccessScopeKeyHash", "ScopeIdHash", "ScopeId")
                         .IsUnique();
@@ -2696,6 +2752,8 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
 
                     b.HasKey("Id");
 
+                    b.HasIndex("SchemaVersion");
+
                     b.HasIndex("ScopeKeyHash", "ActivationIdHash", "TriggerBindingIdHash");
 
                     b.HasIndex("ScopeKeyHash", "ArtifactIdHash", "TriggerBindingIdHash");
@@ -2766,6 +2824,8 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("SchemaVersion");
 
                     b.HasIndex("ScopeKeyHash", "ActivationIdHash", "ActivationId")
                         .IsUnique();

@@ -61,6 +61,11 @@ namespace Elsa.Secrets.Persistence.EntityFrameworkCore.Migrations.MySql
                         .IsRequired()
                         .HasColumnType("json");
 
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("varchar(32)");
+
                     b.Property<string>("ScopeLookupKey")
                         .HasColumnType("longtext")
                         .UseCollation("utf8mb4_0900_bin")
@@ -86,6 +91,8 @@ namespace Elsa.Secrets.Persistence.EntityFrameworkCore.Migrations.MySql
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.HasKey("TenantId", "NormalizedName");
+
+                    b.HasIndex("SchemaVersion");
 
                     b.HasIndex("TenantId", "Status", "NormalizedName")
                         .HasDatabaseName("IX_elsa_secrets_tenantId_status_normalizedName");

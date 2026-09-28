@@ -25,6 +25,7 @@ public abstract class SecretsDbContext : DbContext
         modelBuilder.HasElsaDefaultSchema(this);
         modelBuilder.ApplyConfiguration(new SecretRecordConfiguration());
         ConfigureProvider(modelBuilder);
+        modelBuilder.IndexSchemaVersionStamps();
     }
 
     /// <summary>Provider-specific column types (json vs jsonb, blob vs varbinary vs bytea).</summary>

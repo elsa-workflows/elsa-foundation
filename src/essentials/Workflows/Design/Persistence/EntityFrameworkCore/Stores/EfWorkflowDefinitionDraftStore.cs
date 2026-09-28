@@ -3,6 +3,7 @@ using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Serialization.Core;
+using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Microsoft.EntityFrameworkCore;
 
@@ -84,6 +85,8 @@ public sealed class EfWorkflowDefinitionDraftStore(WorkflowsDesignDbContext db, 
              select new
              {
                  Draft = draft,
+                 // The layout is projected rather than materialized, so no interceptor sees its stamp: it is read here.
+                 LayoutSchemaVersion = layout == null ? null : EF.Property<string>(layout, EfSchemaVersionMaterializationInterceptor.PropertyName),
                  LayoutDraftId = layout == null ? null : layout.WorkflowDefinitionDraftId,
                  LayoutTenantId = layout == null ? null : layout.TenantId,
                  RecordsJson = layout == null ? null : layout.RecordsJson,
@@ -97,6 +100,7 @@ public sealed class EfWorkflowDefinitionDraftStore(WorkflowsDesignDbContext db, 
         EfDesignSupport.EnsureExactIdentity(draftId, result.Draft.Id, "workflow draft with layout lookup");
         if (result.LayoutDraftId is not null)
         {
+            EfSchemaVersion.EnsureReadable(WorkflowsDesignEfModule.SchemaFamily, result.LayoutSchemaVersion, WorkflowsDesignEfModule.SchemaVersion);
             EfDesignSupport.EnsureExactIdentity(draftId, result.LayoutDraftId, "workflow draft layout lookup");
             if (!StringComparer.Ordinal.Equals(result.Draft.TenantId, result.LayoutTenantId))
                 throw new InvalidOperationException("The workflow draft layout lookup returned a row from a different persistence scope.");

@@ -23,6 +23,7 @@ public abstract class ExecutionCommandTransportDbContext(DbContextOptions option
         modelBuilder.UseElsaPayloadColumns(
             this,
             "PayloadJson");
+        modelBuilder.IndexSchemaVersionStamps();
     }
 
     protected abstract void ConfigureProvider(ModelBuilder modelBuilder);

@@ -25,6 +25,6 @@ public static class PublishingLedgerEfModule
 
     public const int TestRunIdOrderKeyMaximumLength = (PublishingPolicyProjectionEfModule.IdentityMaximumLength + 1) * sizeof(char);
 
-    /// <summary>The schema version stamped on the lossless JSON material of receipts and test-run receipts.</summary>
+    /// <summary>The schema version stamped on every publication-record, activity-publication receipt and test-run row.</summary>
     public const string ContentSchemaVersion = "1";
 }

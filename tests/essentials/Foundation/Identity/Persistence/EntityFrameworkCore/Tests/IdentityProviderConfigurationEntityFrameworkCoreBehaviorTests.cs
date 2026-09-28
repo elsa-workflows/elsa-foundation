@@ -10,6 +10,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using System.Data.Common;
 using Xunit;
+using Elsa.Persistence.EntityFramework;
 
 namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Tests;
 
@@ -43,6 +44,42 @@ public sealed class IdentityProviderConfigurationEntityFrameworkCoreBehaviorTest
             await using var reopened = CreateContext(databasePath);
             var loaded = await Store(reopened, configuration.TenantId!).FindForTenantAsync(configuration.TenantId!, configuration.Provider);
             AssertConfiguration(configuration, Assert.IsType<ProviderConfigurationRecord>(loaded));
+        }
+        finally
+        {
+            DeleteDatabaseFiles(databasePath);
+        }
+    }
+
+    [Fact]
+    public async Task A_configuration_with_a_newer_incompatible_schema_reports_skew_on_every_read_and_before_a_save_replaces_it()
+    {
+        var databasePath = TemporaryDatabasePath();
+        try
+        {
+            await EnsureDatabaseAsync(databasePath);
+            var configuration = Configuration("acme", "oidc", "original");
+            await using var context = CreateContext(databasePath);
+            await Store(context, "acme").SaveAsync(configuration);
+            var row = await context.TenantProviderConfigurations.SingleAsync();
+            Assert.Equal(IdentityProviderConfigurationEfModule.SchemaVersion, row.SchemaVersion);
+            await EfSchemaVersionSkewTestSupport.ArrangeSkewedRowAsync(context, v => row.SchemaVersion = v, v => row.SettingsJson = v);
+
+            Func<Task>[] operations =
+            [
+                () => Store(context, "acme").FindForTenantAsync("acme", "oidc").AsTask(),
+                () => Store(context, "acme").FindEffectiveAsync("acme", "oidc").AsTask(),
+                () => Store(context, "acme").FindForTenantWithRevisionAsync("acme", "oidc").AsTask(),
+                () => Store(context, "acme").SaveAsync(configuration with { Kind = "changed" }).AsTask()
+            ];
+            foreach (var operation in operations)
+            {
+                EfSchemaVersionSkewTestSupport.AssertSchemaVersionSkew(
+                    await Assert.ThrowsAsync<EfSchemaVersionSkewException>(operation),
+                    "IdentityProviderConfiguration",
+                    IdentityProviderConfigurationEfModule.SchemaVersion);
+                context.ChangeTracker.Clear();
+            }
         }
         finally
         {

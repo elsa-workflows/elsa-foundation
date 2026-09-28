@@ -6,6 +6,12 @@ public static class PublishingSnapshotReviewEfModule
 {
     public const string HistoryModuleName = "ElsaPublishingSnapshotReview";
     public const string TableName = "elsa_publication_snapshot_reviews";
+
+    /// <summary>The persisted-schema version every snapshot-review row is stamped with, and checked against when read.</summary>
+    public const string SchemaVersion = "1.0.0";
+
+    /// <summary>The schema family this module's rows belong to, checked against when a row is read.</summary>
+    public const string SchemaFamily = "PublishingSnapshotReview";
     public const string ExpiryIndexName = "IX_elsa_publication_snapshot_reviews_expiresAt_preflightToken";
     public const int IdentityMaximumLength = 256;
     public const int CandidateHashMaximumLength = 128;

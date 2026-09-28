@@ -2,6 +2,7 @@ using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.Dependency
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Models;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.DependencyInjection;
+using Elsa.Persistence.EntityFramework;
 using Elsa.Persistence.EntityFramework.Tests;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Extensions;
@@ -87,5 +88,73 @@ public sealed class EfCoreIdentityStoreTests
 
         var otherTenant = new AspNetCoreIdentityUser { Id = "same", TenantId = "tenant-b", UserName = "first" };
         await Assert.ThrowsAsync<InvalidOperationException>(() => manager.CreateAsync(otherTenant, "Correct Horse1!"));
+    }
+
+    /// <summary>
+    /// The framework adapter reads the Identity IAM family from outside its owning module, so it applies the family's
+    /// check itself: a row a newer module version wrote reports skew as itself before the adapter maps any of it.
+    /// </summary>
+    [Theory]
+    [InlineData("users")]
+    [InlineData("user claims")]
+    [InlineData("logins")]
+    [InlineData("tokens")]
+    [InlineData("user roles")]
+    [InlineData("roles")]
+    [InlineData("role claims")]
+    public async Task A_row_with_a_newer_schema_reports_skew_before_the_framework_adapter_maps_it(string table)
+    {
+        await using var database = new TemporarySqliteDatabase("identity");
+        var services = new ServiceCollection();
+        services.AddFoundationAspNetCoreIdentityEntityFrameworkCore(
+            new IdentityIamEntityFrameworkCoreOptions { Provider = "Sqlite", ConnectionString = database.ConnectionString },
+            isDevelopmentOrDemo: true);
+        await using var provider = services.BuildServiceProvider();
+        await using var scope = provider.CreateAsyncScope();
+        var serviceProvider = scope.ServiceProvider;
+        serviceProvider.GetRequiredService<IPersistenceAccessContextBinder>()
+            .Bind(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
+        var context = serviceProvider.GetRequiredService<IdentityIamDbContext>();
+        await context.Database.EnsureCreatedAsync();
+        var roles = serviceProvider.GetRequiredService<RoleManager<IdentityRole>>();
+        var users = serviceProvider.GetRequiredService<UserManager<AspNetCoreIdentityUser>>();
+        var role = new IdentityRole { Id = "role-1", Name = "Operators", NormalizedName = "OPERATORS" };
+        Assert.True((await roles.CreateAsync(role)).Succeeded);
+        Assert.True((await roles.AddClaimAsync(role, new System.Security.Claims.Claim("permission", "read"))).Succeeded);
+        var user = new AspNetCoreIdentityUser { Id = "user-1", TenantId = "tenant-a", UserName = "Alice", Email = "alice@example.test" };
+        Assert.True((await users.CreateAsync(user, "Correct Horse1!")).Succeeded);
+        Assert.True((await users.AddToRoleAsync(user, role.Name!)).Succeeded);
+        Assert.True((await users.AddClaimAsync(user, new System.Security.Claims.Claim("department", "operations"))).Succeeded);
+        Assert.True((await users.AddLoginAsync(user, new UserLoginInfo("oidc", "subject-1", "OIDC"))).Succeeded);
+        await users.SetAuthenticationTokenAsync(user, "test", "token", "value");
+
+        var (skew, reads) = table switch
+        {
+            "users" => (SkewAsync(context.Users), new Func<Task>[] { () => users.FindByIdAsync(user.Id), () => users.FindByNameAsync("ALICE"), () => users.FindByEmailAsync("ALICE@EXAMPLE.TEST") }),
+            "user claims" => (SkewAsync(context.UserClaims), [() => users.GetClaimsAsync(user)]),
+            "logins" => (SkewAsync(context.ExternalIdentities), [() => users.GetLoginsAsync(user), () => users.FindByLoginAsync("oidc", "subject-1")]),
+            "tokens" => (SkewAsync(context.UserTokens), [() => users.GetAuthenticationTokenAsync(user, "test", "token")]),
+            "user roles" => (SkewAsync(context.UserRoles), [() => users.GetRolesAsync(user)]),
+            "roles" => (SkewAsync(context.Roles), [() => roles.FindByIdAsync(role.Id), () => roles.FindByNameAsync("OPERATORS"), () => users.GetRolesAsync(user), () => users.IsInRoleAsync(user, role.Name!)]),
+            _ => (SkewAsync(context.RoleClaims), [() => roles.GetClaimsAsync(role)])
+        };
+        await skew;
+
+        foreach (var read in reads)
+        {
+            EfSchemaVersionSkewTestSupport.AssertSchemaVersionSkew(
+                await Assert.ThrowsAsync<EfSchemaVersionSkewException>(read), "IdentityIam", IdentityIamEfModule.SchemaVersion);
+            context.ChangeTracker.Clear();
+        }
+
+        async Task SkewAsync<TEntity>(DbSet<TEntity> set) where TEntity : class
+        {
+            var rows = await set.ToListAsync();
+            Assert.NotEmpty(rows);
+            await EfSchemaVersionSkewTestSupport.ArrangeSkewedRowAsync(
+                context,
+                version => rows.ForEach(row => context.Entry(row).Property("SchemaVersion").CurrentValue = version),
+                _ => { });
+        }
     }
 }

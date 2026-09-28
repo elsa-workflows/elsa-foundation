@@ -10,4 +10,7 @@ public sealed class StructuredLogAppendOperation
     public long IssuedAtTicks { get; set; }
     public string Fingerprint { get; set; } = "";
     public string OutcomeJson { get; set; } = "";
+
+    /// <summary>The persisted-schema version of this row: <see cref="StructuredLogsEfModule.SchemaVersion"/>.</summary>
+    public string SchemaVersion { get; set; } = null!;
 }

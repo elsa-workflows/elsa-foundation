@@ -67,7 +67,8 @@ public sealed class EfStudioPreferenceStore(StudioPreferencesDbContext context) 
                     TenantId = key.TenantId,
                     StudioHostId = key.StudioHostId,
                     Namespace = key.Namespace,
-                    SchemaVersion = write.SchemaVersion,
+                    PreferenceSchemaVersion = write.SchemaVersion,
+                    SchemaVersion = StudioPreferencesEfModule.SchemaVersion,
                     ValueJson = write.Value.GetRawText(),
                     UpdatedAt = updatedAt,
                     Revision = 1
@@ -94,7 +95,8 @@ public sealed class EfStudioPreferenceStore(StudioPreferencesDbContext context) 
                     return Conflict();
 
                 var nextRevision = checked(record.Revision + 1);
-                record.SchemaVersion = write.SchemaVersion;
+                record.PreferenceSchemaVersion = write.SchemaVersion;
+                record.SchemaVersion = StudioPreferencesEfModule.SchemaVersion;
                 record.ValueJson = write.Value.GetRawText();
                 record.UpdatedAt = updatedAt;
                 record.Revision = nextRevision;
@@ -136,13 +138,18 @@ public sealed class EfStudioPreferenceStore(StudioPreferencesDbContext context) 
         using var document = JsonDocument.Parse(record.ValueJson);
         return new StudioPreferenceDocument(
             record.Namespace,
-            record.SchemaVersion,
+            record.PreferenceSchemaVersion,
             $"rev-{record.Revision.ToString(CultureInfo.InvariantCulture)}",
             document.RootElement.Clone(),
             record.UpdatedAt);
     }
 
+    /// <summary>
+    /// Every read and every write of an existing row passes through here first, so the row's schema version is
+    /// settled before its identity projection is trusted and before its value is parsed.
+    /// </summary>
     private static bool MatchesKey(StudioPreferenceRecord record, string id, StudioPreferenceKey key) =>
+        EfSchemaVersion.Readable("StudioPreferences", record.SchemaVersion, StudioPreferencesEfModule.SchemaVersion) &&
         string.Equals(record.Id, id, StringComparison.Ordinal) &&
         string.Equals(record.SubjectId, key.SubjectId, StringComparison.Ordinal) &&
         string.Equals(record.TenantId, key.TenantId, StringComparison.Ordinal) &&

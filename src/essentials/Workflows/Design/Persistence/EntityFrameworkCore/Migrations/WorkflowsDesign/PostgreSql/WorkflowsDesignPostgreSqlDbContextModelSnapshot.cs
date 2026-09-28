@@ -81,12 +81,19 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                         .HasColumnType("character varying(1792)")
                         .UseCollation("C");
 
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
                     b.Property<string>("TenantId")
                         .HasMaxLength(128)
                         .HasColumnType("character varying(128)")
                         .UseCollation("C");
 
                     b.HasKey("ScopeKey", "IdLookupHash");
+
+                    b.HasIndex("SchemaVersion");
 
                     b.HasIndex("ScopeKey", "Id");
 
@@ -118,6 +125,11 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                     b.Property<DateTimeOffset>("LastModifiedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
                     b.Property<string>("SourceVersionId")
                         .HasMaxLength(128)
                         .HasColumnType("character varying(128)")
@@ -144,6 +156,8 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                         .UseCollation("C");
 
                     b.HasKey("ScopeKey", "IdLookupHash");
+
+                    b.HasIndex("SchemaVersion");
 
                     b.HasIndex("ScopeKey", "WorkflowDefinitionIdLookupHash", "LastModifiedAt", "IdLookupHash");
 
@@ -182,6 +196,11 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
                     b.Property<string>("TenantId")
                         .HasMaxLength(128)
                         .HasColumnType("character varying(128)")
@@ -200,6 +219,8 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                         .UseCollation("C");
 
                     b.HasKey("ScopeKey", "IdLookupHash");
+
+                    b.HasIndex("SchemaVersion");
 
                     b.HasIndex("ScopeKey", "WorkflowDefinitionDraftIdLookupHash")
                         .IsUnique();
@@ -243,6 +264,11 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                         .IsConcurrencyToken()
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
                     b.Property<string>("SemVerSortKey")
                         .IsRequired()
                         .HasMaxLength(128)
@@ -270,6 +296,8 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                         .UseCollation("C");
 
                     b.HasKey("ScopeKey", "IdLookupHash");
+
+                    b.HasIndex("SchemaVersion");
 
                     b.HasIndex("ScopeKey", "DefinitionIdLookupHash", "SemVerSortKey")
                         .IsUnique()
@@ -310,6 +338,11 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
                     b.Property<string>("TenantId")
                         .HasMaxLength(128)
                         .HasColumnType("character varying(128)")
@@ -328,6 +361,8 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                         .UseCollation("C");
 
                     b.HasKey("ScopeKey", "IdLookupHash");
+
+                    b.HasIndex("SchemaVersion");
 
                     b.HasIndex("ScopeKey", "WorkflowDefinitionVersionIdLookupHash")
                         .IsUnique();
@@ -383,6 +418,11 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
                     b.Property<string>("TenantId")
                         .IsRequired()
                         .HasMaxLength(128)
@@ -390,6 +430,8 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                         .UseCollation("C");
 
                     b.HasKey("ScopeKey", "OperationKindLookupHash", "OperationKeyLookupHash");
+
+                    b.HasIndex("SchemaVersion");
 
                     b.ToTable("elsa_design_operations", (string)null);
                 });

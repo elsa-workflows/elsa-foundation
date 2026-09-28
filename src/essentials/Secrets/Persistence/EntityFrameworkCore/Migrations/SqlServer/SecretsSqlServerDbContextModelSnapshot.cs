@@ -59,6 +59,11 @@ namespace Elsa.Secrets.Persistence.EntityFrameworkCore.Migrations.SqlServer
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
                     b.Property<string>("ScopeLookupKey")
                         .HasColumnType("nvarchar(max)")
                         .UseCollation("Latin1_General_100_BIN2");
@@ -80,6 +85,8 @@ namespace Elsa.Secrets.Persistence.EntityFrameworkCore.Migrations.SqlServer
                         .UseCollation("Latin1_General_100_BIN2");
 
                     b.HasKey("TenantId", "NormalizedName");
+
+                    b.HasIndex("SchemaVersion");
 
                     b.HasIndex("TenantId", "Status", "NormalizedName")
                         .HasDatabaseName("IX_elsa_secrets_tenantId_status_normalizedName");

@@ -170,7 +170,7 @@ public sealed class EfIdentityAuthorityAggregateCoordinator(
                 var user = await context.Users.SingleOrDefaultAsync(x => x.Id == id, token);
                 if (user is null)
                     return NotFound(id);
-                if (user.Revision != expectedVersion)
+                if (EfSchemaVersion.NotReadable(IdentityIamEfModule.SchemaFamily, user.SchemaVersion, IdentityIamEfModule.SchemaVersion) || user.Revision != expectedVersion)
                     return Conflict(id);
 
                 EfIdentityStoreSupport.EnsureUserIdentity(user, tenantId, userId);
@@ -282,7 +282,7 @@ public sealed class EfIdentityAuthorityAggregateCoordinator(
                 var role = await context.Roles.SingleOrDefaultAsync(x => x.Id == id, token);
                 if (role is null)
                     return NotFound(id);
-                if (role.Revision != expectedVersion)
+                if (EfSchemaVersion.NotReadable(IdentityIamEfModule.SchemaFamily, role.SchemaVersion, IdentityIamEfModule.SchemaVersion) || role.Revision != expectedVersion)
                     return Conflict(id);
 
                 EfIdentityStoreSupport.EnsureRoleIdentity(role, tenantId, roleId);
@@ -443,7 +443,8 @@ public sealed class EfIdentityAuthorityAggregateCoordinator(
             NormalizedUserName = normalized,
             NormalizedUserNameKey = user.NormalizedUserNameKey!,
             UserId = user.UserId,
-            Revision = 1
+            Revision = 1,
+            SchemaVersion = IdentityIamEfModule.SchemaVersion
         };
     }
 
@@ -460,7 +461,8 @@ public sealed class EfIdentityAuthorityAggregateCoordinator(
             NormalizedEmail = normalized,
             NormalizedEmailKey = user.NormalizedEmailKey!,
             UserId = user.UserId,
-            Revision = 1
+            Revision = 1,
+            SchemaVersion = IdentityIamEfModule.SchemaVersion
         };
     }
 
@@ -477,7 +479,8 @@ public sealed class EfIdentityAuthorityAggregateCoordinator(
             NormalizedRoleName = normalized,
             NormalizedRoleNameKey = role.NormalizedNameKey!,
             RoleId = role.RoleId,
-            Revision = 1
+            Revision = 1,
+            SchemaVersion = IdentityIamEfModule.SchemaVersion
         };
     }
 
@@ -513,6 +516,7 @@ public sealed class EfIdentityAuthorityAggregateCoordinator(
         entity.Ownership = (int)user.Ownership;
         entity.RoleIdsJson = EfIdentityStoreSupport.SerializeSet(user.RoleIds);
         entity.DirectPermissionsJson = EfIdentityStoreSupport.SerializeSet(user.DirectPermissions);
+        entity.SchemaVersion = IdentityIamEfModule.SchemaVersion;
     }
 
     private static void Apply(RoleEntity entity, RoleRecord role)
@@ -527,6 +531,7 @@ public sealed class EfIdentityAuthorityAggregateCoordinator(
         entity.Description = role.Description;
         entity.PermissionsJson = EfIdentityStoreSupport.SerializeSet(role.Permissions);
         entity.System = role.System;
+        entity.SchemaVersion = IdentityIamEfModule.SchemaVersion;
     }
 
     private static IReadOnlyList<string> ReadRegistry(string? json, string owner)

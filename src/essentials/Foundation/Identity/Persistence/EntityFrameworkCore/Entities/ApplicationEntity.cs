@@ -19,4 +19,7 @@ public sealed class ApplicationEntity : IRevisionedIdentityEntity
     public string AllowedGrantTypesJson { get; set; } = "[]";
     public string ScopesJson { get; set; } = "[]";
     public long Revision { get; set; }
+
+    /// <summary>The persisted-schema version of this row: <see cref="IdentityIamEfModule.SchemaVersion"/>.</summary>
+    public string SchemaVersion { get; set; } = null!;
 }

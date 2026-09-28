@@ -1,3 +1,4 @@
+using Elsa.Persistence.EntityFramework;
 using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Stores;
@@ -25,6 +26,13 @@ public static class IdentityEntityFrameworkAdapterSupport
 
     public static Task<T> ReadAsync<T>(DbContext context, string operation, Func<Task<T>> readAsync) =>
         EfIdentityStoreSupport.ReadAsync(context, operation, readAsync);
+
+    /// <summary>
+    /// Settles whether this build can read an Identity IAM row before an adapter outside the owning module trusts any
+    /// of it, so the adapter applies the family's own check rather than restating the family or its version.
+    /// </summary>
+    public static void EnsureReadable(string? schemaVersion) =>
+        EfSchemaVersion.EnsureReadable(IdentityIamEfModule.SchemaFamily, schemaVersion, IdentityIamEfModule.SchemaVersion);
 }
 
 /// <summary>Scoped revision-stamp integration surface for first-party Identity framework adapters.</summary>

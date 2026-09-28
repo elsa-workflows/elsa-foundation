@@ -45,8 +45,9 @@ public sealed class PostgreSqlEfSecretRepositoryTests(PostgresContainerFixture f
         var migrator = context.GetService<IMigrator>();
         await migrator.MigrateAsync("20260910210216_Initial");
 
+        await using (var preStamp = CreatePreStampContext(connectionString))
+            await new EfSecretRepository(preStamp).SaveAsync(Secret("tenant-a", "before.upgrade", "preserved", scope: "Finance"));
         var repository = new EfSecretRepository(context);
-        await repository.SaveAsync(Secret("tenant-a", "before.upgrade", "preserved", scope: "Finance"));
         await EfDatabaseMigrator.ApplyAsync(context, SecretsPostgreSqlDbContext.ExpectedProviderName);
         Assert.Equal(
             "before.upgrade",
@@ -137,8 +138,11 @@ public sealed class PostgreSqlEfSecretRepositoryTests(PostgresContainerFixture f
             legacySecret.TypeName = "\u019B";
             var current = SecretDocument.FromSecret(legacySecret);
             var record = (current with { TypeNameLookupKey = "\u019B" }).ToRecord();
-            olderContext.Secrets.Add(record);
-            await olderContext.SaveChangesAsync();
+            await using (var preStamp = CreatePreStampContext(connectionString))
+            {
+                preStamp.Secrets.Add(record);
+                await preStamp.SaveChangesAsync();
+            }
             originalToken = record.ConcurrencyToken.ToArray();
         }
 
@@ -255,15 +259,22 @@ public sealed class PostgreSqlEfSecretRepositoryTests(PostgresContainerFixture f
         string connectionString,
         params IInterceptor[] interceptors)
     {
-        var builder = new DbContextOptionsBuilder<SecretsPostgreSqlDbContext>()
-            .UseNpgsql(connectionString, npgsql => npgsql
-                .MigrationsAssembly(typeof(SecretsPostgreSqlDbContext).Assembly.GetName().Name)
-                .MigrationsHistoryTable(SecretsEfModule.HistoryTableName));
+        var builder = Options(connectionString);
         if (interceptors.Length > 0)
             builder.AddInterceptors(interceptors);
 
         return new SecretsPostgreSqlDbContext(builder.Options);
     }
+
+    /// <summary>A context with the model builds from before the schema-version stamp had, to write rows the way they did.</summary>
+    private static SecretsPostgreSqlDbContext CreatePreStampContext(string connectionString) =>
+        new(PreStampSecretsModel.Use(Options(connectionString)).Options);
+
+    private static DbContextOptionsBuilder<SecretsPostgreSqlDbContext> Options(string connectionString) =>
+        new DbContextOptionsBuilder<SecretsPostgreSqlDbContext>()
+            .UseNpgsql(connectionString, npgsql => npgsql
+                .MigrationsAssembly(typeof(SecretsPostgreSqlDbContext).Assembly.GetName().Name)
+                .MigrationsHistoryTable(SecretsEfModule.HistoryTableName));
 
     private static async Task<bool> TableExistsAsync(SecretsPostgreSqlDbContext context, string table)
     {

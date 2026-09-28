@@ -60,6 +60,7 @@ public sealed record SecretDocument(
         HasNonExpiringActiveVersion = HasNonExpiringActiveVersion,
         MaxActiveVersionExpiresAt = MaxActiveVersionExpiresAt,
         Payload = ToPayload(),
+        SchemaVersion = SecretsEfModule.SchemaVersion,
         ConcurrencyToken = concurrencyToken ?? []
     };
 
@@ -83,5 +84,6 @@ public sealed record SecretDocument(
         record.HasNonExpiringActiveVersion = HasNonExpiringActiveVersion;
         record.MaxActiveVersionExpiresAt = MaxActiveVersionExpiresAt;
         record.Payload = ToPayload();
+        record.SchemaVersion = SecretsEfModule.SchemaVersion;
     }
 }

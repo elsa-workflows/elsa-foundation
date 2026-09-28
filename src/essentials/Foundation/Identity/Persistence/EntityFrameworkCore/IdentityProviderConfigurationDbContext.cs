@@ -23,6 +23,7 @@ public abstract class IdentityProviderConfigurationDbContext(DbContextOptions op
         modelBuilder.ApplyConfiguration(new TenantProviderConfigurationEntityConfiguration());
         modelBuilder.ApplyConfiguration(new GlobalProviderConfigurationEntityConfiguration());
         ConfigureProvider(modelBuilder);
+        modelBuilder.IndexSchemaVersionStamps();
     }
 
     protected abstract void ConfigureProvider(ModelBuilder modelBuilder);

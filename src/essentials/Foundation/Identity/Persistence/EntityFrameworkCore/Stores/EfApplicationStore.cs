@@ -3,6 +3,7 @@ using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Exceptions;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Microsoft.EntityFrameworkCore;
+using Elsa.Persistence.EntityFramework;
 
 namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Stores;
 
@@ -137,6 +138,7 @@ public sealed class EfApplicationStore(
         entity.Ownership = application.Ownership;
         entity.AllowedGrantTypesJson = IdentityApplicationSetCodec.Serialize(application.AllowedGrantTypes);
         entity.ScopesJson = IdentityApplicationSetCodec.Serialize(application.Scopes);
+        entity.SchemaVersion = IdentityIamEfModule.SchemaVersion;
     }
 
     private static ApplicationRecord Map(ApplicationEntity entity) =>
@@ -151,6 +153,7 @@ public sealed class EfApplicationStore(
             IdentityApplicationSetCodec.Deserialize(entity.ScopesJson));
 
     private static bool Matches(ApplicationEntity entity, string tenantId, string applicationId) =>
+        EfSchemaVersion.Readable(IdentityIamEfModule.SchemaFamily, entity.SchemaVersion, IdentityIamEfModule.SchemaVersion) &&
         string.Equals(entity.Id, IdentityEntityFrameworkKey.TenantRecordId(tenantId, applicationId), StringComparison.Ordinal) &&
         string.Equals(IdentityEntityFrameworkKey.Normalize(entity.TenantId), IdentityEntityFrameworkKey.Normalize(tenantId), StringComparison.Ordinal) &&
         string.Equals(IdentityEntityFrameworkKey.Normalize(entity.ApplicationId), IdentityEntityFrameworkKey.Normalize(applicationId), StringComparison.Ordinal);
@@ -175,5 +178,5 @@ public sealed class EfApplicationStore(
     }
 
     private static IdentityEntityFrameworkPersistenceException Failure(string message, Exception exception) =>
-        new(message, exception);
+        EfIdentityStoreSupport.Failure(message, exception);
 }

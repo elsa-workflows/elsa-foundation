@@ -3,6 +3,7 @@ using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Exceptions;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Microsoft.EntityFrameworkCore;
+using Elsa.Persistence.EntityFramework;
 
 namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Stores;
 
@@ -160,6 +161,7 @@ public sealed class EfCredentialStore(
         entity.HashAlgorithm = credential.HashAlgorithm;
         entity.Status = (int)credential.Status;
         entity.ExpiresAt = credential.ExpiresAt;
+        entity.SchemaVersion = IdentityIamEfModule.SchemaVersion;
     }
 
     private static CredentialRecord Map(CredentialEntity entity) => new(
@@ -174,6 +176,7 @@ public sealed class EfCredentialStore(
         entity.ExpiresAt);
 
     private static bool Matches(CredentialEntity entity, string tenantId, string credentialId) =>
+        EfSchemaVersion.Readable(IdentityIamEfModule.SchemaFamily, entity.SchemaVersion, IdentityIamEfModule.SchemaVersion) &&
         string.Equals(entity.Id, StorageId(tenantId, credentialId), StringComparison.Ordinal) &&
         string.Equals(entity.TenantLookupKey, IdentityEntityFrameworkKey.Normalize(tenantId), StringComparison.Ordinal) &&
         string.Equals(entity.CredentialLookupKey, IdentityEntityFrameworkKey.Normalize(credentialId), StringComparison.Ordinal) &&
@@ -206,5 +209,5 @@ public sealed class EfCredentialStore(
     }
 
     private static IdentityEntityFrameworkPersistenceException Failure(string message, Exception exception) =>
-        new(message, exception);
+        EfIdentityStoreSupport.Failure(message, exception);
 }

@@ -43,6 +43,11 @@ namespace Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.Mig
                         .IsConcurrencyToken()
                         .HasColumnType("bigint");
 
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
                     b.Property<string>("ScopeKey")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -68,6 +73,8 @@ namespace Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.Mig
                         .HasColumnType("varbinary(258)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("SchemaVersion");
 
                     b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash")
                         .IsUnique();
@@ -112,6 +119,11 @@ namespace Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.Mig
                         .IsConcurrencyToken()
                         .HasColumnType("bigint");
 
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
                     b.Property<string>("ScopeKey")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -148,6 +160,8 @@ namespace Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.Mig
                         .HasColumnType("nvarchar(64)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("SchemaVersion");
 
                     b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash", "Sequence")
                         .IsUnique();

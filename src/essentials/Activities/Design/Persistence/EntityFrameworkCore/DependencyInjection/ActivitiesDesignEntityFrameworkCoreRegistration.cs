@@ -208,7 +208,11 @@ public static class ActivitiesDesignEntityFrameworkCoreRegistration
         where TContext : ActivitiesDesignDbContext
     {
         Binding.AddContext<TContext>(services, options.Pooling, (provider, builder) =>
-            Binding.Apply(builder, provider, options.Provider, options.ConnectionString, options.ConnectionName, options.Schema));
+        {
+            Binding.Apply(builder, provider, options.Provider, options.ConnectionString, options.ConnectionName, options.Schema);
+            // A pooled context's options are frozen before OnConfiguring runs, so the check is added here.
+            builder.AddInterceptors(EfSchemaVersionMaterializationInterceptor.Instance);
+        });
         services.AddScoped<ActivitiesDesignDbContext>(provider => provider.GetRequiredService<TContext>());
     }
 }

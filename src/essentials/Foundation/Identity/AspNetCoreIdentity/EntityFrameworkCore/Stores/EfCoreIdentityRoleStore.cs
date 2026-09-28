@@ -107,7 +107,12 @@ public sealed class EfCoreIdentityRoleStore(
                 .Take(MaximumMaterializedRelationshipEntries + 1).ToListAsync(cancellationToken));
         EnsureRelationshipMaterializationLimit(rows.Count, "role claims");
         return rows
-            .Select(x => new Claim(x.ClaimType, x.ClaimValue ?? string.Empty)).ToList();
+            .Select(x =>
+            {
+                IdentityEntityFrameworkAdapterSupport.EnsureReadable(x.SchemaVersion);
+                return new Claim(x.ClaimType, x.ClaimValue ?? string.Empty);
+            })
+            .ToList();
     }
 
     public async Task AddClaimAsync(IdentityRole role, Claim claim, CancellationToken cancellationToken = default)
@@ -191,14 +196,23 @@ public sealed class EfCoreIdentityRoleStore(
             });
     }
 
-    private static IdentityRole ToFrameworkRole(RoleEntity entity) => new() { Id = entity.RoleId, Name = entity.Name, NormalizedName = entity.NormalizedName, ConcurrencyStamp = IdentityEntityFrameworkRevisionSupport.FromRole(entity.TenantId, entity.RoleId, entity.Revision) };
+    private static IdentityRole ToFrameworkRole(RoleEntity entity)
+    {
+        IdentityEntityFrameworkAdapterSupport.EnsureReadable(entity.SchemaVersion);
+        return new() { Id = entity.RoleId, Name = entity.Name, NormalizedName = entity.NormalizedName, ConcurrencyStamp = IdentityEntityFrameworkRevisionSupport.FromRole(entity.TenantId, entity.RoleId, entity.Revision) };
+    }
+
     private static void ApplyFrameworkState(RoleEntity entity, IdentityRole role)
     {
         entity.NormalizedName = role.NormalizedName ?? (string.IsNullOrWhiteSpace(role.Name) ? null : IdentityEntityFrameworkAdapterSupport.Normalize(role.Name));
         entity.ConcurrencyStamp = IdentityEntityFrameworkRevisionSupport.FromRole(entity.TenantId, entity.RoleId, entity.Revision);
     }
 
-    private static RoleRecord ToRoleRecord(RoleEntity entity) => new(entity.RoleId, entity.TenantId, entity.Name, entity.Description, IdentityEntityFrameworkAdapterSupport.DeserializeSet(entity.PermissionsJson), entity.System);
+    private static RoleRecord ToRoleRecord(RoleEntity entity)
+    {
+        IdentityEntityFrameworkAdapterSupport.EnsureReadable(entity.SchemaVersion);
+        return new(entity.RoleId, entity.TenantId, entity.Name, entity.Description, IdentityEntityFrameworkAdapterSupport.DeserializeSet(entity.PermissionsJson), entity.System);
+    }
     private static void EnsureRelationshipMaterializationLimit(int count, string subject)
     {
         if (count > MaximumMaterializedRelationshipEntries)
