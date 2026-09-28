@@ -30,6 +30,7 @@
       "src/essentials/Caching/Core/Elsa.Caching.Core.csproj",
       "src/essentials/Caching/Memory/Elsa.Caching.Memory.csproj",
       "src/essentials/Cluster/Core/Elsa.Cluster.Core.csproj",
+      "src/essentials/Cluster/EntityFrameworkCore/Elsa.Cluster.EntityFrameworkCore.csproj",
       "src/essentials/Cluster/InProcess/Elsa.Cluster.InProcess.csproj",
       "src/essentials/Cluster/Readability/Elsa.Cluster.Readability.csproj",
       "src/essentials/Diagnostics/ConsoleLogStreaming/Elsa.Diagnostics.ConsoleLogStreaming.csproj",

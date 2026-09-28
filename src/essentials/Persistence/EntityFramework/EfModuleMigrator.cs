@@ -67,6 +67,21 @@ public static class EfModuleMigrationServiceCollectionExtensions
     /// provider-derived registration must use <paramref name="provider"/>. Repeat calls keep one migrator.
     /// </summary>
     public static IServiceCollection AddEfModuleMigrations<TContext>(this IServiceCollection services, string provider)
+        where TContext : DbContext =>
+        services.AddEfModuleMigrations<TContext>(provider, onShellActivation: true);
+
+    /// <summary>
+    /// Registers the migrator for <typeparamref name="TContext"/> as a plain-host hosted service only, for a module
+    /// composed once on the host container rather than by a shell feature. CShells copies every root registration into
+    /// each shell's container, so the shell hook <see cref="AddEfModuleMigrations{TContext}"/> adds would migrate the
+    /// module again on every shell activation, resolving its context from the shell's configuration rather than the
+    /// host's. Here the host's start alone applies or validates it, before any later hosted service touches its store.
+    /// </summary>
+    public static IServiceCollection AddEfModuleHostMigrations<TContext>(this IServiceCollection services, string provider)
+        where TContext : DbContext =>
+        services.AddEfModuleMigrations<TContext>(provider, onShellActivation: false);
+
+    private static IServiceCollection AddEfModuleMigrations<TContext>(this IServiceCollection services, string provider, bool onShellActivation)
         where TContext : DbContext
     {
         ArgumentNullException.ThrowIfNull(services);
@@ -96,7 +111,8 @@ public static class EfModuleMigrationServiceCollectionExtensions
             return services;
         // CShells runs initializers by lifecycle phase, not registration order, and shell tasks and seeders
         // run at Start. Schema has to exist before any of them touches a store, so migrations run at Prepare.
-        services.AddShellInitializer<EfModuleMigrator<TContext>>(LifecyclePhase.Prepare, 0);
+        if (onShellActivation)
+            services.AddShellInitializer<EfModuleMigrator<TContext>>(LifecyclePhase.Prepare, 0);
         // AddShellInitializer registers the initializer transiently; this last-wins registration makes the
         // shell and the hosted-service paths resolve one instance, exactly as AddEfProviderBindingValidation
         // does for the validator above. Ordering matters: a singleton added *before* that call is shadowed by

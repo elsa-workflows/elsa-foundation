@@ -329,15 +329,17 @@ public sealed class EfSchemaFamilyDeclarationGuardTests
 
     /// <summary>
     /// The rules pass vacuously if the scan stops finding what they judge, so pin floors rather than counts: the
-    /// twenty-seven declared families, the checks and stamps of their stores, and a chain handle for each family.
+    /// twenty-eight declared families - the twenty-six every EF content table stamps since #2119, the shared finalization
+    /// family (#2134) and cluster membership's (#2098) - the checks and stamps of their stores, and a chain handle for each
+    /// family.
     /// </summary>
     [Fact]
     public void Guard_scans_the_checks_declarations_handles_and_stamps_it_claims_to_scan()
     {
         Assert.True(Production.Checks.Count >= 80, $"Expected the EF stores to keep checking families through EfSchemaVersion; found {Production.Checks.Count} checks.");
-        Assert.True(Production.Declarations.Count >= 27, $"Expected at least twenty-seven [EfSchemaFamily] declarations; found {Production.Declarations.Count}.");
-        Assert.True(Production.NamedFamilies.Count >= 27, $"Expected at least twenty-seven families named by checks and constants; found {Production.NamedFamilies.Count}.");
-        Assert.True(Production.Handles.Count >= 27, $"Expected a chain handle for each of at least twenty-seven families; found {Production.Handles.Count}.");
+        Assert.True(Production.Declarations.Count >= 28, $"Expected at least twenty-eight [EfSchemaFamily] declarations; found {Production.Declarations.Count}.");
+        Assert.True(Production.NamedFamilies.Count >= 28, $"Expected at least twenty-eight families named by checks and constants; found {Production.NamedFamilies.Count}.");
+        Assert.True(Production.Handles.Count >= 28, $"Expected a chain handle for each of at least twenty-eight families; found {Production.Handles.Count}.");
         Assert.True(Production.Stamps.Count >= 60, $"Expected the EF stores to keep stamping their families' constants; found {Production.Stamps.Count} stamps.");
         Assert.True(Production.MaterializedFamilies.Count >= 2, $"Expected the two design contexts EF materializes directly; found {Production.MaterializedFamilies.Count}.");
         Assert.True(Production.ContentRewrites.Count >= 20, $"Expected the EF stores' in-place content rewrites; found {Production.ContentRewrites.Count}.");

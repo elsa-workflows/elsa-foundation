@@ -90,9 +90,9 @@ public static class EfSuiteSelectorContractTests
 
         var repo = RepoContext.Discover();
         var full = EfSuiteSelector.Select(repo, "workflow_dispatch", null, null);
-        if (full.Mode != "full" || full.Suites.Count != 18)
-            throw new InvalidOperationException("Manual dispatch must select all 18 current EF suites.");
-        if (EfSuiteSelector.Select(repo, "push", null, null).Suites.Count != 18 ||
+        if (full.Mode != "full" || full.Suites.Count != 19)
+            throw new InvalidOperationException("Manual dispatch must select all 19 current EF suites.");
+        if (EfSuiteSelector.Select(repo, "push", null, null).Suites.Count != 19 ||
             EfSuiteSelector.Select(repo, "pull_request", "missing", "missing").Mode != "full")
             throw new InvalidOperationException("Main and an unavailable PR diff must fail closed to the full matrix.");
 
