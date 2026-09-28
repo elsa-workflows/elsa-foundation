@@ -17,13 +17,19 @@ public sealed class ExpandOnlyMigrationScanTests
     /// <summary>
     /// FR-003, SC-004, User Story 4 Acceptance Scenario 3. #1976 has not happened (spec 185, "Current state"):
     /// no baseline is frozen and no freeze manifest exists, and ADR 0078 says this guard does not apply to a
-    /// real database before then. This is that state, proven rather than assumed: the real scan, pointed at the
-    /// real expected path, refuses to guess and never quietly reports success over zero migrations.
+    /// real database before then. This is that state, proven rather than assumed, over the real scan and the
+    /// real first-party module set — not <see cref="FreezeManifestReader.Load"/> alone — so what this proves is
+    /// that the real scan itself refuses to guess and never quietly reports success over zero migrations, not
+    /// merely that the reader does.
     /// </summary>
     [Fact]
-    public void The_real_scan_fails_naming_the_path_when_the_freeze_manifest_is_missing()
+    public void The_real_scan_over_every_first_party_module_fails_naming_the_path_when_the_freeze_manifest_is_missing()
     {
-        var failure = Assert.Throws<FreezeManifestMissingException>(() => FreezeManifestReader.Load(FreezeManifestReader.ExpectedPath));
+        var failure = Assert.Throws<FreezeManifestMissingException>(() =>
+        {
+            var manifest = FreezeManifestReader.Load(FreezeManifestReader.ExpectedPath);
+            return ExpandOnlyMigrationScanner.Scan(ModuleContextCatalog.Modules, ModuleContextCatalog.Providers, manifest);
+        });
 
         Assert.Contains(FreezeManifestReader.ExpectedPath, failure.Message, StringComparison.Ordinal);
     }
@@ -66,6 +72,29 @@ public sealed class ExpandOnlyMigrationScanTests
 
         Assert.False(report.Passed);
         Assert.Contains(report.Failures, failure => failure.Contains("Secrets/Sqlite", StringComparison.Ordinal) && failure.Contains("no baseline entry", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// FR-020b's independent floor: a baseline id that names no migration the context actually has — a typo, a
+    /// rename, or a deletion — fails naming that id, rather than silently dropping out of the subtraction and
+    /// leaving the migration it used to name mis-counted as baseline.
+    /// </summary>
+    [Fact]
+    public void A_stale_baseline_migration_id_fails_naming_it()
+    {
+        var manifest = FreezeEveryCurrentMigrationAsBaseline();
+        var staleId = manifest.BaselineOf("Secrets", "Sqlite")[0] + "_typo";
+        var withStaleEntry = new FreezeManifest(manifest.Baselines.ToDictionary(
+            entry => entry.Key,
+            entry => entry.Key == ("Secrets", "Sqlite") ? (IReadOnlyList<string>)[.. entry.Value, staleId] : entry.Value));
+
+        var report = ExpandOnlyMigrationScanner.Scan(ModuleContextCatalog.Modules, ModuleContextCatalog.Providers, withStaleEntry);
+
+        Assert.False(report.Passed);
+        Assert.Contains(report.Failures, failure =>
+            failure.Contains("Secrets/Sqlite", StringComparison.Ordinal) &&
+            failure.Contains(staleId, StringComparison.Ordinal) &&
+            failure.Contains("does not exist in this context", StringComparison.Ordinal));
     }
 
     /// <summary>
@@ -134,15 +163,58 @@ public sealed class ExpandOnlyMigrationScanTests
         }
     }
 
-    /// <summary>Builds a manifest that records every migration every real module and provider context has today as that context's baseline.</summary>
+    /// <summary>
+    /// A migration whose opt-out is what let it pass records that opt-out as honoured — the only case
+    /// <see cref="ExpandOnlyMigrationScanReport.OptOutsHonoured"/> exists to report.
+    /// </summary>
+    [Fact]
+    public void An_opt_out_that_made_its_migration_pass_is_recorded_as_honoured()
+    {
+        var optOut = new ExpandOnlyMigrationOptOutAttribute("Reason.", "#2104", "DropColumn elsa_example.Legacy");
+        var result = new ExpandOnlyMigrationResult(
+            Violations: ["DropColumn elsa_example.Legacy"], UnlistedViolations: [], StaleOptOutEntries: [], HasOptOut: true);
+
+        Assert.True(result.Passed);
+        Assert.True(ExpandOnlyMigrationScanner.ShouldRecordOptOutHonoured(optOut, result));
+    }
+
+    /// <summary>
+    /// A migration that carries an opt-out but still fails — an unlisted violation, here — must not be recorded
+    /// as honoured: the opt-out did not make it pass, so it belongs in the report's failures only.
+    /// </summary>
+    [Fact]
+    public void An_opt_out_whose_migration_still_fails_is_not_recorded_as_honoured()
+    {
+        var optOut = new ExpandOnlyMigrationOptOutAttribute("Reason.", "#2104", "DropColumn elsa_example.Legacy");
+        var result = new ExpandOnlyMigrationResult(
+            Violations: ["DropColumn elsa_example.Legacy", "RenameColumn elsa_example.OldName"],
+            UnlistedViolations: ["RenameColumn elsa_example.OldName"], StaleOptOutEntries: [], HasOptOut: true);
+
+        Assert.False(result.Passed);
+        Assert.False(ExpandOnlyMigrationScanner.ShouldRecordOptOutHonoured(optOut, result));
+    }
+
+    /// <summary>A migration with no opt-out at all is never recorded, whether or not it happens to pass.</summary>
+    [Fact]
+    public void A_migration_with_no_opt_out_is_never_recorded_as_honoured()
+    {
+        var result = new ExpandOnlyMigrationResult(Violations: [], UnlistedViolations: [], StaleOptOutEntries: [], HasOptOut: false);
+
+        Assert.True(result.Passed);
+        Assert.False(ExpandOnlyMigrationScanner.ShouldRecordOptOutHonoured(optOut: null, result));
+    }
+
+    /// <summary>
+    /// Builds a manifest that records every migration every real module and provider context has today as that
+    /// context's baseline, through <see cref="ExpandOnlyMigrationScanner.EnumerateModuleProviderContexts"/> —
+    /// the same seam <see cref="ExpandOnlyMigrationScanner.Scan"/> iterates through, so this can never drift
+    /// from what the scan itself examines.
+    /// </summary>
     private static FreezeManifest FreezeEveryCurrentMigrationAsBaseline()
     {
-        var descriptors = EfModuleCatalog.Discover(ModuleContextCatalog.Modules);
         var entries = new Dictionary<(string, string), IReadOnlyList<string>>();
-        foreach (var descriptor in descriptors)
-        foreach (var provider in ModuleContextCatalog.Providers)
+        foreach (var (descriptor, provider, contextType) in ExpandOnlyMigrationScanner.EnumerateModuleProviderContexts(ModuleContextCatalog.Modules, ModuleContextCatalog.Providers))
         {
-            var contextType = descriptor.ProviderContext(provider);
             if (contextType is null)
                 continue;
             using var context = ModuleContextCatalog.Create(contextType, ModuleContextCatalog.PlaceholderConnection(provider));

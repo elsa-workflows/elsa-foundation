@@ -97,9 +97,32 @@ internal static class ExpandOnlyMigrationScanner
         "one later in a contracting migration with an opt-out (spec 185 FR-016), once no finalized version still " +
         "reads what it removes.";
 
+    /// <summary>
+    /// Spec 185's shared enumeration seam: every (module, provider) pair of <paramref name="moduleAssemblies"/>'s
+    /// declared modules crossed with <paramref name="providers"/>, with the declared provider context or
+    /// <c>null</c> when the module marks that provider unsupported. <see cref="Scan"/> and any test building a
+    /// manifest from today's real migrations enumerate through this one place, so they can never drift apart on
+    /// which modules and provider contexts exist.
+    /// </summary>
+    public static IEnumerable<(EfModuleDescriptor Descriptor, string Provider, Type? ContextType)> EnumerateModuleProviderContexts(
+        IReadOnlyList<Assembly> moduleAssemblies, IReadOnlyList<string> providers)
+    {
+        foreach (var descriptor in EfModuleCatalog.Discover(moduleAssemblies))
+            foreach (var provider in providers)
+                yield return (descriptor, provider, descriptor.ProviderContext(provider));
+    }
+
+    /// <summary>
+    /// FR-013, User Story 3: whether one post-freeze migration's opt-out is what let it pass — never recorded
+    /// for a migration whose opt-out itself failed (an unlisted violation, or a stale entry), which belongs in
+    /// the report's failures rather than in <see cref="ExpandOnlyMigrationScanReport.OptOutsHonoured"/>.
+    /// </summary>
+    internal static bool ShouldRecordOptOutHonoured(ExpandOnlyMigrationOptOutAttribute? optOut, ExpandOnlyMigrationResult result) =>
+        optOut is not null && result.Passed;
+
     public static ExpandOnlyMigrationScanReport Scan(IReadOnlyList<Assembly> moduleAssemblies, IReadOnlyList<string> providers, FreezeManifest manifest)
     {
-        var descriptors = EfModuleCatalog.Discover(moduleAssemblies);
+        var modules = EfModuleCatalog.Discover(moduleAssemblies).Count;
         var providerContextsExamined = 0;
         var providerContextsSkipped = 0;
         var baselineMigrations = 0;
@@ -108,67 +131,79 @@ internal static class ExpandOnlyMigrationScanner
         var optOutsHonoured = new List<string>();
         var failures = new List<string>();
 
-        foreach (var descriptor in descriptors)
+        foreach (var (descriptor, provider, contextType) in EnumerateModuleProviderContexts(moduleAssemblies, providers))
         {
-            foreach (var provider in providers)
+            if (contextType is null)
             {
-                var contextType = descriptor.ProviderContext(provider);
-                if (contextType is null)
-                {
-                    // FR-001: a provider context the declaration marks unsupported is skipped and reported as skipped.
-                    providerContextsSkipped++;
-                    continue;
-                }
+                // FR-001: a provider context the declaration marks unsupported is skipped and reported as skipped.
+                providerContextsSkipped++;
+                continue;
+            }
 
-                if (!manifest.HasEntry(descriptor.Name, provider))
-                {
-                    // FR-020a: every supported provider context must have a baseline entry. None at all is its own failure.
-                    failures.Add($"{descriptor.Name}/{provider}: no baseline entry in the freeze manifest.");
-                    providerContextsExamined++;
-                    continue;
-                }
-
+            if (!manifest.HasEntry(descriptor.Name, provider))
+            {
+                // FR-020a: every supported provider context must have a baseline entry. None at all is its own failure.
+                failures.Add($"{descriptor.Name}/{provider}: no baseline entry in the freeze manifest.");
                 providerContextsExamined++;
-                var baseline = manifest.BaselineOf(descriptor.Name, provider);
+                continue;
+            }
 
-                using var context = ModuleContextCatalog.Create(contextType, ModuleContextCatalog.PlaceholderConnection(provider));
-                var assembly = context.GetService<IMigrationsAssembly>();
-                var ordered = assembly.Migrations.OrderBy(migration => migration.Key, StringComparer.Ordinal).ToArray();
-                var postFreeze = ordered.Where(migration => !baseline.Contains(migration.Key, StringComparer.Ordinal)).ToArray();
+            providerContextsExamined++;
+            var baseline = manifest.BaselineOf(descriptor.Name, provider);
 
-                baselineMigrations += ordered.Length - postFreeze.Length;
-                postFreezeMigrations += postFreeze.Length;
+            using var context = ModuleContextCatalog.Create(contextType, ModuleContextCatalog.PlaceholderConnection(provider));
+            var assembly = context.GetService<IMigrationsAssembly>();
+            var ordered = assembly.Migrations.OrderBy(migration => migration.Key, StringComparer.Ordinal).ToArray();
 
-                foreach (var (id, migrationType) in postFreeze)
+            // FR-020b: a baseline id that names no migration this context actually has — a typo, or a
+            // renamed or deleted baseline — never gets the chance to quietly stop counting as post-freeze.
+            var orderedIds = ordered.Select(migration => migration.Key).ToHashSet(StringComparer.Ordinal);
+            foreach (var staleId in baseline.Where(id => !orderedIds.Contains(id)))
+                failures.Add($"{descriptor.Name}/{provider}: the freeze manifest's baseline names migration " +
+                             $"'{staleId}', which does not exist in this context (renamed, deleted, or a typo'd id).");
+
+            var postFreeze = ordered.Where(migration => !baseline.Contains(migration.Key, StringComparer.Ordinal)).ToArray();
+
+            // FR-020b's independent floor: the post-freeze count must equal the context's total migration
+            // count minus the manifest's baseline count for it — computed from raw counts, not from the
+            // same membership test that built postFreeze above, so a defect there still surfaces here.
+            if (postFreeze.Length != ordered.Length - baseline.Count)
+                failures.Add($"{descriptor.Name}/{provider}: post-freeze migration count ({postFreeze.Length}) " +
+                             $"does not equal the context's migration count ({ordered.Length}) minus the " +
+                             $"manifest's baseline count ({baseline.Count}) for this context.");
+
+            baselineMigrations += ordered.Length - postFreeze.Length;
+            postFreezeMigrations += postFreeze.Length;
+
+            foreach (var (id, migrationType) in postFreeze)
+            {
+                IReadOnlyList<Microsoft.EntityFrameworkCore.Migrations.Operations.MigrationOperation> operations;
+                try
                 {
-                    IReadOnlyList<Microsoft.EntityFrameworkCore.Migrations.Operations.MigrationOperation> operations;
-                    try
-                    {
-                        // FR-004: what EF will execute, never source text. FR-005: Down is never read.
-                        operations = assembly.CreateMigration(migrationType, EfRelationalProviderBinding.ExpectedProviderName(provider)).UpOperations;
-                    }
-                    catch (Exception exception)
-                    {
-                        // FR-017: a migration the guard cannot build fails the guard, naming it. Never skipped.
-                        failures.Add($"{descriptor.Name}/{provider} {id}: could not be built without a database ({exception.Message}).");
-                        continue;
-                    }
-
-                    operationsClassified += operations.Count;
-                    var optOut = migrationType.GetCustomAttribute<ExpandOnlyMigrationOptOutAttribute>();
-                    var result = ExpandOnlyMigrationGuard.Evaluate(operations, optOut);
-
-                    if (optOut is not null)
-                        optOutsHonoured.Add($"{descriptor.Name}/{provider} {id}: {optOut.ReviewReference} — {optOut.Reason}");
-
-                    if (!result.Passed)
-                        failures.Add(FormatFailure(descriptor.Name, provider, id, result));
+                    // FR-004: what EF will execute, never source text. FR-005: Down is never read.
+                    operations = assembly.CreateMigration(migrationType, EfRelationalProviderBinding.ExpectedProviderName(provider)).UpOperations;
                 }
+                catch (Exception exception)
+                {
+                    // FR-017: a migration the guard cannot build fails the guard, naming it. Never skipped.
+                    failures.Add($"{descriptor.Name}/{provider} {id}: could not be built without a database ({exception.Message}).");
+                    continue;
+                }
+
+                operationsClassified += operations.Count;
+                var optOut = migrationType.GetCustomAttribute<ExpandOnlyMigrationOptOutAttribute>();
+                var result = ExpandOnlyMigrationGuard.Evaluate(operations, optOut);
+
+                if (ShouldRecordOptOutHonoured(optOut, result))
+                    optOutsHonoured.Add($"{descriptor.Name}/{provider} {id}: {optOut!.ReviewReference} — {optOut.Reason}");
+
+                if (!result.Passed)
+                    failures.Add(FormatFailure(descriptor.Name, provider, id, result));
             }
         }
 
         return new ExpandOnlyMigrationScanReport(
-            descriptors.Count,
+            modules,
             providerContextsExamined,
             providerContextsSkipped,
             baselineMigrations,

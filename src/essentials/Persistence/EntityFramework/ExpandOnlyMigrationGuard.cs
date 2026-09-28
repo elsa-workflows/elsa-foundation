@@ -22,6 +22,10 @@ namespace Elsa.Persistence.EntityFramework;
 /// the same check from its own tests (spec 185, Out of Scope): this guard itself only runs over first-party
 /// modules.
 /// </para>
+/// <para>
+/// This is the build-time guard only. Spec 185's apply-time refusal of an early contracting migration
+/// (FR-023 to FR-025) is tracked separately in elsa-workflows/elsa-foundation#2136 and is not implemented here.
+/// </para>
 /// </remarks>
 public static class ExpandOnlyMigrationGuard
 {
@@ -85,7 +89,12 @@ public static class ExpandOnlyMigrationGuard
         _ => false
     };
 
-    /// <summary>FR-011's canonical violation name. Every arm below is reachable only for a disallowed operation.</summary>
+    /// <summary>
+    /// FR-011's canonical violation name. Every arm below is reachable only for a disallowed operation.
+    /// <i>2026-09-28:</i> an operation that carries no table — raw SQL, a database-level alteration, or a kind
+    /// this guard has never seen — is named by its operation kind alone (spec 185 Decisions, found while
+    /// building #2104).
+    /// </summary>
     private static string CanonicalName(MigrationOperation operation)
     {
         var kind = OperationKind(operation);
