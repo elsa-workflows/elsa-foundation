@@ -58,6 +58,19 @@ public sealed class ModuleFinalizationGateTests : IAsyncLifetime
         Assert.Equal(StudioPreferenceStoreWriteStatus.Saved, (await WriteAsync("first")).Status);
     }
 
+    /// <summary>
+    /// Spec 182, FR-014 and FR-022: the migrator gives the gate it registers a way to open its module's contexts, so the
+    /// shared dormancy check can have the gate refresh, or read its status, when nothing else hands it a context.
+    /// </summary>
+    [Fact]
+    public async Task The_migrator_lets_its_gate_refresh_and_read_its_status_on_demand()
+    {
+        await Migrator.StartAsync(CancellationToken.None);
+
+        Assert.True(await Migrator.Gate!.RefreshIfOlderThanAsync(TimeSpan.Zero));
+        Assert.Contains(await Migrator.Gate.ReadStatusAsync(), status => status.Family == StudioPreferencesEfModule.SchemaFamily && status.WriteVersion == StudioPreferencesEfModule.SchemaVersion);
+    }
+
     [Fact]
     public async Task Once_a_refresh_finds_a_finalized_version_this_build_cannot_read_every_store_write_is_refused()
     {

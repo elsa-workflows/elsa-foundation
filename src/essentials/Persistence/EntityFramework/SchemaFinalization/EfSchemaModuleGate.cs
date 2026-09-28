@@ -47,9 +47,13 @@ public sealed class EfSchemaModuleGate
     private readonly ILogger _logger;
     private readonly bool _publishBeforeRead;
     private readonly object _lock = new();
+    private readonly SemaphoreSlim _onDemand = new(1, 1);
     private Dictionary<string, EfSchemaFamilyWriteState> _states = new(StringComparer.Ordinal);
+    private Dictionary<string, (SchemaFinalizationRecord Record, DateTimeOffset At)> _observed = new(StringComparer.Ordinal);
     private string? _databaseIdentity;
     private string? _admittedIncarnation;
+    private DateTimeOffset _refreshedAt = DateTimeOffset.MinValue;
+    private Func<Func<DbContext, Task>, CancellationToken, Task>? _withContext;
 
     /// <param name="families">The families of the module this gate guards.</param>
     /// <param name="fleet">This host's view of the fleet, or null when the host composes none.</param>
@@ -101,6 +105,67 @@ public sealed class EfSchemaModuleGate
     {
         lock (_lock)
             return _states.GetValueOrDefault(family);
+    }
+
+    /// <summary>
+    /// The record of <paramref name="family"/> as this host last read it, and when, or null before the module has been
+    /// admitted: the holds, intent and finish record behind the write version, so spec 182's shared dormancy check can say
+    /// why a version is not available yet without reading the record again (spec 182, FR-003; spec 186, FR-017).
+    /// </summary>
+    public (SchemaFinalizationRecord Record, DateTimeOffset At)? ObservedRecordOf(string family)
+    {
+        lock (_lock)
+            return _observed.TryGetValue(family, out var observed) ? observed : null;
+    }
+
+    /// <summary>
+    /// Gives the gate a way to open a fresh context of its module on demand, as <see cref="RunAsync"/>'s argument does, so
+    /// <see cref="RefreshIfOlderThanAsync"/> and <see cref="ReadStatusAsync(CancellationToken)"/> can serve a caller that
+    /// has none. The module's migrator supplies it before it registers the gate.
+    /// </summary>
+    public void UseContexts(Func<Func<DbContext, Task>, CancellationToken, Task> withContext)
+    {
+        ArgumentNullException.ThrowIfNull(withContext);
+        _withContext = withContext;
+    }
+
+    /// <summary>
+    /// Refreshes (FR-010) unless the last refresh was less than <paramref name="maxAge"/> ago, which is spec 182's FR-014:
+    /// before a dormancy refusal, a host re-reads what may have finalized since. Concurrent callers share one refresh, so a
+    /// burst of refused requests costs at most one read per <paramref name="maxAge"/>. Returns whether it read the records.
+    /// Nothing is read before the module has been admitted, or when the gate has no way to open a context.
+    /// </summary>
+    public async Task<bool> RefreshIfOlderThanAsync(TimeSpan maxAge, CancellationToken cancellationToken = default)
+    {
+        if (_withContext is not { } withContext || DatabaseIdentity is null || !IsOlderThan(maxAge))
+            return false;
+
+        await _onDemand.WaitAsync(cancellationToken);
+        try
+        {
+            // Another caller may have refreshed while this one waited.
+            if (!IsOlderThan(maxAge))
+                return false;
+            await withContext(context => RefreshAsync(context, cancellationToken), cancellationToken);
+            return true;
+        }
+        finally
+        {
+            _onDemand.Release();
+        }
+    }
+
+    /// <summary>
+    /// Every family's status (FR-022), read now on a fresh context of the module, for a caller that has none. Empty when the
+    /// gate has no way to open one.
+    /// </summary>
+    public async Task<IReadOnlyList<EfSchemaFamilyStatus>> ReadStatusAsync(CancellationToken cancellationToken = default)
+    {
+        if (_withContext is not { } withContext)
+            return [];
+        IReadOnlyList<EfSchemaFamilyStatus> statuses = [];
+        await withContext(async context => statuses = await ReadStatusAsync(context, cancellationToken), cancellationToken);
+        return statuses;
     }
 
     /// <summary>
@@ -210,7 +275,10 @@ public sealed class EfSchemaModuleGate
 
         // The readability report carries the version this host writes (spec 183, FR-019), so a change is published now
         // rather than left to a provider that publishes only when asked.
-        if (Adopt(identity, records, mayAdvance))
+        var changed = Adopt(identity, records, mayAdvance);
+        lock (_lock)
+            _refreshedAt = _time.GetUtcNow();
+        if (changed)
             await PublishQuietlyAsync(cancellationToken);
     }
 
@@ -490,10 +558,13 @@ public sealed class EfSchemaModuleGate
             var changed = false;
             _databaseIdentity = identity;
             var states = new Dictionary<string, EfSchemaFamilyWriteState>(_states, StringComparer.Ordinal);
+            var observed = new Dictionary<string, (SchemaFinalizationRecord, DateTimeOffset)>(_observed, StringComparer.Ordinal);
+            var at = _time.GetUtcNow();
             foreach (var chain in Families.Chains)
             {
                 if (!records.TryGetValue(chain.Family, out var record))
                     continue;
+                observed[chain.Family] = (record, at);
                 var previous = states.GetValueOrDefault(chain.Family);
                 var next = Next(chain, record, previous, mayAdvance);
                 changed |= next != previous;
@@ -507,8 +578,15 @@ public sealed class EfSchemaModuleGate
             }
 
             _states = states;
+            _observed = observed;
             return changed;
         }
+    }
+
+    private bool IsOlderThan(TimeSpan maxAge)
+    {
+        lock (_lock)
+            return _time.GetUtcNow() - _refreshedAt >= maxAge;
     }
 
     private static EfSchemaFamilyWriteState Next(EfSchemaChain chain, SchemaFinalizationRecord record, EfSchemaFamilyWriteState? previous, bool mayAdvance)

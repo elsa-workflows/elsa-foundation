@@ -1,5 +1,3 @@
-using System.Reflection;
-
 namespace Elsa.Cluster.Core.Models;
 
 /// <summary>
@@ -24,12 +22,21 @@ public sealed record SchemaVersionRequirement
     public bool RequiresCompleteness { get; }
 
     /// <summary>The requirements <paramref name="featureType"/> declares with <see cref="RequiresSchemaVersionAttribute"/>, in declaration order.</summary>
+    /// <remarks>
+    /// Read from the attribute's metadata and matched by the attribute's full name, not its runtime type, so a feature
+    /// whose package loaded its own copy of this assembly still has its requirements read rather than silently missed.
+    /// </remarks>
     public static IReadOnlyList<SchemaVersionRequirement> DeclaredBy(Type featureType)
     {
         ArgumentNullException.ThrowIfNull(featureType);
+        var attributeName = typeof(RequiresSchemaVersionAttribute).FullName;
         return featureType
-            .GetCustomAttributes<RequiresSchemaVersionAttribute>(inherit: false)
-            .Select(declared => new SchemaVersionRequirement(declared.Family, declared.Version, declared.RequiresCompleteness))
+            .GetCustomAttributesData()
+            .Where(declared => declared.AttributeType.FullName == attributeName && declared.ConstructorArguments.Count == 2)
+            .Select(declared => new SchemaVersionRequirement(
+                (string)declared.ConstructorArguments[0].Value!,
+                (string)declared.ConstructorArguments[1].Value!,
+                declared.NamedArguments.Any(named => named.MemberName == nameof(RequiresSchemaVersionAttribute.RequiresCompleteness) && named.TypedValue.Value is true)))
             .Distinct()
             .ToArray();
     }
