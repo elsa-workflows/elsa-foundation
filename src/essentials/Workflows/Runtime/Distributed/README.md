@@ -44,7 +44,10 @@ differs from the host id refuses the shell.
   off instead of renewing.
 - **Draining.** A member that is draining claims nothing and hands off every execution it holds: it passivates the
   local actor, which waits for an in-flight drain to finish its turn, releases the placement lease, and makes its
-  unacknowledged transport items visible. When the pump stops it hands off whatever it still holds.
+  unacknowledged transport items visible. When the pump stops because the host stops or its shell is removed, it hands
+  off whatever it still holds. A shell reload is not such a stop: CShells activates the new generation before it drains
+  the old one, the new generation's pump renews the leases under the host id, and the old one hands off nothing when it
+  stops.
 - **Failover.** The first time a shell's runtime activates in a process, its join sweep reclaims every lease held under
   the host id, which can only be a predecessor's, before it claims anything. An active member that sees a host id
   departed, and confirms it with a fresh read, reclaims that host id's leases within the sweep. Reclaim releases

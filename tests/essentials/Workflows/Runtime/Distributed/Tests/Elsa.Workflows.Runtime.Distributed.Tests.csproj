@@ -5,13 +5,17 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- A real CShells host, to prove a shell reload keeps the leases a host stop hands off (spec 184, FR-021, FR-022). -->
+    <PackageReference Include="CShells" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
-    <PackageReference Include="Microsoft.Extensions.Logging" />
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" />
     <PackageReference Include="coverlet.collector" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
   <ItemGroup>
@@ -24,6 +28,7 @@
     <ProjectReference Include="..\..\..\..\..\..\src\essentials\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\essentials\Workflows\Runtime\Distributed\Elsa.Workflows.Runtime.Distributed.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\essentials\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\essentials\Tasks\Elsa.Tasks.csproj" />
     <!-- The distributed runtime composed on a membership provider, shared with the membership conformance kit (spec 184). -->
     <ProjectReference Include="..\..\..\..\Cluster\Testing\Elsa.Cluster.Testing.csproj" />
   </ItemGroup>

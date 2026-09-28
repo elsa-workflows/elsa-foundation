@@ -17935,6 +17935,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Tasks",
+          "path": "src/essentials/Tasks/Elsa.Tasks.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Workflows.Runtime.Api",
           "path": "src/essentials/Workflows/Runtime/Api/Elsa.Workflows.Runtime.Api.csproj"
         },
@@ -17955,13 +17960,8 @@
         },
         {
           "type": "external",
-          "id": "Microsoft.Extensions.DependencyInjection",
-          "version": "10.0.10"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.Extensions.Logging",
-          "version": "10.0.10"
+          "id": "CShells",
+          "version": "0.0.30-preview.159"
         },
         {
           "type": "external",

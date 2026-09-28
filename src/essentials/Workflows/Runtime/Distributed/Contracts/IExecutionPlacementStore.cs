@@ -36,8 +36,8 @@ public interface IExecutionPlacementStore
 
     /// <summary>
     /// Renews a placement lease only when the stored lease is still live, unreleased, and held under exactly
-    /// <paramref name=held/>'s owner id and placement token, as a compare-and-set (spec 184, FR-014). A renewal
-    /// issues a strictly greater placement token and extends the expiry to <paramref name=expiresAt/>. It never grants:
+    /// <paramref name="held"/>'s owner id and placement token, as a compare-and-set (spec 184, FR-014). A renewal
+    /// issues a strictly greater placement token and extends the expiry to <paramref name="expiresAt"/>. It never grants:
     /// a lease that expired, was released or was claimed by another member since the caller last held it returns
     /// <see langword="null"/>, so a reclaim and a renewal that race cannot both win.
     /// </summary>

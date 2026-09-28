@@ -163,6 +163,7 @@ public sealed class WorkflowsRuntimeDistributedFeature : IShellFeature
         // and the contracts through which the runtime's core and Attention consume them without referencing this leaf.
         services.TryAddSingleton(JoinSweepLedger.Process);
         services.TryAddSingleton(DistributedRuntimeShell.From);
+        services.TryAddSingleton(ShellSuccession.From);
         services.TryAddSingleton<ExecutionPlacementRequirementResolver>();
         services.TryAddSingleton<ExecutionPlacementGate>();
         services.TryAddSingleton<ReclaimedExecutionRegistry>();

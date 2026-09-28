@@ -40,8 +40,10 @@ namespace Elsa.Workflows.Runtime.Distributed.Services;
 /// renews only what the gate says this shell can run now (FR-011, FR-012, FR-015, FR-016), and hands off, at the
 /// drain's next boundary, what it can no longer run or holds while its member drains (FR-019). An active member that
 /// sees a host id departed confirms it with a fresh read and reclaims that host id's leases within the sweep (FR-023).
-/// Work no active member can run stays in the transport and is reported (FR-017, FR-018). When the pump stops it hands
-/// off everything it still holds (FR-021).
+/// Work no active member can run stays in the transport and is reported (FR-017, FR-018). When the pump stops because
+/// the host stops or its shell is removed, it hands off everything it still holds (FR-021). A shell reload is not such a
+/// stop: the newer generation of the shell already runs and renews those leases, so the old one hands off nothing, and a
+/// renewal that loses to the newer generation passivates the old generation's actor without releasing anything.
 /// </para>
 /// </remarks>
 public sealed class ExecutionPlacementPumpTask : BackoffSweepPumpTask, IRecurringTask
@@ -199,15 +201,29 @@ public sealed class ExecutionPlacementPumpTask : BackoffSweepPumpTask, IRecurrin
         }
     }
 
-    /// <summary>Hands off everything this member holds before it stops (FR-021), within one lease duration, and withdraws
-    /// this shell's runnability entry.</summary>
+    /// <summary>
+    /// Hands off everything this member holds before it stops (FR-021), within one lease duration, and withdraws this
+    /// shell's runnability entry. A shell reload is not a stop: a newer generation of the shell is already active and its
+    /// pump renews the leases this generation held, so this one hands off nothing and passivates nothing (FR-022).
+    /// </summary>
     async Task IRecurringTask.StopAsync(CancellationToken cancellationToken)
+    {
+        if (_membership?.Succession.HasSuccessor is true)
+            Logger.LogDebug("A newer generation of this shell is active and renews the placement leases this generation held; none is handed off.");
+        else
+            await HandOffBeforeStoppingAsync(cancellationToken);
+
+        if (_membership is not null && _membership.Runnability.Remove(_membership.Gate.Shell))
+            await TryPublishAsync(CancellationToken.None);
+    }
+
+    private async ValueTask HandOffBeforeStoppingAsync(CancellationToken cancellationToken)
     {
         using var bounded = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         bounded.CancelAfter(_placementOptions.Value.LeaseDuration);
         try
         {
-            var handedOff = await HandOffAllAsync("the host is stopping", bounded.Token);
+            var handedOff = await HandOffAllAsync("the shell is stopping", bounded.Token);
             if (handedOff > 0)
                 Logger.LogInformation("Handed off {Count} workflow execution(s) before stopping.", handedOff);
         }
@@ -215,9 +231,6 @@ public sealed class ExecutionPlacementPumpTask : BackoffSweepPumpTask, IRecurrin
         {
             Logger.LogWarning(exception, "Could not hand off every workflow execution before stopping; the rest are reclaimed once this host id is departed, or expire.");
         }
-
-        if (_membership is not null && _membership.Runnability.Remove(_membership.Gate.Shell))
-            await TryPublishAsync(CancellationToken.None);
     }
 
     private async ValueTask<ExecutionPlacementSweepResult> SweepAsync(
@@ -570,17 +583,21 @@ public sealed class ExecutionPlacementPumpTask : BackoffSweepPumpTask, IRecurrin
             await transport.ReleaseLeaseAsync(workflowExecutionId, item.TransportItemId, placementService.NodeId, item.LeaseToken!.Value, now, cancellationToken);
     }
 
-    /// <summary>A renewal that found the lease released or taken passivates the local actor without releasing
-    /// anything: the lease is no longer this member's (FR-014).</summary>
-    private ValueTask PassivateLocallyAsync(string workflowExecutionId, WorkflowExecutionPartition partition, CancellationToken cancellationToken) =>
-        _actorProvider.PassivateAsync(
-            new WorkflowExecutionActorPassivationRequest(
-                workflowExecutionId: workflowExecutionId,
-                boundary: WorkflowExecutionActorPassivationBoundary.ProviderSafeBoundary,
-                requestedAt: _timeProvider.GetUtcNow(),
-                reason: "placement lease no longer held",
-                partition: partition),
-            cancellationToken);
+    /// <summary>A renewal that found the lease no longer as this pump held it passivates the local actor without releasing
+    /// anything (FR-014). The lease was released or taken, or renewed by a newer generation of this shell under the same
+    /// host id, during a reload; the distributed provider's own passivation would release that generation's lease.</summary>
+    private ValueTask PassivateLocallyAsync(string workflowExecutionId, WorkflowExecutionPartition partition, CancellationToken cancellationToken)
+    {
+        var request = new WorkflowExecutionActorPassivationRequest(
+            workflowExecutionId: workflowExecutionId,
+            boundary: WorkflowExecutionActorPassivationBoundary.ProviderSafeBoundary,
+            requestedAt: _timeProvider.GetUtcNow(),
+            reason: "placement lease no longer held",
+            partition: partition);
+        return _actorProvider is DistributedWorkflowExecutionActorProvider distributed
+            ? distributed.PassivateLocalActorAsync(request, cancellationToken)
+            : _actorProvider.PassivateAsync(request, cancellationToken);
+    }
 
     private Func<CancellationToken, ValueTask<IReadOnlyList<WorkflowExecutionCommandEnvelope>>> PendingCommands(
         IExecutionCommandTransport transport,

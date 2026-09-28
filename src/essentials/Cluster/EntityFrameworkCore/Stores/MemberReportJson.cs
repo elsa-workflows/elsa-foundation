@@ -5,8 +5,8 @@ using Elsa.Cluster.Core.Models;
 namespace Elsa.Cluster.EntityFrameworkCore.Stores;
 
 /// <summary>
-/// How a member report is stored: named sections, each an explicit document shape, so the stored form never follows a
-/// model type's shape by accident.
+/// How a member report is stored: named sections, readability (spec 183) and runnability (spec 184), each an explicit
+/// document shape, so the stored form never follows a model type's shape by accident.
 /// </summary>
 /// <remarks>
 /// Reading is strict on purpose. A report with a member, a section or an entry field this build does not know was
@@ -32,10 +32,13 @@ internal static class MemberReportJson
         if (report.IsUnknown)
             throw new ArgumentException("An unknown report is what a reader returns; no member publishes one.", nameof(report));
 
-        var readability = report.Readability is { } section
-            ? new ReadabilityDocument(section.Entries.Select(EntryDocument.From).ToArray())
+        var readability = report.Readability is { } readable
+            ? new ReadabilityDocument(readable.Entries.Select(EntryDocument.From).ToArray())
             : null;
-        return JsonSerializer.Serialize(new ReportDocument(readability), Options);
+        var runnability = report.Runnability is { } runnable
+            ? new RunnabilityDocument(runnable.Entries.Select(RunnabilityEntryDocument.From).ToArray())
+            : null;
+        return JsonSerializer.Serialize(new ReportDocument(readability, runnability), Options);
     }
 
     /// <summary>The report <paramref name="json"/> holds, or <see langword="null"/> when this build cannot interpret it.</summary>
@@ -43,13 +46,12 @@ internal static class MemberReportJson
     {
         try
         {
-            var document = JsonSerializer.Deserialize<ReportDocument>(json, Options);
-            if (document is null)
+            if (JsonSerializer.Deserialize<ReportDocument>(json, Options) is not { } document)
                 return null;
-            if (document.Readability is not { } readability)
-                return new MemberReport();
 
-            return new MemberReport(new ReadabilitySection(readability.Entries.Select(entry => entry.ToEntry())));
+            return new MemberReport(
+                document.Readability is { } readability ? new ReadabilitySection(Elements(readability.Entries).Select(entry => entry.ToEntry())) : null,
+                document.Runnability is { } runnability ? new RunnabilitySection(Elements(runnability.Entries).Select(entry => entry.ToEntry())) : null);
         }
         catch (Exception exception) when (exception is JsonException or ArgumentException or NotSupportedException)
         {
@@ -57,7 +59,14 @@ internal static class MemberReportJson
         }
     }
 
-    private sealed record ReportDocument(ReadabilityDocument? Readability);
+    /// <summary>The elements of a stored list. A null element was not written by this envelope, so the report is
+    /// uninterpretable rather than read in part.</summary>
+    private static IEnumerable<T> Elements<T>(IEnumerable<T?> elements) where T : class =>
+        elements.Select(element => element ?? throw new JsonException("A stored member report holds a null list element."));
+
+    /// <summary>Both sections, each <see langword="null"/> when the member has no source for it (spec 183, FR-014; spec 184,
+    /// FR-008). Each is written, null included, so a document without one was not written by this envelope.</summary>
+    private sealed record ReportDocument(ReadabilityDocument? Readability, RunnabilityDocument? Runnability);
 
     private sealed record ReadabilityDocument(IReadOnlyList<EntryDocument> Entries);
 
@@ -78,5 +87,33 @@ internal static class MemberReportJson
             new(entry.Family, entry.EfModule, entry.ReadableVersions, entry.DatabaseIdentity, entry.ObservedFinalizedVersion);
 
         public ReadabilityEntry ToEntry() => new(Family, EfModule, ReadableVersions, DatabaseIdentity, ObservedFinalizedVersion);
+    }
+
+    private sealed record RunnabilityDocument(IReadOnlyList<RunnabilityEntryDocument> Entries);
+
+    /// <summary>
+    /// Every field of <see cref="RunnabilityEntry"/>, nullable exactly where it is, on the same terms as
+    /// <see cref="EntryDocument"/>: the store tests round-trip an entry with every field of it and of
+    /// <see cref="RunnableConsumer"/> set, so a field either gains fails them until it is mapped here. A runnability entry
+    /// that reads back with less than was published would place work on a member that never said it can run it.
+    /// </summary>
+    private sealed record RunnabilityEntryDocument(
+        IReadOnlyList<RunnableConsumerDocument> Consumers,
+        IReadOnlyList<string> StorageDrivers,
+        IReadOnlyList<string> ActivityTypes,
+        string? DatabaseIdentity)
+    {
+        public static RunnabilityEntryDocument From(RunnabilityEntry entry) =>
+            new(entry.Consumers.Select(RunnableConsumerDocument.From).ToArray(), entry.StorageDrivers, entry.ActivityTypes, entry.DatabaseIdentity);
+
+        public RunnabilityEntry ToEntry() =>
+            new(Elements(Consumers).Select(consumer => consumer.ToConsumer()), StorageDrivers, ActivityTypes, DatabaseIdentity);
+    }
+
+    private sealed record RunnableConsumerDocument(string ConsumerKey, IReadOnlyList<string> SchemaVersions)
+    {
+        public static RunnableConsumerDocument From(RunnableConsumer consumer) => new(consumer.ConsumerKey, consumer.SchemaVersions);
+
+        public RunnableConsumer ToConsumer() => new(ConsumerKey, SchemaVersions);
     }
 }

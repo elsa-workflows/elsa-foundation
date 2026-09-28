@@ -184,6 +184,14 @@ public sealed class DistributedWorkflowExecutionActorProvider : IWorkflowExecuti
     }
 
     /// <summary>
+    /// Passivates this member's local actor only, and releases nothing: for the placement pump, when a renewal found the
+    /// lease no longer as it held it (spec 184, FR-014). <see cref="PassivateAsync"/> releases whatever lease this host id
+    /// holds now, which during a reload can be the one a newer generation of the shell just renewed.
+    /// </summary>
+    internal ValueTask PassivateLocalActorAsync(WorkflowExecutionActorPassivationRequest request, CancellationToken cancellationToken) =>
+        _localProvider.PassivateAsync(request, cancellationToken);
+
+    /// <summary>
     /// Decides placement for one command: the gate first, in an operation scope that is closed before the drain runs,
     /// then the claim. Nothing is written when the gate refuses (FR-013).
     /// </summary>

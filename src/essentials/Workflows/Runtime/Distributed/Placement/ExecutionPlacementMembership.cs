@@ -5,13 +5,15 @@ namespace Elsa.Workflows.Runtime.Distributed.Placement;
 
 /// <summary>
 /// What the placement pump needs to make placement a membership query and to act on the fleet (spec 184): the gate it
-/// asks before claiming or renewing, the reclaimer, the unplaceable-work report, and this shell's runnability entry.
+/// asks before claiming or renewing, the reclaimer, the unplaceable-work report, this shell's runnability entry, and
+/// whether a newer generation of this shell has taken over.
 /// </summary>
 public sealed class ExecutionPlacementMembership(
     ExecutionPlacementGate gate,
     HostIdReclaimer reclaimer,
     UnplaceableWorkRegistry unplaceable,
     ShellRunnabilityRegistry runnability,
+    ShellSuccession succession,
     IServiceScopeFactory shellScopes)
 {
     public ExecutionPlacementGate Gate { get; } = gate ?? throw new ArgumentNullException(nameof(gate));
@@ -21,6 +23,9 @@ public sealed class ExecutionPlacementMembership(
     public UnplaceableWorkRegistry Unplaceable { get; } = unplaceable ?? throw new ArgumentNullException(nameof(unplaceable));
 
     public ShellRunnabilityRegistry Runnability { get; } = runnability ?? throw new ArgumentNullException(nameof(runnability));
+
+    /// <summary>Whether a newer generation of this shell is active, so a stop of this one is a reload (FR-021, FR-022).</summary>
+    public ShellSuccession Succession { get; } = succession ?? throw new ArgumentNullException(nameof(succession));
 
     /// <summary>Computes this shell's runnability entry from its registries now (FR-008).</summary>
     public async ValueTask<RunnabilityEntry> ComputeRunnabilityAsync()

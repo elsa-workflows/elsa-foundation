@@ -30,7 +30,6 @@ public sealed class ReclaimedExecutionRegistry
 
     private readonly ConcurrentDictionary<(string Scope, string WorkflowExecutionId), RuntimeRecoveryCandidate> _candidates = new();
 
-    /// <summary>Makes the execution of <paramref name="state"/> a recovery candidate in <paramref name="scope"/>.</summary>
     /// <summary>Forgets every candidate older than <see cref="CandidateLifetime"/> at <paramref name="now"/>.</summary>
     public void Prune(DateTimeOffset now)
     {
@@ -38,6 +37,13 @@ public sealed class ReclaimedExecutionRegistry
             _candidates.TryRemove(stale);
     }
 
+    /// <summary>Makes the execution of <paramref name="state"/> a recovery candidate in <paramref name="scope"/>.</summary>
+    /// <param name="scope">The persistence scope the execution lives in.</param>
+    /// <param name="state">The execution's liveness state, whose execution lease or heartbeat was held under
+    /// <paramref name="hostId"/>; its last checkpoint, if any, is where the recovery resumes from.</param>
+    /// <param name="hostId">The reclaimed host id, recorded on the candidate.</param>
+    /// <param name="kind">Whether a join sweep or a departure reclaimed it, recorded on the candidate.</param>
+    /// <param name="reclaimedAt">When the reclaim ran: the candidate's detection time, from which it ages out.</param>
     public void Add(string scope, ExecutionLivenessState state, string hostId, HostIdReclaimKind kind, DateTimeOffset reclaimedAt)
     {
         var lastCheckpointId = state.InterruptedExecution?.LastCheckpointId;
