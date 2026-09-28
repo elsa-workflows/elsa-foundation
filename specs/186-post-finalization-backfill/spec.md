@@ -410,7 +410,7 @@ after one run with no membership table.
   Without it, the upgrade pass, the verification pass and every hourly audit (FR-018) select by a full scan of each
   stamped table, repeated for as long as the family exists. Adding the index after the freeze is still possible, as an
   expand-only migration per table (spec 185), but landing it in the 4.0 baseline avoids that later, separate migration
-  for the twenty-six families that stamp today and the tables spec 180's FR-026 stamps for the first time.
+  for the families that already stamp today and the tables spec 180's FR-026 stamps for the first time.
 
 ### Requirements on membership (B3) and the gate (B5)
 
@@ -520,7 +520,7 @@ Recorded 2026-09-28, when the owner answered Q27 on #2093.
 
 **2026-09-28 note.** [#2119](https://github.com/elsa-workflows/elsa-foundation/issues/2119) (PR
 [#2131](https://github.com/elsa-workflows/elsa-foundation/pull/2131)) landed while this spec was open: every EF
-module now stamps a schema family, taking the checked total from fifteen to twenty-six. FR-025's count is corrected
-to twenty-six here; the "ten unstamped EF modules and two Publishing tables" this spec and research.md describe
-(Current state, "Families, and where content-addressed rows live") should be checked against what #2131 already
-shipped before FR-004's rewriters are scoped.
+module now stamps a schema family, taking the checked total from fifteen to twenty-six; the "ten unstamped EF
+modules and two Publishing tables" this spec and research.md describe (Current state, "Families, and where
+content-addressed rows live") should be checked against what #2131 already shipped before FR-004's rewriters are
+scoped.
