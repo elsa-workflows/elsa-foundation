@@ -97,6 +97,8 @@ internal sealed class EfClusterMembershipLifecycle(
         }
         catch (OperationCanceledException) when (stopping.IsCancellationRequested)
         {
+            // Cancellation on shutdown is the normal exit, not a failure.
+            logger.LogDebug("Cluster membership heartbeat loop stopped because the host is stopping.");
         }
     }
 
