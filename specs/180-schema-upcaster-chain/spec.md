@@ -51,8 +51,13 @@ clauses" for the checks the code's messages call the row envelope.
 
 ## Current state
 
-Fifteen schema families across three EF modules (`Workflows.Runtime`, `Workflows.Publishing`,
-`Elsa3.Activities.Design.Import`) stamp their rows; ten other EF modules and two Publishing tables carry no stamp.
+Every EF module now stamps its schema families in its rows, delivered by
+[#2119](https://github.com/elsa-workflows/elsa-foundation/issues/2119) (PR
+[#2131](https://github.com/elsa-workflows/elsa-foundation/pull/2131)); the authoritative list of families is the
+code, not a count kept here. At this spec's writing (2026-09-27), fifteen
+schema families across three EF modules (`Workflows.Runtime`, `Workflows.Publishing`,
+`Elsa3.Activities.Design.Import`) stamped their rows; ten other EF modules and two Publishing tables carried no
+stamp — the gap FR-026 below was written to close.
 Stamping and checking are each done through one mechanism (`EfSchemaVersion`, `EfSchemaVersionSkewException`), but
 call sites are scattered across 30 store files, an ordering guard already polices part of the read path, and no
 Runtime or Publishing family has a committed payload fixture yet. The full inventory — the family table, call-site
@@ -66,8 +71,8 @@ hypothesis is that this needs no down-transform when the change is expand-only. 
 rows with the old version and leaves new-only fields unset. Features that need those fields are dormant (spec 182)
 and writes that need them are refused. After finalization the host stamps the new version and writes the new fields.
 
-**Verdict: it holds for the fifteen stamped families, under two conditions. It does not hold for rows that carry no
-stamp.**
+**Verdict: it holds for every stamped family, under two conditions. It does not hold for rows that carry
+no stamp.**
 
 It holds because:
 
@@ -331,9 +336,9 @@ the build fails each time with a message naming the family and versions.
 
 - **FR-026**: Each of the ten EF modules and the two Publishing tables that carry no stamp today (Current state) MUST
   gain a `SchemaVersion` stamp column in its 4.0 baseline (`Initial`) migration, landing before #1976 freezes it.
-  From that baseline forward, a missing stamp on those tables is skew (FR-007), exactly as it already is for the
-  fifteen stamped families. The same baseline change also carries a non-unique index on every stamped table's
-  `SchemaVersion` column, for every one of the fifteen families and for the tables this requirement stamps for the
+  From that baseline forward, a missing stamp on those tables is skew (FR-007), exactly as it already is for every
+  already-stamped family. The same baseline change also carries a non-unique index on every stamped table's
+  `SchemaVersion` column, both for the families that stamp today and for the tables this requirement stamps for the
   first time (spec 186, FR-025).
 - **FR-027**: A content change to a family's stored shape that is not additive — a rename, retype or restructure of a
   JSON member — MUST NOT be expressed as a single version with a reverse transform. It MUST be split across two
@@ -367,8 +372,8 @@ the build fails each time with a message naming the family and versions.
 
 - **SC-001**: For every family that declares a chain longer than one, a fixture row at the oldest readable version
   reads through the current build's store and equals the current-version fixture.
-- **SC-002**: For all fifteen families, rows stamped above the chain, below it and with no stamp raise skew. None of
-  them is reported as corruption.
+- **SC-002**: For every family, rows stamped above the chain, below it and with no stamp raise skew. None
+  of them is reported as corruption.
 - **SC-003**: With the finalized version held at the predecessor, a full workflow run on a host at the new version
   leaves zero rows stamped at the new version.
 - **SC-004**: After finalization, a row read and written once carries the new stamp. A row that was never written
@@ -441,5 +446,13 @@ Recorded 2026-09-28, when the owner answered spec 186's Q27 on #2093, which touc
   same 4.0 baseline change as FR-026's stamp columns (#2119), so the upgrade pass, verification pass and hourly audit
   spec 186 runs can select by stamp without a full table scan (spec 186, FR-025).
 
-*2026-09-28:* FR-001 gains the shared-family exception, needed for spec 181's finalization record (#2120), found
+**2026-09-28 note.** [#2119](https://github.com/elsa-workflows/elsa-foundation/issues/2119) (PR
+[#2131](https://github.com/elsa-workflows/elsa-foundation/pull/2131)) landed while this spec was open: every EF
+module now stamps a schema family, taking the checked total from fifteen to twenty-six. Current state above reflects
+this. Q2's "fifteen stamped families" is corrected to twenty-six here rather than in place. FR-026's baseline-column
+requirement and Q2's skew rule, both written for the ten EF modules and two Publishing tables this spec's Current
+state describes as unstamped at this spec's writing, should be checked against what #2131 already shipped before
+this spec's implementation starts.
+
+**2026-09-28 note.** FR-001 gains the shared-family exception, needed for spec 181's finalization record (#2120), found
 while building B3 (#2099); lands with its PR, whose merge is the owner's approval.
