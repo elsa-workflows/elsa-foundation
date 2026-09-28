@@ -20,6 +20,78 @@ namespace Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.Migrations.Stu
 
             // NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns omitted: the module stays provider-free.
 
+            modelBuilder.Entity("Elsa.Persistence.EntityFramework.SchemaFinalization.EfDatabaseIdentityRow", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("DatabaseIdentity")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SchemaVersion");
+
+                    b.ToTable("__ElsaDatabaseIdentity_ElsaStudioPreferences", (string)null);
+                });
+
+            modelBuilder.Entity("Elsa.Persistence.EntityFramework.SchemaFinalization.EfSchemaFinalizationRecordRow", b =>
+                {
+                    b.Property<string>("Family")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("DatabaseIdentity")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("FinalizedVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("FinishHistoryJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("FinishJson")
+                        .HasColumnType("text");
+
+                    b.Property<string>("HistoryJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("HoldsJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("IntentJson")
+                        .HasColumnType("text");
+
+                    b.Property<long>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.HasKey("Family");
+
+                    b.HasIndex("SchemaVersion");
+
+                    b.ToTable("__ElsaSchemaFinalization_ElsaStudioPreferences", (string)null);
+                });
+
             modelBuilder.Entity("Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.Entities.StudioPreferenceRecord", b =>
                 {
                     b.Property<string>("Id")

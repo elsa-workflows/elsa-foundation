@@ -48,6 +48,7 @@ public abstract class IdentityIamDbContext(DbContextOptions options) : DbContext
         modelBuilder.ApplyConfiguration(new EmailReservationEntityConfiguration());
         modelBuilder.ApplyConfiguration(new RoleNameReservationEntityConfiguration());
         modelBuilder.ApplyConfiguration(new MutationReceiptEntityConfiguration());
+        modelBuilder.MapSchemaFinalization(IdentityIamEfModule.HistoryModuleName);
         ConfigureProvider(modelBuilder);
         modelBuilder.IndexSchemaVersionStamps();
     }

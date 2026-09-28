@@ -2,7 +2,8 @@ namespace Elsa.Persistence.EntityFramework;
 
 /// <summary>
 /// A context whose tables all belong to one schema family, stamped and checked by
-/// <see cref="EfSchemaVersionMaterializationInterceptor"/>.
+/// <see cref="EfSchemaVersionMaterializationInterceptor"/>, apart from the finalization tables every module context maps
+/// (<see cref="EfSchemaFinalization"/>), which belong to their own.
 /// </summary>
 public interface IEfSchemaVersionedContext
 {

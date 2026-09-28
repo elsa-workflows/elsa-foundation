@@ -25,7 +25,7 @@ public class SecretsMySqlDbContext : SecretsDbContext
     public const string CharacterSet = "utf8mb4";
     public const string Collation = "utf8mb4_0900_bin";
     public const string HistoryTableName = "__EFMigrationsHistory_ElsaSecretsMySqlSpike";
-    public const string MigrationId = "20260928002249_Initial";
+    public const string MigrationId = "20260928040042_Initial";
     public bool IncludePendingModel => includePendingModel;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)

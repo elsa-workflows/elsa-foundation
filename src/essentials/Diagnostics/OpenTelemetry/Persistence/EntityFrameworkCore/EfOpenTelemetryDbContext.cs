@@ -161,6 +161,7 @@ public abstract class OpenTelemetryDbContext(DbContextOptions options) : DbConte
         });
         foreach (var entityType in modelBuilder.Model.GetEntityTypes())
             modelBuilder.Entity(entityType.ClrType).Property<string>(nameof(EfOpenTelemetryScopedEntity.SchemaVersion)).HasMaxLength(32).IsRequired();
+        modelBuilder.MapSchemaFinalization(EfOpenTelemetryModule.HistoryModuleName);
         ConfigureProvider(modelBuilder);
         // Installed unconditionally, so this context reads a frame whatever wrote it. Nothing here enables an
         // encoder: with no codec configured these columns are written exactly as they were before.

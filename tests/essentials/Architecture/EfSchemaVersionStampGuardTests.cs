@@ -103,6 +103,50 @@ public sealed class EfSchemaVersionStampGuardTests
             Assert.Equal(4, indexedBySnapshot.Count(tables => tables.Contains(table)));
     }
 
+    /// <summary>The two tables spec 181 puts beside every module's migrations-history table, by name prefix.</summary>
+    private static readonly string[] FinalizationTablePrefixes = ["__ElsaSchemaFinalization_", "__ElsaDatabaseIdentity_"];
+
+    private static readonly Regex ProviderContextSuffix = new("(?:Sqlite|SqlServer|PostgreSql|MySql)DbContext$", RegexOptions.Compiled);
+
+    /// <summary>
+    /// Spec 181, FR-002 (#2120): every provider context an EF module declares creates both finalization tables through its
+    /// own migrations, stamped with the stamp indexed like every other table. A module's four providers name the same
+    /// table, and no two modules name the same one, since modules share databases.
+    /// </summary>
+    [Fact]
+    public void Every_declared_provider_context_creates_both_finalization_tables_stamped_and_indexed()
+    {
+        var violations = new List<string>();
+        var named = new List<(string Module, string Table)>();
+        foreach (var (context, snapshot) in DeclaredSnapshots())
+        {
+            var source = File.ReadAllText(snapshot);
+            var tables = FindTables(source).Select(table => table.Name).ToArray();
+            var unstamped = FindUnstampedTables(source);
+            var indexed = FindIndexedStamps(source);
+            foreach (var prefix in FinalizationTablePrefixes)
+            {
+                var table = tables.SingleOrDefault(name => name.StartsWith(prefix, StringComparison.Ordinal));
+                if (table is null || unstamped.Contains(table) || !indexed.Contains(table))
+                    violations.Add($"{context}: {table ?? prefix + "*"} is missing, unstamped or unindexed");
+                else
+                    named.Add((ProviderContextSuffix.Replace(context, ""), table));
+            }
+        }
+
+        var tablesByModule = named.Distinct().ToLookup(pair => pair.Module, pair => pair.Table);
+        violations.AddRange(tablesByModule
+            .Where(module => module.Count() != FinalizationTablePrefixes.Length)
+            .Select(module => $"{module.Key}: its providers name different finalization tables: {string.Join(", ", module)}"));
+        violations.AddRange(named.Distinct()
+            .GroupBy(pair => pair.Table, StringComparer.Ordinal)
+            .Where(table => table.Count() > 1)
+            .Select(table => $"{table.Key} is shared by {string.Join(", ", table.Select(pair => pair.Module))}"));
+        Assert.True(violations.Count == 0, "Every EF module's baseline must create both finalization tables of its own (spec 181, FR-002):" +
+            Environment.NewLine + string.Join(Environment.NewLine, violations.Order(StringComparer.Ordinal)));
+        Assert.True(tablesByModule.Count >= 13, $"Expected the finalization tables of at least 13 modules; found {tablesByModule.Count}.");
+    }
+
     [Theory]
     [MemberData(nameof(UnstampedFixtures))]
     public void Detector_flags_a_table_without_a_required_stamp(string name, string snapshot, string table)

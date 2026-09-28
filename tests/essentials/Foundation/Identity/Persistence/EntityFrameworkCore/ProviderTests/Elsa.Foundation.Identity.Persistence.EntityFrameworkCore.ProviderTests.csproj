@@ -20,4 +20,8 @@
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Foundation\Identity\Persistence\EntityFrameworkCore\Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- Excludes the finalization tables every module maps from own-table assertions. -->
+    <Compile Include="..\..\..\..\..\Persistence\EntityFramework\Tests\EfSchemaFinalizationTestFilter.cs" Link="EfSchemaFinalizationTestFilter.cs" />
+  </ItemGroup>
 </Project>

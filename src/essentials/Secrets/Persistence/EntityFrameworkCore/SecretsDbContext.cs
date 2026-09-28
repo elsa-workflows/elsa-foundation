@@ -24,6 +24,7 @@ public abstract class SecretsDbContext : DbContext
         // The host's optional schema; nothing changes when none is configured.
         modelBuilder.HasElsaDefaultSchema(this);
         modelBuilder.ApplyConfiguration(new SecretRecordConfiguration());
+        modelBuilder.MapSchemaFinalization(SecretsEfModule.HistoryModuleName);
         ConfigureProvider(modelBuilder);
         modelBuilder.IndexSchemaVersionStamps();
     }

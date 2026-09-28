@@ -27,6 +27,8 @@ public abstract class Elsa3ImportDbContext(DbContextOptions options) : DbContext
         // provenance. An accidental update fails instead of silently rewriting history.
         foreach (var property in modelBuilder.Model.GetEntityTypes().SelectMany(entity => entity.GetProperties()))
             property.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
+        // Mapped after that loop: a finalization record is updated in place.
+        modelBuilder.MapSchemaFinalization(Elsa3ImportEfModule.HistoryModuleName);
         ConfigureProvider(modelBuilder);
         // Installed unconditionally, so this context reads a frame whatever wrote it. Nothing here enables an
         // encoder: with no codec configured these columns are written exactly as they were before.

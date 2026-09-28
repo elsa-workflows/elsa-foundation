@@ -1,4 +1,5 @@
 using Elsa.Persistence.EntityFramework;
+using Elsa.Persistence.EntityFramework.Tests;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
@@ -83,7 +84,8 @@ public sealed class IdentityIamProviderModelTests
 
         Assert.Equal(expectedProvider, context.Database.ProviderName);
 
-        var entityTypes = context.Model.GetEntityTypes().ToArray();
+        // The module's own tables; the finalization tables every module maps are pinned by the migration guards.
+        var entityTypes = context.Model.GetEntityTypes().ExcludingSchemaFinalization().ToArray();
         Assert.Equal(ExpectedIamTables.OrderBy(name => name), entityTypes.Select(entity => entity.GetTableName()).OrderBy(name => name));
         Assert.All(entityTypes, entity =>
         {
@@ -136,7 +138,9 @@ public sealed class IdentityIamProviderModelTests
             entity => entity.ClrType.FullName?.Contains("OpenIddict", StringComparison.Ordinal) == true);
 
         var designTimeModel = context.GetService<IDesignTimeModel>().Model;
-        Assert.Equal(ExpectedIamTables.OrderBy(name => name), designTimeModel.GetEntityTypes().Select(entity => entity.GetTableName()).OrderBy(name => name));
+        Assert.Equal(
+            ExpectedIamTables.OrderBy(name => name),
+            designTimeModel.GetEntityTypes().ExcludingSchemaFinalization().Select(entity => entity.GetTableName()).OrderBy(name => name));
 
         var application = Assert.IsAssignableFrom<IEntityType>(designTimeModel.GetEntityTypes().Single(entity => entity.GetTableName() == "identity_applications"));
         var credential = Assert.IsAssignableFrom<IEntityType>(designTimeModel.GetEntityTypes().Single(entity => entity.GetTableName() == "identity_credentials"));

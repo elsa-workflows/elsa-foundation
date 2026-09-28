@@ -18,6 +18,7 @@ public abstract class StudioPreferencesDbContext(DbContextOptions options) : DbC
         // The host's optional schema; nothing changes when none is configured.
         modelBuilder.HasElsaDefaultSchema(this);
         modelBuilder.ApplyConfiguration(new StudioPreferenceRecordConfiguration());
+        modelBuilder.MapSchemaFinalization(StudioPreferencesEfModule.HistoryModuleName);
         ConfigureProvider(modelBuilder);
         modelBuilder.IndexSchemaVersionStamps();
     }
