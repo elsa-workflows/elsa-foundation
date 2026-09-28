@@ -11,10 +11,13 @@ name: Publish repair
 # metadata; its own workflow says so directly and keeps packages.yml's modes (branch, dry-run, bootstrap, publish) as
 # they are.
 #
-# Exactly one of the two inputs below is given, and reason is always required:
-#   - package_id   settles a collision: reads the feed's highest version of that package and its source commit (the
-#                  nuspec's repository commit, FR-018), and sets the record's entry to them, refusing to lower it
-#                  (FR-012).
+# Exactly one of package_id and main_commit is given, and reason is always required:
+#   - package_id   settles a collision: computes the version the current run would publish for that package at this
+#                  run's commit - the version whose push got the 409 - reads it and its source commit (the nuspec's
+#                  repository commit, FR-018) from the feed, and sets the record's entry to them, refusing to lower it
+#                  (FR-012) and refusing when the feed does not hold that version. version overrides the computed one
+#                  for an operator who knows better; it must still be a version the feed holds and must still not
+#                  lower the entry.
 #   - main_commit  settles a rewritten main (FR-021's edge case): resets last_publish_commit to a commit that is on
 #                  main's history, refusing one that is not.
 #
@@ -26,6 +29,10 @@ on:
     inputs:
       package_id:
         description: 'The package id whose record entry is settled against the feed. Give this or main_commit, not both.'
+        type: string
+        default: ''
+      version:
+        description: 'The version to settle package_id at, overriding the computed colliding version. Must be a version the feed holds, and must not lower the entry. Optional; only used with package_id.'
         type: string
         default: ''
       main_commit:
@@ -76,10 +83,11 @@ jobs:
         env:
           FEEDZ_API_KEY: ${{ secrets.FEEDZ_API_KEY }}
           PACKAGE_ID: ${{ inputs.package_id }}
+          VERSION: ${{ inputs.version }}
           MAIN_COMMIT: ${{ inputs.main_commit }}
           REASON: ${{ inputs.reason }}
         run: >-
           dotnet run --project tools/versioning/Elsa.Versioning.Publisher -c Release --no-build --
           repair --ref "$GITHUB_REF" --commit "$GITHUB_SHA" --reason "$REASON" --actor "${{ github.actor }}"
-          --package-id "$PACKAGE_ID" --main-commit "$MAIN_COMMIT"
+          --package-id "$PACKAGE_ID" --version "$VERSION" --main-commit "$MAIN_COMMIT"
           --feed "$feedz_feed_source" --api-key-env FEEDZ_API_KEY --summary "$GITHUB_STEP_SUMMARY"

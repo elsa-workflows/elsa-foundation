@@ -4,11 +4,20 @@ namespace Elsa.Versioning.Publisher;
 
 /// <param name="Repository">A directory inside the repository.</param>
 /// <param name="Ref">The ref the repair is run from, as <c>GITHUB_REF</c> gives it; only main may write <c>publish-state</c> (spec 150 FR-019).</param>
+/// <param name="Commit">
+/// Main's tip the repair is run from, as <c>GITHUB_SHA</c> gives it: the commit the current computation is made
+/// against to find the version whose push collided, unless <paramref name="Version"/> names one directly.
+/// </param>
 /// <param name="PackageId">The package id whose record entry is settled against the feed.</param>
+/// <param name="Version">
+/// The version to settle the entry at, for an operator who knows better than the computation; it must still be a
+/// version the feed holds, and it must still not lower the entry. Null to use the version the current computation
+/// would publish for <paramref name="PackageId"/> at <paramref name="Commit"/> — the version whose push collided.
+/// </param>
 /// <param name="Reason">Why the repair is being made; the write-back commit names it.</param>
 /// <param name="Actor">Who ran the repair (<c>github.actor</c>); the write-back commit names it.</param>
 /// <param name="Summary">The step's <c>GITHUB_STEP_SUMMARY</c> file, or null.</param>
-public sealed record RepairPackageOptions(string Repository, string Ref, string PackageId, string Reason, string Actor, string? Summary);
+public sealed record RepairPackageOptions(string Repository, string Ref, string Commit, string PackageId, string? Version, string Reason, string Actor, string? Summary);
 
 /// <param name="Repository">A directory inside the repository.</param>
 /// <param name="Ref">The ref the repair is run from, as <c>GITHUB_REF</c> gives it; only main may write <c>publish-state</c> (spec 150 FR-019).</param>
@@ -33,12 +42,16 @@ public sealed record RepairReport(string RecordCommit, string Message);
 public static class RepairCommand
 {
     /// <summary>
-    /// Settles a package's record entry from the feed: the highest version the feed holds of it and that version's
-    /// source commit — the nuspec's <c>repository</c> <c>commit</c> (FR-018) — refusing to lower the entry (FR-012).
+    /// Settles a package's record entry to exactly the colliding version — the version the current computation would
+    /// publish for it at <see cref="RepairPackageOptions.Commit"/>, the same version whose push got the 409 (FR-019) —
+    /// unless <see cref="RepairPackageOptions.Version"/> names one directly. Either way, reads that version's source
+    /// commit from the feed — the nuspec's <c>repository</c> <c>commit</c> (FR-018) — refusing to lower the entry
+    /// (FR-012).
     /// </summary>
     /// <exception cref="PublishRefusedException">
-    /// Not run from <c>main</c>, <c>publish-state</c> does not exist yet, the feed holds no version of the package, its
-    /// source commit cannot be read, or settling it would lower the record's entry.
+    /// Not run from <c>main</c>, <c>publish-state</c> does not exist yet, no packable project has the package id, the
+    /// feed does not hold the colliding (or named) version, its source commit cannot be read, or settling it would
+    /// lower the record's entry.
     /// </exception>
     public static async Task<RepairReport> RepairPackageAsync(
         RepairPackageOptions options, IPackageFeed feed, IPublishState state, TextWriter log, CancellationToken cancellationToken = default)
@@ -46,19 +59,20 @@ public static class RepairCommand
         RequireMain(options.Ref);
         var (tip, record) = ReadRecord(state);
 
-        var versions = await feed.ListVersionsAsync(options.PackageId, cancellationToken);
-        if (versions.Count == 0)
-            throw new PublishRefusedException($"The feed holds no version of {options.PackageId}; there is nothing to settle its record entry against.");
+        var version = options.Version is { Length: > 0 } named ? named : Colliding(options, record);
+        var number = PackageVersionNumber.Parse(version, $"the version to settle {options.PackageId} at");
 
-        var (version, number) = versions
-            .Select(text => (Text: text, Number: PackageVersionNumber.Parse(text, $"a feed version of {options.PackageId}")))
-            .OrderByDescending(candidate => candidate.Number, NumericOrder)
-            .First();
+        var versions = await feed.ListVersionsAsync(options.PackageId, cancellationToken);
+        if (!versions.Contains(version, StringComparer.OrdinalIgnoreCase))
+            throw new PublishRefusedException(versions.Count == 0
+                ? $"The feed holds no version of {options.PackageId}; there is nothing to settle its record entry against."
+                : $"The feed does not hold {options.PackageId} {version}; a repair only settles the record to a version the feed holds. " +
+                  $"It holds: {string.Join(", ", versions)}.");
 
         var current = record.Find(options.PackageId);
         if (current is not null && number.CompareNumeric(current.Version) < 0)
             throw new PublishRefusedException(
-                $"The feed's highest version of {options.PackageId}, {version}, is lower than the record's entry, {current.Version}. " +
+                $"{options.PackageId} {version} is lower than the record's entry, {current.Version}. " +
                 "A repair never lowers an entry (spec 150 FR-012); nothing was written.");
 
         string commit;
@@ -127,7 +141,22 @@ public static class RepairCommand
         return new RepairReport(written, message);
     }
 
-    private static readonly IComparer<PackageVersionNumber> NumericOrder = Comparer<PackageVersionNumber>.Create((left, right) => left.CompareNumeric(right));
+    /// <summary>
+    /// The version the current computation would publish for <see cref="RepairPackageOptions.PackageId"/> at
+    /// <see cref="RepairPackageOptions.Commit"/> — the version whose push got the 409 (FR-019) — with the label a
+    /// build of <c>main</c> carries (FR-008), reusing the calculator rather than re-deriving it.
+    /// </summary>
+    /// <exception cref="PublishRefusedException">No packable project at the commit has the package id.</exception>
+    private static string Colliding(RepairPackageOptions options, PublishedVersions record)
+    {
+        var git = new GitRepository(options.Repository);
+        var computation = VersionCalculator.Compute(git, options.Commit, record);
+        var computed = computation.Packages.SingleOrDefault(package => string.Equals(package.PackageId, options.PackageId, StringComparison.OrdinalIgnoreCase))
+            ?? throw new PublishRefusedException(
+                $"No packable project at {options.Commit} has package id {options.PackageId}; there is nothing to compute a colliding version for.");
+
+        return PackProperties.VersionOf(computed, PackProperties.LabelFor(computation, PrereleaseLabel.MainBranch));
+    }
 
     private static void RequireMain(string reference)
     {

@@ -31,27 +31,35 @@ public sealed class RepairTests : PublishingHistory
         Assert.Contains("main only", refused.Message, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// #2083: a repair settles the record to the version the current computation would publish at the commit it runs
+    /// from, not the feed's highest version of the package; a commit that moved main without anything pushed at its
+    /// computed version yet is refused, rather than settled against something the feed happens to hold.
+    /// </summary>
     [Fact]
-    public async Task Repair_refuses_a_package_the_feed_holds_no_version_of()
+    public async Task Repair_refuses_when_the_feed_does_not_hold_the_colliding_version()
     {
         await BootstrapAsync();
+        Edit("src/Tasks/Scheduler.cs");
+        CommitAndPush();
 
-        var refused = await Assert.ThrowsAsync<PublishRefusedException>(() => RepairPackageAsync("Elsa.NoSuchPackage"));
+        var refused = await Assert.ThrowsAsync<PublishRefusedException>(() => RepairPackageAsync(PackageId));
 
-        Assert.Contains("holds no version", refused.Message, StringComparison.Ordinal);
+        Assert.Contains("does not hold", refused.Message, StringComparison.Ordinal);
+        Assert.Contains("4.0.1-preview", refused.Message, StringComparison.Ordinal);
     }
 
-    /// <summary>FR-012: a repair never lowers an entry, even when the feed genuinely holds something lower.</summary>
+    /// <summary>FR-012: a repair never lowers an entry, even one an operator names explicitly that the feed genuinely holds.</summary>
     [Fact]
     public async Task Repair_refuses_to_lower_the_entry()
     {
         await BootstrapAsync();
-        SetRecordEntry(PackageId, "4.0.9-preview", Repo.Head);
+        Feed.Seed(PackageId, "3.9.9-preview");
 
-        var refused = await Assert.ThrowsAsync<PublishRefusedException>(() => RepairPackageAsync(PackageId));
+        var refused = await Assert.ThrowsAsync<PublishRefusedException>(() => RepairPackageAsync(PackageId, version: "3.9.9-preview"));
 
         Assert.Contains("lower", refused.Message, StringComparison.Ordinal);
-        Assert.Equal("4.0.9-preview", RecordedVersions[PackageId]);
+        Assert.Equal("4.0.0-preview", RecordedVersions[PackageId]);
     }
 
     /// <summary>
@@ -92,6 +100,34 @@ public sealed class RepairTests : PublishingHistory
         Assert.Equal(PackageOutcomeKind.Pushed, next.Report.Packages.Single(package => package.PackageId == PackageId).Kind);
         Assert.Equal("4.0.2-preview", RecordedVersions[PackageId]);
         Assert.Equal(["4.0.0-preview", "4.0.1-preview", "4.0.2-preview"], Feed.Versions(PackageId));
+    }
+
+    /// <summary>
+    /// #2083's bug: a repair used to settle a package's entry against the feed's highest version, comparing numbers
+    /// only. A stray higher version and a stable release without a label both sort above the version that actually
+    /// collided; the repair must settle exactly that one.
+    /// </summary>
+    [Fact]
+    public async Task A_repair_settles_the_colliding_version_though_the_feed_holds_a_stray_higher_version_and_a_stable_release()
+    {
+        var bootstrapCommit = (await BootstrapAsync()).Plan.Commit;
+        Edit("src/Tasks/Scheduler.cs");
+        var pushedCommit = CommitAndPush();
+        Assert.True((await RunAsync()).Report!.Succeeded);
+        Assert.Equal("4.0.1-preview", RecordedVersions[PackageId]);
+
+        SetRecordEntry(PackageId, "4.0.0-preview", bootstrapCommit);
+        Edit("src/Tasks/Scheduler.cs");
+        CommitAndPush();
+        var collided = await RunAsync();
+        Assert.False(collided.Report!.Succeeded);
+
+        Feed.Seed(PackageId, "9.0.0-preview");
+        Feed.Seed(PackageId, "4.0.1");
+
+        await RepairPackageAsync(PackageId, reason: "settle a collision despite stray feed versions", actor: "sfmskywalker");
+
+        Assert.Equal(("4.0.1-preview", pushedCommit), (RecordedVersions[PackageId], OriginRecord!.Find(PackageId)!.Commit));
     }
 
     [Fact]
@@ -154,8 +190,9 @@ public sealed class RepairTests : PublishingHistory
         State.Write(updated, tip, "Simulate a corrupted record entry");
     }
 
-    private Task<RepairReport> RepairPackageAsync(string packageId, string reason = "settle a collision", string actor = "an operator", string reference = PublishPlan.MainRef) =>
-        RepairCommand.RepairPackageAsync(new RepairPackageOptions(Repo.Root, reference, packageId, reason, actor, null), Feed, State, TextWriter.Null);
+    private Task<RepairReport> RepairPackageAsync(
+        string packageId, string reason = "settle a collision", string actor = "an operator", string reference = PublishPlan.MainRef, string? commit = null, string? version = null) =>
+        RepairCommand.RepairPackageAsync(new RepairPackageOptions(Repo.Root, reference, commit ?? Repo.Head, packageId, version, reason, actor, null), Feed, State, TextWriter.Null);
 
     private Task<RepairReport> RepairMainCommitAsync(
         string resetTo, string commit, string reason = "settle a rewritten main", string actor = "an operator", string reference = PublishPlan.MainRef) =>
