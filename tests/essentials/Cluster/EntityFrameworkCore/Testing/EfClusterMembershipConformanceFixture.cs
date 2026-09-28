@@ -237,6 +237,17 @@ public sealed class EfClusterMembershipConformanceFixture(EfClusterMembershipTes
         return services.BuildServiceProvider();
     }
 
+    /// <summary>
+    /// Runs <paramref name="run"/> with a fresh context on this fixture's store, once the store is ready: for a suite
+    /// that keeps records of its own beside the membership table, such as the finalization record every module context
+    /// maps.
+    /// </summary>
+    public async Task<T> WithStoreAsync<T>(Func<ClusterMembershipDbContext, Task<T>> run, CancellationToken cancellationToken = default)
+    {
+        await EnsureReadyAsync(cancellationToken);
+        return await WithContextAsync(run);
+    }
+
     private async Task<T> WithContextAsync<T>(Func<ClusterMembershipDbContext, Task<T>> run)
     {
         await using var scope = Root.CreateAsyncScope();
