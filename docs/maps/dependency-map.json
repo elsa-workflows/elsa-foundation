@@ -13204,6 +13204,11 @@
         },
         {
           "type": "external",
+          "id": "CShells",
+          "version": "0.0.30-preview.159"
+        },
+        {
+          "type": "external",
           "id": "Microsoft.Extensions.DependencyInjection",
           "version": "10.0.10"
         },
