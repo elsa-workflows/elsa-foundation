@@ -83,6 +83,16 @@ internal sealed class SchemaFamilyScan
     /// assignment inside it can be told from one added by a separate statement in the same member.
     /// </summary>
     private readonly List<(string Location, string Path, string Method, string Type, string Target, InitializerExpressionSyntax Initializer, SyntaxNode Node)> _replacementCandidates = [];
+
+    /// <summary>
+    /// Every <c>new Type { ... }</c> object creation, anywhere, whose initializer assigns <c>SchemaVersion</c>: a
+    /// fresh row (a new local, a field, an argument or a return value), not only a row replacing an existing
+    /// parameter the way <see cref="_replacementCandidates"/> tracks. The restamp-completeness rule holds it to the
+    /// same bar as a dotted stamp (<c>row.SchemaVersion = ...</c>): every declared content column of the type it
+    /// creates, assigned in the initializer or, when the creation names a row (a local or an assignment target), by
+    /// a later write to that row in the same member (#2144).
+    /// </summary>
+    private readonly List<(string Location, string Path, SyntaxNode? Member, string Type, string? Row, InitializerExpressionSyntax Initializer, SyntaxNode Node)> _stampedCreations = [];
     private IReadOnlySet<(string Name, int Arity)>? _upcastingMethods;
     private IReadOnlySet<(string Name, int Arity, int Parameter)>? _stampingMethods;
     private IReadOnlyList<(string Location, string Path, string? Family, string? Entity, string? Column, bool Integrity, string? Reason)>? _declaredColumns;
@@ -544,6 +554,30 @@ internal sealed class SchemaFamilyScan
                                "a restamp rewrites every declared content column from upcast values, so no column is left at the row's old stamp (spec 180, FR-014; #2144).");
         }
 
+        // An object initializer that stamps the row it creates is judged the same way: every declared content
+        // column of that type must be assigned in the initializer, or, when the creation names a row, by a later
+        // write to that row in the same member. A creation the full-row-rewrite rule already counts - a reassignment
+        // of a declared parameter with two or more assigned columns - is left to that rule instead (#2144).
+        foreach (var creation in _stampedCreations.Where(creation => _stampedTypes.Contains(creation.Type)))
+        {
+            if (creation.Row is not null && creation.Member is not null && wholeRow.Contains((creation.Path, creation.Member.FullSpan, creation.Row)))
+                continue;
+            var declared = content.Where(column => column.Entity == creation.Type && column.Column is not null)
+                .Select(column => column.Column!).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+            if (declared.Length == 0)
+                continue;
+            var written = InitializerColumns(creation.Initializer).Columns.ToHashSet(StringComparer.Ordinal);
+            if (creation.Row is not null && creation.Member is not null)
+                written.UnionWith(_memberWrites
+                    .Where(write => write.Path == creation.Path && write.Member is not null && write.Member.FullSpan == creation.Member.FullSpan && write.Row == creation.Row)
+                    .Select(write => write.Column));
+            var missing = declared.Where(column => !written.Contains(column)).ToArray();
+            if (missing.Length > 0)
+                violations.Add($"{creation.Location}: creates '{creation.Type}' and stamps it in the initializer but never assigns {Quoted(missing)} of its " +
+                               "declared content there" + (creation.Row is not null ? $" or by a later write to '{creation.Row}' in the same member" : "") +
+                               "; a restamp rewrites every declared content column from upcast values, so no column is left at the row's old stamp (spec 180, FR-014; #2144).");
+        }
+
         return Ordered(violations);
     }
 
@@ -905,6 +939,30 @@ internal sealed class SchemaFamilyScan
                 ((MemberAccessExpressionSyntax)assignment.Left).Expression.ToString(),
                 ((MemberAccessExpressionSyntax)assignment.Left).Name.Identifier.ValueText,
                 assignment.Ancestors().FirstOrDefault(node => node is MemberDeclarationSyntax or LocalFunctionStatementSyntax))));
+
+        // A fresh row's SchemaVersion can be set inside its own object initializer rather than by a later dotted
+        // assignment; the restamp-completeness rule holds that shape to the same bar (#2144). The row it creates is
+        // named when the creation initializes a local (`var row = new Row {...}`) or replaces an assignment target
+        // (`row = new Row {...}`, `state.Row = new Row {...}`); anything else - an argument, a return value - is
+        // still judged on its initializer alone, since there is no row to look for a later write against.
+        _stampedCreations.AddRange(root.DescendantNodes()
+            .OfType<ObjectCreationExpressionSyntax>()
+            .Where(creation => creation.Initializer is not null &&
+                creation.Initializer.Expressions.OfType<AssignmentExpressionSyntax>()
+                    .Any(assignment => assignment.Left is IdentifierNameSyntax { Identifier.ValueText: "SchemaVersion" }))
+            .Select(creation => (
+                Locate(path, creation),
+                Normalize(path),
+                Member: creation.Ancestors().FirstOrDefault(node => node is MemberDeclarationSyntax or LocalFunctionStatementSyntax),
+                Type: Rightmost(creation.Type) ?? creation.Type.ToString(),
+                Row: creation.Parent switch
+                {
+                    EqualsValueClauseSyntax { Parent: VariableDeclaratorSyntax variable } => variable.Identifier.ValueText,
+                    AssignmentExpressionSyntax { Right: var right } assignment when right == creation && assignment.IsKind(SyntaxKind.SimpleAssignmentExpression) => assignment.Left.ToString(),
+                    _ => (string?)null
+                },
+                creation.Initializer!,
+                Node: (SyntaxNode)creation)));
 
         Stamps.AddRange(root.DescendantNodes()
             .OfType<AssignmentExpressionSyntax>()

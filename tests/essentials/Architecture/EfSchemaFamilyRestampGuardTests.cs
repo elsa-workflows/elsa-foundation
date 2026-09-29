@@ -281,4 +281,60 @@ public sealed class EfSchemaFamilyRestampGuardTests
         Assert.Contains("'row'", violation);
         Assert.Contains("'LinesJson'", violation);
     }
+
+    /// <summary>
+    /// A stamp set inside an object initializer (<c>new Row { SchemaVersion = ..., ContentJson = ... }</c>) is judged
+    /// the same way a dotted stamp is: every declared content column of the type it creates must be assigned, either
+    /// in the initializer itself or by a later write to the row it names in the same member. A fresh row this scan
+    /// cannot name - an argument, a return value with no local - is judged on its initializer alone (#2144).
+    /// </summary>
+    [Fact]
+    public void Restamp_completeness_detector_flags_an_incomplete_initializer_stamp_and_accepts_a_complete_one_and_a_later_write()
+    {
+        var scan = Scan(
+            """
+            [assembly: EfSchemaFamily(Orders.SchemaFamily, "Sales", Orders.SchemaVersion)]
+            [assembly: EfSchemaContent(Orders.SchemaFamily, typeof(Row), nameof(Row.LinesJson), nameof(Row.ContentJson))]
+
+            public static class Orders
+            {
+                public const string SchemaVersion = "2";
+                public const string SchemaFamily = "Orders";
+                public static readonly EfSchemaChain Chain = EfSchemaChain.Of(typeof(Orders).Assembly, SchemaFamily);
+            }
+
+            public sealed class Row
+            {
+                public string ContentJson { get; set; } = "";
+                public string LinesJson { get; set; } = "";
+                public string SchemaVersion { get; set; } = "";
+            }
+
+            public sealed class Store
+            {
+                private static Row Partial()
+                {
+                    var row = new Row { ContentJson = "...", SchemaVersion = Orders.SchemaVersion };
+                    return row;
+                }
+
+                private static Row Complete()
+                {
+                    var row = new Row { ContentJson = "...", LinesJson = "...", SchemaVersion = Orders.SchemaVersion };
+                    return row;
+                }
+
+                private static Row RestampedInInitializerThenWrittenAfter()
+                {
+                    var row = new Row { ContentJson = "...", SchemaVersion = Orders.SchemaVersion };
+                    row.LinesJson = "...";
+                    return row;
+                }
+            }
+            """);
+
+        var violation = Assert.Single(scan.RestampCompletenessViolations());
+        Assert.Contains("'Row'", violation);
+        Assert.Contains("'LinesJson'", violation);
+    }
 }
