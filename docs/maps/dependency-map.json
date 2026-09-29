@@ -2592,6 +2592,11 @@
       "line": "B",
       "edges": [
         {
+          "type": "internal",
+          "id": "Elsa.Primitives",
+          "path": "src/essentials/Primitives/Primitives/Elsa.Primitives.csproj"
+        },
+        {
           "type": "external",
           "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
           "version": "10.0.10"
@@ -4951,6 +4956,11 @@
           "type": "internal",
           "id": "Elsa.Attention.Core",
           "path": "src/essentials/Attention/Core/Elsa.Attention.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Cluster.Core",
+          "path": "src/essentials/Cluster/Core/Elsa.Cluster.Core.csproj"
         },
         {
           "type": "internal",
