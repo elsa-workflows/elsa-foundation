@@ -84,7 +84,7 @@ PY
 for feed in "${resolved[@]}"; do
   # DemoVersion selects the release; the package version (1.0.0 or 1.1.0) follows from it in the project file. It is not a
   # -p:Version because a global Version would also be the version the referenced Elsa projects are asked for.
-  echo "== packing Elsa.Samples.Nuplane.Notes, release $release, into $feed"
+  echo "== packing Elsa.Samples.Nuplane.Notes, release $release, into ${feed#"$demo_root"/}"
   demo_quiet "Packing the Notes sample" dotnet pack "$sample" -c "$configuration" -p:DemoVersion="$release" -o "$feed" -nologo -v q
 
   # A host that carries Elsa.Persistence.EntityFramework shares it with every package, and `dotnet elsa persistence` finds a
@@ -96,14 +96,14 @@ for feed in "${resolved[@]}"; do
       demo_fail "$feed holds a copy of Elsa.Persistence.EntityFramework from an earlier pack, and this host carries its own. Delete it (rm $feed/Elsa.Persistence.EntityFramework.*.nupkg) and pack again."
     fi
   elif ! compgen -G "$feed/Elsa.Persistence.EntityFramework.*.nupkg" >/dev/null; then
-    echo "== packing Elsa.Persistence.EntityFramework into $feed (this host does not carry it)"
+    echo "== packing Elsa.Persistence.EntityFramework into ${feed#"$demo_root"/} (this host does not carry it)"
     demo_quiet "Packing Elsa.Persistence.EntityFramework" dotnet pack "$persistence" -c "$configuration" -p:IsPackable=true -o "$feed" -nologo -v q
   fi
 done
 
 # The closure feed: every package EF persistence resolved (EF Core and what it needs) and, from the tooling project's
 # restore, the two database engines the module offers and their own closures. Copied from the NuGet cache.
-echo "== filling the closure feed $closure"
+echo "== filling the closure feed ${closure#"$demo_root"/}"
 demo_quiet "Restoring the tooling project" dotnet restore "$tooling" -nologo -v q
 python3 - "$closure" \
   "$demo_root/src/essentials/Persistence/EntityFramework/obj/project.assets.json" \
@@ -143,10 +143,10 @@ for path in [*packages(persistence_assets, []), *packages(tooling_assets, engine
     if path not in copied:
         shutil.copyfile(path, os.path.join(closure, os.path.basename(path)))
         copied.add(path)
-print(f"   {len(copied)} packages in {closure}")
+print(f"   {len(copied)} packages in {os.path.relpath(closure)}")
 PY
 
 for feed in "${resolved[@]}"; do
-  echo "== feed: $feed"
+  echo "== feed: ${feed#"$demo_root"/}"
   ls -1 "$feed" | sed 's/^/     /'
 done
