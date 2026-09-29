@@ -34,6 +34,7 @@ public sealed class FoundationHostBootTests(FoundationHostFeed feed) : IClassFix
 
     /// <summary>The host's module-management key, restated: the host is never loaded into this process.</summary>
     private static readonly Dictionary<string, string> ModuleManagementKey = new() { ["X-Elsa-Module-Management-Key"] = "foundation-host-boot-tests" };
+
     private readonly string _file = Path.Join(Path.GetTempPath(), $"elsa-foundation-host-boot-{Guid.NewGuid():N}.db");
     private FoundationHostProcess? _host;
 
