@@ -2805,7 +2805,27 @@
         },
         {
           "type": "external",
+          "id": "CShells.Abstractions",
+          "version": "0.0.30-preview.159"
+        },
+        {
+          "type": "external",
           "id": "Microsoft.Extensions.Logging.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "external",
+          "id": "Nuplane.Loading.Abstractions",
+          "version": "0.0.11-preview.93"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration.Abstractions",
           "version": "10.0.10"
         },
         {
@@ -13191,6 +13211,11 @@
           "type": "external",
           "id": "Microsoft.NET.Test.Sdk",
           "version": "18.0.0"
+        },
+        {
+          "type": "external",
+          "id": "Nuplane.Loading",
+          "version": "0.0.11-preview.93"
         },
         {
           "type": "external",

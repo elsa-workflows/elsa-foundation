@@ -807,7 +807,7 @@ note of the same date.
 Recorded 2026-09-29, amending FR-020 to FR-022 for an in-place upgrade; lands with the PR that implements it, whose merge
 is the owner's approval.
 
-- **A superseded package generation stops counting once it is retired, and not before.** Nuplane loads each
+- **A replaced package generation stops counting once it is retired, and not before.** Nuplane loads each
   host-integrated package graph into a load context it never unloads, so an EF module upgraded in place on a running
   host keeps its previous release's assembly loaded for the life of the process. FR-021's intersection over every
   loaded declaration then pinned the upgraded host to what the previous release reads - [1] and [1, 2] intersect to
