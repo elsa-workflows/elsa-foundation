@@ -132,7 +132,7 @@ public sealed class NuplanePackageGenerations : ISupersededAssemblySource, IShel
 
         var pinned = await PinnedByFeatureCatalogAsync(replaced, cancellationToken);
         foreach (var generation in _live.Keys)
-            pinned.UnionWith(generation.Contexts ?? PackageContexts(replaced));
+            pinned.UnionWith(PackageContexts(generation.Features ?? replaced));
         return replaced.Where(assembly => !pinned.Contains(ContextOf(assembly))).ToHashSet();
     }
 
@@ -195,7 +195,7 @@ public sealed class NuplanePackageGenerations : ISupersededAssemblySource, IShel
 
     private Generation Track(IShell? shell, IServiceProvider? container, bool leased)
     {
-        var generation = new Generation(this, shell, container is null ? null : FeatureContexts(container, shell), leased);
+        var generation = new Generation(this, shell, container is null ? null : FeatureAssemblies(container, shell), leased);
         if (shell is not null)
             _shells.AddOrUpdate(shell, generation);
         _live.TryAdd(generation, 0);
@@ -203,16 +203,15 @@ public sealed class NuplanePackageGenerations : ISupersededAssemblySource, IShel
     }
 
     /// <summary>
-    /// Every load context, other than the default one, of a feature in <paramref name="container"/>, or
-    /// <see langword="null"/> when they cannot be read: CShells gives every shell container the feature descriptors of
-    /// the catalog snapshot it was built from.
+    /// The assemblies the features in <paramref name="container"/> come from, or <see langword="null"/> when they cannot be
+    /// read: CShells gives every shell container the feature descriptors of the catalog snapshot it was built from.
     /// </summary>
-    private IReadOnlySet<AssemblyLoadContext>? FeatureContexts(IServiceProvider container, IShell? shell)
+    private IReadOnlySet<Assembly>? FeatureAssemblies(IServiceProvider container, IShell? shell)
     {
         try
         {
             if (container.GetService<IReadOnlyCollection<ShellFeatureDescriptor>>() is { } descriptors)
-                return PackageContexts(descriptors.Select(descriptor => descriptor.StartupType?.Assembly));
+                return descriptors.Select(descriptor => descriptor.StartupType?.Assembly).OfType<Assembly>().ToHashSet();
             _logger.LogWarning(
                 "Shell generation {Shell} names no features, so every superseded package generation keeps counting for this host's " +
                 "readability report until it is disposed.",
@@ -310,7 +309,8 @@ public sealed class NuplanePackageGenerations : ISupersededAssemblySource, IShel
         try
         {
             var retired = await GetRetiredAsync();
-            var released = retired.Where(assembly => generation.Contexts?.Contains(ContextOf(assembly)) ?? true).ToArray();
+            var composed = generation.Features is { } features ? PackageContexts(features) : null;
+            var released = retired.Where(assembly => composed?.Contains(ContextOf(assembly)) ?? true).ToArray();
             if (released.Length == 0 || Host?.GetService<IClusterMembership>() is not { } membership)
                 return;
 
@@ -342,15 +342,18 @@ public sealed class NuplanePackageGenerations : ISupersededAssemblySource, IShel
     /// disposes it after everything it created since; a drain, when the generation has one, completes only after the whole
     /// provider has been disposed.
     /// </summary>
-    private sealed class Generation(NuplanePackageGenerations owner, IShell? shell, IReadOnlySet<AssemblyLoadContext>? contexts, bool leased)
+    private sealed class Generation(NuplanePackageGenerations owner, IShell? shell, IReadOnlySet<Assembly>? features, bool leased)
         : IShellInitializer, IAsyncDisposable, IDisposable
     {
         private readonly Lock _gate = new();
         private IDrainOperation? _drain;
         private bool _disposed;
 
-        /// <summary>The load contexts it pins, or <see langword="null"/> for every one a replaced assembly is in.</summary>
-        public IReadOnlySet<AssemblyLoadContext>? Contexts => contexts;
+        /// <summary>
+        /// The assemblies its features come from, whose every load context but the default one it pins, or
+        /// <see langword="null"/> when they could not be read, which pins every load context a replaced assembly is in.
+        /// </summary>
+        public IReadOnlySet<Assembly>? Features => features;
 
         public string Name => shell?.Descriptor.ToString() ?? "(unidentified)";
 
