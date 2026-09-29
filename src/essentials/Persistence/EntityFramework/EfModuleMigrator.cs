@@ -213,7 +213,23 @@ public static class EfModuleMigrationServiceCollectionExtensions
         // CShells runs initializers by lifecycle phase, not registration order, and shell tasks and seeders
         // run at Start. Schema has to exist before any of them touches a store, so migrations run at Prepare.
         if (onShellActivation)
+        {
+            var exposed = Exposures(services).Length;
             services.AddShellInitializer<EfModuleMigrator<TContext>>(LifecyclePhase.Prepare, 0);
+            // AddShellInitializer exposes the initializer through a transient factory, and a container disposes what a
+            // transient registration returns with the scope that resolved it. CShells runs initializers in a scope it
+            // disposes once they have run, so that disposed this migrator - and with it the gate's background evaluation
+            // and refresh - right after activation, leaving writers and dormancy stuck at what activation saw (#2143).
+            // Exposed as a singleton, it is the same instance and the shell's container alone owns it, as the Tasks
+            // feature keeps its task manager out of that scope.
+            var exposures = Exposures(services);
+            if (exposures.Length != exposed + 1)
+                throw new InvalidOperationException(
+                    $"AddShellInitializer<{typeof(EfModuleMigrator<TContext>).Name}> no longer adds exactly one {nameof(IShellInitializer)} " +
+                    "registration, so the migrator's exposure cannot be kept out of CShells' initializer scope. Revisit this registration.");
+            if (exposures[^1].Lifetime != ServiceLifetime.Singleton)
+                services[services.IndexOf(exposures[^1])] = ServiceDescriptor.Singleton<IShellInitializer>(provider => provider.GetRequiredService<EfModuleMigrator<TContext>>());
+        }
         // AddShellInitializer registers the initializer transiently; this last-wins registration makes the
         // shell and the hosted-service paths resolve one instance, exactly as AddEfProviderBindingValidation
         // does for the validator above. Ordering matters: a singleton added *before* that call is shadowed by
@@ -224,4 +240,6 @@ public static class EfModuleMigrationServiceCollectionExtensions
         return services;
     }
 
+    private static ServiceDescriptor[] Exposures(IServiceCollection services) =>
+        services.Where(descriptor => descriptor.ServiceType == typeof(IShellInitializer) && !descriptor.IsKeyedService).ToArray();
 }

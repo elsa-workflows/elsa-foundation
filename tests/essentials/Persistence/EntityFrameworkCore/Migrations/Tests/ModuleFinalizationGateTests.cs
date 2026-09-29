@@ -1,4 +1,5 @@
 using System.Text.Json;
+using CShells.Lifecycle;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Persistence.EntityFramework.SchemaFinalization;
 using Elsa.Persistence.EntityFramework.Tests;
@@ -31,11 +32,17 @@ public sealed class ModuleFinalizationGateTests : IAsyncLifetime
 
     public Task InitializeAsync()
     {
+        _host = Compose();
+        return Task.CompletedTask;
+    }
+
+    private ServiceProvider Compose(Action<IServiceCollection>? configure = null)
+    {
         var services = new ServiceCollection();
         services.AddStudioPreferencesEntityFrameworkCore(new StudioPreferencesEntityFrameworkCoreOptions { Provider = "Sqlite", ConnectionString = ConnectionString });
         services.AddEfModuleMigrations<StudioPreferencesDbContext>("Sqlite");
-        _host = services.BuildServiceProvider();
-        return Task.CompletedTask;
+        configure?.Invoke(services);
+        return services.BuildServiceProvider();
     }
 
     public async Task DisposeAsync()
@@ -69,6 +76,33 @@ public sealed class ModuleFinalizationGateTests : IAsyncLifetime
 
         Assert.True(await Migrator.Gate!.RefreshIfOlderThanAsync(TimeSpan.Zero));
         Assert.Contains(await Migrator.Gate.ReadStatusAsync(), status => status.Family == StudioPreferencesEfModule.SchemaFamily && status.WriteVersion == StudioPreferencesEfModule.SchemaVersion);
+    }
+
+    /// <summary>
+    /// CShells resolves a shell's initializers in a scope it disposes once they have run (#2143). The migrator it
+    /// initialized there outlives that scope, so its gate keeps refreshing: a family finalized afterwards at a version this
+    /// build cannot read refuses the module's writes with no restart (spec 181, FR-012). Disposed with that scope, the
+    /// gate stopped right after activation and the module kept writing a version the fleet had left behind, with nothing
+    /// logged: the direction that looks like success.
+    /// </summary>
+    [Fact]
+    public async Task The_gate_admitted_in_a_shells_initializer_scope_keeps_refreshing_after_that_scope_ends()
+    {
+        await _host.DisposeAsync();
+        _host = Compose(services => services.Configure<EfSchemaFinalizationOptions>(options => options.RefreshInterval = TimeSpan.FromMilliseconds(50)));
+        await using (var scope = _host.CreateAsyncScope())
+            await Assert.Single(scope.ServiceProvider.GetServices<IShellInitializer>().OfType<EfModuleMigrator<StudioPreferencesDbContext>>()).InitializeAsync();
+
+        await FinalizeNewerAsync();
+
+        var deadline = DateTimeOffset.UtcNow + TimeSpan.FromSeconds(20);
+        while (Migrator.Gate!.StateOf(StudioPreferencesEfModule.SchemaFamily) is not { WritesRefused: true })
+        {
+            Assert.True(DateTimeOffset.UtcNow < deadline, "The gate did not refresh after the initializer scope ended.");
+            await Task.Delay(TimeSpan.FromMilliseconds(50));
+        }
+
+        await Assert.ThrowsAsync<EfSchemaFamilyWritesRefusedException>(() => WriteAsync("refused").AsTask());
     }
 
     [Fact]
