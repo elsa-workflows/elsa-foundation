@@ -534,6 +534,12 @@ lands with the B5b PR, whose merge is the owner's approval.
   at activation holds there, for its EF modules as for a feed-loaded module on `Elsa.Workbench`. It composes the
   in-process default only; the durable EF provider would bring EF Core into a host that carries none (ADR 0076), so
   `Elsa.Foundation.Host` is a cluster of one.
+- **Proved on the built host.** `FoundationHostBootTests` (`tests/essentials/Cluster/EntityFrameworkCore/Tests`) start
+  the real `Elsa.Foundation.Host` as a child process over a directory feed holding the feed-module fixture and
+  `Elsa.Persistence.EntityFramework`, packed by the SDK, with EF Core and the Sqlite engine resolved from the package
+  cache: the module finalizes its new version at activation and its feature serves; and while a hold is on that version
+  the feature is dormant (409) until the hold is released on the database, after which the running host serves it.
+  Taking `AddEfSchemaReadability` out of the host's `Program.cs` fails both.
 - **The gate keeps running after shell activation.** CShells resolves a shell's initializers in a scope it disposes
   once they have run, and `AddShellInitializer` exposes an initializer through a transient factory, so that scope
   disposed the singleton `EfModuleMigrator`, and with it the gate's background evaluation and refresh (FR-005, FR-010,

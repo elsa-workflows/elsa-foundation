@@ -13061,6 +13061,11 @@
       "edges": [
         {
           "type": "internal",
+          "id": "Elsa.Foundation.Host",
+          "path": "src/apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Cluster.EntityFrameworkCore.Testing",
           "path": "tests/essentials/Cluster/EntityFrameworkCore/Testing/Elsa.Cluster.EntityFrameworkCore.Testing.csproj"
         },

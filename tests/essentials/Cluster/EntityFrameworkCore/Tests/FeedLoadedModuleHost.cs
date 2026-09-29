@@ -173,26 +173,13 @@ internal sealed class FeedLoadedModuleHost : IAsyncDisposable
     public static IReadOnlyList<string> SharedAssemblies(string host) =>
     [
         .. new ConfigurationBuilder()
-            .AddJsonFile(Path.Join(RepoRoot, "src", "apps", host, "appsettings.json"))
+            .AddJsonFile(Path.Join(FoundationHostProcess.RepoRoot, "src", "apps", host, "appsettings.json"))
             .Build()
             .GetSection("Nuplane:Loading:SharedAssemblies")
             .GetChildren()
             .Select(entry => entry["Name"])
             .OfType<string>()
     ];
-
-    private static string RepoRoot { get; } = FindRepoRoot();
-
-    private static string FindRepoRoot()
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
-        {
-            if (File.Exists(Path.Join(directory.FullName, "Elsa.Server.slnx")))
-                return directory.FullName;
-        }
-
-        throw new InvalidOperationException($"No Elsa.Server.slnx above {AppContext.BaseDirectory}.");
-    }
 
     /// <summary>The fixture module's finalization tables, mapped from the test's side to seed and read them.</summary>
     private sealed class SeedContext(DbContextOptions<SeedContext> options) : DbContext(options)

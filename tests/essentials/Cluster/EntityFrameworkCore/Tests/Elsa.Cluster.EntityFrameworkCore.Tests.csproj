@@ -33,6 +33,15 @@
                       OutputItemType="FeedModuleFixture" />
   </ItemGroup>
 
+  <!--
+    Build-order only, and the fixture's packing beside it (#2143): FoundationHostBootTests start the host's own build
+    output as a child process, over a directory feed holding the fixture and the EF persistence package it carries a
+    private copy of, exactly as an operator runs it. Nothing from the host is loaded into this process.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\..\src\apps\Elsa.Foundation.Host\Elsa.Foundation.Host.csproj" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
   <Target Name="CopyFeedModuleFixture" AfterTargets="Build">
     <Copy SourceFiles="@(FeedModuleFixture)" DestinationFolder="$(OutDir)feed-module" SkipUnchangedFiles="true" />
   </Target>
