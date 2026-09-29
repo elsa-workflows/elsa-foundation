@@ -202,7 +202,7 @@ public sealed class EfOpenTelemetryDurabilityTests
     public async Task Durable_capture_survives_provider_restart_but_isolated_database_does_not_leak()
     {
         await using var temp = new TempDatabaseDirectory("elsa-otel-restart-", "restart.db");
-        var foreignPath = Path.Combine(temp.DirectoryPath, "foreign.db");
+        var foreignPath = Path.Join(temp.DirectoryPath, "foreign.db");
 
         await using (var first = OpenTelemetryEntityFrameworkCoreFixture.BuildProvider(temp.DatabasePath))
         {
@@ -506,8 +506,8 @@ public sealed class EfOpenTelemetryDurabilityTests
     [Fact]
     public async Task Infrastructure_failures_do_not_escape_as_successful_captures()
     {
-        var directory = Path.Combine(Path.GetTempPath(), "elsa-otel-infrastructure-" + Guid.NewGuid().ToString("N"));
-        var path = Path.Combine(directory, "missing", "otel.db");
+        var directory = Path.Join(Path.GetTempPath(), "elsa-otel-infrastructure-" + Guid.NewGuid().ToString("N"));
+        var path = Path.Join(directory, "missing", "otel.db");
         try
         {
             await using var provider = OpenTelemetryEntityFrameworkCoreFixture.BuildProvider(path);

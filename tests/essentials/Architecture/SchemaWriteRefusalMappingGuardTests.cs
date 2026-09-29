@@ -237,7 +237,7 @@ public sealed class SchemaWriteRefusalMappingGuardTests
         }
 
         context.Response.Body.Position = 0;
-        using var reader = new StreamReader(context.Response.Body);
+        using var reader = new StreamReader(context.Response.Body, leaveOpen: true);
         return (context.Response.StatusCode, await reader.ReadToEndAsync());
     }
 
