@@ -317,7 +317,7 @@ public sealed class EfWorkflowTriggerBindingStore(
         WorkflowTriggerBinding x;
         try
         {
-            x = RuntimeArtifactJson.Deserialize<WorkflowTriggerBinding>(RuntimeTriggerBindingEfModule.Chain.Upcast(e.SchemaVersion, RuntimeTriggerBindingEfModule.TableName, nameof(e.ContentJson), e.ContentJson));
+            x = RuntimeArtifactJson.Deserialize<WorkflowTriggerBinding>(RuntimeTriggerBindingEfModule.Chain.Upcast<WorkflowTriggerBindingEntity>(e.SchemaVersion, (nameof(e.ContentJson), e.ContentJson))[nameof(e.ContentJson)]!);
         }
         catch (Exception exception) when (exception is JsonException or NotSupportedException or ArgumentException or InvalidOperationException or FormatException)
         {
@@ -334,7 +334,7 @@ public sealed class EfWorkflowTriggerBindingStore(
     // (eagerly, via .ToArray()) on this same row, so the version check has already passed and this
     // Deserialize call cannot observe a skewed row's changed shape as corruption. The content is rewritten at the
     // current version, so the stamp moves with it: a row read at an older version is upgraded here.
-    private static void SetActive(WorkflowTriggerBindingEntity row, bool active) { var binding = RuntimeArtifactJson.Deserialize<WorkflowTriggerBinding>(RuntimeTriggerBindingEfModule.Chain.Upcast(row.SchemaVersion, RuntimeTriggerBindingEfModule.TableName, nameof(row.ContentJson), row.ContentJson)); row.IsActive = active; row.ContentJson = RuntimeArtifactJson.Serialize(binding with { IsActive = active }); row.SchemaVersion = RuntimeTriggerBindingEfModule.SchemaVersion; row.Revision = checked(row.Revision + 1); }
+    private static void SetActive(WorkflowTriggerBindingEntity row, bool active) { var binding = RuntimeArtifactJson.Deserialize<WorkflowTriggerBinding>(RuntimeTriggerBindingEfModule.Chain.Upcast<WorkflowTriggerBindingEntity>(row.SchemaVersion, (nameof(row.ContentJson), row.ContentJson))[nameof(row.ContentJson)]!); row.IsActive = active; row.ContentJson = RuntimeArtifactJson.Serialize(binding with { IsActive = active }); row.SchemaVersion = RuntimeTriggerBindingEfModule.SchemaVersion; row.Revision = checked(row.Revision + 1); }
     private static void ValidateActivation(string id, IReadOnlyCollection<WorkflowTriggerBinding> xs) { ArgumentException.ThrowIfNullOrWhiteSpace(id); ArgumentNullException.ThrowIfNull(xs); var ids = new HashSet<string>(StringComparer.Ordinal); foreach (var x in xs) { Validate(x); if (x.ActivationId != id || string.IsNullOrWhiteSpace(x.SlotId) || !ids.Add(x.TriggerBindingId)) throw new ArgumentException("Activation bindings must have matching activation, slot, and unique binding ids.", nameof(xs)); } }
     private static bool ProjectionsEqual(IEnumerable<WorkflowTriggerBindingEntity> rows, IEnumerable<WorkflowTriggerBinding> xs, string scope) => Fingerprint(rows.Select(x => Read(x, scope))) == Fingerprint(xs);
     private static bool ProjectionMatches(WorkflowTriggerBindingProjectionStateEntity state, IEnumerable<WorkflowTriggerBindingEntity> rows, string scope, string activation)
@@ -349,7 +349,7 @@ public sealed class EfWorkflowTriggerBindingStore(
                state.Revision > 0 &&
                state.BindingCount == bindings.Length &&
                state.ProjectionFingerprint == fingerprint &&
-               RuntimeTriggerBindingEfModule.Chain.Upcast(state.SchemaVersion, RuntimeTriggerBindingEfModule.ProjectionStateTableName, nameof(state.ContentJson), state.ContentJson) == fingerprint &&
+               RuntimeTriggerBindingEfModule.Chain.Upcast<WorkflowTriggerBindingProjectionStateEntity>(state.SchemaVersion, (nameof(state.ContentJson), state.ContentJson))[nameof(state.ContentJson)] == fingerprint &&
                bindings.All(binding => binding.ActivationId == activation && binding.IsActive == state.IsActive);
     }
     private static void EnsureProjection(WorkflowTriggerBindingProjectionStateEntity state, IEnumerable<WorkflowTriggerBindingEntity> rows, string scope, string activation) { if (!ProjectionMatches(state, rows, scope, activation)) throw new InvalidDataException($"Trigger-binding activation projection '{activation}' does not match its rows."); }

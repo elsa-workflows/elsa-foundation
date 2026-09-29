@@ -575,7 +575,7 @@ public sealed class EfRuntimePostCommitOutboxStore(
         RuntimePostCommitOutboxItem item;
         try
         {
-            item = RuntimeArtifactJson.Deserialize<RuntimePostCommitOutboxItem>(RuntimePostCommitOutboxEfModule.Chain.Upcast(row.SchemaVersion, RuntimePostCommitOutboxEfModule.TableName, nameof(row.ContentJson), row.ContentJson));
+            item = RuntimeArtifactJson.Deserialize<RuntimePostCommitOutboxItem>(RuntimePostCommitOutboxEfModule.Chain.Upcast<RuntimePostCommitOutboxEntity>(row.SchemaVersion, (nameof(row.ContentJson), row.ContentJson))[nameof(row.ContentJson)]!);
         }
         catch (Exception exception) when (exception is JsonException or ArgumentException or InvalidOperationException or NotSupportedException)
         {

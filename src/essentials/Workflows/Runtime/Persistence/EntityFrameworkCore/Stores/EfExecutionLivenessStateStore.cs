@@ -514,7 +514,7 @@ public sealed class EfExecutionLivenessStateStore(
             row.Revision <= 0 || row.ScopeKey != EfRuntimeOperationalStoreSupport.Encode(scope) || row.ScopeKeyHash != EfRuntimeOperationalStoreSupport.Hash(scope))
             throw new InvalidDataException("The execution-liveness row scope, schema, or revision projection is corrupt.");
         ExecutionLivenessState state;
-        var content = RuntimeOperationalStateEfModule.Chain.Upcast(row.SchemaVersion, RuntimeOperationalStateEfModule.ExecutionLivenessTableName, nameof(row.ContentJson), row.ContentJson);
+        var content = RuntimeOperationalStateEfModule.Chain.Upcast<ExecutionLivenessStateEntity>(row.SchemaVersion, (nameof(row.ContentJson), row.ContentJson))[nameof(row.ContentJson)]!;
         try { state = RuntimeArtifactJson.Deserialize<ExecutionLivenessState>(content); }
         catch (Exception exception) when (exception is JsonException or ArgumentException or InvalidOperationException or NotSupportedException)
         { throw new InvalidDataException("The persisted execution-liveness state is not valid current data.", exception); }

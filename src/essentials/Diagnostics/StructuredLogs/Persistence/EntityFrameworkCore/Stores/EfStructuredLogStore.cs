@@ -286,8 +286,8 @@ public sealed class EfStructuredLogStore : IStructuredLogStore, IDiagnosticsPers
                 if (existingOperation.IssuedAtTicks != batch.Id.IssuedAt.UtcTicks)
                     throw new StructuredLogsException("The structured log append operation identity was reused with a different issue time.");
 
-                var replayed = DeserializeOutcome(StructuredLogsEfModule.Chain.Upcast(
-                    existingOperation.SchemaVersion, StructuredLogsEfModule.AppendOperationsTableName, nameof(existingOperation.OutcomeJson), existingOperation.OutcomeJson));
+                var replayed = DeserializeOutcome(StructuredLogsEfModule.Chain.Upcast<StructuredLogAppendOperation>(
+                    existingOperation.SchemaVersion, (nameof(existingOperation.OutcomeJson), existingOperation.OutcomeJson))[nameof(existingOperation.OutcomeJson)]!);
 
                 // The stored fingerprint was computed over this attempt's payload serialization at the version that
                 // wrote it - existingOperation.SchemaVersion, stamped alongside it, so no separate column is needed
@@ -545,7 +545,7 @@ public sealed class EfStructuredLogStore : IStructuredLogStore, IDiagnosticsPers
 
     private StructuredLogEntry ToEntry(StructuredLogRecord row)
     {
-        var payload = DeserializePayload(StructuredLogsEfModule.Chain.Upcast(row.SchemaVersion, StructuredLogsEfModule.RecordsTableName, nameof(row.PayloadJson), row.PayloadJson));
+        var payload = DeserializePayload(StructuredLogsEfModule.Chain.Upcast<StructuredLogRecord>(row.SchemaVersion, (nameof(row.PayloadJson), row.PayloadJson))[nameof(row.PayloadJson)]!);
         return payload with
         {
             Timestamp = new DateTimeOffset(row.TimestampTicks, TimeSpan.FromMinutes(row.TimestampOffsetMinutes)),

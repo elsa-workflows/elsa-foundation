@@ -182,7 +182,7 @@ public sealed class EfActivityExecutionInspectionStore(
         ActivityExecutionEfSupport.EnsureIdentityProjection(row.ActivityExecutionId, row.ActivityExecutionIdHash, row.ActivityExecutionIdOrderKey, activity);
         if (row.ExecutionScopeId is null != row.ExecutionScopeIdHash is null)
             throw new InvalidDataException("The persisted activity execution inspection execution-scope projection is incomplete.");
-        var projection = RuntimeArtifactJson.Deserialize<ActivityExecutionInspectionProjection>(RuntimeActivityExecutionEfModule.Chain.Upcast(row.SchemaVersion, RuntimeActivityExecutionEfModule.ActivityExecutionInspectionTableName, nameof(row.ContentJson), row.ContentJson));
+        var projection = RuntimeArtifactJson.Deserialize<ActivityExecutionInspectionProjection>(RuntimeActivityExecutionEfModule.Chain.Upcast<ActivityExecutionInspectionEntity>(row.SchemaVersion, (nameof(row.ContentJson), row.ContentJson))[nameof(row.ContentJson)]!);
         ActivityExecutionEfSupport.Validate(projection);
         var executionScope = row.ExecutionScopeId is null ? null : ActivityExecutionEfSupport.Decode(row.ExecutionScopeId);
         if (executionScope is not null && row.ExecutionScopeIdHash != ActivityExecutionEfSupport.Hash(executionScope))

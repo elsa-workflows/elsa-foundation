@@ -135,8 +135,8 @@ public sealed class EfStudioPreferenceStore(StudioPreferencesDbContext context) 
 
     private static StudioPreferenceDocument Map(StudioPreferenceRecord record)
     {
-        using var document = JsonDocument.Parse(StudioPreferencesEfModule.Chain.Upcast(
-            record.SchemaVersion, StudioPreferencesEfModule.TableName, nameof(record.ValueJson), record.ValueJson));
+        using var document = JsonDocument.Parse(StudioPreferencesEfModule.Chain.Upcast<StudioPreferenceRecord>(
+            record.SchemaVersion, (nameof(record.ValueJson), record.ValueJson))[nameof(record.ValueJson)]!);
         return new StudioPreferenceDocument(
             record.Namespace,
             record.PreferenceSchemaVersion,

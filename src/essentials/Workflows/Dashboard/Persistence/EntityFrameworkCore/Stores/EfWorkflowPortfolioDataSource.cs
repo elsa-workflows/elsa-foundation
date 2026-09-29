@@ -294,8 +294,8 @@ public sealed class EfWorkflowPortfolioDataSource(
                 !StringComparer.Ordinal.Equals(row.DefinitionIdHash, EfRelationalIdentity.Hash(definitionId)))
                 throw new InvalidDataException("The workflow executable source-reference projection identity envelope is corrupt.");
 
-            using var document = JsonDocument.Parse(RuntimeArtifactEfModule.Chain.Upcast(
-                row.SchemaVersion, RuntimeArtifactEfModule.SourceReferenceTableName, nameof(row.ContentJson), row.ContentJson));
+            using var document = JsonDocument.Parse(RuntimeArtifactEfModule.Chain.Upcast<WorkflowExecutableSourceReferenceEntity>(
+                row.SchemaVersion, (nameof(row.ContentJson), row.ContentJson))[nameof(row.ContentJson)]!);
             if (!document.RootElement.TryGetProperty("collection", out var collection) ||
                 !StringComparer.Ordinal.Equals(collection.GetString(), "workflowExecutableSourceReference") ||
                 !document.RootElement.TryGetProperty("artifactId", out var envelopeArtifactId) ||

@@ -12,7 +12,8 @@ namespace Elsa.Persistence.EntityFrameworkCore.Migrations.Tests;
 /// and FR-008) against the model its module's context actually builds, on every provider: a declared column is a column
 /// of a stamped table in that model, and every document column of a stamped table is declared, content or integrity, by
 /// one family of the module that maps it. Nothing falls through, so the guards that read the declaration
-/// (<c>EfSchemaFamilyDeclarationGuardTests</c>) see every column that needs a chain on read and a stamp on write.
+/// (<c>EfSchemaFamilyContentReadGuardTests</c>, <c>EfSchemaFamilyRestampGuardTests</c>) see every column that needs a
+/// chain on read and a stamp on write.
 /// </summary>
 /// <remarks>
 /// A document column is one a store keeps a document in: a string column whose name ends in <c>Json</c> or is

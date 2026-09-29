@@ -21,7 +21,7 @@ using Elsa.Specifications.PackageManifest.Generator.Hints;
 [assembly: ManifestExtension("efModules", ClusterMembershipEfModule.Name)]
 
 // The schema family this module owns (spec 180, FR-001), at the version its rows are stamped and read with. A host's
-// readability report is derived from it alone (spec 183, FR-020); EfSchemaFamilyDeclarationGuardTests fails the build
+// readability report is derived from it alone (spec 183, FR-020); EfSchemaFamilyChainDeclarationGuardTests fails the build
 // when a SchemaFamily constant is not declared here, or is declared at another version.
 [assembly: EfSchemaFamily(ClusterMembershipEfModule.SchemaFamily, ClusterMembershipEfModule.Name, ClusterMembershipEfModule.SchemaVersion)]
 

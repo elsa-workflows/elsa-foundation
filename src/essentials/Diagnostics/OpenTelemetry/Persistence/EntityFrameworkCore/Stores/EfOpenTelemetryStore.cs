@@ -236,8 +236,9 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
                 return null;
             // These columns are a portable integrity projection as well as a corruption probe; filters use
             // normalized membership rows, never provider JSON operators.
-            _ = ValidatePersistedMemberships(summary, nameof(summary.ServiceMembershipJson), summary.ServiceMembershipJson);
-            _ = ValidatePersistedMemberships(summary, nameof(summary.WorkflowMembershipJson), summary.WorkflowMembershipJson);
+            var content = SummaryContent(summary);
+            _ = ValidatePersistedMemberships(content, nameof(summary.ServiceMembershipJson));
+            _ = ValidatePersistedMemberships(content, nameof(summary.WorkflowMembershipJson));
             var trace = ToTrace(summary);
             if (!StringComparer.Ordinal.Equals(summary.TraceIdSearchKey, traceSearchKey))
                 return null;
@@ -715,11 +716,12 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
                 records.AddRange(group);
                 var merged = MergeTraceRecords(records);
                 var row = existing ?? new OpenTelemetryTraceSummaryEntity { ScopeKey = binding.ScopeKey, TraceKey = group.Key, Version = Guid.NewGuid() };
-                var retainedServices = existing is null
+                var existingContent = existing is null ? null : SummaryContent(existing);
+                var retainedServices = existingContent is null
                     ? []
-                    : ValidatePersistedMemberships(existing, nameof(existing.ServiceMembershipJson), existing.ServiceMembershipJson);
-                if (existing is not null)
-                    _ = ValidatePersistedMemberships(existing, nameof(existing.WorkflowMembershipJson), existing.WorkflowMembershipJson);
+                    : ValidatePersistedMemberships(existingContent, nameof(OpenTelemetryTraceSummaryEntity.ServiceMembershipJson));
+                if (existingContent is not null)
+                    _ = ValidatePersistedMemberships(existingContent, nameof(OpenTelemetryTraceSummaryEntity.WorkflowMembershipJson));
                 var serviceNames = CanonicalSummaryElements(
                     retainedServices.Concat(merged.ResourceIds.Select(id => ResolveService(services, id)).OfType<string>()),
                     nameof(OpenTelemetryTraceSummaryEntity.ServiceMembershipJson));
@@ -869,13 +871,21 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
     }
 
     /// <summary>
-    /// A membership column of <paramref name="summary"/>, upcast from the row's stamp before it is parsed: the memberships
-    /// restate the payload's and are merged with new ones or compared with the upcast payload, so they are content (spec
-    /// 180, FR-009; #2140).
+    /// The content columns of <paramref name="summary"/> - its payload and its two memberships - upcast together from the
+    /// row's stamp before any is parsed: the memberships restate the payload's and are merged with new ones or compared
+    /// with the upcast payload, so they are content (spec 180, FR-009; #2140, #2144).
     /// </summary>
-    private static string[] ValidatePersistedMemberships(OpenTelemetryTraceSummaryEntity summary, string field, string json)
+    private static EfSchemaRowContent SummaryContent(OpenTelemetryTraceSummaryEntity summary) =>
+        EfOpenTelemetryModule.Chain.Upcast<OpenTelemetryTraceSummaryEntity>(
+            summary.SchemaVersion,
+            (nameof(summary.PayloadJson), summary.PayloadJson),
+            (nameof(summary.ServiceMembershipJson), summary.ServiceMembershipJson),
+            (nameof(summary.WorkflowMembershipJson), summary.WorkflowMembershipJson));
+
+    /// <summary>The membership column <paramref name="field"/> of an upcast summary row, parsed and checked canonical.</summary>
+    private static string[] ValidatePersistedMemberships(EfSchemaRowContent summary, string field)
     {
-        var values = Deserialize<string[]>(EfOpenTelemetryModule.Chain.Upcast(summary.SchemaVersion, EfOpenTelemetryModule.SummaryTable, field, json));
+        var values = Deserialize<string[]>(summary[field]!);
         string[] canonical;
         try
         {
@@ -1142,7 +1152,7 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
     private static TelemetryResource ToResource(OpenTelemetryResourceEntity x) => ValidatePersisted("resource", () =>
     {
         EfSchemaVersion.EnsureReadable(EfOpenTelemetryModule.Chain, x.SchemaVersion);
-        var payload = Deserialize<TelemetryResource>(EfOpenTelemetryModule.Chain.Upcast(x.SchemaVersion, EfOpenTelemetryModule.ResourceTable, nameof(x.PayloadJson), x.PayloadJson));
+        var payload = Deserialize<TelemetryResource>(EfOpenTelemetryModule.Chain.Upcast<OpenTelemetryResourceEntity>(x.SchemaVersion, (nameof(x.PayloadJson), x.PayloadJson))[nameof(x.PayloadJson)]!);
         RequirePersisted(payload.Attributes is not null, nameof(payload.Attributes));
         var idSearchKey = OpenTelemetrySearchKeys.ResourceId(payload.Id);
         var serviceNameSearchKey = OpenTelemetrySearchKeys.ServiceName(payload.ServiceName);
@@ -1160,7 +1170,7 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
     private static TelemetryTrace ToTraceRecord(OpenTelemetryTraceEntity x) => ValidatePersisted("trace record", () =>
     {
         EfSchemaVersion.EnsureReadable(EfOpenTelemetryModule.Chain, x.SchemaVersion);
-        var payload = Deserialize<TelemetryTrace>(EfOpenTelemetryModule.Chain.Upcast(x.SchemaVersion, EfOpenTelemetryModule.TraceTable, nameof(x.PayloadJson), x.PayloadJson));
+        var payload = Deserialize<TelemetryTrace>(EfOpenTelemetryModule.Chain.Upcast<OpenTelemetryTraceEntity>(x.SchemaVersion, (nameof(x.PayloadJson), x.PayloadJson))[nameof(x.PayloadJson)]!);
         RequirePersisted(payload.ResourceIds is not null, nameof(payload.ResourceIds));
         RequirePersisted(payload.WorkflowInstanceIds is not null, nameof(payload.WorkflowInstanceIds));
         _ = ValidateSummary(payload);
@@ -1186,7 +1196,8 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
     private static TelemetryTrace ToTrace(OpenTelemetryTraceSummaryEntity x) => ValidatePersisted("trace summary", () =>
     {
         EfSchemaVersion.EnsureReadable(EfOpenTelemetryModule.Chain, x.SchemaVersion);
-        var payload = Deserialize<TelemetryTrace>(EfOpenTelemetryModule.Chain.Upcast(x.SchemaVersion, EfOpenTelemetryModule.SummaryTable, nameof(x.PayloadJson), x.PayloadJson));
+        var content = SummaryContent(x);
+        var payload = Deserialize<TelemetryTrace>(content[nameof(x.PayloadJson)]!);
         var resourceIds = payload.ResourceIds ?? throw new InvalidDataException("The persisted OpenTelemetry trace summary has no resource identities.");
         var workflowInstanceIds = payload.WorkflowInstanceIds ?? throw new InvalidDataException("The persisted OpenTelemetry trace summary has no workflow identities.");
         var normalized = NormalizeSummary(payload);
@@ -1204,15 +1215,15 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
         RequirePersisted(normalized.EndTime >= normalized.StartTime && normalized.Duration == normalized.EndTime - normalized.StartTime, nameof(normalized.Duration));
         RequirePersisted(normalized.SpanCount >= 0 && x.SpanCount == normalized.SpanCount, nameof(x.SpanCount));
         RequirePersisted(x.Version != Guid.Empty, nameof(x.Version));
-        _ = ValidatePersistedMemberships(x, nameof(x.ServiceMembershipJson), x.ServiceMembershipJson);
-        var workflows = ValidatePersistedMemberships(x, nameof(x.WorkflowMembershipJson), x.WorkflowMembershipJson);
+        _ = ValidatePersistedMemberships(content, nameof(x.ServiceMembershipJson));
+        var workflows = ValidatePersistedMemberships(content, nameof(x.WorkflowMembershipJson));
         RequirePersisted(workflows.SequenceEqual(normalized.WorkflowInstanceIds, StringComparer.Ordinal), nameof(x.WorkflowMembershipJson));
         return normalized;
     });
     private static TelemetrySpan ToSpan(OpenTelemetrySpanEntity x) => ValidatePersisted("span", () =>
     {
         EfSchemaVersion.EnsureReadable(EfOpenTelemetryModule.Chain, x.SchemaVersion);
-        var payload = Deserialize<TelemetrySpan>(EfOpenTelemetryModule.Chain.Upcast(x.SchemaVersion, EfOpenTelemetryModule.SpanTable, nameof(x.PayloadJson), x.PayloadJson));
+        var payload = Deserialize<TelemetrySpan>(EfOpenTelemetryModule.Chain.Upcast<OpenTelemetrySpanEntity>(x.SchemaVersion, (nameof(x.PayloadJson), x.PayloadJson))[nameof(x.PayloadJson)]!);
         RequirePersisted(payload.Attributes is not null, nameof(payload.Attributes));
         var events = payload.Events ?? throw new InvalidDataException("The persisted OpenTelemetry span has no event collection.");
         var links = payload.Links ?? throw new InvalidDataException("The persisted OpenTelemetry span has no link collection.");
@@ -1258,7 +1269,7 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
     private static MetricInstrument ToInstrument(OpenTelemetryMetricInstrumentEntity x) => ValidatePersisted("metric instrument", () =>
     {
         EfSchemaVersion.EnsureReadable(EfOpenTelemetryModule.Chain, x.SchemaVersion);
-        var payload = Deserialize<MetricInstrument>(EfOpenTelemetryModule.Chain.Upcast(x.SchemaVersion, EfOpenTelemetryModule.InstrumentTable, nameof(x.PayloadJson), x.PayloadJson));
+        var payload = Deserialize<MetricInstrument>(EfOpenTelemetryModule.Chain.Upcast<OpenTelemetryMetricInstrumentEntity>(x.SchemaVersion, (nameof(x.PayloadJson), x.PayloadJson))[nameof(x.PayloadJson)]!);
         RequirePersisted(payload.Attributes is not null, nameof(payload.Attributes));
         RequirePersisted(StringComparer.Ordinal.Equals(x.Id, payload.Id), nameof(x.Id));
         RequirePersisted(StringComparer.Ordinal.Equals(x.IdSearchKey, OpenTelemetrySearchKeys.SummaryElement(payload.Id)), nameof(x.IdSearchKey));
@@ -1275,7 +1286,7 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
     private static MetricPoint ToMetricPoint(OpenTelemetryMetricPointEntity x) => ValidatePersisted("metric point", () =>
     {
         EfSchemaVersion.EnsureReadable(EfOpenTelemetryModule.Chain, x.SchemaVersion);
-        var payload = Deserialize<MetricPoint>(EfOpenTelemetryModule.Chain.Upcast(x.SchemaVersion, EfOpenTelemetryModule.MetricPointTable, nameof(x.PayloadJson), x.PayloadJson));
+        var payload = Deserialize<MetricPoint>(EfOpenTelemetryModule.Chain.Upcast<OpenTelemetryMetricPointEntity>(x.SchemaVersion, (nameof(x.PayloadJson), x.PayloadJson))[nameof(x.PayloadJson)]!);
         RequirePersisted(payload.Attributes is not null, nameof(payload.Attributes));
         RequirePersisted(x.Sequence > 0, nameof(x.Sequence));
         RequirePersisted(StringComparer.Ordinal.Equals(x.Id, payload.Id), nameof(x.Id));
@@ -1299,7 +1310,7 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
     private static OtlpLogRecord ToLog(OpenTelemetryLogEntity x) => ValidatePersisted("log record", () =>
     {
         EfSchemaVersion.EnsureReadable(EfOpenTelemetryModule.Chain, x.SchemaVersion);
-        var payload = Deserialize<OtlpLogRecord>(EfOpenTelemetryModule.Chain.Upcast(x.SchemaVersion, EfOpenTelemetryModule.LogTable, nameof(x.PayloadJson), x.PayloadJson));
+        var payload = Deserialize<OtlpLogRecord>(EfOpenTelemetryModule.Chain.Upcast<OpenTelemetryLogEntity>(x.SchemaVersion, (nameof(x.PayloadJson), x.PayloadJson))[nameof(x.PayloadJson)]!);
         RequirePersisted(payload.Attributes is not null, nameof(payload.Attributes));
         RequirePersisted(x.Sequence > 0, nameof(x.Sequence));
         RequirePersisted(StringComparer.Ordinal.Equals(x.Id, payload.Id), nameof(x.Id));

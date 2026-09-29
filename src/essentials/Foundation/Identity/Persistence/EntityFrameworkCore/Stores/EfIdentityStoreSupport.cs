@@ -367,13 +367,59 @@ public static class EfIdentityStoreSupport
     }
 
     /// <summary>
-    /// An id-set content column of an Identity IAM row, upcast from the row's stamp to the current version before it is
-    /// parsed (spec 180, FR-009): the column <paramref name="column"/> of <paramref name="table"/>. Every read of an
-    /// Identity IAM content column goes through here or through the chain directly, including a read of a row
-    /// <see cref="Upgrade(UserEntity)"/> has already brought current, where the chain runs nothing (FR-021).
+    /// The id-set content column <paramref name="column"/> of a user row, read from the row's content columns upcast
+    /// together from its stamp to the current version before any is parsed (spec 180, FR-009; #2144). Every read of an
+    /// Identity IAM content column goes through one of these overloads or <see cref="Content(UserEntity, EfSchemaChain?)"/>
+    /// and its siblings, including a read of a row <see cref="Upgrade(UserEntity)"/> has already brought current, where the
+    /// chain runs nothing (FR-021).
     /// </summary>
-    public static IReadOnlySet<string> ReadSet(string? schemaVersion, string table, string column, string? json) =>
-        DeserializeSet(IdentityIamEfModule.Chain.Upcast(schemaVersion, table, column, json));
+    public static IReadOnlySet<string> ReadSet(UserEntity user, string column) => DeserializeSet(Content(user)[column]);
+
+    /// <summary>The id-set content column <paramref name="column"/> of a role row, as <see cref="ReadSet(UserEntity, string)"/> reads a user's.</summary>
+    public static IReadOnlySet<string> ReadSet(RoleEntity role, string column) => DeserializeSet(Content(role)[column]);
+
+    /// <summary>The id-set content column <paramref name="column"/> of a tenant membership, as <see cref="ReadSet(UserEntity, string)"/> reads a user's.</summary>
+    public static IReadOnlySet<string> ReadSet(TenantMembershipEntity membership, string column) => DeserializeSet(Content(membership)[column]);
+
+    /// <summary>The id-set content column <paramref name="column"/> of a claim mapping, as <see cref="ReadSet(UserEntity, string)"/> reads a user's.</summary>
+    public static IReadOnlySet<string> ReadSet(ClaimMappingEntity mapping, string column) => DeserializeSet(Content(mapping)[column]);
+
+    /// <summary>
+    /// Every content column of a user row, upcast together through <paramref name="chain"/>, the family's own by default,
+    /// from the row's stamp to the current version (spec 180, FR-009; #2144).
+    /// </summary>
+    public static EfSchemaRowContent Content(UserEntity user, EfSchemaChain? chain = null) =>
+        (chain ?? IdentityIamEfModule.Chain).Upcast<UserEntity>(
+            user.SchemaVersion,
+            (nameof(user.RoleIdsJson), user.RoleIdsJson),
+            (nameof(user.DirectPermissionsJson), user.DirectPermissionsJson),
+            (nameof(user.ClaimIdsJson), user.ClaimIdsJson),
+            (nameof(user.LoginIdsJson), user.LoginIdsJson),
+            (nameof(user.RoleLinkIdsJson), user.RoleLinkIdsJson),
+            (nameof(user.TokenIdsJson), user.TokenIdsJson),
+            (nameof(user.TenantMembershipIdsJson), user.TenantMembershipIdsJson));
+
+    /// <summary>Every content column of a role row, upcast together as <see cref="Content(UserEntity, EfSchemaChain?)"/> upcasts a user's.</summary>
+    public static EfSchemaRowContent Content(RoleEntity role, EfSchemaChain? chain = null) =>
+        (chain ?? IdentityIamEfModule.Chain).Upcast<RoleEntity>(
+            role.SchemaVersion,
+            (nameof(role.PermissionsJson), role.PermissionsJson),
+            (nameof(role.ClaimIdsJson), role.ClaimIdsJson),
+            (nameof(role.UserLinkIdsJson), role.UserLinkIdsJson));
+
+    /// <summary>Every content column of a tenant membership, upcast together as <see cref="Content(UserEntity, EfSchemaChain?)"/> upcasts a user's.</summary>
+    public static EfSchemaRowContent Content(TenantMembershipEntity membership) =>
+        IdentityIamEfModule.Chain.Upcast<TenantMembershipEntity>(
+            membership.SchemaVersion,
+            (nameof(membership.RoleIdsJson), membership.RoleIdsJson),
+            (nameof(membership.DirectPermissionsJson), membership.DirectPermissionsJson));
+
+    /// <summary>Every content column of a claim mapping, upcast together as <see cref="Content(UserEntity, EfSchemaChain?)"/> upcasts a user's.</summary>
+    public static EfSchemaRowContent Content(ClaimMappingEntity mapping) =>
+        IdentityIamEfModule.Chain.Upcast<ClaimMappingEntity>(
+            mapping.SchemaVersion,
+            (nameof(mapping.GrantRolesJson), mapping.GrantRolesJson),
+            (nameof(mapping.GrantPermissionsJson), mapping.GrantPermissionsJson));
 
     /// <summary>
     /// Brings a stored user row to the current version in place, before a write edits it or writes it back: every
@@ -393,24 +439,24 @@ public static class EfIdentityStoreSupport
     /// </summary>
     public static void Upgrade(UserEntity user, EfSchemaChain chain)
     {
-        const string table = IdentityIamEfModule.UserTableName;
-        user.RoleIdsJson = chain.Upcast(user.SchemaVersion, table, nameof(user.RoleIdsJson), user.RoleIdsJson);
-        user.DirectPermissionsJson = chain.Upcast(user.SchemaVersion, table, nameof(user.DirectPermissionsJson), user.DirectPermissionsJson);
-        user.ClaimIdsJson = chain.Upcast(user.SchemaVersion, table, nameof(user.ClaimIdsJson), user.ClaimIdsJson);
-        user.LoginIdsJson = chain.Upcast(user.SchemaVersion, table, nameof(user.LoginIdsJson), user.LoginIdsJson);
-        user.RoleLinkIdsJson = chain.Upcast(user.SchemaVersion, table, nameof(user.RoleLinkIdsJson), user.RoleLinkIdsJson);
-        user.TokenIdsJson = chain.Upcast(user.SchemaVersion, table, nameof(user.TokenIdsJson), user.TokenIdsJson);
-        user.TenantMembershipIdsJson = chain.Upcast(user.SchemaVersion, table, nameof(user.TenantMembershipIdsJson), user.TenantMembershipIdsJson);
+        var content = Content(user, chain);
+        user.RoleIdsJson = content[nameof(user.RoleIdsJson)]!;
+        user.DirectPermissionsJson = content[nameof(user.DirectPermissionsJson)]!;
+        user.ClaimIdsJson = content[nameof(user.ClaimIdsJson)]!;
+        user.LoginIdsJson = content[nameof(user.LoginIdsJson)]!;
+        user.RoleLinkIdsJson = content[nameof(user.RoleLinkIdsJson)]!;
+        user.TokenIdsJson = content[nameof(user.TokenIdsJson)]!;
+        user.TenantMembershipIdsJson = content[nameof(user.TenantMembershipIdsJson)]!;
         user.SchemaVersion = chain.CurrentVersion;
     }
 
     /// <summary><see cref="Upgrade(RoleEntity)"/> over <paramref name="chain"/>, for the same reason as the user overload.</summary>
     public static void Upgrade(RoleEntity role, EfSchemaChain chain)
     {
-        const string table = IdentityIamEfModule.RoleTableName;
-        role.PermissionsJson = chain.Upcast(role.SchemaVersion, table, nameof(role.PermissionsJson), role.PermissionsJson);
-        role.ClaimIdsJson = chain.Upcast(role.SchemaVersion, table, nameof(role.ClaimIdsJson), role.ClaimIdsJson);
-        role.UserLinkIdsJson = chain.Upcast(role.SchemaVersion, table, nameof(role.UserLinkIdsJson), role.UserLinkIdsJson);
+        var content = Content(role, chain);
+        role.PermissionsJson = content[nameof(role.PermissionsJson)]!;
+        role.ClaimIdsJson = content[nameof(role.ClaimIdsJson)]!;
+        role.UserLinkIdsJson = content[nameof(role.UserLinkIdsJson)]!;
         role.SchemaVersion = chain.CurrentVersion;
     }
 

@@ -8,7 +8,7 @@ namespace Elsa.Persistence.EntityFrameworkCore.Migrations.Tests;
 /// Every first-party module's <c>[EfSchemaFamily]</c> declarations (spec 180, FR-001) are discoverable the way a host's
 /// readability source discovers them: each family is declared once across the tree, and owned by an <c>[EfModule]</c>
 /// its own assembly declares. Each resolves to the chain its stores read through, which reads exactly what the host
-/// reports. <c>EfSchemaFamilyDeclarationGuardTests</c> holds the source to the same rules.
+/// reports. <c>EfSchemaFamilyChainDeclarationGuardTests</c> holds the source to the same rules.
 /// </summary>
 public sealed class EfSchemaFamilyDescriptorTests
 {
@@ -64,7 +64,8 @@ public sealed class EfSchemaFamilyDescriptorTests
         Assert.All(EfSchemaFamilyCatalog.Discover(Declaring), family =>
         {
             var chain = EfSchemaChain.Of(family.Assembly, family.Name);
-            var skew = Assert.Throws<EfSchemaVersionSkewException>(() => chain.Upcast(stamp, "any", "Content", "not-json"));
+            // The stamp is settled before the row's columns are, so any row reports skew, whatever table it names.
+            var skew = Assert.Throws<EfSchemaVersionSkewException>(() => chain.Upcast(stamp, new EfSchemaRowContent(typeof(object), ("Content", "not-json"))));
             Assert.Equal(family.Name, skew.Family);
             Assert.Equal(chain.ReadableVersions, skew.ReadableVersions);
         });

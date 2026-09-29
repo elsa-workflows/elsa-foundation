@@ -396,7 +396,7 @@ public sealed class EfActivityExecutionHierarchyStore(
             throw new InvalidDataException("The persisted activity execution hierarchy parent projection is incomplete.");
         if (parent is not null && row.ParentActivityExecutionIdHash != ActivityExecutionEfSupport.Hash(parent))
             throw new InvalidDataException("The persisted activity execution hierarchy parent projection is corrupt.");
-        var record = RuntimeArtifactJson.Deserialize<ActivityExecutionHierarchyRecord>(RuntimeActivityExecutionEfModule.Chain.Upcast(row.SchemaVersion, RuntimeActivityExecutionEfModule.ActivityExecutionHierarchyTableName, nameof(row.ContentJson), row.ContentJson));
+        var record = RuntimeArtifactJson.Deserialize<ActivityExecutionHierarchyRecord>(RuntimeActivityExecutionEfModule.Chain.Upcast<ActivityExecutionHierarchyEntity>(row.SchemaVersion, (nameof(row.ContentJson), row.ContentJson))[nameof(row.ContentJson)]!);
         ActivityExecutionEfSupport.Validate(record);
         if (!StringComparer.Ordinal.Equals(record.WorkflowExecutionId, workflow) || !StringComparer.Ordinal.Equals(record.ActivityExecutionId, activity) ||
             !StringComparer.Ordinal.Equals(record.ExecutionScopeId, executionScope) || !StringComparer.Ordinal.Equals(record.ParentActivityExecutionId, parent) ||

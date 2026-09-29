@@ -3,6 +3,7 @@ using System.Text;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Text;
 
 namespace Elsa.Architecture.Tests;
 
@@ -56,9 +57,15 @@ internal sealed class SchemaFamilyScan
         _upcasters.Select(upcaster => (upcaster.Path, upcaster.Class, Resolve(upcaster.From), Resolve(upcaster.To))).ToArray();
 
     private readonly List<(string Path, CompilationUnitSyntax Root)> _roots = [];
-    private readonly List<(string Location, string Row, string Column, SyntaxNode? Member)> _memberWrites = [];
+    private readonly List<(string Location, string Path, string Row, string Column, SyntaxNode? Member)> _memberWrites = [];
     private readonly List<(string Name, int Arity, string[] Parameters, SyntaxNode Node)> _methods = [];
     private readonly HashSet<string> _stampedTypes = new(StringComparer.Ordinal);
+
+    /// <summary>Each type's first base type, by simple name, as its base list names it.</summary>
+    private readonly Dictionary<string, string> _baseTypes = new(StringComparer.Ordinal);
+
+    /// <summary>Each type's own property types, by simple name, keyed by (declaring type, property).</summary>
+    private readonly Dictionary<(string Type, string Property), string> _propertyTypes = new();
     private readonly List<(string Location, string Path, string Method, string Type, string Target, string Source, SyntaxNode Node)> _rowCopyCandidates = [];
 
     /// <summary>
@@ -76,23 +83,55 @@ internal sealed class SchemaFamilyScan
     /// assignment inside it can be told from one added by a separate statement in the same member.
     /// </summary>
     private readonly List<(string Location, string Path, string Method, string Type, string Target, InitializerExpressionSyntax Initializer, SyntaxNode Node)> _replacementCandidates = [];
+
+    /// <summary>
+    /// Every <c>new Type { ... }</c> object creation, anywhere, whose initializer assigns <c>SchemaVersion</c>: a
+    /// fresh row (a new local, a field, an argument or a return value), not only a row replacing an existing
+    /// parameter the way <see cref="_replacementCandidates"/> tracks. The restamp-completeness rule holds it to the
+    /// same bar as a dotted stamp (<c>row.SchemaVersion = ...</c>): every declared content column of the type it
+    /// creates, assigned in the initializer or, when the creation names a row (a local or an assignment target), by
+    /// a later write to that row in the same member (#2144).
+    /// </summary>
+    private readonly List<(string Location, string Path, SyntaxNode? Member, string Type, string? Row, InitializerExpressionSyntax Initializer, SyntaxNode Node)> _stampedCreations = [];
     private IReadOnlySet<(string Name, int Arity)>? _upcastingMethods;
     private IReadOnlySet<(string Name, int Arity, int Parameter)>? _stampingMethods;
     private IReadOnlyList<(string Location, string Path, string? Family, string? Entity, string? Column, bool Integrity, string? Reason)>? _declaredColumns;
     private IReadOnlySet<string>? _contentColumns;
 
     /// <summary>
-    /// Every method that hands one of its parameters to a chain's <c>Upcast</c>, directly or through another such
-    /// method, by name and arity: the store helpers a content column is read through, such as Identity IAM's
-    /// <c>ReadSet</c>.
+    /// Every method that hands one of its parameters to a chain's <c>Upcast</c>, as an argument or as a column value in
+    /// one of its <c>(column, value)</c> arguments, directly or through another such method, by name and arity: the store
+    /// helpers a content column could be read through. A chain's own <c>Upcast</c>, of any arity, is upcasting without
+    /// being listed (<see cref="IsUpcasting"/>).
     /// </summary>
     public IReadOnlySet<(string Name, int Arity)> UpcastingMethods => _upcastingMethods ??= Fixpoint<(string Name, int Arity)>(
-        [("Upcast", 4)],
+        [],
         (method, known) => method.Node.DescendantNodes().OfType<InvocationExpressionSyntax>().Any(invocation =>
-            known.Contains((InvokedName(invocation), invocation.ArgumentList.Arguments.Count)) &&
-            invocation.ArgumentList.Arguments.Any(argument => argument.Expression is IdentifierNameSyntax identifier && method.Parameters.Contains(identifier.Identifier.ValueText)))
+            IsUpcasting(invocation, known) &&
+            invocation.ArgumentList.Arguments.SelectMany(ValuesOf).Any(value => value is IdentifierNameSyntax identifier && method.Parameters.Contains(identifier.Identifier.ValueText)))
             ? [(method.Name, method.Parameters.Length)]
             : []);
+
+    /// <summary>True when <paramref name="invocation"/> is a chain's <c>Upcast</c>, or a helper of <paramref name="helpers"/>.</summary>
+    private static bool IsUpcasting(InvocationExpressionSyntax invocation, IReadOnlySet<(string Name, int Arity)> helpers) =>
+        InvokedName(invocation) == "Upcast" || helpers.Contains((InvokedName(invocation), invocation.ArgumentList.Arguments.Count));
+
+    private bool IsUpcasting(InvocationExpressionSyntax invocation) => IsUpcasting(invocation, UpcastingMethods);
+
+    /// <summary>The values an argument hands over: itself, or each element of a tuple argument.</summary>
+    private static IEnumerable<ExpressionSyntax> ValuesOf(ArgumentSyntax argument) =>
+        argument.Expression is TupleExpressionSyntax tuple ? tuple.Arguments.Select(element => element.Expression) : [argument.Expression];
+
+    /// <summary>
+    /// Every <c>(column, value)</c> argument of a chain's <c>Upcast</c>: the row's content column the value is read from,
+    /// as its <c>nameof</c>, literal or constant names it, and the value.
+    /// </summary>
+    private IEnumerable<(TupleExpressionSyntax Tuple, string? Column, ExpressionSyntax Value)> ColumnArguments(InvocationExpressionSyntax upcast) =>
+        upcast.ArgumentList.Arguments
+            .Select(argument => argument.Expression)
+            .OfType<TupleExpressionSyntax>()
+            .Where(tuple => tuple.Arguments.Count == 2)
+            .Select(tuple => (tuple, ColumnName(tuple.Arguments[0].Expression), tuple.Arguments[1].Expression));
 
     /// <summary>
     /// Every method that stamps the row one of its parameters holds, directly or through another such method, by name,
@@ -155,12 +194,14 @@ internal sealed class SchemaFamilyScan
     /// <summary>
     /// Every read of a declared content column (<see cref="ContentColumns"/>) in the files <paramref name="isReader"/>
     /// accepts, whose source <paramref name="sees"/> the declaration from, that does not go through the family's chain;
-    /// and the exemptions that matched nothing. A read goes through the chain when it is an argument of an upcasting
-    /// method. It deserializes nothing when it is a <c>nameof</c>, the target of a write, a copy into the same column of
-    /// another row (<c>a.C = b.C</c>, or <c>C = b.C</c> in an initializer, whose target the restamp rule then holds to a
-    /// stamp), a presence check (<c>is null</c>, <c>== null</c>, <c>string.IsNullOrWhiteSpace</c>), or a column named in
-    /// model configuration (<c>Property(x =&gt; x.C)</c>). Anything else is a violation unless <paramref name="exempt"/>
-    /// names it by file, member, the read, and what consumes it (<see cref="Consumer"/>), with the reason.
+    /// and the exemptions that matched nothing. A read goes through the chain when it is a column value of a chain's
+    /// <c>Upcast</c>, <c>(nameof(r.C), r.C)</c>, or an argument of an upcasting helper. It deserializes nothing when it is
+    /// a <c>nameof</c>, the target of a write, a copy into the same column of another row (<c>a.C = b.C</c>, or
+    /// <c>C = b.C</c> in an initializer, whose target the restamp rule then holds to a stamp), or a column named in model
+    /// configuration (<c>Property(x =&gt; x.C)</c>). A presence check (<c>is null</c>, <c>string.IsNullOrWhiteSpace</c>)
+    /// is a read like any other: a step sees the whole row and may fill a column or clear one (#2144), so whether a column
+    /// holds anything is read from the upcast row. Anything else is a violation unless <paramref name="exempt"/> names it
+    /// by file, member, the read, and what consumes it (<see cref="Consumer"/>), with the reason.
     /// </summary>
     public (IReadOnlyList<string> Violations, IReadOnlyList<string> UnusedExemptions, int Reads) ContentReads(
         Func<string, bool> isReader,
@@ -175,7 +216,7 @@ internal sealed class SchemaFamilyScan
                 .Select(access => (source.Path, Access: access)))
             .ToArray();
         var unchained = reads
-            .Where(read => !IsChained(read.Access) && !IsCopy(read.Access) && !IsPresenceCheck(read.Access) && !IsModelConfiguration(read.Access))
+            .Where(read => !IsChained(read.Access) && !IsCopy(read.Access) && !IsModelConfiguration(read.Access))
             .Select(read => (read.Path, read.Access, Key: (File: Path.GetFileName(read.Path), Member: MemberName(read.Access), Read: read.Access.ToString(), Consumer: Consumer(read.Access))))
             .ToArray();
         var violations = unchained
@@ -211,25 +252,132 @@ internal sealed class SchemaFamilyScan
     }
 
     /// <summary>
-    /// Every column a store names, by <c>nameof</c>, when it reads it through a family's chain, that the family does
-    /// not declare content: the chain the call goes through when it calls <c>&lt;Module&gt;.Chain.Upcast</c> directly,
-    /// any family when it calls a helper. This keeps the declaration at least as complete as the call sites, which is
-    /// what the restamp rule inferred content from before the declaration existed.
+    /// What a store hands a family's chain, held to the declaration (spec 180, FR-009; #2144):
+    /// <list type="bullet">
+    /// <item>every column a read names, by <c>nameof</c>, is one the family declares content: the chain the call goes
+    /// through when it calls <c>&lt;Module&gt;.Chain.Upcast</c> directly, any family otherwise. This keeps the
+    /// declaration at least as complete as the call sites;</item>
+    /// <item>each <c>(column, value)</c> reads the column it names, so no value is upcast as another column's;</item>
+    /// <item>a <c>Upcast&lt;TEntity&gt;</c> passes exactly the columns the family declares for <c>TEntity</c>'s table,
+    /// so no read upcasts a row in part, leaving a column it did not pass at the row's stamp;</item>
+    /// <item>and the row it reads the columns of is a <c>TEntity</c>, where this guard can tell the row's declared type,
+    /// so no row is upcast as another table's, whose steps would transform it as that table's.</item>
+    /// </list>
+    /// The chain refuses the first three at run time too, on every read at every version; the build fails on them first,
+    /// and on the fourth, which two tables declaring the same columns would hide from the run-time check.
     /// </summary>
     public IReadOnlyList<string> UpcastDeclarationViolations()
     {
         var content = DeclaredColumns().Where(column => !column.Integrity).ToArray();
-        return Ordered(_roots.SelectMany(source => source.Root.DescendantNodes().OfType<InvocationExpressionSyntax>()
-            .Where(invocation => UpcastingMethods.Contains((InvokedName(invocation), invocation.ArgumentList.Arguments.Count)))
-            .SelectMany(invocation => invocation.ArgumentList.Arguments
-                .Select(argument => NameOf(argument.Expression))
-                .OfType<string>()
-                .Select(column => (Invocation: invocation, Column: column,
-                    Family: invocation.Expression is MemberAccessExpressionSyntax { Name.Identifier.ValueText: "Upcast", Expression: var handle } ? FamilyOfHandle(handle) : null)))
-            .Where(read => !content.Any(column => column.Column == read.Column && (read.Family is null || column.Family == read.Family)))
-            .Select(read => $"{Locate(source.Path, read.Invocation)}: upcasts '{read.Column}' through " +
-                            (read.Family is null ? "a family's chain, but no family declares it content" : $"the '{read.Family}' chain, but '{read.Family}' does not declare it content") +
-                            "; declare it with [EfSchemaContent] (spec 180, FR-009).")));
+        var violations = new List<string>();
+        foreach (var (path, root) in _roots)
+        {
+            foreach (var invocation in root.DescendantNodes().OfType<InvocationExpressionSyntax>().Where(IsUpcasting))
+            {
+                var family = invocation.Expression is MemberAccessExpressionSyntax { Name.Identifier.ValueText: "Upcast", Expression: var handle } ? FamilyOfHandle(handle) : null;
+                var location = Locate(path, invocation);
+                var columns = ColumnArguments(invocation).ToArray();
+                var named = invocation.ArgumentList.Arguments.Select(argument => NameOf(argument.Expression))
+                    .Concat(columns.Select(column => column.Column))
+                    .OfType<string>()
+                    .Distinct(StringComparer.Ordinal);
+                violations.AddRange(named
+                    .Where(column => !content.Any(declared => declared.Column == column && (family is null || declared.Family == family)))
+                    .Select(column => $"{location}: upcasts '{column}' through " +
+                                      (family is null ? "a family's chain, but no family declares it content" : $"the '{family}' chain, but '{family}' does not declare it content") +
+                                      "; declare it with [EfSchemaContent] (spec 180, FR-009)."));
+                violations.AddRange(columns
+                    .Where(column => column.Column is null || ColumnOf(column.Value) is { } read && read != column.Column)
+                    .Select(column => column.Column is null
+                        ? $"{location}: passes '{column.Tuple}', whose column this guard cannot resolve; name it with nameof, a literal or a constant (spec 180, FR-009)."
+                        : $"{location}: passes '{column.Value}' as column '{column.Column}'; a (column, value) pair reads the column it names (spec 180, FR-009)."));
+
+                if (invocation.Expression is not MemberAccessExpressionSyntax { Name: GenericNameSyntax { TypeArgumentList.Arguments: [var typeArgument] } })
+                    continue;
+                var entity = Rightmost(typeArgument) ?? typeArgument.ToString();
+                var declared = content.Where(column => column.Entity == entity && column.Column is not null && (family is null || column.Family == family))
+                    .Select(column => column.Column!).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+                var passed = columns.Select(column => column.Column).OfType<string>().Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+                if (declared.Length == 0)
+                    violations.Add($"{location}: upcasts a row of '{entity}', which {(family is null ? "no family" : $"'{family}'")} declares no content columns for; " +
+                                   "declare them with [EfSchemaContent] (spec 180, FR-009).");
+                else if (!declared.SequenceEqual(passed, StringComparer.Ordinal))
+                    violations.Add($"{location}: passes {Quoted(passed)} of '{entity}', but its family declares {Quoted(declared)}; a read upcasts every " +
+                                   "declared content column of a row together, so no row is upcast in part (spec 180, FR-009; #2144).");
+
+                foreach (var (row, type) in columns.Select(column => column.Value).OfType<MemberAccessExpressionSyntax>()
+                             .Select(access => access.Expression).OfType<IdentifierNameSyntax>()
+                             .Select(identifier => identifier.Identifier.ValueText).Distinct(StringComparer.Ordinal)
+                             .Select(row => (row, type: DeclaredType(invocation, row)))
+                             .Where(candidate => candidate.type is not null && candidate.type != entity && !DerivesFrom(entity, candidate.type)))
+                {
+                    violations.Add($"{location}: upcasts '{row}', a '{type}', as a row of '{entity}'; a row is upcast as its own table's, whose steps " +
+                                   "are the ones written for it (spec 180, FR-009; #2144).");
+                }
+            }
+        }
+
+        return Ordered(violations);
+    }
+
+    /// <summary>
+    /// Every <c>Upcast&lt;TEntity&gt;(stamp, (column, value), ...)</c> a store reads a row with: the calls the whole-row rule
+    /// of <see cref="UpcastDeclarationViolations"/> judges, so its floor can tell a rule that passes from one that saw nothing.
+    /// </summary>
+    public IReadOnlyList<string> RowUpcasts() =>
+        _roots.SelectMany(source => source.Root.DescendantNodes().OfType<InvocationExpressionSyntax>()
+                .Where(invocation => invocation.Expression is MemberAccessExpressionSyntax { Name: GenericNameSyntax { Identifier.ValueText: "Upcast" } } &&
+                                     ColumnArguments(invocation).Any())
+                .Select(invocation => Locate(source.Path, invocation)))
+            .ToArray();
+
+    private static string Quoted(IEnumerable<string> columns) => columns.Any() ? string.Join(", ", columns.Select(column => $"'{column}'")) : "no columns";
+
+    /// <summary>
+    /// The declared type of <paramref name="name"/> where <paramref name="node"/> reads it: a parameter of an enclosing
+    /// method, local function or explicitly typed lambda, or a local declared with a type rather than <c>var</c>; null
+    /// when the syntax does not say.
+    /// </summary>
+    private static string? DeclaredType(SyntaxNode node, string name)
+    {
+        // AncestorsAndSelf, not Ancestors: the restamp-completeness rule calls this with the enclosing member itself
+        // (the row's own stamp gives it no narrower node to start from), so the member's own parameters must be in
+        // reach, not just its ancestors' (#2144).
+        foreach (var ancestor in node.AncestorsAndSelf())
+        {
+            var parameters = ancestor switch
+            {
+                BaseMethodDeclarationSyntax method => method.ParameterList.Parameters,
+                LocalFunctionStatementSyntax local => local.ParameterList.Parameters,
+                ParenthesizedLambdaExpressionSyntax lambda => lambda.ParameterList.Parameters,
+                SimpleLambdaExpressionSyntax lambda => SyntaxFactory.SeparatedList([lambda.Parameter]),
+                _ => default(SeparatedSyntaxList<ParameterSyntax>?)
+            };
+            // The nearest declaration of the name decides, typed or not: an untyped lambda parameter hides an outer one.
+            if (parameters?.FirstOrDefault(parameter => parameter.Identifier.ValueText == name) is { } declared)
+                return declared.Type is { } parameterType ? Rightmost(parameterType) ?? parameterType.ToString() : null;
+            if (ancestor is BlockSyntax block &&
+                block.DescendantNodes().OfType<VariableDeclarationSyntax>()
+                    .FirstOrDefault(declaration => declaration.Variables.Any(variable => variable.Identifier.ValueText == name)) is { Type: var localType })
+                return localType.IsVar ? null : Rightmost(localType) ?? localType.ToString();
+            if (ancestor is MemberDeclarationSyntax and not BaseMethodDeclarationSyntax)
+                break;
+        }
+
+        return null;
+    }
+
+    /// <summary>True when <paramref name="type"/> derives from <paramref name="baseType"/> through base lists this scan read.</summary>
+    private bool DerivesFrom(string type, string baseType)
+    {
+        for (var current = type; _baseTypes.TryGetValue(current, out var next);)
+        {
+            if (next == baseType)
+                return true;
+            current = next;
+        }
+
+        return false;
     }
 
     /// <summary>Every family a check names through a handle, or a <c>SchemaFamily</c> constant holds.</summary>
@@ -250,6 +398,7 @@ internal sealed class SchemaFamilyScan
     [
         .. DeclarationViolations(), .. HandleViolations(), .. ChainViolations(), .. UpcasterViolations(),
         .. MaterializedFamilyViolations(), .. StampViolations(), .. RestampViolations(), .. FullRowRewriteViolations(),
+        .. RestampCompletenessViolations(),
         .. ColumnDeclarationViolations(), .. UpcastDeclarationViolations(),
         .. ContentReads(_ => true, (_, _) => true, new Dictionary<(string, string, string, string), string>()).Violations
     ];
@@ -334,6 +483,102 @@ internal sealed class SchemaFamilyScan
                      $"'{rewrite.Target}'; a full rewrite of a stamped row restamps to the write version, a write that only bumps a " +
                      "concurrency revision need not (spec 180, FR-014, 2026-09-28 note)."
             }));
+
+    /// <summary>
+    /// Every (member, row) this scan can prove rewrites the row wholesale by construction - a copy, SetValues, Update
+    /// or object-initializer replacement, the same three shapes <see cref="FullRowRewrites"/> recognises - keyed by
+    /// file and the enclosing member's span rather than by node identity, since two independent traversals of the
+    /// same tree are not guaranteed to hand back the same node instance. The restamp-completeness rule exempts
+    /// these: writing every mapped column already writes every declared content column too (spec 180, FR-014;
+    /// #2144).
+    /// </summary>
+    private IReadOnlySet<(string Path, TextSpan Span, string Row)>? _fullRowRewriteTargets;
+    private IReadOnlySet<(string Path, TextSpan Span, string Row)> FullRowRewriteTargets => _fullRowRewriteTargets ??= BuildFullRowRewriteTargets();
+
+    private IReadOnlySet<(string Path, TextSpan Span, string Row)> BuildFullRowRewriteTargets()
+    {
+        var targets = new HashSet<(string, TextSpan, string)>();
+        foreach (var candidate in _rowCopyCandidates.Where(candidate => _stampedTypes.Contains(candidate.Type) && CopiedColumns(candidate.Node, candidate.Target, candidate.Source).Count >= 2))
+            targets.Add((candidate.Path, candidate.Node.FullSpan, candidate.Target));
+        foreach (var candidate in _fullReplaceCandidates.Where(candidate => _stampedTypes.Contains(candidate.Type)))
+            targets.Add((candidate.Path, candidate.Node.FullSpan, candidate.Target));
+        foreach (var candidate in _replacementCandidates.Where(candidate => _stampedTypes.Contains(candidate.Type) && InitializerColumns(candidate.Initializer).Columns.Count >= 2))
+            targets.Add((candidate.Path, candidate.Node.FullSpan, candidate.Target));
+        return targets;
+    }
+
+    /// <summary>
+    /// The declared type of <paramref name="row"/> as read from <paramref name="member"/>: a simple identifier's
+    /// declared parameter or local type, or - for a chain of properties, such as <c>state.Entity</c> - that type's
+    /// own declared property, resolved one segment at a time from <see cref="_propertyTypes"/>. Null once a segment
+    /// this scan cannot resolve is reached.
+    /// </summary>
+    private string? RowEntityType(SyntaxNode member, string row)
+    {
+        var segments = row.Split('.');
+        var type = DeclaredType(member, segments[0]);
+        for (var index = 1; index < segments.Length && type is not null; index++)
+            type = _propertyTypes.GetValueOrDefault((type, segments[index]));
+        return type;
+    }
+
+    /// <summary>
+    /// Every member that stamps a row directly (<c>row.SchemaVersion = ...</c>) without, by construction, rewriting
+    /// the whole row, and does not assign every content column its row's entity type declares in the same member
+    /// (spec 180, FR-014; #2144): the restamp rule's other half, so a stamp never describes content a column was
+    /// left holding at its old value. This guard judges only a row this scan resolves to an entity with declared
+    /// content; anything else is left to <see cref="RestampViolations"/> and <see cref="FullRowRewriteViolations"/>.
+    /// </summary>
+    public IReadOnlyList<string> RestampCompletenessViolations()
+    {
+        var content = DeclaredColumns().Where(column => !column.Integrity).ToArray();
+        var wholeRow = FullRowRewriteTargets;
+        var violations = new List<string>();
+        foreach (var stamp in _memberWrites.Where(write => write.Column == "SchemaVersion" && write.Member is not null &&
+                                                            !wholeRow.Contains((write.Path, write.Member!.FullSpan, write.Row))))
+        {
+            var entity = RowEntityType(stamp.Member!, stamp.Row);
+            if (entity is null)
+                continue;
+            var declared = content.Where(column => column.Entity == entity && column.Column is not null)
+                .Select(column => column.Column!).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+            if (declared.Length == 0)
+                continue;
+            var written = _memberWrites
+                .Where(write => write.Path == stamp.Path && write.Member is not null && write.Member.FullSpan == stamp.Member!.FullSpan && write.Row == stamp.Row)
+                .Select(write => write.Column)
+                .ToHashSet(StringComparer.Ordinal);
+            var missing = declared.Where(column => !written.Contains(column)).ToArray();
+            if (missing.Length > 0)
+                violations.Add($"{stamp.Location}: stamps '{stamp.Row}' but never assigns {Quoted(missing)} of its declared content in the same member; " +
+                               "a restamp rewrites every declared content column from upcast values, so no column is left at the row's old stamp (spec 180, FR-014; #2144).");
+        }
+
+        // An object initializer that stamps the row it creates is judged the same way: every declared content
+        // column of that type must be assigned in the initializer, or, when the creation names a row, by a later
+        // write to that row in the same member. A creation the full-row-rewrite rule already counts - a reassignment
+        // of a declared parameter with two or more assigned columns - is left to that rule instead (#2144).
+        foreach (var creation in _stampedCreations.Where(creation => _stampedTypes.Contains(creation.Type) &&
+                     !(creation.Row is not null && creation.Member is not null && wholeRow.Contains((creation.Path, creation.Member.FullSpan, creation.Row)))))
+        {
+            var declared = content.Where(column => column.Entity == creation.Type && column.Column is not null)
+                .Select(column => column.Column!).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+            if (declared.Length == 0)
+                continue;
+            var written = InitializerColumns(creation.Initializer).Columns.ToHashSet(StringComparer.Ordinal);
+            if (creation.Row is not null && creation.Member is not null)
+                written.UnionWith(_memberWrites
+                    .Where(write => write.Path == creation.Path && write.Member is not null && write.Member.FullSpan == creation.Member.FullSpan && write.Row == creation.Row)
+                    .Select(write => write.Column));
+            var missing = declared.Where(column => !written.Contains(column)).ToArray();
+            if (missing.Length > 0)
+                violations.Add($"{creation.Location}: creates '{creation.Type}' and stamps it in the initializer but never assigns {Quoted(missing)} of its " +
+                               "declared content there" + (creation.Row is not null ? $" or by a later write to '{creation.Row}' in the same member" : "") +
+                               "; a restamp rewrites every declared content column from upcast values, so no column is left at the row's old stamp (spec 180, FR-014; #2144).");
+        }
+
+        return Ordered(violations);
+    }
 
     /// <summary>The distinct columns, other than Revision and SchemaVersion, an object initializer assigns, and whether it assigns SchemaVersion itself.</summary>
     private static (IReadOnlyList<string> Columns, bool SetsSchemaVersion) InitializerColumns(InitializerExpressionSyntax initializer)
@@ -619,6 +864,14 @@ internal sealed class SchemaFamilyScan
 
         foreach (var type in root.DescendantNodes().OfType<TypeDeclarationSyntax>())
         {
+            if (type.BaseList?.Types.FirstOrDefault()?.Type is { } baseType)
+                _baseTypes.TryAdd(type.Identifier.ValueText, Rightmost(baseType) ?? baseType.ToString());
+
+            // A property's own declared type, so the restamp-completeness rule can resolve a row reached through a
+            // chain of properties (`state.Entity`), not only a bare parameter or local (#2144).
+            foreach (var property in type.Members.OfType<PropertyDeclarationSyntax>())
+                _propertyTypes.TryAdd((type.Identifier.ValueText, property.Identifier.ValueText), Rightmost(property.Type) ?? property.Type.ToString());
+
             var upcaster = type.AttributeLists.SelectMany(list => list.Attributes).FirstOrDefault(attribute => UpcasterNames.Contains(Rightmost(attribute.Name), StringComparer.Ordinal));
             if (upcaster is not null)
             {
@@ -681,9 +934,34 @@ internal sealed class SchemaFamilyScan
             .Where(assignment => assignment.IsKind(SyntaxKind.SimpleAssignmentExpression) && assignment.Left is MemberAccessExpressionSyntax)
             .Select(assignment => (
                 Locate(path, assignment),
+                Normalize(path),
                 ((MemberAccessExpressionSyntax)assignment.Left).Expression.ToString(),
                 ((MemberAccessExpressionSyntax)assignment.Left).Name.Identifier.ValueText,
                 assignment.Ancestors().FirstOrDefault(node => node is MemberDeclarationSyntax or LocalFunctionStatementSyntax))));
+
+        // A fresh row's SchemaVersion can be set inside its own object initializer rather than by a later dotted
+        // assignment; the restamp-completeness rule holds that shape to the same bar (#2144). The row it creates is
+        // named when the creation initializes a local (`var row = new Row {...}`) or replaces an assignment target
+        // (`row = new Row {...}`, `state.Row = new Row {...}`); anything else - an argument, a return value - is
+        // still judged on its initializer alone, since there is no row to look for a later write against.
+        _stampedCreations.AddRange(root.DescendantNodes()
+            .OfType<ObjectCreationExpressionSyntax>()
+            .Where(creation => creation.Initializer is not null &&
+                creation.Initializer.Expressions.OfType<AssignmentExpressionSyntax>()
+                    .Any(assignment => assignment.Left is IdentifierNameSyntax { Identifier.ValueText: "SchemaVersion" }))
+            .Select(creation => (
+                Locate(path, creation),
+                Normalize(path),
+                Member: creation.Ancestors().FirstOrDefault(node => node is MemberDeclarationSyntax or LocalFunctionStatementSyntax),
+                Type: Rightmost(creation.Type) ?? creation.Type.ToString(),
+                Row: creation.Parent switch
+                {
+                    EqualsValueClauseSyntax { Parent: VariableDeclaratorSyntax variable } => variable.Identifier.ValueText,
+                    AssignmentExpressionSyntax { Right: var right } assignment when right == creation && assignment.IsKind(SyntaxKind.SimpleAssignmentExpression) => assignment.Left.ToString(),
+                    _ => (string?)null
+                },
+                creation.Initializer!,
+                Node: (SyntaxNode)creation)));
 
         Stamps.AddRange(root.DescendantNodes()
             .OfType<AssignmentExpressionSyntax>()
@@ -745,10 +1023,15 @@ internal sealed class SchemaFamilyScan
         var parent => parent?.Kind().ToString() ?? ""
     };
 
-    /// <summary>True when <paramref name="access"/> is an argument of an upcasting method: it goes through the chain.</summary>
+    /// <summary>
+    /// True when <paramref name="access"/> goes through the chain: it is the value of a <c>(column, value)</c> argument of
+    /// a chain's <c>Upcast</c>, or an argument of an upcasting helper.
+    /// </summary>
     private bool IsChained(ExpressionSyntax access) =>
-        access.Parent is ArgumentSyntax { Parent.Parent: InvocationExpressionSyntax invocation } &&
-        UpcastingMethods.Contains((InvokedName(invocation), invocation.ArgumentList.Arguments.Count));
+        access.Parent is ArgumentSyntax argument &&
+        (argument.Parent is TupleExpressionSyntax { Arguments: [_, var value], Parent: ArgumentSyntax { Parent.Parent: InvocationExpressionSyntax upcast } } &&
+         value == argument && IsUpcasting(upcast) ||
+         argument.Parent?.Parent is InvocationExpressionSyntax helper && UpcastingMethods.Contains((InvokedName(helper), helper.ArgumentList.Arguments.Count)));
 
     /// <summary>True when <paramref name="access"/> is copied, unread, into the same column of another row.</summary>
     private static bool IsCopy(ExpressionSyntax access) =>
@@ -769,20 +1052,6 @@ internal sealed class SchemaFamilyScan
         MemberAccessExpressionSyntax access => access.Name.Identifier.ValueText,
         ConditionalAccessExpressionSyntax { WhenNotNull: MemberBindingExpressionSyntax binding } => binding.Name.Identifier.ValueText,
         _ => null
-    };
-
-    /// <summary>True when <paramref name="access"/> is only tested for presence, which no upcaster changes.</summary>
-    private static bool IsPresenceCheck(ExpressionSyntax access) => access.Parent switch
-    {
-        IsPatternExpressionSyntax { Pattern: ConstantPatternSyntax { Expression: LiteralExpressionSyntax nullLiteral } } =>
-            nullLiteral.IsKind(SyntaxKind.NullLiteralExpression),
-        IsPatternExpressionSyntax { Pattern: UnaryPatternSyntax { Pattern: ConstantPatternSyntax { Expression: LiteralExpressionSyntax nullLiteral } } } =>
-            nullLiteral.IsKind(SyntaxKind.NullLiteralExpression),
-        BinaryExpressionSyntax binary when binary.IsKind(SyntaxKind.EqualsExpression) || binary.IsKind(SyntaxKind.NotEqualsExpression) =>
-            (binary.Left == access ? binary.Right : binary.Left).IsKind(SyntaxKind.NullLiteralExpression),
-        ArgumentSyntax { Parent.Parent: InvocationExpressionSyntax invocation } =>
-            InvokedName(invocation) is "IsNullOrEmpty" or "IsNullOrWhiteSpace" && invocation.ArgumentList.Arguments.Count == 1,
-        _ => false
     };
 
     /// <summary>
@@ -918,12 +1187,14 @@ internal static class ProjectVisibility
 
 /// <summary>
 /// FR-022's fixture rules over a set of committed fixtures, their lock and the declared upcasters, so the detector can
-/// be pinned on fixtures that never touch the tree.
+/// be pinned on fixtures that never touch the tree. A fixture is one row of one table, every content column in one JSON
+/// file named by the table (#2144), so a name with a column in it - the per-column layout upcasters had before they
+/// worked on rows - is refused.
 /// </summary>
 internal static class UpcasterFixtureRules
 {
     private static readonly System.Text.RegularExpressions.Regex Named = new(
-        @"/Fixtures/SchemaUpcasters/(?<family>[^/]+)/(?<from>[^/]+)-to-(?<to>[^/]+)/(?<name>[^/]+)\.(?<role>source|expected)\.(?<ext>[^./]+)$");
+        @"/Fixtures/SchemaUpcasters/(?<family>[^/]+)/(?<from>[^/]+)-to-(?<to>[^/]+)/(?<name>[^/.]+)\.(?<role>source|expected)\.(?<ext>json)$");
 
     public static IReadOnlyList<string> Violations(
         IReadOnlyList<(string Path, string Text)> fixtures,
@@ -933,7 +1204,8 @@ internal static class UpcasterFixtureRules
         var violations = new List<string>();
         var named = fixtures.Select(fixture => (fixture.Path, fixture.Text, Match: Named.Match("/" + fixture.Path))).ToArray();
         violations.AddRange(named.Where(fixture => !fixture.Match.Success)
-            .Select(fixture => $"{fixture.Path}: is not named <table>.<column>.source.<ext> or .expected.<ext> under Fixtures/SchemaUpcasters/<family>/<from>-to-<to>/."));
+            .Select(fixture => $"{fixture.Path}: is not named <table>.source.json or <table>.expected.json under Fixtures/SchemaUpcasters/<family>/<from>-to-<to>/; " +
+                               "a fixture is one row, every content column of the table in one file (#2144)."));
 
         var pairs = named.Where(fixture => fixture.Match.Success)
             .GroupBy(fixture => fixture.Path[..(fixture.Path.Length - fixture.Match.Groups["role"].Length - fixture.Match.Groups["ext"].Length - 1)], StringComparer.Ordinal)

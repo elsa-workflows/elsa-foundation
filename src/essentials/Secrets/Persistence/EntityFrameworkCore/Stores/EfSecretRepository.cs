@@ -283,7 +283,7 @@ public sealed class EfSecretRepository(SecretsDbContext context) : ISecretReposi
     private static Secret Map(SecretRecord record, string tenantId)
     {
         EfSchemaVersion.EnsureReadable(SecretsEfModule.Chain, record.SchemaVersion);
-        var document = SecretDocument.Parse(SecretsEfModule.Chain.Upcast(record.SchemaVersion, SecretsEfModule.TableName, nameof(record.Payload), record.Payload));
+        var document = SecretDocument.Parse(SecretsEfModule.Chain.Upcast<SecretRecord>(record.SchemaVersion, (nameof(record.Payload), record.Payload))[nameof(record.Payload)]!);
         if (!string.Equals(document.TenantId, document.Secret.TenantId, StringComparison.Ordinal))
             throw new InvalidOperationException("Secret document contains conflicting tenant identities.");
         if (!string.Equals(document.TenantId, tenantId, StringComparison.Ordinal) ||
