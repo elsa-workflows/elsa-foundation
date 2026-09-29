@@ -588,3 +588,21 @@ that the migrator seeds first; built by [#2136](https://github.com/elsa-workflow
   member's or an operator's record, one changed since, and one the migrator created for a contraction that has run,
   since a gate that admits a module whose families all have a record creates none and leaves no trace (spec 185,
   2026-09-29 note).
+
+**2026-09-29 note.** Recorded while preparing the two-host demo: the CLI's `status` printed a pending version as "held by
+nothing; waits for every counted member to read it" and never named the members, on the reading that the counted members
+are known only to a running host. FR-022 says the gate names them and that the CLI prints it, so the CLI now does.
+
+- **`persistence status` names the counted members that cannot read each pending version**, as host id and the versions it
+  reads of the family, and lists the members of the membership table in the database it is pointed at: host id, status,
+  whether it is counted, last heartbeat and the versions each reads. It reads the table through the host's own EF closure
+  (the `Cluster.Membership` module, found beside the module by `IEfToolingFleetSource`), on the connection the command
+  carries, so this package still knows nothing of membership. Who blocks a version is the same counting query the gate asks
+  (`ReadsSchemaVersion`, MR-007), so the tool and the gate cannot disagree.
+- **Two interpretations.** The tool judges liveness on its own clock with the provider's default skew allowance, because it
+  reads no host configuration; a host configured otherwise may count a member the tool lists as expired, or the reverse,
+  within that difference. And the table is read from the database the command reaches, where membership normally lives
+  (`docs/foundation-host-feeds.md`, "The shared database"); a membership kept in another database is not read, and the tool
+  says so as a cluster of one when the table is not there.
+- **What stays unknown to the tool** is a running host's memory: how far a backfill has got, and the observation a host last
+  made. Both remain with the gate's in-process status, which spec 182 carries to the feature catalog and Attention.

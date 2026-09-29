@@ -420,6 +420,10 @@ dotnet elsa persistence release --host <dir> --provider PostgreSql --modules Wor
   --family RuntimeWorkflowExecution --operator ops@example
 ```
 
+`status` also names, under each pending version, the cluster members that cannot read it and lists the members of the
+membership table, read through the host's closure (`IEfToolingFleetSource`; see `docs/foundation-host-feeds.md`, "Seeing which
+host holds a version back").
+
 A hold on a version already finalized is refused. No command finalizes, forces finalization or lowers a finalized
 version: going back past one means restoring a database backup taken before it.
 

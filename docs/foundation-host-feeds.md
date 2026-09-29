@@ -638,13 +638,52 @@ Elsa__Cluster__Membership__EntityFrameworkCore__ConnectionString="Host=db;Databa
 version, but the version is finalized only once every live host can read it (spec 181). Until then that host writes the
 old version, and a feature that needs the new one answers `409` with code `schema-version-not-finalized`, saying it
 becomes available once every host can read the version (spec 182); the gate's status names each host that cannot yet
-(spec 181, FR-022). Upgrade the other hosts by restarting each on the new release. A hot reload is not enough: an EF
+(spec 181, FR-022; `dotnet elsa persistence status` prints it, below). Upgrade the other hosts by restarting each on the new release. A hot reload is not enough: an EF
 module package loads host-integrated, and today the previous release of such a module stays loaded after a reload (its
 load context is not released until the host restarts). A host reports only the versions every loaded declaration of a
 family reads (spec 183, FR-021, FR-022), so it goes on counting as unable to read the new version until it restarts. Once the last
 host is on the new release, the version finalizes on its own and the feature serves on every host, with no restart of
 the hosts that already had it. A host that is stopped leaves the fleet; one that crashes is still counted until its
 entry expires.
+
+**Seeing which host holds a version back.** One command, from any machine that can reach the shared database, shows the
+family's finalization state, names each host that cannot read a pending version, and lists the cluster's members:
+
+```bash
+dotnet elsa persistence status --host /app --provider PostgreSql --modules SamplesNotes,Cluster.Membership \
+  --family SamplesNotes --connection-env ELSA_EF_CONNECTION
+```
+
+```text
+SamplesNotes (SamplesNotes): finalized at 1.0.0; this host reads [1.0.0, 2.0.0]
+  2.0.0: pending, held by nothing; waits for every counted member to read it
+    waits for: foundation-host-a (reads 1.0.0)
+
+members: 2 in Cluster.Membership, judged at 2026-09-29T12:00:00+00:00 with a skew allowance of 00:00:05
+  foundation-host-a: Active, counted, last heartbeat 2026-09-29T11:59:58+00:00
+    SamplesNotes: reads 1.0.0
+  foundation-host-b: Active, counted, last heartbeat 2026-09-29T11:59:58+00:00
+    SamplesNotes: reads 1.0.0, 2.0.0
+```
+
+Each `waits for` line is a live host that counts toward the version and does not report reading it, with the versions it
+does read; a host whose report the tool cannot interpret is named as reading nothing, which blocks the version just as it
+blocks the gate. When no counted member blocks a pending version the line says it finalizes at the next evaluation. The
+members list every row of the membership table, so a host that left (`Left`, not counted) or stopped heartbeating
+(`expired`, not counted) is visible until the cleanup period removes it. `--modules` need not name `Cluster.Membership`:
+the members are read through the host's own closure whenever it carries the membership module, on the connection the
+command uses. Two things to know:
+
+- Liveness is judged on the machine running the command, with the default skew allowance (5 s), because the command reads no
+  host configuration. A host configured with another allowance can count a member the command shows as expired, by that
+  difference.
+- A host with no membership in its closure prints `members: this host only`; one whose database has not had the
+  `Cluster.Membership` migrations applied prints that the table is missing, a cluster of one. Pending versions then keep the
+  plain "waits for every counted member" line, since nothing was read to name anyone.
+
+The running host reports the same blockers itself: a feature that needs the pending version answers `409` with
+`schema-version-not-finalized`, and the Modularity API's Attention items carry the reason (spec 182). There is no separate
+status endpoint on `Elsa.Foundation.Host`; the CLI is the operator's view before and beside a running host.
 
 `FoundationHostClusterBootTests` (`tests/essentials/Cluster/EntityFrameworkCore/Tests`) runs this whole sequence on two
 built hosts over one SQLite database, and `PostgreSqlFoundationHostClusterTests` (`.../ProviderTests`, in a container) on
