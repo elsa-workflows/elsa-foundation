@@ -394,9 +394,9 @@ or set Elsa:Persistence:EntityFramework:Migrate:Policy to AutoMigrate.
 ```
 
 The exception is an `IEfModuleRefusal` (in `Elsa.Persistence.Schema`, which every host shares with the packages it loads),
-as are `EfContractingMigrationRefusedException` and `EfSchemaActivationRefusedException`. A host that carries no copy of this
-assembly reads the module, the pending migration ids, a stable `Code` and the command from it, without naming the
-exception's type: an EF module package's exception is a different type from any the host could reference.
+as are `EfContractingMigrationRefusedException` and `EfSchemaActivationRefusedException`. A host reads the module, the pending
+migration ids, a stable `Code` and the command from it without naming the exception's type, which a module that
+loaded a private copy of this assembly would make a different type from any the host could reference.
 
 ## Schema finalization (spec 181)
 

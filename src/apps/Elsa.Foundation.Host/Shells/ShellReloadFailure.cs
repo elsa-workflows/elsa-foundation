@@ -11,9 +11,10 @@ namespace Elsa.Foundation.Host.Shells;
 /// <remarks>
 /// <para>
 /// An EF module's refusal is recognised by <see cref="IEfModuleRefusal"/>, from <c>Elsa.Persistence.Schema</c>, which this
-/// host shares with every package it loads. The exception itself is a type of the module's own copy of
-/// <c>Elsa.Persistence.EntityFramework</c>, in a load context of its own, which this host neither references nor could name.
-/// A module whose exception was built against a private copy of <c>Elsa.Persistence.Schema</c> too implements an interface
+/// host shares with every package it loads. The host carries and shares <c>Elsa.Persistence.EntityFramework</c> for its
+/// cluster membership, so a module usually binds that copy, but this code names no EF type: a module built against a
+/// computed-version copy the host does not declare can still load a private one, in a load context of its own, whose
+/// exception this host could not name. A module whose exception was built against a private copy of <c>Elsa.Persistence.Schema</c> too implements an interface
 /// of the same full name that is not this host's type, so the refusal is then read from it by name and reflection.
 /// </para>
 /// <para>

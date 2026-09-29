@@ -16,7 +16,7 @@ namespace Elsa.Persistence.EntityFramework;
 /// negative result rather than a database failure does the same for it without a change.
 /// </para>
 /// <para>
-/// It is an <see cref="IEfModuleRefusal"/>, so a host that carries no copy of this assembly, such as
+/// It is an <see cref="IEfModuleRefusal"/>, so a host that does not name this assembly's types, such as
 /// <c>Elsa.Foundation.Host</c> answering a shell reload, can name the module and the migrations without knowing this type.
 /// </para>
 /// </remarks>

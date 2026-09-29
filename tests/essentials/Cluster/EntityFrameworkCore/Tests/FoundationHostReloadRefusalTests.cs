@@ -15,11 +15,12 @@ namespace Elsa.Cluster.EntityFrameworkCore.Tests;
 /// refusal, and the same process then reloads.
 /// </summary>
 /// <remarks>
-/// The module arrives from a directory feed, so its <c>Elsa.Persistence.EntityFramework</c> is a private copy in a load
-/// context of its own and its refusal a type the host cannot name: the host recognises it by the interface it shares.
+/// The host carries and shares <c>Elsa.Persistence.EntityFramework</c> (#2151), so the module binds the host's copy and the
+/// feed offers none: only the module is packed. The host recognises the refusal by the interface it shares, naming no EF type.
 /// </remarks>
+[Collection(FoundationHostCollection.Name)]
 public sealed class FoundationHostReloadRefusalTests(FoundationHostFeed feed, MigratingModuleFeed migrating)
-    : IClassFixture<FoundationHostFeed>, IClassFixture<MigratingModuleFeed>, IAsyncLifetime
+    : IClassFixture<MigratingModuleFeed>, IAsyncLifetime
 {
     private const string ApiKey = "reload-refusal-test-key";
     private const string ConnectionVariable = "ELSA_EF_CONNECTION";
@@ -75,7 +76,7 @@ public sealed class FoundationHostReloadRefusalTests(FoundationHostFeed feed, Mi
         // the host says so on its log, for whoever reads that instead of a response. The older package is one the host does not
         // switch to, so the reload is all that reaches the shell.
         File.Copy(migrating.Package(1), Path.Join(_host.PackagesDirectory, Path.GetFileName(migrating.Package(1))));
-        await WaitUntilAsync(() => _host.Output.Contains($"Reloading shell '{ShellName}' after a Nuplane reconcile was refused", StringComparison.Ordinal));
+        await HostLogsAsync($"Reloading shell '{ShellName}' after a Nuplane reconcile was refused");
         Assert.Contains(MigratingModule.AddColor, _host.Output, StringComparison.Ordinal);
 
         await AssertRefusedThenAppliedThenReloadedAsync(runningVersion: "2.0.0 generation 1", reloadedVersion: "2.0.0");
@@ -91,7 +92,7 @@ public sealed class FoundationHostReloadRefusalTests(FoundationHostFeed feed, Mi
         await MigrateAsync(generation: 1);
         _host = await StartAsync(EfMigratePolicy.Validate, generation: 2, deployed: true, awaitShells: false);
 
-        await WaitUntilAsync(() => _host.Output.Contains($"EF module '{MigratingModule.Name}' has pending migrations: {MigratingModule.AddColor}", StringComparison.Ordinal));
+        await HostLogsAsync($"EF module '{MigratingModule.Name}' has pending migrations: {MigratingModule.AddColor}");
         Assert.NotEqual(HttpStatusCode.OK, (await Version()).Status);
         Assert.NotEqual(HttpStatusCode.OK, (await _host.GetAsync("/health/ready")).Status);
 
@@ -134,14 +135,14 @@ public sealed class FoundationHostReloadRefusalTests(FoundationHostFeed feed, Mi
         // CShells kept the running generation serving.
         Assert.Equal((HttpStatusCode.OK, runningVersion), await Version());
 
-        // The real tool, against the host's own directory: the package set the running host last reconciled, its
-        // Elsa.Persistence.EntityFramework loaded from that package graph, since the host itself carries no EF.
+        // The real tool, against the host's own directory: it finds the module through the host's own copy of
+        // Elsa.Persistence.EntityFramework, in that directory's output, and the package set the host last reconciled.
         await ApplyAsync();
         Assert.Contains(MigratingModule.AddedColumn, await ColumnsAsync(), StringComparer.Ordinal);
 
         var (reloaded, ok) = await ReloadAsync();
 
-        Assert.True(reloaded == HttpStatusCode.OK, $"Reload answered {reloaded}: {ok}{Environment.NewLine}Host output:{Environment.NewLine}{_host.Output}");
+        Assert.True(reloaded == HttpStatusCode.OK, $"Reload answered {reloaded}: {ok}{Environment.NewLine}Host output:{Environment.NewLine}{_host!.Output}");
         var (status, version) = await Version();
         Assert.Equal(HttpStatusCode.OK, status);
         var parts = version.Split(" generation ");
@@ -160,15 +161,9 @@ public sealed class FoundationHostReloadRefusalTests(FoundationHostFeed feed, Mi
         Assert.True(exitCode == 0, $"dotnet elsa persistence apply exited {exitCode}:{Environment.NewLine}{output}");
     }
 
-    private async Task WaitUntilAsync(Func<bool> condition)
-    {
-        var deadline = DateTimeOffset.UtcNow + Patience;
-        while (!condition())
-        {
-            Assert.True(DateTimeOffset.UtcNow < deadline, $"Not met within {Patience}. Host output:{Environment.NewLine}{_host!.Output}");
-            await Task.Delay(TimeSpan.FromMilliseconds(100));
-        }
-    }
+    private Task HostLogsAsync(string text) =>
+        Polling.UntilAsync(
+            () => Task.FromResult(_host!.Output.Contains(text, StringComparison.Ordinal)), Patience, TimeSpan.FromMilliseconds(100), () => $"Host output:{Environment.NewLine}{_host!.Output}");
 
     private Task<(HttpStatusCode Status, string Body)> Version() => _host!.GetAsync(MigratingModule.VersionPath);
 
@@ -185,14 +180,13 @@ public sealed class FoundationHostReloadRefusalTests(FoundationHostFeed feed, Mi
 
     private async Task<FoundationHostProcess> StartAsync(EfMigratePolicy policy, int generation, bool deployed, bool awaitShells = true)
     {
-        var packages = Directory.EnumerateFiles(feed.Directory, "Elsa.Persistence.EntityFramework.*.nupkg").Append(migrating.Package(generation));
         return await FoundationHostProcess.StartAsync(
             Shells(ConnectionString),
-            packages,
+            [migrating.Package(generation)],
             new Dictionary<string, string>
             {
-                // A second feed beside the host's own `packages` one, which resolves what the packages there depend on and holds
-                // nothing the host loads on its own account.
+                // A second feed beside the host's own `packages` one, which resolves what the package there depends on and holds
+                // nothing the host loads on its own account: the host carries EF Core and Elsa.Persistence.EntityFramework itself.
                 ["Nuplane:Setup:Feeds:1:Name"] = "closure",
                 ["Nuplane:Setup:Feeds:1:DirectoryPath"] = feed.ClosureDirectory,
                 ["Nuplane:Capabilities:ef-provider"] = "Sqlite",

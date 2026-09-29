@@ -626,9 +626,9 @@ the host last reconciled:
 dotnet elsa persistence apply --host "<host directory>" --modules <module> --provider <p> --connection-env ELSA_EF_CONNECTION
 ```
 
-The host recognises the refusal by `IEfModuleRefusal` (`Elsa.Persistence.Schema`, a shared assembly), because the
-exception itself is a type of the module package's own copy of `Elsa.Persistence.EntityFramework`, which the host
-does not reference. A module whose exception was built against a private copy of `Elsa.Persistence.Schema` too is
+The host recognises the refusal by `IEfModuleRefusal` (`Elsa.Persistence.Schema`, a shared assembly) and names no EF
+type: it carries and shares `Elsa.Persistence.EntityFramework`, which the module binds, so the tool finds the module
+through the host's own copy in the deployed directory. A module whose exception was built against a private copy of `Elsa.Persistence.Schema` too is
 recognised by the full name of the interface it implements. Once the command has run, the same `POST` answers `200`
 and the shell's generation advances, with no restart.
 
