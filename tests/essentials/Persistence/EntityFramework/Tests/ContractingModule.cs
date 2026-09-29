@@ -12,7 +12,9 @@ using Microsoft.Extensions.Logging;
     typeof(ContractingDbContext),
     HistoryModule = ContractingModule.HistoryModule,
     Sqlite = typeof(ContractingDbContext),
-    PostgreSql = typeof(ContractingDbContext))]
+    SqlServer = typeof(ContractingDbContext),
+    PostgreSql = typeof(ContractingDbContext),
+    MySql = typeof(ContractingDbContext))]
 [assembly: EfSchemaFamily(ContractingModule.Family, ContractingModule.Name, ContractingModule.CurrentVersion, Upcasters = [typeof(ContractingProbeUpcaster)])]
 
 namespace Elsa.Persistence.EntityFramework.Tests;
@@ -23,7 +25,7 @@ namespace Elsa.Persistence.EntityFramework.Tests;
 /// replacement beside it, <see cref="DropObsolete"/> drops a column of an unstamped table under an opt-out that is not
 /// contracting, and <see cref="Contract"/> drops <c>Legacy</c> under an opt-out naming the family and
 /// <see cref="CurrentVersion"/>, the version whose finalization makes that safe. Its migrations are written by hand and
-/// provider-free, so the same set runs on SQLite and PostgreSQL. Each test project that drives it compiles this file in,
+/// provider-free, so the same set runs on SQLite, SQL Server, PostgreSQL and MySQL. Each test project that drives it compiles this file in,
 /// so each carries the module in an assembly of its own.
 /// </summary>
 internal static class ContractingModule
@@ -137,14 +139,29 @@ internal static class ContractingModule
             constraints: table => table.PrimaryKey($"PK_{keyPrefix}SchemaFinalization", record => record.Family));
     }
 
-    /// <summary>Whether <paramref name="table"/> has <paramref name="column"/>, read from the engine's own catalog.</summary>
+    /// <summary>
+    /// Whether <paramref name="table"/> has <paramref name="column"/>, read from the engine's own catalog. The count is read
+    /// as the engine returns it, since each types <c>COUNT(*)</c> differently.
+    /// </summary>
     public static async Task<bool> HasColumnAsync(string provider, string connectionString, string table, string column)
     {
         await using var context = Create(provider, connectionString);
         var sql = EfRelationalProviderBinding.Normalize(provider) == "sqlite"
-            ? "SELECT COUNT(*) AS \"Value\" FROM pragma_table_info({0}) WHERE name = {1}"
-            : "SELECT COUNT(*)::int AS \"Value\" FROM information_schema.columns WHERE table_name = {0} AND column_name = {1}";
-        return await context.Database.SqlQueryRaw<int>(sql, table, column).SingleAsync() > 0;
+            ? "SELECT COUNT(*) FROM pragma_table_info({0}) WHERE name = {1}"
+            : "SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = {0} AND COLUMN_NAME = {1}";
+        var connection = context.Database.GetDbConnection();
+        await connection.OpenAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText = string.Format(System.Globalization.CultureInfo.InvariantCulture, sql, "@table", "@column");
+        foreach (var (name, value) in new[] { ("@table", table), ("@column", column) })
+        {
+            var parameter = command.CreateParameter();
+            parameter.ParameterName = name;
+            parameter.Value = value;
+            command.Parameters.Add(parameter);
+        }
+
+        return Convert.ToInt64(await command.ExecuteScalarAsync(), System.Globalization.CultureInfo.InvariantCulture) > 0;
     }
 }
 
@@ -152,7 +169,10 @@ internal static class ContractingModule
 /// What a test sees of a synthetic module's migrations as EF applies them: an action registered with
 /// <see cref="WhenApplying{TMigration}"/> runs as EF begins applying that migration, before any of its operations, on the
 /// flow that applies it, whichever of the persistence tool, a host's migrator or <see cref="EfDatabaseMigrator"/> drives
-/// it. It is scoped to the registering test's own flow, so tests running at once never see each other's.
+/// it. It is scoped to the registering test's own flow, so tests running at once never see each other's, and it stays
+/// registered for the rest of that flow, firing each time the flow applies the migration. A crash is therefore
+/// simulated not here but by an interceptor on one run's context, <c>ContractingSeedScenarios.EndTheProcessOnceWritten</c>,
+/// which the retry's context does not carry.
 /// </summary>
 internal static class ContractingProbe
 {
@@ -167,9 +187,6 @@ internal static class ContractingProbe
     };
 
     public static void WhenApplying<TMigration>(Action action) where TMigration : Migration => Hook.Value = (typeof(TMigration), action);
-
-    /// <summary>Stops observing, so an action that simulated a crash does not fire on the retry.</summary>
-    public static void Stop() => Hook.Value = null;
 
     /// <summary>Hand-written migrations carry no model snapshot to compare the running model with; and every synthetic context is observed.</summary>
     public static void Configure(DbContextOptionsBuilder optionsBuilder) =>

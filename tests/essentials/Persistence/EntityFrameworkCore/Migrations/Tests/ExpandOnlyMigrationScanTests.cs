@@ -160,17 +160,17 @@ public sealed class ExpandOnlyMigrationScanTests
     [Fact]
     public void The_scan_tells_a_contracting_opt_out_from_any_other_and_shows_the_version_it_waits_for()
     {
-        var manifest = new FreezeManifest(new[] { "Sqlite", "PostgreSql" }
+        var manifest = new FreezeManifest(ModuleContextCatalog.Providers
             .ToDictionary(provider => (ContractingModule.Name, provider), IReadOnlyList<string> (_) => [ContractingModule.Initial]));
 
         var report = ExpandOnlyMigrationScanner.Scan([typeof(ContractingDbContext).Assembly], ModuleContextCatalog.Providers, manifest);
 
         Assert.True(report.Passed, string.Join("\n", report.Failures));
-        Assert.Equal((1, 2, 2, 6), (report.Modules, report.ProviderContextsExamined, report.ProviderContextsSkipped, report.PostFreezeMigrations));
-        Assert.Equal(2, report.OptOutsHonoured.Count(line =>
+        Assert.Equal((1, 4, 0, 12), (report.Modules, report.ProviderContextsExamined, report.ProviderContextsSkipped, report.PostFreezeMigrations));
+        Assert.Equal(4, report.OptOutsHonoured.Count(line =>
             line.Contains(ContractingModule.Contract, StringComparison.Ordinal) &&
             line.EndsWith($"(applies once '{ContractingModule.Family}' is finalized at '{ContractingModule.CurrentVersion}')", StringComparison.Ordinal)));
-        Assert.Equal(2, report.OptOutsHonoured.Count(line =>
+        Assert.Equal(4, report.OptOutsHonoured.Count(line =>
             line.Contains(ContractingModule.DropObsolete, StringComparison.Ordinal) && !line.Contains("applies once", StringComparison.Ordinal)));
     }
 

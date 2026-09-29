@@ -259,8 +259,9 @@ public sealed class EfContractingMigrationRefusalTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// Once the module has been admitted, which a family's record shows, a family with no record has nothing to show its
-    /// version finalized, and the whole batch is refused: here the second of two families, the first admitted at its version.
+    /// Once the module has been admitted, which a record a member created shows, a family with no record has nothing to
+    /// show its version finalized, and the whole batch is refused: here the second of two families, the first finalized at
+    /// its version.
     /// </summary>
     [Fact]
     public async Task Once_the_module_has_been_admitted_a_family_with_no_record_is_refused()
@@ -298,6 +299,134 @@ public sealed class EfContractingMigrationRefusalTests : IAsyncLifetime
 
         Assert.Contains(Contract, await AppliedAsync(Provider, Connection));
         AssertSeeded(await RecordAsync(Provider, Connection), MachineMigrator);
+    }
+
+    /// <summary>
+    /// A process that ends between two families' seeds, simulated by failing as soon as the first family's record has been
+    /// written, leaves only the migrator's own record. An older release starting then is still refused, on that record;
+    /// <c>Validate</c> reports the batch as pending, not refused; and the next apply seeds the second family, keeps the
+    /// first's record as it was, and completes, rather than refusing the second family for want of a record forever.
+    /// </summary>
+    [Fact]
+    public async Task A_seed_cut_short_between_two_families_is_completed_by_the_next_apply()
+    {
+        await EndThePairsSeedAfterItsFirstRecordAsync();
+        var cutShort = Assert.Single(await ContractingPairModule.RecordsAsync(Connection));
+        Assert.Equal(ContractingPairModule.First, cutShort.Key);
+        AssertSeeded(cutShort.Value, MachineMigrator);
+        await using (var context = ContractingPairModule.Create(Connection))
+        {
+            var older = await Assert.ThrowsAsync<EfSchemaActivationRefusedException>(() => ContractingPairModule.OlderGate().ActivateAsync(context));
+            Assert.Equal((EfSchemaActivationRefusal.FinalizedUnreadable, ContractingPairModule.First, CurrentVersion), (older.Refusal, older.Family, older.Version));
+        }
+
+        await using (var context = ContractingPairModule.Create(Connection))
+            await Assert.ThrowsAsync<EfPendingMigrationsException>(() => EfDatabaseMigrator.ApplyAsync(context, EfProviderNames.Sqlite, EfMigratePolicy.Validate));
+
+        await ApplyPairAsync();
+
+        var records = await ContractingPairModule.RecordsAsync(Connection);
+        Assert.All(records.Values, record => AssertSeeded(record, MachineMigrator));
+        Assert.Equal([ContractingPairModule.First, ContractingPairModule.Second], records.Keys.Order(StringComparer.Ordinal));
+        Assert.Equal((cutShort.Value.Revision, cutShort.Value.History[0].At), (records[ContractingPairModule.First].Revision, records[ContractingPairModule.First].History[0].At));
+        Assert.Equal(
+            [ContractingPairModule.Initial, ContractingPairModule.ContractFirst, ContractingPairModule.ContractSecond],
+            await ContractingPairModule.AppliedAsync(Connection));
+    }
+
+    /// <summary>
+    /// A seed cut short between two families, and then a release that reads the first family's new version but only the
+    /// second's old one starts: its gate reads the migrator's record, creates the second family's at the only version it
+    /// reads, as a member, and admits the module. That release now serves it, so the next apply is refused, before
+    /// anything runs, rather than completing the seed and contracting the second family under it.
+    /// </summary>
+    [Fact]
+    public async Task A_gate_that_admits_the_module_after_a_seed_was_cut_short_leaves_the_next_apply_refused()
+    {
+        await EndThePairsSeedAfterItsFirstRecordAsync();
+        var assembly = typeof(ContractingPairDbContext).Assembly;
+        var readsOnlyTheSecondFamilysOldVersion = EfSchemaModuleFamilies.FromDeclarations(
+            ContractingPairModule.Name,
+            [
+                new EfSchemaFamilyDescriptor(ContractingPairModule.First, ContractingPairModule.Name, CurrentVersion, assembly),
+                new EfSchemaFamilyDescriptor(ContractingPairModule.Second, ContractingPairModule.Name, EarlierVersion, assembly)
+            ]);
+        await using (var context = ContractingPairModule.Create(Connection))
+            await new EfSchemaModuleGate(readsOnlyTheSecondFamilysOldVersion, fleet: null, new EfSchemaFinalizationObservations(), new EfSchemaFinalizationOptions())
+                .ActivateAsync(context);
+        var admitted = (await ContractingPairModule.RecordsAsync(Connection))[ContractingPairModule.Second];
+        Assert.Equal((EarlierVersion, Environment.MachineName), (admitted.FinalizedVersion, admitted.History[0].Actor.Member?.HostId));
+
+        var refusal = await Assert.ThrowsAsync<EfContractingMigrationRefusedException>(() => ApplyPairAsync());
+
+        Assert.Equal(
+            new EfContractingMigrationRefusal(ContractingPairModule.ContractSecond, ContractingPairModule.Second, CurrentVersion, EarlierVersion, EfContractingMigrationRefusalReason.NotFinalized),
+            Assert.Single(refusal.Refusals));
+        Assert.Empty(refusal.Applied);
+        Assert.Equal([ContractingPairModule.Initial], await ContractingPairModule.AppliedAsync(Connection));
+        Assert.Equal(admitted.Revision, (await ContractingPairModule.RecordsAsync(Connection))[ContractingPairModule.Second].Revision);
+    }
+
+    /// <summary>What a record shows that the migrator's own seed of the pending batch, cut short, would not have left.</summary>
+    public enum NotTheMigratorsOwnSeed
+    {
+        /// <summary>A member created it, at the very version the seed would have: a gate admitted the module.</summary>
+        CreatedByAMember,
+
+        /// <summary>The migrator created it, and an operator has since placed and released a hold on it.</summary>
+        ChangedSince,
+
+        /// <summary>
+        /// The migrator created it for a contraction that has run since: a gate may since have admitted the module
+        /// without creating anything, since every family it declares had a record.
+        /// </summary>
+        ForAContractionThatHasRun,
+
+        /// <summary>The migrator created it at a version this seed would not create it at.</summary>
+        AtAnotherVersion
+    }
+
+    /// <summary>
+    /// The migrator completes only its own seed of the pending batch. Any other record counts as an admission, so the
+    /// family with no record is refused, before anything runs, and is not seeded: the loud direction, where seeding would
+    /// run a contraction under a release that may already be serving the module.
+    /// </summary>
+    [Theory]
+    [InlineData(NotTheMigratorsOwnSeed.CreatedByAMember)]
+    [InlineData(NotTheMigratorsOwnSeed.ChangedSince)]
+    [InlineData(NotTheMigratorsOwnSeed.ForAContractionThatHasRun)]
+    [InlineData(NotTheMigratorsOwnSeed.AtAnotherVersion)]
+    public async Task A_record_the_migrators_own_seed_would_not_have_left_counts_as_an_admission_so_a_family_with_none_is_refused(NotTheMigratorsOwnSeed staged)
+    {
+        await using (var context = ContractingPairModule.Create(Connection))
+        {
+            await context.GetService<IMigrator>().MigrateAsync(
+                staged is NotTheMigratorsOwnSeed.ForAContractionThatHasRun ? ContractingPairModule.ContractFirst : ContractingPairModule.Initial);
+            var store = new EfSchemaFinalizationStore(context);
+            var created = await store.GetOrCreateAsync(
+                ContractingPairModule.First,
+                staged is NotTheMigratorsOwnSeed.AtAnotherVersion ? EarlierVersion : CurrentVersion,
+                Chain,
+                SchemaFinalizationActor.Of(staged is NotTheMigratorsOwnSeed.CreatedByAMember
+                    ? EfSchemaFinalizationTestSupport.NewerHost
+                    : new SchemaFinalizationMember(MachineMigrator, "an-earlier-run")));
+            if (staged is NotTheMigratorsOwnSeed.ChangedSince)
+            {
+                var held = await store.PlaceHoldAsync(ContractingPairModule.First, created.Revision, version: null, "Checking the release.", "ops", Chain);
+                await store.ReleaseHoldAsync(ContractingPairModule.First, held.Record.Revision, version: null, "ops");
+            }
+        }
+
+        var applied = await ContractingPairModule.AppliedAsync(Connection);
+
+        var refusal = await Assert.ThrowsAsync<EfContractingMigrationRefusedException>(() => ApplyPairAsync());
+
+        Assert.Contains(
+            new EfContractingMigrationRefusal(ContractingPairModule.ContractSecond, ContractingPairModule.Second, CurrentVersion, null, EfContractingMigrationRefusalReason.NoRecord),
+            refusal.Refusals);
+        Assert.Empty(refusal.Applied);
+        Assert.Equal(applied, await ContractingPairModule.AppliedAsync(Connection));
+        Assert.False((await ContractingPairModule.RecordsAsync(Connection)).ContainsKey(ContractingPairModule.Second));
     }
 
     /// <summary>A finalized version older than anything this build's chain reads is below the version the migration names.</summary>
@@ -462,6 +591,18 @@ public sealed class EfContractingMigrationRefusalTests : IAsyncLifetime
             $"'{finalized}' in this database, not at '{CurrentVersion}' or later",
             message,
             StringComparison.Ordinal);
+
+    /// <summary>One run of the migrator over the two-family module, as a fresh process would start it.</summary>
+    private async Task ApplyPairAsync(params IInterceptor[] interceptors)
+    {
+        await using var context = ContractingPairModule.Create(Connection, interceptors);
+        await EfDatabaseMigrator.ApplyAsync(context, EfProviderNames.Sqlite);
+    }
+
+    /// <summary>A run of the migrator over the two-family module whose process ends as soon as its seed has written the first family's record.</summary>
+    private Task EndThePairsSeedAfterItsFirstRecordAsync() =>
+        Assert.ThrowsAsync<ProcessEndedException>(
+            () => ApplyPairAsync(new EndTheProcessOnceWritten(EfSchemaFinalization.RecordTableName(ContractingPairModule.HistoryModule))));
 
     private async Task<EfContractingMigrationRefusedException> ApplyExpectingRefusalAsync()
     {

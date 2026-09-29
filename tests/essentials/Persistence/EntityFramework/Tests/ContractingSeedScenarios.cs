@@ -47,7 +47,7 @@ internal static class ContractingSeedScenarios
     /// <summary>
     /// A process that ends after the seed and before the contraction, simulated by failing as soon as the family's record
     /// has been written, so nothing after it runs: the record stands without the contraction, an older release starting
-    /// then is refused, and the next apply finds the module admitted with the record at the version and completes.
+    /// then is refused, and the next apply finds only its own seed's record, at the version, and completes.
     /// </summary>
     /// <param name="apply">One run of the migrator, as a fresh process would start it, with these interceptors on its context.</param>
     /// <param name="migrator">The member the seeded record names.</param>

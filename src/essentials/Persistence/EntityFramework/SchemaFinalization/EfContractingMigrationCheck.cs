@@ -21,7 +21,8 @@ namespace Elsa.Persistence.EntityFramework.SchemaFinalization;
 /// Since a finalized version only moves forward (spec 181, FR-003) and a gate refuses a host that cannot read it
 /// (FR-015), every host that reads only versions before that one is refused from then on, whichever order hosts start
 /// in. Two paths make it hold, chosen by whether a gate-aware host has admitted the module in the database, which a
-/// family's record there shows:
+/// family's record there shows, unless every record is the migrator's own seed of the pending batch, cut short before its
+/// last family's record and untouched since:
 /// </para>
 /// <list type="bullet">
 /// <item><b>Admitted.</b> The check runs before <c>MigrateAsync</c> and refuses the context's whole pending batch, which
@@ -34,11 +35,13 @@ namespace Elsa.Persistence.EntityFramework.SchemaFinalization;
 /// reads every record again, refusing as the admitted path does when one is below, because a racing release's gate
 /// created it first; and only then applies the contracting migrations and the rest. A record is created by one insert
 /// keyed by its family, so of a seed and a racing gate one creates it and the other reads it: either the racing gate
-/// is refused, or the re-check refuses the contraction. A process that ends between the seed and the contraction leaves
-/// the record without the contraction, so the module then counts as admitted, the record passes the check, and the
-/// next apply completes; one that ends after the identity and before the first record leaves no record, so the next
-/// apply seeds again. A family the build or its chain cannot place is refused before anything runs, so an unplaceable
-/// version is never seeded.</item>
+/// is refused, or the re-check refuses the contraction. A process that ends after the identity and before the first
+/// record leaves no record, and one that ends between two families' records, or between the seed and the contraction,
+/// leaves only records its own seed created, untouched, at the versions it creates them at: either way the next apply
+/// seeds what is missing, keeps what exists, and completes. Once a record exists that a member or an operator created,
+/// or that has changed since, or that the migrator created for a contraction that has run, the module counts as
+/// admitted and a family with no record is refused. A family the build or its chain cannot place is refused before
+/// anything runs, so an unplaceable version is never seeded.</item>
 /// </list>
 /// <para>
 /// <b>What is not covered.</b> SQL run outside Elsa, such as the script <c>dotnet elsa persistence script</c> writes for
@@ -49,8 +52,9 @@ namespace Elsa.Persistence.EntityFramework.SchemaFinalization;
 /// A module with no contracting migration costs nothing here: the opt-outs are read as assembly metadata, by name, as
 /// <see cref="EfSchemaFamilyCatalog"/> reads declarations, and no database is opened. The migrations-history table is
 /// read only when a contracting migration's family is below its version, to learn whether it is pending, on a database
-/// no host has admitted the module in, to learn what to seed, and when a gate creates the record of a family a
-/// contracting migration names, to learn whether it has been applied.
+/// no host has admitted the module in, to learn what to seed, where every record is one the migrator created and nothing
+/// has changed since, to learn whether it is the migrator's own seed cut short, and when a gate creates the record of a
+/// family a contracting migration names, to learn whether it has been applied.
 /// </para>
 /// </remarks>
 public static class EfContractingMigrationCheck
@@ -82,7 +86,7 @@ public static class EfContractingMigrationCheck
             return null;
 
         var families = EfSchemaModuleFamilies.ForContext(context.GetType());
-        var unsafeMigrations = await IsAdmittedAsync(context, cancellationToken)
+        var unsafeMigrations = await IsAdmittedAsync(context, contracting, families, pending, cancellationToken)
             ? await JudgeAsync(contracting, families, new EfSchemaFinalizationStore(context), cancellationToken)
             : contracting.Select(migration => Place(migration, families).Refusal).OfType<EfContractingMigrationRefusal>().ToArray();
         return unsafeMigrations.Count == 0 ? null : await RefuseBatchAsync(context, families, unsafeMigrations, pending, cancellationToken);
@@ -105,7 +109,7 @@ public static class EfContractingMigrationCheck
         var contracting = ContractingMigrations(context);
         if (contracting.Count > 0)
         {
-            if (!await IsAdmittedAsync(context, cancellationToken))
+            if (!await IsAdmittedAsync(context, contracting, families, pending: null, cancellationToken))
                 await SeedAsync(context, contracting, families, host, cancellationToken);
             else if (await JudgeAsync(contracting, families, new EfSchemaFinalizationStore(context), cancellationToken) is { Count: > 0 } unsafeMigrations &&
                      await RefuseBatchAsync(context, families, unsafeMigrations, pending: null, cancellationToken) is { } refusal)
@@ -182,13 +186,7 @@ public static class EfContractingMigrationCheck
         CancellationToken cancellationToken)
     {
         var module = ModuleOf(context, families);
-        var pending = (await context.Database.GetPendingMigrationsAsync(cancellationToken)).ToArray();
-        // In the order EF applies them, which is the pending order.
-        var seeding = pending
-            .Select(id => contracting.FirstOrDefault(migration => StringComparer.Ordinal.Equals(migration.Id, id)))
-            .OfType<ContractingMigration>()
-            .Select(migration => (Migration: migration, Placement: Place(migration, families)))
-            .ToArray();
+        var (pending, seeding) = await PlanSeedAsync(context, contracting, families, pending: null, cancellationToken);
         if (seeding.Length == 0)
             return;
         if (seeding.Select(entry => entry.Placement.Refusal).OfType<EfContractingMigrationRefusal>().ToArray() is { Length: > 0 } unplaceable)
@@ -206,15 +204,11 @@ public static class EfContractingMigrationCheck
 
         var store = new EfSchemaFinalizationStore(context);
         var creator = SchemaFinalizationActor.Of(MigratorMember(host));
-        foreach (var family in seeding.GroupBy(entry => entry.Placement.Chain!.Family, StringComparer.Ordinal))
+        // A record that exists, the migrator's own from a seed cut short or a racing gate's, is kept as it is.
+        foreach (var family in ByFamily(seeding))
         {
-            var chain = family.First().Placement.Chain!;
-            // The latest version any of the family's pending contracting migrations names, and no lower than what an applied
-            // one already left the schema serving: where the gate would start the record once the batch has applied.
-            var at = Math.Max(
-                IndexOf(chain.ReadableVersions, await SeedVersionAsync(context, module, chain, cancellationToken)),
-                family.Max(entry => entry.Placement.At));
-            await store.GetOrCreateAsync(chain.Family, chain.ReadableVersions[at], chain.ReadableVersions, creator, cancellationToken);
+            var chain = family[0].Chain!;
+            await store.GetOrCreateAsync(chain.Family, await SeedTargetAsync(context, module, family, cancellationToken), chain.ReadableVersions, creator, cancellationToken);
         }
 
         // A racing release's gate may have created a record first, below the version: then the contraction may not run.
@@ -236,14 +230,103 @@ public static class EfContractingMigrationCheck
     }
 
     /// <summary>
-    /// Whether the module has been admitted in the database: a family's record exists there. A gate creates the database
-    /// identity and then each family's record before the module serves anything, and the seed does the same, so an
-    /// identity with no record is an admission or a seed that ended before its first record, and nothing has read or
-    /// written the module's rows.
+    /// Whether the module has been admitted in the database, so that a family with no record there is refused rather than
+    /// seeded. It has not while no family has a record: a gate creates the database identity and then each family's
+    /// record before the module serves anything, and the seed does the same, so an identity with no record is an
+    /// admission or a seed that ended before its first record, and nothing has read or written the module's rows. Nor has
+    /// it while every record is the migrator's own seed of this pending batch, cut short before its last family's record
+    /// (#2136): created by a <see cref="MigratorHostIdPrefix"/> member, unchanged since, of a family a pending contracting
+    /// migration this build places names, at the version this seed creates it at. The next apply completes that seed.
     /// </summary>
-    private static async Task<bool> IsAdmittedAsync(DbContext context, CancellationToken cancellationToken) =>
-        await EfSchemaFinalizationCheck.RecordTableExistsAsync(context, cancellationToken) &&
-        await context.Set<EfSchemaFinalizationRecordRow>().AnyAsync(cancellationToken);
+    /// <remarks>
+    /// Any other record counts as an admission, the loud direction: one a member or an operator created, one changed
+    /// since, and one the migrator created for a contraction that has run. A gate that admits a module whose families all
+    /// have a record creates none and leaves no trace, so a record the migrator created is no evidence that no gate has
+    /// admitted the module once its own contraction may have run. The records' columns are read first, so a record this
+    /// build's seed cannot have written is neither parsed nor followed by a read of the migrations-history table.
+    /// </remarks>
+    private static async Task<bool> IsAdmittedAsync(
+        DbContext context,
+        IReadOnlyList<ContractingMigration> contracting,
+        EfSchemaModuleFamilies? families,
+        IReadOnlyCollection<string>? pending,
+        CancellationToken cancellationToken)
+    {
+        if (!await EfSchemaFinalizationCheck.RecordTableExistsAsync(context, cancellationToken))
+            return false;
+        var rows = await context.Set<EfSchemaFinalizationRecordRow>()
+            .AsNoTracking()
+            .Select(row => new { row.Family, row.Revision, row.SchemaVersion })
+            .ToListAsync(cancellationToken);
+        if (rows.Count == 0)
+            return false;
+        if (rows.Any(row => row.Revision != 1 ||
+                            !StringComparer.Ordinal.Equals(row.SchemaVersion, EfSchemaFinalization.SchemaVersion) ||
+                            !contracting.Any(migration => StringComparer.Ordinal.Equals(migration.Family, row.Family))))
+            return true;
+
+        var store = new EfSchemaFinalizationStore(context);
+        var records = new List<SchemaFinalizationRecord>();
+        foreach (var row in rows)
+        {
+            if (await store.FindAsync(row.Family, cancellationToken) is not { History: [{ Transition: SchemaFinalizationTransition.Created, Actor.Member.HostId: var creator }] } record ||
+                !creator.StartsWith(MigratorHostIdPrefix, StringComparison.Ordinal))
+                return true;
+            records.Add(record);
+        }
+
+        var (_, seeding) = await PlanSeedAsync(context, contracting, families, pending, cancellationToken);
+        if (seeding.Any(entry => entry.Placement.Refusal is not null))
+            return true;
+        var seeded = ByFamily(seeding).ToDictionary(family => family[0].Chain!.Family, StringComparer.Ordinal);
+        var module = ModuleOf(context, families);
+        foreach (var record in records)
+        {
+            if (!seeded.TryGetValue(record.Family, out var family) ||
+                !StringComparer.Ordinal.Equals(record.FinalizedVersion, await SeedTargetAsync(context, module, family, cancellationToken)))
+                return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// The context's pending migrations, and those of them that are contracting, in the order EF applies them, which is
+    /// the pending order, each placed on its family's chain in this build.
+    /// </summary>
+    private static async Task<(string[] Pending, (ContractingMigration Migration, Placement Placement)[] Seeding)> PlanSeedAsync(
+        DbContext context,
+        IReadOnlyList<ContractingMigration> contracting,
+        EfSchemaModuleFamilies? families,
+        IReadOnlyCollection<string>? pending,
+        CancellationToken cancellationToken)
+    {
+        var batch = (pending ?? await context.Database.GetPendingMigrationsAsync(cancellationToken)).ToArray();
+        var seeding = batch
+            .Select(id => contracting.FirstOrDefault(migration => StringComparer.Ordinal.Equals(migration.Id, id)))
+            .OfType<ContractingMigration>()
+            .Select(migration => (Migration: migration, Placement: Place(migration, families)))
+            .ToArray();
+        return (batch, seeding);
+    }
+
+    /// <summary>The placements of <paramref name="seeding"/>, which all place, by family, in the order of each family's first contracting migration.</summary>
+    private static IEnumerable<Placement[]> ByFamily(IEnumerable<(ContractingMigration Migration, Placement Placement)> seeding) =>
+        seeding.GroupBy(entry => entry.Placement.Chain!.Family, entry => entry.Placement, StringComparer.Ordinal).Select(family => family.ToArray());
+
+    /// <summary>
+    /// The version the seed creates a family's record at, <paramref name="family"/> being the placements of its pending
+    /// contracting migrations: the latest version any of them names, and no lower than what an applied one already left
+    /// the schema serving, which is where the gate would start the record once the batch has applied.
+    /// </summary>
+    private static async Task<string> SeedTargetAsync(DbContext context, string module, IReadOnlyList<Placement> family, CancellationToken cancellationToken)
+    {
+        var chain = family[0].Chain!;
+        var at = Math.Max(
+            IndexOf(chain.ReadableVersions, await SeedVersionAsync(context, module, chain, cancellationToken)),
+            family.Max(placement => placement.At));
+        return chain.ReadableVersions[at];
+    }
 
     /// <summary>The refusal of each of <paramref name="migrations"/> the family's record in the database does not yet allow.</summary>
     private static async Task<IReadOnlyList<EfContractingMigrationRefusal>> JudgeAsync(
