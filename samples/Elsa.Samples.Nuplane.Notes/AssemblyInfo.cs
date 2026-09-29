@@ -2,7 +2,7 @@ using Elsa.Persistence.EntityFramework;
 using Elsa.Samples.Nuplane.Notes;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
 
-// The single, discoverable declaration of this module (ADR 0076 D2): a host, and `dotnet elsa persistence`, read it as
+// The single, discoverable declaration of this module: a host, and `dotnet elsa persistence`, read it as
 // metadata to learn the module's name, its provider-derived contexts and its migrations-history table.
 [assembly: EfModule(
     NotesModule.Name,
