@@ -285,7 +285,8 @@ for identical fleets.
   narrows the readable set until that generation's load context is gone (FR-021). Amended 2026-09-29 (Decisions):
   Nuplane never unloads a host-integrated package's load context, so "gone" would mean a restart; the older
   generation instead stops narrowing once it is retired - Nuplane's active package set lists a newer generation of
-  the same assembly, and no shell generation that has not been disposed composes from it (FR-021).
+  the same assembly, no shell generation that can still run code composes from its load context, and the feature
+  catalog the next shell generation is built from does not name it (FR-021).
 - **A package removed on a running host.** Its families stay in the report until no declaration of them remains
   loaded. Removing them earlier would stop the host being counted while it can still write.
 - **The membership store is missing its tables.** Under `Validate` the EF provider's module is refused like any other
@@ -498,15 +499,27 @@ for identical fleets.
   Amended 2026-09-29 (Decisions): except the declarations FR-021 retires.
 - **FR-021**: When several declarations of one family are loaded, for instance an old and a new shell generation
   during a reload, the readable set reported MUST be their intersection. Amended 2026-09-29 (Decisions): a declaration
-  MUST stop counting once it is retired, and MUST NOT stop counting before. It is retired when both hold: the host's
-  package runtime has positive evidence that a newer generation replaced it - for Nuplane, its active package set lists
-  a loaded assembly of the same name and not this one, and this one is in a load context Nuplane created - and no shell
-  generation that has not been disposed composes a feature from a replaced assembly in its load context. So while an
-  old and a new generation are both live they are still intersected, and the old one stops counting as soon as the
-  last shell generation that could run it is disposed, without a restart. A declaration in the default load context,
-  in a load context the package runtime did not create, or whose replacement is still loading or failed to load, is
-  never retired. The host publishes its report again when a disposal retires one, so a gate waiting on it evaluates
-  at once.
+  MUST stop counting once it is retired, and MUST NOT stop counting before. It is retired when all three hold:
+  1. The host's package runtime has positive evidence that a newer generation replaced it: for Nuplane, its active
+     package set lists a loaded assembly of the same name and not this one, and this one is in a load context Nuplane
+     created.
+  2. No shell generation that can still run code composes a feature from its load context. A shell generation counts
+     from before its first initializer runs until its container has finished disposing: when it was drained, until
+     that drain completes, which the shell runtime completes only after the generation's service provider has been
+     disposed; otherwise until its container has disposed everything it created after the generation began. It counts
+     every load context, other than the default one, of a feature its container names - for CShells, every feature of
+     the catalog snapshot it was built from, enabled or not - so a replaced declaration beside an unchanged feature in
+     the same load context keeps counting. A generation whose features cannot be read counts for every replaced
+     declaration.
+  3. The feature catalog the next shell generation will be built from names neither it nor a feature in its load
+     context. A catalog that has not been initialized yet, or that cannot be read, counts for every replaced
+     declaration: the first build may be reading any of them.
+
+  So while an old and a new generation are both live they are still intersected, and the old one stops counting as
+  soon as nothing that could run it is left, without a restart. A declaration in the default load context, in a load
+  context the package runtime did not create, or whose replacement is still loading or failed to load, is never
+  retired. The host publishes its report again when a shell generation that stops counting retires one, so a gate
+  waiting on it evaluates at once.
 - **FR-022**: A family MUST stay in the report while any declaration of it remains loaded, even after its modules are
   disabled. Amended 2026-09-29 (Decisions): any declaration FR-021 has not retired. A package removed, not replaced,
   retires nothing.
@@ -814,11 +827,16 @@ is the owner's approval.
   [1] - so the new version never finalized and every feature that needs it stayed dormant until a restart. The same
   stale assembly made the EF activation guard's module catalog find the module declared twice. The fix keeps the
   conservative direction in every transition: a declaration is retired only on positive evidence that a newer
-  generation replaced it in the host's active package set, and only once no shell generation that has not been
-  disposed - an active one, including one whose reload failed, or one still draining - composes from it. Until then
-  both generations are intersected, as before. The host's evidence of replacement is Nuplane's catalog of the active
-  package set, read on every publish; the evidence that nothing still runs the old generation is CShells' shell
-  lifecycle. The finalization gates were considered and not chosen as that evidence: they live per shell container
+  generation replaced it in the host's active package set, and only once nothing that could run it is left. That is
+  every shell generation - an active one, including one whose reload failed, one still draining, or one still
+  initializing - from before its first initializer runs until its provider has been disposed, pinning every load
+  context of a feature its container names; and the next shell generation, which CShells builds from its runtime
+  feature catalog's current snapshot however stale: `Elsa.Foundation.Host` skips refreshing that catalog after a
+  reconcile while no shell is active, so with eager activation off, or after it failed, the first request would build
+  from a catalog that still names the old generation. Until then both generations are intersected, as before. The
+  host's evidence of replacement is Nuplane's catalog of the active package set, read on every publish; the evidence
+  that nothing still runs the old generation is CShells' shell containers, its drains and its feature catalog. The
+  finalization gates were considered and not chosen as that evidence: they live per shell container
   and are registered only after admission, so they cannot speak for a generation that is about to publish, nor for a
   family whose module no shell enables (FR-022). The activation guard, which judges the shell generation an apply is
   about to build, stops counting a replaced generation at once. Research: "B3: what 'loaded' means".
@@ -827,6 +845,7 @@ is the owner's approval.
   loaded in, which still held the previous release, and the previous release's migrations are keyed to the previous
   release's context type. The new release's context therefore saw no migration of its own, so under `Validate` a
   reload onto a release with an unapplied migration activated anyway, and `AutoMigrate` would have applied nothing.
-  Every module binding now hands EF Core the module's assembly itself, so a reload onto such a release is refused by
+  Every module binding now hands EF Core the module's assembly itself (`EfRelationalProviderBinding.UseMigrationsFrom`),
+  as do the design-time factory and the Workbench's OpenIddict context, so a reload onto such a release is refused by
   `EfDatabaseMigrator`'s `Validate` check with the migration pending (ADR 0076), as a restart would be. This changes no
   requirement; it is recorded here because it is the same in-place upgrade.

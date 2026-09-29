@@ -126,18 +126,47 @@ Both enumerations now subtract what the host's `ISupersededAssemblySource` (`Els
 hosts compose one through `AddEfSchemaReadability`: `NuplanePackageGenerations` (`src/essentials/Cluster/Readability`).
 It names an assembly *replaced* when it is in a load context whose type `Nuplane.Loading` defines, and Nuplane's
 `IPackageAssemblyCatalog` lists a loaded assembly of the same name for the active package set but not this one; and
-*retired* when it is replaced and no CShells shell generation that has not been disposed composes a feature from a
-replaced assembly in the same load context. The readability report subtracts the retired set, so both generations are
-intersected until the last shell generation running the old one is disposed, and the host publishes again at that
-disposal, since nothing else republishes a report whose declarations did not change. The guard subtracts the replaced
-set, because the generation an apply builds composes the active package set.
+*retired* when it is replaced and nothing left could run it, which takes two pins to be gone from its load context:
+
+- **Every shell generation, from before its first initializer until its provider is disposed.** `AddEfSchemaReadability`
+  registers a shell initializer on the host container, which every CShells shell container copies and constructs when
+  CShells resolves the shell's initializers, before any of them runs (`ShellRegistry.RunInitializersAsync` in the
+  pinned `0.0.30-preview.159`). A lifecycle subscriber could not do this: the first transition CShells raises is
+  `Initializing` to `Active`, after the initializers have run, and a shell whose initializer throws is disposed with no
+  transition raised at all. The generation pins every load context, other than the default one, of a feature its
+  container names; CShells gives every shell container the feature descriptors of the whole catalog snapshot it was
+  built from, enabled or not, so that is what it pins, and an unchanged feature served from an old graph context pins
+  the replaced assembly beside it. It stops pinning when its container has finished disposing. CShells raises
+  `Disposed` before it disposes the provider (`Shell.DisposeCoreAsync` awaits the transition, then
+  `ServiceProvider.DisposeAsync()`), so that transition cannot be the signal. For a drained generation the signal is
+  the drain's completion: `DrainOperation` completes it only after `Shell.DisposeAsync()` has returned, and the
+  subscriber attaches it at `Draining` or `Drained`, while `IShell.Drain` is still set. A generation disposed without a
+  drain - a failed activation - is released when its container disposes the tracking initializer, which it does after
+  everything it created later. A drain that faults releases nothing, and a warning says so.
+- **The next shell generation.** CShells builds it from its runtime feature catalog's current snapshot, which a host
+  refreshes when it chooses to: `ShellReloadOnPackagesChanged` skips the refresh while no shell is active, so with eager
+  activation off, or after it failed, the catalog can name a replaced generation that the first request then builds.
+  Every load context of a feature the snapshot names, and of a replaced assembly it lists among those it scanned, is
+  pinned; an uninitialized catalog pins every replaced assembly, and it is probed through `CurrentSnapshot`, which
+  throws until it is initialized, because `GetSnapshotAsync` would initialize it from the reading side.
+
+The readability report subtracts the retired set, so both generations are intersected until nothing that could run the
+old one is left, and the host publishes again when a generation that stops pinning retires something, since nothing
+else republishes a report whose declarations did not change. The guard subtracts the replaced set, because the
+generation an apply builds composes the active package set.
+
+One window stays open, and it needs CShells to close it: a build that read the catalog's snapshot before a refresh
+committed a newer one is not tracked until its container resolves its initializers, so if every other pin on the old
+generation lifts inside that window - a concurrent reload of another shell draining, typically - a publish there credits
+the new version while that build is about to run the old one. CShells exposes no hook before a build reads the
+snapshot, nor the snapshot generation a shell was built from.
 
 Two alternatives were weighed. Nuplane's active set alone drops the old generation before the shell generation running
 it has drained, and drops a family entirely while its replacement is still loading or failed to load, because the
 catalog then lists neither generation; that is the direction that credits a version a live reader cannot read. The
 finalization gates are per shell container and registered only after admission, so they cannot speak for a generation
 about to publish, nor for a family no shell enables. Nuplane exposing which contexts are current would not remove the
-need for the CShells half, so no upstream change was needed.
+need for the CShells half, so no Nuplane change was needed; the window above is CShells'.
 
 The same stale generation reached the new release's migrations. `EfModuleBinding` named its migrations assembly, and EF
 Core's `MigrationsAssembly` resolves a name with `Assembly.Load` from its own load context before it looks at an
@@ -145,12 +174,18 @@ assembly object (Microsoft.EntityFrameworkCore.Relational 10.0.10, `Migrations.I
 constructor). EF Core is loaded in the previous release's graph context, so the name reached the previous release, whose
 migrations carry `[DbContext]` for the previous release's context type and matched nothing: under `Validate` a reload
 onto a release with an unapplied migration activated over the unmigrated database. `EfModuleBinding`, the activation
-guard's context and the persistence tool's now pass the module's assembly itself (`MigrationsAssembly(Assembly)`, which
-EF Core reads only when no name is set), so no module's migrations are resolved by name across load contexts.
+guard's context, the persistence tool's and the design-time factory's (`tools/ef`) now pass the module's assembly itself
+through `EfRelationalProviderBinding.UseMigrationsFrom` (`MigrationsAssembly(Assembly)`, which EF Core reads only when no
+name is set), and the Workbench's OpenIddict context, which binds EF Core directly, passes its own, so no migrations are
+resolved by name across load contexts. `EfRelationalProviderBinding.Use` still takes a name, for the tests and
+fixtures that bind a context whose migrations assembly they name.
 
-Shells are activated lazily on `Elsa.Foundation.Host` unless `Elsa:Boot:EagerShellActivation:Enabled` is set
-(`src/apps/Elsa.Foundation.Host/Shells/EagerShellActivationHostedService.cs`), and reloaded after a Nuplane reconcile
-by `ShellReloadOnPackagesChanged`. `Elsa.Workbench` registers `NullShellReloader`, so a new package version there
+Shells are activated eagerly at boot on `Elsa.Foundation.Host` unless `Elsa:Boot:EagerShellActivation:Enabled` is
+set to `false`: the key defaults to on in code, so an absent or unparseable value enables it
+(`src/apps/Elsa.Foundation.Host/Shells/EagerShellActivationHostedService.cs`, `IsEnabled`). A failed eager activation is
+logged and swallowed, and the shell then activates on its first request. Active shells are reloaded after a Nuplane
+reconcile by `ShellReloadOnPackagesChanged`, which skips both the catalog refresh and the reload while no shell is
+active. `Elsa.Workbench` registers `NullShellReloader`, so a new package version there
 takes effect only after a restart.
 
 ## B2: the anatomy of an EF module to follow

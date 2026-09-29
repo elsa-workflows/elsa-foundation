@@ -225,6 +225,23 @@ EF Core and the Sqlite engine, which the host does not carry), showing finalizat
 hold is released. The durable EF membership provider (`AddConfiguredClusterMembership`) would bring EF Core into the
 host, so `Elsa.Foundation.Host` composes only the in-process default: it is a cluster of one.
 
+An EF module upgraded in place leaves its previous release loaded: Nuplane loads each host-integrated package graph
+into a load context it never unloads. `AddEfSchemaReadability` therefore also composes the host's superseded-generation
+source, `NuplanePackageGenerations` (spec 183, FR-021, amended 2026-09-29), which the readability report and the EF
+activation guard both subtract through. It calls a release *replaced* once Nuplane's catalog of the active package set
+lists a newer release of the same assembly, and *retired* once nothing on the host could still run it: no shell
+generation composes a feature from its load context - counted from before a generation's first initializer runs until
+its drain, or otherwise its container's disposal, has completed - and CShells' runtime feature catalog, which the next
+generation is built from, names nothing in it. The guard stops reading a release once it is replaced; the report,
+once it is retired, and the host publishes its report again then, so the new version finalizes without a restart.
+Until then the report intersects both releases. That includes a host whose shells are not active, since it does not
+refresh the feature catalog after a reconcile then: with `Elsa:Boot:EagerShellActivation:Enabled` set to `false` and no
+request yet, the catalog is not initialized, and the previous release counts until the first request initializes it
+from the upgrade; after an eager activation that failed once it had initialized the catalog, the first request builds
+the previous release, which then counts until a reload - the next reconcile, or `/_module-management/reload` -
+refreshes the catalog and drains that shell. `FoundationHostBootTests` upgrades the fixture in place on a running host
+both with eager activation and without it.
+
 ### Generating the closure
 
 Maintain the **roots** by hand — they map one-to-one onto the shell features in `shells.json`. Generate

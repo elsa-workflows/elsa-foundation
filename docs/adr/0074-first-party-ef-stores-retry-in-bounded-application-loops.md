@@ -68,11 +68,13 @@ without the store's own loop" cannot run on SQLite, so it needs a Testcontainers
 it in a suite the fast PR gate excludes by construction (`.github/workflows/ci.yml:84-95`).
 
 **There is no seam to configure it through.** Every module binds its provider through one shared
-path, `EfModuleBinding.Apply` calling `EfRelationalProviderBinding.Use`
-(`EfModuleBinding.cs:23-43`, `EfRelationalProviderBinding.cs:66-78`). That path builds the provider
-options delegate by reflection over exactly two methods, `MigrationsHistoryTable` and
-`MigrationsAssembly` (`EfRelationalProviderBinding.cs:195-236`), and both are declared on the shared
-relational options builder, which is why one reflected call works for all four engines.
+path, `EfModuleBinding.Apply` calling `EfRelationalProviderBinding.UseMigrationsFrom` (it was
+`EfRelationalProviderBinding.Use` when this was decided; spec 183's FR-021 amendment of 2026-09-29
+moved module bindings onto the assembly overload). That path builds the provider options delegate by
+reflection over exactly two methods, `MigrationsHistoryTable` and `MigrationsAssembly`
+(`EfRelationalProviderBinding.BuildRelationalConfigure`, with `ResolveMigrationsHistoryTable` and
+`ResolveMigrationsAssembly`), and both are declared on the shared relational options builder, which
+is why one reflected call works for all four engines.
 `EnableRetryOnFailure` is not declared there; it is a per-provider method on each engine's own
 options builder, and SQLite's does not have it at all. Enabling it means new per-provider reflected
 calls in that shared method, a per-provider absence to handle, and a flag plumbed through
