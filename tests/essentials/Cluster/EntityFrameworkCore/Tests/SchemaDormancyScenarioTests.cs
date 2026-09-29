@@ -35,6 +35,7 @@ public sealed class SchemaDormancyScenarioTests : IAsyncLifetime
     private readonly ServiceProvider _services;
     private readonly EfSchemaModuleGate _gate;
     private readonly SchemaDormancyCheck _check;
+    private TaskCompletionSource? _heldRead;
 
     public SchemaDormancyScenarioTests()
     {
@@ -201,7 +202,11 @@ public sealed class SchemaDormancyScenarioTests : IAsyncLifetime
         var bound = TimeSpan.FromSeconds(2);
         _time.Advance(bound);
 
-        var reads = await Task.WhenAll(Enumerable.Range(0, 4).Select(_ => _gate.RefreshIfOlderThanAsync(bound)));
+        // The first read is held open until every caller has asked, so they all find the view stale and contend.
+        _heldRead = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var refreshes = Enumerable.Range(0, 4).Select(_ => _gate.RefreshIfOlderThanAsync(bound)).ToArray();
+        _heldRead.SetResult();
+        var reads = await Task.WhenAll(refreshes);
 
         Assert.Equal(1, reads.Count(read => read));
         Assert.False(await _gate.RefreshIfOlderThanAsync(bound));
@@ -321,6 +326,8 @@ public sealed class SchemaDormancyScenarioTests : IAsyncLifetime
 
     private async Task WithContextAsync(Func<DbContext, Task> action, CancellationToken cancellationToken)
     {
+        if (_heldRead is { } held)
+            await held.Task;
         await using var context = Context();
         await action(context);
     }
