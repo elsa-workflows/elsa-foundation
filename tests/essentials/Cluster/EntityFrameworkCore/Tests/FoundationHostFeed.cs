@@ -107,38 +107,15 @@ public sealed class FoundationHostFeed : IAsyncLifetime
     /// <see cref="DotnetTimeout"/>, when its whole process tree is killed. MSBuild is kept from leaving nodes behind: they
     /// would inherit the redirected pipes, and reading them to the end would then never return.
     /// </summary>
-    private static async Task DotnetAsync(params string[] arguments)
+    internal static async Task DotnetAsync(params string[] arguments)
     {
-        var startInfo = new ProcessStartInfo(FoundationHostProcess.DotnetPath, [.. arguments, "-nodeReuse:false"])
-        {
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false
-        };
+        var startInfo = new ProcessStartInfo(FoundationHostProcess.DotnetPath, [.. arguments, "-nodeReuse:false"]);
         startInfo.Environment["MSBUILDDISABLENODEREUSE"] = "1";
         startInfo.Environment["DOTNET_CLI_USE_MSBUILD_SERVER"] = "0";
 
-        var output = new CapturedOutput();
-        using var process = new Process { StartInfo = startInfo };
-        process.OutputDataReceived += (_, line) => output.Append(line.Data);
-        process.ErrorDataReceived += (_, line) => output.Append(line.Data);
         var command = $"dotnet {string.Join(' ', startInfo.ArgumentList)}";
-
-        using var timeout = new CancellationTokenSource(DotnetTimeout);
-        process.Start();
-        process.BeginOutputReadLine();
-        process.BeginErrorReadLine();
-        try
-        {
-            await process.WaitForExitAsync(timeout.Token);
-        }
-        catch (OperationCanceledException)
-        {
-            process.Kill(entireProcessTree: true);
-            throw new TimeoutException($"{command} did not finish within {DotnetTimeout} and was killed. Its output:{Environment.NewLine}{output}");
-        }
-
-        if (process.ExitCode != 0)
-            throw new InvalidOperationException($"{command} exited {process.ExitCode}. Its output:{Environment.NewLine}{output}");
+        var (exitCode, output) = await ChildProcess.RunAsync(startInfo, DotnetTimeout, command);
+        if (exitCode != 0)
+            throw new InvalidOperationException($"{command} exited {exitCode}. Its output:{Environment.NewLine}{output}");
     }
 }

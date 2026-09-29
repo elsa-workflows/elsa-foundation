@@ -67,12 +67,50 @@ public static class EfDatabaseMigrator
                 // waits for, rather than pointing the operator at an `apply` that would refuse it too.
                 if (await EfContractingMigrationCheck.FindRefusalAsync(context, pending, cancellationToken) is { } withheld)
                     throw withheld;
-                throw new EfPendingMigrationsException(
-                    $"{context.GetType().Name} has pending migrations: {string.Join(", ", pending)}. " +
-                    "Apply them out of process (dotnet elsa persistence apply) or set " +
-                    $"{EfMigrateOptions.SectionName}:{nameof(EfMigrateOptions.Policy)} to {nameof(EfMigratePolicy.AutoMigrate)}.");
+                throw PendingMigrations(context, expectedProviderName, pending);
             default:
                 throw new ArgumentOutOfRangeException(nameof(policy), policy, "Unknown EF migrate policy.");
         }
     }
+
+    /// <summary>
+    /// The refusal for <paramref name="pending"/> under <see cref="EfMigratePolicy.Validate"/>. It names the EF module that
+    /// declares <paramref name="context"/> and the exact command that applies its migrations: the operator who reads it
+    /// is at a host's log or a reload's answer, not at a DbContext type.
+    /// </summary>
+    private static EfPendingMigrationsException PendingMigrations(DbContext context, string expectedProviderName, string[] pending)
+    {
+        var contextType = context.GetType();
+        var module = DeclaringModule(contextType);
+        var policy = $"{EfMigrateOptions.SectionName}:{nameof(EfMigrateOptions.Policy)} to {nameof(EfMigratePolicy.AutoMigrate)}";
+        if (module is null)
+            return new EfPendingMigrationsException(
+                contextType.Name,
+                pending,
+                $"{contextType.Name} has pending migrations: {string.Join(", ", pending)}. " +
+                $"Apply them out of process (dotnet elsa persistence apply) or set {policy}.");
+
+        var command = EfPersistenceCommand.Apply(host: null, module, ProviderOf(expectedProviderName));
+        return new EfPendingMigrationsException(
+            module,
+            pending,
+            $"EF module '{module}' has pending migrations: {string.Join(", ", pending)}. " +
+            $"Apply them out of process with `{command}`, or set {policy}.",
+            command);
+    }
+
+    /// <summary>The EF module whose <c>[EfModule]</c> declares <paramref name="contextType"/> or a type it derives from, if one does.</summary>
+    private static string? DeclaringModule(Type contextType)
+    {
+        var declared = EfModuleCatalog.Discover([contextType.Assembly]);
+        for (var type = contextType; type is not null; type = type.BaseType)
+            if (declared.FirstOrDefault(module => module.ContextType == type || module.Sqlite == type || module.SqlServer == type || module.PostgreSql == type || module.MySql == type) is { } match)
+                return match.Name;
+
+        return null;
+    }
+
+    /// <summary>The provider name the tool's <c>--provider</c> takes for <paramref name="expectedProviderName"/>.</summary>
+    private static string ProviderOf(string expectedProviderName) =>
+        EfRelationalProviderBinding.Select(expectedProviderName, "relational", "Sqlite", "SqlServer", "PostgreSql", "MySql");
 }

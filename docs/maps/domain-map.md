@@ -7,9 +7,9 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 ## Summary
 
 - Source projects: 137
-- Test projects: 129
+- Test projects: 130
 - Domains: 31
-- Direct cross-domain references: 749
+- Direct cross-domain references: 751
 
 ## Domains
 
@@ -22,7 +22,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | Elsa.Attention | 2 | 2 | contract<br>feature/implementation<br>test |
 | Elsa.Caching | 2 | 1 | contract<br>feature/implementation<br>test |
 | Elsa.Cli | 2 | 15 | feature/implementation<br>test |
-| Elsa.Cluster | 4 | 8 | contract<br>feature/implementation<br>test |
+| Elsa.Cluster | 4 | 9 | contract<br>feature/implementation<br>test |
 | Elsa.Diagnostics | 8 | 8 | contract<br>feature/implementation<br>test |
 | Elsa.Events | 3 | 1 | contract<br>feature/implementation<br>helper<br>test |
 | Elsa.Expressions | 9 | 3 | contract<br>feature/implementation<br>provider/implementation<br>test |
@@ -238,9 +238,10 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Cli.Tests](../../tests/essentials/Cli/Tests/Elsa.Cli.Tests.csproj) | test | Elsa.Cli | Tests | test | Acme.Widgets<br>Elsa.Cli<br>Elsa.Cli.Fixtures.CollisionHost<br>Elsa.Cli.Fixtures.Host<br>Elsa.Cli.Fixtures.LegacyHost<br>Elsa.Cli.Fixtures.MinimalHost<br>Elsa.Cli.Fixtures.NuplaneCapabilityHost<br>Elsa.Cli.Fixtures.NuplaneHost<br>Elsa.Cli.Fixtures.PartialContextHost<br>Elsa.Cli.Fixtures.ResourceAwareLiveHost<br>Elsa.Cli.Fixtures.ShellsHost<br>Elsa.Cli.Fixtures.UnsupportedContextHost<br>Elsa.Cli.Fixtures.WorkerContextHost<br>Elsa.Modularity.Planning |
 | [Elsa.Cluster.EntityFrameworkCore.ProviderTests](../../tests/essentials/Cluster/EntityFrameworkCore/ProviderTests/Elsa.Cluster.EntityFrameworkCore.ProviderTests.csproj) | test | Elsa.Cluster | EntityFrameworkCore.ProviderTests | test | Elsa.Cluster.EntityFrameworkCore.Testing<br>Elsa.Cluster.Fixtures.FeedModule<br>Elsa.Cluster.Fixtures.FeedModuleV1<br>Elsa.Foundation.Host |
 | [Elsa.Cluster.EntityFrameworkCore.Testing](../../tests/essentials/Cluster/EntityFrameworkCore/Testing/Elsa.Cluster.EntityFrameworkCore.Testing.csproj) | test | Elsa.Cluster | EntityFrameworkCore.Testing | test | Elsa.Cluster.EntityFrameworkCore<br>Elsa.Cluster.Readability<br>Elsa.Cluster.Testing |
-| [Elsa.Cluster.EntityFrameworkCore.Tests](../../tests/essentials/Cluster/EntityFrameworkCore/Tests/Elsa.Cluster.EntityFrameworkCore.Tests.csproj) | test | Elsa.Cluster | EntityFrameworkCore.Tests | test | Elsa.Cluster.EntityFrameworkCore.Testing<br>Elsa.Cluster.Fixtures.FeedModule<br>Elsa.Cluster.Fixtures.FeedModuleV1<br>Elsa.Foundation.Host |
+| [Elsa.Cluster.EntityFrameworkCore.Tests](../../tests/essentials/Cluster/EntityFrameworkCore/Tests/Elsa.Cluster.EntityFrameworkCore.Tests.csproj) | test | Elsa.Cluster | EntityFrameworkCore.Tests | test | Elsa.Cli<br>Elsa.Cluster.EntityFrameworkCore.Testing<br>Elsa.Cluster.Fixtures.FeedModule<br>Elsa.Cluster.Fixtures.FeedModuleV1<br>Elsa.Cluster.Fixtures.MigratingModule<br>Elsa.Foundation.Host |
 | [Elsa.Cluster.Fixtures.FeedModule](../../tests/essentials/Cluster/Fixtures/FeedModule/Elsa.Cluster.Fixtures.FeedModule.csproj) | test | Elsa.Cluster | Fixtures.FeedModule | test | Elsa.Cluster.Core<br>Elsa.Persistence.EntityFramework |
 | [Elsa.Cluster.Fixtures.FeedModuleV1](../../tests/essentials/Cluster/Fixtures/FeedModuleV1/Elsa.Cluster.Fixtures.FeedModuleV1.csproj) | test | Elsa.Cluster | Fixtures.FeedModuleV1 | test | Elsa.Cluster.Core<br>Elsa.Persistence.EntityFramework |
+| [Elsa.Cluster.Fixtures.MigratingModule](../../tests/essentials/Cluster/Fixtures/MigratingModule/Elsa.Cluster.Fixtures.MigratingModule.csproj) | test | Elsa.Cluster | Fixtures.MigratingModule | test | Elsa.Persistence.EntityFramework |
 | [Elsa.Cluster.Readability.Tests](../../tests/essentials/Cluster/Readability/Tests/Elsa.Cluster.Readability.Tests.csproj) | test | Elsa.Cluster | Readability.Tests | test | Elsa.Cluster.Readability<br>Elsa.Testing<br>Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore |
 | [Elsa.Cluster.Testing](../../tests/essentials/Cluster/Testing/Elsa.Cluster.Testing.csproj) | test | Elsa.Cluster | Testing | test | Elsa.Cluster.Core<br>Elsa.Serialization.SystemText<br>Elsa.Workflows.Runtime.Distributed |
 | [Elsa.Cluster.Tests](../../tests/essentials/Cluster/Tests/Elsa.Cluster.Tests.csproj) | test | Elsa.Cluster | Tests | test | Elsa.Cluster.Core<br>Elsa.Cluster.InProcess<br>Elsa.Cluster.Testing |
@@ -572,9 +573,11 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Cluster.Core](../../src/essentials/Cluster/Core/Elsa.Cluster.Core.csproj) | Elsa.Cluster | [Elsa.Primitives](../../src/essentials/Primitives/Primitives/Elsa.Primitives.csproj) | Elsa.Primitives |
 | [Elsa.Cluster.EntityFrameworkCore](../../src/essentials/Cluster/EntityFrameworkCore/Elsa.Cluster.EntityFrameworkCore.csproj) | Elsa.Cluster | [Elsa.Persistence.EntityFramework](../../src/essentials/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj) | Elsa.Persistence |
 | [Elsa.Cluster.EntityFrameworkCore.ProviderTests](../../tests/essentials/Cluster/EntityFrameworkCore/ProviderTests/Elsa.Cluster.EntityFrameworkCore.ProviderTests.csproj) | Elsa.Cluster | [Elsa.Foundation.Host](../../src/apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj) | Elsa.Foundation |
+| [Elsa.Cluster.EntityFrameworkCore.Tests](../../tests/essentials/Cluster/EntityFrameworkCore/Tests/Elsa.Cluster.EntityFrameworkCore.Tests.csproj) | Elsa.Cluster | [Elsa.Cli](../../src/essentials/Cli/Elsa.Cli.csproj) | Elsa.Cli |
 | [Elsa.Cluster.EntityFrameworkCore.Tests](../../tests/essentials/Cluster/EntityFrameworkCore/Tests/Elsa.Cluster.EntityFrameworkCore.Tests.csproj) | Elsa.Cluster | [Elsa.Foundation.Host](../../src/apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj) | Elsa.Foundation |
 | [Elsa.Cluster.Fixtures.FeedModule](../../tests/essentials/Cluster/Fixtures/FeedModule/Elsa.Cluster.Fixtures.FeedModule.csproj) | Elsa.Cluster | [Elsa.Persistence.EntityFramework](../../src/essentials/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj) | Elsa.Persistence |
 | [Elsa.Cluster.Fixtures.FeedModuleV1](../../tests/essentials/Cluster/Fixtures/FeedModuleV1/Elsa.Cluster.Fixtures.FeedModuleV1.csproj) | Elsa.Cluster | [Elsa.Persistence.EntityFramework](../../src/essentials/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj) | Elsa.Persistence |
+| [Elsa.Cluster.Fixtures.MigratingModule](../../tests/essentials/Cluster/Fixtures/MigratingModule/Elsa.Cluster.Fixtures.MigratingModule.csproj) | Elsa.Cluster | [Elsa.Persistence.EntityFramework](../../src/essentials/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj) | Elsa.Persistence |
 | [Elsa.Cluster.Readability](../../src/essentials/Cluster/Readability/Elsa.Cluster.Readability.csproj) | Elsa.Cluster | [Elsa.Persistence.Schema](../../src/essentials/Persistence/Schema/Elsa.Persistence.Schema.csproj) | Elsa.Persistence |
 | [Elsa.Cluster.Readability.Tests](../../tests/essentials/Cluster/Readability/Tests/Elsa.Cluster.Readability.Tests.csproj) | Elsa.Cluster | [Elsa.Testing](../../tests/essentials/Testing/Elsa.Testing.csproj) | Elsa.Testing |
 | [Elsa.Cluster.Readability.Tests](../../tests/essentials/Cluster/Readability/Tests/Elsa.Cluster.Readability.Tests.csproj) | Elsa.Cluster | [Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore](../../src/essentials/Workflows/Publishing/Persistence/EntityFrameworkCore/Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.csproj) | Elsa.Workflows |

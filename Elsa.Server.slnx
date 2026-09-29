@@ -396,6 +396,7 @@
   </Folder>
   <Folder Name="/tests/essentials/Cluster/Fixtures/">
     <Project Path="tests/essentials/Cluster/Fixtures/FeedModule/Elsa.Cluster.Fixtures.FeedModule.csproj" />
+    <Project Path="tests/essentials/Cluster/Fixtures/MigratingModule/Elsa.Cluster.Fixtures.MigratingModule.csproj" />
     <Project Path="tests/essentials/Cluster/Fixtures/FeedModuleV1/Elsa.Cluster.Fixtures.FeedModuleV1.csproj" />
   </Folder>
   <Folder Name="/tests/essentials/Cluster/Readability/">
