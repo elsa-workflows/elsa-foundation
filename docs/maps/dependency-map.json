@@ -13066,6 +13066,11 @@
         },
         {
           "type": "internal",
+          "id": "dotnet-elsa",
+          "path": "src/essentials/Cli/Elsa.Cli.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Cluster.EntityFrameworkCore.Testing",
           "path": "tests/essentials/Cluster/EntityFrameworkCore/Testing/Elsa.Cluster.EntityFrameworkCore.Testing.csproj"
         },
@@ -13073,6 +13078,11 @@
           "type": "internal",
           "id": "Elsa.Cluster.Fixtures.FeedModule",
           "path": "tests/essentials/Cluster/Fixtures/FeedModule/Elsa.Cluster.Fixtures.FeedModule.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Cluster.Fixtures.MigratingModule",
+          "path": "tests/essentials/Cluster/Fixtures/MigratingModule/Elsa.Cluster.Fixtures.MigratingModule.csproj"
         },
         {
           "type": "external",
@@ -13128,6 +13138,40 @@
           "id": "Elsa.Cluster.Core",
           "path": "src/essentials/Cluster/Core/Elsa.Cluster.Core.csproj"
         },
+        {
+          "type": "internal",
+          "id": "Elsa.Persistence.EntityFramework",
+          "path": "src/essentials/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj"
+        },
+        {
+          "type": "external",
+          "id": "CShells.AspNetCore.Abstractions",
+          "version": "0.0.30-preview.159"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.EntityFrameworkCore",
+          "version": "10.0.10"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.EntityFrameworkCore.Relational",
+          "version": "10.0.10"
+        }
+      ]
+    },
+    {
+      "path": "tests/essentials/Cluster/Fixtures/MigratingModule/Elsa.Cluster.Fixtures.MigratingModule.csproj",
+      "name": "Elsa.Cluster.Fixtures.MigratingModule",
+      "kind": "test",
+      "domain": "Elsa.Cluster",
+      "sub_domain": "Fixtures.MigratingModule",
+      "role": "test",
+      "declared_target_framework": null,
+      "packable": false,
+      "package_id": null,
+      "line": null,
+      "edges": [
         {
           "type": "internal",
           "id": "Elsa.Persistence.EntityFramework",

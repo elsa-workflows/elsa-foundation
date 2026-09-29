@@ -519,6 +519,23 @@ apply at the next restart. The bridge performs no compatibility check of its own
 cycle applied, which is why the refusal above has to happen at reconciliation — a refused package is
 never applied, so there is nothing for the reload to pick up.
 
+CShells does not throw when a shell's reload fails: it keeps the previous generation active and reports the
+failure in that shell's `ReloadResult.Error`. The bridge logs each such shell at `Warning` (an EF module's
+refusal) or `Error` (anything else), and `POST /_module-management/reload` answers `409` with a problem
+document instead of `200`. The document lists every shell that stayed on its old generation under `shells`.
+When the cause is an EF module's refusal — pending migrations under `Migrate:Policy=Validate`, a contracting
+migration that may not be applied yet, or the schema finalization gate — each entry names the module, a
+stable `code`, the `pendingMigrations` and, for pending migrations, the exact `command` that applies them:
+
+```
+dotnet elsa persistence apply --host <path> --modules <module> --provider <p> --connection-env ELSA_EF_CONNECTION
+```
+
+The host recognises the refusal by `IEfModuleRefusal` (`Elsa.Persistence.Schema`, a shared assembly), because the
+exception itself is a type of the module package's own copy of `Elsa.Persistence.EntityFramework`, which the host
+does not reference. Once the command has run, the same `POST` answers `200` and the shell's generation advances,
+with no restart.
+
 `Elsa.Workbench` does not do this. Its `Program.cs` composes Nuplane with no reconciliation observer, and
 registers `NullShellReloader` (`src/apps/Elsa.Workbench/Modularity/NullShellReloader.cs`) as its
 host-level `IShellReloader` — a no-op that reports zero shells reloaded. A package the directory watcher
