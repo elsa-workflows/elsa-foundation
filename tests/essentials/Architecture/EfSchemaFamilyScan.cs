@@ -554,10 +554,9 @@ internal sealed class SchemaFamilyScan
                         _fullReplaceCandidates.Add((Locate(path, invocation), Normalize(path), name!, updateType, updateTarget.Identifier.ValueText, "Update", node));
                 }
 
-                foreach (var assignment in node.DescendantNodes().OfType<AssignmentExpressionSyntax>())
+                foreach (var assignment in node.DescendantNodes().OfType<AssignmentExpressionSyntax>().Where(assignment => assignment.IsKind(SyntaxKind.SimpleAssignmentExpression)))
                 {
-                    if (assignment.IsKind(SyntaxKind.SimpleAssignmentExpression) &&
-                        assignment.Left is IdentifierNameSyntax replacedTarget &&
+                    if (assignment.Left is IdentifierNameSyntax replacedTarget &&
                         declaredTypes.TryGetValue(replacedTarget.Identifier.ValueText, out var replacedType) &&
                         assignment.Right is BaseObjectCreationExpressionSyntax { Initializer: { } initializer })
                         _replacementCandidates.Add((Locate(path, assignment), Normalize(path), name!, replacedType, replacedTarget.Identifier.ValueText, initializer, node));
