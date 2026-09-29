@@ -12371,6 +12371,35 @@
       ]
     },
     {
+      "path": "tests/essentials/Cli/Fixtures/ClusterHost/Elsa.Cli.Fixtures.ClusterHost.csproj",
+      "name": "Elsa.Cli.Fixtures.ClusterHost",
+      "kind": "test",
+      "domain": "Elsa.Cli",
+      "sub_domain": "Fixtures.ClusterHost",
+      "role": "test",
+      "declared_target_framework": null,
+      "packable": false,
+      "package_id": null,
+      "line": null,
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Cluster.EntityFrameworkCore",
+          "path": "src/essentials/Cluster/EntityFrameworkCore/Elsa.Cluster.EntityFrameworkCore.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Secrets.Persistence.EntityFrameworkCore",
+          "path": "src/essentials/Secrets/Persistence/EntityFrameworkCore/Elsa.Secrets.Persistence.EntityFrameworkCore.csproj"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.EntityFrameworkCore.Sqlite",
+          "version": "10.0.10"
+        }
+      ]
+    },
+    {
       "path": "tests/essentials/Cli/Fixtures/Collision/Acme.Widgets.Collision.csproj",
       "name": "Acme.Widgets.Collision",
       "kind": "test",
@@ -12861,6 +12890,11 @@
           "type": "internal",
           "id": "Elsa.Modularity.Planning",
           "path": "src/essentials/Modularity/Planning/Elsa.Modularity.Planning.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Cli.Fixtures.ClusterHost",
+          "path": "tests/essentials/Cli/Fixtures/ClusterHost/Elsa.Cli.Fixtures.ClusterHost.csproj"
         },
         {
           "type": "internal",
