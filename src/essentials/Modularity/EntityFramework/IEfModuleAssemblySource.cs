@@ -37,6 +37,6 @@ public interface IEfModuleAssemblySource
 /// </remarks>
 public sealed class LoadedEfModuleAssemblySource(ISupersededAssemblySource? superseded = null) : IEfModuleAssemblySource
 {
-    public async ValueTask<IReadOnlyList<Assembly>> GetAssembliesAsync(CancellationToken cancellationToken = default) =>
-        LoadedAssemblies.Except(superseded is null ? LoadedAssemblies.NoneSuperseded : await superseded.GetReplacedAsync(cancellationToken));
+    public ValueTask<IReadOnlyList<Assembly>> GetAssembliesAsync(CancellationToken cancellationToken = default) =>
+        LoadedAssemblies.ExceptReplacedAsync(superseded, cancellationToken);
 }
