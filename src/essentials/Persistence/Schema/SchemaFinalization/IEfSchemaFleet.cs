@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Primitives;
 
-namespace Elsa.Persistence.EntityFramework.SchemaFinalization;
+namespace Elsa.Persistence.Schema.SchemaFinalization;
 
 /// <summary>
 /// What the finalization gate needs from cluster membership (spec 181, "Requirements on membership"), stated in the

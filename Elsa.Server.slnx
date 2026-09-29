@@ -205,6 +205,7 @@
   </Folder>
   <Folder Name="/src/essentials/Persistence/">
     <Project Path="src/essentials/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj" />
+    <Project Path="src/essentials/Persistence/Schema/Elsa.Persistence.Schema.csproj" />
   </Folder>
   <Folder Name="/src/essentials/Pipelines/">
     <Project Path="src/essentials/Pipelines/Core/Elsa.Pipelines.Core.csproj" />
@@ -388,6 +389,9 @@
     <Project Path="tests/essentials/Cluster/EntityFrameworkCore/ProviderTests/Elsa.Cluster.EntityFrameworkCore.ProviderTests.csproj" />
     <Project Path="tests/essentials/Cluster/EntityFrameworkCore/Testing/Elsa.Cluster.EntityFrameworkCore.Testing.csproj" />
     <Project Path="tests/essentials/Cluster/EntityFrameworkCore/Tests/Elsa.Cluster.EntityFrameworkCore.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/essentials/Cluster/Fixtures/">
+    <Project Path="tests/essentials/Cluster/Fixtures/FeedModule/Elsa.Cluster.Fixtures.FeedModule.csproj" />
   </Folder>
   <Folder Name="/tests/essentials/Cluster/Readability/">
     <Project Path="tests/essentials/Cluster/Readability/Tests/Elsa.Cluster.Readability.Tests.csproj" />

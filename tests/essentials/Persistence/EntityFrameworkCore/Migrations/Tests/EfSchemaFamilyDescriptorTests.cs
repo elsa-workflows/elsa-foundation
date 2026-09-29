@@ -1,5 +1,6 @@
 using System.Reflection;
 using Elsa.Persistence.EntityFramework;
+using Elsa.Persistence.Schema;
 using Xunit;
 
 namespace Elsa.Persistence.EntityFrameworkCore.Migrations.Tests;

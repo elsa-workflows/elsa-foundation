@@ -9,6 +9,8 @@ using Elsa.Cluster.Testing;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Persistence.EntityFramework.SchemaBackfill;
 using Elsa.Persistence.EntityFramework.SchemaFinalization;
+using Elsa.Persistence.Schema;
+using Elsa.Persistence.Schema.SchemaFinalization;
 using Elsa.Primitives.Exceptions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -418,7 +420,7 @@ public sealed class SchemaDormancyScenarioTests : IAsyncLifetime
             var stored = await context.Orders.SingleOrDefaultAsync(order => order.Id == id, cancellationToken);
             if (stored is null)
                 return EfSchemaRewriteOutcome.Missing;
-            var gate = gates.FindForContext(typeof(DormancyContext))!;
+            var gate = gates.FindModuleGate(typeof(DormancyContext))!;
             var chain = gate.Families.Chains.Single();
             EfSchemaVersion.EnsureReadable(chain, stored.SchemaVersion);
             if (chain.IsAtOrAfter(stored.SchemaVersion, row.TargetVersion))

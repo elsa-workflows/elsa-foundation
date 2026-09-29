@@ -3,6 +3,8 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Elsa.Persistence.EntityFramework.SchemaBackfill;
 using Elsa.Persistence.EntityFramework.SchemaFinalization;
+using Elsa.Persistence.Schema;
+using Elsa.Persistence.Schema.SchemaFinalization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Primitives;
@@ -182,7 +184,7 @@ public sealed class BackfillRewriter(BackfillContext context, EfSchemaFinalizati
     public async ValueTask<EfSchemaRewriteOutcome> RewriteAsync(EfSchemaRowToRewrite row, CancellationToken cancellationToken = default)
     {
         probe.Asked(row);
-        var gate = gates.FindForContext(typeof(BackfillContext)) ?? throw new InvalidOperationException("The module has not been admitted.");
+        var gate = gates.FindModuleGate(typeof(BackfillContext)) ?? throw new InvalidOperationException("The module has not been admitted.");
         var chain = gate.Families.Chains.Single();
         var writeVersion = gate.StateOf(BackfillFamily.Family)!.WriteVersion;
         if (row.Entity == typeof(BackfillOrderRow))

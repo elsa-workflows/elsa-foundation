@@ -1,21 +1,21 @@
 using System.Reflection;
 
-namespace Elsa.Persistence.EntityFramework;
+namespace Elsa.Persistence.Schema;
 
 /// <summary>
-/// What <see cref="EfSchemaFamilyCatalog.Discover"/> read off one <see cref="EfSchemaFamilyAttribute"/> declaration: the
-/// family, the canonical name of its owning EF module as that module's <see cref="EfModuleAttribute"/> spells it, the
+/// What <see cref="EfSchemaFamilyCatalog.Discover"/> read off one <c>[EfSchemaFamily]</c> declaration: the
+/// family, the canonical name of its owning EF module as that module's <c>[EfModule]</c> spells it, the
 /// version this build writes, its upcaster chain, and the assembly that declared it. <see cref="Module"/> is
 /// <see langword="null"/> for a family shared by no single EF module: one whose declaration named none, because shared
 /// mapping code owns it rather than one module's own assembly.
 /// </summary>
 public sealed record EfSchemaFamilyDescriptor(string Name, string? Module, string CurrentVersion, Assembly Assembly)
 {
-    /// <summary>The declared upcasters in the order <see cref="EfSchemaFamilyAttribute.Upcasters"/> lists them.</summary>
+    /// <summary>The declared upcasters in the order <c>[EfSchemaFamily(Upcasters = ...)]</c> lists them.</summary>
     public IReadOnlyList<EfSchemaUpcasterDescriptor> Upcasters { get; init; } = [];
 
     /// <summary>
-    /// The family's content columns, as its <see cref="EfSchemaContentAttribute"/> declarations name them: what every
+    /// The family's content columns, as its <c>[EfSchemaContent]</c> declarations name them: what every
     /// read upcasts through the chain before deserializing, and every write that changes restamps (spec 180, FR-009 and
     /// FR-014).
     /// </summary>
@@ -23,30 +23,30 @@ public sealed record EfSchemaFamilyDescriptor(string Name, string? Module, strin
 
     /// <summary>
     /// The family's document columns compared as stored bytes rather than upcast, as its
-    /// <see cref="EfSchemaIntegrityAttribute"/> declarations name them, each with the reason (spec 180, FR-008).
+    /// <c>[EfSchemaIntegrity]</c> declarations name them, each with the reason (spec 180, FR-008).
     /// </summary>
     public IReadOnlyList<EfSchemaIntegrityColumn> IntegrityColumns { get; init; } = [];
 
     /// <summary>
-    /// The entity types <see cref="EfSchemaFamilyAttribute.Entities"/> names: empty for a family that is its module's
+    /// The entity types <c>[EfSchemaFamily(Entities = ...)]</c> names: empty for a family that is its module's
     /// only one, whose module's stamped tables all belong to it.
     /// </summary>
     public IReadOnlyList<Type> Entities { get; init; } = [];
 
     /// <summary>
-    /// The entity types <see cref="EfSchemaFamilyAttribute.ContentAddressed"/> names: the family's tables the
+    /// The entity types <c>[EfSchemaFamily(ContentAddressed = ...)]</c> names: the family's tables the
     /// post-finalization backfill never rewrites (spec 186, FR-010a and FR-010b).
     /// </summary>
     public IReadOnlyList<Type> ContentAddressed { get; init; } = [];
 
-    /// <summary>The family's rewriter, as <see cref="EfSchemaFamilyAttribute.Rewriter"/> names it, or <see langword="null"/> (spec 186, FR-004).</summary>
+    /// <summary>The family's rewriter, as <c>[EfSchemaFamily(Rewriter = ...)]</c> names it, or <see langword="null"/> (spec 186, FR-004).</summary>
     public Type? Rewriter { get; init; }
 
     /// <summary>
     /// The versions this declaration can read, as opaque labels in chain order ending at <see cref="CurrentVersion"/>
     /// (spec 180, FR-004): the current version and every predecessor the chain reaches from it without a gap. A version
     /// below a gap, or reached only through an upcaster that is malformed, is never in it. A store's read accepts
-    /// exactly these versions (<see cref="EfSchemaChain"/>), and a host's readability report credits exactly these.
+    /// exactly these versions (<c>EfSchemaChain</c>, in <c>Elsa.Persistence.EntityFramework</c>), and a host's readability report credits exactly these.
     /// </summary>
     public IReadOnlyList<string> ReadableVersions => EfSchemaChainRules.ReadableVersions(CurrentVersion, Upcasters);
 
@@ -66,7 +66,7 @@ public sealed record EfSchemaIntegrityColumn(Type Entity, string Name, string Re
 
 /// <summary>
 /// One entry of a family's declared chain, read as metadata: the upcaster type, the versions its
-/// <see cref="EfSchemaUpcasterAttribute"/> names (<see langword="null"/> when it names none), and why its type cannot
+/// <c>[EfSchemaUpcaster]</c> names (<see langword="null"/> when it names none), and why its type cannot
 /// serve as an upcaster at all, or <see langword="null"/> when it can.
 /// </summary>
 public sealed record EfSchemaUpcasterDescriptor(Type Type, string? From, string? To, string? Refusal = null)

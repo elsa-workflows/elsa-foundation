@@ -1,37 +1,59 @@
 using System.Reflection;
 
-namespace Elsa.Persistence.EntityFramework;
+namespace Elsa.Persistence.Schema;
 
 /// <summary>
-/// The one place that reads <see cref="EfSchemaFamilyAttribute"/> declarations off a set of assemblies (spec 180,
-/// FR-001). Every family is discovered the same way, first-party and third-party alike.
+/// The one place that reads <c>[EfSchemaFamily]</c> declarations off a set of assemblies (spec 180, FR-001). Every
+/// family is discovered the same way, first-party and third-party alike.
 /// </summary>
 /// <remarks>
+/// <para>
 /// Declarations are matched by the attribute's full type name and read as metadata (<see cref="CustomAttributeData"/>),
-/// never constructed. A package that Nuplane loads into a load context of its own can carry its own copy of this
-/// assembly, and so its own copy of the attribute type. Matching by type identity would skip exactly that package's
-/// families without a word, and a family missing from a host's readability report lets a version finalize that the host
-/// cannot read (spec 183, FR-020).
+/// never constructed. A package that Nuplane loads into a load context of its own can carry its own copy of
+/// <c>Elsa.Persistence.EntityFramework</c>, and so its own copy of the attribute type. Matching by type identity would
+/// skip exactly that package's families without a word, and a family missing from a host's readability report lets a
+/// version finalize that the host cannot read (spec 183, FR-020).
+/// </para>
+/// <para>
+/// It lives in <c>Elsa.Persistence.Schema</c>, which every host shares with every package it loads and which references
+/// no EF Core, so a host that carries no EF (ADR 0076) still reads every package's declarations (#2143). It therefore
+/// names the attribute types it matches rather than referencing them: they stay in <c>Elsa.Persistence.EntityFramework</c>.
+/// Every name below is exercised by declarations built with those types - this assembly's own tests' and the EF
+/// persistence's - so a rename that left this reader matching nothing fails them.
+/// </para>
 /// </remarks>
 public static class EfSchemaFamilyCatalog
 {
-    private static readonly string FamilyAttributeName = typeof(EfSchemaFamilyAttribute).FullName!;
-    private static readonly string ModuleAttributeName = typeof(EfModuleAttribute).FullName!;
-    private static readonly string UpcasterAttributeName = typeof(EfSchemaUpcasterAttribute).FullName!;
-    private static readonly string UpcasterInterfaceName = typeof(IEfSchemaUpcaster).FullName!;
-    private static readonly string ContentAttributeName = typeof(EfSchemaContentAttribute).FullName!;
-    private static readonly string IntegrityAttributeName = typeof(EfSchemaIntegrityAttribute).FullName!;
+    private const string DeclarationNamespace = "Elsa.Persistence.EntityFramework";
+    private const string FamilyAttributeName = DeclarationNamespace + ".EfSchemaFamilyAttribute";
+    private const string ModuleAttributeName = DeclarationNamespace + ".EfModuleAttribute";
+    private const string UpcasterAttributeName = DeclarationNamespace + ".EfSchemaUpcasterAttribute";
+    private const string UpcasterInterfaceName = DeclarationNamespace + ".IEfSchemaUpcaster";
+    private const string ContentAttributeName = DeclarationNamespace + ".EfSchemaContentAttribute";
+    private const string IntegrityAttributeName = DeclarationNamespace + ".EfSchemaIntegrityAttribute";
+
+    /// <summary>The family declaration's named argument listing its upcasters, oldest first.</summary>
+    private const string UpcastersMember = "Upcasters";
+
+    /// <summary>The family declaration's named argument listing the entity types whose rows stamp it.</summary>
+    private const string EntitiesMember = "Entities";
+
+    /// <summary>The family declaration's named argument listing its content-addressed entity types (spec 186, FR-010b).</summary>
+    private const string ContentAddressedMember = "ContentAddressed";
+
+    /// <summary>The family declaration's named argument naming its rewriter (spec 186, FR-004).</summary>
+    private const string RewriterMember = "Rewriter";
 
     /// <summary>
-    /// Enumerates every <see cref="EfSchemaFamilyAttribute"/> declared on <paramref name="assemblies"/>, one
+    /// Enumerates every <c>[EfSchemaFamily]</c> declared on <paramref name="assemblies"/>, one
     /// <see cref="EfSchemaFamilyDescriptor"/> per declaration. Refuses discovery, naming the assembly, when a declaration
     /// has no name or no current version, when its module is not one the same assembly declares with
-    /// <see cref="EfModuleAttribute"/>, when a family declared shared - owned by no single EF module, so
+    /// <c>[EfModule]</c>, when a family declared shared - owned by no single EF module, so
     /// <see cref="EfSchemaFamilyDescriptor.Module"/> reads <see langword="null"/> - sits in an assembly that declares an
-    /// <see cref="EfModuleAttribute"/> of its own, or when one assembly declares a family twice. The same family
+    /// <c>[EfModule]</c> of its own, or when one assembly declares a family twice. The same family
     /// declared by two assemblies, such as two generations of one package, is two descriptors: combining them is the
     /// caller's decision. Each descriptor carries the content and integrity columns its assembly declares for it
-    /// (<see cref="EfSchemaContentAttribute"/>, <see cref="EfSchemaIntegrityAttribute"/>); discovery is refused, naming
+    /// (<c>[EfSchemaContent]</c>, <c>[EfSchemaIntegrity]</c>); discovery is refused, naming
     /// the assembly, when such a declaration names a family the assembly does not declare, names no type or column, gives
     /// an integrity column no reason, or declares one column twice.
     /// </summary>
@@ -165,17 +187,17 @@ public static class EfSchemaFamilyCatalog
         family with
         {
             Upcasters = Upcasters(declaration),
-            Entities = Types(declaration, nameof(EfSchemaFamilyAttribute.Entities)),
-            ContentAddressed = Types(declaration, nameof(EfSchemaFamilyAttribute.ContentAddressed)),
+            Entities = Types(declaration, EntitiesMember),
+            ContentAddressed = Types(declaration, ContentAddressedMember),
             Rewriter = declaration.NamedArguments
-                .Where(argument => argument.MemberName == nameof(EfSchemaFamilyAttribute.Rewriter))
+                .Where(argument => argument.MemberName == RewriterMember)
                 .Select(argument => argument.TypedValue.Value as Type)
                 .FirstOrDefault()
         };
 
-    /// <summary>The declaration's <see cref="EfSchemaFamilyAttribute.Upcasters"/>, each read as metadata.</summary>
+    /// <summary>The declaration's <c>Upcasters</c>, each read as metadata.</summary>
     private static EfSchemaUpcasterDescriptor[] Upcasters(CustomAttributeData declaration) =>
-        TypeArguments(declaration, nameof(EfSchemaFamilyAttribute.Upcasters)).Select(DescribeUpcaster).ToArray();
+        TypeArguments(declaration, UpcastersMember).Select(DescribeUpcaster).ToArray();
 
     /// <summary>The non-null types a <c>Type[]</c> named argument of the declaration lists.</summary>
     private static Type[] Types(CustomAttributeData declaration, string member) =>
@@ -189,8 +211,12 @@ public static class EfSchemaFamilyCatalog
             .SelectMany(types => types)
             .Select(type => type.Value as Type);
 
-    /// <summary>One chain entry, read from <paramref name="type"/>'s metadata exactly as a declaration's entries are.</summary>
-    internal static EfSchemaUpcasterDescriptor DescribeUpcaster(Type? type)
+    /// <summary>
+    /// One chain entry, read from <paramref name="type"/>'s metadata exactly as a declaration's entries are, for a caller
+    /// that builds a declaration itself, as a tool or a test does. Public for the reflection catalog's consumers
+    /// (Elsa.Persistence.EntityFramework and its tests) rather than shared through InternalsVisibleTo.
+    /// </summary>
+    public static EfSchemaUpcasterDescriptor DescribeUpcaster(Type? type)
     {
         if (type is null)
             return new EfSchemaUpcasterDescriptor(typeof(void), null, null, "the chain lists no type.");

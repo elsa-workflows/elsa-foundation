@@ -1,6 +1,4 @@
-using Elsa.Persistence.EntityFramework.SchemaFinalization;
-
-namespace Elsa.Persistence.EntityFramework.SchemaBackfill;
+namespace Elsa.Persistence.Schema.SchemaFinalization;
 
 /// <summary>
 /// One family's post-finalization backfill as this host's worker last saw it (spec 186, FR-021): what it is doing, the

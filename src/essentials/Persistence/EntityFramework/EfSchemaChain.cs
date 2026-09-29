@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Reflection;
+using Elsa.Persistence.Schema;
 
 namespace Elsa.Persistence.EntityFramework;
 

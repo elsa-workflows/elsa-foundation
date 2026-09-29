@@ -1,6 +1,7 @@
 using CShells.AspNetCore.Configuration;
 using CShells.AspNetCore.Extensions;
 using CShells.DependencyInjection;
+using Elsa.Cluster.Readability;
 using Elsa.Foundation.Host.Feed;
 using Elsa.Foundation.Host.Health;
 using Elsa.Foundation.Host.ModuleManagement;
@@ -54,6 +55,21 @@ builder.Services.AddNuplane(nuplaneConfiguration, nuplane =>
 // The bridge that hands Nuplane-loaded assemblies to CShells feature discovery.
 builder.Services.AddSingleton<NuplaneAssemblyProvider>();
 builder.Services.AddSingleton<ShellReloadOnPackagesChanged>();
+
+// ---------------------------------------------------------------------------------------------------------
+// Cluster membership — selected once per host, on this container, never per shell (spec 183, FR-017; #2143).
+// ---------------------------------------------------------------------------------------------------------
+// Exactly as Elsa.Workbench composes it: the readability report of every schema family loaded in any load context,
+// the in-process membership default (a cluster of one, writing nothing durable), the finalization gate's view of the
+// fleet, and the dormancy check over what each shell's gates observed. CShells copies these registrations into every
+// shell, and the types they are registered under come from Elsa.Cluster.Core and Elsa.Persistence.Schema, which
+// Nuplane:Loading:SharedAssemblies shares with every package: so an EF module package, loaded with its own copy of
+// Elsa.Persistence.EntityFramework, finds this fleet and finalizes its schema versions (spec 181, FR-021), and a
+// feed-loaded feature leaves dormancy once the version it needs is finalized (spec 182, FR-019). Without it, every
+// gate here would stay at the version its record was created at, and every declared requirement would read "not
+// observed". The durable EF provider (AddConfiguredClusterMembership) is not composed: it would bring EF Core into a
+// host that carries none (ADR 0076).
+builder.Services.AddEfSchemaReadability();
 
 // ---------------------------------------------------------------------------------------------------------
 // CShells — activate shells, map them, own per-shell middleware.

@@ -1,5 +1,6 @@
 using System.Text.Json.Nodes;
 using Xunit;
+using Elsa.Persistence.Schema;
 using static Elsa.Persistence.EntityFramework.Tests.SchemaChains;
 
 namespace Elsa.Persistence.EntityFramework.Tests;

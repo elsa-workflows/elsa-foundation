@@ -2,7 +2,7 @@
 
 **Feature Branch**: `claude/2093-rollout-specs`
 **Created**: 2026-09-27
-**Status**: In progress — B5 ([#2101](https://github.com/elsa-workflows/elsa-foundation/issues/2101)) built the gate, the write check, both activation refusals and the CLI; FR-020a, the Modularity API step, is not built yet (see the 2026-09-28 note).
+**Status**: In progress — B5 ([#2101](https://github.com/elsa-workflows/elsa-foundation/issues/2101)) built the gate, the write check, both activation refusals and the CLI; B5b ([#2143](https://github.com/elsa-workflows/elsa-foundation/issues/2143)) composed the fleet on `Elsa.Foundation.Host` and made it reachable from feed-loaded EF modules on both hosts (see the 2026-09-29 note); FR-020a, the Modularity API step, is not built yet (see the 2026-09-28 note).
 **Input**: Workstream B5, [issue #2101](https://github.com/elsa-workflows/elsa-foundation/issues/2101), of the
 cluster-safe schema rollout program [#2093](https://github.com/elsa-workflows/elsa-foundation/issues/2093). A host
 reads both formats as soon as it runs a new persisted-schema version, and keeps writing the old format until that
@@ -531,6 +531,37 @@ rather than a record of its own.
   runtime as `IRuntimeSchemaFinalization`: the runnability entry names the database identity the gate read (spec 184,
   FR-008), a member whose writes to a Runtime family the gate refuses claims nothing and hands off what it holds
   (spec 184, FR-012), and a placement query names the database its execution lives in (spec 184, FR-009).
+
+**2026-09-29 note.** Found and settled while building B5b ([#2143](https://github.com/elsa-workflows/elsa-foundation/issues/2143));
+lands with the B5b PR, whose merge is the owner's approval.
+
+- **Feed-loaded EF modules reach the host's fleet.** An EF module that arrives from a feed carries its own copy of
+  `Elsa.Persistence.EntityFramework` in a load context of its own, so a fleet the host registered under that
+  assembly's `IEfSchemaFleet` was a different type from the one the module asked for, and its gate found none: it
+  admitted, and never finalized past the version its record was created at. `IEfSchemaFleet` and its answer types,
+  `EfSchemaFinalizationObservations`, the record's model and status, the gate registry and the family catalog now live
+  in `Elsa.Persistence.Schema`, which references no EF Core, under that assembly's own namespaces (`Elsa.Persistence.Schema`
+  for the catalog and its descriptors, `Elsa.Persistence.Schema.SchemaFinalization` for the rest), and every host shares it
+  with `Elsa.Cluster.Core` ([ADR 0067](../../docs/adr/0067-package-versioning-uses-two-lines-with-computed-patch.md),
+  amended 2026-09-29, "Host-composed shares"). `Elsa.Cluster.Readability` therefore takes no EF Core either.
+- **`Elsa.Foundation.Host` composes the fleet.** It calls `AddEfSchemaReadability` on its host container, as
+  `Elsa.Workbench` does, so the 2026-09-28 note's "composes no membership today" no longer holds: FR-021's finalization
+  at activation holds there, for its EF modules as for a feed-loaded module on `Elsa.Workbench`. It composes the
+  in-process default only; the durable EF provider would bring EF Core into a host that carries none (ADR 0076), so
+  `Elsa.Foundation.Host` is a cluster of one.
+- **Proved on the built host.** `FoundationHostBootTests` (`tests/essentials/Cluster/EntityFrameworkCore/Tests`) start
+  the real `Elsa.Foundation.Host` as a child process over a directory feed holding the feed-module fixture and
+  `Elsa.Persistence.EntityFramework`, packed by the SDK, with EF Core and the Sqlite engine resolved from the package
+  cache: the module finalizes its new version at activation and its feature serves; and while a hold is on that version
+  the feature is dormant (409) until the hold is released on the database, after which the running host serves it.
+  Taking `AddEfSchemaReadability` out of the host's `Program.cs` fails both.
+- **The gate keeps running after shell activation.** CShells resolves a shell's initializers in a scope it disposes
+  once they have run, and `AddShellInitializer` exposes an initializer through a transient factory, so that scope
+  disposed the singleton `EfModuleMigrator`, and with it the gate's background evaluation and refresh (FR-005, FR-010,
+  FR-011), right after activation, on both hosts. A version this host could finalize after activation, once a hold was
+  released or the last older member was upgraded, never was, and a finalization another host committed was adopted only
+  on demand. The migrator's initializer exposure is now a singleton, which the shell's container alone owns, as the
+  Tasks feature already keeps its task manager out of that scope.
 
 **2026-09-29 note.** Recorded when the owner decided on [#2093](https://github.com/elsa-workflows/elsa-foundation/issues/2093)
 that the migrator seeds first; built by [#2136](https://github.com/elsa-workflows/elsa-foundation/issues/2136) with

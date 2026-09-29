@@ -2,6 +2,7 @@ using Elsa.Diagnostics.StructuredLogs.Core.Models;
 using Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Persistence.EntityFramework;
+using Elsa.Persistence.Schema;
 using Xunit;
 
 namespace Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.Tests;

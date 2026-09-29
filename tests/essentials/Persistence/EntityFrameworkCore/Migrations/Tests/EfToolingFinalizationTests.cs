@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using Elsa.Persistence.EntityFramework.SchemaFinalization;
 using Elsa.Persistence.EntityFramework.Tooling;
+using Elsa.Persistence.Schema.SchemaFinalization;
 using Elsa.Secrets.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Microsoft.Data.Sqlite;

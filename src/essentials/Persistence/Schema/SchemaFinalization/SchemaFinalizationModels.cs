@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace Elsa.Persistence.EntityFramework.SchemaFinalization;
+namespace Elsa.Persistence.Schema.SchemaFinalization;
 
 /// <summary>
 /// One schema family's finalization record in one database (spec 181, FR-001): the opaque database identity, the
@@ -204,9 +204,15 @@ public sealed record SchemaFinishHistoryEntry(
 /// </summary>
 public sealed record SchemaFinalizationWrite(bool Applied, SchemaFinalizationRecord Record);
 
-/// <summary>Positions of opaque version labels along a family's chain, which alone orders them (spec 180, FR-004).</summary>
-internal static class SchemaVersionChain
+/// <summary>
+/// Positions of opaque version labels along a family's chain, which alone orders them (spec 180, FR-004). Public because
+/// the finalization record's rules and the EF stores that enforce them live in different assemblies (issue 2143).
+/// </summary>
+public static class SchemaVersionChain
 {
+    /// <summary>The longest version label a chain may name: the width of a schema-version stamp column.</summary>
+    public const int MaxVersionLength = 32;
+
     public static int PositionOf(IReadOnlyList<string> chain, string version)
     {
         for (var position = 0; position < chain.Count; position++)
@@ -239,7 +245,7 @@ internal static class SchemaVersionChain
             throw new ArgumentException("A family's chain names at least its current version, and no blank one.", nameof(chain));
         if (chain.Distinct(StringComparer.Ordinal).Count() != chain.Count)
             throw new ArgumentException($"A family's chain names each version once: [{string.Join(", ", chain)}].", nameof(chain));
-        if (chain.Any(version => version.Length > EfSchemaFinalization.MaxVersionLength))
-            throw new ArgumentException($"A version label is at most {EfSchemaFinalization.MaxVersionLength} characters, the width of a stamp column.", nameof(chain));
+        if (chain.Any(version => version.Length > MaxVersionLength))
+            throw new ArgumentException($"A version label is at most {MaxVersionLength} characters, the width of a stamp column.", nameof(chain));
     }
 }

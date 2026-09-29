@@ -1,3 +1,4 @@
+using Elsa.Persistence.Schema.SchemaFinalization;
 using System.Reflection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;

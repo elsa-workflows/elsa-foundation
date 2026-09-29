@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
+using Elsa.Persistence.Schema.SchemaFinalization;
 
 namespace Elsa.Persistence.EntityFramework.SchemaFinalization;
 
@@ -133,5 +134,5 @@ public sealed class EfSchemaWriteGateInterceptor : SaveChangesInterceptor
 
     private static EfSchemaModuleGate? FindGate(DbContext context) =>
         context.GetService<IDbContextOptions>().FindExtension<CoreOptionsExtension>()?.ApplicationServiceProvider?
-            .GetService<EfSchemaFinalizationGates>()?.FindForContext(context.GetType());
+            .GetService<EfSchemaFinalizationGates>()?.FindModuleGate(context.GetType());
 }
