@@ -161,7 +161,7 @@ internal static class ExpandOnlyMigrationScanner
             providerContextsExamined++;
             var baseline = manifest.BaselineOf(descriptor.Name, provider);
 
-            using var context = ModuleContextCatalog.Create(contextType, ModuleContextCatalog.PlaceholderConnection(provider));
+            using var context = CreateContext(descriptor, contextType, provider);
             var assembly = context.GetService<IMigrationsAssembly>();
             var ordered = assembly.Migrations.OrderBy(migration => migration.Key, StringComparer.Ordinal).ToArray();
 
@@ -195,14 +195,24 @@ internal static class ExpandOnlyMigrationScanner
 
             baselineMigrations += ordered.Length - postFreeze.Length;
             postFreezeMigrations += postFreeze.Length;
+            var families = Elsa.Persistence.EntityFramework.SchemaFinalization.EfSchemaModuleFamilies.For(descriptor.Name, descriptor.Assembly);
 
             foreach (var (id, migrationType) in postFreeze)
             {
                 IReadOnlyList<Microsoft.EntityFrameworkCore.Migrations.Operations.MigrationOperation> operations;
+                ExpandOnlyMigrationFamilies before;
                 try
                 {
                     // FR-004: what EF will execute, never source text. FR-005: Down is never read.
-                    operations = assembly.CreateMigration(migrationType, EfRelationalProviderBinding.ExpectedProviderName(provider)).UpOperations;
+                    var providerName = EfRelationalProviderBinding.ExpectedProviderName(provider);
+                    operations = assembly.CreateMigration(migrationType, providerName).UpOperations;
+                    // FR-023: which tables a stamped family covered before this migration is the previous migration's
+                    // target model, the schema this one runs against; a context's first migration has none before it.
+                    var position = Array.FindIndex(ordered, migration => migration.Key == id);
+                    before = ExpandOnlyMigrationFamilies.Before(
+                        position == 0 ? null : assembly.CreateMigration(ordered[position - 1].Value, providerName).TargetModel,
+                        families,
+                        descriptor.Assembly);
                 }
                 catch (Exception exception) when (exception is not OutOfMemoryException)
                 {
@@ -218,10 +228,12 @@ internal static class ExpandOnlyMigrationScanner
 
                 operationsClassified += operations.Count;
                 var optOut = migrationType.GetCustomAttribute<ExpandOnlyMigrationOptOutAttribute>();
-                var result = ExpandOnlyMigrationGuard.Evaluate(operations, optOut);
+                var result = ExpandOnlyMigrationGuard.Evaluate(operations, optOut, before);
 
+                // FR-015: a contracting opt-out also shows the family and version its application waits for (FR-023).
                 if (ShouldRecordOptOutHonoured(optOut, result))
-                    optOutsHonoured.Add($"{descriptor.Name}/{provider} {id}: {optOut!.ReviewReference} — {optOut.Reason}");
+                    optOutsHonoured.Add($"{descriptor.Name}/{provider} {id}: {optOut!.ReviewReference} — {optOut.Reason}" +
+                                        (optOut.SchemaFamily is { } family ? $" (applies once '{family}' is finalized at '{optOut.FinalizedVersion}')" : ""));
 
                 if (!result.Passed)
                     failures.Add(FormatFailure(descriptor.Name, provider, id, result));
@@ -237,6 +249,20 @@ internal static class ExpandOnlyMigrationScanner
             operationsClassified,
             optOutsHonoured,
             failures);
+    }
+
+    /// <summary>
+    /// The provider context bound as its own <c>[EfModule]</c> declares it, to a connection that is never opened (FR-004),
+    /// so the scan reads any module the catalog discovers, first-party or synthetic, and not only the ones
+    /// <see cref="ModuleContextCatalog"/> names by convention.
+    /// </summary>
+    private static DbContext CreateContext(EfModuleDescriptor descriptor, Type contextType, string provider)
+    {
+        var builder = (DbContextOptionsBuilder)Activator.CreateInstance(typeof(DbContextOptionsBuilder<>).MakeGenericType(contextType))!;
+        EfRelationalProviderBinding.Use(builder, provider, ModuleContextCatalog.PlaceholderConnection(provider), descriptor.HistoryTableName, descriptor.Assembly.GetName().Name);
+        // As ModuleContextCatalog.Create does, so building every module stays within EF's internal service provider limit.
+        EfSchemaVersionMaterializationInterceptor.EnsureAdded(builder);
+        return (DbContext)Activator.CreateInstance(contextType, builder.Options)!;
     }
 
     /// <summary>
@@ -263,6 +289,7 @@ internal static class ExpandOnlyMigrationScanner
             reasons.Add($"opt-out lists violations that do not occur: {string.Join(", ", result.StaleOptOutEntries)}");
         if (result is { HasOptOut: true, Violations.Count: 0 })
             reasons.Add("carries an opt-out but has no violations to permit");
+        reasons.AddRange(result.ContractionFaults);
 
         return $"{module}/{provider} {migrationId}: {string.Join("; ", reasons)}. {Remedy}";
     }

@@ -228,7 +228,17 @@ after each one.
   newest version every counted member can read, which can never be past any member's current version.
 - **A database with no record yet.** The first activation records the activating host's oldest readable version as
   finalized, then evaluates normally. On a fresh database, or one written only by the first gate-aware release, that
-  is exactly the version its rows carry.
+  is exactly the version its rows carry. *Amended 2026-09-29* ([spec 185](../185-expand-only-migration-guard/spec.md),
+  FR-023; [#2136](https://github.com/elsa-workflows/elsa-foundation/issues/2136)): the record starts no lower than the
+  latest version named by a contracting migration of the family already applied to the database, when that is later.
+  Such a migration ran before any gate admitted the module, since spec 185 refuses it once one has and the family is
+  below that version, and it removed what every earlier version reads: the schema serves none of those, and a record
+  started at one would admit a host that reads only them. A host whose chain does not read that version, or whose
+  applied contracting migration names none, refuses the module rather than creating the record. The version is read
+  from the activating host's own migrations and their opt-outs, so it holds when that host's release carries the
+  contracting migration; spec 185's Invariant states what holds when it does not. Since the migrator creates the record
+  before a contracting migration it applies (Decisions, 2026-09-29 note), this start matters only for a contraction
+  run outside Elsa, and a record the migrator created is the one the first activation finds.
 - **A host partitioned during finalization.** It was not counted. When it reconnects, FR-012 and FR-018 apply: it
   refreshes, finds a finalized version outside its readable set, and refuses writes to that family. Its reads of
   newer rows already raise skew (spec 180, FR-007).
@@ -307,7 +317,12 @@ after each one.
   post-migration audit, and before any shell task, seeder or store touches the module's tables. It throws a typed
   refusal, so the shell does not activate, as a pending migration under `Validate` does today. Amended 2026-09-28
   (spec 186, Decisions): the same check MUST also refuse the module when a family's finish record names a completion
-  version outside the host's readable set (spec 186, FR-020), for the same reason and at the same point.
+  version outside the host's readable set (spec 186, FR-020), for the same reason and at the same point. Amended
+  2026-09-29 (spec 185, FR-023; #2136): it MUST also refuse the module, at the same point, when a family has no record
+  yet and a contracting migration of it already applied names a version outside the host's readable set, or names none
+  (Edge Cases, "A database with no record yet"). FR-016 does not repeat that one at enable time: it needs a contracting
+  migration whose opt-out spec 185's build guard refuses for every first-party module, and this refusal still comes
+  before anything touches the module's tables.
 - **FR-016**: At enable time, under both `Validate` and `AutoMigrate`, an `IFeatureActivationGuard` MUST read the
   finalization record and apply the same check to every feature that `[UsesEfModule]` maps to the module, returning a
   `FeatureActivationRefusal` that the Modularity API renders as 409, with nothing saved. This is the narrowing spec
@@ -516,3 +531,29 @@ rather than a record of its own.
   runtime as `IRuntimeSchemaFinalization`: the runnability entry names the database identity the gate read (spec 184,
   FR-008), a member whose writes to a Runtime family the gate refuses claims nothing and hands off what it holds
   (spec 184, FR-012), and a placement query names the database its execution lives in (spec 184, FR-009).
+
+**2026-09-29 note.** Recorded when the owner decided on [#2093](https://github.com/elsa-workflows/elsa-foundation/issues/2093)
+that the migrator seeds first; built by [#2136](https://github.com/elsa-workflows/elsa-foundation/issues/2136) with
+[spec 185](../185-expand-only-migration-guard/spec.md)'s FR-024 (its 2026-09-29 note, "The migrator seeds first").
+
+- **The migrator and the persistence tool create finalization records in exactly one case.** On a database where the
+  module has not been admitted yet (the last bullet), `EfDatabaseMigrator` under `AutoMigrate`, and so
+  `EfModuleMigrator` at Prepare and `dotnet elsa persistence apply`, creates the record of each family a pending
+  contracting migration names before any contracting migration runs, at the version that migration's opt-out names
+  (the latest, where several name one family), through the store's get-or-create (FR-001), and the database identity
+  with the first. It creates no other record, and none under `Validate`. A record that already exists, because a gate
+  created it first or the migrator's own seed was cut short, is kept as it is, and the contracting migration is
+  refused if it is below the version.
+- **Its creator is recorded like a member.** The created entry of the history and of the finish record names the
+  member `migrator:<host id>` in the host's incarnation, where the host composes a fleet, or `migrator:<machine name>`
+  in a per-process incarnation, where it does not or the persistence tool applies.
+- **The module counts as admitted once a family's record exists**, not once its database identity does: a gate and a
+  seed both create the identity first, so an identity with no record is an admission or a seed cut short before its
+  first record, and nothing has read the module's rows. *Amended the same day* (the owner's review of #2149): nor while
+  every record is the migrator's own seed of the pending batch, cut short between two families or before the
+  contraction, which the next apply completes. Such a record was created by a `migrator:*` member, has not changed
+  since (revision 1), belongs to a family a pending contracting migration names, and stands at the version that seed
+  creates it at. A record that fails any of these admits the module, and a family with no record is then refused: a
+  member's or an operator's record, one changed since, and one the migrator created for a contraction that has run,
+  since a gate that admits a module whose families all have a record creates none and leaves no trace (spec 185,
+  2026-09-29 note).

@@ -17,8 +17,12 @@ namespace Elsa.Modularity.EntityFramework;
 /// the module's own history table whether anything is outstanding. Under both policies it then reads the finalization
 /// record of every schema family the module owns and refuses when a finalized or completion version is outside this
 /// host's readable set, exactly as the module's gate would refuse it at Prepare. Under <c>AutoMigrate</c> it opens
-/// the database for that record alone: it never reads the history table or evaluates pending migrations there, and a
-/// record table that does not exist yet has finalized nothing, so it passes.
+/// the database for that record alone, and a record table that does not exist yet has finalized nothing, so it passes.
+/// Under both policies it also refuses a feature whose module has a pending contracting migration its schema family is
+/// not yet finalized for (spec 185, FR-025), since the module's migrator would refuse that batch at Prepare. That is the
+/// one thing that reads the history table under <c>AutoMigrate</c>, and only once such a migration's family is found
+/// below its version: a module that has no contracting migration, or whose families have reached their versions, is
+/// judged as before.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -200,19 +204,29 @@ public sealed class EfPendingMigrationActivationGuard(IServiceProvider services,
         {
             await using var context = CreateContext(descriptor, contextType, settings.Provider, connection, schema);
             // Under AutoMigrate the module's own migrator brings the schema current at Prepare, so pending
-            // migrations are nothing to refuse and the history table is not read (FR-068).
+            // migrations are nothing to refuse and the history table is not read (FR-068) — except to learn whether a
+            // contracting migration its family is not yet finalized for is pending, which the migrator would refuse at
+            // Prepare too (spec 185, FR-025). Under Validate the same refusal comes from EfDatabaseMigrator.
             if (policy is EfMigratePolicy.Validate)
                 await EfDatabaseMigrator.ApplyAsync(
                     context,
                     EfRelationalProviderBinding.ExpectedProviderName(settings.Provider),
                     EfMigratePolicy.Validate,
                     cancellationToken);
+            else if (await EfContractingMigrationCheck.FindRefusalAsync(context, pending: null, cancellationToken) is { } withheld)
+                return new(Verdict.ContractingWithheld, withheld.Message);
             // Under both policies: a family finalized at a version this host cannot read would be refused at Prepare,
             // so saving the request now would be the half-applied state this guard exists to prevent (spec 181, FR-016).
             var families = EfSchemaModuleFamilies.For(descriptor.Name, descriptor.Assembly);
             return await EfSchemaFinalizationCheck.FindRefusalAsync(context, families, cancellationToken) is { } refusal
                 ? new(Verdict.Unfinalizable, refusal.Message)
                 : Probe.Current;
+        }
+        catch (EfContractingMigrationRefusedException withheld)
+        {
+            // Pending, but not appliable yet either, so it is not reported as Pending: that names an `apply` which
+            // would refuse it too. Its message is built from names and version labels alone (FR-061).
+            return new(Verdict.ContractingWithheld, withheld.Message);
         }
         catch (EfPendingMigrationsException)
         {
@@ -279,7 +293,7 @@ public sealed class EfPendingMigrationActivationGuard(IServiceProvider services,
                 $"pending while this host runs {policy}. Nothing was saved. Check that module's connection " +
                 $"settings, apply its migrations, then enable the feature again:{Environment.NewLine}  " +
                 Commands(descriptor, settings.Provider),
-            Verdict.Unfinalizable =>
+            Verdict.Unfinalizable or Verdict.ContractingWithheld =>
                 $"{head}. {probe.Detail} Nothing was saved.",
             Verdict.Unresolved =>
                 $"{head} whose database connection could not be resolved: {probe.Detail} Nothing was saved.",
@@ -331,7 +345,13 @@ public sealed class EfPendingMigrationActivationGuard(IServiceProvider services,
         Unbindable,
 
         /// <summary>A schema family's finalized or completion version is one this host cannot read (spec 181, FR-016).</summary>
-        Unfinalizable
+        Unfinalizable,
+
+        /// <summary>
+        /// A pending contracting migration's schema family is not yet finalized at the version its opt-out names, so the
+        /// module's pending batch would be refused at Prepare (spec 185, FR-025).
+        /// </summary>
+        ContractingWithheld
     }
 
     private sealed record Probe(Verdict Verdict, string? Detail = null)

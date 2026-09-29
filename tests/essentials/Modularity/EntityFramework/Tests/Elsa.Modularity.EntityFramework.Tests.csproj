@@ -21,6 +21,8 @@
   <ItemGroup>
     <Compile Include="../../../../Shared/FakeRuntimeFeatureCatalog.cs" Link="FakeRuntimeFeatureCatalog.cs" />
     <Compile Include="../../../Persistence/EntityFramework/Tests/EfSchemaFinalizationTestSupport.cs" Link="EfSchemaFinalizationTestSupport.cs" />
+    <!-- The synthetic module with a contracting migration (spec 185, FR-025). -->
+    <Compile Include="../../../Persistence/EntityFramework/Tests/ContractingModule.cs" Link="ContractingModule.cs" />
     <ProjectReference Include="..\..\..\..\..\src\essentials\Modularity\EntityFramework\Elsa.Modularity.EntityFramework.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\essentials\Modularity\Nuplane\Elsa.Modularity.Nuplane.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\essentials\Secrets\Persistence\EntityFrameworkCore\Elsa.Secrets.Persistence.EntityFrameworkCore.csproj" />

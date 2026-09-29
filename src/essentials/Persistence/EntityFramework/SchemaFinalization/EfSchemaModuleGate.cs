@@ -25,7 +25,10 @@ namespace Elsa.Persistence.EntityFramework.SchemaFinalization;
 /// both stores, one side always sees the other: the evaluator counts the newcomer and abandons, or the newcomer sees
 /// the intent or the finalization and waits, or refuses (FR-014).</item>
 /// <item><b>Finalization only moves forward</b>, which the record's store enforces (FR-003).</item>
-/// <item><b>Activation refuses an unreadable finalized version</b> (FR-015), and an unreadable completion version.</item>
+/// <item><b>Activation refuses an unreadable finalized version</b> (FR-015), and an unreadable completion version. A
+/// record it creates starts no lower than the version any contracting migration applied to the database names, since the
+/// schema serves nothing below that, and a version this host cannot place refuses the module
+/// (<see cref="EfContractingMigrationCheck.SeedVersionAsync"/>, spec 185 FR-023).</item>
 /// <item><b>Active hosts keep checking</b> (FR-010, FR-012): a refresh that finds a finalized version outside this
 /// host's readable set refuses every write to the family. A member that has lapsed, or has not been admitted under its
 /// current incarnation, keeps the write version it had and never adopts a newer one (FR-018).</item>
@@ -38,7 +41,8 @@ namespace Elsa.Persistence.EntityFramework.SchemaFinalization;
 /// </remarks>
 public sealed class EfSchemaModuleGate
 {
-    private static readonly string ProcessIncarnation = Guid.NewGuid().ToString("N");
+    /// <summary>This process's incarnation, for the member a host that composes no fleet, or the persistence tool, names itself by.</summary>
+    internal static readonly string ProcessIncarnation = Guid.NewGuid().ToString("N");
 
     private readonly IEfSchemaFleet? _fleet;
     private readonly EfSchemaFinalizationObservations _observations;
@@ -433,7 +437,7 @@ public sealed class EfSchemaModuleGate
             var identity = await store.GetOrCreateDatabaseIdentityAsync(cancellationToken);
             var records = new Dictionary<string, SchemaFinalizationRecord>(StringComparer.Ordinal);
             foreach (var chain in Families.Chains)
-                records[chain.Family] = await AdmitAsync(store, chain, identity, member, cancellationToken);
+                records[chain.Family] = await AdmitAsync(context, store, chain, identity, member, cancellationToken);
             foreach (var (family, record) in records)
                 _observations.Observe(family, identity, record.FinalizedVersion);
             return new Admission(identity, records);
@@ -446,15 +450,23 @@ public sealed class EfSchemaModuleGate
 
     /// <summary>One family's admission: its record, created when missing, once nothing in it is unreadable to this host.</summary>
     private async Task<SchemaFinalizationRecord> AdmitAsync(
+        DbContext context,
         EfSchemaFinalizationStore store,
         EfSchemaChain chain,
         string identity,
         SchemaFinalizationMember member,
         CancellationToken cancellationToken)
     {
-        var readable = chain.ReadableVersions;
-        // A database with no record: every row it holds carries the oldest version this host reads (spec 181, Edge Cases).
-        var record = await store.GetOrCreateAsync(chain.Family, readable[0], readable, SchemaFinalizationActor.Of(member), cancellationToken);
+        // A database with no record: every row it holds carries the oldest version this host reads (spec 181, Edge Cases),
+        // and the record starts there, unless a contracting migration applied before any gate admitted the module left
+        // the schema serving only a later version, which it starts at instead (spec 185, FR-023; #2136).
+        var record = await store.FindAsync(chain.Family, cancellationToken)
+                     ?? await store.GetOrCreateAsync(
+                         chain.Family,
+                         await EfContractingMigrationCheck.SeedVersionAsync(context, Module, chain, cancellationToken),
+                         chain.ReadableVersions,
+                         SchemaFinalizationActor.Of(member),
+                         cancellationToken);
         var deadline = _time.GetUtcNow() + _options.IntentWaitBound;
         while (true)
         {
