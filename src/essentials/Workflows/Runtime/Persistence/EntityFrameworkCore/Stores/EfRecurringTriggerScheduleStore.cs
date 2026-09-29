@@ -578,10 +578,13 @@ public sealed class EfRecurringTriggerScheduleStore(
         Dictionary<string, string> fps;
         try
         {
-            var stored = RuntimeOperationalStateEfModule.Chain.Upcast(entity.SchemaVersion, RuntimeOperationalStateEfModule.RecurringScheduleProjectionStateTableName, nameof(entity.ContentJson), entity.ContentJson);
-            content = JsonSerializer.Deserialize<ProjectionStateContent>(stored, JsonOptions) ?? throw new JsonException("Projection content is empty.");
-            ids = JsonSerializer.Deserialize<string[]>(entity.ScheduleIdsJson, JsonOptions) ?? throw new JsonException("Schedule identities are empty.");
-            fps = JsonSerializer.Deserialize<Dictionary<string, string>>(entity.ScheduleFingerprintsJson, JsonOptions) ?? throw new JsonException("Schedule fingerprints are empty.");
+            // The id and fingerprint sets restate the content's and are compared with it and returned, so they are content
+            // too, upcast from the row's stamp with it (spec 180, FR-009; #2140).
+            string Upcast(string column, string json) =>
+                RuntimeOperationalStateEfModule.Chain.Upcast(entity.SchemaVersion, RuntimeOperationalStateEfModule.RecurringScheduleProjectionStateTableName, column, json);
+            content = JsonSerializer.Deserialize<ProjectionStateContent>(Upcast(nameof(entity.ContentJson), entity.ContentJson), JsonOptions) ?? throw new JsonException("Projection content is empty.");
+            ids = JsonSerializer.Deserialize<string[]>(Upcast(nameof(entity.ScheduleIdsJson), entity.ScheduleIdsJson), JsonOptions) ?? throw new JsonException("Schedule identities are empty.");
+            fps = JsonSerializer.Deserialize<Dictionary<string, string>>(Upcast(nameof(entity.ScheduleFingerprintsJson), entity.ScheduleFingerprintsJson), JsonOptions) ?? throw new JsonException("Schedule fingerprints are empty.");
         }
         catch (Exception exception) when (exception is JsonException or NotSupportedException or ArgumentException)
         {

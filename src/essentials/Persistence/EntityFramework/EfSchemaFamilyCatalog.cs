@@ -19,6 +19,8 @@ public static class EfSchemaFamilyCatalog
     private static readonly string ModuleAttributeName = typeof(EfModuleAttribute).FullName!;
     private static readonly string UpcasterAttributeName = typeof(EfSchemaUpcasterAttribute).FullName!;
     private static readonly string UpcasterInterfaceName = typeof(IEfSchemaUpcaster).FullName!;
+    private static readonly string ContentAttributeName = typeof(EfSchemaContentAttribute).FullName!;
+    private static readonly string IntegrityAttributeName = typeof(EfSchemaIntegrityAttribute).FullName!;
 
     /// <summary>
     /// Enumerates every <see cref="EfSchemaFamilyAttribute"/> declared on <paramref name="assemblies"/>, one
@@ -28,7 +30,10 @@ public static class EfSchemaFamilyCatalog
     /// <see cref="EfSchemaFamilyDescriptor.Module"/> reads <see langword="null"/> - sits in an assembly that declares an
     /// <see cref="EfModuleAttribute"/> of its own, or when one assembly declares a family twice. The same family
     /// declared by two assemblies, such as two generations of one package, is two descriptors: combining them is the
-    /// caller's decision.
+    /// caller's decision. Each descriptor carries the content and integrity columns its assembly declares for it
+    /// (<see cref="EfSchemaContentAttribute"/>, <see cref="EfSchemaIntegrityAttribute"/>); discovery is refused, naming
+    /// the assembly, when such a declaration names a family the assembly does not declare, names no type or column, gives
+    /// an integrity column no reason, or declares one column twice.
     /// </summary>
     /// <remarks>
     /// A fault in a family's upcaster chain (spec 180, FR-005) does not refuse discovery: it is reported on the
@@ -64,8 +69,62 @@ public static class EfSchemaFamilyCatalog
         if (duplicate is not null)
             throw new InvalidOperationException($"{assembly.GetName().Name} declares schema family '{duplicate.Key}' more than once.");
 
-        return families;
+        var columns = Columns(assembly, attributes, families);
+        return families
+            .Select(family => family with
+            {
+                ContentColumns = columns.Where(column => column.Family == family.Name && column.Reason is null)
+                    .Select(column => new EfSchemaColumn(column.Entity, column.Name)).ToArray(),
+                IntegrityColumns = columns.Where(column => column.Family == family.Name && column.Reason is not null)
+                    .Select(column => new EfSchemaIntegrityColumn(column.Entity, column.Name, column.Reason!)).ToArray()
+            })
+            .ToArray();
     }
+
+    /// <summary>
+    /// Every content and integrity column <paramref name="assembly"/> declares, one entry per column: its family, the type
+    /// mapped to its table, its name, and for an integrity column the reason, <see langword="null"/> for content.
+    /// </summary>
+    private static (string Family, Type Entity, string Name, string? Reason)[] Columns(
+        Assembly assembly,
+        IList<CustomAttributeData> attributes,
+        EfSchemaFamilyDescriptor[] families)
+    {
+        var name = assembly.GetName().Name;
+        var content = attributes.Where(attribute => Is(attribute, ContentAttributeName))
+            .SelectMany(attribute => Names(attribute).Select(column => (Declaration: attribute, Column: column, Reason: (string?)null)));
+        var integrity = attributes.Where(attribute => Is(attribute, IntegrityAttributeName))
+            .Select(attribute => (Declaration: attribute, Column: Argument(attribute, 2), Reason: (string?)(Argument(attribute, 3) ?? "")));
+        var columns = content.Concat(integrity)
+            .Select(column => (Family: Argument(column.Declaration, 0), Entity: column.Declaration.ConstructorArguments.Count > 1 ? column.Declaration.ConstructorArguments[1].Value as Type : null, column.Column, column.Reason))
+            .ToArray();
+
+        foreach (var column in columns)
+        {
+            var declaration = $"{name} declares a {(column.Reason is null ? "content" : "integrity")} column '{column.Entity?.Name}.{column.Column}' of family '{column.Family}'";
+            if (column.Family is null || !families.Any(family => StringComparer.Ordinal.Equals(family.Name, column.Family)))
+                throw new InvalidOperationException($"{declaration}, which that assembly does not declare with [EfSchemaFamily].");
+            if (column.Entity is null || string.IsNullOrWhiteSpace(column.Column))
+                throw new InvalidOperationException($"{declaration} with no type or no column name.");
+            if (column.Reason is not null && string.IsNullOrWhiteSpace(column.Reason))
+                throw new InvalidOperationException($"{declaration} with no reason; an integrity column records why it is compared as stored bytes.");
+        }
+
+        var twice = columns
+            .GroupBy(column => (column.Entity, column.Column))
+            .FirstOrDefault(group => group.Count() > 1);
+        if (twice is not null)
+            throw new InvalidOperationException(
+                $"{name} declares column '{twice.Key.Entity!.Name}.{twice.Key.Column}' {twice.Count()} times; a column is content or integrity of one family, once.");
+
+        return columns.Select(column => (column.Family!, column.Entity!, column.Column!, column.Reason)).ToArray();
+    }
+
+    /// <summary>The columns a content declaration names: its <c>params</c> argument, read as metadata.</summary>
+    private static IEnumerable<string?> Names(CustomAttributeData declaration) =>
+        declaration.ConstructorArguments.Count > 2 && declaration.ConstructorArguments[2].Value is IEnumerable<CustomAttributeTypedArgument> names
+            ? names.Select(column => column.Value as string).DefaultIfEmpty(null)
+            : [null];
 
     private static EfSchemaFamilyDescriptor Describe(Assembly assembly, CustomAttributeData declaration, string[] modules)
     {

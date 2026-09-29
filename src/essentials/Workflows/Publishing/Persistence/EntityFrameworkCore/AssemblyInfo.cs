@@ -26,3 +26,8 @@ using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Entities;
 [assembly: EfSchemaFamily(PublishingLedgerEfModule.SchemaFamily, "Workflows.Publishing", PublishingLedgerEfModule.ContentSchemaVersion, Entities = [typeof(PublicationRecordEntity), typeof(ActivityPublicationReceiptEntity), typeof(ActivityDraftTestRunEntity)])]
 [assembly: EfSchemaFamily(PublishingPolicyProjectionEfModule.SchemaFamily, "Workflows.Publishing", PublishingPolicyProjectionEfModule.SchemaVersion, Entities = [typeof(PublicationPolicyEntity), typeof(PublicationProjectionIntentEntity)])]
 [assembly: EfSchemaFamily(PublishingSnapshotReviewEfModule.SchemaFamily, "Workflows.Publishing", PublishingSnapshotReviewEfModule.SchemaVersion, Entities = [typeof(PublicationSnapshotReviewEntity)])]
+
+// Content and integrity columns: see src/essentials/Persistence/EntityFramework/EXTENSION_POINTS.md, "Content and integrity columns" (spec 180, FR-008, FR-009
+// and FR-014).
+[assembly: EfSchemaContent(PublishingLedgerEfModule.SchemaFamily, typeof(ActivityPublicationReceiptEntity), nameof(ActivityPublicationReceiptEntity.Content))]
+[assembly: EfSchemaContent(PublishingLedgerEfModule.SchemaFamily, typeof(ActivityDraftTestRunEntity), nameof(ActivityDraftTestRunEntity.Content))]

@@ -462,3 +462,46 @@ EF materializing domain types directly, so their value converters deserialize th
 run. Their read path cannot meet FR-006 with a chain longer than one, so it accepts their current version alone, and
 each declares no upcasters until its content moves to store code that upcasts before it deserializes; the build
 enforces both. Lands with the B4 PR, whose merge is the owner's approval.
+
+**2026-09-28 note.** Found while building B4b ([#2140](https://github.com/elsa-workflows/elsa-foundation/issues/2140)):
+FR-009 and FR-014 need to know which columns are content, and nothing in the tree said. FR-001's declaration now names
+them: beside a family's `[EfSchemaFamily]`, `[EfSchemaContent(family, typeof(Entity), columns...)]` declares a table's
+content columns, and `[EfSchemaIntegrity(family, typeof(Entity), column, reason)]` a document column compared as stored
+bytes (FR-008), with the reason. Every document column of a stamped table is one or the other, checked against every
+module's model; the guards read the declaration instead of inferring content from the call sites that upcast it. The
+columns #2140 listed are classified as follows.
+
+- BookmarkState `PayloadJson` and `MetadataJson`: content. Each restates part of `ContentJson`, is compared with the
+  upcast content, and the payload is what a read returns, so comparing its stored bytes with an upcast document would
+  report an older row as corrupt. They are upcast with the content before either is parsed or compared.
+- StructuredLogs `outcome.PayloadJson`: no column. It is a field of the append operation's `OutcomeJson`, which is
+  content; that column's upcaster owns the payloads it embeds.
+- RuntimeCheckpointCommit's marker id sets: content. They are compared with the upcast content and returned to a
+  replay, and are now upcast first.
+- Workflows.Design `ResultJson`, Activities.Design `AuthoritativeResultJson` and `MutatedUnitsJson`, `PlanJson` and
+  `ReceiptJson`: content. A result or plan is deserialized; mutated units, a plan and a receipt are compared with a
+  serialization this build makes, which is sound only between documents in one format. Both families read their current
+  version alone (the note above), so their read paths are unchanged.
+- Identity child rows (claims, tokens, role links, external logins): no document column, so nothing to declare.
+
+The declaration-driven read rule found further content read past the chain, now upcast: the OpenTelemetry trace
+summary's service and workflow memberships, and the recurring-schedule projection's id and fingerprint sets. A cluster
+member's report was compared as stored bytes with the report being published; it is now compared only at the current
+version, and a report at an older one is always rewritten and restamped. Publishing's upgrade apply wrote a workflow
+draft's state in a bulk update that bypassed its context's stamping; it now stamps the row. The only integrity columns
+are the Activities management projection's `ContentAuthorityCanonicalJson`, `ContentAuthorityAuthorityKeyJson` and
+`ContentAuthoritySourceIdJson`: the context derives them on save, and only provider SQL reads them, as stored bytes.
+
+Open for the owner: FR-014 says any row written again is written at the write version, but the guard holds only content
+columns to a restamp. Rows without content, such as Identity's child rows, are rewritten or have their revision bumped
+under their old stamp. A full rewrite from a freshly prepared row could restamp safely; a partial one, such as a
+revision bump, could not without first filling the columns a later version adds, or FR-008 would check those columns
+on a row that lacks them. Every family has one version today, so no row is at risk until one ships a second. Lands
+with the B4b PR, whose merge is the owner's approval.
+
+**2026-09-28 note.** The owner answered the question above, on #2093: a full rewrite of a row restamps it, and a
+revision-only bump (no data change) keeps its stamp. FR-014's reading is amended to exactly that. The guard is
+extended so that a write assigning every mapped non-key column of a stamped row, or replacing the row, must set the
+stamp, while a write that only bumps a concurrency revision need not; Identity's child rows (claims, tokens, role
+links, external logins) are rewritten by that rule, so their full-rewrite paths now restamp to the write version.
+Lands with #2140's follow-up.

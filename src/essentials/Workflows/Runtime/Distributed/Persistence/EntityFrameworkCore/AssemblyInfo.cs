@@ -1,6 +1,7 @@
 using Elsa.Persistence.EntityFramework;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore;
+using Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.Entities;
 
 // The single, discoverable declaration of this assembly's two modules (ADR 0076 D2): [EfModule] is
 // AllowMultiple for exactly the two assemblies that carry two contexts, this one and Identity's.
@@ -36,3 +37,7 @@ using Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore;
 // build when a family the stores check is not declared here, or is declared at another version.
 [assembly: EfSchemaFamily(ExecutionPlacementEfModule.SchemaFamily, "Workflows.Runtime.Distributed.Placement", ExecutionPlacementEfModule.SchemaVersion)]
 [assembly: EfSchemaFamily(ExecutionCommandTransportEfModule.SchemaFamily, "Workflows.Runtime.Distributed.CommandTransport", ExecutionCommandTransportEfModule.SchemaVersion)]
+
+// Content and integrity columns: see src/essentials/Persistence/EntityFramework/EXTENSION_POINTS.md, "Content and integrity columns" (spec 180, FR-008, FR-009
+// and FR-014).
+[assembly: EfSchemaContent(ExecutionCommandTransportEfModule.SchemaFamily, typeof(ExecutionCommandTransportItemEntity), nameof(ExecutionCommandTransportItemEntity.PayloadJson))]

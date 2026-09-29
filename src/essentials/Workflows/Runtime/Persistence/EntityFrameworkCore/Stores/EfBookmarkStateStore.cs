@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -317,19 +318,24 @@ public sealed class EfBookmarkStateStore(
                 (expectedBookmark is not null && row.BookmarkId != expectedBookmark) || string.IsNullOrWhiteSpace(row.MetadataJson) || row.Revision <= 0)
                 throw new InvalidDataException("The persisted EF bookmark row is corrupt.");
 
-            var content = BookmarkStateEfModule.Chain.Upcast(row.SchemaVersion, BookmarkStateEfModule.TableName, nameof(row.ContentJson), row.ContentJson);
+            // The payload and metadata columns restate parts of the content, and each is compared with it, so each is
+            // upcast from the row's stamp with it: the comparisons then hold between documents in one format (spec 180,
+            // FR-009; #2140).
+            var content = Upcast(row, nameof(row.ContentJson), row.ContentJson);
+            var payloadJson = Upcast(row, nameof(row.PayloadJson), row.PayloadJson);
+            var metadataJson = Upcast(row, nameof(row.MetadataJson), row.MetadataJson);
             var state = JsonSerializer.Deserialize<BookmarkState>(content, Json)
                         ?? throw new JsonException("Bookmark content was null.");
-            var projectedPayload = DeserializePayload(row.PayloadJson);
-            var contentPayloadMatchesProjection = SerializePayload(state.Payload) == row.PayloadJson ||
+            var projectedPayload = DeserializePayload(payloadJson);
+            var contentPayloadMatchesProjection = SerializePayload(state.Payload) == payloadJson ||
                                                   state.Payload is null && projectedPayload is { ValueKind: JsonValueKind.Null };
-            var metadata = JsonSerializer.Deserialize<Dictionary<string, string>>(row.MetadataJson, Json)
+            var metadata = JsonSerializer.Deserialize<Dictionary<string, string>>(metadataJson, Json)
                            ?? throw new JsonException("Bookmark metadata was null.");
             if (state.BookmarkId != row.BookmarkId || state.WorkflowExecutionId != row.WorkflowExecutionId ||
                 state.ActivityExecutionId != row.ActivityExecutionId || state.ExecutableNodeId != row.ExecutableNodeId ||
                 state.ResumeTargetId != row.ResumeTargetId || state.StimulusType != row.StimulusType || state.StimulusHash != row.StimulusHash ||
-                !contentPayloadMatchesProjection || SerializePayload(projectedPayload) != row.PayloadJson ||
-                JsonSerializer.Serialize(state.Metadata, Json) != row.MetadataJson ||
+                !contentPayloadMatchesProjection || SerializePayload(projectedPayload) != payloadJson ||
+                JsonSerializer.Serialize(state.Metadata, Json) != metadataJson ||
                 state.CreatedAt.UtcTicks != row.CreatedAtUtcTicks || state.CreatedAt.Offset.TotalMinutes != row.CreatedAtOffsetMinutes ||
                 state.ExpiresAt?.UtcTicks != row.ExpiresAtUtcTicks ||
                 state.ExpiresAt?.Offset.TotalMinutes != row.ExpiresAtOffsetMinutes)
@@ -366,6 +372,11 @@ public sealed class EfBookmarkStateStore(
         }
         _ = CreateId("scope", state.WorkflowExecutionId, state.BookmarkId);
     }
+
+    /// <summary>A content column of <paramref name="row"/>, upcast from the row's stamp to the current version.</summary>
+    [return: NotNullIfNotNull(nameof(content))]
+    private static string? Upcast(BookmarkStateEntity row, string column, string? content) =>
+        BookmarkStateEfModule.Chain.Upcast(row.SchemaVersion, BookmarkStateEfModule.TableName, column, content);
 
     private static string? SerializePayload(JsonElement? payload) =>
         payload is null ? null : JsonSerializer.Serialize(payload.Value, Json);
