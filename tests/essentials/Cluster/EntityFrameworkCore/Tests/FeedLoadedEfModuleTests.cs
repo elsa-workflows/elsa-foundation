@@ -19,12 +19,23 @@ namespace Elsa.Cluster.EntityFrameworkCore.Tests;
 /// finalized (spec 182, FR-019 and SC-003), and a durable provider composed on the host is the fleet the module counts.
 /// </summary>
 /// <remarks>
+/// <para>
 /// The dangerous direction is the one that looks healthy: without the share the module still admits and its shell still
 /// activates, but its gate never finalizes and its feature is refused as "not observed" for ever. Both are pinned below
-/// with the share withheld, so this suite cannot turn green by loading the fixture where the host's own types are.
+/// with the share withheld (the schema one on <c>Elsa.Workbench</c>, for the reason given there), so this suite cannot turn green by loading the fixture where the host's own types are.
+/// </para>
+/// <para>
+/// <c>Elsa.Foundation.Host</c> shares <c>Elsa.Persistence.EntityFramework</c> since #2151, because it carries it for its
+/// cluster membership, so there a module never has a copy of its own: the entry's major is the assembly's, whatever
+/// build either side is (#2150). <c>Elsa.Workbench</c> carries it without sharing it, so there the module keeps its own.
+/// Each host is exercised as it is shipped, and <see cref="AssertLoadedAsAPackage"/> holds the module to that difference.
+/// </para>
 /// </remarks>
 public sealed class FeedLoadedEfModuleTests : IAsyncLifetime
 {
+    /// <summary>The persistence assembly <c>Elsa.Foundation.Host</c> shares and <c>Elsa.Workbench</c> does not (see the remarks above).</summary>
+    private const string Persistence = "Elsa.Persistence.EntityFramework";
+
     private static readonly TimeSpan Patience = TimeSpan.FromSeconds(20);
     private readonly string _file = Path.Join(Path.GetTempPath(), $"elsa-feed-module-{Guid.NewGuid():N}.db");
     private readonly List<IAsyncDisposable> _owned = [];
@@ -62,7 +73,7 @@ public sealed class FeedLoadedEfModuleTests : IAsyncLifetime
         var reported = (await loaded.Shell.GetRequiredService<IClusterMembership>().ReadFleetAsync(FleetReadMode.Fresh)).Members
             .Single().Report.Readability!.Entries.Single(entry => entry.Family == Family);
         Assert.Equal((record.DatabaseIdentity, "2"), (reported.DatabaseIdentity, reported.ObservedFinalizedVersion));
-        AssertLoadedAsAPackage(loaded);
+        AssertLoadedAsAPackage(host, loaded);
     }
 
     [Theory]
@@ -130,15 +141,16 @@ public sealed class FeedLoadedEfModuleTests : IAsyncLifetime
     /// <summary>
     /// Without <c>Elsa.Persistence.Schema</c> shared, the module loads its own copy: it admits and its shell activates, so
     /// nothing fails, but its gate finds no fleet of that type and never finalizes, and the host's dormancy check finds no
-    /// gate, so the feature is refused as not observed. This is the failure #2143 closes, and it looks like success.
+    /// gate, so the feature is refused as not observed. This is the failure #2143 closes, and it looks like success. Only
+    /// <c>Elsa.Workbench</c> can show it: a module on <c>Elsa.Foundation.Host</c> reaches the schema types through the host's
+    /// own <c>Elsa.Persistence.EntityFramework</c>, which holds the host's whatever copy the package carries.
     /// </summary>
-    [Theory]
-    [MemberData(nameof(Hosts))]
-    public async Task Without_the_schema_share_the_module_admits_but_never_finalizes_and_its_feature_reads_not_observed(string host)
+    [Fact]
+    public async Task Without_the_schema_share_the_module_admits_but_never_finalizes_and_its_feature_reads_not_observed()
     {
         await SeedAsync(ConnectionString);
 
-        var loaded = await StartAsync(host, withheld: "Elsa.Persistence.Schema");
+        var loaded = await StartAsync(Workbench, withheld: "Elsa.Persistence.Schema");
         await Task.Delay(TimeSpan.FromSeconds(1));
 
         Assert.Contains(loaded.Package.Assemblies, assembly => assembly.GetName().Name == "Elsa.Persistence.Schema");
@@ -173,24 +185,19 @@ public sealed class FeedLoadedEfModuleTests : IAsyncLifetime
     private static ISchemaDormancyCheck Check(FeedLoadedModuleHost loaded) => loaded.Shell.GetRequiredService<ISchemaDormancyCheck>();
 
     /// <summary>
-    /// The module and its own copy of the EF persistence are in the package's load context, and the two host-composed
-    /// contracts are the host's: this is the case #2143 is about, not a module compiled into the host.
+    /// The module is in the package's load context, the two host-composed contracts are the host's, and so is the EF
+    /// persistence where the host shares it: this is the case #2143 is about, not a module compiled into the host.
     /// </summary>
-    private static void AssertLoadedAsAPackage(FeedLoadedModuleHost loaded)
+    private static void AssertLoadedAsAPackage(string host, FeedLoadedModuleHost loaded)
     {
         Assert.Same(loaded.Package, AssemblyLoadContext.GetLoadContext(loaded.Module));
-        var persistence = Assert.Single(loaded.Package.Assemblies, assembly => assembly.GetName().Name == "Elsa.Persistence.EntityFramework");
-        Assert.NotSame(AssemblyLoadContext.Default, AssemblyLoadContext.GetLoadContext(persistence));
+        var persistence = loaded.Package.Assemblies.Where(assembly => assembly.GetName().Name == Persistence).ToArray();
+        if (host == Workbench)
+            Assert.NotSame(AssemblyLoadContext.Default, AssemblyLoadContext.GetLoadContext(Assert.Single(persistence)));
+        else
+            Assert.Empty(persistence);
         Assert.DoesNotContain(loaded.Package.Assemblies, assembly => assembly.GetName().Name is "Elsa.Persistence.Schema" or "Elsa.Cluster.Core");
     }
 
-    private static async Task WaitUntilAsync(Func<bool> condition)
-    {
-        var deadline = DateTimeOffset.UtcNow + Patience;
-        while (!condition())
-        {
-            Assert.True(DateTimeOffset.UtcNow < deadline, $"Not met within {Patience}.");
-            await Task.Delay(TimeSpan.FromMilliseconds(50));
-        }
-    }
+    private static Task WaitUntilAsync(Func<bool> condition) => Polling.UntilAsync(condition, Patience, TimeSpan.FromMilliseconds(50));
 }

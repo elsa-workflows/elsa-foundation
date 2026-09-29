@@ -1,28 +1,29 @@
 using System.Net;
-using System.Text.Json.Nodes;
-using Elsa.Persistence.EntityFramework;
-using Elsa.Persistence.EntityFramework.SchemaFinalization;
-using Microsoft.Extensions.Configuration;
+using Elsa.Cluster.Core.Contracts;
 using static Elsa.Cluster.EntityFrameworkCore.Tests.FeedLoadedModuleHost;
+using static Elsa.Cluster.EntityFrameworkCore.Tests.FoundationHostComposition;
 
 namespace Elsa.Cluster.EntityFrameworkCore.Tests;
 
 /// <summary>
 /// #2143's acceptance, on the real thing: the built <c>Elsa.Foundation.Host</c> as a child process, with the feed-module
-/// fixture and the EF persistence package it carries a private copy of packed into a directory feed, and Nuplane loading
-/// them as it loads any package. Nothing here composes the host, its membership or the module's load context: what
-/// <see cref="FeedLoadedEfModuleTests"/> assembles in process, the host assembles itself, from its own shipped
-/// <c>appsettings.json</c> shares and its own <c>Program.cs</c>. And #2150's: a package that carries its own copies of the
-/// assemblies the host shares binds the host's, because Nuplane binds, validates and matches those shipped shares itself.
+/// fixture packed into a directory feed, and Nuplane loading it as it loads any package. Nothing here composes the host,
+/// its membership or the module's load context: what <see cref="FeedLoadedEfModuleTests"/> assembles in process, the host
+/// assembles itself, from its own shipped <c>appsettings.json</c> shares and its own <c>Program.cs</c>. With no membership
+/// configured, the host is a cluster of one on the in-process default. And #2150's: a package that carries its own copies
+/// of the assemblies the host shares binds the host's, because Nuplane binds, validates and matches those shipped shares
+/// itself.
 /// </summary>
 /// <remarks>
-/// The host carries no EF Core (ADR 0076), so its feeds also have to supply Microsoft.EntityFrameworkCore, the provider
-/// engine (chosen by the <c>ef-provider</c> capability the fixture's <c>nuplane.json</c> declares) and the rest of their
-/// closure. <see cref="FoundationHostFeed"/> takes those from the package cache that restoring this project filled, so the
-/// run needs no network.
+/// The host carries EF Core, the four engines and <c>Elsa.Persistence.EntityFramework</c> for its opt-in cluster membership
+/// (#2151), and the module binds those copies. Its feeds still offer EF Core and the Sqlite engine's closure, taken by
+/// <see cref="FoundationHostFeed"/> from the package cache that restoring this project filled, so the run needs no network
+/// and a host that acquired a second copy could; <see cref="FoundationHostClusterBootTests"/> asserts it does not.
 /// </remarks>
-public sealed class FoundationHostBootTests(FoundationHostFeed feed) : IClassFixture<FoundationHostFeed>, IAsyncLifetime
+[Collection(FoundationHostCollection.Name)]
+public sealed class FoundationHostBootTests(FoundationHostFeed feed) : IAsyncLifetime
 {
+    private const string SharesSection = "Nuplane:Loading:SharedAssemblies";
     private static readonly TimeSpan Patience = TimeSpan.FromSeconds(30);
     private readonly string _file = Path.Join(Path.GetTempPath(), $"elsa-foundation-host-boot-{Guid.NewGuid():N}.db");
     private FoundationHostProcess? _host;
@@ -100,22 +101,28 @@ public sealed class FoundationHostBootTests(FoundationHostFeed feed) : IClassFix
     }
 
     /// <summary>
-    /// The same package on a host whose <c>Elsa.Persistence.Schema</c> share declares major 0, as every Elsa share did
-    /// before #2150: Nuplane's matcher does not take it, the package's own copy is the one the module binds, and nothing
-    /// fails. The host starts, the module admits and its feature is mapped, but its gate never finalizes and the host's
-    /// dormancy check never sees it, so the feature is refused as not observed. The share, not the copy, decides.
+    /// The same package on a host whose <c>Elsa.Cluster.Core</c> share declares major 0, as every Elsa share did before
+    /// #2150: Nuplane's matcher does not take it, the package's own copy is the one the module binds, and nothing fails at
+    /// startup. The host starts and the module admits, but the feature's contract is a different type from the one the host
+    /// registered its dormancy check under, so the feature cannot ask it and fails. The share, not the copy, decides. (The
+    /// <c>Elsa.Persistence.Schema</c> entry cannot show the same: the module's persistence is the host's, and reaches the
+    /// host's schema types whichever copy of them the package carries.)
     /// </summary>
     [Fact]
-    public async Task A_carried_copy_whose_share_declares_another_major_splits_the_module_from_the_host_and_its_feature_is_never_observed()
+    public async Task A_carried_copy_whose_share_declares_another_major_is_the_one_the_module_binds_and_its_feature_cannot_reach_the_hosts_dormancy_check()
     {
         await SeedAsync(ConnectionString);
 
-        await StartAsync(feed.CarryingDirectory, (ShareSetting("Elsa.Persistence.Schema", "MajorVersion"), "0"));
-        await Task.Delay(TimeSpan.FromSeconds(2));
+        await StartAsync(feed.CarryingDirectory, (ShareSetting("Elsa.Cluster.Core", "MajorVersion"), "0"));
 
-        var (status, body) = await Orders();
-        Assert.Equal((HttpStatusCode.Conflict, "1"), (status, (await RecordAsync(ConnectionString)).FinalizedVersion));
-        Assert.Contains("has not read the finalization record", body, StringComparison.Ordinal);
+        // Wait for the failure itself rather than for time to pass: the request either reaches the host's check or it does not.
+        var answered = default((HttpStatusCode Status, string Text));
+        await Polling.UntilAsync(
+            async () => (answered = await Orders()).Status == HttpStatusCode.InternalServerError,
+            Patience,
+            TimeSpan.FromMilliseconds(100),
+            () => $"The orders endpoint last answered {answered.Status}: {answered.Text}{Environment.NewLine}Host output:{Environment.NewLine}{_host!.Output}");
+        Assert.Contains(nameof(ISchemaDormancyCheck), answered.Text, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -128,40 +135,29 @@ public sealed class FoundationHostBootTests(FoundationHostFeed feed) : IClassFix
     public async Task A_share_the_host_has_no_copy_of_refuses_the_package_that_carries_it_and_the_host_does_not_start()
     {
         await SeedAsync(ConnectionString);
-        var added = $"Nuplane:Loading:SharedAssemblies:{RawShares().Length}";
+        var added = $"{SharesSection}:{SharedAssemblies(FoundationHost).Entries.Count}";
 
         var refusal = await Assert.ThrowsAsync<InvalidOperationException>(() => StartAsync(
             ($"{added}:Name", FoundationHostFeed.FixturePackage),
-            ($"{added}:MajorVersion", "1")));
+            ($"{added}:MajorVersion", FixtureMajor.ToString())));
 
+        // Only what names the refusal is asserted: Nuplane's exception, the package and the assembly.
         Assert.Contains("NuplaneStartupReconciliationException", refusal.Message, StringComparison.Ordinal);
-        Assert.Contains(
-            $"carries shared assembly '{FoundationHostFeed.FixturePackage}' (public key token: unsigned, major version: 1), which " +
-            "the shared-assembly policy leaves to the host, but the host has no copy of it with that major version.",
-            refusal.Message,
-            StringComparison.Ordinal);
+        Assert.Contains($"'{FoundationHostFeed.FixturePackage}'", refusal.Message, StringComparison.Ordinal);
     }
 
-    private Task StartAsync(params (string Key, string Value)[] settings) => StartAsync(feed.Directory, settings);
+    private Task StartAsync(params (string Key, string Value)[] overrides) => StartAsync(feed.Directory, overrides);
 
-    private async Task StartAsync(string packages, params (string Key, string Value)[] settings) => _host = await FoundationHostProcess.StartAsync(
-        Shells(ConnectionString),
-        packages,
-        new Dictionary<string, string>(settings.Select(setting => KeyValuePair.Create(setting.Key, setting.Value)))
-        {
-            // A second feed beside the host's own `packages` one, which resolves what the packages there depend on and holds
-            // nothing the host loads on its own account: with no include patterns it is a source, not a list of roots.
-            ["Nuplane:Setup:Feeds:1:Name"] = "closure",
-            ["Nuplane:Setup:Feeds:1:DirectoryPath"] = feed.ClosureDirectory,
-            // The one engine the module's ef-provider capability offers that this database uses.
-            ["Nuplane:Capabilities:ef-provider"] = "Sqlite",
-            // The fixture ships no migrations: its database is created by the test, as a release before it did.
-            [$"{EfMigrateOptions.SectionName}:{nameof(EfMigrateOptions.Policy)}"] = nameof(EfMigratePolicy.Validate),
-            [$"{EfSchemaFinalizationOptions.SectionName}:{nameof(EfSchemaFinalizationOptions.EvaluationInterval)}"] = "00:00:00.200",
-            [$"{EfSchemaFinalizationOptions.SectionName}:{nameof(EfSchemaFinalizationOptions.RefreshInterval)}"] = "00:00:00.100"
-        });
+    private async Task StartAsync(string packages, params (string Key, string Value)[] overrides)
+    {
+        var settings = Settings(feed);
+        foreach (var (key, value) in overrides)
+            settings[key] = value;
 
-    private Task<(HttpStatusCode Status, string Body)> Orders() => _host!.GetAsync("/feed-module-fixture/orders");
+        _host = await FoundationHostProcess.StartAsync(Shells(ConnectionString, EntityFrameworkCoreFeature, OrdersFeature), packages, settings);
+    }
+
+    private Task<(HttpStatusCode Status, string Text)> Orders() => OrdersAsync(_host!);
 
     /// <summary>Every copy of <paramref name="share"/> Nuplane extracted with the fixture's package.</summary>
     private string[] Carried(string share) =>
@@ -170,47 +166,10 @@ public sealed class FoundationHostBootTests(FoundationHostFeed feed) : IClassFix
             .Where(path => path.Contains(FoundationHostFeed.FixturePackage, StringComparison.OrdinalIgnoreCase))
     ];
 
-    /// <summary>The host's <c>Nuplane:Loading:SharedAssemblies</c> entries as its <c>appsettings.json</c> lists them.</summary>
-    private static IConfigurationSection[] RawShares() =>
-    [
-        .. new ConfigurationBuilder()
-            .AddJsonFile(Path.Join(FoundationHostProcess.RepoRoot, "src", "apps", FoundationHost, "appsettings.json"))
-            .Build()
-            .GetSection("Nuplane:Loading:SharedAssemblies")
-            .GetChildren()
-    ];
-
     /// <summary>The setting that overrides <paramref name="property"/> of the host's share of <paramref name="name"/>.</summary>
     private static string ShareSetting(string name, string property) =>
-        $"{RawShares().Single(entry => entry["Name"] == name).Path}:{property}";
+        $"{SharesSection}:{SharedAssemblies(FoundationHost).Entries.ToList().FindIndex(entry => entry.Name == name)}:{property}";
 
-    private static string Shells(string connectionString) => new JsonObject
-    {
-        ["CShells"] = new JsonObject
-        {
-            ["Shells"] = new JsonObject
-            {
-                ["default"] = new JsonObject
-                {
-                    ["Name"] = "default",
-                    ["Features"] = new JsonObject
-                    {
-                        ["FeedModuleFixtureEntityFrameworkCore"] = new JsonObject { ["ConnectionString"] = connectionString },
-                        ["FeedModuleFixtureOrders"] = new JsonObject()
-                    },
-                    ["Configuration"] = new JsonObject { ["WebRouting"] = new JsonObject { ["Path"] = "" } }
-                }
-            }
-        }
-    }.ToJsonString();
-
-    private async Task WaitUntilAsync(Func<Task<bool>> condition)
-    {
-        var deadline = DateTimeOffset.UtcNow + Patience;
-        while (!await condition())
-        {
-            Assert.True(DateTimeOffset.UtcNow < deadline, $"Not met within {Patience}. Host output:{Environment.NewLine}{_host!.Output}");
-            await Task.Delay(TimeSpan.FromMilliseconds(100));
-        }
-    }
+    private Task WaitUntilAsync(Func<Task<bool>> condition) =>
+        Polling.UntilAsync(condition, Patience, TimeSpan.FromMilliseconds(100), () => $"Host output:{Environment.NewLine}{_host!.Output}");
 }

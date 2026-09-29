@@ -41,10 +41,25 @@ internal sealed class NuplaneSharedAssemblyPolicy
         ]);
     }
 
+    /// <summary>
+    /// The policy of the host whose settings are <paramref name="appSettingsPaths"/>, each layered over the one before as the
+    /// host's own <c>appsettings.json</c> and its environment's <c>appsettings.{Environment}.json</c> are, bound from the
+    /// merged <c>Nuplane</c> section by <see cref="Bind"/>. The JSON provider is the host's, so the <c>//</c> comments
+    /// <c>Elsa.Foundation.Host</c> carries parse as they do at runtime.
+    /// </summary>
+    public static NuplaneSharedAssemblyPolicy FromHostAppSettings(params string[] appSettingsPaths)
+    {
+        var settings = new ConfigurationBuilder();
+        foreach (var path in appSettingsPaths)
+            settings.AddJsonFile(path);
+
+        return Bind(settings.Build().GetSection("Nuplane"));
+    }
+
     /// <summary>Whether Nuplane resolves a package's reference to <paramref name="requested"/> to the host's copy.</summary>
     public bool Shares(AssemblyName requested) => Matcher.IsMatch(requested, Entries);
 
-    /// <summary>This policy without the entries for <paramref name="names"/>, for the direction a missing share takes.</summary>
+    /// <summary>This policy without the entries for <paramref name="names"/>, withholding a share to prove the module then binds its own copy.</summary>
     public NuplaneSharedAssemblyPolicy Without(IEnumerable<string> names)
     {
         var withheld = names.ToHashSet(StringComparer.OrdinalIgnoreCase);

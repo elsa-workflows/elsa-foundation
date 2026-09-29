@@ -3,7 +3,7 @@ status: proposed
 date: 2026-08-07
 amended: 2026-09-29
 decision_context: FR-1 discussion on issue #1144, agreed by Joey Barten, Sipke Schoorstra and Frans van Ek
-amendment_context: 2026-09-22, patch derivation changed from commit height to last-published state after the rename hazard was measured; agreed on PR #1948 by Frans van Ek, Joey Barten and Sipke Schoorstra, the same three who agreed the original. 2026-09-24, Line A membership is defined by a rule rather than a heuristic, which settles the six undecided packages; proposed by Sipke Schoorstra and, on 2026-09-25, recorded by him as agreed on behalf of Frans van Ek and Joey Barten. 2026-09-24, the last-published record moves out of the generated dependency map into its own committed file that only publishing, or its audited repair workflow, writes, and on 2026-09-25 onto a dedicated publish-state branch so that writing it needs no bypass of main's protection; proposed by Sipke Schoorstra and, on 2026-09-25, recorded by him as agreed on behalf of Frans van Ek and Joey Barten. 2026-09-28, Line A sharing corrected: both hosts now share all ten (#2130, #2126); approved by Sipke Schoorstra. 2026-09-29, host-composed shares: every host also shares Elsa.Cluster.Core and Elsa.Persistence.Schema, kept on Line B by the rule; the sharing decided by Sipke Schoorstra on #2093 (2026-09-28), delivered by #2143. 2026-09-29, every Elsa assembly's AssemblyVersion is its line's major, so a host's shared-assembly entries can match; decided by Sipke Schoorstra on #2092 (2026-09-29), delivered by #2150 on Nuplane 0.0.11-preview.94.
+amendment_context: 2026-09-22, patch derivation changed from commit height to last-published state after the rename hazard was measured; agreed on PR #1948 by Frans van Ek, Joey Barten and Sipke Schoorstra, the same three who agreed the original. 2026-09-24, Line A membership is defined by a rule rather than a heuristic, which settles the six undecided packages; proposed by Sipke Schoorstra and, on 2026-09-25, recorded by him as agreed on behalf of Frans van Ek and Joey Barten. 2026-09-24, the last-published record moves out of the generated dependency map into its own committed file that only publishing, or its audited repair workflow, writes, and on 2026-09-25 onto a dedicated publish-state branch so that writing it needs no bypass of main's protection; proposed by Sipke Schoorstra and, on 2026-09-25, recorded by him as agreed on behalf of Frans van Ek and Joey Barten. 2026-09-28, Line A sharing corrected: both hosts now share all ten (#2130, #2126); approved by Sipke Schoorstra. 2026-09-29, host-composed shares: every host also shares Elsa.Cluster.Core and Elsa.Persistence.Schema, kept on Line B by the rule; the sharing decided by Sipke Schoorstra on #2093 (2026-09-28), delivered by #2143. 2026-09-29, every Elsa assembly's AssemblyVersion is its line's major, so a host's shared-assembly entries can match; decided by Sipke Schoorstra on #2092 (2026-09-29), delivered by #2150 on Nuplane 0.0.11-preview.94. 2026-09-29, Elsa.Foundation.Host additionally shares Elsa.Persistence.EntityFramework and EF Core, which it now carries for its EF cluster membership provider (ADR 0076, amended 2026-09-29); decided by Sipke Schoorstra on #2093, delivered by #2151.
 ---
 
 # Package versioning uses two version lines with a computed patch digit
@@ -99,6 +99,16 @@ own container something packages must reach by type. Sharing them on every host 
 share or as an addition to Line A; keeping them off Line A is this rule's answer. Delivered by
 [#2143](https://github.com/elsa-workflows/elsa-foundation/issues/2143).
 
+*Amended 2026-09-29 ([#2151](https://github.com/elsa-workflows/elsa-foundation/issues/2151)).* `Elsa.Foundation.Host`
+also shares `Elsa.Persistence.EntityFramework` and EF Core's `Microsoft.EntityFrameworkCore`, `.Abstractions` and
+`.Relational`, because it now carries them for its EF cluster membership provider
+([ADR 0076](0076-persistence-tooling-runs-inside-the-host-closure.md), amended 2026-09-29). They are not host-composed
+shares by the rule above, since no package reaches membership through them; they are shared because, once a host
+carries `Elsa.Persistence.EntityFramework`, its copy must be the only one its modules bind, or `dotnet elsa persistence`,
+which runs through the host's copy, cannot see them. So on that host an EF module binds the host's copy whenever the major
+matches, and one built against another major is refused when it loads. `Elsa.Workbench` carries
+the assembly but does not share it, and keeps the shape the paragraph above describes.
+
 **Line B, everything else.** All features and all domain `.Core` packages share `major.minor` across
 the repository, with the patch digit per package. A domain's `.Core` ships with its domain, because a
 domain is a delivery unit.
@@ -142,8 +152,10 @@ rather than assumed.
 **An assembly version carries only its line's major.** *Amended 2026-09-29.* Every Elsa assembly's
 `AssemblyVersion` is `<line major>.0.0.0`, today `4.0.0.0` on both lines, in a source build and a build
 with computed versions alike. `FileVersion` and `InformationalVersion` keep the full version, so a file
-still says which build it came from, and every activity version derived from the informational version
-is unchanged. A host shares an assembly with the packages it loads through a Nuplane
+still says which build it came from, and every version derived from the informational version is
+unchanged. One reads the assembly version instead: the `ActivitySource` version that
+`ActivitySourceWorkflowEngineTracer` reports now reads `4.0.0.0` in a source build, where it read `1.0.0.0`
+(a computed build read `4.0.N.0`), so a trace consumer that keys on that version sees the line major. A host shares an assembly with the packages it loads through a Nuplane
 `Loading:SharedAssemblies` entry, and Nuplane's matcher takes an entry only when its `MajorVersion`
 equals the referenced assembly version's major. While assembly versions followed the package version,
 `1.0.0.0` from source and `4.0.N.0` when computed, and every Elsa entry declared `0`, no Elsa entry

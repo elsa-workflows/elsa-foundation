@@ -9,8 +9,9 @@
 # reference for shared endpoint metadata, plus Line A, the ten cross-cutting
 # contract projects every host shares with every feature (ADR 0067, #2126), plus
 # the cluster membership it composes on its own container, whose contracts
-# (Elsa.Cluster.Core, Elsa.Persistence.Schema) it shares too (#2143) — none of
-# which brings a feature implementation or EF Core into this host — so its
+# (Elsa.Cluster.Core, Elsa.Persistence.Schema) it shares too (#2143), and the
+# opt-in EF membership provider with EF Core and the four engines (#2151) —
+# none of which brings a feature implementation into this host — so its
 # project and their sources must also be present in the Docker build context.
 # Example:
 #
@@ -34,7 +35,8 @@ WORKDIR /src
 # ignores a missing import -- see the same step in the Workbench Dockerfile.
 COPY *.props *.targets NuGet.config ./
 
-# Restore inputs: the host, its shared endpoint-metadata project, Line A, its cluster membership, and the computed-production-settings
+# Restore inputs: the host, its shared endpoint-metadata project, Line A, its cluster membership, the EF closure that membership's
+# durable provider carries (Elsa.Persistence.EntityFramework plus the EF Core packages, #2151), and the computed-production-settings
 # swap Elsa.Foundation.Host.csproj imports from src/apps/ (shared with Elsa.Workbench.csproj, #2126) -- MSBuild
 # treats a missing <Import> as an error, not a no-op the way it does for the root files above, so this one has
 # to be copied before restore too, or restore fails outright with MSB4019 rather than silently.
@@ -48,12 +50,14 @@ COPY src/essentials/Api/AspNetCore/Elsa.Api.AspNetCore.csproj src/essentials/Api
 COPY src/essentials/Attention/Core/Elsa.Attention.Core.csproj src/essentials/Attention/Core/packages.lock.json src/essentials/Attention/Core/
 COPY src/essentials/Caching/Core/Elsa.Caching.Core.csproj src/essentials/Caching/Core/packages.lock.json src/essentials/Caching/Core/
 COPY src/essentials/Cluster/Core/Elsa.Cluster.Core.csproj src/essentials/Cluster/Core/packages.lock.json src/essentials/Cluster/Core/
+COPY src/essentials/Cluster/EntityFrameworkCore/Elsa.Cluster.EntityFrameworkCore.csproj src/essentials/Cluster/EntityFrameworkCore/packages.lock.json src/essentials/Cluster/EntityFrameworkCore/
 COPY src/essentials/Cluster/InProcess/Elsa.Cluster.InProcess.csproj src/essentials/Cluster/InProcess/packages.lock.json src/essentials/Cluster/InProcess/
 COPY src/essentials/Cluster/Readability/Elsa.Cluster.Readability.csproj src/essentials/Cluster/Readability/packages.lock.json src/essentials/Cluster/Readability/
 COPY src/essentials/Events/Core/Elsa.Events.Core.csproj src/essentials/Events/Core/packages.lock.json src/essentials/Events/Core/
 COPY src/essentials/Expressions/Core/Elsa.Expressions.Core.csproj src/essentials/Expressions/Core/packages.lock.json src/essentials/Expressions/Core/
 COPY src/essentials/Locking/Core/Elsa.Locking.Core.csproj src/essentials/Locking/Core/packages.lock.json src/essentials/Locking/Core/
 COPY src/essentials/Mediator/Core/Elsa.Mediator.Core.csproj src/essentials/Mediator/Core/packages.lock.json src/essentials/Mediator/Core/
+COPY src/essentials/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj src/essentials/Persistence/EntityFramework/packages.lock.json src/essentials/Persistence/EntityFramework/
 COPY src/essentials/Persistence/Schema/Elsa.Persistence.Schema.csproj src/essentials/Persistence/Schema/packages.lock.json src/essentials/Persistence/Schema/
 COPY src/essentials/Pipelines/Core/Elsa.Pipelines.Core.csproj src/essentials/Pipelines/Core/packages.lock.json src/essentials/Pipelines/Core/
 COPY src/essentials/Primitives/Primitives/Elsa.Primitives.csproj src/essentials/Primitives/Primitives/packages.lock.json src/essentials/Primitives/Primitives/
@@ -71,12 +75,14 @@ COPY src/essentials/Api/AspNetCore/ src/essentials/Api/AspNetCore/
 COPY src/essentials/Attention/Core/ src/essentials/Attention/Core/
 COPY src/essentials/Caching/Core/ src/essentials/Caching/Core/
 COPY src/essentials/Cluster/Core/ src/essentials/Cluster/Core/
+COPY src/essentials/Cluster/EntityFrameworkCore/ src/essentials/Cluster/EntityFrameworkCore/
 COPY src/essentials/Cluster/InProcess/ src/essentials/Cluster/InProcess/
 COPY src/essentials/Cluster/Readability/ src/essentials/Cluster/Readability/
 COPY src/essentials/Events/Core/ src/essentials/Events/Core/
 COPY src/essentials/Expressions/Core/ src/essentials/Expressions/Core/
 COPY src/essentials/Locking/Core/ src/essentials/Locking/Core/
 COPY src/essentials/Mediator/Core/ src/essentials/Mediator/Core/
+COPY src/essentials/Persistence/EntityFramework/ src/essentials/Persistence/EntityFramework/
 COPY src/essentials/Persistence/Schema/ src/essentials/Persistence/Schema/
 COPY src/essentials/Pipelines/Core/ src/essentials/Pipelines/Core/
 COPY src/essentials/Primitives/Primitives/ src/essentials/Primitives/Primitives/
@@ -90,7 +96,7 @@ COPY src/essentials/Tasks/Core/ src/essentials/Tasks/Core/
 # which gives every Elsa assembly, and every Elsa package in the deps.json, the version
 # the feed carries, and makes Elsa.Foundation.Host.csproj ship
 # ComputedVersions/appsettings.Production.json, which declares the Line A shares
-# and the host-composed ones host-provided. The restore has to see it too: deps.json takes a project reference's
+# and the host-composed ones (the cluster contracts, Elsa.Persistence.EntityFramework and the EF Core packages) host-provided. The restore has to see it too: deps.json takes a project reference's
 # version from the restore, not the build, so a publish alone would stamp the assemblies
 # and still record the dev versions. The restore above stays free of it and keeps its
 # cache; this one only rewrites the assets file from the packages that stage downloaded.

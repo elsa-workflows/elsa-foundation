@@ -51,14 +51,10 @@ internal sealed class FeedLoadedModuleHost : IAsyncDisposable
     /// <summary>A scope of the activated shell.</summary>
     public IServiceProvider Shell => _scope.ServiceProvider;
 
-    /// <summary>
-    /// The fixture's family. The fixture's names are restated here because the fixture is never loaded where this code
-    /// runs; <see cref="StartAsync"/> refuses a fixture whose own constants say otherwise.
-    /// </summary>
-    public const string Family = "FeedModuleFixtureOrders";
+    /// <summary>The fixture's family, and its migrations-history name, restated by <see cref="FeedModuleDatabase"/>.</summary>
+    public const string Family = FeedModuleDatabase.Family;
 
-    /// <summary>The module's migrations-history name, which names its finalization tables.</summary>
-    public const string HistoryModule = "ElsaFeedModuleFixture";
+    public const string HistoryModule = FeedModuleDatabase.HistoryModule;
 
     /// <summary>The EF module, as its <c>[EfModule]</c> names it.</summary>
     public const string ModuleName = "FeedModuleFixture";
@@ -74,7 +70,7 @@ internal sealed class FeedLoadedModuleHost : IAsyncDisposable
         Action<IServiceCollection>? composeMembership = null,
         params string[] withheld)
     {
-        var package = new PackageLoadContext(SharedAssemblies(host).Without(withheld), hostCarriesEntityFramework: host != FoundationHost);
+        var package = new PackageLoadContext(SharedAssemblies(host).Without(withheld));
         var module = package.LoadFromAssemblyPath(FixturePath);
         foreach (var (name, expected) in new[] { ("Family", Family), ("HistoryModuleName", HistoryModule), ("Name", ModuleName) })
         {
@@ -137,30 +133,14 @@ internal sealed class FeedLoadedModuleHost : IAsyncDisposable
         SqliteConnection.ClearAllPools();
     }
 
-    /// <summary>Creates the module's finalization tables and the record a release at version 1 created, optionally held.</summary>
-    public static async Task SeedAsync(string connectionString, string? hold = null)
-    {
-        await using var context = SeedContext.Create(connectionString);
-        await context.Database.EnsureCreatedAsync();
-        var store = new EfSchemaFinalizationStore(context);
-        var created = await store.GetOrCreateAsync(Family, "1", Chain, SchemaFinalizationActor.OfOperator("release-1"));
-        if (hold is not null && !(await store.PlaceHoldAsync(Family, created.Revision, null, hold, "ops@example", Chain)).Applied)
-            throw new InvalidOperationException("The hold was not placed: the record changed under the seed.");
-    }
+    /// <summary>The fixture's database on SQLite.</summary>
+    private static FeedModuleDatabase Sqlite(string connectionString) => new((builder, cs) => builder.UseSqlite(cs), connectionString);
 
-    public static async Task ReleaseHoldAsync(string connectionString)
-    {
-        await using var context = SeedContext.Create(connectionString);
-        var store = new EfSchemaFinalizationStore(context);
-        if (!(await store.ReleaseHoldAsync(Family, (await store.FindAsync(Family))!.Revision, null, "ops@example")).Applied)
-            throw new InvalidOperationException("The hold was not released: the record changed under the release.");
-    }
+    public static Task SeedAsync(string connectionString, string? hold = null) => Sqlite(connectionString).SeedAsync(hold);
 
-    public static async Task<SchemaFinalizationRecord> RecordAsync(string connectionString)
-    {
-        await using var context = SeedContext.Create(connectionString);
-        return (await new EfSchemaFinalizationStore(context).FindAsync(Family))!;
-    }
+    public static Task ReleaseHoldAsync(string connectionString) => Sqlite(connectionString).ReleaseHoldAsync();
+
+    public static Task<SchemaFinalizationRecord> RecordAsync(string connectionString) => Sqlite(connectionString).RecordAsync();
 
     /// <summary>Deletes a SQLite database file and the journal, WAL and shared-memory files beside it.</summary>
     public static void DeleteDatabaseFiles(string file)
@@ -169,7 +149,10 @@ internal sealed class FeedLoadedModuleHost : IAsyncDisposable
             File.Delete(path);
     }
 
-    public static readonly string[] Chain = ["1", "2"];
+    public static readonly string[] Chain = FeedModuleDatabase.Chain;
+
+    /// <summary>The major of the fixture's own assembly, which no host carries, so a share for it names what a package's own copy is.</summary>
+    public static int FixtureMajor => AssemblyName.GetAssemblyName(FixturePath).Version!.Major;
 
     private static string FixturePath => Path.Join(AppContext.BaseDirectory, "feed-module", "Elsa.Cluster.Fixtures.FeedModule.dll");
 
@@ -178,27 +161,14 @@ internal sealed class FeedLoadedModuleHost : IAsyncDisposable
 
     /// <summary>The host's <c>Nuplane:Loading:SharedAssemblies</c>, from its <c>appsettings.json</c>, as Nuplane binds and validates them.</summary>
     public static NuplaneSharedAssemblyPolicy SharedAssemblies(string host) =>
-        NuplaneSharedAssemblyPolicy.Bind(new ConfigurationBuilder()
-            .AddJsonFile(Path.Join(FoundationHostProcess.RepoRoot, "src", "apps", host, "appsettings.json"))
-            .Build()
-            .GetSection("Nuplane"));
-
-    /// <summary>The fixture module's finalization tables, mapped from the test's side to seed and read them.</summary>
-    private sealed class SeedContext(DbContextOptions<SeedContext> options) : DbContext(options)
-    {
-        public static SeedContext Create(string connectionString) =>
-            new(new DbContextOptionsBuilder<SeedContext>().UseSqlite(connectionString).Options);
-
-        protected override void OnModelCreating(ModelBuilder modelBuilder) =>
-            modelBuilder.MapSchemaFinalization(HistoryModule).IndexSchemaVersionStamps();
-    }
+        NuplaneSharedAssemblyPolicy.FromHostAppSettings(Path.Join(FoundationHostProcess.RepoRoot, "src", "apps", host, "appsettings.json"));
 }
 
 /// <summary>
 /// A load context of the kind Nuplane gives an EF module package, which declares itself host-integrated in its
 /// <c>nuplane.json</c>, as the fixture's does: an assembly the host shares resolves to the host's copy; every other Elsa assembly
-/// the package needs is a private copy of its own, loaded from the package's files, and so is EF Core when the host
-/// carries none, as <c>Elsa.Foundation.Host</c> does not (ADR 0076). The package's assemblies are made visible to the
+/// the package needs is a private copy of its own, loaded from the package's files. EF Core is the host's: both hosts carry
+/// it, <c>Elsa.Foundation.Host</c> for its cluster membership since #2151. The package's assemblies are made visible to the
 /// host's own context through its <c>Resolving</c> event, as Nuplane's host-integrated resolver does, so EF Core loaded by
 /// the host finds the module's migrations assembly. Anything else, the framework and CShells, is the test process's.
 /// </summary>
@@ -212,13 +182,11 @@ internal sealed class PackageLoadContext : AssemblyLoadContext, IDisposable
 {
     private static readonly string[] Directories = [Path.Join(AppContext.BaseDirectory, "feed-module"), AppContext.BaseDirectory];
     private readonly NuplaneSharedAssemblyPolicy _shared;
-    private readonly string[] _private;
 
-    public PackageLoadContext(NuplaneSharedAssemblyPolicy shared, bool hostCarriesEntityFramework = true)
+    public PackageLoadContext(NuplaneSharedAssemblyPolicy shared)
         : base($"feed-module-package-{Guid.NewGuid():N}", isCollectible: false)
     {
         _shared = shared;
-        _private = hostCarriesEntityFramework ? ["Elsa."] : ["Elsa.", "Microsoft.EntityFrameworkCore"];
         Default.Resolving += ResolveForHost;
     }
 
@@ -230,7 +198,7 @@ internal sealed class PackageLoadContext : AssemblyLoadContext, IDisposable
             return null;
         if (_shared.Shares(assemblyName))
             return Default.LoadFromAssemblyName(assemblyName);
-        if (!_private.Any(prefix => name.StartsWith(prefix, StringComparison.Ordinal)))
+        if (!name.StartsWith("Elsa.", StringComparison.Ordinal))
             return null;
         return Directories.Select(directory => Path.Join(directory, name + ".dll")).FirstOrDefault(File.Exists) is { } path
             ? LoadFromAssemblyPath(path)
