@@ -536,17 +536,24 @@ rather than a record of its own.
 that the migrator seeds first; built by [#2136](https://github.com/elsa-workflows/elsa-foundation/issues/2136) with
 [spec 185](../185-expand-only-migration-guard/spec.md)'s FR-024 (its 2026-09-29 note, "The migrator seeds first").
 
-- **The migrator and the persistence tool create finalization records in exactly one case.** On a database where no
-  family of the module has a record yet, `EfDatabaseMigrator` under `AutoMigrate`, and so `EfModuleMigrator` at
-  Prepare and `dotnet elsa persistence apply`, creates the record of each family a pending contracting migration names
-  before any contracting migration runs, at the version that migration's opt-out names (the latest, where several
-  name one family), through the store's
-  get-or-create (FR-001), and the database identity with the first. It creates no other record, and none under
-  `Validate`. A record that already exists, because a gate created it first, is kept as it is, and the contracting
-  migration is refused if it is below the version.
+- **The migrator and the persistence tool create finalization records in exactly one case.** On a database where the
+  module has not been admitted yet (the last bullet), `EfDatabaseMigrator` under `AutoMigrate`, and so
+  `EfModuleMigrator` at Prepare and `dotnet elsa persistence apply`, creates the record of each family a pending
+  contracting migration names before any contracting migration runs, at the version that migration's opt-out names
+  (the latest, where several name one family), through the store's get-or-create (FR-001), and the database identity
+  with the first. It creates no other record, and none under `Validate`. A record that already exists, because a gate
+  created it first or the migrator's own seed was cut short, is kept as it is, and the contracting migration is
+  refused if it is below the version.
 - **Its creator is recorded like a member.** The created entry of the history and of the finish record names the
   member `migrator:<host id>` in the host's incarnation, where the host composes a fleet, or `migrator:<machine name>`
   in a per-process incarnation, where it does not or the persistence tool applies.
 - **The module counts as admitted once a family's record exists**, not once its database identity does: a gate and a
   seed both create the identity first, so an identity with no record is an admission or a seed cut short before its
-  first record, and nothing has read the module's rows.
+  first record, and nothing has read the module's rows. *Amended the same day* (the owner's review of #2149): nor while
+  every record is the migrator's own seed of the pending batch, cut short between two families or before the
+  contraction, which the next apply completes. Such a record was created by a `migrator:*` member, has not changed
+  since (revision 1), belongs to a family a pending contracting migration names, and stands at the version that seed
+  creates it at. A record that fails any of these admits the module, and a family with no record is then refused: a
+  member's or an operator's record, one changed since, and one the migrator created for a contraction that has run,
+  since a gate that admits a module whose families all have a record creates none and leaves no trace (spec 185,
+  2026-09-29 note).

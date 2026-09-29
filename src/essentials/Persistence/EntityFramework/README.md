@@ -456,9 +456,13 @@ and in `apply`, `EfDatabaseMigrator` applies the pending migrations before the f
 contracted family's record at the version its contraction names, as `migrator:<host id>` (the host's member in the
 fleet) or `migrator:<machine name>`, reads the records again, and only then applies the contracting migrations and
 the rest. A release that reads only earlier versions is then refused (`EfSchemaActivationRefusedException`) whether it
-starts after the apply, during it, or after a process that applied it ended between the seed and the contraction; if
-its gate created a record below the version first, the contraction is refused instead, with the migrations before it
-applied and named in the refusal. Once the module has been admitted, a family with no record is refused.
+starts after the apply, during it, or after a process that applied it ended part-way through; if its gate created a
+record below the version first, the contraction is refused instead, with the migrations before it applied and named in
+the refusal. A process that ends between two families' records, or between the seed and the contraction, leaves only
+the migrator's own records, and the next apply completes that seed. Any other record admits the module, and a family
+with no record is then refused: one a member or an operator created, one changed since it was created, and one the
+migrator created for a contraction that has already run, since a gate that admits a module whose families all have a
+record leaves no trace of it.
 
 SQL run outside Elsa, such as `script`'s, creates no record. For it the first gate to admit the module creates the
 family's record no lower than the version an applied contraction names, and a host whose chain does not read that

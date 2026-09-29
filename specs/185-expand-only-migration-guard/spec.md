@@ -85,8 +85,8 @@ first contracting one, creates the family's record at that version, as `migrator
 record again, refuses as on an admitted database if a racing release's gate created it below that version first, and
 only then applies the contraction. A finalized version only moves forward, and a host that cannot read it is refused
 (spec 181, FR-015), so no host that reads only earlier versions is admitted once the contraction has run: whether it
-starts after the apply, during it, or races it, and whether or not the process applying it ended between the seed and
-the contraction.
+starts after the apply, during it, or races it, and whether or not the process applying it ended part-way through the
+seed or between the seed and the contraction.
 
 One case is left: SQL run outside Elsa, such as the script `dotnet elsa persistence script` writes for a DBA, creates
 no record. There the first gate to admit the module creates the family's record no lower than the version an applied
@@ -521,7 +521,8 @@ approval.
   (below). Once the module has been admitted, a family with no record is refused, the loud direction, as is a
   finalized version the build's chain does not place. *Amended by the seed below:* the module counts as admitted once a
   family's record exists, rather than once its database identity does, since a gate or a seed creates the identity
-  first; an identity with no record is an admission or a seed cut short, and the next apply seeds again.
+  first; an identity with no record is an admission or a seed cut short, and the next apply seeds again. Nor does it
+  count as admitted while every record is the migrator's own seed of the pending batch, cut short (below).
 - **The refusal is a pending batch that may not run yet.** It derives from `EfPendingMigrationsException`, so every
   caller that reports pending migrations as a negative result still does. `dotnet elsa persistence apply` reports it
   as a refusal (exit 2, `contracting-migration-refused`), `validate` as pending (exit 1).
@@ -562,10 +563,29 @@ approval.
     unplaceable version is never seeded.
   - `Validate` applies nothing, so it seeds nothing: the record is created where the contraction is applied, by
     `apply` or a host under `AutoMigrate`.
-  - A process that ends between the seed and the contraction leaves the record without the contraction; the next apply
-    finds the module admitted, the record at the version, and completes. One that ends between two families' seeds
-    leaves the module admitted with the second family's record missing, and the next apply refuses that family for
-    want of a record, loudly, until an operator removes the records and identity only the migrator wrote.
+  - A process that ends between two families' seeds, or between the seed and the contraction, leaves only records the
+    migrator's own seed created, and the next apply completes that seed: it creates the missing families' records,
+    keeps the existing ones as they are, re-checks, and applies the contraction. The module does not count as admitted
+    while every record is the migrator's own seed of the pending batch: created by a `migrator:*` member (the created
+    entry of its history), unchanged since (revision 1), of a family a pending contracting migration names that the
+    build places, and at the version this seed creates it at. Any other record counts as an admission, and a family with
+    no record is then refused, loudly, as before: one a member created, because a gate admitted the module; one an
+    operator created, or changed since in any way, such as a hold placed and released; and one the migrator created for
+    a contraction that has already run. The owner's review of #2149 (2026-09-29) set the rule that a migrator-created
+    record does not admit the module and a member-created one does; the last three conditions were found while
+    building it, and each only ever chooses refusal. The migrator's authorship alone does not show that no gate has
+    admitted the module: a gate that admits a module whose declared families all have a record creates none and leaves
+    no other trace, so once a seed's contraction has run, a record the migrator created no longer tells an unadmitted
+    database from one a release is serving. Seeding a family missing there could contract it under that release.
+  - **An EF Core 10 behaviour on SQLite, upstream and not Elsa's.** EF takes its migration lock on SQLite by inserting
+    a row into a `__EFMigrationsLock` table, one per database file and shared by every module in it, and deletes the row
+    when it releases the lock. A hard process crash while EF holds the lock, such as a kill or a power loss rather than
+    an exception, leaves the row behind, and every later apply against that file waits on it, retrying without end,
+    until the row is removed. SQL Server, PostgreSQL and MySQL take session-scoped locks that end with the connection.
+    The seed-first path takes the lock twice in one apply where migrations come before the first contracting one, once
+    for those and once for the contraction and the rest, so it has two such windows where a plain apply has one. After
+    such a crash an operator makes sure no process is applying migrations to that file, deletes the row
+    (`DELETE FROM "__EFMigrationsLock";`), and runs the apply again, which completes whatever the crashed apply left.
 - **Not covered, and why.** `dotnet elsa persistence script` produces SQL a DBA runs outside Elsa, so nothing checks
   or creates the finalization record when that SQL runs; FR-024 names `apply` and the migrator only. The gate's
   starting version is the second line there, as the Invariant's qualification states.
