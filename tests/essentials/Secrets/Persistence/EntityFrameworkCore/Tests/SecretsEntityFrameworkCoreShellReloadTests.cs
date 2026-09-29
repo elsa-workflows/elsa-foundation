@@ -132,7 +132,7 @@ public sealed class SecretsEntityFrameworkCoreShellReloadTests
                 var registry = validatingHost.Services.GetRequiredService<IShellRegistry>();
                 var exception = await Assert.ThrowsAnyAsync<Exception>(() => registry.GetOrActivateAsync(ShellName));
                 var message = Flatten(exception);
-                Assert.Contains(nameof(SecretsSqliteDbContext), message, StringComparison.Ordinal);
+                Assert.Contains($"EF module '{PersistenceCliProcessRunner.Module}'", message, StringComparison.Ordinal);
                 Assert.Contains(WidenLookupKeys, message, StringComparison.Ordinal);
             }
 
