@@ -23,7 +23,7 @@ internal static class ElsaCli
             OpensDatabase(WorkerCommands.PostMigrate, "Run each selected module's required post-migration actions against a database. The only command that runs one."),
             Finalization(WorkerCommands.Hold, "Hold a schema family's finalization, optionally at one version and every later one, with a reason. Refused once that version is finalized: the rollback boundary has been crossed."),
             Finalization(WorkerCommands.Release, "Release a hold on a schema family's finalization."),
-            Finalization(WorkerCommands.Status, "Report each selected schema family's finalized version, the versions still pending and why, any intent in flight, and its holds.")
+            Finalization(WorkerCommands.Status, "Report each selected schema family's finalized version, the versions still pending and why (a hold, or each cluster member that cannot read the version yet, with the versions it reads), any intent in flight, and its holds. Also lists the cluster members in the database's membership table: host id, status, liveness, last heartbeat and the versions each reads, judged with --skew-allowance.")
         };
 
         var composition = new Command("composition", "Inspect and review feature selections.")
@@ -152,11 +152,17 @@ internal static class ElsaCli
         var version = new Option<string?>("--version") { Description = "Hold or release only this version, and every later one. Default: the whole family." };
         var reason = new Option<string?>("--reason") { Description = "Why the hold is placed; the history records it.", Required = name == WorkerCommands.Hold };
         var @operator = new Option<string?>("--operator") { Description = "The operator identity the history records.", Required = changesHolds };
+        var skewAllowance = new Option<string?>("--skew-allowance")
+        {
+            Description = "The skew allowance the cluster members' liveness is judged with, as a time span such as 00:00:02. " +
+                          $"Default: the host's '{HostMembershipSettings.SkewAllowanceKey}' in its appsettings for --environment, else 00:00:05. " +
+                          "A host configured through its process environment (for example --fast-membership) is not visible here; name its value."
+        };
         Option[] extra = name switch
         {
             WorkerCommands.Hold => [provider, schema, connectionEnv, connectionStdin, family, version, reason, @operator],
             WorkerCommands.Release => [provider, schema, connectionEnv, connectionStdin, family, version, @operator],
-            _ => [provider, schema, connectionEnv, connectionStdin, family]
+            _ => [provider, schema, connectionEnv, connectionStdin, family, skewAllowance]
         };
         var command = selectors.Build(name, description, extra);
 
@@ -172,6 +178,7 @@ internal static class ElsaCli
                 Schema = Schema(result, schema),
                 ConnectionEnv = connection.Env,
                 Connection = connection.Value,
+                SkewAllowance = changesHolds ? null : SkewAllowance(result.GetValue(skewAllowance), layout, resolved.Environment!),
                 Finalization = changesHolds || result.GetValue(family) is not null
                     ? new WorkerFinalization
                     {
@@ -187,6 +194,15 @@ internal static class ElsaCli
 
         return command;
     }
+
+    /// <summary>
+    /// The skew allowance <c>status</c> judges liveness with: the flag, else the host's own configured one, else none, which
+    /// leaves the membership provider's default. Always stated in the report, so the reader sees what was used.
+    /// </summary>
+    private static TimeSpan? SkewAllowance(string? named, HostLayout layout, string environment) =>
+        named is not null
+            ? HostMembershipSettings.Parse(named, "--skew-allowance")
+            : HostMembershipSettings.SkewAllowance(layout.Directory, environment);
 
     private static Command ScriptCheckCommand()
     {

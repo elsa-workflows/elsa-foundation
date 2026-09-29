@@ -220,12 +220,11 @@ public sealed class SharedAssemblyMajorVersionGuardTests
         var folders = assets.RootElement.GetProperty("packageFolders").EnumerateObject().Select(folder => folder.Name).ToArray();
         var libraries = assets.RootElement.GetProperty("libraries");
         var carried = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
-        foreach (var library in assets.RootElement.GetProperty("targets").EnumerateObject().Single().Value.EnumerateObject())
+        var withRuntime = assets.RootElement.GetProperty("targets").EnumerateObject().Single().Value.EnumerateObject()
+            .Where(library => library.Value.TryGetProperty("runtime", out _));
+        foreach (var library in withRuntime)
         {
-            if (!library.Value.TryGetProperty("runtime", out var runtime))
-                continue;
-
-            foreach (var assembly in runtime.EnumerateObject().Where(assembly => assembly.Name.EndsWith(".dll", StringComparison.OrdinalIgnoreCase)))
+            foreach (var assembly in library.Value.GetProperty("runtime").EnumerateObject().Where(assembly => assembly.Name.EndsWith(".dll", StringComparison.OrdinalIgnoreCase)))
             {
                 var isProject = library.Value.GetProperty("type").GetString() == "project";
                 var relative = Path.Join(libraries.GetProperty(library.Name).GetProperty("path").GetString()!, assembly.Name);
@@ -249,11 +248,11 @@ public sealed class SharedAssemblyMajorVersionGuardTests
         string.Concat(unmatched.Select(line => $"{Environment.NewLine}  {line}"));
 
     /// <summary><paramref name="entries"/>, a JSON array, as a host's <c>Nuplane:Loading:SharedAssemblies</c>, bound by Nuplane.</summary>
-    private static NuplaneSharedAssemblyPolicy Policy(string entries) =>
-        NuplaneSharedAssemblyPolicy.Bind(new ConfigurationBuilder()
-            .AddJsonStream(new MemoryStream(Encoding.UTF8.GetBytes($$"""{ "Nuplane": { "Loading": { "SharedAssemblies": {{entries}} } } }""")))
-            .Build()
-            .GetSection("Nuplane"));
+    private static NuplaneSharedAssemblyPolicy Policy(string entries)
+    {
+        using var json = new MemoryStream(Encoding.UTF8.GetBytes($$"""{ "Nuplane": { "Loading": { "SharedAssemblies": {{entries}} } } }"""));
+        return NuplaneSharedAssemblyPolicy.Bind(new ConfigurationBuilder().AddJsonStream(json).Build().GetSection("Nuplane"));
+    }
 
     /// <summary>A reference to an unsigned assembly, as a package compiled against it records it.</summary>
     private static AssemblyName Reference(string name, Version version)

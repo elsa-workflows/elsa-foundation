@@ -588,3 +588,30 @@ that the migrator seeds first; built by [#2136](https://github.com/elsa-workflow
   member's or an operator's record, one changed since, and one the migrator created for a contraction that has run,
   since a gate that admits a module whose families all have a record creates none and leaves no trace (spec 185,
   2026-09-29 note).
+
+**2026-09-29 note.** Recorded while preparing the two-host demo: the CLI's `status` printed a pending version as "held by
+nothing; waits for every counted member to read it" and never named the members, on the reading that the counted members
+are known only to a running host. FR-022 says the gate names them and that the CLI prints it, so the CLI now does.
+
+- **`persistence status` names the counted members that cannot read each pending version**, as host id and the versions it
+  reads of the family, and lists the members of the membership table in the database it is pointed at: host id, status,
+  whether it is counted, last heartbeat and the versions each reads. It reads the table through the host's own EF closure
+  (the `Cluster.Membership` module, found beside the module by `IEfToolingFleetSource`), on the connection the command
+  carries, so this package still knows nothing of membership. Who blocks a version is the same counting query the gate asks
+  (`ReadsSchemaVersion`, MR-007), so the tool and the gate cannot disagree.
+- **Two interpretations.** The tool judges liveness on its own clock, with the skew allowance it is given (`--skew-allowance`),
+  else the host's `Elsa:Cluster:Membership:SkewAllowance` from its `appsettings.json` and `--environment` overlay, else the
+  provider's 5 s default, and prints the one it used; a host configured through its process environment (or started with
+  `--fast-membership`) is not visible to it, and the tool may then count a member the hosts already count expired, by that
+  difference, until the flag names the host's value. And the table is read from the database the command reaches, where
+  membership normally lives (`docs/foundation-host-feeds.md`, "The shared database"); a membership kept in another database is
+  not read, and the tool says so as a cluster of one when the table is not there.
+- **The tool says only what it computed.** A pending version no counted member blocks reads "no member counted here blocks it",
+  not that it finalizes at the next evaluation; a host with no membership provider in its closure is "this host only" only by an
+  explicit marker on the tooling's answer, and an answer with no cluster at all is "not reported by this host's tooling". Each
+  member is judged by the same judgement the provider's own fleet view uses (`StoredMember.ToFleetMember`) and blocks a version by
+  the same counting query (`ReadsSchemaVersion`), a parity `EfClusterMembershipToolingSourceTests` holds member by member. The
+  tooling contract stays version 1: these are optional fields on `status`, and `skewAllowance` is sent only to a host whose
+  tooling declares it (`EfToolingContract` remarks).
+- **What stays unknown to the tool** is a running host's memory: how far a backfill has got, and the observation a host last
+  made. Both remain with the gate's in-process status, which spec 182 carries to the feature catalog and Attention.

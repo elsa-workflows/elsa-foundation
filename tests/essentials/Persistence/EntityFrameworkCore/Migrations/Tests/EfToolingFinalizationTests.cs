@@ -1,5 +1,8 @@
+using System.Reflection;
 using System.Text;
 using System.Text.Json;
+using Elsa.Cluster.EntityFrameworkCore;
+using Elsa.Persistence.EntityFramework;
 using Elsa.Persistence.EntityFramework.SchemaFinalization;
 using Elsa.Persistence.EntityFramework.Tooling;
 using Elsa.Persistence.Schema.SchemaFinalization;
@@ -183,6 +186,122 @@ public sealed class EfToolingFinalizationTests : IAsyncLifetime
         }
     }
 
+    /// <summary>
+    /// Spec 181, FR-022: each pending version names the counted members that cannot read it, from the fleet the tool read.
+    /// No membership provider in the host's closure, or a table this database does not have, leaves the fleet unread, which
+    /// the payload says by a null list, not by an empty one that would claim no member blocks the version.
+    /// </summary>
+    [Fact]
+    public async Task A_pending_version_carries_the_members_that_cannot_read_it_and_none_when_the_fleet_was_not_read()
+    {
+        string[] chain = [SecretsEfModule.SchemaVersion, "next"];
+        SchemaFinalizationRecord record;
+        await using (var context = ModuleContextCatalog.Create(typeof(SecretsSqliteDbContext), Connection))
+            record = await new EfSchemaFinalizationStore(context).GetOrCreateAsync(SecretsEfModule.SchemaFamily, SecretsEfModule.SchemaVersion, chain, SchemaFinalizationActor.OfOperator("release"));
+        var fleet = new EfToolingFleet(
+            DateTimeOffset.UnixEpoch,
+            TimeSpan.FromSeconds(5),
+            _ => [],
+            (family, databaseIdentity, version) => family == SecretsEfModule.SchemaFamily && databaseIdentity == record.DatabaseIdentity && version == "next"
+                ? [new EfToolingWaitingOn { HostId = "host-a", Incarnation = "a", Reads = [SecretsEfModule.SchemaVersion] }]
+                : []);
+
+        var read = Assert.Single(EfToolingHost.Describe("Secrets", SecretsEfModule.SchemaFamily, "Secrets", chain, record, fleet).Pending);
+        var unread = Assert.Single(EfToolingHost.Describe("Secrets", SecretsEfModule.SchemaFamily, "Secrets", chain, record, fleet: null).Pending);
+
+        Assert.Equal(("next", "pending"), (read.Version, read.State));
+        var waiting = Assert.Single(read.WaitsFor!);
+        Assert.Equal("host-a", waiting.HostId);
+        Assert.Equal([SecretsEfModule.SchemaVersion], waiting.Reads);
+        Assert.Null(unread.WaitsFor);
+    }
+
+    /// <summary>
+    /// A closure with no membership provider says so by an explicit marker on the cluster, which is what lets the CLI say
+    /// "this host only" for it and nothing of the kind for a payload that carries no cluster at all.
+    /// </summary>
+    [Fact]
+    public async Task Status_of_a_closure_with_no_membership_provider_carries_an_explicit_marker()
+    {
+        var status = await RunAsync(Status(), [typeof(SecretsSqliteDbContext).Assembly]);
+
+        Assert.Equal(EfToolingExitCode.Success, status.ExitCode);
+        var cluster = status.Response.GetProperty("finalization").GetProperty("cluster");
+        Assert.Equal(EfToolingClusterAvailability.NoMembershipProvider, cluster.GetProperty("availability").GetString());
+        Assert.Empty(cluster.GetProperty("members").EnumerateArray());
+        Assert.All(status.Response.GetProperty("finalization").GetProperty("families").EnumerateArray(), family =>
+            Assert.All(family.GetProperty("pending").EnumerateArray(), pending => Assert.False(pending.TryGetProperty("waitsFor", out _))));
+    }
+
+    /// <summary>A closure that carries the provider, over a database whose membership table was never created, says that and not that there is no provider.</summary>
+    [Fact]
+    public async Task Status_of_a_database_without_the_membership_table_carries_a_distinct_marker_and_says_why()
+    {
+        var status = await RunAsync(Status());
+
+        Assert.Equal(EfToolingExitCode.Success, status.ExitCode);
+        var cluster = status.Response.GetProperty("finalization").GetProperty("cluster");
+        Assert.Equal(EfToolingClusterAvailability.NotMigrated, cluster.GetProperty("availability").GetString());
+        Assert.Equal("Cluster.Membership", cluster.GetProperty("module").GetString());
+        Assert.Contains("migrations not applied", cluster.GetProperty("note").GetString(), StringComparison.Ordinal);
+    }
+
+    /// <summary>A module the closure carries that has no context for the requested engine says that, with the module and the engine, and not that the cluster is empty.</summary>
+    [Fact]
+    public async Task A_membership_module_with_no_context_for_the_engine_carries_a_distinct_marker_and_says_why()
+    {
+        var withoutPostgreSql = MembershipModule() with { PostgreSql = null };
+
+        var read = await EfToolingHost.ReadClusterAsync(new EfClusterMembershipToolingSource(), withoutPostgreSql, "PostgreSql", "Host=unused", schema: null, skewAllowance: null, CancellationToken.None);
+
+        var cluster = read.Describe([]);
+        Assert.Null(read.Fleet);
+        Assert.Equal(EfToolingClusterAvailability.NoProviderContext, cluster.Availability);
+        Assert.Equal("Cluster.Membership", cluster.Module);
+        Assert.Contains("no context for provider 'PostgreSql'", cluster.Note, StringComparison.Ordinal);
+        Assert.Empty(cluster.Members);
+    }
+
+    /// <summary>A table that cannot be read says so and why, and is not mistaken for a cluster with nobody in it.</summary>
+    [Fact]
+    public async Task A_membership_table_that_cannot_be_read_carries_a_distinct_marker_and_a_note()
+    {
+        var notADatabase = Path.Join(Path.GetTempPath(), $"elsa-tooling-unreadable-{Guid.NewGuid():N}.db");
+        await File.WriteAllTextAsync(notADatabase, new string('x', 4096));
+        try
+        {
+            var read = await EfToolingHost.ReadClusterAsync(new EfClusterMembershipToolingSource(), MembershipModule(), "Sqlite", $"Data Source={notADatabase};Pooling=False", schema: null, skewAllowance: null, CancellationToken.None);
+
+            var cluster = read.Describe([]);
+            Assert.Null(read.Fleet);
+            Assert.Equal(EfToolingClusterAvailability.Unreadable, cluster.Availability);
+            Assert.Equal("Cluster.Membership", cluster.Module);
+            Assert.StartsWith("The members could not be read from 'Cluster.Membership'", cluster.Note, StringComparison.Ordinal);
+            Assert.Empty(cluster.Members);
+        }
+        finally
+        {
+            SqliteConnection.ClearAllPools();
+            File.Delete(notADatabase);
+        }
+    }
+
+    private static EfModuleDescriptor MembershipModule() =>
+        EfToolingHost.Discover([typeof(ClusterMembershipEfModule).Assembly]).Single(module => module.Name == ClusterMembershipEfModule.Name);
+
+    [Fact]
+    public async Task Status_takes_a_skew_allowance_and_nothing_else_does_and_a_bad_one_is_refused()
+    {
+        Assert.Equal(EfToolingExitCode.Success, (await RunAsync(Status("00:00:02"))).ExitCode);
+        Assert.Equal(EfToolingExitCode.Refusal, (await RunAsync(Status("soon"))).ExitCode);
+        Assert.Equal(EfToolingExitCode.Refusal, (await RunAsync(Status("-00:00:02"))).ExitCode);
+        Assert.Equal(EfToolingExitCode.Refusal, (await RunAsync(new
+        {
+            version = 1, command = "release", provider = "Sqlite", selection = Modules("Secrets"), connection = Connection, skewAllowance = "00:00:02",
+            finalization = new { family = SecretsEfModule.SchemaFamily, @operator = "ops@example" }
+        })).ExitCode);
+    }
+
     [Fact]
     public async Task Status_refuses_the_fields_only_a_hold_takes()
     {
@@ -205,6 +324,11 @@ public sealed class EfToolingFinalizationTests : IAsyncLifetime
         finalization = new { family = SecretsEfModule.SchemaFamily, version, reason = "canary of the next release", @operator = "ops@example" }
     });
 
+    private object Status(string? skewAllowance = null) => new
+    {
+        version = 1, command = "status", provider = "Sqlite", selection = Modules("Secrets"), connection = Connection, skewAllowance
+    };
+
     private object Release(string? version) => new
     {
         version = 1,
@@ -223,11 +347,11 @@ public sealed class EfToolingFinalizationTests : IAsyncLifetime
         return await new EfSchemaFinalizationStore(context).FindAsync(SecretsEfModule.SchemaFamily);
     }
 
-    private static async Task<Run> RunAsync(object request)
+    private static async Task<Run> RunAsync(object request, IEnumerable<Assembly>? closure = null)
     {
         using var input = new MemoryStream(JsonSerializer.SerializeToUtf8Bytes(request, Json));
         using var output = new MemoryStream();
-        var exitCode = await EfToolingHost.RunAsync(input, output, ModuleContextCatalog.Modules);
+        var exitCode = await EfToolingHost.RunAsync(input, output, closure ?? ModuleContextCatalog.Modules);
         using var response = JsonDocument.Parse(Encoding.UTF8.GetString(output.ToArray()));
         return new Run(exitCode, response.RootElement.Clone());
     }

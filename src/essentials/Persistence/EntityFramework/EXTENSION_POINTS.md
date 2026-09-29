@@ -170,6 +170,22 @@ could not read. `RunAsync` has exactly one caller, `dotnet elsa persistence post
 applying migrations, `EfModuleMigrator<TContext>` audits under both policies and fails closed naming
 that command, and `apply`/`validate` do the same — no command ever runs an action as a side effect.
 
+## Fleet source for `persistence status`
+
+`IEfToolingFleetSource` (`Elsa.Persistence.EntityFramework.Tooling`) is how `dotnet elsa persistence status` reads the
+cluster's members without this package knowing what membership is ([spec 181](../../../../specs/181-schema-finalization-gate/spec.md),
+FR-022). A provider that keeps its members in an EF module declares one public class with a parameterless constructor in the
+assembly that declares that module, naming the module (`ModuleName`); the tool finds it beside the module, hands it a
+context of the module on the command's connection once the module has no pending migration, with the skew allowance to judge
+liveness with (or none, for the provider's default), and prints what it returns: the members, each with what it reads of the
+families listed and only the entries that speak for each family's database, and for a family, version and database, the
+counted members that cannot read it. The provider owns what "counted" and "can read" mean and how a member is judged live
+(`EfClusterMembershipToolingSource` judges each member with the provider's own `StoredMember.ToFleetMember` and asks the same
+`ReadsSchemaVersion` query as the gate), so the tool and the printer repeat none of it. The source must not write. A closure
+with no source, or a module with no context for the provider, or a database whose module tables are not migrated, leaves the
+fleet unread, which the status says by an explicit marker (`cluster.availability`) rather than by reporting that nobody
+blocks a version.
+
 ## Schema finalization record
 
 Not an extension point: every first-party EF module maps the finalization tables with

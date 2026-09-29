@@ -60,6 +60,22 @@ public sealed record StoredMember(
     public bool IsLive(DateTimeOffset now, TimeSpan skewAllowance) =>
         MemberLiveness.IsLive(Status, HeartbeatAt, ExpiryPeriod, skewAllowance, now);
 
+    /// <summary>
+    /// The member as a reader whose clock shows <paramref name="now"/> judges it: live or not, displaced or not, with the
+    /// report this build could interpret. The one judgement the provider's own fleet view and <c>persistence status</c>
+    /// share, so neither can count a member the other would not. The provider adds the conditions it observes.
+    /// </summary>
+    public FleetMember ToFleetMember(DateTimeOffset now, TimeSpan skewAllowance) => new(
+        Identity,
+        Status,
+        HeartbeatAt,
+        ExpiryPeriod,
+        IsLive(now, skewAllowance),
+        IsDisplaced: !IsCurrent,
+        Report,
+        ReportRevision,
+        []);
+
     private static (MemberStatus Status, MemberReport Report)? Interpret(ClusterMemberEntity row)
     {
         if (!EfSchemaVersion.IsReadable(ClusterMembershipEfModule.Chain, row.SchemaVersion))
