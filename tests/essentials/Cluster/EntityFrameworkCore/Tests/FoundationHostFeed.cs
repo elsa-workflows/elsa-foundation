@@ -1,11 +1,13 @@
 using System.Diagnostics;
+using System.IO.Compression;
 using System.Text.Json.Nodes;
 
 namespace Elsa.Cluster.EntityFrameworkCore.Tests;
 
 /// <summary>
 /// The feeds the host loads from: the fixture and <c>Elsa.Persistence.EntityFramework</c>, packed by the SDK from the build
-/// this test assembly was built with, in <see cref="Directory"/>; and the packages they and the EF provider engine depend
+/// this test assembly was built with, in <see cref="Directory"/>, and the same with the fixture carrying its own copies of
+/// two shared assemblies, in <see cref="CarryingDirectory"/>; and the packages they and the EF provider engine depend
 /// on that the host does not carry (EF Core, the Sqlite engine and what they need), copied from the package cache this
 /// project's restore filled, in <see cref="ClosureDirectory"/>.
 /// </summary>
@@ -28,8 +30,21 @@ public sealed class FoundationHostFeed : IAsyncLifetime
 
     private readonly DirectoryInfo _root = System.IO.Directory.CreateTempSubdirectory("elsa-foundation-host-feeds-");
 
+    /// <summary>The fixture's package id, which is its project's name.</summary>
+    public const string FixturePackage = "Elsa.Cluster.Fixtures.FeedModule";
+
+    /// <summary>The shares whose own copies the fixture's package in <see cref="CarryingDirectory"/> carries.</summary>
+    public static readonly string[] CarriedShares = ["Elsa.Cluster.Core", "Elsa.Persistence.Schema"];
+
     /// <summary>The packed packages, which the host takes as its own feed.</summary>
     public string Directory => Path.Join(_root.FullName, "packed");
+
+    /// <summary>
+    /// The same packages, except that the fixture's carries its own copies of <see cref="CarriedShares"/> beside its own
+    /// assembly, as a package that bundles what it was built against does (#2150). Nuplane loads every assembly of a
+    /// host-integrated package graph unless the host's shared-assembly policy matches it.
+    /// </summary>
+    public string CarryingDirectory => Path.Join(_root.FullName, "carrying");
 
     /// <summary>The packages those depend on, which the host only resolves from.</summary>
     public string ClosureDirectory => Path.Join(_root.FullName, "closure");
@@ -38,6 +53,11 @@ public sealed class FoundationHostFeed : IAsyncLifetime
     {
         foreach (var project in Projects)
             await DotnetAsync("pack", Path.Join(FoundationHostProcess.RepoRoot, project), "--no-build", "-c", FoundationHostProcess.Configuration, "-p:IsPackable=true", "-o", Directory);
+
+        System.IO.Directory.CreateDirectory(CarryingDirectory);
+        foreach (var package in System.IO.Directory.EnumerateFiles(Directory, "*.nupkg"))
+            File.Copy(package, Path.Join(CarryingDirectory, Path.GetFileName(package)));
+        AddCarriedShares(System.IO.Directory.EnumerateFiles(CarryingDirectory, $"{FixturePackage}.*.nupkg").Single());
 
         System.IO.Directory.CreateDirectory(ClosureDirectory);
         // Both restores prune what ASP.NET's shared framework carries, which the host does not offer Nuplane, so the EF
@@ -50,6 +70,18 @@ public sealed class FoundationHostFeed : IAsyncLifetime
     {
         _root.Delete(recursive: true);
         return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Adds the copies of <see cref="CarriedShares"/> this assembly was built with, the ones the fixture was compiled
+    /// against, to the folder of <paramref name="package"/> that holds the fixture's own assembly.
+    /// </summary>
+    private static void AddCarriedShares(string package)
+    {
+        using var archive = ZipFile.Open(package, ZipArchiveMode.Update);
+        var fixture = archive.Entries.Single(entry => entry.Name == $"{FixturePackage}.dll");
+        foreach (var share in CarriedShares)
+            archive.CreateEntryFromFile(Path.Join(AppContext.BaseDirectory, $"{share}.dll"), $"{fixture.FullName[..^fixture.Name.Length]}{share}.dll");
     }
 
     /// <summary>
