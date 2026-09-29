@@ -808,7 +808,9 @@ public static class EfToolingHost
     /// <para>
     /// A module whose pending batch holds a contracting migration its schema family is not yet finalized for is
     /// refused by <see cref="EfDatabaseMigrator.ApplyAsync"/> before anything of that batch runs (spec 185, FR-024),
-    /// and reported as a refusal, exit code 2, naming the family and the version it waits for.
+    /// and reported as a refusal, exit code 2, naming the family and the version it waits for. On a database no host
+    /// has admitted the module in, <c>apply</c> creates each contracted family's finalization record before the
+    /// contracting migration runs, naming <c>migrator:&lt;machine name&gt;</c> (#2136).
     /// </para>
     /// </remarks>
     private static async Task<EfToolingResponse> Apply(
@@ -845,11 +847,15 @@ public static class EfToolingHost
             catch (SchemaFinalization.EfContractingMigrationRefusedException refusal)
             {
                 // Spec 185, FR-024: a refusal, not a database failure — the database was read, and it says this module's
-                // pending batch may not run yet. Nothing of it was applied; modules before it in the order were.
+                // pending batch may not run yet. Nothing of it was applied, unless no host had admitted the module there,
+                // when the migrations before its first contracting one were (#2136); modules before it in the order were.
                 throw EfToolingRefusal.Usage(
                     "contracting-migration-refused",
-                    $"'{descriptor.Name}' was not applied: a pending contracting migration waits for its schema family's " +
-                    "version to be finalized, so none of its pending migrations was applied.",
+                    refusal.Applied.Count == 0
+                        ? $"'{descriptor.Name}' was not applied: a pending contracting migration waits for its schema family's " +
+                          "version to be finalized, so none of its pending migrations was applied."
+                        : $"'{descriptor.Name}' was applied only up to its first contracting migration, which waits for its " +
+                          "schema family's version to be finalized, so none of its pending migrations from there on was applied.",
                     [EfToolingRedaction.Redact(refusal.Message, connection)]);
             }
             catch (Exception failure) when (failure is not EfToolingRefusal and not OperationCanceledException)

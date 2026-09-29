@@ -41,7 +41,8 @@ namespace Elsa.Persistence.EntityFramework.SchemaFinalization;
 /// </remarks>
 public sealed class EfSchemaModuleGate
 {
-    private static readonly string ProcessIncarnation = Guid.NewGuid().ToString("N");
+    /// <summary>This process's incarnation, for the member a host that composes no fleet, or the persistence tool, names itself by.</summary>
+    internal static readonly string ProcessIncarnation = Guid.NewGuid().ToString("N");
 
     private readonly IEfSchemaFleet? _fleet;
     private readonly EfSchemaFinalizationObservations _observations;

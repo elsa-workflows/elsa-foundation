@@ -11,18 +11,43 @@ namespace Elsa.Persistence.EntityFramework;
 /// wrapping <see cref="DatabaseFacade.MigrateAsync"/> in a second lock is not required and races.
 /// </summary>
 /// <remarks>
+/// <para>
 /// Under both policies a pending contracting migration whose schema family is not yet finalized at the version its
 /// opt-out names refuses the context's whole pending batch before anything runs, with
 /// <see cref="EfContractingMigrationRefusedException"/> (spec 185, FR-024): <see cref="DatabaseFacade.MigrateAsync"/>
 /// cannot apply some of a context's pending migrations and withhold others. Every host's module migrator and the
 /// persistence tool's <c>apply</c> and <c>validate</c> come through here, so none of them can skip the check.
+/// </para>
+/// <para>
+/// On a database no host has admitted the module in, <see cref="EfMigratePolicy.AutoMigrate"/> seeds first (#2136):
+/// it applies the pending migrations before the first contracting one, creates each contracted family's finalization
+/// record at the version the contracting migration names, and applies the contracting migrations only once a fresh
+/// read shows every such record there. <see cref="EfContractingMigrationCheck"/> states why that holds.
+/// <see cref="EfMigratePolicy.Validate"/> applies nothing, so it creates nothing either.
+/// </para>
 /// </remarks>
 public static class EfDatabaseMigrator
 {
-    public static async Task ApplyAsync(
+    public static Task ApplyAsync(
         DbContext context,
         string expectedProviderName,
         EfMigratePolicy policy = EfMigratePolicy.AutoMigrate,
+        CancellationToken cancellationToken = default) =>
+        ApplyAsync(context, expectedProviderName, policy, host: null, cancellationToken);
+
+    /// <param name="context">The module context whose migrations to apply or validate.</param>
+    /// <param name="expectedProviderName">The provider the context must be bound to.</param>
+    /// <param name="policy">Whether to apply pending migrations or refuse them.</param>
+    /// <param name="host">
+    /// This host's member in the fleet: a finalization record created before a contracting migration names it, as
+    /// <c>migrator:&lt;host id&gt;</c>. Null where there is none, such as the persistence tool, when the machine name stands in.
+    /// </param>
+    /// <param name="cancellationToken">Cancels the work.</param>
+    public static async Task ApplyAsync(
+        DbContext context,
+        string expectedProviderName,
+        EfMigratePolicy policy,
+        SchemaFinalizationMember? host,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(context);
@@ -31,9 +56,7 @@ public static class EfDatabaseMigrator
         switch (policy)
         {
             case EfMigratePolicy.AutoMigrate:
-                if (await EfContractingMigrationCheck.FindRefusalAsync(context, pending: null, cancellationToken) is { } refusal)
-                    throw refusal;
-                await context.Database.MigrateAsync(cancellationToken);
+                await EfContractingMigrationCheck.MigrateAsync(context, host, cancellationToken);
                 return;
             case EfMigratePolicy.Validate:
                 var pending = (await context.Database.GetPendingMigrationsAsync(cancellationToken)).ToArray();

@@ -4,7 +4,9 @@ namespace Elsa.Persistence.EntityFramework.SchemaFinalization;
 /// A module context's pending migrations include a contracting migration whose schema family is not yet finalized at
 /// the version its opt-out names (spec 185, FR-024 and FR-025), so the whole pending batch is withheld: a context's
 /// pending migrations apply as one <c>MigrateAsync</c>, which cannot apply some and hold back others. No operation of
-/// any of them has run when this is thrown.
+/// any of them has run when this is thrown. On a database no host had admitted the module in, the migrations before the
+/// first contracting one ran first, so its family's record could be created before it (#2136); <see cref="Applied"/>
+/// names them.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -19,25 +21,40 @@ namespace Elsa.Persistence.EntityFramework.SchemaFinalization;
 /// </remarks>
 public sealed class EfContractingMigrationRefusedException : EfPendingMigrationsException
 {
-    public EfContractingMigrationRefusedException(string module, IReadOnlyList<string> pending, IReadOnlyList<EfContractingMigrationRefusal> refusals)
-        : base(Describe(module, pending, refusals))
+    public EfContractingMigrationRefusedException(
+        string module,
+        IReadOnlyList<string> pending,
+        IReadOnlyList<EfContractingMigrationRefusal> refusals,
+        IReadOnlyList<string>? applied = null)
+        : base(Describe(module, pending, refusals, applied))
     {
         Module = module;
         Pending = pending;
         Refusals = refusals;
+        Applied = applied ?? [];
     }
 
     /// <summary>The EF module whose pending batch was withheld.</summary>
     public string Module { get; }
 
-    /// <summary>Every pending migration of the context, none of which was applied.</summary>
+    /// <summary>Every pending migration of the context this refusal withheld, none of which was applied.</summary>
     public IReadOnlyList<string> Pending { get; }
 
     /// <summary>Each pending contracting migration that may not be applied yet, and why.</summary>
     public IReadOnlyList<EfContractingMigrationRefusal> Refusals { get; }
 
+    /// <summary>
+    /// The migrations applied before the refusal: on a database no host had admitted the module in, those before its first
+    /// contracting migration, applied so its family's finalization record could be created before it runs. Empty otherwise.
+    /// </summary>
+    public IReadOnlyList<string> Applied { get; }
+
     /// <summary>The refusal's sentence, for a caller that reports it under a subject of its own, such as a feature.</summary>
-    public static string Describe(string module, IReadOnlyList<string> pending, IReadOnlyList<EfContractingMigrationRefusal> refusals)
+    public static string Describe(
+        string module,
+        IReadOnlyList<string> pending,
+        IReadOnlyList<EfContractingMigrationRefusal> refusals,
+        IReadOnlyList<string>? applied = null)
     {
         ArgumentNullException.ThrowIfNull(pending);
         ArgumentNullException.ThrowIfNull(refusals);
@@ -47,9 +64,13 @@ public sealed class EfContractingMigrationRefusedException : EfPendingMigrations
               "finalizes it, then apply the migrations again."
             : "Correct the migration's [ExpandOnlyMigrationOptOut] so it names a family this module declares and a version " +
               "that family's chain reads (spec 185, FR-023).";
-        return $"EF module '{module}' was not migrated: its pending migrations ({string.Join(", ", pending)}) include a " +
-               "contracting migration that may not be applied yet, and one context's pending migrations apply as one batch, " +
-               $"so none of them was applied. {string.Join(" ", refusals.Select(refusal => refusal.Describe(module) + "."))} {remedy}";
+        var head = applied is { Count: > 0 }
+            ? $"EF module '{module}' was migrated only up to its first contracting migration: no host had admitted it in this " +
+              $"database, so {string.Join(", ", applied)} were applied first, for its schema families' finalization records " +
+              $"to be created before any contracting migration runs, and its remaining pending migrations ({string.Join(", ", pending)})"
+            : $"EF module '{module}' was not migrated: its pending migrations ({string.Join(", ", pending)})";
+        return $"{head} include a contracting migration that may not be applied yet, and one context's pending migrations " +
+               $"apply as one batch, so none of them was applied. {string.Join(" ", refusals.Select(refusal => refusal.Describe(module) + "."))} {remedy}";
     }
 }
 
