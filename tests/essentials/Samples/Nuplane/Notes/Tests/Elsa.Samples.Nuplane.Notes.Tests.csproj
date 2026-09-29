@@ -14,9 +14,12 @@
 
   <ItemGroup>
     <!-- The sample is one project that builds as two releases. This project is compiled against release 1.1.0, which has the
-         upcaster and everything the proofs name; release 1.0.0 is built beside it by the target below. -->
+         upcaster and everything the proofs name; release 1.0.0 is referenced beside it, for its assembly only. -->
     <ProjectReference Include="..\..\..\..\..\..\samples\Elsa.Samples.Nuplane.Notes\Elsa.Samples.Nuplane.Notes.csproj"
                       AdditionalProperties="DemoVersion=2" />
+    <ProjectReference Include="..\..\..\..\..\..\samples\Elsa.Samples.Nuplane.Notes\Elsa.Samples.Nuplane.Notes.csproj"
+                      ReferenceOutputAssembly="false"
+                      OutputItemType="NotesRelease1" />
   </ItemGroup>
 
   <ItemGroup>
@@ -32,14 +35,10 @@
   </ItemGroup>
 
   <!--
-    Builds release 1.0.0 of the sample (DemoVersion=1) into folders of its own and copies its assembly under notes-v1/, where the
-    tests read it in a load context of its own: two assemblies of one name, one process, and nothing shared between them.
+    Release 1.0.0 is the sample built as it is by default (the second reference above): its assembly is copied under notes-v1/,
+    where the tests read it in a load context of their own. Two assemblies of one name, one process, nothing shared between them.
   -->
-  <Target Name="BuildNotesRelease1" AfterTargets="Build">
-    <MSBuild Projects="..\..\..\..\..\..\samples\Elsa.Samples.Nuplane.Notes\Elsa.Samples.Nuplane.Notes.csproj"
-             Properties="DemoVersion=1" Targets="Build">
-      <Output TaskParameter="TargetOutputs" ItemName="NotesRelease1" />
-    </MSBuild>
+  <Target Name="CopyNotesRelease1" AfterTargets="Build">
     <Copy SourceFiles="@(NotesRelease1)" DestinationFolder="$(OutDir)notes-v1" />
   </Target>
 
