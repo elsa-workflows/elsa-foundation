@@ -255,6 +255,7 @@
         "dependencies": {
           "CShells": "[0.0.30-preview.159, )",
           "CShells.Abstractions": "[0.0.30-preview.159, )",
+          "Elsa.Primitives": "[4.0.0-dev, )",
           "Microsoft.EntityFrameworkCore": "[10.0.10, )",
           "Microsoft.EntityFrameworkCore.Relational": "[10.0.10, )",
           "Microsoft.Extensions.Configuration.EnvironmentVariables": "[10.0.10, )",
@@ -262,6 +263,9 @@
           "Microsoft.Extensions.Hosting.Abstractions": "[10.0.10, )",
           "Microsoft.Extensions.Options": "[10.0.10, )"
         }
+      },
+      "elsa.primitives": {
+        "type": "Project"
       },
       "CShells": {
         "type": "CentralTransitive",

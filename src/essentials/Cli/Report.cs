@@ -80,6 +80,9 @@ internal static class Report
             case WorkerCommands.PostMigrate:
                 WritePostMigrate(output, tooling.GetProperty("postMigrate"));
                 break;
+            case WorkerCommands.Hold or WorkerCommands.Release or WorkerCommands.Status:
+                WriteFinalization(output, command, tooling.GetProperty("finalization"));
+                break;
         }
 
         if (tooling.TryGetProperty("configurationContext", out var context))
@@ -87,6 +90,47 @@ internal static class Report
 
         return response.ExitCode;
     }
+
+    /// <summary>
+    /// Each family's finalization status (spec 181, FR-022): the finalized version, each pending version and the holds
+    /// that keep it, any intent in flight and every hold. Which counted members cannot read a version is known only to
+    /// a running host, whose membership this tool does not read.
+    /// </summary>
+    internal static void WriteFinalization(TextWriter output, string command, JsonElement finalization)
+    {
+        var families = finalization.GetProperty("families").EnumerateArray().ToArray();
+        foreach (var family in families)
+        {
+            var finalized = Optional(family, "finalizedVersion");
+            output.WriteLine($"{Text(family, "family")} ({Text(family, "module")}): " +
+                             (finalized is null ? "no finalization record in this database yet" : $"finalized at {finalized}") +
+                             $"; this host reads [{string.Join(", ", family.GetProperty("readableVersions").EnumerateArray().Select(version => version.GetString()))}]");
+            if (family.TryGetProperty("intent", out var intent) && intent.ValueKind == JsonValueKind.Object)
+                output.WriteLine($"  intent to finalize {Text(intent, "version")} by {Text(intent, "member")} at {Text(intent, "at")}");
+            foreach (var pending in family.GetProperty("pending").EnumerateArray())
+            {
+                var heldBy = pending.GetProperty("heldBy").EnumerateArray().Select(reason => reason.GetString()).ToArray();
+                output.WriteLine($"  {Text(pending, "version")}: {Text(pending, "state")}" +
+                                 (heldBy.Length > 0 ? $", held: {string.Join("; ", heldBy)}" : ", held by nothing; waits for every counted member to read it"));
+            }
+
+            foreach (var hold in family.GetProperty("holds").EnumerateArray())
+                output.WriteLine($"  hold on {Optional(hold, "version") ?? "the whole family"} by {Text(hold, "placedBy")} at {Text(hold, "placedAt")}: {Text(hold, "reason")}");
+            if (Optional(family, "completionVersion") is { } completion)
+                output.WriteLine($"  complete from {completion}");
+        }
+
+        output.WriteLine();
+        output.WriteLine(command switch
+        {
+            WorkerCommands.Hold => "Hold placed. Nothing it applies to finalizes until it is released.",
+            WorkerCommands.Release => "Hold released. The version finalizes at the next evaluation once every counted member reads it.",
+            _ => $"{families.Length} family(ies)."
+        });
+    }
+
+    private static string? Optional(JsonElement element, string name) =>
+        element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
 
     public static void WriteRefusal(TextWriter error, string code, string message, IReadOnlyList<string> details)
     {

@@ -83,6 +83,30 @@ public sealed class EfSchemaReadabilitySourceTests : IDisposable
             Assert.Null(entry.ObservedFinalizedVersion);
         });
 
+    /// <summary>
+    /// Spec 183's FR-019 through spec 181's gate: an entry names the database and the finalized version the host read,
+    /// but names no database while the host is reading one it has not read before, or once it serves two, since an entry
+    /// naming one would not be counted for the other (FR-023) and would let the other finalize what this host cannot read.
+    /// </summary>
+    [Fact]
+    public void An_entry_names_the_database_this_host_read_only_while_that_is_the_one_database_it_serves()
+    {
+        var observations = new Elsa.Persistence.EntityFramework.SchemaFinalization.EfSchemaFinalizationObservations();
+        var family = RuntimeArtifactEfModule.SchemaFamily;
+        ReadabilityEntry Entry() => EfSchemaReadabilitySource.Read(EfSchemaFamilyCatalog.Discover([RuntimeModule]), observations: observations)
+            .Entries.Single(entry => entry.Family == family);
+
+        observations.BeginActivation([family]);
+        observations.Observe(family, "database-a", "1.0.0");
+        Assert.Null(Entry().DatabaseIdentity);
+        observations.EndActivation([family]);
+        Assert.Equal(("database-a", "1.0.0"), (Entry().DatabaseIdentity, Entry().ObservedFinalizedVersion));
+        Assert.Equal([RuntimeArtifactEfModule.SchemaVersion], Entry().ReadableVersions);
+
+        observations.Observe(family, "database-b", "1.0.0");
+        Assert.Equal((null, "1.0.0"), (Entry().DatabaseIdentity, Entry().ObservedFinalizedVersion));
+    }
+
     [Fact]
     public void Every_loaded_declaration_of_a_family_narrows_what_the_host_reports_it_can_read()
     {

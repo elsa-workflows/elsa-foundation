@@ -143,6 +143,29 @@ internal static class WorkerRunner
         // of them needs the provider engine's package facts `ResolveEngine` exists to establish (FR-053) —
         // the host's own tooling entry point already refuses a provider engine it cannot bind (D4), the same
         // way it does for every other command.
+        // `hold`, `release` and `status` carry what they act on besides; the field travels only with them, so a host
+        // built before they existed still reads every other command's request exactly as it did.
+        if (WorkerCommands.IsFinalization(command))
+        {
+            return await Respond(
+                tooling,
+                new
+                {
+                    version = 1,
+                    command,
+                    provider,
+                    schema = request.Schema,
+                    selection = Selection(request.Selection),
+                    shells = Shells(request),
+                    capabilitySelection,
+                    finalization = request.Finalization is { } finalization
+                        ? new { family = finalization.Family, version = finalization.Version, reason = finalization.Reason, @operator = finalization.Operator }
+                        : null,
+                    connection = ResolveConnection(request)
+                },
+                cancellationToken);
+        }
+
         if (WorkerCommands.OpensDatabase(command))
         {
             return await Respond(
@@ -571,7 +594,7 @@ internal static class WorkerRunner
 
         throw WorkerRefusal.Usage(
             "connection-missing",
-            "'apply', 'validate' and 'post-migrate' need a connection, given with --connection-env or --connection-stdin.");
+            "'apply', 'validate', 'post-migrate', 'hold', 'release' and 'status' need a connection, given with --connection-env or --connection-stdin.");
     }
 
     private static async Task<WorkerResponse> Respond(ToolingEntryPoint tooling, object request, CancellationToken cancellationToken)

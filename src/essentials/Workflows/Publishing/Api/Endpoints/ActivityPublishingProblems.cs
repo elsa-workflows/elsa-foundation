@@ -1,6 +1,8 @@
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Core.Services;
+using Elsa.Api.AspNetCore;
 using Elsa.Primitives.Diagnostics;
+using Elsa.Primitives.Exceptions;
 using Elsa.Workflows.Publishing.Api.Models;
 using Elsa.Workflows.Publishing.Api.Services;
 using Microsoft.AspNetCore.Http;
@@ -28,6 +30,20 @@ internal static class ActivityPublishingProblems
             context.TraceIdentifier,
             ActivityDiagnosticOrderer.Order(exception.Diagnostics).Select(ToView).ToArray());
     }
+
+    /// <summary>
+    /// A schema write refusal (spec 180, FR-016a): a 409 whose error code is the refusal's stable code, and whose detail
+    /// names the family and both versions.
+    /// </summary>
+    public static ActivityPublishingProblemDetails SchemaWriteRefused(SchemaWriteRefusedException refusal, HttpContext context) => new(
+        Type(refusal.Code),
+        "Schema write refused",
+        SchemaWriteRefusalProblem.StatusCode,
+        refusal.Message,
+        context.Request.Path.Value ?? string.Empty,
+        refusal.Code,
+        context.TraceIdentifier,
+        []);
 
     public static ActivityPublishingProblemDetails Unexpected(HttpContext context) => new(
         Type(ActivityErrorCodes.OperationFailed),

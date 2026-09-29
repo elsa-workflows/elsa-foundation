@@ -168,6 +168,7 @@
       "elsa.api.aspnetcore": {
         "type": "Project",
         "dependencies": {
+          "Elsa.Primitives": "[4.0.0-dev, )",
           "NativeEndpoints": "[1.0.0-preview.6, )"
         }
       },
@@ -192,6 +193,9 @@
         }
       },
       "elsa.foundation.identity.core": {
+        "type": "Project"
+      },
+      "elsa.primitives": {
         "type": "Project"
       },
       "CShells": {

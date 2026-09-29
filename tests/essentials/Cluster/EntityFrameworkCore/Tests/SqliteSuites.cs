@@ -9,3 +9,6 @@ public sealed class SqliteEfClusterMembershipConformanceTests()
 
 /// <summary>User stories 2 and 4 on SQLite.</summary>
 public sealed class SqliteEfClusterMembershipScenarioTests() : EfClusterMembershipScenarioTests(EfClusterMembershipTestStore.CreateSqlite());
+
+/// <summary>Spec 181's finalization gate over the EF provider on SQLite.</summary>
+public sealed class SqliteEfSchemaFinalizationClusterScenarioTests() : EfSchemaFinalizationClusterScenarioTests(EfClusterMembershipTestStore.CreateSqlite());

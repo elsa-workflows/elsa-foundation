@@ -1,6 +1,7 @@
 using Elsa.Modularity.Core.Contracts;
 using Elsa.Modularity.Core.Models;
 using Elsa.Persistence.EntityFramework;
+using Elsa.Persistence.EntityFramework.SchemaFinalization;
 using Elsa.Persistence.EntityFramework.Tooling;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -9,12 +10,15 @@ using System.Text.Json;
 namespace Elsa.Modularity.EntityFramework;
 
 /// <summary>
-/// Refuses to enable a feature whose EF module's schema is behind (spec 171 FR-062, FR-067–FR-069, ADR
-/// 0076 D9). It maps a feature to its module(s) through <c>[UsesEfModule]</c>, resolves that module's
-/// provider and connection from the feature's own configuration, and — under
-/// <c>Elsa:Persistence:EntityFramework:Migrate:Policy=Validate</c> — asks the module's own history table
-/// whether anything is outstanding. Under <c>AutoMigrate</c> it opens nothing: the host migrates the
-/// module itself at Prepare, so there is nothing to refuse.
+/// Refuses to enable a feature whose EF module's schema is behind, or whose database holds a finalized schema
+/// version this host cannot read (spec 171 FR-062, FR-067–FR-069, ADR 0076 D9; spec 181, FR-016). It maps a
+/// feature to its module(s) through <c>[UsesEfModule]</c>, resolves that module's provider and connection from the
+/// feature's own configuration, and — under <c>Elsa:Persistence:EntityFramework:Migrate:Policy=Validate</c> — asks
+/// the module's own history table whether anything is outstanding. Under both policies it then reads the finalization
+/// record of every schema family the module owns and refuses when a finalized or completion version is outside this
+/// host's readable set, exactly as the module's gate would refuse it at Prepare. Under <c>AutoMigrate</c> it opens
+/// the database for that record alone: it never reads the history table or evaluates pending migrations there, and a
+/// record table that does not exist yet has finalized nothing, so it passes.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -30,10 +34,10 @@ namespace Elsa.Modularity.EntityFramework;
 /// </para>
 /// <para>
 /// It checks pending migrations, not post-migration actions. A declared action is audited by
-/// <c>EfModuleMigrator</c> under both policies (FR-056), and auditing one here would mean opening the
-/// database under <c>AutoMigrate</c> too — exactly what FR-069 forbids. A module that declares actions has
-/// <c>post-migrate</c> named in its refusal instead, so the operator is pointed at the whole path rather
-/// than only its first step.
+/// <c>EfModuleMigrator</c> under both policies (FR-056), and auditing one here would mean reading more than
+/// the finalization record under <c>AutoMigrate</c> — exactly what FR-069 forbids. A module that declares
+/// actions has <c>post-migrate</c> named in its refusal instead, so the operator is pointed at the whole path
+/// rather than only its first step.
 /// </para>
 /// </remarks>
 public sealed class EfPendingMigrationActivationGuard(IServiceProvider services, IEfModuleAssemblySource assemblies)
@@ -86,7 +90,7 @@ public sealed class EfPendingMigrationActivationGuard(IServiceProvider services,
                 }
 
                 if (probe.Verdict is not Verdict.Current)
-                    refusals.Add(new(feature.Id, Describe(feature.Id, descriptor, source.Feature, settings, probe)));
+                    refusals.Add(new(feature.Id, Describe(feature.Id, descriptor, source.Feature, settings, policy, probe)));
             }
         }
 
@@ -165,14 +169,10 @@ public sealed class EfPendingMigrationActivationGuard(IServiceProvider services,
         if (EfRelationalProviderBinding.DescribeBindingFailure(settings.Provider) is { } binding)
             return new(Verdict.Unbindable, Redact(binding, settings));
 
-        // Under AutoMigrate the module's own migrator brings the schema current at Prepare, so there is
-        // nothing here to refuse — and nothing to look at. The database is not opened at all, not even to
-        // find out whether it could be.
-        if (policy is EfMigratePolicy.AutoMigrate)
-            return Probe.Current;
-
+        // Under AutoMigrate an unsupported provider is the feature's own startup's to report, as it always was;
+        // under Validate it is a refusal.
         if (descriptor.ProviderContext(settings.Provider) is not { } contextType)
-            return new(Verdict.Unsupported);
+            return policy is EfMigratePolicy.AutoMigrate ? Probe.Current : new(Verdict.Unsupported);
 
         string connection;
         string? schema;
@@ -199,12 +199,20 @@ public sealed class EfPendingMigrationActivationGuard(IServiceProvider services,
         try
         {
             await using var context = CreateContext(descriptor, contextType, settings.Provider, connection, schema);
-            await EfDatabaseMigrator.ApplyAsync(
-                context,
-                EfRelationalProviderBinding.ExpectedProviderName(settings.Provider),
-                EfMigratePolicy.Validate,
-                cancellationToken);
-            return Probe.Current;
+            // Under AutoMigrate the module's own migrator brings the schema current at Prepare, so pending
+            // migrations are nothing to refuse and the history table is not read (FR-068).
+            if (policy is EfMigratePolicy.Validate)
+                await EfDatabaseMigrator.ApplyAsync(
+                    context,
+                    EfRelationalProviderBinding.ExpectedProviderName(settings.Provider),
+                    EfMigratePolicy.Validate,
+                    cancellationToken);
+            // Under both policies: a family finalized at a version this host cannot read would be refused at Prepare,
+            // so saving the request now would be the half-applied state this guard exists to prevent (spec 181, FR-016).
+            var families = EfSchemaModuleFamilies.For(descriptor.Name, descriptor.Assembly);
+            return await EfSchemaFinalizationCheck.FindRefusalAsync(context, families, cancellationToken) is { } refusal
+                ? new(Verdict.Unfinalizable, refusal.Message)
+                : Probe.Current;
         }
         catch (EfPendingMigrationsException)
         {
@@ -247,6 +255,7 @@ public sealed class EfPendingMigrationActivationGuard(IServiceProvider services,
         EfModuleDescriptor descriptor,
         string configuredBy,
         Settings settings,
+        EfMigratePolicy configuredPolicy,
         Probe probe)
     {
         var via = string.Equals(configuredBy, feature, StringComparison.OrdinalIgnoreCase)
@@ -261,11 +270,17 @@ public sealed class EfPendingMigrationActivationGuard(IServiceProvider services,
                 $"{head} which has migrations that are not applied to its database, and this host runs {policy}. " +
                 $"Nothing was saved. Apply them out of process, then enable the feature again:{Environment.NewLine}  " +
                 Commands(descriptor, settings.Provider),
+            Verdict.Unreadable when configuredPolicy is EfMigratePolicy.AutoMigrate =>
+                $"{head} whose database could not be reached ({probe.Detail}), so its schema finalization record " +
+                "could not be read, and a feature is never enabled on the assumption that nothing it cannot read has " +
+                "been finalized. Nothing was saved. Check that module's connection settings, then enable the feature again.",
             Verdict.Unreadable =>
                 $"{head} whose database could not be reached ({probe.Detail}), so every migration is treated as " +
                 $"pending while this host runs {policy}. Nothing was saved. Check that module's connection " +
                 $"settings, apply its migrations, then enable the feature again:{Environment.NewLine}  " +
                 Commands(descriptor, settings.Provider),
+            Verdict.Unfinalizable =>
+                $"{head}. {probe.Detail} Nothing was saved.",
             Verdict.Unresolved =>
                 $"{head} whose database connection could not be resolved: {probe.Detail} Nothing was saved.",
             Verdict.Unsupported =>
@@ -313,7 +328,10 @@ public sealed class EfPendingMigrationActivationGuard(IServiceProvider services,
         Unreadable,
         Unresolved,
         Unsupported,
-        Unbindable
+        Unbindable,
+
+        /// <summary>A schema family's finalized or completion version is one this host cannot read (spec 181, FR-016).</summary>
+        Unfinalizable
     }
 
     private sealed record Probe(Verdict Verdict, string? Detail = null)

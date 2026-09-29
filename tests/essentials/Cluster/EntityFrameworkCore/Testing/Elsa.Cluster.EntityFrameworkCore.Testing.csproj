@@ -19,6 +19,8 @@
   <ItemGroup>
     <ProjectReference Include="..\..\Testing\Elsa.Cluster.Testing.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\essentials\Cluster\EntityFrameworkCore\Elsa.Cluster.EntityFrameworkCore.csproj" />
+    <!-- The finalization gate over this provider (spec 181, SC-001, SC-004, SC-008): the membership side of the gate. -->
+    <ProjectReference Include="..\..\..\..\..\src\essentials\Cluster\Readability\Elsa.Cluster.Readability.csproj" />
   </ItemGroup>
 
 </Project>

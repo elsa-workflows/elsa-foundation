@@ -59,6 +59,12 @@ public static class ElsaEndpointGroupExtensions
     /// Maps an operation with no bound request whose dispatch owns the entire response — the escape
     /// hatch for streaming and other non-JSON responses that still belong to the module convention.
     /// </summary>
+    /// <remarks>
+    /// An operation mapped with <paramref name="containFailures"/> false leaves its failures to the host's exception
+    /// handling, with one exception: a schema write refusal is a conflict the owner answers, not an unexpected failure
+    /// the host would answer with a 500, so it is answered 409 through <see cref="SchemaWriteRefusalProblem"/>
+    /// (spec 180, FR-016a). A contained operation answers it through the failure pipeline instead.
+    /// </remarks>
     public static IEndpointConventionBuilder MapUnboundOperation(
         this EndpointGroup api,
         string method,
@@ -88,6 +94,6 @@ public static class ElsaEndpointGroupExtensions
                 DocumentAuthResponses = documentAuthResponses,
                 ContainFailures = containFailures
             },
-            dispatch);
+            containFailures ? dispatch : SchemaWriteRefusalProblem.Answering(dispatch));
     }
 }

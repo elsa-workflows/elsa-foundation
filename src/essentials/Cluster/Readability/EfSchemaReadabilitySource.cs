@@ -2,6 +2,7 @@ using System.Runtime.Loader;
 using Elsa.Cluster.Core.Contracts;
 using Elsa.Cluster.Core.Models;
 using Elsa.Persistence.EntityFramework;
+using Elsa.Persistence.EntityFramework.SchemaFinalization;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -37,12 +38,17 @@ namespace Elsa.Cluster.Readability;
 /// (FR-005) still credits only what it reaches, never a version below a gap, and the fault is logged as an error.
 /// </para>
 /// <para>
-/// The database identity and the observed finalized version come from spec 181's finalization record, which B5 (#2101)
-/// adds. Until then the host has read no record, so both are <see langword="null"/>, and an entry that names no
-/// database counts for every database: the conservative direction (FR-019; Decisions, Q19).
+/// The database identity and the observed finalized version come from the finalization records this host's gates have
+/// read (spec 181, FR-001 and FR-010), through the host's one <see cref="EfSchemaFinalizationObservations"/>. An entry
+/// names a database only while every record of the family this host read carries that one identity and no activation
+/// of the family is between publishing and reading; otherwise, and before any record is read, it names none, which
+/// counts for every database: the conservative direction (FR-019; Decisions, Q19). Naming the database read most
+/// recently instead would let a second database this host serves finalize a version it cannot read.
 /// </para>
 /// </remarks>
-public sealed class EfSchemaReadabilitySource(ILogger<EfSchemaReadabilitySource>? logger = null) : IMemberReportSource<ReadabilitySection>
+public sealed class EfSchemaReadabilitySource(
+    ILogger<EfSchemaReadabilitySource>? logger = null,
+    EfSchemaFinalizationObservations? observations = null) : IMemberReportSource<ReadabilitySection>
 {
     private readonly ILogger _logger = logger ?? NullLogger<EfSchemaReadabilitySource>.Instance;
 
@@ -50,7 +56,7 @@ public sealed class EfSchemaReadabilitySource(ILogger<EfSchemaReadabilitySource>
     public ValueTask<ReadabilitySection> ReadAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        return ValueTask.FromResult(Read(EfSchemaFamilyCatalog.Discover(AssemblyLoadContext.All.SelectMany(context => context.Assemblies)), _logger));
+        return ValueTask.FromResult(Read(EfSchemaFamilyCatalog.Discover(AssemblyLoadContext.All.SelectMany(context => context.Assemblies)), _logger, observations));
     }
 
     /// <summary>
@@ -59,11 +65,22 @@ public sealed class EfSchemaReadabilitySource(ILogger<EfSchemaReadabilitySource>
     /// whose loaded declarations disagree on the owning EF module is logged to <paramref name="logger"/> and reported
     /// with no readable version rather than dropped, so a malformed family never omits every other one from the report.
     /// </summary>
-    public static ReadabilitySection Read(IEnumerable<EfSchemaFamilyDescriptor> declarations, ILogger? logger = null) =>
+    public static ReadabilitySection Read(
+        IEnumerable<EfSchemaFamilyDescriptor> declarations,
+        ILogger? logger = null,
+        EfSchemaFinalizationObservations? observations = null) =>
         new(declarations
             .GroupBy(declaration => declaration.Name, StringComparer.Ordinal)
             .OrderBy(family => family.Key, StringComparer.Ordinal)
-            .Select(family => Entry(family, logger ?? NullLogger.Instance)));
+            .Select(family => Observed(Entry(family, logger ?? NullLogger.Instance), observations)));
+
+    /// <summary><paramref name="entry"/> with the database identity and observed finalized version this host read, if any.</summary>
+    private static ReadabilityEntry Observed(ReadabilityEntry entry, EfSchemaFinalizationObservations? observations)
+    {
+        if (observations?.Find(entry.Family) is not { } observed || observed == EfSchemaFamilyObservation.None)
+            return entry;
+        return new ReadabilityEntry(entry.Family, entry.EfModule, entry.ReadableVersions, observed.DatabaseIdentity, observed.ObservedFinalizedVersion);
+    }
 
     private static ReadabilityEntry Entry(IGrouping<string, EfSchemaFamilyDescriptor> declarations, ILogger logger)
     {

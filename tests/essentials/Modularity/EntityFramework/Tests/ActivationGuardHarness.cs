@@ -1,5 +1,7 @@
 using Elsa.Modularity.Core.Models;
 using Elsa.Persistence.EntityFramework;
+using Elsa.Persistence.EntityFramework.SchemaFinalization;
+using Elsa.Persistence.EntityFramework.Tests;
 using Elsa.Secrets.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Design.Persistence.EntityFrameworkCore;
@@ -158,6 +160,22 @@ internal sealed class ActivationGuardHarness : IDisposable
     }
 
     public static string ConnectionTo(string path) => $"Data Source={path}";
+
+    /// <summary>
+    /// Applies <paramref name="module"/>'s migrations, then records its family <paramref name="family"/> as a build whose
+    /// chain is <paramref name="chain"/> would: created at the chain's first version and finalized at
+    /// <paramref name="finalized"/> (spec 181).
+    /// </summary>
+    public static async Task FinalizeAsync(string module, string connection, string family, string[] chain, string finalized)
+    {
+        await ApplyMigrationsAsync(module, connection);
+        var descriptor = EfModuleCatalog.Find(EfModuleCatalog.Discover(Assemblies), module)!;
+        var contextType = descriptor.RequireProviderContext("Sqlite");
+        var builder = (DbContextOptionsBuilder)Activator.CreateInstance(typeof(DbContextOptionsBuilder<>).MakeGenericType(contextType))!;
+        EfRelationalProviderBinding.UseSqlite(builder, connection, descriptor.HistoryTableName, descriptor.Assembly.GetName().Name);
+        await using var context = (DbContext)Activator.CreateInstance(contextType, builder.Options)!;
+        await EfSchemaFinalizationTestSupport.FinalizeAsync(new EfSchemaFinalizationStore(context), family, chain, finalized);
+    }
 
     public void Dispose()
     {

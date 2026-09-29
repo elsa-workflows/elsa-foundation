@@ -1,4 +1,6 @@
+using Elsa.Api.AspNetCore;
 using Elsa.Primitives.Diagnostics;
+using Elsa.Primitives.Exceptions;
 using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.AspNetCore.Http;
@@ -75,6 +77,16 @@ internal static class ActivityExecutionProblemDetails
                 null,
                 cancellationToken)
         };
+
+    /// <summary>A schema write refusal (spec 180, FR-016a): a 409 with its code, and a detail naming the family and both versions.</summary>
+    public static Task SchemaWriteRefusedAsync(HttpContext context, SchemaWriteRefusedException refusal, CancellationToken cancellationToken) =>
+        WriteAsync(
+            context,
+            SchemaWriteRefusalProblem.StatusCode,
+            refusal.Code,
+            "Schema write refused",
+            refusal.Message,
+            cancellationToken);
 
     public static Task UnexpectedAsync(HttpContext context, CancellationToken cancellationToken) =>
         WriteAsync(

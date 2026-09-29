@@ -184,6 +184,15 @@
           "Elsa.Cluster.Core": "[4.0.0-dev, )"
         }
       },
+      "elsa.cluster.readability": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Cluster.Core": "[4.0.0-dev, )",
+          "Elsa.Cluster.InProcess": "[4.0.0-dev, )",
+          "Elsa.Persistence.EntityFramework": "[4.0.0-dev, )",
+          "Microsoft.Extensions.Logging.Abstractions": "[10.0.10, )"
+        }
+      },
       "elsa.cluster.testing": {
         "type": "Project",
         "dependencies": {
@@ -212,6 +221,7 @@
         "dependencies": {
           "CShells": "[0.0.30-preview.159, )",
           "CShells.Abstractions": "[0.0.30-preview.159, )",
+          "Elsa.Primitives": "[4.0.0-dev, )",
           "Microsoft.EntityFrameworkCore": "[10.0.10, )",
           "Microsoft.EntityFrameworkCore.Relational": "[10.0.10, )",
           "Microsoft.Extensions.Configuration.EnvironmentVariables": "[10.0.10, )",

@@ -67,10 +67,22 @@ public static class WorkerCommands
     public const string Validate = "validate";
     public const string PostMigrate = "post-migrate";
 
-    public static readonly string[] All = [List, Plan, Script, Apply, Validate, PostMigrate];
+    /// <summary>Places an operator's hold on a schema family's finalization (spec 181, FR-019, FR-020).</summary>
+    public const string Hold = "hold";
+
+    /// <summary>Releases an operator's hold (spec 181, FR-019, FR-020).</summary>
+    public const string Release = "release";
+
+    /// <summary>Reports each schema family's finalization status (spec 181, FR-020, FR-022).</summary>
+    public const string Status = "status";
+
+    public static readonly string[] All = [List, Plan, Script, Apply, Validate, PostMigrate, Hold, Release, Status];
+
+    /// <summary>The commands that read or write a schema family's finalization record rather than migrations.</summary>
+    public static bool IsFinalization(string command) => command is Hold or Release or Status;
 
     /// <summary>The commands that open the host's database and so need a connection (D7).</summary>
-    public static bool OpensDatabase(string command) => command is Apply or Validate or PostMigrate;
+    public static bool OpensDatabase(string command) => command is Apply or Validate or PostMigrate || IsFinalization(command);
 }
 
 /// <summary>Source identifiers shared by the EF-free CLI front end and worker.</summary>
@@ -167,12 +179,27 @@ public sealed record WorkerRequest
     /// </summary>
     public string? ConnectionEnv { get; init; }
 
+    /// <summary>The family, version, reason and operator <c>hold</c>, <c>release</c> and <c>status</c> act on; absent otherwise.</summary>
+    public WorkerFinalization? Finalization { get; init; }
+
     /// <summary>
     /// The connection string itself, read by this front end from its own stdin when <c>--connection-stdin</c>
     /// was given (D7) — the one case where the value has nowhere to travel but this request. Never populated
     /// from <c>--connection-env</c>, and never logged, echoed, or included in a refusal.
     /// </summary>
     public string? Connection { get; init; }
+}
+
+/// <summary>What a finalization command names (spec 181, FR-019): the family, an optional version, the reason and the operator.</summary>
+public sealed record WorkerFinalization
+{
+    public string? Family { get; init; }
+
+    public string? Version { get; init; }
+
+    public string? Reason { get; init; }
+
+    public string? Operator { get; init; }
 }
 
 /// <summary>Which modules a command runs against, discriminated the same way the tooling contract discriminates it.</summary>

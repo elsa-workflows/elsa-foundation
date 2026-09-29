@@ -70,8 +70,9 @@ public static class RunnabilityEntryFactory
 {
     /// <summary>The entry of the shell whose services <paramref name="services"/> resolve from.</summary>
     /// <remarks>
-    /// The database identity is the finalization record's (spec 181, FR-001). Spec 181 is not built yet, so no shell
-    /// has read one and the entry names none, which applies to every database: the conservative direction.
+    /// The database identity is the one the shell's Runtime EF module read from its finalization record (spec 181,
+    /// FR-001). Before the module has read one, and in a shell with no Runtime EF module, the entry names none, which
+    /// applies to every database: the conservative direction.
     /// </remarks>
     public static RunnabilityEntry Create(IServiceProvider services)
     {
@@ -86,7 +87,7 @@ public static class RunnabilityEntryFactory
                 .Select(type => typeRegistry.TryGetAlias(type, out var alias) ? alias : null)
                 .Where(alias => !string.IsNullOrWhiteSpace(alias) && typeRegistry.TryGetTypeOrDefault(alias, out _))
                 .Select(alias => alias!);
-        return new RunnabilityEntry(consumers, drivers, aliases);
+        return new RunnabilityEntry(consumers, drivers, aliases, services.GetService<IRuntimeSchemaFinalization>()?.DatabaseIdentity);
     }
 }
 

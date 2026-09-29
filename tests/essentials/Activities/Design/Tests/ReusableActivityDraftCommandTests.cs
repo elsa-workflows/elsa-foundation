@@ -11,6 +11,7 @@ using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Activities.Design.Tests.Fixtures;
 using Elsa.Primitives.Contracts;
+using Elsa.Primitives.Exceptions;
 using Microsoft.Extensions.Options;
 using Xunit;
 using Microsoft.Extensions.Time.Testing;
@@ -904,6 +905,23 @@ public sealed class ReusableActivityDraftCommandTests
         Assert.DoesNotContain(harness.Stores.Definitions, x => x.Id == preview.Target.DefinitionId);
     }
 
+    /// <summary>
+    /// A schema write refusal saved nothing, so its outcome is known: it leaves as itself, for the API to answer 409
+    /// (spec 180, FR-016a), and is never the 500 of an apply whose outcome is unknown.
+    /// </summary>
+    [Fact]
+    public async Task Fork_apply_lets_a_schema_write_refusal_leave_as_itself()
+    {
+        var harness = new Harness(decorateApplyCommand: _ => new RefusingForkCommand());
+        var preview = await harness.PreviewForkAsync();
+
+        await Assert.ThrowsAsync<ForkWriteRefusal>(() => harness.Forks.ApplyAsync(
+            new(preview.CandidateId, preview.RequestFingerprint, "refused-operation"),
+            default));
+
+        Assert.DoesNotContain(harness.Stores.Definitions, x => x.Id == preview.Target.DefinitionId);
+    }
+
     [Fact]
     public async Task Provider_migration_creates_a_new_draft_and_preserves_source_revision_and_original()
     {
@@ -1305,6 +1323,17 @@ public sealed class ReusableActivityDraftCommandTests
             CancellationToken cancellationToken = default) =>
             throw new IOException("The persistence response is unavailable.");
     }
+
+    private sealed class RefusingForkCommand : IApplyActivityForkCandidateCommand
+    {
+        public Task<ActivityForkApplyResult> ExecuteAsync(
+            ApplyActivityForkCandidateRequest request,
+            CancellationToken cancellationToken = default) =>
+            throw new ForkWriteRefusal();
+    }
+
+    private sealed class ForkWriteRefusal() : SchemaWriteRefusedException(
+        "Activities.Design", "1.0.0", "2.0.0", "The fork needs schema version '2.0.0', which this host may not write yet. Nothing was saved.");
 
     private sealed class NonOverridableActivityTypeKeyPolicy : IActivityTypeKeyPolicy
     {

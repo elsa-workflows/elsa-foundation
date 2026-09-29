@@ -1,6 +1,7 @@
 # dotnet-elsa
 
-The `dotnet elsa` command-line tool: `list`, `plan`, `script`, `script-check`, `apply`, `validate` and `post-migrate`.
+The `dotnet elsa` command-line tool: `list`, `plan`, `script`, `script-check`, `apply`, `validate` and `post-migrate`,
+and the schema finalization gate's `hold`, `release` and `status` ([spec 181](../../../specs/181-schema-finalization-gate/spec.md)).
 
 Designed by [spec 171](../../../specs/171-persistence-script-cli/spec.md) and
 [ADR 0076](../../../docs/adr/0076-persistence-tooling-runs-inside-the-host-closure.md).
@@ -47,6 +48,9 @@ extracts into its install root, which no other command may do to directories it 
 | `persistence apply` | Runs each selected module's compiled migrations against a database, through `EfDatabaseMigrator`/`DbContext.Database.MigrateAsync`. |
 | `persistence validate` | Fails (exit 1) if any selected module has a pending migration against a database. Applies nothing. |
 | `persistence post-migrate` | Runs selected modules' required post-migration actions against a database. |
+| `persistence hold` | Holds a schema family's finalization (`--family`, optionally `--version` and every later one), with a `--reason` and an `--operator` the record's history keeps. Writes the finalization record directly, creating it if no host has yet, so a hold can be placed before any gate-aware host runs, which a canary needs. A hold on a version already finalized is refused (exit 2): the rollback boundary has been crossed. |
+| `persistence release` | Releases a hold (`--family`, the same `--version` it was placed with, and `--operator`). The version finalizes at the next evaluation once every counted member reads it. |
+| `persistence status` | Prints each selected family's finalized version, the versions this host reads above it and the holds that keep each, any intent in flight, and every hold. `--family` narrows it to one. Which counted members cannot read a version is known only to a running host; this tool reads no membership. |
 
 With an explicit configuration context, the selected host owns the source snapshot, resource selection and provider agreement. Offline commands report `targetVerification: not-performed`; live commands match the supplied connection against the selected resource's expected named connection before database access. This does not observe a separately running host.
 
@@ -65,8 +69,9 @@ With an explicit configuration context, the selected host owns the source snapsh
 | `--schema`, `--output` | `--output` is required for `script`. |
 | `--environment <name>` | Which `shells.<name>.json` overlay is read, and what the manifest records. Default `Production` — ASP.NET Core's own default, never this tool's own `ASPNETCORE_ENVIRONMENT`. |
 | `--idempotent` | Accepted and implied: every script is idempotent. |
-| `--connection-env <NAME>` | `apply`/`validate`/`post-migrate` only. Default `ELSA_EF_CONNECTION`. Reads the connection from this process's own named environment variable. |
-| `--connection-stdin` | `apply`/`validate`/`post-migrate` only. Reads the connection from this process's own stdin instead. |
+| `--family`, `--version`, `--reason`, `--operator` | `hold`, `release` and `status` only. `--family` and `--operator` are required by `hold` and `release`, `--reason` by `hold`; `status` takes `--family` alone. None of these commands finalizes, forces finalization or lowers a finalized version, and none takes `--configuration-context`. |
+| `--connection-env <NAME>` | `apply`/`validate`/`post-migrate`/`hold`/`release`/`status` only. Default `ELSA_EF_CONNECTION`. Reads the connection from this process's own named environment variable. |
+| `--connection-stdin` | `apply`/`validate`/`post-migrate`/`hold`/`release`/`status` only. Reads the connection from this process's own stdin instead. |
 
 There is no `--connection` flag (D7): giving one is a usage error, not a silently ignored value.
 

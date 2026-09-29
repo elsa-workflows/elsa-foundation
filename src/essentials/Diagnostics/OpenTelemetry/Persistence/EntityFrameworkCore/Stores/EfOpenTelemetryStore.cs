@@ -6,6 +6,7 @@ using Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Diagnostics.Persistence.Draining;
 using Elsa.Diagnostics.Persistence.Observability;
 using Elsa.Persistence.EntityFramework;
+using Elsa.Primitives.Exceptions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.DependencyInjection;
@@ -134,6 +135,9 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
             CountDropped(batch);
             if (exception.InnerException is OpenTelemetryPersistenceException persistence)
                 throw persistence;
+            // The gate's refusal must reach the caller as itself, the same way it does off the durable entry point.
+            if (exception.InnerException is SchemaWriteRefusedException refusal)
+                throw refusal;
             throw;
         }
     }
@@ -463,6 +467,7 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
         catch (OpenTelemetryPersistenceException) { throw; }
         // Skew is neither corrupt data nor a provider failure, so it leaves as itself (ADR 0077).
         catch (EfSchemaVersionSkewException) { throw; }
+        catch (SchemaWriteRefusedException) { throw; }
         catch (OperationCanceledException) { throw; }
         catch (ArgumentException) { throw; }
         catch (InvalidDataException exception) { throw new OpenTelemetryPersistenceDataException(operation, "The durable OpenTelemetry capture contains inconsistent state.", ScopeContext(), exception); }
@@ -520,6 +525,7 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
         catch (OpenTelemetryPersistenceException) { throw; }
+        catch (SchemaWriteRefusedException) { throw; }
         catch (InvalidDataException exception) { throw new OpenTelemetryPersistenceDataException("Retention", "The durable OpenTelemetry capture contains inconsistent state.", ScopeContext(), exception); }
         catch (JsonException exception) { throw new OpenTelemetryPersistenceDataException("Retention", "The durable OpenTelemetry capture contains malformed JSON.", ScopeContext(), exception); }
         catch (Exception exception) { throw new OpenTelemetryPersistenceUnavailableException("Retention", "The OpenTelemetry retention operation failed.", ScopeContext(), exception); }
@@ -953,6 +959,7 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
         catch (OpenTelemetryPersistenceException) { throw; }
         // Skew is neither corrupt data nor a provider failure, so it leaves as itself (ADR 0077).
         catch (EfSchemaVersionSkewException) { throw; }
+        catch (SchemaWriteRefusedException) { throw; }
         catch (InvalidDataException exception) { throw new OpenTelemetryPersistenceDataException(operation, "The durable OpenTelemetry payload is inconsistent.", ScopeContext(), exception); }
         catch (JsonException exception) { throw new OpenTelemetryPersistenceDataException(operation, "The durable OpenTelemetry payload is malformed.", ScopeContext(), exception); }
         catch (Exception exception) { throw new OpenTelemetryPersistenceUnavailableException(operation, "The OpenTelemetry persistence provider failed.", ScopeContext(), exception); }

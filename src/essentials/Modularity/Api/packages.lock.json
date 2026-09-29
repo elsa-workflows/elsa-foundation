@@ -184,6 +184,7 @@
       "elsa.api.aspnetcore": {
         "type": "Project",
         "dependencies": {
+          "Elsa.Primitives": "[4.0.0-dev, )",
           "NativeEndpoints": "[1.0.0-preview.6, )"
         }
       },
@@ -213,6 +214,9 @@
           "Elsa.Specifications.PackageManifests": "[0.0.1-preview.8, )",
           "Nuplane.Admin": "[0.0.11-preview.93, )"
         }
+      },
+      "elsa.primitives": {
+        "type": "Project"
       },
       "CShells": {
         "type": "CentralTransitive",

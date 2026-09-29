@@ -17,7 +17,8 @@ namespace Elsa.Activities.Design.Api.Endpoints;
 /// failures are 400, and anything unexpected is a sanitized 500 whose detail is
 /// <c>"Unexpected error occurred."</c> — with the trailing period the pipeline's generic message
 /// lacks, which is why the generic fallback cannot serve these routes. Authoring endpoints render
-/// <see cref="ActivityProblemDetailsView"/> exactly as the hand-written catch ladders did.
+/// <see cref="ActivityProblemDetailsView"/> exactly as the hand-written catch ladders did. Either shape
+/// answers a schema write refusal with a 409 carrying its code (spec 180, FR-016a).
 /// </remarks>
 internal sealed class ActivitiesDesignFaultRenderer : IEndpointFaultRenderer
 {
@@ -35,20 +36,26 @@ internal sealed class ActivitiesDesignFaultRenderer : IEndpointFaultRenderer
             {
                 EntityNotFoundException => ActivitiesDesignLegacyProblem.Create(context, exception.Message, StatusCodes.Status404NotFound),
                 ArgumentException => ActivitiesDesignLegacyProblem.Create(context, exception.Message, StatusCodes.Status400BadRequest),
+                SchemaWriteRefusedException refusal => ActivitiesDesignLegacyProblem.Create(context, SchemaWriteRefusalProblem.For(refusal)),
                 _ => Unexpected(context, exception)
             };
             await problem.WriteAsync(context);
             return true;
         }
 
-        if (exception is not ActivityAuthoringException authoring)
+        var view = exception switch
+        {
+            ActivityAuthoringException authoring => ActivityProblemDetails.From(authoring, context),
+            SchemaWriteRefusedException refusal => ActivityProblemDetails.SchemaWriteRefused(refusal, context),
+            _ => null
+        };
+        if (view is null)
         {
             LogUnexpected(context, exception);
-            await WriteAuthoringAsync(context, ActivityProblemDetails.Unexpected(context));
-            return true;
+            view = ActivityProblemDetails.Unexpected(context);
         }
 
-        await WriteAuthoringAsync(context, ActivityProblemDetails.From(authoring, context));
+        await WriteAuthoringAsync(context, view);
         return true;
     }
 

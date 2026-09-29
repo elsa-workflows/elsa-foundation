@@ -1,3 +1,4 @@
+using System.Runtime.ExceptionServices;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Elsa.Activities.Design.Persistence.Core.Entities;
@@ -5,6 +6,7 @@ using Elsa.Activities.Design.Persistence.Core.Exceptions;
 using Elsa.Activities.Design.Persistence.EntityFrameworkCore;
 using Elsa.Activities.Design.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Persistence.EntityFramework;
+using Elsa.Primitives.Exceptions;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Exceptions;
@@ -77,6 +79,8 @@ public sealed class EfReusableActivityImportCommand(
                 return outcome.Result;
 
             var failure = outcome.Failure!;
+            if (failure is SchemaWriteRefusedException)
+                ExceptionDispatchInfo.Throw(failure);
             if (failure is EfCommitOutcomeUnknownException)
                 return await ReconcileUncertainCommitAsync(mutation, scoped, commitAttemptId, failure, cancellationToken);
             if (!WriteConflicts.ShouldRetry(null, failure))

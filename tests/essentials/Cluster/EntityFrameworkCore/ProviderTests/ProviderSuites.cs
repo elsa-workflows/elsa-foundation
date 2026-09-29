@@ -26,3 +26,14 @@ public sealed class MySqlEfClusterMembershipConformanceTests(MySqlMembershipData
 
 [Collection(MySqlMembershipDatabase.Collection)]
 public sealed class MySqlEfClusterMembershipScenarioTests(MySqlMembershipDatabase database) : EfClusterMembershipScenarioTests(database.Store);
+
+// Spec 181's finalization gate over the EF provider on each container engine.
+
+[Collection(PostgreSqlMembershipDatabase.Collection)]
+public sealed class PostgreSqlEfSchemaFinalizationClusterScenarioTests(PostgreSqlMembershipDatabase database) : EfSchemaFinalizationClusterScenarioTests(database.Store);
+
+[Collection(SqlServerMembershipDatabase.Collection)]
+public sealed class SqlServerEfSchemaFinalizationClusterScenarioTests(SqlServerMembershipDatabase database) : EfSchemaFinalizationClusterScenarioTests(database.Store);
+
+[Collection(MySqlMembershipDatabase.Collection)]
+public sealed class MySqlEfSchemaFinalizationClusterScenarioTests(MySqlMembershipDatabase database) : EfSchemaFinalizationClusterScenarioTests(database.Store);

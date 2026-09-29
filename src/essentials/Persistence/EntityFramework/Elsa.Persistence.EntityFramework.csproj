@@ -21,6 +21,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The write refusal's persistence-agnostic base (SchemaWriteRefusedException), which the domain APIs answer
+         without resolving EF Core (spec 180, FR-016a). -->
+    <ProjectReference Include="..\..\Primitives\Primitives\Elsa.Primitives.csproj" />
+  </ItemGroup>
+  <ItemGroup>
     <!-- Test-only visibility for the pure resolver. Production adapters use the public preparation facade. -->
     <InternalsVisibleTo Include="Elsa.Persistence.EntityFramework.Tests" />
     <InternalsVisibleTo Include="Elsa.Persistence.EntityFrameworkCore.Migrations.Tests" />
