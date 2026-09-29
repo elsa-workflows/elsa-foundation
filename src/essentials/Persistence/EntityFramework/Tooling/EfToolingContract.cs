@@ -439,6 +439,29 @@ public sealed class EfToolingFinalizationFamily
 
     /// <summary>The finish record's completion version (spec 186), or null when none stands.</summary>
     public string? CompletionVersion { get; init; }
+
+    /// <summary>The backfill run a worker has claimed in the finish record (spec 186, FR-008 and FR-021), or null when none is.</summary>
+    public EfToolingBackfillRun? BackfillRun { get; init; }
+
+    /// <summary>The withdrawal of the family's completion while none has been recorded since (spec 186, FR-018), or null.</summary>
+    public EfToolingCompletionWithdrawal? CompletionWithdrawn { get; init; }
+}
+
+/// <summary>A claimed backfill run: the version it upgrades to, the member that claimed it, and until when the claim holds.</summary>
+public sealed class EfToolingBackfillRun
+{
+    public string TargetVersion { get; init; } = "";
+    public string Member { get; init; } = "";
+    public DateTimeOffset ExpiresAt { get; init; }
+}
+
+/// <summary>A withdrawn completion: the version, who withdrew it and when, and why, naming the tables and counts.</summary>
+public sealed class EfToolingCompletionWithdrawal
+{
+    public string Version { get; init; } = "";
+    public string WithdrawnBy { get; init; } = "";
+    public DateTimeOffset At { get; init; }
+    public string? Reason { get; init; }
 }
 
 public sealed class EfToolingFinalizationIntent

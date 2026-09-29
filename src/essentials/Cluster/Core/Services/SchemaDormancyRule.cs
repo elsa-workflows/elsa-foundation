@@ -55,8 +55,10 @@ public static class SchemaDormancyRule
 
         // A completion version this build cannot place lies before its readable set, so rows it names may remain (spec 186,
         // FR-020): incomplete, never complete.
+        // Content-addressed rows below the backfill's target are never upgraded, so the reason says completeness cannot come
+        // (spec 186, FR-022) rather than promising it.
         if (requirement.RequiresCompleteness && family.PositionOf(family.CompletionVersion) < required)
-            return Unmet(requirement, SchemaDormancyKind.WaitingForCompleteness, family.WriteVersion);
+            return Unmet(requirement, SchemaDormancyKind.WaitingForCompleteness, family.WriteVersion, unreachable: family.Backfill?.CompletenessUnreachable == true);
 
         return null;
     }
@@ -65,6 +67,7 @@ public static class SchemaDormancyRule
         SchemaVersionRequirement requirement,
         SchemaDormancyKind kind,
         string? observedVersion,
-        IReadOnlyList<SchemaHoldObservation>? holds = null) =>
-        new(requirement, kind, observedVersion, SchemaDormancyReasons.ForCaller(requirement, kind), holds ?? []);
+        IReadOnlyList<SchemaHoldObservation>? holds = null,
+        bool unreachable = false) =>
+        new(requirement, kind, observedVersion, SchemaDormancyReasons.ForCaller(requirement, kind, unreachable), holds ?? []);
 }

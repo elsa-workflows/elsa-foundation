@@ -12,8 +12,10 @@ namespace Elsa.Modularity.Api.Attention;
 /// <summary>
 /// Turns the feature catalog's problems into Attention items: a manifest that could not be read (critical), a missing or
 /// disabled dependency (warning), a dormant feature with its reason and the finalization gate's status (info; spec 182,
-/// FR-010), and a schema family whose writes this host refuses because it cannot read its finalized version (critical;
-/// spec 181, FR-012). Everything comes from items Attention already has a shape for, so its public API does not change.
+/// FR-010), a schema family whose writes this host refuses because it cannot read its finalized version (critical;
+/// spec 181, FR-012), and a schema family whose completion was withdrawn because a row below it turned up after it was
+/// recorded (critical; spec 186, FR-018). Everything comes from items Attention already has a shape for, so its public API
+/// does not change.
 /// </summary>
 public sealed class ModularityAttentionContributor(
     IFeatureManagementService featureManagementService,
@@ -36,12 +38,14 @@ public sealed class ModularityAttentionContributor(
         var catalog = await featureManagementService.GetCatalogAsync(cancellationToken);
         var byId = catalog.Features.ToDictionary(feature => feature.Id, StringComparer.OrdinalIgnoreCase);
         var observedAt = _timeProvider.GetUtcNow();
+        // What this host has observed, from memory: no record is read for it.
+        var families = dormancy?.Observe() ?? [];
 
         var conditions = catalog.Features
             .Select(feature => Evaluate(feature, byId, observedAt))
             .Concat(catalog.Features.Select(feature => EvaluateDormancy(feature, observedAt)))
-            // What this host has observed, from memory: no record is read for it.
-            .Concat((dormancy?.Observe() ?? []).Where(family => family.WritesRefused).Select(family => WritesRefused(family, observedAt)))
+            .Concat(families.Where(family => family.WritesRefused).Select(family => WritesRefused(family, observedAt)))
+            .Concat(families.Where(family => family.Withdrawal is not null).Select(family => CompletionWithdrawn(family, observedAt)))
             .Where(condition => condition is not null)
             .Select(condition => condition!)
             .OrderBy(item => item.Severity)
@@ -136,6 +140,31 @@ public sealed class ModularityAttentionContributor(
             new("/modules", "Inspect modules"),
             [new("schema-family", family.Family)],
             AttentionSensitivity.Metadata);
+
+    /// <summary>
+    /// One critical item for a schema family whose completion the backfill's audit withdrew (spec 186, FR-018): a row below
+    /// the completion version was written after it was recorded, by a writer that had not observed the finalization. It
+    /// names the family, the tables and the counts, from the withdrawal the record carries, so every host reports it, and
+    /// it disappears once a new verification pass records the completion again.
+    /// </summary>
+    private static AttentionItem CompletionWithdrawn(SchemaFamilyObservation family, DateTimeOffset observedAt)
+    {
+        var withdrawal = family.Withdrawal!;
+        return new(
+            $"schema-family-completion-withdrawn:{family.Family}",
+            HashGeneration(family.Family, [$"completion-withdrawn:{withdrawal.Version}:{withdrawal.At:O}"]),
+            AttentionSeverity.Critical,
+            $"Schema family {family.Family} is no longer complete",
+            $"Schema family '{family.Family}'{(family.Module is null ? "" : $" of EF module '{family.Module}'")} was complete at " +
+            $"'{withdrawal.Version}', and {withdrawal.WithdrawnBy} withdrew that at {withdrawal.At:u}: {withdrawal.Reason} Features that need " +
+            "every record of the family at a version stay dormant until the post-finalization backfill proves it again.",
+            withdrawal.At,
+            observedAt,
+            1,
+            new("/modules", "Inspect modules"),
+            [new("schema-family", family.Family)],
+            AttentionSensitivity.Metadata);
+    }
 
     private static string BuildSummary(
         bool hasReadError,
