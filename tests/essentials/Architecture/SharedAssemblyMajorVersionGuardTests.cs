@@ -1,5 +1,11 @@
+using System.Reflection;
+using System.Text;
 using System.Text.Json;
 using System.Xml.Linq;
+using Elsa.Testing;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Options;
+using Nuplane.Loading;
 using Xunit;
 using static Elsa.Architecture.Tests.NuplaneHostSettings;
 using static Elsa.Architecture.Tests.RepoPaths;
@@ -7,58 +13,67 @@ using static Elsa.Architecture.Tests.RepoPaths;
 namespace Elsa.Architecture.Tests;
 
 /// <summary>
-/// Keeps the major version each host declares for a shared Elsa assembly equal to the major that assembly is built with,
-/// in a source build and in a build with computed package versions alike (#2150).
+/// Holds every Elsa share of every host to what Nuplane itself does with it (#2150): each host's
+/// <c>Nuplane:Loading:SharedAssemblies</c>, bound and validated by Nuplane as the host binds it, must take, under Nuplane's
+/// own matcher, the reference a package built against this repository carries to each shared Elsa assembly, in a source
+/// build and in a build with computed package versions alike.
 /// </summary>
 /// <remarks>
 /// <para>
-/// Nuplane resolves a package's reference to the host's copy of a shared assembly only when a
-/// <c>Nuplane:Loading:SharedAssemblies</c> entry matches the reference, and its matcher compares the entry's
-/// <c>MajorVersion</c> with the referenced assembly version's major exactly. An entry naming another major never matches,
-/// and nothing says so: a package that carries its own copy of the assembly loads that copy, and the types the host and
-/// the package exchange through it stop being the same types. Every Elsa entry once declared 0 while Elsa assemblies were
-/// built as 1.0.0.0 from source and 4.x with computed versions.
+/// Nuplane resolves a package's reference to the host's copy of an assembly only when an entry matches it on name, public
+/// key token and major version, the major exactly. An entry that does not match says nothing: a package that carries its
+/// own copy of the assembly loads that copy, and the types the host and the package exchange through it stop being the same
+/// types. Every Elsa entry once declared major 0 while Elsa assemblies were built as 1.0.0.0 from source and 4.x with
+/// computed versions, and before 0.0.11-preview.94 Nuplane dropped every entry whose token was null while binding, so none
+/// ever matched.
 /// </para>
 /// <para>
-/// <c>PackageVersioning.props</c> now gives every Elsa assembly its line's major as its assembly version, whichever way it
-/// is built, and fails a build that overrides it (ELSAPV008). This guard reads what the SDK really computes for each shared
-/// project, both ways, and holds each host's declarations to it, so a declaration and a version line cannot move apart.
-/// A shared assembly with no project under <c>src/</c> (the <c>CShells.*</c> contracts) is not examined.
+/// <c>PackageVersioning.props</c> gives every Elsa assembly its line's major as its assembly version, whichever way it is
+/// built, and fails a build that overrides it (ELSAPV008). This guard reads what the SDK really computes for each shared
+/// project, both ways, and asks Nuplane's matcher whether each host's entries, as Nuplane binds them, take a reference to
+/// that version: a source build's from the host's <c>appsettings.json</c>, a computed build's with the
+/// <c>ComputedVersions/appsettings.Production.json</c> it ships over it. A shared assembly with no project under
+/// <c>src/</c> (the <c>CShells.*</c> contracts) is not examined.
 /// </para>
 /// </remarks>
 public sealed class SharedAssemblyMajorVersionGuardTests
 {
+    /// <summary>What a build with computed package versions ships as its <c>appsettings.Production.json</c>.</summary>
+    private const string ComputedProductionSettings = $"{ComputedVersionsDirectory}/appsettings.Production.json";
+
     /// <summary>Every Elsa project under <c>src/</c>, by assembly name, with its project file.</summary>
     private static IReadOnlyDictionary<string, string> ElsaProjects { get; } =
         ProjectGraph.ElsaProjectPaths(RepoRoot).ToDictionary(path => Path.GetFileNameWithoutExtension(path)!, Path.GetFullPath, StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>The Elsa assemblies any host shares, each with the assembly version a source build gives it.</summary>
-    private static readonly Lazy<IReadOnlyDictionary<string, Version>> SourceBuild = new(() => BuiltAssemblyVersions(computed: false));
+    /// <summary>The reference a package compiled against a source build carries to each Elsa assembly any host shares.</summary>
+    private static readonly Lazy<IReadOnlyDictionary<string, AssemblyName>> SourceBuild = new(() => BuiltReferences(computed: false));
 
-    /// <summary>The same assemblies, each with the assembly version a build with computed package versions gives it.</summary>
-    private static readonly Lazy<IReadOnlyDictionary<string, Version>> ComputedBuild = new(() => BuiltAssemblyVersions(computed: true));
+    /// <summary>The same references, for a package compiled against a build with computed package versions.</summary>
+    private static readonly Lazy<IReadOnlyDictionary<string, AssemblyName>> ComputedBuild = new(() => BuiltReferences(computed: true));
 
     public static TheoryData<string> Hosts => [.. HostsThatShareAssemblies()];
 
     [Theory]
     [MemberData(nameof(Hosts))]
-    public void Every_elsa_share_declares_the_major_its_assembly_is_built_with(string host)
+    public void Every_elsa_share_takes_its_assemblys_reference_under_nuplanes_own_matcher(string host)
     {
-        var declared = DeclaredElsaMajors(host);
+        var source = NuplaneSharedAssemblyPolicy.Bind(ReadNuplane(host));
+        var computed = NuplaneSharedAssemblyPolicy.Bind(ReadNuplane(host, ComputedProductionSettings));
 
-        Assert.NotEmpty(declared);
-        Assert.True(Mismatches(declared, SourceBuild.Value).Count == 0, Report(host, "a source build", Mismatches(declared, SourceBuild.Value)));
-        Assert.True(Mismatches(declared, ComputedBuild.Value).Count == 0, Report(host, "a build with computed versions", Mismatches(declared, ComputedBuild.Value)));
+        Assert.NotEmpty(ElsaShares(source));
+        Assert.True(Unmatched(source, SourceBuild.Value).Count == 0, Report(host, "a source build", Unmatched(source, SourceBuild.Value)));
+        Assert.True(Unmatched(computed, ComputedBuild.Value).Count == 0, Report(host, "a build with computed versions", Unmatched(computed, ComputedBuild.Value)));
     }
 
     /// <summary>
-    /// The theory above compares only what both sides name, so this pins that the evaluation reported a version for every
-    /// Elsa share of every host, and that each is the major of the line <c>VersionLines.props</c> puts its project on.
+    /// The theory above compares only what both sides name, so this pins that the evaluation reported a reference for every
+    /// Elsa share of every host, and that its version is the major of the line <c>VersionLines.props</c> puts its project on.
     /// </summary>
     [Fact]
     public void Every_elsa_share_is_evaluated_and_carries_its_lines_major()
     {
-        var shared = HostsThatShareAssemblies().SelectMany(host => DeclaredElsaMajors(host).Keys).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var shared = HostsThatShareAssemblies().SelectMany(host => ElsaShares(NuplaneSharedAssemblyPolicy.Bind(ReadNuplane(host))))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var lineA = VersionLines.LineAMembers(RepoRoot).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         Assert.Contains("Elsa.Primitives", shared);
@@ -66,67 +81,114 @@ public sealed class SharedAssemblyMajorVersionGuardTests
         Assert.All(shared, name =>
         {
             var expected = new Version(LineMajor(lineA.Contains(name) ? "ElsaContractsVersion" : "ElsaVersion"), 0, 0, 0);
-            Assert.Equal(expected, SourceBuild.Value.GetValueOrDefault(name));
-            Assert.Equal(expected, ComputedBuild.Value.GetValueOrDefault(name));
+            Assert.Equal(expected, SourceBuild.Value.GetValueOrDefault(name)?.Version);
+            Assert.Equal(expected, ComputedBuild.Value.GetValueOrDefault(name)?.Version);
         });
     }
 
-    /// <summary>The detector itself, so the theory's green means "every major matches" rather than "nothing compared".</summary>
+    /// <summary>
+    /// The detector itself, through Nuplane's own binding and matcher, so the theory's green means "every share matches"
+    /// rather than "nothing compared": another major, a token an unsigned assembly does not have, and a share no evaluation
+    /// reported are each flagged; a match is not, whatever case the entry spells the name in.
+    /// </summary>
     [Fact]
-    public void A_share_declaring_another_major_than_its_assembly_is_flagged()
+    public void A_share_nuplanes_matcher_does_not_take_is_flagged()
     {
-        var built = new Dictionary<string, Version>(StringComparer.OrdinalIgnoreCase)
+        var built = new Dictionary<string, AssemblyName>(StringComparer.OrdinalIgnoreCase)
         {
-            ["Elsa.Primitives"] = new(4, 0, 0, 0),
-            ["Elsa.Caching.Core"] = new(4, 0, 0, 0)
+            ["Elsa.Caching.Core"] = Reference("Elsa.Caching.Core", new(4, 0, 0, 0)),
+            ["Elsa.Events.Core"] = Reference("Elsa.Events.Core", new(4, 0, 0, 0)),
+            ["Elsa.Primitives"] = Reference("Elsa.Primitives", new(4, 0, 0, 0))
         };
 
         Assert.Equal(
-            ["Elsa.Caching.Core declares no major; its assembly is 4.0.0.0", "Elsa.Primitives declares major 0; its assembly is 4.0.0.0",
-             "Elsa.Tasks.Core declares major 4; its assembly was not evaluated"],
-            Mismatches(new Dictionary<string, int?> { ["Elsa.Primitives"] = 0, ["Elsa.Caching.Core"] = null, ["Elsa.Tasks.Core"] = 4 }, built));
-        Assert.Empty(Mismatches(new Dictionary<string, int?> { ["Elsa.Primitives"] = 4, ["elsa.caching.core"] = 4 }, built));
+            [
+                "Elsa.Caching.Core, declared as major 4 with token 0123456789abcdef: the reference is Elsa.Caching.Core, Version=4.0.0.0, PublicKeyToken=null",
+                "Elsa.Primitives, declared as major 0, unsigned: the reference is Elsa.Primitives, Version=4.0.0.0, PublicKeyToken=null",
+                "Elsa.Tasks.Core, declared as major 4, unsigned: its project was not evaluated"
+            ],
+            Unmatched(Policy("""
+                [
+                  { "Name": "Elsa.Primitives", "PublicKeyToken": null, "MajorVersion": 0 },
+                  { "Name": "Elsa.Caching.Core", "PublicKeyToken": "0123456789abcdef", "MajorVersion": 4 },
+                  { "Name": "Elsa.Events.Core", "PublicKeyToken": "", "MajorVersion": 4 },
+                  { "Name": "Elsa.Tasks.Core", "MajorVersion": 4 }
+                ]
+                """), built));
+        Assert.Empty(Unmatched(Policy("""
+            [
+              { "Name": "Elsa.Primitives", "PublicKeyToken": null, "MajorVersion": 4 },
+              { "Name": "elsa.caching.core", "MajorVersion": 4 }
+            ]
+            """), built));
     }
 
-    /// <summary>Each Elsa share of <paramref name="host"/> that has a project under <c>src/</c>, with the major it declares, if any.</summary>
-    private static IReadOnlyDictionary<string, int?> DeclaredElsaMajors(string host) =>
-        ReadNuplane(host).GetSection("Loading:SharedAssemblies").GetChildren()
-            .Where(entry => entry["Name"] is { } name && ElsaProjects.ContainsKey(name))
-            .ToDictionary(
-                entry => entry["Name"]!,
-                entry => int.TryParse(entry["MajorVersion"], out var major) ? major : (int?)null,
-                StringComparer.OrdinalIgnoreCase);
+    /// <summary>
+    /// An entry Nuplane cannot bind stops this guard exactly as it stops the host, naming the entry, rather than leaving
+    /// the host with one share fewer than it lists.
+    /// </summary>
+    [Fact]
+    public void A_share_nuplane_cannot_bind_fails_as_the_host_fails_to_start()
+    {
+        var refusal = Assert.Throws<OptionsValidationException>(() => Policy("""[ { "Name": "Elsa.Primitives", "PublicKeyToken": null } ]"""));
 
-    /// <summary>Every declaration whose major is not the major of the assembly version its project is built with.</summary>
-    private static IReadOnlyList<string> Mismatches(IReadOnlyDictionary<string, int?> declared, IReadOnlyDictionary<string, Version> built) =>
+        Assert.Contains("'Nuplane:Loading:SharedAssemblies:0' could not be bound", refusal.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>The Elsa assemblies with a project under <c>src/</c> that <paramref name="policy"/> has an entry for.</summary>
+    private static IEnumerable<string> ElsaShares(NuplaneSharedAssemblyPolicy policy) =>
+        policy.Entries.Select(entry => entry.Name).Where(ElsaProjects.ContainsKey).Distinct(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Every Elsa share of <paramref name="policy"/> whose reference, as <paramref name="built"/> gives it, Nuplane's matcher does not take.</summary>
+    private static IReadOnlyList<string> Unmatched(NuplaneSharedAssemblyPolicy policy, IReadOnlyDictionary<string, AssemblyName> built) =>
     [
-        .. declared
-            .Select(entry => (Name: entry.Key, Declared: entry.Value, Built: built.GetValueOrDefault(entry.Key)))
-            .Where(entry => entry.Built is null || entry.Declared != entry.Built.Major)
-            .OrderBy(entry => entry.Name, StringComparer.Ordinal)
-            .Select(entry =>
-                $"{entry.Name} declares {(entry.Declared is { } major ? $"major {major}" : "no major")}; " +
-                $"its assembly {(entry.Built is null ? "was not evaluated" : $"is {entry.Built}")}")
+        .. ElsaShares(policy)
+            .Select(name => (Name: name, Reference: built.GetValueOrDefault(name)))
+            .Where(share => share.Reference is null || !policy.Shares(share.Reference))
+            .OrderBy(share => share.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(share =>
+                $"{share.Name}, declared as " +
+                string.Join(" and as ", policy.Entries.Where(entry => string.Equals(entry.Name, share.Name, StringComparison.OrdinalIgnoreCase)).Select(Describe)) +
+                (share.Reference is null ? ": its project was not evaluated" : $": the reference is {share.Reference.FullName}"))
     ];
 
-    private static string Report(string host, string build, IReadOnlyList<string> mismatches) =>
-        $"{host}'s Nuplane:Loading:SharedAssemblies (src/apps/{host}/appsettings.json) declares majors that {build} does not " +
-        "build its Elsa assemblies with. Nuplane's matcher compares the major exactly, so each such share would never match, " +
-        "and a package carrying its own copy of the assembly would load that copy instead of the host's (#2150):" +
-        string.Concat(mismatches.Select(line => $"{Environment.NewLine}  {line}"));
+    private static string Describe(SharedAssemblyPolicyEntry entry) =>
+        $"major {entry.MajorVersion}{(entry.PublicKeyToken.Length == 0 ? ", unsigned" : $" with token {entry.PublicKeyToken}")}";
+
+    private static string Report(string host, string build, IReadOnlyList<string> unmatched) =>
+        $"{host}'s Nuplane:Loading:SharedAssemblies (src/apps/{host}/appsettings.json) has Elsa shares that Nuplane's matcher " +
+        $"does not take for the reference a package built against {build} carries. Such a share never matches, so a package " +
+        "carrying its own copy of the assembly loads that copy instead of the host's (#2150):" +
+        string.Concat(unmatched.Select(line => $"{Environment.NewLine}  {line}"));
+
+    /// <summary><paramref name="entries"/>, a JSON array, as a host's <c>Nuplane:Loading:SharedAssemblies</c>, bound by Nuplane.</summary>
+    private static NuplaneSharedAssemblyPolicy Policy(string entries) =>
+        NuplaneSharedAssemblyPolicy.Bind(new ConfigurationBuilder()
+            .AddJsonStream(new MemoryStream(Encoding.UTF8.GetBytes($$"""{ "Nuplane": { "Loading": { "SharedAssemblies": {{entries}} } } }""")))
+            .Build()
+            .GetSection("Nuplane"));
+
+    /// <summary>A reference to an unsigned assembly, as a package compiled against it records it.</summary>
+    private static AssemblyName Reference(string name, Version version)
+    {
+        var reference = new AssemblyName(name) { Version = version };
+        reference.SetPublicKeyToken([]);
+        return reference;
+    }
 
     /// <summary>The major of a line's <c>major.minor</c> in <c>VersionLines.props</c>.</summary>
     private static int LineMajor(string property) =>
         Version.Parse(XDocument.Load(Path.Join(RepoRoot, "VersionLines.props")).Descendants(property).Single().Value.Trim()).Major;
 
     /// <summary>
-    /// The assembly version the SDK computes for the project of every Elsa assembly a host shares, as a build of the
-    /// repository evaluates it: one MSBuild invocation runs the SDK's own <c>GetAssemblyVersion</c> target in each project,
-    /// with no build input, or with a pack-properties file shaped as the calculator writes it.
+    /// The reference a package compiled against a build of the repository carries to the project of every Elsa assembly a
+    /// host shares: one MSBuild invocation runs the SDK's own <c>GetAssemblyVersion</c> target in each project, with no build
+    /// input, or with a pack-properties file shaped as the calculator writes it. A project that signs its assembly fails
+    /// here, because its reference carries a token this guard cannot derive and each host's entry would have to name.
     /// </summary>
-    private static IReadOnlyDictionary<string, Version> BuiltAssemblyVersions(bool computed)
+    private static IReadOnlyDictionary<string, AssemblyName> BuiltReferences(bool computed)
     {
-        var projects = HostsThatShareAssemblies().SelectMany(host => DeclaredElsaMajors(host).Keys)
+        var projects = HostsThatShareAssemblies().SelectMany(host => ElsaShares(NuplaneSharedAssemblyPolicy.Bind(ReadNuplane(host))))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Select(name => ElsaProjects[name])
             .Order(StringComparer.Ordinal);
@@ -139,7 +201,7 @@ public sealed class SharedAssemblyMajorVersionGuardTests
                 <Project>
                   <Target Name="ElsaReportAssemblyVersion" DependsOnTargets="GetAssemblyVersion" Returns="@(_ElsaReportedAssemblyVersion)">
                     <ItemGroup>
-                      <_ElsaReportedAssemblyVersion Include="$(AssemblyName)" AssemblyVersion="$(AssemblyVersion)" />
+                      <_ElsaReportedAssemblyVersion Include="$(AssemblyName)" AssemblyVersion="$(AssemblyVersion)" SignAssembly="$(SignAssembly)" />
                     </ItemGroup>
                   </Target>
                 </Project>
@@ -183,7 +245,15 @@ public sealed class SharedAssemblyMajorVersionGuardTests
             return document.RootElement.GetProperty("TargetResults").GetProperty("Report").GetProperty("Items").EnumerateArray()
                 .ToDictionary(
                     item => item.GetProperty("Identity").GetString()!,
-                    item => Version.Parse(item.GetProperty("AssemblyVersion").GetString()!),
+                    item =>
+                    {
+                        var name = item.GetProperty("Identity").GetString()!;
+                        Assert.False(
+                            string.Equals(item.GetProperty("SignAssembly").GetString(), "true", StringComparison.OrdinalIgnoreCase),
+                            $"{name} signs its assembly, so a package's reference to it carries a public key token each host's " +
+                            "Nuplane:Loading:SharedAssemblies entry would have to name, and this guard would have to derive (#2150).");
+                        return Reference(name, Version.Parse(item.GetProperty("AssemblyVersion").GetString()!));
+                    },
                     StringComparer.OrdinalIgnoreCase);
         }
         finally
