@@ -79,11 +79,10 @@ internal static class SyntheticSchemaFamilies
         var method = type.DefineMethod(
             contract.Name,
             MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.Final | MethodAttributes.HideBySig | MethodAttributes.NewSlot,
-            typeof(string),
-            [typeof(EfSchemaContent)]);
+            typeof(EfSchemaRowContent),
+            [typeof(EfSchemaRowContent)]);
         var il = method.GetILGenerator();
-        il.Emit(OpCodes.Ldarga_S, (byte)1);
-        il.Emit(OpCodes.Call, typeof(EfSchemaContent).GetProperty(nameof(EfSchemaContent.Value))!.GetMethod!);
+        il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ret);
         type.DefineMethodOverride(method, contract);
         return type.CreateType();

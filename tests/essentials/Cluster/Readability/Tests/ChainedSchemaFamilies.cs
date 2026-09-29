@@ -30,24 +30,24 @@ internal static class ChainedSchemaFamilies
     [EfSchemaUpcaster("1", "2")]
     public sealed class OrdersOneToTwo : IEfSchemaUpcaster
     {
-        public string Upcast(EfSchemaContent content) => content.Value;
+        public EfSchemaRowContent Upcast(EfSchemaRowContent row) => row;
     }
 
     [EfSchemaUpcaster("2", "3")]
     public sealed class OrdersTwoToThree : IEfSchemaUpcaster
     {
-        public string Upcast(EfSchemaContent content) => content.Value;
+        public EfSchemaRowContent Upcast(EfSchemaRowContent row) => row;
     }
 
     [EfSchemaUpcaster("0", "1")]
     public sealed class GappedZeroToOne : IEfSchemaUpcaster
     {
-        public string Upcast(EfSchemaContent content) => content.Value;
+        public EfSchemaRowContent Upcast(EfSchemaRowContent row) => row;
     }
 
     [EfSchemaUpcaster("2", "3")]
     public sealed class GappedTwoToThree : IEfSchemaUpcaster
     {
-        public string Upcast(EfSchemaContent content) => content.Value;
+        public EfSchemaRowContent Upcast(EfSchemaRowContent row) => row;
     }
 }

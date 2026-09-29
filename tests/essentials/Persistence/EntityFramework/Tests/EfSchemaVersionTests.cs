@@ -130,12 +130,12 @@ public sealed class EfSchemaVersionTests
     [EfSchemaUpcaster("1", "2")]
     private sealed class OneToTwo : IEfSchemaUpcaster
     {
-        public string Upcast(EfSchemaContent content) => content.Value;
+        public EfSchemaRowContent Upcast(EfSchemaRowContent row) => row;
     }
 
     [EfSchemaUpcaster("2", "3")]
     private sealed class TwoToThree : IEfSchemaUpcaster
     {
-        public string Upcast(EfSchemaContent content) => content.Value;
+        public EfSchemaRowContent Upcast(EfSchemaRowContent row) => row;
     }
 }

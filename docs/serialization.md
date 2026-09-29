@@ -82,9 +82,13 @@ bindings) must be able to evolve without silently breaking already-suspended wor
   predecessor the chain reaches without a gap; a host's readability report credits exactly that set, and a store's
   check accepts exactly that set, because both are computed from the one declaration. A store checks the stamp first
   (`EfSchemaVersion.NotReadable(<Module>.Chain, row.SchemaVersion)`), evaluates its integrity clauses for the stamped
-  version, then upcasts the decoded content one step at a time (`<Module>.Chain.Upcast(...)`) before deserializing it.
-  A stamp outside the readable set, below a gap included, is `EfSchemaVersionSkewException`; an upcaster that fails on
-  a readable row is corruption. A write stamps the current version on content it writes in the current format, so a
+  version, then upcasts the row's decoded content columns together, one step at a time
+  (`<Module>.Chain.Upcast<TEntity>(row.SchemaVersion, (nameof(row.A), row.A), ...)`, every declared content column of
+  the table), before deserializing any of them. An upcaster works on the whole row, so one step can move data from one
+  column to another, and the chain refuses a read that passes other columns than the table's declared ones, and a step
+  that adds or drops one: a row is either at its stamp or wholly upcast (#2144). A stamp outside the readable set,
+  below a gap included, is `EfSchemaVersionSkewException`; an upcaster that fails on a readable row, or returns other
+  columns than it received, is corruption. A write stamps the current version on content it writes in the current format, so a
   row moves forward the next time it is written; a read never rewrites anything. A chain with a gap, a duplicate, a
   branch or a cycle, or one that does not end at the current version, fails the build
   (`EfSchemaFamilyDeclarationGuardTests`) and the module's registration at startup. The two design contexts whose
@@ -119,15 +123,19 @@ reset-and-republish upgrades.
 From 4.0 on, a change to what a family stores is a new version of that family ([spec 180](../specs/180-schema-upcaster-chain/spec.md)):
 
 1. Bump the family's `SchemaVersion` constant, and add one upcaster from the previous version to the end of its
-   declared chain, beside the family's store code. It is a pure function of its input (FR-019) and preserves every
-   identity the row carries (FR-020), and it transforms every column the family declares content, since each is read
-   through it. A new document column is declared with `[EfSchemaContent]`, or `[EfSchemaIntegrity]` with its reason.
+   declared chain, beside the family's store code. It is a pure function of the row it receives (FR-019) and preserves
+   every identity the row carries (FR-020). It receives every content column the family declares for the row's table
+   and returns the same columns, changing the ones it has a change for and returning the rest as it received them,
+   including a column a later version added, which is null on the rows it reads. A new document column is declared with
+   `[EfSchemaContent]`, or `[EfSchemaIntegrity]` with its reason, and every store read of that table names it.
 2. Keep the change expand-only, for content as for migrations: a renamed, retyped or restructured member is split
    across two versions (FR-027), and an executable's identity-hashed format never changes in place (FR-028).
 3. Gate every integrity clause for a projection the version introduces on the row's stamp
    (`<Module>.Chain.IsAtOrAfter(row.SchemaVersion, "<version>")`), since an older writer left it unset (FR-008).
 4. Commit the upcaster's fixture pair under `Fixtures/SchemaUpcasters/<family>/<from>-to-<to>/` in the module's
-   test project, record it in `tests/essentials/Architecture/Baselines/schema-upcaster-fixtures.sha256`, and prove the
+   test project - one row per table, `<table>.source.json` and `<table>.expected.json`, each a JSON object of the row's
+   content columns, the table named by its entity type - record it in
+   `tests/essentials/Architecture/Baselines/schema-upcaster-fixtures.sha256`, and prove the
    upcast, the old-format round trip and the store's read of the source fixture (FR-022) with a test class deriving
    directly from `EfSchemaUpcasterProof<TUpcaster, TValue>(family, store)`, compiled in from
    `EfSchemaUpcasterFixtureSupport.cs`. The base class holds all three proofs; the module supplies only the store's

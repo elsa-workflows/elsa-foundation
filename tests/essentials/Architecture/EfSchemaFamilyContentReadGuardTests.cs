@@ -56,10 +56,11 @@ public sealed class EfSchemaFamilyContentReadGuardTests
     /// </summary>
     /// <remarks>
     /// Tree-wide over every EF persistence source, where the Identity-only pin this replaces could not be, since nothing
-    /// said which columns were content. A read that deserializes nothing - a copy into the same column of another row, a
-    /// presence check, model configuration - is no violation; a read of a freshly built row, or of stored bytes an integrity
-    /// clause compares (FR-008), is exempted by name with its reason, because telling it from a stored row's content takes
-    /// data flow this syntax-only guard does not have.
+    /// said which columns were content. A read that deserializes nothing - a copy into the same column of another row, model
+    /// configuration - is no violation; a read of a freshly built row, or of stored bytes an integrity clause compares
+    /// (FR-008), is exempted by name with its reason, because telling it from a stored row's content takes data flow this
+    /// syntax-only guard does not have. A presence check is held to the rule since upcasters work on rows (#2144): a step
+    /// may fill a column an older writer left null, so whether it holds anything is read from the upcast row.
     /// </remarks>
     [Fact]
     public void Every_declared_content_column_is_read_through_its_chain()
@@ -69,7 +70,10 @@ public sealed class EfSchemaFamilyContentReadGuardTests
         AssertNone(violations, "A declared content column is read through its family's chain, from the row's stamp, so an older row is " +
             "upcast before it is parsed or compared with anything this build serializes (spec 180, FR-009):");
         AssertNone(unused, "Every exemption from the content read rule still matches a read:");
-        Assert.True(reads >= 200, $"Expected the EF stores to keep reading their content columns; found {reads} reads.");
+        // 195 when #2144 moved upcasting to rows: a store now reads a row's content columns once, in the one call that
+        // upcasts them together, where it read each column at every use before, so the floor moved from 200.
+        Assert.True(reads >= 190, $"Expected the EF stores to keep reading their content columns; found {reads} reads.");
+        Assert.True(Persistence.RowUpcasts().Count >= 45, $"Expected the EF stores to keep upcasting whole rows; found {Persistence.RowUpcasts().Count} row upcasts.");
     }
 
     /// <summary>
@@ -88,6 +92,11 @@ public sealed class EfSchemaFamilyContentReadGuardTests
         Assert.False(ProjectVisibility.Sees("src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfBookmarkStateStore.cs", secrets));
     }
 
+    /// <summary>
+    /// A read goes through the chain as a column value of a chain's <c>Upcast</c>, or through a helper that hands its
+    /// parameters to one. A presence check is a read like any other since #2144: a step sees the whole row and may fill a
+    /// column, so testing the stored column for null past the chain can skip data the upcast row holds.
+    /// </summary>
     [Fact]
     public void Content_read_detector_flags_a_read_past_the_chain_and_accepts_one_that_deserializes_nothing()
     {
@@ -107,14 +116,16 @@ public sealed class EfSchemaFamilyContentReadGuardTests
             public sealed class Store
             {
                 Set Raw(Row row) => Parse(row.ClaimIdsJson);
-                Set Through(Row row) => ReadSet(row.SchemaVersion, "rows", nameof(row.ClaimIdsJson), row.ClaimIdsJson);
+                Set Through(Row row) => Parse(Orders.Chain.Upcast<Row>(row.SchemaVersion, (nameof(row.ClaimIdsJson), row.ClaimIdsJson), (nameof(row.ContentJson), row.ContentJson))[nameof(row.ClaimIdsJson)]);
+                Set Helped(Row row) => Parse(Content(row.SchemaVersion, row.ClaimIdsJson, row.ContentJson)[nameof(Row.ClaimIdsJson)]);
                 Set Incoming(Row caller) => Parse(caller.ClaimIdsJson);
-                bool Present(Row row) => row.ContentJson is not null && !string.IsNullOrWhiteSpace(row.ClaimIdsJson);
+                bool Present(Row row) => row.ContentJson is not null;
                 void Copy(Row row, Row replacement) { row.ContentJson = replacement.ContentJson; row.SchemaVersion = replacement.SchemaVersion; }
                 Row Fresh(Row source) => new() { ContentJson = source.ContentJson, SchemaVersion = Orders.SchemaVersion };
                 void Configure(Builder b) => b.Property(x => x.ContentJson).IsRequired();
                 bool Digest(Row row) => Hash(row.DigestJson) == row.Hash;
-                static Set ReadSet(string? stamp, string table, string column, string json) => Parse(Orders.Chain.Upcast(stamp, table, column, json));
+                static EfSchemaRowContent Content(string? stamp, string? claims, string? content) =>
+                    Orders.Chain.Upcast<Row>(stamp, (nameof(Row.ClaimIdsJson), claims), (nameof(Row.ContentJson), content));
             }
             """);
 
@@ -127,9 +138,12 @@ public sealed class EfSchemaFamilyContentReadGuardTests
                 [("Fixture.cs", "Gone", "row.ClaimIdsJson", "Parse(...)")] = "stale"
             });
 
-        var violation = Assert.Single(violations);
-        Assert.StartsWith("Fixture.cs(14): reads 'row.ClaimIdsJson' in 'Raw' (Parse(...))", violation);
+        Assert.Collection(
+            violations,
+            raw => Assert.StartsWith("Fixture.cs(14): reads 'row.ClaimIdsJson' in 'Raw' (Parse(...))", raw),
+            present => Assert.StartsWith("Fixture.cs(18): reads 'row.ContentJson' in 'Present' (IsPatternExpression)", present));
         Assert.StartsWith("Fixture.cs, Gone, row.ClaimIdsJson, Parse(...)", Assert.Single(unused));
+        Assert.Empty(scan.UpcastDeclarationViolations());
     }
 
     /// <summary>A family EF materializes directly meets the read rule through the interceptor, so its content reads are not judged.</summary>

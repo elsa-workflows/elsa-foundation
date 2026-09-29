@@ -64,7 +64,8 @@ public sealed class EfSchemaFamilyDescriptorTests
         Assert.All(EfSchemaFamilyCatalog.Discover(Declaring), family =>
         {
             var chain = EfSchemaChain.Of(family.Assembly, family.Name);
-            var skew = Assert.Throws<EfSchemaVersionSkewException>(() => chain.Upcast(stamp, "any", "Content", "not-json"));
+            // The stamp is settled before the row's columns are, so any row reports skew, whatever table it names.
+            var skew = Assert.Throws<EfSchemaVersionSkewException>(() => chain.Upcast(stamp, new EfSchemaRowContent(typeof(object), ("Content", "not-json"))));
             Assert.Equal(family.Name, skew.Family);
             Assert.Equal(chain.ReadableVersions, skew.ReadableVersions);
         });
