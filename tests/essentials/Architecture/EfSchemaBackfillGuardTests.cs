@@ -191,10 +191,9 @@ internal sealed class BackfillDeclarationScan
 
     private void Read(string path, CompilationUnitSyntax root)
     {
-        foreach (var field in root.DescendantNodes().OfType<FieldDeclarationSyntax>().Where(field => field.Modifiers.Any(SyntaxKind.ConstKeyword)))
+        foreach (var field in root.DescendantNodes().OfType<FieldDeclarationSyntax>().Where(field => field.Modifiers.Any(SyntaxKind.ConstKeyword) && field.Parent is TypeDeclarationSyntax))
         {
-            if (field.Parent is not TypeDeclarationSyntax owner)
-                continue;
+            var owner = (TypeDeclarationSyntax)field.Parent!;
             foreach (var variable in field.Declaration.Variables)
             {
                 if (variable.Initializer?.Value is LiteralExpressionSyntax literal && literal.IsKind(SyntaxKind.StringLiteralExpression))
@@ -202,15 +201,18 @@ internal sealed class BackfillDeclarationScan
             }
         }
 
-        foreach (var attribute in root.AttributeLists
+        foreach (var candidate in root.AttributeLists
                      .Where(list => list.Target?.Identifier.IsKind(SyntaxKind.AssemblyKeyword) == true)
                      .SelectMany(list => list.Attributes)
-                     .Where(attribute => FamilyNames.Contains(Rightmost(attribute.Name), StringComparer.Ordinal)))
+                     .Where(attribute => FamilyNames.Contains(Rightmost(attribute.Name), StringComparer.Ordinal))
+                     .Select(attribute =>
+                     {
+                         var arguments = attribute.ArgumentList?.Arguments ?? default;
+                         return (Attribute: attribute, Arguments: arguments, Positional: arguments.Where(argument => argument.NameEquals is null).ToArray());
+                     })
+                     .Where(candidate => candidate.Positional.Length >= 2))
         {
-            var arguments = attribute.ArgumentList?.Arguments ?? default;
-            var positional = arguments.Where(argument => argument.NameEquals is null).ToArray();
-            if (positional.Length < 2)
-                continue;
+            var (attribute, arguments, positional) = candidate;
             Declarations.Add(new Declaration(
                 Locate(path, attribute),
                 path,

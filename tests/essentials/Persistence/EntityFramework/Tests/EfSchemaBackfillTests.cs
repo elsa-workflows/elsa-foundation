@@ -379,7 +379,7 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
         await SeedFamilyAsync();
         var first = await HostAsync("host-a", claim: TimeSpan.Zero);
         var second = await HostAsync("host-b", claim: TimeSpan.Zero);
-        var bothRead = new CountdownEvent(2);
+        using var bothRead = new CountdownEvent(2);
         foreach (var host in new[] { first, second })
         {
             host.Probe.BeforeWrite = row =>
@@ -1040,7 +1040,7 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
     private sealed class RewriterWithAnUncomposedService(IServiceScopeFactory unused, UncomposedService service) : IEfSchemaRowRewriter
     {
         public ValueTask<EfSchemaRewriteOutcome> RewriteAsync(EfSchemaRowToRewrite row, CancellationToken cancellationToken = default) =>
-            throw new InvalidOperationException($"{unused}{service} cannot have been constructed.");
+            throw new InvalidOperationException($"{unused.GetType().Name}{service.GetType().Name} cannot have been constructed.");
     }
 
     private sealed class UncomposedService;

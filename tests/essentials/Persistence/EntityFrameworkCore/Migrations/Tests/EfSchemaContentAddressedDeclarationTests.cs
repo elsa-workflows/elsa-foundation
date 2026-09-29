@@ -147,12 +147,12 @@ public sealed class EfSchemaContentAddressedDeclarationTests
     /// </summary>
     private static IEnumerable<(Type Type, DbContext Context, EfSchemaModuleFamilies Families)> Modules(string provider, string connectionString)
     {
-        foreach (var type in ModuleContextCatalog.Contexts(provider))
+        foreach (var (type, families) in ModuleContextCatalog.Contexts(provider)
+                     .Select(type => (Type: type, Families: EfSchemaModuleFamilies.ForContext(type)))
+                     .Where(module => module.Families is not null))
         {
-            if (EfSchemaModuleFamilies.ForContext(type) is not { } families)
-                continue;
             using var context = ModuleContextCatalog.Create(type, connectionString);
-            yield return (type, context, families);
+            yield return (type, context, families!);
         }
     }
 
