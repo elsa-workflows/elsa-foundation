@@ -30,5 +30,7 @@
   <ItemGroup>
     <!-- Wrapped provider failures this suite injects without a real server. -->
     <Compile Include="..\..\..\..\..\Persistence\EntityFramework\Tests\ProviderFailures.cs" Link="ProviderFailures.cs" />
+    <!-- Asserts a module's migrations are bound by the assembly itself, never by name (spec 183, FR-021). -->
+    <Compile Include="..\..\..\..\..\Persistence\EntityFramework\Tests\MigrationsAssemblyAssert.cs" Link="MigrationsAssemblyAssert.cs" />
   </ItemGroup>
 </Project>

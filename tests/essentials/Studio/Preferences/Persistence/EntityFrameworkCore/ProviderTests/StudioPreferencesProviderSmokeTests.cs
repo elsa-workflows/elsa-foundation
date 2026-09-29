@@ -1,4 +1,5 @@
 using Elsa.Studio.Preferences.Core.Contracts;
+using Elsa.Persistence.EntityFramework.Tests;
 using Elsa.Studio.Preferences.Core.Models;
 using Elsa.Studio.Preferences.Persistence.EntityFrameworkCore;
 using Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.DependencyInjection;
@@ -82,9 +83,7 @@ public sealed class StudioPreferencesMySqlSmokeTests(StudioPreferencesMySqlConta
             .OfType<RelationalOptionsExtension>()
             .Single();
         Assert.Equal(StudioPreferencesEfModule.HistoryTableName, relational.MigrationsHistoryTableName);
-        // Bound by the assembly itself, never by a name EF Core would resolve from its own load context (spec 183, FR-021).
-        Assert.Same(typeof(StudioPreferencesDbContext).Assembly, relational.MigrationsAssemblyObject);
-        Assert.Null(relational.MigrationsAssembly);
+        MigrationsAssemblyAssert.BoundByTheAssemblyItself(typeof(StudioPreferencesDbContext).Assembly, relational);
 
         await context.Database.EnsureCreatedAsync();
         var key = new StudioPreferenceKey(

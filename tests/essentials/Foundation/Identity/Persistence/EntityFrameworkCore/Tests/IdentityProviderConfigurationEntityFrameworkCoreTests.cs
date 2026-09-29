@@ -3,6 +3,7 @@ using Elsa.Foundation.Identity.Core.Ownership;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Stores;
+using Elsa.Persistence.EntityFramework.Tests;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Data.Sqlite;
@@ -251,9 +252,7 @@ public sealed class IdentityProviderConfigurationEntityFrameworkCoreTests
         Assert.IsType<EfProviderConfigurationStore>(primary);
         Assert.Same(primary, revisionAware);
         Assert.Equal(IdentityProviderConfigurationEfModule.HistoryTableName, relational.MigrationsHistoryTableName);
-        // Bound by the assembly itself, never by a name EF Core would resolve from its own load context (spec 183, FR-021).
-        Assert.Same(typeof(IdentityProviderConfigurationDbContext).Assembly, relational.MigrationsAssemblyObject);
-        Assert.Null(relational.MigrationsAssembly);
+        MigrationsAssemblyAssert.BoundByTheAssemblyItself(typeof(IdentityProviderConfigurationDbContext).Assembly, relational);
         Assert.DoesNotContain(context.Model.GetEntityTypes(), entity =>
             entity.ClrType.FullName?.Contains("OpenIddict", StringComparison.Ordinal) == true);
     }

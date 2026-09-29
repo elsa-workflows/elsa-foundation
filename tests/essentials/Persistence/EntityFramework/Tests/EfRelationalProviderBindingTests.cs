@@ -85,12 +85,7 @@ public sealed class EfRelationalProviderBindingTests
         var relational = builder.Options.Extensions.OfType<RelationalOptionsExtension>().Single();
         Assert.Equal("Data Source=test-module.db", relational.ConnectionString);
         Assert.Equal("__EFMigrationsHistory_Test", relational.MigrationsHistoryTableName);
-        Assert.Same(migrations, relational.MigrationsAssemblyObject);
-        // Spec 183's FR-021, amended 2026-09-29: never a name as well. EF Core resolves a name before it looks at an
-        // assembly, and from its own load context, which after an in-place upgrade still holds the previous release under
-        // that name: the new release's context would find no migration of its own, and validation would pass over all of
-        // the ones it has pending.
-        Assert.Null(relational.MigrationsAssembly);
+        MigrationsAssemblyAssert.BoundByTheAssemblyItself(migrations, relational);
     }
 
     [Fact]
