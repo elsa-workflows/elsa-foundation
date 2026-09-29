@@ -1,3 +1,4 @@
+using System.Reflection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -8,10 +9,16 @@ namespace Elsa.Persistence.EntityFramework;
 /// history table and assembly, and where it connects by default. Every module applies a host's provider and connection
 /// choices through here, so they accept the same provider aliases and resolve connections in the same order.
 /// </summary>
+/// <remarks>
+/// The migrations assembly is the assembly itself, never its name (spec 183, FR-021, amended 2026-09-29): EF Core would
+/// resolve a name from its own load context, and where a package upgraded in place leaves the previous release loaded
+/// there, the name reaches the previous release's migrations, which the new release's context does not match, so none of
+/// the new release's pending migrations would be seen. <see langword="null"/> reads the context's own assembly.
+/// </remarks>
 public sealed record EfModuleBinding(
     string Owner,
     string HistoryTableName,
-    string? MigrationsAssembly,
+    Assembly? MigrationsAssembly,
     string DefaultConnectionName = EfConnectionDefaults.ConnectionName,
     string DefaultSqliteConnectionString = EfConnectionDefaults.SqliteConnectionString)
 {
@@ -33,7 +40,7 @@ public sealed record EfModuleBinding(
         return new EfModuleBinding(
             descriptor.Owner,
             descriptor.HistoryTableName,
-            contextType.Assembly.GetName().Name,
+            contextType.Assembly,
             descriptor.DefaultConnectionName,
             descriptor.DefaultSqliteConnectionString);
     }

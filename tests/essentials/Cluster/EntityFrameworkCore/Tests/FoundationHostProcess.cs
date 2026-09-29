@@ -118,6 +118,24 @@ internal sealed class FoundationHostProcess : IAsyncDisposable
     /// <summary>Whether the host process is still the one <see cref="StartAsync"/> started, and still running.</summary>
     public bool IsRunning => _started && !_process.HasExited;
 
+    /// <summary>Posts nothing to <paramref name="path"/> with <paramref name="headers"/>, and returns the status it is answered with.</summary>
+    public async Task<HttpStatusCode> PostAsync(string path, IReadOnlyDictionary<string, string> headers)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, path);
+        foreach (var (name, value) in headers)
+            request.Headers.Add(name, value);
+        using var response = await _client.SendAsync(request);
+        return response.StatusCode;
+    }
+
+    /// <summary>The host's output from the first line that contains <paramref name="marker"/> on, or empty before that line.</summary>
+    public string OutputSince(string marker)
+    {
+        var output = Output;
+        var index = output.IndexOf(marker, StringComparison.Ordinal);
+        return index < 0 ? "" : output[index..];
+    }
+
     /// <summary>The status a request to <paramref name="path"/> is answered with, and its body.</summary>
     public async Task<(HttpStatusCode Status, string Body)> GetAsync(string path)
     {

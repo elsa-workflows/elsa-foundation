@@ -251,7 +251,9 @@ public sealed class IdentityProviderConfigurationEntityFrameworkCoreTests
         Assert.IsType<EfProviderConfigurationStore>(primary);
         Assert.Same(primary, revisionAware);
         Assert.Equal(IdentityProviderConfigurationEfModule.HistoryTableName, relational.MigrationsHistoryTableName);
-        Assert.Equal(typeof(IdentityProviderConfigurationDbContext).Assembly.GetName().Name, relational.MigrationsAssembly);
+        // Bound by the assembly itself, never by a name EF Core would resolve from its own load context (spec 183, FR-021).
+        Assert.Same(typeof(IdentityProviderConfigurationDbContext).Assembly, relational.MigrationsAssemblyObject);
+        Assert.Null(relational.MigrationsAssembly);
         Assert.DoesNotContain(context.Model.GetEntityTypes(), entity =>
             entity.ClrType.FullName?.Contains("OpenIddict", StringComparison.Ordinal) == true);
     }

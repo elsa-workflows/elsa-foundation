@@ -82,7 +82,9 @@ public sealed class StudioPreferencesMySqlSmokeTests(StudioPreferencesMySqlConta
             .OfType<RelationalOptionsExtension>()
             .Single();
         Assert.Equal(StudioPreferencesEfModule.HistoryTableName, relational.MigrationsHistoryTableName);
-        Assert.Equal(typeof(StudioPreferencesDbContext).Assembly.GetName().Name, relational.MigrationsAssembly);
+        // Bound by the assembly itself, never by a name EF Core would resolve from its own load context (spec 183, FR-021).
+        Assert.Same(typeof(StudioPreferencesDbContext).Assembly, relational.MigrationsAssemblyObject);
+        Assert.Null(relational.MigrationsAssembly);
 
         await context.Database.EnsureCreatedAsync();
         var key = new StudioPreferenceKey(

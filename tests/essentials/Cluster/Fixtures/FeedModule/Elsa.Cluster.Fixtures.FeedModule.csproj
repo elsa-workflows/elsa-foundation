@@ -12,20 +12,31 @@
   </PropertyGroup>
 
   <!--
-    The previous release of the same package, for an in-place upgrade (spec 183, FR-021, amended 2026-09-29):
-    FoundationHostFeed packs it with -p:FeedModuleGeneration=1, and gets a lower package version whose family is at
-    version 1 with no upcaster, so it reads version 1 alone. It builds into outputs of its own, so it never overwrites the
-    build every other test loads, and it never becomes this project's default.
+    Two other releases of the same package, for an in-place upgrade (spec 183, FR-021, amended 2026-09-29), which
+    FoundationHostFeed builds and packs with -p:FeedModuleRelease=previous or =next. Each builds into outputs of its own,
+    so it never overwrites the build every other test loads, and neither is ever this project's default.
+    - previous: a lower package version whose family is at version 1 with no upcaster, so it reads version 1 alone.
+    - next: a higher package version that is this release plus one migration, so a host that validates its migrations
+      has one pending when it reloads onto it.
   -->
-  <PropertyGroup Condition="'$(FeedModuleGeneration)' == '1'">
-    <DefineConstants>$(DefineConstants);FEED_MODULE_GENERATION_1</DefineConstants>
-    <Version>0.1.0</Version>
-    <IntermediateOutputPath>$(BaseIntermediateOutputPath)generation-1/$(Configuration)/</IntermediateOutputPath>
-    <OutputPath>$(BaseOutputPath)generation-1/$(Configuration)/</OutputPath>
+  <PropertyGroup Condition="'$(FeedModuleRelease)' != ''">
+    <IntermediateOutputPath>$(BaseIntermediateOutputPath)release-$(FeedModuleRelease)/$(Configuration)/</IntermediateOutputPath>
+    <!-- BaseOutputPath is not set yet here, so the default bin/ is spelled out. -->
+    <OutputPath>bin/release-$(FeedModuleRelease)/$(Configuration)/</OutputPath>
   </PropertyGroup>
 
-  <ItemGroup Condition="'$(FeedModuleGeneration)' == '1'">
-    <Compile Remove="FeedModuleOneToTwo.cs" />
+  <PropertyGroup Condition="'$(FeedModuleRelease)' == 'previous'">
+    <DefineConstants>$(DefineConstants);FEED_MODULE_PREVIOUS_RELEASE</DefineConstants>
+    <Version>0.1.0</Version>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(FeedModuleRelease)' == 'next'">
+    <Version>1.1.0</Version>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="FeedModuleOneToTwo.cs" Condition="'$(FeedModuleRelease)' == 'previous'" />
+    <Compile Remove="FeedModuleAddTags.cs" Condition="'$(FeedModuleRelease)' != 'next'" />
   </ItemGroup>
 
   <ItemGroup>

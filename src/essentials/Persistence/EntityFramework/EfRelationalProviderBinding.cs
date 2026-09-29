@@ -86,6 +86,33 @@ public static class EfRelationalProviderBinding
     }
 
     /// <summary>
+    /// Binds <paramref name="provider"/> as <see cref="Use(DbContextOptionsBuilder,string,string,string,string?,string?)"/>
+    /// does, reading migrations from <paramref name="migrationsAssembly"/> itself rather than from an assembly of its name,
+    /// or from the context's own assembly when it is <see langword="null"/>.
+    /// </summary>
+    /// <remarks>
+    /// EF Core resolves a migrations assembly given by name with <see cref="Assembly.Load(AssemblyName)"/> from its own load
+    /// context. Where two generations of a module are loaded - a package upgraded in place, whose new release Nuplane loads
+    /// into a load context of its own that binds EF Core from the previous release's - that name reaches the previous
+    /// release, whose migrations are keyed to the previous release's context type: the new context would see none, so
+    /// <c>Validate</c> would pass over every migration it has pending and <c>AutoMigrate</c> would apply nothing (spec
+    /// 183, FR-021, amended 2026-09-29). Given the assembly, EF Core reads exactly the generation the module was bound with.
+    /// </remarks>
+    public static void Use(
+        DbContextOptionsBuilder builder,
+        string provider,
+        string connectionString,
+        string historyTableName,
+        Assembly? migrationsAssembly,
+        string? schema = null)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
+        ArgumentException.ThrowIfNullOrWhiteSpace(historyTableName);
+        Use(builder, EngineFor(provider), connectionString, historyTableName, migrationsAssembly, schema);
+    }
+
+    /// <summary>
     /// Resolves what <see cref="Use(DbContextOptionsBuilder,string,string,string,string?,string?)"/> would reflect over for
     /// <paramref name="provider"/> — the engine assembly, its <c>Use*</c> overload, and the two relational options
     /// methods the binding calls — without configuring a context or opening a connection. Returns <c>null</c> when
@@ -98,7 +125,8 @@ public static class EfRelationalProviderBinding
             var method = ResolveExtensionMethod(EngineFor(provider));
             var optionsBuilderType = method.GetParameters()[2].ParameterType.GenericTypeArguments[0];
             ResolveMigrationsHistoryTable(optionsBuilderType);
-            ResolveMigrationsAssembly(optionsBuilderType);
+            ResolveMigrationsAssembly(optionsBuilderType, typeof(string));
+            ResolveMigrationsAssembly(optionsBuilderType, typeof(Assembly));
             return null;
         }
         catch (Exception failure) when (failure is InvalidOperationException or ArgumentException)
@@ -149,12 +177,13 @@ public static class EfRelationalProviderBinding
     private static ProviderEngine EngineFor(string provider) =>
         Select(provider, "relational", SqliteEngine, SqlServerEngine, PostgreSqlEngine, MySqlEngine);
 
+    /// <param name="migrationsAssembly">The migrations assembly's name, the assembly itself, or <see langword="null"/> for the context's own.</param>
     private static void Use(
         DbContextOptionsBuilder builder,
         ProviderEngine engine,
         string connectionString,
         string historyTableName,
-        string? migrationsAssembly,
+        object? migrationsAssembly,
         string? schema)
     {
         if (!engine.SupportsSchemas || string.IsNullOrWhiteSpace(schema))
@@ -204,7 +233,7 @@ public static class EfRelationalProviderBinding
         Type actionType,
         Type optionsBuilderType,
         string historyTableName,
-        string? migrationsAssembly,
+        object? migrationsAssembly,
         string? schema)
     {
         var parameter = Expression.Parameter(optionsBuilderType, "relational");
@@ -216,8 +245,16 @@ public static class EfRelationalProviderBinding
             Expression.Constant(historyTableName),
             Expression.Constant(schema, typeof(string)));
 
-        if (!string.IsNullOrWhiteSpace(migrationsAssembly))
-            body = Expression.Call(body, ResolveMigrationsAssembly(optionsBuilderType), Expression.Constant(migrationsAssembly));
+        // Only one of the two is ever set: EF Core resolves a name before it looks at an assembly, so a name beside an
+        // assembly would reach an assembly of that name from EF Core's own load context after all.
+        var migrations = migrationsAssembly switch
+        {
+            Assembly assembly => Expression.Constant(assembly, typeof(Assembly)),
+            string name when !string.IsNullOrWhiteSpace(name) => Expression.Constant(name, typeof(string)),
+            _ => null
+        };
+        if (migrations is not null)
+            body = Expression.Call(body, ResolveMigrationsAssembly(optionsBuilderType, migrations.Type), migrations);
 
         return Expression.Lambda(actionType, body, parameter).Compile();
     }
@@ -233,15 +270,16 @@ public static class EfRelationalProviderBinding
         ?? throw new InvalidOperationException(
             $"{optionsBuilderType.FullName} does not expose MigrationsHistoryTable(string, string).");
 
-    private static MethodInfo ResolveMigrationsAssembly(Type optionsBuilderType) =>
+    /// <summary>The options builder's <c>MigrationsAssembly</c> overload that takes <paramref name="argument"/>: a name or an assembly.</summary>
+    private static MethodInfo ResolveMigrationsAssembly(Type optionsBuilderType, Type argument) =>
         optionsBuilderType
             .GetMethods(BindingFlags.Public | BindingFlags.Instance)
             .FirstOrDefault(method =>
                 method.Name == "MigrationsAssembly" &&
                 method.GetParameters() is { Length: 1 } parameters &&
-                parameters[0].ParameterType == typeof(string))
+                parameters[0].ParameterType == argument)
         ?? throw new InvalidOperationException(
-            $"{optionsBuilderType.FullName} does not expose MigrationsAssembly(string).");
+            $"{optionsBuilderType.FullName} does not expose MigrationsAssembly({argument.Name}).");
 
     private static Type? FindLoadedType(ProviderEngine engine)
     {

@@ -7,13 +7,14 @@ namespace Elsa.Cluster.EntityFrameworkCore.Tests;
 /// The feeds the host loads from: the fixture and <c>Elsa.Persistence.EntityFramework</c>, packed by the SDK from the build
 /// this test assembly was built with, in <see cref="Directory"/>; and the packages they and the EF provider engine depend
 /// on that the host does not carry (EF Core, the Sqlite engine and what they need), copied from the package cache this
-/// project's restore filled, in <see cref="ClosureDirectory"/>. The fixture's previous release, a lower version of the
-/// same package whose family reads version 1 alone, is built and packed beside the persistence package in
-/// <see cref="PreviousDirectory"/>, so a host can start on it and be upgraded in place to <see cref="FixturePackage"/>.
+/// project's restore filled, in <see cref="ClosureDirectory"/>. Two other releases of the fixture are built and packed
+/// here, so a host can be upgraded in place: its previous release, a lower version whose family reads version 1 alone,
+/// beside the persistence package in <see cref="PreviousDirectory"/>, which a host starts on; and its next release, a
+/// higher version that adds one migration, as <see cref="NextPackage"/>.
 /// </summary>
 public sealed class FoundationHostFeed : IAsyncLifetime
 {
-    /// <summary>The fixture's package id, which both of its releases share.</summary>
+    /// <summary>The fixture's package id, which all of its releases share.</summary>
     public const string FixturePackageId = "Elsa.Cluster.Fixtures.FeedModule";
 
     /// <summary>Packing a built project takes seconds; this is the ceiling for a <c>dotnet</c> that will never return.</summary>
@@ -44,6 +45,9 @@ public sealed class FoundationHostFeed : IAsyncLifetime
     /// <summary>The fixture's current release, the package an in-place upgrade drops into a running host's feed.</summary>
     public string FixturePackage => FoundationHostProcess.Releases(Directory, FixturePackageId).Single();
 
+    /// <summary>The fixture's next release: the current one plus a migration a host that validates has to have applied.</summary>
+    public string NextPackage => FoundationHostProcess.Releases(Path.Join(_root.FullName, "next"), FixturePackageId).Single();
+
     /// <summary>The packages those depend on, which the host only resolves from.</summary>
     public string ClosureDirectory => Path.Join(_root.FullName, "closure");
 
@@ -52,10 +56,11 @@ public sealed class FoundationHostFeed : IAsyncLifetime
         foreach (var project in Projects)
             await DotnetAsync("pack", project, "--no-build", "-c", FoundationHostProcess.Configuration, "-p:IsPackable=true", "-o", Directory);
 
-        // The previous release is compiled here, into outputs of its own: only the fixture, against the persistence build
-        // the current release was built against, and packed with the persistence package it depends on.
-        await DotnetAsync("pack", FixtureProject, "--no-restore", "-c", FoundationHostProcess.Configuration, "-p:FeedModuleGeneration=1",
-            "-p:BuildProjectReferences=false", "-p:IsPackable=true", "-o", PreviousDirectory);
+        // The other releases are compiled here, each into outputs of its own: only the fixture, against the persistence
+        // build the current release was built against. The previous one is packed with the persistence package it needs.
+        foreach (var release in new[] { "previous", "next" })
+            await DotnetAsync("pack", FixtureProject, "--no-restore", "-c", FoundationHostProcess.Configuration, $"-p:FeedModuleRelease={release}",
+                "-p:BuildProjectReferences=false", "-p:IsPackable=true", "-o", Path.Join(_root.FullName, release));
         foreach (var package in System.IO.Directory.EnumerateFiles(Directory, "*.nupkg").Except(FoundationHostProcess.Releases(Directory, FixturePackageId)))
             File.Copy(package, Path.Join(PreviousDirectory, Path.GetFileName(package)));
 

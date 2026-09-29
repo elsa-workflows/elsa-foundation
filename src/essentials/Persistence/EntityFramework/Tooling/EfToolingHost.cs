@@ -1233,7 +1233,7 @@ public static class EfToolingHost
             provider,
             connection,
             descriptor.HistoryTableName,
-            descriptor.Assembly.GetName().Name,
+            descriptor.Assembly,
             schema);
         return (DbContext)Activator.CreateInstance(contextType, builder.Options)!;
     }

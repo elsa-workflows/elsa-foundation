@@ -61,6 +61,12 @@ internal sealed class FeedLoadedModuleHost : IAsyncDisposable
     /// <summary>The EF module, as its <c>[EfModule]</c> names it.</summary>
     public const string ModuleName = "FeedModuleFixture";
 
+    /// <summary>The one migration the fixture's next release adds, and the table it creates.</summary>
+    public const string NextReleaseMigration = "20260929000000_FeedModuleAddTags";
+
+    /// <inheritdoc cref="NextReleaseMigration"/>
+    public const string TagsTable = "FeedModuleFixtureTags";
+
     /// <summary>
     /// Starts the host and activates its shell. <paramref name="composeMembership"/> runs on the host container before the
     /// readability composition, as a host that selects a durable provider in configuration composes it.
@@ -76,7 +82,11 @@ internal sealed class FeedLoadedModuleHost : IAsyncDisposable
             SharedAssemblies(host).Except(withheld, StringComparer.OrdinalIgnoreCase),
             hostCarriesEntityFramework: host != FoundationHost);
         var module = package.LoadFromAssemblyPath(FixturePath);
-        foreach (var (name, expected) in new[] { ("Family", Family), ("HistoryModuleName", HistoryModule), ("Name", ModuleName) })
+        foreach (var (name, expected) in new[]
+                 {
+                     ("Family", Family), ("HistoryModuleName", HistoryModule), ("Name", ModuleName),
+                     ("NextReleaseMigration", NextReleaseMigration), ("TagsTable", TagsTable)
+                 })
         {
             if (Constant(module, name) != expected)
                 throw new InvalidOperationException($"The feed-module fixture's {name} is '{Constant(module, name)}', not the '{expected}' these tests seed.");
@@ -154,6 +164,22 @@ internal sealed class FeedLoadedModuleHost : IAsyncDisposable
         var store = new EfSchemaFinalizationStore(context);
         if (!(await store.ReleaseHoldAsync(Family, (await store.FindAsync(Family))!.Revision, null, "ops@example")).Applied)
             throw new InvalidOperationException("The hold was not released: the record changed under the release.");
+    }
+
+    /// <summary>
+    /// Applies the next release's migration out of process, as an operator does before a host that validates its
+    /// migrations may run that release: its table, and its row in the module's migrations history.
+    /// </summary>
+    public static async Task ApplyNextReleaseMigrationAsync(string connectionString)
+    {
+        await using var context = SeedContext.Create(connectionString);
+        var history = EfMigrationsHistory.TableName(HistoryModule);
+        await context.Database.ExecuteSqlRawAsync(
+            $"""
+             CREATE TABLE "{TagsTable}" ("Id" INTEGER NOT NULL CONSTRAINT "PK_{TagsTable}" PRIMARY KEY, "Name" TEXT NOT NULL);
+             CREATE TABLE IF NOT EXISTS "{history}" ("MigrationId" TEXT NOT NULL CONSTRAINT "PK_{history}" PRIMARY KEY, "ProductVersion" TEXT NOT NULL);
+             INSERT INTO "{history}" ("MigrationId", "ProductVersion") VALUES ('{NextReleaseMigration}', '10.0.10');
+             """);
     }
 
     public static async Task<SchemaFinalizationRecord> RecordAsync(string connectionString)
