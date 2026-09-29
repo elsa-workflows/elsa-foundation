@@ -1,4 +1,5 @@
 using System.Data.Common;
+using System.Text.Json;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Persistence.EntityFramework.Tests;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -195,6 +196,49 @@ public sealed class EfRuntimePostCommitOutboxStoreTests
         var persisted = new EfRuntimePostCommitOutboxStore(restarted, new FixedAccessor("tenant-a"));
         Assert.Equal(RuntimePostCommitOutboxStatus.Delivered, (await persisted.FindAsync(id))!.Status);
         Assert.Empty(await persisted.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(Now.AddHours(1), 10)));
+    }
+
+    [Theory]
+    [InlineData(RuntimePostCommitOutboxStatus.Delivered, RuntimePostCommitOutboxStatus.Delivered)]
+    [InlineData(RuntimePostCommitOutboxStatus.Delivered, RuntimePostCommitOutboxStatus.FailedFinal)]
+    [InlineData(RuntimePostCommitOutboxStatus.FailedFinal, RuntimePostCommitOutboxStatus.Delivered)]
+    [InlineData(RuntimePostCommitOutboxStatus.FailedFinal, RuntimePostCommitOutboxStatus.FailedFinal)]
+    public async Task Completed_claim_reports_superseded_for_late_claimless_success_or_failure(
+        RuntimePostCommitOutboxStatus ownerResultStatus,
+        RuntimePostCommitOutboxStatus lateResultStatus)
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using (var ownerContext = database.Open("tenant-a"))
+        {
+            var ownerStore = new EfRuntimePostCommitOutboxStore(ownerContext, new FixedAccessor("tenant-a"));
+            await ownerStore.SavePendingAsync(Pending("outbox-completed", "workflow-a"));
+            var ownerClaim = Assert.Single(await ownerStore.ClaimAsync(new RuntimePostCommitOutboxClaimRequest(
+                "sweep-owner", Now, TimeSpan.FromMinutes(1), 10)));
+            var ownerResult = new RuntimePostCommitOutboxDeliveryResult(
+                "outbox-completed",
+                ownerResultStatus,
+                Now.AddSeconds(1),
+                ownerResultStatus == RuntimePostCommitOutboxStatus.FailedFinal ? "owner failure" : null);
+
+            Assert.Equal(
+                RuntimePostCommitOutboxClaimCompletionOutcome.Persisted,
+                await ownerStore.CompleteClaimAsync(new RuntimePostCommitOutboxClaimCompletion(ownerClaim, ownerResult)));
+        }
+
+        var beforeLateResult = await ReadPersistedOutboxSnapshotAsync(database);
+        await using (var liveDrainContext = database.Open("tenant-a"))
+        {
+            var liveDrainStore = new EfRuntimePostCommitOutboxStore(liveDrainContext, new FixedAccessor("tenant-a"));
+            var outcome = await liveDrainStore.RecordDeliveryResultAsync(new RuntimePostCommitOutboxDeliveryResult(
+                "outbox-completed",
+                lateResultStatus,
+                Now.AddSeconds(2),
+                lateResultStatus == RuntimePostCommitOutboxStatus.FailedFinal ? "late failure" : null));
+
+            Assert.Equal(RuntimePostCommitOutboxClaimCompletionOutcome.SupersededByOtherOwner, outcome);
+        }
+
+        Assert.Equal(beforeLateResult, await ReadPersistedOutboxSnapshotAsync(database));
     }
 
     [Fact]
@@ -430,6 +474,14 @@ public sealed class EfRuntimePostCommitOutboxStoreTests
             RuntimePostCommitOutboxStatus.Pending,
             Now,
             null);
+
+    private static async Task<string> ReadPersistedOutboxSnapshotAsync(TestDatabase database)
+    {
+        await using var context = database.Open("tenant-a");
+        var row = await context.RuntimePostCommitOutbox.AsNoTracking().SingleAsync();
+        // Comparing the serialized relational entity covers every persisted projection and the optimistic-concurrency revision.
+        return JsonSerializer.Serialize(row);
+    }
 
     private sealed class FixedAccessor(string scope) : IPersistenceAccessContextAccessor
     {
