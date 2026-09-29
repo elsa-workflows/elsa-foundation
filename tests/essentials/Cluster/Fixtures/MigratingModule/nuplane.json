@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 2,
+  "loading": {
+    "loadMode": "HostIntegrated",
+    "scope": "DependencyClosure",
+    "reason": "An EF module fixture with real migrations, loaded the way every first-party EF module package is."
+  },
+  "capabilities": [
+    {
+      "name": "ef-provider",
+      "description": "The EF Core relational provider engine this module binds at run time.",
+      "options": [
+        { "name": "Sqlite", "packageId": "Microsoft.EntityFrameworkCore.Sqlite", "version": "[10.0.10]" }
+      ]
+    }
+  ]
+}

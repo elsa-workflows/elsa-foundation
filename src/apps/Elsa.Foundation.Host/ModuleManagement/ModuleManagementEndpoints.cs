@@ -3,6 +3,7 @@ using System.Text;
 using CShells.Features;
 using CShells.Lifecycle;
 using Elsa.Api.AspNetCore;
+using Elsa.Foundation.Host.Shells;
 using Nuplane.Admin;
 
 namespace Elsa.Foundation.Host.ModuleManagement;
@@ -46,10 +47,48 @@ public static class ModuleManagementEndpoints
         {
             var snapshot = await runtimeFeatureCatalog.RefreshAsync(ct);
             var results = await registry.ReloadActiveAsync(null, ct);
-            return Results.Ok(new { features = snapshot.FeatureDescriptors.Count, reloaded = results.Count });
+            // CShells reports a shell that could not activate in its ReloadResult and keeps the previous generation
+            // serving, so the count of results is not the count of reloads.
+            var failures = ShellReloadFailure.From(results, ShellReloadFailure.HostDirectory);
+            return failures.Count == 0
+                ? Results.Ok(new { features = snapshot.FeatureDescriptors.Count, reloaded = results.Count })
+                : FailedReload(snapshot.FeatureDescriptors.Count, results.Count - failures.Count, failures);
         });
 
         return endpoints;
+    }
+
+    /// <summary>
+    /// A reload that left at least one shell on its previous generation. 409 when every such shell was refused by an EF module,
+    /// typically a database whose migrations were not applied to the schema the new package version needs: the request is well
+    /// formed and the host is healthy, but the state it asks for conflicts with the state of the world, and the operator
+    /// resolves that outside this request and then repeats it, which is what 409 says. 500 as soon as one shell failed for any
+    /// other reason, which is a fault of the host or its packages that repeating the request does not clear. The body is the
+    /// same problem document either way.
+    /// </summary>
+    private static IResult FailedReload(int features, int reloaded, IReadOnlyList<ShellReloadFailure> failures)
+    {
+        var refused = failures.All(failure => failure.Refusal is not null);
+        return Results.Problem(
+            title: refused ? "Shell reload refused" : "Shell reload failed",
+            detail: string.Join(
+                " ",
+                failures.Select(failure => $"Shell '{failure.Shell}' was not reloaded and its previous generation is still active: {failure.Error}")),
+            statusCode: refused ? StatusCodes.Status409Conflict : StatusCodes.Status500InternalServerError,
+            extensions: new Dictionary<string, object?>
+            {
+                ["features"] = features,
+                ["reloaded"] = reloaded,
+                ["shells"] = failures.Select(failure => new
+                {
+                    shell = failure.Shell,
+                    error = failure.Error,
+                    code = failure.Refusal?.Code,
+                    module = failure.Refusal?.Module,
+                    pendingMigrations = failure.Refusal?.PendingMigrations,
+                    command = failure.Refusal?.Command
+                }).ToArray()
+            });
     }
 
     private static bool Authorized(HttpContext context, ModuleManagementOptions options)
