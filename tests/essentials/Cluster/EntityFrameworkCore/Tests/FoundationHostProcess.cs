@@ -40,6 +40,9 @@ internal sealed class FoundationHostProcess : IAsyncDisposable
     /// <summary>The host's console output so far, for assertion messages.</summary>
     public string Output => _output.ToString();
 
+    /// <summary>Where Nuplane extracts the packages this host acquires, one directory per package.</summary>
+    public string PackageInstallRoot => InstallRoot(ContentRoot);
+
     /// <summary>
     /// Starts the host over <paramref name="packages"/>, a directory of <c>.nupkg</c> files it takes as its feed, with
     /// <paramref name="shells"/> as its <c>shells.json</c> and <paramref name="settings"/> as environment variables, and
@@ -82,7 +85,7 @@ internal sealed class FoundationHostProcess : IAsyncDisposable
             // Nuplane keeps its store state and the packages it installs beside the host binaries by default, which every
             // run would share.
             startInfo.Environment["Nuplane__Setup__StateFilePath"] = Path.Join(contentRoot, ".nuplane", "store-state.json");
-            startInfo.Environment["Nuplane__FeedResolution__PackageInstallRoot"] = Path.Join(contentRoot, ".nuplane", "packages");
+            startInfo.Environment["Nuplane__FeedResolution__PackageInstallRoot"] = InstallRoot(contentRoot);
             startInfo.Environment["Logging__LogLevel__Microsoft.Hosting.Lifetime"] = "Information";
             foreach (var (key, value) in settings)
                 startInfo.Environment[key.Replace(":", "__", StringComparison.Ordinal)] = value;
@@ -318,6 +321,8 @@ internal sealed class FoundationHostProcess : IAsyncDisposable
     }
 
     private static string SourceDirectory => Path.Join(RepoRoot, "src", "apps", Host);
+
+    private static string InstallRoot(string contentRoot) => Path.Join(contentRoot, ".nuplane", "packages");
 
     /// <summary>
     /// <c>Elsa.Foundation.Host.dll</c> from the host's own <c>bin</c> folder, built with this assembly's configuration and

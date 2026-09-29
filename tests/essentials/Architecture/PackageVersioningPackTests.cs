@@ -1,4 +1,7 @@
+using System.Diagnostics;
 using System.IO.Compression;
+using System.Reflection.Metadata;
+using System.Reflection.PortableExecutable;
 using System.Xml.Linq;
 using Xunit;
 using static Elsa.Architecture.Tests.RepoPaths;
@@ -48,7 +51,8 @@ public sealed class PackageVersioningPackTests : IDisposable
               </ItemGroup>
             </Project>
             """);
-        Write("src/App/App.cs", "namespace Fixture; public static class App;");
+        // App uses a type of Lib's, so its assembly records the version of Lib it was compiled against.
+        Write("src/App/App.cs", "namespace Fixture; public static class App { public static System.Type Lib => typeof(Fixture.Lib); }");
 
         Git("init", "--quiet", "--initial-branch=main");
         Git("add", "--all");
@@ -71,6 +75,7 @@ public sealed class PackageVersioningPackTests : IDisposable
         var package = Path.Join(Output, "Fixture.App.4.0.0-dev.nupkg");
         Assert.Equal([("Fixture.Lib", "4.0.0-dev"), ("Microsoft.Extensions.Primitives", PrimitivesVersion)], Dependencies(package));
         Assert.Null(Entry(package, "elsa-input-fingerprint.json"));
+        Assert.Equal(("4.0.0.0", "1.0.0.0", "4.0.0.0"), AssemblyVersions(package));
     }
 
     /// <summary>
@@ -109,6 +114,9 @@ public sealed class PackageVersioningPackTests : IDisposable
         Assert.Equal(head, (string?)metadata.Element(metadata.Name.Namespace + "repository")!.Attribute("commit"));
         Assert.Equal([("Fixture.Lib", "[4.0.3-preview, 5.0.0)"), ("Microsoft.Extensions.Primitives", PrimitivesVersion)], Dependencies(package));
         Assert.Equal($$"""{"schema_version":1,"fingerprint":"{{AppFingerprint}}"}""", Entry(package, "elsa-input-fingerprint.json")?.Trim());
+        // The assembly claims its line's major, as a dev build's does, and so does its reference to Lib, whose package is at
+        // 4.0.3-preview: a host shares either with a package built either way (#2150). The file version keeps the full one.
+        Assert.Equal(("4.0.0.0", "4.0.8.0", "4.0.0.0"), AssemblyVersions(package));
     }
 
     /// <summary>A no-build pack stamping another version than the build did would ship assemblies claiming a different one.</summary>
@@ -236,6 +244,25 @@ public sealed class PackageVersioningPackTests : IDisposable
         return metadata.Descendants(metadata.Name.Namespace + "dependency")
             .Select(dependency => ((string)dependency.Attribute("id")!, (string)dependency.Attribute("version")!))
             .ToArray();
+    }
+
+    /// <summary>
+    /// The version <c>Fixture.App.dll</c> in a package claims, its file version, and the version of <c>Fixture.Lib</c> it
+    /// was compiled against, read from the assembly's metadata as the runtime reads them.
+    /// </summary>
+    private (string Assembly, string? File, string LibReference) AssemblyVersions(string package)
+    {
+        Assert.True(File.Exists(package), $"{package} was not produced.");
+        var extracted = Path.Join(root.FullName, "extracted", Path.GetFileName(package), "Fixture.App.dll");
+        Directory.CreateDirectory(Path.GetDirectoryName(extracted)!);
+        using (var archive = ZipFile.OpenRead(package))
+            archive.Entries.Single(entry => entry.FullName.EndsWith("/Fixture.App.dll", StringComparison.Ordinal)).ExtractToFile(extracted, overwrite: true);
+
+        using var stream = File.OpenRead(extracted);
+        using var image = new PEReader(stream);
+        var metadata = image.GetMetadataReader();
+        var lib = metadata.AssemblyReferences.Select(metadata.GetAssemblyReference).Single(reference => metadata.GetString(reference.Name) == "Fixture.Lib");
+        return (metadata.GetAssemblyDefinition().Version.ToString(), FileVersionInfo.GetVersionInfo(extracted).FileVersion, lib.Version.ToString());
     }
 
     /// <summary>The text of an entry in a package, or null when it has none.</summary>

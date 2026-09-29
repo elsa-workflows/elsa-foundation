@@ -1,3 +1,4 @@
+using Elsa.Testing;
 using Microsoft.Extensions.Configuration;
 using static Elsa.Architecture.Tests.RepoPaths;
 
@@ -44,6 +45,13 @@ internal static class NuplaneHostSettings
 
         return builder.Build().GetSection("Nuplane");
     }
+
+    /// <summary>
+    /// The host's shares as Nuplane binds and validates them, from its <c>appsettings.json</c> with <paramref name="overlay"/>,
+    /// when given, layered over it.
+    /// </summary>
+    internal static NuplaneSharedAssemblyPolicy SharedAssemblyPolicy(string host, string? overlay = null) =>
+        NuplaneSharedAssemblyPolicy.FromHostAppSettings([HostFile(host, "appsettings.json"), .. overlay is null ? Array.Empty<string>() : [HostFile(host, overlay)]]);
 
     /// <summary>The names listed under <c>Loading:SharedAssemblies</c>.</summary>
     internal static IReadOnlyList<string> SharedAssemblies(IConfiguration nuplane) =>
