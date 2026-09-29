@@ -58,7 +58,7 @@ public sealed class EfPendingMigrationActivationGuard(IServiceProvider services,
     {
         ArgumentNullException.ThrowIfNull(context);
 
-        var loaded = assemblies.GetAssemblies();
+        var loaded = await assemblies.GetAssembliesAsync(cancellationToken);
         var usages = EfProviderAgreement.Discover(loaded);
         var enabled = context.EnabledFeatures;
         var mapped = enabled

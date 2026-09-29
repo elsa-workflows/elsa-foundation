@@ -1,7 +1,9 @@
+using CShells.Lifecycle;
 using Elsa.Cluster.Core.Contracts;
 using Elsa.Cluster.Core.Extensions;
 using Elsa.Cluster.Core.Models;
 using Elsa.Cluster.InProcess;
+using Elsa.Persistence.Schema;
 using Elsa.Persistence.Schema.SchemaFinalization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -23,11 +25,25 @@ public static class EfSchemaReadabilityServiceCollectionExtensions
     /// <see cref="EfSchemaFinalizationObservations"/>, registered here by instance so every shell container built from
     /// copies of the host's registrations shares it, and this report names what the host's gates read. A host that
     /// composes neither has gates that never finalize a version past the one each record was created at.
+    /// <para>
+    /// It also composes the host's <see cref="ISupersededAssemblySource"/>, <see cref="NuplanePackageGenerations"/>, unless
+    /// one is already registered (spec 183, FR-021, amended 2026-09-29): by instance, so every shell shares it, and bound
+    /// to the host's own container through the CShells lifecycle subscriber registered beside it, which CShells builds
+    /// from the host's container alone. On a host without Nuplane, or without CShells, it never names anything superseded,
+    /// and the report reads every load context as before.
+    /// </para>
     /// </remarks>
     public static IServiceCollection AddEfSchemaReadability(this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
         services.TryAddSingleton(new EfSchemaFinalizationObservations());
+        if (!services.Any(descriptor => descriptor.ServiceType == typeof(ISupersededAssemblySource)))
+        {
+            var generations = new NuplanePackageGenerations();
+            services.AddSingleton<ISupersededAssemblySource>(generations);
+            services.AddSingleton<IShellLifecycleSubscriber>(host => generations.BindTo(host));
+        }
+
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IMemberReportSource<ReadabilitySection>, EfSchemaReadabilitySource>());
         services.TryAddSingleton<IEfSchemaFleet, ClusterSchemaFleet>();
         services.AddEfSchemaDormancy();

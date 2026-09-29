@@ -11,18 +11,23 @@ namespace Elsa.Cluster.Readability;
 /// <summary>
 /// This host's readability report (spec 183, FR-019 to FR-022): one entry for each schema family whose declaration
 /// (spec 180, FR-001) is loaded in the process, from any load context, holding the versions every loaded declaration of
-/// that family can read.
+/// that family can read, less any an upgrade has retired (FR-021, amended 2026-09-29).
 /// </summary>
 /// <remarks>
 /// <para>
 /// It reads declarations and nothing else, so no configuration can change what it reports (FR-020, MR-002). It reads
 /// them each time a provider publishes, so a package Nuplane loads is reported by the first publish after its assembly
-/// loads. A family stays while any declaration of it is loaded, whether or not a shell has its module enabled (FR-022):
-/// a host that can still write a family's rows has to be counted for it.
+/// loads. A family stays while any declaration of it is loaded and not retired, whether or not a shell has its module
+/// enabled (FR-022): a host that can still write a family's rows has to be counted for it.
 /// </para>
 /// <para>
 /// When several declarations of one family are loaded, as an old and a new generation of a package are during a reload,
-/// the entry holds only the versions all of them read (FR-021). They must name the same owning EF module - or agree
+/// the entry holds only the versions all of them read (FR-021). An old generation stops counting only once the host's
+/// <see cref="ISupersededAssemblySource"/> names it retired (FR-021, amended 2026-09-29): a newer generation of the same
+/// assembly replaced it in the host's active package set, and no shell generation that has not been disposed composes a
+/// feature from it. Until then, and always on a host that composes no such source, it narrows the entry, so a load
+/// context a package runtime never unloads holds an upgraded host back until the old generation is gone rather than
+/// until the process restarts. They must name the same owning EF module - or agree
 /// that the family is shared, owned by none (spec 180, FR-001) - if they do not, that one family is isolated rather
 /// than let it take the whole report down with it (FR-020): its entry names one of the disagreeing modules, which may
 /// be <see langword="null"/> when a shared declaration disagrees with an owned one, credits no version, and an error
@@ -48,15 +53,20 @@ namespace Elsa.Cluster.Readability;
 /// </remarks>
 public sealed class EfSchemaReadabilitySource(
     ILogger<EfSchemaReadabilitySource>? logger = null,
-    EfSchemaFinalizationObservations? observations = null) : IMemberReportSource<ReadabilitySection>
+    EfSchemaFinalizationObservations? observations = null,
+    ISupersededAssemblySource? superseded = null) : IMemberReportSource<ReadabilitySection>
 {
     private readonly ILogger _logger = logger ?? NullLogger<EfSchemaReadabilitySource>.Instance;
 
-    /// <summary>Reads the declarations of every assembly loaded in this process, across every <see cref="AssemblyLoadContext"/>.</summary>
-    public ValueTask<ReadabilitySection> ReadAsync(CancellationToken cancellationToken = default)
+    /// <summary>
+    /// Reads the declarations of every assembly loaded in this process, across every <see cref="AssemblyLoadContext"/>,
+    /// except the ones <see cref="ISupersededAssemblySource.GetRetiredAsync"/> names.
+    /// </summary>
+    public async ValueTask<ReadabilitySection> ReadAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        return ValueTask.FromResult(Read(EfSchemaFamilyCatalog.Discover(AssemblyLoadContext.All.SelectMany(context => context.Assemblies)), _logger, observations));
+        var retired = superseded is null ? LoadedAssemblies.NoneSuperseded : await superseded.GetRetiredAsync(cancellationToken);
+        return Read(EfSchemaFamilyCatalog.Discover(LoadedAssemblies.Except(retired)), _logger, observations);
     }
 
     /// <summary>
