@@ -254,7 +254,7 @@ public sealed class EfPendingMigrationActivationGuard(IServiceProvider services,
         string? schema)
     {
         var builder = (DbContextOptionsBuilder)Activator.CreateInstance(typeof(DbContextOptionsBuilder<>).MakeGenericType(contextType))!;
-        EfRelationalProviderBinding.Use(
+        EfRelationalProviderBinding.UseMigrationsFrom(
             builder,
             provider,
             connection,

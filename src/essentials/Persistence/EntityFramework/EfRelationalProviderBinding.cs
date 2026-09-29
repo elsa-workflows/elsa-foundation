@@ -56,20 +56,23 @@ public static class EfRelationalProviderBinding
         "MySql.EntityFrameworkCore");
 
     public static void UseSqlite(DbContextOptionsBuilder builder, string connectionString, string historyTableName, string? migrationsAssembly = null, string? schema = null) =>
-        Use(builder, SqliteEngine, connectionString, historyTableName, migrationsAssembly, schema);
+        Bind(builder, SqliteEngine, connectionString, historyTableName, Named(migrationsAssembly), schema);
 
     public static void UseSqlServer(DbContextOptionsBuilder builder, string connectionString, string historyTableName, string? migrationsAssembly = null, string? schema = null) =>
-        Use(builder, SqlServerEngine, connectionString, historyTableName, migrationsAssembly, schema);
+        Bind(builder, SqlServerEngine, connectionString, historyTableName, Named(migrationsAssembly), schema);
 
     public static void UseNpgsql(DbContextOptionsBuilder builder, string connectionString, string historyTableName, string? migrationsAssembly = null, string? schema = null) =>
-        Use(builder, PostgreSqlEngine, connectionString, historyTableName, migrationsAssembly, schema);
+        Bind(builder, PostgreSqlEngine, connectionString, historyTableName, Named(migrationsAssembly), schema);
 
     public static void UseMySql(DbContextOptionsBuilder builder, string connectionString, string historyTableName, string? migrationsAssembly = null, string? schema = null) =>
-        Use(builder, MySqlEngine, connectionString, historyTableName, migrationsAssembly, schema);
+        Bind(builder, MySqlEngine, connectionString, historyTableName, Named(migrationsAssembly), schema);
 
     /// <summary>
     /// Binds <paramref name="provider"/>, putting the module's tables and its own migrations history table in
-    /// <paramref name="schema"/> when one is given. A schema is ignored on SQLite, which has none.
+    /// <paramref name="schema"/> when one is given, and reading migrations from the assembly EF Core loads by
+    /// <paramref name="migrationsAssembly"/>'s name, or from the context's own assembly when none is given. A schema is
+    /// ignored on SQLite, which has none. A module binding reads its migrations from the assembly itself instead, through
+    /// <see cref="UseMigrationsFrom"/>.
     /// </summary>
     public static void Use(
         DbContextOptionsBuilder builder,
@@ -77,18 +80,13 @@ public static class EfRelationalProviderBinding
         string connectionString,
         string historyTableName,
         string? migrationsAssembly = null,
-        string? schema = null)
-    {
-        ArgumentNullException.ThrowIfNull(builder);
-        ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
-        ArgumentException.ThrowIfNullOrWhiteSpace(historyTableName);
-        Use(builder, EngineFor(provider), connectionString, historyTableName, migrationsAssembly, schema);
-    }
+        string? schema = null) =>
+        Bind(builder, provider, connectionString, historyTableName, Named(migrationsAssembly), schema);
 
     /// <summary>
-    /// Binds <paramref name="provider"/> as <see cref="Use(DbContextOptionsBuilder,string,string,string,string?,string?)"/>
-    /// does, reading migrations from <paramref name="migrationsAssembly"/> itself rather than from an assembly of its name,
-    /// or from the context's own assembly when it is <see langword="null"/>.
+    /// Binds <paramref name="provider"/> as <see cref="Use"/> does, reading migrations from
+    /// <paramref name="migrationsAssembly"/> itself rather than from an assembly of its name, or from the context's own
+    /// assembly when it is <see langword="null"/>. Every module binding binds through here.
     /// </summary>
     /// <remarks>
     /// EF Core resolves a migrations assembly given by name with <see cref="Assembly.Load(AssemblyName)"/> from its own load
@@ -98,25 +96,21 @@ public static class EfRelationalProviderBinding
     /// <c>Validate</c> would pass over every migration it has pending and <c>AutoMigrate</c> would apply nothing (spec
     /// 183, FR-021, amended 2026-09-29). Given the assembly, EF Core reads exactly the generation the module was bound with.
     /// </remarks>
-    public static void Use(
+    public static void UseMigrationsFrom(
         DbContextOptionsBuilder builder,
         string provider,
         string connectionString,
         string historyTableName,
         Assembly? migrationsAssembly,
-        string? schema = null)
-    {
-        ArgumentNullException.ThrowIfNull(builder);
-        ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
-        ArgumentException.ThrowIfNullOrWhiteSpace(historyTableName);
-        Use(builder, EngineFor(provider), connectionString, historyTableName, migrationsAssembly, schema);
-    }
+        string? schema = null) =>
+        Bind(builder, provider, connectionString, historyTableName, migrationsAssembly is null ? null : Expression.Constant(migrationsAssembly, typeof(Assembly)), schema);
 
     /// <summary>
-    /// Resolves what <see cref="Use(DbContextOptionsBuilder,string,string,string,string?,string?)"/> would reflect over for
-    /// <paramref name="provider"/> — the engine assembly, its <c>Use*</c> overload, and the two relational options
-    /// methods the binding calls — without configuring a context or opening a connection. Returns <c>null</c> when
-    /// the provider binds, and otherwise a message naming the missing assembly or method and the package to add.
+    /// Resolves what <see cref="Use"/> and <see cref="UseMigrationsFrom"/> would reflect over for <paramref name="provider"/>
+    /// — the engine assembly, its <c>Use*</c> overload, and the relational options methods the binding calls: the history
+    /// table, and the migrations assembly both by name and by assembly — without configuring a context or opening a
+    /// connection. Returns <c>null</c> when the provider binds both ways, and otherwise a message naming the missing
+    /// assembly or method and the package to add.
     /// </summary>
     public static string? DescribeBindingFailure(string provider)
     {
@@ -177,13 +171,34 @@ public static class EfRelationalProviderBinding
     private static ProviderEngine EngineFor(string provider) =>
         Select(provider, "relational", SqliteEngine, SqlServerEngine, PostgreSqlEngine, MySqlEngine);
 
-    /// <param name="migrationsAssembly">The migrations assembly's name, the assembly itself, or <see langword="null"/> for the context's own.</param>
-    private static void Use(
+    /// <summary>A migrations assembly given by name, or none when the name is blank.</summary>
+    private static ConstantExpression? Named(string? migrationsAssembly) =>
+        string.IsNullOrWhiteSpace(migrationsAssembly) ? null : Expression.Constant(migrationsAssembly, typeof(string));
+
+    private static void Bind(
+        DbContextOptionsBuilder builder,
+        string provider,
+        string connectionString,
+        string historyTableName,
+        ConstantExpression? migrationsAssembly,
+        string? schema)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
+        ArgumentException.ThrowIfNullOrWhiteSpace(historyTableName);
+        Bind(builder, EngineFor(provider), connectionString, historyTableName, migrationsAssembly, schema);
+    }
+
+    /// <param name="migrationsAssembly">
+    /// The argument of the options builder's <c>MigrationsAssembly</c> overload of its type - a name or the assembly itself
+    /// - or <see langword="null"/> for the context's own assembly.
+    /// </param>
+    private static void Bind(
         DbContextOptionsBuilder builder,
         ProviderEngine engine,
         string connectionString,
         string historyTableName,
-        object? migrationsAssembly,
+        ConstantExpression? migrationsAssembly,
         string? schema)
     {
         if (!engine.SupportsSchemas || string.IsNullOrWhiteSpace(schema))
@@ -233,7 +248,7 @@ public static class EfRelationalProviderBinding
         Type actionType,
         Type optionsBuilderType,
         string historyTableName,
-        object? migrationsAssembly,
+        ConstantExpression? migrationsAssembly,
         string? schema)
     {
         var parameter = Expression.Parameter(optionsBuilderType, "relational");
@@ -245,16 +260,10 @@ public static class EfRelationalProviderBinding
             Expression.Constant(historyTableName),
             Expression.Constant(schema, typeof(string)));
 
-        // Only one of the two is ever set: EF Core resolves a name before it looks at an assembly, so a name beside an
-        // assembly would reach an assembly of that name from EF Core's own load context after all.
-        var migrations = migrationsAssembly switch
-        {
-            Assembly assembly => Expression.Constant(assembly, typeof(Assembly)),
-            string name when !string.IsNullOrWhiteSpace(name) => Expression.Constant(name, typeof(string)),
-            _ => null
-        };
-        if (migrations is not null)
-            body = Expression.Call(body, ResolveMigrationsAssembly(optionsBuilderType, migrations.Type), migrations);
+        // One overload, never both: EF Core resolves a name before it looks at an assembly, so a name beside an assembly
+        // would reach an assembly of that name from EF Core's own load context after all.
+        if (migrationsAssembly is not null)
+            body = Expression.Call(body, ResolveMigrationsAssembly(optionsBuilderType, migrationsAssembly.Type), migrationsAssembly);
 
         return Expression.Lambda(actionType, body, parameter).Compile();
     }

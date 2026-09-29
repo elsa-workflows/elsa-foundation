@@ -58,7 +58,7 @@ public sealed record EfModuleBinding(
         string? connectionName,
         string? schema = null)
     {
-        EfRelationalProviderBinding.Use(
+        EfRelationalProviderBinding.UseMigrationsFrom(
             builder,
             provider,
             EfConnectionDefaults.ResolveConnectionString(

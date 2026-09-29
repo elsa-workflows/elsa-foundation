@@ -16,7 +16,7 @@ public sealed class OpenIddictIdentityDbContextFactory : IDesignTimeDbContextFac
 
         var builder = new DbContextOptionsBuilder<OpenIddictIdentityDbContext>();
         builder.UseSqlite(connectionString, sqlite => sqlite
-            .MigrationsAssembly(typeof(OpenIddictIdentityDbContextFactory).Assembly.GetName().Name)
+            .MigrationsAssembly(typeof(OpenIddictIdentityDbContextFactory).Assembly)
             .MigrationsHistoryTable(OpenIddictEntityFrameworkCoreDefaults.MigrationsHistoryTable, OpenIddictIdentityDbContext.Schema));
 
         return new OpenIddictIdentityDbContext(builder.Options);

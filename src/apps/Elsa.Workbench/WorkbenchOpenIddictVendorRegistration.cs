@@ -41,7 +41,7 @@ internal static class WorkbenchOpenIddictVendorRegistration
             builder.UseSqlite(
                 options.ConnectionString ?? OpenIddictEntityFrameworkCoreDefaults.DefaultConnectionString,
                 sqlite => sqlite
-                    .MigrationsAssembly(typeof(OpenIddictIdentityDbContext).Assembly.GetName().Name)
+                    .MigrationsAssembly(typeof(OpenIddictIdentityDbContext).Assembly)
                     .MigrationsHistoryTable(
                         OpenIddictEntityFrameworkCoreDefaults.MigrationsHistoryTable,
                         OpenIddictIdentityDbContext.Schema));
