@@ -30,6 +30,8 @@ public sealed class SupersededPackageGenerationShellTests : IAsyncDisposable
     private readonly LoadedFeatures _loaded = new();
     private readonly FailingActivation _failing = new();
     private readonly SlowDisposal _slow = new();
+    private readonly Armed _failingDrainHandlers = new();
+    private readonly Armed _failingDisposal = new();
     private readonly ServiceProvider _host;
 
     public SupersededPackageGenerationShellTests()
@@ -43,6 +45,12 @@ public sealed class SupersededPackageGenerationShellTests : IAsyncDisposable
         services.AddSingleton<IShellInitializer>(_ => _failing);
         services.AddSingleton<IShellInitializer>(_ => new SlowDisposalOf(_slow));
         services.AddEfSchemaReadability();
+        // Registered after readability's own, so every shell container creates it after this host's tracking and disposes
+        // it before, as a service a feature composes is.
+        services.AddSingleton<IShellInitializer>(_ => new FailingDisposal(_failingDisposal));
+        // CShells resolves a draining shell's handlers inside its drain, and a drain whose handlers cannot be resolved faults
+        // after it has disposed the shell's provider.
+        services.AddTransient<IDrainHandler>(_ => _failingDrainHandlers.On ? throw new InvalidOperationException("The drain handler could not be built.") : new NoDrainWork());
         services.AddCShells(shells => shells
             .WithAssemblyProvider(_loaded)
             .ConfigureGracePeriod(TimeSpan.FromMilliseconds(100))
@@ -71,8 +79,12 @@ public sealed class SupersededPackageGenerationShellTests : IAsyncDisposable
         Assert.Null(Shells.GetActive(ShellName));
         Assert.Equal(PreviousOnly, await ReadableAsync());
 
+        await PublishAsync();
         await FeatureCatalog.RefreshAsync();
         Assert.Equal(Both, await ReadableAsync());
+        // CShells raises nothing when the refresh commits, so the host watches the catalog while it alone holds the previous
+        // generation back, and publishes again once it no longer does.
+        await UntilAsync(async () => (await _package.PublishedAsync(_host)).SequenceEqual(Both));
     }
 
     /// <summary>
@@ -121,7 +133,7 @@ public sealed class SupersededPackageGenerationShellTests : IAsyncDisposable
     public async Task A_reloaded_generation_keeps_counting_until_its_provider_has_finished_disposing()
     {
         await Shells.GetOrActivateAsync(ShellName);
-        await _host.GetRequiredService<IClusterMembership>().PublishReportAsync();
+        await PublishAsync();
         Loaded(_package.Current);
         _slow.Armed = true;
 
@@ -136,6 +148,45 @@ public sealed class SupersededPackageGenerationShellTests : IAsyncDisposable
 
         await UntilAsync(async () => (await ReadableAsync()).SequenceEqual(Both));
         await UntilAsync(async () => (await _package.PublishedAsync(_host)).SequenceEqual(Both));
+    }
+
+    /// <summary>
+    /// A drain that faults after CShells disposed the shell's provider - here because its drain handlers could not be
+    /// built, which CShells follows by disposing the provider and only then failing the drain - leaves nothing of the
+    /// generation's own running, so it stops counting, and the host's report is published again.
+    /// </summary>
+    [Fact]
+    public async Task A_generation_whose_drain_fails_after_its_provider_was_disposed_stops_counting()
+    {
+        await Shells.GetOrActivateAsync(ShellName);
+        await PublishAsync();
+        Loaded(_package.Current);
+        _failingDrainHandlers.On = true;
+
+        var reload = await ReloadAsync(drain: false);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => reload.Drain!.WaitAsync().WaitAsync(Patience));
+        await UntilAsync(async () => (await ReadableAsync()).SequenceEqual(Both));
+        await UntilAsync(async () => (await _package.PublishedAsync(_host)).SequenceEqual(Both));
+    }
+
+    /// <summary>
+    /// A drain that faults because the provider's disposal threw before it reached this host's tracking leaves the
+    /// services the container created before it undisposed, and possibly running the generation, so it keeps counting.
+    /// </summary>
+    [Fact]
+    public async Task A_generation_whose_drain_fails_before_its_provider_finished_disposing_keeps_counting()
+    {
+        await Shells.GetOrActivateAsync(ShellName);
+        Loaded(_package.Current);
+        _failingDisposal.On = true;
+
+        var reload = await ReloadAsync(drain: false);
+
+        await Assert.ThrowsAnyAsync<Exception>(() => reload.Drain!.WaitAsync().WaitAsync(Patience));
+        _failingDisposal.On = false;
+        await Task.Delay(TimeSpan.FromSeconds(1));
+        Assert.Equal(PreviousOnly, await ReadableAsync());
     }
 
     public async ValueTask DisposeAsync()
@@ -176,6 +227,8 @@ public sealed class SupersededPackageGenerationShellTests : IAsyncDisposable
 
     private Task<IReadOnlyList<string>> ReadableAsync() => _package.ReadableAsync(_host);
 
+    private async Task PublishAsync() => await _host.GetRequiredService<IClusterMembership>().PublishReportAsync();
+
     private static async Task UntilAsync(Func<Task<bool>> condition)
     {
         var deadline = DateTimeOffset.UtcNow + Patience;
@@ -210,6 +263,24 @@ public sealed class SupersededPackageGenerationShellTests : IAsyncDisposable
         public TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    }
+
+    private sealed class Armed
+    {
+        public bool On { get; set; }
+    }
+
+    private sealed class NoDrainWork : IDrainHandler
+    {
+        public Task DrainAsync(IDrainExtensionHandle extensionHandle, CancellationToken cancellationToken) => Task.CompletedTask;
+    }
+
+    /// <summary>Once armed, throws from its container's disposal, which stops the container disposing what it created before it.</summary>
+    private sealed class FailingDisposal(Armed armed) : IShellInitializer, IAsyncDisposable
+    {
+        public Task InitializeAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+        public ValueTask DisposeAsync() => armed.On ? throw new InvalidOperationException("A service of the shell failed to dispose.") : ValueTask.CompletedTask;
     }
 
     private sealed class SlowDisposalOf(SlowDisposal slow) : IShellInitializer, IAsyncDisposable

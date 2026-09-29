@@ -3,12 +3,15 @@ using System.Runtime.Loader;
 using CShells.Features;
 using CShells.Lifecycle;
 using Elsa.Cluster.Core.Contracts;
+using Elsa.Cluster.Core.Models;
 using Elsa.Cluster.Core.Options;
+using Elsa.Cluster.InProcess;
 using Elsa.Persistence.Schema;
 using Elsa.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Primitives;
 using Nuplane.Loading;
 using static Elsa.Cluster.Readability.Tests.UpgradedPackage;
 
@@ -40,6 +43,7 @@ public sealed class SupersededPackageGenerationTests : IAsyncDisposable
     private readonly UpgradedPackage _package = new();
     private readonly FeatureCatalog _features = new();
     private readonly RecordingLogger _log = new();
+    private readonly GatedPublishes _publishes = new(open: true);
     private readonly List<ServiceProvider> _containers = [];
     private readonly IServiceCollection _services;
     private readonly ServiceProvider _host;
@@ -50,7 +54,7 @@ public sealed class SupersededPackageGenerationTests : IAsyncDisposable
         // leaves them; each test moves them from there.
         _package.Catalog.Active = [_package.Current];
         _features.Names(FeatureOf(_package.Current));
-        _services = HostServices(_package.Catalog, _features, _log);
+        _services = HostServices(_package.Catalog, _features, _log, _publishes);
         _host = Bound(_services.BuildServiceProvider());
     }
 
@@ -79,8 +83,8 @@ public sealed class SupersededPackageGenerationTests : IAsyncDisposable
     /// <summary>
     /// A shell generation is counted from before its first initializer runs - a module's migrator or finalization gate
     /// reads rows there - with no lifecycle notification yet, and until its container has finished disposing, whose end
-    /// publishes the host's report again so a gate waiting on it evaluates at once. The guard, which judges the generation
-    /// about to be built, already sees only the upgrade.
+    /// has the host's report published again so a gate waiting on it evaluates at once. The guard, which judges the
+    /// generation about to be built, already sees only the upgrade.
     /// </summary>
     [Fact]
     public async Task A_shell_generation_counts_from_before_its_first_initializer_until_its_container_is_disposed_and_that_republishes()
@@ -95,7 +99,29 @@ public sealed class SupersededPackageGenerationTests : IAsyncDisposable
         await previous.DisposeAsync();
 
         Assert.Equal(Both, await ReadableAsync());
-        Assert.Equal(Both, await PublishedAsync());
+        await UntilAsync(async () => (await PublishedAsync()).SequenceEqual(Both));
+    }
+
+    /// <summary>
+    /// The republish a released generation asks for is a membership-store write, and CShells disposes a shell's provider
+    /// under its own locks, so the container's disposal marks the generation released and returns: the publish runs after
+    /// it, once, however slow it is.
+    /// </summary>
+    [Fact]
+    public async Task A_container_disposal_does_not_wait_for_the_republish_it_asks_for()
+    {
+        var publishes = new GatedPublishes(open: false);
+        var services = HostServices(_package.Catalog, _features, _log, publishes);
+        await using var host = Bound(services.BuildServiceProvider());
+        var previous = Shell(FeatureOf(_package.Previous), from: services);
+
+        await previous.DisposeAsync().AsTask().WaitAsync(Patience);
+
+        Assert.Equal(Both, await _package.ReadableAsync(host));
+        await publishes.Started.Task.WaitAsync(Patience);
+        publishes.Release.SetResult();
+        await UntilAsync(async () => (await _package.PublishedAsync(host)).SequenceEqual(Both));
+        Assert.Equal(1, publishes.Count);
     }
 
     [Fact]
@@ -129,21 +155,41 @@ public sealed class SupersededPackageGenerationTests : IAsyncDisposable
         await UntilAsync(async () => (await PublishedAsync()).SequenceEqual(Both));
     }
 
-    /// <summary>A drain that fails may have left the provider partly disposed and still running, so nothing is released.</summary>
+    /// <summary>
+    /// A drain that fails after the container disposed this host's tracking, which it does after everything it created for
+    /// the generation, leaves nothing of the generation's own running, so it is released, and the report republished.
+    /// </summary>
     [Fact]
-    public async Task A_shell_generation_whose_drain_fails_keeps_counting()
+    public async Task A_shell_generation_whose_drain_fails_after_its_container_disposed_it_stops_counting()
     {
-        var shell = new FakeShell();
-        var container = Shell(shell, FeatureOf(_package.Previous));
-        var drain = new FakeDrain();
-        shell.Drain = drain;
-        await AdvanceAsync(shell, ShellLifecycleState.Active, ShellLifecycleState.Draining, ShellLifecycleState.Disposed);
+        var (shell, container, drain) = await DrainingAsync();
+        await PublishAsync();
         await container.DisposeAsync();
+        Assert.Equal(PreviousOnly, await ReadableAsync());
+
+        drain.Fail();
+
+        await UntilAsync(async () => (await ReadableAsync()).SequenceEqual(Both));
+        await UntilAsync(async () => (await PublishedAsync()).SequenceEqual(Both));
+        Assert.Contains(_log.Warnings, warning => warning.Exception is InvalidOperationException);
+    }
+
+    /// <summary>
+    /// A drain that fails before the container disposed this host's tracking may have left the provider partly disposed
+    /// and still running the generation, so it keeps counting until the container has disposed it.
+    /// </summary>
+    [Fact]
+    public async Task A_shell_generation_whose_drain_fails_before_its_container_disposed_it_keeps_counting_until_that_is_done()
+    {
+        var (_, container, drain) = await DrainingAsync();
 
         drain.Fail();
 
         await UntilAsync(() => Task.FromResult(_log.Warnings.Any(warning => warning.Exception is InvalidOperationException)));
         Assert.Equal(PreviousOnly, await ReadableAsync());
+
+        await container.DisposeAsync();
+        Assert.Equal(Both, await ReadableAsync());
     }
 
     /// <summary>A shell generation whose features cannot be read may be running anything, so nothing it could run retires.</summary>
@@ -209,6 +255,40 @@ public sealed class SupersededPackageGenerationTests : IAsyncDisposable
 
         _features.Names(FeatureOf(_package.Current));
         Assert.Equal(Both, await ReadableAsync());
+    }
+
+    /// <summary>
+    /// CShells raises nothing when its catalog commits a refresh, so a refresh that lifts the last pin on the previous
+    /// generation would leave the published report narrowed until some other publish came. A refresh that still names the
+    /// previous generation lifts nothing, and publishes nothing.
+    /// </summary>
+    [Fact]
+    public async Task A_feature_catalog_refresh_that_lifts_the_last_pin_republishes_and_one_that_does_not_publishes_nothing()
+    {
+        _features.Names(FeatureOf(_package.Previous));
+        await PublishAsync();
+
+        _features.Names(FeatureOf(_package.Previous));
+        await Task.Delay(NuplanePackageGenerations.CatalogWatchInterval * 3);
+        Assert.Equal(PreviousOnly, await PublishedAsync());
+        Assert.Equal(1, _publishes.Count);
+
+        _features.Names(FeatureOf(_package.Current));
+        await UntilAsync(async () => (await PublishedAsync()).SequenceEqual(Both));
+        Assert.Equal(2, _publishes.Count);
+    }
+
+    /// <summary>The first build initializes the catalog; that lifts every pin its absence held, and republishes too.</summary>
+    [Fact]
+    public async Task Initializing_the_feature_catalog_republishes_once_it_lifts_the_last_pin()
+    {
+        _features.Uninitialize();
+        await PublishAsync();
+        Assert.Equal(PreviousOnly, await PublishedAsync());
+
+        _features.Names(FeatureOf(_package.Current));
+
+        await UntilAsync(async () => (await PublishedAsync()).SequenceEqual(Both));
     }
 
     /// <summary>A catalog that lists the replaced assembly among those it scanned may compose from it too.</summary>
@@ -341,7 +421,8 @@ public sealed class SupersededPackageGenerationTests : IAsyncDisposable
     /// A host composed as <c>Elsa.Foundation.Host</c> composes it, with Nuplane's catalog and CShells' feature catalog when
     /// they are given.
     /// </summary>
-    private static IServiceCollection HostServices(IPackageAssemblyCatalog? catalog, IRuntimeFeatureCatalog? features, RecordingLogger log)
+    /// <remarks>Its membership is the in-process default, whose publishes pass through <paramref name="publishes"/> when it is given.</remarks>
+    private static IServiceCollection HostServices(IPackageAssemblyCatalog? catalog, IRuntimeFeatureCatalog? features, RecordingLogger log, GatedPublishes? publishes = null)
     {
         var services = new ServiceCollection()
             .Configure<ClusterMembershipOptions>(options => options.HostId = $"superseded-{Guid.NewGuid():N}")
@@ -350,6 +431,8 @@ public sealed class SupersededPackageGenerationTests : IAsyncDisposable
             services.AddSingleton(catalog);
         if (features is not null)
             services.AddSingleton(features);
+        if (publishes is not null)
+            services.AddSingleton<IClusterMembership>(provider => new GatedMembership(ActivatorUtilities.CreateInstance<InProcessClusterMembership>(provider), publishes));
         return services.AddEfSchemaReadability();
     }
 
@@ -362,23 +445,38 @@ public sealed class SupersededPackageGenerationTests : IAsyncDisposable
 
     private ServiceProvider Shell(params Type[] features) => Shell(new FakeShell(), features);
 
+    /// <summary>A shell generation of <paramref name="feature"/> copied from <paramref name="from"/>, another host's registrations.</summary>
+    private ServiceProvider Shell(Type feature, IServiceCollection from) =>
+        Shell(new FakeShell(), services => services.AddSingleton<IReadOnlyCollection<ShellFeatureDescriptor>>(Descriptors(feature)), from);
+
+    /// <summary>A shell generation of the previous generation's feature, active and then draining, with its drain attached.</summary>
+    private async Task<(FakeShell Shell, ServiceProvider Container, FakeDrain Drain)> DrainingAsync()
+    {
+        var shell = new FakeShell();
+        var container = Shell(shell, FeatureOf(_package.Previous));
+        var drain = new FakeDrain();
+        shell.Drain = drain;
+        await AdvanceAsync(shell, ShellLifecycleState.Active, ShellLifecycleState.Draining);
+        return (shell, container, drain);
+    }
+
     private ServiceProvider Shell(FakeShell shell, params Type[] features) =>
         Shell(shell, services => services.AddSingleton<IReadOnlyCollection<ShellFeatureDescriptor>>(Descriptors(features)));
 
     private ServiceProvider Shell(Action<IServiceCollection> describe) => Shell(new FakeShell(), describe);
 
     /// <summary>A shell generation's container, with every initializer constructed, as CShells constructs them all before it runs any.</summary>
-    private ServiceProvider Shell(FakeShell shell, Action<IServiceCollection> describe)
+    private ServiceProvider Shell(FakeShell shell, Action<IServiceCollection> describe, IServiceCollection? from = null)
     {
-        var container = Container(shell, describe);
+        var container = Container(shell, describe, from);
         _ = container.GetServices<IShellInitializer>().ToArray();
         return container;
     }
 
-    private ServiceProvider Container(FakeShell shell, Action<IServiceCollection> describe)
+    private ServiceProvider Container(FakeShell shell, Action<IServiceCollection> describe, IServiceCollection? from = null)
     {
         var services = new ServiceCollection();
-        foreach (var descriptor in _services.Where(descriptor => descriptor.ServiceType != typeof(IShellLifecycleSubscriber)))
+        foreach (var descriptor in (from ?? _services).Where(descriptor => descriptor.ServiceType != typeof(IShellLifecycleSubscriber)))
             services.Add(descriptor);
         services.AddSingleton<IShell>(shell);
         describe(services);
@@ -406,6 +504,7 @@ public sealed class SupersededPackageGenerationTests : IAsyncDisposable
     private Task<IReadOnlyList<string>> ReadableAsync() => _package.ReadableAsync(_host);
 
     private Task<IReadOnlyList<string>> PublishedAsync() => _package.PublishedAsync(_host);
+
 
     /// <summary>What happens on a drain's completion runs after it, not in it.</summary>
     private static async Task UntilAsync(Func<Task<bool>> condition)
@@ -491,6 +590,52 @@ public sealed class SupersededPackageGenerationTests : IAsyncDisposable
         {
             public IReadOnlyList<RuntimeFeatureDescriptor> FeatureDescriptors => [];
         }
+    }
+
+    /// <summary>Counts a membership's publishes, and holds them until a test lets them through unless it is <paramref name="open"/>.</summary>
+    private sealed class GatedPublishes
+    {
+        private int _count;
+
+        public GatedPublishes(bool open)
+        {
+            if (open)
+                Release.SetResult();
+        }
+
+        public int Count => Volatile.Read(ref _count);
+
+        public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public async Task PassAsync()
+        {
+            Interlocked.Increment(ref _count);
+            Started.TrySetResult();
+            await Release.Task;
+        }
+    }
+
+    /// <summary>The in-process membership, whose publishes wait for <paramref name="publishes"/>: a store write that is slow.</summary>
+    private sealed class GatedMembership(IClusterMembership inner, GatedPublishes publishes) : IClusterMembership
+    {
+        public ClusterProviderKind ProviderKind => inner.ProviderKind;
+
+        public LocalMemberStanding GetLocalStanding() => inner.GetLocalStanding();
+
+        public ValueTask<FleetView> ReadFleetAsync(FleetReadMode mode, CancellationToken cancellationToken = default) => inner.ReadFleetAsync(mode, cancellationToken);
+
+        public async ValueTask<PublishedMemberReport> PublishReportAsync(CancellationToken cancellationToken = default)
+        {
+            await publishes.PassAsync();
+            return await inner.PublishReportAsync(cancellationToken);
+        }
+
+        public ValueTask<MemberQueryAnswer> QueryAsync(MemberQuery query, FleetReadMode mode, CancellationToken cancellationToken = default) =>
+            inner.QueryAsync(query, mode, cancellationToken);
+
+        public IChangeToken GetChangeToken() => inner.GetChangeToken();
     }
 
     private sealed class RecordingLoggerFactory(RecordingLogger log) : ILoggerFactory
