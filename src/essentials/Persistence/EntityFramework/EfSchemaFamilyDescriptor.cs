@@ -34,6 +34,15 @@ public sealed record EfSchemaFamilyDescriptor(string Name, string? Module, strin
     public IReadOnlyList<Type> Entities { get; init; } = [];
 
     /// <summary>
+    /// The entity types <see cref="EfSchemaFamilyAttribute.ContentAddressed"/> names: the family's tables the
+    /// post-finalization backfill never rewrites (spec 186, FR-010a and FR-010b).
+    /// </summary>
+    public IReadOnlyList<Type> ContentAddressed { get; init; } = [];
+
+    /// <summary>The family's rewriter, as <see cref="EfSchemaFamilyAttribute.Rewriter"/> names it, or <see langword="null"/> (spec 186, FR-004).</summary>
+    public Type? Rewriter { get; init; }
+
+    /// <summary>
     /// The versions this declaration can read, as opaque labels in chain order ending at <see cref="CurrentVersion"/>
     /// (spec 180, FR-004): the current version and every predecessor the chain reaches from it without a gap. A version
     /// below a gap, or reached only through an upcaster that is malformed, is never in it. A store's read accepts

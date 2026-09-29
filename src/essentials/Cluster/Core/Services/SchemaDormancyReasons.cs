@@ -11,12 +11,19 @@ namespace Elsa.Cluster.Core.Services;
 public static class SchemaDormancyReasons
 {
     /// <summary>The caller-neutral reason for one unmet requirement. It names no host and no operator's words.</summary>
-    public static string ForCaller(SchemaVersionRequirement requirement, SchemaDormancyKind kind)
+    /// <param name="completenessUnreachable">
+    /// For <see cref="SchemaDormancyKind.WaitingForCompleteness"/>: the family keeps content-addressed rows below the
+    /// version, which nothing may upgrade, so it can never become complete (spec 186, FR-022).
+    /// </param>
+    public static string ForCaller(SchemaVersionRequirement requirement, SchemaDormancyKind kind, bool completenessUnreachable = false)
     {
         ArgumentNullException.ThrowIfNull(requirement);
         var version = $"version '{requirement.Version}' of schema family '{requirement.Family}'";
         return kind switch
         {
+            SchemaDormancyKind.WaitingForCompleteness when completenessUnreachable =>
+                $"It cannot become available: schema family '{requirement.Family}' keeps records that are never upgraded in place, so its " +
+                $"existing records can never all be at version '{requirement.Version}'.",
             SchemaDormancyKind.WaitingForHosts => $"It becomes available once every host can read {version}.",
             SchemaDormancyKind.Held => $"It is held by an operator: {version} is not finalized until the hold is released.",
             SchemaDormancyKind.WaitingForCompleteness =>
@@ -62,6 +69,10 @@ public static class SchemaDormancyReasons
                 parts.Add(status?.CompletionVersion is { } completion
                     ? $"Its finish record names '{completion}'; the post-finalization backfill has not yet recorded '{requirement.Version}'."
                     : "No finish record stands for it; the post-finalization backfill records one once no older row remains.");
+                if (status?.Withdrawal is { } withdrawal)
+                    parts.Add($"Its completion at '{withdrawal.Version}' was withdrawn by {withdrawal.WithdrawnBy} at {Format(withdrawal.At)}: {withdrawal.Reason}");
+                if (status?.Backfill is { } backfill)
+                    parts.Add(Describe(backfill));
                 break;
             case SchemaDormancyKind.WritesRefused when status is not null:
                 parts.Add($"This host reads only [{string.Join(", ", status.ReadableVersions)}]. Run a version that reads the finalized one.");
@@ -71,6 +82,24 @@ public static class SchemaDormancyReasons
         if (status?.Intent is { } intent)
             parts.Add($"An intent to finalize '{intent.Version}' was recorded by {intent.Member} at {Format(intent.At)}.");
 
+        return string.Join(" ", parts);
+    }
+
+    /// <summary>The backfill's part of an operator reason (spec 186, FR-021 and FR-022): its state, progress, and what it waits for or is blocked by.</summary>
+    private static string Describe(SchemaBackfillObservation backfill)
+    {
+        var parts = new List<string>
+        {
+            $"The backfill is {backfill.State.ToLowerInvariant()}{(backfill.TargetVersion is null ? "" : $" towards '{backfill.TargetVersion}'")}, " +
+            $"with {backfill.RowsRewritten} row(s) rewritten so far."
+        };
+        if (backfill.SettleWaitingFor.Count > 0)
+            parts.Add($"It waits for hosts to observe the finalized version: {string.Join("; ", backfill.SettleWaitingFor)}.");
+        if (backfill.CompletenessUnreachable)
+            parts.Add("Completeness cannot be reached: content-addressed rows below the version remain, and nothing may upgrade them.");
+        parts.AddRange(backfill.Blockers);
+        if (backfill.Detail is { } detail)
+            parts.Add(detail);
         return string.Join(" ", parts);
     }
 

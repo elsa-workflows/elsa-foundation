@@ -122,11 +122,23 @@ internal sealed class FakeMember(string hostId)
 
     public bool ReportUnknown { get; set; }
 
+    /// <summary>
+    /// The finalized version this member reports having observed, per family, where a test states it (spec 186, MR-001);
+    /// otherwise what <see cref="Observations"/>, the member's own gates' record, says.
+    /// </summary>
+    public Dictionary<string, string?> Observed { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>What this member's gates observed, which its report carries unless <see cref="Observed"/> says otherwise.</summary>
+    public EfSchemaFinalizationObservations? Observations { get; set; }
+
     public FakeMember Reading(string family, params string[] readable)
     {
         Reads[family] = (readable, null);
         return this;
     }
+
+    public string? ObservedVersionOf(string family) =>
+        Observed.TryGetValue(family, out var observed) ? observed : Observations?.Find(family).ObservedFinalizedVersion;
 
     public override string ToString() => $"{HostId} ({Incarnation[..6]})";
 }
@@ -163,6 +175,34 @@ internal sealed class FakeFleetState
                     continue;
                 if (!entry.Readable.Contains(version, StringComparer.Ordinal))
                     blockers.Add($"{member} reads [{string.Join(", ", entry.Readable)}]");
+            }
+
+            return new EfSchemaFleetAnswer(blockers.Count == 0, blockers);
+        }
+    }
+
+    /// <summary>
+    /// The backfill's settle condition over every published, live member whose report speaks for the database (spec 186,
+    /// FR-012): each must report an observed finalized version among <paramref name="versions"/>.
+    /// </summary>
+    public EfSchemaFleetAnswer CountObserving(string family, IReadOnlyList<string> versions, string databaseIdentity)
+    {
+        lock (_lock)
+        {
+            var blockers = new List<string>();
+            foreach (var member in _members.Where(member => member is { Published: true, Live: true }))
+            {
+                if (member.ReportUnknown)
+                {
+                    blockers.Add($"{member} (unknown)");
+                    continue;
+                }
+
+                if (!member.Reads.TryGetValue(family, out var entry) || entry.Identity is not null && entry.Identity != databaseIdentity)
+                    continue;
+                var observed = member.ObservedVersionOf(family);
+                if (observed is null || !versions.Contains(observed, StringComparer.Ordinal))
+                    blockers.Add($"{member} has observed [{observed ?? "nothing"}]");
             }
 
             return new EfSchemaFleetAnswer(blockers.Count == 0, blockers);
@@ -226,6 +266,11 @@ internal sealed class FakeFleet(FakeFleetState state, FakeMember self) : IEfSche
             await after();
         return answer;
     }
+
+    public ValueTask<EfSchemaFleetAnswer> CountObservingAsync(string family, IReadOnlyList<string> versions, string databaseIdentity, CancellationToken cancellationToken = default) =>
+        ValueTask.FromResult(state.CountObserving(family, versions, databaseIdentity));
+
+    public TimeSpan SettleMargin { get; set; } = TimeSpan.Zero;
 
     public IChangeToken GetChangeToken() => state.ChangeToken();
 }

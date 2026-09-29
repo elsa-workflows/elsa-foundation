@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Elsa.Persistence.EntityFramework.SchemaFinalization;
 
 /// <summary>
@@ -148,11 +150,38 @@ public sealed record SchemaFinalizationHistoryEntry(
 /// recorded when the record was created, which no verification pass proved because no older row can exist (spec 186,
 /// FR-016).
 /// </summary>
+/// <param name="Run">
+/// The claim of the backfill run upgrading the family past <paramref name="CompletionVersion"/>, if one holds it (spec
+/// 186, FR-008). It only spares duplicate work: nothing correct depends on it, so it is absent from the JSON of a record
+/// no run has claimed, a build that does not know it reads the record unchanged, and a completion or a withdrawal drops
+/// it.
+/// </param>
 public sealed record SchemaFinishRecord(
     string CompletionVersion,
     DateTimeOffset? VerificationStartedAt,
     DateTimeOffset? VerificationEndedAt,
-    SchemaFinalizationActor RecordedBy);
+    SchemaFinalizationActor RecordedBy,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    SchemaBackfillClaim? Run = null);
+
+/// <summary>
+/// A backfill worker's claim on a family's run in one database (spec 186, FR-008): the member and the worker that holds
+/// it, the version the run upgrades to, and until when it holds it. Another worker leaves the run alone until the claim
+/// expires, so a crashed worker delays the run by at most one claim period and never stops it.
+/// </summary>
+/// <param name="Worker">
+/// The worker within the member: one host serving the same database from two shells runs two workers under one member.
+/// </param>
+public sealed record SchemaBackfillClaim(
+    SchemaFinalizationMember Member,
+    string Worker,
+    string TargetVersion,
+    DateTimeOffset ClaimedAt,
+    DateTimeOffset ExpiresAt)
+{
+    /// <summary>Whether the claim still holds at <paramref name="now"/>.</summary>
+    public bool HoldsAt(DateTimeOffset now) => ExpiresAt > now;
+}
 
 /// <summary>What a finish history entry records.</summary>
 public enum SchemaFinishTransition

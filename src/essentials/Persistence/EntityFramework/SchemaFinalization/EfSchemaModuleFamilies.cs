@@ -75,6 +75,15 @@ public sealed class EfSchemaModuleFamilies
         return new EfSchemaModuleFamilies(module, declared, declared.Select(EfSchemaChain.For).ToArray());
     }
 
+    /// <summary>The declaration of <paramref name="family"/>, one of <see cref="Chains"/>: its content-addressed tables and its rewriter among it.</summary>
+    /// <exception cref="ArgumentException">The module owns no such family.</exception>
+    public EfSchemaFamilyDescriptor DeclarationOf(string family)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(family);
+        return _declarations.FirstOrDefault(declaration => StringComparer.Ordinal.Equals(declaration.Name, family))
+               ?? throw new ArgumentException($"EF module '{Module}' owns no schema family '{family}'.", nameof(family));
+    }
+
     /// <summary>
     /// The family the rows of <paramref name="entityType"/> belong to: the module's only family, or the one whose
     /// <see cref="EfSchemaFamilyAttribute.Entities"/> names the type. <see langword="null"/> when none or several do,

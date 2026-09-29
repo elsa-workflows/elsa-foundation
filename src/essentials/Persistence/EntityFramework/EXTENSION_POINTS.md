@@ -206,6 +206,36 @@ module and a host decide:
 - **Timings** come from `Elsa:Persistence:EntityFramework:Finalization` (`EvaluationInterval`, default 30 seconds;
   `RefreshInterval`, 15 seconds; `IntentWaitBound`, 2 minutes; `IntentPollInterval`, 1 second).
 
+## Post-finalization backfill
+
+The backfill itself is not an extension point: beside each module's gate, `EfModuleMigrator<TContext>` runs an
+`EfSchemaBackfill` in the shell, with the shell's services, which upgrades a family's rows below the version this host
+has adopted as finalized, waits until every counted member reports observing it and the settle margin has passed,
+proves in a verification pass that no row below it remains, and records the family complete in its finish record; it
+then audits the family and withdraws the completion when a row below it turns up
+([spec 186](../../../../specs/186-post-finalization-backfill/spec.md)). It is not an `IEfPostMigrationAction`, whose audit
+at Prepare would refuse the module finalization needs active. What a module declares:
+
+- **A rewriter** (FR-004): `[EfSchemaFamily(..., Rewriter = typeof(...))]` names a class of the module's own assembly,
+  beside its store code, implementing `IEfSchemaRowRewriter`. The backfill constructs it for every row in a fresh
+  scope of the shell, so it may take the stores, serializers and codec the family's write path uses. It reads the row
+  by key through the family's read path, leaves it alone when it is at the target or later, and otherwise writes it
+  whole through the write path: every declared content column, the projections a newer version introduced, the stamp
+  at the host's write version, by compare-and-set on the row's revision. A family that has only ever had one version
+  needs none; `EfSchemaBackfillGuardTests` fails the build when a family with upcasters names no rewriter of its own
+  module, and the backfill reports such a family blocked rather than complete.
+- **Content-addressed tables** (FR-010b): `ContentAddressed = [typeof(...)]` names the family's tables whose rows'
+  identity is their content, such as executables (ADR 0038). The backfill never rewrites them, and a family with any
+  row in them below a version is never recorded complete at it. `EfSchemaContentAddressedDeclarationTests` fails the
+  build when a stamped table holding executables is not named, and `EfSchemaBackfillGuardTests` when a feature needs
+  completeness of a family that names any (FR-011c).
+- **`IEfSchemaFleet.CountObservingAsync`** answers the settle condition from each counted member's readability entry,
+  which carries the finalized version it observed (spec 186, MR-001), and `SettleMargin` is the membership expiry
+  period plus the skew allowance. A host with no fleet never records completion.
+- **Settings** come from `Elsa:Persistence:EntityFramework:Backfill` (`BatchSize`, default 500; `BatchPause`,
+  100 ms; `CheckInterval`, 15 seconds; `AuditInterval`, one hour; `SettleMargin`, the fleet's by default;
+  `ClaimDuration`, 2 minutes, zero for none; `VerificationPasses`, 3).
+
 ## Schema and pooling
 
 Neither is an extension point: a module opts in by passing its `Schema` and `Pooling` options through

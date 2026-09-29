@@ -1,5 +1,6 @@
 using CShells.Lifecycle;
 using CShells.Features;
+using Elsa.Persistence.EntityFramework.SchemaBackfill;
 using Elsa.Persistence.EntityFramework.SchemaFinalization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -26,7 +27,10 @@ namespace Elsa.Persistence.EntityFramework;
 /// (spec 181, FR-015): a family whose finalized version this host cannot read refuses the module here, under both
 /// policies, before any shell task, seeder or store touches its tables, exactly as a pending migration under
 /// <see cref="EfMigratePolicy.Validate"/> does. The gate then keeps evaluating and refreshing in the background until
-/// the shell or host stops, so writers switch versions without a restart or a shell reload (FR-011).
+/// the shell or host stops, so writers switch versions without a restart or a shell reload (FR-011). Beside it runs the
+/// module's post-finalization backfill (spec 186), which upgrades the rows below each family's finalized version and
+/// records the family complete. It runs here, in the shell with the shell's services, and not as a post-migration action,
+/// whose audit at Prepare would refuse the very module finalization needs active.
 /// </remarks>
 public sealed class EfModuleMigrator<TContext>(
     IServiceScopeFactory scopes,
@@ -39,6 +43,7 @@ public sealed class EfModuleMigrator<TContext>(
     private readonly CancellationTokenSource _stopping = new();
     private EfSchemaModuleGate? _gate;
     private Task? _gateLoop;
+    private Task? _backfillLoop;
 
     /// <summary>The module's finalization gate, once it has admitted the module.</summary>
     public EfSchemaModuleGate? Gate => _gate;
@@ -117,6 +122,14 @@ public sealed class EfModuleMigrator<TContext>(
             services.GetService<EfSchemaFinalizationGates>()?.Register(typeof(TContext), gate);
             _gate = gate;
             _gateLoop = Task.Run(() => gate.RunAsync(WithContextAsync, _stopping.Token), CancellationToken.None);
+            var backfill = new EfSchemaBackfill(
+                gate,
+                services.GetService<IEfSchemaFleet>(),
+                services.GetService<IOptions<EfSchemaBackfillOptions>>()?.Value ?? new EfSchemaBackfillOptions(),
+                services.GetService<TimeProvider>(),
+                services.GetService<ILoggerFactory>()?.CreateLogger<EfSchemaBackfill>());
+            gate.UseBackfill(backfill);
+            _backfillLoop = Task.Run(() => backfill.RunAsync(WithBackfillScopeAsync, _stopping.Token), CancellationToken.None);
         }
         finally
         {
@@ -131,19 +144,27 @@ public sealed class EfModuleMigrator<TContext>(
             await action(context);
     }
 
+    private async Task WithBackfillScopeAsync(Func<EfSchemaBackfillScope, Task> action, CancellationToken cancellationToken)
+    {
+        await using var scope = scopes.CreateAsyncScope();
+        if (scope.ServiceProvider.GetService<TContext>() is { } context)
+            await action(new EfSchemaBackfillScope(scope.ServiceProvider, context));
+    }
+
     private async Task StopGateAsync()
     {
         if (!_stopping.IsCancellationRequested)
             await _stopping.CancelAsync();
-        if (_gateLoop is not { } loop)
-            return;
-        try
+        foreach (var loop in new[] { _gateLoop, _backfillLoop }.OfType<Task>())
         {
-            await loop;
-        }
-        catch (OperationCanceledException)
-        {
-            // The loop was stopped mid-round; a shell or host that is disposing is not failing.
+            try
+            {
+                await loop;
+            }
+            catch (OperationCanceledException)
+            {
+                // The loop was stopped mid-round; a shell or host that is disposing is not failing.
+            }
         }
     }
 }
@@ -218,6 +239,8 @@ public static class EfModuleMigrationServiceCollectionExtensions
         services.TryAddSingleton<EfSchemaFinalizationGates>();
         services.AddOptions<EfSchemaFinalizationOptions>();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IConfigureOptions<EfSchemaFinalizationOptions>, EfSchemaFinalizationOptionsConfigurator>());
+        services.AddOptions<EfSchemaBackfillOptions>();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IConfigureOptions<EfSchemaBackfillOptions>, EfSchemaBackfillOptionsConfigurator>());
         if (services.Any(descriptor => descriptor.ServiceType == typeof(EfModuleMigrator<TContext>)))
             return services;
         // CShells runs initializers by lifecycle phase, not registration order, and shell tasks and seeders

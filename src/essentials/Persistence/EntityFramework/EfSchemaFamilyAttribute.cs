@@ -80,4 +80,22 @@ public sealed class EfSchemaFamilyAttribute : Attribute
     /// a module maps to no family, or to more than one.
     /// </summary>
     public Type[] Entities { get; set; } = [];
+
+    /// <summary>
+    /// The entity types of the family whose rows are content-addressed (spec 186, FR-010b): their identity is derived
+    /// from their stored content, so rewriting one would change or forge it, as with a workflow executable or an
+    /// executable activity template (ADR 0038). The post-finalization backfill never rewrites them (FR-010a), and a family
+    /// that holds any below a version is never recorded complete at it (FR-011a). <c>EfSchemaContentAddressedGuardTests</c>
+    /// fails the build when a table holding executables is not named here.
+    /// </summary>
+    public Type[] ContentAddressed { get; set; } = [];
+
+    /// <summary>
+    /// The family's rewriter (spec 186, FR-004): a concrete <see cref="SchemaBackfill.IEfSchemaRowRewriter"/> in this
+    /// assembly, beside the family's store code, that reads one row through the family's read path and writes it back
+    /// through its write path. Unlike an upcaster it is constructed in the shell with the shell's services, since the
+    /// post-finalization backfill runs there. A family that has only ever had one version needs none; one whose chain is
+    /// longer names one, or its backfill reports that it cannot upgrade the rows below the finalized version.
+    /// </summary>
+    public Type? Rewriter { get; set; }
 }

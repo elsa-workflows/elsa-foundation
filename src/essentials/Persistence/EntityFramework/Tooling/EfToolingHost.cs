@@ -1085,7 +1085,13 @@ public static class EfToolingHost
                 State = pending.State == SchemaFinalization.SchemaFinalizationState.ReadableEverywhere ? "readable-everywhere" : "pending",
                 HeldBy = [.. pending.HeldBy.Select(hold => hold.Reason)]
             })],
-            CompletionVersion = status.Finish?.CompletionVersion
+            CompletionVersion = status.Finish?.CompletionVersion,
+            BackfillRun = status.Finish?.Run is { } run
+                ? new() { TargetVersion = run.TargetVersion, Member = run.Member.ToString(), ExpiresAt = run.ExpiresAt }
+                : null,
+            CompletionWithdrawn = status.Withdrawal is { } withdrawal
+                ? new() { Version = withdrawal.Version, WithdrawnBy = withdrawal.Actor.ToString(), At = withdrawal.At, Reason = withdrawal.Reason }
+                : null
         };
     }
 

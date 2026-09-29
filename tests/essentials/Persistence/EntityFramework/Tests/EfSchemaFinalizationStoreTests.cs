@@ -404,6 +404,75 @@ public sealed class EfSchemaFinalizationStoreTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// Spec 186, FR-008: a backfill run's claim sits in the finish record, keeps other workers off while it holds, is
+    /// renewed by its own worker without moving when it was first claimed, is taken over once it expires, adds nothing to
+    /// the finish history, and is dropped by the completion it leads to. A refused claim writes nothing.
+    /// </summary>
+    [Fact]
+    public async Task A_backfill_claim_holds_off_other_workers_until_it_expires_and_the_completion_drops_it()
+    {
+        var finalized = await FinalizedAsync(await CreatedAsync(), "3");
+        var claimed = Applied(await Store().ClaimBackfillAsync(Family, finalized.Revision, "3", Chain, HostA, "worker-a", TimeSpan.FromMinutes(2)));
+
+        Assert.Equal(new SchemaBackfillClaim(HostA, "worker-a", "3", Now, Now.AddMinutes(2)), claimed.Finish!.Run);
+        Assert.Equal(finalized.FinishHistory, claimed.FinishHistory);
+        var raw = await RawAsync();
+        await AssertRefusedAsync(SchemaFinalizationRefusal.BackfillClaimed,
+            () => Store().ClaimBackfillAsync(Family, claimed.Revision, "3", Chain, HostB, "worker-b", TimeSpan.FromMinutes(2)));
+        Assert.Equal(raw, await RawAsync());
+
+        var renewed = Applied(await StoreAt(Now.AddMinutes(1)).ClaimBackfillAsync(Family, claimed.Revision, "3", Chain, HostA, "worker-a", TimeSpan.FromMinutes(2)));
+        Assert.Equal(new SchemaBackfillClaim(HostA, "worker-a", "3", Now, Now.AddMinutes(3)), renewed.Finish!.Run);
+
+        var taken = Applied(await StoreAt(Now.AddMinutes(3)).ClaimBackfillAsync(Family, renewed.Revision, "3", Chain, HostB, "worker-b", TimeSpan.FromMinutes(2)));
+        Assert.Equal(new SchemaBackfillClaim(HostB, "worker-b", "3", Now.AddMinutes(3), Now.AddMinutes(5)), taken.Finish!.Run);
+
+        var completed = Applied(await Store().RecordCompletionAsync(Family, taken.Revision, "3", Now, Now, Chain, HostB));
+        Assert.Null(completed.Finish!.Run);
+    }
+
+    [Fact]
+    public async Task A_claim_needs_a_standing_completion_and_a_target_after_it_that_is_finalized()
+    {
+        var finalized = await FinalizedAsync(await CreatedAsync(), "3");
+        var raw = await RawAsync();
+
+        await AssertRefusedAsync(SchemaFinalizationRefusal.NotForward,
+            () => Store().ClaimBackfillAsync(Family, finalized.Revision, "1", Chain, HostA, "worker-a", TimeSpan.FromMinutes(2)));
+        await AssertRefusedAsync(SchemaFinalizationRefusal.CompletionBeyondFinalized,
+            () => Store().ClaimBackfillAsync(Family, finalized.Revision, "4", Chain, HostA, "worker-a", TimeSpan.FromMinutes(2)));
+        Assert.Equal(raw, await RawAsync());
+
+        var withdrawn = Applied(await Store().WithdrawCompletionAsync(Family, finalized.Revision, HostB, "a straggler"));
+        await AssertRefusedAsync(SchemaFinalizationRefusal.NoCompletion,
+            () => Store().ClaimBackfillAsync(Family, withdrawn.Revision, "3", Chain, HostA, "worker-a", TimeSpan.FromMinutes(2)));
+    }
+
+    /// <summary>
+    /// Spec 186, FR-008: the claim is an optional member of the finish record's JSON, absent while no run holds one, so a
+    /// build that does not know it reads a claimed record unchanged, and one written before it existed reads with none.
+    /// </summary>
+    [Fact]
+    public async Task A_claim_is_absent_from_an_unclaimed_finish_record_and_a_build_that_does_not_know_it_reads_a_claimed_one()
+    {
+        var finalized = await FinalizedAsync(await CreatedAsync(), "3");
+        Assert.DoesNotContain("\"run\"", await FinishJsonAsync(), StringComparison.Ordinal);
+
+        Applied(await Store().ClaimBackfillAsync(Family, finalized.Revision, "3", Chain, HostA, "worker-a", TimeSpan.FromMinutes(2)));
+        var claimedJson = await FinishJsonAsync();
+
+        Assert.Contains("\"run\"", claimedJson, StringComparison.Ordinal);
+        var options = new System.Text.Json.JsonSerializerOptions
+        {
+            PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase,
+            Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() },
+            RespectNullableAnnotations = true,
+            RespectRequiredConstructorParameters = true
+        };
+        Assert.Equal("1", System.Text.Json.JsonSerializer.Deserialize<FinishBeforeClaims>(claimedJson, options)!.CompletionVersion);
+    }
+
+    /// <summary>
     /// A row a newer build wrote reports skew on read and on write, before its JSON is parsed: the corrupt history would
     /// otherwise surface as corruption. The next test is the witness that the same JSON at the current version does.
     /// </summary>
@@ -550,6 +619,18 @@ public sealed class EfSchemaFinalizationStoreTests : IAsyncLifetime
     }
 
     private EfSchemaFinalizationStore Store(params IInterceptor[] interceptors) => new(Context(interceptors), new FixedClock(Now));
+
+    private EfSchemaFinalizationStore StoreAt(DateTimeOffset now) => new(Context(), new FixedClock(now));
+
+    private async Task<string?> FinishJsonAsync() =>
+        (await Context().Set<EfSchemaFinalizationRecordRow>().AsNoTracking().SingleAsync(candidate => candidate.Family == Family)).FinishJson;
+
+    /// <summary>The finish record as the build before claims read it: what a host that has not been upgraded deserializes.</summary>
+    private sealed record FinishBeforeClaims(
+        string CompletionVersion,
+        DateTimeOffset? VerificationStartedAt,
+        DateTimeOffset? VerificationEndedAt,
+        SchemaFinalizationActor RecordedBy);
 
     private FinalizationContext Context(params IInterceptor[] interceptors)
     {

@@ -156,6 +156,25 @@ public sealed class EfSchemaModuleGateTests : IAsyncLifetime
         await Gate(Families("3"), Fleet("host-full", "1", "2", "3")).ActivateAsync(Context());
     }
 
+    /// <summary>
+    /// Spec 186, User Story 6, acceptance 2; SC-006: once the backfill has recorded the family complete past the version a
+    /// release retired, that release activates. The test above is the other direction.
+    /// </summary>
+    [Fact]
+    public async Task A_host_whose_readable_set_starts_at_the_completion_version_activates()
+    {
+        await StoreRecordAsync("1", ["1", "2", "3"]);
+        var finalized = await EfSchemaFinalizationTestSupport.FinalizeAsync(new EfSchemaFinalizationStore(Context()), Family, ["1", "2", "3"], "3", new("host-x", "i"));
+        var at = DateTimeOffset.UtcNow;
+        await new EfSchemaFinalizationStore(Context()).RecordCompletionAsync(Family, finalized.Revision, "2", at, at, ["1", "2", "3"], new("host-x", "i"));
+
+        var retired = EfSchemaModuleFamilies.FromDeclarations(Module, [Declaration(Family, "2-3") with { Entities = [typeof(GateRow)] }]);
+        var gate = Gate(retired, Fleet("host-retired", "2", "3"));
+        await gate.ActivateAsync(Context());
+
+        Assert.Equal("3", gate.StateOf(Family)!.WriteVersion);
+    }
+
     [Fact]
     public async Task An_intent_left_by_a_crashed_evaluator_is_resolved_by_the_next_evaluation()
     {

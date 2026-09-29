@@ -144,6 +144,40 @@ public sealed class MemberQueryTests
         Assert.Equal(new[] { active, unknown }, Evaluate(MemberQuery.Counting(), active, unknown).Matches);
     }
 
+    /// <summary>
+    /// Spec 186, FR-012 and MR-001, both ways: the backfill's settle condition holds only once every counted member that
+    /// speaks for the database reports an observed finalized version among the target and later; a member that observed
+    /// an older one, or none at all, or whose report is unknown, holds it back, and one that does not declare the family
+    /// or speaks for another database does not.
+    /// </summary>
+    [Fact]
+    public void The_settle_condition_holds_only_once_every_counted_member_reports_observing_the_target_or_later()
+    {
+        var settled = new ObservesFinalizedSchemaVersion(Family, ["2", "3"], "db-a");
+        var atTarget = Member("at-target", report: Reports(Observing(Family, "2", "db-a")));
+        var later = Member("later", report: Reports(Observing(Family, "3", null)));
+        var behind = Member("behind", report: Reports(Observing(Family, "1", "db-a")));
+        var nothing = Member("nothing", report: Reports(Entry(Family, ["1", "2", "3"])));
+        var unknown = Member("unknown", report: MemberReport.Unknown);
+        var unrelated = Member("unrelated", report: Reports(Observing("customers", "1", null)));
+        var elsewhere = Member("elsewhere", report: Reports(Observing(Family, "1", "db-b")));
+        var expired = Member("expired", live: false, report: Reports(Observing(Family, "1", "db-a")));
+
+        var answer = Evaluate(MemberQuery.Counting(settled), atTarget, later, behind, nothing, unknown, unrelated, elsewhere, expired);
+
+        Assert.Equal(new[] { atTarget, later, unrelated, elsewhere }, answer.Matches);
+        Assert.Equal(new[] { behind, nothing, unknown }, answer.Failures.Select(failure => failure.Member));
+        Assert.True(Evaluate(MemberQuery.Counting(settled), atTarget, later, unrelated, elsewhere, expired).EveryConsideredMemberMatches);
+    }
+
+    [Fact]
+    public void A_settle_condition_names_at_least_one_version_and_compares_by_value()
+    {
+        Assert.Throws<ArgumentException>(() => new ObservesFinalizedSchemaVersion(Family, []));
+        Assert.Equal(new ObservesFinalizedSchemaVersion(Family, ["2", "3"], "db-a"), new ObservesFinalizedSchemaVersion(Family, ["2", "3"], "db-a"));
+        Assert.NotEqual(new ObservesFinalizedSchemaVersion(Family, ["2"], "db-a"), new ObservesFinalizedSchemaVersion(Family, ["2", "3"], "db-a"));
+    }
+
     private static MemberQueryAnswer Evaluate(MemberQuery query, params FleetMember[] members) =>
         query.Evaluate(new FleetView(ClusterProviderKind.Durable, FleetReadMode.Fresh, Now, members));
 
@@ -166,6 +200,9 @@ public sealed class MemberQueryTests
 
     private static ReadabilityEntry Entry(string family, string[] versions, string? databaseIdentity = null) =>
         new(family, "OrdersModule", versions, databaseIdentity);
+
+    private static ReadabilityEntry Observing(string family, string observed, string? databaseIdentity) =>
+        new(family, "OrdersModule", ["1", "2", "3"], databaseIdentity, observed);
 
     private static MemberReport Reports(params ReadabilityEntry[] entries) => new(new ReadabilitySection(entries));
 }

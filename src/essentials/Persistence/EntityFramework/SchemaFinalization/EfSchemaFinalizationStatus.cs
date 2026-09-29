@@ -7,6 +7,11 @@ namespace Elsa.Persistence.EntityFramework.SchemaFinalization;
 /// </summary>
 /// <param name="WriteVersion">The version this host writes, or null where no host is asking (the CLI).</param>
 /// <param name="WritesRefused">True when this host refuses every write to the family (FR-012).</param>
+/// <param name="Withdrawal">
+/// The finish history entry that withdrew the family's completion, while no completion has been recorded since: the
+/// straggler spec 186's audit found, which Attention reports as critical on every host (FR-018).
+/// </param>
+/// <param name="Backfill">This host's post-finalization backfill of the family, or null where none runs (spec 186, FR-021).</param>
 public sealed record EfSchemaFamilyStatus(
     string Family,
     string? Module,
@@ -18,7 +23,9 @@ public sealed record EfSchemaFamilyStatus(
     IReadOnlyList<EfSchemaPendingVersion> Pending,
     SchemaFinishRecord? Finish,
     string? WriteVersion = null,
-    bool WritesRefused = false)
+    bool WritesRefused = false,
+    SchemaFinishHistoryEntry? Withdrawal = null,
+    SchemaBackfill.EfSchemaBackfillStatus? Backfill = null)
 {
     /// <summary>
     /// Describes <paramref name="record"/> against the versions this build reads. Each version this build reads after
@@ -55,7 +62,8 @@ public sealed record EfSchemaFamilyStatus(
             record.Intent,
             record.Holds,
             pending,
-            record.Finish);
+            record.Finish,
+            Withdrawal: record.Finish is null && record.FinishHistory.LastOrDefault() is { Transition: SchemaFinishTransition.Withdrawn } withdrawn ? withdrawn : null);
     }
 }
 

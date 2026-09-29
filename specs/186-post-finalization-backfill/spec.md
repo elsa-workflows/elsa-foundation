@@ -2,7 +2,7 @@
 
 **Feature Branch**: `claude/2093-specs-b7-b9`
 **Created**: 2026-09-27
-**Status**: Approved
+**Status**: Implemented — B9 ([#2116](https://github.com/elsa-workflows/elsa-foundation/issues/2116)), proven on a synthetic family at versions 1 to 3, since every first-party family is still at one version; no first-party family has a rewriter yet (see the 2026-09-29 note).
 **Input**: Workstream B9, [issue #2116](https://github.com/elsa-workflows/elsa-foundation/issues/2116), of the
 cluster-safe schema rollout program [#2093](https://github.com/elsa-workflows/elsa-foundation/issues/2093). Rows that
 are written once and never written again are never reached by "upgrade on next write", so a family could never retire
@@ -524,3 +524,48 @@ module now stamps a schema family, taking the checked total from fifteen to twen
 modules and two Publishing tables" this spec and research.md describe (Current state, "Families, and where
 content-addressed rows live") should be checked against what #2131 already shipped before FR-004's rewriters are
 scoped.
+
+**2026-09-29 note.** Built by B9 ([#2116](https://github.com/elsa-workflows/elsa-foundation/issues/2116)); the PR's merge
+is the owner's approval of what follows, found while building.
+
+- **Where it runs.** `EfModuleMigrator` starts an `EfSchemaBackfill` beside each module's gate once the gate has admitted
+  the module, in the shell, with the shell's services (FR-001). Its first round is one check interval later, so the
+  shell is running by then. Its target is this host's write version, the finalized version it has adopted (FR-002); a
+  host that has not adopted the version the finish record names leaves the family alone, since a row it rewrote would
+  still be below the completion.
+- **The claim (FR-008)** is an optional member of the finish record's JSON, `run`: a member, a worker and an expiry,
+  absent while no run holds one. A build that does not know it reads a claimed record unchanged and drops the claim
+  when it next rewrites the record, which is harmless since nothing depends on it. A withdrawn completion leaves no
+  finish record to hold a claim, so the verification after a withdrawal runs unclaimed; giving the claim a column of
+  its own would change every module's finalization table, which B9 does not do. A claim is taken only for an upgrade
+  pass that has rows to rewrite, so a family that is settling or blocked does not rewrite its record every round.
+- **The settle margin (FR-012)** runs from when the worker first saw every counted member report the target, which is
+  no earlier than when the last of them began to; a worker that restarts waits it again. A counted member whose entry
+  names no observed version - one that loads the family's declaration without activating its module, or serves the
+  family in two databases whose records disagree - holds the condition back, as FR-012 reads. Both only delay.
+  MR-001 was already met by B3; B9 adds the counting requirement `ObservesFinalizedSchemaVersion` to the membership
+  contract, and `IEfSchemaFleet.SettleMargin` gives the default margin from the membership settings. A host that composes
+  no fleet, `Elsa.Foundation.Host` among them today (spec 182, 2026-09-29 note), upgrades rows but never records
+  completion; nothing observable differs while every chain has one version.
+- **Any pass withdraws (FR-018).** A row found below the standing completion by any pass, not only the hourly audit,
+  withdraws it: a run towards a newer finalized version can meet one below the old completion. The audit runs first one
+  check interval after a host starts, then hourly, so hosts that restart more often than hourly still audit. A
+  withdrawal while a verification pass runs is detected by its position in the finish history, not by time, since two
+  hosts' clocks cannot order it. The withdrawal reaches Attention from the finish record's history on every host, as a
+  critical item naming the tables and counts, until a new verification pass records the completion again.
+- **Status (FR-021, FR-022).** The gate's status carries the backfill's state, target, rows rewritten, the members the
+  settle condition waits for and what blocks completion. The persistence tool's `status` prints what the record holds:
+  the completion version, a claimed run and a withdrawn completion. A feature waiting on completeness is told it cannot
+  become available when content-addressed rows below the version remain; FR-011c's guard keeps any first-party feature
+  from reaching that.
+- **Selection (FR-005).** Batches are keyset pages over the primary key, resuming after the last key, so a row the
+  backfill cannot rewrite is passed over rather than selected again. A key part is compared as text, as an enum's stored
+  number, or with its type's own order; one stored through any other value converter is refused. A model test runs
+  every first-party stamped table's selections on SQLite, and the synthetic family's run on the three server engines.
+- **Content-addressed tables (FR-010b).** `RuntimeArtifact` names its executables and executable activity templates.
+  The model guard treats every stamped table whose name mentions executables as holding them unless it is listed with
+  why its rows' identity is not their content: the executable coordination, source-reference and template hash-claim
+  tables are.
+- **Rewriters (FR-004).** A family names its rewriter with `[EfSchemaFamily(..., Rewriter = typeof(...))]`, and the build
+  fails for a family with upcasters and none. Every first-party family still has one version, so none exists yet;
+  each family writes its own before its first version bump.

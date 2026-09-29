@@ -123,6 +123,16 @@ public sealed class EfSchemaModuleGate
     }
 
     /// <summary>
+    /// The module's post-finalization backfill in this shell, once the module's migrator has started it (spec 186): the
+    /// gate's status carries what it reports of each family (FR-021).
+    /// </summary>
+    public SchemaBackfill.EfSchemaBackfill? Backfill { get; private set; }
+
+    /// <summary>Gives the gate the module's backfill, whose status its own then carries (spec 186, FR-021). The module's migrator supplies it.</summary>
+    public void UseBackfill(SchemaBackfill.EfSchemaBackfill backfill) =>
+        Backfill = backfill ?? throw new ArgumentNullException(nameof(backfill));
+
+    /// <summary>
     /// Gives the gate a way to open a fresh context of its module on demand, as <see cref="RunAsync"/>'s argument does, so
     /// <see cref="RefreshIfOlderThanAsync"/> and <see cref="ReadStatusAsync(CancellationToken)"/> can serve a caller that
     /// has none. The module's migrator supplies it before it registers the gate.
@@ -328,7 +338,8 @@ public sealed class EfSchemaModuleGate
             statuses.Add(EfSchemaFamilyStatus.Describe(chain, record, blockers) with
             {
                 WriteVersion = state?.WriteVersion,
-                WritesRefused = state?.WritesRefused ?? false
+                WritesRefused = state?.WritesRefused ?? false,
+                Backfill = Backfill?.StatusOf(chain.Family)
             });
         }
 
@@ -746,7 +757,8 @@ public sealed class EfSchemaModuleGate
         }
     }
 
-    private SchemaFinalizationMember LocalMember() =>
+    /// <summary>This process's member, as the record names it in history entries and claims.</summary>
+    internal SchemaFinalizationMember LocalMember() =>
         _fleet?.GetLocalStanding().Member ?? new SchemaFinalizationMember(Environment.MachineName, ProcessIncarnation);
 
     private EfSchemaActivationRefusedException Refuse(EfSchemaChain chain, EfSchemaActivationRefusal refusal, string version) =>
