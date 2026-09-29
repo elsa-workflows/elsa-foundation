@@ -56,8 +56,7 @@ public sealed class NotesMigrationExecutionTests : IAsyncDisposable
     public async Task A_row_written_under_release_1_reads_as_no_tags_through_release_2_and_the_upcaster()
     {
         await AddNoteUnderRelease1Async();
-        var store = NewStore();
-        await NotesRelease.MigrateAsync(release2Contexts[^1], release2.SqliteMigrationId("AddTags"));
+        var store = await MigrateToRelease2Async(release2.SqliteMigrationId("AddTags"));
 
         Assert.Equal([("1.0.0", null)], NoteStamps());
         var note = Assert.Single(await store.ListWithTagsAsync());
@@ -149,11 +148,11 @@ public sealed class NotesMigrationExecutionTests : IAsyncDisposable
         return Rows($"SELECT Id FROM {NotesModule.TableName}", row => row.GetString(0)).Single();
     }
 
-    /// <summary>Applies release 1.1.0's migrations and returns a store on a new release 1.1.0 context.</summary>
-    private async Task<NoteStore> MigrateToRelease2Async()
+    /// <summary>Applies release 1.1.0's migrations, up to <paramref name="targetMigration"/> when given, and returns a store on the release 1.1.0 context that did.</summary>
+    private async Task<NoteStore> MigrateToRelease2Async(string? targetMigration = null)
     {
         var store = NewStore();
-        await NotesRelease.MigrateAsync(release2Contexts[^1]);
+        await NotesRelease.MigrateAsync(release2Contexts[^1], targetMigration);
         return store;
     }
 
