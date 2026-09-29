@@ -228,6 +228,42 @@ public sealed class StatusClusterCliTests : IDisposable
         Assert.Contains("invalid-skew-allowance", refused.Text, StringComparison.Ordinal);
     }
 
+    /// <summary>A host configuration that names a skew allowance the membership options would refuse is refused, and never judged with in its place.</summary>
+    [Theory]
+    [InlineData("\"soon\"")]
+    [InlineData("\"-00:00:02\"")]
+    public void An_invalid_skew_allowance_in_the_hosts_appsettings_is_refused(string value)
+    {
+        using var host = HostWithAppSettings($$"""{ "Elsa": { "Cluster": { "Membership": { "SkewAllowance": {{value}} } } } }""");
+
+        var refused = Run(host.Path, "status", Modules);
+
+        Assert.Equal(ToolExitCode.Refusal, refused.ExitCode);
+        Assert.Contains("invalid-skew-allowance", refused.Text, StringComparison.Ordinal);
+        Assert.Contains("Elsa:Cluster:Membership:SkewAllowance", refused.Text, StringComparison.Ordinal);
+    }
+
+    /// <summary>An appsettings the tool cannot read is said to be unreadable, with the way out, and is never taken as configuring nothing.</summary>
+    [Fact]
+    public void A_host_appsettings_that_cannot_be_read_is_refused_and_names_the_flag_that_avoids_it()
+    {
+        using var host = HostWithAppSettings("{ not json");
+
+        var refused = Run(host.Path, "status", Modules);
+
+        Assert.Equal(ToolExitCode.ResolutionFailure, refused.ExitCode);
+        Assert.Contains("host-configuration-unreadable", refused.Text, StringComparison.Ordinal);
+        Assert.Contains("--skew-allowance", refused.Text, StringComparison.Ordinal);
+    }
+
+    private TempDirectory HostWithAppSettings(string appsettings)
+    {
+        var host = new TempDirectory("elsa-cli-status-cluster-host-");
+        CopyDirectory(_clusterHost, host.Path);
+        File.WriteAllText(host.File("appsettings.json"), appsettings);
+        return host;
+    }
+
     private CliRun Status(params string[] extra) => Run(_clusterHost, "status", Modules, ["--family", Family, .. extra]);
 
     private CliRun Apply(string host, string modules)

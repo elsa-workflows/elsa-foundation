@@ -1,6 +1,8 @@
 using System.Reflection;
 using System.Text;
 using System.Text.Json;
+using Elsa.Cluster.EntityFrameworkCore;
+using Elsa.Persistence.EntityFramework;
 using Elsa.Persistence.EntityFramework.SchemaFinalization;
 using Elsa.Persistence.EntityFramework.Tooling;
 using Elsa.Persistence.Schema.SchemaFinalization;
@@ -243,6 +245,49 @@ public sealed class EfToolingFinalizationTests : IAsyncLifetime
         Assert.Equal("Cluster.Membership", cluster.GetProperty("module").GetString());
         Assert.Contains("migrations not applied", cluster.GetProperty("note").GetString(), StringComparison.Ordinal);
     }
+
+    /// <summary>A module the closure carries that has no context for the requested engine says that, with the module and the engine, and not that the cluster is empty.</summary>
+    [Fact]
+    public async Task A_membership_module_with_no_context_for_the_engine_carries_a_distinct_marker_and_says_why()
+    {
+        var withoutPostgreSql = MembershipModule() with { PostgreSql = null };
+
+        var read = await EfToolingHost.ReadClusterAsync(new EfClusterMembershipToolingSource(), withoutPostgreSql, "PostgreSql", "Host=unused", schema: null, skewAllowance: null, CancellationToken.None);
+
+        var cluster = read.Describe([]);
+        Assert.Null(read.Fleet);
+        Assert.Equal(EfToolingClusterAvailability.NoProviderContext, cluster.Availability);
+        Assert.Equal("Cluster.Membership", cluster.Module);
+        Assert.Contains("no context for provider 'PostgreSql'", cluster.Note, StringComparison.Ordinal);
+        Assert.Empty(cluster.Members);
+    }
+
+    /// <summary>A table that cannot be read says so and why, and is not mistaken for a cluster with nobody in it.</summary>
+    [Fact]
+    public async Task A_membership_table_that_cannot_be_read_carries_a_distinct_marker_and_a_note()
+    {
+        var notADatabase = Path.Join(Path.GetTempPath(), $"elsa-tooling-unreadable-{Guid.NewGuid():N}.db");
+        await File.WriteAllTextAsync(notADatabase, new string('x', 4096));
+        try
+        {
+            var read = await EfToolingHost.ReadClusterAsync(new EfClusterMembershipToolingSource(), MembershipModule(), "Sqlite", $"Data Source={notADatabase};Pooling=False", schema: null, skewAllowance: null, CancellationToken.None);
+
+            var cluster = read.Describe([]);
+            Assert.Null(read.Fleet);
+            Assert.Equal(EfToolingClusterAvailability.Unreadable, cluster.Availability);
+            Assert.Equal("Cluster.Membership", cluster.Module);
+            Assert.StartsWith("The members could not be read from 'Cluster.Membership'", cluster.Note, StringComparison.Ordinal);
+            Assert.Empty(cluster.Members);
+        }
+        finally
+        {
+            SqliteConnection.ClearAllPools();
+            File.Delete(notADatabase);
+        }
+    }
+
+    private static EfModuleDescriptor MembershipModule() =>
+        EfToolingHost.Discover([typeof(ClusterMembershipEfModule).Assembly]).Single(module => module.Name == ClusterMembershipEfModule.Name);
 
     [Fact]
     public async Task Status_takes_a_skew_allowance_and_nothing_else_does_and_a_bad_one_is_refused()

@@ -12888,6 +12888,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Cluster.Core",
+          "path": "src/essentials/Cluster/Core/Elsa.Cluster.Core.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Modularity.Planning",
           "path": "src/essentials/Modularity/Planning/Elsa.Modularity.Planning.csproj"
         },

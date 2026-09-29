@@ -1057,8 +1057,21 @@ public static class EfToolingHost
         var found = declared
             .SelectMany(descriptor => FleetSourcesIn(descriptor.Assembly).Select(source => (Source: source, Module: EfModuleCatalog.Find(declared, source.ModuleName))))
             .FirstOrDefault(candidate => candidate.Module is not null);
-        if (found.Module is not { } module)
-            return ClusterRead.Unread(new() { Availability = EfToolingClusterAvailability.NoMembershipProvider });
+        return found.Module is { } module
+            ? await ReadClusterAsync(found.Source, module, provider, connection, schema, skewAllowance, cancellationToken)
+            : ClusterRead.Unread(new() { Availability = EfToolingClusterAvailability.NoMembershipProvider });
+    }
+
+    /// <summary>The members <paramref name="source"/> reads from <paramref name="module"/>'s table, or the marker that says why it could not.</summary>
+    internal static async Task<ClusterRead> ReadClusterAsync(
+        IEfToolingFleetSource source,
+        EfModuleDescriptor module,
+        string provider,
+        string connection,
+        string? schema,
+        TimeSpan? skewAllowance,
+        CancellationToken cancellationToken)
+    {
         if (module.ProviderContext(provider) is not { } contextType)
         {
             return ClusterRead.Unread(new()
@@ -1086,7 +1099,7 @@ public static class EfToolingHost
                 });
             }
 
-            return new ClusterRead(module.Name, await found.Source.ReadAsync(context, skewAllowance, cancellationToken), null);
+            return new ClusterRead(module.Name, await source.ReadAsync(context, skewAllowance, cancellationToken), null);
         }
         catch (Exception failure) when (failure is not EfToolingRefusal and not OperationCanceledException)
         {
@@ -1111,7 +1124,7 @@ public static class EfToolingHost
     }
 
     /// <summary>What <c>status</c> made of the cluster: the fleet it read, or the marker that says why it read none.</summary>
-    private sealed record ClusterRead(string Module, EfToolingFleet? Fleet, EfToolingCluster? UnreadCluster)
+    internal sealed record ClusterRead(string Module, EfToolingFleet? Fleet, EfToolingCluster? UnreadCluster)
     {
         public static ClusterRead Unread(EfToolingCluster cluster) => new(cluster.Module, null, cluster);
 

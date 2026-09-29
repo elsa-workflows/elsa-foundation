@@ -16,7 +16,10 @@ namespace Elsa.Cli;
 /// </remarks>
 internal static class HostMembershipSettings
 {
-    /// <summary>The key, spelled as <c>ClusterMembershipOptions.SectionName</c> and <c>SkewAllowance</c> spell it.</summary>
+    /// <summary>
+    /// The key, spelled as <c>ClusterMembershipOptions.SectionName</c> and <c>SkewAllowance</c> spell it. This assembly cannot
+    /// reference the options, so an architecture test holds the two to each other.
+    /// </summary>
     public const string SkewAllowanceKey = "Elsa:Cluster:Membership:SkewAllowance";
 
     /// <summary>The host's configured skew allowance for <paramref name="environment"/>, or <see langword="null"/> when it configures none.</summary>
@@ -45,7 +48,4 @@ internal static class HostMembershipSettings
         TimeSpan.TryParse(value, CultureInfo.InvariantCulture, out var skew) && skew >= TimeSpan.Zero
             ? skew
             : throw CliRefusal.Usage("invalid-skew-allowance", $"{source} is '{value}', which is not a non-negative time span such as 00:00:05.");
-
-    /// <summary>The form the request carries a time span in.</summary>
-    public static string Format(TimeSpan skew) => skew.ToString("c", CultureInfo.InvariantCulture);
 }

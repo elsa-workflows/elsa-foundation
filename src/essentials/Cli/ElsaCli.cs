@@ -199,12 +199,10 @@ internal static class ElsaCli
     /// The skew allowance <c>status</c> judges liveness with: the flag, else the host's own configured one, else none, which
     /// leaves the membership provider's default. Always stated in the report, so the reader sees what was used.
     /// </summary>
-    private static string? SkewAllowance(string? named, HostLayout layout, string environment) =>
-        (named is not null
+    private static TimeSpan? SkewAllowance(string? named, HostLayout layout, string environment) =>
+        named is not null
             ? HostMembershipSettings.Parse(named, "--skew-allowance")
-            : HostMembershipSettings.SkewAllowance(layout.Directory, environment)) is { } skew
-            ? HostMembershipSettings.Format(skew)
-            : null;
+            : HostMembershipSettings.SkewAllowance(layout.Directory, environment);
 
     private static Command ScriptCheckCommand()
     {

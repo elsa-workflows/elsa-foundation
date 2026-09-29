@@ -11,15 +11,12 @@ namespace Elsa.Persistence.EntityFramework.Tooling;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Frozen means closed, not unchanging: a new optional field is additive and does not move <see cref="Version"/>. That
-/// holds only while a field a reader does not know is never sent to it. A response field is safe to add, since the worker
-/// reads the response as a document and a build that predates the field simply omits it, which the CLI reports as "not
-/// reported" rather than reading as an answer. A request field is safe only when the worker asks the host's build whether it
-/// declares the field before sending it (as it does for <see cref="EfToolingRequest.CapabilitySelection"/> and
-/// <see cref="EfToolingRequest.SkewAllowance"/>), because this contract refuses an unknown request property. A bump would
-/// refuse every host build in the field for the sake of a status detail, so it is reserved for a change no reader can
-/// tolerate. The 2026-09-29 additions, all optional and all on <c>status</c>: the request's <c>skewAllowance</c>, the
-/// response's <c>finalization.cluster</c> (with its <c>availability</c> marker) and each pending version's <c>waitsFor</c>.
+/// Frozen means closed, not unchanging: an additive optional field does not move <see cref="Version"/>. A request field is
+/// sent only to a host build that declares it, as the worker does for <see cref="EfToolingRequest.CapabilitySelection"/> and
+/// <see cref="EfToolingRequest.SkewAllowance"/>. The rule, and why it does not contradict "do not add optional fields to the
+/// closed version-1 DTOs", is the 2026-09-29 note in <c>specs/173-shared-persistence/contracts/tooling.md</c>. The 2026-09-29
+/// additions, all optional and all on <c>status</c>: the request's <c>skewAllowance</c>, the response's
+/// <c>finalization.cluster</c> (with its <c>availability</c> marker) and each pending version's <c>waitsFor</c>.
 /// </para>
 /// </remarks>
 public static class EfToolingContract
@@ -555,8 +552,6 @@ public static class EfToolingClusterAvailability
 
     /// <summary>The table could not be read; <see cref="EfToolingCluster.Note"/> says why.</summary>
     public const string Unreadable = "unreadable";
-
-    public static readonly string[] All = [Read, NoMembershipProvider, NoProviderContext, NotMigrated, Unreadable];
 }
 
 /// <summary>

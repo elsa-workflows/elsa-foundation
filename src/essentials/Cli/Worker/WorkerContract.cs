@@ -187,7 +187,7 @@ public sealed record WorkerRequest
     /// <c>c</c> format: <c>--skew-allowance</c>, else the host's <c>Elsa:Cluster:Membership:SkewAllowance</c>, else absent
     /// for the membership provider's own default. Never sent to a host whose tooling predates it, which judges nothing.
     /// </summary>
-    public string? SkewAllowance { get; init; }
+    public TimeSpan? SkewAllowance { get; init; }
 
     /// <summary>
     /// The connection string itself, read by this front end from its own stdin when <c>--connection-stdin</c>
