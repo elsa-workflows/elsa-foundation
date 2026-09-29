@@ -27,21 +27,24 @@ public static class EfSchemaReadabilityServiceCollectionExtensions
     /// composes neither has gates that never finalize a version past the one each record was created at.
     /// <para>
     /// It also composes the host's <see cref="ISupersededAssemblySource"/>, <see cref="NuplanePackageGenerations"/>, unless
-    /// one is already registered (spec 183, FR-021, amended 2026-09-29): by instance, so every shell shares it, and bound
-    /// to the host's own container through the CShells lifecycle subscriber registered beside it, which CShells builds
-    /// from the host's container alone. On a host without Nuplane, or without CShells, it never names anything superseded,
-    /// and the report reads every load context as before.
+    /// one is already registered (spec 183, FR-021, amended 2026-09-29): by instance, so every shell shares it, bound to
+    /// the host's own container through the CShells lifecycle subscriber registered beside it, which CShells builds from
+    /// the host's container alone, and fed by the shell initializer registered beside that, which every shell container
+    /// copies and constructs before its first initializer runs, so each shell generation is counted from then until its
+    /// container has finished disposing. On a host without Nuplane, or without CShells, it never names anything
+    /// superseded, and the report reads every load context as before.
     /// </para>
     /// </remarks>
     public static IServiceCollection AddEfSchemaReadability(this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
         services.TryAddSingleton(new EfSchemaFinalizationObservations());
-        if (!services.Any(descriptor => descriptor.ServiceType == typeof(ISupersededAssemblySource)))
+        var generations = new NuplanePackageGenerations();
+        services.TryAddSingleton<ISupersededAssemblySource>(generations);
+        if (services.Any(descriptor => !descriptor.IsKeyedService && descriptor.ImplementationInstance == generations))
         {
-            var generations = new NuplanePackageGenerations();
-            services.AddSingleton<ISupersededAssemblySource>(generations);
             services.AddSingleton<IShellLifecycleSubscriber>(host => generations.BindTo(host));
+            services.AddSingleton<IShellInitializer>(container => generations.Track(container));
         }
 
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IMemberReportSource<ReadabilitySection>, EfSchemaReadabilitySource>());

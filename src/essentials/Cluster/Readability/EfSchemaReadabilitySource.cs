@@ -22,19 +22,22 @@ namespace Elsa.Cluster.Readability;
 /// </para>
 /// <para>
 /// When several declarations of one family are loaded, as an old and a new generation of a package are during a reload,
-/// the entry holds only the versions all of them read (FR-021). An old generation stops counting only once the host's
-/// <see cref="ISupersededAssemblySource"/> names it retired (FR-021, amended 2026-09-29): a newer generation of the same
-/// assembly replaced it in the host's active package set, and no shell generation that has not been disposed composes a
-/// feature from it. Until then, and always on a host that composes no such source, it narrows the entry, so a load
-/// context a package runtime never unloads holds an upgraded host back until the old generation is gone rather than
-/// until the process restarts. They must name the same owning EF module - or agree
-/// that the family is shared, owned by none (spec 180, FR-001) - if they do not, that one family is isolated rather
-/// than let it take the whole report down with it (FR-020): its entry names one of the disagreeing modules, which may
-/// be <see langword="null"/> when a shared declaration disagrees with an owned one, credits no version, and an error
-/// is logged naming the family and every conflicting declaration, so <see cref="ReadsSchemaVersion"/> counts the host
-/// for that family and fails it — the conservative direction — while every other family is still reported normally. A
-/// declaration <see cref="EfSchemaFamilyCatalog"/> refuses still fails the whole report: a family left out of it would
-/// let a version finalize that this host cannot read.
+/// the entry holds only the versions all of them read (FR-021). The declarations of one family must name the same
+/// owning EF module - or agree that the family is shared, owned by none (spec 180, FR-001) - and if they do not, that
+/// one family is isolated rather than let it take the whole report down with it (FR-020): its entry names one of the
+/// disagreeing modules, which may be <see langword="null"/> when a shared declaration disagrees with an owned one,
+/// credits no version, and an error is logged naming the family and every conflicting declaration, so
+/// <see cref="ReadsSchemaVersion"/> counts the host for that family and fails it — the conservative direction — while
+/// every other family is still reported normally. A declaration <see cref="EfSchemaFamilyCatalog"/> refuses still fails
+/// the whole report: a family left out of it would let a version finalize that this host cannot read.
+/// </para>
+/// <para>
+/// An old generation stops counting only once the host's <see cref="ISupersededAssemblySource"/> names it retired (FR-021,
+/// amended 2026-09-29): a newer generation of the same assembly replaced it in the host's active package set, no shell
+/// generation whose container has not finished disposing composes a feature from its load context, and the feature
+/// catalog the next shell generation is built from names neither it nor a feature in its load context. Until then, and
+/// always on a host that composes no such source, it narrows the entry, so a load context a package runtime never
+/// unloads holds an upgraded host back until the old generation can no longer run rather than until the process restarts.
 /// </para>
 /// <para>
 /// Each declaration credits its readable set (spec 180, FR-004): its current version and every predecessor its upcaster
@@ -65,8 +68,7 @@ public sealed class EfSchemaReadabilitySource(
     public async ValueTask<ReadabilitySection> ReadAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var retired = superseded is null ? LoadedAssemblies.NoneSuperseded : await superseded.GetRetiredAsync(cancellationToken);
-        return Read(EfSchemaFamilyCatalog.Discover(LoadedAssemblies.Except(retired)), _logger, observations);
+        return Read(EfSchemaFamilyCatalog.Discover(await LoadedAssemblies.ExceptRetiredAsync(superseded, cancellationToken)), _logger, observations);
     }
 
     /// <summary>
