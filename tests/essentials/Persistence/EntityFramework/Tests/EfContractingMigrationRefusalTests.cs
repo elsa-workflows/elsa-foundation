@@ -1,11 +1,13 @@
-using System.Text;
-using System.Text.Json;
 using Elsa.Persistence.EntityFramework.SchemaFinalization;
 using Elsa.Persistence.EntityFramework.Tooling;
 using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using static Elsa.Persistence.EntityFramework.Tests.ContractingModule;
+using static Elsa.Persistence.EntityFramework.Tests.ContractingSeedScenarios;
 
 namespace Elsa.Persistence.EntityFramework.Tests;
 
@@ -20,14 +22,8 @@ public sealed class EfContractingMigrationRefusalTests : IAsyncLifetime
 {
     private const string Provider = "Sqlite";
 
-    private static readonly JsonSerializerOptions Json = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
-    };
-
     private readonly TemporarySqliteDatabase _database = new("contracting");
-    private ServiceProvider? _host;
+    private readonly List<ServiceProvider> _hosts = [];
 
     private string Connection => _database.ConnectionString;
 
@@ -35,8 +31,8 @@ public sealed class EfContractingMigrationRefusalTests : IAsyncLifetime
 
     public async Task DisposeAsync()
     {
-        if (_host is not null)
-            await _host.DisposeAsync();
+        foreach (var host in _hosts)
+            await host.DisposeAsync();
         await _database.DisposeAsync();
     }
 
@@ -114,8 +110,8 @@ public sealed class EfContractingMigrationRefusalTests : IAsyncLifetime
 
     /// <summary>
     /// A fresh install of a release that carries a contracting migration applies it with the rest: no host has admitted
-    /// the module in this database, so nothing reads what it removes, and a refusal here could never clear, since only an
-    /// admitted module creates the record the check waits for.
+    /// the module in this database, so nothing reads what it removes, and the migrator creates the family's record at the
+    /// version the contraction names before the contraction runs, which the gate then admits the module against.
     /// </summary>
     [Fact]
     public async Task A_fresh_database_takes_the_contracting_migration_with_the_rest_of_its_batch()
@@ -125,10 +121,14 @@ public sealed class EfContractingMigrationRefusalTests : IAsyncLifetime
         await migrator.InitializeAsync();
 
         Assert.Equal([Initial, Expand, DropObsolete, Contract], await AppliedAsync(Provider, Connection));
+        AssertSeeded(await RecordAsync(Provider, Connection), MachineMigrator);
         Assert.NotNull(migrator.Gate);
     }
 
-    /// <summary>Tables that exist without a database identity were migrated, but no gate-aware host has admitted the module.</summary>
+    /// <summary>
+    /// Tables that exist without a database identity were migrated, but no gate-aware host has admitted the module: nothing
+    /// is pending before the contraction, so the record is created at once and the contraction runs.
+    /// </summary>
     [Fact]
     public async Task A_database_whose_module_no_host_has_admitted_yet_takes_the_contracting_migration()
     {
@@ -138,6 +138,80 @@ public sealed class EfContractingMigrationRefusalTests : IAsyncLifetime
             await EfDatabaseMigrator.ApplyAsync(context, EfProviderNames.Sqlite);
 
         Assert.Contains(Contract, await AppliedAsync(Provider, Connection));
+        AssertSeeded(await RecordAsync(Provider, Connection), MachineMigrator);
+    }
+
+    // --- The migrator seeds first where no host has admitted the module (#2136) ------------------------------------
+
+    [Fact]
+    public Task Persistence_apply_on_a_fresh_database_creates_the_record_before_the_contraction_so_an_older_release_starting_next_is_refused() =>
+        ApplyThenAnOlderReleaseStartsAsync(Provider, Connection);
+
+    /// <summary>A host, named by its member in the fleet, whose process ends between the seed and the contraction.</summary>
+    [Fact]
+    public Task A_host_that_crashes_between_the_seed_and_the_contraction_leaves_an_older_release_refused_and_the_next_start_completes()
+    {
+        var fleet = new FakeFleetState();
+        var host = fleet.Add(new FakeMember("host-new").Reading(Family, Chain));
+        return ACrashBetweenTheSeedAndTheContractionAsync(
+            Provider,
+            Connection,
+            interceptors => Migrator(EfMigratePolicy.AutoMigrate, new FakeFleet(fleet, host), interceptors).InitializeAsync(),
+            EfContractingMigrationCheck.MigratorHostIdPrefix + host.HostId);
+    }
+
+    [Fact]
+    public Task An_older_release_whose_gate_creates_the_record_first_keeps_the_contraction_from_running() =>
+        AnOlderReleaseThatCreatesTheRecordFirstKeepsTheContractionFromRunningAsync(Provider, Connection);
+
+    [Fact]
+    public Task An_older_release_that_starts_after_the_seed_is_refused_and_the_contraction_runs() =>
+        AnOlderReleaseThatStartsAfterTheSeedIsRefusedAndTheContractionRunsAsync(Provider, Connection);
+
+    /// <summary>
+    /// A build whose own chain cannot place the version its contracting migration names seeds nothing: it is refused
+    /// before anything runs, so no record is created at a version it cannot place and nothing is migrated.
+    /// </summary>
+    [Fact]
+    public async Task A_contracting_migration_whose_version_the_build_cannot_place_is_refused_before_anything_runs_and_seeds_nothing()
+    {
+        var readsOnlyTheEarlierVersion = Gate(EarlierVersion).Families;
+
+        await using (var context = Create(Provider, Connection))
+        {
+            var refusal = await Assert.ThrowsAsync<EfContractingMigrationRefusedException>(
+                () => EfContractingMigrationCheck.MigrateAsync(context, host: null, readsOnlyTheEarlierVersion, CancellationToken.None));
+
+            Assert.Equal(
+                new EfContractingMigrationRefusal(Contract, Family, CurrentVersion, null, EfContractingMigrationRefusalReason.UnknownVersion),
+                Assert.Single(refusal.Refusals));
+            Assert.Empty(refusal.Applied);
+        }
+
+        Assert.Empty(await AppliedAsync(Provider, Connection));
+        Assert.Null(await RecordAsync(Provider, Connection));
+    }
+
+    /// <summary>
+    /// The first step applies what comes before the contraction and nothing else, and never reverts: EF's own targeted
+    /// migrate reverts every applied migration after its target, which a concurrent migrator may have applied by the time
+    /// EF's lock is taken. Both ways, on a database already at its last migration: EF's sets out to revert the
+    /// contraction, which these hand-written migrations refuse for want of a <c>Down</c> that a generated one would run.
+    /// </summary>
+    [Fact]
+    public async Task The_step_before_the_contraction_never_reverts_what_another_migrator_applied_past_it()
+    {
+        await StageAsync(Provider, Connection, Contract, finalized: null);
+
+        await using (var context = Create(Provider, Connection))
+            await EfContractingMigrationCheck.MigrateBeforeAsync(context, Contract, CancellationToken.None);
+        Assert.Equal([Initial, Expand, DropObsolete, Contract], await AppliedAsync(Provider, Connection));
+
+        await using (var context = Create(Provider, Connection))
+        {
+            var revert = await Assert.ThrowsAsync<NotSupportedException>(() => context.GetService<IMigrator>().MigrateAsync(DropObsolete));
+            Assert.Contains("'Down' method", revert.Message, StringComparison.Ordinal);
+        }
     }
 
     /// <summary>Once a host has admitted the module, a family with no record has nothing to show its version finalized.</summary>
@@ -203,10 +277,11 @@ public sealed class EfContractingMigrationRefusalTests : IAsyncLifetime
     /// Three hosts and a database no host has run the module in. host-old runs the release before the family's change, so
     /// it reads only <see cref="EarlierVersion"/>, and it is live in the fleet: the family cannot finalize past that
     /// version while it is. host-new runs the contracting release and is the first to run the module on this database, so
-    /// nothing refuses the contraction, and its gate creates the family's record. The record must start at
-    /// <see cref="CurrentVersion"/>, which the contraction names, not at <see cref="EarlierVersion"/>, the oldest version
-    /// host-new reads, since the schema no longer serves that. So host-late, starting later on the older release, is
-    /// refused rather than admitted against a schema without the column it reads.
+    /// nothing refuses the contraction, and its migrator creates the family's record before it, as host-new's migrator.
+    /// The record must start at <see cref="CurrentVersion"/>, which the contraction names, not at
+    /// <see cref="EarlierVersion"/>, the oldest version host-new reads, since the schema no longer serves that. So
+    /// host-late, starting later on the older release, is refused rather than admitted against a schema without the
+    /// column it reads.
     /// </summary>
     [Fact]
     public async Task A_contraction_applied_on_a_fresh_database_starts_its_familys_record_at_its_version_so_an_older_host_is_refused()
@@ -218,9 +293,7 @@ public sealed class EfContractingMigrationRefusalTests : IAsyncLifetime
         await newer.InitializeAsync();
 
         Assert.False(await HasColumnAsync(Provider, Connection, RowsTable, "Legacy"));
-        var record = await RecordAsync(Provider, Connection);
-        Assert.Equal(CurrentVersion, record!.FinalizedVersion);
-        Assert.Equal((SchemaFinalizationTransition.Created, CurrentVersion), (record.History[0].Transition, record.History[0].Version));
+        AssertSeeded(await RecordAsync(Provider, Connection), EfContractingMigrationCheck.MigratorHostIdPrefix + "host-new");
         var before = await SnapshotAsync();
 
         var late = Gate(EarlierVersion, new FakeFleet(fleet, fleet.Add(new FakeMember("host-late").Reading(Family, EarlierVersion))));
@@ -232,8 +305,10 @@ public sealed class EfContractingMigrationRefusalTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// Both ways: a contraction still pending leaves the schema serving the oldest version the host reads, and the record
-    /// starts there; once it has applied, the record starts at the version it names.
+    /// The gate's own floor, for a contraction applied outside Elsa's migrator, as SQL from <c>dotnet elsa persistence
+    /// script</c> is, so no record was created before it. Both ways: a contraction still pending leaves the schema serving
+    /// the oldest version the host reads, and the record starts there; once it has applied, the record starts at the
+    /// version it names.
     /// </summary>
     [Theory]
     [InlineData(DropObsolete, EarlierVersion)]
@@ -249,8 +324,9 @@ public sealed class EfContractingMigrationRefusalTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// A host that cannot place the version an applied contraction names cannot tell which of its versions the schema still
-    /// serves, so it is refused rather than starting the record at the oldest version it reads, and creates no record.
+    /// A host that cannot place the version a contraction applied outside Elsa's migrator names cannot tell which of its
+    /// versions the schema still serves, so it is refused rather than starting the record at the oldest version it reads,
+    /// and creates no record.
     /// </summary>
     [Fact]
     public async Task A_host_whose_chain_does_not_read_the_version_an_applied_contraction_names_is_refused_and_creates_no_record()
@@ -273,7 +349,7 @@ public sealed class EfContractingMigrationRefusalTests : IAsyncLifetime
         await StageAsync(Provider, Connection, Expand);
         var before = await SnapshotAsync();
 
-        var refused = await ToolAsync("apply");
+        var refused = await ToolAsync(Provider, Connection, "apply");
 
         Assert.Equal(EfToolingExitCode.Refusal, refused.ExitCode);
         var error = refused.Response.GetProperty("error");
@@ -282,7 +358,7 @@ public sealed class EfContractingMigrationRefusalTests : IAsyncLifetime
         Assert.Equal(before, await SnapshotAsync());
 
         await FinalizeAsync(Provider, Connection, CurrentVersion);
-        var applied = await ToolAsync("apply");
+        var applied = await ToolAsync(Provider, Connection, "apply");
 
         Assert.Equal(EfToolingExitCode.Success, applied.ExitCode);
         Assert.Equal([Initial, Expand, DropObsolete, Contract], await AppliedAsync(Provider, Connection));
@@ -293,7 +369,7 @@ public sealed class EfContractingMigrationRefusalTests : IAsyncLifetime
     {
         await StageAsync(Provider, Connection, DropObsolete);
 
-        var run = await ToolAsync("validate");
+        var run = await ToolAsync(Provider, Connection, "validate");
 
         Assert.Equal(EfToolingExitCode.NegativeResult, run.ExitCode);
         var error = run.Response.GetProperty("error");
@@ -323,26 +399,17 @@ public sealed class EfContractingMigrationRefusalTests : IAsyncLifetime
         return await Assert.ThrowsAsync<EfContractingMigrationRefusedException>(() => EfDatabaseMigrator.ApplyAsync(context, EfProviderNames.Sqlite));
     }
 
-    private EfModuleMigrator<ContractingDbContext> Migrator(EfMigratePolicy policy, IEfSchemaFleet? fleet = null)
+    private EfModuleMigrator<ContractingDbContext> Migrator(EfMigratePolicy policy, IEfSchemaFleet? fleet = null, IInterceptor[]? interceptors = null)
     {
         var services = new ServiceCollection();
         if (fleet is not null)
             services.AddSingleton(fleet);
-        services.AddDbContext<ContractingDbContext>(options => Bind(options, Provider, Connection));
+        services.AddDbContext<ContractingDbContext>(options => Bind(options.AddInterceptors(interceptors ?? []), Provider, Connection));
         services.AddEfModuleMigrations<ContractingDbContext>(Provider);
         services.Configure<EfMigrateOptions>(options => options.Policy = policy);
-        _host = services.BuildServiceProvider();
-        return _host.GetRequiredService<EfModuleMigrator<ContractingDbContext>>();
-    }
-
-    private async Task<(int ExitCode, JsonElement Response)> ToolAsync(string command)
-    {
-        var request = new { version = 1, command, provider = Provider, selection = new { kind = "modules", modules = new[] { Name } }, connection = Connection };
-        using var input = new MemoryStream(JsonSerializer.SerializeToUtf8Bytes(request, Json));
-        using var output = new MemoryStream();
-        var exitCode = await EfToolingHost.RunAsync(input, output, [typeof(ContractingDbContext).Assembly]);
-        using var response = JsonDocument.Parse(Encoding.UTF8.GetString(output.ToArray()));
-        return (exitCode, response.RootElement.Clone());
+        var host = services.BuildServiceProvider();
+        _hosts.Add(host);
+        return host.GetRequiredService<EfModuleMigrator<ContractingDbContext>>();
     }
 
     /// <summary>Every table's definition and every row, as text: what a refusal must leave exactly as it found it.</summary>

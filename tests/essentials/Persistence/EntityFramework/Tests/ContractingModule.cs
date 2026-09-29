@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.Extensions.Logging;
 
 [assembly: EfModule(
     ContractingModule.Name,
@@ -48,10 +49,12 @@ internal static class ContractingModule
     public static string MigrationsAssembly => typeof(ContractingDbContext).Assembly.GetName().Name!;
 
     /// <summary>The module's context on <paramref name="connectionString"/>, bound the way a host binds it.</summary>
-    public static ContractingDbContext Create(string provider, string connectionString)
+    public static ContractingDbContext Create(string provider, string connectionString, params IInterceptor[] interceptors)
     {
         var builder = new DbContextOptionsBuilder<ContractingDbContext>();
         Bind(builder, provider, connectionString);
+        if (interceptors.Length > 0)
+            builder.AddInterceptors(interceptors);
         return new ContractingDbContext(builder.Options);
     }
 
@@ -77,11 +80,13 @@ internal static class ContractingModule
         await EfSchemaFinalizationTestSupport.FinalizeAsync(new EfSchemaFinalizationStore(context), Family, chain ?? Chain, version);
     }
 
-    /// <summary>The family's finalization record, or null while no gate has created it.</summary>
+    /// <summary>The family's finalization record, or null while nothing has created it, or its table.</summary>
     public static async Task<SchemaFinalizationRecord?> RecordAsync(string provider, string connectionString)
     {
         await using var context = Create(provider, connectionString);
-        return await new EfSchemaFinalizationStore(context).FindAsync(Family);
+        return await EfSchemaFinalizationCheck.RecordTableExistsAsync(context)
+            ? await new EfSchemaFinalizationStore(context).FindAsync(Family)
+            : null;
     }
 
     /// <summary>
@@ -113,12 +118,40 @@ internal static class ContractingModule
     }
 }
 
+/// <summary>
+/// What a test sees of a synthetic module's migrations as EF applies them: an action registered with
+/// <see cref="WhenApplying{TMigration}"/> runs as EF begins applying that migration, before any of its operations, on the
+/// flow that applies it, whichever of the persistence tool, a host's migrator or <see cref="EfDatabaseMigrator"/> drives
+/// it. It is scoped to the registering test's own flow, so tests running at once never see each other's.
+/// </summary>
+internal static class ContractingProbe
+{
+    private static readonly AsyncLocal<(Type Migration, Action Action)?> Hook = new();
+
+    public static readonly Func<EventId, LogLevel, bool> Filter = static (id, _) => id == RelationalEventId.MigrationApplying;
+
+    public static readonly Action<EventData> Observe = static data =>
+    {
+        if (data is MigrationEventData applying && Hook.Value is { } hook && applying.Migration.GetType() == hook.Migration)
+            hook.Action();
+    };
+
+    public static void WhenApplying<TMigration>(Action action) where TMigration : Migration => Hook.Value = (typeof(TMigration), action);
+
+    /// <summary>Stops observing, so an action that simulated a crash does not fire on the retry.</summary>
+    public static void Stop() => Hook.Value = null;
+
+    /// <summary>Hand-written migrations carry no model snapshot to compare the running model with; and every synthetic context is observed.</summary>
+    public static void Configure(DbContextOptionsBuilder optionsBuilder) =>
+        optionsBuilder
+            .ConfigureWarnings(warnings => warnings.Ignore(RelationalEventId.PendingModelChangesWarning))
+            .LogTo(Filter, Observe);
+}
+
 /// <summary>The module's context as the latest migration leaves it: <c>Legacy</c> and <c>Obsolete</c> are gone.</summary>
 public sealed class ContractingDbContext(DbContextOptions<ContractingDbContext> options) : DbContext(options)
 {
-    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder) =>
-        // Hand-written migrations carry no model snapshot to compare the running model with.
-        optionsBuilder.ConfigureWarnings(warnings => warnings.Ignore(RelationalEventId.PendingModelChangesWarning));
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder) => ContractingProbe.Configure(optionsBuilder);
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

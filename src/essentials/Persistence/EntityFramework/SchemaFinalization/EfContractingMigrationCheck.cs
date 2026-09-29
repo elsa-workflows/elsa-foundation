@@ -84,12 +84,7 @@ public static class EfContractingMigrationCheck
         var unsafeMigrations = await IsAdmittedAsync(context, cancellationToken)
             ? await JudgeAsync(contracting, families, new EfSchemaFinalizationStore(context), cancellationToken)
             : contracting.Select(migration => Place(migration, families).Refusal).OfType<EfContractingMigrationRefusal>().ToArray();
-        if (unsafeMigrations.Count == 0)
-            return null;
-
-        var batch = (pending ?? (await context.Database.GetPendingMigrationsAsync(cancellationToken)).ToArray()).ToArray();
-        var refused = unsafeMigrations.Where(refusal => batch.Contains(refusal.Migration, StringComparer.Ordinal)).ToArray();
-        return refused.Length == 0 ? null : new EfContractingMigrationRefusedException(ModuleOf(context, families), batch, refused);
+        return unsafeMigrations.Count == 0 ? null : await RefuseBatchAsync(context, families, unsafeMigrations, pending, cancellationToken);
     }
 
     /// <summary>
@@ -100,14 +95,19 @@ public static class EfContractingMigrationCheck
     /// </summary>
     /// <param name="host">This host's member in the fleet, which a created record names prefixed with <see cref="MigratorHostIdPrefix"/>; the machine name when null.</param>
     /// <exception cref="EfContractingMigrationRefusedException">A pending contracting migration may not be applied yet.</exception>
-    internal static async Task MigrateAsync(DbContext context, SchemaFinalizationMember? host, CancellationToken cancellationToken)
+    internal static Task MigrateAsync(DbContext context, SchemaFinalizationMember? host, CancellationToken cancellationToken) =>
+        MigrateAsync(context, host, EfSchemaModuleFamilies.ForContext(context.GetType()), cancellationToken);
+
+    /// <summary><see cref="MigrateAsync(DbContext, SchemaFinalizationMember?, CancellationToken)"/> as a build that declares <paramref name="families"/> runs it.</summary>
+    internal static async Task MigrateAsync(DbContext context, SchemaFinalizationMember? host, EfSchemaModuleFamilies? families, CancellationToken cancellationToken)
     {
         var contracting = ContractingMigrations(context);
         if (contracting.Count > 0)
         {
             if (!await IsAdmittedAsync(context, cancellationToken))
-                await SeedAsync(context, contracting, host, cancellationToken);
-            else if (await FindRefusalAsync(context, pending: null, cancellationToken) is { } refusal)
+                await SeedAsync(context, contracting, families, host, cancellationToken);
+            else if (await JudgeAsync(contracting, families, new EfSchemaFinalizationStore(context), cancellationToken) is { Count: > 0 } unsafeMigrations &&
+                     await RefuseBatchAsync(context, families, unsafeMigrations, pending: null, cancellationToken) is { } refusal)
                 throw refusal;
         }
 
@@ -176,10 +176,10 @@ public static class EfContractingMigrationCheck
     private static async Task SeedAsync(
         DbContext context,
         IReadOnlyList<ContractingMigration> contracting,
+        EfSchemaModuleFamilies? families,
         SchemaFinalizationMember? host,
         CancellationToken cancellationToken)
     {
-        var families = EfSchemaModuleFamilies.ForContext(context.GetType());
         var module = ModuleOf(context, families);
         var pending = (await context.Database.GetPendingMigrationsAsync(cancellationToken)).ToArray();
         // In the order EF applies them, which is the pending order.
@@ -219,6 +219,19 @@ public static class EfContractingMigrationCheck
         // A racing release's gate may have created a record first, below the version: then the contraction may not run.
         if (await JudgeAsync(seeding.Select(entry => entry.Migration), families, store, cancellationToken) is { Count: > 0 } refusals)
             throw new EfContractingMigrationRefusedException(module, pending.Skip(applied.Length).ToArray(), refusals, applied);
+    }
+
+    /// <summary>The refusal of the pending batch for those of <paramref name="unsafeMigrations"/> it holds, or null when it holds none.</summary>
+    private static async Task<EfContractingMigrationRefusedException?> RefuseBatchAsync(
+        DbContext context,
+        EfSchemaModuleFamilies? families,
+        IReadOnlyList<EfContractingMigrationRefusal> unsafeMigrations,
+        IReadOnlyCollection<string>? pending,
+        CancellationToken cancellationToken)
+    {
+        var batch = (pending ?? (await context.Database.GetPendingMigrationsAsync(cancellationToken)).ToArray()).ToArray();
+        var refused = unsafeMigrations.Where(refusal => batch.Contains(refusal.Migration, StringComparer.Ordinal)).ToArray();
+        return refused.Length == 0 ? null : new EfContractingMigrationRefusedException(ModuleOf(context, families), batch, refused);
     }
 
     /// <summary>Whether a gate-aware host has admitted the module in the database: its record table and database identity exist.</summary>
