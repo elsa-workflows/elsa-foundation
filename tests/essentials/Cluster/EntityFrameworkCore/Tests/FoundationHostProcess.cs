@@ -40,9 +40,10 @@ internal sealed class FoundationHostProcess : IAsyncDisposable
     /// <summary>
     /// Starts the host over <paramref name="packages"/>, a directory of <c>.nupkg</c> files it takes as its feed, with
     /// <paramref name="shells"/> as its <c>shells.json</c> and <paramref name="settings"/> as environment variables, and
-    /// returns once its shells are active.
+    /// returns once its shells are active, or, when <paramref name="untilReady"/> is <see langword="false"/> because they
+    /// activate only on their first request, once it is live.
     /// </summary>
-    public static async Task<FoundationHostProcess> StartAsync(string shells, string packages, IReadOnlyDictionary<string, string> settings)
+    public static async Task<FoundationHostProcess> StartAsync(string shells, string packages, IReadOnlyDictionary<string, string> settings, bool untilReady = true)
     {
         var contentRoot = Directory.CreateTempSubdirectory("elsa-foundation-host-boot-").FullName;
         try
@@ -75,7 +76,7 @@ internal sealed class FoundationHostProcess : IAsyncDisposable
             var host = new FoundationHostProcess(new Process { StartInfo = startInfo }, contentRoot);
             try
             {
-                await host.StartAndWaitUntilReadyAsync();
+                await host.StartAndWaitUntilAsync(untilReady ? "/health/ready" : "/health/live");
                 return host;
             }
             catch
@@ -183,7 +184,7 @@ internal sealed class FoundationHostProcess : IAsyncDisposable
         }
     }
 
-    private async Task StartAndWaitUntilReadyAsync()
+    private async Task StartAndWaitUntilAsync(string probe)
     {
         _process.OutputDataReceived += (_, line) => Append(line.Data);
         _process.ErrorDataReceived += (_, line) => Append(line.Data);
@@ -196,23 +197,23 @@ internal sealed class FoundationHostProcess : IAsyncDisposable
         while (true)
         {
             if (_process.HasExited)
-                throw Failure($"exited with code {_process.ExitCode} before its shells were active");
+                throw Failure($"exited with code {_process.ExitCode} before {probe} answered");
             if (_client.BaseAddress is null && _listening.Task.IsCompletedSuccessfully)
                 _client.BaseAddress = await _listening.Task;
-            if (_client.BaseAddress is not null && await IsReadyAsync())
+            if (_client.BaseAddress is not null && await AnswersAsync(probe))
                 return;
             if (DateTimeOffset.UtcNow > deadline)
-                throw Failure($"did not activate its shells within {ReadyTimeout}");
+                throw Failure($"did not answer {probe} within {ReadyTimeout}");
 
             await Task.Delay(250);
         }
     }
 
-    private async Task<bool> IsReadyAsync()
+    private async Task<bool> AnswersAsync(string probe)
     {
         try
         {
-            using var response = await _client.GetAsync("/health/ready");
+            using var response = await _client.GetAsync(probe);
             return response.StatusCode == HttpStatusCode.OK;
         }
         catch (HttpRequestException)

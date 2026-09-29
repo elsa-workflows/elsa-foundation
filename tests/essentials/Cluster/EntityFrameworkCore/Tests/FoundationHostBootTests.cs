@@ -34,8 +34,10 @@ public sealed class FoundationHostBootTests(FoundationHostFeed feed) : IClassFix
     /// <summary>What <c>ShellReloadOnPackagesChanged</c> logs once its reload after a reconcile has returned, refused or not.</summary>
     private const string ReloadedAfterReconcile = "Reloaded 1 active shell(s) after a Nuplane reconcile.";
 
-    /// <summary>The host's module-management key, restated: the host is never loaded into this process.</summary>
-    private static readonly Dictionary<string, string> ModuleManagementKey = new() { ["X-Elsa-Module-Management-Key"] = "foundation-host-boot-tests" };
+    /// <summary>The header the host's module-management API reads its key from, restated: the host is never loaded into this process.</summary>
+    private const string ModuleManagementKeyHeader = "X-Elsa-Module-Management-Key";
+
+    private const string ModuleManagementKey = "foundation-host-boot-tests";
 
     private readonly string _file = Path.Join(Path.GetTempPath(), $"elsa-foundation-host-boot-{Guid.NewGuid():N}.db");
     private FoundationHostProcess? _host;
@@ -134,26 +136,51 @@ public sealed class FoundationHostBootTests(FoundationHostFeed feed) : IClassFix
         _host!.UpgradeInPlace(FoundationHostFeed.FixturePackageId, feed.NextPackage);
 
         // The reload the feed triggers is refused: the previous release keeps serving at 1, and nothing is finalized.
-        await WaitUntilAsync(() => Task.FromResult(_host.OutputSince($"Loaded package {FoundationHostFeed.FixturePackageId}@1.1.0").Contains(ReloadedAfterReconcile, StringComparison.Ordinal)), UpgradePatience);
+        await WaitUntilAsync(() => Task.FromResult(_host.OutputSince(Loaded(feed.NextPackage)).Contains(ReloadedAfterReconcile, StringComparison.Ordinal)), UpgradePatience);
         var (status, body) = await Orders();
         Assert.True(status == HttpStatusCode.OK && body.Contains("is at 1", StringComparison.Ordinal),
             $"The previous release must keep serving, but the orders feature answered {status}: {body}. Host output:{Environment.NewLine}{_host.Output}");
         Assert.Equal("1", (await RecordAsync(ConnectionString)).FinalizedVersion);
 
         await ApplyNextReleaseMigrationAsync(ConnectionString);
-        Assert.Equal(HttpStatusCode.OK, await _host.PostAsync("/_module-management/reload", ModuleManagementKey));
+        Assert.Equal(HttpStatusCode.OK, await _host.PostAsync("/_module-management/reload", new Dictionary<string, string> { [ModuleManagementKeyHeader] = ModuleManagementKey }));
 
         await WaitUntilAsync(async () => (await RecordAsync(ConnectionString)).FinalizedVersion == "2", UpgradePatience);
         await WaitUntilAsync(async () => await Orders() is (HttpStatusCode.OK, var served) && served.Contains("is at 2", StringComparison.Ordinal), UpgradePatience);
     }
 
-    private async Task StartAsync(string? packages = null, bool moduleManagement = false) => _host = await FoundationHostProcess.StartAsync(
+    /// <summary>
+    /// Spec 183's FR-021, amended 2026-09-29, with eager activation turned off: an upgrade that lands before any shell was
+    /// ever built finds CShells' feature catalog not yet initialized, so the previous release keeps counting until the
+    /// first request builds the shell. That build reads what Nuplane lists by then, so it composes the upgrade, which
+    /// serves and finalizes its version on that first request, with no restart.
+    /// </summary>
+    [Fact]
+    public async Task With_eager_activation_off_an_upgrade_before_the_first_request_serves_and_finalizes_on_that_request()
+    {
+        await SeedAsync(ConnectionString);
+        await StartAsync(feed.PreviousDirectory, eagerActivation: false);
+        await WaitUntilAsync(() => Task.FromResult(_host!.Output.Contains(Loaded(feed.PreviousPackage), StringComparison.Ordinal)));
+
+        _host!.UpgradeInPlace(FoundationHostFeed.FixturePackageId, feed.FixturePackage);
+
+        await WaitUntilAsync(() => Task.FromResult(_host.Output.Contains(Loaded(feed.FixturePackage), StringComparison.Ordinal)), UpgradePatience);
+        // No shell has been built, so no gate has run and nothing is finalized yet.
+        Assert.Equal("1", (await RecordAsync(ConnectionString)).FinalizedVersion);
+
+        await WaitUntilAsync(async () => await Orders() is (HttpStatusCode.OK, var body) && body.Contains("is at 2", StringComparison.Ordinal), UpgradePatience);
+        await WaitUntilAsync(async () => (await RecordAsync(ConnectionString)).FinalizedVersion == "2", UpgradePatience);
+        Assert.True(_host.IsRunning, "The host must be upgraded in place, not restarted.");
+    }
+
+    private async Task StartAsync(string? packages = null, bool moduleManagement = false, bool eagerActivation = true) => _host = await FoundationHostProcess.StartAsync(
         Shells(ConnectionString),
         packages ?? feed.Directory,
         new Dictionary<string, string>
         {
+            ["Elsa:Boot:EagerShellActivation:Enabled"] = eagerActivation.ToString(),
             ["Elsa:ModuleManagement:Enabled"] = moduleManagement.ToString(),
-            ["Elsa:ModuleManagement:ApiKey"] = ModuleManagementKey.Single().Value,
+            ["Elsa:ModuleManagement:ApiKey"] = ModuleManagementKey,
             // A second feed beside the host's own `packages` one, which resolves what the packages there depend on and holds
             // nothing the host loads on its own account: with no include patterns it is a source, not a list of roots.
             ["Nuplane:Setup:Feeds:1:Name"] = "closure",
@@ -165,7 +192,12 @@ public sealed class FoundationHostBootTests(FoundationHostFeed feed) : IClassFix
             [$"{EfMigrateOptions.SectionName}:{nameof(EfMigrateOptions.Policy)}"] = nameof(EfMigratePolicy.Validate),
             [$"{EfSchemaFinalizationOptions.SectionName}:{nameof(EfSchemaFinalizationOptions.EvaluationInterval)}"] = "00:00:00.200",
             [$"{EfSchemaFinalizationOptions.SectionName}:{nameof(EfSchemaFinalizationOptions.RefreshInterval)}"] = "00:00:00.100"
-        });
+        },
+        untilReady: eagerActivation);
+
+    /// <summary>What the host logs once Nuplane has loaded <paramref name="package"/>, a release of the fixture.</summary>
+    private static string Loaded(string package) =>
+        $"Loaded package {FoundationHostFeed.FixturePackageId}@{Path.GetFileNameWithoutExtension(package)[(FoundationHostFeed.FixturePackageId.Length + 1)..]}";
 
     private Task<(HttpStatusCode Status, string Body)> Orders() => _host!.GetAsync("/feed-module-fixture/orders");
 
@@ -191,10 +223,11 @@ public sealed class FoundationHostBootTests(FoundationHostFeed feed) : IClassFix
 
     private async Task WaitUntilAsync(Func<Task<bool>> condition, TimeSpan? patience = null)
     {
-        var deadline = DateTimeOffset.UtcNow + (patience ?? Patience);
+        var within = patience ?? Patience;
+        var deadline = DateTimeOffset.UtcNow + within;
         while (!await condition())
         {
-            Assert.True(DateTimeOffset.UtcNow < deadline, $"Not met within {patience ?? Patience}. Host output:{Environment.NewLine}{_host!.Output}");
+            Assert.True(DateTimeOffset.UtcNow < deadline, $"Not met within {within}. Host output:{Environment.NewLine}{_host!.Output}");
             await Task.Delay(TimeSpan.FromMilliseconds(100));
         }
     }

@@ -42,6 +42,9 @@ public sealed class FoundationHostFeed : IAsyncLifetime
     /// <summary>The fixture's previous release and the persistence package, which a host starts on before it is upgraded.</summary>
     public string PreviousDirectory => Path.Join(_root.FullName, "previous");
 
+    /// <summary>The fixture's previous release, which a host started on <see cref="PreviousDirectory"/> loads first.</summary>
+    public string PreviousPackage => FoundationHostProcess.Releases(PreviousDirectory, FixturePackageId).Single();
+
     /// <summary>The fixture's current release, the package an in-place upgrade drops into a running host's feed.</summary>
     public string FixturePackage => FoundationHostProcess.Releases(Directory, FixturePackageId).Single();
 
