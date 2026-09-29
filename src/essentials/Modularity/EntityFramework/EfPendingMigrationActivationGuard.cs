@@ -314,8 +314,8 @@ public sealed class EfPendingMigrationActivationGuard(IServiceProvider services,
         // D5: EF cannot emit an idempotent script for SQLite, so `script` refuses that provider outright.
         // Naming it here would name a command that cannot run; `apply` is the path for a SQLite deployment.
         var bringCurrent = EfRelationalProviderBinding.Normalize(provider) == "sqlite"
-            ? $"dotnet elsa persistence apply --modules {descriptor.Name} --provider {named} --connection-env ELSA_EF_CONNECTION"
-            : $"dotnet elsa persistence script --modules {descriptor.Name} --provider {named} --output <directory>";
+            ? EfPersistenceCommand.Apply(host: null, descriptor.Name, named)
+            : EfPersistenceCommand.Script(host: null, descriptor.Name, named);
 
         // A module that declares a post-migration action is not current until that has run too, and only
         // `post-migrate` ever runs one (D8) — so the whole path is named rather than only its first step.

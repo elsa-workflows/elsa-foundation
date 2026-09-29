@@ -205,7 +205,8 @@ module and a host decide:
   and what the readability report names (spec 183, FR-019).
 - **Where these live.** `IEfSchemaFleet` and its answer types, `EfSchemaFinalizationObservations`, the finalization
   record's model and status, `EfSchemaFinalizationGates` with the `IEfSchemaModuleGate` view the dormancy check's
-  source reads, and `EfSchemaFamilyCatalog` with its descriptors are in `Elsa.Persistence.Schema`, not in this
+  source reads, `EfSchemaFamilyCatalog` with its descriptors, and `IEfModuleRefusal`, which every EF module's refusal to
+  activate implements so a host can name the module and its command without the exception's type, are in `Elsa.Persistence.Schema`, not in this
   assembly, and declared in that assembly's own namespaces: the catalog and its descriptors in `Elsa.Persistence.Schema`,
   everything else in `Elsa.Persistence.Schema.SchemaFinalization`, the name of the folder they sit in (a consumer adds
   `using Elsa.Persistence.Schema;` or `using Elsa.Persistence.Schema.SchemaFinalization;`). That assembly references no

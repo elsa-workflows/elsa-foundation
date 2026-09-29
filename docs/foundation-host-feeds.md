@@ -521,20 +521,56 @@ never applied, so there is nothing for the reload to pick up.
 
 CShells does not throw when a shell's reload fails: it keeps the previous generation active and reports the
 failure in that shell's `ReloadResult.Error`. The bridge logs each such shell at `Warning` (an EF module's
-refusal) or `Error` (anything else), and `POST /_module-management/reload` answers `409` with a problem
-document instead of `200`. The document lists every shell that stayed on its old generation under `shells`.
-When the cause is an EF module's refusal — pending migrations under `Migrate:Policy=Validate`, a contracting
-migration that may not be applied yet, or the schema finalization gate — each entry names the module, a
-stable `code`, the `pendingMigrations` and, for pending migrations, the exact `command` that applies them:
+refusal) or `Error` (anything else), and `POST /_module-management/reload` answers with a problem document instead
+of `200`:
+
+- `409 Conflict` when every shell that stayed on its old generation was refused by an EF module: pending migrations
+  under `Migrate:Policy=Validate`, a contracting migration that may not be applied yet, or the schema finalization
+  gate. The operator resolves that outside the request and repeats it.
+- `500 Internal Server Error` when any failed shell was not such a refusal. Only the exception's type name is
+  reported for it; its message stays in the host's log.
+
+The body is `application/problem+json` in both cases, with the standard `type`, `title`, `status` and `detail`
+(one sentence per shell) and these fields:
+
+| Field | Meaning |
+| --- | --- |
+| `features` | The number of feature descriptors in the refreshed runtime catalog. |
+| `reloaded` | The number of shells that reloaded. |
+| `shells` | One entry per shell that stayed on its previous generation, in the order CShells reported them. |
+
+Each entry of `shells`:
+
+| Field | Meaning |
+| --- | --- |
+| `shell` | The shell's name. |
+| `error` | What went wrong. For a refusal, the module's own message; otherwise the exception's type name and a pointer to the host log. |
+| `code` | For a refusal, one of the codes below; `null` otherwise. |
+| `module` | For a refusal, the EF module; `null` otherwise. |
+| `pendingMigrations` | For a refusal, the ids of the migrations it concerns (empty for `schema-activation-refused`); `null` otherwise. |
+| `command` | For a refusal, the exact command that resolves it, when there is one; `null` otherwise. |
+
+`code` values:
+
+- `pending-migrations`: the module's database has migrations that are not applied. `command` applies them.
+- `contracting-migration-refused`: the pending batch holds a contracting migration that may not be applied yet. `error`
+  says which and what it waits for; there is no `command`.
+- `schema-activation-refused`: the schema finalization gate refuses to activate the module. `error` names the remedy;
+  there is no `command`.
+
+For `pending-migrations` the command is runnable as it stands, with `--host` the directory of the running host (the one
+holding its build output and its `.nuplane` state, not its content root), which is where the tool reads the package set
+the host last reconciled:
 
 ```
-dotnet elsa persistence apply --host <path> --modules <module> --provider <p> --connection-env ELSA_EF_CONNECTION
+dotnet elsa persistence apply --host "<host directory>" --modules <module> --provider <p> --connection-env ELSA_EF_CONNECTION
 ```
 
 The host recognises the refusal by `IEfModuleRefusal` (`Elsa.Persistence.Schema`, a shared assembly), because the
 exception itself is a type of the module package's own copy of `Elsa.Persistence.EntityFramework`, which the host
-does not reference. Once the command has run, the same `POST` answers `200` and the shell's generation advances,
-with no restart.
+does not reference. A module whose exception was built against a private copy of `Elsa.Persistence.Schema` too is
+recognised by the full name of the interface it implements. Once the command has run, the same `POST` answers `200`
+and the shell's generation advances, with no restart.
 
 `Elsa.Workbench` does not do this. Its `Program.cs` composes Nuplane with no reconciliation observer, and
 registers `NullShellReloader` (`src/apps/Elsa.Workbench/Modularity/NullShellReloader.cs`) as its

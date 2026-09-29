@@ -22,7 +22,6 @@ internal sealed class FoundationHostProcess : IAsyncDisposable
     private static readonly TimeSpan StopTimeout = TimeSpan.FromSeconds(30);
 
     private readonly Process _process;
-    private readonly string _contentRoot;
     private readonly CapturedOutput _output = new();
     private readonly TaskCompletionSource<Uri> _listening = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly HttpClient _client = new();
@@ -32,7 +31,7 @@ internal sealed class FoundationHostProcess : IAsyncDisposable
     private FoundationHostProcess(Process process, string contentRoot, bool awaitShells)
     {
         _process = process;
-        _contentRoot = contentRoot;
+        ContentRoot = contentRoot;
         _awaitShells = awaitShells;
     }
 
@@ -106,32 +105,37 @@ internal sealed class FoundationHostProcess : IAsyncDisposable
     }
 
     /// <summary>The host's content root and, when it was started <c>deployed</c>, its own directory: what <c>--host</c> names to the persistence tool.</summary>
-    public string ContentRoot => _contentRoot;
+    public string ContentRoot { get; }
 
     /// <summary>The directory the host's feed reads, where a package dropped in is a package installed.</summary>
-    public string PackagesDirectory => Path.Join(_contentRoot, "packages");
+    public string PackagesDirectory => Path.Join(ContentRoot, "packages");
 
     /// <summary>The status a request to <paramref name="path"/> is answered with, and its body.</summary>
-    public async Task<(HttpStatusCode Status, string Body)> GetAsync(string path)
-    {
-        using var response = await _client.GetAsync(path);
-        return (response.StatusCode, await response.Content.ReadAsStringAsync());
-    }
+    public Task<(HttpStatusCode Status, string Body)> GetAsync(string path) => SendAsync(new HttpRequestMessage(HttpMethod.Get, path));
 
     /// <summary>The status a <c>POST</c> to <paramref name="path"/> is answered with, and its body, with <paramref name="headers"/> on the request.</summary>
-    public async Task<(HttpStatusCode Status, string Body)> PostAsync(string path, IReadOnlyDictionary<string, string> headers)
+    public Task<(HttpStatusCode Status, string Body)> PostAsync(string path, IReadOnlyDictionary<string, string> headers)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Post, path);
+        var request = new HttpRequestMessage(HttpMethod.Post, path);
         foreach (var (name, value) in headers)
             request.Headers.Add(name, value);
-        try
+
+        return SendAsync(request);
+    }
+
+    private async Task<(HttpStatusCode Status, string Body)> SendAsync(HttpRequestMessage request)
+    {
+        using (request)
         {
-            using var response = await _client.SendAsync(request);
-            return (response.StatusCode, await response.Content.ReadAsStringAsync());
-        }
-        catch (TaskCanceledException exception)
-        {
-            throw new InvalidOperationException($"{Host} did not answer POST {path} in time. Host output:{Environment.NewLine}{Output}", exception);
+            try
+            {
+                using var response = await _client.SendAsync(request);
+                return (response.StatusCode, await response.Content.ReadAsStringAsync());
+            }
+            catch (TaskCanceledException exception)
+            {
+                throw new InvalidOperationException($"{Host} did not answer {request.Method} {request.RequestUri} in time. Host output:{Environment.NewLine}{Output}", exception);
+            }
         }
     }
 
@@ -158,7 +162,7 @@ internal sealed class FoundationHostProcess : IAsyncDisposable
         finally
         {
             _process.Dispose();
-            TryDelete(_contentRoot);
+            TryDelete(ContentRoot);
         }
     }
 

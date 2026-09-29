@@ -22,6 +22,12 @@ public interface IEfModuleRefusal
     /// <summary><see cref="Code"/> for a module the finalization gate refuses to activate.</summary>
     const string SchemaActivationRefusedCode = "schema-activation-refused";
 
+    /// <summary>
+    /// What a <see cref="Command"/> prints for <c>--host</c> when its author does not know the host's directory. A host that
+    /// does know it replaces exactly this text with the directory, quoted the same way.
+    /// </summary>
+    const string HostPlaceholder = "\"<host directory>\"";
+
     /// <summary>The EF module that was refused, as its <c>[EfModule]</c> names it.</summary>
     string Module { get; }
 

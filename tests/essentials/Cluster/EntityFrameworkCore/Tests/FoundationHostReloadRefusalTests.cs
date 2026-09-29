@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json.Nodes;
+using Elsa.Cluster.Fixtures.MigratingModule;
 using Elsa.Persistence.EntityFramework;
 using Microsoft.Data.Sqlite;
 using static Elsa.Cluster.EntityFrameworkCore.Tests.FeedLoadedModuleHost;
@@ -29,20 +30,6 @@ public sealed class FoundationHostReloadRefusalTests(FoundationHostFeed feed, Mi
 
     private static readonly TimeSpan Patience = TimeSpan.FromSeconds(60);
     private static readonly IReadOnlyDictionary<string, string> Credential = new Dictionary<string, string> { [ModuleManagementKeyHeader] = ApiKey };
-
-    /// <summary>
-    /// What the fixture module declares, restated: it is built and packed but never referenced, so nothing of it is loaded into
-    /// this process. <c>MigratingModule.cs</c> in the fixture is the source of each value.
-    /// </summary>
-    private static class Fixture
-    {
-        public const string Name = "MigratingModuleFixture";
-        public const string Feature = "MigratingModuleFixture";
-        public const string VersionPath = "/migrating-module-fixture/version";
-        public const string Table = "MigratingModuleWidgets";
-        public const string AddedColumn = "Color";
-        public const string AddColor = "20260930000002_AddColor";
-    }
 
     private readonly string _file = Path.Join(Path.GetTempPath(), $"elsa-foundation-host-reload-{Guid.NewGuid():N}.db");
     private FoundationHostProcess? _host;
@@ -82,38 +69,16 @@ public sealed class FoundationHostReloadRefusalTests(FoundationHostFeed feed, Mi
         Assert.Equal((HttpStatusCode.OK, "2.0.0 generation 1"), await Version());
 
         File.Copy(Snapshot, _file, overwrite: true);
-        Assert.DoesNotContain(Fixture.AddedColumn, await ColumnsAsync(), StringComparer.Ordinal);
+        Assert.DoesNotContain(MigratingModule.AddedColumn, await ColumnsAsync(), StringComparer.Ordinal);
 
         // A change to the feed makes the host reconcile and reload its shell on its own, which the pending migration refuses, and
         // the host says so on its log, for whoever reads that instead of a response. The older package is one the host does not
         // switch to, so the reload is all that reaches the shell.
         File.Copy(migrating.Package(1), Path.Join(_host.PackagesDirectory, Path.GetFileName(migrating.Package(1))));
         await WaitUntilAsync(() => _host.Output.Contains($"Reloading shell '{ShellName}' after a Nuplane reconcile was refused", StringComparison.Ordinal));
-        Assert.Contains(Fixture.AddColor, _host.Output, StringComparison.Ordinal);
+        Assert.Contains(MigratingModule.AddColor, _host.Output, StringComparison.Ordinal);
 
         await AssertRefusedThenAppliedThenReloadedAsync(runningVersion: "2.0.0 generation 1", reloadedVersion: "2.0.0");
-    }
-
-    /// <summary>
-    /// What an operator does: a newer package version lands in the feed of a host that runs the older one. This needs the
-    /// module's own migrations to be found when the older assembly is still loaded, which is not so yet: EF resolves the
-    /// migrations assembly it is told by name, and reaches the older one, whose migrations are declared for the older context, so
-    /// it finds none pending and the reload is accepted over a schema the new version does not fit. Passes with the module's
-    /// binding naming no migrations assembly of its own; enable it with <c>claude/readability-superseded-contexts</c>.
-    /// </summary>
-    [Fact(Skip = "needs claude/readability-superseded-contexts")]
-    public async Task A_newer_version_installed_beside_a_running_one_is_refused_with_a_409_until_the_persistence_tool_applies_its_migrations()
-    {
-        await MigrateAsync(generation: 1);
-        _host = await StartAsync(EfMigratePolicy.Validate, generation: 1, deployed: true);
-        Assert.Equal((HttpStatusCode.OK, "1.0.0 generation 1"), await Version());
-
-        // The package lands in the feed, and the host's folder listener reconciles it and reloads the shell onto it, which the
-        // pending migration refuses. The host says so on its log, which is what this waits for.
-        File.Copy(migrating.Package(2), Path.Join(_host.PackagesDirectory, Path.GetFileName(migrating.Package(2))));
-        await WaitUntilAsync(() => _host.Output.Contains($"Reloading shell '{ShellName}' after a Nuplane reconcile was refused", StringComparison.Ordinal));
-
-        await AssertRefusedThenAppliedThenReloadedAsync(runningVersion: "1.0.0 generation 1", reloadedVersion: "2.0.0");
     }
 
     /// <summary>
@@ -126,16 +91,13 @@ public sealed class FoundationHostReloadRefusalTests(FoundationHostFeed feed, Mi
         await MigrateAsync(generation: 1);
         _host = await StartAsync(EfMigratePolicy.Validate, generation: 2, deployed: true, awaitShells: false);
 
-        await WaitUntilAsync(() => _host.Output.Contains($"EF module '{Fixture.Name}' has pending migrations: {Fixture.AddColor}", StringComparison.Ordinal));
+        await WaitUntilAsync(() => _host.Output.Contains($"EF module '{MigratingModule.Name}' has pending migrations: {MigratingModule.AddColor}", StringComparison.Ordinal));
         Assert.NotEqual(HttpStatusCode.OK, (await Version()).Status);
         Assert.NotEqual(HttpStatusCode.OK, (await _host.GetAsync("/health/ready")).Status);
 
-        var (exitCode, output) = await ElsaCliProcess.RunAsync(
-            ["persistence", "apply", "--host", _host.ContentRoot, "--provider", "Sqlite", "--modules", Fixture.Name, "--connection-env", ConnectionVariable],
-            new Dictionary<string, string> { [ConnectionVariable] = ConnectionString });
-        Assert.True(exitCode == 0, $"dotnet elsa persistence apply exited {exitCode}:{Environment.NewLine}{output}");
+        await ApplyAsync();
 
-        var (reloaded, ok) = await _host.PostAsync("/_module-management/reload", Credential);
+        var (reloaded, ok) = await ReloadAsync();
         var (status, version) = await Version();
         Assert.True(reloaded == HttpStatusCode.OK, $"Reload answered {reloaded}: {ok}{Environment.NewLine}Host output:{Environment.NewLine}{_host.Output}");
         // Each activation that was refused took a generation number, so which one serves is not the first.
@@ -149,31 +111,35 @@ public sealed class FoundationHostReloadRefusalTests(FoundationHostFeed feed, Mi
     /// </summary>
     private async Task AssertRefusedThenAppliedThenReloadedAsync(string runningVersion, string reloadedVersion)
     {
-        var (refused, problem) = await _host!.PostAsync("/_module-management/reload", Credential);
+        var (refused, problem) = await ReloadAsync();
 
         Assert.Equal(HttpStatusCode.Conflict, refused);
         var body = JsonNode.Parse(problem)!;
         var detail = body["detail"]!.GetValue<string>();
         var failure = Assert.Single(body["shells"]!.AsArray())!;
         Assert.Equal(
-            (ShellName, Fixture.Name, "pending-migrations", "dotnet elsa persistence apply --host <path> --modules MigratingModuleFixture --provider Sqlite --connection-env ELSA_EF_CONNECTION"),
-            (failure["shell"]!.GetValue<string>(), failure["module"]!.GetValue<string>(), failure["code"]!.GetValue<string>(), failure["command"]!.GetValue<string>()));
-        Assert.Equal([Fixture.AddColor], failure["pendingMigrations"]!.AsArray().Select(id => id!.GetValue<string>()));
+            (ShellName, MigratingModule.Name, "pending-migrations"),
+            (failure["shell"]!.GetValue<string>(), failure["module"]!.GetValue<string>(), failure["code"]!.GetValue<string>()));
+        // Runnable as it stands: --host names the directory of the running host, which holds its build output and the
+        // .nuplane state the tool reads. The host may name it through a symlink the test's path does not (macOS's /var).
+        var command = failure["command"]!.GetValue<string>();
+        var hostDirectory = command.Split('"')[1];
+        Assert.Equal($"dotnet elsa persistence apply --host \"{hostDirectory}\" --modules MigratingModuleFixture --provider Sqlite --connection-env ELSA_EF_CONNECTION", command);
+        Assert.True(File.Exists(Path.Join(hostDirectory, "Elsa.Foundation.Host.dll")) && Directory.Exists(Path.Join(hostDirectory, ".nuplane")), $"--host {hostDirectory} is not the running host's directory.");
+        Assert.Contains(command, detail, StringComparison.Ordinal);
+        Assert.Equal([MigratingModule.AddColor], failure["pendingMigrations"]!.AsArray().Select(id => id!.GetValue<string>()));
         Assert.Contains($"Shell '{ShellName}'", detail, StringComparison.Ordinal);
-        Assert.Contains($"EF module '{Fixture.Name}'", detail, StringComparison.Ordinal);
-        Assert.Contains(Fixture.AddColor, detail, StringComparison.Ordinal);
+        Assert.Contains($"EF module '{MigratingModule.Name}'", detail, StringComparison.Ordinal);
+        Assert.Contains(MigratingModule.AddColor, detail, StringComparison.Ordinal);
         // CShells kept the running generation serving.
         Assert.Equal((HttpStatusCode.OK, runningVersion), await Version());
 
         // The real tool, against the host's own directory: the package set the running host last reconciled, its
         // Elsa.Persistence.EntityFramework loaded from that package graph, since the host itself carries no EF.
-        var (exitCode, output) = await ElsaCliProcess.RunAsync(
-            ["persistence", "apply", "--host", _host.ContentRoot, "--provider", "Sqlite", "--modules", Fixture.Name, "--connection-env", ConnectionVariable],
-            new Dictionary<string, string> { [ConnectionVariable] = ConnectionString });
-        Assert.True(exitCode == 0, $"dotnet elsa persistence apply exited {exitCode}:{Environment.NewLine}{output}");
-        Assert.Contains(Fixture.AddedColumn, await ColumnsAsync(), StringComparer.Ordinal);
+        await ApplyAsync();
+        Assert.Contains(MigratingModule.AddedColumn, await ColumnsAsync(), StringComparer.Ordinal);
 
-        var (reloaded, ok) = await _host.PostAsync("/_module-management/reload", Credential);
+        var (reloaded, ok) = await ReloadAsync();
 
         Assert.True(reloaded == HttpStatusCode.OK, $"Reload answered {reloaded}: {ok}{Environment.NewLine}Host output:{Environment.NewLine}{_host.Output}");
         var (status, version) = await Version();
@@ -181,6 +147,17 @@ public sealed class FoundationHostReloadRefusalTests(FoundationHostFeed feed, Mi
         var parts = version.Split(" generation ");
         Assert.Equal(reloadedVersion, parts[0]);
         Assert.True(int.Parse(parts[1]) > 1, $"The shell's generation did not advance: {version}");
+    }
+
+    private Task<(HttpStatusCode Status, string Body)> ReloadAsync() => _host!.PostAsync("/_module-management/reload", Credential);
+
+    /// <summary>The real tool, against the host's own directory, for the module the host's shell runs.</summary>
+    private async Task ApplyAsync()
+    {
+        var (exitCode, output) = await ElsaCliProcess.RunAsync(
+            ["persistence", "apply", "--host", _host!.ContentRoot, "--provider", "Sqlite", "--modules", MigratingModule.Name, "--connection-env", ConnectionVariable],
+            new Dictionary<string, string> { [ConnectionVariable] = ConnectionString });
+        Assert.True(exitCode == 0, $"dotnet elsa persistence apply exited {exitCode}:{Environment.NewLine}{output}");
     }
 
     private async Task WaitUntilAsync(Func<bool> condition)
@@ -193,7 +170,7 @@ public sealed class FoundationHostReloadRefusalTests(FoundationHostFeed feed, Mi
         }
     }
 
-    private Task<(HttpStatusCode Status, string Body)> Version() => _host!.GetAsync(Fixture.VersionPath);
+    private Task<(HttpStatusCode Status, string Body)> Version() => _host!.GetAsync(MigratingModule.VersionPath);
 
     /// <summary>
     /// Brings the database to what a release of <paramref name="generation"/> leaves behind, the way it does: a host of that
@@ -238,7 +215,7 @@ public sealed class FoundationHostReloadRefusalTests(FoundationHostFeed feed, Mi
                     ["Name"] = ShellName,
                     ["Features"] = new JsonObject
                     {
-                        [Fixture.Feature] = new JsonObject { ["ConnectionString"] = connectionString }
+                        [MigratingModule.Feature] = new JsonObject { ["ConnectionString"] = connectionString }
                     },
                     ["Configuration"] = new JsonObject { ["WebRouting"] = new JsonObject { ["Path"] = "" } }
                 }
@@ -252,7 +229,7 @@ public sealed class FoundationHostReloadRefusalTests(FoundationHostFeed feed, Mi
         await using var connection = new SqliteConnection(ConnectionString);
         await connection.OpenAsync();
         await using var command = connection.CreateCommand();
-        command.CommandText = $"SELECT name FROM pragma_table_info('{Fixture.Table}')";
+        command.CommandText = $"SELECT name FROM pragma_table_info('{MigratingModule.Table}')";
         var columns = new List<string>();
         await using var reader = await command.ExecuteReaderAsync();
         while (await reader.ReadAsync())

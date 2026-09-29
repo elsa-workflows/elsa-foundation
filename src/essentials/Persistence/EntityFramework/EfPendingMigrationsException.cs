@@ -20,27 +20,34 @@ namespace Elsa.Persistence.EntityFramework;
 /// <c>Elsa.Foundation.Host</c> answering a shell reload, can name the module and the migrations without knowing this type.
 /// </para>
 /// </remarks>
-public class EfPendingMigrationsException(
-    string module,
-    IReadOnlyList<string> pending,
-    string message,
-    string? command = null) : InvalidOperationException(message), IEfModuleRefusal
+public class EfPendingMigrationsException : InvalidOperationException, IEfModuleRefusal
 {
-    /// <summary>The exact invocation that applies <paramref name="module"/>'s pending migrations on <paramref name="provider"/>.</summary>
-    /// <remarks>The connection is named by the variable it is read from, never its value (spec 171, D7); the host's path is the operator's to fill in.</remarks>
-    public static string CommandFor(string module, string provider) =>
-        $"dotnet elsa persistence apply --host <path> --modules {module} --provider {provider} --connection-env ELSA_EF_CONNECTION";
+    /// <summary>A refusal that names no module, migrations or command: only its <paramref name="message"/>.</summary>
+    public EfPendingMigrationsException(string message)
+        : this(string.Empty, [], message)
+    {
+    }
 
-    /// <summary>The EF module whose migrations are pending, or the name of the context that has them when no module declares it.</summary>
-    public string Module { get; } = module;
+    public EfPendingMigrationsException(
+        string module,
+        IReadOnlyList<string> pending,
+        string message,
+        string? command = null) : base(message)
+    {
+        Module = module;
+        PendingMigrations = pending;
+        Command = command;
+    }
 
-    /// <summary>The ids of the migrations that are pending.</summary>
-    public IReadOnlyList<string> Pending { get; } = pending;
+    /// <summary>The EF module whose migrations are pending, or the name of the context that has them when no module declares it; empty when the refusal names none.</summary>
+    public string Module { get; }
 
-    /// <summary>The exact command that applies the pending migrations, when the module and provider are known.</summary>
-    public string? Command { get; } = command;
+    /// <summary>The ids of the migrations that are pending; for a contracting refusal, every pending migration of the context it withheld, none of which was applied.</summary>
+    public IReadOnlyList<string> PendingMigrations { get; }
 
+    /// <summary>The exact command that applies the pending migrations, when the module and provider are known. Its <c>--host</c> is a placeholder the reader fills in, or a host that knows its directory replaces (<see cref="IEfModuleRefusal.HostPlaceholder"/>).</summary>
+    public string? Command { get; }
+
+    /// <summary>A stable machine-readable code for this refusal, one of the <c>*Code</c> constants of <see cref="IEfModuleRefusal"/>; a subclass that is a different refusal overrides it.</summary>
     public virtual string Code => IEfModuleRefusal.PendingMigrationsCode;
-
-    IReadOnlyList<string> IEfModuleRefusal.PendingMigrations => Pending;
 }

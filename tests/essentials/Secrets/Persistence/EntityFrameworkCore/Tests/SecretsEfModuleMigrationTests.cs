@@ -84,7 +84,7 @@ public sealed class SecretsEfModuleMigrationTests
         Assert.NotEmpty(refusal.PendingMigrations);
         Assert.All(refusal.PendingMigrations, id => Assert.Contains(id, exception.Message, StringComparison.Ordinal));
         Assert.Equal(
-            "dotnet elsa persistence apply --host <path> --modules Secrets --provider Sqlite --connection-env ELSA_EF_CONNECTION",
+            "dotnet elsa persistence apply --host \"<host directory>\" --modules Secrets --provider Sqlite --connection-env ELSA_EF_CONNECTION",
             refusal.Command);
         Assert.Contains("EF module 'Secrets'", exception.Message, StringComparison.Ordinal);
         Assert.Contains(refusal.Command, exception.Message, StringComparison.Ordinal);

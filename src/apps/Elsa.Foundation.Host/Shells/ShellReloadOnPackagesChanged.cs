@@ -53,14 +53,20 @@ internal sealed class ShellReloadOnPackagesChanged(
             logger.LogInformation("Refreshed runtime feature catalog after reconcile: {Count} feature descriptor(s).", snapshot.FeatureDescriptors.Count);
 
             var results = await registry.ReloadActiveAsync(null, ct);
-            var failures = ShellReloadFailure.From(results);
+            var failures = ShellReloadFailure.From(results, ShellReloadFailure.HostDirectory);
             logger.LogInformation("Reloaded {Count} active shell(s) after a Nuplane reconcile.", results.Count - failures.Count);
             // CShells keeps a shell's previous generation active when its reload fails, and only says so in the result.
             foreach (var failure in failures)
+            {
                 if (failure.Refusal is null)
+                {
                     logger.LogError(failure.Exception, "Reloading shell '{Shell}' after a Nuplane reconcile failed; its previous generation is still active.", failure.Shell);
+                }
                 else
+                {
                     logger.LogWarning("Reloading shell '{Shell}' after a Nuplane reconcile was refused; its previous generation is still active. {Error}", failure.Shell, failure.Error);
+                }
+            }
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {

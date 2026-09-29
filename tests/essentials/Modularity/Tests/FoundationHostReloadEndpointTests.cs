@@ -1,5 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Reflection;
+using System.Reflection.Emit;
 using System.Text.Json;
 using CShells.Features;
 using CShells.Lifecycle;
@@ -63,6 +65,8 @@ public sealed class FoundationHostReloadEndpointTests : IAsyncLifetime
         Assert.Equal(2, body.GetProperty("reloaded").GetInt32());
     }
 
+    private static readonly string HostDirectory = Path.TrimEndingDirectorySeparator(AppContext.BaseDirectory);
+
     [Fact]
     public async Task Answers_a_409_naming_the_shell_the_module_the_migrations_and_the_command_when_a_module_refuses()
     {
@@ -79,26 +83,54 @@ public sealed class FoundationHostReloadEndpointTests : IAsyncLifetime
         Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal(409, body.GetProperty("status").GetInt32());
-        var detail = body.GetProperty("detail").GetString();
-        Assert.Contains("Shell 'default'", detail, StringComparison.Ordinal);
-        Assert.Contains(PendingRefusal.Text, detail, StringComparison.Ordinal);
         Assert.Equal(1, body.GetProperty("reloaded").GetInt32());
-        var shell = Assert.Single(body.GetProperty("shells").EnumerateArray());
-        Assert.Equal("default", shell.GetProperty("shell").GetString());
-        Assert.Equal("Orders", shell.GetProperty("module").GetString());
-        Assert.Equal(IEfModuleRefusal.PendingMigrationsCode, shell.GetProperty("code").GetString());
-        Assert.Equal(["20260930_One", "20260930_Two"], shell.GetProperty("pendingMigrations").EnumerateArray().Select(id => id.GetString()));
-        Assert.Equal(PendingRefusal.ApplyCommand, shell.GetProperty("command").GetString());
+        AssertOrdersRefusal(body, PendingRefusal.Text);
     }
 
     [Fact]
-    public async Task Answers_a_409_for_any_other_failed_shell_without_carrying_its_message()
+    public async Task Finds_a_refusal_however_deep_the_inner_exceptions_nest_it()
+    {
+        _registry.Results = [new ReloadResult("default", null, null, new InvalidOperationException("outer", new InvalidOperationException("middle", new PendingRefusal())))];
+
+        using var response = await ReloadAsync();
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        AssertOrdersRefusal(await response.Content.ReadFromJsonAsync<JsonElement>(), PendingRefusal.Text);
+    }
+
+    [Fact]
+    public async Task Finds_a_refusal_inside_an_AggregateException_as_CShells_reports_one()
+    {
+        _registry.Results = [new ReloadResult("default", null, null, new AggregateException(new InvalidOperationException("unrelated"), new InvalidOperationException("wrapper", new PendingRefusal())))];
+
+        using var response = await ReloadAsync();
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        AssertOrdersRefusal(await response.Content.ReadFromJsonAsync<JsonElement>(), PendingRefusal.Text);
+    }
+
+    [Fact]
+    public async Task Recognises_a_refusal_by_the_full_name_of_its_interface_when_that_is_a_private_copy_of_the_shared_assembly()
+    {
+        var foreign = ForeignRefusal.Create(PendingRefusal.Text);
+        Assert.False(foreign is IEfModuleRefusal, "The refusal must not be this assembly's interface, or the fast path answers instead of the name path.");
+        _registry.Results = [new ReloadResult("default", null, null, new InvalidOperationException("Shell 'default' failed to activate.", foreign))];
+
+        using var response = await ReloadAsync();
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        AssertOrdersRefusal(await response.Content.ReadFromJsonAsync<JsonElement>(), PendingRefusal.Text);
+    }
+
+    [Fact]
+    public async Task Answers_a_500_for_any_other_failed_shell_without_carrying_its_message()
     {
         _registry.Results = [new ReloadResult("default", null, null, new InvalidOperationException("Host=db;Password=hunter2 refused"))];
 
         using var response = await ReloadAsync();
 
-        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
         var text = await response.Content.ReadAsStringAsync();
         Assert.Contains(nameof(InvalidOperationException), text, StringComparison.Ordinal);
         Assert.DoesNotContain("hunter2", text, StringComparison.Ordinal);
@@ -106,11 +138,45 @@ public sealed class FoundationHostReloadEndpointTests : IAsyncLifetime
         Assert.Equal(JsonValueKind.Null, shell.GetProperty("code").ValueKind);
     }
 
+    [Fact]
+    public async Task Answers_a_500_when_a_refused_shell_is_reloaded_beside_one_that_failed_for_another_reason()
+    {
+        _registry.Results =
+        [
+            new ReloadResult("default", null, null, new PendingRefusal()),
+            new ReloadResult("tenant-a", null, null, new InvalidOperationException("boom"))
+        ];
+
+        using var response = await ReloadAsync();
+
+        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(2, body.GetProperty("shells").GetArrayLength());
+        Assert.Equal(0, body.GetProperty("reloaded").GetInt32());
+    }
+
+    /// <summary>The one shell named <c>default</c> is refused for <c>Orders</c>, and its command names this host's directory rather than a placeholder.</summary>
+    private static void AssertOrdersRefusal(JsonElement body, string message)
+    {
+        var detail = body.GetProperty("detail").GetString();
+        Assert.Contains("Shell 'default'", detail, StringComparison.Ordinal);
+        Assert.Contains(message.Replace(IEfModuleRefusal.HostPlaceholder, $"\"{HostDirectory}\""), detail, StringComparison.Ordinal);
+        Assert.DoesNotContain("<host directory>", detail, StringComparison.Ordinal);
+        var shell = Assert.Single(body.GetProperty("shells").EnumerateArray());
+        Assert.Equal("default", shell.GetProperty("shell").GetString());
+        Assert.Equal("Orders", shell.GetProperty("module").GetString());
+        Assert.Equal(IEfModuleRefusal.PendingMigrationsCode, shell.GetProperty("code").GetString());
+        Assert.Equal(["20260930_One", "20260930_Two"], shell.GetProperty("pendingMigrations").EnumerateArray().Select(id => id.GetString()));
+        Assert.Equal(
+            $"dotnet elsa persistence apply --host \"{HostDirectory}\" --modules Orders --provider Sqlite --connection-env ELSA_EF_CONNECTION",
+            shell.GetProperty("command").GetString());
+    }
+
     /// <summary>An EF module's refusal as this host meets it: a type of the module's own, known here only by the shared interface.</summary>
     private sealed class PendingRefusal() : InvalidOperationException(Text), IEfModuleRefusal
     {
-        public const string ApplyCommand = "dotnet elsa persistence apply --host <path> --modules Orders --provider Sqlite --connection-env ELSA_EF_CONNECTION";
-        public const string Text = "EF module 'Orders' has pending migrations: 20260930_One, 20260930_Two.";
+        public const string ApplyCommand = $"dotnet elsa persistence apply --host {IEfModuleRefusal.HostPlaceholder} --modules Orders --provider Sqlite --connection-env ELSA_EF_CONNECTION";
+        public const string Text = $"EF module 'Orders' has pending migrations: 20260930_One, 20260930_Two. Apply them out of process with `{ApplyCommand}`.";
 
         public string Module => "Orders";
 
@@ -141,5 +207,59 @@ public sealed class FoundationHostReloadEndpointTests : IAsyncLifetime
         public IReadOnlyCollection<IShell> GetActiveShells() => [];
         public void Subscribe(IShellLifecycleSubscriber subscriber) { }
         public void Unsubscribe(IShellLifecycleSubscriber subscriber) { }
+    }
+
+    /// <summary>
+    /// A refusal built against a private copy of <c>Elsa.Persistence.Schema</c>: a dynamic assembly declares its own
+    /// <c>Elsa.Persistence.Schema.IEfModuleRefusal</c>, the same full name as the host's and not the same type, as a module
+    /// package's copy is in a load context of its own, and an exception that implements that.
+    /// </summary>
+    private static class ForeignRefusal
+    {
+        public static InvalidOperationException Create(string message)
+        {
+            var module = AssemblyBuilder.DefineDynamicAssembly(new AssemblyName("PrivateCopyOfElsaPersistenceSchema"), AssemblyBuilderAccess.RunAndCollect).DefineDynamicModule("main");
+            var contract = module.DefineType(typeof(IEfModuleRefusal).FullName!, TypeAttributes.Public | TypeAttributes.Interface | TypeAttributes.Abstract);
+            var members = new (string Name, Type Type)[]
+            {
+                (nameof(IEfModuleRefusal.Module), typeof(string)),
+                (nameof(IEfModuleRefusal.Code), typeof(string)),
+                (nameof(IEfModuleRefusal.PendingMigrations), typeof(IReadOnlyList<string>)),
+                (nameof(IEfModuleRefusal.Command), typeof(string))
+            };
+            foreach (var (name, type) in members)
+            {
+                var getter = contract.DefineMethod($"get_{name}", MethodAttributes.Public | MethodAttributes.Abstract | MethodAttributes.Virtual | MethodAttributes.HideBySig | MethodAttributes.NewSlot | MethodAttributes.SpecialName, type, Type.EmptyTypes);
+                contract.DefineProperty(name, PropertyAttributes.None, type, null).SetGetMethod(getter);
+            }
+
+            var contractType = contract.CreateType();
+
+            var refusal = module.DefineType("PrivateCopyRefusal", TypeAttributes.Public | TypeAttributes.Sealed, typeof(InvalidOperationException), [contractType]);
+            var constructor = refusal.DefineConstructor(MethodAttributes.Public, CallingConventions.Standard, [typeof(string)]);
+            var il = constructor.GetILGenerator();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Call, typeof(InvalidOperationException).GetConstructor([typeof(string)])!);
+            il.Emit(OpCodes.Ret);
+            foreach (var (name, type) in members)
+            {
+                var field = refusal.DefineField($"_{name}", type, FieldAttributes.Public);
+                var getter = refusal.DefineMethod($"get_{name}", MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.Final | MethodAttributes.HideBySig | MethodAttributes.NewSlot | MethodAttributes.SpecialName, type, Type.EmptyTypes);
+                il = getter.GetILGenerator();
+                il.Emit(OpCodes.Ldarg_0);
+                il.Emit(OpCodes.Ldfld, field);
+                il.Emit(OpCodes.Ret);
+                refusal.DefineMethodOverride(getter, contractType.GetMethod($"get_{name}")!);
+            }
+
+            var created = refusal.CreateType();
+            var instance = (InvalidOperationException)Activator.CreateInstance(created, message)!;
+            created.GetField($"_{nameof(IEfModuleRefusal.Module)}")!.SetValue(instance, "Orders");
+            created.GetField($"_{nameof(IEfModuleRefusal.Code)}")!.SetValue(instance, IEfModuleRefusal.PendingMigrationsCode);
+            created.GetField($"_{nameof(IEfModuleRefusal.PendingMigrations)}")!.SetValue(instance, new[] { "20260930_One", "20260930_Two" });
+            created.GetField($"_{nameof(IEfModuleRefusal.Command)}")!.SetValue(instance, PendingRefusal.ApplyCommand);
+            return instance;
+        }
     }
 }

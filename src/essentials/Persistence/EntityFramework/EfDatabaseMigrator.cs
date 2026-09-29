@@ -90,7 +90,7 @@ public static class EfDatabaseMigrator
                 $"{contextType.Name} has pending migrations: {string.Join(", ", pending)}. " +
                 $"Apply them out of process (dotnet elsa persistence apply) or set {policy}.");
 
-        var command = EfPendingMigrationsException.CommandFor(module, ProviderOf(expectedProviderName));
+        var command = EfPersistenceCommand.Apply(host: null, module, ProviderOf(expectedProviderName));
         return new EfPendingMigrationsException(
             module,
             pending,

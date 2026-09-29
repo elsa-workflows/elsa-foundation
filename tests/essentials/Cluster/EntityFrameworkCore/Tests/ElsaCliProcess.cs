@@ -28,36 +28,11 @@ internal static class ElsaCliProcess
     /// </summary>
     public static async Task<(int ExitCode, string Output)> RunAsync(IEnumerable<string> arguments, IReadOnlyDictionary<string, string> environment)
     {
-        var startInfo = new ProcessStartInfo(FoundationHostProcess.DotnetPath, ["exec", ToolAssembly, .. arguments])
-        {
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false
-        };
+        var startInfo = new ProcessStartInfo(FoundationHostProcess.DotnetPath, ["exec", ToolAssembly, .. arguments]);
         foreach (var (name, value) in environment)
             startInfo.Environment[name] = value;
 
-        var output = new CapturedOutput();
-        using var process = new Process { StartInfo = startInfo };
-        process.OutputDataReceived += (_, line) => output.Append(line.Data);
-        process.ErrorDataReceived += (_, line) => output.Append(line.Data);
-        process.Start();
-        process.BeginOutputReadLine();
-        process.BeginErrorReadLine();
-        using var timeout = new CancellationTokenSource(Timeout);
-        try
-        {
-            await process.WaitForExitAsync(timeout.Token);
-        }
-        catch (OperationCanceledException)
-        {
-            process.Kill(entireProcessTree: true);
-            // The arguments and their environment name the connection by variable, never by value, so this is safe to say.
-            throw new TimeoutException($"dotnet elsa {string.Join(' ', arguments)} did not finish within {Timeout} and was killed. Its output:{Environment.NewLine}{output}");
-        }
-
-        // The output events are drained once the process has exited and its streams have closed.
-        process.WaitForExit();
-        return (process.ExitCode, output.ToString());
+        // The arguments and their environment name the connection by variable, never by value, so this is safe to say.
+        return await ChildProcess.RunAsync(startInfo, Timeout, $"dotnet elsa {string.Join(' ', arguments)}");
     }
 }

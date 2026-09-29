@@ -56,7 +56,6 @@ public sealed class EfContractingMigrationRefusalTests : IAsyncLifetime
         // A host without this module's copy of the assembly reads the refusal through the shared interface.
         IEfModuleRefusal shared = refusal;
         Assert.Equal((refusal.Module, IEfModuleRefusal.ContractingMigrationRefusedCode), (shared.Module, shared.Code));
-        Assert.Equal(refusal.Pending, shared.PendingMigrations);
 
         await FinalizeAsync(Provider, Connection, CurrentVersion);
         await migrator.InitializeAsync();
@@ -78,7 +77,7 @@ public sealed class EfContractingMigrationRefusalTests : IAsyncLifetime
 
         var refusal = await Assert.ThrowsAsync<EfContractingMigrationRefusedException>(() => Migrator(EfMigratePolicy.AutoMigrate).InitializeAsync());
 
-        Assert.Equal([Expand, DropObsolete, Contract], refusal.Pending);
+        Assert.Equal([Expand, DropObsolete, Contract], refusal.PendingMigrations);
         Assert.Equal([Initial], await AppliedAsync(Provider, Connection));
         Assert.False(await HasColumnAsync(Provider, Connection, RowsTable, "Replacement"));
         Assert.True(await HasColumnAsync(Provider, Connection, NotesTable, "Obsolete"));

@@ -389,7 +389,7 @@ fails activation:
 
 ```
 EF module 'Runtime' has pending migrations: 20260911000000_Initial. Apply them out of process with
-`dotnet elsa persistence apply --host <path> --modules Runtime --provider Sqlite --connection-env ELSA_EF_CONNECTION`,
+`dotnet elsa persistence apply --host "<host directory>" --modules Runtime --provider Sqlite --connection-env ELSA_EF_CONNECTION`,
 or set Elsa:Persistence:EntityFramework:Migrate:Policy to AutoMigrate.
 ```
 
