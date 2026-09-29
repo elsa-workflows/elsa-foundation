@@ -31,6 +31,7 @@ internal sealed class CompositionBridgeFixture : IDisposable
         CatalogPath = _directory.File("catalog.json");
         ReviewPath = _directory.File("review.json");
         OutputPath = _directory.File("authored.json");
+        AcceptedOutputPath = _directory.File("accepted.json");
         CandidateDirectory = _directory.File("candidate");
         File.WriteAllText(CatalogPath, CatalogJson);
         File.WriteAllText(ReviewPath, """
@@ -46,6 +47,7 @@ internal sealed class CompositionBridgeFixture : IDisposable
     public string CatalogJson { get; }
     public string ReviewPath { get; }
     public string OutputPath { get; }
+    public string AcceptedOutputPath { get; }
     public string CandidateDirectory { get; }
 
     public CliRun RunImport(string environment = "Production") => DotnetElsa.RunWithStdinAsync(string.Empty,
@@ -87,6 +89,37 @@ internal sealed class CompositionBridgeFixture : IDisposable
             "Type generate to write the candidate: ", response, args.ToArray(),
             beforeResponsePath: sourceFileToChangeAtReview is null ? null : Path.Join(HostDirectory, sourceFileToChangeAtReview),
             beforeResponseText: sourceFileToChangeAtReview is null ? null : "{}");
+    }
+
+    public Task<PseudoTerminalCliRun> RunAcceptInteractiveAsync(
+        string response,
+        string? workspaceProfilePath = null,
+        string? inputToChangeAtReview = null,
+        string? replacementText = null)
+    {
+        var args = new List<string>
+        {
+            "composition", "accept", "--composition", OutputPath,
+            "--catalog", CatalogPath, "--output", AcceptedOutputPath
+        };
+        if (workspaceProfilePath is not null)
+            args.AddRange(["--workspace-profile", workspaceProfilePath]);
+        return PseudoTerminalCli.RunElsaAsync(
+            "Type accept to write the accepted composition: ", response, args.ToArray(),
+            beforeResponsePath: inputToChangeAtReview,
+            beforeResponseText: inputToChangeAtReview is null ? null : replacementText ?? "{}");
+    }
+
+    public CliRun RunAcceptRedirected(string? workspaceProfilePath = null)
+    {
+        var args = new List<string>
+        {
+            "composition", "accept", "--composition", OutputPath,
+            "--catalog", CatalogPath, "--output", AcceptedOutputPath
+        };
+        if (workspaceProfilePath is not null)
+            args.AddRange(["--workspace-profile", workspaceProfilePath]);
+        return DotnetElsa.RunWithStdinAsync(string.Empty, [.. args]).GetAwaiter().GetResult();
     }
 
     public void WriteAcceptedComposition(int limit = 0)

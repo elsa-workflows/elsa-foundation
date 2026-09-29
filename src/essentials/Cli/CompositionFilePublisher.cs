@@ -114,14 +114,41 @@ public static class CompositionFilePublisher
         ArgumentNullException.ThrowIfNull(sourceDirectory);
         ArgumentNullException.ThrowIfNull(recheck);
 
+        PublishAuthoredCore(destinationPath, sourceDirectory, authoredJson, recheck, cancellationToken);
+    }
+
+    /// <summary>Publishes a reviewed authored composition beside its inputs without replacing any file.</summary>
+    public static void PublishReviewedAuthored(
+        string destinationPath,
+        ReadOnlyMemory<byte> authoredJson,
+        Action recheck,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(destinationPath);
+        ArgumentNullException.ThrowIfNull(recheck);
+
+        PublishAuthoredCore(destinationPath, null, authoredJson, recheck, cancellationToken);
+    }
+
+    private static void PublishAuthoredCore(
+        string destinationPath,
+        string? sourceDirectory,
+        ReadOnlyMemory<byte> authoredJson,
+        Action recheck,
+        CancellationToken cancellationToken)
+    {
+
         string? stagingPath = null;
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (!Directory.Exists(sourceDirectory))
-                throw CliRefusal.Resolution("bridge-source-missing", "The selected host source directory is missing.");
-
-            var sourceRoot = ResolveExistingDirectory(sourceDirectory);
+            string? sourceRoot = null;
+            if (sourceDirectory is not null)
+            {
+                if (!Directory.Exists(sourceDirectory))
+                    throw CliRefusal.Resolution("bridge-source-missing", "The selected host source directory is missing.");
+                sourceRoot = ResolveExistingDirectory(sourceDirectory);
+            }
             var destinationFullPath = Path.GetFullPath(destinationPath);
             var destinationName = Path.GetFileName(destinationFullPath);
             var destinationParent = Path.GetDirectoryName(destinationFullPath);
@@ -130,7 +157,7 @@ public static class CompositionFilePublisher
 
             var resolvedParent = ResolveExistingDirectory(destinationParent);
             var resolvedDestination = Path.Combine(resolvedParent, destinationName);
-            if (IsSameOrInside(sourceRoot, resolvedDestination))
+            if (sourceRoot is not null && IsSameOrInside(sourceRoot, resolvedDestination))
                 throw OutputExists();
             if (PathExists(resolvedDestination))
                 throw OutputExists();
