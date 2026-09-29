@@ -161,7 +161,7 @@ internal static class ExpandOnlyMigrationScanner
             providerContextsExamined++;
             var baseline = manifest.BaselineOf(descriptor.Name, provider);
 
-            using var context = ModuleContextCatalog.Create(contextType, ModuleContextCatalog.PlaceholderConnection(provider));
+            using var context = CreateContext(descriptor, contextType, provider);
             var assembly = context.GetService<IMigrationsAssembly>();
             var ordered = assembly.Migrations.OrderBy(migration => migration.Key, StringComparer.Ordinal).ToArray();
 
@@ -261,6 +261,20 @@ internal static class ExpandOnlyMigrationScanner
     /// it), so <c>contextType.Assembly</c> is where <see cref="Scan"/> already loads that context's migrations
     /// from.
     /// </summary>
+    /// <summary>
+    /// The provider context bound as its own <c>[EfModule]</c> declares it, to a connection that is never opened (FR-004),
+    /// so the scan reads any module the catalog discovers, first-party or synthetic, and not only the ones
+    /// <see cref="ModuleContextCatalog"/> names by convention.
+    /// </summary>
+    private static DbContext CreateContext(EfModuleDescriptor descriptor, Type contextType, string provider)
+    {
+        var builder = (DbContextOptionsBuilder)Activator.CreateInstance(typeof(DbContextOptionsBuilder<>).MakeGenericType(contextType))!;
+        EfRelationalProviderBinding.Use(builder, provider, ModuleContextCatalog.PlaceholderConnection(provider), descriptor.HistoryTableName, descriptor.Assembly.GetName().Name);
+        // As ModuleContextCatalog.Create does, so building every module stays within EF's internal service provider limit.
+        EfSchemaVersionMaterializationInterceptor.EnsureAdded(builder);
+        return (DbContext)Activator.CreateInstance(contextType, builder.Options)!;
+    }
+
     internal static int MigrationTypesDeclaredFor(Type contextType) =>
         contextType.Assembly.GetTypes().Count(type =>
             type.GetCustomAttribute<MigrationAttribute>() is not null &&

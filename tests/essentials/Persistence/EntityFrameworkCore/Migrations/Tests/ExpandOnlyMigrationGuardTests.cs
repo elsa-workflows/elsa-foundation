@@ -1,4 +1,7 @@
 using Elsa.Persistence.EntityFramework;
+using Elsa.Persistence.EntityFramework.SchemaFinalization;
+using Elsa.Persistence.EntityFramework.Tests;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Migrations.Operations;
 using Xunit;
@@ -285,6 +288,207 @@ public sealed class ExpandOnlyMigrationGuardTests
     {
         Assert.Throws<ArgumentException>(() => new ExpandOnlyMigrationOptOutAttribute("Reason.", "#2104"));
     }
+
+    // --- FR-023: a contracting opt-out names its schema family and version, and no other opt-out does ---------------
+
+    private const string Orders = "elsa_orders";
+
+    /// <summary>
+    /// Before the migration: <c>elsa_orders</c> is stamped by <c>Orders</c>, which reads 1 and 2; <c>elsa_invoices</c> by
+    /// <c>Invoices</c>; and which family stamps <c>elsa_shared</c> cannot be told. <c>elsa_example</c> is not stamped.
+    /// </summary>
+    private static readonly ExpandOnlyMigrationFamilies Stamped = new(
+        new Dictionary<string, string?> { [Orders] = "Orders", ["elsa_invoices"] = "Invoices", ["elsa_shared"] = null },
+        new Dictionary<string, IReadOnlyList<string>> { ["Orders"] = ["1", "2"], ["Invoices"] = ["1"] });
+
+    private static ExpandOnlyMigrationOptOutAttribute Contracting(string? family, string? version, params string[] violations) =>
+        new(reason: "Nothing reads it once version 2 is finalized.", reviewReference: "#2136", violations) { SchemaFamily = family, FinalizedVersion = version };
+
+    public static TheoryData<string, string> Removals() => new()
+    {
+        { "DropColumn", "DropColumn elsa_orders.Legacy" },
+        { "RenameColumn", "RenameColumn elsa_orders.Legacy" },
+        { "DropTable", "DropTable elsa_orders" },
+        { "RenameTable", "RenameTable elsa_orders" },
+        { "DropIndex", "DropIndex elsa_orders.IX_Orders_Legacy" },
+        { "DeleteData", "DeleteData elsa_orders" }
+    };
+
+    private static IReadOnlyList<MigrationOperation> Removal(string kind) => Build(migration =>
+    {
+        _ = kind switch
+        {
+            "DropColumn" => (object)migration.DropColumn(name: "Legacy", table: Orders),
+            "RenameColumn" => migration.RenameColumn(name: "Legacy", table: Orders, newName: "Replacement"),
+            "DropTable" => migration.DropTable(name: Orders),
+            "RenameTable" => migration.RenameTable(name: Orders, newName: "elsa_orders_v2"),
+            "DropIndex" => migration.DropIndex(name: "IX_Orders_Legacy", table: Orders),
+            "DeleteData" => migration.DeleteData(table: Orders, keyColumn: "Id", keyValue: "legacy"),
+            _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null)
+        };
+    });
+
+    [Theory]
+    [MemberData(nameof(Removals))]
+    public void A_removal_from_a_stamped_table_passes_with_an_opt_out_naming_its_family_and_a_version_it_reads(string kind, string violation)
+    {
+        var result = ExpandOnlyMigrationGuard.Evaluate(Removal(kind), Contracting("Orders", "2", violation), Stamped);
+
+        Assert.True(result.Passed, string.Join("; ", result.ContractionFaults));
+    }
+
+    [Theory]
+    [MemberData(nameof(Removals))]
+    public void A_removal_from_a_stamped_table_fails_when_its_opt_out_names_no_family_and_says_which_to_name(string kind, string violation)
+    {
+        var result = ExpandOnlyMigrationGuard.Evaluate(Removal(kind), Contracting(null, null, violation), Stamped);
+
+        Assert.False(result.Passed);
+        Assert.Contains("SchemaFamily = \"Orders\"", Assert.Single(result.ContractionFaults), StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("Orders", null)]
+    [InlineData(null, "2")]
+    public void A_contracting_opt_out_naming_only_one_of_the_two_fails(string? family, string? version)
+    {
+        var result = ExpandOnlyMigrationGuard.Evaluate(Removal("DropColumn"), Contracting(family, version, "DropColumn elsa_orders.Legacy"), Stamped);
+
+        Assert.False(result.Passed);
+        Assert.Contains("must name SchemaFamily", Assert.Single(result.ContractionFaults), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void An_opt_out_naming_a_family_on_a_migration_that_removes_nothing_a_stamped_family_covers_fails()
+    {
+        var operations = Build(migration => migration.DropColumn(name: "Legacy", table: Table));
+
+        var result = ExpandOnlyMigrationGuard.Evaluate(operations, Contracting("Orders", "2", "DropColumn elsa_example.Legacy"), Stamped);
+
+        Assert.False(result.Passed);
+        Assert.Contains("removes nothing a stamped schema family covers", Assert.Single(result.ContractionFaults), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_contracting_opt_out_naming_another_family_fails()
+    {
+        var result = ExpandOnlyMigrationGuard.Evaluate(Removal("DropColumn"), Contracting("Invoices", "1", "DropColumn elsa_orders.Legacy"), Stamped);
+
+        Assert.False(result.Passed);
+        Assert.Contains("belongs to 'Orders'", Assert.Single(result.ContractionFaults), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_contracting_opt_out_naming_a_version_the_family_does_not_read_fails()
+    {
+        var result = ExpandOnlyMigrationGuard.Evaluate(Removal("DropColumn"), Contracting("Orders", "3", "DropColumn elsa_orders.Legacy"), Stamped);
+
+        Assert.False(result.Passed);
+        Assert.Contains("version '3' of 'Orders'", Assert.Single(result.ContractionFaults), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_migration_that_contracts_two_families_fails_because_one_opt_out_names_one()
+    {
+        var operations = Build(migration =>
+        {
+            migration.DropColumn(name: "Legacy", table: Orders);
+            migration.DropColumn(name: "Legacy", table: "elsa_invoices");
+        });
+
+        var result = ExpandOnlyMigrationGuard.Evaluate(
+            operations, Contracting("Orders", "2", "DropColumn elsa_orders.Legacy", "DropColumn elsa_invoices.Legacy"), Stamped);
+
+        Assert.False(result.Passed);
+        Assert.Contains("more than one stamped schema family ('Invoices', 'Orders')", Assert.Single(result.ContractionFaults), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_removal_from_a_stamped_table_whose_family_cannot_be_told_fails()
+    {
+        var operations = Build(migration => migration.DropColumn(name: "Legacy", table: "elsa_shared"));
+
+        var result = ExpandOnlyMigrationGuard.Evaluate(operations, Contracting("Orders", "2", "DropColumn elsa_shared.Legacy"), Stamped);
+
+        Assert.False(result.Passed);
+        Assert.Contains("'elsa_shared'", Assert.Single(result.ContractionFaults), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A reviewed alteration of a stamped table removes nothing, so its opt-out is not contracting: it names no family and
+    /// the apply-time check never holds it (spec 185, Decisions, "Every AlterColumn is a violation").
+    /// </summary>
+    [Fact]
+    public void An_alteration_of_a_stamped_table_is_not_contracting()
+    {
+        var operations = Build(migration => migration.AlterColumn<string>(name: "Name", table: Orders, maxLength: 512, oldMaxLength: 128));
+
+        Assert.True(ExpandOnlyMigrationGuard.Evaluate(operations, Contracting(null, null, "AlterColumn elsa_orders.Name"), Stamped).Passed);
+    }
+
+    // --- Which tables a stamped family covered before a migration: the previous migration's target model -------------
+
+    [Fact]
+    public void Before_a_contexts_first_migration_no_table_is_stamped()
+    {
+        var before = ExpandOnlyMigrationFamilies.Before(null, ContractingFamilies, ContractingAssembly);
+
+        Assert.Empty(before.StampedTables);
+        Assert.Equal(["1", "2"], before.ReadableVersions[ContractingModule.Family]);
+    }
+
+    /// <summary>
+    /// A snapshot names its entity types rather than holding them. The module's own stamped tables count; an unstamped
+    /// table and the finalization record's own tables, which belong to no module family, do not.
+    /// </summary>
+    [Fact]
+    public void A_snapshot_s_stamped_tables_belong_to_the_module_s_family_and_the_finalization_tables_to_none()
+    {
+        var snapshot = new ModelBuilder();
+        ContractingTargetModel.Build(snapshot, ContractingModule.DropObsolete);
+        snapshot.MapSchemaFinalization(ContractingModule.HistoryModule);
+
+        var before = ExpandOnlyMigrationFamilies.Before(snapshot.Model, ContractingFamilies, ContractingAssembly);
+
+        Assert.Equal(new Dictionary<string, string?> { [ContractingModule.RowsTable] = ContractingModule.Family }, before.StampedTables);
+    }
+
+    /// <summary>With more than one family, each table's is found through its entity type's name, and an unknown one stays unknown.</summary>
+    [Fact]
+    public void With_two_families_each_stamped_table_is_resolved_by_its_entity_type_s_name()
+    {
+        var families = EfSchemaModuleFamilies.FromDeclarations("Sales",
+        [
+            new EfSchemaFamilyDescriptor("Orders", "Sales", "1", typeof(OrderRow).Assembly) { Entities = [typeof(OrderRow)] },
+            new EfSchemaFamilyDescriptor("Invoices", "Sales", "1", typeof(InvoiceRow).Assembly) { Entities = [typeof(InvoiceRow)] }
+        ]);
+        var snapshot = new ModelBuilder();
+        Stamp(snapshot, typeof(OrderRow).FullName!, "elsa_orders");
+        Stamp(snapshot, typeof(InvoiceRow).FullName!, "elsa_invoices");
+        Stamp(snapshot, "Removed.Since.RetiredRow", "elsa_retired");
+
+        var before = ExpandOnlyMigrationFamilies.Before(snapshot.Model, families, typeof(OrderRow).Assembly);
+
+        Assert.Equal(
+            new Dictionary<string, string?> { ["elsa_orders"] = "Orders", ["elsa_invoices"] = "Invoices", ["elsa_retired"] = null },
+            before.StampedTables);
+
+        static void Stamp(ModelBuilder model, string entity, string table) => model.Entity(entity, row =>
+        {
+            row.Property<string>("Id");
+            row.Property<string>(EfSchemaVersion.ColumnName);
+            row.HasKey("Id");
+            row.ToTable(table);
+        });
+    }
+
+    private static readonly System.Reflection.Assembly ContractingAssembly = typeof(ContractingDbContext).Assembly;
+
+    private static EfSchemaModuleFamilies ContractingFamilies => EfSchemaModuleFamilies.For(ContractingModule.Name, ContractingAssembly);
+
+    private sealed class OrderRow;
+
+    private sealed class InvoiceRow;
 }
 
 /// <summary>A shape the guard has never classified, for FR-006's "unknown operation is still a violation".</summary>
