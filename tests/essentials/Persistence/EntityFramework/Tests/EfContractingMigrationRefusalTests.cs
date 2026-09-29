@@ -169,6 +169,50 @@ public sealed class EfContractingMigrationRefusalTests : IAsyncLifetime
         AnOlderReleaseThatStartsAfterTheSeedIsRefusedAndTheContractionRunsAsync(Provider, Connection);
 
     /// <summary>
+    /// Two families contracted by two migrations of one pending batch: each family's record is created, in the order of its
+    /// contracting migration, before the first contraction runs. Neither contraction runs while a family lacks its record,
+    /// and the second family is not refused for want of one once the first seed has created the database identity.
+    /// </summary>
+    [Fact]
+    public async Task Several_contracted_families_are_each_seeded_in_migration_order_before_any_contraction_runs()
+    {
+        IReadOnlyDictionary<string, SchemaFinalizationRecord>? atFirstContraction = null;
+        ContractingProbe.WhenApplying<PairContractFirstMigration>(
+            () => atFirstContraction = Task.Run(() => ContractingPairModule.RecordsAsync(Connection)).GetAwaiter().GetResult());
+        var created = new RecordsCreated();
+
+        await using (var context = ContractingPairModule.Create(Connection, created))
+            await EfDatabaseMigrator.ApplyAsync(context, EfProviderNames.Sqlite);
+
+        Assert.Equal([ContractingPairModule.First, ContractingPairModule.Second], created.Families);
+        Assert.Equal([ContractingPairModule.First, ContractingPairModule.Second], atFirstContraction!.Keys.Order(StringComparer.Ordinal));
+        Assert.All(atFirstContraction.Values, record => AssertSeeded(record, MachineMigrator));
+        Assert.Equal(
+            [ContractingPairModule.Initial, ContractingPairModule.ContractFirst, ContractingPairModule.ContractSecond],
+            await ContractingPairModule.AppliedAsync(Connection));
+    }
+
+    /// <summary>A racing older gate that leaves the families below their versions refuses the whole batch: no contraction of either runs.</summary>
+    [Fact]
+    public async Task A_racing_gate_that_leaves_the_families_below_their_versions_keeps_every_contraction_from_running()
+    {
+        await using (var context = ContractingPairModule.Create(Connection, new BeforeFirstSave(async () =>
+                     {
+                         await using var older = ContractingPairModule.Create(Connection);
+                         await ContractingPairModule.OlderGate().ActivateAsync(older);
+                     })))
+        {
+            var refusal = await Assert.ThrowsAsync<EfContractingMigrationRefusedException>(() => EfDatabaseMigrator.ApplyAsync(context, EfProviderNames.Sqlite));
+
+            Assert.Equal([ContractingPairModule.ContractFirst, ContractingPairModule.ContractSecond], refusal.Refusals.Select(entry => entry.Migration));
+            Assert.All(refusal.Refusals, entry => Assert.Equal((EfContractingMigrationRefusalReason.NotFinalized, EarlierVersion), (entry.Reason, entry.FinalizedVersion)));
+            Assert.Equal([ContractingPairModule.Initial], refusal.Applied);
+        }
+
+        Assert.Equal([ContractingPairModule.Initial], await ContractingPairModule.AppliedAsync(Connection));
+    }
+
+    /// <summary>
     /// A build whose own chain cannot place the version its contracting migration names seeds nothing: it is refused
     /// before anything runs, so no record is created at a version it cannot place and nothing is migrated.
     /// </summary>
@@ -397,6 +441,23 @@ public sealed class EfContractingMigrationRefusalTests : IAsyncLifetime
     {
         await using var context = Create(Provider, Connection);
         return await Assert.ThrowsAsync<EfContractingMigrationRefusedException>(() => EfDatabaseMigrator.ApplyAsync(context, EfProviderNames.Sqlite));
+    }
+
+    /// <summary>The family of every finalization record the context it is added to creates, in the order it creates them.</summary>
+    private sealed class RecordsCreated : SaveChangesInterceptor
+    {
+        public List<string> Families { get; } = [];
+
+        public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
+            DbContextEventData eventData,
+            InterceptionResult<int> result,
+            CancellationToken cancellationToken = default)
+        {
+            Families.AddRange(eventData.Context!.ChangeTracker.Entries<EfSchemaFinalizationRecordRow>()
+                .Where(entry => entry.State == Microsoft.EntityFrameworkCore.EntityState.Added)
+                .Select(entry => entry.Entity.Family));
+            return ValueTask.FromResult(result);
+        }
     }
 
     private EfModuleMigrator<ContractingDbContext> Migrator(EfMigratePolicy policy, IEfSchemaFleet? fleet = null, IInterceptor[]? interceptors = null)

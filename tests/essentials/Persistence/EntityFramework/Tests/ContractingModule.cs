@@ -107,6 +107,36 @@ internal static class ContractingModule
         return (await context.Database.GetAppliedMigrationsAsync()).ToArray();
     }
 
+    /// <summary>Spec 181, FR-002: the finalization record lands in a module's baseline, beside its history table.</summary>
+    public static void CreateFinalizationTables(MigrationBuilder migrationBuilder, string historyModule, string keyPrefix)
+    {
+        migrationBuilder.CreateTable(
+            name: EfSchemaFinalization.DatabaseIdentityTableName(historyModule),
+            columns: table => new
+            {
+                Id = table.Column<int>(nullable: false),
+                DatabaseIdentity = table.Column<string>(maxLength: 64, nullable: false),
+                SchemaVersion = table.Column<string>(maxLength: 32, nullable: false)
+            },
+            constraints: table => table.PrimaryKey($"PK_{keyPrefix}DatabaseIdentity", identity => identity.Id));
+        migrationBuilder.CreateTable(
+            name: EfSchemaFinalization.RecordTableName(historyModule),
+            columns: table => new
+            {
+                Family = table.Column<string>(maxLength: 128, nullable: false),
+                SchemaVersion = table.Column<string>(maxLength: 32, nullable: false),
+                DatabaseIdentity = table.Column<string>(maxLength: 64, nullable: false),
+                Revision = table.Column<long>(nullable: false),
+                FinalizedVersion = table.Column<string>(maxLength: 32, nullable: false),
+                IntentJson = table.Column<string>(nullable: true),
+                HoldsJson = table.Column<string>(nullable: false),
+                HistoryJson = table.Column<string>(nullable: false),
+                FinishJson = table.Column<string>(nullable: true),
+                FinishHistoryJson = table.Column<string>(nullable: false)
+            },
+            constraints: table => table.PrimaryKey($"PK_{keyPrefix}SchemaFinalization", record => record.Family));
+    }
+
     /// <summary>Whether <paramref name="table"/> has <paramref name="column"/>, read from the engine's own catalog.</summary>
     public static async Task<bool> HasColumnAsync(string provider, string connectionString, string table, string column)
     {
@@ -254,32 +284,7 @@ public sealed class ContractingInitialMigration : Migration
                 Obsolete = table.Column<string>(nullable: true)
             },
             constraints: table => table.PrimaryKey($"PK_{ContractingModule.NotesTable}", note => note.Id));
-        // Spec 181, FR-002: the finalization record lands in the module's baseline.
-        migrationBuilder.CreateTable(
-            name: EfSchemaFinalization.DatabaseIdentityTableName(ContractingModule.HistoryModule),
-            columns: table => new
-            {
-                Id = table.Column<int>(nullable: false),
-                DatabaseIdentity = table.Column<string>(maxLength: 64, nullable: false),
-                SchemaVersion = table.Column<string>(maxLength: 32, nullable: false)
-            },
-            constraints: table => table.PrimaryKey("PK_ContractingDatabaseIdentity", identity => identity.Id));
-        migrationBuilder.CreateTable(
-            name: EfSchemaFinalization.RecordTableName(ContractingModule.HistoryModule),
-            columns: table => new
-            {
-                Family = table.Column<string>(maxLength: 128, nullable: false),
-                SchemaVersion = table.Column<string>(maxLength: 32, nullable: false),
-                DatabaseIdentity = table.Column<string>(maxLength: 64, nullable: false),
-                Revision = table.Column<long>(nullable: false),
-                FinalizedVersion = table.Column<string>(maxLength: 32, nullable: false),
-                IntentJson = table.Column<string>(nullable: true),
-                HoldsJson = table.Column<string>(nullable: false),
-                HistoryJson = table.Column<string>(nullable: false),
-                FinishJson = table.Column<string>(nullable: true),
-                FinishHistoryJson = table.Column<string>(nullable: false)
-            },
-            constraints: table => table.PrimaryKey("PK_ContractingSchemaFinalization", record => record.Family));
+        ContractingModule.CreateFinalizationTables(migrationBuilder, ContractingModule.HistoryModule, "Contracting");
     }
 
     protected override void BuildTargetModel(ModelBuilder modelBuilder) => ContractingTargetModel.Build(modelBuilder, ContractingModule.Initial);

@@ -156,7 +156,7 @@ internal static class ContractingSeedScenarios
     private static T Wait<T>(Func<Task<T>> read) => Task.Run(read).GetAwaiter().GetResult();
 
     /// <summary>Runs an action once, before the first save of the context it is added to.</summary>
-    private sealed class BeforeFirstSave(Func<Task> action) : SaveChangesInterceptor
+    internal sealed class BeforeFirstSave(Func<Task> action) : SaveChangesInterceptor
     {
         private Func<Task>? _action = action;
 
