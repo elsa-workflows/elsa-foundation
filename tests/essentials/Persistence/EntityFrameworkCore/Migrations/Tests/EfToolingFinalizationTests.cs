@@ -142,6 +142,47 @@ public sealed class EfToolingFinalizationTests : IAsyncLifetime
         Assert.Equal([RuntimeArtifactEfModule.SchemaVersion], runtime.GetProperty("readableVersions").EnumerateArray().Select(version => version.GetString()));
     }
 
+    /// <summary>
+    /// Spec 186, FR-021: what the finish record holds, the status prints, since the tool runs where no backfill does: a
+    /// backfill run a worker has claimed, and a completion the audit withdrew with the tables and counts it found.
+    /// </summary>
+    [Fact]
+    public async Task Status_reports_a_claimed_backfill_run_and_a_withdrawn_completion_from_the_finish_record()
+    {
+        string[] chain = [SecretsEfModule.SchemaVersion, "next"];
+        var member = new SchemaFinalizationMember("host-a", "a");
+        await using (var context = ModuleContextCatalog.Create(typeof(SecretsSqliteDbContext), Connection))
+        {
+            var store = new EfSchemaFinalizationStore(context);
+            var created = await store.GetOrCreateAsync(SecretsEfModule.SchemaFamily, SecretsEfModule.SchemaVersion, chain, SchemaFinalizationActor.OfOperator("release"));
+            var intended = await store.RecordIntentAsync(SecretsEfModule.SchemaFamily, created.Revision, "next", chain, member);
+            var finalized = await store.CommitIntentAsync(SecretsEfModule.SchemaFamily, intended.Record.Revision, chain, member);
+            await store.ClaimBackfillAsync(SecretsEfModule.SchemaFamily, finalized.Record.Revision, "next", chain, member, "worker", TimeSpan.FromMinutes(2));
+        }
+
+        var claimed = await StatusAsync();
+        Assert.Equal(("next", "host-a (a)"), (claimed.GetProperty("backfillRun").GetProperty("targetVersion").GetString(), claimed.GetProperty("backfillRun").GetProperty("member").GetString()));
+
+        await using (var context = ModuleContextCatalog.Create(typeof(SecretsSqliteDbContext), Connection))
+        {
+            var store = new EfSchemaFinalizationStore(context);
+            var record = (await store.FindAsync(SecretsEfModule.SchemaFamily))!;
+            await store.WithdrawCompletionAsync(SecretsEfModule.SchemaFamily, record.Revision, member, "table 'secrets': 1 (rewritten)");
+        }
+
+        var withdrawn = await StatusAsync();
+        Assert.Equal(JsonValueKind.Null, withdrawn.GetProperty("completionVersion").ValueKind);
+        Assert.Equal(JsonValueKind.Null, withdrawn.GetProperty("backfillRun").ValueKind);
+        Assert.Equal("table 'secrets': 1 (rewritten)", withdrawn.GetProperty("completionWithdrawn").GetProperty("reason").GetString());
+
+        async Task<JsonElement> StatusAsync()
+        {
+            var status = await RunAsync(new { version = 1, command = "status", provider = "Sqlite", selection = Modules("Secrets"), connection = Connection });
+            Assert.Equal(EfToolingExitCode.Success, status.ExitCode);
+            return Assert.Single(status.Response.GetProperty("finalization").GetProperty("families").EnumerateArray());
+        }
+    }
+
     [Fact]
     public async Task Status_refuses_the_fields_only_a_hold_takes()
     {

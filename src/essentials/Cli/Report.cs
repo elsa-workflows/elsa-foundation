@@ -93,8 +93,9 @@ internal static class Report
 
     /// <summary>
     /// Each family's finalization status (spec 181, FR-022): the finalized version, each pending version and the holds
-    /// that keep it, any intent in flight and every hold. Which counted members cannot read a version is known only to
-    /// a running host, whose membership this tool does not read.
+    /// that keep it, any intent in flight and every hold, and what the finish record holds: the completion version, a
+    /// claimed backfill run and a withdrawn completion (spec 186, FR-021). Which counted members cannot read a version, and
+    /// how far a backfill has got, is known only to a running host, whose membership and memory this tool does not read.
     /// </summary>
     internal static void WriteFinalization(TextWriter output, string command, JsonElement finalization)
     {
@@ -118,6 +119,10 @@ internal static class Report
                 output.WriteLine($"  hold on {Optional(hold, "version") ?? "the whole family"} by {Text(hold, "placedBy")} at {Text(hold, "placedAt")}: {Text(hold, "reason")}");
             if (Optional(family, "completionVersion") is { } completion)
                 output.WriteLine($"  complete from {completion}");
+            if (family.TryGetProperty("backfillRun", out var run) && run.ValueKind == JsonValueKind.Object)
+                output.WriteLine($"  backfill to {Text(run, "targetVersion")} claimed by {Text(run, "member")} until {Text(run, "expiresAt")}");
+            if (family.TryGetProperty("completionWithdrawn", out var withdrawn) && withdrawn.ValueKind == JsonValueKind.Object)
+                output.WriteLine($"  completion at {Text(withdrawn, "version")} withdrawn by {Text(withdrawn, "withdrawnBy")} at {Text(withdrawn, "at")}: {Optional(withdrawn, "reason")}");
         }
 
         output.WriteLine();

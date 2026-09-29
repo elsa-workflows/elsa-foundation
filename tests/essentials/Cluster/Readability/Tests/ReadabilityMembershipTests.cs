@@ -1,6 +1,7 @@
 using Elsa.Cluster.Core.Contracts;
 using Elsa.Cluster.Core.Models;
 using Elsa.Cluster.Core.Options;
+using Elsa.Persistence.Schema.SchemaFinalization;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -82,6 +83,26 @@ public sealed class ReadabilityMembershipTests : IAsyncDisposable
 
         Assert.IsType<EfSchemaReadabilitySource>(Assert.Single(host.GetServices<IMemberReportSource<ReadabilitySection>>()));
         Assert.Contains(Family, (await host.GetRequiredService<IClusterMembership>().PublishReportAsync()).Report.Readability?.Entries.Select(entry => entry.Family) ?? []);
+    }
+
+    /// <summary>
+    /// Spec 186, FR-012: the fleet a host composes gives the backfill's default settle margin, the membership expiry
+    /// period plus the skew allowance, as the membership settings say when it is asked.
+    /// </summary>
+    [Fact]
+    public async Task The_fleets_settle_margin_is_the_membership_expiry_period_plus_the_skew_allowance()
+    {
+        await using var host = new ServiceCollection()
+            .Configure<ClusterMembershipOptions>(options =>
+            {
+                options.HostId = $"readability-{Guid.NewGuid():N}";
+                options.ExpiryPeriod = TimeSpan.FromSeconds(40);
+                options.SkewAllowance = TimeSpan.FromSeconds(7);
+            })
+            .AddEfSchemaReadability()
+            .BuildServiceProvider();
+
+        Assert.Equal(TimeSpan.FromSeconds(47), host.GetRequiredService<IEfSchemaFleet>().SettleMargin);
     }
 
     public ValueTask DisposeAsync() => _host.DisposeAsync();

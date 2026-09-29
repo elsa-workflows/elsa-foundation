@@ -18,4 +18,22 @@ public sealed record ReadabilitySection : MemberReportSection
     public bool Equals(ReadabilitySection? other) => other is not null && Entries.SequenceEqual(other.Entries);
 
     public override int GetHashCode() => Entries.Count;
+
+    /// <summary>
+    /// Whether <paramref name="member"/>'s report meets a schema requirement on <paramref name="family"/>, for the database
+    /// whose finalization record has <paramref name="databaseIdentity"/> (FR-015, FR-023): the entries that speak for the
+    /// database are those for the family that name its identity or name none, and each must satisfy
+    /// <paramref name="meets"/>. A member with no such entry meets it vacuously when counted, and not for placement. A
+    /// member whose report is unknown, or has no readability section, cannot say what it reads or writes, and never meets it.
+    /// </summary>
+    internal static bool EveryEntryMeets(FleetMember member, string family, string? databaseIdentity, MemberQueryPurpose purpose, Func<ReadabilityEntry, bool> meets)
+    {
+        if (member.Report.IsUnknown || member.Report.Readability is not { } readability)
+            return false;
+
+        var applicable = readability.Entries
+            .Where(entry => string.Equals(entry.Family, family, StringComparison.Ordinal) && entry.AppliesTo(databaseIdentity))
+            .ToArray();
+        return applicable.Length == 0 ? purpose == MemberQueryPurpose.Counting : applicable.All(meets);
+    }
 }
