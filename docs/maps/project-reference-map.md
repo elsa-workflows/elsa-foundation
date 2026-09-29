@@ -8,7 +8,7 @@ Records direct project references only.
 
 - Source projects: 136
 - Test projects: 126
-- Direct project references: 1216
+- Direct project references: 1214
 
 ## Projects
 
@@ -46,7 +46,7 @@ Records direct project references only.
 | [Elsa.Caching.Memory](../../src/essentials/Caching/Memory/Elsa.Caching.Memory.csproj) | source | Elsa.Caching | - | true | Elsa.Caching.Core |
 | [Elsa.Cli](../../src/essentials/Cli/Elsa.Cli.csproj) | source | Elsa.Cli | - | true | Elsa.Cli.Worker<br>Elsa.Modularity.Planning |
 | [Elsa.Cli.Worker](../../src/essentials/Cli/Worker/Elsa.Cli.Worker.csproj) | source | Elsa.Cli | - | false | - |
-| [Elsa.Cluster.Core](../../src/essentials/Cluster/Core/Elsa.Cluster.Core.csproj) | source | Elsa.Cluster | - | true | Elsa.Primitives |
+| [Elsa.Cluster.Core](../../src/essentials/Cluster/Core/Elsa.Cluster.Core.csproj) | source | Elsa.Cluster | - | true | - |
 | [Elsa.Cluster.EntityFrameworkCore](../../src/essentials/Cluster/EntityFrameworkCore/Elsa.Cluster.EntityFrameworkCore.csproj) | source | Elsa.Cluster | - | true | Elsa.Cluster.Core<br>Elsa.Persistence.EntityFramework |
 | [Elsa.Cluster.InProcess](../../src/essentials/Cluster/InProcess/Elsa.Cluster.InProcess.csproj) | source | Elsa.Cluster | - | true | Elsa.Cluster.Core |
 | [Elsa.Cluster.Readability](../../src/essentials/Cluster/Readability/Elsa.Cluster.Readability.csproj) | source | Elsa.Cluster | - | true | Elsa.Cluster.Core<br>Elsa.Cluster.InProcess<br>Elsa.Persistence.EntityFramework |
@@ -87,7 +87,7 @@ Records direct project references only.
 | [Elsa.Locking.FileSystem](../../src/essentials/Locking/FileSystem/Elsa.Locking.FileSystem.csproj) | source | Elsa.Locking | - | true | Elsa.Locking.Core |
 | [Elsa.Mediator.Core](../../src/essentials/Mediator/Core/Elsa.Mediator.Core.csproj) | source | Elsa.Mediator | - | true | Elsa.Pipelines.Core |
 | [Elsa.Mediator](../../src/essentials/Mediator/Elsa.Mediator.csproj) | source | Elsa.Mediator | - | true | Elsa.Mediator.Core |
-| [Elsa.Modularity.Api](../../src/essentials/Modularity/Api/Elsa.Modularity.Api.csproj) | source | Elsa.Modularity | - | true | Elsa.Api.AspNetCore<br>Elsa.Attention.Core<br>Elsa.Cluster.Core<br>Elsa.Foundation.Identity<br>Elsa.Foundation.Identity.Core<br>Elsa.Modularity.Core<br>Elsa.Modularity.Nuplane |
+| [Elsa.Modularity.Api](../../src/essentials/Modularity/Api/Elsa.Modularity.Api.csproj) | source | Elsa.Modularity | - | true | Elsa.Api.AspNetCore<br>Elsa.Attention.Core<br>Elsa.Foundation.Identity<br>Elsa.Foundation.Identity.Core<br>Elsa.Modularity.Core<br>Elsa.Modularity.Nuplane |
 | [Elsa.Modularity.Core](../../src/essentials/Modularity/Core/Elsa.Modularity.Core.csproj) | source | Elsa.Modularity | - | true | - |
 | [Elsa.Modularity.EntityFramework](../../src/essentials/Modularity/EntityFramework/Elsa.Modularity.EntityFramework.csproj) | source | Elsa.Modularity | - | true | Elsa.Modularity.Core<br>Elsa.Persistence.EntityFramework |
 | [Elsa.Modularity.Nuplane](../../src/essentials/Modularity/Nuplane/Elsa.Modularity.Nuplane.csproj) | source | Elsa.Modularity | - | true | Elsa.Modularity.Core |

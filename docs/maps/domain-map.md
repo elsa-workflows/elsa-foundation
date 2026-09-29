@@ -9,7 +9,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 - Source projects: 136
 - Test projects: 126
 - Domains: 31
-- Direct cross-domain references: 741
+- Direct cross-domain references: 739
 
 ## Domains
 
@@ -83,7 +83,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Caching.Memory](../../src/essentials/Caching/Memory/Elsa.Caching.Memory.csproj) | source | Elsa.Caching | Memory | feature/implementation | Elsa.Caching.Core |
 | [Elsa.Cli](../../src/essentials/Cli/Elsa.Cli.csproj) | source | Elsa.Cli | (root) | feature/implementation | Elsa.Cli.Worker<br>Elsa.Modularity.Planning |
 | [Elsa.Cli.Worker](../../src/essentials/Cli/Worker/Elsa.Cli.Worker.csproj) | source | Elsa.Cli | Worker | feature/implementation | - |
-| [Elsa.Cluster.Core](../../src/essentials/Cluster/Core/Elsa.Cluster.Core.csproj) | source | Elsa.Cluster | Core | contract | Elsa.Primitives |
+| [Elsa.Cluster.Core](../../src/essentials/Cluster/Core/Elsa.Cluster.Core.csproj) | source | Elsa.Cluster | Core | contract | - |
 | [Elsa.Cluster.EntityFrameworkCore](../../src/essentials/Cluster/EntityFrameworkCore/Elsa.Cluster.EntityFrameworkCore.csproj) | source | Elsa.Cluster | EntityFrameworkCore | feature/implementation | Elsa.Cluster.Core<br>Elsa.Persistence.EntityFramework |
 | [Elsa.Cluster.InProcess](../../src/essentials/Cluster/InProcess/Elsa.Cluster.InProcess.csproj) | source | Elsa.Cluster | InProcess | feature/implementation | Elsa.Cluster.Core |
 | [Elsa.Cluster.Readability](../../src/essentials/Cluster/Readability/Elsa.Cluster.Readability.csproj) | source | Elsa.Cluster | Readability | feature/implementation | Elsa.Cluster.Core<br>Elsa.Cluster.InProcess<br>Elsa.Persistence.EntityFramework |
@@ -124,7 +124,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Locking.FileSystem](../../src/essentials/Locking/FileSystem/Elsa.Locking.FileSystem.csproj) | source | Elsa.Locking | FileSystem | provider/implementation | Elsa.Locking.Core |
 | [Elsa.Mediator.Core](../../src/essentials/Mediator/Core/Elsa.Mediator.Core.csproj) | source | Elsa.Mediator | Core | contract | Elsa.Pipelines.Core |
 | [Elsa.Mediator](../../src/essentials/Mediator/Elsa.Mediator.csproj) | source | Elsa.Mediator | (root) | feature/implementation | Elsa.Mediator.Core |
-| [Elsa.Modularity.Api](../../src/essentials/Modularity/Api/Elsa.Modularity.Api.csproj) | source | Elsa.Modularity | Api | feature/implementation | Elsa.Api.AspNetCore<br>Elsa.Attention.Core<br>Elsa.Cluster.Core<br>Elsa.Foundation.Identity<br>Elsa.Foundation.Identity.Core<br>Elsa.Modularity.Core<br>Elsa.Modularity.Nuplane |
+| [Elsa.Modularity.Api](../../src/essentials/Modularity/Api/Elsa.Modularity.Api.csproj) | source | Elsa.Modularity | Api | feature/implementation | Elsa.Api.AspNetCore<br>Elsa.Attention.Core<br>Elsa.Foundation.Identity<br>Elsa.Foundation.Identity.Core<br>Elsa.Modularity.Core<br>Elsa.Modularity.Nuplane |
 | [Elsa.Modularity.Core](../../src/essentials/Modularity/Core/Elsa.Modularity.Core.csproj) | source | Elsa.Modularity | Core | contract | - |
 | [Elsa.Modularity.EntityFramework](../../src/essentials/Modularity/EntityFramework/Elsa.Modularity.EntityFramework.csproj) | source | Elsa.Modularity | EntityFramework | feature/implementation | Elsa.Modularity.Core<br>Elsa.Persistence.EntityFramework |
 | [Elsa.Modularity.Nuplane](../../src/essentials/Modularity/Nuplane/Elsa.Modularity.Nuplane.csproj) | source | Elsa.Modularity | Nuplane | feature/implementation | Elsa.Modularity.Core |
@@ -565,7 +565,6 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Cli.Fixtures.ShellsHost](../../tests/essentials/Cli/Fixtures/ShellsHost/Elsa.Cli.Fixtures.ShellsHost.csproj) | Elsa.Cli | [Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore](../../src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj) | Elsa.Workflows |
 | [Elsa.Cli.Tests](../../tests/essentials/Cli/Tests/Elsa.Cli.Tests.csproj) | Elsa.Cli | [Acme.Widgets](../../tests/essentials/Cli/Fixtures/Widgets/Acme.Widgets.csproj) | Other |
 | [Elsa.Cli.Tests](../../tests/essentials/Cli/Tests/Elsa.Cli.Tests.csproj) | Elsa.Cli | [Elsa.Modularity.Planning](../../src/essentials/Modularity/Planning/Elsa.Modularity.Planning.csproj) | Elsa.Modularity |
-| [Elsa.Cluster.Core](../../src/essentials/Cluster/Core/Elsa.Cluster.Core.csproj) | Elsa.Cluster | [Elsa.Primitives](../../src/essentials/Primitives/Primitives/Elsa.Primitives.csproj) | Elsa.Primitives |
 | [Elsa.Cluster.EntityFrameworkCore](../../src/essentials/Cluster/EntityFrameworkCore/Elsa.Cluster.EntityFrameworkCore.csproj) | Elsa.Cluster | [Elsa.Persistence.EntityFramework](../../src/essentials/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj) | Elsa.Persistence |
 | [Elsa.Cluster.Readability](../../src/essentials/Cluster/Readability/Elsa.Cluster.Readability.csproj) | Elsa.Cluster | [Elsa.Persistence.EntityFramework](../../src/essentials/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj) | Elsa.Persistence |
 | [Elsa.Cluster.Readability.Tests](../../tests/essentials/Cluster/Readability/Tests/Elsa.Cluster.Readability.Tests.csproj) | Elsa.Cluster | [Elsa.Testing](../../tests/essentials/Testing/Elsa.Testing.csproj) | Elsa.Testing |
@@ -650,7 +649,6 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Mediator.Core](../../src/essentials/Mediator/Core/Elsa.Mediator.Core.csproj) | Elsa.Mediator | [Elsa.Pipelines.Core](../../src/essentials/Pipelines/Core/Elsa.Pipelines.Core.csproj) | Elsa.Pipelines |
 | [Elsa.Modularity.Api](../../src/essentials/Modularity/Api/Elsa.Modularity.Api.csproj) | Elsa.Modularity | [Elsa.Api.AspNetCore](../../src/essentials/Api/AspNetCore/Elsa.Api.AspNetCore.csproj) | Elsa.Api |
 | [Elsa.Modularity.Api](../../src/essentials/Modularity/Api/Elsa.Modularity.Api.csproj) | Elsa.Modularity | [Elsa.Attention.Core](../../src/essentials/Attention/Core/Elsa.Attention.Core.csproj) | Elsa.Attention |
-| [Elsa.Modularity.Api](../../src/essentials/Modularity/Api/Elsa.Modularity.Api.csproj) | Elsa.Modularity | [Elsa.Cluster.Core](../../src/essentials/Cluster/Core/Elsa.Cluster.Core.csproj) | Elsa.Cluster |
 | [Elsa.Modularity.Api](../../src/essentials/Modularity/Api/Elsa.Modularity.Api.csproj) | Elsa.Modularity | [Elsa.Foundation.Identity](../../src/essentials/Foundation/Identity/Elsa.Foundation.Identity.csproj) | Elsa.Foundation |
 | [Elsa.Modularity.Api](../../src/essentials/Modularity/Api/Elsa.Modularity.Api.csproj) | Elsa.Modularity | [Elsa.Foundation.Identity.Core](../../src/essentials/Foundation/Identity/Core/Elsa.Foundation.Identity.Core.csproj) | Elsa.Foundation |
 | [Elsa.Modularity.EntityFramework](../../src/essentials/Modularity/EntityFramework/Elsa.Modularity.EntityFramework.csproj) | Elsa.Modularity | [Elsa.Persistence.EntityFramework](../../src/essentials/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj) | Elsa.Persistence |
