@@ -53,7 +53,7 @@ internal static class ContractingSeedScenarios
     /// <param name="migrator">The member the seeded record names.</param>
     public static async Task ACrashBetweenTheSeedAndTheContractionAsync(string provider, string connection, Func<IInterceptor[], Task> apply, string migrator)
     {
-        await Assert.ThrowsAsync<ProcessEndedException>(() => apply([new EndTheProcessOnceTheRecordIsWritten()]));
+        await Assert.ThrowsAsync<ProcessEndedException>(() => apply([new EndTheProcessOnceWritten(EfSchemaFinalization.RecordTableName(HistoryModule))]));
 
         Assert.Equal([Initial, Expand, DropObsolete], await AppliedAsync(provider, connection));
         Assert.True(await HasColumnAsync(provider, connection, RowsTable, "Legacy"));
@@ -171,14 +171,14 @@ internal static class ContractingSeedScenarios
         }
     }
 
-    /// <summary>Ends the process, as far as the migrator can tell, the moment a save that wrote a finalization record has committed.</summary>
-    private sealed class EndTheProcessOnceTheRecordIsWritten : SaveChangesInterceptor
+    /// <summary>Ends the process, as far as the migrator can tell, the moment a save that wrote a row of <paramref name="table"/> has committed.</summary>
+    internal sealed class EndTheProcessOnceWritten(string table) : SaveChangesInterceptor
     {
         public override ValueTask<int> SavedChangesAsync(SaveChangesCompletedEventData eventData, int result, CancellationToken cancellationToken = default) =>
-            eventData.Context!.ChangeTracker.Entries().Any(entry => entry.Metadata.GetTableName() == EfSchemaFinalization.RecordTableName(HistoryModule))
+            eventData.Context!.ChangeTracker.Entries().Any(entry => entry.Metadata.GetTableName() == table)
                 ? throw new ProcessEndedException()
                 : ValueTask.FromResult(result);
     }
 
-    private sealed class ProcessEndedException() : Exception("The process ended here.");
+    internal sealed class ProcessEndedException() : Exception("The process ended here.");
 }

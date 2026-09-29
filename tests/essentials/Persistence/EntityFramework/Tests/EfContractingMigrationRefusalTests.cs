@@ -258,20 +258,46 @@ public sealed class EfContractingMigrationRefusalTests : IAsyncLifetime
         }
     }
 
-    /// <summary>Once a host has admitted the module, a family with no record has nothing to show its version finalized.</summary>
+    /// <summary>
+    /// Once the module has been admitted, which a family's record shows, a family with no record has nothing to show its
+    /// version finalized, and the whole batch is refused: here the second of two families, the first admitted at its version.
+    /// </summary>
     [Fact]
     public async Task Once_the_module_has_been_admitted_a_family_with_no_record_is_refused()
     {
-        await StageAsync(Provider, Connection, DropObsolete, finalized: null);
+        await using (var context = ContractingPairModule.Create(Connection))
+        {
+            await context.GetService<IMigrator>().MigrateAsync(ContractingPairModule.Initial);
+            await EfSchemaFinalizationTestSupport.FinalizeAsync(new EfSchemaFinalizationStore(context), ContractingPairModule.First, Chain, CurrentVersion);
+        }
+
+        await using (var context = ContractingPairModule.Create(Connection))
+        {
+            var refusal = await Assert.ThrowsAsync<EfContractingMigrationRefusedException>(() => EfDatabaseMigrator.ApplyAsync(context, EfProviderNames.Sqlite));
+            Assert.Equal(
+                new EfContractingMigrationRefusal(ContractingPairModule.ContractSecond, ContractingPairModule.Second, CurrentVersion, null, EfContractingMigrationRefusalReason.NoRecord),
+                Assert.Single(refusal.Refusals));
+        }
+
+        Assert.Equal([ContractingPairModule.Initial], await ContractingPairModule.AppliedAsync(Connection));
+    }
+
+    /// <summary>
+    /// A database identity with no record is an admission, or a seed, that ended before its first record: nothing has read
+    /// the module's rows, so the next apply seeds again and completes, rather than refusing a family for want of a record.
+    /// </summary>
+    [Fact]
+    public async Task A_seed_that_ended_after_the_identity_and_before_the_record_is_completed_by_the_next_apply()
+    {
+        await using (var context = Create(Provider, Connection, new EndTheProcessOnceWritten(EfSchemaFinalization.DatabaseIdentityTableName(HistoryModule))))
+            await Assert.ThrowsAsync<ProcessEndedException>(() => EfDatabaseMigrator.ApplyAsync(context, EfProviderNames.Sqlite));
+        Assert.Null(await RecordAsync(Provider, Connection));
+
         await using (var context = Create(Provider, Connection))
-            await new EfSchemaFinalizationStore(context).GetOrCreateDatabaseIdentityAsync();
+            await EfDatabaseMigrator.ApplyAsync(context, EfProviderNames.Sqlite);
 
-        var refusal = await ApplyExpectingRefusalAsync();
-
-        Assert.Equal(
-            new EfContractingMigrationRefusal(Contract, Family, CurrentVersion, null, EfContractingMigrationRefusalReason.NoRecord),
-            Assert.Single(refusal.Refusals));
-        Assert.DoesNotContain(Contract, await AppliedAsync(Provider, Connection));
+        Assert.Contains(Contract, await AppliedAsync(Provider, Connection));
+        AssertSeeded(await RecordAsync(Provider, Connection), MachineMigrator);
     }
 
     /// <summary>A finalized version older than anything this build's chain reads is below the version the migration names.</summary>

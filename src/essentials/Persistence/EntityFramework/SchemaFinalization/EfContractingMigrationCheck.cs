@@ -20,8 +20,8 @@ namespace Elsa.Persistence.EntityFramework.SchemaFinalization;
 /// until the family's finalization record in the target database exists at the version the migration names or later.
 /// Since a finalized version only moves forward (spec 181, FR-003) and a gate refuses a host that cannot read it
 /// (FR-015), every host that reads only versions before that one is refused from then on, whichever order hosts start
-/// in. Two paths make it hold, chosen by whether a gate-aware host has admitted the module in the database, which its
-/// database identity shows:
+/// in. Two paths make it hold, chosen by whether a gate-aware host has admitted the module in the database, which a
+/// family's record there shows:
 /// </para>
 /// <list type="bullet">
 /// <item><b>Admitted.</b> The check runs before <c>MigrateAsync</c> and refuses the context's whole pending batch, which
@@ -36,8 +36,9 @@ namespace Elsa.Persistence.EntityFramework.SchemaFinalization;
 /// keyed by its family, so of a seed and a racing gate one creates it and the other reads it: either the racing gate
 /// is refused, or the re-check refuses the contraction. A process that ends between the seed and the contraction leaves
 /// the record without the contraction, so the module then counts as admitted, the record passes the check, and the
-/// next apply completes. A family the build or its chain cannot place is refused before anything runs, so an
-/// unplaceable version is never seeded.</item>
+/// next apply completes; one that ends after the identity and before the first record leaves no record, so the next
+/// apply seeds again. A family the build or its chain cannot place is refused before anything runs, so an unplaceable
+/// version is never seeded.</item>
 /// </list>
 /// <para>
 /// <b>What is not covered.</b> SQL run outside Elsa, such as the script <c>dotnet elsa persistence script</c> writes for
@@ -234,10 +235,15 @@ public static class EfContractingMigrationCheck
         return refused.Length == 0 ? null : new EfContractingMigrationRefusedException(ModuleOf(context, families), batch, refused);
     }
 
-    /// <summary>Whether a gate-aware host has admitted the module in the database: its record table and database identity exist.</summary>
+    /// <summary>
+    /// Whether the module has been admitted in the database: a family's record exists there. A gate creates the database
+    /// identity and then each family's record before the module serves anything, and the seed does the same, so an
+    /// identity with no record is an admission or a seed that ended before its first record, and nothing has read or
+    /// written the module's rows.
+    /// </summary>
     private static async Task<bool> IsAdmittedAsync(DbContext context, CancellationToken cancellationToken) =>
         await EfSchemaFinalizationCheck.RecordTableExistsAsync(context, cancellationToken) &&
-        await new EfSchemaFinalizationStore(context).FindDatabaseIdentityAsync(cancellationToken) is not null;
+        await context.Set<EfSchemaFinalizationRecordRow>().AnyAsync(cancellationToken);
 
     /// <summary>The refusal of each of <paramref name="migrations"/> the family's record in the database does not yet allow.</summary>
     private static async Task<IReadOnlyList<EfContractingMigrationRefusal>> JudgeAsync(
