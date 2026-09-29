@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using System.Net;
+using System.ComponentModel;
 using System.Reflection;
-using System.Text;
 
 namespace Elsa.Cluster.EntityFrameworkCore.Tests;
 
@@ -18,11 +18,15 @@ internal sealed class FoundationHostProcess : IAsyncDisposable
     /// <summary>A ceiling for pathological hangs: the host reconciles its feed and activates its shell in seconds.</summary>
     private static readonly TimeSpan ReadyTimeout = TimeSpan.FromMinutes(5);
 
+    /// <summary>How long a killed host gets to be gone before disposal stops waiting.</summary>
+    private static readonly TimeSpan StopTimeout = TimeSpan.FromSeconds(30);
+
     private readonly Process _process;
     private readonly string _contentRoot;
-    private readonly StringBuilder _output = new();
+    private readonly CapturedOutput _output = new();
     private readonly TaskCompletionSource<Uri> _listening = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly HttpClient _client = new();
+    private bool _started;
 
     private FoundationHostProcess(Process process, string contentRoot)
     {
@@ -31,14 +35,7 @@ internal sealed class FoundationHostProcess : IAsyncDisposable
     }
 
     /// <summary>The host's console output so far, for assertion messages.</summary>
-    public string Output
-    {
-        get
-        {
-            lock (_output)
-                return _output.ToString();
-        }
-    }
+    public string Output => _output.ToString();
 
     /// <summary>
     /// Starts the host over <paramref name="packages"/>, a directory of <c>.nupkg</c> files it takes as its feed, with
@@ -58,7 +55,7 @@ internal sealed class FoundationHostProcess : IAsyncDisposable
                 File.Copy(package, Path.Join(feed, Path.GetFileName(package)));
 
             // Kestrel reserves its own ephemeral port: picking a free one and releasing it races other test processes.
-            var startInfo = new ProcessStartInfo(Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") ?? "dotnet",
+            var startInfo = new ProcessStartInfo(DotnetPath,
                 [AssemblyPath, "--contentRoot", contentRoot, "--urls", "http://127.0.0.1:0"])
             {
                 WorkingDirectory = contentRoot,
@@ -89,8 +86,7 @@ internal sealed class FoundationHostProcess : IAsyncDisposable
         }
         catch
         {
-            if (Directory.Exists(contentRoot))
-                Directory.Delete(contentRoot, recursive: true);
+            TryDelete(contentRoot);
             throw;
         }
     }
@@ -102,23 +98,43 @@ internal sealed class FoundationHostProcess : IAsyncDisposable
         return (response.StatusCode, await response.Content.ReadAsStringAsync());
     }
 
+    /// <summary>
+    /// Stops the host's process tree if it is running. Safe when the process never started or has already exited, so it
+    /// never masks the error that made a start fail, and it cannot wait for ever on a process that will not die.
+    /// </summary>
     public async ValueTask DisposeAsync()
     {
         _client.Dispose();
-        if (!_process.HasExited)
-        {
-            _process.Kill(entireProcessTree: true);
-            await _process.WaitForExitAsync();
-        }
-
-        _process.Dispose();
         try
         {
-            Directory.Delete(_contentRoot, recursive: true);
+            if (_started && !_process.HasExited)
+            {
+                _process.Kill(entireProcessTree: true);
+                using var timeout = new CancellationTokenSource(StopTimeout);
+                await _process.WaitForExitAsync(timeout.Token);
+            }
         }
-        catch (IOException)
+        catch (Exception exception) when (exception is InvalidOperationException or Win32Exception or OperationCanceledException)
         {
-            // A temp directory left behind is harmless; failing the test over it is not.
+            // Exited between the check and the kill, or would not die in time: nothing left here to act on.
+        }
+        finally
+        {
+            _process.Dispose();
+            TryDelete(_contentRoot);
+        }
+    }
+
+    /// <summary>A temp directory left behind is harmless; failing the test over it, or masking an earlier failure, is not.</summary>
+    private static void TryDelete(string directory)
+    {
+        try
+        {
+            if (Directory.Exists(directory))
+                Directory.Delete(directory, recursive: true);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
         }
     }
 
@@ -127,6 +143,7 @@ internal sealed class FoundationHostProcess : IAsyncDisposable
         _process.OutputDataReceived += (_, line) => Append(line.Data);
         _process.ErrorDataReceived += (_, line) => Append(line.Data);
         _process.Start();
+        _started = true;
         _process.BeginOutputReadLine();
         _process.BeginErrorReadLine();
 
@@ -163,11 +180,9 @@ internal sealed class FoundationHostProcess : IAsyncDisposable
 
     private void Append(string? line)
     {
+        _output.Append(line);
         if (line is null)
             return;
-
-        lock (_output)
-            _output.AppendLine(line);
 
         const string marker = "Now listening on: ";
         var index = line.IndexOf(marker, StringComparison.Ordinal);
@@ -185,14 +200,19 @@ internal sealed class FoundationHostProcess : IAsyncDisposable
     {
         get
         {
-            var configuration = typeof(FoundationHostProcess).Assembly.GetCustomAttribute<AssemblyConfigurationAttribute>()!.Configuration;
             var framework = Path.GetFileName(Path.TrimEndingDirectorySeparator(AppContext.BaseDirectory));
-            var path = Path.Join(SourceDirectory, "bin", configuration, framework, Host + ".dll");
-            return File.Exists(path) ? path : throw new FileNotFoundException($"Build src/apps/{Host} ({configuration}) before running these tests.", path);
+            var path = Path.Join(SourceDirectory, "bin", Configuration, framework, Host + ".dll");
+            return File.Exists(path) ? path : throw new FileNotFoundException($"Build src/apps/{Host} ({Configuration}) before running these tests.", path);
         }
     }
 
     public static string RepoRoot { get; } = FindRepoRoot();
+
+    /// <summary>The build configuration this assembly was built with, which the host and the packages are built in too.</summary>
+    public static string Configuration { get; } = typeof(FoundationHostProcess).Assembly.GetCustomAttribute<AssemblyConfigurationAttribute>()!.Configuration;
+
+    /// <summary>The <c>dotnet</c> that is running the tests, so a child runs on the same SDK and runtime.</summary>
+    public static string DotnetPath { get; } = Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") ?? "dotnet";
 
     private static string FindRepoRoot()
     {

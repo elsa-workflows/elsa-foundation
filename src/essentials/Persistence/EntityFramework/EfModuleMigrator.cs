@@ -19,6 +19,10 @@ namespace Elsa.Persistence.EntityFramework;
 /// in validate mode without a code change.
 /// </summary>
 /// <remarks>
+/// A pending contracting migration whose schema family is not yet finalized at the version its opt-out names refuses
+/// the whole pending batch here, under both policies, before any of it runs (spec 185, FR-024): that check is
+/// <see cref="EfDatabaseMigrator"/>'s, so the persistence tool's <c>apply</c> makes it too. On a database no host has
+/// admitted the module in, the migrator creates each contracted family's record first, naming this host's member.
 /// Once the schema is current and its post-migration actions audited, the module's finalization gate admits it
 /// (spec 181, FR-015): a family whose finalized version this host cannot read refuses the module here, under both
 /// policies, before any shell task, seeder or store touches its tables, exactly as a pending migration under
@@ -63,8 +67,14 @@ public sealed class EfModuleMigrator<TContext>(
         var context = scope.ServiceProvider.GetService<TContext>();
         if (context is null)
             return;
-        // MigrateAsync takes EF's migration lock, and applying is idempotent, so running on both hooks is safe.
-        await EfDatabaseMigrator.ApplyAsync(context, migration.ExpectedProviderName, options.Value.Policy, cancellationToken);
+        // MigrateAsync takes EF's migration lock, and applying is idempotent, so running on both hooks is safe. A record
+        // created before a contracting migration names this host's member (#2136).
+        await EfDatabaseMigrator.ApplyAsync(
+            context,
+            migration.ExpectedProviderName,
+            options.Value.Policy,
+            services.GetService<IEfSchemaFleet>()?.GetLocalStanding().Member,
+            cancellationToken);
         // Under both policies (FR-056), and only ever after the schema is known to be current: an audit that
         // read a pre-migration schema would answer a question about a database that no longer exists. Under
         // Validate the line above has already thrown for a pending migration, so reaching here means current.

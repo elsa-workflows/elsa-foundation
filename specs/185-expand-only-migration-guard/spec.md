@@ -74,6 +74,28 @@ The inventory, with paths, counts and the EF Core operation types the classifica
 the previous release makes, unless a reviewed opt-out on that migration names the exact operations that may, and why.
 Applying a contracting migration's opted-out removal never breaks a read that a host still finalized below it makes.
 
+*Qualified 2026-09-29* ([#2136](https://github.com/elsa-workflows/elsa-foundation/issues/2136); the owner's decision
+on [#2093](https://github.com/elsa-workflows/elsa-foundation/issues/2093) the same day, "the migrator seeds first").
+The second sentence holds on every database Elsa applies the migration to: through `EfDatabaseMigrator`, which every
+host's `EfModuleMigrator` at Prepare and `dotnet elsa persistence apply` go through. No operation of a contracting
+migration runs there until its family's finalization record stands at the version its opt-out names or later. On a
+database where a gate-aware host has admitted the module, the migration applies only once the family is finalized
+there at that version. On one where none has, the migrator seeds first: it applies the pending migrations before the
+first contracting one, creates the family's record at that version, as `migrator:<host id or machine name>`, reads the
+record again, refuses as on an admitted database if a racing release's gate created it below that version first, and
+only then applies the contraction. A finalized version only moves forward, and a host that cannot read it is refused
+(spec 181, FR-015), so no host that reads only earlier versions is admitted once the contraction has run: whether it
+starts after the apply, during it, or races it, and whether or not the process applying it ended part-way through the
+seed or between the seed and the contraction.
+
+One case is left: SQL run outside Elsa, such as the script `dotnet elsa persistence script` writes for a DBA, creates
+no record. There the first gate to admit the module creates the family's record no lower than the version an applied
+contracting migration names (spec 181, Edge Cases, "A database with no record yet"), which holds when that gate's
+release carries the contraction. When an older release admits the module first, it is admitted at the oldest version
+it reads, against a schema without what the contraction removed: its reads and writes of a removed column or table
+fail loudly, with the engine's error, and a dropped index, key or constraint, or deleted data, that it relied on is
+missed silently, until it leaves the fleet and the family finalizes at the contraction's version.
+
 It holds through five mechanisms, each tested separately (Success Criteria):
 
 1. **Operations, not source text, are inspected** (FR-004). The guard classifies what EF will execute, the same list
@@ -89,7 +111,8 @@ It holds through five mechanisms, each tested separately (Success Criteria):
 5. **Applying an opted-out migration is checked again, against the database it targets** (FR-023 to FR-025). The build
    guard decides what may merge; this mechanism decides what may run, by reading spec 181's finalization record for
    every family the migration's violations name, wherever `EfModuleMigrator` and `EfDatabaseMigrator` apply or validate
-   migrations, and wherever the activation guard runs under spec 181's FR-016.
+   migrations, and wherever the activation guard runs under spec 181's FR-016. Where no host has admitted the module,
+   the migrator creates that record first (2026-09-29 note, "The migrator seeds first").
 
 Why "additive" is the rule, per operation, is in "Why each operation is classified as it is" below.
 
@@ -411,7 +434,12 @@ model does not know.
   opt-out.
 - **SC-006**: A contracting migration whose opt-out names family F and version V is refused, naming F and V, wherever
   `EfModuleMigrator` would apply or validate it and wherever the activation guard checks it, while F's finalized
-  version in the target database is below V, and applies or enables normally once it reaches V.
+  version in the target database is below V, and applies or enables normally once it reaches V. *Qualified
+  2026-09-29* (#2136): on a database where a gate-aware host has admitted the module. On one where none has,
+  `EfModuleMigrator` under `AutoMigrate` and `dotnet elsa persistence apply` create F's record at V before any
+  operation of the migration runs, so a release that reads only versions before V is refused there however it
+  interleaves with the apply, and the migration is refused, naming F and both versions, if a racing release's gate
+  created F's record below V first. Only SQL run outside Elsa (`script`) is not covered (Invariant).
 
 ## Assumptions
 
@@ -475,3 +503,89 @@ Recorded 2026-09-28, when the owner answered Q26 on #2093.
 
 *2026-09-28:* operations that carry no table (raw SQL, database-level alterations, unknown kinds) are named by their
 operation kind alone, found while building #2104; lands with its PR, whose merge is the owner's approval.
+
+*2026-09-29 note.* Found while building FR-023 to FR-025
+([#2136](https://github.com/elsa-workflows/elsa-foundation/issues/2136)); lands with its PR, whose merge is the owner's
+approval.
+
+- **Which opt-outs are contracting.** One whose migration drops or renames something, or deletes data, on a table a
+  stamped schema family covered before the migration runs, read from the previous migration's target model. Additions
+  and alterations are not: an `AlterColumn` opt-out stays the reviewed "safe alteration" of Decisions. The opt-out's
+  `SchemaFamily` and `FinalizedVersion` are required exactly then and refused anywhere else, the version must be one
+  the family's chain reads in the build, and a migration that contracts two families is refused, since one opt-out
+  names one family and version.
+- **A database no host has admitted the module in is seeded, not refused.** Before a family's record exists there, no
+  gate-aware host has read or written the module's rows, so nothing reads what the batch removes; and refusing there
+  could never clear, because the gate that would create the record runs only after the migrations. A fresh install of a
+  release that carries a contracting migration therefore applies it, once the migrator has created the family's record
+  (below). Once the module has been admitted, a family with no record is refused, the loud direction, as is a
+  finalized version the build's chain does not place. *Amended by the seed below:* the module counts as admitted once a
+  family's record exists, rather than once its database identity does, since a gate or a seed creates the identity
+  first; an identity with no record is an admission or a seed cut short, and the next apply seeds again. Nor does it
+  count as admitted while every record is the migrator's own seed of the pending batch, cut short (below).
+- **The refusal is a pending batch that may not run yet.** It derives from `EfPendingMigrationsException`, so every
+  caller that reports pending migrations as a negative result still does. `dotnet elsa persistence apply` reports it
+  as a refusal (exit 2, `contracting-migration-refused`), `validate` as pending (exit 1).
+- **Under `AutoMigrate` the activation guard reads the migrations-history table in one case**: once a contracting
+  migration's family is found below its version, or its opt-out names a family or version the build cannot place, to
+  learn whether that migration is pending. This narrows spec 171's FR-069 once more, as FR-025 requires. A module with
+  no contracting migration opens nothing more than before.
+- **A contracted database's record starts at the contraction's version.** Found in review: a database no host had
+  admitted the module in took the contraction, and the first gate then created the family's record at its own oldest
+  readable version, possibly below the version the contraction names, so a still older release could later be
+  admitted against the reduced schema. The gate now creates a missing record at the latest version any applied
+  contracting migration of the family names, when that is later than the oldest it reads, and refuses the module when
+  it cannot place that version (spec 181, Edge Cases, "A database with no record yet", and FR-015, both amended
+  2026-09-29). It reads the migrations-history table for that only when the module has a contracting migration naming
+  the family, and only when the record is missing. Since the seed below, this matters only where the contraction ran
+  outside Elsa, and it stays as a second line there.
+- **The migrator seeds first.** The owner's decision on #2093, 2026-09-29, closing the gap the previous bullet left: a
+  release older than the contraction could still be the first to admit the module, by starting at once with the newer
+  release, or after `apply`, or a host that stopped before its gate ran, had applied the contraction. On a database no
+  host has admitted the module in, `EfDatabaseMigrator` under `AutoMigrate`, and so `EfModuleMigrator` at Prepare and
+  `dotnet elsa persistence apply`, now: (1) applies the pending migrations before the first pending contracting one;
+  (2) creates each contracted family's finalization record, and the database identity, through the finalization
+  store's get-or-create, at the version its contracting migrations name, as the member `migrator:<host id or machine
+  name>` (spec 181, 2026-09-29 note); (3) reads every record again and refuses, as on an admitted database, if one is
+  below that version because a racing release's gate created it first; and (4) only then applies the contracting
+  migrations and the rest. Found while building it:
+  - Step 1 does not use EF's `MigrateAsync(target)`, which reverts every applied migration after its target: another
+    host's migrator may have applied past it by the time EF's lock is taken. It runs the context's own migrator type
+    over a view of the module's migrations that ends before the contracting one, which applies only those and reverts
+    nothing it does not know.
+  - Several contracting migrations in one batch are seeded one after another in migration order, all before the first
+    of them runs, and re-checked together, so a re-check that fails leaves no contraction of any family applied. A
+    family contracted twice is seeded at the latest version its contracting migrations name.
+  - A refusal at the re-check leaves the migrations before the first contracting one applied, since the record table
+    the seed writes is one of them; they are expand-only, and the refusal names them
+    (`EfContractingMigrationRefusedException.Applied`). An unadmitted database is otherwise refused only for a
+    contracting migration whose family or version the build cannot place, and that before anything runs: an
+    unplaceable version is never seeded.
+  - `Validate` applies nothing, so it seeds nothing: the record is created where the contraction is applied, by
+    `apply` or a host under `AutoMigrate`.
+  - A process that ends between two families' seeds, or between the seed and the contraction, leaves only records the
+    migrator's own seed created, and the next apply completes that seed: it creates the missing families' records,
+    keeps the existing ones as they are, re-checks, and applies the contraction. The module does not count as admitted
+    while every record is the migrator's own seed of the pending batch: created by a `migrator:*` member (the created
+    entry of its history), unchanged since (revision 1), of a family a pending contracting migration names that the
+    build places, and at the version this seed creates it at. Any other record counts as an admission, and a family with
+    no record is then refused, loudly, as before: one a member created, because a gate admitted the module; one an
+    operator created, or changed since in any way, such as a hold placed and released; and one the migrator created for
+    a contraction that has already run. The owner's review of #2149 (2026-09-29) set the rule that a migrator-created
+    record does not admit the module and a member-created one does; the last three conditions were found while
+    building it, and each only ever chooses refusal. The migrator's authorship alone does not show that no gate has
+    admitted the module: a gate that admits a module whose declared families all have a record creates none and leaves
+    no other trace, so once a seed's contraction has run, a record the migrator created no longer tells an unadmitted
+    database from one a release is serving. Seeding a family missing there could contract it under that release.
+  - **An EF Core 10 behaviour on SQLite, upstream and not Elsa's.** EF takes its migration lock on SQLite by inserting
+    a row into a `__EFMigrationsLock` table, one per database file and shared by every module in it, and deletes the row
+    when it releases the lock. A hard process crash while EF holds the lock, such as a kill or a power loss rather than
+    an exception, leaves the row behind, and every later apply against that file waits on it, retrying without end,
+    until the row is removed. SQL Server, PostgreSQL and MySQL take locks the server releases when the connection ends.
+    The seed-first path takes the lock twice in one apply where migrations come before the first contracting one, once
+    for those and once for the contraction and the rest, so it has two such windows where a plain apply has one. After
+    such a crash an operator makes sure no process is applying migrations to that file, deletes the row
+    (`DELETE FROM "__EFMigrationsLock";`), and runs the apply again, which completes whatever the crashed apply left.
+- **Not covered, and why.** `dotnet elsa persistence script` produces SQL a DBA runs outside Elsa, so nothing checks
+  or creates the finalization record when that SQL runs; FR-024 names `apply` and the migrator only. The gate's
+  starting version is the second line there, as the Invariant's qualification states.

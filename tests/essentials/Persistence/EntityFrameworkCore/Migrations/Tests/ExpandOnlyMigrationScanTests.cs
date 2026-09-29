@@ -1,4 +1,5 @@
 using Elsa.Persistence.EntityFramework;
+using Elsa.Persistence.EntityFramework.Tests;
 using Elsa.Secrets.Persistence.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -148,6 +149,32 @@ public sealed class ExpandOnlyMigrationScanTests
         // entry at all" — this manifest gave every supported provider context an entry, just an empty one.
         Assert.DoesNotContain(report.Failures, failure => failure.Contains("no baseline entry", StringComparison.Ordinal));
         Assert.All(report.Failures, failure => Assert.Contains("violates expand-only", failure, StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// FR-022 and FR-023 through the real scan, over a module whose migrations split one change across two versions of
+    /// its family: the scan learns from the migration before each one which tables a stamped family covered, so it tells
+    /// the contracting opt-out, which must name the family and version, from one that removes from an unstamped table,
+    /// which must not; and FR-015's output shows the version the contracting one waits for.
+    /// </summary>
+    [Fact]
+    public void The_scan_tells_a_contracting_opt_out_from_any_other_and_shows_the_version_it_waits_for()
+    {
+        // Two of the engines the module declares: each engine's context is one more EF internal service provider in this
+        // process, which EF refuses past twenty, and the scan's reading of the opt-outs does not depend on the engine.
+        string[] providers = ["Sqlite", "PostgreSql"];
+        var manifest = new FreezeManifest(providers
+            .ToDictionary(provider => (ContractingModule.Name, provider), IReadOnlyList<string> (_) => [ContractingModule.Initial]));
+
+        var report = ExpandOnlyMigrationScanner.Scan([typeof(ContractingDbContext).Assembly], providers, manifest);
+
+        Assert.True(report.Passed, string.Join("\n", report.Failures));
+        Assert.Equal((1, 2, 0, 6), (report.Modules, report.ProviderContextsExamined, report.ProviderContextsSkipped, report.PostFreezeMigrations));
+        Assert.Equal(2, report.OptOutsHonoured.Count(line =>
+            line.Contains(ContractingModule.Contract, StringComparison.Ordinal) &&
+            line.EndsWith($"(applies once '{ContractingModule.Family}' is finalized at '{ContractingModule.CurrentVersion}')", StringComparison.Ordinal)));
+        Assert.Equal(2, report.OptOutsHonoured.Count(line =>
+            line.Contains(ContractingModule.DropObsolete, StringComparison.Ordinal) && !line.Contains("applies once", StringComparison.Ordinal)));
     }
 
     /// <summary>

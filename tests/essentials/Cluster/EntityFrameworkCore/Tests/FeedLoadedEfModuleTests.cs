@@ -23,7 +23,7 @@ namespace Elsa.Cluster.EntityFrameworkCore.Tests;
 /// activates, but its gate never finalizes and its feature is refused as "not observed" for ever. Both are pinned below
 /// with the share withheld, so this suite cannot turn green by loading the fixture where the host's own types are.
 /// </remarks>
-public sealed class FeedLoadedEfModuleTests : IAsyncDisposable
+public sealed class FeedLoadedEfModuleTests : IAsyncLifetime
 {
     private static readonly TimeSpan Patience = TimeSpan.FromSeconds(20);
     private readonly string _file = Path.Join(Path.GetTempPath(), $"elsa-feed-module-{Guid.NewGuid():N}.db");
@@ -33,12 +33,20 @@ public sealed class FeedLoadedEfModuleTests : IAsyncDisposable
 
     private string ConnectionString => $"Data Source={_file};Pooling=False";
 
-    public async ValueTask DisposeAsync()
+    public Task InitializeAsync() => Task.CompletedTask;
+
+    /// <summary>Disposes what the test started before its database is deleted, and deletes it even if disposing failed.</summary>
+    public async Task DisposeAsync()
     {
-        foreach (var owned in Enumerable.Reverse(_owned))
-            await owned.DisposeAsync();
-        foreach (var file in new[] { _file, _file + "-journal", _file + "-wal", _file + "-shm" })
-            File.Delete(file);
+        try
+        {
+            foreach (var owned in Enumerable.Reverse(_owned))
+                await owned.DisposeAsync();
+        }
+        finally
+        {
+            DeleteDatabaseFiles(_file);
+        }
     }
 
     [Theory]

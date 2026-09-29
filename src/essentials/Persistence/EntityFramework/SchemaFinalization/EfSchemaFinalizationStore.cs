@@ -146,7 +146,11 @@ public sealed class EfSchemaFinalizationStore
     /// completion recorded at the same version (spec 181, Edge Cases, "A database with no record yet"; spec 186,
     /// FR-016). A record that exists is returned as it is, whatever <paramref name="initialVersion"/> says.
     /// </summary>
-    /// <param name="initialVersion">The oldest version the creator reads: what every row already in the database carries.</param>
+    /// <param name="initialVersion">
+    /// The oldest version the creator reads, what every row already in the database carries; or a later version, when a
+    /// contracting migration already applied leaves the schema serving none before it
+    /// (<see cref="EfContractingMigrationCheck.SeedVersionAsync"/>).
+    /// </param>
     /// <param name="chain">The family's versions, oldest first, as the creator's build declares them.</param>
     public async Task<SchemaFinalizationRecord> GetOrCreateAsync(
         string family,

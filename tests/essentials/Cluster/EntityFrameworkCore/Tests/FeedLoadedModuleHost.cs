@@ -162,6 +162,13 @@ internal sealed class FeedLoadedModuleHost : IAsyncDisposable
         return (await new EfSchemaFinalizationStore(context).FindAsync(Family))!;
     }
 
+    /// <summary>Deletes a SQLite database file and the journal, WAL and shared-memory files beside it.</summary>
+    public static void DeleteDatabaseFiles(string file)
+    {
+        foreach (var path in new[] { file, file + "-journal", file + "-wal", file + "-shm" })
+            File.Delete(path);
+    }
+
     public static readonly string[] Chain = ["1", "2"];
 
     private static string FixturePath => Path.Join(AppContext.BaseDirectory, "feed-module", "Elsa.Cluster.Fixtures.FeedModule.dll");

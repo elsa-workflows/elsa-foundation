@@ -1,6 +1,4 @@
-using System.Diagnostics;
 using System.Net;
-using System.Reflection;
 using System.Text.Json.Nodes;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Persistence.EntityFramework.SchemaFinalization;
@@ -21,7 +19,7 @@ namespace Elsa.Cluster.EntityFrameworkCore.Tests;
 /// closure. <see cref="FoundationHostFeed"/> takes those from the package cache that restoring this project filled, so the
 /// run needs no network.
 /// </remarks>
-public sealed class FoundationHostBootTests(FoundationHostFeed feed) : IClassFixture<FoundationHostFeed>, IAsyncDisposable
+public sealed class FoundationHostBootTests(FoundationHostFeed feed) : IClassFixture<FoundationHostFeed>, IAsyncLifetime
 {
     private static readonly TimeSpan Patience = TimeSpan.FromSeconds(30);
     private readonly string _file = Path.Join(Path.GetTempPath(), $"elsa-foundation-host-boot-{Guid.NewGuid():N}.db");
@@ -29,11 +27,20 @@ public sealed class FoundationHostBootTests(FoundationHostFeed feed) : IClassFix
 
     private string ConnectionString => $"Data Source={_file};Pooling=False";
 
-    public ValueTask DisposeAsync()
+    public Task InitializeAsync() => Task.CompletedTask;
+
+    /// <summary>Stops the host before its database is deleted, and deletes it even if stopping the host failed.</summary>
+    public async Task DisposeAsync()
     {
-        foreach (var file in new[] { _file, _file + "-journal", _file + "-wal", _file + "-shm" })
-            File.Delete(file);
-        return _host?.DisposeAsync() ?? ValueTask.CompletedTask;
+        try
+        {
+            if (_host is not null)
+                await _host.DisposeAsync();
+        }
+        finally
+        {
+            DeleteDatabaseFiles(_file);
+        }
     }
 
     /// <summary>
@@ -119,95 +126,5 @@ public sealed class FoundationHostBootTests(FoundationHostFeed feed) : IClassFix
             Assert.True(DateTimeOffset.UtcNow < deadline, $"Not met within {Patience}. Host output:{Environment.NewLine}{_host!.Output}");
             await Task.Delay(TimeSpan.FromMilliseconds(100));
         }
-    }
-}
-
-/// <summary>
-/// The feeds the host loads from: the fixture and <c>Elsa.Persistence.EntityFramework</c>, packed by the SDK from the build
-/// this test assembly was built with, in <see cref="Directory"/>; and the packages they and the EF provider engine depend
-/// on that the host does not carry (EF Core, the Sqlite engine and what they need), copied from the package cache this
-/// project's restore filled, in <see cref="ClosureDirectory"/>.
-/// </summary>
-public sealed class FoundationHostFeed : IAsyncLifetime
-{
-    private static readonly string[] Projects =
-    [
-        Path.Join("tests", "essentials", "Cluster", "Fixtures", "FeedModule", "Elsa.Cluster.Fixtures.FeedModule.csproj"),
-        Path.Join("src", "essentials", "Persistence", "EntityFramework", "Elsa.Persistence.EntityFramework.csproj")
-    ];
-
-    /// <summary>The EF persistence project's restore: every package it needs, which the packed package declares.</summary>
-    private static readonly string PersistenceAssets = Path.Join(FoundationHostProcess.RepoRoot, "src", "essentials", "Persistence", "EntityFramework", "obj", "project.assets.json");
-
-    /// <summary>This project's restore, which carries the Sqlite engine and the rest of what it needs.</summary>
-    private static readonly string TestAssets = Path.Join(FoundationHostProcess.RepoRoot, "tests", "essentials", "Cluster", "EntityFrameworkCore", "Tests", "obj", "project.assets.json");
-
-    private readonly DirectoryInfo _root = System.IO.Directory.CreateTempSubdirectory("elsa-foundation-host-feeds-");
-
-    /// <summary>The packed packages, which the host takes as its own feed.</summary>
-    public string Directory => Path.Join(_root.FullName, "packed");
-
-    /// <summary>The packages those depend on, which the host only resolves from.</summary>
-    public string ClosureDirectory => Path.Join(_root.FullName, "closure");
-
-    public async Task InitializeAsync()
-    {
-        var configuration = typeof(FoundationHostFeed).Assembly.GetCustomAttribute<AssemblyConfigurationAttribute>()!.Configuration;
-        foreach (var project in Projects)
-            await DotnetAsync("pack", Path.Join(FoundationHostProcess.RepoRoot, project), "--no-build", "-c", configuration, "-p:IsPackable=true", "-o", Directory);
-
-        System.IO.Directory.CreateDirectory(ClosureDirectory);
-        // Both restores prune what ASP.NET's shared framework carries, which the host does not offer Nuplane, so the EF
-        // persistence project's, a class library, is the one that names EF Core's own closure.
-        foreach (var package in Packages(PersistenceAssets).Concat(Packages(TestAssets, "Microsoft.EntityFrameworkCore.Sqlite")).Distinct())
-            File.Copy(package, Path.Join(ClosureDirectory, Path.GetFileName(package)), overwrite: true);
-    }
-
-    public Task DisposeAsync()
-    {
-        _root.Delete(recursive: true);
-        return Task.CompletedTask;
-    }
-
-    /// <summary>
-    /// The <c>.nupkg</c> of each of <paramref name="roots"/> and of everything they depend on, as the restore of
-    /// <paramref name="assetsFile"/> resolved them; of every package it resolved when no root is named.
-    /// </summary>
-    private static IEnumerable<string> Packages(string assetsFile, params string[] roots)
-    {
-        var assets = JsonNode.Parse(File.ReadAllText(assetsFile))!;
-        var cache = assets["packageFolders"]!.AsObject().First().Key;
-        var libraries = assets["libraries"]!.AsObject();
-        var target = assets["targets"]!.AsObject().Single().Value!.AsObject();
-        var byId = target.ToDictionary(entry => entry.Key[..entry.Key.IndexOf('/')], entry => entry.Key, StringComparer.OrdinalIgnoreCase);
-
-        var pending = new Stack<string>(roots.Length == 0 ? byId.Keys : roots);
-        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        while (pending.TryPop(out var id))
-        {
-            if (!byId.TryGetValue(id, out var key) || !seen.Add(id) || libraries[key]!["type"]!.GetValue<string>() != "package")
-                continue;
-
-            var library = libraries[key]!;
-            var file = library["files"]!.AsArray().Select(entry => entry!.GetValue<string>()).Single(name => name.EndsWith(".nupkg.sha512", StringComparison.Ordinal));
-            yield return Path.Join(cache, library["path"]!.GetValue<string>(), file[..^".sha512".Length]);
-
-            foreach (var dependency in target[key]!["dependencies"]?.AsObject().Select(entry => entry.Key) ?? [])
-                pending.Push(dependency);
-        }
-    }
-
-    private static async Task DotnetAsync(params string[] arguments)
-    {
-        using var process = Process.Start(new ProcessStartInfo(Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") ?? "dotnet", arguments)
-        {
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false
-        })!;
-        var output = process.StandardOutput.ReadToEndAsync();
-        var error = process.StandardError.ReadToEndAsync();
-        await process.WaitForExitAsync();
-        Assert.True(process.ExitCode == 0, $"dotnet {string.Join(' ', arguments)} exited {process.ExitCode}:{Environment.NewLine}{await output}{await error}");
     }
 }
