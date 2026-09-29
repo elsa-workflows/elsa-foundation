@@ -121,7 +121,7 @@ internal static class WorkflowDispatchEfSupport
         WorkflowDispatchRecord record;
         try
         {
-            record = RuntimeArtifactJson.Deserialize<WorkflowDispatchRecord>(RuntimeWorkflowDispatchEfModule.Chain.Upcast(row.SchemaVersion, RuntimeWorkflowDispatchEfModule.TableName, nameof(row.ContentJson), row.ContentJson));
+            record = RuntimeArtifactJson.Deserialize<WorkflowDispatchRecord>(RuntimeWorkflowDispatchEfModule.Chain.Upcast<WorkflowDispatchEntity>(row.SchemaVersion, (nameof(row.ContentJson), row.ContentJson))[nameof(row.ContentJson)]!);
         }
         catch (Exception exception) when (exception is JsonException or ArgumentException or InvalidOperationException or NotSupportedException)
         {

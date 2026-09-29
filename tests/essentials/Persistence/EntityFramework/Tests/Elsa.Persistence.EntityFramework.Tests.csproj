@@ -19,7 +19,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Spec 180, FR-022: upcaster fixture pairs, frozen once committed (EfSchemaFamilyDeclarationGuardTests). -->
+    <!-- Spec 180, FR-022: upcaster fixture pairs, frozen once committed (EfSchemaFamilyFixtureProofGuardTests). -->
     <None Include="Fixtures\SchemaUpcasters\**\*" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 

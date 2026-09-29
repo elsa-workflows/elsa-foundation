@@ -476,7 +476,7 @@ public sealed class EfIdentityAuthorityRelationshipCoordinator(
             var beforeRoleCount = RelationshipCount(role);
             var userIds = Registry(user, UserRegistry.RoleLinks);
             var roleIds = RoleUserLinks(role);
-            var userRoleIds = EfIdentityStoreSupport.ReadSet(user.SchemaVersion, IdentityIamEfModule.UserTableName, nameof(user.RoleIdsJson), user.RoleIdsJson).ToHashSet(StringComparer.Ordinal);
+            var userRoleIds = EfIdentityStoreSupport.ReadSet(user, nameof(user.RoleIdsJson)).ToHashSet(StringComparer.Ordinal);
             userRoleIds.RemoveWhere(existingRoleId => Same(existingRoleId, roleId));
             if (delete)
             { if (existing is not null) context.UserRoles.Remove(existing); userIds.Remove(id); roleIds.Remove(id); }
@@ -546,7 +546,24 @@ public sealed class EfIdentityAuthorityRelationshipCoordinator(
     private static void Prepare(UserRoleEntity row, string tenant, string user, string role) { row.SchemaVersion = IdentityIamEfModule.SchemaVersion; row.TenantId = tenant; row.TenantLookupKey = EfIdentityStoreSupport.TenantLookup(tenant); row.UserId = user; row.UserLookupKey = EfIdentityStoreSupport.Lookup(tenant, user); row.RoleId = role; row.RoleLookupKey = EfIdentityStoreSupport.Lookup(tenant, role); row.Revision = row.Revision == 0 ? 1 : row.Revision; }
     private static void Prepare(UserTokenEntity row, string tenant, string user) { row.SchemaVersion = IdentityIamEfModule.SchemaVersion; row.TenantId = tenant; row.TenantLookupKey = EfIdentityStoreSupport.TenantLookup(tenant); row.UserId = user; row.UserLookupKey = EfIdentityStoreSupport.Lookup(tenant, user); row.TokenKey = EfIdentityStoreSupport.CompoundKey(tenant, row.LoginProvider, row.Name); row.Revision = row.Revision == 0 ? 1 : row.Revision; }
     private static void Prepare(ExternalIdentityEntity row, string tenant, string user) { row.SchemaVersion = IdentityIamEfModule.SchemaVersion; row.TenantId = tenant; row.TenantLookupKey = EfIdentityStoreSupport.TenantLookup(tenant); row.ProviderLookupKey = EfIdentityStoreSupport.Lookup(tenant, row.Provider); row.ProviderSubjectLookupKey = EfIdentityStoreSupport.Lookup(tenant, row.ProviderSubject); row.ExternalOrderKey = EfIdentityStoreSupport.ExternalOrderKey(row.Provider, row.ProviderSubject); row.UserLookupKey = EfIdentityStoreSupport.Lookup(tenant, user); row.Revision = row.Revision == 0 ? 1 : row.Revision; }
-    private static void Prepare(TenantMembershipEntity row, string tenant, string user) { row.SchemaVersion = IdentityIamEfModule.SchemaVersion; row.TenantId = tenant; row.TenantLookupKey = EfIdentityStoreSupport.TenantLookup(tenant); row.UserId = user; row.UserLookupKey = EfIdentityStoreSupport.Lookup(tenant, user); row.Revision = row.Revision == 0 ? 1 : row.Revision; }
+    // A fresh row (no prior SchemaVersion) carries only current-format registries already, set by the caller before
+    // this runs; a row this ever receives with a prior stamp - not the case today - upcasts from it instead, so this
+    // restamps completely on its own (spec 180, FR-014; #2144).
+    private static void Prepare(TenantMembershipEntity row, string tenant, string user)
+    {
+        var content = row.SchemaVersion is null ? null : EfIdentityStoreSupport.Content(row);
+        if (content is not null)
+        {
+            row.RoleIdsJson = content[nameof(row.RoleIdsJson)]!;
+            row.DirectPermissionsJson = content[nameof(row.DirectPermissionsJson)]!;
+        }
+        row.SchemaVersion = IdentityIamEfModule.SchemaVersion;
+        row.TenantId = tenant;
+        row.TenantLookupKey = EfIdentityStoreSupport.TenantLookup(tenant);
+        row.UserId = user;
+        row.UserLookupKey = EfIdentityStoreSupport.Lookup(tenant, user);
+        row.Revision = row.Revision == 0 ? 1 : row.Revision;
+    }
     // Each of these five Apply overloads assigns every mapped non-key column of the existing row from a freshly
     // prepared one - a full rewrite, not a revision-only bump - so each restamps to the write version, as
     // Apply(TenantMembershipEntity, TenantMembershipEntity) below already does (spec 180, FR-014, 2026-09-28 note).
@@ -563,19 +580,19 @@ public sealed class EfIdentityAuthorityRelationshipCoordinator(
     /// </summary>
     private static HashSet<string> Registry(UserEntity user, UserRegistry registry) => (registry switch
     {
-        UserRegistry.Claims => EfIdentityStoreSupport.ReadSet(user.SchemaVersion, IdentityIamEfModule.UserTableName, nameof(user.ClaimIdsJson), user.ClaimIdsJson),
-        UserRegistry.Logins => EfIdentityStoreSupport.ReadSet(user.SchemaVersion, IdentityIamEfModule.UserTableName, nameof(user.LoginIdsJson), user.LoginIdsJson),
-        UserRegistry.RoleLinks => EfIdentityStoreSupport.ReadSet(user.SchemaVersion, IdentityIamEfModule.UserTableName, nameof(user.RoleLinkIdsJson), user.RoleLinkIdsJson),
-        UserRegistry.Tokens => EfIdentityStoreSupport.ReadSet(user.SchemaVersion, IdentityIamEfModule.UserTableName, nameof(user.TokenIdsJson), user.TokenIdsJson),
-        UserRegistry.TenantMemberships => EfIdentityStoreSupport.ReadSet(user.SchemaVersion, IdentityIamEfModule.UserTableName, nameof(user.TenantMembershipIdsJson), user.TenantMembershipIdsJson),
+        UserRegistry.Claims => EfIdentityStoreSupport.ReadSet(user, nameof(user.ClaimIdsJson)),
+        UserRegistry.Logins => EfIdentityStoreSupport.ReadSet(user, nameof(user.LoginIdsJson)),
+        UserRegistry.RoleLinks => EfIdentityStoreSupport.ReadSet(user, nameof(user.RoleLinkIdsJson)),
+        UserRegistry.Tokens => EfIdentityStoreSupport.ReadSet(user, nameof(user.TokenIdsJson)),
+        UserRegistry.TenantMemberships => EfIdentityStoreSupport.ReadSet(user, nameof(user.TenantMembershipIdsJson)),
         _ => EfIdentityStoreSupport.DeserializeSet(null)
     }).ToHashSet(StringComparer.Ordinal);
 
     private static HashSet<string> RoleClaims(RoleEntity role) =>
-        EfIdentityStoreSupport.ReadSet(role.SchemaVersion, IdentityIamEfModule.RoleTableName, nameof(role.ClaimIdsJson), role.ClaimIdsJson).ToHashSet(StringComparer.Ordinal);
+        EfIdentityStoreSupport.ReadSet(role, nameof(role.ClaimIdsJson)).ToHashSet(StringComparer.Ordinal);
 
     private static HashSet<string> RoleUserLinks(RoleEntity role) =>
-        EfIdentityStoreSupport.ReadSet(role.SchemaVersion, IdentityIamEfModule.RoleTableName, nameof(role.UserLinkIdsJson), role.UserLinkIdsJson).ToHashSet(StringComparer.Ordinal);
+        EfIdentityStoreSupport.ReadSet(role, nameof(role.UserLinkIdsJson)).ToHashSet(StringComparer.Ordinal);
 
     private static int RelationshipCount(UserEntity user)
     {

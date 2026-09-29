@@ -1,4 +1,5 @@
 using Elsa.Diagnostics.StructuredLogs.Core.Models;
+using Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Persistence.EntityFramework;
 using Xunit;
@@ -73,7 +74,8 @@ public sealed class StructuredLogAppendReplayComparisonTests
         EfSchemaChain.For(new EfSchemaFamilyDescriptor(
             "StructuredLogs.ReplayComparisonProof", null, StructuredLogsEfModule.SchemaVersion, typeof(StructuredLogAppendReplayComparisonTests).Assembly)
         {
-            Upcasters = [new EfSchemaUpcasterDescriptor(typeof(IdentityUpcaster), OlderVersion, StructuredLogsEfModule.SchemaVersion)]
+            Upcasters = [new EfSchemaUpcasterDescriptor(typeof(IdentityUpcaster), OlderVersion, StructuredLogsEfModule.SchemaVersion)],
+            ContentColumns = [new EfSchemaColumn(typeof(StructuredLogAppendOperation), nameof(StructuredLogAppendOperation.OutcomeJson))]
         });
 
     /// <summary>
@@ -91,7 +93,8 @@ public sealed class StructuredLogAppendReplayComparisonTests
         var upcast = storedItems
             .Select(item => new EfPendingAppend(
                 item.RecordToken,
-                chain.Upcast(storedSchemaVersion, "elsa_structured_log_append_operations", "OutcomeJson", item.PayloadJson)))
+                chain.Upcast<StructuredLogAppendOperation>(storedSchemaVersion, (nameof(StructuredLogAppendOperation.OutcomeJson), item.PayloadJson))
+                    [nameof(StructuredLogAppendOperation.OutcomeJson)]!))
             .ToArray();
         var storedFingerprint = string.Equals(storedSchemaVersion, chain.CurrentVersion, StringComparison.Ordinal)
             ? StructuredLogAppendFingerprint.Compute(Binding, storedItems)
@@ -103,6 +106,6 @@ public sealed class StructuredLogAppendReplayComparisonTests
     /// <summary>A no-op step: the synthetic chain exists only to give a row a second readable stamp, not to change content.</summary>
     private sealed class IdentityUpcaster : IEfSchemaUpcaster
     {
-        public string Upcast(EfSchemaContent content) => content.Value;
+        public EfSchemaRowContent Upcast(EfSchemaRowContent row) => row;
     }
 }

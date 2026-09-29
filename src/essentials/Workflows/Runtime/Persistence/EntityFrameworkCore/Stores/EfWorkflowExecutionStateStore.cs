@@ -290,7 +290,7 @@ public sealed class EfWorkflowExecutionStateStore(
         WorkflowExecutionState state;
         try
         {
-            state = RuntimeArtifactJson.Deserialize<WorkflowExecutionState>(RuntimeWorkflowExecutionEfModule.Chain.Upcast(row.SchemaVersion, RuntimeWorkflowExecutionEfModule.TableName, nameof(row.ContentJson), row.ContentJson));
+            state = RuntimeArtifactJson.Deserialize<WorkflowExecutionState>(RuntimeWorkflowExecutionEfModule.Chain.Upcast<WorkflowExecutionStateEntity>(row.SchemaVersion, (nameof(row.ContentJson), row.ContentJson))[nameof(row.ContentJson)]!);
         }
         catch (Exception exception) when (exception is JsonException or ArgumentException or InvalidOperationException or NotSupportedException)
         {

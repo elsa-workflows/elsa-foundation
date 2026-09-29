@@ -342,7 +342,7 @@ public sealed class EfSchemaVersionOrderingGuardTests
             "a second check of the row after the first has settled its version",
             """
             EfSchemaVersion.EnsureReadable(Module.Chain, row.SchemaVersion);
-            var content = Module.Chain.Upcast(row.SchemaVersion, Table, nameof(row.ContentJson), row.ContentJson);
+            var content = Module.Chain.Upcast<Row>(row.SchemaVersion, (nameof(row.ContentJson), row.ContentJson));
             if (EfSchemaVersion.NotReadable(Module.Chain, row.SchemaVersion) || row.Revision <= 0)
                 throw new InvalidDataException("corrupt");
             """

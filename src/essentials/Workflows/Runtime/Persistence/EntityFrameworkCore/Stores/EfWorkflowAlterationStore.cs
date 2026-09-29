@@ -409,7 +409,8 @@ public sealed class EfWorkflowAlterationStore(
             row.ScopeKey != EfRelationalIdentity.Encode(scope) ||
             row.ScopeKeyHash != EfRelationalIdentity.Hash(scope))
             throw new InvalidDataException("The alteration plan projections do not match its durable content.");
-        var plan = RuntimeArtifactJson.Deserialize<WorkflowAlterationPlanState>(RuntimeWorkflowAlterationEfModule.Chain.Upcast(row.SchemaVersion, RuntimeWorkflowAlterationEfModule.PlanTableName, nameof(row.ContentJson), row.ContentJson));
+        var content = PlanContent(row);
+        var plan = RuntimeArtifactJson.Deserialize<WorkflowAlterationPlanState>(content[nameof(row.ContentJson)]!);
         var idempotency = plan.AuthorityScope.TenantPartition + "\u001f" + plan.IdempotencyKeyHash;
         var valid =
             (expectedPlanId is null || StringComparer.Ordinal.Equals(plan.PlanId, expectedPlanId)) &&
@@ -427,14 +428,29 @@ public sealed class EfWorkflowAlterationStore(
         if (!valid)
             throw new InvalidDataException("The alteration plan projections do not match its durable content.");
 
-        ReadCleanup(row);
+        ReadCleanup(row, content);
         return plan;
     }
-    private static UnsealedCleanupIntent? ReadCleanup(WorkflowAlterationPlanEntity row)
+    /// <summary>
+    /// The plan row's content columns, its plan and its cleanup's safe failure, upcast together from its stamp to the
+    /// current version (spec 180, FR-009; #2144). Whether the safe failure is present is read from here too, since a step
+    /// may fill or clear a column.
+    /// </summary>
+    private static EfSchemaRowContent PlanContent(WorkflowAlterationPlanEntity row) =>
+        RuntimeWorkflowAlterationEfModule.Chain.Upcast<WorkflowAlterationPlanEntity>(
+            row.SchemaVersion,
+            (nameof(row.ContentJson), row.ContentJson),
+            (nameof(row.CleanupSafeFailureJson), row.CleanupSafeFailureJson));
+    /// <summary>
+    /// The row's cleanup intent, read from <paramref name="content"/> when the caller already upcast the row so the
+    /// chain runs once per read, or upcasting it itself otherwise (spec 180, FR-009; #2144).
+    /// </summary>
+    private static UnsealedCleanupIntent? ReadCleanup(WorkflowAlterationPlanEntity row, EfSchemaRowContent? content = null)
     {
+        var safeFailureJson = (content ?? PlanContent(row))[nameof(row.CleanupSafeFailureJson)];
         if (row.CleanupTerminalStatus is null)
         {
-            if (row.CleanupSafeFailureJson is not null || row.CleanupCompletedAtUtcTicks is not null || row.CleanupDeletedCount != 0)
+            if (safeFailureJson is not null || row.CleanupCompletedAtUtcTicks is not null || row.CleanupDeletedCount != 0)
                 throw new InvalidDataException("The alteration cleanup projections are incomplete.");
             return null;
         }
@@ -442,12 +458,12 @@ public sealed class EfWorkflowAlterationStore(
         var status = (WorkflowAlterationPlanStatus)row.CleanupTerminalStatus.Value;
         if (status is not (WorkflowAlterationPlanStatus.Cancelled or WorkflowAlterationPlanStatus.Failed) || row.CleanupCompletedAtUtcTicks is null || row.CleanupDeletedCount < 0)
             throw new InvalidDataException("The alteration cleanup projections are invalid.");
-        var safeFailure = row.CleanupSafeFailureJson is null ? null : RuntimeArtifactJson.Deserialize<WorkflowAlterationSafeFailure>(RuntimeWorkflowAlterationEfModule.Chain.Upcast(row.SchemaVersion, RuntimeWorkflowAlterationEfModule.PlanTableName, nameof(row.CleanupSafeFailureJson), row.CleanupSafeFailureJson));
+        var safeFailure = safeFailureJson is null ? null : RuntimeArtifactJson.Deserialize<WorkflowAlterationSafeFailure>(safeFailureJson);
         if ((status == WorkflowAlterationPlanStatus.Failed) != (safeFailure is not null))
             throw new InvalidDataException("The alteration cleanup intent does not match its terminal status.");
         return new(status, safeFailure, new DateTimeOffset(new DateTime(row.CleanupCompletedAtUtcTicks.Value, DateTimeKind.Utc)), row.CleanupDeletedCount);
     }
-    private static void CopyPlan(WorkflowAlterationPlanEntity r, WorkflowAlterationPlanState p, string scope, string? activeOrderKey = null, UnsealedCleanupIntent? cleanup = null, bool clearCleanup = false) { r.Status = (int)p.Status; r.ActiveOrderKey = activeOrderKey ?? r.ActiveOrderKey; r.CreatedAtUtcTicks = p.CreatedAt.UtcTicks; r.Revision = p.Revision; r.ContentJson = RuntimeArtifactJson.Serialize(p); if (!clearCleanup && cleanup is null) r.CleanupSafeFailureJson = RuntimeWorkflowAlterationEfModule.Chain.Upcast(r.SchemaVersion, RuntimeWorkflowAlterationEfModule.PlanTableName, nameof(r.CleanupSafeFailureJson), r.CleanupSafeFailureJson); r.SchemaVersion = RuntimeWorkflowAlterationEfModule.SchemaVersion; if (clearCleanup) { r.CleanupTerminalStatus = null; r.CleanupSafeFailureJson = null; r.CleanupCompletedAtUtcTicks = null; r.CleanupDeletedCount = 0; } else if (cleanup is not null) { r.CleanupTerminalStatus = (int)cleanup.TerminalStatus; r.CleanupSafeFailureJson = cleanup.SafeFailure is null ? null : RuntimeArtifactJson.Serialize(cleanup.SafeFailure); r.CleanupCompletedAtUtcTicks = cleanup.CompletedAt.UtcTicks; r.CleanupDeletedCount = cleanup.DeletedCount; } }
+    private static void CopyPlan(WorkflowAlterationPlanEntity r, WorkflowAlterationPlanState p, string scope, string? activeOrderKey = null, UnsealedCleanupIntent? cleanup = null, bool clearCleanup = false) { r.Status = (int)p.Status; r.ActiveOrderKey = activeOrderKey ?? r.ActiveOrderKey; r.CreatedAtUtcTicks = p.CreatedAt.UtcTicks; r.Revision = p.Revision; if (!clearCleanup && cleanup is null) r.CleanupSafeFailureJson = PlanContent(r)[nameof(r.CleanupSafeFailureJson)]; r.ContentJson = RuntimeArtifactJson.Serialize(p); r.SchemaVersion = RuntimeWorkflowAlterationEfModule.SchemaVersion; if (clearCleanup) { r.CleanupTerminalStatus = null; r.CleanupSafeFailureJson = null; r.CleanupCompletedAtUtcTicks = null; r.CleanupDeletedCount = 0; } else if (cleanup is not null) { r.CleanupTerminalStatus = (int)cleanup.TerminalStatus; r.CleanupSafeFailureJson = cleanup.SafeFailure is null ? null : RuntimeArtifactJson.Serialize(cleanup.SafeFailure); r.CleanupCompletedAtUtcTicks = cleanup.CompletedAt.UtcTicks; r.CleanupDeletedCount = cleanup.DeletedCount; } }
     private static WorkflowAlterationPlanState CopyPlan(WorkflowAlterationPlanState p, WorkflowAlterationPlanStatus? status = null, string? captureCursor = null, bool replaceCaptureCursor = false, long? capturedSoFar = null, long? targetCount = null, long? succeededJobCount = null, long? failedJobCount = null, long? cancelledJobCount = null, DateTimeOffset? sealedAt = null, bool replaceSealedAt = false, DateTimeOffset? startedAt = null, bool replaceStartedAt = false, DateTimeOffset? completedAt = null, bool replaceCompletedAt = false, DateTimeOffset? cancellationRequestedAt = null, bool replaceCancellationRequestedAt = false, WorkflowAlterationSafeFailure? safeFailure = null, long? revision = null) => new(p.PlanId, p.AuthorityScope, p.SubmittedBy, p.IdempotencyKeyHash, p.CanonicalRequestHash, p.ProtectedPayload, p.Target, status ?? p.Status, p.CreatedAt, replaceCaptureCursor ? captureCursor : p.CaptureCursor, capturedSoFar ?? p.CapturedSoFar, targetCount ?? p.TargetCount, succeededJobCount ?? p.SucceededJobCount, failedJobCount ?? p.FailedJobCount, cancelledJobCount ?? p.CancelledJobCount, replaceSealedAt ? sealedAt : p.SealedAt, replaceStartedAt ? startedAt : p.StartedAt, replaceCompletedAt ? completedAt : p.CompletedAt, replaceCancellationRequestedAt ? cancellationRequestedAt : p.CancellationRequestedAt, safeFailure ?? p.SafeFailure, revision ?? p.Revision, p.AlterationDescriptors);
     private static WorkflowAlterationJobEntity ToJob(WorkflowAlterationJobState j, string scope) => new() { Id = Id(scope, j.JobId), ScopeKey = EfRelationalIdentity.Encode(scope), ScopeKeyHash = EfRelationalIdentity.Hash(scope), JobId = EfRelationalIdentity.Encode(j.JobId), JobIdHash = EfRelationalIdentity.Hash(j.JobId), JobIdOrderKey = Convert.ToHexString(EfRelationalIdentity.CreateOrderKey(j.JobId, RuntimeWorkflowAlterationEfModule.IdentityMaximumLength)), PlanId = EfRelationalIdentity.Encode(j.PlanId), PlanIdHash = EfRelationalIdentity.Hash(j.PlanId), WorkflowExecutionId = EfRelationalIdentity.Encode(j.WorkflowExecutionId), WorkflowExecutionIdOrderKey = Convert.ToHexString(EfRelationalIdentity.CreateOrderKey(j.WorkflowExecutionId, RuntimeWorkflowAlterationEfModule.IdentityMaximumLength)), WorkflowExecutionIdHash = EfRelationalIdentity.Hash(j.WorkflowExecutionId), TenantPartition = EfRelationalIdentity.Encode(j.TenantPartition), TenantPartitionHash = EfRelationalIdentity.Hash(j.TenantPartition), CaptureOrdinal = j.CaptureOrdinal, ClaimableAtUtcTicks = j.Status == WorkflowAlterationJobStatus.Pending ? j.CreatedAt.UtcTicks : j.Claim?.ExpiresAt.UtcTicks, Status = (int)j.Status, CheckpointCommitId = j.CheckpointCommitId is null ? null : EfRelationalIdentity.Encode(j.CheckpointCommitId), CheckpointCommitIdHash = j.CheckpointCommitId is null ? null : EfRelationalIdentity.Hash(j.CheckpointCommitId), Revision = j.Revision, ContentJson = RuntimeArtifactJson.Serialize(j), SchemaVersion = RuntimeWorkflowAlterationEfModule.SchemaVersion };
     internal static WorkflowAlterationJobState ReadJob(WorkflowAlterationJobEntity row, string scope, string? expectedJobId = null)
@@ -456,7 +472,7 @@ public sealed class EfWorkflowAlterationStore(
             row.ScopeKey != EfRelationalIdentity.Encode(scope) ||
             row.ScopeKeyHash != EfRelationalIdentity.Hash(scope))
             throw new InvalidDataException("The alteration job projections do not match its durable content.");
-        var job = RuntimeArtifactJson.Deserialize<WorkflowAlterationJobState>(RuntimeWorkflowAlterationEfModule.Chain.Upcast(row.SchemaVersion, RuntimeWorkflowAlterationEfModule.JobTableName, nameof(row.ContentJson), row.ContentJson));
+        var job = RuntimeArtifactJson.Deserialize<WorkflowAlterationJobState>(RuntimeWorkflowAlterationEfModule.Chain.Upcast<WorkflowAlterationJobEntity>(row.SchemaVersion, (nameof(row.ContentJson), row.ContentJson))[nameof(row.ContentJson)]!);
         var checkpoint = job.CheckpointCommitId;
         var claimableAt = job.Status == WorkflowAlterationJobStatus.Pending ? job.CreatedAt.UtcTicks : job.Claim?.ExpiresAt.UtcTicks;
         var valid =

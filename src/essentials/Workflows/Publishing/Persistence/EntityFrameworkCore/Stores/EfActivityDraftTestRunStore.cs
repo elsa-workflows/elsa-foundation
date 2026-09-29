@@ -185,10 +185,11 @@ public sealed class EfActivityDraftTestRunStore(
             TestRunId = EfPublishingStoreSupport.Encode(receipt.TestRunId),
             TestRunIdHash = EfPublishingStoreSupport.Hash(receipt.TestRunId),
             TestRunIdOrderKey = EfPublishingStoreSupport.OrderKey(receipt.TestRunId),
-            SchemaVersion = PublishingLedgerEfModule.ContentSchemaVersion,
             TenantId = EfPublishingStoreSupport.EncodeNullable(scope),
             TenantIdHash = EfPublishingStoreSupport.TenantHash(scope)
         };
+        // CopyMutable sets SchemaVersion alongside Content, the row's only declared content column, so the stamp
+        // and the content it describes are always written together (spec 180, FR-014; #2144).
         CopyMutable(row, receipt);
         return row;
     }
@@ -214,7 +215,7 @@ public sealed class EfActivityDraftTestRunStore(
             throw new InvalidOperationException("The persisted activity Test Run receipt scope projection is corrupt.");
         EfPublishingStoreSupport.EnsureProjection(testRunId, row.TestRunIdHash, row.TestRunIdOrderKey, nameof(row.TestRunId));
 
-        var content = PublishingLedgerEfModule.Chain.Upcast(row.SchemaVersion, PublishingLedgerEfModule.ActivityDraftTestRunTableName, nameof(row.Content), row.Content);
+        var content = PublishingLedgerEfModule.Chain.Upcast<ActivityDraftTestRunEntity>(row.SchemaVersion, (nameof(row.Content), row.Content))[nameof(row.Content)]!;
         var receipt = PublishingEfJson.Deserialize<ActivityDraftTestRunReceipt>(content, "activity Test Run receipt");
         var expiry = EfPublishingStoreSupport.DateTimeOffset(row.ReceiptExpiresAtUtcTicks, row.ReceiptExpiresAtOffsetMinutes);
         if (!StringComparer.Ordinal.Equals(receipt.TestRunId, testRunId) ||

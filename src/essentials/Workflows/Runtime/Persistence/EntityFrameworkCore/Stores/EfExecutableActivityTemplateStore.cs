@@ -317,7 +317,7 @@ public sealed class EfExecutableActivityTemplateStore(
             throw new InvalidDataException("The persisted executable activity template row is corrupt.");
         try
         {
-            var content = RuntimeArtifactEfModule.Chain.Upcast(row.SchemaVersion, RuntimeArtifactEfModule.ExecutableActivityTemplateTableName, nameof(row.ContentJson), row.ContentJson);
+            var content = RuntimeArtifactEfModule.Chain.Upcast<ExecutableActivityTemplateEntity>(row.SchemaVersion, (nameof(row.ContentJson), row.ContentJson))[nameof(row.ContentJson)]!;
             var envelope = JsonNode.Parse(content)?.AsObject() ?? throw new InvalidDataException("The persisted executable activity template envelope is empty.");
             if (!StringComparer.Ordinal.Equals(ReadString(envelope, "collection"), "executableActivityTemplate") || !StringComparer.Ordinal.Equals(Decode(ReadString(envelope, "templateHash")), row.TemplateHash) || envelope["template"] is null)
                 throw new InvalidDataException("The persisted executable activity template envelope projection is corrupt.");
@@ -340,8 +340,8 @@ public sealed class EfExecutableActivityTemplateStore(
             throw new InvalidDataException("The persisted executable activity template hash claim is corrupt.");
         try
         {
-            var claim = RuntimeArtifactJson.Deserialize<HashClaim>(RuntimeArtifactEfModule.Chain.Upcast(
-                row.SchemaVersion, RuntimeArtifactEfModule.ExecutableActivityTemplateHashClaimTableName, nameof(row.ContentJson), row.ContentJson));
+            var claim = RuntimeArtifactJson.Deserialize<HashClaim>(RuntimeArtifactEfModule.Chain.Upcast<ExecutableActivityTemplateHashClaimEntity>(
+                row.SchemaVersion, (nameof(row.ContentJson), row.ContentJson))[nameof(row.ContentJson)]!);
             if (claim.TemplateHash != identity.TemplateHash || claim.TemplateId != Decode(row.TemplateId))
                 throw new InvalidDataException("The persisted executable activity template hash claim projection is corrupt.");
             return claim;

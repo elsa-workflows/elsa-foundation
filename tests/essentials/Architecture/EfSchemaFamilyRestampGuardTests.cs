@@ -31,6 +31,18 @@ public sealed class EfSchemaFamilyRestampGuardTests
             "the same type is a full rewrite, so it stamps the target row to the write version; a write that only bumps a " +
             "concurrency revision need not (spec 180, FR-014, 2026-09-28 note):");
 
+    /// <summary>
+    /// The restamp rule's other half (#2144): a member that sets a row's SchemaVersion directly must also assign every
+    /// content column its row's entity type declares, from upcast values, in the same member; a full rewrite - a copy,
+    /// SetValues, Update or initializer replacement - already writes every mapped column by construction, so
+    /// <see cref="EfSchemaFamilyRestampGuardTests"/>'s full-row-rewrite facts above judge it instead.
+    /// </summary>
+    [Fact]
+    public void Every_restamp_writes_every_declared_content_column_of_its_row() =>
+        AssertNone(Persistence.RestampCompletenessViolations(), "A member that stamps a row directly assigns every content column its row's " +
+            "entity type declares, from upcast values, in the same member; a column left unwritten still holds its old format under " +
+            "a stamp that now claims it is current (spec 180, FR-014; #2144):");
+
     [Fact]
     public void Full_row_rewrite_detector_flags_a_copy_that_never_restamps_and_leaves_a_revision_bump_and_an_unstamped_type_alone()
     {
@@ -200,5 +212,129 @@ public sealed class EfSchemaFamilyRestampGuardTests
         Assert.Contains("'Overwrite'", violation);
         Assert.Contains("replaces 'target'", violation);
         Assert.Contains("never stamps 'target'", violation);
+    }
+
+    /// <summary>
+    /// A member that stamps a row directly and writes only one of its two declared content columns is a violation; one
+    /// that writes both is not, neither is one reached through a chain of properties that writes both, nor one that
+    /// rewrites the whole row through <c>CurrentValues.SetValues</c>, which writes every mapped column by construction
+    /// without an explicit assignment of either declared column the detector could otherwise see (#2144).
+    /// </summary>
+    [Fact]
+    public void Restamp_completeness_detector_flags_a_partial_write_and_accepts_a_full_one_a_property_chain_and_a_whole_row_rewrite()
+    {
+        var scan = Scan(
+            """
+            [assembly: EfSchemaFamily(Orders.SchemaFamily, "Sales", Orders.SchemaVersion)]
+            [assembly: EfSchemaContent(Orders.SchemaFamily, typeof(Row), nameof(Row.LinesJson), nameof(Row.ContentJson))]
+
+            public static class Orders
+            {
+                public const string SchemaVersion = "2";
+                public const string SchemaFamily = "Orders";
+                public static readonly EfSchemaChain Chain = EfSchemaChain.Of(typeof(Orders).Assembly, SchemaFamily);
+            }
+
+            public sealed class Row
+            {
+                public string ContentJson { get; set; } = "";
+                public string LinesJson { get; set; } = "";
+                public string SchemaVersion { get; set; } = "";
+            }
+
+            public sealed class Holder
+            {
+                public required Row Entity { get; init; }
+            }
+
+            public sealed class Store
+            {
+                private static void Partial(Row row)
+                {
+                    row.ContentJson = "...";
+                    row.SchemaVersion = Orders.SchemaVersion;
+                }
+
+                private static void Complete(Row row)
+                {
+                    row.ContentJson = "...";
+                    row.LinesJson = "...";
+                    row.SchemaVersion = Orders.SchemaVersion;
+                }
+
+                private static void ThroughProperty(Holder holder)
+                {
+                    holder.Entity.ContentJson = "...";
+                    holder.Entity.LinesJson = "...";
+                    holder.Entity.SchemaVersion = Orders.SchemaVersion;
+                }
+
+                private void ViaSetValues(Context context, Row target, Row source)
+                {
+                    context.Entry(target).CurrentValues.SetValues(source);
+                    target.SchemaVersion = Orders.SchemaVersion;
+                }
+            }
+            """);
+
+        var violation = Assert.Single(scan.RestampCompletenessViolations());
+        Assert.Contains("'row'", violation);
+        Assert.Contains("'LinesJson'", violation);
+    }
+
+    /// <summary>
+    /// A stamp set inside an object initializer (<c>new Row { SchemaVersion = ..., ContentJson = ... }</c>) is judged
+    /// the same way a dotted stamp is: every declared content column of the type it creates must be assigned, either
+    /// in the initializer itself or by a later write to the row it names in the same member. A fresh row this scan
+    /// cannot name - an argument, a return value with no local - is judged on its initializer alone (#2144).
+    /// </summary>
+    [Fact]
+    public void Restamp_completeness_detector_flags_an_incomplete_initializer_stamp_and_accepts_a_complete_one_and_a_later_write()
+    {
+        var scan = Scan(
+            """
+            [assembly: EfSchemaFamily(Orders.SchemaFamily, "Sales", Orders.SchemaVersion)]
+            [assembly: EfSchemaContent(Orders.SchemaFamily, typeof(Row), nameof(Row.LinesJson), nameof(Row.ContentJson))]
+
+            public static class Orders
+            {
+                public const string SchemaVersion = "2";
+                public const string SchemaFamily = "Orders";
+                public static readonly EfSchemaChain Chain = EfSchemaChain.Of(typeof(Orders).Assembly, SchemaFamily);
+            }
+
+            public sealed class Row
+            {
+                public string ContentJson { get; set; } = "";
+                public string LinesJson { get; set; } = "";
+                public string SchemaVersion { get; set; } = "";
+            }
+
+            public sealed class Store
+            {
+                private static Row Partial()
+                {
+                    var row = new Row { ContentJson = "...", SchemaVersion = Orders.SchemaVersion };
+                    return row;
+                }
+
+                private static Row Complete()
+                {
+                    var row = new Row { ContentJson = "...", LinesJson = "...", SchemaVersion = Orders.SchemaVersion };
+                    return row;
+                }
+
+                private static Row RestampedInInitializerThenWrittenAfter()
+                {
+                    var row = new Row { ContentJson = "...", SchemaVersion = Orders.SchemaVersion };
+                    row.LinesJson = "...";
+                    return row;
+                }
+            }
+            """);
+
+        var violation = Assert.Single(scan.RestampCompletenessViolations());
+        Assert.Contains("'Row'", violation);
+        Assert.Contains("'LinesJson'", violation);
     }
 }

@@ -35,14 +35,14 @@ public sealed class EfSchemaFamilyFixtureProofGuardTests
     [Fact]
     public void Fixture_detector_accepts_a_recorded_pair_for_every_upcaster() =>
         Assert.Empty(UpcasterFixtureRules.Violations(
-            [(Pair + "orders.Content.source.json", "{}"), (Pair + "orders.Content.expected.json", "{}")],
-            $"{UpcasterFixtureRules.Hash("{}")}  {Pair}orders.Content.expected.json\n{UpcasterFixtureRules.Hash("{}")}  {Pair}orders.Content.source.json\n",
+            [(Pair + "Order.source.json", "{}"), (Pair + "Order.expected.json", "{}")],
+            $"{UpcasterFixtureRules.Hash("{}")}  {Pair}Order.expected.json\n{UpcasterFixtureRules.Hash("{}")}  {Pair}Order.source.json\n",
             [("Fixture.cs(1)", "Orders", "1", "2")]));
 
     /// <summary>The scan must find the committed fixtures, or the frozen rule would pass having checked nothing.</summary>
     [Fact]
     public void Fixture_scan_finds_the_committed_fixtures() =>
-        Assert.True(UpcasterFixtures.Count >= 4, $"Expected at least the four synthetic upcaster fixtures; found {UpcasterFixtures.Count}.");
+        Assert.True(UpcasterFixtures.Count >= 6, $"Expected at least the six synthetic upcaster fixtures; found {UpcasterFixtures.Count}.");
 
     /// <summary>
     /// FR-022 asks for three proofs per upcaster, not only a fixture pair. They are fixed in
@@ -61,13 +61,19 @@ public sealed class EfSchemaFamilyFixtureProofGuardTests
             "a test class deriving from EfSchemaUpcasterProof<TUpcaster, TValue>(family, store), and every committed fixture pair " +
             "is proven by one (spec 180, FR-022):");
 
-    /// <summary>The proof rule passes vacuously if the scan stops finding proofs, so it must find the synthetic family's two.</summary>
+    /// <summary>
+    /// The proof rule passes vacuously if the scan stops finding proofs, so it must find the synthetic family's four,
+    /// the steps that move data between two content columns of a row and then complete the move by removing the old
+    /// copy (#2144) among them.
+    /// </summary>
     [Fact]
     public void Proof_scan_finds_the_synthetic_familys_proofs()
     {
         Assert.Contains(Proving.Proofs, proof => proof.Upcaster == "AddCurrency" && Proving.Resolve(proof.Family) == "SyntheticOrders");
         Assert.Contains(Proving.Proofs, proof => proof.Upcaster == "AddLines" && Proving.Resolve(proof.Family) == "SyntheticOrders");
-        Assert.True(UpcasterFixtureRules.Pairs(UpcasterFixtures.Select(fixture => fixture.Path)).Count >= 2, "Expected the synthetic family's two fixture pairs.");
+        Assert.Contains(Proving.Proofs, proof => proof.Upcaster == "MoveLines" && Proving.Resolve(proof.Family) == "SyntheticOrders");
+        Assert.Contains(Proving.Proofs, proof => proof.Upcaster == "RemoveLines" && Proving.Resolve(proof.Family) == "SyntheticOrders");
+        Assert.True(UpcasterFixtureRules.Pairs(UpcasterFixtures.Select(fixture => fixture.Path)).Count >= 4, "Expected the synthetic family's four fixture pairs.");
     }
 
     [Theory]
@@ -130,20 +136,22 @@ public sealed class EfSchemaFamilyFixtureProofGuardTests
     public static TheoryData<string, string[], string, string[], string> ViolatingFixtureSets() => new()
     {
         { "an upcaster with no fixture pair", [], "", ["Orders/1/2"], "'Orders' upcaster from '1' to '2' ships no fixture pair" },
-        { "a source fixture without its expected fixture", [Pair + "orders.Content.source.json"], "", [], "has no matching expected fixture" },
-        { "a fixture named outside the convention", [Pair + "orders.json"], "", [], "is not named <table>.<column>.source.<ext> or .expected.<ext>" },
-        { "a committed fixture not recorded in the lock", [Pair + "orders.Content.source.json", Pair + "orders.Content.expected.json"], "", [], "is not recorded" },
+        { "a source fixture without its expected fixture", [Pair + "Order.source.json"], "", [], "has no matching expected fixture" },
+        { "a fixture named outside the convention", [Pair + "orders.json"], "", [], "is not named <table>.source.json or <table>.expected.json" },
+        { "a fixture of one column rather than a whole row", [Pair + "Order.ContentJson.source.json"], "", [], "is not named <table>.source.json or <table>.expected.json" },
+        { "a fixture that is not JSON", [Pair + "Order.source.txt"], "", [], "is not named <table>.source.json or <table>.expected.json" },
+        { "a committed fixture not recorded in the lock", [Pair + "Order.source.json", Pair + "Order.expected.json"], "", [], "is not recorded" },
         {
             "an edited fixture",
-            [Pair + "orders.Content.source.json", Pair + "orders.Content.expected.json"],
-            $"0000  {Pair}orders.Content.source.json\n{UpcasterFixtureRules.Hash("{}")}  {Pair}orders.Content.expected.json\n",
+            [Pair + "Order.source.json", Pair + "Order.expected.json"],
+            $"0000  {Pair}Order.source.json\n{UpcasterFixtureRules.Hash("{}")}  {Pair}Order.expected.json\n",
             [],
             "was edited"
         },
         {
             "a recorded fixture that was deleted",
             [],
-            $"{UpcasterFixtureRules.Hash("{}")}  {Pair}orders.Content.source.json\n",
+            $"{UpcasterFixtureRules.Hash("{}")}  {Pair}Order.source.json\n",
             [],
             "was deleted"
         }

@@ -109,7 +109,7 @@ public sealed class EfClaimMappingStore(
     private static ClaimMappingRule Map(ClaimMappingEntity row)
     {
         EfSchemaVersion.EnsureReadable(IdentityIamEfModule.Chain, row.SchemaVersion);
-        return new(row.RuleId, row.TenantId, row.Provider, row.MatchClaimType, row.MatchValue, EfIdentityStoreSupport.ReadSet(row.SchemaVersion, IdentityIamEfModule.ClaimMappingTableName, nameof(row.GrantRolesJson), row.GrantRolesJson), EfIdentityStoreSupport.ReadSet(row.SchemaVersion, IdentityIamEfModule.ClaimMappingTableName, nameof(row.GrantPermissionsJson), row.GrantPermissionsJson), row.Order, row.StopOnMatch);
+        return new(row.RuleId, row.TenantId, row.Provider, row.MatchClaimType, row.MatchValue, EfIdentityStoreSupport.ReadSet(row, nameof(row.GrantRolesJson)), EfIdentityStoreSupport.ReadSet(row, nameof(row.GrantPermissionsJson)), row.Order, row.StopOnMatch);
     }
 
     private static string Id(string tenantId, string provider, string ruleId) => EfIdentityStoreSupport.CompoundKey(tenantId, provider, ruleId);

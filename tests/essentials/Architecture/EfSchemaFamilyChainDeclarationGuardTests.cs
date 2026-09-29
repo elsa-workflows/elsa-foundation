@@ -140,6 +140,7 @@ public sealed class EfSchemaFamilyChainDeclarationGuardTests
         [assembly: EfSchemaFamily(Orders.SchemaFamily, "Sales", Orders.SchemaVersion, Upcasters = new[] { typeof(OrdersOneToTwo), typeof(OrdersTwoToThree) })]
         [assembly: Elsa.Persistence.EntityFramework.EfSchemaFamilyAttribute(Invoices.SchemaFamily, "Sales", Invoices.SchemaVersion)]
         [assembly: EfSchemaContent(Orders.SchemaFamily, typeof(Row), nameof(Row.ContentJson), nameof(Row.ClaimIdsJson))]
+        [assembly: EfSchemaContent(Orders.SchemaFamily, typeof(TenantSetting), nameof(TenantSetting.SettingsJson))]
         [assembly: Elsa.Persistence.EntityFramework.EfSchemaIntegrityAttribute(Invoices.SchemaFamily, typeof(Invoice), nameof(Invoice.DigestJson), "Compared as stored bytes.")]
 
         public static class Orders
@@ -157,10 +158,10 @@ public sealed class EfSchemaFamilyChainDeclarationGuardTests
         }
 
         [EfSchemaUpcaster("1", "2")]
-        public sealed class OrdersOneToTwo : IEfSchemaUpcaster { public string Upcast(EfSchemaContent content) => content.Value; }
+        public sealed class OrdersOneToTwo : IEfSchemaUpcaster { public EfSchemaRowContent Upcast(EfSchemaRowContent row) => row; }
 
         [EfSchemaUpcaster("2", Orders.SchemaVersion)]
-        public sealed class OrdersTwoToThree : IEfSchemaUpcaster { public string Upcast(EfSchemaContent content) => content.Value; }
+        public sealed class OrdersTwoToThree : IEfSchemaUpcaster { public EfSchemaRowContent Upcast(EfSchemaRowContent row) => row; }
 
         public sealed class Store
         {
@@ -176,9 +177,19 @@ public sealed class EfSchemaFamilyChainDeclarationGuardTests
 
             Row Write(Order order) => new() { Id = order.Id, SchemaVersion = Orders.SchemaVersion };
 
-            void Replace(Row row, Row replacement) => row.SchemaVersion = replacement.SchemaVersion;
+            void Replace(Row row, Row replacement)
+            {
+                row.ContentJson = replacement.ContentJson;
+                row.ClaimIdsJson = replacement.ClaimIdsJson;
+                row.SchemaVersion = replacement.SchemaVersion;
+            }
 
-            void Upgrade(Row row) => row.SchemaVersion = Invoices.Chain.CurrentVersion;
+            void Upgrade(Row row)
+            {
+                row.ContentJson = row.ContentJson;
+                row.ClaimIdsJson = row.ClaimIdsJson;
+                row.SchemaVersion = Invoices.Chain.CurrentVersion;
+            }
 
             Cursor Page() => new() { SchemaVersion = 1 };
 
@@ -190,6 +201,7 @@ public sealed class EfSchemaFamilyChainDeclarationGuardTests
             void Rewrite(Row row, Order order)
             {
                 row.ContentJson = Serialize(order);
+                row.ClaimIdsJson = Serialize(order);
                 row.SchemaVersion = Orders.SchemaVersion;
             }
 
@@ -200,13 +212,19 @@ public sealed class EfSchemaFamilyChainDeclarationGuardTests
                 return row;
             }
 
-            Set Claims(Row row) => ReadSet(row.SchemaVersion, "orders", nameof(row.ClaimIdsJson), row.ClaimIdsJson);
+            Set Claims(Row row) => Parse(Content(row)[nameof(row.ClaimIdsJson)]);
 
-            static Set ReadSet(string? stamp, string table, string column, string json) => Parse(Orders.Chain.Upcast(stamp, table, column, json));
+            static EfSchemaRowContent Content(Row row) =>
+                Orders.Chain.Upcast<Row>(row.SchemaVersion, (nameof(row.ContentJson), row.ContentJson), (nameof(row.ClaimIdsJson), row.ClaimIdsJson));
+
+            Settings Settings(Setting setting) =>
+                Parse(Orders.Chain.Upcast<TenantSetting>(setting.SchemaVersion, (nameof(setting.SettingsJson), setting.SettingsJson))[nameof(setting.SettingsJson)]);
 
             static void Upgrade(Row row)
             {
-                row.ClaimIdsJson = Orders.Chain.Upcast(row.SchemaVersion, "orders", nameof(row.ClaimIdsJson), row.ClaimIdsJson);
+                var content = Content(row);
+                row.ContentJson = content[nameof(row.ContentJson)];
+                row.ClaimIdsJson = content[nameof(row.ClaimIdsJson)];
                 row.SchemaVersion = Orders.Chain.CurrentVersion;
             }
 
@@ -222,6 +240,10 @@ public sealed class EfSchemaFamilyChainDeclarationGuardTests
                 row.ClaimIdsJson = Serialize(ids);
             }
         }
+
+        public abstract class Setting;
+
+        public sealed class TenantSetting : Setting;
         """;
 
     public static TheoryData<string, string, string> ViolatingFixtures() => new()
@@ -429,9 +451,7 @@ public sealed class EfSchemaFamilyChainDeclarationGuardTests
 
             public sealed class Store
             {
-                Set Read(Row row) => ReadSet(row.SchemaVersion, "users", nameof(row.ClaimIdsJson), row.ClaimIdsJson);
-
-                static Set ReadSet(string? stamp, string table, string column, string json) => Parse(Users.Chain.Upcast(stamp, table, column, json));
+                Set Read(Row row) => Parse(Users.Chain.Upcast<Row>(row.SchemaVersion, (nameof(row.ClaimIdsJson), row.ClaimIdsJson))[nameof(row.ClaimIdsJson)]);
 
                 void Edit(Row row, Set ids)
                 {
@@ -470,10 +490,105 @@ public sealed class EfSchemaFamilyChainDeclarationGuardTests
 
             public sealed class Store
             {
-                Order Read(Row row) => Parse(Orders.Chain.Upcast(row.SchemaVersion, "orders", nameof(row.PayloadJson), row.PayloadJson));
+                Order Read(Row row) => Parse(Orders.Chain.Upcast<Row>(row.SchemaVersion, (nameof(row.PayloadJson), row.PayloadJson))[nameof(row.PayloadJson)]);
             }
             """,
             "upcasts 'PayloadJson' through the 'Orders' chain, but 'Orders' does not declare it content"
+        },
+        {
+            "a read that upcasts some of a row's declared content columns and leaves the others at the row's stamp",
+            """
+            [assembly: EfSchemaFamily(Orders.SchemaFamily, "Sales", Orders.SchemaVersion)]
+            [assembly: EfSchemaContent(Orders.SchemaFamily, typeof(Row), nameof(Row.ContentJson), nameof(Row.ClaimIdsJson))]
+
+            public static class Orders
+            {
+                public const string SchemaVersion = "1";
+                public const string SchemaFamily = "Orders";
+                public static readonly EfSchemaChain Chain = EfSchemaChain.Of(typeof(Orders).Assembly, SchemaFamily);
+            }
+
+            public sealed class Store
+            {
+                Order Read(Row row) => Parse(Orders.Chain.Upcast<Row>(row.SchemaVersion, (nameof(row.ContentJson), row.ContentJson))[nameof(row.ContentJson)]);
+            }
+            """,
+            "passes 'ContentJson' of 'Row', but its family declares 'ClaimIdsJson', 'ContentJson'"
+        },
+        {
+            "a column value read from another column than the one it is passed as",
+            """
+            [assembly: EfSchemaFamily(Orders.SchemaFamily, "Sales", Orders.SchemaVersion)]
+            [assembly: EfSchemaContent(Orders.SchemaFamily, typeof(Row), nameof(Row.ContentJson), nameof(Row.ClaimIdsJson))]
+
+            public static class Orders
+            {
+                public const string SchemaVersion = "1";
+                public const string SchemaFamily = "Orders";
+                public static readonly EfSchemaChain Chain = EfSchemaChain.Of(typeof(Orders).Assembly, SchemaFamily);
+            }
+
+            public sealed class Store
+            {
+                EfSchemaRowContent Read(Row row) =>
+                    Orders.Chain.Upcast<Row>(row.SchemaVersion, (nameof(row.ContentJson), row.ClaimIdsJson), (nameof(row.ClaimIdsJson), row.ContentJson));
+            }
+            """,
+            "passes 'row.ClaimIdsJson' as column 'ContentJson'"
+        },
+        {
+            "a row upcast as another table's that declares the same columns",
+            """
+            [assembly: EfSchemaFamily(Orders.SchemaFamily, "Sales", Orders.SchemaVersion)]
+            [assembly: EfSchemaContent(Orders.SchemaFamily, typeof(Order), nameof(Order.ContentJson))]
+            [assembly: EfSchemaContent(Orders.SchemaFamily, typeof(Invoice), nameof(Invoice.ContentJson))]
+
+            public static class Orders
+            {
+                public const string SchemaVersion = "1";
+                public const string SchemaFamily = "Orders";
+                public static readonly EfSchemaChain Chain = EfSchemaChain.Of(typeof(Orders).Assembly, SchemaFamily);
+            }
+
+            public sealed class Store
+            {
+                Value Read(Invoice row) => Parse(Orders.Chain.Upcast<Order>(row.SchemaVersion, (nameof(row.ContentJson), row.ContentJson))[nameof(row.ContentJson)]);
+            }
+            """,
+            "upcasts 'row', a 'Invoice', as a row of 'Order'"
+        },
+        {
+            "a row of a table its family declares no content columns for",
+            """
+            [assembly: EfSchemaFamily(Orders.SchemaFamily, "Sales", Orders.SchemaVersion)]
+            [assembly: EfSchemaContent(Orders.SchemaFamily, typeof(Row), nameof(Row.ContentJson))]
+
+            public static class Orders
+            {
+                public const string SchemaVersion = "1";
+                public const string SchemaFamily = "Orders";
+                public static readonly EfSchemaChain Chain = EfSchemaChain.Of(typeof(Orders).Assembly, SchemaFamily);
+            }
+
+            public sealed class Store
+            {
+                Value Read(Ghost row) => Parse(Orders.Chain.Upcast<Ghost>(row.SchemaVersion, (nameof(row.ContentJson), row.ContentJson))[nameof(row.ContentJson)]);
+            }
+            """,
+            "upcasts a row of 'Ghost', which 'Orders' declares no content columns for"
+        },
+        {
+            "a content column tested for presence past the chain",
+            """
+            [assembly: EfSchemaFamily("Orders", "Sales", "1")]
+            [assembly: EfSchemaContent("Orders", typeof(Row), nameof(Row.PayloadJson))]
+
+            public sealed class Store
+            {
+                bool Present(Row row) => !string.IsNullOrWhiteSpace(row.PayloadJson);
+            }
+            """,
+            "reads 'row.PayloadJson' in 'Present' (IsNullOrWhiteSpace(...)) without its family's chain"
         },
         {
             "a content column read and deserialized past the chain",
