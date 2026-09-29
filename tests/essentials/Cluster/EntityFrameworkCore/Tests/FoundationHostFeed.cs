@@ -7,17 +7,24 @@ namespace Elsa.Cluster.EntityFrameworkCore.Tests;
 /// The feeds the host loads from: the fixture and <c>Elsa.Persistence.EntityFramework</c>, packed by the SDK from the build
 /// this test assembly was built with, in <see cref="Directory"/>; and the packages they and the EF provider engine depend
 /// on that the host does not carry (EF Core, the Sqlite engine and what they need), copied from the package cache this
-/// project's restore filled, in <see cref="ClosureDirectory"/>.
+/// project's restore filled, in <see cref="ClosureDirectory"/>. The fixture's previous release, a lower version of the
+/// same package whose family reads version 1 alone, is built and packed beside the persistence package in
+/// <see cref="PreviousDirectory"/>, so a host can start on it and be upgraded in place to <see cref="FixturePackage"/>.
 /// </summary>
 public sealed class FoundationHostFeed : IAsyncLifetime
 {
+    /// <summary>The fixture's package id, which both of its releases share.</summary>
+    public const string FixturePackageId = "Elsa.Cluster.Fixtures.FeedModule";
+
     /// <summary>Packing a built project takes seconds; this is the ceiling for a <c>dotnet</c> that will never return.</summary>
     private static readonly TimeSpan DotnetTimeout = TimeSpan.FromMinutes(3);
 
+    private static readonly string FixtureProject = Path.Join(FoundationHostProcess.RepoRoot, "tests", "essentials", "Cluster", "Fixtures", "FeedModule", $"{FixturePackageId}.csproj");
+
     private static readonly string[] Projects =
     [
-        Path.Join("tests", "essentials", "Cluster", "Fixtures", "FeedModule", "Elsa.Cluster.Fixtures.FeedModule.csproj"),
-        Path.Join("src", "essentials", "Persistence", "EntityFramework", "Elsa.Persistence.EntityFramework.csproj")
+        FixtureProject,
+        Path.Join(FoundationHostProcess.RepoRoot, "src", "essentials", "Persistence", "EntityFramework", "Elsa.Persistence.EntityFramework.csproj")
     ];
 
     /// <summary>The EF persistence project's restore: every package it needs, which the packed package declares.</summary>
@@ -31,13 +38,26 @@ public sealed class FoundationHostFeed : IAsyncLifetime
     /// <summary>The packed packages, which the host takes as its own feed.</summary>
     public string Directory => Path.Join(_root.FullName, "packed");
 
+    /// <summary>The fixture's previous release and the persistence package, which a host starts on before it is upgraded.</summary>
+    public string PreviousDirectory => Path.Join(_root.FullName, "previous");
+
+    /// <summary>The fixture's current release, the package an in-place upgrade drops into a running host's feed.</summary>
+    public string FixturePackage => FoundationHostProcess.Releases(Directory, FixturePackageId).Single();
+
     /// <summary>The packages those depend on, which the host only resolves from.</summary>
     public string ClosureDirectory => Path.Join(_root.FullName, "closure");
 
     public async Task InitializeAsync()
     {
         foreach (var project in Projects)
-            await DotnetAsync("pack", Path.Join(FoundationHostProcess.RepoRoot, project), "--no-build", "-c", FoundationHostProcess.Configuration, "-p:IsPackable=true", "-o", Directory);
+            await DotnetAsync("pack", project, "--no-build", "-c", FoundationHostProcess.Configuration, "-p:IsPackable=true", "-o", Directory);
+
+        // The previous release is compiled here, into outputs of its own: only the fixture, against the persistence build
+        // the current release was built against, and packed with the persistence package it depends on.
+        await DotnetAsync("pack", FixtureProject, "--no-restore", "-c", FoundationHostProcess.Configuration, "-p:FeedModuleGeneration=1",
+            "-p:BuildProjectReferences=false", "-p:IsPackable=true", "-o", PreviousDirectory);
+        foreach (var package in System.IO.Directory.EnumerateFiles(Directory, "*.nupkg").Except(FoundationHostProcess.Releases(Directory, FixturePackageId)))
+            File.Copy(package, Path.Join(PreviousDirectory, Path.GetFileName(package)));
 
         System.IO.Directory.CreateDirectory(ClosureDirectory);
         // Both restores prune what ASP.NET's shared framework carries, which the host does not offer Nuplane, so the EF

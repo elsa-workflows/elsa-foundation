@@ -91,6 +91,33 @@ internal sealed class FoundationHostProcess : IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// Upgrades a package in place, the way an operator does on a running host: every release of
+    /// <paramref name="packageId"/> leaves the host's feed folder and <paramref name="package"/> takes its place, written
+    /// under another name and moved in, so the folder's watcher never reads half a file. The host is not restarted.
+    /// </summary>
+    public void UpgradeInPlace(string packageId, string package)
+    {
+        var feed = Path.Join(_contentRoot, "packages");
+        foreach (var previous in Releases(feed, packageId).ToArray())
+            File.Delete(previous);
+
+        var staged = Path.Join(feed, Path.GetFileName(package) + ".partial");
+        File.Copy(package, staged);
+        File.Move(staged, Path.Join(feed, Path.GetFileName(package)));
+    }
+
+    /// <summary>
+    /// The <c>.nupkg</c> files in <paramref name="directory"/> that are a release of <paramref name="packageId"/>, whatever
+    /// their version, and not of a longer id it prefixes: <c>{id}.{version}.nupkg</c>, whose version starts with a digit.
+    /// </summary>
+    public static IEnumerable<string> Releases(string directory, string packageId) =>
+        Directory.EnumerateFiles(directory, $"{packageId}.*.nupkg")
+            .Where(file => char.IsAsciiDigit(Path.GetFileName(file)[packageId.Length + 1]));
+
+    /// <summary>Whether the host process is still the one <see cref="StartAsync"/> started, and still running.</summary>
+    public bool IsRunning => _started && !_process.HasExited;
+
     /// <summary>The status a request to <paramref name="path"/> is answered with, and its body.</summary>
     public async Task<(HttpStatusCode Status, string Body)> GetAsync(string path)
     {

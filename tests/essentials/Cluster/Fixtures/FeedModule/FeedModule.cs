@@ -15,8 +15,17 @@ public static class FeedModule
     /// <summary>The version the database's record was created at, by a release before this one.</summary>
     public const string PreviousVersion = "1";
 
-    /// <summary>The version this build writes, and the one the orders feature needs.</summary>
+    /// <summary>
+    /// The version this build writes, and the one the orders feature needs. The previous release, built with
+    /// <c>FeedModuleGeneration=1</c> and packed as an older version of the same package, writes and reads only
+    /// <see cref="PreviousVersion"/>, so a host that upgrades it in place shows whether its readability report stops
+    /// counting the generation it replaced.
+    /// </summary>
+#if FEED_MODULE_GENERATION_1
+    public const string CurrentVersion = PreviousVersion;
+#else
     public const string CurrentVersion = "2";
+#endif
 
     /// <summary>The feature that binds the module's context and admits it through its finalization gate.</summary>
     public const string EntityFrameworkCoreFeature = "FeedModuleFixtureEntityFrameworkCore";

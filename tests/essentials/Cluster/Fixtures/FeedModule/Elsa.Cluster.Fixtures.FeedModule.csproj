@@ -11,6 +11,23 @@
     </Description>
   </PropertyGroup>
 
+  <!--
+    The previous release of the same package, for an in-place upgrade (spec 183, FR-021, amended 2026-09-29):
+    FoundationHostFeed packs it with -p:FeedModuleGeneration=1, and gets a lower package version whose family is at
+    version 1 with no upcaster, so it reads version 1 alone. It builds into outputs of its own, so it never overwrites the
+    build every other test loads, and it never becomes this project's default.
+  -->
+  <PropertyGroup Condition="'$(FeedModuleGeneration)' == '1'">
+    <DefineConstants>$(DefineConstants);FEED_MODULE_GENERATION_1</DefineConstants>
+    <Version>0.1.0</Version>
+    <IntermediateOutputPath>$(BaseIntermediateOutputPath)generation-1/$(Configuration)/</IntermediateOutputPath>
+    <OutputPath>$(BaseOutputPath)generation-1/$(Configuration)/</OutputPath>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(FeedModuleGeneration)' == '1'">
+    <Compile Remove="FeedModuleOneToTwo.cs" />
+  </ItemGroup>
+
   <ItemGroup>
     <!-- The feature maps one endpoint, so a real Elsa.Foundation.Host that loads this fixture from a feed shows its
          dormancy over HTTP. -->

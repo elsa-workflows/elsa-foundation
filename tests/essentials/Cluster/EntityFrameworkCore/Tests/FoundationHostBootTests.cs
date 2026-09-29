@@ -22,6 +22,12 @@ namespace Elsa.Cluster.EntityFrameworkCore.Tests;
 public sealed class FoundationHostBootTests(FoundationHostFeed feed) : IClassFixture<FoundationHostFeed>, IAsyncLifetime
 {
     private static readonly TimeSpan Patience = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// An upgrade waits for the feed folder's debounce, a reconcile, the shell reload and the old generation's drain, which
+    /// CShells bounds at 30 seconds, before the version can finalize.
+    /// </summary>
+    private static readonly TimeSpan UpgradePatience = TimeSpan.FromSeconds(90);
     private readonly string _file = Path.Join(Path.GetTempPath(), $"elsa-foundation-host-boot-{Guid.NewGuid():N}.db");
     private FoundationHostProcess? _host;
 
@@ -79,9 +85,31 @@ public sealed class FoundationHostBootTests(FoundationHostFeed feed) : IClassFix
         Assert.Equal("2", (await RecordAsync(ConnectionString)).FinalizedVersion);
     }
 
-    private async Task StartAsync() => _host = await FoundationHostProcess.StartAsync(
+    /// <summary>
+    /// Spec 183's FR-021, amended 2026-09-29: an EF module upgraded in place on a running host finalizes the version only
+    /// its new release reads, and its feature serves that version, with no restart. Nuplane never unloads the previous
+    /// release's load context, so a report that kept reading every loaded declaration would intersect the two releases for
+    /// the life of the process, [1] ∩ [1, 2], and the record would stay at 1 and the feature dormant for ever - a host
+    /// that looks healthy in every other way.
+    /// </summary>
+    [Fact]
+    public async Task An_ef_module_upgraded_in_place_finalizes_the_version_only_its_new_release_reads_without_a_restart()
+    {
+        await SeedAsync(ConnectionString);
+        await StartAsync(feed.PreviousDirectory);
+        // The previous release reads version 1 alone, so nothing past it is finalized, and its feature serves at 1.
+        Assert.Equal(("1", HttpStatusCode.OK), ((await RecordAsync(ConnectionString)).FinalizedVersion, (await Orders()).Status));
+
+        _host!.UpgradeInPlace(FoundationHostFeed.FixturePackageId, feed.FixturePackage);
+
+        await WaitUntilAsync(async () => (await RecordAsync(ConnectionString)).FinalizedVersion == "2", UpgradePatience);
+        await WaitUntilAsync(async () => await Orders() is (HttpStatusCode.OK, var body) && body.Contains("is at 2", StringComparison.Ordinal), UpgradePatience);
+        Assert.True(_host.IsRunning, "The host must be upgraded in place, not restarted.");
+    }
+
+    private async Task StartAsync(string? packages = null) => _host = await FoundationHostProcess.StartAsync(
         Shells(ConnectionString),
-        feed.Directory,
+        packages ?? feed.Directory,
         new Dictionary<string, string>
         {
             // A second feed beside the host's own `packages` one, which resolves what the packages there depend on and holds
@@ -118,12 +146,12 @@ public sealed class FoundationHostBootTests(FoundationHostFeed feed) : IClassFix
         }
     }.ToJsonString();
 
-    private async Task WaitUntilAsync(Func<Task<bool>> condition)
+    private async Task WaitUntilAsync(Func<Task<bool>> condition, TimeSpan? patience = null)
     {
-        var deadline = DateTimeOffset.UtcNow + Patience;
+        var deadline = DateTimeOffset.UtcNow + (patience ?? Patience);
         while (!await condition())
         {
-            Assert.True(DateTimeOffset.UtcNow < deadline, $"Not met within {Patience}. Host output:{Environment.NewLine}{_host!.Output}");
+            Assert.True(DateTimeOffset.UtcNow < deadline, $"Not met within {patience ?? Patience}. Host output:{Environment.NewLine}{_host!.Output}");
             await Task.Delay(TimeSpan.FromMilliseconds(100));
         }
     }
