@@ -3,7 +3,7 @@ status: proposed
 date: 2026-08-07
 amended: 2026-09-29
 decision_context: FR-1 discussion on issue #1144, agreed by Joey Barten, Sipke Schoorstra and Frans van Ek
-amendment_context: 2026-09-22, patch derivation changed from commit height to last-published state after the rename hazard was measured; agreed on PR #1948 by Frans van Ek, Joey Barten and Sipke Schoorstra, the same three who agreed the original. 2026-09-24, Line A membership is defined by a rule rather than a heuristic, which settles the six undecided packages; proposed by Sipke Schoorstra and, on 2026-09-25, recorded by him as agreed on behalf of Frans van Ek and Joey Barten. 2026-09-24, the last-published record moves out of the generated dependency map into its own committed file that only publishing, or its audited repair workflow, writes, and on 2026-09-25 onto a dedicated publish-state branch so that writing it needs no bypass of main's protection; proposed by Sipke Schoorstra and, on 2026-09-25, recorded by him as agreed on behalf of Frans van Ek and Joey Barten. 2026-09-28, Line A sharing corrected: both hosts now share all ten (#2130, #2126); approved by Sipke Schoorstra. 2026-09-29, host-composed shares: every host also shares Elsa.Cluster.Core and Elsa.Persistence.Schema, kept on Line B by the rule; the sharing decided by Sipke Schoorstra on #2093 (2026-09-28), delivered by #2143. 2026-09-29, every Elsa assembly's AssemblyVersion is its line's major, so a host's shared-assembly entries can match; decided by Sipke Schoorstra on #2092 (2026-09-29), delivered by #2150.
+amendment_context: 2026-09-22, patch derivation changed from commit height to last-published state after the rename hazard was measured; agreed on PR #1948 by Frans van Ek, Joey Barten and Sipke Schoorstra, the same three who agreed the original. 2026-09-24, Line A membership is defined by a rule rather than a heuristic, which settles the six undecided packages; proposed by Sipke Schoorstra and, on 2026-09-25, recorded by him as agreed on behalf of Frans van Ek and Joey Barten. 2026-09-24, the last-published record moves out of the generated dependency map into its own committed file that only publishing, or its audited repair workflow, writes, and on 2026-09-25 onto a dedicated publish-state branch so that writing it needs no bypass of main's protection; proposed by Sipke Schoorstra and, on 2026-09-25, recorded by him as agreed on behalf of Frans van Ek and Joey Barten. 2026-09-28, Line A sharing corrected: both hosts now share all ten (#2130, #2126); approved by Sipke Schoorstra. 2026-09-29, host-composed shares: every host also shares Elsa.Cluster.Core and Elsa.Persistence.Schema, kept on Line B by the rule; the sharing decided by Sipke Schoorstra on #2093 (2026-09-28), delivered by #2143. 2026-09-29, every Elsa assembly's AssemblyVersion is its line's major, so a host's shared-assembly entries can match; decided by Sipke Schoorstra on #2092 (2026-09-29), tracked as #2150.
 ---
 
 # Package versioning uses two version lines with a computed patch digit
@@ -147,13 +147,13 @@ is unchanged. A host shares an assembly with the packages it loads through a Nup
 `Loading:SharedAssemblies` entry, and Nuplane's matcher takes an entry only when its `MajorVersion`
 equals the referenced assembly version's major. While assembly versions followed the package version,
 `1.0.0.0` from source and `4.0.N.0` when computed, and every Elsa entry declared `0`, no Elsa entry
-could match. Pinned to the major, the version a package is compiled against is the one every host on the
-line carries, and the runtime binds it to the host's copy. A package that needs a newer copy than the
-host's is still refused at reconciliation, by its dependency range and the host-provided declaration,
-not at binding. `PackageVersioning.props` sets the version and fails a build that overrides it, and
+could match. Pinned to the major, a reference compiled against any build of a line names the version
+every host on that line carries, and the major its entries declare. A package that needs a newer copy
+than the host's is still refused at reconciliation, by its dependency range and the host-provided
+declaration, not at binding. `PackageVersioning.props` sets the version and fails a build that overrides it, and
 `SharedAssemblyMajorVersionGuardTests` holds each host's declared majors to what the SDK computes, both
 ways. Decided by Sipke Schoorstra on [#2092](https://github.com/elsa-workflows/elsa-foundation/issues/2092)
-(2026-09-29), delivered by [#2150](https://github.com/elsa-workflows/elsa-foundation/issues/2150).
+(2026-09-29), tracked as [#2150](https://github.com/elsa-workflows/elsa-foundation/issues/2150).
 
 **Version magnitude is enforced, not asserted.** `Microsoft.CodeAnalysis.PublicApiAnalyzers` makes an
 unacknowledged public addition a build error, and `Microsoft.DotNet.ApiCompat.Tool` detects removals
@@ -272,8 +272,9 @@ propagates through the reverse closure.
   task's lock name, the one runtime use, lives only while the lock is held; across the upgrade to this
   change, as across every computed patch before it, nodes of the two builds take different lock names. A
   matching major is what a shared-assembly entry needs from the version, not all it needs: the entry must
-  also bind, and name the assembly's public key token (Decision, "An assembly version carries only its
-  line's major"; [#2150](https://github.com/elsa-workflows/elsa-foundation/issues/2150)).
+  also bind, name the assembly's public key token, and be honoured by every way Nuplane loads a package
+  (Decision, "An assembly version carries only its line's major";
+  [#2150](https://github.com/elsa-workflows/elsa-foundation/issues/2150)).
 - Nuplane must promote a domain's `.Core` to a shared assembly within that domain's subtree, for
   first-party and third-party domains alike; otherwise two features in one domain load separate copies
   and their types do not match. That work belongs to the clean host effort.
