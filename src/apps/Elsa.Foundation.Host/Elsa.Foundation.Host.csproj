@@ -63,6 +63,28 @@
     <ProjectReference Include="..\..\essentials\Tasks\Core\Elsa.Tasks.Core.csproj" />
   </ItemGroup>
 
+  <!--
+    Cluster membership, composed once on this host's container (spec 183, FR-017; ADR 0078, amended 2026-09-27), as
+    Elsa.Workbench composes it (#2143). Membership is per host, never per shell, so its provider lives in the host's own
+    closure rather than arriving through a shell's feature list.
+
+    Elsa.Cluster.Core and Elsa.Persistence.Schema are the host-composed shares every host shares with every package it
+    loads (ADR 0067, amended 2026-09-29): the membership contract and dormancy check, and the EF-free half of the
+    schema-family surface - the finalization gate's view of the fleet, what the host observed, and the registry the
+    dormancy check reads the gates through. An EF module package carries its own copy of Elsa.Persistence.EntityFramework
+    in its own load context, and reaches this host's membership only through types both sides load from here.
+
+    Elsa.Cluster.Readability composes them (AddEfSchemaReadability): the readability report, the in-process membership
+    default (Elsa.Cluster.InProcess) and the dormancy check's source. None of the four references EF Core, so this host
+    still carries no EF (ADR 0076), which EfCoreDependencyGuardTests holds; the durable EF membership provider,
+    Elsa.Cluster.EntityFrameworkCore, is not referenced for exactly that reason. None is a shell feature either.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\essentials\Cluster\Core\Elsa.Cluster.Core.csproj" />
+    <ProjectReference Include="..\..\essentials\Cluster\Readability\Elsa.Cluster.Readability.csproj" />
+    <ProjectReference Include="..\..\essentials\Persistence\Schema\Elsa.Persistence.Schema.csproj" />
+  </ItemGroup>
+
   <ItemGroup>
     <!-- The Nuplane directory feed drop-folder. -->
     <Folder Include="packages\" />

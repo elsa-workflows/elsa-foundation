@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>
+      An EF module and a feature that needs its newest schema version, shaped the way a Nuplane package arrives on a host
+      (#2143): it is never loaded into the test process's own load context, only into one of the kind Nuplane gives a
+      package, which carries its own copy of Elsa.Persistence.EntityFramework and of every other Elsa assembly the host
+      does not share. Its family is at version 2 with an upcaster from 1, so a database whose record is at 1 shows whether
+      the module's finalization gate reached the host's fleet, and its feature asks the shared dormancy check before it
+      serves, so it shows whether the host's check sees the module's gate.
+    </Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The feature maps one endpoint, so a real Elsa.Foundation.Host that loads this fixture from a feed shows its
+         dormancy over HTTP. -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="CShells.AspNetCore.Abstractions" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Packed at the package root, as every EF module package's is, when the fixture is packed for a feed. -->
+    <None Update="nuplane.json" Pack="true" PackagePath="/" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\..\src\essentials\Persistence\EntityFramework\Elsa.Persistence.EntityFramework.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\essentials\Cluster\Core\Elsa.Cluster.Core.csproj" />
+  </ItemGroup>
+
+</Project>

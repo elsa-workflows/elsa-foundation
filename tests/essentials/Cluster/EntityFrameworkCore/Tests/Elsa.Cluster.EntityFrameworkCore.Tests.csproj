@@ -19,6 +19,24 @@
     <ProjectReference Include="..\Testing\Elsa.Cluster.EntityFrameworkCore.Testing.csproj" />
   </ItemGroup>
 
+  <!--
+    The feed-module fixture is built but never referenced (#2143): its assembly is copied under feed-module/ and loaded
+    only into a load context of the kind Nuplane gives a package, never into this process's own, so what the tests see
+    is exactly what a host sees of a package that carries its own copy of Elsa.Persistence.EntityFramework.
+  -->
+  <ItemGroup>
+    <!-- What both hosts carry and share with the packages they load, which the fixture's web feature binds to. -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="CShells.AspNetCore.Abstractions" />
+    <ProjectReference Include="..\..\Fixtures\FeedModule\Elsa.Cluster.Fixtures.FeedModule.csproj"
+                      ReferenceOutputAssembly="false"
+                      OutputItemType="FeedModuleFixture" />
+  </ItemGroup>
+
+  <Target Name="CopyFeedModuleFixture" AfterTargets="Build">
+    <Copy SourceFiles="@(FeedModuleFixture)" DestinationFolder="$(OutDir)feed-module" SkipUnchangedFiles="true" />
+  </Target>
+
   <ItemGroup>
     <Using Include="Xunit" />
   </ItemGroup>

@@ -54,7 +54,7 @@ public static class EfSchemaFinalization
     public const int MaxFamilyLength = 128;
 
     /// <summary>The longest version label a record holds: the width of every schema-version stamp column.</summary>
-    public const int MaxVersionLength = 32;
+    public const int MaxVersionLength = SchemaVersionChain.MaxVersionLength;
 
     /// <summary>The per-family record table of the module whose migrations-history module is <paramref name="module"/>.</summary>
     public static string RecordTableName(string module) => TableName(RecordTablePrefix, module);

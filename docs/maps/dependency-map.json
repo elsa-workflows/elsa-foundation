@@ -31,6 +31,16 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Cluster.Core",
+          "path": "src/essentials/Cluster/Core/Elsa.Cluster.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Cluster.Readability",
+          "path": "src/essentials/Cluster/Readability/Elsa.Cluster.Readability.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Events.Core",
           "path": "src/essentials/Events/Core/Elsa.Events.Core.csproj"
         },
@@ -48,6 +58,11 @@
           "type": "internal",
           "id": "Elsa.Mediator.Core",
           "path": "src/essentials/Mediator/Core/Elsa.Mediator.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Persistence.Schema",
+          "path": "src/essentials/Persistence/Schema/Elsa.Persistence.Schema.csproj"
         },
         {
           "type": "internal",
@@ -2785,8 +2800,8 @@
         },
         {
           "type": "internal",
-          "id": "Elsa.Persistence.EntityFramework",
-          "path": "src/essentials/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj"
+          "id": "Elsa.Persistence.Schema",
+          "path": "src/essentials/Persistence/Schema/Elsa.Persistence.Schema.csproj"
         },
         {
           "type": "external",
@@ -2795,72 +2810,7 @@
         },
         {
           "type": "pinned-transitive",
-          "id": "CShells",
-          "version": "0.0.30-preview.159"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.EntityFrameworkCore",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.EntityFrameworkCore.Relational",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Caching.Abstractions",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Caching.Memory",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Configuration",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Configuration.Abstractions",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Configuration.EnvironmentVariables",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Configuration.Json",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.DependencyInjection",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
           "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Hosting.Abstractions",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Logging",
           "version": "10.0.10"
         },
         {
@@ -5282,6 +5232,11 @@
       "edges": [
         {
           "type": "internal",
+          "id": "Elsa.Persistence.Schema",
+          "path": "src/essentials/Persistence/Schema/Elsa.Persistence.Schema.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Primitives",
           "path": "src/essentials/Primitives/Primitives/Elsa.Primitives.csproj"
         },
@@ -5367,6 +5322,25 @@
         },
         {
           "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Primitives",
+          "version": "10.0.10"
+        }
+      ]
+    },
+    {
+      "path": "src/essentials/Persistence/Schema/Elsa.Persistence.Schema.csproj",
+      "name": "Elsa.Persistence.Schema",
+      "kind": "source",
+      "domain": "Elsa.Persistence",
+      "sub_domain": "Schema",
+      "role": "feature/implementation",
+      "declared_target_framework": null,
+      "packable": true,
+      "package_id": "Elsa.Persistence.Schema",
+      "line": "B",
+      "edges": [
+        {
+          "type": "external",
           "id": "Microsoft.Extensions.Primitives",
           "version": "10.0.10"
         }
@@ -13091,6 +13065,16 @@
           "path": "tests/essentials/Cluster/EntityFrameworkCore/Testing/Elsa.Cluster.EntityFrameworkCore.Testing.csproj"
         },
         {
+          "type": "internal",
+          "id": "Elsa.Cluster.Fixtures.FeedModule",
+          "path": "tests/essentials/Cluster/Fixtures/FeedModule/Elsa.Cluster.Fixtures.FeedModule.csproj"
+        },
+        {
+          "type": "external",
+          "id": "CShells.AspNetCore.Abstractions",
+          "version": "0.0.30-preview.159"
+        },
+        {
           "type": "external",
           "id": "Microsoft.EntityFrameworkCore.Sqlite",
           "version": "10.0.10"
@@ -13119,6 +13103,45 @@
           "type": "external",
           "id": "xunit.runner.visualstudio",
           "version": "3.1.5"
+        }
+      ]
+    },
+    {
+      "path": "tests/essentials/Cluster/Fixtures/FeedModule/Elsa.Cluster.Fixtures.FeedModule.csproj",
+      "name": "Elsa.Cluster.Fixtures.FeedModule",
+      "kind": "test",
+      "domain": "Elsa.Cluster",
+      "sub_domain": "Fixtures.FeedModule",
+      "role": "test",
+      "declared_target_framework": null,
+      "packable": false,
+      "package_id": null,
+      "line": null,
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Cluster.Core",
+          "path": "src/essentials/Cluster/Core/Elsa.Cluster.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Persistence.EntityFramework",
+          "path": "src/essentials/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj"
+        },
+        {
+          "type": "external",
+          "id": "CShells.AspNetCore.Abstractions",
+          "version": "0.0.30-preview.159"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.EntityFrameworkCore",
+          "version": "10.0.10"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.EntityFrameworkCore.Relational",
+          "version": "10.0.10"
         }
       ]
     },

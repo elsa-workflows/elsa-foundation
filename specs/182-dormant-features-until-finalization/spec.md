@@ -2,7 +2,7 @@
 
 **Feature Branch**: `claude/2093-rollout-specs`
 **Created**: 2026-09-27
-**Status**: In progress — B6 ([#2102](https://github.com/elsa-workflows/elsa-foundation/issues/2102)) built the shared dormancy check, the refusal, the catalog, Attention and `/capabilities` reporting; `Elsa.Foundation.Host` does not yet compose the observation the check reads, as it composes no membership (see the 2026-09-29 note).
+**Status**: Implemented — B6 ([#2102](https://github.com/elsa-workflows/elsa-foundation/issues/2102)) built the shared dormancy check, the refusal, the catalog, Attention and `/capabilities` reporting; B5b ([#2143](https://github.com/elsa-workflows/elsa-foundation/issues/2143)) composed the observation on `Elsa.Foundation.Host` and made it reach feed-loaded EF modules on both hosts, so SC-003 holds on both host kinds (see the second 2026-09-29 note). Completeness itself is proven by B9 ([#2116](https://github.com/elsa-workflows/elsa-foundation/issues/2116)).
 **Input**: Workstream B6, [issue #2102](https://github.com/elsa-workflows/elsa-foundation/issues/2102), of the
 cluster-safe schema rollout program [#2093](https://github.com/elsa-workflows/elsa-foundation/issues/2093). A feature
 that needs data only a new persisted-schema version can hold stays dormant until that version is finalized. A dormant
@@ -410,3 +410,22 @@ Recorded 2026-09-27, when the owner answered this spec's open questions on #2093
 - **Nothing is dormant today.** Every chain has one version until 4.0 ships, so no first-party feature declares a
   requirement, no background task derives new-version data (FR-018), and no capability source marks one dormant
   (FR-007). The tests use a family whose build is at version 2 against a database finalized at 1.
+
+**2026-09-29 note (B5b).** Found and settled while building B5b ([#2143](https://github.com/elsa-workflows/elsa-foundation/issues/2143));
+lands with the B5b PR, whose merge is the owner's approval. It supersedes the first 2026-09-29 note's
+"`Elsa.Foundation.Host` observes nothing yet".
+
+- **`Elsa.Foundation.Host` observes.** It composes `AddEfSchemaReadability()` on its host container, which calls
+  `AddEfSchemaDormancy()`, exactly as `Elsa.Workbench` does. Every EF module there arrives from a feed with its own copy
+  of `Elsa.Persistence.EntityFramework`, and so does a feed-loaded one on `Elsa.Workbench`; the check's source reads
+  their gates through `IEfSchemaModuleGate` and `EfSchemaFinalizationGates`, which now live in `Elsa.Persistence.Schema`
+  with the rest of what the source needs, and a feature asks the check through `Elsa.Cluster.Core`. Every host shares
+  both assemblies ([ADR 0067](../../docs/adr/0067-package-versioning-uses-two-lines-with-computed-patch.md), amended
+  2026-09-29). Without them a feed-loaded feature's requirement read "not observed", which refuses rather than serves
+  but never ends; with them FR-019 and SC-003 hold on both host kinds, which `FeedLoadedEfModuleTests` proves on each
+  host's configured shares, in both directions.
+- **Dormancy ends in the running shell.** The gate's background refresh, which carries a finalization into the
+  observation within one refresh interval (FR-019, SC-003), used to stop right after shell activation on both hosts:
+  CShells disposed the module's migrator with the scope its initializers ran in. It now keeps running (spec 181, the
+  2026-09-29 note), so a feature leaves dormancy once its version is finalized, whether that host finalized it after a
+  hold was released or the last older member was upgraded, or adopted another host's finalization.

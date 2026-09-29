@@ -45,6 +45,7 @@
       "src/essentials/Modularity/EntityFramework/Elsa.Modularity.EntityFramework.csproj",
       "src/essentials/Modularity/Planning/Elsa.Modularity.Planning.csproj",
       "src/essentials/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj",
+      "src/essentials/Persistence/Schema/Elsa.Persistence.Schema.csproj",
       "src/essentials/Pipelines/Core/Elsa.Pipelines.Core.csproj",
       "src/essentials/Primitives/Hosting/Elsa.Primitives.Hosting.csproj",
       "src/essentials/Primitives/Primitives/Elsa.Primitives.csproj",

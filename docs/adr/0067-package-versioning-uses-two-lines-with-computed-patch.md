@@ -1,9 +1,9 @@
 ---
 status: proposed
 date: 2026-08-07
-amended: 2026-09-28
+amended: 2026-09-29
 decision_context: FR-1 discussion on issue #1144, agreed by Joey Barten, Sipke Schoorstra and Frans van Ek
-amendment_context: 2026-09-22, patch derivation changed from commit height to last-published state after the rename hazard was measured; agreed on PR #1948 by Frans van Ek, Joey Barten and Sipke Schoorstra, the same three who agreed the original. 2026-09-24, Line A membership is defined by a rule rather than a heuristic, which settles the six undecided packages; proposed by Sipke Schoorstra and, on 2026-09-25, recorded by him as agreed on behalf of Frans van Ek and Joey Barten. 2026-09-24, the last-published record moves out of the generated dependency map into its own committed file that only publishing, or its audited repair workflow, writes, and on 2026-09-25 onto a dedicated publish-state branch so that writing it needs no bypass of main's protection; proposed by Sipke Schoorstra and, on 2026-09-25, recorded by him as agreed on behalf of Frans van Ek and Joey Barten. 2026-09-28, Line A sharing corrected: both hosts now share all ten (#2130, #2126); approved by Sipke Schoorstra.
+amendment_context: 2026-09-22, patch derivation changed from commit height to last-published state after the rename hazard was measured; agreed on PR #1948 by Frans van Ek, Joey Barten and Sipke Schoorstra, the same three who agreed the original. 2026-09-24, Line A membership is defined by a rule rather than a heuristic, which settles the six undecided packages; proposed by Sipke Schoorstra and, on 2026-09-25, recorded by him as agreed on behalf of Frans van Ek and Joey Barten. 2026-09-24, the last-published record moves out of the generated dependency map into its own committed file that only publishing, or its audited repair workflow, writes, and on 2026-09-25 onto a dedicated publish-state branch so that writing it needs no bypass of main's protection; proposed by Sipke Schoorstra and, on 2026-09-25, recorded by him as agreed on behalf of Frans van Ek and Joey Barten. 2026-09-28, Line A sharing corrected: both hosts now share all ten (#2130, #2126); approved by Sipke Schoorstra. 2026-09-29, host-composed shares: every host also shares Elsa.Cluster.Core and Elsa.Persistence.Schema, kept on Line B by the rule; the sharing decided by Sipke Schoorstra on #2093 (2026-09-28), delivered by #2143.
 ---
 
 # Package versioning uses two version lines with a computed patch digit
@@ -67,6 +67,35 @@ replaced by the rule above. Applied to the six, measured against the tree on 202
 
 `Elsa.Persistence.Core` was a member in the original text and was removed on 2026-09-01, when the project
 itself was deleted.
+
+**Host-composed shares.** *Amended 2026-09-29.* Every host also shares a small set of Line B packages: the contracts
+of what a host composes once on its own container rather than in a shell, which a package reaches only if it sees the
+host's types. Cluster membership is selected per host, on the host container
+([ADR 0078](0078-workflow-executions-are-virtual-actors-and-cluster-membership-is-a-foundation-contract.md), amended
+2026-09-27; spec 183, FR-017), and every EF module's schema finalization gate and every feature that waits for a
+finalized schema version reach it. An EF module arrives as a package that carries its own copy of
+`Elsa.Persistence.EntityFramework` in a load context of its own, so the types it reaches membership through must not
+be defined there. The set is:
+
+- `Elsa.Cluster.Core`, the membership contract and the shared dormancy check;
+- `Elsa.Persistence.Schema`, the EF-free half of the schema-family surface: the finalization gate's view of the
+  fleet, what a host observed of the finalization records, the registry of a container's gates that the dormancy
+  check reads, the finalization record's model and status, and the reflection-only reader of family declarations.
+
+They are not Line A under the rule above. Their types cross the boundary between host and package for the
+persistence and cluster domains, not for every domain, and they change with the cluster-safe schema rollout rather
+than stabilising with the baseline; placing them on Line A would move the baseline with every step of that work. So
+they keep Line B's computed patch, and the cost of sharing a Line B package applies to them as it does to the domain
+`.Core` packages `Elsa.Workbench` already shares: a host pins its copy, and where it declares the package
+host-provided, as every build with computed versions does, a feed package that needs a newer one is refused at
+reconciliation rather than loaded against the older copy. Like every share they are closed under Elsa project
+dependencies, and each reaches only Line A, so sharing them drags in no other domain. `SharedAssemblyClosureGuardTests`
+fails the build when a host does not share both or does not carry them, and `HostProvidedPackagesGuardTests` holds
+their declarations in step with every other share. A further package joins this set only when a host composes on its
+own container something packages must reach by type. Sharing them on every host was decided by Sipke Schoorstra on
+[#2093](https://github.com/elsa-workflows/elsa-foundation/issues/2093) (2026-09-28), leaving open whether as a named
+share or as an addition to Line A; keeping them off Line A is this rule's answer. Delivered by
+[#2143](https://github.com/elsa-workflows/elsa-foundation/issues/2143).
 
 **Line B, everything else.** All features and all domain `.Core` packages share `major.minor` across
 the repository, with the patch digit per package. A domain's `.Core` ships with its domain, because a
@@ -215,6 +244,9 @@ propagates through the reverse closure.
   the ten Line A contract projects listed in `VersionLines.props`, shares them with the Nuplane packages it
   loads, and a computed-version build records them in its `deps.json` and `appsettings.Production.json` at
   the version the feed carries, per [#2126](https://github.com/elsa-workflows/elsa-foundation/issues/2126).
+
+  *Amended 2026-09-29:* Both hosts also share the two host-composed contracts, `Elsa.Cluster.Core` and
+  `Elsa.Persistence.Schema` (Decision, "Host-composed shares"; [#2143](https://github.com/elsa-workflows/elsa-foundation/issues/2143)).
 - Nuplane must promote a domain's `.Core` to a shared assembly within that domain's subtree, for
   first-party and third-party domains alike; otherwise two features in one domain load separate copies
   and their types do not match. That work belongs to the clean host effort.

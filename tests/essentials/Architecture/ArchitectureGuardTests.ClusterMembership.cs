@@ -1,5 +1,6 @@
 using System.Xml.Linq;
 using Xunit;
+using static Elsa.Architecture.Tests.RepoPaths;
 
 namespace Elsa.Architecture.Tests;
 
@@ -7,6 +8,8 @@ public sealed partial class ArchitectureGuardTests
 {
     private const string ClusterMembershipContract = "Elsa.Cluster.Core";
     private const string InProcessClusterMembership = "Elsa.Cluster.InProcess";
+    private const string SharedSchemaSeam = "Elsa.Persistence.Schema";
+    private const string ReadabilitySource = "Elsa.Cluster.Readability";
 
     /// <summary>Package-id prefixes of the actor frameworks ADR 0078 admits only as membership providers.</summary>
     private static readonly string[] ActorFrameworkPackagePrefixes = ["Microsoft.Orleans", "Orleans.", "Proto.Actor", "Proto.Cluster", "Proto.Remote", "Akka"];
@@ -50,6 +53,58 @@ public sealed partial class ArchitectureGuardTests
         Assert.True(hostingDependencies.Length == 0,
             "The in-process membership default must have no way to run anything in the background:" + Environment.NewLine +
             string.Join(Environment.NewLine, hostingDependencies));
+    }
+
+    /// <summary>
+    /// The EF-free half of the schema-family surface, which every host shares with every package it loads (#2143; ADR
+    /// 0067, amended 2026-09-29): no EF Core, database engine, actor framework or provider project, no Elsa project outside
+    /// Line A, and no package but the <c>Microsoft.Extensions</c> abstractions. Anything more would be pinned by every host
+    /// and loaded by every package, and EF Core in it would put EF into a host that carries none (ADR 0076).
+    /// </summary>
+    [Fact]
+    public void The_shared_schema_seam_takes_no_provider_and_only_abstractions()
+    {
+        AssertNoMembershipProviderDependency(SharedSchemaSeam);
+
+        var project = ProjectFiles().Single(candidate => candidate.Name == SharedSchemaSeam);
+        var lineA = VersionLines.LineAMembers(RepoRoot).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var violations = ReachableProjects(project)
+            .Where(reached => !lineA.Contains(reached.Name))
+            .Select(reached => $"{project.Name} reaches {reached.Name}, which is not on Line A")
+            .Concat(PackageReferences(project)
+                .Where(package => !package.StartsWith("Microsoft.Extensions.", StringComparison.OrdinalIgnoreCase))
+                .Select(package => $"{project.Name} references package {package}"))
+            .ToArray();
+
+        Assert.True(violations.Length == 0,
+            $"{SharedSchemaSeam} is shared by every host, so it may reach only Line A and Microsoft.Extensions abstractions:" +
+            Environment.NewLine + string.Join(Environment.NewLine, violations));
+    }
+
+    /// <summary>
+    /// What a host composes to reach its membership: the readability report, the fleet and the dormancy source (#2143). A
+    /// host that carries no EF (ADR 0076), <c>Elsa.Foundation.Host</c>, composes it, so it reaches no EF Core and no
+    /// database engine. It is still classed as a provider project by name below, which keeps the contract and the
+    /// in-process default from reaching it.
+    /// </summary>
+    [Fact]
+    public void The_readability_source_a_host_composes_takes_no_ef_dependency()
+    {
+        var project = ProjectFiles().Single(candidate => candidate.Name == ReadabilitySource);
+        var violations = ReachableProjects(project)
+            .Prepend(project)
+            .SelectMany(PackageReferences)
+            .Where(PersistenceProviderNeutralityBoundary.IsConcreteProviderPackage)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Concat(ReachableProjects(project)
+                .Where(reached => PersistenceProviderNeutralityBoundary.IsConcreteProviderProject(reached.Name, reached.RelativePath) ||
+                                  reached.Name == "Elsa.Persistence.EntityFramework")
+                .Select(reached => reached.Name))
+            .ToArray();
+
+        Assert.True(violations.Length == 0,
+            $"{ReadabilitySource} must reach no EF Core, engine or EF persistence project, so a host without EF can compose it:" +
+            Environment.NewLine + string.Join(Environment.NewLine, violations));
     }
 
     [Theory]
@@ -97,8 +152,9 @@ public sealed partial class ArchitectureGuardTests
             string.Join(Environment.NewLine, violations));
     }
 
-    /// <summary>Every cluster project but the contract and the in-process default is a provider, or reaches one as the
-    /// readability source reaches EF Core, and so is any concrete persistence provider.</summary>
+    /// <summary>Every cluster project but the contract and the in-process default is a provider, or bridges membership to
+    /// one as the readability source bridges it to the EF persistence's schema families, and so is any concrete
+    /// persistence provider.</summary>
     private static bool IsMembershipProviderProject(string name, string relativePath) =>
         name.StartsWith("Elsa.Cluster.", StringComparison.Ordinal) && name is not ClusterMembershipContract and not InProcessClusterMembership ||
         PersistenceProviderNeutralityBoundary.IsConcreteProviderProject(name, relativePath);

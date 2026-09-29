@@ -24,6 +24,10 @@
     <!-- The write refusal's persistence-agnostic base (SchemaWriteRefusedException), which the domain APIs answer
          without resolving EF Core (spec 180, FR-016a). -->
     <ProjectReference Include="..\..\Primitives\Primitives\Elsa.Primitives.csproj" />
+    <!-- The EF-free half of the schema-family surface - the declaration reader, the finalization record's model, the
+         fleet seam and the gate registry - which every host shares, so a module loaded with its own copy of this
+         assembly still reaches the host's cluster membership (#2143). -->
+    <ProjectReference Include="..\Schema\Elsa.Persistence.Schema.csproj" />
   </ItemGroup>
   <ItemGroup>
     <!-- Test-only visibility for the pure resolver. Production adapters use the public preparation facade. -->

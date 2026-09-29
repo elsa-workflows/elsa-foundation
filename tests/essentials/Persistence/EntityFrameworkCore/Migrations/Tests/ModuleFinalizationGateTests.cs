@@ -58,7 +58,7 @@ public sealed class ModuleFinalizationGateTests : IAsyncLifetime
     {
         await Migrator.StartAsync(CancellationToken.None);
 
-        var gate = _host.GetRequiredService<EfSchemaFinalizationGates>().FindForContext(typeof(StudioPreferencesSqliteDbContext));
+        var gate = _host.GetRequiredService<EfSchemaFinalizationGates>().FindModuleGate(typeof(StudioPreferencesSqliteDbContext));
         Assert.Same(Migrator.Gate, gate);
         Assert.Equal(StudioPreferencesEfModule.SchemaVersion, (await RecordAsync())!.FinalizedVersion);
         Assert.Equal(StudioPreferencesEfModule.SchemaVersion, gate!.StateOf(StudioPreferencesEfModule.SchemaFamily)!.WriteVersion);

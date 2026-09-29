@@ -166,9 +166,10 @@ builds their images
 [#2126](https://github.com/elsa-workflows/elsa-foundation/issues/2126)). Such a build records each Elsa package
 in its `deps.json` at the version the feed carries, and ships `ComputedVersions/appsettings.Production.json` as
 its `appsettings.Production.json`: the committed file plus a `Nuplane:HostProvidedPackages` list naming every
-share. `Elsa.Foundation.Host` shares exactly Line A's ten contracts (`Elsa.Primitives`, `Elsa.Events.Core` and the
-rest) beside its three `CShells.*.Abstractions` ones; `Elsa.Workbench` shares those same ten plus the domain
-`.Core` packages its own features need, `Elsa.Workflows.Runtime.Core` among them. So each image refuses a feed
+share. `Elsa.Foundation.Host` shares Line A's ten contracts (`Elsa.Primitives`, `Elsa.Events.Core` and the rest) and
+the two host-composed ones, `Elsa.Cluster.Core` and `Elsa.Persistence.Schema`, beside its three
+`CShells.*.Abstractions` ones; `Elsa.Workbench` shares those same twelve plus the domain `.Core` packages its own
+features need, `Elsa.Workflows.Runtime.Core` among them. So each image refuses a feed
 package that needs a newer shared Elsa package than it carries. A host built from source records its Elsa
 packages at their line's dev version (`4.0.0-dev` today), which every Elsa feed package's range excludes, so
 declaring them would refuse every Elsa feed package that depends on one. A source build therefore keeps the
@@ -188,7 +189,8 @@ transitively. That is why `Elsa.Workbench` shares `Elsa.Events.Core`, `Elsa.Pipe
 `Elsa.Workflows.Design.Validations.Core`, and it shares `Elsa.Attention.Core` because that assembly is a
 Line A contract features exchange with one another. All four are declared and exempted like its other
 Elsa shares. `Elsa.Foundation.Host`'s closure holds by construction: Line A depends only on Line A
-(ADR 0067), so sharing exactly the ten leaves nothing unshared to flag.
+(ADR 0067), and the two host-composed shares reach only Line A, so sharing those twelve leaves nothing unshared to
+flag.
 
 Neither case is caught by the version range or the lock file, because nothing was resolved to check.
 
@@ -202,6 +204,23 @@ the host's own `deps.json` (rule 2) or the host explicitly adds the `Microsoft.E
 `Nuplane:HostProvidedPackages` (rule 1). `Microsoft.EntityFrameworkCore.*` and `Npgsql.*` were never
 covered by the old prefix rule either way, so EF and its provider have always arrived through the feed
 normally.
+
+### Cluster membership and EF module packages
+
+Both hosts compose cluster membership once, on the host container (`AddEfSchemaReadability`): the readability report,
+the in-process default, the finalization gate's view of the fleet and the dormancy check's source (spec 183, FR-017;
+[#2143](https://github.com/elsa-workflows/elsa-foundation/issues/2143)). An EF module package carries its own copy of
+`Elsa.Persistence.EntityFramework`, which the host does not share and, on `Elsa.Foundation.Host`, does not carry at
+all. What the module reaches membership through is therefore not in that assembly but in `Elsa.Persistence.Schema`,
+which references no EF Core, and `Elsa.Cluster.Core`; both hosts share both (ADR 0067, "Host-composed shares"). With
+them shared, a module's finalization gate counts the host's fleet, so a single host finalizes a new schema version at
+activation (spec 181, FR-021), and the host's dormancy check reads the module's gate, so a feature that needs that
+version serves once it is finalized (spec 182, FR-019). Without them nothing fails loudly: the module admits, its gate
+never finalizes past the version its record was created at, and every feature waiting on it is refused as not
+observed. `SharedAssemblyClosureGuardTests` fails the build when a host does not share both, and
+`FeedLoadedEfModuleTests` (`tests/essentials/Cluster/EntityFrameworkCore/Tests`) proves each direction on both hosts'
+configured shares. The durable EF membership provider (`AddConfiguredClusterMembership`) would bring EF Core into the
+host, so `Elsa.Foundation.Host` composes only the in-process default: it is a cluster of one.
 
 ### Generating the closure
 

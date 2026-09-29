@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>
+      The EF-free half of persistence's schema-family surface, shared by every host with every package it loads
+      (#2143; ADR 0067, amended 2026-09-29): the reflection-only reader of schema-family declarations, the finalization
+      record's model and status, what a host observed of it, the finalization gate's view of the fleet, and the
+      registry a container's gates are found in. It references no EF Core, no database engine and no Elsa project, so a
+      host that carries no EF (ADR 0076) can compose cluster membership over it, and an EF module whose own copy of
+      Elsa.Persistence.EntityFramework Nuplane loads privately still exchanges these types with the host.
+    </Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- IChangeToken, the fleet's change signal. -->
+    <PackageReference Include="Microsoft.Extensions.Primitives" />
+  </ItemGroup>
+
+</Project>

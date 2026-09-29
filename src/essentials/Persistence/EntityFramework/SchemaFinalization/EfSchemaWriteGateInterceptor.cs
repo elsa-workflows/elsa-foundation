@@ -133,5 +133,5 @@ public sealed class EfSchemaWriteGateInterceptor : SaveChangesInterceptor
 
     private static EfSchemaModuleGate? FindGate(DbContext context) =>
         context.GetService<IDbContextOptions>().FindExtension<CoreOptionsExtension>()?.ApplicationServiceProvider?
-            .GetService<EfSchemaFinalizationGates>()?.FindForContext(context.GetType());
+            .GetService<EfSchemaFinalizationGates>()?.FindModuleGate(context.GetType());
 }

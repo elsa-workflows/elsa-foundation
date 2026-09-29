@@ -184,12 +184,18 @@ module and a host decide:
   version whenever writes are allowed. The write check refuses a row stamped with any other version
   (`EfSchemaWriteRefusedException`), and every write to a family whose finalized version this host cannot read
   (`EfSchemaFamilyWritesRefusedException`, spec 181 FR-012). A store that one day writes an older version's format
-  reads the write version from its module's gate (`EfSchemaFinalizationGates.FindForContext(...).StateOf(family)`).
+  reads the write version from its module's gate (`EfSchemaFinalizationGates.FindModuleGate(...).StateOf(family)`).
 - **`IEfSchemaFleet`** is the gate's view of cluster membership. `Elsa.Cluster.Readability` implements it over the
   host's one membership provider (`AddEfSchemaReadability`). A host that composes none has gates that never finalize
   a version past the one each record was created at: the conservative direction, which only ever delays.
 - **`EfSchemaFinalizationObservations`**, registered once by instance on the host container, is what the gates read
   and what the readability report names (spec 183, FR-019).
+- **Where these live.** `IEfSchemaFleet` and its answer types, `EfSchemaFinalizationObservations`, the finalization
+  record's model and status, `EfSchemaFinalizationGates` with the `IEfSchemaModuleGate` view the dormancy check's
+  source reads, and `EfSchemaFamilyCatalog` with its descriptors are in `Elsa.Persistence.Schema`, under the same
+  namespaces, not in this assembly. That assembly references no EF Core, and every host shares it with every package
+  it loads (ADR 0067, amended 2026-09-29): an EF module Nuplane loads with its own copy of this assembly still finds
+  the host's fleet, observations and registry, because their types come from the host's copy of that one (#2143).
 - **Timings** come from `Elsa:Persistence:EntityFramework:Finalization` (`EvaluationInterval`, default 30 seconds;
   `RefreshInterval`, 15 seconds; `IntentWaitBound`, 2 minutes; `IntentPollInterval`, 1 second).
 

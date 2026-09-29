@@ -1048,7 +1048,7 @@ public static class EfToolingHost
 
     private static EfToolingFinalizationFamily Describe(string module, EfSchemaChain chain, SchemaFinalization.SchemaFinalizationRecord? record)
     {
-        var status = SchemaFinalization.EfSchemaFamilyStatus.Describe(chain, record);
+        var status = SchemaFinalization.EfSchemaFamilyStatus.Describe(chain.Family, chain.Module, chain.ReadableVersions, record);
         return new()
         {
             Module = module,
