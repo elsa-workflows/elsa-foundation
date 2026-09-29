@@ -543,15 +543,21 @@ is the owner's approval of what follows, found while building.
   no earlier than when the last of them began to; a worker that restarts waits it again. A counted member whose entry
   names no observed version - one that loads the family's declaration without activating its module, or serves the
   family in two databases whose records disagree - holds the condition back, as FR-012 reads. Both only delay.
+  A withdrawal starts the margin again, so the verification after one waits a full margin.
   MR-001 was already met by B3; B9 adds the counting requirement `ObservesFinalizedSchemaVersion` to the membership
   contract, and `IEfSchemaFleet.SettleMargin` gives the default margin from the membership settings. A host that composes
   no fleet, `Elsa.Foundation.Host` among them today (spec 182, 2026-09-29 note), upgrades rows but never records
   completion; nothing observable differs while every chain has one version.
-- **Any pass withdraws (FR-018).** A row found below the standing completion by any pass, not only the hourly audit,
-  withdraws it: a run towards a newer finalized version can meet one below the old completion. The audit runs first one
-  check interval after a host starts, then hourly, so hosts that restart more often than hourly still audit. A
-  withdrawal while a verification pass runs is detected by its position in the finish history, not by time, since two
-  hosts' clocks cannot order it. The withdrawal reaches Attention from the finish record's history on every host, as a
+- **Any pass withdraws, before it rewrites (FR-018).** A row found below the standing completion by any pass, not only
+  the hourly audit, withdraws it: a run towards a newer finalized version can meet one below the old completion. The
+  audit, the upgrade pass and the verification pass each withdraw before they rewrite the first such row, so a host
+  that dies midway leaves the straggler reported rather than under a completion that still stands. A withdrawal is a
+  compare-and-set against evidence read after the record it withdraws: a completion another worker recorded again in
+  the meantime is withdrawn only if rows below it still remain. A standing completion is audited whatever this host's
+  target, so a family whose run towards a newer version is blocked or claimed elsewhere is still audited. The audit
+  runs first one check interval after a host starts, then hourly, so hosts that restart more often than hourly still
+  audit. A withdrawal while a verification pass runs is detected by its position in the finish history, not by time,
+  since two hosts' clocks cannot order it. The withdrawal reaches Attention from the finish record's history on every host, as a
   critical item naming the tables and counts, until a new verification pass records the completion again.
 - **Status (FR-021, FR-022).** The gate's status carries the backfill's state, target, rows rewritten, the members the
   settle condition waits for and what blocks completion. The persistence tool's `status` prints what the record holds:
@@ -562,10 +568,16 @@ is the owner's approval of what follows, found while building.
   backfill cannot rewrite is passed over rather than selected again. A key part is compared as text, as an enum's stored
   number, or with its type's own order; one stored through any other value converter is refused. A model test runs
   every first-party stamped table's selections on SQLite, and the synthetic family's run on the three server engines.
-- **Content-addressed tables (FR-010b).** `RuntimeArtifact` names its executables and executable activity templates.
-  The model guard treats every stamped table whose name mentions executables as holding them unless it is listed with
-  why its rows' identity is not their content: the executable coordination, source-reference and template hash-claim
-  tables are.
+- **Content-addressed tables (FR-010b).** `RuntimeArtifact` names its executables, its executable activity templates
+  and the template hash claims, which are keyed by a template's content hash. Each such entity type is also marked
+  `[EfSchemaContentAddressed(reason)]`, and the model guard fails when a first-party stamped table is marked but not
+  named by its family, or named but not marked, and pins the three tables above by name, failing when one stops being a
+  stamped table. It infers nothing from a table's name. The backfill never rewrites a marked row even where its family
+  forgot to name it.
+- **A blocked family (FR-023).** A family blocked at its target by skew, corruption, content-addressed rows, a missing
+  rewriter or a missing fleet is surveyed again at the audit interval, not every check interval, unless its target
+  moves: a blocker persists until someone resolves it, and surveying every round would select every table by stamp
+  every fifteen seconds.
 - **Rewriters (FR-004).** A family names its rewriter with `[EfSchemaFamily(..., Rewriter = typeof(...))]`, and the build
   fails for a family with upcasters and none. Every first-party family still has one version, so none exists yet;
   each family writes its own before its first version bump.
