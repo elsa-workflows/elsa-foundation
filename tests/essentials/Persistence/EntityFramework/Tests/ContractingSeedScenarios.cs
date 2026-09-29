@@ -87,7 +87,7 @@ internal static class ContractingSeedScenarios
             new EfContractingMigrationRefusal(Contract, Family, CurrentVersion, EarlierVersion, EfContractingMigrationRefusalReason.NotFinalized),
             Assert.Single(refusal.Refusals));
         Assert.Equal([Initial, Expand, DropObsolete], refusal.Applied);
-        Assert.Equal([Contract], refusal.Pending);
+        Assert.Equal([Contract], refusal.PendingMigrations);
         Assert.Contains($"so {Initial}, {Expand}, {DropObsolete} were applied first", refusal.Message, StringComparison.Ordinal);
         Assert.Equal([Initial, Expand, DropObsolete], await AppliedAsync(provider, connection));
         Assert.True(await HasColumnAsync(provider, connection, RowsTable, "Legacy"));

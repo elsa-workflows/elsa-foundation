@@ -49,23 +49,18 @@ internal sealed class FeedLoadedModuleHost : IAsyncDisposable
     /// <summary>A scope of the activated shell.</summary>
     public IServiceProvider Shell => _scope.ServiceProvider;
 
-    /// <summary>
-    /// The fixture's family. The fixture's names are restated here because the fixture is never loaded where this code
-    /// runs; <see cref="StartAsync"/> refuses a fixture whose own constants say otherwise.
-    /// </summary>
-    public const string Family = "FeedModuleFixtureOrders";
+    /// <summary>The fixture's family, and its migrations-history name, restated by <see cref="FeedModuleDatabase"/>.</summary>
+    public const string Family = FeedModuleDatabase.Family;
 
-    /// <summary>The module's migrations-history name, which names its finalization tables.</summary>
-    public const string HistoryModule = "ElsaFeedModuleFixture";
+    public const string HistoryModule = FeedModuleDatabase.HistoryModule;
 
     /// <summary>The EF module, as its <c>[EfModule]</c> names it.</summary>
     public const string ModuleName = "FeedModuleFixture";
 
-    /// <summary>The one migration the fixture's next release adds, and the table it creates.</summary>
-    public const string NextReleaseMigration = "20260929000000_FeedModuleAddTags";
+    /// <summary>The one migration the fixture's next release adds, and the table it creates, restated by <see cref="FeedModuleDatabase"/>.</summary>
+    public const string NextReleaseMigration = FeedModuleDatabase.NextReleaseMigration;
 
-    /// <inheritdoc cref="NextReleaseMigration"/>
-    public const string TagsTable = "FeedModuleFixtureTags";
+    public const string TagsTable = FeedModuleDatabase.TagsTable;
 
     /// <summary>
     /// Starts the host and activates its shell. <paramref name="composeMembership"/> runs on the host container before the
@@ -78,9 +73,7 @@ internal sealed class FeedLoadedModuleHost : IAsyncDisposable
         Action<IServiceCollection>? composeMembership = null,
         params string[] withheld)
     {
-        var package = new PackageLoadContext(
-            SharedAssemblies(host).Except(withheld, StringComparer.OrdinalIgnoreCase),
-            hostCarriesEntityFramework: host != FoundationHost);
+        var package = new PackageLoadContext(SharedAssemblies(host).Except(withheld, StringComparer.OrdinalIgnoreCase));
         var module = package.LoadFromAssemblyPath(FixturePath);
         foreach (var (name, expected) in new[]
                  {
@@ -147,46 +140,17 @@ internal sealed class FeedLoadedModuleHost : IAsyncDisposable
         SqliteConnection.ClearAllPools();
     }
 
-    /// <summary>Creates the module's finalization tables and the record a release at version 1 created, optionally held.</summary>
-    public static async Task SeedAsync(string connectionString, string? hold = null)
-    {
-        await using var context = SeedContext.Create(connectionString);
-        await context.Database.EnsureCreatedAsync();
-        var store = new EfSchemaFinalizationStore(context);
-        var created = await store.GetOrCreateAsync(Family, "1", Chain, SchemaFinalizationActor.OfOperator("release-1"));
-        if (hold is not null && !(await store.PlaceHoldAsync(Family, created.Revision, null, hold, "ops@example", Chain)).Applied)
-            throw new InvalidOperationException("The hold was not placed: the record changed under the seed.");
-    }
+    /// <summary>The fixture's database on SQLite.</summary>
+    private static FeedModuleDatabase Sqlite(string connectionString) => new((builder, cs) => builder.UseSqlite(cs), connectionString);
 
-    public static async Task ReleaseHoldAsync(string connectionString)
-    {
-        await using var context = SeedContext.Create(connectionString);
-        var store = new EfSchemaFinalizationStore(context);
-        if (!(await store.ReleaseHoldAsync(Family, (await store.FindAsync(Family))!.Revision, null, "ops@example")).Applied)
-            throw new InvalidOperationException("The hold was not released: the record changed under the release.");
-    }
+    public static Task SeedAsync(string connectionString, string? hold = null) => Sqlite(connectionString).SeedAsync(hold);
 
-    /// <summary>
-    /// Applies the next release's migration out of process, as an operator does before a host that validates its
-    /// migrations may run that release: its table, and its row in the module's migrations history.
-    /// </summary>
-    public static async Task ApplyNextReleaseMigrationAsync(string connectionString)
-    {
-        await using var context = SeedContext.Create(connectionString);
-        var history = EfMigrationsHistory.TableName(HistoryModule);
-        await context.Database.ExecuteSqlRawAsync(
-            $"""
-             CREATE TABLE "{TagsTable}" ("Id" INTEGER NOT NULL CONSTRAINT "PK_{TagsTable}" PRIMARY KEY, "Name" TEXT NOT NULL);
-             CREATE TABLE IF NOT EXISTS "{history}" ("MigrationId" TEXT NOT NULL CONSTRAINT "PK_{history}" PRIMARY KEY, "ProductVersion" TEXT NOT NULL);
-             INSERT INTO "{history}" ("MigrationId", "ProductVersion") VALUES ('{NextReleaseMigration}', '10.0.10');
-             """);
-    }
+    public static Task ReleaseHoldAsync(string connectionString) => Sqlite(connectionString).ReleaseHoldAsync();
 
-    public static async Task<SchemaFinalizationRecord> RecordAsync(string connectionString)
-    {
-        await using var context = SeedContext.Create(connectionString);
-        return (await new EfSchemaFinalizationStore(context).FindAsync(Family))!;
-    }
+    /// <inheritdoc cref="FeedModuleDatabase.ApplyNextReleaseMigrationAsync"/>
+    public static Task ApplyNextReleaseMigrationAsync(string connectionString) => Sqlite(connectionString).ApplyNextReleaseMigrationAsync();
+
+    public static Task<SchemaFinalizationRecord> RecordAsync(string connectionString) => Sqlite(connectionString).RecordAsync();
 
     /// <summary>Deletes a SQLite database file and the journal, WAL and shared-memory files beside it.</summary>
     public static void DeleteDatabaseFiles(string file)
@@ -195,7 +159,7 @@ internal sealed class FeedLoadedModuleHost : IAsyncDisposable
             File.Delete(path);
     }
 
-    public static readonly string[] Chain = ["1", "2"];
+    public static readonly string[] Chain = FeedModuleDatabase.Chain;
 
     private static string FixturePath => Path.Join(AppContext.BaseDirectory, "feed-module", "Elsa.Cluster.Fixtures.FeedModule.dll");
 
@@ -213,23 +177,13 @@ internal sealed class FeedLoadedModuleHost : IAsyncDisposable
             .Select(entry => entry["Name"])
             .OfType<string>()
     ];
-
-    /// <summary>The fixture module's finalization tables, mapped from the test's side to seed and read them.</summary>
-    private sealed class SeedContext(DbContextOptions<SeedContext> options) : DbContext(options)
-    {
-        public static SeedContext Create(string connectionString) =>
-            new(new DbContextOptionsBuilder<SeedContext>().UseSqlite(connectionString).Options);
-
-        protected override void OnModelCreating(ModelBuilder modelBuilder) =>
-            modelBuilder.MapSchemaFinalization(HistoryModule).IndexSchemaVersionStamps();
-    }
 }
 
 /// <summary>
 /// A load context of the kind Nuplane gives an EF module package, which declares itself host-integrated in its
 /// <c>nuplane.json</c>, as the fixture's does: an assembly the host shares resolves to the host's copy; every other Elsa assembly
-/// the package needs is a private copy of its own, loaded from the package's files, and so is EF Core when the host
-/// carries none, as <c>Elsa.Foundation.Host</c> does not (ADR 0076). The package's assemblies are made visible to the
+/// the package needs is a private copy of its own, loaded from the package's files. EF Core is the host's: both hosts carry
+/// it, <c>Elsa.Foundation.Host</c> for its cluster membership since #2151. The package's assemblies are made visible to the
 /// host's own context through its <c>Resolving</c> event, as Nuplane's host-integrated resolver does, so EF Core loaded by
 /// the host finds the module's migrations assembly. Anything else, the framework and CShells, is the test process's.
 /// </summary>
@@ -244,13 +198,11 @@ internal sealed class PackageLoadContext : AssemblyLoadContext, IDisposable
 {
     private static readonly string[] Directories = [Path.Join(AppContext.BaseDirectory, "feed-module"), AppContext.BaseDirectory];
     private readonly HashSet<string> _shared;
-    private readonly string[] _private;
 
-    public PackageLoadContext(IEnumerable<string> shared, bool hostCarriesEntityFramework = true)
+    public PackageLoadContext(IEnumerable<string> shared)
         : base($"feed-module-package-{Guid.NewGuid():N}", isCollectible: false)
     {
         _shared = shared.ToHashSet(StringComparer.OrdinalIgnoreCase);
-        _private = hostCarriesEntityFramework ? ["Elsa."] : ["Elsa.", "Microsoft.EntityFrameworkCore"];
         Default.Resolving += ResolveForHost;
     }
 
@@ -262,7 +214,7 @@ internal sealed class PackageLoadContext : AssemblyLoadContext, IDisposable
             return null;
         if (_shared.Contains(name))
             return Default.LoadFromAssemblyName(assemblyName);
-        if (!_private.Any(prefix => name.StartsWith(prefix, StringComparison.Ordinal)))
+        if (!name.StartsWith("Elsa.", StringComparison.Ordinal))
             return null;
         return Directories.Select(directory => Path.Join(directory, name + ".dll")).FirstOrDefault(File.Exists) is { } path
             ? LoadFromAssemblyPath(path)

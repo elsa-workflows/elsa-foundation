@@ -1,6 +1,7 @@
 using CShells.Lifecycle;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Persistence.EntityFramework.Tests;
+using Elsa.Persistence.Schema;
 using Elsa.Secrets.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Secrets.Persistence.EntityFrameworkCore.Stores;
 using Microsoft.Data.Sqlite;
@@ -63,6 +64,30 @@ public sealed class SecretsEfModuleMigrationTests
             fixture.Lifecycle.InitializeAsync(CancellationToken.None));
         Assert.Contains("pending migrations", exception.Message, StringComparison.OrdinalIgnoreCase);
         Assert.False(await TableExistsAsync(fixture, SecretsEfModule.TableName));
+    }
+
+    /// <summary>
+    /// A host that carries no copy of this assembly reads the refusal through <see cref="IEfModuleRefusal"/>: it names the
+    /// EF module rather than its context, lists the pending migrations and gives the command that applies them.
+    /// </summary>
+    [Fact]
+    public async Task Validate_names_the_module_the_pending_migrations_and_the_command_that_applies_them()
+    {
+        await using var fixture = await MigrationHostFixture.CreateAsync(EfMigratePolicy.Validate);
+
+        var exception = await Assert.ThrowsAsync<EfPendingMigrationsException>(() =>
+            fixture.Lifecycle.InitializeAsync(CancellationToken.None));
+
+        IEfModuleRefusal refusal = exception;
+        Assert.Equal("Secrets", refusal.Module);
+        Assert.Equal(IEfModuleRefusal.PendingMigrationsCode, refusal.Code);
+        Assert.NotEmpty(refusal.PendingMigrations);
+        Assert.All(refusal.PendingMigrations, id => Assert.Contains(id, exception.Message, StringComparison.Ordinal));
+        Assert.Equal(
+            "dotnet elsa persistence apply --host \"<host directory>\" --modules Secrets --provider Sqlite --connection-env ELSA_EF_CONNECTION",
+            refusal.Command);
+        Assert.Contains("EF module 'Secrets'", exception.Message, StringComparison.Ordinal);
+        Assert.Contains(refusal.Command, exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]

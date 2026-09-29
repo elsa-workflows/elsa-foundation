@@ -34,12 +34,28 @@
   </ItemGroup>
 
   <!--
-    Build-order only, and the fixture's packing beside it (#2143): FoundationHostBootTests start the host's own build
-    output as a child process, over a directory feed holding the fixture and the EF persistence package it carries a
-    private copy of, exactly as an operator runs it. Nothing from the host is loaded into this process.
+    Build-order only (#2143, #2151): FoundationHostBootTests and FoundationHostClusterBootTests start the host's own build
+    output as child processes, over a directory feed holding the fixture, or its release before or after, which
+    FoundationHostFeed packs from the fixture's project under the same package id, exactly as an operator runs it. The
+    fixture's own release is packed from the build above, and the other two from its restore and its references' builds, so
+    they have to be built first; nothing from the host is loaded into this process.
   -->
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\..\src\apps\Elsa.Foundation.Host\Elsa.Foundation.Host.csproj" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <!--
+    Build-order only, and packed by MigratingModuleFeed in two generations: the persistence tool the reload
+    refusal tests run against the host's output directory, and the EF module with real migrations they upgrade. The
+    module's names are linked in as source, so nothing of the module is loaded into this process.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\..\src\essentials\Cli\Elsa.Cli.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\..\Fixtures\MigratingModule\Elsa.Cluster.Fixtures.MigratingModule.csproj" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\Fixtures\MigratingModule\MigratingModule.cs" Link="MigratingModule.cs" />
   </ItemGroup>
 
   <Target Name="CopyFeedModuleFixture" AfterTargets="Build">

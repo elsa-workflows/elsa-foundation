@@ -38,6 +38,12 @@ public static class EfSchemaFamilyCatalog
     /// <summary>The family declaration's named argument listing the entity types whose rows stamp it.</summary>
     private const string EntitiesMember = "Entities";
 
+    /// <summary>The family declaration's named argument listing its content-addressed entity types (spec 186, FR-010b).</summary>
+    private const string ContentAddressedMember = "ContentAddressed";
+
+    /// <summary>The family declaration's named argument naming its rewriter (spec 186, FR-004).</summary>
+    private const string RewriterMember = "Rewriter";
+
     /// <summary>
     /// Enumerates every <c>[EfSchemaFamily]</c> declared on <paramref name="assemblies"/>, one
     /// <see cref="EfSchemaFamilyDescriptor"/> per declaration. Refuses discovery, naming the assembly, when a declaration
@@ -164,7 +170,7 @@ public static class EfSchemaFamilyCatalog
                     $"{string.Join(", ", modules.Select(declared => $"'{declared}'"))}. An assembly that owns an [EfModule] names it as the family's " +
                     "owner instead of declaring the family shared.");
 
-            return new EfSchemaFamilyDescriptor(name, null, currentVersion, assembly) { Upcasters = Upcasters(declaration), Entities = Types(declaration, EntitiesMember) };
+            return Declared(new EfSchemaFamilyDescriptor(name, null, currentVersion, assembly), declaration);
         }
 
         var owner = modules.FirstOrDefault(declared => StringComparer.OrdinalIgnoreCase.Equals(declared, module));
@@ -173,8 +179,21 @@ public static class EfSchemaFamilyCatalog
                 $"{assembly.GetName().Name} declares [EfSchemaFamily(\"{name}\")] owned by EF module '{module}', which that assembly does not declare. " +
                 $"A family belongs to an [EfModule] of its own assembly; this one declares {(modules.Length == 0 ? "none" : string.Join(", ", modules.Select(declared => $"'{declared}'")))}.");
 
-        return new EfSchemaFamilyDescriptor(name, owner, currentVersion, assembly) { Upcasters = Upcasters(declaration), Entities = Types(declaration, EntitiesMember) };
+        return Declared(new EfSchemaFamilyDescriptor(name, owner, currentVersion, assembly), declaration);
     }
+
+    /// <summary><paramref name="family"/> with what the declaration's named arguments say, each read as metadata.</summary>
+    private static EfSchemaFamilyDescriptor Declared(EfSchemaFamilyDescriptor family, CustomAttributeData declaration) =>
+        family with
+        {
+            Upcasters = Upcasters(declaration),
+            Entities = Types(declaration, EntitiesMember),
+            ContentAddressed = Types(declaration, ContentAddressedMember),
+            Rewriter = declaration.NamedArguments
+                .Where(argument => argument.MemberName == RewriterMember)
+                .Select(argument => argument.TypedValue.Value as Type)
+                .FirstOrDefault()
+        };
 
     /// <summary>The declaration's <c>Upcasters</c>, each read as metadata.</summary>
     private static EfSchemaUpcasterDescriptor[] Upcasters(CustomAttributeData declaration) =>

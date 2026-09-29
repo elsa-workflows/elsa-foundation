@@ -95,6 +95,7 @@ public sealed class HostProvidedPackagesGuardTests
                 ["Elsa.Expressions.Core"] = FoundationHostSourceBuildVersion,
                 ["Elsa.Locking.Core"] = FoundationHostSourceBuildVersion,
                 ["Elsa.Mediator.Core"] = FoundationHostSourceBuildVersion,
+                ["Elsa.Persistence.EntityFramework"] = FoundationHostSourceBuildVersion,
                 ["Elsa.Persistence.Schema"] = FoundationHostSourceBuildVersion,
                 ["Elsa.Pipelines.Core"] = FoundationHostSourceBuildVersion,
                 ["Elsa.Primitives"] = FoundationHostSourceBuildVersion,

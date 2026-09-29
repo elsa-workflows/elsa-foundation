@@ -2,7 +2,7 @@
 
 **Feature Branch**: `claude/2093-specs-b7-b9`
 **Created**: 2026-09-27
-**Status**: Approved
+**Status**: Implemented — B9 ([#2116](https://github.com/elsa-workflows/elsa-foundation/issues/2116)), proven on a synthetic family at versions 1 to 3, since every first-party family is still at one version; no first-party family has a rewriter yet (see the 2026-09-29 note).
 **Input**: Workstream B9, [issue #2116](https://github.com/elsa-workflows/elsa-foundation/issues/2116), of the
 cluster-safe schema rollout program [#2093](https://github.com/elsa-workflows/elsa-foundation/issues/2093). Rows that
 are written once and never written again are never reached by "upgrade on next write", so a family could never retire
@@ -364,10 +364,15 @@ after one run with no membership table.
 **Afterwards**
 
 - **FR-018**: While a finish record names a completion version, the backfill MUST keep auditing the family on a
-  configurable interval, defaulting to one hour, for rewritable rows below it. A straggler it finds is rewritten,
-  reported as critical through Attention with the family, the table and the count, and the finish record's completion
-  is withdrawn by compare-and-set, with a history entry, until a new verification pass (FR-012 to FR-014) succeeds.
-  Features that need completeness are dormant meanwhile (spec 182, FR-005).
+  configurable interval, defaulting to one hour, across every table of the family, for rows below it and rows whose
+  stamp is missing or outside the host's readable set. Any such row withdraws the completion, the one recorded when the
+  finalization record was created (FR-016) included: a rewritable row below it, a row below it in a table whose family
+  names no rewriter or in a content-addressed table, and a row with an unreadable stamp alike. The completion is
+  withdrawn by compare-and-set, with a history entry, before any row is rewritten, and the withdrawal is reported as
+  critical through Attention with the family, the tables and the counts. The rewritable stragglers are then rewritten;
+  the others stay, and block completion as FR-004, FR-006 and FR-011a say. The completion stays withdrawn until a new
+  verification pass (FR-012 to FR-014) succeeds. Features that need completeness are dormant meanwhile (spec 182,
+  FR-005).
 - **FR-019**: Withdrawing completion MUST NOT move the finalized version. Finalization stays monotonic (spec 181,
   FR-003); completion is a proof about the rows present, and can stop holding.
 
@@ -524,3 +529,77 @@ module now stamps a schema family, taking the checked total from fifteen to twen
 modules and two Publishing tables" this spec and research.md describe (Current state, "Families, and where
 content-addressed rows live") should be checked against what #2131 already shipped before FR-004's rewriters are
 scoped.
+
+**2026-09-29 note.** Built by B9 ([#2116](https://github.com/elsa-workflows/elsa-foundation/issues/2116)); the PR's merge
+is the owner's approval of what follows, found while building.
+
+- **Where it runs.** `EfModuleMigrator` starts an `EfSchemaBackfill` beside each module's gate once the gate has admitted
+  the module, in the shell, with the shell's services (FR-001). Its first round is one check interval later, so the
+  shell is running by then. Its target is this host's write version, the finalized version it has adopted (FR-002); a
+  host that has not adopted the version the finish record names leaves the family alone, since a row it rewrote would
+  still be below the completion.
+- **The claim (FR-008)** is an optional member of the finish record's JSON, `run`: a member, a worker and an expiry,
+  absent while no run holds one. A build that does not know it reads a claimed record unchanged and drops the claim
+  when it next rewrites the record, which is harmless since nothing depends on it. A withdrawn completion leaves no
+  finish record to hold a claim, so the verification after a withdrawal runs unclaimed; giving the claim a column of
+  its own would change every module's finalization table, which B9 does not do. A claim is taken only for an upgrade
+  pass that has rows to rewrite, so a family that is settling or blocked does not rewrite its record every round.
+- **The settle margin (FR-012)** runs from when the worker first saw every counted member report the target, which is
+  no earlier than when the last of them began to; a worker that restarts waits it again. A counted member whose entry
+  names no observed version - one that loads the family's declaration without activating its module, or serves the
+  family in two databases whose records disagree - holds the condition back, as FR-012 reads. Both only delay.
+  A withdrawal starts the margin again on every worker, not only the one that made it, so the verification after one
+  waits a full margin: a worker notes how many entries the finish history held when its margin began, and a withdrawal
+  entry past that position, whoever appended it, restarts the margin and keeps a verification pass that followed it
+  from recording a completion. The check is by position, not by time, since two hosts' clocks cannot order a withdrawal
+  against a margin.
+  MR-001 was already met by B3; B9 adds the counting requirement `ObservesFinalizedSchemaVersion` to the membership
+  contract, and `IEfSchemaFleet.SettleMargin` gives the default margin from the membership settings. A host that composes
+  no fleet, `Elsa.Foundation.Host` among them today (spec 182, 2026-09-29 note), upgrades rows but never records
+  completion; nothing observable differs while every chain has one version.
+- **Any pass withdraws, before it rewrites (FR-018).** A row found below the standing completion by any pass, not only
+  the hourly audit, withdraws it: a run towards a newer finalized version can meet one below the old completion. The
+  audit, the upgrade pass and the verification pass each withdraw before they rewrite the first such row, so a host
+  that dies midway leaves the straggler reported rather than under a completion that still stands. A pass reads what
+  stands afresh before each row, and so whenever a batch starts, unless it already knows of a completion at or after
+  its target: a completion another worker records while the run goes on covers the rows the run meets next, and a row
+  rewritten under it without a withdrawal would hide a straggler. That costs a run one read of the finalization record
+  per row it rewrites, beside FR-023's read and write of the row. A withdrawal is a compare-and-set against evidence
+  read after the record it withdraws: a completion another worker recorded again in the meantime is withdrawn only if
+  rows below it still remain. A withdrawal that loses its compare-and-set three times stops the round rather than
+  rewrite the row under a completion that still stands; the next round finds the row again. The audit selects every
+  table of the family, as FR-018 now reads: rows below the completion in rewritable tables, in tables whose family
+  names no rewriter and in content-addressed tables, and rows with a missing or unreadable stamp, each withdraw it,
+  and the completion recorded at the first version when the record was created (FR-016) is no exception, since
+  nothing shows a row with an unreadable stamp is not below it. A standing completion is audited whatever this host's
+  target, so a family whose run towards a newer version is blocked or claimed elsewhere is still audited. The audit
+  runs first one check interval after a host starts, then hourly, so hosts that restart more often than hourly still
+  audit. A withdrawal after the settle margin a verification pass followed began, before the pass or during it, keeps
+  the pass from recording, told by its position in the finish history, not by time, since two hosts' clocks cannot
+  order it. The withdrawal reaches Attention from the finish record's history on every host, as a
+  critical item naming the tables and counts, until a new verification pass records the completion again.
+- **Status (FR-021, FR-022).** The gate's status carries the backfill's state, target, rows rewritten, the members the
+  settle condition waits for and what blocks completion. The persistence tool's `status` prints what the record holds:
+  the completion version, a claimed run and a withdrawn completion. A feature waiting on completeness is told it cannot
+  become available when content-addressed rows below the version remain; FR-011c's guard keeps any first-party feature
+  from reaching that.
+- **Selection (FR-005).** Batches are keyset pages over the primary key, resuming after the last key, so a row the
+  backfill cannot rewrite is passed over rather than selected again. A key part is compared as text, as an enum's stored
+  number, or with its type's own order; one stored through any other value converter is refused. A model test runs
+  every first-party stamped table's selections on SQLite, and the synthetic family's run on the three server engines.
+- **Content-addressed tables (FR-010b).** `RuntimeArtifact` names its executables, its executable activity templates
+  and the template hash claims, which are keyed by a template's content hash. Each such entity type is also marked
+  `[EfSchemaContentAddressed(reason)]`, and the model guard fails when a first-party stamped table is marked but not
+  named by its family, or named but not marked, and pins the three tables above by name, failing when one stops being a
+  stamped table. It infers nothing from a table's name. The backfill never rewrites a marked row even where its family
+  forgot to name it.
+- **A blocked family (FR-023).** A family blocked at its target is surveyed again after an interval, not every check
+  interval, unless its target moves: a blocker persists until someone resolves it, and surveying every round would
+  select every table by stamp every fifteen seconds. A family blocked by content-addressed rows, a missing rewriter or
+  a missing fleet waits the audit interval, since only deleting those rows, a new build or a new composition resolves
+  it. One blocked by skew or corruption, rows an operator repairs in place, waits the shorter
+  `RepairableBlockerInterval`, five minutes by default, so a repair is seen soon; a family blocked by both waits the
+  shorter one.
+- **Rewriters (FR-004).** A family names its rewriter with `[EfSchemaFamily(..., Rewriter = typeof(...))]`, and the build
+  fails for a family with upcasters and none. Every first-party family still has one version, so none exists yet;
+  each family writes its own before its first version bump.

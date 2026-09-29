@@ -1,3 +1,4 @@
+using Elsa.Cluster.Core.Contracts;
 using Elsa.Cluster.Core.Models;
 using Elsa.Cluster.Core.Options;
 using Elsa.Cluster.Core.Services;
@@ -6,6 +7,7 @@ using Elsa.Cluster.InProcess;
 using Elsa.Cluster.Readability;
 using Elsa.Cluster.Testing;
 using Elsa.Persistence.EntityFramework;
+using Elsa.Persistence.EntityFramework.SchemaBackfill;
 using Elsa.Persistence.EntityFramework.SchemaFinalization;
 using Elsa.Persistence.Schema;
 using Elsa.Persistence.Schema.SchemaFinalization;
@@ -34,28 +36,31 @@ public sealed class SchemaDormancyScenarioTests : IAsyncLifetime
     private readonly string _file = Path.Join(Path.GetTempPath(), $"elsa-dormancy-{Guid.NewGuid():N}.db");
     private readonly FakeTimeProvider _time = new(DateTimeOffset.UtcNow);
     private readonly EfSchemaFinalizationGates _gates = new();
+    private readonly EfSchemaFinalizationObservations _observations = new();
     private readonly ServiceProvider _services;
+    private readonly ClusterSchemaFleet _fleet;
     private readonly EfSchemaModuleGate _gate;
     private readonly SchemaDormancyCheck _check;
     private TaskCompletionSource? _heldRead;
 
     public SchemaDormancyScenarioTests()
     {
-        _services = new ServiceCollection().AddSingleton(_gates).BuildServiceProvider();
+        _services = new ServiceCollection().AddSingleton(_gates).AddScoped(_ => Context()).BuildServiceProvider();
+        var declaration = new EfSchemaFamilyDescriptor(_family, Module, "2", typeof(ScenarioUpcaster).Assembly)
+        {
+            Upcasters = [new EfSchemaUpcasterDescriptor(typeof(ScenarioUpcaster), "1", "2")],
+            Rewriter = typeof(OrderRewriter)
+        };
+        // The host's report carries what its gate observed, as EfSchemaReadabilitySource makes it do for a declared family.
         var membership = new InProcessClusterMembership(
             Options.Create(new ClusterMembershipOptions { HostId = $"dormancy-{Guid.NewGuid():N}" }),
-            [new ConformanceReadabilitySource([new ReadabilityEntry(_family, Module, Chain)])],
+            [new ObservedReadability(declaration, _observations)],
             _time);
+        _fleet = new ClusterSchemaFleet(membership);
         _gate = new EfSchemaModuleGate(
-            EfSchemaModuleFamilies.FromDeclarations(Module,
-            [
-                new EfSchemaFamilyDescriptor(_family, Module, "2", typeof(ScenarioUpcaster).Assembly)
-                {
-                    Upcasters = [new EfSchemaUpcasterDescriptor(typeof(ScenarioUpcaster), "1", "2")]
-                }
-            ]),
-            new ClusterSchemaFleet(membership),
-            new EfSchemaFinalizationObservations(),
+            EfSchemaModuleFamilies.FromDeclarations(Module, [declaration]),
+            _fleet,
+            _observations,
             new EfSchemaFinalizationOptions { EvaluationInterval = TimeSpan.FromSeconds(30), RefreshInterval = TimeSpan.FromSeconds(15) },
             _time);
         _check = new SchemaDormancyCheck(Options.Create(new SchemaDormancyOptions()), new EfObservedSchemaFinalization(_gates));
@@ -233,6 +238,46 @@ public sealed class SchemaDormancyScenarioTests : IAsyncLifetime
         Assert.Equal("2", _check.Observe().Single(family => family.Family == _family).CompletionVersion);
     }
 
+    /// <summary>
+    /// Spec 186, User Story 2 and User Story 7; SC-007, FR-012 and FR-017: spec 182's User Story 6 with the backfill running
+    /// instead of a stub, on a single host with the in-process membership. The case that looks like success comes first:
+    /// every row is already at 2 after the upgrade pass, yet the query stays dormant, with the upgrade-in-progress reason,
+    /// until the verification pass after the settle margin records the completion; then it answers from every row. No
+    /// membership table is created.
+    /// </summary>
+    [Fact]
+    public async Task With_the_backfill_running_a_query_that_needs_completeness_is_served_only_once_the_finish_record_names_2()
+    {
+        await SaveAsync(new Order("old-1", null), new Order("old-2", null));
+        await ActivateAsync();
+        // The gate's status carries the backfill's once it is built over the gate (spec 186, FR-021).
+        var backfill = new EfSchemaBackfill(_gate, _fleet, new EfSchemaBackfillOptions(), _time);
+        var needsComplete = new SchemaVersionRequirement(_family, "2", requiresCompleteness: true);
+
+        await backfill.RunOnceAsync(WithScopeAsync);
+
+        Assert.All(await RowsAsync(), row => Assert.Equal(("2", "EUR"), (row.SchemaVersion, row.Currency)));
+        var refusal = await Assert.ThrowsAsync<SchemaDormancyRefusedException>(() => _check.EnsureAvailableAsync([needsComplete], "OrdersByCurrency").AsTask());
+        Assert.Contains("existing records", refusal.Reason, StringComparison.Ordinal);
+        var unmet = Assert.Single(_check.Evaluate([needsComplete]).Unmet);
+        var status = Assert.Single(await _check.ReadStatusAsync(), family => family.Family == _family);
+        Assert.Contains("The backfill is settling towards '2'", SchemaDormancyReasons.ForOperator(unmet, status), StringComparison.Ordinal);
+
+        _time.Advance(TimeSpan.FromSeconds(34));
+        await backfill.RunOnceAsync(WithScopeAsync);
+        Assert.False(_check.Evaluate([needsComplete]).IsAvailable);
+
+        _time.Advance(TimeSpan.FromSeconds(1));
+        await backfill.RunOnceAsync(WithScopeAsync);
+
+        await _check.EnsureAvailableAsync([needsComplete], "OrdersByCurrency");
+        Assert.Equal("2", _check.Observe().Single(family => family.Family == _family).CompletionVersion);
+        Assert.Equal(["EUR", "EUR"], (await RowsAsync()).Select(row => row.Currency));
+        await using var context = Context();
+        var tables = await context.Database.SqlQueryRaw<string>("SELECT name AS Value FROM sqlite_master WHERE type = 'table'").ToListAsync();
+        Assert.DoesNotContain(tables, table => table.Contains("cluster", StringComparison.OrdinalIgnoreCase) || table.Contains("member", StringComparison.OrdinalIgnoreCase));
+    }
+
     /// <summary>Edge case "A host that cannot read the finalized version": not dormancy, and never available.</summary>
     [Fact]
     public async Task A_family_finalized_at_a_version_this_build_cannot_read_is_reported_as_refusing_writes_and_its_requirement_stays_unmet()
@@ -336,15 +381,14 @@ public sealed class SchemaDormancyScenarioTests : IAsyncLifetime
 
     private EfSchemaFinalizationStore Store(DbContext context) => new(context, _time);
 
-    private static async Task WaitUntilAsync(Func<bool> condition)
+    private async Task WithScopeAsync(Func<EfSchemaBackfillScope, Task> action, CancellationToken cancellationToken)
     {
-        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(20);
-        while (!condition())
-        {
-            Assert.True(DateTime.UtcNow < deadline, "The gate's background refresh did not end the dormancy.");
-            await Task.Delay(20);
-        }
+        await using var scope = _services.CreateAsyncScope();
+        await action(new EfSchemaBackfillScope(scope.ServiceProvider, scope.ServiceProvider.GetRequiredService<DormancyContext>()));
     }
+
+    private static Task WaitUntilAsync(Func<bool> condition) =>
+        Polling.UntilAsync(condition, TimeSpan.FromSeconds(20), TimeSpan.FromMilliseconds(20), "The gate's background refresh did not end the dormancy.");
 
     private DormancyContext Context()
     {
@@ -356,6 +400,37 @@ public sealed class SchemaDormancyScenarioTests : IAsyncLifetime
     }
 
     private sealed record Order(string Id, string? Currency);
+
+    /// <summary>
+    /// The family's rewriter (spec 186, FR-004): a row an older writer left at 1 carries no currency, and version 2's write
+    /// path fills the projection with the currency every version-1 order implicitly had.
+    /// </summary>
+    private sealed class OrderRewriter(DormancyContext context, EfSchemaFinalizationGates gates) : IEfSchemaRowRewriter
+    {
+        public async ValueTask<EfSchemaRewriteOutcome> RewriteAsync(EfSchemaRowToRewrite row, CancellationToken cancellationToken = default)
+        {
+            var id = (string)row.Key[0]!;
+            var stored = await context.Orders.SingleOrDefaultAsync(order => order.Id == id, cancellationToken);
+            if (stored is null)
+                return EfSchemaRewriteOutcome.Missing;
+            var gate = gates.FindModuleGate(typeof(DormancyContext))!;
+            var chain = gate.Families.Chains.Single();
+            EfSchemaVersion.EnsureReadable(chain, stored.SchemaVersion);
+            if (chain.IsAtOrAfter(stored.SchemaVersion, row.TargetVersion))
+                return EfSchemaRewriteOutcome.AlreadyCurrent;
+            stored.SchemaVersion = gate.StateOf(chain.Family)!.WriteVersion;
+            stored.Currency ??= "EUR";
+            await context.SaveChangesAsync(cancellationToken);
+            return EfSchemaRewriteOutcome.Rewritten;
+        }
+    }
+
+    /// <summary>The host's readability for the one scenario family, with the database and finalized version its gate observed.</summary>
+    private sealed class ObservedReadability(EfSchemaFamilyDescriptor declaration, EfSchemaFinalizationObservations observations) : IMemberReportSource<ReadabilitySection>
+    {
+        public ValueTask<ReadabilitySection> ReadAsync(CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(EfSchemaReadabilitySource.Read([declaration], observations: observations));
+    }
 
     private sealed class OrderRow
     {

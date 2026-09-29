@@ -4,14 +4,21 @@ using System.Text.Json.Nodes;
 namespace Elsa.Cluster.EntityFrameworkCore.Tests;
 
 /// <summary>
-/// The feeds the host loads from: the fixture and <c>Elsa.Persistence.EntityFramework</c>, packed by the SDK from the build
-/// this test assembly was built with, in <see cref="Directory"/>; and the packages they and the EF provider engine depend
-/// on that the host does not carry (EF Core, the Sqlite engine and what they need), copied from the package cache this
-/// project's restore filled, in <see cref="ClosureDirectory"/>. Two other releases of the fixture are built and packed
-/// here, so a host can be upgraded in place: its previous release, a lower version whose family reads version 1 alone,
-/// beside the persistence package in <see cref="PreviousDirectory"/>, which a host starts on; and its next release, a
-/// higher version that adds one migration, as <see cref="NextPackage"/>.
+/// The feeds the host loads from: the fixture, packed by the SDK from the build this test assembly was built with, in
+/// <see cref="Directory"/>; its releases before and after, packed under the same package id by
+/// <see cref="PackReleaseAsync"/>, the release before, which reads only version 1 of its family, in
+/// <see cref="PreviousDirectory"/>, and the release after, which adds one migration, as <see cref="NextPackage"/>; and, in
+/// <see cref="ClosureDirectory"/>, everything they and the EF provider engine depend on -
+/// <c>Elsa.Persistence.EntityFramework</c>'s restore closure, EF Core, the Sqlite engine and what they need - copied from
+/// the package cache this project's restore filled.
 /// </summary>
+/// <remarks>
+/// The host carries EF Core, the engines and <c>Elsa.Persistence.EntityFramework</c> for its cluster membership (#2151), so
+/// Nuplane must acquire none of what the closure feed offers but the engine package the <c>ef-provider</c> selection names:
+/// the closure is there so that acquiring any of it is possible, and a test that finds one acquired has found a second copy.
+/// No feed offers <c>Elsa.Persistence.EntityFramework</c> itself, or any other Elsa project: a host that did not provide one
+/// would fail its reconciliation loudly rather than load a copy.
+/// </remarks>
 public sealed class FoundationHostFeed : IAsyncLifetime
 {
     /// <summary>The fixture's package id, which all of its releases share.</summary>
@@ -20,35 +27,38 @@ public sealed class FoundationHostFeed : IAsyncLifetime
     /// <summary>Packing a built project takes seconds; this is the ceiling for a <c>dotnet</c> that will never return.</summary>
     private static readonly TimeSpan DotnetTimeout = TimeSpan.FromMinutes(3);
 
-    private static readonly string FixtureProject = Path.Join(FoundationHostProcess.RepoRoot, "tests", "essentials", "Cluster", "Fixtures", "FeedModule", $"{FixturePackageId}.csproj");
-
-    private static readonly string[] Projects =
-    [
-        FixtureProject,
-        Path.Join(FoundationHostProcess.RepoRoot, "src", "essentials", "Persistence", "EntityFramework", "Elsa.Persistence.EntityFramework.csproj")
-    ];
+    private static readonly string Fixture = Path.Join(FoundationHostProcess.RepoRoot, "tests", "essentials", "Cluster", "Fixtures", "FeedModule", $"{FixturePackageId}.csproj");
 
     /// <summary>The EF persistence project's restore: every package it needs, which the packed package declares.</summary>
     private static readonly string PersistenceAssets = Path.Join(FoundationHostProcess.RepoRoot, "src", "essentials", "Persistence", "EntityFramework", "obj", "project.assets.json");
 
-    /// <summary>This project's restore, which carries the Sqlite engine and the rest of what it needs.</summary>
-    private static readonly string TestAssets = Path.Join(FoundationHostProcess.RepoRoot, "tests", "essentials", "Cluster", "EntityFrameworkCore", "Tests", "obj", "project.assets.json");
+    /// <summary>
+    /// The restore of the test project this is compiled into (<c>Tests</c>, or <c>ProviderTests</c>, which links this file),
+    /// which carries the engine it runs on and the rest of what it needs.
+    /// </summary>
+    private static readonly string TestAssets = Path.Join(
+        FoundationHostProcess.RepoRoot, "tests", "essentials", "Cluster", "EntityFrameworkCore",
+        typeof(FoundationHostFeed).Assembly.GetName().Name![(typeof(FoundationHostFeed).Assembly.GetName().Name!.LastIndexOf('.') + 1)..],
+        "obj", "project.assets.json");
+
+    /// <summary>The engine packages the tests run on; the restore of a project that does not use one does not name it.</summary>
+    private static readonly string[] Engines = ["Microsoft.EntityFrameworkCore.Sqlite", "Npgsql.EntityFrameworkCore.PostgreSQL"];
 
     private readonly DirectoryInfo _root = System.IO.Directory.CreateTempSubdirectory("elsa-foundation-host-feeds-");
 
-    /// <summary>The packed packages, which the host takes as its own feed.</summary>
+    /// <summary>The fixture's package, at the version that reads and writes version 2 of its family.</summary>
     public string Directory => Path.Join(_root.FullName, "packed");
 
-    /// <summary>The fixture's previous release and the persistence package, which a host starts on before it is upgraded.</summary>
+    /// <summary>The release of the fixture's package before it, which reads only version 1 of its family.</summary>
     public string PreviousDirectory => Path.Join(_root.FullName, "previous");
 
-    /// <summary>The fixture's previous release, which a host started on <see cref="PreviousDirectory"/> loads first.</summary>
+    /// <summary>The release before the fixture's, which a host started on <see cref="PreviousDirectory"/> loads.</summary>
     public string PreviousPackage => FoundationHostProcess.Releases(PreviousDirectory, FixturePackageId).Single();
 
-    /// <summary>The fixture's current release, the package an in-place upgrade drops into a running host's feed.</summary>
+    /// <summary>The fixture's own release, the package an in-place upgrade from <see cref="PreviousPackage"/> drops into a running host's feed.</summary>
     public string FixturePackage => FoundationHostProcess.Releases(Directory, FixturePackageId).Single();
 
-    /// <summary>The fixture's next release: the current one plus a migration a host that validates has to have applied.</summary>
+    /// <summary>The release after the fixture's: the fixture plus a migration a host that validates has to have applied.</summary>
     public string NextPackage => FoundationHostProcess.Releases(Path.Join(_root.FullName, "next"), FixturePackageId).Single();
 
     /// <summary>The packages those depend on, which the host only resolves from.</summary>
@@ -56,21 +66,14 @@ public sealed class FoundationHostFeed : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        foreach (var project in Projects)
-            await DotnetAsync("pack", project, "--no-build", "-c", FoundationHostProcess.Configuration, "-p:IsPackable=true", "-o", Directory);
-
-        // The other releases are compiled here, each into outputs of its own: only the fixture, against the persistence
-        // build the current release was built against. The previous one is packed with the persistence package it needs.
+        await DotnetAsync("pack", Fixture, "--no-build", "-c", FoundationHostProcess.Configuration, "-p:IsPackable=true", "-o", Directory);
         foreach (var release in new[] { "previous", "next" })
-            await DotnetAsync("pack", FixtureProject, "--no-restore", "-c", FoundationHostProcess.Configuration, $"-p:FeedModuleRelease={release}",
-                "-p:BuildProjectReferences=false", "-p:IsPackable=true", "-o", Path.Join(_root.FullName, release));
-        foreach (var package in System.IO.Directory.EnumerateFiles(Directory, "*.nupkg").Except(FoundationHostProcess.Releases(Directory, FixturePackageId)))
-            File.Copy(package, Path.Join(PreviousDirectory, Path.GetFileName(package)));
+            await PackReleaseAsync(Fixture, Path.Join(_root.FullName, "build", release), Path.Join(_root.FullName, release), $"FeedModuleRelease={release}");
 
         System.IO.Directory.CreateDirectory(ClosureDirectory);
         // Both restores prune what ASP.NET's shared framework carries, which the host does not offer Nuplane, so the EF
         // persistence project's, a class library, is the one that names EF Core's own closure.
-        foreach (var package in Packages(PersistenceAssets).Concat(Packages(TestAssets, "Microsoft.EntityFrameworkCore.Sqlite")).Distinct())
+        foreach (var package in Packages(PersistenceAssets).Concat(Packages(TestAssets, Engines)).Distinct())
             File.Copy(package, Path.Join(ClosureDirectory, Path.GetFileName(package)), overwrite: true);
     }
 
@@ -113,42 +116,34 @@ public sealed class FoundationHostFeed : IAsyncLifetime
     }
 
     /// <summary>
+    /// Packs a release of the fixture <paramref name="project"/> other than the one its build left into
+    /// <paramref name="output"/>, the one way every fixture with several releases is packed: <paramref name="properties"/>
+    /// select the release's sources and version in the project, and <c>FixtureBuildRoot</c> builds it into
+    /// <paramref name="buildRoot"/>, so the fixture's own build output, which the rest of the run shares, is left as it was.
+    /// The project references are built already, by this project's build: building them again into these folders would
+    /// pack their sources twice over and race the build everything else uses.
+    /// </summary>
+    internal static Task PackReleaseAsync(string project, string buildRoot, string output, params string[] properties) =>
+        DotnetAsync(
+        [
+            "pack", project, "--no-restore", "-c", FoundationHostProcess.Configuration, "-p:IsPackable=true", "-p:BuildProjectReferences=false",
+            $"-p:FixtureBuildRoot={buildRoot}{Path.DirectorySeparatorChar}", .. properties.Select(property => $"-p:{property}"), "-o", output
+        ]);
+
+    /// <summary>
     /// Runs <c>dotnet</c> to completion and fails with everything it wrote if it exits non-zero or outlasts
     /// <see cref="DotnetTimeout"/>, when its whole process tree is killed. MSBuild is kept from leaving nodes behind: they
     /// would inherit the redirected pipes, and reading them to the end would then never return.
     /// </summary>
     private static async Task DotnetAsync(params string[] arguments)
     {
-        var startInfo = new ProcessStartInfo(FoundationHostProcess.DotnetPath, [.. arguments, "-nodeReuse:false"])
-        {
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false
-        };
+        var startInfo = new ProcessStartInfo(FoundationHostProcess.DotnetPath, [.. arguments, "-nodeReuse:false"]);
         startInfo.Environment["MSBUILDDISABLENODEREUSE"] = "1";
         startInfo.Environment["DOTNET_CLI_USE_MSBUILD_SERVER"] = "0";
 
-        var output = new CapturedOutput();
-        using var process = new Process { StartInfo = startInfo };
-        process.OutputDataReceived += (_, line) => output.Append(line.Data);
-        process.ErrorDataReceived += (_, line) => output.Append(line.Data);
         var command = $"dotnet {string.Join(' ', startInfo.ArgumentList)}";
-
-        using var timeout = new CancellationTokenSource(DotnetTimeout);
-        process.Start();
-        process.BeginOutputReadLine();
-        process.BeginErrorReadLine();
-        try
-        {
-            await process.WaitForExitAsync(timeout.Token);
-        }
-        catch (OperationCanceledException)
-        {
-            process.Kill(entireProcessTree: true);
-            throw new TimeoutException($"{command} did not finish within {DotnetTimeout} and was killed. Its output:{Environment.NewLine}{output}");
-        }
-
-        if (process.ExitCode != 0)
-            throw new InvalidOperationException($"{command} exited {process.ExitCode}. Its output:{Environment.NewLine}{output}");
+        var (exitCode, output) = await ChildProcess.RunAsync(startInfo, DotnetTimeout, command);
+        if (exitCode != 0)
+            throw new InvalidOperationException($"{command} exited {exitCode}. Its output:{Environment.NewLine}{output}");
     }
 }

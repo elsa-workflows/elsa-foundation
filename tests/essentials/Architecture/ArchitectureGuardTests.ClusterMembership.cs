@@ -60,7 +60,8 @@ public sealed partial class ArchitectureGuardTests
     /// The EF-free half of the schema-family surface, which every host shares with every package it loads (#2143; ADR
     /// 0067, amended 2026-09-29): no EF Core, database engine, actor framework or provider project, no Elsa project outside
     /// Line A, and no package but the <c>Microsoft.Extensions</c> abstractions. Anything more would be pinned by every host
-    /// and loaded by every package, and EF Core in it would put EF into a host that carries none (ADR 0076).
+    /// and loaded by every package, and EF Core in it would put EF into every host, even one that composes only the
+    /// in-process default (ADR 0076; #2151 admits EF into Elsa.Foundation.Host for its opt-in membership provider only).
     /// </summary>
     [Fact]
     public void The_shared_schema_seam_takes_no_provider_and_only_abstractions()
@@ -84,9 +85,10 @@ public sealed partial class ArchitectureGuardTests
 
     /// <summary>
     /// What a host composes to reach its membership: the readability report, the fleet and the dormancy source (#2143). A
-    /// host that carries no EF (ADR 0076), <c>Elsa.Foundation.Host</c>, composes it, so it reaches no EF Core and no
-    /// database engine. It is still classed as a provider project by name below, which keeps the contract and the
-    /// in-process default from reaching it.
+    /// host composes it whether or not it clusters, so it reaches no EF Core and no database engine: a cluster of one
+    /// needs no EF at all, and <c>Elsa.Foundation.Host</c> carries EF only for the opt-in durable provider (ADR 0076,
+    /// amended 2026-09-29; #2151). It is still classed as a provider project by name below, which keeps the contract and
+    /// the in-process default from reaching it.
     /// </summary>
     [Fact]
     public void The_readability_source_a_host_composes_takes_no_ef_dependency()

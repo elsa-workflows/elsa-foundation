@@ -9,29 +9,32 @@
       the module's finalization gate reached the host's fleet, and its feature asks the shared dormancy check before it
       serves, so it shows whether the host's check sees the module's gate.
     </Description>
+    <!-- Between the release before it and the release after it, which pack under this package id too. -->
+    <Version>2.0.0</Version>
   </PropertyGroup>
 
   <!--
-    Two other releases of the same package, for an in-place upgrade (spec 183, FR-021, amended 2026-09-29), which
-    FoundationHostFeed builds and packs with -p:FeedModuleRelease=previous or =next. Each builds into outputs of its own,
-    so it never overwrites the build every other test loads, and neither is ever this project's default.
-    - previous: a lower package version whose family is at version 1 with no upcaster, so it reads version 1 alone.
-    - next: a higher package version that is this release plus one migration, so a host that validates its migrations
-      has one pending when it reloads onto it.
+    The releases before and after this one, which FoundationHostFeed packs with -p:FeedModuleRelease=previous or =next,
+    each built into a folder of its own named by FixtureBuildRoot, as every fixture with several releases is built.
+    - previous (1.0.0): its family is at version 1 with no upcaster, so it reads version 1 alone, and its orders feature
+      serves at 1. A host on it beside a host on this release is the cluster whose finalization of 2 has to wait for it
+      (#2151), and a host upgraded in place from it shows that finalization no longer waits for the release it replaced
+      (spec 183, FR-021, amended 2026-09-29).
+    - next (3.0.0): this release plus one migration, so a host that validates its migrations has one pending when it
+      reloads onto it.
   -->
-  <PropertyGroup Condition="'$(FeedModuleRelease)' != ''">
-    <IntermediateOutputPath>$(BaseIntermediateOutputPath)release-$(FeedModuleRelease)/$(Configuration)/</IntermediateOutputPath>
-    <!-- BaseOutputPath is not set yet here, so the default bin/ is spelled out. -->
-    <OutputPath>bin/release-$(FeedModuleRelease)/$(Configuration)/</OutputPath>
+  <PropertyGroup Condition="'$(FixtureBuildRoot)' != ''">
+    <OutputPath>$(FixtureBuildRoot)bin/</OutputPath>
+    <IntermediateOutputPath>$(FixtureBuildRoot)obj/</IntermediateOutputPath>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(FeedModuleRelease)' == 'previous'">
     <DefineConstants>$(DefineConstants);FEED_MODULE_PREVIOUS_RELEASE</DefineConstants>
-    <Version>0.1.0</Version>
+    <Version>1.0.0</Version>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(FeedModuleRelease)' == 'next'">
-    <Version>1.1.0</Version>
+    <Version>3.0.0</Version>
   </PropertyGroup>
 
   <ItemGroup>

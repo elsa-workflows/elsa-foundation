@@ -37,21 +37,8 @@ public sealed record ReadsSchemaVersion : MemberRequirement
 
     public string? DatabaseIdentity { get; }
 
-    internal override bool IsMetBy(FleetMember member, MemberQueryPurpose purpose)
-    {
-        if (member.Report.IsUnknown || member.Report.Readability is not { } readability)
-            return false;
-
-        var applicable = readability.Entries
-            .Where(entry => string.Equals(entry.Family, Family, StringComparison.Ordinal))
-            .Where(entry => entry.AppliesTo(DatabaseIdentity))
-            .ToArray();
-
-        if (applicable.Length == 0)
-            return purpose == MemberQueryPurpose.Counting;
-
-        return applicable.All(entry => entry.CanRead(Version));
-    }
+    internal override bool IsMetBy(FleetMember member, MemberQueryPurpose purpose) =>
+        ReadabilitySection.EveryEntryMeets(member, Family, DatabaseIdentity, purpose, entry => entry.CanRead(Version));
 
     public override string ToString() =>
         DatabaseIdentity is null
