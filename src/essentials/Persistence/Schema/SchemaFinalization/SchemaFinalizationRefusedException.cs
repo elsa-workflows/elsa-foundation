@@ -46,6 +46,9 @@ public enum SchemaFinalizationRefusal
     /// <summary>A completion version later than the finalized version (spec 186, FR-014).</summary>
     CompletionBeyondFinalized,
 
-    /// <summary>No completion stands to withdraw.</summary>
-    NoCompletion
+    /// <summary>No completion stands to withdraw, or to claim a backfill run past.</summary>
+    NoCompletion,
+
+    /// <summary>Another backfill worker holds a live claim on the family's run (spec 186, FR-008).</summary>
+    BackfillClaimed
 }

@@ -143,6 +143,54 @@ public sealed class FeatureDormancyReportingTests
         Assert.Contains("'9'", item.Summary, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// Spec 186, FR-018, both ways: a completion the backfill's audit withdrew is critical, naming the family and the
+    /// tables and counts it found; once a new verification pass records the completion again, the item is gone.
+    /// </summary>
+    [Fact]
+    public async Task Attention_reports_a_withdrawn_completion_as_critical_until_it_is_recorded_again()
+    {
+        var withdrawal = new SchemaCompletionWithdrawal("2", "host-a (1f)", Now, "The audit found rows below '2': table 'orders': 3 (rewritten).");
+        _observed.Set(Observed("2") with { CompletionVersion = null, Withdrawal = withdrawal });
+
+        var item = Assert.Single((await AttentionAsync()).Items);
+
+        Assert.Equal((AttentionSeverity.Critical, $"schema-family-completion-withdrawn:{Family}"), (item.Severity, item.Id));
+        Assert.Contains("table 'orders': 3", item.Summary, StringComparison.Ordinal);
+        Assert.Contains(item.Correlations, correlation => correlation == new AttentionCorrelation("schema-family", Family));
+
+        _observed.Set(Observed("2"));
+        Assert.Empty((await AttentionAsync()).Items);
+    }
+
+    /// <summary>
+    /// Spec 186, FR-022: a feature waiting on completeness gets its reason from the backfill's status, and one whose family
+    /// keeps content-addressed rows below the version is told it cannot become available at all.
+    /// </summary>
+    [Fact]
+    public async Task A_feature_waiting_for_completeness_says_so_and_says_when_content_addressed_rows_make_it_unreachable()
+    {
+        var backfill = new SchemaBackfillObservation("Upgrading", "2", 40, [], [], false, null);
+        _observed.Set(Observed("2") with { CompletionVersion = "1", Backfill = backfill });
+
+        var waiting = Assert.Single((await CatalogItemAsync(enabled: true, typeof(OrdersQueryFeature))).Availability!.Reasons);
+
+        Assert.Equal(nameof(SchemaDormancyKind.WaitingForCompleteness), waiting.Kind);
+        Assert.Contains("existing records of schema family 'Orders' have been upgraded", waiting.Reason, StringComparison.Ordinal);
+        Assert.Contains("The backfill is upgrading towards '2', with 40 row(s) rewritten so far.", waiting.Reason, StringComparison.Ordinal);
+
+        _observed.Set(Observed("2") with
+        {
+            CompletionVersion = "1",
+            Backfill = backfill with { State = "Blocked", Blockers = ["2 content-addressed row(s) of table 'receipts' are below '2'."], CompletenessUnreachable = true }
+        });
+
+        var unreachable = Assert.Single((await CatalogItemAsync(enabled: true, typeof(OrdersQueryFeature))).Availability!.Reasons);
+
+        Assert.Contains("It cannot become available", unreachable.Reason, StringComparison.Ordinal);
+        Assert.Contains("content-addressed rows below the version remain", unreachable.Reason, StringComparison.Ordinal);
+    }
+
     /// <summary>The runtime contributor hands each feature's class on, which is where its requirements are read from.</summary>
     private Task<FeatureCatalogItem> CatalogItemAsync(bool enabled, Type? featureType = null) => CatalogItemAsync(enabled, _check, featureType);
 
@@ -168,6 +216,9 @@ public sealed class FeatureDormancyReportingTests
 
     [RequiresSchemaVersion(Family, "2")]
     private sealed class OrdersApiFeature;
+
+    [RequiresSchemaVersion(Family, "2", RequiresCompleteness = true)]
+    private sealed class OrdersQueryFeature;
 
     private sealed class PlainFeature;
 

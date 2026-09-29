@@ -172,6 +172,26 @@ public sealed class EfSchemaFamilyCatalogTests : IDisposable
         Assert.Empty(families["Ledger"].IntegrityColumns);
     }
 
+    /// <summary>
+    /// Spec 186, FR-004 and FR-010b: a family's content-addressed tables and its rewriter are read from the declaration's
+    /// named arguments as metadata alone, by name, since the catalog names the attribute rather than referencing it; a
+    /// family that names neither reads as none.
+    /// </summary>
+    [Fact]
+    public void Content_addressed_tables_and_the_rewriter_are_read_onto_their_family_from_metadata_alone()
+    {
+        var sales = Declare("Sales", ["Sales"],
+            new SyntheticFamily("Orders", "Sales", "1", ContentAddressed: ["Sales.ReceiptRow", "Sales.TemplateRow"], Rewriter: "Sales.OrdersRewriter"),
+            new SyntheticFamily("Ledger", "Sales", "1"));
+
+        var families = EfSchemaFamilyCatalog.Discover([sales]).ToDictionary(family => family.Name);
+
+        Assert.Equal(["ReceiptRow", "TemplateRow"], families["Orders"].ContentAddressed.Select(type => type.Name));
+        Assert.Equal("OrdersRewriter", families["Orders"].Rewriter?.Name);
+        Assert.Empty(families["Ledger"].ContentAddressed);
+        Assert.Null(families["Ledger"].Rewriter);
+    }
+
     [Theory]
     [InlineData("a column of a family the assembly does not declare", "which that assembly does not declare")]
     [InlineData("a column declared twice", "2 times")]

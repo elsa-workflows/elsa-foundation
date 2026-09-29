@@ -6,8 +6,9 @@ namespace Elsa.Cluster.Readability;
 
 /// <summary>
 /// What this container's EF finalization gates have observed (spec 181), as the shared dormancy check reads it (spec
-/// 182, FR-003): each family's write version, its record as last read, with holds, intent and finish record, and a way to
-/// refresh it or read its status on demand. It reads the gates live, so it follows every refresh without a restart or a
+/// 182, FR-003): each family's write version, its record as last read, with holds, intent and finish record, what the
+/// module's post-finalization backfill reports of it (spec 186, FR-021), and a way to refresh it or read its status on
+/// demand. It reads the gates live, so it follows every refresh without a restart or a
 /// shell reload (FR-019).
 /// </summary>
 /// <remarks>
@@ -66,5 +67,18 @@ public sealed class EfObservedSchemaFinalization(EfSchemaFinalizationGates? gate
                     pending.Blockers))
                 .ToArray(),
             status.Intent is { } intent ? new SchemaIntentObservation(intent.Version, intent.Member.ToString(), intent.At) : null,
-            status.ObservedAt);
+            status.ObservedAt,
+            status.Backfill is { } backfill
+                ? new SchemaBackfillObservation(
+                    backfill.State.ToString(),
+                    backfill.TargetVersion,
+                    backfill.RowsRewritten,
+                    backfill.SettleWaitingFor,
+                    backfill.Blockers.Select(blocker => blocker.Detail).ToArray(),
+                    backfill.BlockedByContentAddressedRows,
+                    backfill.Detail)
+                : null,
+            status.Withdrawal is { } withdrawal
+                ? new SchemaCompletionWithdrawal(withdrawal.Version, withdrawal.Actor.ToString(), withdrawal.At, withdrawal.Reason)
+                : null);
 }

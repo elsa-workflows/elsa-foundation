@@ -1,5 +1,3 @@
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
 namespace Elsa.Persistence.EntityFramework.SchemaFinalization;
@@ -54,23 +52,12 @@ internal sealed class EfSchemaFinalizationOptionsConfigurator(IServiceProvider s
 {
     public void Configure(EfSchemaFinalizationOptions options)
     {
-        var section = services.GetService<IConfiguration>()?.GetSection(EfSchemaFinalizationOptions.SectionName);
-        if (section is null)
+        if (EfSettingsSection.Of(services, EfSchemaFinalizationOptions.SectionName) is not { } section)
             return;
-        options.EvaluationInterval = Read(section, nameof(options.EvaluationInterval)) ?? options.EvaluationInterval;
-        options.RefreshInterval = Read(section, nameof(options.RefreshInterval)) ?? options.RefreshInterval;
-        options.IntentWaitBound = Read(section, nameof(options.IntentWaitBound)) ?? options.IntentWaitBound;
-        options.IntentPollInterval = Read(section, nameof(options.IntentPollInterval)) ?? options.IntentPollInterval;
+        options.EvaluationInterval = section.TimeSpan(nameof(options.EvaluationInterval)) ?? options.EvaluationInterval;
+        options.RefreshInterval = section.TimeSpan(nameof(options.RefreshInterval)) ?? options.RefreshInterval;
+        options.IntentWaitBound = section.TimeSpan(nameof(options.IntentWaitBound)) ?? options.IntentWaitBound;
+        options.IntentPollInterval = section.TimeSpan(nameof(options.IntentPollInterval)) ?? options.IntentPollInterval;
         options.Validate();
-    }
-
-    private static TimeSpan? Read(IConfigurationSection section, string key)
-    {
-        var value = section[key];
-        if (string.IsNullOrWhiteSpace(value))
-            return null;
-        return TimeSpan.TryParse(value, System.Globalization.CultureInfo.InvariantCulture, out var parsed)
-            ? parsed
-            : throw new InvalidOperationException($"Configuration '{EfSchemaFinalizationOptions.SectionName}:{key}' is '{value}', which is not a time span such as '00:00:30'.");
     }
 }
