@@ -9,6 +9,8 @@
       the module's finalization gate reached the host's fleet, and its feature asks the shared dormancy check before it
       serves, so it shows whether the host's check sees the module's gate.
     </Description>
+    <!-- Above the release before it, FeedModuleV1's, which packs under this package id too (#2151). -->
+    <Version>2.0.0</Version>
   </PropertyGroup>
 
   <ItemGroup>

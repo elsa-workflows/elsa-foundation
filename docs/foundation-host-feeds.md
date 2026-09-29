@@ -2,7 +2,9 @@
 
 `Elsa.Foundation.Host` compiles in no Elsa feature. Every feature — activities, HTTP, persistence,
 the Tasks feature — arrives as a NuGet package through a Nuplane feed and is discovered by CShells
-via `NuplaneAssemblyProvider`. This page is the worked reference for pointing the host at a feed.
+via `NuplaneAssemblyProvider`. This page is the worked reference for pointing the host at a feed, and,
+in [Running several hosts as a cluster](#running-several-hosts-as-a-cluster), for pointing several of
+them at one database.
 
 A feed can be a **directory** of `.nupkg` files or a **remote NuGet V3 service index**. Both are
 declared the same way, under `Nuplane:Setup:Feeds`, and both work in the shipped host. A deployment
@@ -166,15 +168,18 @@ builds their images
 [#2126](https://github.com/elsa-workflows/elsa-foundation/issues/2126)). Such a build records each Elsa package
 in its `deps.json` at the version the feed carries, and ships `ComputedVersions/appsettings.Production.json` as
 its `appsettings.Production.json`: the committed file plus a `Nuplane:HostProvidedPackages` list naming every
-share. `Elsa.Foundation.Host` shares Line A's ten contracts (`Elsa.Primitives`, `Elsa.Events.Core` and the rest) and
-the two host-composed ones, `Elsa.Cluster.Core` and `Elsa.Persistence.Schema`, beside its three
-`CShells.*.Abstractions` ones; `Elsa.Workbench` shares those same twelve plus the domain `.Core` packages its own
-features need, `Elsa.Workflows.Runtime.Core` among them. So each image refuses a feed
+share. `Elsa.Foundation.Host` shares Line A's ten contracts (`Elsa.Primitives`, `Elsa.Events.Core` and the rest),
+the two host-composed ones, `Elsa.Cluster.Core` and `Elsa.Persistence.Schema`, and what it carries for its EF cluster
+membership provider, `Elsa.Persistence.EntityFramework` and EF Core's `Microsoft.EntityFrameworkCore`, `.Abstractions`
+and `.Relational` (see [Cluster membership and EF module packages](#cluster-membership-and-ef-module-packages)),
+beside its three `CShells.*.Abstractions` ones; `Elsa.Workbench` shares the ten and the two plus the domain `.Core`
+packages its own features need, `Elsa.Workflows.Runtime.Core` among them. So each image refuses a feed
 package that needs a newer shared Elsa package than it carries. A host built from source records its Elsa
 packages at their line's dev version (`4.0.0-dev` today), which every Elsa feed package's range excludes, so
 declaring them would refuse every Elsa feed package that depends on one. A source build therefore keeps the
-committed `appsettings.Production.json`, declares only its CShells/Nuplane shares, and carries a named exemption
-for the Elsa ones, which it leaves unchecked: the late-failure shape this section describes. That covers
+committed `appsettings.Production.json`, declares only its CShells/Nuplane shares (and, on `Elsa.Foundation.Host`, EF
+Core's, whose versions are real in any build), and carries a named exemption for the Elsa ones, which it leaves
+unchecked: the late-failure shape this section describes. That covers
 `dotnet run`, the Docker image built locally and the source-built compose stack alike. The exemption lives in the
 guard with its reason beside each entry, and applies to source builds only; the guard fails if an exempted assembly
 stops being shared or a source build declares it after all, if a computed build leaves any share undeclared, and if
@@ -189,8 +194,8 @@ transitively. That is why `Elsa.Workbench` shares `Elsa.Events.Core`, `Elsa.Pipe
 `Elsa.Workflows.Design.Validations.Core`, and it shares `Elsa.Attention.Core` because that assembly is a
 Line A contract features exchange with one another. All four are declared and exempted like its other
 Elsa shares. `Elsa.Foundation.Host`'s closure holds by construction: Line A depends only on Line A
-(ADR 0067), and the two host-composed shares reach only Line A, so sharing those twelve leaves nothing unshared to
-flag.
+(ADR 0067), the two host-composed shares reach only Line A, and `Elsa.Persistence.EntityFramework` reaches only
+`Elsa.Primitives` and `Elsa.Persistence.Schema`, so sharing those thirteen leaves nothing unshared to flag.
 
 Neither case is caught by the version range or the lock file, because nothing was resolved to check.
 
@@ -203,27 +208,70 @@ Note that `Microsoft.Extensions.*` is no longer skipped by a fixed prefix rule e
 the host's own `deps.json` (rule 2) or the host explicitly adds the `Microsoft.Extensions.` prefix to
 `Nuplane:HostProvidedPackages` (rule 1). `Microsoft.EntityFrameworkCore.*` and `Npgsql.*` were never
 covered by the old prefix rule either way, so EF and its provider have always arrived through the feed
-normally.
+normally — until `Elsa.Foundation.Host` began carrying them for its cluster membership
+([#2151](https://github.com/elsa-workflows/elsa-foundation/issues/2151)). On that host EF Core, Abstractions and
+Relational are declared (rule 1) and the engines' closures are in its `deps.json` (rule 2), so a module's
+dependency on any of them is never acquired, and binds the host's copy.
 
 ### Cluster membership and EF module packages
 
 Both hosts compose cluster membership once, on the host container (`AddEfSchemaReadability`): the readability report,
 the in-process default, the finalization gate's view of the fleet and the dormancy check's source (spec 183, FR-017;
-[#2143](https://github.com/elsa-workflows/elsa-foundation/issues/2143)). An EF module package carries its own copy of
-`Elsa.Persistence.EntityFramework`, which the host does not share and, on `Elsa.Foundation.Host`, does not carry at
-all. What the module reaches membership through is therefore not in that assembly but in `Elsa.Persistence.Schema`,
-which references no EF Core, and `Elsa.Cluster.Core`; both hosts share both (ADR 0067, "Host-composed shares"). With
-them shared, a module's finalization gate counts the host's fleet, so a single host finalizes a new schema version at
-activation (spec 181, FR-021), and the host's dormancy check reads the module's gate, so a feature that needs that
-version serves once it is finalized (spec 182, FR-019). Without them nothing fails loudly: the module admits, its gate
-never finalizes past the version its record was created at, and every feature waiting on it is refused as not
-observed. `SharedAssemblyClosureGuardTests` fails the build when a host does not share both, and
+[#2143](https://github.com/elsa-workflows/elsa-foundation/issues/2143)). Both also compose
+`AddConfiguredClusterMembership`, which replaces that default with the durable EF provider when configuration enables it
+(spec 183, FR-024; on `Elsa.Foundation.Host` since [#2151](https://github.com/elsa-workflows/elsa-foundation/issues/2151);
+see [Running several hosts as a cluster](#running-several-hosts-as-a-cluster)). What a module reaches membership through
+is in `Elsa.Persistence.Schema`, which references no EF Core, and `Elsa.Cluster.Core`; both hosts share both (ADR 0067,
+"Host-composed shares"). With them shared, a module's finalization gate counts the host's fleet, so a single host
+finalizes a new schema version at activation (spec 181, FR-021), and the host's dormancy check reads the module's gate,
+so a feature that needs that version serves once it is finalized (spec 182, FR-019). Without them nothing fails loudly:
+the module admits, its gate never finalizes past the version its record was created at, and every feature waiting on it
+is refused as not observed. `SharedAssemblyClosureGuardTests` fails the build when a host does not share both.
+
+**`Elsa.Foundation.Host` carries EF Core for its membership provider, and its modules bind that copy.** It carries
+`Elsa.Cluster.EntityFrameworkCore`, `Elsa.Persistence.EntityFramework`, EF Core and the four engines, and nothing else
+of EF ([ADR 0076](adr/0076-persistence-tooling-runs-inside-the-host-closure.md), amended 2026-09-29). It shares
+`Elsa.Persistence.EntityFramework` and EF Core's three assemblies, and declares EF Core's host-provided in every build
+and `Elsa.Persistence.EntityFramework` in a build with computed versions. So a feed-loaded EF module's dependency on any
+of them is never acquired, and the module binds the host's copy: the one `dotnet elsa persistence` discovers modules
+through, since it runs through the host's own `Elsa.Persistence.EntityFramework` and matches `[EfModule]` by type. A
+module that needs a newer EF Core than the host carries is refused (`host-version-unsatisfied`); on a computed build
+the same holds for `Elsa.Persistence.EntityFramework`. A source build leaves that one undeclared, so a feed module built
+against a computed-version `Elsa.Persistence.EntityFramework` still loads, with a copy of its own that the module reaches
+membership through just as well, but that `dotnet elsa persistence` against this host does not see (see the builds that
+work, below). `Elsa.Workbench` carries `Elsa.Persistence.EntityFramework`
+too and does not share it, so an EF module loaded there from a feed keeps a copy of its own.
+
+**Which builds work together.** Build the host and the EF module packages from one commit. Two combinations work:
+
+- a source-built host with EF modules packed from the same tree (dev versions on both sides);
+- a computed-version host with modules from the matching computed feed.
+
+The trap is the mix. Until [#2150](https://github.com/elsa-workflows/elsa-foundation/issues/2150) lands, a source-built
+host that is fed a computed-version EF module acquires a private `Elsa.Persistence.EntityFramework`, because its share is
+undeclared there and every computed version falls outside the dev version's range. This holds for any computed-version
+package, not only a newer one. The module still loads and activates, but `dotnet elsa persistence` against that host
+silently does not see it. #2150 (Nuplane `0.0.11-preview.94` shared-assembly matching plus the `AssemblyVersion` major
+pin) removes the trap.
+
+**Do not name them as feed roots.** A root is always acquired, and Nuplane `0.0.11-preview.93` loads every assembly a
+host-integrated package graph holds without consulting `Nuplane:Loading:SharedAssemblies`
+([#2150](https://github.com/elsa-workflows/elsa-foundation/issues/2150) tracks the upstream fix), so a module whose
+graph holds its own `Elsa.Persistence.EntityFramework` or EF Core binds that copy. Leave `Elsa.Persistence.EntityFramework`,
+EF Core (`Microsoft.EntityFrameworkCore`, `.Abstractions`, `.Relational`) and the engines' driver closures
+(`Microsoft.Data.Sqlite*`, `SQLitePCLRaw.*`, `Npgsql`, `MySql.Data`, `Microsoft.Data.SqlClient*`) out of your roots; see
+[Generating the closure](#generating-the-closure). The engine package itself may stay, since the `ef-provider`
+selection injects it as a root anyway. Once the fix lands the shares take effect inside such a graph as well, and a
+copy named by accident is no longer the one a module binds.
+
 `FeedLoadedEfModuleTests` (`tests/essentials/Cluster/EntityFrameworkCore/Tests`) proves each direction on both hosts'
-configured shares, and `FoundationHostBootTests` (same project) boots the built `Elsa.Foundation.Host` as a child process over a
-directory feed of the packed fixture and `Elsa.Persistence.EntityFramework` (plus a second, resolve-only `closure` feed holding
-EF Core and the Sqlite engine, which the host does not carry), showing finalization at activation and dormancy ending once a
-hold is released. The durable EF membership provider (`AddConfiguredClusterMembership`) would bring EF Core into the
-host, so `Elsa.Foundation.Host` composes only the in-process default: it is a cluster of one.
+configured shares, a module carrying its own copy of `Elsa.Persistence.EntityFramework` included.
+`FoundationHostBootTests` (same project) boots the built `Elsa.Foundation.Host` as a child process over a directory feed
+of the packed fixture, plus a second, resolve-only `closure` feed holding EF Core and the Sqlite engine's closure,
+showing finalization at activation and dormancy ending once a hold is released. `FoundationHostClusterBootTests` boots
+two of them over one database with the EF provider enabled, and shows that neither acquired any of what it carries from
+the closure feed that offers it. Its PostgreSQL twin also shows that the host maps one copy of Npgsql, EF Core and
+`Elsa.Persistence.EntityFramework`, and two of the engine assembly (the host's and the one Nuplane injected).
 
 ### Generating the closure
 
@@ -254,12 +302,17 @@ tens of entries.
    Derive that drop-list from the host image's own `*.deps.json` rather than copying one from elsewhere —
    it is exactly the set rule 2 above already skips, and it changes as the host's own references change.
    For the host as it ships today that means the `Microsoft.Extensions.*`, `CShells.*`, `Nuplane*` and
-   `NuGet.*` families plus `FastEndpoints`, `Newtonsoft.Json` and `JetBrains.Annotations` — but check,
-   do not assume.
+   `NuGet.*` families plus `FastEndpoints`, `Newtonsoft.Json` and `JetBrains.Annotations`, and, since
+   [#2151](https://github.com/elsa-workflows/elsa-foundation/issues/2151), EF Core and every engine's closure:
+   `Microsoft.EntityFrameworkCore*`, `Microsoft.Data.Sqlite*`, `SQLitePCLRaw.*`, `Npgsql`, `MySql.*` and
+   `Microsoft.Data.SqlClient*` with what they pull in — but check, do not assume.
 
-   **Then put every `Elsa.*` id back.** `Elsa.Api.AspNetCore` is in the host's `deps.json`, so a drop-list
-   derived mechanically would prune the one Elsa package that is in there — the rule 2 shape again, and it
-   surfaces as a `FeatureNotFoundException` naming a *feature* rather than the missing package.
+   **Then put every `Elsa.*` id back, except `Elsa.Persistence.EntityFramework`.** `Elsa.Api.AspNetCore` is in
+   the host's `deps.json`, so a drop-list derived mechanically would prune the one Elsa package that is in there
+   — the rule 2 shape again, and it surfaces as a `FeatureNotFoundException` naming a *feature* rather than the
+   missing package. `Elsa.Persistence.EntityFramework` is the opposite case: the host carries it for its cluster
+   membership and shares it, and naming it as a root gives every EF module a copy of its own (see
+   [Cluster membership and EF module packages](#cluster-membership-and-ef-module-packages)).
 
 ### Selecting the EF provider engine
 
@@ -301,6 +354,13 @@ policy, evaluated against the lock file, applied in the same transaction, and re
 `store-state.json` with `PackageRole = Root` and `SourceName = capability:ef-provider=PostgreSql`, which
 is what says the selection is where it came from. Changing the selection changes the graph, so the next
 cycle reconciles the previous engine out of the desired set and the new one in.
+
+**On `Elsa.Foundation.Host` the engine is also the host's.** The host carries all four engines for its cluster
+membership, and a module binds its engine by name through the host's `Elsa.Persistence.EntityFramework`, so it binds
+the host's copy. The selection still has to be made, because a module that declares the capability is refused without
+one. The package it injects is still acquired as a root: `Microsoft.EntityFrameworkCore.Sqlite` carries no assembly of
+its own, and for the other three the engine assembly is loaded into the module's graph unused, while everything each
+depends on is the host's.
 
 **`--provider` stays authoritative** (ADR 0076 D4). `dotnet elsa persistence` reads this key out of the
 host's own `appsettings.json` plus its `--environment` overlay, and when the selection does not contain
@@ -529,6 +589,66 @@ is a shell that enables the `ModularityApi` feature: it replaces `NullShellReloa
 with a reloader that does reload it, so a feature change applied through that shell's module API also
 refreshes the feature catalog and rebuilds that one shell. That is a side effect of applying feature
 configuration, not a response to reconciliation.
+
+## Running several hosts as a cluster
+
+With nothing configured each `Elsa.Foundation.Host` is a cluster of one: the in-process membership default, which writes
+nothing and counts only itself (spec 183, FR-017, FR-018). Several hosts that share one database must be configured as a
+cluster, or each will finalize a feed-loaded EF module's new schema version as soon as it alone can read it, however many
+hosts on the older release still write the same rows (spec 183, FR-018a). Nothing detects that misconfiguration.
+
+A cluster is declared by enabling the durable EF membership provider on every host, with the same membership store and a
+host id of each host's own ([#2151](https://github.com/elsa-workflows/elsa-foundation/issues/2151); ADR 0078; spec 183,
+FR-024):
+
+```bash
+Elsa__Cluster__Membership__HostId=foundation-host-a            # distinct per host, stable across its restarts
+Elsa__Cluster__Membership__EntityFrameworkCore__Enabled=true
+Elsa__Cluster__Membership__EntityFrameworkCore__Provider=PostgreSql
+Elsa__Cluster__Membership__EntityFrameworkCore__ConnectionString="Host=db;Database=elsa;Username=elsa;Password=…"
+```
+
+- **The keys.** Under `Elsa:Cluster:Membership`: `HostId`, `HeartbeatInterval` (default 10 s), `ExpiryPeriod` (30 s) and
+  `SkewAllowance` (5 s); under its `EntityFrameworkCore` subsection: `Enabled`, `Provider` (`Sqlite`, `SqlServer`,
+  `PostgreSql` or `MySql`; default `Sqlite`), `ConnectionString`, or `ConnectionName` naming an entry under
+  `ConnectionStrings` (with `ConnectionStrings:Elsa` as the fallback), `Schema`, `Pooling` and `CleanupPeriod` (10 min;
+  it must exceed the expiry period plus the skew allowance). `ClusterMembershipConfigurationExtensions` in
+  `src/essentials/Cluster/EntityFrameworkCore` is the reference.
+- **The host id.** It is required once the provider is enabled: a host without one refuses to start, naming
+  `Elsa:Cluster:Membership:HostId` (FR-003a). Give each host its own and keep it across restarts; two live processes
+  under one id are refused rather than allowed to displace each other (FR-004b). A host restarted after a crash under
+  the same id waits until its earlier incarnation's entry expires, at most the expiry period plus the skew allowance,
+  before it joins and becomes ready.
+- **The shared database.** Every host's membership connection must reach the same primary, never a read replica
+  (FR-032). It is normally the database the EF modules' own features use, so each finalization record and the fleet that
+  decides it live side by side. SQLite serves several processes on one machine only, which suits development and tests
+  (FR-033); use PostgreSQL, SQL Server or MySQL across machines.
+- **Migrations.** The membership table is an EF module of its own (`Cluster.Membership`). Under the default policy the
+  first host to start creates it; under `Elsa:Persistence:EntityFramework:Migrate:Policy=Validate` a host refuses to start
+  until `dotnet elsa persistence apply` has created it, like any other module.
+- **Half a configuration is refused.** Settings under `EntityFrameworkCore` without `Enabled` stop the host at startup,
+  naming the key, because a host that meant to join a cluster and silently stayed a cluster of one is exactly the failure
+  that looks like success. `Enabled=false` is the explicit way to stay alone.
+- **The engine selection is separate.** `Nuplane:Capabilities:ef-provider` still has to be set for the feed-loaded EF
+  modules, which Nuplane refuses without it ([Selecting the EF provider engine](#selecting-the-ef-provider-engine)); each
+  module's own `Provider` feature setting chooses the engine it binds, and membership's `Provider` the one its table
+  uses. They are normally all the same.
+
+**Rolling a new module version out.** Install the new release of an EF module on one host and it reads the new schema
+version, but the version is finalized only once every live host can read it (spec 181). Until then that host writes the
+old version, and a feature that needs the new one answers `409` with code `schema-version-not-finalized`, saying it
+becomes available once every host can read the version (spec 182); the gate's status names each host that cannot yet
+(spec 181, FR-022). Upgrade the other hosts by restarting each on the new release. A hot reload is not enough: an EF
+module package loads host-integrated, and today the previous release of such a module stays loaded after a reload (its
+load context is not released until the host restarts). A host reports only the versions every loaded declaration of a
+family reads (spec 183, FR-021, FR-022), so it goes on counting as unable to read the new version until it restarts. Once the last
+host is on the new release, the version finalizes on its own and the feature serves on every host, with no restart of
+the hosts that already had it. A host that is stopped leaves the fleet; one that crashes is still counted until its
+entry expires.
+
+`FoundationHostClusterBootTests` (`tests/essentials/Cluster/EntityFrameworkCore/Tests`) runs this whole sequence on two
+built hosts over one SQLite database, and `PostgreSqlFoundationHostClusterTests` (`.../ProviderTests`, in a container) on
+one PostgreSQL database.
 
 ## Related
 

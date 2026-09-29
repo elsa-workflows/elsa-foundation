@@ -1,7 +1,9 @@
 ---
 status: accepted
 date: 2026-09-19
+amended: 2026-09-29
 decision_context: Design of issue #1861, owner decisions taken during the design session on 2026-09-19.
+amendment_context: 2026-09-29, decided by Sipke Schoorstra on #2093 and delivered by #2151 — Elsa.Foundation.Host may carry EF Core, the four provider engines and the EF cluster membership provider in its host closure, for cluster membership only; features still arrive from feeds.
 ---
 
 # Persistence tooling runs inside the host's closure
@@ -59,6 +61,56 @@ downloaded." D13 and its Consequences bullet are left as written below, as the h
 what was designed; they no longer describe what ships. Found while reviewing
 [#2096](https://github.com/elsa-workflows/elsa-foundation/issues/2096) (acceptance of ADR 0077 and ADR
 0078), which depend on this ADR's D9 guard, not its D13 gate.
+
+## Amended — 2026-09-29: `Elsa.Foundation.Host` may carry EF Core for cluster membership
+
+**`Elsa.Foundation.Host` may carry EF Core, the four provider engines and the EF cluster membership provider in its host
+closure, for cluster membership only.** Sipke Schoorstra decided this on
+[#2093](https://github.com/elsa-workflows/elsa-foundation/issues/2093) on 2026-09-29, so that several of these hosts
+sharing one database form a cluster, and [#2151](https://github.com/elsa-workflows/elsa-foundation/issues/2151)
+delivered it. Context's "it carries no EF at all" was true when D1 was designed and is kept below as that record; it no
+longer describes the host. Features still arrive from feeds: no EF module, EF feature or EF store is compiled in.
+
+- **What the host composes.** `AddConfiguredClusterMembership(configuration)` on the host container, exactly as
+  `Elsa.Workbench` does. The provider is enabled only by `Elsa:Cluster:Membership:EntityFrameworkCore:Enabled`, requires
+  an explicit `Elsa:Cluster:Membership:HostId`, and otherwise leaves the in-process default in place, so an unconfigured
+  host is still a cluster of one that writes nothing (spec 183, FR-003a, FR-017, FR-018, FR-024).
+- **Why it is compiled in rather than fed.** Membership is selected once per host, on the host container, never by a
+  shell ([ADR 0078](0078-workflow-executions-are-virtual-actors-and-cluster-membership-is-a-foundation-contract.md),
+  amended 2026-09-27; spec 183, Q20), the same reason D9 gives for the activation guard. The provider joins while the
+  host starts, and binds its engine in the default load context, so neither it nor that engine can wait for a package.
+  That is why the host carries all four engines: the membership table lives in whichever database the operator selects.
+- **One copy of what it carries.** A feed-loaded EF module binds the host's `Elsa.Persistence.EntityFramework` and EF
+  Core, never copies of its own. D1 is the reason: the worker calls into "the host's own"
+  `Elsa.Persistence.EntityFramework`, whose `EfModuleCatalog.Discover` matches `[EfModule]` by attribute type, so on a
+  host that now carries its own copy, a module bound to a private one would be invisible to `dotnet elsa persistence`. A
+  second EF Core would also bring a second engine closure into the process. The host therefore lists those assemblies
+  under `Nuplane:Loading:SharedAssemblies`, and declares EF Core, Abstractions and Relational under
+  `Nuplane:HostProvidedPackages` in every build (their versions are real in a source build too) and
+  `Elsa.Persistence.EntityFramework` in a build with computed versions, the source build exempting it as it exempts
+  every Elsa share. What keeps it to one copy today is that Nuplane never acquires a declared or `deps.json`-satisfied
+  dependency, so a module's package graph holds none of them and resolves each from the host; a module that needs a
+  newer EF Core is refused at reconciliation (`host-version-unsatisfied`) instead.
+- **What is not shared: the engines.** No module references one. `EfRelationalProviderBinding` binds it by name through
+  the host's `Elsa.Persistence.EntityFramework`, so it binds the host's. The `ef-provider` capability still has to be
+  selected, because Nuplane refuses a module that declares it while nothing selects it. The package the selection
+  injects is acquired as a root; for SQLite it carries no assembly, and for the other three its assembly is loaded into
+  the module's graph unused, its dependencies being the host's.
+- **Where Nuplane does not yet enforce it.** In Nuplane `0.0.11-preview.93` a share entry with a null token is dropped by
+  the configuration binder, and a host-integrated package graph loads every assembly it holds without consulting the
+  share matcher ([#2150](https://github.com/elsa-workflows/elsa-foundation/issues/2150) carries the upstream fix and the
+  `AssemblyVersion` pin the Elsa entries' major needs). So an operator who names any of these packages as a feed root,
+  which always acquires it, gives the module a private copy. Once the fix lands the share entries take effect inside
+  such a graph too, and the module binds the host's copy whatever the feed offered. In a source build that trades
+  today's private copy of `Elsa.Persistence.EntityFramework` for the #1144 exemption's late failure, a newer module bound
+  to the host's older dev copy, which every exempted Elsa share already accepts.
+- **Nothing else changes.** D1's worker still runs on the host's own closure, which for this host now includes
+  `Elsa.Persistence.EntityFramework`; D9's guard is still not composed on this host.
+  `EfCoreDependencyGuardTests` admits the host with a reviewed closure of its own: EF Core, Abstractions, Analyzers and
+  Relational, and the four engines, with no design-time or in-memory package and no vendor EF store.
+  `SharedAssemblyClosureGuardTests` requires it to share that closure under the token and major it carries.
+  `FoundationHostClusterBootTests` boots two of these hosts over one database and shows a feed-loaded module's new
+  schema version finalizing only once both can read it.
 
 ## Context
 
@@ -809,3 +861,4 @@ Costs and risks:
 | 2026-09-22 | R5 resolved; D10 gains one opt-in exception | The owner decided on 2026-09-21 that the tool may touch the network when, and only when, the operator asks it to. Delivered as `--restore` ([#1927](https://github.com/elsa-workflows/elsa-foundation/issues/1927), spec 171 FR-083 to FR-086): off by default and implied by nothing, acting only on a host that records no package set, single-point pins only, feeds with credentials refused by name, and Nuplane's store lock as the only running-host detection. It builds on `NuplaneRestore` (valence-works/nuplane#82), released as `0.0.11-preview.84` and pinned in Elsa by PR 1932 — so D12's rule held again: the host-free "reconcile, do not load" entry point was filed and fixed upstream rather than composed in Elsa, where it would have meant encoding six pieces of Nuplane's internals. No decision is changed; D10's implicit-restore rejection stands, and its write-set prose is narrowed to what `e49642e` actually does (cleanup deletes nothing). Slice 11 ([#1881](https://github.com/elsa-workflows/elsa-foundation/issues/1881)) was delivered the same day as PR 1934. |
 | 2026-09-22 | U5 delivered; D4 gains one more agreement input | The owner decided on 2026-09-22 to deliver U5 (valence-works/nuplane#77) end to end. Upstream landed through #87–#90 and published as `0.0.11-preview.91`: a schema-2 `nuplane.json` `capabilities` section, `Nuplane:Capabilities:<name>` selection, a desired-state contributor that turns a selected option into a root with `SourceName = capability:<name>=<option>`, and the `capability-*` refusal stages. The Elsa consumer is [#1936](https://github.com/elsa-workflows/elsa-foundation/issues/1936) through [#1937](https://github.com/elsa-workflows/elsa-foundation/issues/1937) (pin bump, PR 1953), [#1938](https://github.com/elsa-workflows/elsa-foundation/issues/1938) (every EF module package declares `ef-provider`, PR 1954) and [#1939](https://github.com/elsa-workflows/elsa-foundation/issues/1939) (the host and CLI consume it), specified in [spec 172](../../specs/172-engine-capability-declaration/spec.md). **D5 is narrowed for a disagreeing capability selection; nothing else changes.** D5's exit-2 SQLite-script refusal still stands for every host that selects no engine, or selects one containing `Sqlite`; a host whose closure selects another engine is refused for the disagreement instead (exit 3), because it was never a SQLite host. D4 gains one more offender source rather than a new rule: the engine the host's package closure selects is compared with `--provider` exactly as an enabled feature's `Provider` setting is, listed in the same exit-3 `provider-disagreement` refusal, and never used as a provider. D6's by-hand-engine prose is replaced everywhere it appeared (`docs/foundation-host-feeds.md`, both `WorkerRunner` refusal details, `EfRelationalProviderBinding.EngineMissing`), with an explicitly named root still allowed and still winning. D10's single-point rule holds for the injected engine by construction, because each declaration pins its options exactly. D12 held again: the whole mechanism was built in Nuplane rather than worked around in Elsa. |
 | 2026-09-27 | Drift corrected | Reviewing [#2096](https://github.com/elsa-workflows/elsa-foundation/issues/2096) (acceptance of ADR 0077 and ADR 0078) found that D13's and Consequences' Elsa implementation of `IPackageActivationGate` was never built: `git grep` finds no such type in `src/`. Pending migrations are refused at enable time only, by `EfPendingMigrationActivationGuard` (D9), and the unrelated #1951 host-too-old refusal happens at Nuplane resolution ([PR #1979](https://github.com/elsa-workflows/elsa-foundation/pull/1979)), not through `IPackageActivationGate`. A new "Drift corrected — 2026-09-27" section records this; D13 and the Consequences bullet are left as written, as the historical record of the design. No decision changes. |
+| 2026-09-29 | Amended: `Elsa.Foundation.Host` may carry EF for cluster membership | Decided by Sipke Schoorstra on [#2093](https://github.com/elsa-workflows/elsa-foundation/issues/2093) and delivered by [#2151](https://github.com/elsa-workflows/elsa-foundation/issues/2151). The host composes `AddConfiguredClusterMembership` on its container, carries EF Core, the four engines and `Elsa.Cluster.EntityFrameworkCore` for it, and shares and declares what it carries so that feed-loaded EF modules bind the host's copies. A new "Amended — 2026-09-29" section records it; D1, D9 and every other decision are unchanged. |

@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>
+      The release of the feed-module fixture before it: the same package id, assembly, EF module and schema family, at
+      version 1 with no upcaster and without the orders feature, which needs version 2 (#2151). Two Elsa.Foundation.Host
+      processes that share one database, one on this package and one on the fixture's, are the cluster whose finalization
+      has to wait for this one; upgrading it to the fixture's package is what lets version 2 finalize.
+    </Description>
+    <AssemblyName>Elsa.Cluster.Fixtures.FeedModule</AssemblyName>
+    <RootNamespace>Elsa.Cluster.Fixtures.FeedModule</RootNamespace>
+    <PackageId>Elsa.Cluster.Fixtures.FeedModule</PackageId>
+    <!-- Below the fixture's own, so moving a host from this package to that one is an upgrade of the same package. -->
+    <Version>1.0.0</Version>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
+  </ItemGroup>
+
+  <!-- The module itself is the fixture's, compiled again: only the declaration of what this release reads differs. -->
+  <ItemGroup>
+    <Compile Include="..\FeedModule\FeedModule.cs" Link="FeedModule.cs" />
+    <Compile Include="..\FeedModule\FeedModuleDbContext.cs" Link="FeedModuleDbContext.cs" />
+    <Compile Include="..\FeedModule\FeedModuleEntityFrameworkCoreFeature.cs" Link="FeedModuleEntityFrameworkCoreFeature.cs" />
+    <None Include="..\FeedModule\nuplane.json" Link="nuplane.json" Pack="true" PackagePath="/" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\..\src\essentials\Persistence\EntityFramework\Elsa.Persistence.EntityFramework.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\essentials\Cluster\Core\Elsa.Cluster.Core.csproj" />
+  </ItemGroup>
+
+</Project>
