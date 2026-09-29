@@ -72,9 +72,7 @@ internal sealed class FeedLoadedModuleHost : IAsyncDisposable
         Action<IServiceCollection>? composeMembership = null,
         params string[] withheld)
     {
-        var package = new PackageLoadContext(
-            SharedAssemblies(host).Except(withheld, StringComparer.OrdinalIgnoreCase),
-            hostCarriesEntityFramework: host != FoundationHost);
+        var package = new PackageLoadContext(SharedAssemblies(host).Except(withheld, StringComparer.OrdinalIgnoreCase));
         var module = package.LoadFromAssemblyPath(FixturePath);
         foreach (var (name, expected) in new[] { ("Family", Family), ("HistoryModuleName", HistoryModule), ("Name", ModuleName) })
         {
@@ -202,8 +200,8 @@ internal sealed class FeedLoadedModuleHost : IAsyncDisposable
 /// <summary>
 /// A load context of the kind Nuplane gives an EF module package, which declares itself host-integrated in its
 /// <c>nuplane.json</c>, as the fixture's does: an assembly the host shares resolves to the host's copy; every other Elsa assembly
-/// the package needs is a private copy of its own, loaded from the package's files, and so is EF Core when the host
-/// carries none, as <c>Elsa.Foundation.Host</c> does not (ADR 0076). The package's assemblies are made visible to the
+/// the package needs is a private copy of its own, loaded from the package's files. EF Core is the host's: both hosts carry
+/// it, <c>Elsa.Foundation.Host</c> for its cluster membership since #2151. The package's assemblies are made visible to the
 /// host's own context through its <c>Resolving</c> event, as Nuplane's host-integrated resolver does, so EF Core loaded by
 /// the host finds the module's migrations assembly. Anything else, the framework and CShells, is the test process's.
 /// </summary>
@@ -218,13 +216,11 @@ internal sealed class PackageLoadContext : AssemblyLoadContext, IDisposable
 {
     private static readonly string[] Directories = [Path.Join(AppContext.BaseDirectory, "feed-module"), AppContext.BaseDirectory];
     private readonly HashSet<string> _shared;
-    private readonly string[] _private;
 
-    public PackageLoadContext(IEnumerable<string> shared, bool hostCarriesEntityFramework = true)
+    public PackageLoadContext(IEnumerable<string> shared)
         : base($"feed-module-package-{Guid.NewGuid():N}", isCollectible: false)
     {
         _shared = shared.ToHashSet(StringComparer.OrdinalIgnoreCase);
-        _private = hostCarriesEntityFramework ? ["Elsa."] : ["Elsa.", "Microsoft.EntityFrameworkCore"];
         Default.Resolving += ResolveForHost;
     }
 
@@ -236,7 +232,7 @@ internal sealed class PackageLoadContext : AssemblyLoadContext, IDisposable
             return null;
         if (_shared.Contains(name))
             return Default.LoadFromAssemblyName(assemblyName);
-        if (!_private.Any(prefix => name.StartsWith(prefix, StringComparison.Ordinal)))
+        if (!name.StartsWith("Elsa.", StringComparison.Ordinal))
             return null;
         return Directories.Select(directory => Path.Join(directory, name + ".dll")).FirstOrDefault(File.Exists) is { } path
             ? LoadFromAssemblyPath(path)

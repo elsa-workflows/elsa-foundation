@@ -34,12 +34,14 @@
   </ItemGroup>
 
   <!--
-    Build-order only, and the fixture's packing beside it (#2143): FoundationHostBootTests start the host's own build
-    output as a child process, over a directory feed holding the fixture and the EF persistence package it carries a
-    private copy of, exactly as an operator runs it. Nothing from the host is loaded into this process.
+    Build-order only (#2143, #2151): FoundationHostBootTests and FoundationHostClusterBootTests start the host's own build
+    output as child processes, over a directory feed holding the fixture, or the release of it before (FeedModuleV1, which
+    packs under the same package id), exactly as an operator runs it. Both fixtures are packed from these builds, so they
+    have to be built first; nothing from the host or FeedModuleV1 is loaded into this process.
   -->
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\..\src\apps\Elsa.Foundation.Host\Elsa.Foundation.Host.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\..\Fixtures\FeedModuleV1\Elsa.Cluster.Fixtures.FeedModuleV1.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
   <Target Name="CopyFeedModuleFixture" AfterTargets="Build">

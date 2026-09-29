@@ -19,9 +19,18 @@ namespace Elsa.Cluster.EntityFrameworkCore.Tests;
 /// finalized (spec 182, FR-019 and SC-003), and a durable provider composed on the host is the fleet the module counts.
 /// </summary>
 /// <remarks>
+/// <para>
 /// The dangerous direction is the one that looks healthy: without the share the module still admits and its shell still
 /// activates, but its gate never finalizes and its feature is refused as "not observed" for ever. Both are pinned below
 /// with the share withheld, so this suite cannot turn green by loading the fixture where the host's own types are.
+/// </para>
+/// <para>
+/// <c>Elsa.Foundation.Host</c> shares <c>Elsa.Persistence.EntityFramework</c> since #2151, because it carries it for its
+/// cluster membership, so there a module has a copy of its own only when the host's does not satisfy it: a source build
+/// facing a feed package, whose dev version every feed range excludes. That is the shape this suite exercises on both
+/// hosts, so it withholds that share throughout; the shape a Foundation.Host module is in when versions agree is
+/// <see cref="On_foundation_host_a_feed_loaded_ef_module_binds_the_hosts_own_persistence_and_finalizes"/>'s.
+/// </para>
 /// </remarks>
 public sealed class FeedLoadedEfModuleTests : IAsyncLifetime
 {
@@ -128,6 +137,25 @@ public sealed class FeedLoadedEfModuleTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// With the share <c>Elsa.Foundation.Host</c> declares for what its membership provider carries, the module binds the
+    /// host's own <c>Elsa.Persistence.EntityFramework</c>, the copy <c>dotnet elsa persistence</c> discovers modules through,
+    /// and still finalizes at activation and serves (#2151).
+    /// </summary>
+    [Fact]
+    public async Task On_foundation_host_a_feed_loaded_ef_module_binds_the_hosts_own_persistence_and_finalizes()
+    {
+        await SeedAsync(ConnectionString);
+
+        var loaded = await FeedLoadedModuleHost.StartAsync(FoundationHost, ConnectionString);
+        _owned.Add(loaded);
+
+        Assert.Equal("2", (await RecordAsync(ConnectionString)).FinalizedVersion);
+        await loaded.PlaceOrderAsync();
+        Assert.Same(loaded.Package, AssemblyLoadContext.GetLoadContext(loaded.Module));
+        Assert.DoesNotContain(loaded.Package.Assemblies, assembly => assembly.GetName().Name is PrivatePersistence or "Elsa.Persistence.Schema" or "Elsa.Cluster.Core");
+    }
+
+    /// <summary>
     /// Without <c>Elsa.Persistence.Schema</c> shared, the module loads its own copy: it admits and its shell activates, so
     /// nothing fails, but its gate finds no fleet of that type and never finalizes, and the host's dormancy check finds no
     /// gate, so the feature is refused as not observed. This is the failure #2143 closes, and it looks like success.
@@ -163,9 +191,12 @@ public sealed class FeedLoadedEfModuleTests : IAsyncLifetime
         await Assert.ThrowsAsync<InvalidOperationException>(loaded.PlaceOrderAsync);
     }
 
+    /// <summary>The persistence assembly a module in this suite carries a copy of, on both hosts (see the remarks above).</summary>
+    private const string PrivatePersistence = "Elsa.Persistence.EntityFramework";
+
     private async Task<FeedLoadedModuleHost> StartAsync(string host, Action<IServiceCollection>? composeMembership = null, params string[] withheld)
     {
-        var loaded = await FeedLoadedModuleHost.StartAsync(host, ConnectionString, composeMembership, withheld);
+        var loaded = await FeedLoadedModuleHost.StartAsync(host, ConnectionString, composeMembership, [.. withheld, PrivatePersistence]);
         _owned.Add(loaded);
         return loaded;
     }
@@ -179,7 +210,7 @@ public sealed class FeedLoadedEfModuleTests : IAsyncLifetime
     private static void AssertLoadedAsAPackage(FeedLoadedModuleHost loaded)
     {
         Assert.Same(loaded.Package, AssemblyLoadContext.GetLoadContext(loaded.Module));
-        var persistence = Assert.Single(loaded.Package.Assemblies, assembly => assembly.GetName().Name == "Elsa.Persistence.EntityFramework");
+        var persistence = Assert.Single(loaded.Package.Assemblies, assembly => assembly.GetName().Name == PrivatePersistence);
         Assert.NotSame(AssemblyLoadContext.Default, AssemblyLoadContext.GetLoadContext(persistence));
         Assert.DoesNotContain(loaded.Package.Assemblies, assembly => assembly.GetName().Name is "Elsa.Persistence.Schema" or "Elsa.Cluster.Core");
     }

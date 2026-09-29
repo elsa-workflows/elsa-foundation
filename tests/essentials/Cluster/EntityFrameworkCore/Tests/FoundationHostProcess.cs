@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Net;
 using System.ComponentModel;
 using System.Reflection;
+using System.Text.Json.Nodes;
 
 namespace Elsa.Cluster.EntityFrameworkCore.Tests;
 
@@ -90,6 +91,14 @@ internal sealed class FoundationHostProcess : IAsyncDisposable
             throw;
         }
     }
+
+    /// <summary>
+    /// The packages Nuplane has active in this host, by id, at the version active, read from the store state the host
+    /// wrote: what it acquired from its feeds, as opposed to what it found it already carries.
+    /// </summary>
+    public IReadOnlyDictionary<string, string> ActivePackages() =>
+        JsonNode.Parse(File.ReadAllText(Path.Join(_contentRoot, ".nuplane", "store-state.json")))!["activeVersionById"]!.AsObject()
+            .ToDictionary(package => package.Key, package => package.Value!.GetValue<string>(), StringComparer.OrdinalIgnoreCase);
 
     /// <summary>The status a request to <paramref name="path"/> is answered with, and its body.</summary>
     public async Task<(HttpStatusCode Status, string Body)> GetAsync(string path)
