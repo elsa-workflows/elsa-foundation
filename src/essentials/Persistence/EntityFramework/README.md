@@ -391,6 +391,37 @@ RuntimeSqliteDbContext has pending migrations: 20260911000000_Initial. Apply the
 process (tools/ef/module-migrate.sh) or set Elsa:Persistence:EntityFramework:Migrate:Policy to AutoMigrate.
 ```
 
+## Schema finalization (spec 181)
+
+A module's new persisted-schema version is read as soon as a host runs it, but written only once it is
+**finalized**: once every live host that may read the database can read it, unless an operator holds it. Each
+module's migrator admits the module through its finalization gate after its migrations, under both policies:
+
+- it publishes the host's readability report, then reads (or creates) each family's finalization record;
+- a family finalized at a version this build cannot read refuses the module, exactly where a pending migration
+  under `Validate` does, and the Modularity API's enable-time guard refuses the same feature with a 409 under both
+  policies before anything is saved;
+- it then evaluates, which on a host alone finalizes at once, and keeps evaluating and refreshing in the background,
+  so writers switch versions without a restart or a shell reload.
+
+The write version is the finalized version the host last observed; every module context refuses a row stamped with
+any other. Finalization is the rollback boundary: before it, no row at the new version exists and rolling back the
+binary is safe; after it, it is not.
+
+An operator holds finalization, for a canary, with the persistence tool, which writes the record directly and so
+works before any gate-aware host runs:
+
+```bash
+dotnet elsa persistence hold    --host <dir> --provider PostgreSql --modules Workflows.Runtime \
+  --family RuntimeWorkflowExecution --reason "canary of 4.1" --operator ops@example
+dotnet elsa persistence status  --host <dir> --provider PostgreSql --modules Workflows.Runtime
+dotnet elsa persistence release --host <dir> --provider PostgreSql --modules Workflows.Runtime \
+  --family RuntimeWorkflowExecution --operator ops@example
+```
+
+A hold on a version already finalized is refused. No command finalizes, forces finalization or lowers a finalized
+version: going back past one means restoring a database backup taken before it.
+
 ## Post-migration actions
 
 Some repairs cannot be expressed as a migration — rewriting rows a changed projection algorithm left

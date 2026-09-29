@@ -256,10 +256,12 @@ public sealed class ExecutionPlacementPumpTask : BackoffSweepPumpTask, IRecurrin
         var gate = services is null ? null : _membership?.Gate;
         var standing = gate?.CheckStanding();
 
-        // A draining or departed member hands off everything it holds (FR-019, FR-021). A joining member, or one whose
-        // join sweep has not completed, neither renews nor hands off: a lease under its host id may still be its
-        // predecessor's, which only the join sweep may release (FR-022).
-        var handingOff = gate?.Membership.GetLocalStanding().Status is MemberStatus.Draining or MemberStatus.Left;
+        // A draining or departed member hands off everything it holds (FR-019, FR-021), and so does one whose writes to
+        // the Runtime EF module spec 181 refuses, which could not commit a checkpoint of them anyway (FR-012). A joining
+        // member, or one whose join sweep has not completed, neither renews nor hands off: a lease under its host id may
+        // still be its predecessor's, which only the join sweep may release (FR-022).
+        var handingOff = gate?.Membership.GetLocalStanding().Status is MemberStatus.Draining or MemberStatus.Left ||
+                         standing?.Refusal is PlacementRefusalKind.RuntimeWritesRefused;
         var renewing = gate is null || standing is null;
 
         var renewed = 0;

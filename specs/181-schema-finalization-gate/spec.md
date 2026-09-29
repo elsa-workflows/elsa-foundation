@@ -2,7 +2,7 @@
 
 **Feature Branch**: `claude/2093-rollout-specs`
 **Created**: 2026-09-27
-**Status**: Approved
+**Status**: In progress — B5 ([#2101](https://github.com/elsa-workflows/elsa-foundation/issues/2101)) built the gate, the write check, both activation refusals and the CLI; FR-020a, the Modularity API step, is not built yet (see the 2026-09-28 note).
 **Input**: Workstream B5, [issue #2101](https://github.com/elsa-workflows/elsa-foundation/issues/2101), of the
 cluster-safe schema rollout program [#2093](https://github.com/elsa-workflows/elsa-foundation/issues/2093). A host
 reads both formats as soon as it runs a new persisted-schema version, and keeps writing the old format until that
@@ -473,3 +473,46 @@ rather than a record of its own.
   database and family, so it shares the record's identity, migration and history mechanism (FR-001). Activation and
   enable-time refusal (FR-015, FR-016) gain the matching condition: a family whose finish record names a completion
   version outside the host's readable set refuses the module, the same way an unreadable finalized version does.
+
+**2026-09-28 note.** Found while building B5 (#2101); lands with the B5 PR, whose merge is the owner's approval.
+
+- **A report entry names a database only while it is the one this host serves.** Spec 183's FR-019 says the entry
+  names the identity of the record the host "read most recently". A host that serves the family in two databases
+  would then name one of them, and evaluators of the other would stop counting it (FR-006), so that database could
+  finalize a version this host cannot read. The entry therefore names an identity only while every record of the
+  family this host has read carries that one identity and no activation of the family is between publishing its
+  report and reading its record (FR-013); otherwise it names none, which counts for every database. The observed
+  finalized version is reported only while those databases agree on it.
+- **An activating host resolves an intent it cannot read by abandoning it.** FR-014's joiner is a counted member
+  that cannot read the intended version, so running the confirmation itself (FR-008) abandons the intent at once
+  rather than waiting up to the bound for an evaluator that may have crashed. If the evaluator's commit lands first,
+  the joiner's next read finds the version finalized and refuses. The bound still applies to an intent the joiner
+  cannot resolve.
+- **A host that composes no fleet never finalizes past the version a record was created at.** Without
+  `Elsa.Cluster.Readability`'s `AddEfSchemaReadability` the gate cannot count anyone, and treating "no membership
+  composed" as "alone" would finalize at once on a host whose durable provider was composed without the bridge, the
+  silent direction. Such a host still creates records, refuses what it cannot read, refreshes, and holds its writes to
+  what it observed. `Elsa.Foundation.Host` composes no membership today (B1 to B3 did not add it), so FR-021's
+  finalization at activation needs membership composed there first; every chain has one version until 4.0 ships, so
+  nothing observable differs yet.
+- **The membership module is admitted after its join.** It is composed on the host container and migrated before the
+  member joins, and the join is its publish, so its gate reads the record first and admits it again, publish first,
+  at the first refresh after the join, adopting no newer version until then. The window between is closed loudly by
+  FR-012.
+- **FR-020a, the Modularity API's hold, release and status, is the second step and is not built here.** The CLI
+  (FR-020) is. So is the gate's status as an in-process API (`EfSchemaModuleGate.ReadStatusAsync`), which spec 182
+  carries to the feature catalog and Attention.
+- **Every domain API answers both write refusals with a 409** (spec 180, FR-016a), carrying the code, the family and
+  both versions. An API resolves no EF Core, so both refusals derive from `Elsa.Primitives`'
+  `SchemaWriteRefusedException`, and `Elsa.Api.AspNetCore`'s `SchemaWriteRefusalProblem` is the one place the
+  refusal's part of every envelope is decided. Stores that wrap a failed save in a failure of their own (Identity's,
+  OpenTelemetry's, Structured Logs' and the Elsa 3 import's) now exclude the refusal from that wrapping and let it
+  pass through unwrapped, the same way `EfSchemaVersionSkewException` already does (commit c41f8a250, "Let schema
+  write refusals pass through store failure wrappers (#2101)").
+- **The write check refuses deletes as well** while a family's writes are refused (FR-012), and it covers every
+  write through `SaveChanges`. `ExecuteUpdate` and `ExecuteDelete` bypass it; no first-party store writes a stamp
+  that way.
+- **Spec 184's two requirements on this gate are built with it.** The Runtime EF module exposes its gate to the
+  runtime as `IRuntimeSchemaFinalization`: the runnability entry names the database identity the gate read (spec 184,
+  FR-008), a member whose writes to a Runtime family the gate refuses claims nothing and hands off what it holds
+  (spec 184, FR-012), and a placement query names the database its execution lives in (spec 184, FR-009).

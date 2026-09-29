@@ -28,6 +28,12 @@ public sealed record EfSchemaFamilyDescriptor(string Name, string? Module, strin
     public IReadOnlyList<EfSchemaIntegrityColumn> IntegrityColumns { get; init; } = [];
 
     /// <summary>
+    /// The entity types <see cref="EfSchemaFamilyAttribute.Entities"/> names: empty for a family that is its module's
+    /// only one, whose module's stamped tables all belong to it.
+    /// </summary>
+    public IReadOnlyList<Type> Entities { get; init; } = [];
+
+    /// <summary>
     /// The versions this declaration can read, as opaque labels in chain order ending at <see cref="CurrentVersion"/>
     /// (spec 180, FR-004): the current version and every predecessor the chain reaches from it without a gap. A version
     /// below a gap, or reached only through an upcaster that is malformed, is never in it. A store's read accepts

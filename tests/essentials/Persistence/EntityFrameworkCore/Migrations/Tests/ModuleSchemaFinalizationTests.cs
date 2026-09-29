@@ -42,7 +42,9 @@ public sealed class ModuleSchemaFinalizationTests : IDisposable
     public async Task Every_sqlite_module_keeps_its_own_finalization_record_in_one_shared_database()
     {
         var connection = $"Data Source={databasePath};Pooling=False";
+        await ModuleSchemaFinalizationScenario.AssertRecordTablesAsync("Sqlite", connection, expected: false);
         await ModuleContextCatalog.InstallAllAsync("Sqlite", connection);
+        await ModuleSchemaFinalizationScenario.AssertRecordTablesAsync("Sqlite", connection, expected: true);
 
         await ModuleSchemaFinalizationScenario.RunAsync("Sqlite", connection);
     }

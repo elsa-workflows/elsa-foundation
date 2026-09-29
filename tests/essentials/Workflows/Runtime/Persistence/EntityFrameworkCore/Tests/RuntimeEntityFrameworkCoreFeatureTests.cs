@@ -6,6 +6,8 @@ using CShells.Features;
 using CShells.Lifecycle;
 using Elsa.Locking.Core;
 using Elsa.Persistence.EntityFramework;
+using Elsa.Persistence.EntityFramework.SchemaFinalization;
+using Elsa.Persistence.EntityFramework.Tests;
 using Elsa.Tasks;
 using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -78,6 +80,38 @@ public sealed class RuntimeEntityFrameworkCoreFeatureTests : IDisposable
         Assert.Equal(HierarchySigningKey, provider.GetRequiredService<IOptions<ActivityExecutionHierarchyCursorOptions>>().Value.SigningKey);
         Assert.Single(provider.GetServices<IShellInitializer>().OfType<EfModuleMigrator<RuntimeDbContext>>());
         Assert.Equal(EfProviderNames.Sqlite, provider.GetRequiredService<EfModuleMigration<RuntimeDbContext>>().ExpectedProviderName);
+    }
+
+    /// <summary>
+    /// Spec 184, FR-008 and FR-012 through spec 181's gate: once the module's migrator has admitted it, the runtime reads
+    /// the database identity its gate read, and a refresh that finds a Runtime family finalized at a version this build
+    /// cannot read refuses the runtime's writes, which placement acts on.
+    /// </summary>
+    [Fact]
+    public async Task The_runtime_reads_its_database_identity_and_any_write_refusal_from_its_modules_gate()
+    {
+        var services = new ServiceCollection().AddLogging();
+        var feature = NewFeature();
+        feature.ConnectionString = ConnectionString;
+        feature.ConfigureServices(services);
+        await using var provider = services.BuildServiceProvider();
+        var finalization = provider.GetRequiredService<IRuntimeSchemaFinalization>();
+        Assert.Null(finalization.DatabaseIdentity);
+
+        var migrator = provider.GetRequiredService<EfModuleMigrator<RuntimeDbContext>>();
+        await migrator.StartAsync(CancellationToken.None);
+        await using var scope = provider.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<RuntimeDbContext>();
+        var store = new EfSchemaFinalizationStore(context);
+        var record = (await store.FindAsync(RuntimeArtifactEfModule.SchemaFamily))!;
+        Assert.Equal(record.DatabaseIdentity, finalization.DatabaseIdentity);
+        Assert.Null(finalization.WritesRefusedReason);
+
+        await EfSchemaFinalizationTestSupport.FinalizeAsync(store, RuntimeArtifactEfModule.SchemaFamily, [RuntimeArtifactEfModule.SchemaVersion, "2.0.0"], "2.0.0");
+        await migrator.Gate!.RefreshAsync(context);
+
+        Assert.Contains($"schema family '{RuntimeArtifactEfModule.SchemaFamily}' is finalized at '2.0.0'", finalization.WritesRefusedReason);
+        await migrator.StopAsync(CancellationToken.None);
     }
 
     /// <summary>

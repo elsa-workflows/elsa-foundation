@@ -20,6 +20,7 @@
 
   <ItemGroup>
     <Compile Include="../../../../Shared/FakeRuntimeFeatureCatalog.cs" Link="FakeRuntimeFeatureCatalog.cs" />
+    <Compile Include="../../../Persistence/EntityFramework/Tests/EfSchemaFinalizationTestSupport.cs" Link="EfSchemaFinalizationTestSupport.cs" />
     <ProjectReference Include="..\..\..\..\..\src\essentials\Modularity\EntityFramework\Elsa.Modularity.EntityFramework.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\essentials\Modularity\Nuplane\Elsa.Modularity.Nuplane.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\essentials\Secrets\Persistence\EntityFrameworkCore\Elsa.Secrets.Persistence.EntityFrameworkCore.csproj" />

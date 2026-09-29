@@ -1,6 +1,7 @@
 using Elsa.Api.AspNetCore;
 using Elsa.Activities.Design.Core.Services;
 using Elsa.Primitives.Diagnostics;
+using Elsa.Primitives.Exceptions;
 using Elsa.Workflows.Publishing.Api.Services;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Publishing.Exceptions;
@@ -58,6 +59,13 @@ internal sealed class WorkflowPublishingFaultRenderer : IEndpointFaultRenderer
                 return true;
             }
 
+            if (exception is SchemaWriteRefusedException activityRefusal)
+            {
+                await ActivityPublishingProblems.WriteAsync(context.Response,
+                    ActivityPublishingProblems.SchemaWriteRefused(activityRefusal, context), context.RequestAborted);
+                return true;
+            }
+
             LogUnexpected(context, exception);
             await ActivityPublishingProblems.WriteAsync(context.Response,
                 ActivityPublishingProblems.Unexpected(context), context.RequestAborted);
@@ -72,6 +80,14 @@ internal sealed class WorkflowPublishingFaultRenderer : IEndpointFaultRenderer
                     "https://elsa.dev/problems/activity-request-invalid", "Runtime requirement preflight request is invalid",
                     StatusCodes.Status400BadRequest, invalid.Message, context.Request.Path, ActivityErrorCodes.RequestInvalid,
                     context.TraceIdentifier, []));
+                return true;
+            }
+
+            if (exception is SchemaWriteRefusedException preflightRefusal)
+            {
+                await WriteRuntimePreflightAsync(context, new RuntimePreflightProblemDetails(
+                    $"https://elsa.dev/problems/{preflightRefusal.Code}", "Schema write refused", SchemaWriteRefusalProblem.StatusCode,
+                    preflightRefusal.Message, context.Request.Path, preflightRefusal.Code, context.TraceIdentifier, []));
                 return true;
             }
 
@@ -103,7 +119,15 @@ internal sealed class WorkflowPublishingFaultRenderer : IEndpointFaultRenderer
 
         // Not scoped by endpoint metadata: every Publishing failure below carries a code (issue #1699), so it
         // renders here regardless of which endpoint raised it, ahead of WorkflowPublishingExceptionTranslator,
-        // which handles only the codeless arms (404, generic 400).
+        // which handles only the codeless arms (404, generic 400). A schema write refusal (spec 180, FR-016a) also
+        // carries its family and both versions as errors.
+        if (exception is SchemaWriteRefusedException refusal)
+        {
+            await WorkflowPublishingLegacyProblems.WriteAsync(context,
+                WorkflowPublishingLegacyProblems.Build(context, SchemaWriteRefusalProblem.For(refusal), refusal.Code));
+            return true;
+        }
+
         if (ClassifyCodedFailure(exception) is { } coded)
         {
             var problem = WorkflowPublishingLegacyProblems.Build(

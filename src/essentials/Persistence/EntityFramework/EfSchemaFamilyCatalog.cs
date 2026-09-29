@@ -148,7 +148,7 @@ public static class EfSchemaFamilyCatalog
                     $"{string.Join(", ", modules.Select(declared => $"'{declared}'"))}. An assembly that owns an [EfModule] names it as the family's " +
                     "owner instead of declaring the family shared.");
 
-            return new EfSchemaFamilyDescriptor(name, null, currentVersion, assembly) { Upcasters = Upcasters(declaration) };
+            return new EfSchemaFamilyDescriptor(name, null, currentVersion, assembly) { Upcasters = Upcasters(declaration), Entities = Types(declaration, nameof(EfSchemaFamilyAttribute.Entities)) };
         }
 
         var owner = modules.FirstOrDefault(declared => StringComparer.OrdinalIgnoreCase.Equals(declared, module));
@@ -157,19 +157,24 @@ public static class EfSchemaFamilyCatalog
                 $"{assembly.GetName().Name} declares [EfSchemaFamily(\"{name}\")] owned by EF module '{module}', which that assembly does not declare. " +
                 $"A family belongs to an [EfModule] of its own assembly; this one declares {(modules.Length == 0 ? "none" : string.Join(", ", modules.Select(declared => $"'{declared}'")))}.");
 
-        return new EfSchemaFamilyDescriptor(name, owner, currentVersion, assembly) { Upcasters = Upcasters(declaration) };
+        return new EfSchemaFamilyDescriptor(name, owner, currentVersion, assembly) { Upcasters = Upcasters(declaration), Entities = Types(declaration, nameof(EfSchemaFamilyAttribute.Entities)) };
     }
 
     /// <summary>The declaration's <see cref="EfSchemaFamilyAttribute.Upcasters"/>, each read as metadata.</summary>
     private static EfSchemaUpcasterDescriptor[] Upcasters(CustomAttributeData declaration) =>
+        TypeArguments(declaration, nameof(EfSchemaFamilyAttribute.Upcasters)).Select(DescribeUpcaster).ToArray();
+
+    /// <summary>The non-null types a <c>Type[]</c> named argument of the declaration lists.</summary>
+    private static Type[] Types(CustomAttributeData declaration, string member) =>
+        TypeArguments(declaration, member).OfType<Type>().ToArray();
+
+    private static IEnumerable<Type?> TypeArguments(CustomAttributeData declaration, string member) =>
         declaration.NamedArguments
-            .Where(argument => argument.MemberName == nameof(EfSchemaFamilyAttribute.Upcasters))
+            .Where(argument => argument.MemberName == member)
             .Select(argument => argument.TypedValue.Value)
             .OfType<IEnumerable<CustomAttributeTypedArgument>>()
             .SelectMany(types => types)
-            .Select(type => type.Value as Type)
-            .Select(DescribeUpcaster)
-            .ToArray();
+            .Select(type => type.Value as Type);
 
     /// <summary>One chain entry, read from <paramref name="type"/>'s metadata exactly as a declaration's entries are.</summary>
     internal static EfSchemaUpcasterDescriptor DescribeUpcaster(Type? type)

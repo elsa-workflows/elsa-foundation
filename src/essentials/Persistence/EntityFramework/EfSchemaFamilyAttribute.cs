@@ -71,4 +71,13 @@ public sealed class EfSchemaFamilyAttribute : Attribute
     /// A read never bridges a gap: a row stamped below one is skew.
     /// </remarks>
     public Type[] Upcasters { get; set; } = [];
+
+    /// <summary>
+    /// The entity types whose rows stamp this family, for an EF module that owns more than one family. A module that
+    /// owns one family leaves it empty: every stamped table of its context belongs to that family. The finalization
+    /// gate's write check (<c>EfSchemaWriteGateInterceptor</c>) reads it to know which family's write version a row
+    /// must carry (spec 181, FR-009), and <c>ModuleFinalizationGateTests</c> fails the build when a stamped table of
+    /// a module maps to no family, or to more than one.
+    /// </summary>
+    public Type[] Entities { get; set; } = [];
 }

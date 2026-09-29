@@ -69,6 +69,8 @@ public sealed record EfModuleBinding(
         // nothing byte-identical to what it was: no extension, so no second model to cache.
         if (EfPayloadCompressionSettings.Resolve(services, Owner) is { } compression)
             builder.UseElsaPayloadCompression(compression);
+        // Every module context holds its writes to the write version its finalization gate keeps (spec 181, FR-009).
+        SchemaFinalization.EfSchemaWriteGateInterceptor.EnsureAdded(builder);
     }
 
     /// <summary>

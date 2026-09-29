@@ -1,3 +1,5 @@
+using Elsa.Primitives.Exceptions;
+
 namespace Elsa.Persistence.EntityFramework;
 
 /// <summary>
@@ -10,7 +12,10 @@ namespace Elsa.Persistence.EntityFramework;
 /// Unassignable to <see cref="InvalidOperationException"/>, <see cref="ArgumentException"/>, <see cref="FormatException"/>,
 /// <see cref="NotSupportedException"/>, <c>JsonException</c> and <see cref="InvalidDataException"/>, the types store catch
 /// filters and API fault ladders turn into corruption or a 400, for the same reason <see cref="EfSchemaVersionSkewException"/>
-/// is. Every domain API that can raise it maps it to HTTP 409 in its own problem envelope, carrying <see cref="Code"/>.
+/// is. Every domain API that can raise it maps it to HTTP 409 in its own problem envelope, carrying
+/// <see cref="SchemaWriteRefusedException.Code"/>: an API sees no EF Core, so it answers the
+/// <see cref="SchemaWriteRefusedException"/> this derives from, through <c>Elsa.Api.AspNetCore</c>'s
+/// <c>SchemaWriteRefusalProblem</c>.
 /// </para>
 /// <para>
 /// A store raises it with the family and the two versions alone. Spec 182 reuses it for a write that needs a dormant
@@ -19,11 +24,8 @@ namespace Elsa.Persistence.EntityFramework;
 /// host write an older finalized version.
 /// </para>
 /// </remarks>
-public class EfSchemaWriteRefusedException : Exception
+public class EfSchemaWriteRefusedException : SchemaWriteRefusedException
 {
-    /// <summary>The stable code every problem envelope that reports this refusal carries.</summary>
-    public const string RefusalCode = "schema-write-refused";
-
     public EfSchemaWriteRefusedException(string family, string writeVersion, string requiredVersion)
         : this(family, writeVersion, requiredVersion,
             $"Schema family '{family}' refused a write: the value needs schema version '{requiredVersion}', but this host may write " +
@@ -33,22 +35,7 @@ public class EfSchemaWriteRefusedException : Exception
 
     /// <summary>For a derived refusal that states its own reason, such as spec 182's dormant-feature refusal.</summary>
     protected EfSchemaWriteRefusedException(string family, string writeVersion, string requiredVersion, string message)
-        : base(message)
+        : base(family, writeVersion, requiredVersion, message)
     {
-        Family = family;
-        WriteVersion = writeVersion;
-        RequiredVersion = requiredVersion;
     }
-
-    /// <summary>The stable code: <see cref="RefusalCode"/>.</summary>
-    public string Code => RefusalCode;
-
-    /// <summary>The schema family the write belongs to.</summary>
-    public string Family { get; }
-
-    /// <summary>The version this host may write for the family.</summary>
-    public string WriteVersion { get; }
-
-    /// <summary>The version the value being written needs.</summary>
-    public string RequiredVersion { get; }
 }

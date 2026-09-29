@@ -49,16 +49,18 @@ public sealed record ExecutionPlacementRequirement
     /// The membership requirement kinds this requirement translates into (FR-006), from a check of it: one per runtime
     /// consumer at its schema version, per storage driver and per activity type alias. They are how a member asks
     /// whether any other active member could run the work (FR-017); a member never asks about itself this way (FR-011).
+    /// Each is asked of the database the execution lives in, when this shell's Runtime EF module has read its identity
+    /// (FR-009): a member that serves another database cannot run it.
     /// </summary>
-    public static IReadOnlyList<RunnabilityRequirement> ToMemberRequirements(RuntimeRequirementCheckResult check)
+    public static IReadOnlyList<RunnabilityRequirement> ToMemberRequirements(RuntimeRequirementCheckResult check, string? databaseIdentity = null)
     {
         ArgumentNullException.ThrowIfNull(check);
         return check.Requirements
-            .Select(entry => (RunnabilityRequirement)new ActivatesRuntimeConsumer(entry.ConsumerKey, entry.SchemaVersion))
-            .Concat(check.StorageDrivers.Select(entry => new HasStorageDriver(entry.DriverKey)))
+            .Select(entry => (RunnabilityRequirement)new ActivatesRuntimeConsumer(entry.ConsumerKey, entry.SchemaVersion, databaseIdentity))
+            .Concat(check.StorageDrivers.Select(entry => new HasStorageDriver(entry.DriverKey, databaseIdentity)))
             .Concat(check.ActivityTypes
                 .Where(entry => !string.IsNullOrWhiteSpace(entry.TypeAlias))
-                .Select(entry => new ResolvesActivityType(entry.TypeAlias)))
+                .Select(entry => new ResolvesActivityType(entry.TypeAlias, databaseIdentity)))
             .ToArray();
     }
 }

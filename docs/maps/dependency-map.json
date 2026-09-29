@@ -2266,6 +2266,11 @@
       "line": "B",
       "edges": [
         {
+          "type": "internal",
+          "id": "Elsa.Primitives",
+          "path": "src/essentials/Primitives/Primitives/Elsa.Primitives.csproj"
+        },
+        {
           "type": "external",
           "id": "NativeEndpoints",
           "version": "1.0.0-preview.6"
@@ -5265,6 +5270,11 @@
       "package_id": "Elsa.Persistence.EntityFramework",
       "line": "B",
       "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Primitives",
+          "path": "src/essentials/Primitives/Primitives/Elsa.Primitives.csproj"
+        },
         {
           "type": "external",
           "id": "CShells",
@@ -13025,6 +13035,11 @@
           "type": "internal",
           "id": "Elsa.Cluster.EntityFrameworkCore",
           "path": "src/essentials/Cluster/EntityFrameworkCore/Elsa.Cluster.EntityFrameworkCore.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Cluster.Readability",
+          "path": "src/essentials/Cluster/Readability/Elsa.Cluster.Readability.csproj"
         },
         {
           "type": "internal",

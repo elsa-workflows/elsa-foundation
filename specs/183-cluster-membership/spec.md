@@ -781,3 +781,10 @@ Recorded 2026-09-28, reconciling the diagnostics preamble with the FR-039 move a
   joiner that is refused before it ever joins (FR-004b), so it has no fleet entry to carry the diagnostic; it reports
   the diagnostic at startup instead. FR-037, FR-038, FR-040, FR-041 and FR-042 still appear in the subject's own
   entry.
+
+**2026-09-28 note.** Found while building B5 (#2101); lands with the B5 PR, whose merge is the owner's approval.
+FR-019's entry names the database identity of the finalization record the host read only while that is the one
+database the host has read the family in and no activation of the family is mid-read; otherwise it names none, and
+its observed finalized version is given only while every database the host has read agrees on it. Naming the
+database read "most recently" would stop a second database's evaluators counting this host (FR-023). See spec 181's
+note of the same date.

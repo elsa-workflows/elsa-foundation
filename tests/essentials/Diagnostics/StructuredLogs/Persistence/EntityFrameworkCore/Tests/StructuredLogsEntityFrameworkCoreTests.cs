@@ -378,6 +378,28 @@ public sealed class StructuredLogsEntityFrameworkCoreTests
         await store.StopAsync();
     }
 
+    /// <summary>
+    /// A schema write refusal raised while a batch commits must reach the caller as itself, never wrapped in
+    /// <see cref="StructuredLogsException"/> (#2101).
+    /// </summary>
+    [Fact]
+    public async Task A_schema_write_refusal_during_commit_reaches_the_caller_unwrapped()
+    {
+        await using var fixture = await CreateFixtureAsync();
+        await fixture.Store.StopAsync();
+        var interceptor = new ProviderFailures.FailingSaveInterceptor(() => new EfSchemaWriteRefusedException("StructuredLogs", "1", "2"));
+        await using var provider = BuildInterceptingProvider(fixture.DatabasePath, fixture.Binding, interceptor);
+        await StructuredLogsEntityFrameworkCoreFixture.EnsureCreatedAsync(provider);
+        var store = provider.GetRequiredService<EfStructuredLogStore>();
+        store.Start();
+
+        var refusal = await Assert.ThrowsAsync<EfSchemaWriteRefusedException>(
+            () => store.AppendAsync(Entry("write-refusal", LogLevel.Information, "source-a")).AsTask());
+
+        Assert.Equal("StructuredLogs", refusal.Family);
+        await store.StopAsync();
+    }
+
     [Fact]
     public async Task Feature_registration_is_opt_in_and_replaces_only_the_structured_log_store()
     {

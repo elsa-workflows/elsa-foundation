@@ -63,10 +63,15 @@ public sealed class WorkerLaunchTests
 
         Assert.Equal(
             [
-                "Command", "Connection", "ConnectionEnv", "ContextSource", "ContextVersion", "DepsFile", "Environment", "HostDirectory", "HostName",
-                "Output", "PackageRoots", "Provider", "Resource", "Restore", "Schema", "Selection", "Shell", "Shells", "Version"
+                "Command", "Connection", "ConnectionEnv", "ContextSource", "ContextVersion", "DepsFile", "Environment", "Finalization", "HostDirectory",
+                "HostName", "Output", "PackageRoots", "Provider", "Resource", "Restore", "Schema", "Selection", "Shell", "Shells", "Version"
             ],
             fields);
+        // Spec 181's hold, release and status name a schema family, a version, a reason and an operator identity, and
+        // nothing a feed credential could travel in.
+        Assert.Equal(
+            ["Family", "Operator", "Reason", "Version"],
+            typeof(WorkerFinalization).GetProperties().Select(property => property.Name).Order(StringComparer.Ordinal));
         Assert.Equal(typeof(bool), typeof(WorkerRequest).GetProperty(nameof(WorkerRequest.Restore))!.PropertyType);
     }
 }

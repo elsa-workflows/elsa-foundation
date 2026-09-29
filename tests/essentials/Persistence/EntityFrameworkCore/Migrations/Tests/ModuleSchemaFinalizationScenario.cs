@@ -1,4 +1,5 @@
 using Elsa.Persistence.EntityFramework.SchemaFinalization;
+using Elsa.Persistence.EntityFramework.Tests;
 using Xunit;
 
 namespace Elsa.Persistence.EntityFrameworkCore.Migrations.Tests;
@@ -26,9 +27,7 @@ internal static class ModuleSchemaFinalizationScenario
         {
             await using var context = ModuleContextCatalog.Create(type, connectionString, schema: schema);
             var store = new EfSchemaFinalizationStore(context);
-            var created = await store.GetOrCreateAsync(Family, "1.0.0", Chain, SchemaFinalizationActor.OfOperator("provider-test"));
-            var intended = Applied(type, await store.RecordIntentAsync(Family, created.Revision, "2.0.0", Chain, HostA));
-            var finalized = Applied(type, await store.CommitIntentAsync(Family, intended.Revision, Chain, HostB));
+            var finalized = await EfSchemaFinalizationTestSupport.FinalizeAsync(store, Family, Chain, "2.0.0", HostA);
 
             var refusal = await Assert.ThrowsAsync<SchemaFinalizationRefusedException>(
                 () => store.RecordIntentAsync(Family, finalized.Revision, "1.0.0", Chain, HostA));
@@ -45,18 +44,26 @@ internal static class ModuleSchemaFinalizationScenario
             var reread = await new EfSchemaFinalizationStore(restarted).FindAsync(Family);
             Assert.NotNull(reread);
             Assert.Equal("2.0.0", reread.FinalizedVersion);
-            Assert.Equal(created.DatabaseIdentity, reread.DatabaseIdentity);
-            Assert.Equal(created.DatabaseIdentity, await new EfSchemaFinalizationStore(restarted).GetOrCreateDatabaseIdentityAsync());
-            identities.Add(created.DatabaseIdentity);
+            Assert.Equal(finalized.DatabaseIdentity, reread.DatabaseIdentity);
+            Assert.Equal(finalized.DatabaseIdentity, await new EfSchemaFinalizationStore(restarted).GetOrCreateDatabaseIdentityAsync());
+            identities.Add(finalized.DatabaseIdentity);
         }
 
         Assert.NotEmpty(identities);
         Assert.Equal(identities.Count, identities.Distinct(StringComparer.Ordinal).Count());
     }
 
-    private static SchemaFinalizationRecord Applied(Type context, SchemaFinalizationWrite write)
+    /// <summary>
+    /// The enable-time guard finds each module's record table through the engine's own catalog, never the migrations
+    /// history (spec 171, FR-069): absent before the module's migrations run, present after, on every engine.
+    /// </summary>
+    public static async Task AssertRecordTablesAsync(string provider, string connectionString, bool expected, string? schema = null)
     {
-        Assert.True(write.Applied, $"{context.Name}: an uncontended write lost its compare-and-set.");
-        return write.Record;
+        foreach (var type in ModuleContextCatalog.Contexts(provider))
+        {
+            await using var context = ModuleContextCatalog.Create(type, connectionString, schema: schema);
+            Assert.True(expected == await EfSchemaFinalizationCheck.RecordTableExistsAsync(context),
+                $"{type.Name}: expected its finalization record table to {(expected ? "exist" : "be absent")}.");
+        }
     }
 }

@@ -7,6 +7,9 @@
         "requested": "[1.0.0-preview.6, )",
         "resolved": "1.0.0-preview.6",
         "contentHash": "3TeUmdG8kjVZYj2NJeYc53kmP0M9Qj6sTBfhJjQMqrLGXgIBGdme9ivE7vlshRAqM79mRLmjICQJPAIBcdEQQw=="
+      },
+      "elsa.primitives": {
+        "type": "Project"
       }
     }
   }

@@ -400,6 +400,36 @@ public sealed class PersistenceCliTests : IDisposable
         Assert.Contains("No pending migrations.", validate.Output, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// Spec 181, FR-019, FR-020 and FR-022, through the packaged host: a hold is placed with a reason and an operator
+    /// before any gate-aware host has run, <c>status</c> names it, a hold on the version already finalized is refused
+    /// as crossing the rollback boundary (exit 2), and a release takes the hold away.
+    /// </summary>
+    [Fact]
+    public void Hold_status_and_release_act_on_the_finalization_record_and_a_hold_on_a_finalized_version_is_refused()
+    {
+        var db = Path.Join(output.Path, "elsa-hold.db");
+        var env = new Dictionary<string, string> { ["ELSA_EF_CONNECTION"] = $"Data Source={db}" };
+        string[] target = ["--host", DotnetElsa.Host("Host"), "--provider", "Sqlite", "--modules", "Secrets"];
+        Assert.Equal(ToolExitCode.Success, DotnetElsa.Run(env, ["persistence", "apply", .. target]).ExitCode);
+
+        var hold = DotnetElsa.Run(env, ["persistence", "hold", .. target, "--family", "Secrets", "--reason", "canary of 2", "--operator", "ops@example"]);
+        Assert.Equal(ToolExitCode.Success, hold.ExitCode);
+        Assert.Contains("Hold placed.", hold.Output, StringComparison.Ordinal);
+
+        var status = DotnetElsa.Run(env, ["persistence", "status", .. target]);
+        Assert.Equal(ToolExitCode.Success, status.ExitCode);
+        Assert.Contains("Secrets (Secrets): finalized at 1.0.0", status.Output, StringComparison.Ordinal);
+        Assert.Contains("hold on the whole family by ops@example", status.Output, StringComparison.Ordinal);
+
+        var crossed = DotnetElsa.Run(env, ["persistence", "hold", .. target, "--family", "Secrets", "--version", "1.0.0", "--reason", "too late", "--operator", "ops@example"]);
+        Assert.Equal(ToolExitCode.Refusal, crossed.ExitCode);
+        Assert.Contains("rollback-boundary-crossed", crossed.Error, StringComparison.Ordinal);
+
+        Assert.Equal(ToolExitCode.Success, DotnetElsa.Run(env, ["persistence", "release", .. target, "--family", "Secrets", "--operator", "ops@example"]).ExitCode);
+        Assert.DoesNotContain("hold on", DotnetElsa.Run(env, ["persistence", "status", .. target]).Output, StringComparison.Ordinal);
+    }
+
     /// <summary>Reading the connection off the named environment variable is the default, unnamed flag.</summary>
     [Fact]
     public void Apply_reads_a_custom_connection_env_name()

@@ -21,10 +21,11 @@ using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Entities;
 
 // The schema families this module owns (spec 180, FR-001), each at the version its skew check reads. A host's
 // readability report is derived from these alone (spec 183, FR-020); EfSchemaFamilyDeclarationGuardTests fails the
-// build when a family the stores check is not declared here, or is declared at another version.
-[assembly: EfSchemaFamily(PublishingLedgerEfModule.SchemaFamily, "Workflows.Publishing", PublishingLedgerEfModule.ContentSchemaVersion)]
-[assembly: EfSchemaFamily(PublishingPolicyProjectionEfModule.SchemaFamily, "Workflows.Publishing", PublishingPolicyProjectionEfModule.SchemaVersion)]
-[assembly: EfSchemaFamily(PublishingSnapshotReviewEfModule.SchemaFamily, "Workflows.Publishing", PublishingSnapshotReviewEfModule.SchemaVersion)]
+// build when a family the stores check is not declared here, or is declared at another version. Each names the tables
+// whose rows it stamps, so the finalization gate holds every write to its own family's write version (spec 181, FR-009).
+[assembly: EfSchemaFamily(PublishingLedgerEfModule.SchemaFamily, "Workflows.Publishing", PublishingLedgerEfModule.ContentSchemaVersion, Entities = [typeof(PublicationRecordEntity), typeof(ActivityPublicationReceiptEntity), typeof(ActivityDraftTestRunEntity)])]
+[assembly: EfSchemaFamily(PublishingPolicyProjectionEfModule.SchemaFamily, "Workflows.Publishing", PublishingPolicyProjectionEfModule.SchemaVersion, Entities = [typeof(PublicationPolicyEntity), typeof(PublicationProjectionIntentEntity)])]
+[assembly: EfSchemaFamily(PublishingSnapshotReviewEfModule.SchemaFamily, "Workflows.Publishing", PublishingSnapshotReviewEfModule.SchemaVersion, Entities = [typeof(PublicationSnapshotReviewEntity)])]
 
 // Content and integrity columns: see src/essentials/Persistence/EntityFramework/EXTENSION_POINTS.md, "Content and integrity columns" (spec 180, FR-008, FR-009
 // and FR-014).

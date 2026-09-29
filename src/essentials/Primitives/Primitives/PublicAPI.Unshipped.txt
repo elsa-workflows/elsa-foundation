@@ -14,6 +14,7 @@ const Elsa.Primitives.Diagnostics.ActivityErrorCodes.PublicationInvalid = "activ
 const Elsa.Primitives.Diagnostics.ActivityErrorCodes.RequestInvalid = "activity.request.invalid" -> string!
 const Elsa.Primitives.Diagnostics.ActivityErrorCodes.VersionConflict = "activity.version.conflict" -> string!
 const Elsa.Primitives.Diagnostics.ActivityErrorCodes.VersionInvalid = "activity.version.invalid" -> string!
+const Elsa.Primitives.Exceptions.SchemaWriteRefusedException.RefusalCode = "schema-write-refused" -> string!
 Elsa.Primitives.Contracts.IIdentityGenerator
 Elsa.Primitives.Contracts.IIdentityGenerator.Generate() -> string!
 Elsa.Primitives.Contracts.ISystemClock
@@ -49,6 +50,12 @@ Elsa.Primitives.Exceptions.EntityNotFoundException.EntityNotFoundException(strin
 Elsa.Primitives.Exceptions.FeatureConfigurationException
 Elsa.Primitives.Exceptions.FeatureConfigurationException.FeatureConfigurationException() -> void
 Elsa.Primitives.Exceptions.FeatureConfigurationException.FeatureConfigurationException(string? message) -> void
+Elsa.Primitives.Exceptions.SchemaWriteRefusedException
+Elsa.Primitives.Exceptions.SchemaWriteRefusedException.Code.get -> string!
+Elsa.Primitives.Exceptions.SchemaWriteRefusedException.Family.get -> string!
+Elsa.Primitives.Exceptions.SchemaWriteRefusedException.RequiredVersion.get -> string!
+Elsa.Primitives.Exceptions.SchemaWriteRefusedException.SchemaWriteRefusedException(string! family, string! writeVersion, string! requiredVersion, string! message) -> void
+Elsa.Primitives.Exceptions.SchemaWriteRefusedException.WriteVersion.get -> string!
 Elsa.Primitives.Extensions.CollectionExtensions
 Elsa.Primitives.Extensions.ObjectExtensions
 Elsa.Primitives.Extensions.PropertyAccessorExtensions
