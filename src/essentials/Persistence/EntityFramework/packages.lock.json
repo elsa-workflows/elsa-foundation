@@ -175,6 +175,12 @@
         "resolved": "10.0.10",
         "contentHash": "jSOCVxEwCd4Aq925kJVz1kSO1EpX2OHYKL04qVREXkDU7Ce3pVDdHPYm+fEy8y/th2kJf/DAstRHpJAqoNWP8w=="
       },
+      "elsa.persistence.schema": {
+        "type": "Project",
+        "dependencies": {
+          "Microsoft.Extensions.Primitives": "[10.0.10, )"
+        }
+      },
       "elsa.primitives": {
         "type": "Project"
       },

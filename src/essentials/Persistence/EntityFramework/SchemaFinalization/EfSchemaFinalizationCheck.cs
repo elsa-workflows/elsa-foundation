@@ -2,6 +2,7 @@ using System.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage;
+using Elsa.Persistence.Schema.SchemaFinalization;
 
 namespace Elsa.Persistence.EntityFramework.SchemaFinalization;
 

@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.EntityFrameworkCore;
+using Elsa.Persistence.Schema.SchemaFinalization;
 
 namespace Elsa.Persistence.EntityFramework.SchemaFinalization;
 

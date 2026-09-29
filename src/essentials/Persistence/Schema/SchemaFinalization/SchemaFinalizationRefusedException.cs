@@ -1,4 +1,4 @@
-namespace Elsa.Persistence.EntityFramework.SchemaFinalization;
+namespace Elsa.Persistence.Schema.SchemaFinalization;
 
 /// <summary>
 /// A change to a finalization record that its rules forbid, whatever else has happened to the record. Unlike a lost

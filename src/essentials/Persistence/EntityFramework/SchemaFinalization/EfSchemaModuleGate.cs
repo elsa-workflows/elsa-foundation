@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Elsa.Persistence.Schema.SchemaFinalization;
 
 namespace Elsa.Persistence.EntityFramework.SchemaFinalization;
 
@@ -39,7 +40,7 @@ namespace Elsa.Persistence.EntityFramework.SchemaFinalization;
 /// and holds writes to what it observed.
 /// </para>
 /// </remarks>
-public sealed class EfSchemaModuleGate
+public sealed class EfSchemaModuleGate : IEfSchemaModuleGate
 {
     /// <summary>This process's incarnation, for the member a host that composes no fleet, or the persistence tool, names itself by.</summary>
     internal static readonly string ProcessIncarnation = Guid.NewGuid().ToString("N");
@@ -120,6 +121,39 @@ public sealed class EfSchemaModuleGate
     {
         lock (_lock)
             return _observed.TryGetValue(family, out var observed) ? observed : null;
+    }
+
+    /// <inheritdoc />
+    public EfSchemaFamilyStatus? Observe(string family)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(family);
+        return Families.Chains.FirstOrDefault(chain => StringComparer.Ordinal.Equals(chain.Family, family)) is { } owned ? Observe(owned) : null;
+    }
+
+    /// <inheritdoc />
+    public IReadOnlyList<EfSchemaFamilyStatus> Observe() => Families.Chains.Select(Observe).ToArray();
+
+    /// <summary>The family's status from what this gate last read and what it writes, with no I/O.</summary>
+    private EfSchemaFamilyStatus Observe(EfSchemaChain chain)
+    {
+        var observed = ObservedRecordOf(chain.Family);
+        return Status(chain, observed?.Record, observed?.At);
+    }
+
+    /// <summary><paramref name="record"/> described against <paramref name="chain"/>, with what this host writes for the family.</summary>
+    private EfSchemaFamilyStatus Status(
+        EfSchemaChain chain,
+        SchemaFinalizationRecord? record,
+        DateTimeOffset? observedAt,
+        IReadOnlyDictionary<string, IReadOnlyList<string>>? blockers = null)
+    {
+        var state = StateOf(chain.Family);
+        return EfSchemaFamilyStatus.Describe(chain.Family, chain.Module, chain.ReadableVersions, record, blockers) with
+        {
+            WriteVersion = state?.WriteVersion,
+            WritesRefused = state?.WritesRefused ?? false,
+            ObservedAt = observedAt
+        };
     }
 
     /// <summary>
@@ -324,12 +358,7 @@ public sealed class EfSchemaModuleGate
                 }
             }
 
-            var state = StateOf(chain.Family);
-            statuses.Add(EfSchemaFamilyStatus.Describe(chain, record, blockers) with
-            {
-                WriteVersion = state?.WriteVersion,
-                WritesRefused = state?.WritesRefused ?? false
-            });
+            statuses.Add(Status(chain, record, ObservedRecordOf(chain.Family)?.At, blockers));
         }
 
         return statuses;

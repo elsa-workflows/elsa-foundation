@@ -129,10 +129,11 @@ public sealed partial class ArchitectureGuardTests
     {
         var policy = Path.Combine(RepoRoot, "src", "essentials", "Persistence", "EntityFramework");
         var project = XDocument.Load(Path.Join(policy, "Elsa.Persistence.EntityFramework.csproj"));
-        // Its one project reference is no feature assembly: Elsa.Primitives, the root of the Line A contract baseline,
-        // holds the write refusal's persistence-agnostic base that the domain APIs answer (spec 180, FR-016a).
+        // Its two project references are no feature assembly: Elsa.Primitives, the root of the Line A contract baseline,
+        // holds the write refusal's persistence-agnostic base that the domain APIs answer (spec 180, FR-016a), and
+        // Elsa.Persistence.Schema is the EF-free half of the schema-family surface every host shares (#2143).
         Assert.Equal(
-            new[] { @"..\..\Primitives\Primitives\Elsa.Primitives.csproj" },
+            new[] { @"..\..\Primitives\Primitives\Elsa.Primitives.csproj", @"..\Schema\Elsa.Persistence.Schema.csproj" },
             project.Descendants("ProjectReference").Select(reference => reference.Attribute("Include")?.Value ?? string.Empty));
         Assert.DoesNotContain(project.Descendants("PackageReference"), reference =>
             (reference.Attribute("Include")?.Value ?? string.Empty).StartsWith("Elsa.", StringComparison.Ordinal));

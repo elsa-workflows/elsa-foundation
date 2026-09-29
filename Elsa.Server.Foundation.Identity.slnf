@@ -16,6 +16,7 @@
       "src/essentials/Foundation/Identity/OpenIddict/Elsa.Foundation.Identity.OpenIddict.csproj",
       "src/essentials/Foundation/Identity/Persistence/EntityFrameworkCore/Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.csproj",
       "src/essentials/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj",
+      "src/essentials/Persistence/Schema/Elsa.Persistence.Schema.csproj",
       "src/essentials/Pipelines/Core/Elsa.Pipelines.Core.csproj",
       "src/essentials/Primitives/Primitives/Elsa.Primitives.csproj",
       "src/essentials/Serialization/Core/Elsa.Serialization.Core.csproj",

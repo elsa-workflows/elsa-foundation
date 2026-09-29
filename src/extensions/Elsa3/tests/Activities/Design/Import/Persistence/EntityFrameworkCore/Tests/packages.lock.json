@@ -437,6 +437,7 @@
         "dependencies": {
           "CShells": "[0.0.30-preview.159, )",
           "CShells.Abstractions": "[0.0.30-preview.159, )",
+          "Elsa.Persistence.Schema": "[4.0.0-dev, )",
           "Elsa.Primitives": "[4.0.0-dev, )",
           "Microsoft.EntityFrameworkCore": "[10.0.10, )",
           "Microsoft.EntityFrameworkCore.Relational": "[10.0.10, )",
@@ -444,6 +445,12 @@
           "Microsoft.Extensions.Configuration.Json": "[10.0.10, )",
           "Microsoft.Extensions.Hosting.Abstractions": "[10.0.10, )",
           "Microsoft.Extensions.Options": "[10.0.10, )"
+        }
+      },
+      "elsa.persistence.schema": {
+        "type": "Project",
+        "dependencies": {
+          "Microsoft.Extensions.Primitives": "[10.0.10, )"
         }
       },
       "elsa.pipelines.core": {

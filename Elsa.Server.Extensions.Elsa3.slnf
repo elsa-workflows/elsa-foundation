@@ -13,6 +13,7 @@
       "src/essentials/Foundation/Identity/Elsa.Foundation.Identity.csproj",
       "src/essentials/Locking/Core/Elsa.Locking.Core.csproj",
       "src/essentials/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj",
+      "src/essentials/Persistence/Schema/Elsa.Persistence.Schema.csproj",
       "src/essentials/Pipelines/Core/Elsa.Pipelines.Core.csproj",
       "src/essentials/Primitives/Primitives/Elsa.Primitives.csproj",
       "src/essentials/Serialization/Core/Elsa.Serialization.Core.csproj",

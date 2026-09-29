@@ -29,6 +29,17 @@ public sealed class SharedAssemblyClosureGuardTests
     /// <summary>Every Elsa project under <c>src/</c>, by assembly name, with the Elsa projects it references directly.</summary>
     private static IReadOnlyDictionary<string, IReadOnlyList<string>> ElsaReferences { get; } = ProjectGraph.LoadElsaReferences(RepoRoot);
 
+    /// <summary>
+    /// The host-composed shares (ADR 0067, amended 2026-09-29; #2143): the contracts of what a host composes once on its
+    /// own container rather than in a shell - cluster membership, its readability report and the dormancy check's source
+    /// (spec 183, FR-017; ADR 0078) - which a feed-loaded package reaches only if it sees the host's types. They are on
+    /// Line B, not Line A: they cross the host/package boundary for the persistence and cluster domains, not for every
+    /// domain. <c>Elsa.Persistence.Schema</c> is the EF-free half of the schema-family surface; an EF module package
+    /// carries its own copy of <c>Elsa.Persistence.EntityFramework</c>, and without this share its finalization gate
+    /// never finds the host's fleet and its dormancy source never finds its gate.
+    /// </summary>
+    internal static readonly string[] HostComposedShares = ["Elsa.Cluster.Core", "Elsa.Persistence.Schema"];
+
     public static TheoryData<string> Hosts => [.. HostsThatShareAssemblies()];
 
     [Theory]
@@ -51,15 +62,48 @@ public sealed class SharedAssemblyClosureGuardTests
         Assert.NotEmpty(Examined(workbench));
         Assert.Equal(workbench.Where(ProjectGraph.IsElsa), Examined(workbench));
 
-        // Elsa.Foundation.Host shares exactly Line A's ten contracts (#2126) beside its three CShells.*.Abstractions
-        // ones, and Line A is closed under its own dependencies by definition (ADR 0067), so the theory above holds
-        // with every one of the ten examined and none of them reaching outside the set.
+        // Elsa.Foundation.Host shares Line A's ten contracts (#2126) and the two host-composed ones (#2143) beside its three
+        // CShells.*.Abstractions ones. Line A is closed under its own dependencies by definition (ADR 0067), and the two
+        // host-composed ones reach nothing but Line A, so the theory above holds with every one of the twelve examined and
+        // none of them reaching outside the set.
         var foundationHost = SharedAssemblies(ReadNuplane("Elsa.Foundation.Host"));
         Assert.NotEmpty(Examined(foundationHost));
         Assert.Equal(foundationHost.Where(ProjectGraph.IsElsa), Examined(foundationHost));
 
         // The edge behind the original bug, resolved from the real csproj files.
         Assert.Contains("Elsa.Events.Core", ElsaReferences["Elsa.Serialization.Core"]);
+    }
+
+    /// <summary>
+    /// Every host shares the host-composed contracts, and carries the projects that define them, so the types a feed-loaded
+    /// package resolves them to are the ones the host registered its membership under. A host that composed membership but
+    /// shared neither would look healthy: every EF module package would admit, and its gate would silently never finalize.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(Hosts))]
+    public void Every_host_shares_the_contracts_of_the_membership_it_composes(string host)
+    {
+        var shared = SharedAssemblies(ReadNuplane(host));
+        var carried = Reachable(host, ElsaReferences).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        Assert.All(HostComposedShares, share =>
+        {
+            Assert.True(shared.Contains(share, StringComparer.OrdinalIgnoreCase),
+                $"{host} composes cluster membership on its own container but does not share {share} " +
+                $"(src/apps/{host}/appsettings.json, Nuplane:Loading:SharedAssemblies). A feed-loaded EF module would load a " +
+                "private copy of it and never reach the host's fleet (ADR 0067, amended 2026-09-29; #2143).");
+            Assert.True(carried.Contains(share), $"{host} shares {share} but does not reference the project that builds it.");
+        });
+    }
+
+    /// <summary>The host-composed shares reach nothing outside Line A, so sharing them adds no Line B floor of another domain.</summary>
+    [Fact]
+    public void The_host_composed_shares_reach_only_line_a()
+    {
+        var lineA = VersionLines.LineAMembers(RepoRoot).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        Assert.All(HostComposedShares, share =>
+            Assert.All(Reachable(share, ElsaReferences), dependency => Assert.Contains(dependency, lineA)));
     }
 
     /// <summary>The detector itself, so the theory's green means "closed" rather than "nothing checked".</summary>

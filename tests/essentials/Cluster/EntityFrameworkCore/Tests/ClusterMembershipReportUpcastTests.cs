@@ -3,6 +3,7 @@ using Elsa.Cluster.Core.Models;
 using Elsa.Cluster.EntityFrameworkCore.Entities;
 using Elsa.Cluster.EntityFrameworkCore.Stores;
 using Elsa.Persistence.EntityFramework;
+using Elsa.Persistence.Schema;
 
 namespace Elsa.Cluster.EntityFrameworkCore.Tests;
 

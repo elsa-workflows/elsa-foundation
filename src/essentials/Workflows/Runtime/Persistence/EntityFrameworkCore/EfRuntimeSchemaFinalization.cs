@@ -1,4 +1,5 @@
 using Elsa.Persistence.EntityFramework.SchemaFinalization;
+using Elsa.Persistence.Schema.SchemaFinalization;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -29,5 +30,5 @@ internal sealed class EfRuntimeSchemaFinalization(IServiceProvider services) : I
     }
 
     /// <summary>The gate that admitted the Runtime EF module in this shell, or none before Prepare admitted it.</summary>
-    private EfSchemaModuleGate? Gate() => services.GetService<EfSchemaFinalizationGates>()?.FindForContext(typeof(RuntimeDbContext));
+    private EfSchemaModuleGate? Gate() => services.GetService<EfSchemaFinalizationGates>()?.FindModuleGate(typeof(RuntimeDbContext));
 }

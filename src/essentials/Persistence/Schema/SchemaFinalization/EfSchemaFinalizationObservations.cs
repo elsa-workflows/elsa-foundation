@@ -1,4 +1,4 @@
-namespace Elsa.Persistence.EntityFramework.SchemaFinalization;
+namespace Elsa.Persistence.Schema.SchemaFinalization;
 
 /// <summary>
 /// What this host has read from finalization records, per schema family, across every shell and database it serves:

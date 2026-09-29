@@ -1,6 +1,7 @@
 using System.Reflection;
 using Elsa.Cluster.Core.Models;
 using Elsa.Persistence.EntityFramework;
+using Elsa.Persistence.Schema;
 using Elsa.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;

@@ -1,3 +1,5 @@
+using Elsa.Persistence.Schema;
+
 namespace Elsa.Persistence.EntityFramework;
 
 /// <summary>

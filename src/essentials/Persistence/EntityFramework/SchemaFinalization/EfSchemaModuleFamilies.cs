@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Elsa.Persistence.Schema;
 
 namespace Elsa.Persistence.EntityFramework.SchemaFinalization;
 

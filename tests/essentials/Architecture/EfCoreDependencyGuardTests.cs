@@ -1382,23 +1382,23 @@ public sealed class EfCoreDependencyGuardTests
     }
 
     /// <summary>
-    /// Spec 183's readability source (B3, #2099): it reads schema-family declarations through the persistence policy
-    /// package and reports them through the membership contract, so it resolves EF Core and Relational and never a
-    /// provider engine. Its tests read the declarations of two first-party module assemblies, which carry the same
-    /// closure.
+    /// Spec 183's readability source (B3, #2099) reads schema-family declarations and reports them through the membership
+    /// contract. Since #2143 it reads them through <c>Elsa.Persistence.Schema</c>, which references no EF Core, so the
+    /// source itself is no longer admitted here: it resolves no EF package, and
+    /// <see cref="Only_admitted_consumers_and_pilot_projects_resolve_ef_core_packages"/> keeps it that way, which is what
+    /// lets <c>Elsa.Foundation.Host</c> compose it and still carry no EF (ADR 0076). Its tests read the declarations of two
+    /// first-party module assemblies, which resolve EF Core and Relational and never a provider engine.
     /// </summary>
     internal static class Spec183ReadabilityEf
     {
         public static readonly string[] SurfacePathPrefixes =
         [
-            "src/essentials/Cluster/Readability/",
             "tests/essentials/Cluster/Readability/"
         ];
 
         public static readonly IReadOnlyDictionary<string, string[]> ExpectedEfPackagesByProject =
             new Dictionary<string, string[]>(StringComparer.Ordinal)
             {
-                ["src/essentials/Cluster/Readability/Elsa.Cluster.Readability.csproj"] = CorePackages(),
                 ["tests/essentials/Cluster/Readability/Tests/Elsa.Cluster.Readability.Tests.csproj"] = CorePackages()
             };
 

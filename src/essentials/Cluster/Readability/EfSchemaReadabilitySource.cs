@@ -1,8 +1,8 @@
 using System.Runtime.Loader;
 using Elsa.Cluster.Core.Contracts;
 using Elsa.Cluster.Core.Models;
-using Elsa.Persistence.EntityFramework;
-using Elsa.Persistence.EntityFramework.SchemaFinalization;
+using Elsa.Persistence.Schema;
+using Elsa.Persistence.Schema.SchemaFinalization;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 

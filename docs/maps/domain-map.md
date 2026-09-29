@@ -6,10 +6,10 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 
 ## Summary
 
-- Source projects: 136
-- Test projects: 126
+- Source projects: 137
+- Test projects: 127
 - Domains: 31
-- Direct cross-domain references: 741
+- Direct cross-domain references: 746
 
 ## Domains
 
@@ -22,7 +22,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | Elsa.Attention | 2 | 2 | contract<br>feature/implementation<br>test |
 | Elsa.Caching | 2 | 1 | contract<br>feature/implementation<br>test |
 | Elsa.Cli | 2 | 15 | feature/implementation<br>test |
-| Elsa.Cluster | 4 | 6 | contract<br>feature/implementation<br>test |
+| Elsa.Cluster | 4 | 7 | contract<br>feature/implementation<br>test |
 | Elsa.Diagnostics | 8 | 8 | contract<br>feature/implementation<br>test |
 | Elsa.Events | 3 | 1 | contract<br>feature/implementation<br>helper<br>test |
 | Elsa.Expressions | 9 | 3 | contract<br>feature/implementation<br>provider/implementation<br>test |
@@ -32,7 +32,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | Elsa.Locking | 2 | 0 | contract<br>provider/implementation |
 | Elsa.Mediator | 2 | 1 | contract<br>feature/implementation<br>test |
 | Elsa.Modularity | 5 | 3 | contract<br>feature/implementation<br>test |
-| Elsa.Persistence | 1 | 8 | feature/implementation<br>test |
+| Elsa.Persistence | 2 | 8 | feature/implementation<br>test |
 | Elsa.Pipelines | 1 | 0 | contract |
 | Elsa.Primitives | 2 | 2 | feature/implementation<br>test |
 | Elsa.Samples | 0 | 1 | test |
@@ -51,7 +51,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 
 | Project | Kind | Domain | Sub-domain | Role | Direct references |
 |---|---|---|---|---|---|
-| [Elsa.Foundation.Host](../../src/apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj) | source | Elsa.Foundation | Host | feature/implementation | Elsa.Api.AspNetCore<br>Elsa.Attention.Core<br>Elsa.Caching.Core<br>Elsa.Events.Core<br>Elsa.Expressions.Core<br>Elsa.Locking.Core<br>Elsa.Mediator.Core<br>Elsa.Pipelines.Core<br>Elsa.Primitives<br>Elsa.Serialization.Core<br>Elsa.Tasks.Core |
+| [Elsa.Foundation.Host](../../src/apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj) | source | Elsa.Foundation | Host | feature/implementation | Elsa.Api.AspNetCore<br>Elsa.Attention.Core<br>Elsa.Caching.Core<br>Elsa.Cluster.Core<br>Elsa.Cluster.Readability<br>Elsa.Events.Core<br>Elsa.Expressions.Core<br>Elsa.Locking.Core<br>Elsa.Mediator.Core<br>Elsa.Persistence.Schema<br>Elsa.Pipelines.Core<br>Elsa.Primitives<br>Elsa.Serialization.Core<br>Elsa.Tasks.Core |
 | [Elsa.Workbench](../../src/apps/Elsa.Workbench/Elsa.Workbench.csproj) | source | Elsa.Workbench | - | host | Elsa.Activities.Bpmn<br>Elsa.Activities.Bpmn.Interchange<br>Elsa.Activities.ControlFlow<br>Elsa.Activities.Design.Api<br>Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Persistence.Core<br>Elsa.Activities.Design.Persistence.EntityFrameworkCore<br>Elsa.Activities.Design.Reconciliation<br>Elsa.Activities.Design.Reconciliation.Clr<br>Elsa.Activities.DispatchWorkflow.Design<br>Elsa.Activities.DispatchWorkflow.Runtime<br>Elsa.Activities.Flowchart<br>Elsa.Activities.Graph.Design<br>Elsa.Activities.Graph.Runtime<br>Elsa.Activities.Http<br>Elsa.Activities.Primitives<br>Elsa.Activities.Runtime<br>Elsa.Activities.Scheduling<br>Elsa.Activities.Sequence<br>Elsa.Agent.Api<br>Elsa.Agent.Core<br>Elsa.Agent.GitHubCopilot<br>Elsa.Agent.Workflows<br>Elsa.Api.Capabilities<br>Elsa.Attention.Api<br>Elsa.Attention.Core<br>Elsa.Caching.Core<br>Elsa.Caching.Memory<br>Elsa.Cluster.EntityFrameworkCore<br>Elsa.Cluster.Readability<br>Elsa.Diagnostics.ConsoleLogStreaming<br>Elsa.Diagnostics.OpenTelemetry<br>Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore<br>Elsa.Diagnostics.StructuredLogs<br>Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore<br>Elsa.Events<br>Elsa.Expressions<br>Elsa.Expressions.Api<br>Elsa.Expressions.JavaScript<br>Elsa.Expressions.JavaScript.Jint<br>Elsa.Expressions.JavaScript.Rendering<br>Elsa.Foundation.Identity<br>Elsa.Foundation.Identity.Api<br>Elsa.Foundation.Identity.AspNetCoreIdentity<br>Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore<br>Elsa.Foundation.Identity.Oidc<br>Elsa.Foundation.Identity.OpenIddict<br>Elsa.Foundation.Identity.Persistence.EntityFrameworkCore<br>Elsa.Http<br>Elsa.Http.JavaScript<br>Elsa.Locking.FileSystem<br>Elsa.Mediator<br>Elsa.Modularity.Api<br>Elsa.Modularity.Core<br>Elsa.Modularity.EntityFramework<br>Elsa.Modularity.Nuplane<br>Elsa.Primitives<br>Elsa.Primitives.Hosting<br>Elsa.Secrets<br>Elsa.Secrets.Api<br>Elsa.Secrets.Core<br>Elsa.Secrets.Persistence.EntityFrameworkCore<br>Elsa.Serialization.Newtonsoft<br>Elsa.Serialization.SystemText<br>Elsa.Studio.Preferences.Api<br>Elsa.Studio.Preferences.Core<br>Elsa.Studio.Preferences.Persistence.EntityFrameworkCore<br>Elsa.Tasks<br>Elsa.Tasks.Core<br>Elsa.Tasks.Schedules<br>Elsa.Workflows.Dashboard<br>Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Design.Api<br>Elsa.Workflows.Design.JavaScript<br>Elsa.Workflows.Design.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Design.Reconciliation<br>Elsa.Workflows.Design.Reconciliation.Json<br>Elsa.Workflows.Design.Validations<br>Elsa.Workflows.ExecutionEvidence<br>Elsa.Workflows.Publishing.Api<br>Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Runtime<br>Elsa.Workflows.Runtime.Api<br>Elsa.Workflows.Runtime.Distributed<br>Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Runtime.Http<br>Elsa.Workflows.Runtime.JavaScript<br>Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Runtime.Reconciliation<br>Elsa.Workflows.Runtime.ReferenceGarbageCollection<br>Elsa.Workflows.Runtime.Resumption<br>Elsa.Workflows.Runtime.Scheduling |
 | [Elsa.Activities.Bpmn](../../src/essentials/Activities/Bpmn/Elsa.Activities.Bpmn.csproj) | source | Elsa.Activities | Bpmn | feature/implementation | Elsa.Activities.Runtime.Core<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Runtime<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Activities.Bpmn.Interchange](../../src/essentials/Activities/Bpmn/Interchange/Elsa.Activities.Bpmn.Interchange.csproj) | source | Elsa.Activities | Bpmn.Interchange | feature/implementation | Elsa.Activities.Bpmn<br>Elsa.Api.AspNetCore<br>Elsa.Foundation.Identity<br>Elsa.Foundation.Identity.Core<br>Elsa.Workflows.Design.Core |
@@ -86,7 +86,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Cluster.Core](../../src/essentials/Cluster/Core/Elsa.Cluster.Core.csproj) | source | Elsa.Cluster | Core | contract | Elsa.Primitives |
 | [Elsa.Cluster.EntityFrameworkCore](../../src/essentials/Cluster/EntityFrameworkCore/Elsa.Cluster.EntityFrameworkCore.csproj) | source | Elsa.Cluster | EntityFrameworkCore | feature/implementation | Elsa.Cluster.Core<br>Elsa.Persistence.EntityFramework |
 | [Elsa.Cluster.InProcess](../../src/essentials/Cluster/InProcess/Elsa.Cluster.InProcess.csproj) | source | Elsa.Cluster | InProcess | feature/implementation | Elsa.Cluster.Core |
-| [Elsa.Cluster.Readability](../../src/essentials/Cluster/Readability/Elsa.Cluster.Readability.csproj) | source | Elsa.Cluster | Readability | feature/implementation | Elsa.Cluster.Core<br>Elsa.Cluster.InProcess<br>Elsa.Persistence.EntityFramework |
+| [Elsa.Cluster.Readability](../../src/essentials/Cluster/Readability/Elsa.Cluster.Readability.csproj) | source | Elsa.Cluster | Readability | feature/implementation | Elsa.Cluster.Core<br>Elsa.Cluster.InProcess<br>Elsa.Persistence.Schema |
 | [Elsa.Diagnostics.ConsoleLogStreaming](../../src/essentials/Diagnostics/ConsoleLogStreaming/Elsa.Diagnostics.ConsoleLogStreaming.csproj) | source | Elsa.Diagnostics | ConsoleLogStreaming | feature/implementation | - |
 | [Elsa.Diagnostics.OpenTelemetry.Core](../../src/essentials/Diagnostics/OpenTelemetry/Core/Elsa.Diagnostics.OpenTelemetry.Core.csproj) | source | Elsa.Diagnostics | OpenTelemetry.Core | contract | - |
 | [Elsa.Diagnostics.OpenTelemetry](../../src/essentials/Diagnostics/OpenTelemetry/Elsa.Diagnostics.OpenTelemetry.csproj) | source | Elsa.Diagnostics | OpenTelemetry | feature/implementation | Elsa.Api.AspNetCore<br>Elsa.Diagnostics.OpenTelemetry.Core<br>Elsa.Foundation.Identity<br>Elsa.Foundation.Identity.Core<br>Elsa.Primitives |
@@ -129,7 +129,8 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Modularity.EntityFramework](../../src/essentials/Modularity/EntityFramework/Elsa.Modularity.EntityFramework.csproj) | source | Elsa.Modularity | EntityFramework | feature/implementation | Elsa.Modularity.Core<br>Elsa.Persistence.EntityFramework |
 | [Elsa.Modularity.Nuplane](../../src/essentials/Modularity/Nuplane/Elsa.Modularity.Nuplane.csproj) | source | Elsa.Modularity | Nuplane | feature/implementation | Elsa.Modularity.Core |
 | [Elsa.Modularity.Planning](../../src/essentials/Modularity/Planning/Elsa.Modularity.Planning.csproj) | source | Elsa.Modularity | Planning | feature/implementation | - |
-| [Elsa.Persistence.EntityFramework](../../src/essentials/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj) | source | Elsa.Persistence | EntityFramework | feature/implementation | Elsa.Primitives |
+| [Elsa.Persistence.EntityFramework](../../src/essentials/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj) | source | Elsa.Persistence | EntityFramework | feature/implementation | Elsa.Persistence.Schema<br>Elsa.Primitives |
+| [Elsa.Persistence.Schema](../../src/essentials/Persistence/Schema/Elsa.Persistence.Schema.csproj) | source | Elsa.Persistence | Schema | feature/implementation | - |
 | [Elsa.Pipelines.Core](../../src/essentials/Pipelines/Core/Elsa.Pipelines.Core.csproj) | source | Elsa.Pipelines | Core | contract | - |
 | [Elsa.Primitives.Hosting](../../src/essentials/Primitives/Hosting/Elsa.Primitives.Hosting.csproj) | source | Elsa.Primitives | Hosting | feature/implementation | Elsa.Primitives |
 | [Elsa.Primitives](../../src/essentials/Primitives/Primitives/Elsa.Primitives.csproj) | source | Elsa.Primitives | (root) | feature/implementation | - |
@@ -237,7 +238,8 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Cli.Tests](../../tests/essentials/Cli/Tests/Elsa.Cli.Tests.csproj) | test | Elsa.Cli | Tests | test | Acme.Widgets<br>Elsa.Cli<br>Elsa.Cli.Fixtures.CollisionHost<br>Elsa.Cli.Fixtures.Host<br>Elsa.Cli.Fixtures.LegacyHost<br>Elsa.Cli.Fixtures.MinimalHost<br>Elsa.Cli.Fixtures.NuplaneCapabilityHost<br>Elsa.Cli.Fixtures.NuplaneHost<br>Elsa.Cli.Fixtures.PartialContextHost<br>Elsa.Cli.Fixtures.ResourceAwareLiveHost<br>Elsa.Cli.Fixtures.ShellsHost<br>Elsa.Cli.Fixtures.UnsupportedContextHost<br>Elsa.Cli.Fixtures.WorkerContextHost<br>Elsa.Modularity.Planning |
 | [Elsa.Cluster.EntityFrameworkCore.ProviderTests](../../tests/essentials/Cluster/EntityFrameworkCore/ProviderTests/Elsa.Cluster.EntityFrameworkCore.ProviderTests.csproj) | test | Elsa.Cluster | EntityFrameworkCore.ProviderTests | test | Elsa.Cluster.EntityFrameworkCore.Testing |
 | [Elsa.Cluster.EntityFrameworkCore.Testing](../../tests/essentials/Cluster/EntityFrameworkCore/Testing/Elsa.Cluster.EntityFrameworkCore.Testing.csproj) | test | Elsa.Cluster | EntityFrameworkCore.Testing | test | Elsa.Cluster.EntityFrameworkCore<br>Elsa.Cluster.Readability<br>Elsa.Cluster.Testing |
-| [Elsa.Cluster.EntityFrameworkCore.Tests](../../tests/essentials/Cluster/EntityFrameworkCore/Tests/Elsa.Cluster.EntityFrameworkCore.Tests.csproj) | test | Elsa.Cluster | EntityFrameworkCore.Tests | test | Elsa.Cluster.EntityFrameworkCore.Testing |
+| [Elsa.Cluster.EntityFrameworkCore.Tests](../../tests/essentials/Cluster/EntityFrameworkCore/Tests/Elsa.Cluster.EntityFrameworkCore.Tests.csproj) | test | Elsa.Cluster | EntityFrameworkCore.Tests | test | Elsa.Cluster.EntityFrameworkCore.Testing<br>Elsa.Cluster.Fixtures.FeedModule<br>Elsa.Foundation.Host |
+| [Elsa.Cluster.Fixtures.FeedModule](../../tests/essentials/Cluster/Fixtures/FeedModule/Elsa.Cluster.Fixtures.FeedModule.csproj) | test | Elsa.Cluster | Fixtures.FeedModule | test | Elsa.Cluster.Core<br>Elsa.Persistence.EntityFramework |
 | [Elsa.Cluster.Readability.Tests](../../tests/essentials/Cluster/Readability/Tests/Elsa.Cluster.Readability.Tests.csproj) | test | Elsa.Cluster | Readability.Tests | test | Elsa.Cluster.Readability<br>Elsa.Testing<br>Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore |
 | [Elsa.Cluster.Testing](../../tests/essentials/Cluster/Testing/Elsa.Cluster.Testing.csproj) | test | Elsa.Cluster | Testing | test | Elsa.Cluster.Core<br>Elsa.Serialization.SystemText<br>Elsa.Workflows.Runtime.Distributed |
 | [Elsa.Cluster.Tests](../../tests/essentials/Cluster/Tests/Elsa.Cluster.Tests.csproj) | test | Elsa.Cluster | Tests | test | Elsa.Cluster.Core<br>Elsa.Cluster.InProcess<br>Elsa.Cluster.Testing |
@@ -567,7 +569,9 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Cli.Tests](../../tests/essentials/Cli/Tests/Elsa.Cli.Tests.csproj) | Elsa.Cli | [Elsa.Modularity.Planning](../../src/essentials/Modularity/Planning/Elsa.Modularity.Planning.csproj) | Elsa.Modularity |
 | [Elsa.Cluster.Core](../../src/essentials/Cluster/Core/Elsa.Cluster.Core.csproj) | Elsa.Cluster | [Elsa.Primitives](../../src/essentials/Primitives/Primitives/Elsa.Primitives.csproj) | Elsa.Primitives |
 | [Elsa.Cluster.EntityFrameworkCore](../../src/essentials/Cluster/EntityFrameworkCore/Elsa.Cluster.EntityFrameworkCore.csproj) | Elsa.Cluster | [Elsa.Persistence.EntityFramework](../../src/essentials/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj) | Elsa.Persistence |
-| [Elsa.Cluster.Readability](../../src/essentials/Cluster/Readability/Elsa.Cluster.Readability.csproj) | Elsa.Cluster | [Elsa.Persistence.EntityFramework](../../src/essentials/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj) | Elsa.Persistence |
+| [Elsa.Cluster.EntityFrameworkCore.Tests](../../tests/essentials/Cluster/EntityFrameworkCore/Tests/Elsa.Cluster.EntityFrameworkCore.Tests.csproj) | Elsa.Cluster | [Elsa.Foundation.Host](../../src/apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj) | Elsa.Foundation |
+| [Elsa.Cluster.Fixtures.FeedModule](../../tests/essentials/Cluster/Fixtures/FeedModule/Elsa.Cluster.Fixtures.FeedModule.csproj) | Elsa.Cluster | [Elsa.Persistence.EntityFramework](../../src/essentials/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj) | Elsa.Persistence |
+| [Elsa.Cluster.Readability](../../src/essentials/Cluster/Readability/Elsa.Cluster.Readability.csproj) | Elsa.Cluster | [Elsa.Persistence.Schema](../../src/essentials/Persistence/Schema/Elsa.Persistence.Schema.csproj) | Elsa.Persistence |
 | [Elsa.Cluster.Readability.Tests](../../tests/essentials/Cluster/Readability/Tests/Elsa.Cluster.Readability.Tests.csproj) | Elsa.Cluster | [Elsa.Testing](../../tests/essentials/Testing/Elsa.Testing.csproj) | Elsa.Testing |
 | [Elsa.Cluster.Readability.Tests](../../tests/essentials/Cluster/Readability/Tests/Elsa.Cluster.Readability.Tests.csproj) | Elsa.Cluster | [Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore](../../src/essentials/Workflows/Publishing/Persistence/EntityFrameworkCore/Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.csproj) | Elsa.Workflows |
 | [Elsa.Cluster.Readability.Tests](../../tests/essentials/Cluster/Readability/Tests/Elsa.Cluster.Readability.Tests.csproj) | Elsa.Cluster | [Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore](../../src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj) | Elsa.Workflows |
@@ -620,10 +624,13 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Foundation.Host](../../src/apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj) | Elsa.Foundation | [Elsa.Api.AspNetCore](../../src/essentials/Api/AspNetCore/Elsa.Api.AspNetCore.csproj) | Elsa.Api |
 | [Elsa.Foundation.Host](../../src/apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj) | Elsa.Foundation | [Elsa.Attention.Core](../../src/essentials/Attention/Core/Elsa.Attention.Core.csproj) | Elsa.Attention |
 | [Elsa.Foundation.Host](../../src/apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj) | Elsa.Foundation | [Elsa.Caching.Core](../../src/essentials/Caching/Core/Elsa.Caching.Core.csproj) | Elsa.Caching |
+| [Elsa.Foundation.Host](../../src/apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj) | Elsa.Foundation | [Elsa.Cluster.Core](../../src/essentials/Cluster/Core/Elsa.Cluster.Core.csproj) | Elsa.Cluster |
+| [Elsa.Foundation.Host](../../src/apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj) | Elsa.Foundation | [Elsa.Cluster.Readability](../../src/essentials/Cluster/Readability/Elsa.Cluster.Readability.csproj) | Elsa.Cluster |
 | [Elsa.Foundation.Host](../../src/apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj) | Elsa.Foundation | [Elsa.Events.Core](../../src/essentials/Events/Core/Elsa.Events.Core.csproj) | Elsa.Events |
 | [Elsa.Foundation.Host](../../src/apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj) | Elsa.Foundation | [Elsa.Expressions.Core](../../src/essentials/Expressions/Core/Elsa.Expressions.Core.csproj) | Elsa.Expressions |
 | [Elsa.Foundation.Host](../../src/apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj) | Elsa.Foundation | [Elsa.Locking.Core](../../src/essentials/Locking/Core/Elsa.Locking.Core.csproj) | Elsa.Locking |
 | [Elsa.Foundation.Host](../../src/apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj) | Elsa.Foundation | [Elsa.Mediator.Core](../../src/essentials/Mediator/Core/Elsa.Mediator.Core.csproj) | Elsa.Mediator |
+| [Elsa.Foundation.Host](../../src/apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj) | Elsa.Foundation | [Elsa.Persistence.Schema](../../src/essentials/Persistence/Schema/Elsa.Persistence.Schema.csproj) | Elsa.Persistence |
 | [Elsa.Foundation.Host](../../src/apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj) | Elsa.Foundation | [Elsa.Pipelines.Core](../../src/essentials/Pipelines/Core/Elsa.Pipelines.Core.csproj) | Elsa.Pipelines |
 | [Elsa.Foundation.Host](../../src/apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj) | Elsa.Foundation | [Elsa.Primitives](../../src/essentials/Primitives/Primitives/Elsa.Primitives.csproj) | Elsa.Primitives |
 | [Elsa.Foundation.Host](../../src/apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj) | Elsa.Foundation | [Elsa.Serialization.Core](../../src/essentials/Serialization/Core/Elsa.Serialization.Core.csproj) | Elsa.Serialization |

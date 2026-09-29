@@ -1,6 +1,6 @@
 using Elsa.Cluster.Core.Contracts;
 using Elsa.Cluster.Core.Models;
-using Elsa.Persistence.EntityFramework.SchemaFinalization;
+using Elsa.Persistence.Schema.SchemaFinalization;
 using Microsoft.Extensions.Primitives;
 
 namespace Elsa.Cluster.Readability;
