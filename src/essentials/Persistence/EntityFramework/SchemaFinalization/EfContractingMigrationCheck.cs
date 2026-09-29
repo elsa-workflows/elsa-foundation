@@ -40,7 +40,8 @@ namespace Elsa.Persistence.EntityFramework.SchemaFinalization;
 /// <para>
 /// A module with no contracting migration costs nothing here: the opt-outs are read as assembly metadata, by name, as
 /// <see cref="EfSchemaFamilyCatalog"/> reads declarations, and no database is opened. The migrations-history table is
-/// read only when a contracting migration's family is below its version, to learn whether it is pending.
+/// read only when a contracting migration's family is below its version, to learn whether it is pending, and when a
+/// gate creates the record of a family a contracting migration names, to learn whether it has been applied.
 /// </para>
 /// </remarks>
 public static class EfContractingMigrationCheck

@@ -70,7 +70,8 @@ public sealed class EfSchemaActivationRefusedException : InvalidOperationExcepti
             EfSchemaActivationRefusal.ContractedUnreadable =>
                 $"{head} has no finalization record in this database yet, and a contracting migration already applied here " +
                 $"removed what every version before '{version}' reads, and {reads}. The schema serves no version before " +
-                $"'{version}', and this host cannot tell which of its own those are. Run a version of the module that reads '{version}'.",
+                $"'{version}', and this host cannot tell which of its own those are. Run a version of the module that " +
+                $"reads '{version}'.",
             EfSchemaActivationRefusal.ReportNotPublished =>
                 $"{head} could not be activated because this host's readability report could not be published to cluster " +
                 "membership, and a host whose report the fleet cannot see must not read the finalization record. Check the " +
