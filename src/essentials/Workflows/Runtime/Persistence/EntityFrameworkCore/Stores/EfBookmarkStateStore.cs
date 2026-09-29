@@ -315,15 +315,23 @@ public sealed class EfBookmarkStateStore(
                 row.WorkflowExecutionIdHash != Hash(row.WorkflowExecutionId) || row.BookmarkIdHash != Hash(row.BookmarkId) ||
                 row.WorkflowExecutionIdOrderKey != OrdinalKey(row.WorkflowExecutionId) || row.BookmarkIdOrderKey != OrdinalKey(row.BookmarkId) ||
                 (expectedWorkflow is not null && row.WorkflowExecutionId != expectedWorkflow) ||
-                (expectedBookmark is not null && row.BookmarkId != expectedBookmark) || string.IsNullOrWhiteSpace(row.MetadataJson) || row.Revision <= 0)
+                (expectedBookmark is not null && row.BookmarkId != expectedBookmark) || row.Revision <= 0)
                 throw new InvalidDataException("The persisted EF bookmark row is corrupt.");
 
-            // The payload and metadata columns restate parts of the content, and each is compared with it, so each is
-            // upcast from the row's stamp with it: the comparisons then hold between documents in one format (spec 180,
-            // FR-009; #2140).
-            var content = Upcast(row, nameof(row.ContentJson), row.ContentJson);
-            var payloadJson = Upcast(row, nameof(row.PayloadJson), row.PayloadJson);
-            var metadataJson = Upcast(row, nameof(row.MetadataJson), row.MetadataJson);
+            // The payload and metadata columns restate parts of the content, and each is compared with it, so the row's
+            // three content columns are upcast from its stamp together: the comparisons then hold between documents in
+            // one format (spec 180, FR-009; #2140, #2144). Whether metadata is present is read from the upcast row too,
+            // since a step may fill a column.
+            var upcast = BookmarkStateEfModule.Chain.Upcast<BookmarkStateEntity>(
+                row.SchemaVersion,
+                (nameof(row.ContentJson), row.ContentJson),
+                (nameof(row.PayloadJson), row.PayloadJson),
+                (nameof(row.MetadataJson), row.MetadataJson));
+            var content = upcast[nameof(row.ContentJson)]!;
+            var payloadJson = upcast[nameof(row.PayloadJson)];
+            var metadataJson = upcast[nameof(row.MetadataJson)];
+            if (string.IsNullOrWhiteSpace(metadataJson))
+                throw new InvalidDataException("The persisted EF bookmark row is corrupt.");
             var state = JsonSerializer.Deserialize<BookmarkState>(content, Json)
                         ?? throw new JsonException("Bookmark content was null.");
             var projectedPayload = DeserializePayload(payloadJson);
@@ -372,11 +380,6 @@ public sealed class EfBookmarkStateStore(
         }
         _ = CreateId("scope", state.WorkflowExecutionId, state.BookmarkId);
     }
-
-    /// <summary>A content column of <paramref name="row"/>, upcast from the row's stamp to the current version.</summary>
-    [return: NotNullIfNotNull(nameof(content))]
-    private static string? Upcast(BookmarkStateEntity row, string column, string? content) =>
-        BookmarkStateEfModule.Chain.Upcast(row.SchemaVersion, BookmarkStateEfModule.TableName, column, content);
 
     private static string? SerializePayload(JsonElement? payload) =>
         payload is null ? null : JsonSerializer.Serialize(payload.Value, Json);

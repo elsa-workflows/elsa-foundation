@@ -214,7 +214,7 @@ public sealed class EfActivityDraftTestRunStore(
             throw new InvalidOperationException("The persisted activity Test Run receipt scope projection is corrupt.");
         EfPublishingStoreSupport.EnsureProjection(testRunId, row.TestRunIdHash, row.TestRunIdOrderKey, nameof(row.TestRunId));
 
-        var content = PublishingLedgerEfModule.Chain.Upcast(row.SchemaVersion, PublishingLedgerEfModule.ActivityDraftTestRunTableName, nameof(row.Content), row.Content);
+        var content = PublishingLedgerEfModule.Chain.Upcast<ActivityDraftTestRunEntity>(row.SchemaVersion, (nameof(row.Content), row.Content))[nameof(row.Content)]!;
         var receipt = PublishingEfJson.Deserialize<ActivityDraftTestRunReceipt>(content, "activity Test Run receipt");
         var expiry = EfPublishingStoreSupport.DateTimeOffset(row.ReceiptExpiresAtUtcTicks, row.ReceiptExpiresAtOffsetMinutes);
         if (!StringComparer.Ordinal.Equals(receipt.TestRunId, testRunId) ||

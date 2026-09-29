@@ -466,28 +466,31 @@ public sealed class EfSchemaFinalizationStore
 
     /// <summary>
     /// Reads a row as a record. The stamp is checked before anything else is read from the row, so a row a build this
-    /// host does not run wrote reports skew rather than corruption, and none of its JSON is parsed; each JSON column is
-    /// then upcast from the row's stamp to the current version before it is parsed.
+    /// host does not run wrote reports skew rather than corruption, and none of its JSON is parsed; the row's JSON columns
+    /// are then upcast together from its stamp to the current version before any is parsed, and whether an optional one
+    /// is present is read from the upcast row, since a step may fill or clear it.
     /// </summary>
     private static SchemaFinalizationRecord Read(EfSchemaFinalizationRecordRow row)
     {
         EfSchemaVersion.EnsureReadable(EfSchemaFinalization.Chain, row.SchemaVersion);
+        var content = EfSchemaFinalization.Chain.Upcast<EfSchemaFinalizationRecordRow>(
+            row.SchemaVersion,
+            (nameof(row.IntentJson), row.IntentJson),
+            (nameof(row.HoldsJson), row.HoldsJson),
+            (nameof(row.HistoryJson), row.HistoryJson),
+            (nameof(row.FinishJson), row.FinishJson),
+            (nameof(row.FinishHistoryJson), row.FinishHistoryJson));
         return new SchemaFinalizationRecord(
             row.Family,
             row.DatabaseIdentity,
             row.Revision,
             row.FinalizedVersion,
-            row.IntentJson is null ? null : Deserialize<SchemaFinalizationIntent>(row, Upcast(row, nameof(row.IntentJson), row.IntentJson)),
-            Deserialize<SchemaFinalizationHold[]>(row, Upcast(row, nameof(row.HoldsJson), row.HoldsJson)),
-            Deserialize<SchemaFinalizationHistoryEntry[]>(row, Upcast(row, nameof(row.HistoryJson), row.HistoryJson)),
-            row.FinishJson is null ? null : Deserialize<SchemaFinishRecord>(row, Upcast(row, nameof(row.FinishJson), row.FinishJson)),
-            Deserialize<SchemaFinishHistoryEntry[]>(row, Upcast(row, nameof(row.FinishHistoryJson), row.FinishHistoryJson)));
+            content[nameof(row.IntentJson)] is { } intent ? Deserialize<SchemaFinalizationIntent>(row, intent) : null,
+            Deserialize<SchemaFinalizationHold[]>(row, content[nameof(row.HoldsJson)]!),
+            Deserialize<SchemaFinalizationHistoryEntry[]>(row, content[nameof(row.HistoryJson)]!),
+            content[nameof(row.FinishJson)] is { } finish ? Deserialize<SchemaFinishRecord>(row, finish) : null,
+            Deserialize<SchemaFinishHistoryEntry[]>(row, content[nameof(row.FinishHistoryJson)]!));
     }
-
-    /// <summary>A JSON column of a record row, as the current version stores it. Every module maps the record table under a
-    /// name of its own, so the upcaster sees the name's shared prefix.</summary>
-    private static string Upcast(EfSchemaFinalizationRecordRow row, string column, string json) =>
-        EfSchemaFinalization.Chain.Upcast(row.SchemaVersion, EfSchemaFinalization.RecordTablePrefix, column, json)!;
 
     /// <summary>Writes a record into its row; the family and its database identity are set once, when the row is created.</summary>
     private static void Write(EfSchemaFinalizationRecordRow row, SchemaFinalizationRecord record)

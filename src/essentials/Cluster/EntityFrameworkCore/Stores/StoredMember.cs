@@ -80,7 +80,7 @@ public sealed record StoredMember(
         string report;
         try
         {
-            report = chain.Upcast(row.SchemaVersion, ClusterMembershipEfModule.TableName, nameof(row.ReportJson), row.ReportJson);
+            report = chain.Upcast<ClusterMemberEntity>(row.SchemaVersion, (nameof(row.ReportJson), row.ReportJson))[nameof(row.ReportJson)]!;
         }
         catch (InvalidDataException)
         {

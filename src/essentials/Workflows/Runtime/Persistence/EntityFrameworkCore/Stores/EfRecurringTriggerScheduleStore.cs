@@ -498,7 +498,7 @@ public sealed class EfRecurringTriggerScheduleStore(
         if (EfSchemaVersion.NotReadable(RuntimeOperationalStateEfModule.Chain, row.SchemaVersion) || row.Id != Id(scope, Decode(row.ScheduleId)) || row.ScopeKey != Encode(scope) || row.ScopeKeyHash != Hash(scope) || expectedId is not null && row.ScheduleId != Encode(expectedId) || row.Revision <= 0)
             throw new InvalidDataException("The persisted EF recurring-trigger schedule row does not match its identity envelope.");
         RecurringTriggerSchedule schedule;
-        var scheduleContent = RuntimeOperationalStateEfModule.Chain.Upcast(row.SchemaVersion, RuntimeOperationalStateEfModule.RecurringScheduleTableName, nameof(row.ContentJson), row.ContentJson);
+        var scheduleContent = RuntimeOperationalStateEfModule.Chain.Upcast<RecurringTriggerScheduleEntity>(row.SchemaVersion, (nameof(row.ContentJson), row.ContentJson))[nameof(row.ContentJson)]!;
         try { schedule = RuntimeArtifactJson.Deserialize<RecurringTriggerSchedule>(scheduleContent); }
         catch (Exception exception) when (exception is JsonException or NotSupportedException or ArgumentException or InvalidOperationException or FormatException)
         { throw new InvalidDataException("The persisted EF recurring-trigger schedule content is not valid current JSON.", exception); }
@@ -579,12 +579,15 @@ public sealed class EfRecurringTriggerScheduleStore(
         try
         {
             // The id and fingerprint sets restate the content's and are compared with it and returned, so they are content
-            // too, upcast from the row's stamp with it (spec 180, FR-009; #2140).
-            string Upcast(string column, string json) =>
-                RuntimeOperationalStateEfModule.Chain.Upcast(entity.SchemaVersion, RuntimeOperationalStateEfModule.RecurringScheduleProjectionStateTableName, column, json);
-            content = JsonSerializer.Deserialize<ProjectionStateContent>(Upcast(nameof(entity.ContentJson), entity.ContentJson), JsonOptions) ?? throw new JsonException("Projection content is empty.");
-            ids = JsonSerializer.Deserialize<string[]>(Upcast(nameof(entity.ScheduleIdsJson), entity.ScheduleIdsJson), JsonOptions) ?? throw new JsonException("Schedule identities are empty.");
-            fps = JsonSerializer.Deserialize<Dictionary<string, string>>(Upcast(nameof(entity.ScheduleFingerprintsJson), entity.ScheduleFingerprintsJson), JsonOptions) ?? throw new JsonException("Schedule fingerprints are empty.");
+            // too, upcast from the row's stamp together with it (spec 180, FR-009; #2140, #2144).
+            var upcast = RuntimeOperationalStateEfModule.Chain.Upcast<RecurringTriggerScheduleProjectionStateEntity>(
+                entity.SchemaVersion,
+                (nameof(entity.ContentJson), entity.ContentJson),
+                (nameof(entity.ScheduleIdsJson), entity.ScheduleIdsJson),
+                (nameof(entity.ScheduleFingerprintsJson), entity.ScheduleFingerprintsJson));
+            content = JsonSerializer.Deserialize<ProjectionStateContent>(upcast[nameof(entity.ContentJson)]!, JsonOptions) ?? throw new JsonException("Projection content is empty.");
+            ids = JsonSerializer.Deserialize<string[]>(upcast[nameof(entity.ScheduleIdsJson)]!, JsonOptions) ?? throw new JsonException("Schedule identities are empty.");
+            fps = JsonSerializer.Deserialize<Dictionary<string, string>>(upcast[nameof(entity.ScheduleFingerprintsJson)]!, JsonOptions) ?? throw new JsonException("Schedule fingerprints are empty.");
         }
         catch (Exception exception) when (exception is JsonException or NotSupportedException or ArgumentException)
         {

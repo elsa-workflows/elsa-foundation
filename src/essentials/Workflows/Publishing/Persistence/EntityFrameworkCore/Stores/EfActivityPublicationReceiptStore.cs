@@ -126,7 +126,7 @@ public sealed class EfActivityPublicationReceiptStore(
             !StringComparer.Ordinal.Equals(row.ReceiptKeyHash, EfPublishingStoreSupport.Hash(receiptKey)))
             throw new InvalidOperationException("The persisted activity-publication receipt identity projection is corrupt.");
 
-        var content = PublishingLedgerEfModule.Chain.Upcast(row.SchemaVersion, PublishingLedgerEfModule.ActivityPublicationReceiptTableName, nameof(row.Content), row.Content);
+        var content = PublishingLedgerEfModule.Chain.Upcast<ActivityPublicationReceiptEntity>(row.SchemaVersion, (nameof(row.Content), row.Content))[nameof(row.Content)]!;
         var receipt = PublishingEfJson.Deserialize<ActivityPublicationReceipt>(content, "activity-publication receipt");
         if (!StringComparer.Ordinal.Equals(receipt.TenantId, receiptTenantId) ||
             !StringComparer.Ordinal.Equals(receipt.IdempotencyKey, idempotencyKey))

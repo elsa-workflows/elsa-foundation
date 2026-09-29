@@ -149,8 +149,8 @@ public sealed class EfDurableValueStateStore(
             row.ScopeKeyHash != EfRuntimeOperationalStoreSupport.Hash(scope) ||
             row.ScopeKey != EfRuntimeOperationalStoreSupport.Encode(scope))
             throw new InvalidDataException("The durable-value row scope, schema, or revision projection is corrupt.");
-        var state = RuntimeArtifactJson.Deserialize<DurableValueState>(RuntimeOperationalStateEfModule.Chain.Upcast(
-            row.SchemaVersion, RuntimeOperationalStateEfModule.DurableValueTableName, nameof(row.ContentJson), row.ContentJson));
+        var state = RuntimeArtifactJson.Deserialize<DurableValueState>(RuntimeOperationalStateEfModule.Chain.Upcast<DurableValueStateEntity>(
+            row.SchemaVersion, (nameof(row.ContentJson), row.ContentJson))[nameof(row.ContentJson)]!);
         if ((expectedWorkflow is not null && !StringComparer.Ordinal.Equals(expectedWorkflow, state.WorkflowExecutionId)) ||
             (expectedValue is not null && !StringComparer.Ordinal.Equals(expectedValue, state.DurableValueId)) ||
             row.WorkflowExecutionId != EfRuntimeOperationalStoreSupport.Encode(state.WorkflowExecutionId) ||

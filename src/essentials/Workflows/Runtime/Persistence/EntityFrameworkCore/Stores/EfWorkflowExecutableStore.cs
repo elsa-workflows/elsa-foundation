@@ -609,7 +609,7 @@ public sealed class EfWorkflowExecutableStore(
             throw new InvalidDataException("The persisted workflow executable row is corrupt.");
         try
         {
-            var x = RuntimeArtifactJson.Deserialize<WorkflowExecutable>(RuntimeArtifactEfModule.Chain.Upcast(row.SchemaVersion, RuntimeArtifactEfModule.WorkflowExecutableTableName, nameof(row.ContentJson), row.ContentJson));
+            var x = RuntimeArtifactJson.Deserialize<WorkflowExecutable>(RuntimeArtifactEfModule.Chain.Upcast<WorkflowExecutableEntity>(row.SchemaVersion, (nameof(row.ContentJson), row.ContentJson))[nameof(row.ContentJson)]!);
             Validate(x);
             if (x.Identity.ArtifactId != expected || x.Identity.ArtifactHash != row.ArtifactHash)
                 throw new InvalidDataException("The persisted workflow executable identity is corrupt.");
@@ -633,7 +633,7 @@ public sealed class EfWorkflowExecutableStore(
 
         try
         {
-            var content = RuntimeArtifactEfModule.Chain.Upcast(row.SchemaVersion, RuntimeArtifactEfModule.WorkflowExecutableCoordinationTableName, nameof(row.ContentJson), row.ContentJson);
+            var content = RuntimeArtifactEfModule.Chain.Upcast<WorkflowExecutableCoordinationEntity>(row.SchemaVersion, (nameof(row.ContentJson), row.ContentJson))[nameof(row.ContentJson)]!;
             using var document = JsonDocument.Parse(content);
             EnsureUniqueProperties(document.RootElement);
             var state = RuntimeArtifactJson.Deserialize<CoordinationState>(content);

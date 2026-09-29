@@ -161,7 +161,7 @@ public static class SecretsProjectionContract
         SecretDocument current;
         try
         {
-            using var json = JsonDocument.Parse(SecretsEfModule.Chain.Upcast(record.SchemaVersion, SecretsEfModule.TableName, nameof(record.Payload), record.Payload));
+            using var json = JsonDocument.Parse(SecretsEfModule.Chain.Upcast<SecretRecord>(record.SchemaVersion, (nameof(record.Payload), record.Payload))[nameof(record.Payload)]!);
             ValidatePayloadStructure(json.RootElement);
             stored = SecretDocument.Parse(json.RootElement);
             if (stored.Secret is null)

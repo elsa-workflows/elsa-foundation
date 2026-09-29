@@ -263,7 +263,7 @@ public sealed class EfWorkflowActivationAuthority(
         WorkflowActivationSlot slot;
         try
         {
-            slot = RuntimeArtifactJson.Deserialize<WorkflowActivationSlot>(RuntimeActivationSlotEfModule.Chain.Upcast(row.SchemaVersion, RuntimeActivationSlotEfModule.TableName, nameof(row.ContentJson), row.ContentJson));
+            slot = RuntimeArtifactJson.Deserialize<WorkflowActivationSlot>(RuntimeActivationSlotEfModule.Chain.Upcast<WorkflowActivationSlotEntity>(row.SchemaVersion, (nameof(row.ContentJson), row.ContentJson))[nameof(row.ContentJson)]!);
         }
         catch (JsonException exception)
         {

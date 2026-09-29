@@ -476,7 +476,7 @@ public sealed class EfIdentityAuthorityRelationshipCoordinator(
             var beforeRoleCount = RelationshipCount(role);
             var userIds = Registry(user, UserRegistry.RoleLinks);
             var roleIds = RoleUserLinks(role);
-            var userRoleIds = EfIdentityStoreSupport.ReadSet(user.SchemaVersion, IdentityIamEfModule.UserTableName, nameof(user.RoleIdsJson), user.RoleIdsJson).ToHashSet(StringComparer.Ordinal);
+            var userRoleIds = EfIdentityStoreSupport.ReadSet(user, nameof(user.RoleIdsJson)).ToHashSet(StringComparer.Ordinal);
             userRoleIds.RemoveWhere(existingRoleId => Same(existingRoleId, roleId));
             if (delete)
             { if (existing is not null) context.UserRoles.Remove(existing); userIds.Remove(id); roleIds.Remove(id); }
@@ -563,19 +563,19 @@ public sealed class EfIdentityAuthorityRelationshipCoordinator(
     /// </summary>
     private static HashSet<string> Registry(UserEntity user, UserRegistry registry) => (registry switch
     {
-        UserRegistry.Claims => EfIdentityStoreSupport.ReadSet(user.SchemaVersion, IdentityIamEfModule.UserTableName, nameof(user.ClaimIdsJson), user.ClaimIdsJson),
-        UserRegistry.Logins => EfIdentityStoreSupport.ReadSet(user.SchemaVersion, IdentityIamEfModule.UserTableName, nameof(user.LoginIdsJson), user.LoginIdsJson),
-        UserRegistry.RoleLinks => EfIdentityStoreSupport.ReadSet(user.SchemaVersion, IdentityIamEfModule.UserTableName, nameof(user.RoleLinkIdsJson), user.RoleLinkIdsJson),
-        UserRegistry.Tokens => EfIdentityStoreSupport.ReadSet(user.SchemaVersion, IdentityIamEfModule.UserTableName, nameof(user.TokenIdsJson), user.TokenIdsJson),
-        UserRegistry.TenantMemberships => EfIdentityStoreSupport.ReadSet(user.SchemaVersion, IdentityIamEfModule.UserTableName, nameof(user.TenantMembershipIdsJson), user.TenantMembershipIdsJson),
+        UserRegistry.Claims => EfIdentityStoreSupport.ReadSet(user, nameof(user.ClaimIdsJson)),
+        UserRegistry.Logins => EfIdentityStoreSupport.ReadSet(user, nameof(user.LoginIdsJson)),
+        UserRegistry.RoleLinks => EfIdentityStoreSupport.ReadSet(user, nameof(user.RoleLinkIdsJson)),
+        UserRegistry.Tokens => EfIdentityStoreSupport.ReadSet(user, nameof(user.TokenIdsJson)),
+        UserRegistry.TenantMemberships => EfIdentityStoreSupport.ReadSet(user, nameof(user.TenantMembershipIdsJson)),
         _ => EfIdentityStoreSupport.DeserializeSet(null)
     }).ToHashSet(StringComparer.Ordinal);
 
     private static HashSet<string> RoleClaims(RoleEntity role) =>
-        EfIdentityStoreSupport.ReadSet(role.SchemaVersion, IdentityIamEfModule.RoleTableName, nameof(role.ClaimIdsJson), role.ClaimIdsJson).ToHashSet(StringComparer.Ordinal);
+        EfIdentityStoreSupport.ReadSet(role, nameof(role.ClaimIdsJson)).ToHashSet(StringComparer.Ordinal);
 
     private static HashSet<string> RoleUserLinks(RoleEntity role) =>
-        EfIdentityStoreSupport.ReadSet(role.SchemaVersion, IdentityIamEfModule.RoleTableName, nameof(role.UserLinkIdsJson), role.UserLinkIdsJson).ToHashSet(StringComparer.Ordinal);
+        EfIdentityStoreSupport.ReadSet(role, nameof(role.UserLinkIdsJson)).ToHashSet(StringComparer.Ordinal);
 
     private static int RelationshipCount(UserEntity user)
     {

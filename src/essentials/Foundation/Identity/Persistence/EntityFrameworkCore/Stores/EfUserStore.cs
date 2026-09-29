@@ -107,7 +107,7 @@ public sealed class EfUserStore(
         return new(
             entity.UserId, entity.TenantId, entity.UserName, entity.Email, entity.DisplayName,
             (UserStatus)entity.Status, (ResourceOwnership)entity.Ownership,
-            EfIdentityStoreSupport.ReadSet(entity.SchemaVersion, IdentityIamEfModule.UserTableName, nameof(entity.RoleIdsJson), entity.RoleIdsJson), EfIdentityStoreSupport.ReadSet(entity.SchemaVersion, IdentityIamEfModule.UserTableName, nameof(entity.DirectPermissionsJson), entity.DirectPermissionsJson));
+            EfIdentityStoreSupport.ReadSet(entity, nameof(entity.RoleIdsJson)), EfIdentityStoreSupport.ReadSet(entity, nameof(entity.DirectPermissionsJson)));
     }
 
     private static bool Matches(UserEntity entity, string tenantId, string userId) =>

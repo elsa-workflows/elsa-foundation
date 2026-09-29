@@ -102,7 +102,7 @@ public sealed class EfRoleStore(
     private static RoleRecord Map(RoleEntity entity)
     {
         EfSchemaVersion.EnsureReadable(IdentityIamEfModule.Chain, entity.SchemaVersion);
-        return new(entity.RoleId, entity.TenantId, entity.Name, entity.Description, EfIdentityStoreSupport.ReadSet(entity.SchemaVersion, IdentityIamEfModule.RoleTableName, nameof(entity.PermissionsJson), entity.PermissionsJson), entity.System);
+        return new(entity.RoleId, entity.TenantId, entity.Name, entity.Description, EfIdentityStoreSupport.ReadSet(entity, nameof(entity.PermissionsJson)), entity.System);
     }
 
     private static bool Matches(RoleEntity entity, string tenantId, string roleId) => EfSchemaVersion.Readable(IdentityIamEfModule.Chain, entity.SchemaVersion) && string.Equals(entity.Id, EfIdentityStoreSupport.RecordId(tenantId, roleId), StringComparison.Ordinal) && string.Equals(EfIdentityStoreSupport.Normalize(entity.TenantId), EfIdentityStoreSupport.Normalize(tenantId), StringComparison.Ordinal) && string.Equals(EfIdentityStoreSupport.Normalize(entity.RoleId), EfIdentityStoreSupport.Normalize(roleId), StringComparison.Ordinal);

@@ -183,11 +183,12 @@ public sealed class EfIdentityAuthorityAggregateCoordinator(
                     return Conflict(id);
 
                 EfIdentityStoreSupport.EnsureUserIdentity(user, tenantId, userId);
-                var claimIds = ReadRegistry(user.SchemaVersion, IdentityIamEfModule.UserTableName, nameof(user.ClaimIdsJson), user.ClaimIdsJson, "user claims");
-                var loginIds = ReadRegistry(user.SchemaVersion, IdentityIamEfModule.UserTableName, nameof(user.LoginIdsJson), user.LoginIdsJson, "external logins");
-                var roleLinkIds = ReadRegistry(user.SchemaVersion, IdentityIamEfModule.UserTableName, nameof(user.RoleLinkIdsJson), user.RoleLinkIdsJson, "user-role links");
-                var tokenIds = ReadRegistry(user.SchemaVersion, IdentityIamEfModule.UserTableName, nameof(user.TokenIdsJson), user.TokenIdsJson, "user tokens");
-                var membershipIds = ReadRegistry(user.SchemaVersion, IdentityIamEfModule.UserTableName, nameof(user.TenantMembershipIdsJson), user.TenantMembershipIdsJson, "tenant memberships");
+                var registries = EfIdentityStoreSupport.Content(user);
+                var claimIds = ReadRegistry(registries, nameof(user.ClaimIdsJson), "user claims");
+                var loginIds = ReadRegistry(registries, nameof(user.LoginIdsJson), "external logins");
+                var roleLinkIds = ReadRegistry(registries, nameof(user.RoleLinkIdsJson), "user-role links");
+                var tokenIds = ReadRegistry(registries, nameof(user.TokenIdsJson), "user tokens");
+                var membershipIds = ReadRegistry(registries, nameof(user.TenantMembershipIdsJson), "tenant memberships");
                 EnsureAggregateRelationshipCapacity(claimIds, loginIds, roleLinkIds, tokenIds, membershipIds);
 
                 var claimRows = await EfIdentityChildRows.LoadAsync(claimIds, context.UserClaims, x => x.Id, token);
@@ -243,7 +244,7 @@ public sealed class EfIdentityAuthorityAggregateCoordinator(
                     EfIdentityStoreSupport.EnsureRoleIdentity(role, tenantId, link.RoleId);
                     EfIdentityStoreSupport.Upgrade(role);
                     role.UserLinkIdsJson = RemoveId(
-                        EfIdentityStoreSupport.ReadSet(role.SchemaVersion, IdentityIamEfModule.RoleTableName, nameof(role.UserLinkIdsJson), role.UserLinkIdsJson),
+                        EfIdentityStoreSupport.ReadSet(role, nameof(role.UserLinkIdsJson)),
                         link.Id);
                     role.Revision = checked(role.Revision + 1);
                     context.UserRoles.Remove(link);
@@ -298,8 +299,9 @@ public sealed class EfIdentityAuthorityAggregateCoordinator(
                     return Conflict(id);
 
                 EfIdentityStoreSupport.EnsureRoleIdentity(role, tenantId, roleId);
-                var claimIds = ReadRegistry(role.SchemaVersion, IdentityIamEfModule.RoleTableName, nameof(role.ClaimIdsJson), role.ClaimIdsJson, "role claims");
-                var roleLinkIds = ReadRegistry(role.SchemaVersion, IdentityIamEfModule.RoleTableName, nameof(role.UserLinkIdsJson), role.UserLinkIdsJson, "user-role links");
+                var registries = EfIdentityStoreSupport.Content(role);
+                var claimIds = ReadRegistry(registries, nameof(role.ClaimIdsJson), "role claims");
+                var roleLinkIds = ReadRegistry(registries, nameof(role.UserLinkIdsJson), "user-role links");
                 EnsureAggregateRelationshipCapacity(claimIds, roleLinkIds);
 
                 var claimRows = await EfIdentityChildRows.LoadAsync(claimIds, context.RoleClaims, x => x.Id, token);
@@ -329,10 +331,10 @@ public sealed class EfIdentityAuthorityAggregateCoordinator(
                     EfIdentityStoreSupport.EnsureUserIdentity(user, tenantId, link.UserId);
                     EfIdentityStoreSupport.Upgrade(user);
                     user.RoleLinkIdsJson = RemoveId(
-                        EfIdentityStoreSupport.ReadSet(user.SchemaVersion, IdentityIamEfModule.UserTableName, nameof(user.RoleLinkIdsJson), user.RoleLinkIdsJson),
+                        EfIdentityStoreSupport.ReadSet(user, nameof(user.RoleLinkIdsJson)),
                         link.Id);
                     user.RoleIdsJson = RemoveEquivalentId(
-                        EfIdentityStoreSupport.ReadSet(user.SchemaVersion, IdentityIamEfModule.UserTableName, nameof(user.RoleIdsJson), user.RoleIdsJson),
+                        EfIdentityStoreSupport.ReadSet(user, nameof(user.RoleIdsJson)),
                         link.RoleId);
                     user.Revision = checked(user.Revision + 1);
                     context.UserRoles.Remove(link);
@@ -552,12 +554,13 @@ public sealed class EfIdentityAuthorityAggregateCoordinator(
     }
 
     /// <summary>
-    /// A registry of the row being deleted, read through the family's chain from the row's stamp (spec 180, FR-009). The
-    /// row is removed rather than written, so it is read as stored and never upgraded.
+    /// A registry of the row being deleted, from its content columns upcast together through the family's chain from the
+    /// row's stamp (spec 180, FR-009; #2144). The row is removed rather than written, so it is read as stored and never
+    /// upgraded.
     /// </summary>
-    private static IReadOnlyList<string> ReadRegistry(string? schemaVersion, string table, string column, string json, string owner)
+    private static IReadOnlyList<string> ReadRegistry(EfSchemaRowContent registries, string column, string owner)
     {
-        var values = EfIdentityStoreSupport.ReadSet(schemaVersion, table, column, json)
+        var values = EfIdentityStoreSupport.DeserializeSet(registries[column])
             .OrderBy(value => value, StringComparer.Ordinal)
             .ToArray();
         if (values.Length > EfIdentityStoreSupport.MaximumMaterializedListEntries)
