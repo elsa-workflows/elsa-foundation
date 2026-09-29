@@ -36,14 +36,16 @@ internal static class EfSchemaFamilyTestFixtures
 
     /// <summary>
     /// Every source that can ship an upcaster or prove one: the production tree, every test tree and the samples, whose
-    /// upcaster a test project under tests/ proves (the schema-rollout demo's Notes module).
+    /// upcaster a test project under tests/ proves (the schema-rollout demo's Notes module). A source that names a schema
+    /// family is read too, because a proof may name its family by the constant that source declares.
     /// </summary>
     public static SchemaFamilyScan Proving { get; } = SchemaFamilyScan.Of(
         new[] { "src", "tests", "samples" }
             .SelectMany(root => Directory.EnumerateFiles(Path.Join(RepoRoot, root), "*.cs", SearchOption.AllDirectories))
             .Where(file => !IsBuildOutput(file) && !HasSegment(RepoRoot, file, "Migrations"))
             .Select(file => (Path: Path.GetRelativePath(RepoRoot, file), Text: File.ReadAllText(file)))
-            .Where(source => source.Text.Contains("EfSchemaUpcaster", StringComparison.Ordinal)));
+            .Where(source => source.Text.Contains("EfSchemaUpcaster", StringComparison.Ordinal) ||
+                             source.Text.Contains("SchemaFamily", StringComparison.Ordinal)));
 
     /// <summary>
     /// Every production source a stored row's content can be read or written in: every file of an EF persistence project,

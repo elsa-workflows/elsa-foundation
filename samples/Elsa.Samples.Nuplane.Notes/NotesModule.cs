@@ -14,7 +14,7 @@ public static partial class NotesModule
     /// <summary>The one table: a note per row.</summary>
     public const string TableName = "elsa_samples_notes";
 
-    /// <summary>The module's one schema family: the tables whose rows stamp one persisted-schema version.</summary>
+    /// <summary>The module's one schema family, as its <c>[EfSchemaFamily]</c> names it: the tables whose rows stamp one persisted-schema version.</summary>
     public const string Family = "SamplesNotes";
 
     /// <summary>The feature that binds the module's context and has its migrator admit it through its finalization gate.</summary>
