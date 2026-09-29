@@ -46,6 +46,8 @@ The initial backlog was published on 2026-09-23. The persistence boundary and ef
 
 ## Epic Outcomes
 
+The next developer editing slice is [#2165](https://github.com/elsa-workflows/elsa-foundation/issues/2165): [review and accept an edited exact selection](../reports/runtime-composition/edited-selection-acceptance.md) without hand-maintaining the accepted feature list. Its implementation and verification remain pending. Project 51 and native issue state were refreshed through the supported REST API after GraphQL reached its rate limit. The builder study [#2064](https://github.com/elsa-workflows/elsa-foundation/issues/2064) is Todo / Blocked awaiting six real participants, and Authoring/Worker profile publication still requires the documented API/identity decisions and host evidence.
+
 | Epic | Initial planning depth |
 |---|---|
 | [Shared persistence and explicit overrides #1960](https://github.com/elsa-workflows/elsa-foundation/issues/1960) | Complete: reviewed specification, shared-primary story, and diagnostics-override story |
