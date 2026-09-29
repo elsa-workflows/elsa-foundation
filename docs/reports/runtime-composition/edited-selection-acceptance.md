@@ -42,3 +42,5 @@ Verify the actual CLI journey: create/import an accepted document, edit individu
 An unchanged command with the acceptance update removed must fail the downstream generation journey: this is a behavioral gate, not merely a JSON serialization test. Run the affected CLI suite, architecture guard, generated-map check and required exact-head CI before claiming delivery.
 
 Catalog-version transitions, new package-lock acquisition, live host evidence, production identity, in-place apply/recovery and the [real-user builder study](builder-ux/moderated-evaluation.md) remain separate outcomes. Revisit catalog transitions when an explicit upgrade workflow and lock acquisition contract are reviewed.
+
+Workspace profiles can be supplied to planning and acceptance. Current candidate generation does not yet accept those definitions; [#2166](https://github.com/elsa-workflows/elsa-foundation/issues/2166) owns that downstream gap and will reuse this slice's immutable input boundary. The generation demonstration here uses exact explicit selections; it does not establish workspace-profile generation.
