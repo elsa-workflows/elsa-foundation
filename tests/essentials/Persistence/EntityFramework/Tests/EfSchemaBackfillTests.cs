@@ -19,6 +19,7 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
 {
     private readonly TemporarySqliteDatabase file = new("schema-backfill");
     private static readonly TimeSpan AuditInterval = TimeSpan.FromHours(1);
+    private static readonly TimeSpan RepairableInterval = TimeSpan.FromMinutes(5);
     private static readonly string RecordTable = EfSchemaFinalization.RecordTableName(BackfillFamily.HistoryModule);
 
     private readonly FakeTimeProvider clock = new(new DateTimeOffset(2026, 9, 29, 12, 0, 0, TimeSpan.Zero));
@@ -625,7 +626,7 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
         Assert.Null(record.Finish);
         Assert.Equal((SchemaFinishTransition.Withdrawn, "1"), (record.FinishHistory[^1].Transition, record.FinishHistory[^1].Version));
         Assert.Equal(EfSchemaBackfillState.Verifying, host.Status.State);
-        Assert.Contains("withdrawn while the verification pass ran", host.Status.Detail);
+        Assert.Contains("withdrawn after the settle margin began", host.Status.Detail);
 
         await host.RunOnceAsync();
 
@@ -691,6 +692,44 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// FR-012 after FR-018, across workers, the case a worker's own memory would hide: a worker whose settle condition has
+    /// held for longer than the margin, and that did not make the withdrawal, still waits a full margin after another
+    /// worker withdraws the completion, since it finds the withdrawal in the finish history past where its margin began.
+    /// </summary>
+    [Fact]
+    public async Task A_withdrawal_by_another_worker_restarts_the_settle_margin_of_a_worker_that_did_not_make_it()
+    {
+        var margin = TimeSpan.FromSeconds(35);
+        await SeedFamilyAsync();
+        var withdrawer = await HostAsync("host-a", margin: margin);
+        var other = await HostAsync("host-b", margin: margin);
+        await withdrawer.RunOnceAsync();
+        await other.RunOnceAsync();
+        Assert.Equal(EfSchemaBackfillState.Settling, other.Status.State);
+        clock.Advance(margin);
+        await withdrawer.RunOnceAsync();
+        Assert.Equal(("2", "host-a"), CompletedBy(await database.RecordAsync()));
+
+        await database.SeedAsync(Order("straggler", 7));
+        clock.Advance(AuditInterval);
+        await withdrawer.RunOnceAsync();
+        var withdrawal = (await database.RecordAsync()).FinishHistory[^1];
+        Assert.Equal((SchemaFinishTransition.Withdrawn, "host-a"), (withdrawal.Transition, withdrawal.Actor.Member!.HostId));
+
+        await other.RunOnceAsync();
+        clock.Advance(margin - TimeSpan.FromSeconds(1));
+        await other.RunOnceAsync();
+
+        Assert.Null((await database.RecordAsync()).Finish);
+        Assert.Equal(EfSchemaBackfillState.Settling, other.Status.State);
+
+        clock.Advance(TimeSpan.FromSeconds(1));
+        await other.RunOnceAsync();
+
+        Assert.Equal(("2", "host-b"), CompletedBy(await database.RecordAsync()));
+    }
+
+    /// <summary>
     /// FR-018, both ways across a race: an audit withdraws only a completion that rows below it contradict when it
     /// withdraws. Here another worker rewrote the straggler the audit counted and recorded the completion again before the
     /// audit's withdrawal landed, so that completion stands; the audit's own withdrawal of the one it examined is the
@@ -707,7 +746,7 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
         var raced = false;
         host.Probe.BeforeCommand = async text =>
         {
-            if (raced || !text.TrimStart().StartsWith("UPDATE", StringComparison.OrdinalIgnoreCase) || !text.Contains(RecordTable, StringComparison.Ordinal))
+            if (raced || !IsRecordWrite(text))
                 return;
             raced = true;
             // Another worker, between the audit's count and its withdrawal: it rewrites the straggler, withdraws the
@@ -730,9 +769,84 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
 
         Assert.True(raced);
         var record = await database.RecordAsync();
-        Assert.Equal(("2", "host-b"), (record.Finish!.CompletionVersion, record.Finish.RecordedBy.Member!.HostId));
+        Assert.Equal(("2", "host-b"), CompletedBy(record));
         Assert.Equal(SchemaFinishTransition.Completed, record.FinishHistory[^1].Transition);
         Assert.Single(record.FinishHistory, entry => entry.Transition == SchemaFinishTransition.Withdrawn);
+    }
+
+    /// <summary>
+    /// FR-018, the case a read taken when the run began would hide: another worker records the completion while this
+    /// worker's run goes on, and then a writer still at 1 leaves a late row below it. This worker reads what stands before
+    /// each row, so it withdraws that completion, naming the row's table, before it rewrites the row, rather than rewriting
+    /// it silently under a completion that still stands; then it records the completion again.
+    /// </summary>
+    [Fact]
+    public async Task A_completion_another_worker_records_mid_run_is_withdrawn_before_a_late_row_below_it_is_rewritten()
+    {
+        await SeedFamilyAsync();
+        var host = await HostAsync("host-a", claim: TimeSpan.Zero);
+        var other = await HostAsync("host-b", claim: TimeSpan.Zero);
+        var interleaved = false;
+        host.Probe.AfterWrite = async _ =>
+        {
+            if (interleaved)
+                return;
+            interleaved = true;
+            // Between two of this worker's rows, the other runs a whole round: it upgrades what is left, verifies and records.
+            await other.RunOnceAsync();
+            Assert.Equal(("2", "host-b"), CompletedBy(await database.RecordAsync()));
+            // After every order this worker has selected, so it meets the row later in the same run.
+            await database.SeedAsync(Order("z-late", 5));
+        };
+
+        await host.RunOnceAsync();
+
+        Assert.True(interleaved);
+        var history = (await database.RecordAsync()).FinishHistory;
+        var withdrawal = Assert.Single(history, entry => entry.Transition == SchemaFinishTransition.Withdrawn);
+        Assert.Equal(("2", "host-a"), (withdrawal.Version, withdrawal.Actor.Member!.HostId));
+        Assert.Contains($"'{BackfillFamily.OrdersTable}': 1 (to be rewritten)", withdrawal.Reason);
+        Assert.Equal(
+            [(SchemaFinishTransition.Completed, "host-b"), (SchemaFinishTransition.Withdrawn, "host-a"), (SchemaFinishTransition.Completed, "host-a")],
+            history.Skip(1).Select(entry => (entry.Transition, entry.Actor.Member!.HostId)));
+        Assert.Contains("BackfillOrderRow:z-late", host.Probe.WrittenRows);
+        Assert.All(await database.SnapshotAsync(), row => Assert.Contains(" 2 ", row));
+    }
+
+    /// <summary>
+    /// FR-018, the case logging and going on would hide: a withdrawal that loses its compare-and-set on every attempt stops
+    /// the round rather than rewrite the straggler under a completion that still stands, so the next round finds it again.
+    /// </summary>
+    [Fact]
+    public async Task A_withdrawal_that_loses_every_compare_and_set_stops_the_round_and_rewrites_nothing()
+    {
+        await SeedFamilyAsync();
+        var host = await HostAsync("host-a");
+        await host.RunOnceAsync();
+        await database.SeedAsync(Order("straggler", 7));
+        clock.Advance(AuditInterval);
+        var rows = await database.SnapshotAsync();
+        var written = host.Probe.WrittenRows.Count;
+        var lost = 0;
+        host.Probe.BeforeCommand = async text =>
+        {
+            if (!IsRecordWrite(text))
+                return;
+            lost++;
+            // Another writer changes the record between each attempt's read and its write.
+            await using var context = database.Context();
+            await context.Set<EfSchemaFinalizationRecordRow>().ExecuteUpdateAsync(row => row.SetProperty(record => record.Revision, record => record.Revision + 1));
+        };
+
+        var exhausted = await Assert.ThrowsAsync<InvalidOperationException>(() => host.RunOnceAsync());
+
+        Assert.Contains("attempts to withdraw the completion", exhausted.Message);
+        Assert.Equal(3, lost);
+        Assert.Equal(rows, await database.SnapshotAsync());
+        Assert.Equal(written, host.Probe.WrittenRows.Count);
+        var record = await database.RecordAsync();
+        Assert.Equal("2", record.Finish!.CompletionVersion);
+        Assert.DoesNotContain(record.FinishHistory, entry => entry.Transition == SchemaFinishTransition.Withdrawn);
     }
 
     /// <summary>
@@ -747,27 +861,52 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
         var host = await HostAsync("host-a");
         await host.RunOnceAsync();
         Assert.Equal(EfSchemaBackfillState.Blocked, host.Status.State);
-        var selections = 0;
-        host.Probe.BeforeCommand = text =>
-        {
-            if (new[] { BackfillFamily.OrdersTable, BackfillFamily.LinesTable, BackfillFamily.ReceiptsTable }.Any(table => text.Contains(table, StringComparison.Ordinal)))
-                selections++;
-            return Task.CompletedTask;
-        };
+        var selections = CountSelections(host);
 
         await host.RunOnceAsync();
         clock.Advance(AuditInterval - TimeSpan.FromSeconds(1));
         await host.RunOnceAsync();
 
-        Assert.Equal(0, selections);
+        Assert.Equal(0, selections());
         Assert.Equal(EfSchemaBackfillState.Blocked, host.Status.State);
         Assert.Equal(EfSchemaBackfillBlockerKind.ContentAddressed, Assert.Single(host.Status.Blockers).Kind);
 
         clock.Advance(TimeSpan.FromSeconds(1));
         await host.RunOnceAsync();
 
-        Assert.True(selections > 0);
+        Assert.True(selections() > 0);
         Assert.Equal(EfSchemaBackfillState.Blocked, host.Status.State);
+    }
+
+    /// <summary>
+    /// FR-023 with FR-006, both ways: a family blocked by a row an operator repairs in place is surveyed again at the
+    /// shorter repairable interval, not the audit interval, so a repair is seen within minutes; before that interval it is
+    /// left alone.
+    /// </summary>
+    [Fact]
+    public async Task A_family_blocked_by_a_row_an_operator_repairs_is_surveyed_again_at_the_repairable_interval()
+    {
+        await SeedFamilyAsync();
+        var corrupt = Order("corrupt", 1);
+        corrupt.ContentJson = "{ not json";
+        await database.SeedAsync(corrupt);
+        var host = await HostAsync("host-a");
+        await host.RunOnceAsync();
+        Assert.Equal(EfSchemaBackfillBlockerKind.Corruption, Assert.Single(host.Status.Blockers).Kind);
+        await using (var context = host.Context())
+            await context.Orders.Where(row => row.Id == "corrupt").ExecuteDeleteAsync();
+        var selections = CountSelections(host);
+
+        clock.Advance(RepairableInterval - TimeSpan.FromSeconds(1));
+        await host.RunOnceAsync();
+
+        Assert.Equal(0, selections());
+        Assert.Equal("1", (await database.RecordAsync()).Finish!.CompletionVersion);
+
+        clock.Advance(TimeSpan.FromSeconds(1));
+        await host.RunOnceAsync();
+
+        Assert.Equal("2", (await database.RecordAsync()).Finish!.CompletionVersion);
     }
 
     /// <summary>
@@ -801,6 +940,25 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
         members["host-previous"].Live = false;
         return await HostAsync("host-a", current: current);
     }
+
+    /// <summary>Counts, from now on, the commands <paramref name="host"/> sends that select from the family's tables.</summary>
+    private static Func<int> CountSelections(BackfillHost host)
+    {
+        var selections = 0;
+        host.Probe.BeforeCommand = text =>
+        {
+            if (new[] { BackfillFamily.OrdersTable, BackfillFamily.LinesTable, BackfillFamily.ReceiptsTable }.Any(table => text.Contains(table, StringComparison.Ordinal)))
+                selections++;
+            return Task.CompletedTask;
+        };
+        return () => selections;
+    }
+
+    private static bool IsRecordWrite(string text) =>
+        text.TrimStart().StartsWith("UPDATE", StringComparison.OrdinalIgnoreCase) && text.Contains(RecordTable, StringComparison.Ordinal);
+
+    private static (string Version, string HostId) CompletedBy(SchemaFinalizationRecord record) =>
+        (record.Finish!.CompletionVersion, record.Finish.RecordedBy.Member!.HostId);
 
     private async Task WithStoreAsync(Func<EfSchemaFinalizationStore, Task> action)
     {
@@ -857,6 +1015,7 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
         BatchPause = TimeSpan.Zero,
         ClaimDuration = claim ?? TimeSpan.FromMinutes(1),
         AuditInterval = AuditInterval,
+        RepairableBlockerInterval = RepairableInterval,
         VerificationPasses = verificationPasses
     };
 

@@ -4,9 +4,9 @@ using Elsa.Persistence.Schema.SchemaFinalization;
 namespace Elsa.Persistence.EntityFramework.SchemaBackfill;
 
 /// <summary>
-/// One run's facts: the family, the version it upgrades to, its declaration and tables, and the finish record it examined
-/// when it began, which stands as far as this run knows until the run withdraws it. An audit is a run whose target is the
-/// completion it examines.
+/// One run's facts: the family, the version it upgrades to, its declaration and tables, and the finish record standing as
+/// far as it knows, which it examined when it began and reads again before a pass acts on a row. An audit is a run whose
+/// target is the completion it examines.
 /// </summary>
 internal sealed class EfSchemaBackfillRun(
     EfSchemaChain chain,
@@ -32,9 +32,17 @@ internal sealed class EfSchemaBackfillRun(
 
     /// <summary>
     /// The finish record standing as far as this run knows (FR-018): the one it examined, until a withdrawal leaves none, or
-    /// another is found standing in its place. A row below it is a straggler.
+    /// a fresh read finds another standing in its place, such as one another worker recorded while this run went on. A row
+    /// below it is a straggler.
     /// </summary>
     public SchemaFinishRecord? Completion { get; set; } = completion;
+
+    /// <summary>
+    /// Whether <see cref="Completion"/> is at or after the target, so every row a pass selects lies below it; otherwise a
+    /// completion another worker recorded since may cover the next row, and only a fresh read can tell.
+    /// </summary>
+    public bool CompletionCoversTarget =>
+        Completion is not null && SchemaVersionChain.PositionOf(Chain.ReadableVersions, Completion.CompletionVersion) >= TargetAt;
 
     /// <summary>Whether a pass of this run rewrites <paramref name="table"/>'s rows: it is not content-addressed, and the family names a rewriter.</summary>
     public bool Rewrites(EfSchemaStampedTable table) => !table.ContentAddressed && Declaration.Rewriter is not null;
@@ -58,10 +66,11 @@ internal sealed class EfSchemaBackfillRun(
         chain.ReadableVersions.Take(Math.Max(0, SchemaVersionChain.PositionOf(chain.ReadableVersions, version))).ToArray();
 }
 
-/// <summary>One verification pass (FR-013): when it began and ended, where the finish history stood as it began, the rows it found below the target, and what blocks completion.</summary>
+/// <summary>One verification pass (FR-013): when it began and ended, where the finish history stood when the settle margin it followed began, the rows it found below the target, and what blocks completion.</summary>
 /// <param name="HistoryMark">
-/// How many finish history entries stood when the pass began, so a withdrawal during it is told apart by position, not by
-/// clock: two hosts' clocks, or one that has not moved, cannot order them.
+/// How many finish history entries stood when the settle margin the pass followed began (FR-012), so a withdrawal since,
+/// before the pass or during it, is told apart by position, not by clock: two hosts' clocks, or one that has not moved,
+/// cannot order them.
 /// </param>
 internal sealed record EfSchemaBackfillVerification(
     DateTimeOffset StartedAt,

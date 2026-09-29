@@ -6,17 +6,21 @@ namespace Elsa.Persistence.EntityFramework.SchemaBackfill;
 /// <summary>
 /// The settle condition (spec 186, FR-012): every counted member reports observing the target or later, and the settle
 /// margin has passed since this worker first saw that hold, which is no earlier than when the last of them began to report
-/// it. A withdrawal starts the margin again, so verification after one waits a full margin (FR-012, FR-018).
+/// it. A withdrawal starts the margin again on every worker, whichever of them withdrew (FR-012, FR-018): a worker notes
+/// where the family's finish history stood when its margin began, and a withdrawal entry past that position restarts it.
+/// The check is by position in the history, not by time, since two hosts' clocks cannot order a withdrawal against a
+/// margin.
 /// </summary>
 internal sealed class EfSchemaBackfillSettle(
     IEfSchemaFleet? fleet,
+    EfSchemaBackfillFinish finish,
     EfSchemaBackfillOptions options,
     TimeProvider time,
     ILogger logger,
     EfSchemaBackfillStatusBoard status)
 {
     private readonly object _lock = new();
-    private readonly Dictionary<string, (string Target, DateTimeOffset Since)> _since = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, Margin> _margins = new(StringComparer.Ordinal);
 
     /// <summary>What the condition says of a family now.</summary>
     public enum Outcome
@@ -31,7 +35,25 @@ internal sealed class EfSchemaBackfillSettle(
         Blocked
     }
 
-    public async Task<Outcome> CheckAsync(EfSchemaChain chain, string target, string databaseIdentity, CancellationToken cancellationToken)
+    /// <summary>
+    /// Whether a completion was withdrawn in <paramref name="history"/> after position <paramref name="mark"/>: a row below a
+    /// version turned up since, so a margin that began at the mark proves nothing.
+    /// </summary>
+    public static bool WithdrawnSince(IReadOnlyList<SchemaFinishHistoryEntry> history, int mark) =>
+        history.Skip(mark).Any(entry => entry.Transition == SchemaFinishTransition.Withdrawn);
+
+    /// <summary>
+    /// What the condition says of <paramref name="chain"/>'s family at <paramref name="target"/> now, and where the family's
+    /// finish history stood when the margin began: the mark a verification pass after it holds its completion to, since a
+    /// withdrawal past it, before the pass or during it, means a row below a version turned up after the margin began,
+    /// which only a pass after a new margin can answer.
+    /// </summary>
+    public async Task<(Outcome Outcome, int HistoryMark)> CheckAsync(
+        EfSchemaBackfillScopeRunner scopes,
+        EfSchemaChain chain,
+        string target,
+        string databaseIdentity,
+        CancellationToken cancellationToken)
     {
         var family = chain.Family;
         if (fleet is null)
@@ -39,7 +61,7 @@ internal sealed class EfSchemaBackfillSettle(
             status.Blocked(family, [new EfSchemaBackfillBlocker(EfSchemaBackfillBlockerKind.NoFleet, null, 0,
                 "This host composes no fleet, so it cannot tell whether every counted member has observed the finalized version, " +
                 "and it never records completion (spec 186, FR-012).")]);
-            return Outcome.Blocked;
+            return (Outcome.Blocked, 0);
         }
 
         status.Update(family, current => current with { State = EfSchemaBackfillState.Settling, Detail = null });
@@ -54,40 +76,36 @@ internal sealed class EfSchemaBackfillSettle(
             // No answer is no settle condition: verification waits for a round in which the fleet can be read.
             logger.LogWarning(exception, "The backfill of schema family {Family} could not read the fleet for its settle condition; it tries again next round.", family);
             status.Update(family, current => current with { Detail = $"The fleet could not be read: {exception.GetType().Name}." });
-            return Outcome.Waiting;
+            return (Outcome.Waiting, 0);
         }
 
         if (!answer.EveryCountedMemberReads)
         {
-            Reset(family);
+            lock (_lock)
+                _margins.Remove(family);
             status.Update(family, current => current with { SettleWaitingFor = answer.Blockers, Detail = $"Waiting for every counted member to observe '{target}' as finalized." });
-            return Outcome.Waiting;
+            return (Outcome.Waiting, 0);
         }
 
+        var history = (await finish.ReadAsync(scopes, family, cancellationToken))?.FinishHistory ?? [];
         var now = time.GetUtcNow();
-        DateTimeOffset since;
+        Margin margin;
         lock (_lock)
         {
-            if (_since.TryGetValue(family, out var settled) && settled.Target == target)
-                since = settled.Since;
-            else
-                _since[family] = (target, since = now);
+            if (!_margins.TryGetValue(family, out margin) || margin.Target != target || WithdrawnSince(history, margin.HistoryMark))
+                _margins[family] = margin = new Margin(target, now, history.Count);
         }
 
-        var margin = options.SettleMargin ?? fleet.SettleMargin;
-        if (now - since < margin)
+        var length = options.SettleMargin ?? fleet.SettleMargin;
+        if (now - margin.Since < length)
         {
-            status.Update(family, current => current with { SettleWaitingFor = [], Detail = $"Every counted member has observed '{target}'; verification starts at {since + margin:u}." });
-            return Outcome.Waiting;
+            status.Update(family, current => current with { SettleWaitingFor = [], Detail = $"Every counted member has observed '{target}'; verification starts at {margin.Since + length:u}." });
+            return (Outcome.Waiting, margin.HistoryMark);
         }
 
-        return Outcome.Settled;
+        return (Outcome.Settled, margin.HistoryMark);
     }
 
-    /// <summary>Forgets when the condition was first seen to hold for <paramref name="family"/>, so the margin starts again the next time it does.</summary>
-    public void Reset(string family)
-    {
-        lock (_lock)
-            _since.Remove(family);
-    }
+    /// <summary>When this worker first saw the condition hold for a target, and where the finish history stood then.</summary>
+    private readonly record struct Margin(string Target, DateTimeOffset Since, int HistoryMark);
 }

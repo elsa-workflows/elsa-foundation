@@ -13,8 +13,10 @@ namespace Elsa.Persistence.EntityFramework.SchemaBackfill;
 /// each a selection by stamp in bounded batches, and every rewrite asked of the family's rewriter in a fresh scope.
 /// </summary>
 /// <remarks>
-/// A pass that meets a row below the completion standing as far as its run knows withdraws that completion before it
-/// rewrites the row (FR-018), so a pass that dies midway never leaves a known straggler under a standing completion.
+/// A pass that meets a row below the completion standing withdraws that completion before it rewrites the row (FR-018),
+/// so a pass that dies midway never leaves a known straggler under a standing completion. What stands is read afresh
+/// before each row, and so whenever a batch starts, unless the run already knows of a completion at or after its target:
+/// another worker may record one while the run goes on.
 /// </remarks>
 internal sealed class EfSchemaBackfillPasses(
     EfSchemaBackfillFinish finish,
@@ -57,11 +59,11 @@ internal sealed class EfSchemaBackfillPasses(
     /// rewritable row below the target is rewritten and counted as found, so the pass must run again; a row with an
     /// unreadable stamp, a row that fails to upcast and a content-addressed row below the target each block completion.
     /// </summary>
-    public async Task<EfSchemaBackfillVerification> VerifyAsync(EfSchemaBackfillScopeRunner scopes, EfSchemaBackfillRun run, CancellationToken cancellationToken)
+    /// <param name="historyMark">Where the finish history stood when the settle margin the pass follows began.</param>
+    public async Task<EfSchemaBackfillVerification> VerifyAsync(EfSchemaBackfillScopeRunner scopes, EfSchemaBackfillRun run, int historyMark, CancellationToken cancellationToken)
     {
         var startedAt = time.GetUtcNow();
         status.Update(run.Family, current => current with { State = EfSchemaBackfillState.Verifying, SettleWaitingFor = [], Detail = null });
-        var historyMark = await finish.HistoryMarkAsync(scopes, run.Family, cancellationToken);
         var blockers = new List<EfSchemaBackfillBlocker>();
         long found = 0;
         foreach (var table in run.Tables)
@@ -113,8 +115,7 @@ internal sealed class EfSchemaBackfillPasses(
     /// <summary>
     /// Rewrites every row of <paramref name="table"/> below the run's target, in batches ordered by key, each batch
     /// resuming after the last key of the one before it; returns how many rows it found below the target that still
-    /// existed. A row below the completion standing as far as the run knows withdraws that completion before it is
-    /// rewritten (FR-018).
+    /// existed. A row below the completion that stands withdraws it before it is rewritten (FR-018).
     /// </summary>
     public async Task<long> RewriteAsync(
         EfSchemaBackfillScopeRunner scopes,
@@ -137,8 +138,7 @@ internal sealed class EfSchemaBackfillPasses(
 
             foreach (var row in batch)
             {
-                if (run.IsBelowCompletion(row.Stamp))
-                    run.Completion = await finish.WithdrawAsync(scopes, run.Family, (scope, standing) => StragglersAsync(scope.Context, run, standing, audit: false, cancellationToken), cancellationToken);
+                await WithdrawOverAsync(scopes, run, row, cancellationToken);
                 switch (await RewriteRowAsync(scopes, run, table, row, cancellationToken))
                 {
                     case RowOutcome.Missing:
@@ -179,6 +179,21 @@ internal sealed class EfSchemaBackfillPasses(
                 $"{unrewritten} row(s) of table '{table.Name}' are below '{run.Target}', and the rewriter of schema family '{run.Family}' " +
                 $"cannot be constructed in this shell: {run.RewriterFault}"));
         return found;
+    }
+
+    /// <summary>
+    /// Withdraws the completion that stands over <paramref name="row"/> before the row is rewritten (FR-018). While the run
+    /// knows of no completion at or after its target, it reads the finish record afresh first: a completion another worker
+    /// recorded since the run began, or since this batch was selected, covers the row, and a row rewritten under it
+    /// unreported would hide a straggler. A completion at or after the target covers every row a pass selects, and the
+    /// withdrawal reads the record afresh itself.
+    /// </summary>
+    private async Task WithdrawOverAsync(EfSchemaBackfillScopeRunner scopes, EfSchemaBackfillRun run, EfSchemaStampedRow row, CancellationToken cancellationToken)
+    {
+        if (!run.CompletionCoversTarget)
+            run.Completion = (await finish.ReadAsync(scopes, run.Family, cancellationToken))?.Finish;
+        if (run.IsBelowCompletion(row.Stamp))
+            run.Completion = await finish.WithdrawAsync(scopes, run.Family, (scope, standing) => StragglersAsync(scope.Context, run, standing, audit: false, cancellationToken), cancellationToken);
     }
 
     /// <summary>

@@ -3,7 +3,7 @@ using Microsoft.Extensions.Options;
 namespace Elsa.Persistence.EntityFramework.SchemaBackfill;
 
 /// <summary>
-/// The post-finalization backfill's settings (spec 186, FR-008, FR-009, FR-012 and FR-018), bound from
+/// The post-finalization backfill's settings (spec 186, FR-008, FR-009, FR-012, FR-018 and FR-023), bound from
 /// <see cref="SectionName"/> in the configuration of the container a module's migrator runs in.
 /// </summary>
 public sealed class EfSchemaBackfillOptions
@@ -23,8 +23,19 @@ public sealed class EfSchemaBackfillOptions
     /// </summary>
     public TimeSpan CheckInterval { get; set; } = TimeSpan.FromSeconds(15);
 
-    /// <summary>How often a family whose completion stands is audited for rows below it (FR-018): one hour.</summary>
+    /// <summary>
+    /// How often a family whose completion stands is audited for rows below it (FR-018): one hour. A family blocked by
+    /// anything but rows an operator repairs in place, content-addressed rows among them, is surveyed again at the same
+    /// interval (FR-023).
+    /// </summary>
     public TimeSpan AuditInterval { get; set; } = TimeSpan.FromHours(1);
+
+    /// <summary>
+    /// How often a family blocked by rows an operator repairs in place, with a stamp this host cannot read or that fail to
+    /// upcast, is surveyed again (FR-006, FR-023): 5 minutes, so a repair is seen well before the next audit. A family
+    /// blocked by those and by others too is surveyed at this interval.
+    /// </summary>
+    public TimeSpan RepairableBlockerInterval { get; set; } = TimeSpan.FromMinutes(5);
 
     /// <summary>
     /// How long the settle condition must have held before the verification pass starts (FR-012), or null for the
@@ -51,7 +62,7 @@ public sealed class EfSchemaBackfillOptions
             throw new InvalidOperationException($"Configuration '{SectionName}:{nameof(BatchSize)}' must be positive; it is {BatchSize}.");
         if (VerificationPasses <= 0)
             throw new InvalidOperationException($"Configuration '{SectionName}:{nameof(VerificationPasses)}' must be positive; it is {VerificationPasses}.");
-        foreach (var (name, value) in new[] { (nameof(CheckInterval), CheckInterval), (nameof(AuditInterval), AuditInterval) })
+        foreach (var (name, value) in new[] { (nameof(CheckInterval), CheckInterval), (nameof(AuditInterval), AuditInterval), (nameof(RepairableBlockerInterval), RepairableBlockerInterval) })
         {
             if (value <= TimeSpan.Zero)
                 throw new InvalidOperationException($"Configuration '{SectionName}:{name}' must be positive; it is {value}.");
@@ -80,6 +91,7 @@ internal sealed class EfSchemaBackfillOptionsConfigurator(IServiceProvider servi
         options.BatchPause = section.TimeSpan(nameof(options.BatchPause)) ?? options.BatchPause;
         options.CheckInterval = section.TimeSpan(nameof(options.CheckInterval)) ?? options.CheckInterval;
         options.AuditInterval = section.TimeSpan(nameof(options.AuditInterval)) ?? options.AuditInterval;
+        options.RepairableBlockerInterval = section.TimeSpan(nameof(options.RepairableBlockerInterval)) ?? options.RepairableBlockerInterval;
         options.SettleMargin = section.TimeSpan(nameof(options.SettleMargin)) ?? options.SettleMargin;
         options.ClaimDuration = section.TimeSpan(nameof(options.ClaimDuration)) ?? options.ClaimDuration;
         options.Validate();

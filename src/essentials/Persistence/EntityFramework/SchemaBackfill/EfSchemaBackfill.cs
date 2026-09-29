@@ -27,15 +27,17 @@ namespace Elsa.Persistence.EntityFramework.SchemaBackfill;
 /// <item><b>Content-addressed rows are never rewritten</b> (FR-010a), and a family holding one below the target is never
 /// recorded complete at it (FR-011a).</item>
 /// <item><b>The settle condition comes before verification</b> (FR-012): every counted member reports observing the
-/// target, and the settle margin has passed since this worker first saw that hold, or last withdrew a completion.</item>
+/// target, and the settle margin has passed since this worker first saw that hold with no withdrawal in the finish
+/// history since, whichever worker wrote it.</item>
 /// <item><b>Completion is recorded only from a verification pass that found nothing</b> (FR-013, FR-014): a complete
 /// pass over every table of the family, after the settle condition, that found no row below the target, no row it could
-/// not read and no content-addressed row below it, during which no completion was withdrawn, written by
-/// compare-and-set.</item>
+/// not read and no content-addressed row below it, with no completion withdrawn since its settle margin began, written
+/// by compare-and-set.</item>
 /// <item><b>A straggler is reported before it is rewritten</b> (FR-018). While a completion stands the family is audited
 /// on its interval, whatever this host's target; and the audit, the upgrade pass and the verification pass each withdraw
 /// the completion, by compare-and-set against evidence read after the record they withdraw, before they rewrite the first
-/// row they find below it. A worker that dies midway leaves no known straggler under a standing completion.</item>
+/// row they find below it. A pass reads what stands afresh before each row, so a completion another worker records while
+/// it runs is withdrawn too. A worker that dies midway leaves no known straggler under a standing completion.</item>
 /// </list>
 /// <para>
 /// It is not an <see cref="IEfPostMigrationAction"/>: an action audits at Prepare and refuses the module while it is
@@ -91,8 +93,8 @@ public sealed class EfSchemaBackfill
         _time = time ?? TimeProvider.System;
         _logger = logger ?? NullLogger.Instance;
         _status = new EfSchemaBackfillStatusBoard(gate.Module, _logger);
-        _settle = new EfSchemaBackfillSettle(fleet, _options, _time, _logger, _status);
-        _finish = new EfSchemaBackfillFinish(gate, _settle, _status, _options, _time, _logger);
+        _finish = new EfSchemaBackfillFinish(gate, _status, _options, _time, _logger);
+        _settle = new EfSchemaBackfillSettle(fleet, _finish, _options, _time, _logger, _status);
         _passes = new EfSchemaBackfillPasses(_finish, _options, _time, _logger, _status);
         gate.ReportBackfillFrom(_status);
     }
@@ -135,8 +137,8 @@ public sealed class EfSchemaBackfill
 
     /// <summary>
     /// One round over every family of the module: a standing completion is audited when its audit is due, and a family with
-    /// work is backfilled, unless it was blocked at the same target less than an audit interval ago. Rounds of one worker
-    /// never overlap.
+    /// work is backfilled, unless it was blocked at the same target less than its re-survey interval ago. Rounds of one
+    /// worker never overlap.
     /// </summary>
     public async Task RunOnceAsync(EfSchemaBackfillScopeRunner withScope, CancellationToken cancellationToken = default)
     {
@@ -267,10 +269,11 @@ public sealed class EfSchemaBackfill
             return;
         }
 
-        switch (await _settle.CheckAsync(chain, target, identity, cancellationToken))
+        var (settled, historyMark) = await _settle.CheckAsync(scopes, chain, target, identity, cancellationToken);
+        switch (settled)
         {
             case EfSchemaBackfillSettle.Outcome.Blocked:
-                DeferSurvey(family, target);
+                DeferSurvey(family, target, _options.AuditInterval);
                 return;
             case EfSchemaBackfillSettle.Outcome.Waiting:
                 return;
@@ -278,7 +281,7 @@ public sealed class EfSchemaBackfill
 
         for (var pass = 1; pass <= _options.VerificationPasses; pass++)
         {
-            var verification = await _passes.VerifyAsync(scopes, run, cancellationToken);
+            var verification = await _passes.VerifyAsync(scopes, run, historyMark, cancellationToken);
             if (verification.Blockers.Count > 0)
             {
                 Blocked(family, target, verification.Blockers);
@@ -358,20 +361,23 @@ public sealed class EfSchemaBackfill
     }
 
     /// <summary>
-    /// Records what blocks the family at <paramref name="target"/>, and leaves it until the next audit interval unless the
-    /// target moves (FR-023): a blocker persists until someone resolves it, and surveying the family every round would cost
-    /// a selection by stamp of every table every check interval.
+    /// Records what blocks the family at <paramref name="target"/>, and leaves it until it is due to be surveyed again unless
+    /// the target moves (FR-023): a blocker persists until someone resolves it, and surveying the family every round would
+    /// cost a selection by stamp of every table every check interval. Rows an operator repairs in place, with a stamp this
+    /// host cannot read or that fail to upcast, are surveyed again at <see cref="EfSchemaBackfillOptions.RepairableBlockerInterval"/>,
+    /// so a repair is seen soon; any other blocker, content-addressed rows among them, at the audit interval.
     /// </summary>
     private void Blocked(string family, string target, IReadOnlyList<EfSchemaBackfillBlocker> blockers)
     {
         _status.Blocked(family, blockers);
-        DeferSurvey(family, target);
+        var repairable = blockers.Any(blocker => blocker.Kind is EfSchemaBackfillBlockerKind.Skew or EfSchemaBackfillBlockerKind.Corruption);
+        DeferSurvey(family, target, repairable ? _options.RepairableBlockerInterval : _options.AuditInterval);
     }
 
-    private void DeferSurvey(string family, string target)
+    private void DeferSurvey(string family, string target, TimeSpan interval)
     {
         lock (_lock)
-            _nextSurvey[family] = (target, _time.GetUtcNow() + _options.AuditInterval);
+            _nextSurvey[family] = (target, _time.GetUtcNow() + interval);
     }
 
     private bool SurveyDeferred(string family, string target)

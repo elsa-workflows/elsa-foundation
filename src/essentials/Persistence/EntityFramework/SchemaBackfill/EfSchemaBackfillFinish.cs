@@ -11,7 +11,6 @@ namespace Elsa.Persistence.EntityFramework.SchemaBackfill;
 /// </summary>
 internal sealed class EfSchemaBackfillFinish(
     EfSchemaModuleGate gate,
-    EfSchemaBackfillSettle settle,
     EfSchemaBackfillStatusBoard status,
     EfSchemaBackfillOptions options,
     TimeProvider time,
@@ -26,10 +25,10 @@ internal sealed class EfSchemaBackfillFinish(
         scopes.WithScopeAsync(scope => new EfSchemaFinalizationStore(scope.Context, time).FindAsync(family, cancellationToken), cancellationToken);
 
     /// <summary>
-    /// Records the family complete at the run's target (FR-014), unless a completion at or after it already stands, or the
-    /// completion was withdrawn after the verification pass began, which only a new pass can answer. Then the gate reads
-    /// the record again, so this host's dormancy check answers from it at once (FR-017). Returns why nothing was recorded,
-    /// or null when the completion stands.
+    /// Records the family complete at the run's target (FR-014), unless a completion at or after it already stands, or a
+    /// completion was withdrawn, by this worker or another, after the settle margin the verification pass followed began,
+    /// which only a pass after a new margin can answer (FR-012). Then the gate reads the record again, so this host's
+    /// dormancy check answers from it at once (FR-017). Returns why nothing was recorded, or null when the completion stands.
     /// </summary>
     public Task<string?> RecordAsync(EfSchemaBackfillScopeRunner scopes, EfSchemaBackfillRun run, EfSchemaBackfillVerification verification, CancellationToken cancellationToken)
     {
@@ -42,11 +41,11 @@ internal sealed class EfSchemaBackfillFinish(
                 throw new InvalidOperationException($"The finalization record of '{family}' vanished while its backfill ran.");
             if (record.Finish is { } standing && SchemaVersionChain.PositionOf(readable, standing.CompletionVersion) >= run.TargetAt)
                 return Attempt<string?>.Done(null);
-            if (record.FinishHistory.Skip(verification.HistoryMark).Any(entry => entry.Transition == SchemaFinishTransition.Withdrawn))
+            if (EfSchemaBackfillSettle.WithdrawnSince(record.FinishHistory, verification.HistoryMark))
             {
-                // A row below the target turned up while the pass ran, so it proved nothing; the margin starts again (FR-012).
-                settle.Reset(family);
-                return Attempt<string?>.Done("The completion was withdrawn while the verification pass ran, so only a new pass can prove it.");
+                // A row below a completion turned up after the margin began, so the pass proved nothing. The withdrawal in the
+                // history starts the margin again on every worker's next settle check (FR-012).
+                return Attempt<string?>.Done("A completion was withdrawn after the settle margin began, so only a verification pass after a new margin can prove it.");
             }
 
             try
@@ -70,8 +69,9 @@ internal sealed class EfSchemaBackfillFinish(
     /// reports it as critical. The evidence is read against the record it withdraws, so a completion recorded since the
     /// caller last looked is withdrawn only when rows below it remain, and never on stale evidence. Every host's Attention
     /// reads the withdrawal from the record; the gate reads the record again, so features that need completeness go dormant
-    /// on this host at once; and the settle margin starts again. Returns the finish record that stands afterwards: null
-    /// when it was withdrawn or none stood, and the standing one when nothing below it remains.
+    /// on this host at once; and every worker's settle margin starts again when it next finds the withdrawal in the
+    /// history. Returns the finish record that stands afterwards: null when it was withdrawn or none stood, and the
+    /// standing one when nothing below it remains.
     /// </summary>
     /// <param name="evidence">Why the standing completion does not hold, read in the given scope, or null when nothing below it remains.</param>
     /// <exception cref="InvalidOperationException">
@@ -101,7 +101,6 @@ internal sealed class EfSchemaBackfillFinish(
                 return Attempt<SchemaFinishRecord?>.Done(null);
             }
 
-            settle.Reset(family);
             logger.LogCritical(
                 "Schema family {Family} of EF module {Module} is no longer complete at {Version}: {Reason} The completion is withdrawn until a new " +
                 "verification pass succeeds, and features that need it are dormant meanwhile (spec 186, FR-018).",
@@ -111,10 +110,6 @@ internal sealed class EfSchemaBackfillFinish(
             $"Each of {RecordAttempts} attempts to withdraw the completion of schema family '{family}' lost its compare-and-set; the round stops " +
             "rather than rewrite a row below a completion that still stands."), cancellationToken);
     }
-
-    /// <summary>Where the family's finish history stands now: a verification pass's mark (FR-013).</summary>
-    public async Task<int> HistoryMarkAsync(EfSchemaBackfillScopeRunner scopes, string family, CancellationToken cancellationToken) =>
-        (await ReadAsync(scopes, family, cancellationToken))?.FinishHistory.Count ?? 0;
 
     /// <summary>
     /// Claims the run in the finish record (FR-008), or returns false when another worker's claim holds. A record with no
