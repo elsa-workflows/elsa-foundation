@@ -121,8 +121,8 @@ public sealed class FoundationHostBootTests(FoundationHostFeed feed) : IClassFix
     /// <summary>
     /// A share the host has no copy of refuses the package that carries it, and the host with it: Nuplane will not load
     /// the package's copy of an assembly its policy leaves to the host, so the host stops at its startup reconciliation
-    /// and names the package, the assembly and the entry, rather than serving without the module. Here the entry is one
-    /// for <c>Elsa.Persistence.EntityFramework</c>, which this host does not carry.
+    /// and names the package, the assembly and the entry, rather than serving without the module. The entry here is for
+    /// the fixture's own assembly, which no host carries whatever else it references.
     /// </summary>
     [Fact]
     public async Task A_share_the_host_has_no_copy_of_refuses_the_package_that_carries_it_and_the_host_does_not_start()
@@ -131,14 +131,13 @@ public sealed class FoundationHostBootTests(FoundationHostFeed feed) : IClassFix
         var added = $"Nuplane:Loading:SharedAssemblies:{RawShares().Length}";
 
         var refusal = await Assert.ThrowsAsync<InvalidOperationException>(() => StartAsync(
-            ($"{added}:Name", "Elsa.Persistence.EntityFramework"),
-            ($"{added}:MajorVersion", "4")));
+            ($"{added}:Name", FoundationHostFeed.FixturePackage),
+            ($"{added}:MajorVersion", "1")));
 
         Assert.Contains("NuplaneStartupReconciliationException", refusal.Message, StringComparison.Ordinal);
         Assert.Contains(
-            "Package 'Elsa.Persistence.EntityFramework@4.0.0-dev' carries shared assembly 'Elsa.Persistence.EntityFramework' " +
-            "(public key token: unsigned, major version: 4), which the shared-assembly policy leaves to the host, but the host " +
-            "has no copy of it with that major version.",
+            $"carries shared assembly '{FoundationHostFeed.FixturePackage}' (public key token: unsigned, major version: 1), which " +
+            "the shared-assembly policy leaves to the host, but the host has no copy of it with that major version.",
             refusal.Message,
             StringComparison.Ordinal);
     }
