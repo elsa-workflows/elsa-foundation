@@ -11,14 +11,34 @@ namespace Elsa.Architecture.Tests;
 /// surface at the vendor-owned OpenIddict host boundary plus the repository implementations explicitly
 /// admitted by ADR 0072 and ADR 0073 / Program #1665. It reads
 /// each source project's evaluated Release and Debug restore graphs and scans sources, so imported, conditional, transitive,
-/// and provider-only EF edges anywhere else under <c>src/</c> fail and name the offender. Workbench's host
-/// exception also validates its exact resolved EF package set. Each replacement changes this guard deliberately
-/// with its own architecture evidence; the destination ADR alone is not a repository-wide exemption.
+/// and provider-only EF edges anywhere else under <c>src/</c> fail and name the offender. Each host exception also
+/// validates its exact resolved EF package set. Each replacement changes this guard deliberately with its own
+/// architecture evidence; the destination ADR alone is not a repository-wide exemption.
 /// </summary>
 public sealed class EfCoreDependencyGuardTests
 {
     private static readonly string[] RestoreConfigurations = ["Release", "Debug"];
-    private static readonly string[] AllowedEfConsumers = ["Elsa.Workbench"];
+    private static readonly string[] AllowedEfConsumers = ["Elsa.Foundation.Host", "Elsa.Workbench"];
+
+    /// <summary>
+    /// ADR 0076, amended 2026-09-29 (#2151): <c>Elsa.Foundation.Host</c> carries EF Core for its opt-in cluster membership
+    /// provider and nothing else, so its closure is that provider's - EF Core and Relational - plus the four engines the
+    /// membership table can live in. No design-time package, no in-memory provider and no vendor EF store: every EF
+    /// module still arrives from a feed.
+    /// </summary>
+    private static readonly string[] AllowedFoundationHostEfPackages =
+    [
+        "Microsoft.EntityFrameworkCore",
+        "Microsoft.EntityFrameworkCore.Abstractions",
+        "Microsoft.EntityFrameworkCore.Analyzers",
+        "Microsoft.EntityFrameworkCore.Relational",
+        "Microsoft.EntityFrameworkCore.Sqlite",
+        "Microsoft.EntityFrameworkCore.Sqlite.Core",
+        "Microsoft.EntityFrameworkCore.SqlServer",
+        "MySql.EntityFrameworkCore",
+        "Npgsql.EntityFrameworkCore.PostgreSQL"
+    ];
+
     private static readonly string[] AllowedWorkbenchEfPackages =
     [
         "Microsoft.EntityFrameworkCore",
@@ -57,20 +77,32 @@ public sealed class EfCoreDependencyGuardTests
         Assert.True(offenders.Length == 0, Report("resolve EF Core outside the admitted consumers and pilot projects", offenders));
     }
 
-    [Fact]
-    public void Workbench_resolves_only_reviewed_vendor_and_pilot_EF_packages()
+    /// <summary>Every admitted host, each held to the EF closure it was reviewed with.</summary>
+    public static TheoryData<string> AdmittedHosts => [.. AllowedEfConsumers];
+
+    [Theory]
+    [MemberData(nameof(AdmittedHosts))]
+    public void An_admitted_host_resolves_only_its_reviewed_EF_packages(string host)
     {
-        var offenders = LoadModuleProjects()["Elsa.Workbench"].EfPackagesByConfiguration
+        var reviewed = ReviewedEfPackages(host);
+        var offenders = LoadModuleProjects()[host].EfPackagesByConfiguration
             .SelectMany(configuration =>
-                FindUnexpectedEfPackages(configuration.Value, AllowedWorkbenchEfPackages)
+                FindUnexpectedEfPackages(configuration.Value, reviewed)
                     .Select(package => $"{package} ({configuration.Key}) is not reviewed")
-                    .Concat(FindUnexpectedEfPackages(AllowedWorkbenchEfPackages, configuration.Value)
+                    .Concat(FindUnexpectedEfPackages(reviewed, configuration.Value)
                         .Select(package => $"{package} ({configuration.Key}) is missing from the reviewed closure")))
             .Order(StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
-        Assert.True(offenders.Length == 0, Report("are unreviewed EF packages resolved by Workbench", offenders));
+        Assert.True(offenders.Length == 0, Report($"are unreviewed EF packages resolved by {host}", offenders));
     }
+
+    private static string[] ReviewedEfPackages(string host) => host switch
+    {
+        "Elsa.Foundation.Host" => AllowedFoundationHostEfPackages,
+        "Elsa.Workbench" => AllowedWorkbenchEfPackages,
+        _ => throw new ArgumentOutOfRangeException(nameof(host), host, "An admitted EF consumer needs a reviewed EF closure of its own.")
+    };
 
     [Fact]
     public void Every_admitted_Secrets_pilot_project_resolves_only_its_reviewed_EF_closure()
@@ -1386,7 +1418,8 @@ public sealed class EfCoreDependencyGuardTests
     /// contract. Since #2143 it reads them through <c>Elsa.Persistence.Schema</c>, which references no EF Core, so the
     /// source itself is no longer admitted here: it resolves no EF package, and
     /// <see cref="Only_admitted_consumers_and_pilot_projects_resolve_ef_core_packages"/> keeps it that way, which is what
-    /// lets <c>Elsa.Foundation.Host</c> compose it and still carry no EF (ADR 0076). Its tests read the declarations of two
+    /// lets a host compose it without EF (ADR 0076); <c>Elsa.Foundation.Host</c> carries EF only for its opt-in durable
+    /// membership provider (ADR 0076, amended 2026-09-29; #2151). Its tests read the declarations of two
     /// first-party module assemblies, which resolve EF Core and Relational and never a provider engine.
     /// </summary>
     internal static class Spec183ReadabilityEf

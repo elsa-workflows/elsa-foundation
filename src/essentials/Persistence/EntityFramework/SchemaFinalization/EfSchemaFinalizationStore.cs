@@ -7,8 +7,8 @@ namespace Elsa.Persistence.EntityFramework.SchemaFinalization;
 
 /// <summary>
 /// Reads and writes the finalization records and the database identity a module context maps through
-/// <see cref="EfSchemaFinalization.MapSchemaFinalization"/> (spec 181, FR-001 to FR-004 and FR-019; spec 186, FR-014 to
-/// FR-016 and FR-018). It keeps the record's rules, not the gate's: it decides nothing about the fleet.
+/// <see cref="EfSchemaFinalization.MapSchemaFinalization"/> (spec 181, FR-001 to FR-004 and FR-019; spec 186, FR-008 and
+/// FR-014 to FR-018). It keeps the record's rules, not the gate's: it decides nothing about the fleet.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -400,6 +400,51 @@ public sealed class EfSchemaFinalizationStore
             {
                 Finish = null,
                 FinishHistory = [.. record.FinishHistory, new SchemaFinishHistoryEntry(SchemaFinishTransition.Withdrawn, finish.CompletionVersion, SchemaFinalizationActor.Of(member), at, reason)]
+            };
+        }, cancellationToken);
+    }
+
+    /// <summary>
+    /// Claims, or renews, the backfill run that upgrades the family to <paramref name="targetVersion"/> for
+    /// <paramref name="worker"/> until <paramref name="duration"/> from now (spec 186, FR-008). The claim sits in the
+    /// finish record, so it needs a completion to stand; it adds no history entry, since it is not a transition of the
+    /// proof. Nothing correct depends on it: it only keeps a second worker from repeating the first one's reads.
+    /// </summary>
+    /// <exception cref="SchemaFinalizationRefusedException">
+    /// No completion stands, another worker's claim still holds, or the target is not after the completion that stands or
+    /// is later than the finalized version.
+    /// </exception>
+    public Task<SchemaFinalizationWrite> ClaimBackfillAsync(
+        string family,
+        long expectedRevision,
+        string targetVersion,
+        IReadOnlyList<string> chain,
+        SchemaFinalizationMember member,
+        string worker,
+        TimeSpan duration,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(member);
+        ArgumentException.ThrowIfNullOrWhiteSpace(worker);
+        if (duration <= TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(nameof(duration), duration, "A claim holds for a positive period.");
+        return ChangeAsync(family, expectedRevision, (record, at) =>
+        {
+            var finish = record.Finish
+                         ?? throw Refused(record.Family, SchemaFinalizationRefusal.NoCompletion, "no completion stands, so no backfill run can be claimed in its finish record.");
+            EnsureForward(record.Family, chain, finish.CompletionVersion, targetVersion, "standing completion", "backfill target");
+            if (SchemaVersionChain.Require(record.Family, chain, targetVersion, "backfill target") >
+                SchemaVersionChain.Require(record.Family, chain, record.FinalizedVersion, "finalized"))
+                throw Refused(record.Family, SchemaFinalizationRefusal.CompletionBeyondFinalized,
+                    $"a backfill run cannot upgrade to '{targetVersion}', later than the finalized version '{record.FinalizedVersion}'.");
+            if (finish.Run is { } held && held.HoldsAt(at) && !StringComparer.Ordinal.Equals(held.Worker, worker))
+                throw Refused(record.Family, SchemaFinalizationRefusal.BackfillClaimed,
+                    $"a backfill run to '{held.TargetVersion}' is claimed by {held.Member} until {held.ExpiresAt:u}.");
+
+            var renewed = finish.Run is { } own && StringComparer.Ordinal.Equals(own.Worker, worker) && own.HoldsAt(at);
+            return record with
+            {
+                Finish = finish with { Run = new SchemaBackfillClaim(member, worker, targetVersion, renewed ? finish.Run!.ClaimedAt : at, at + duration) }
             };
         }, cancellationToken);
     }

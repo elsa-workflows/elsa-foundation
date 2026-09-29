@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Xunit;
 using static Elsa.Architecture.Tests.NuplaneHostSettings;
 using static Elsa.Architecture.Tests.RepoPaths;
@@ -62,9 +63,11 @@ public sealed class SharedAssemblyClosureGuardTests
         Assert.NotEmpty(Examined(workbench));
         Assert.Equal(workbench.Where(ProjectGraph.IsElsa), Examined(workbench));
 
-        // Elsa.Foundation.Host shares Line A's ten contracts (#2126) and the two host-composed ones (#2143) beside its three
-        // CShells.*.Abstractions ones. Line A is closed under its own dependencies by definition (ADR 0067), and the two
-        // host-composed ones reach nothing but Line A, so the theory above holds with every one of the twelve examined and
+        // Elsa.Foundation.Host shares Line A's ten contracts (#2126), the two host-composed ones (#2143) and the
+        // Elsa.Persistence.EntityFramework its cluster membership provider carries (#2151), beside its three
+        // CShells.*.Abstractions ones and EF Core's own. Line A is closed under its own dependencies by definition (ADR
+        // 0067), the two host-composed ones reach nothing but Line A, and Elsa.Persistence.EntityFramework reaches only
+        // Elsa.Primitives and Elsa.Persistence.Schema, so the theory above holds with every one of the thirteen examined and
         // none of them reaching outside the set.
         var foundationHost = SharedAssemblies(ReadNuplane("Elsa.Foundation.Host"));
         Assert.NotEmpty(Examined(foundationHost));
@@ -95,6 +98,63 @@ public sealed class SharedAssemblyClosureGuardTests
             Assert.True(carried.Contains(share), $"{host} shares {share} but does not reference the project that builds it.");
         });
     }
+
+    /// <summary>
+    /// What <c>Elsa.Foundation.Host</c> carries for its EF cluster membership provider alone (ADR 0076, amended 2026-09-29;
+    /// #2151). A feed-loaded EF module has to bind these as the host's copies: <c>dotnet elsa persistence</c> runs through the
+    /// host's own <c>Elsa.Persistence.EntityFramework</c> and finds a module only by that assembly's attribute types, and a
+    /// second EF Core would bring a second engine closure into the process.
+    /// </summary>
+    internal static readonly string[] FoundationHostMembershipShares =
+    [
+        "Elsa.Persistence.EntityFramework",
+        "Microsoft.EntityFrameworkCore",
+        "Microsoft.EntityFrameworkCore.Abstractions",
+        "Microsoft.EntityFrameworkCore.Relational"
+    ];
+
+    /// <summary>The public key token every EF Core assembly is signed with.</summary>
+    private const string EfCorePublicKeyToken = "adb9793829ddae60";
+
+    /// <summary>
+    /// <c>Elsa.Foundation.Host</c> shares the EF closure its membership provider carries, and each strong-named entry names
+    /// the token and major of the assembly the host really carries. An entry that does not is the failure that looks like
+    /// success: Nuplane's matcher compares both, so a wrong one never matches, and the configured share silently does
+    /// nothing once Nuplane matches shares inside a host-integrated graph.
+    /// </summary>
+    [Fact]
+    public void Foundation_host_shares_the_ef_closure_its_membership_provider_carries()
+    {
+        const string host = "Elsa.Foundation.Host";
+        var entries = ReadNuplane(host).GetSection("Loading:SharedAssemblies").GetChildren()
+            .ToDictionary(entry => entry["Name"]!, StringComparer.OrdinalIgnoreCase);
+        var carried = Reachable(host, ElsaReferences).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var locked = LockedVersions(host);
+
+        Assert.All(FoundationHostMembershipShares, share =>
+        {
+            Assert.True(entries.ContainsKey(share),
+                $"{host} carries {share} for its cluster membership but does not share it (src/apps/{host}/appsettings.json, " +
+                "Nuplane:Loading:SharedAssemblies), so a feed-loaded EF module could bind a copy of its own (#2151).");
+            Assert.True(carried.Contains(share) || locked.ContainsKey(share), $"{host} shares {share} but does not carry it.");
+        });
+        Assert.All(FoundationHostMembershipShares.Where(share => share.StartsWith("Microsoft.", StringComparison.Ordinal)), share =>
+        {
+            var entry = entries[share];
+            Assert.Equal((EfCorePublicKeyToken, Major(locked[share])), (entry["PublicKeyToken"], int.Parse(entry["MajorVersion"]!)));
+        });
+    }
+
+    /// <summary>The packages the host's committed lock file resolves, by id, at the version it resolves.</summary>
+    private static IReadOnlyDictionary<string, string> LockedVersions(string host)
+    {
+        using var document = JsonDocument.Parse(File.ReadAllText(HostFile(host, "packages.lock.json")));
+        return document.RootElement.GetProperty("dependencies").EnumerateObject().Single().Value.EnumerateObject()
+            .Where(package => package.Value.TryGetProperty("resolved", out _))
+            .ToDictionary(package => package.Name, package => package.Value.GetProperty("resolved").GetString()!, StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static int Major(string version) => int.Parse(version[..version.IndexOf('.')]);
 
     /// <summary>The host-composed shares reach nothing outside Line A, so sharing them adds no Line B floor of another domain.</summary>
     [Fact]

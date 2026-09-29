@@ -4,45 +4,63 @@ using System.Text.Json.Nodes;
 namespace Elsa.Cluster.EntityFrameworkCore.Tests;
 
 /// <summary>
-/// The feeds the host loads from: the fixture and <c>Elsa.Persistence.EntityFramework</c>, packed by the SDK from the build
-/// this test assembly was built with, in <see cref="Directory"/>; and the packages they and the EF provider engine depend
-/// on that the host does not carry (EF Core, the Sqlite engine and what they need), copied from the package cache this
-/// project's restore filled, in <see cref="ClosureDirectory"/>.
+/// The feeds the host loads from: the fixture, packed by the SDK from the build this test assembly was built with, in
+/// <see cref="Directory"/>, and the release of it before, packed from <c>FeedModuleV1</c> under the same package id, in
+/// <see cref="PreviousDirectory"/>; and, in <see cref="ClosureDirectory"/>, everything they and the EF provider engine
+/// depend on - <c>Elsa.Persistence.EntityFramework</c>'s restore closure, EF Core, the Sqlite engine and what they need -
+/// copied from the package cache this project's restore filled.
 /// </summary>
+/// <remarks>
+/// The host carries EF Core, the engines and <c>Elsa.Persistence.EntityFramework</c> for its cluster membership (#2151), so
+/// Nuplane must acquire none of what the closure feed offers but the engine package the <c>ef-provider</c> selection names:
+/// the closure is there so that acquiring any of it is possible, and a test that finds one acquired has found a second copy.
+/// No feed offers <c>Elsa.Persistence.EntityFramework</c> itself, or any other Elsa project: a host that did not provide one
+/// would fail its reconciliation loudly rather than load a copy.
+/// </remarks>
 public sealed class FoundationHostFeed : IAsyncLifetime
 {
     /// <summary>Packing a built project takes seconds; this is the ceiling for a <c>dotnet</c> that will never return.</summary>
     private static readonly TimeSpan DotnetTimeout = TimeSpan.FromMinutes(3);
 
-    private static readonly string[] Projects =
-    [
-        Path.Join("tests", "essentials", "Cluster", "Fixtures", "FeedModule", "Elsa.Cluster.Fixtures.FeedModule.csproj"),
-        Path.Join("src", "essentials", "Persistence", "EntityFramework", "Elsa.Persistence.EntityFramework.csproj")
-    ];
+    private static readonly string Fixture = Path.Join("tests", "essentials", "Cluster", "Fixtures", "FeedModule", "Elsa.Cluster.Fixtures.FeedModule.csproj");
+
+    private static readonly string PreviousFixture = Path.Join("tests", "essentials", "Cluster", "Fixtures", "FeedModuleV1", "Elsa.Cluster.Fixtures.FeedModuleV1.csproj");
 
     /// <summary>The EF persistence project's restore: every package it needs, which the packed package declares.</summary>
     private static readonly string PersistenceAssets = Path.Join(FoundationHostProcess.RepoRoot, "src", "essentials", "Persistence", "EntityFramework", "obj", "project.assets.json");
 
-    /// <summary>This project's restore, which carries the Sqlite engine and the rest of what it needs.</summary>
-    private static readonly string TestAssets = Path.Join(FoundationHostProcess.RepoRoot, "tests", "essentials", "Cluster", "EntityFrameworkCore", "Tests", "obj", "project.assets.json");
+    /// <summary>
+    /// The restore of the test project this is compiled into (<c>Tests</c>, or <c>ProviderTests</c>, which links this file),
+    /// which carries the engine it runs on and the rest of what it needs.
+    /// </summary>
+    private static readonly string TestAssets = Path.Join(
+        FoundationHostProcess.RepoRoot, "tests", "essentials", "Cluster", "EntityFrameworkCore",
+        typeof(FoundationHostFeed).Assembly.GetName().Name![(typeof(FoundationHostFeed).Assembly.GetName().Name!.LastIndexOf('.') + 1)..],
+        "obj", "project.assets.json");
+
+    /// <summary>The engine packages the tests run on; the restore of a project that does not use one does not name it.</summary>
+    private static readonly string[] Engines = ["Microsoft.EntityFrameworkCore.Sqlite", "Npgsql.EntityFrameworkCore.PostgreSQL"];
 
     private readonly DirectoryInfo _root = System.IO.Directory.CreateTempSubdirectory("elsa-foundation-host-feeds-");
 
-    /// <summary>The packed packages, which the host takes as its own feed.</summary>
+    /// <summary>The fixture's package, at the version that reads and writes version 2 of its family.</summary>
     public string Directory => Path.Join(_root.FullName, "packed");
+
+    /// <summary>The release of the fixture's package before it, which reads only version 1 of its family.</summary>
+    public string PreviousDirectory => Path.Join(_root.FullName, "previous");
 
     /// <summary>The packages those depend on, which the host only resolves from.</summary>
     public string ClosureDirectory => Path.Join(_root.FullName, "closure");
 
     public async Task InitializeAsync()
     {
-        foreach (var project in Projects)
-            await DotnetAsync("pack", Path.Join(FoundationHostProcess.RepoRoot, project), "--no-build", "-c", FoundationHostProcess.Configuration, "-p:IsPackable=true", "-o", Directory);
+        foreach (var (project, output) in new[] { (Fixture, Directory), (PreviousFixture, PreviousDirectory) })
+            await DotnetAsync("pack", Path.Join(FoundationHostProcess.RepoRoot, project), "--no-build", "-c", FoundationHostProcess.Configuration, "-p:IsPackable=true", "-o", output);
 
         System.IO.Directory.CreateDirectory(ClosureDirectory);
         // Both restores prune what ASP.NET's shared framework carries, which the host does not offer Nuplane, so the EF
         // persistence project's, a class library, is the one that names EF Core's own closure.
-        foreach (var package in Packages(PersistenceAssets).Concat(Packages(TestAssets, "Microsoft.EntityFrameworkCore.Sqlite")).Distinct())
+        foreach (var package in Packages(PersistenceAssets).Concat(Packages(TestAssets, Engines)).Distinct())
             File.Copy(package, Path.Join(ClosureDirectory, Path.GetFileName(package)), overwrite: true);
     }
 

@@ -109,6 +109,33 @@ public abstract class EfSchemaFinalizationClusterScenarioTests(EfClusterMembersh
         Assert.Equal("2", await FinalizedAsync());
     }
 
+    /// <summary>
+    /// Spec 186, FR-012 and MR-001, over the durable provider on each engine, both ways: the backfill's settle condition
+    /// does not hold while a counted member reports having observed an older finalized version, and names it; it holds
+    /// once that member publishes the target, read fresh from the membership table. A member whose report speaks for
+    /// another database is not waited for.
+    /// </summary>
+    [SkippableFact]
+    public async Task The_backfill_settle_condition_waits_for_every_counted_member_to_report_observing_the_target()
+    {
+        var backfilling = await StartAsync("backfilling", Observing("2"));
+        var lagging = await StartAsync("lagging", Observing("1"));
+        await StartAsync("elsewhere", new ReadabilityEntry(_family, Module, ["1", "2"], databaseIdentity: "another-database", observedFinalizedVersion: "1"));
+        var fleet = new ClusterSchemaFleet(backfilling.Membership);
+
+        var waiting = await fleet.CountObservingAsync(_family, ["2"], "this-database");
+
+        Assert.False(waiting.EveryCountedMemberReads);
+        Assert.Contains("has observed [1]", Assert.Single(waiting.Blockers));
+
+        lagging.SetReadability(Observing("2"));
+        await lagging.Membership.PublishReportAsync();
+
+        Assert.True((await fleet.CountObservingAsync(_family, ["2"], "this-database")).EveryCountedMemberReads);
+    }
+
+    private ReadabilityEntry Observing(string observed) => new(_family, Module, ["1", "2"], observedFinalizedVersion: observed);
+
     private EfSchemaModuleGate Gate(string current, IConformanceMember member) =>
         new(
             EfSchemaModuleFamilies.FromDeclarations(Module, [Declaration(current)]),
