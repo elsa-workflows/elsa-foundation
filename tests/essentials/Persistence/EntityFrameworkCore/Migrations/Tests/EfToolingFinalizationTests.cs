@@ -183,6 +183,36 @@ public sealed class EfToolingFinalizationTests : IAsyncLifetime
         }
     }
 
+    /// <summary>
+    /// Spec 181, FR-022: each pending version names the counted members that cannot read it, from the fleet the tool read.
+    /// No membership provider in the host's closure, or a table this database does not have, leaves the fleet unread, which
+    /// the payload says by a null list, not by an empty one that would claim no member blocks the version.
+    /// </summary>
+    [Fact]
+    public async Task A_pending_version_carries_the_members_that_cannot_read_it_and_none_when_the_fleet_was_not_read()
+    {
+        string[] chain = [SecretsEfModule.SchemaVersion, "next"];
+        SchemaFinalizationRecord record;
+        await using (var context = ModuleContextCatalog.Create(typeof(SecretsSqliteDbContext), Connection))
+            record = await new EfSchemaFinalizationStore(context).GetOrCreateAsync(SecretsEfModule.SchemaFamily, SecretsEfModule.SchemaVersion, chain, SchemaFinalizationActor.OfOperator("release"));
+        var fleet = new EfToolingFleet(
+            DateTimeOffset.UnixEpoch,
+            TimeSpan.FromSeconds(5),
+            [],
+            (family, databaseIdentity, version) => family == SecretsEfModule.SchemaFamily && databaseIdentity == record.DatabaseIdentity && version == "next"
+                ? [new EfToolingWaitingOn { HostId = "host-a", Incarnation = "a", Reads = [SecretsEfModule.SchemaVersion] }]
+                : []);
+
+        var read = Assert.Single(EfToolingHost.Describe("Secrets", SecretsEfModule.SchemaFamily, "Secrets", chain, record, fleet).Pending);
+        var unread = Assert.Single(EfToolingHost.Describe("Secrets", SecretsEfModule.SchemaFamily, "Secrets", chain, record, fleet: null).Pending);
+
+        Assert.Equal(("next", "pending"), (read.Version, read.State));
+        var waiting = Assert.Single(read.WaitsFor!);
+        Assert.Equal("host-a", waiting.HostId);
+        Assert.Equal([SecretsEfModule.SchemaVersion], waiting.Reads);
+        Assert.Null(unread.WaitsFor);
+    }
+
     [Fact]
     public async Task Status_refuses_the_fields_only_a_hold_takes()
     {
