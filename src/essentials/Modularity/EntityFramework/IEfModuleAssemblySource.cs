@@ -28,11 +28,13 @@ public interface IEfModuleAssemblySource
 /// apply calls, and a cache would keep answering from before it did.
 /// </para>
 /// <para>
-/// The guard judges the shell generation an apply is about to build, and that generation composes the active
-/// package set, so a replaced generation stops counting here at once, even while a shell generation still running
-/// it drains; the readability report keeps counting it until that shell is gone. Without the exclusion, an upgraded
-/// module's two loaded generations declare the same module twice, and the catalog refuses every apply until a restart.
-/// A host that composes no source excludes nothing.
+/// The guard judges the shell generation an apply is about to build, which composes the active package set once the
+/// host has refreshed its feature catalog after the reconcile, so a replaced generation stops counting here at once,
+/// even while a shell generation still running it drains. The readability report keeps counting it until nothing that
+/// could still run it is left, a feature catalog not refreshed yet included: a build from that catalog composes the
+/// replaced generation after all, and the guard then judges it by the current generation, which declares the same
+/// module. Without the exclusion, an upgraded module's two loaded generations declare the same module twice, and the
+/// catalog refuses every apply until a restart. A host that composes no source excludes nothing.
 /// </para>
 /// </remarks>
 public sealed class LoadedEfModuleAssemblySource(ISupersededAssemblySource? superseded = null) : IEfModuleAssemblySource
