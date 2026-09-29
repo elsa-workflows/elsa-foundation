@@ -23,9 +23,10 @@ the engine to load and the migrate policy, and a shells.json enabling the Notes 
   --cluster HOSTID         join the durable EF cluster membership under this host id, so hosts that share the database
                            count each other before a new schema version is finalized. Every host of a database gives the
                            same connection and its own id. Needs a host build that carries EF cluster membership.
-  --fast-membership        with --cluster: a 1 s heartbeat, a 4 s expiry and a 1 s skew allowance (the defaults are 10 s, 30 s
-                           and 5 s), so a host restarted after a crash rejoins in 5 s instead of 35 s (a host stopped cleanly leaves at once and needs no wait). For the demo
-                           only; every host of a database can use its own timings
+  --fast-membership        with --cluster: a 2 s heartbeat, a 10 s expiry and a 2 s skew allowance (the defaults are 10 s, 30 s
+                           and 5 s). A host stopped cleanly (Ctrl-C) leaves at once and needs no wait; a crashed or stalled host
+                           is dropped only after the expiry, so one restarted after a crash rejoins in about 12 s instead of
+                           35 s. For the demo only; every host of a database can use its own timings
   --management-key-env VAR enable the module-management endpoints, with the key read from the environment variable VAR:
                            POST /_module-management/reload, with the key in the X-Elsa-Module-Management-Key header,
                            re-composes the shells
@@ -150,9 +151,9 @@ if [[ -n "$cluster_host_id" ]]; then
   export Elsa__Cluster__Membership__EntityFrameworkCore__Provider="$provider"
   export Elsa__Cluster__Membership__EntityFrameworkCore__ConnectionString="$connection"
   if [[ "$fast_membership" -eq 1 ]]; then
-    export Elsa__Cluster__Membership__HeartbeatInterval=00:00:01
-    export Elsa__Cluster__Membership__ExpiryPeriod=00:00:04
-    export Elsa__Cluster__Membership__SkewAllowance=00:00:01
+    export Elsa__Cluster__Membership__HeartbeatInterval=00:00:02
+    export Elsa__Cluster__Membership__ExpiryPeriod=00:00:10
+    export Elsa__Cluster__Membership__SkewAllowance=00:00:02
   fi
 fi
 if [[ -n "$management_key" ]]; then
@@ -167,7 +168,7 @@ echo "database:       $database"
 echo "feed:           ${feed#"$demo_root"/}"
 if [[ -n "$cluster_host_id" ]]; then
   timing="default timings (a crashed host's entry lingers up to 35 s)"
-  [[ "$fast_membership" -eq 0 ]] || timing="fast timings (1 s heartbeat, 4 s expiry, 1 s skew)"
+  [[ "$fast_membership" -eq 0 ]] || timing="fast timings (2 s heartbeat, 10 s expiry, 2 s skew)"
   echo "cluster:        EF membership, host id $cluster_host_id, $timing"
 fi
 [[ -z "$management_key" ]] || echo "management:     POST /_module-management/reload, key from \$$management_key_env"

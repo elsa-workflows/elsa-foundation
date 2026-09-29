@@ -139,9 +139,11 @@ that shares the database can read it. For that the hosts join the durable cluste
 an id of its own (`Elsa:Cluster:Membership:HostId`; `run-host.sh` sets it together with the
 `Elsa:Cluster:Membership:EntityFrameworkCore:*` keys from `ELSA_EF_CONNECTION`), and the database gets one more module,
 `Cluster.Membership`. This needs a build of `Elsa.Foundation.Host` that carries the EF cluster membership provider;
-`run-host.sh --cluster` says so when the build does not. `--fast-membership` shortens the membership timings (1 s heartbeat,
-4 s expiry, 1 s skew allowance) so that a host restarted after a crash rejoins in seconds rather than after 35; a host
-stopped cleanly leaves the fleet at once and needs no wait either way. The same steps run on Sqlite (one machine only):
+`run-host.sh --cluster` says so when the build does not. `--fast-membership` shortens the membership timings (2 s heartbeat,
+10 s expiry, 2 s skew allowance; the defaults are 10 s, 30 s and 5 s). A host stopped cleanly with Ctrl-C leaves the fleet at
+once and needs no wait; a host that crashed or stalled is dropped only after the expiry, so one restarted after a crash rejoins
+in about 12 s rather than 35. The margin is deliberate: a heartbeat that stalls for a few seconds on a loaded laptop does not
+drop a 1.0.0 host from the count in the middle of the demo, which would finalize `2.0.0` early. The same steps run on Sqlite (one machine only):
 leave the container out and leave `ELSA_EF_CONNECTION` unset, and drop `--provider PostgreSql`.
 
 ```bash
