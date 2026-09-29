@@ -146,6 +146,8 @@ public sealed class RuntimePostCommitOutboxStoreTests
             await store.CompleteClaimAsync(new RuntimePostCommitOutboxClaimCompletion(ownerClaim, ownerResult)));
         var beforeLateResult = await store.FindAsync("outbox-completed");
         Assert.NotNull(beforeLateResult);
+        Assert.Equal(ownerResultStatus, beforeLateResult.Status);
+        Assert.True(beforeLateResult.DeliveryFencingToken > 0);
 
         var outcome = await store.RecordDeliveryResultAsync(new RuntimePostCommitOutboxDeliveryResult(
             "outbox-completed",

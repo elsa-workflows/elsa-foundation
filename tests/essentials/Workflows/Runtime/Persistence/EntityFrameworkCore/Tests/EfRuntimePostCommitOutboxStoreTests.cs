@@ -226,6 +226,15 @@ public sealed class EfRuntimePostCommitOutboxStoreTests
         }
 
         var beforeLateResult = await ReadPersistedOutboxSnapshotAsync(database);
+        await using (var verificationContext = database.Open("tenant-a"))
+        {
+            var verificationStore = new EfRuntimePostCommitOutboxStore(verificationContext, new FixedAccessor("tenant-a"));
+            var completedItem = await verificationStore.FindAsync("outbox-completed");
+            Assert.NotNull(completedItem);
+            Assert.Equal(ownerResultStatus, completedItem.Status);
+            Assert.True(completedItem.DeliveryFencingToken > 0);
+        }
+
         await using (var liveDrainContext = database.Open("tenant-a"))
         {
             var liveDrainStore = new EfRuntimePostCommitOutboxStore(liveDrainContext, new FixedAccessor("tenant-a"));
@@ -239,6 +248,30 @@ public sealed class EfRuntimePostCommitOutboxStoreTests
         }
 
         Assert.Equal(beforeLateResult, await ReadPersistedOutboxSnapshotAsync(database));
+    }
+
+    [Fact]
+    public async Task Claimless_recording_still_rejects_missing_and_unfenced_terminal_items()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var context = database.Open("tenant-a");
+        var store = new EfRuntimePostCommitOutboxStore(context, new FixedAccessor("tenant-a"));
+
+        var missingException = await Assert.ThrowsAsync<InvalidOperationException>(() => store.RecordDeliveryResultAsync(
+            new RuntimePostCommitOutboxDeliveryResult("missing", RuntimePostCommitOutboxStatus.Cancelled, Now)).AsTask());
+        Assert.Contains("not found", missingException.Message);
+
+        await store.SavePendingAsync(Pending("unfenced-terminal", "workflow-a"));
+        Assert.Equal(RuntimePostCommitOutboxClaimCompletionOutcome.Persisted, await store.RecordDeliveryResultAsync(
+            new RuntimePostCommitOutboxDeliveryResult("unfenced-terminal", RuntimePostCommitOutboxStatus.Cancelled, Now)));
+        var terminal = await store.FindAsync("unfenced-terminal");
+        Assert.NotNull(terminal);
+        Assert.True(terminal.IsTerminal);
+        Assert.Equal(0, terminal.DeliveryFencingToken);
+
+        var terminalException = await Assert.ThrowsAsync<InvalidOperationException>(() => store.RecordDeliveryResultAsync(
+            new RuntimePostCommitOutboxDeliveryResult("unfenced-terminal", RuntimePostCommitOutboxStatus.Cancelled, Now.AddSeconds(1))).AsTask());
+        Assert.Contains("terminal", terminalException.Message);
     }
 
     [Fact]
