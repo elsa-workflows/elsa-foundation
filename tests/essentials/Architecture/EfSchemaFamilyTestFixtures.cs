@@ -34,9 +34,12 @@ internal static class EfSchemaFamilyTestFixtures
     /// <summary>The synthetic family's fixture-pair directory, used by the fixture-detector unit tests.</summary>
     public const string Pair = "tests/Module/Fixtures/SchemaUpcasters/Orders/1-to-2/";
 
-    /// <summary>Every source that can ship an upcaster or prove one: the production tree and every test tree.</summary>
+    /// <summary>
+    /// Every source that can ship an upcaster or prove one: the production tree, every test tree and the samples, whose
+    /// upcaster a test project under tests/ proves (the schema-rollout demo's Notes module).
+    /// </summary>
     public static SchemaFamilyScan Proving { get; } = SchemaFamilyScan.Of(
-        new[] { "src", "tests" }
+        new[] { "src", "tests", "samples" }
             .SelectMany(root => Directory.EnumerateFiles(Path.Join(RepoRoot, root), "*.cs", SearchOption.AllDirectories))
             .Where(file => !IsBuildOutput(file) && !HasSegment(RepoRoot, file, "Migrations"))
             .Select(file => (Path: Path.GetRelativePath(RepoRoot, file), Text: File.ReadAllText(file)))

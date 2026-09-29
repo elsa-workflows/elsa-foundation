@@ -35,6 +35,8 @@ public sealed class NotesWithTagsFeature : IWebShellFeature
 
     public void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment)
     {
+        static Task<IResult> Serve(Func<Task<IResult>> operation) => NotesResults.ServeAsync(NotesModule.TagsFeature, operation);
+
         endpoints.MapGet(NotesModule.NotesPath + "/with-tags", (NotesWithTags tags, CancellationToken cancellationToken) =>
             Serve(async () => Results.Ok(await tags.ListAsync(cancellationToken))));
 
@@ -42,23 +44,6 @@ public sealed class NotesWithTagsFeature : IWebShellFeature
             request.Tags is not { Length: > 0 }
                 ? Task.FromResult(Results.BadRequest("Name at least one tag."))
                 : Serve(async () => await tags.AddTagsAsync(id, request.Tags, cancellationToken) is { } note ? Results.Ok(note) : Results.NotFound()));
-    }
-
-    /// <summary>Answers 409 with the refusal's code and reason while the feature is dormant, and while a write it attempts is refused.</summary>
-    private static async Task<IResult> Serve(Func<Task<IResult>> operation)
-    {
-        try
-        {
-            return await operation();
-        }
-        catch (SchemaDormancyRefusedException refusal)
-        {
-            return Results.Conflict(new { code = refusal.Code, feature = refusal.FeatureId, reason = refusal.Reason, message = refusal.Message });
-        }
-        catch (SchemaWriteRefusedException refusal)
-        {
-            return Results.Conflict(new { code = refusal.Code, feature = NotesModule.TagsFeature, reason = refusal.Message, message = refusal.Message });
-        }
     }
 }
 

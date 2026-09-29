@@ -509,6 +509,9 @@
   <Folder Name="/tests/essentials/Samples/Nuplane/Activities/">
     <Project Path="tests/essentials/Samples/Nuplane/Activities/Tests/Elsa.Samples.Nuplane.Activities.Tests.csproj" />
   </Folder>
+  <Folder Name="/tests/essentials/Samples/Nuplane/Notes/">
+    <Project Path="tests/essentials/Samples/Nuplane/Notes/Tests/Elsa.Samples.Nuplane.Notes.Tests.csproj" />
+  </Folder>
   <Folder Name="/tests/essentials/Secrets/">
     <Project Path="tests/essentials/Secrets/Tests/Elsa.Secrets.Tests.csproj" />
   </Folder>
