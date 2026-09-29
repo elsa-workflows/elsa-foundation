@@ -44,21 +44,9 @@ public sealed record ObservesFinalizedSchemaVersion : MemberRequirement
 
     public string? DatabaseIdentity { get; }
 
-    internal override bool IsMetBy(FleetMember member, MemberQueryPurpose purpose)
-    {
-        if (member.Report.IsUnknown || member.Report.Readability is not { } readability)
-            return false;
-
-        var applicable = readability.Entries
-            .Where(entry => string.Equals(entry.Family, Family, StringComparison.Ordinal))
-            .Where(entry => entry.AppliesTo(DatabaseIdentity))
-            .ToArray();
-
-        if (applicable.Length == 0)
-            return purpose == MemberQueryPurpose.Counting;
-
-        return applicable.All(entry => entry.ObservedFinalizedVersion is { } observed && Versions.Contains(observed, StringComparer.Ordinal));
-    }
+    internal override bool IsMetBy(FleetMember member, MemberQueryPurpose purpose) =>
+        ReadabilitySection.EveryEntryMeets(member, Family, DatabaseIdentity, purpose,
+            entry => entry.ObservedFinalizedVersion is { } observed && Versions.Contains(observed, StringComparer.Ordinal));
 
     public bool Equals(ObservesFinalizedSchemaVersion? other) =>
         other is not null &&
@@ -66,7 +54,15 @@ public sealed record ObservesFinalizedSchemaVersion : MemberRequirement
         string.Equals(DatabaseIdentity, other.DatabaseIdentity, StringComparison.Ordinal) &&
         Versions.SequenceEqual(other.Versions, StringComparer.Ordinal);
 
-    public override int GetHashCode() => HashCode.Combine(Family, DatabaseIdentity, Versions.Count);
+    public override int GetHashCode()
+    {
+        var hash = new HashCode();
+        hash.Add(Family, StringComparer.Ordinal);
+        hash.Add(DatabaseIdentity, StringComparer.Ordinal);
+        foreach (var version in Versions)
+            hash.Add(version, StringComparer.Ordinal);
+        return hash.ToHashCode();
+    }
 
     public override string ToString() =>
         $"has observed {Family} finalized at one of [{string.Join(", ", Versions)}]{(DatabaseIdentity is null ? "" : $" for database {DatabaseIdentity}")}";

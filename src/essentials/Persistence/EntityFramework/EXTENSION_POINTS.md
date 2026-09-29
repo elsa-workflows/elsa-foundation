@@ -219,10 +219,11 @@ module and a host decide:
 The backfill itself is not an extension point: beside each module's gate, `EfModuleMigrator<TContext>` runs an
 `EfSchemaBackfill` in the shell, with the shell's services, which upgrades a family's rows below the version this host
 has adopted as finalized, waits until every counted member reports observing it and the settle margin has passed,
-proves in a verification pass that no row below it remains, and records the family complete in its finish record; it
-then audits the family and withdraws the completion when a row below it turns up
-([spec 186](../../../../specs/186-post-finalization-backfill/spec.md)). It is not an `IEfPostMigrationAction`, whose audit
-at Prepare would refuse the module finalization needs active. What a module declares:
+proves in a verification pass that no row below it remains, and records the family complete in its finish record; while
+a completion stands it audits the family on its interval, and withdraws the completion, before rewriting it, when a row
+below it turns up ([spec 186](../../../../specs/186-post-finalization-backfill/spec.md)). It is not an
+`IEfPostMigrationAction`, whose audit at Prepare would refuse the module finalization needs active. The gate's status
+carries the backfill's through an internal seam; neither exposes the other. What a module declares:
 
 - **A rewriter** (FR-004): `[EfSchemaFamily(..., Rewriter = typeof(...))]` names a class of the module's own assembly,
   beside its store code, implementing `IEfSchemaRowRewriter`. The backfill constructs it for every row in a fresh
@@ -233,16 +234,30 @@ at Prepare would refuse the module finalization needs active. What a module decl
   needs none; `EfSchemaBackfillGuardTests` fails the build when a family with upcasters names no rewriter of its own
   module, and the backfill reports such a family blocked rather than complete.
 - **Content-addressed tables** (FR-010b): `ContentAddressed = [typeof(...)]` names the family's tables whose rows'
-  identity is their content, such as executables (ADR 0038). The backfill never rewrites them, and a family with any
-  row in them below a version is never recorded complete at it. `EfSchemaContentAddressedDeclarationTests` fails the
-  build when a stamped table holding executables is not named, and `EfSchemaBackfillGuardTests` when a feature needs
-  completeness of a family that names any (FR-011c).
-- **`IEfSchemaFleet.CountObservingAsync`** answers the settle condition from each counted member's readability entry,
-  which carries the finalized version it observed (spec 186, MR-001), and `SettleMargin` is the membership expiry
-  period plus the skew allowance. A host with no fleet never records completion.
+  identity is their content, such as executables (ADR 0038), and each such entity type is marked
+  `[EfSchemaContentAddressed(reason)]`, the reason saying how its key follows from its content. The backfill never
+  rewrites them, and a family with any row in them below a version is never recorded complete at it.
+  `EfSchemaContentAddressedDeclarationTests` fails the build when a first-party stamped table is marked but not named,
+  or named but not marked, and when a table it pins as holding executables or executable activity templates is not
+  both; `EfSchemaBackfillGuardTests` fails it when a feature needs completeness of a family that names any (FR-011c).
+
+What a host decides:
+
+- **`IEfSchemaFleet.CountObservingAsync` and `SettleMargin`** answer the settle condition (FR-012):
+  `Elsa.Cluster.Readability`'s fleet reads each counted member's readability entry, which carries the finalized version
+  it observed (spec 186, MR-001), and its margin is the membership expiry period plus the skew allowance. A host with no
+  fleet never records completion.
 - **Settings** come from `Elsa:Persistence:EntityFramework:Backfill` (`BatchSize`, default 500; `BatchPause`,
-  100 ms; `CheckInterval`, 15 seconds; `AuditInterval`, one hour; `SettleMargin`, the fleet's by default;
-  `ClaimDuration`, 2 minutes, zero for none; `VerificationPasses`, 3).
+  100 ms; `CheckInterval`, 15 seconds; `AuditInterval`, one hour, which is also how often a blocked family is surveyed
+  again; `SettleMargin`, the fleet's by default; `ClaimDuration`, 2 minutes, zero for none; `VerificationPasses`, 3).
+
+**Breaking change for custom fleets.** `IEfSchemaFleet` gained `CountObservingAsync` and `SettleMargin` with spec 186.
+An implementation outside this repository no longer compiles against this version until it adds both: answer the
+settle condition from a fresh, complete read of the fleet, listing each counted member that has not observed one of
+the versions and throwing rather than answering from part of it, and return the margin a write begun before a member
+observed a version can still be in flight. Returning a margin shorter than that, or answering from a partial read, lets
+a verification pass start while such a write can still land below the version, which is exactly what the settle
+condition prevents.
 
 ## Schema and pooling
 

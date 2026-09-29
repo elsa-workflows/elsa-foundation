@@ -16,8 +16,8 @@ namespace Elsa.Architecture.Tests;
 /// <item>a feature that needs completeness never names a family with content-addressed tables, since it could never
 /// leave dormancy (FR-011c).</item>
 /// </list>
-/// The first-party model's side of FR-010b, every stamped table whose name says it holds executables, is
-/// <c>EfSchemaContentAddressedDeclarationTests</c>.
+/// The first-party model's side of FR-010b, every stamped table marked <c>[EfSchemaContentAddressed]</c> exactly when its
+/// family names it, is <c>EfSchemaContentAddressedDeclarationTests</c>.
 /// </summary>
 public sealed class EfSchemaBackfillGuardTests
 {
@@ -38,7 +38,12 @@ public sealed class EfSchemaBackfillGuardTests
     [Fact]
     public void The_tables_holding_executables_and_executable_activity_templates_are_declared_content_addressed() =>
         Assert.Superset(
-            new HashSet<string> { "RuntimeArtifact:WorkflowExecutableEntity", "RuntimeArtifact:ExecutableActivityTemplateEntity" },
+            new HashSet<string>
+            {
+                "RuntimeArtifact:WorkflowExecutableEntity",
+                "RuntimeArtifact:ExecutableActivityTemplateEntity",
+                "RuntimeArtifact:ExecutableActivityTemplateHashClaimEntity"
+            },
             Production.ContentAddressedTables().ToHashSet(StringComparer.Ordinal));
 
     [Fact]

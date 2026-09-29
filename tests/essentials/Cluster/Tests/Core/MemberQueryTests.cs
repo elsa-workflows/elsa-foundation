@@ -178,6 +178,24 @@ public sealed class MemberQueryTests
         Assert.NotEqual(new ObservesFinalizedSchemaVersion(Family, ["2"], "db-a"), new ObservesFinalizedSchemaVersion(Family, ["2", "3"], "db-a"));
     }
 
+    /// <summary>Equal settle conditions hash alike, and ones that differ only in a version do not collide by design.</summary>
+    [Fact]
+    public void A_settle_condition_hashes_every_version_it_names()
+    {
+        Assert.Equal(
+            new ObservesFinalizedSchemaVersion(Family, ["2", "3"], "db-a").GetHashCode(),
+            new ObservesFinalizedSchemaVersion(Family, ["2", "3"], "db-a").GetHashCode());
+        Assert.NotEqual(
+            new ObservesFinalizedSchemaVersion(Family, ["2", "3"], "db-a").GetHashCode(),
+            new ObservesFinalizedSchemaVersion(Family, ["2", "4"], "db-a").GetHashCode());
+        Assert.Equal(2, new HashSet<MemberRequirement>
+        {
+            new ObservesFinalizedSchemaVersion(Family, ["2", "3"], "db-a"),
+            new ObservesFinalizedSchemaVersion(Family, ["2", "3"], "db-a"),
+            new ObservesFinalizedSchemaVersion(Family, ["2", "4"], "db-a")
+        }.Count);
+    }
+
     private static MemberQueryAnswer Evaluate(MemberQuery query, params FleetMember[] members) =>
         query.Evaluate(new FleetView(ClusterProviderKind.Durable, FleetReadMode.Fresh, Now, members));
 
