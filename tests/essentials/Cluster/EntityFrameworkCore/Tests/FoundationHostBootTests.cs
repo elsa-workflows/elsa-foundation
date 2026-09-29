@@ -11,7 +11,9 @@ namespace Elsa.Cluster.EntityFrameworkCore.Tests;
 /// fixture and the EF persistence package it carries a private copy of packed into a directory feed, and Nuplane loading
 /// them as it loads any package. Nothing here composes the host, its membership or the module's load context: what
 /// <see cref="FeedLoadedEfModuleTests"/> assembles in process, the host assembles itself, from its own shipped
-/// <c>appsettings.json</c> shares and its own <c>Program.cs</c>.
+/// <c>appsettings.json</c> shares and its own <c>Program.cs</c>. The same host is also upgraded in place, a release of
+/// the fixture dropped into its feed folder while it runs, which is where the previous release staying loaded in a load
+/// context Nuplane never unloads shows (spec 183, FR-021, amended 2026-09-29).
 /// </summary>
 /// <remarks>
 /// The host carries no EF Core (ADR 0076), so its feeds also have to supply Microsoft.EntityFrameworkCore, the provider
