@@ -22,6 +22,7 @@
       "src/essentials/Attention/Core/Elsa.Attention.Core.csproj",
       "src/essentials/Caching/Core/Elsa.Caching.Core.csproj",
       "src/essentials/Caching/Memory/Elsa.Caching.Memory.csproj",
+      "src/essentials/Cluster/Core/Elsa.Cluster.Core.csproj",
       "src/essentials/Events/Core/Elsa.Events.Core.csproj",
       "src/essentials/Events/Elsa.Events.csproj",
       "src/essentials/Events/Strategies/Elsa.Events.Strategies.csproj",

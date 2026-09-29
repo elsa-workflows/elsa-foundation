@@ -1,15 +1,24 @@
 using System.Security.Cryptography;
 using System.Text;
 using Elsa.Attention.Core;
+using Elsa.Cluster.Core.Contracts;
+using Elsa.Cluster.Core.Models;
 using Elsa.Modularity.Api.Authorization;
 using Elsa.Modularity.Core.Contracts;
 using Elsa.Modularity.Core.Models;
 
 namespace Elsa.Modularity.Api.Attention;
 
+/// <summary>
+/// Turns the feature catalog's problems into Attention items: a manifest that could not be read (critical), a missing or
+/// disabled dependency (warning), a dormant feature with its reason and the finalization gate's status (info; spec 182,
+/// FR-010), and a schema family whose writes this host refuses because it cannot read its finalized version (critical;
+/// spec 181, FR-012). Everything comes from items Attention already has a shape for, so its public API does not change.
+/// </summary>
 public sealed class ModularityAttentionContributor(
     IFeatureManagementService featureManagementService,
-    TimeProvider? timeProvider = null) : IAttentionContributor
+    TimeProvider? timeProvider = null,
+    ISchemaDormancyCheck? dormancy = null) : IAttentionContributor
 {
     private const int MaximumItems = 5;
     private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
@@ -30,6 +39,9 @@ public sealed class ModularityAttentionContributor(
 
         var conditions = catalog.Features
             .Select(feature => Evaluate(feature, byId, observedAt))
+            .Concat(catalog.Features.Select(feature => EvaluateDormancy(feature, observedAt)))
+            // What this host has observed, from memory: no record is read for it.
+            .Concat((dormancy?.Observe() ?? []).Where(family => family.WritesRefused).Select(family => WritesRefused(family, observedAt)))
             .Where(condition => condition is not null)
             .Select(condition => condition!)
             .OrderBy(item => item.Severity)
@@ -78,6 +90,52 @@ public sealed class ModularityAttentionContributor(
             [new("module", feature.Id)],
             AttentionSensitivity.Metadata);
     }
+
+    /// <summary>
+    /// One informational item for an enabled feature the catalog reports dormant (spec 182, FR-010, User Story 1): it names
+    /// the feature and every unmet requirement's reason, which carries the finalization gate's status. It disappears once
+    /// the catalog reports the feature available.
+    /// </summary>
+    private static AttentionItem? EvaluateDormancy(FeatureCatalogItem feature, DateTimeOffset observedAt)
+    {
+        if (!feature.Enabled || feature.Availability is not { IsDormant: true } availability)
+            return null;
+
+        var issueKeys = availability.Reasons.Select(reason => $"dormant:{reason.Family}:{reason.Version}:{reason.Kind}").ToArray();
+        return new(
+            $"feature-dormant:{feature.Id}",
+            HashGeneration(feature.Id, issueKeys),
+            AttentionSeverity.Info,
+            $"{feature.DisplayName} is dormant",
+            string.Join(" ", availability.Reasons.Select(reason => reason.Reason)),
+            observedAt,
+            observedAt,
+            availability.Reasons.Count,
+            new("/modules", "Inspect modules"),
+            [new("module", feature.Id), .. availability.Reasons.Select(reason => new AttentionCorrelation("schema-family", reason.Family)).Distinct()],
+            AttentionSensitivity.Metadata);
+    }
+
+    /// <summary>
+    /// One critical item for a schema family whose finalized version this host cannot read, so every write to it is refused
+    /// (spec 181, FR-012; spec 182, FR-010). That is not dormancy: this host has to be replaced by one that reads it.
+    /// </summary>
+    private static AttentionItem WritesRefused(SchemaFamilyObservation family, DateTimeOffset observedAt) =>
+        new(
+            $"schema-family-writes-refused:{family.Family}",
+            HashGeneration(family.Family, [$"writes-refused:{family.FinalizedVersion}"]),
+            AttentionSeverity.Critical,
+            $"Writes to schema family {family.Family} are refused",
+            $"Schema family '{family.Family}'{(family.Module is null ? "" : $" of EF module '{family.Module}'")} is finalized at " +
+            $"'{family.FinalizedVersion}', and this host reads only [{string.Join(", ", family.ReadableVersions)}], so it refuses every " +
+            "write to the family rather than rewrite rows it cannot read. Run a version that reads the finalized one, or restore a " +
+            "database backup taken before it was finalized.",
+            observedAt,
+            observedAt,
+            1,
+            new("/modules", "Inspect modules"),
+            [new("schema-family", family.Family)],
+            AttentionSensitivity.Metadata);
 
     private static string BuildSummary(
         bool hasReadError,

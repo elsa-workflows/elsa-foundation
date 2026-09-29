@@ -1409,6 +1409,17 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/CapabilityLink'
+        status:
+          type: string
+          enum: [dormant]
+          description: |
+            Present only while the feature that owns the capability is dormant (spec 182, FR-007): it is composed
+            and running, but its operations that need data a newer persisted-schema version holds are refused
+            until that version is finalized. Omitted while the capability is available.
+        reason:
+          type: string
+          description: |
+            Why the capability is dormant, caller-neutral: it names no host. Present only with status.
     CapabilityLink:
       type: object
       required: [rel, href]

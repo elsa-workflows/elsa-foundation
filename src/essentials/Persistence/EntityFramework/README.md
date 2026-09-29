@@ -423,6 +423,15 @@ dotnet elsa persistence release --host <dir> --provider PostgreSql --modules Wor
 A hold on a version already finalized is refused. No command finalizes, forces finalization or lowers a finalized
 version: going back past one means restoring a database backup taken before it.
 
+A feature whose data only the new version can hold stays **dormant** until its host observes that version as
+finalized (spec 182): composed and running, listed as enabled with a reason, and refusing, never dropping, whatever
+needs the new data. It declares `[RequiresSchemaVersion(family, version)]` on its feature class and asks
+`ISchemaDormancyCheck` (`Elsa.Cluster.Core`) where it accepts that data. The check answers from each gate's last
+observation, which `Elsa.Cluster.Readability`'s `AddEfSchemaDormancy()` exposes; before refusing, it has the gate
+re-read an observation older than two seconds, one read per bound however many requests ask
+(`EfSchemaModuleGate.RefreshIfOlderThanAsync`). A store that writes new-version data at an older write version is still
+refused by the write check, so a path that forgot to ask fails loudly.
+
 ## Contracting migrations (spec 185)
 
 A change that is not expand-only ships in two releases: the first adds the new shape beside the old, the second

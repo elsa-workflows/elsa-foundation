@@ -85,7 +85,10 @@
         "type": "Project"
       },
       "elsa.cluster.core": {
-        "type": "Project"
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Primitives": "[4.0.0-dev, )"
+        }
       },
       "elsa.cluster.inprocess": {
         "type": "Project",
