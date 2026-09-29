@@ -127,6 +127,8 @@ public sealed class FoundationHostClusterBootTests(FoundationHostFeed feed) : IC
     [InlineData($"{EfClusterMembershipOptions.SectionKey}:{ClusterMembershipConfigurationExtensions.EnabledKey}")]
     public async Task A_host_whose_ef_provider_is_half_configured_refuses_to_start(string missing)
     {
+        // Seeded, so a host that did not refuse would start in seconds and this would fail at once rather than time out.
+        await SeedAsync(ConnectionString);
         var settings = Clustered(Newer);
         Assert.True(settings.Remove(Key(missing)));
 
@@ -164,7 +166,7 @@ public sealed class FoundationHostClusterBootTests(FoundationHostFeed feed) : IC
     {
         [Key(nameof(ClusterMembershipOptions.HostId))] = hostId,
         [Key(nameof(ClusterMembershipOptions.HeartbeatInterval))] = "00:00:00.500",
-        [Key(nameof(ClusterMembershipOptions.ExpiryPeriod))] = "00:00:05",
+        [Key(nameof(ClusterMembershipOptions.ExpiryPeriod))] = "00:00:10",
         [Key(nameof(ClusterMembershipOptions.SkewAllowance))] = "00:00:01",
         [Key(EfKey(ClusterMembershipConfigurationExtensions.EnabledKey))] = "true",
         [Key(EfKey(nameof(EfClusterMembershipOptions.Provider)))] = "Sqlite",

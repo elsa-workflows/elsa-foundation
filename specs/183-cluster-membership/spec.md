@@ -788,3 +788,19 @@ database the host has read the family in and no activation of the family is mid-
 its observed finalized version is given only while every database the host has read agrees on it. Naming the
 database read "most recently" would stop a second database's evaluators counting this host (FR-023). See spec 181's
 note of the same date.
+
+**2026-09-29 note (B5c, [#2151](https://github.com/elsa-workflows/elsa-foundation/issues/2151)).** Decided by the owner
+on #2093 the same day; lands with the #2151 PR, whose merge is the owner's approval. `Elsa.Foundation.Host` now composes
+`AddConfiguredClusterMembership` on its host container, beside `AddEfSchemaReadability`, exactly as `Elsa.Workbench`
+does, so FR-024 holds on both shipped hosts: the EF provider is enabled by configuration alone, requires an explicit host
+id (FR-003a), and an unconfigured host keeps the in-process default of FR-017 and FR-018. This supersedes spec 181's
+2026-09-29 note that `Elsa.Foundation.Host` is a cluster of one. The host carries EF Core, the four engines and the EF
+provider for this alone ([ADR 0076](../../docs/adr/0076-persistence-tooling-runs-inside-the-host-closure.md), amended
+2026-09-29), and shares what it carries, so a feed-loaded EF module binds the host's `Elsa.Persistence.EntityFramework`
+and EF Core. Nothing in this spec changes. `FoundationHostClusterBootTests` (`tests/essentials/Cluster/EntityFrameworkCore/Tests`)
+boot two built hosts over one SQLite database with the provider enabled: they see each other (User Story 2); a
+feed-loaded module's new schema version is not finalized while one of them runs the release that cannot read it, and
+the feature that needs it answers 409 saying it waits for every host (FR-023; spec 182, FR-008); the older host is
+killed and restarted on the new release under the same host id, waits out its predecessor's expiry (User Story 4,
+FR-004b), and the version is then finalized and served on both. The same test with the provider left off shows each
+host finalizing on its own (FR-018a), and a host with the provider half configured refuses to start.
