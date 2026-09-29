@@ -181,7 +181,7 @@ bash tools/demo/run-host.sh a --port 5101 --provider PostgreSql --cluster host-a
 curl localhost:5101/demo/notes/with-tags                              # 200 on both hosts; old notes have "tags": []
 curl localhost:5102/demo/notes/with-tags
 bash tools/demo/elsa.sh persistence status --host artifacts/demo/hosts/a "${DB[@]}"
-#    SamplesNotes: finalized at 2.0.0, and within seconds "complete from 2.0.0": the backfill has rewritten the old rows
+#    SamplesNotes: finalized at 2.0.0, and "complete from 2.0.0" once the backfill has rewritten the old rows (see the timings below)
 
 docker rm -f elsa-demo-pg                                             # when done
 ```
@@ -189,7 +189,14 @@ docker rm -f elsa-demo-pg                                             # when don
 Timings on a laptop, to plan the pauses: `pack.sh` 5 to 15 s once the host is built (up to a minute or two while other builds
 compete for the machine, so pack before you present); a host is ready 10 to 15 s after it starts; `persistence apply` about 1 s
 (the first `elsa.sh` call builds the tool and takes 25 s); the shell of a host that was refused activates on the first
-request after the apply; the second host's upgrade finalizes `2.0.0` within a second of that host being ready.
+request after the apply. `2.0.0` is finalized as soon as the last 1.0.0 host has left the fleet, not when it comes back on
+1.1.0: about 0 to 3 s after host a is stopped cleanly (host b is then the only member and reads `2.0.0`, so its `/with-tags`
+answers 200 before host a is back), and about 11 s after a crash, which is the expiry plus the skew allowance less what the last
+heartbeat had already used. `complete from 2.0.0` follows the finalization by 16 to 20 s: the backfill waits for the settle
+margin (the membership expiry plus the skew allowance, 12 s here) and then rewrites the old rows and records completion in its
+next rounds, which run every 5 s. Measured over four two-host runs on PostgreSQL, with host a stopped cleanly in three and killed
+in one: 16.5, 19.7, 20.0 and 20.3 s. Repacking and restarting host a takes longer than that on a busy machine, so by the time
+it is ready the status usually says `complete from 2.0.0` already; before then it says `complete from 1.0.0`.
 
 ### Keeping 2.0.0 dormant on purpose
 
