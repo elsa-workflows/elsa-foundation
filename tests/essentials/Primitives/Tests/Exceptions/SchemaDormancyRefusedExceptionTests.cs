@@ -38,6 +38,14 @@ public sealed class SchemaDormancyRefusedExceptionTests
     }
 
     [Fact]
+    public void The_refusal_codes_are_the_literal_stable_codes_the_spec_names()
+    {
+        Assert.Equal("schema-version-not-finalized", SchemaDormancyRefusedException.RefusalCode);
+        Assert.Equal("schema-write-refused", SchemaWriteRefusedException.RefusalCode);
+        Assert.Equal("schema-version-not-finalized", Refusal.Code);
+    }
+
+    [Fact]
     public void The_refusal_names_the_feature_and_the_reason_in_its_properties_and_its_message()
     {
         Assert.Equal("OrdersApi", Refusal.FeatureId);
