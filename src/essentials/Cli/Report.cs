@@ -170,14 +170,14 @@ internal static class Report
         }
 
         var members = cluster.GetProperty("members").EnumerateArray().ToArray();
-        output.WriteLine($"members: {members.Length} in {Text(cluster, "module")}, judged at {Text(cluster, "judgedAt")} with a skew allowance of {Text(cluster, "skewAllowance")}");
+        output.WriteLine($"members: {members.Length} in {Text(cluster, "module")}, judged at {Moment(cluster, "judgedAt")} with a skew allowance of {Text(cluster, "skewAllowance")}");
         foreach (var member in members)
         {
             var displaced = member.GetProperty("displaced").GetBoolean();
             var state = member.GetProperty("live").GetBoolean()
                 ? displaced ? "counted, displaced by a later incarnation" : "counted"
                 : Text(member, "status") == "Left" ? "left" : "expired";
-            output.WriteLine($"  {Text(member, "hostId")}: {Text(member, "status")}, {state}, last heartbeat {Text(member, "lastHeartbeatAt")}");
+            output.WriteLine($"  {Text(member, "hostId")}: {Text(member, "status")}, {state}, last heartbeat {Moment(member, "lastHeartbeatAt")}");
             if (!member.GetProperty("reportReadable").GetBoolean())
             {
                 output.WriteLine($"    {Unreadable}");
@@ -199,6 +199,12 @@ internal static class Report
             }
         }
     }
+
+    /// <summary>An instant to the second, in UTC: what a presenter reads off a heartbeat, without the fraction of a tick the table keeps.</summary>
+    private static string Moment(JsonElement element, string name) =>
+        DateTimeOffset.TryParse(Text(element, name), System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var instant)
+            ? instant.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", System.Globalization.CultureInfo.InvariantCulture)
+            : Text(element, name);
 
     private static string Versions(JsonElement versions) =>
         versions.GetArrayLength() == 0 ? "nothing" : string.Join(", ", versions.EnumerateArray().Select(version => version.GetString()));

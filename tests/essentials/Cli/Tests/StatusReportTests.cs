@@ -27,10 +27,10 @@ public sealed class StatusReportTests
               2.0.0: pending, held by nothing; waits for every counted member to read it
                 waits for: foundation-host-a (reads 1.0.0)
 
-            members: 2 in Cluster.Membership, judged at 2026-09-29T12:00:00+00:00 with a skew allowance of 00:00:05
-              foundation-host-a: Active, counted, last heartbeat 2026-09-29T11:59:58+00:00
+            members: 2 in Cluster.Membership, judged at 2026-09-29T12:00:00Z with a skew allowance of 00:00:05
+              foundation-host-a: Active, counted, last heartbeat 2026-09-29T11:59:58Z
                 SamplesNotes: reads 1.0.0
-              foundation-host-b: Active, counted, last heartbeat 2026-09-29T11:59:58+00:00
+              foundation-host-b: Active, counted, last heartbeat 2026-09-29T11:59:58Z
                 SamplesNotes: reads 1.0.0, 2.0.0
 
             1 family(ies).
@@ -117,7 +117,7 @@ public sealed class StatusReportTests
         Assert.Contains("Hold placed.", output, StringComparison.Ordinal);
     }
 
-    private const string Heartbeat = "2026-09-29T11:59:58+00:00";
+    private const string Heartbeat = "2026-09-29T11:59:58Z";
 
     private static object Member(string hostId, params string[] versions) => Member(hostId, "Active", true, versions);
 
@@ -129,7 +129,7 @@ public sealed class StatusReportTests
 
     private static object Cluster(params object[] members) => new
     {
-        module = "Cluster.Membership", judgedAt = "2026-09-29T12:00:00+00:00", skewAllowance = "00:00:05", note = (string?)null, members
+        module = "Cluster.Membership", judgedAt = "2026-09-29T12:00:00Z", skewAllowance = "00:00:05", note = (string?)null, members
     };
 
     private static object Family(object[]? waitsFor) => new

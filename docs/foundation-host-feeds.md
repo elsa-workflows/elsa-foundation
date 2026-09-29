@@ -659,10 +659,10 @@ SamplesNotes (SamplesNotes): finalized at 1.0.0; this host reads [1.0.0, 2.0.0]
   2.0.0: pending, held by nothing; waits for every counted member to read it
     waits for: foundation-host-a (reads 1.0.0)
 
-members: 2 in Cluster.Membership, judged at 2026-09-29T12:00:00+00:00 with a skew allowance of 00:00:05
-  foundation-host-a: Active, counted, last heartbeat 2026-09-29T11:59:58+00:00
+members: 2 in Cluster.Membership, judged at 2026-09-29T12:00:00Z with a skew allowance of 00:00:05
+  foundation-host-a: Active, counted, last heartbeat 2026-09-29T11:59:58Z
     SamplesNotes: reads 1.0.0
-  foundation-host-b: Active, counted, last heartbeat 2026-09-29T11:59:58+00:00
+  foundation-host-b: Active, counted, last heartbeat 2026-09-29T11:59:58Z
     SamplesNotes: reads 1.0.0, 2.0.0
 ```
 
