@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Xml.Linq;
 using Xunit;
 using static Elsa.Architecture.Tests.RepoPaths;
@@ -107,6 +108,33 @@ public sealed partial class ArchitectureGuardTests
             Environment.NewLine + string.Join(Environment.NewLine, violations));
     }
 
+    /// <summary>
+    /// The readability source learns which package generations an in-place upgrade superseded from Nuplane's catalog and
+    /// CShells' feature catalog and shell lifecycle (spec 183, FR-021, amended 2026-09-29), and takes only their
+    /// abstractions for it, which both hosts that compose it share with their packages. Never a runtime, declared or
+    /// resolved: composing readability must not put Nuplane's loader or CShells' registry into a host, which is why it
+    /// matches Nuplane's load contexts by the name of the assembly that defines them rather than by type.
+    /// </summary>
+    [Fact]
+    public void The_readability_source_takes_only_the_package_runtimes_abstractions()
+    {
+        var project = ProjectFiles().Single(candidate => candidate.Name == ReadabilitySource);
+        var violations = ReachableProjects(project)
+            .Prepend(project)
+            .SelectMany(reached => PackageReferences(reached).Where(IsPackageRuntimePackage).Select(package => (reached.Name, Package: package)))
+            .Where(reference => !ReadabilityPackageRuntimeAbstractions.Contains(reference.Package, StringComparer.OrdinalIgnoreCase))
+            .Select(reference => $"{reference.Name} references {reference.Package}")
+            .Concat(LockedPackages(project)
+                .Where(package => IsPackageRuntimePackage(package) && !package.EndsWith(".Abstractions", StringComparison.OrdinalIgnoreCase))
+                .Select(package => $"{project.Name} resolves {package}"))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.True(violations.Length == 0,
+            $"{ReadabilitySource} may take only {string.Join(" and ", ReadabilityPackageRuntimeAbstractions)} of the package runtimes, never Nuplane, " +
+            "Nuplane.Loading or CShells themselves:" + Environment.NewLine + string.Join(Environment.NewLine, violations));
+    }
+
     [Theory]
     [InlineData("Microsoft.EntityFrameworkCore", true)]
     [InlineData("Pomelo.EntityFrameworkCore.MySql", true)]
@@ -158,6 +186,23 @@ public sealed partial class ArchitectureGuardTests
     private static bool IsMembershipProviderProject(string name, string relativePath) =>
         name.StartsWith("Elsa.Cluster.", StringComparison.Ordinal) && name is not ClusterMembershipContract and not InProcessClusterMembership ||
         PersistenceProviderNeutralityBoundary.IsConcreteProviderProject(name, relativePath);
+
+    /// <summary>The package runtimes' abstractions the readability source may reference, and nothing else of theirs.</summary>
+    private static readonly string[] ReadabilityPackageRuntimeAbstractions = ["CShells.Abstractions", "Nuplane.Loading.Abstractions"];
+
+    private static bool IsPackageRuntimePackage(string package) =>
+        package.StartsWith("CShells", StringComparison.OrdinalIgnoreCase) || package.StartsWith("Nuplane", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Every package <paramref name="project"/>'s committed lock file resolves, for any target framework.</summary>
+    private static IEnumerable<string> LockedPackages(ProjectInfo project)
+    {
+        using var lockFile = JsonDocument.Parse(File.ReadAllText(Path.Join(Path.GetDirectoryName(project.FullPath)!, "packages.lock.json")));
+        return lockFile.RootElement.GetProperty("dependencies").EnumerateObject()
+            .SelectMany(framework => framework.Value.EnumerateObject())
+            .Where(package => package.Value.GetProperty("type").GetString() != "Project")
+            .Select(package => package.Name)
+            .ToArray();
+    }
 
     private static bool IsMembershipProviderPackage(string package) =>
         PersistenceProviderNeutralityBoundary.IsConcreteProviderPackage(package) ||
