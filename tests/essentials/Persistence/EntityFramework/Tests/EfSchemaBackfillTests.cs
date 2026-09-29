@@ -771,6 +771,23 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// A scope runner that returns without running the backfill's work fails the round, rather than being read as "nothing
+    /// found", which a verification pass would record a completion on.
+    /// </summary>
+    [Fact]
+    public async Task A_scope_runner_that_skips_the_work_fails_the_round_and_records_nothing()
+    {
+        await SeedFamilyAsync();
+        var host = await HostAsync("host-a");
+        var before = await database.RecordAsync();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => host.Backfill.RunOnceAsync((_, _) => Task.CompletedTask));
+
+        Assert.Equal(before.Revision, (await database.RecordAsync()).Revision);
+        Assert.All(await database.SnapshotAsync(), row => Assert.Contains(" 1 ", row));
+    }
+
+    /// <summary>
     /// A host that has recorded the family complete at 2, then, for <paramref name="current"/> "3", a host that writes 3 in
     /// its place, whose first round's audit of 2 finds nothing.
     /// </summary>

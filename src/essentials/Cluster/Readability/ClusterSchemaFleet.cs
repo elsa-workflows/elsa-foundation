@@ -20,9 +20,19 @@ namespace Elsa.Cluster.Readability;
 /// </remarks>
 public sealed class ClusterSchemaFleet(IClusterMembership membership, IOptions<ClusterMembershipOptions>? options = null) : IEfSchemaFleet
 {
-    private readonly ClusterMembershipOptions _options = options?.Value ?? new ClusterMembershipOptions();
-
-    public TimeSpan SettleMargin => _options.ExpiryPeriod + _options.SkewAllowance;
+    /// <summary>
+    /// The membership expiry period plus the skew allowance (spec 186, FR-012; spec 183, FR-006), read when the backfill
+    /// asks rather than when the fleet is built: the finalization gate resolves the fleet at module activation, and reading
+    /// the membership settings there would run the provider's own validation of them a second time, ahead of the provider.
+    /// </summary>
+    public TimeSpan SettleMargin
+    {
+        get
+        {
+            var settings = options?.Value ?? new ClusterMembershipOptions();
+            return settings.ExpiryPeriod + settings.SkewAllowance;
+        }
+    }
 
     public EfSchemaFleetStanding GetLocalStanding()
     {
