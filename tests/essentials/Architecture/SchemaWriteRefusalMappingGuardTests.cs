@@ -277,7 +277,8 @@ public sealed class SchemaWriteRefusalMappingGuardTests
         }
 
         context.Response.Body.Position = 0;
-        return (context.Response.StatusCode, await new StreamReader(context.Response.Body).ReadToEndAsync());
+        using var reader = new StreamReader(context.Response.Body, leaveOpen: true);
+        return (context.Response.StatusCode, await reader.ReadToEndAsync());
     }
 
     /// <summary>A dormancy refusal as the shared dormancy check raises one (spec 182, FR-013).</summary>
