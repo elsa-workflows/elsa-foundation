@@ -69,6 +69,16 @@ public sealed class ToolingEntryPointTests
     }
 
     /// <summary>
+    /// The same probe for the skew allowance <c>status</c> judges members with: this build's contract carries it, so the
+    /// worker may send it, and a build that predates it is never sent a field its closed contract would refuse.
+    /// </summary>
+    [Fact]
+    public void A_persistence_build_carrying_the_skew_allowance_field_is_detected()
+    {
+        Assert.True(ToolingEntryPoint.Resolve(typeof(EfToolingHost).Assembly, "4.0.0-preview.1", "4.0.0-preview.1").SupportsSkewAllowance);
+    }
+
+    /// <summary>
     /// The version-skew probe (spec 172 FR-004). The tooling contract refuses an unmapped request property,
     /// so a build that predates the field must be found before the field is sent — and the refusal that
     /// follows names the key rather than reporting a malformed request.

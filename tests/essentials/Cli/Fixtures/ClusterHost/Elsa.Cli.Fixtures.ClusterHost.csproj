@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <Description>
+      A host that carries the EF cluster membership module beside one whose family has two versions (the feed-module
+      fixture, at 2 with an upcaster from 1) and the SQLite engine, which is what `persistence status` needs to name the
+      members that cannot read a pending version and to list the cluster's members through the host's own closure
+      (spec 181, FR-022) on a database that needs no container. Run with `seed-release-1` and a connection string it creates the
+      fixture module's finalization tables and the record a release at version 1 left, which its migrations do not.
+    </Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\..\src\essentials\Cluster\EntityFrameworkCore\Elsa.Cluster.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\..\..\..\tests\essentials\Cluster\Fixtures\FeedModule\Elsa.Cluster.Fixtures.FeedModule.csproj" />
+  </ItemGroup>
+
+</Project>

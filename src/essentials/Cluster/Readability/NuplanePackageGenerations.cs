@@ -219,7 +219,7 @@ public sealed class NuplanePackageGenerations : ISupersededAssemblySource, IShel
             if (shell is null)
                 return NotAShell.Instance;
         }
-        catch (Exception exception)
+        catch (Exception exception) when (!IsCritical(exception))
         {
             // IShell is registered, so this is a shell container; which one cannot be told, so it is tracked as one whose
             // features cannot be read either, until its container disposes it.
@@ -254,7 +254,7 @@ public sealed class NuplanePackageGenerations : ISupersededAssemblySource, IShel
                 "readability report until it is disposed.",
                 shell?.Descriptor);
         }
-        catch (Exception exception)
+        catch (Exception exception) when (!IsCritical(exception))
         {
             _logger.LogWarning(
                 exception,
@@ -365,7 +365,7 @@ public sealed class NuplanePackageGenerations : ISupersededAssemblySource, IShel
         {
             await drain.WaitAsync();
         }
-        catch (Exception exception)
+        catch (Exception exception) when (!IsCritical(exception))
         {
             // The drain completes only after the shell's DisposeAsync returns, and faults when it or the drain threw; which
             // one cannot be told. Its container disposes the tracking before everything it created earlier and after
@@ -452,12 +452,20 @@ public sealed class NuplanePackageGenerations : ISupersededAssemblySource, IShel
         {
             // The host is gone, and its report with it.
         }
-        catch (Exception exception)
+        catch (Exception exception) when (!IsCritical(exception))
         {
             // The next publish - an activation, a changed write version, a heartbeat - carries the same report.
             _logger.LogWarning(exception, "The readability report could not be published again after a superseded package generation retired.");
         }
     }
+
+    /// <summary>
+    /// Whether <paramref name="exception"/> leaves the process unfit to go on. Every other failure is caught where it happens
+    /// and settled conservatively: a release it concerns keeps counting, because a failure is never evidence that nothing can
+    /// run that release, and a report it could not publish goes out with the next publish.
+    /// </summary>
+    private static bool IsCritical(Exception exception) =>
+        exception is OutOfMemoryException or StackOverflowException or AccessViolationException or InvalidProgramException;
 
     private static AssemblyLoadContext ContextOf(Assembly assembly) => AssemblyLoadContext.GetLoadContext(assembly) ?? AssemblyLoadContext.Default;
 

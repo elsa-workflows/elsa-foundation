@@ -183,6 +183,13 @@ public sealed record WorkerRequest
     public WorkerFinalization? Finalization { get; init; }
 
     /// <summary>
+    /// The skew allowance <c>status</c> judges the cluster members' liveness with, as a <c>TimeSpan</c> in its invariant
+    /// <c>c</c> format: <c>--skew-allowance</c>, else the host's <c>Elsa:Cluster:Membership:SkewAllowance</c>, else absent
+    /// for the membership provider's own default. Never sent to a host whose tooling predates it, which judges nothing.
+    /// </summary>
+    public TimeSpan? SkewAllowance { get; init; }
+
+    /// <summary>
     /// The connection string itself, read by this front end from its own stdin when <c>--connection-stdin</c>
     /// was given (D7) — the one case where the value has nowhere to travel but this request. Never populated
     /// from <c>--connection-env</c>, and never logged, echoed, or included in a refusal.

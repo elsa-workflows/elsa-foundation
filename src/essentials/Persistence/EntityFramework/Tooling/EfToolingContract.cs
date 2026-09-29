@@ -9,6 +9,16 @@ namespace Elsa.Persistence.EntityFramework.Tooling;
 /// there. The schema is closed in both directions — an unknown command, an unknown request property, or an
 /// unknown enumerated value is a usage error, never a silent no-op.
 /// </summary>
+/// <remarks>
+/// <para>
+/// Frozen means closed, not unchanging: an additive optional field does not move <see cref="Version"/>. A request field is
+/// sent only to a host build that declares it, as the worker does for <see cref="EfToolingRequest.CapabilitySelection"/> and
+/// <see cref="EfToolingRequest.SkewAllowance"/>. The rule, and why it does not contradict "do not add optional fields to the
+/// closed version-1 DTOs", is the 2026-09-29 note in <c>specs/173-shared-persistence/contracts/tooling.md</c>. The 2026-09-29
+/// additions, all optional and all on <c>status</c>: the request's <c>skewAllowance</c>, the response's
+/// <c>finalization.cluster</c> (with its <c>availability</c> marker) and each pending version's <c>waitsFor</c>.
+/// </para>
+/// </remarks>
 public static class EfToolingContract
 {
     /// <summary>The only request/response envelope version this build speaks.</summary>
@@ -147,6 +157,14 @@ public sealed class EfToolingRequest
     /// <c>release</c>, optional for <c>status</c>, and refused by every other command.
     /// </summary>
     public EfToolingFinalizationRequest? Finalization { get; init; }
+
+    /// <summary>
+    /// The skew allowance <c>status</c> judges the cluster members' liveness with, as a <c>TimeSpan</c> in its invariant
+    /// <c>c</c> format (<c>00:00:02</c>). Optional and accepted by <c>status</c> only: absent means the membership provider's
+    /// own default. A host that runs its members with another allowance names it here, or the tool can list a member as
+    /// counted that the hosts already count expired, or the reverse.
+    /// </summary>
+    public string? SkewAllowance { get; init; }
 
     /// <summary>
     /// The connection string <c>apply</c>, <c>validate</c> and <c>post-migrate</c> run against. Required for
@@ -415,6 +433,13 @@ public sealed class EfToolingFinalizationPayload
     public string Provider { get; init; } = "";
     public string? Schema { get; init; }
     public IReadOnlyList<EfToolingFinalizationFamily> Families { get; init; } = [];
+
+    /// <summary>
+    /// The cluster's members as the membership table in this database holds them, present on <c>status</c> only. Always
+    /// present on a build that reports it, with <see cref="EfToolingCluster.Availability"/> saying whether it was read; a
+    /// payload with no <c>cluster</c> at all comes from a build that predates the property, and says nothing about the cluster.
+    /// </summary>
+    public EfToolingCluster? Cluster { get; init; }
 }
 
 public sealed class EfToolingFinalizationFamily
@@ -487,8 +512,110 @@ public sealed class EfToolingPendingVersion
     /// <summary><c>pending</c> or <c>readable-everywhere</c>.</summary>
     public string State { get; init; } = "";
 
-    /// <summary>The reasons of the holds that keep it. The counted members that cannot read it are known only to a running host.</summary>
+    /// <summary>The reasons of the holds that keep it.</summary>
     public IReadOnlyList<string> HeldBy { get; init; } = [];
+
+    /// <summary>
+    /// The counted members that cannot read it yet, each with the versions it reads (spec 181, FR-022): empty when none
+    /// blocks it, and null when the fleet was not read (a <c>status</c> run whose closure carries no membership provider,
+    /// a membership table not created in this database, and every <c>hold</c> and <c>release</c>).
+    /// </summary>
+    public IReadOnlyList<EfToolingWaitingOn>? WaitsFor { get; init; }
+}
+
+/// <summary>A counted member that cannot read a pending version, and the versions of the family it does read.</summary>
+public sealed class EfToolingWaitingOn
+{
+    public string HostId { get; init; } = "";
+    public string Incarnation { get; init; } = "";
+
+    /// <summary>False when the member's report is in a form this build cannot interpret, which counts as reading nothing.</summary>
+    public bool ReportReadable { get; init; } = true;
+
+    public IReadOnlyList<string> Reads { get; init; } = [];
+}
+
+/// <summary>How <c>status</c> came by the cluster: <see cref="EfToolingCluster.Availability"/>.</summary>
+public static class EfToolingClusterAvailability
+{
+    /// <summary>The membership table was read, and <see cref="EfToolingCluster.Members"/> lists what it holds.</summary>
+    public const string Read = "read";
+
+    /// <summary>The host's closure carries no cluster membership provider, so no cluster is known beyond this host.</summary>
+    public const string NoMembershipProvider = "no-membership-provider";
+
+    /// <summary>The closure carries a provider, but its module has no context for the requested provider engine, so its table could not be read.</summary>
+    public const string NoProviderContext = "no-provider-context";
+
+    /// <summary>The module has migrations not applied in this database, so its table does not exist here.</summary>
+    public const string NotMigrated = "not-migrated";
+
+    /// <summary>The table could not be read; <see cref="EfToolingCluster.Note"/> says why.</summary>
+    public const string Unreadable = "unreadable";
+}
+
+/// <summary>
+/// The membership table as one read of it shows it. <see cref="Availability"/> says whether it could be read, and
+/// <see cref="Note"/> why not: an empty <see cref="Members"/> is a cluster with nobody in it only when it was read.
+/// </summary>
+public sealed class EfToolingCluster
+{
+    /// <summary>One of <see cref="EfToolingClusterAvailability"/>.</summary>
+    public string Availability { get; init; } = EfToolingClusterAvailability.Read;
+
+    /// <summary>The module that holds the members; empty when the closure carries no provider for one.</summary>
+    public string Module { get; init; } = "";
+
+    /// <summary>The instant, on this tool's clock, that liveness was judged at; null when the table was not read.</summary>
+    public DateTimeOffset? JudgedAt { get; init; }
+
+    /// <summary>The skew allowance liveness was judged with: the request's, or the membership default when it named none; null when the table was not read.</summary>
+    public string? SkewAllowance { get; init; }
+
+    /// <summary>Why the table could not be read, or null when it was or when there is no provider to read it with.</summary>
+    public string? Note { get; init; }
+
+    public IReadOnlyList<EfToolingClusterMember> Members { get; init; } = [];
+}
+
+public sealed class EfToolingClusterMember
+{
+    /// <summary>The status of a member whose entry this build cannot interpret: the entry's own word is not one it reads.</summary>
+    public const string UnknownStatus = "unknown";
+
+    public string HostId { get; init; } = "";
+    public string Incarnation { get; init; } = "";
+
+    /// <summary>The member's status by name (joining, active, draining or left), or <see cref="UnknownStatus"/> when its entry cannot be interpreted.</summary>
+    public string Status { get; init; } = "";
+
+    /// <summary>
+    /// Whether the reader judges the member live: it has not left, and its heartbeat plus expiry and skew has not passed. A
+    /// live member is counted for each family it reports on, and for every family when its entry cannot be interpreted.
+    /// </summary>
+    public bool Live { get; init; }
+
+    /// <summary>Whether a later incarnation of the host id has joined.</summary>
+    public bool Displaced { get; init; }
+
+    public DateTimeOffset LastHeartbeatAt { get; init; }
+
+    /// <summary>False when the member's entry is in a form this build cannot interpret, which counts as reading nothing.</summary>
+    public bool ReportReadable { get; init; } = true;
+
+    /// <summary>
+    /// What the member reports it reads of each family <c>status</c> lists, for that family's database: one entry for each
+    /// family it reports on, and none for a family it reports nothing about.
+    /// </summary>
+    public IReadOnlyList<EfToolingClusterReads> Reads { get; init; } = [];
+}
+
+/// <summary>What one member reports it reads of one schema family, in the database that family is listed for.</summary>
+public sealed class EfToolingClusterReads
+{
+    public string Family { get; init; } = "";
+
+    public IReadOnlyList<string> Versions { get; init; } = [];
 }
 
 public sealed class EfToolingErrorPayload

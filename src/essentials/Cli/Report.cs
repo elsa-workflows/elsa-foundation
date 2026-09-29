@@ -10,6 +10,12 @@ namespace Elsa.Cli;
 /// </summary>
 internal static class Report
 {
+    private const string Unreadable = "reports what it reads in a form this tool cannot interpret; counts as reading nothing";
+
+    /// <summary>The <c>cluster.availability</c> markers this tool prints something of its own for; any other says why in its note. The names are the tooling contract's.</summary>
+    private const string ClusterRead = "read";
+    private const string ClusterNoMembershipProvider = "no-membership-provider";
+
     /// <summary>
     /// Discovery is a whole-closure operation: one unreadable <c>[EfModule]</c> declaration withholds every
     /// module, by design (a module silently dropped from a migration artifact is worse than a refusal). The
@@ -94,8 +100,10 @@ internal static class Report
     /// <summary>
     /// Each family's finalization status (spec 181, FR-022): the finalized version, each pending version and the holds
     /// that keep it, any intent in flight and every hold, and what the finish record holds: the completion version, a
-    /// claimed backfill run and a withdrawn completion (spec 186, FR-021). Which counted members cannot read a version, and
-    /// how far a backfill has got, is known only to a running host, whose membership and memory this tool does not read.
+    /// claimed backfill run and a withdrawn completion (spec 186, FR-021). Under each pending version it names the counted
+    /// members that cannot read it (FR-022), and after the families it lists the cluster's members, both read from the
+    /// membership table in the database. How far a backfill has got is known only to a running host, whose memory this tool
+    /// does not read.
     /// </summary>
     internal static void WriteFinalization(TextWriter output, string command, JsonElement finalization)
     {
@@ -111,8 +119,12 @@ internal static class Report
             foreach (var pending in family.GetProperty("pending").EnumerateArray())
             {
                 var heldBy = pending.GetProperty("heldBy").EnumerateArray().Select(reason => reason.GetString()).ToArray();
-                output.WriteLine($"  {Text(pending, "version")}: {Text(pending, "state")}" +
-                                 (heldBy.Length > 0 ? $", held: {string.Join("; ", heldBy)}" : ", held by nothing; waits for every counted member to read it"));
+                var waitsFor = pending.TryGetProperty("waitsFor", out var waiting) && waiting.ValueKind == JsonValueKind.Array
+                    ? waiting.EnumerateArray().ToArray()
+                    : null;
+                output.WriteLine($"  {Text(pending, "version")}: {Text(pending, "state")}{PendingSuffix(heldBy, waitsFor)}");
+                foreach (var member in waitsFor ?? [])
+                    output.WriteLine($"    waits for: {Text(member, "hostId")} ({(member.GetProperty("reportReadable").GetBoolean() ? $"reads {Versions(member.GetProperty("reads"))}" : Unreadable)})");
             }
 
             foreach (var hold in family.GetProperty("holds").EnumerateArray())
@@ -125,6 +137,15 @@ internal static class Report
                 output.WriteLine($"  completion at {Text(withdrawn, "version")} withdrawn by {Text(withdrawn, "withdrawnBy")} at {Text(withdrawn, "at")}: {Optional(withdrawn, "reason")}");
         }
 
+        if (finalization.TryGetProperty("cluster", out var cluster) && cluster.ValueKind == JsonValueKind.Object)
+            WriteCluster(output, cluster, families);
+        else if (command == WorkerCommands.Status)
+        {
+            // A tooling build that predates the property says nothing about the cluster, which is not the same as saying there is none.
+            output.WriteLine();
+            output.WriteLine("members: cluster membership not reported by this host's tooling.");
+        }
+
         output.WriteLine();
         output.WriteLine(command switch
         {
@@ -133,6 +154,70 @@ internal static class Report
             _ => $"{families.Length} family(ies)."
         });
     }
+
+    /// <summary>What follows a pending version: the holds that keep it, or what the members read says of the rest, and no more than that.</summary>
+    private static string PendingSuffix(string?[] heldBy, JsonElement[]? waitsFor)
+    {
+        if (heldBy.Length > 0)
+            return $", held: {string.Join("; ", heldBy)}";
+
+        return waitsFor is { Length: 0 }
+            ? ", held by nothing; no member counted here blocks it"
+            : ", held by nothing; waits for every counted member to read it";
+    }
+
+    /// <summary>
+    /// The membership table's members, judged on this tool's clock: host id, status, whether it is live, its last heartbeat
+    /// and, for each family listed above, the versions it reads, all as the host's tooling computed them. A live member that
+    /// reports nothing about a family is said not to be counted for it.
+    /// </summary>
+    private static void WriteCluster(TextWriter output, JsonElement cluster, JsonElement[] families)
+    {
+        output.WriteLine();
+        switch (Optional(cluster, "availability"))
+        {
+            case ClusterNoMembershipProvider:
+                output.WriteLine("members: this host only (this host's closure carries no cluster membership provider).");
+                return;
+            case not null and not ClusterRead:
+                output.WriteLine($"members: {Optional(cluster, "note") ?? "not read here."}");
+                return;
+        }
+
+        var members = cluster.GetProperty("members").EnumerateArray().ToArray();
+        output.WriteLine($"members: {members.Length} in {Text(cluster, "module")}, judged at {Moment(cluster, "judgedAt")} with a skew allowance of {Text(cluster, "skewAllowance")}");
+        foreach (var member in members)
+        {
+            var live = member.GetProperty("live").GetBoolean();
+            var state = live
+                ? member.GetProperty("displaced").GetBoolean() ? "live, displaced by a later incarnation" : "live"
+                : Text(member, "status") == "Left" ? "left" : "expired";
+            output.WriteLine($"  {Text(member, "hostId")}: {Text(member, "status")}, {state}, last heartbeat {Moment(member, "lastHeartbeatAt")}");
+            if (!member.GetProperty("reportReadable").GetBoolean())
+            {
+                output.WriteLine($"    {Unreadable}");
+                continue;
+            }
+
+            var reads = member.GetProperty("reads").EnumerateArray().ToDictionary(entry => Text(entry, "family"), entry => entry.GetProperty("versions"), StringComparer.Ordinal);
+            foreach (var name in families.Select(family => Text(family, "family")))
+            {
+                if (reads.TryGetValue(name, out var versions))
+                    output.WriteLine($"    {name}: reads {Versions(versions)}");
+                else if (live)
+                    output.WriteLine($"    {name}: reports nothing, so it is not counted for it");
+            }
+        }
+    }
+
+    /// <summary>An instant to the second, in UTC: what a presenter reads off a heartbeat, without the fraction of a tick the table keeps.</summary>
+    private static string Moment(JsonElement element, string name) =>
+        DateTimeOffset.TryParse(Text(element, name), System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var instant)
+            ? instant.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", System.Globalization.CultureInfo.InvariantCulture)
+            : Text(element, name);
+
+    private static string Versions(JsonElement versions) =>
+        versions.GetArrayLength() == 0 ? "nothing" : string.Join(", ", versions.EnumerateArray().Select(version => version.GetString()));
 
     private static string? Optional(JsonElement element, string name) =>
         element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
