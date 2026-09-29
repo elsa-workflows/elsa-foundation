@@ -9,12 +9,21 @@ dotnet elsa composition init --profile embedded-runtime@1 --output embedded-comp
 dotnet elsa composition plan --composition embedded-composition.json --format json
 ```
 
-The plan shows profile provenance, reviewed dependency edges and any supplied host inventory or persistence evidence. Without that evidence, package, provider, schema and migration readiness remain **unverified**. An explicit removal wins over profile membership. If it removes a known required member, generation refuses; CShells may otherwise auto-add that dependency during activation. After editing selection intent, review and update the accepted exact expansion before generating a candidate. A [reviewed diagnostics group](diagnostics-ef-group.md) can be added with `--group diagnostics-ef@1` when creating a new composition.
+The plan shows profile provenance, reviewed dependency edges and any supplied host inventory or persistence evidence. Without that evidence, package, provider, schema and migration readiness remain **unverified**. An explicit removal wins over profile membership. If it removes a known required member, generation refuses; CShells may otherwise auto-add that dependency during activation. A [reviewed diagnostics group](diagnostics-ef-group.md) can be added with `--group diagnostics-ef@1` when creating a new composition.
+
+After editing the profile/group selection or individual additions/removals, inspect the plan and accept its exact expansion to a fresh file:
+
+```bash
+dotnet elsa composition plan --composition embedded-composition.json --format json
+dotnet elsa composition accept --composition embedded-composition.json --output accepted-composition.json
+```
+
+Acceptance displays the exact added/removed IDs and retained/dropped lock IDs, then requires typing `accept`. It preserves authored settings, resources and pins, retaining historical locks only for features still selected. It rechecks every supplied input before writing and never overwrites an existing file. Missing host and persistence evidence stays unverified. Use the resulting `accepted-composition.json` with generation. Custom workspace profiles can be supplied to plan/accept with repeated `--workspace-profile`; [workspace-profile generation](https://github.com/elsa-workflows/elsa-foundation/issues/2166) remains a separate follow-on.
 
 To prepare host files for one selected shell and environment:
 
 ```bash
-dotnet elsa composition generate --host-dir ./host --shell default --environment Production --composition embedded-composition.json --output-dir ./candidate
+dotnet elsa composition generate --host-dir ./host --shell default --environment Production --composition accepted-composition.json --output-dir ./candidate
 ```
 
 The command displays a redacted diff and requires typing `generate` before writing a fresh candidate directory. It supports selected-environment object-map activation changes whose merge behavior is proven. It preserves base settings and other environments, then reads the candidate back to confirm that its enabled IDs exactly match the accepted plan. Array-shaped activation edits, base-disabled enablement and edits that would discard selected-overlay settings refuse. You can pass `--catalog` to plan/generate for an explicitly pinned catalog file; omitting it selects the bundled Foundation snapshot matching the composition's catalog pin.

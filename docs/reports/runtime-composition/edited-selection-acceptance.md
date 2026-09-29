@@ -1,6 +1,6 @@
 # Accepting edited composition intent
 
-Contract for [#2165](https://github.com/elsa-workflows/elsa-foundation/issues/2165), under developer epic [#1962](https://github.com/elsa-workflows/elsa-foundation/issues/1962) and program [#1959](https://github.com/elsa-workflows/elsa-foundation/issues/1959). Implementation and verification are pending.
+Contract implemented by [composition accept](../../../src/essentials/Cli/CompositionAcceptCommand.cs) for [#2165](https://github.com/elsa-workflows/elsa-foundation/issues/2165), under developer epic [#1962](https://github.com/elsa-workflows/elsa-foundation/issues/1962) and program [#1959](https://github.com/elsa-workflows/elsa-foundation/issues/1959). The issue records review, CI and post-merge delivery gates.
 
 ## Problem and decision
 
