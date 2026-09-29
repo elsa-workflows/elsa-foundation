@@ -178,7 +178,7 @@ public sealed class EfContractingMigrationRefusalTests : IAsyncLifetime
     {
         IReadOnlyDictionary<string, SchemaFinalizationRecord>? atFirstContraction = null;
         ContractingProbe.WhenApplying<PairContractFirstMigration>(
-            () => atFirstContraction = Task.Run(() => ContractingPairModule.RecordsAsync(Connection)).GetAwaiter().GetResult());
+            () => atFirstContraction = Wait(() => ContractingPairModule.RecordsAsync(Connection)));
         var created = new RecordsCreated();
 
         await using (var context = ContractingPairModule.Create(Connection, created))

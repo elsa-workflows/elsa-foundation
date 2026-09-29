@@ -153,7 +153,7 @@ internal static class ContractingSeedScenarios
     }
 
     /// <summary>Runs <paramref name="read"/> to completion from EF's synchronous logging callback, off any synchronization context.</summary>
-    private static T Wait<T>(Func<Task<T>> read) => Task.Run(read).GetAwaiter().GetResult();
+    public static T Wait<T>(Func<Task<T>> read) => Task.Run(read).GetAwaiter().GetResult();
 
     /// <summary>Runs an action once, before the first save of the context it is added to.</summary>
     internal sealed class BeforeFirstSave(Func<Task> action) : SaveChangesInterceptor
