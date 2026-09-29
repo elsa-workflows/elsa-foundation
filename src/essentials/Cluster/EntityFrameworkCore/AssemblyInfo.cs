@@ -1,4 +1,5 @@
 using Elsa.Cluster.EntityFrameworkCore;
+using Elsa.Cluster.EntityFrameworkCore.Entities;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
 
@@ -23,3 +24,7 @@ using Elsa.Specifications.PackageManifest.Generator.Hints;
 // readability report is derived from it alone (spec 183, FR-020); EfSchemaFamilyDeclarationGuardTests fails the build
 // when a SchemaFamily constant is not declared here, or is declared at another version.
 [assembly: EfSchemaFamily(ClusterMembershipEfModule.SchemaFamily, ClusterMembershipEfModule.Name, ClusterMembershipEfModule.SchemaVersion)]
+
+// Content and integrity columns: see src/essentials/Persistence/EntityFramework/EXTENSION_POINTS.md, "Content and integrity columns" (spec 180, FR-008, FR-009
+// and FR-014).
+[assembly: EfSchemaContent(ClusterMembershipEfModule.SchemaFamily, typeof(ClusterMemberEntity), nameof(ClusterMemberEntity.ReportJson))]

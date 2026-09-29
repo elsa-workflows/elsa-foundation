@@ -148,8 +148,56 @@ public sealed class EfSchemaFamilyCatalogTests : IDisposable
         Assert.Contains("'Sales'", refusal.Message, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// Spec 180, FR-009 and FR-008: a family's content and integrity columns are declared beside it and read, from metadata
+    /// alone, onto its descriptor, which is what the guards and the model test hold every read and write to.
+    /// </summary>
+    [Fact]
+    public void Content_and_integrity_columns_are_read_onto_their_family_from_metadata_alone()
+    {
+        var sales = Declare("Sales", ["Sales"],
+            [
+                new SyntheticColumn("Orders", "Sales.OrderRow", "ContentJson"),
+                new SyntheticColumn("Orders", "Sales.OrderRow", "DigestJson", "Compared as stored bytes."),
+                new SyntheticColumn("Invoices", "Sales.InvoiceRow", "PayloadJson")
+            ],
+            new SyntheticFamily("Orders", "Sales", "1"), new SyntheticFamily("Invoices", "Sales", "1"), new SyntheticFamily("Ledger", "Sales", "1"));
+
+        var families = EfSchemaFamilyCatalog.Discover([sales]).ToDictionary(family => family.Name);
+
+        Assert.Equal([("OrderRow", "ContentJson")], families["Orders"].ContentColumns.Select(column => (column.Entity.Name, column.Name)));
+        Assert.Equal([("OrderRow", "DigestJson", "Compared as stored bytes.")], families["Orders"].IntegrityColumns.Select(column => (column.Entity.Name, column.Name, column.Reason)));
+        Assert.Equal([("InvoiceRow", "PayloadJson")], families["Invoices"].ContentColumns.Select(column => (column.Entity.Name, column.Name)));
+        Assert.Empty(families["Ledger"].ContentColumns);
+        Assert.Empty(families["Ledger"].IntegrityColumns);
+    }
+
+    [Theory]
+    [InlineData("a column of a family the assembly does not declare", "which that assembly does not declare")]
+    [InlineData("a column declared twice", "2 times")]
+    [InlineData("an integrity column with no reason", "with no reason")]
+    [InlineData("a content declaration with a blank column", "no type or no column name")]
+    public void A_column_declaration_the_catalog_cannot_hold_a_family_to_is_refused(string name, string expected)
+    {
+        var refusal = Assert.Throws<InvalidOperationException>(() =>
+            EfSchemaFamilyCatalog.Discover([Declare("Sales", ["Sales"], RefusedColumns[name], new SyntheticFamily("Orders", "Sales", "1"))]));
+
+        Assert.True(refusal.Message.Contains(expected, StringComparison.Ordinal), $"'{name}' was refused for another reason: {refusal.Message}");
+    }
+
+    private static readonly Dictionary<string, SyntheticColumn[]> RefusedColumns = new(StringComparer.Ordinal)
+    {
+        ["a column of a family the assembly does not declare"] = [new SyntheticColumn("Invoices", "Sales.Row", "ContentJson")],
+        ["a column declared twice"] = [new SyntheticColumn("Orders", "Sales.Row", "ContentJson"), new SyntheticColumn("Orders", "Sales.Row", "ContentJson", "Stored bytes.")],
+        ["an integrity column with no reason"] = [new SyntheticColumn("Orders", "Sales.Row", "DigestJson", " ")],
+        ["a content declaration with a blank column"] = [new SyntheticColumn("Orders", "Sales.Row", " ")]
+    };
+
     public void Dispose() => _metadata.Dispose();
 
     private Assembly Declare(string assemblyName, string[] modules, params SyntheticFamily[] families) =>
         _metadata.Load(SyntheticSchemaFamilies.Image(assemblyName, modules, families));
+
+    private Assembly Declare(string assemblyName, string[] modules, SyntheticColumn[] columns, params SyntheticFamily[] families) =>
+        _metadata.Load(SyntheticSchemaFamilies.Image(assemblyName, modules, columns, families));
 }

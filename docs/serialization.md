@@ -89,6 +89,15 @@ bindings) must be able to evolve without silently breaking already-suspended wor
   branch or a cycle, or one that does not end at the current version, fails the build
   (`EfSchemaFamilyDeclarationGuardTests`) and the module's registration at startup. The two design contexts whose
   content EF deserializes in value converters read their current version alone and declare no chain.
+- **A family declares which of its columns are content.** Beside `[EfSchemaFamily]`, `[EfSchemaContent(family,
+  typeof(Entity), columns...)]` names the columns a read upcasts before it deserializes them and a write that changes
+  them restamps; `[EfSchemaIntegrity(family, typeof(Entity), column, reason)]` names a document column compared as the
+  bytes it was stored with, never upcast, and records why. Every document column of a stamped table is one or the other
+  (`EfSchemaContentDeclarationTests`, against every module's model on every provider), and the guards read the
+  declaration: every read of a content column goes through the chain or deserializes nothing, and every write that
+  changes one, bulk updates included, restamps the row (`EfSchemaFamilyDeclarationGuardTests`). A column that restates
+  part of a row's content and is compared with it, such as a bookmark's payload or a checkpoint marker's id sets, is
+  content, so both sides of the comparison are in one format.
 - **A golden-fixture gate freezes the wire format for the Distributed leaf only.** The
   `Elsa.Workflows.Runtime.Distributed.Tests` suite re-serializes a canonical instance of the placement and
   transport payloads and compares each semantically against a committed `Fixtures/v1/*.json` expectation,
@@ -111,7 +120,8 @@ From 4.0 on, a change to what a family stores is a new version of that family ([
 
 1. Bump the family's `SchemaVersion` constant, and add one upcaster from the previous version to the end of its
    declared chain, beside the family's store code. It is a pure function of its input (FR-019) and preserves every
-   identity the row carries (FR-020).
+   identity the row carries (FR-020), and it transforms every column the family declares content, since each is read
+   through it. A new document column is declared with `[EfSchemaContent]`, or `[EfSchemaIntegrity]` with its reason.
 2. Keep the change expand-only, for content as for migrations: a renamed, retyped or restructured member is split
    across two versions (FR-027), and an executable's identity-hashed format never changes in place (FR-028).
 3. Gate every integrity clause for a projection the version introduces on the row's stamp

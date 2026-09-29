@@ -175,7 +175,11 @@ internal sealed class EfClusterMembershipStore(IServiceScopeFactory scopes)
 
     private static void Republish(ClusterMemberEntity row, string reportJson)
     {
-        if (string.Equals(row.ReportJson, reportJson, StringComparison.Ordinal))
+        // Only a report stored at the current version is compared, as the bytes the chain would return unchanged (spec 180,
+        // FR-021); one stored at an older version is rewritten whatever it says, so the row moves to the current version
+        // with it (FR-014) rather than keeping an older stamp over bytes compared with the current format (#2140).
+        if (StringComparer.Ordinal.Equals(row.SchemaVersion, ClusterMembershipEfModule.Chain.CurrentVersion) &&
+            string.Equals(row.ReportJson, reportJson, StringComparison.Ordinal))
             return;
 
         // The report is the row's one content column and is written whole in the current format, so the row is stamped

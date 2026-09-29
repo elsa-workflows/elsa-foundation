@@ -285,11 +285,25 @@ public sealed class EfStructuredLogStore : IStructuredLogStore, IDiagnosticsPers
                 ValidateBinding(existingOperation.TenantId, existingOperation.ScopeId, existingOperation.StreamId);
                 if (existingOperation.IssuedAtTicks != batch.Id.IssuedAt.UtcTicks)
                     throw new StructuredLogsException("The structured log append operation identity was reused with a different issue time.");
-                if (!StringComparer.Ordinal.Equals(existingOperation.Fingerprint, fingerprint))
-                    throw new StructuredLogsException("The structured log append operation was reused with a different payload.");
 
                 var replayed = DeserializeOutcome(StructuredLogsEfModule.Chain.Upcast(
                     existingOperation.SchemaVersion, StructuredLogsEfModule.AppendOperationsTableName, nameof(existingOperation.OutcomeJson), existingOperation.OutcomeJson));
+
+                // The stored fingerprint was computed over this attempt's payload serialization at the version that
+                // wrote it - existingOperation.SchemaVersion, stamped alongside it, so no separate column is needed
+                // to know which version that was. A retry submitted after a version bump serializes its payload in
+                // the current format (fingerprint, above), so comparing that against the stored string across a
+                // version boundary would reject a legitimate replay. Once the row is at the current version the raw
+                // comparison is exact and cheapest; otherwise recompute the stored side's fingerprint over the
+                // payloads the chain already upcast into the current format (FR-009: content is compared only after
+                // it is brought to one common format, never mixed across versions the way FR-008's stored-bytes
+                // checks compare within one).
+                var storedFingerprint = string.Equals(existingOperation.SchemaVersion, StructuredLogsEfModule.Chain.CurrentVersion, StringComparison.Ordinal)
+                    ? existingOperation.Fingerprint
+                    : StructuredLogAppendFingerprint.Compute(binding, replayed.Select(outcome => new EfPendingAppend(outcome.RecordToken, outcome.PayloadJson)).ToArray());
+                if (!StringComparer.Ordinal.Equals(storedFingerprint, fingerprint))
+                    throw new StructuredLogsException("The structured log append operation was reused with a different payload.");
+
                 await db.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
                 return new DiagnosticsDrainCommit<StructuredLogEntry>(
