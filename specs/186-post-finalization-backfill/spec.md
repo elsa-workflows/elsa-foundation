@@ -364,10 +364,15 @@ after one run with no membership table.
 **Afterwards**
 
 - **FR-018**: While a finish record names a completion version, the backfill MUST keep auditing the family on a
-  configurable interval, defaulting to one hour, for rewritable rows below it. A straggler it finds is rewritten,
-  reported as critical through Attention with the family, the table and the count, and the finish record's completion
-  is withdrawn by compare-and-set, with a history entry, until a new verification pass (FR-012 to FR-014) succeeds.
-  Features that need completeness are dormant meanwhile (spec 182, FR-005).
+  configurable interval, defaulting to one hour, across every table of the family, for rows below it and rows whose
+  stamp is missing or outside the host's readable set. Any such row withdraws the completion, the one recorded when the
+  finalization record was created (FR-016) included: a rewritable row below it, a row below it in a table whose family
+  names no rewriter or in a content-addressed table, and a row with an unreadable stamp alike. The completion is
+  withdrawn by compare-and-set, with a history entry, before any row is rewritten, and the withdrawal is reported as
+  critical through Attention with the family, the tables and the counts. The rewritable stragglers are then rewritten;
+  the others stay, and block completion as FR-004, FR-006 and FR-011a say. The completion stays withdrawn until a new
+  verification pass (FR-012 to FR-014) succeeds. Features that need completeness are dormant meanwhile (spec 182,
+  FR-005).
 - **FR-019**: Withdrawing completion MUST NOT move the finalized version. Finalization stays monotonic (spec 181,
   FR-003); completion is a proof about the rows present, and can stop holding.
 
@@ -543,7 +548,11 @@ is the owner's approval of what follows, found while building.
   no earlier than when the last of them began to; a worker that restarts waits it again. A counted member whose entry
   names no observed version - one that loads the family's declaration without activating its module, or serves the
   family in two databases whose records disagree - holds the condition back, as FR-012 reads. Both only delay.
-  A withdrawal starts the margin again, so the verification after one waits a full margin.
+  A withdrawal starts the margin again on every worker, not only the one that made it, so the verification after one
+  waits a full margin: a worker notes how many entries the finish history held when its margin began, and a withdrawal
+  entry past that position, whoever appended it, restarts the margin and keeps a verification pass that followed it
+  from recording a completion. The check is by position, not by time, since two hosts' clocks cannot order a withdrawal
+  against a margin.
   MR-001 was already met by B3; B9 adds the counting requirement `ObservesFinalizedSchemaVersion` to the membership
   contract, and `IEfSchemaFleet.SettleMargin` gives the default margin from the membership settings. A host that composes
   no fleet, `Elsa.Foundation.Host` among them today (spec 182, 2026-09-29 note), upgrades rows but never records
@@ -551,13 +560,23 @@ is the owner's approval of what follows, found while building.
 - **Any pass withdraws, before it rewrites (FR-018).** A row found below the standing completion by any pass, not only
   the hourly audit, withdraws it: a run towards a newer finalized version can meet one below the old completion. The
   audit, the upgrade pass and the verification pass each withdraw before they rewrite the first such row, so a host
-  that dies midway leaves the straggler reported rather than under a completion that still stands. A withdrawal is a
-  compare-and-set against evidence read after the record it withdraws: a completion another worker recorded again in
-  the meantime is withdrawn only if rows below it still remain. A standing completion is audited whatever this host's
+  that dies midway leaves the straggler reported rather than under a completion that still stands. A pass reads what
+  stands afresh before each row, and so whenever a batch starts, unless it already knows of a completion at or after
+  its target: a completion another worker records while the run goes on covers the rows the run meets next, and a row
+  rewritten under it without a withdrawal would hide a straggler. That costs a run one read of the finalization record
+  per row it rewrites, beside FR-023's read and write of the row. A withdrawal is a compare-and-set against evidence
+  read after the record it withdraws: a completion another worker recorded again in the meantime is withdrawn only if
+  rows below it still remain. A withdrawal that loses its compare-and-set three times stops the round rather than
+  rewrite the row under a completion that still stands; the next round finds the row again. The audit selects every
+  table of the family, as FR-018 now reads: rows below the completion in rewritable tables, in tables whose family
+  names no rewriter and in content-addressed tables, and rows with a missing or unreadable stamp, each withdraw it,
+  and the completion recorded at the first version when the record was created (FR-016) is no exception, since
+  nothing shows a row with an unreadable stamp is not below it. A standing completion is audited whatever this host's
   target, so a family whose run towards a newer version is blocked or claimed elsewhere is still audited. The audit
   runs first one check interval after a host starts, then hourly, so hosts that restart more often than hourly still
-  audit. A withdrawal while a verification pass runs is detected by its position in the finish history, not by time,
-  since two hosts' clocks cannot order it. The withdrawal reaches Attention from the finish record's history on every host, as a
+  audit. A withdrawal after the settle margin a verification pass followed began, before the pass or during it, keeps
+  the pass from recording, told by its position in the finish history, not by time, since two hosts' clocks cannot
+  order it. The withdrawal reaches Attention from the finish record's history on every host, as a
   critical item naming the tables and counts, until a new verification pass records the completion again.
 - **Status (FR-021, FR-022).** The gate's status carries the backfill's state, target, rows rewritten, the members the
   settle condition waits for and what blocks completion. The persistence tool's `status` prints what the record holds:
@@ -574,10 +593,13 @@ is the owner's approval of what follows, found while building.
   named by its family, or named but not marked, and pins the three tables above by name, failing when one stops being a
   stamped table. It infers nothing from a table's name. The backfill never rewrites a marked row even where its family
   forgot to name it.
-- **A blocked family (FR-023).** A family blocked at its target by skew, corruption, content-addressed rows, a missing
-  rewriter or a missing fleet is surveyed again at the audit interval, not every check interval, unless its target
-  moves: a blocker persists until someone resolves it, and surveying every round would select every table by stamp
-  every fifteen seconds.
+- **A blocked family (FR-023).** A family blocked at its target is surveyed again after an interval, not every check
+  interval, unless its target moves: a blocker persists until someone resolves it, and surveying every round would
+  select every table by stamp every fifteen seconds. A family blocked by content-addressed rows, a missing rewriter or
+  a missing fleet waits the audit interval, since only deleting those rows, a new build or a new composition resolves
+  it. One blocked by skew or corruption, rows an operator repairs in place, waits the shorter
+  `RepairableBlockerInterval`, five minutes by default, so a repair is seen soon; a family blocked by both waits the
+  shorter one.
 - **Rewriters (FR-004).** A family names its rewriter with `[EfSchemaFamily(..., Rewriter = typeof(...))]`, and the build
   fails for a family with upcasters and none. Every first-party family still has one version, so none exists yet;
   each family writes its own before its first version bump.

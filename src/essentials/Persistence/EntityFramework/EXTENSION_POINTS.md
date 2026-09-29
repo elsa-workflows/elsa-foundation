@@ -223,7 +223,18 @@ proves in a verification pass that no row below it remains, and records the fami
 a completion stands it audits the family on its interval, and withdraws the completion, before rewriting it, when a row
 below it turns up ([spec 186](../../../../specs/186-post-finalization-backfill/spec.md)). It is not an
 `IEfPostMigrationAction`, whose audit at Prepare would refuse the module finalization needs active. The gate's status
-carries the backfill's through an internal seam; neither exposes the other. What a module declares:
+carries the backfill's through an internal seam; neither exposes the other.
+
+`EfSchemaBackfill`, `EfSchemaBackfillScope` and the `EfSchemaBackfillScopeRunner` delegate a round takes are public, but
+they are not an extension point either: only `EfModuleMigrator<TContext>` builds a backfill and gives it a scope runner.
+They are public because two test suites this assembly grants no internals drive rounds directly, with scopes of their
+own contexts: the dormancy scenario in `Elsa.Cluster.EntityFrameworkCore.Tests` and the synthetic family's run on the
+three server engines in `Elsa.Persistence.EntityFrameworkCore.Migrations.ProviderTests`. Making them internal would need
+an `InternalsVisibleTo` for each. A runner must run the action it is given once, in a fresh service scope of the shell
+with a fresh context of the module, and throw when it cannot; the backfill fails a round whose runner returned without
+running its work, since a count it never read would otherwise read as "nothing found".
+
+What a module declares:
 
 - **A rewriter** (FR-004): `[EfSchemaFamily(..., Rewriter = typeof(...))]` names a class of the module's own assembly,
   beside its store code, implementing `IEfSchemaRowRewriter`. The backfill constructs it for every row in a fresh
@@ -248,8 +259,11 @@ What a host decides:
   it observed (spec 186, MR-001), and its margin is the membership expiry period plus the skew allowance. A host with no
   fleet never records completion.
 - **Settings** come from `Elsa:Persistence:EntityFramework:Backfill` (`BatchSize`, default 500; `BatchPause`,
-  100 ms; `CheckInterval`, 15 seconds; `AuditInterval`, one hour, which is also how often a blocked family is surveyed
-  again; `SettleMargin`, the fleet's by default; `ClaimDuration`, 2 minutes, zero for none; `VerificationPasses`, 3).
+  100 ms; `CheckInterval`, 15 seconds; `AuditInterval`, one hour, which is also how often a family blocked by
+  content-addressed rows, a missing rewriter or no fleet is surveyed again; `RepairableBlockerInterval`, 5 minutes, how
+  often a family blocked by rows an operator repairs in place, with an unreadable stamp or that fail to upcast, is
+  surveyed again, so a repair is seen well before the next audit; `SettleMargin`, the fleet's by default;
+  `ClaimDuration`, 2 minutes, zero for none; `VerificationPasses`, 3).
 
 **Breaking change for custom fleets.** `IEfSchemaFleet` gained `CountObservingAsync` and `SettleMargin` with spec 186.
 An implementation outside this repository no longer compiles against this version until it adds both: answer the
