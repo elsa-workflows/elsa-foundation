@@ -208,11 +208,12 @@ internal sealed class FeedLoadedModuleHost : IAsyncDisposable
 /// the host finds the module's migrations assembly. Anything else, the framework and CShells, is the test process's.
 /// </summary>
 /// <remarks>
-/// A share is matched by name. Nuplane's matcher also compares the major version an entry names, and every Elsa entry in
-/// both hosts' configuration names 0 while Elsa assemblies are versioned 1.0.0.0 from source and 4.x from a computed
-/// build; a computed image is still consistent because it declares every share host-provided, so Nuplane never acquires
-/// one into a package graph and the package falls back to the host's copy. This harness asserts the intent both lists
-/// state: a shared assembly is the host's copy.
+/// A share is matched by name. Nuplane's matcher also compares the entry's major version, which each host now declares as
+/// its Elsa assemblies' AssemblyVersion major (#2150), and its public key token, which this harness does not model: a host
+/// entry's <c>"PublicKeyToken": null</c> does not bind to Nuplane's options at all today (#2150). A computed image is
+/// still consistent because it declares every share host-provided, so Nuplane never acquires one into a package graph and
+/// the package falls back to the host's copy. This harness asserts the intent both lists state: a shared assembly is the
+/// host's copy.
 /// </remarks>
 internal sealed class PackageLoadContext : AssemblyLoadContext, IDisposable
 {
