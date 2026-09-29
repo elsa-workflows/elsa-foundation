@@ -145,6 +145,7 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
         "src/essentials/Persistence/EntityFramework/Tooling/EfToolingContextOperation.cs",
         "src/essentials/Persistence/EntityFramework/Tooling/EfToolingContract.cs",
         "src/essentials/Persistence/EntityFramework/Tooling/EfToolingExitCode.cs",
+        "src/essentials/Persistence/EntityFramework/Tooling/EfToolingFleet.cs",
         "src/essentials/Persistence/EntityFramework/Tooling/EfToolingHost.cs",
         "src/essentials/Persistence/EntityFramework/Tooling/EfToolingShellDefaultsAttribute.cs",
         "src/essentials/Persistence/EntityFramework/Tooling/EfToolingShellDefaultsDeclaration.cs",
