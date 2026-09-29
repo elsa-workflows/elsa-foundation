@@ -252,16 +252,6 @@ internal static class ExpandOnlyMigrationScanner
     }
 
     /// <summary>
-    /// FR-020b's independent source for a provider context's migration count: every type in
-    /// <paramref name="contextType"/>'s own migrations assembly carrying both a <see cref="MigrationAttribute"/>
-    /// and a <see cref="DbContextAttribute"/> naming <paramref name="contextType"/>, read directly off those
-    /// attributes rather than through <see cref="IMigrationsAssembly.Migrations"/>. EF puts both attributes on
-    /// the type's designer partial (never on the hand-edited half), and <see cref="ModuleContextCatalog.Create"/>
-    /// binds every module's migrations assembly to the context's own declaring assembly (no module overrides
-    /// it), so <c>contextType.Assembly</c> is where <see cref="Scan"/> already loads that context's migrations
-    /// from.
-    /// </summary>
-    /// <summary>
     /// The provider context bound as its own <c>[EfModule]</c> declares it, to a connection that is never opened (FR-004),
     /// so the scan reads any module the catalog discovers, first-party or synthetic, and not only the ones
     /// <see cref="ModuleContextCatalog"/> names by convention.
@@ -275,6 +265,16 @@ internal static class ExpandOnlyMigrationScanner
         return (DbContext)Activator.CreateInstance(contextType, builder.Options)!;
     }
 
+    /// <summary>
+    /// FR-020b's independent source for a provider context's migration count: every type in
+    /// <paramref name="contextType"/>'s own migrations assembly carrying both a <see cref="MigrationAttribute"/>
+    /// and a <see cref="DbContextAttribute"/> naming <paramref name="contextType"/>, read directly off those
+    /// attributes rather than through <see cref="IMigrationsAssembly.Migrations"/>. EF puts both attributes on
+    /// the type's designer partial (never on the hand-edited half), and <see cref="ModuleContextCatalog.Create"/>
+    /// binds every module's migrations assembly to the context's own declaring assembly (no module overrides
+    /// it), so <c>contextType.Assembly</c> is where <see cref="Scan"/> already loads that context's migrations
+    /// from.
+    /// </summary>
     internal static int MigrationTypesDeclaredFor(Type contextType) =>
         contextType.Assembly.GetTypes().Count(type =>
             type.GetCustomAttribute<MigrationAttribute>() is not null &&
