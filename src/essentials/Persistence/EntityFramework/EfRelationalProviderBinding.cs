@@ -90,11 +90,12 @@ public static class EfRelationalProviderBinding
     /// </summary>
     /// <remarks>
     /// EF Core resolves a migrations assembly given by name with <see cref="Assembly.Load(AssemblyName)"/> from its own load
-    /// context. Where two generations of a module are loaded - a package upgraded in place, whose new release Nuplane loads
-    /// into a load context of its own that binds EF Core from the previous release's - that name reaches the previous
-    /// release, whose migrations are keyed to the previous release's context type: the new context would see none, so
-    /// <c>Validate</c> would pass over every migration it has pending and <c>AutoMigrate</c> would apply nothing (spec
-    /// 183, FR-021, amended 2026-09-29). Given the assembly, EF Core reads exactly the generation the module was bound with.
+    /// context, so which generation of a module a name reaches depends on where EF Core was loaded. Where two generations
+    /// are loaded - a package upgraded in place - and EF Core is bound from the previous release's load context, as it was
+    /// while each EF module package carried EF Core in its own graph, the name reaches the previous release, whose
+    /// migrations are keyed to the previous release's context type: the new context would see none, so <c>Validate</c>
+    /// would pass over every migration it has pending and <c>AutoMigrate</c> would apply nothing (spec 183, FR-021, amended
+    /// 2026-09-29). Given the assembly, EF Core reads exactly the generation the module was bound with, wherever it runs.
     /// </remarks>
     public static void UseMigrationsFrom(
         DbContextOptionsBuilder builder,

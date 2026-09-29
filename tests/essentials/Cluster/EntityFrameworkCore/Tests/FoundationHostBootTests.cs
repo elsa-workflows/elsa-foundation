@@ -116,12 +116,10 @@ public sealed class FoundationHostBootTests(FoundationHostFeed feed) : IAsyncLif
 
     /// <summary>
     /// An in-place upgrade to a release with a migration this database has not applied, on a host that validates its
-    /// migrations: the reload onto it is refused with the migration pending, and the running generation keeps serving.
-    /// A migrations assembly given by name is resolved by EF Core from its own load context, the host's, where the name is
-    /// bound to the previous release, which stays loaded in the load context Nuplane gave it: EF Core would read the
-    /// previous release's migrations, find none keyed to the new context, and let the new release activate over an
-    /// unmigrated database. Once the migration is applied out of process, the same release activates on the next reload -
-    /// which is what shows the refusal was the pending migration and nothing else.
+    /// migrations: the reload onto it is refused with the migration pending, and the running generation keeps serving, so
+    /// nothing past version 1, the one it reads, is finalized. Once the migration is applied out of process, the same
+    /// release activates on the next reload - which is what shows the refusal was the pending migration and nothing else -
+    /// and the previous release, drained, stops counting, so version 2 finalizes.
     /// </summary>
     [Fact]
     public async Task An_in_place_upgrade_whose_migration_is_not_applied_is_refused_under_validate_until_it_is()

@@ -142,7 +142,11 @@ It names an assembly *replaced* when it is in a load context whose type `Nuplane
   the drain's completion: `DrainOperation` completes it only after `Shell.DisposeAsync()` has returned, and the
   subscriber attaches it at `Draining` or `Drained`, while `IShell.Drain` is still set. A generation disposed without a
   drain - a failed activation - is released when its container disposes the tracking initializer, which it does after
-  everything it created later. A drain that faults releases nothing, and a warning says so.
+  everything it created later. A drain that faults - `DrainOperation` faults it when `Shell.DisposeAsync()` threw, or
+  when something before it threw, such as its drain handlers failing to resolve, in which case it disposes the provider
+  first - is released only once the container has disposed the tracking initializer, since
+  `ServiceProviderEngineScope.DisposeAsync` stops at the first service that throws, which leaves the tracking undisposed
+  when the throw came from something created after it; until then the generation keeps pinning, and a warning says so.
 - **The next shell generation.** CShells builds it from its runtime feature catalog's current snapshot, which a host
   refreshes when it chooses to: `ShellReloadOnPackagesChanged` skips the refresh while no shell is active, so with eager
   activation off, or after it failed, the catalog can name a replaced generation that the first request then builds.
@@ -151,8 +155,14 @@ It names an assembly *replaced* when it is in a load context whose type `Nuplane
   throws until it is initialized, because `GetSnapshotAsync` would initialize it from the reading side.
 
 The readability report subtracts the retired set, so both generations are intersected until nothing that could run the
-old one is left, and the host publishes again when a generation that stops pinning retires something, since nothing
-else republishes a report whose declarations did not change. The guard subtracts the replaced set, because the
+old one is left, and the host publishes again when something retires, since nothing else republishes a report whose
+declarations did not change. A generation that stops pinning does so inside the container's disposal, which CShells runs
+under the shell name's activation semaphore when an activation fails (`ShellRegistry.CreateGenerationAsync` disposes the
+partial provider before it releases it), so it is only marked released there; one loop per host publishes afterwards, coalescing
+every release made while a publish is under way, and publishing only when the retired set grew. A refresh of the
+feature catalog can lift the last pin too, and CShells raises nothing when it commits one, so while a replaced release
+is held back by the catalog alone the host reads the catalog's snapshot generation (`IRuntimeFeatureCatalogSnapshot.Generation`)
+once a second, and has that loop evaluate once it has moved. The guard subtracts the replaced set, because the
 generation an apply builds composes the active package set.
 
 One window stays open, and it needs CShells to close it: a build that read the catalog's snapshot before a refresh
@@ -168,17 +178,29 @@ finalization gates are per shell container and registered only after admission, 
 about to publish, nor for a family no shell enables. Nuplane exposing which contexts are current would not remove the
 need for the CShells half, so no Nuplane change was needed; the window above is CShells'.
 
-The same stale generation reached the new release's migrations. `EfModuleBinding` named its migrations assembly, and EF
-Core's `MigrationsAssembly` resolves a name with `Assembly.Load` from its own load context before it looks at an
-assembly object (Microsoft.EntityFrameworkCore.Relational 10.0.10, `Migrations.Internal.MigrationsAssembly`'s
-constructor). EF Core is loaded in the previous release's graph context, so the name reached the previous release, whose
-migrations carry `[DbContext]` for the previous release's context type and matched nothing: under `Validate` a reload
-onto a release with an unapplied migration activated over the unmigrated database. `EfModuleBinding`, the activation
-guard's context, the persistence tool's and the design-time factory's (`tools/ef`) now pass the module's assembly itself
-through `EfRelationalProviderBinding.UseMigrationsFrom` (`MigrationsAssembly(Assembly)`, which EF Core reads only when no
-name is set), and the Workbench's OpenIddict context, which binds EF Core directly, passes its own, so no migrations are
+The same in-place upgrade reached the new release's migrations while each EF module package carried EF Core in its own
+graph. `EfModuleBinding` named its migrations assembly, and EF Core's `MigrationsAssembly` resolves a name with
+`Assembly.Load` from its own load context before it looks at an assembly object (Microsoft.EntityFrameworkCore.Relational
+10.0.10, `Migrations.Internal.MigrationsAssembly`'s constructor). EF Core was loaded in the previous release's graph
+context, which the new release bound it from, so the name reached the previous release, whose migrations carry
+`[DbContext]` for the previous release's context type and matched nothing: under `Validate` a reload onto a release with
+an unapplied migration activated over the unmigrated database. `EfModuleBinding`, the activation guard's context, the
+persistence tool's and the design-time factory's (`tools/ef`) now pass the module's assembly itself through
+`EfRelationalProviderBinding.UseMigrationsFrom` (`MigrationsAssembly(Assembly)`, which EF Core reads only when no name
+is set), and the Workbench's OpenIddict context, which binds EF Core directly, passes its own, so no migrations are
 resolved by name across load contexts. `EfRelationalProviderBinding.Use` still takes a name, for the tests and
 fixtures that bind a context whose migrations assembly they name.
+
+Since #2151 `Elsa.Foundation.Host` carries and shares EF Core, so EF Core now resolves a name from the host's default load
+context. That context reaches a package's assembly only through `Nuplane.Loading`'s host-integrated resolver, which
+the default context asks afresh on every load (it keeps no answer for a name it did not load itself) and which answers
+from the active package set, so a name now reaches the new release even though the previous one stays loaded in the
+non-collectible host-integrated package context Nuplane gave it. Binding by assembly keeps a module's migrations
+independent of where EF Core runs, which a module whose graph brings its own EF Core copy would still change
+([#2150](https://github.com/elsa-workflows/elsa-foundation/issues/2150)). It follows that the end-to-end refusal
+`FoundationHostReloadRefusalTests` shows for a release installed on a running host holds under a name binding too on
+this host; what pins the binding is `MigrationsAssemblyAssert`, over every module binding, and the binding drift
+tests, on all four engines.
 
 Shells are activated eagerly at boot on `Elsa.Foundation.Host` unless `Elsa:Boot:EagerShellActivation:Enabled` is
 set to `false`: the key defaults to on in code, so an absent or unparseable value enables it

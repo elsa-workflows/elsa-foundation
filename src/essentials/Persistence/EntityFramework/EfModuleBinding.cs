@@ -11,9 +11,10 @@ namespace Elsa.Persistence.EntityFramework;
 /// </summary>
 /// <remarks>
 /// The migrations assembly is the assembly itself, never its name (spec 183, FR-021, amended 2026-09-29): EF Core would
-/// resolve a name from its own load context, and where a package upgraded in place leaves the previous release loaded
-/// there, the name reaches the previous release's migrations, which the new release's context does not match, so none of
-/// the new release's pending migrations would be seen. <see langword="null"/> reads the context's own assembly.
+/// resolve a name from its own load context, and where that context reaches the previous release of a package upgraded
+/// in place - as a package graph that carries its own EF Core does - the name finds the previous release's migrations,
+/// which the new release's context does not match, so none of the new release's pending migrations would be seen.
+/// <see langword="null"/> reads the context's own assembly.
 /// </remarks>
 public sealed record EfModuleBinding(
     string Owner,

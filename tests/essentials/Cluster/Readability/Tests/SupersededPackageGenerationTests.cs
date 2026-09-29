@@ -115,7 +115,8 @@ public sealed class SupersededPackageGenerationTests : IAsyncDisposable
         await using var host = Bound(services.BuildServiceProvider());
         var previous = Shell(FeatureOf(_package.Previous), from: services);
 
-        await previous.DisposeAsync().AsTask().WaitAsync(Patience);
+        // On a thread of its own, so a disposal that blocks on the publish fails here rather than hanging the run.
+        await Task.Run(() => previous.DisposeAsync().AsTask()).WaitAsync(Patience);
 
         Assert.Equal(Both, await _package.ReadableAsync(host));
         await publishes.Started.Task.WaitAsync(Patience);

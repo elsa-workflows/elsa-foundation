@@ -508,10 +508,10 @@ for identical fleets.
   2. No shell generation that can still run code composes a feature from its load context. A shell generation counts
      from before its first initializer runs until its container has finished disposing: when it was drained, until
      that drain completes, which the shell runtime completes only after the generation's service provider has been
-     disposed; otherwise until its container has disposed everything it created after the generation began. It counts
-     every load context, other than the default one, of a feature its container names - for CShells, every feature of
-     the catalog snapshot it was built from, enabled or not - so a replaced declaration beside an unchanged feature in
-     the same load context keeps counting. A generation whose features cannot be read counts for every replaced
+     disposed; otherwise, or when that drain fails, until its container has disposed everything it created after the
+     generation began. It counts every load context, other than the default one, of a feature its container names -
+     for CShells, every feature of the catalog snapshot it was built from, enabled or not - so a replaced declaration
+     beside an unchanged feature in the same load context keeps counting. A generation whose features cannot be read counts for every replaced
      declaration.
   3. The feature catalog the next shell generation will be built from names neither it nor a feature in its load
      context. A catalog that has not been initialized yet, or that cannot be read, counts for every replaced
@@ -520,8 +520,9 @@ for identical fleets.
   So while an old and a new generation are both live they are still intersected, and the old one stops counting as
   soon as nothing that could run it is left, without a restart. A declaration in the default load context, in a load
   context the package runtime did not create, or whose replacement is still loading or failed to load, is never
-  retired. The host publishes its report again when a shell generation that stops counting retires one, so a gate
-  waiting on it evaluates at once.
+  retired. The host publishes its report again when a shell generation that stops counting, or a refresh of the feature
+  catalog that stops naming it, retires one, so a gate waiting on it evaluates without waiting for another publish.
+  That publish runs after the shell generation's disposal, never inside it.
 - **FR-022**: A family MUST stay in the report while any declaration of it remains loaded, even after its modules are
   disabled. Amended 2026-09-29 (Decisions): any declaration FR-021 has not retired. A package removed, not replaced,
   retires nothing.
@@ -858,12 +859,19 @@ is the owner's approval.
   and are registered only after admission, so they cannot speak for a generation that is about to publish, nor for a
   family whose module no shell enables (FR-022). The activation guard, which judges the shell generation an apply is
   about to build, stops counting a replaced generation at once. Research: "B3: what 'loaded' means".
-- **A module's migrations are bound by assembly, never by name.** The same stale generation also reached the new
-  release's migrations: a module named its migrations assembly, EF Core resolved the name from the load context it was
-  loaded in, which still held the previous release, and the previous release's migrations are keyed to the previous
-  release's context type. The new release's context therefore saw no migration of its own, so under `Validate` a
-  reload onto a release with an unapplied migration activated anyway, and `AutoMigrate` would have applied nothing.
-  Every module binding now hands EF Core the module's assembly itself (`EfRelationalProviderBinding.UseMigrationsFrom`),
-  as do the design-time factory and the Workbench's OpenIddict context, so a reload onto such a release is refused by
-  `EfDatabaseMigrator`'s `Validate` check with the migration pending (ADR 0076), as a restart would be. This changes no
-  requirement; it is recorded here because it is the same in-place upgrade.
+- **A module's migrations are bound by assembly, never by name.** The same in-place upgrade reached the new release's
+  migrations while each EF module package carried EF Core in its own package graph. A module named its migrations
+  assembly, EF Core resolves such a name with `Assembly.Load` from its own load context, and after an upgrade that was
+  the previous release's graph context, which the new release binds EF Core from, so the name reached the previous
+  release, whose migrations are keyed to the previous release's context type. The new release's context therefore saw
+  no migration of its own: under `Validate` a reload onto a release with an unapplied migration activated anyway, and
+  `AutoMigrate` would have applied nothing. Since #2151 `Elsa.Foundation.Host` carries and shares EF Core, so EF Core
+  resolves the name from the host's own load context, which reaches a package's assembly only through Nuplane's
+  host-integrated resolution of the active package set, and that answers with the new release; the previous release
+  stays loaded, in the non-collectible host-integrated package context Nuplane gave it, but the name no longer reaches
+  it there. Every module binding now hands EF Core the module's assembly itself
+  (`EfRelationalProviderBinding.UseMigrationsFrom`), as do the design-time factory and the Workbench's OpenIddict
+  context, so which release a module's migrations come from no longer depends on the load context EF Core resolves
+  names from, and a reload onto a release with an unapplied migration is refused by `EfDatabaseMigrator`'s `Validate`
+  check with the migration pending (ADR 0076), as a restart would be. This changes no requirement; it is recorded here
+  because it is the same in-place upgrade.
