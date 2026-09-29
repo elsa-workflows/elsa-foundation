@@ -1,108 +1,161 @@
 #!/usr/bin/env bash
 # Runs a copy of the built Elsa.Foundation.Host as one demo host: its own directory, its own Nuplane state, its own port,
-# the folder feed tools/demo/pack.sh fills, and the Notes module's shell composition.
-#
-# Usage:
-#   bash tools/demo/run-host.sh NAME --port PORT [--provider Sqlite|PostgreSql] [--connection STRING]
-#                                    [--policy Validate|AutoMigrate] [--feed DIR] [--closure DIR] [--prepare-only]
-#
-# The host directory is artifacts/demo/hosts/NAME: the host's build output, an appsettings.Development.json naming the feeds,
-# the engine to load and the migrate policy, and a shells.json enabling the Notes features. A host run this way is what
-# `dotnet elsa persistence --host artifacts/demo/hosts/NAME --environment Development` reads: the packages the running host
-# installed are recorded in artifacts/demo/hosts/NAME/.nuplane/store-state.json, and the engine choice and feeds are in the overlay.
-#
-# Defaults: Sqlite in artifacts/demo/notes.db, the Validate policy (a stale database refuses the module rather than migrating
-# under the operator), --feed artifacts/demo/feed, --closure artifacts/demo/closure. Two hosts that share a database are two
-# names given the same --connection.
+# its own folder feed, and the Notes module's shell composition.
 set -euo pipefail
+source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+
+usage() {
+  cat >&2 <<'USAGE'
+Usage: bash tools/demo/run-host.sh NAME --port PORT [--provider Sqlite|PostgreSql] [--policy Validate|AutoMigrate]
+                                   [--cluster HOSTID] [--management-key-env VAR]
+                                   [--feed DIR] [--closure DIR] [--prepare-only]
+
+The host directory is artifacts/demo/hosts/NAME: the host's build output, an appsettings.Development.json naming the feeds,
+the engine to load and the migrate policy, and a shells.json enabling the Notes features. `dotnet elsa persistence
+--host artifacts/demo/hosts/NAME --environment Development` reads the packages the running host installed, recorded in
+.nuplane/store-state.json there, and the engine choice and feeds in the overlay.
+
+  --port PORT              the port to listen on, on 127.0.0.1 (required)
+  --provider               Sqlite (default) or PostgreSql
+  --policy                 the migrate policy; Validate (default) refuses a stale database rather than migrating under the operator
+  --feed DIR               the host's package feed; default artifacts/demo/hosts/NAME/feed, where `pack.sh --host NAME` packs
+  --closure DIR            the resolve-only feed; default artifacts/demo/closure
+  --cluster HOSTID         join the durable EF cluster membership under this host id, so hosts that share the database
+                           count each other before a new schema version is finalized. Every host of a database gives the
+                           same connection and its own id. Needs a host build that carries EF cluster membership.
+  --management-key-env VAR enable the module-management endpoints, with the key read from the environment variable VAR:
+                           POST /_module-management/reload, with the key in the X-Elsa-Module-Management-Key header,
+                           re-composes the shells
+  --prepare-only           write the host directory and stop
+
+The database connection is taken from ELSA_EF_CONNECTION, the variable `dotnet elsa persistence` reads, and handed to the
+host as an environment variable: it is never written to disk or printed. When it is unset, Sqlite uses the default file,
+artifacts/demo/notes.db. Two hosts that share a database run with the same ELSA_EF_CONNECTION.
+Relative paths are relative to the repository root.
+USAGE
+  exit 2
+}
 
 name="${1:-}"
-[[ -n "$name" && "$name" != --* ]] || { sed -n '2,17p' "${BASH_SOURCE[0]}" | sed 's/^# *//' >&2; exit 2; }
+[[ -n "$name" && "$name" != -* ]] || usage
 shift
 
-root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
-demo="$root/artifacts/demo"
 port=""
 provider="Sqlite"
-connection=""
 policy="Validate"
-feed="$demo/feed"
-closure="$demo/closure"
+feed=""
+closure="artifacts/demo/closure"
+cluster_host_id=""
+management_key_env=""
 prepare_only=0
 while [[ $# -gt 0 ]]; do
+  # Every option but these two takes a value.
+  [[ "$1" != --* || "$1" == --prepare-only || "$1" == --help || $# -ge 2 ]] || usage
   case "$1" in
     --port) port="$2"; shift 2 ;;
     --provider) provider="$2"; shift 2 ;;
-    --connection) connection="$2"; shift 2 ;;
     --policy) policy="$2"; shift 2 ;;
-    --feed) feed="$(cd "$2" && pwd -P)"; shift 2 ;;
-    --closure) closure="$(cd "$2" && pwd -P)"; shift 2 ;;
+    --feed) feed="$2"; shift 2 ;;
+    --closure) closure="$2"; shift 2 ;;
+    --cluster) cluster_host_id="$2"; shift 2 ;;
+    --management-key-env) management_key_env="$2"; shift 2 ;;
     --prepare-only) prepare_only=1; shift ;;
-    *) echo "unknown argument: $1" >&2; exit 2 ;;
+    -h|--help) usage ;;
+    *) echo "unknown argument: $1" >&2; usage ;;
   esac
 done
-[[ -n "$port" ]] || { echo "--port is required" >&2; exit 2; }
-[[ -d "$feed" ]] || feed="$(mkdir -p "$feed" && cd "$feed" && pwd -P)"
-[[ -d "$closure" ]] || closure="$(mkdir -p "$closure" && cd "$closure" && pwd -P)"
-if [[ -z "$connection" ]]; then
-  [[ "$provider" == "Sqlite" ]] || { echo "--connection is required for $provider" >&2; exit 2; }
-  connection="Data Source=$demo/notes.db;Pooling=False"
+[[ -n "$port" ]] || { echo "--port is required" >&2; usage; }
+[[ "$provider" == "Sqlite" || "$provider" == "PostgreSql" ]] || demo_fail "--provider is Sqlite or PostgreSql, not '$provider'."
+
+demo_require_python
+host="$(demo_dir "artifacts/demo/hosts/$name")"
+feed="$(demo_dir "${feed:-artifacts/demo/hosts/$name/feed}")"
+closure="$(demo_dir "$closure")"
+
+if [[ -n "${ELSA_EF_CONNECTION:-}" ]]; then
+  connection="$ELSA_EF_CONNECTION"
+  database="$provider, from ELSA_EF_CONNECTION"
+elif [[ "$provider" == "Sqlite" ]]; then
+  connection="$demo_sqlite_connection"
+  database="Sqlite, the default file ${demo_sqlite_file#"$demo_root"/}"
+else
+  demo_fail "$provider needs its connection string in ELSA_EF_CONNECTION."
 fi
 
-source_dir="$root/src/apps/Elsa.Foundation.Host"
+management_key=""
+if [[ -n "$management_key_env" ]]; then
+  management_key="${!management_key_env:-}"
+  [[ -n "$management_key" ]] || demo_fail "--management-key-env $management_key_env: that environment variable is not set."
+fi
+
+source_dir="$demo_root/src/apps/Elsa.Foundation.Host"
 built="$source_dir/bin/Release/net10.0"
-[[ -f "$built/Elsa.Foundation.Host.dll" ]] || { echo "Build the host first: bash tools/demo/pack.sh 1 (or dotnet build -c Release $source_dir)" >&2; exit 1; }
-host="$demo/hosts/$name"
-mkdir -p "$host"
-rsync -a --exclude '.nuplane/' --exclude 'shells.json' --exclude 'appsettings.Development.json' "$built/" "$host/"
+[[ -f "$built/Elsa.Foundation.Host.dll" ]] || demo_fail "Build the host first: bash tools/demo/pack.sh 1 (or dotnet build -c Release $source_dir)."
+if [[ -n "$cluster_host_id" && ! -f "$built/Elsa.Cluster.EntityFrameworkCore.dll" ]]; then
+  demo_fail "--cluster needs a host build that carries the EF cluster membership provider (Elsa.Cluster.EntityFrameworkCore.dll), and this build does not."
+fi
 
-cat > "$host/shells.json" <<EOF
-{
-  "CShells": {
-    "Shells": {
-      "default": {
-        "Name": "default",
-        "Features": {
-          "NotesEntityFrameworkCore": { "Provider": "$provider", "ConnectionString": "$connection" },
-          "Notes": {},
-          "NotesWithTags": {}
-        },
-        "Configuration": { "WebRouting": { "Path": "" } }
-      }
-    }
-  }
-}
-EOF
+rsync -a --exclude '.nuplane/' --exclude 'feed/' --exclude 'shells.json' --exclude 'appsettings.Development.json' "$built/" "$host/"
 
-# NotesWithTags is listed from the start: release 1.0.0 has no such feature, so the host says it is not available and
-# runs the rest, and the feature appears when release 1.1.0 is installed.
-cat > "$host/appsettings.Development.json" <<EOF
-{
-  "Logging": { "LogLevel": { "Default": "Information", "CShells": "Information", "Nuplane": "Information", "Microsoft.AspNetCore": "Warning", "Microsoft.EntityFrameworkCore.Database.Command": "Warning" } },
-  "Nuplane": {
-    "Setup": {
-      "Feeds": [
-        { "Name": "local-packages", "DirectoryPath": "$feed", "IncludePatterns": [ "*" ], "Directory": { "Watch": true, "DebounceWindow": "00:00:01" } },
-        { "Name": "closure", "DirectoryPath": "$closure" }
-      ]
+# The two files are written by a JSON encoder from the values above; the connection is in neither. NotesWithTags is listed from
+# the start: release 1.0.0 has no such feature, so the host says it is not available and runs the rest, and the feature
+# appears when release 1.1.0 is installed. The feature's connection is ConnectionStrings:Elsa, which the host reads from
+# its environment (below), where an explicit shells.json value would outrank it.
+python3 - "$host" "$provider" "$policy" "$feed" "$closure" <<'PY'
+import json, os, sys
+
+host, provider, policy, feed, closure = sys.argv[1:6]
+
+shells = {"CShells": {"Shells": {"default": {
+    "Name": "default",
+    "Features": {"NotesEntityFrameworkCore": {"Provider": provider}, "Notes": {}, "NotesWithTags": {}},
+    "Configuration": {"WebRouting": {"Path": ""}},
+}}}}
+
+appsettings = {
+    "Logging": {"LogLevel": {"Default": "Information", "CShells": "Information", "Nuplane": "Information",
+                             "Microsoft.AspNetCore": "Warning", "Microsoft.EntityFrameworkCore.Database.Command": "Warning"}},
+    "Nuplane": {
+        "Setup": {"Feeds": [
+            {"Name": "local-packages", "DirectoryPath": feed, "IncludePatterns": ["*"],
+             "Directory": {"Watch": True, "DebounceWindow": "00:00:01"}},
+            {"Name": "closure", "DirectoryPath": closure},
+        ]},
+        "Capabilities": {"ef-provider": provider},
     },
-    "Capabilities": { "ef-provider": "$provider" }
-  },
-  "Elsa": {
-    "Persistence": {
-      "EntityFramework": {
-        "Migrate": { "Policy": "$policy" },
-        "Finalization": { "EvaluationInterval": "00:00:05", "RefreshInterval": "00:00:02" }
-      }
-    }
-  }
+    "Elsa": {"Persistence": {"EntityFramework": {
+        "Migrate": {"Policy": policy},
+        "Finalization": {"EvaluationInterval": "00:00:05", "RefreshInterval": "00:00:02"},
+    }}},
 }
-EOF
 
-echo "host directory: $host"
-echo "database:       $provider, $connection"
-echo "feed:           $feed"
-echo "for the persistence tool:  export ELSA_EF_CONNECTION='$connection'  --host '$host' --provider $provider --environment Development"
+for file, document in (("shells.json", shells), ("appsettings.Development.json", appsettings)):
+    with open(os.path.join(host, file), "w") as out:
+        json.dump(document, out, indent=2)
+        out.write("\n")
+PY
+
+# Everything secret reaches the host as environment variables of its process, and nowhere else.
+export ConnectionStrings__Elsa="$connection"
+if [[ -n "$cluster_host_id" ]]; then
+  export Elsa__Cluster__Membership__HostId="$cluster_host_id"
+  export Elsa__Cluster__Membership__EntityFrameworkCore__Enabled=true
+  export Elsa__Cluster__Membership__EntityFrameworkCore__Provider="$provider"
+  export Elsa__Cluster__Membership__EntityFrameworkCore__ConnectionString="$connection"
+fi
+if [[ -n "$management_key" ]]; then
+  export Elsa__ModuleManagement__Enabled=true
+  export Elsa__ModuleManagement__ApiKey="$management_key"
+fi
+
+modules="Samples.Notes"
+[[ -z "$cluster_host_id" ]] || modules="$modules,Cluster.Membership"
+echo "host directory: ${host#"$demo_root"/}"
+echo "database:       $database"
+echo "feed:           ${feed#"$demo_root"/}"
+[[ -z "$cluster_host_id" ]] || echo "cluster:        EF membership, host id $cluster_host_id"
+[[ -z "$management_key" ]] || echo "management:     POST /_module-management/reload, key from \$$management_key_env"
+echo "persistence:    bash tools/demo/elsa.sh persistence apply --host ${host#"$demo_root"/} --environment Development --provider $provider --modules $modules"
 [[ "$prepare_only" -eq 0 ]] || exit 0
 
 cd "$host"

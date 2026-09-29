@@ -2,6 +2,7 @@
 # Prints what release 1.1.0 changes in the Notes sample as a diff, for the screen: every file in the V2 folder, then the
 # two files V2 replaces (the family declaration and the store's Add), then the version the package gets.
 set -euo pipefail
+source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 usage() {
   cat >&2 <<'USAGE'
@@ -20,8 +21,7 @@ case "${1:-}" in
   *) usage ;;
 esac
 
-root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
-cd "$root/samples/Elsa.Samples.Nuplane.Notes"
+cd "$demo_root/samples/Elsa.Samples.Nuplane.Notes"
 
 # New files, shown whole: a diff against nothing, without the git plumbing lines.
 new_file() { git diff --no-index --no-color -- /dev/null "$1" | sed -n '/^+++ /,$p' | sed "1s|.*|+++ $1|" || true; }

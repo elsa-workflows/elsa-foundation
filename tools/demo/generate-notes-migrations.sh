@@ -2,10 +2,6 @@
 # Generates the Notes sample's EF migrations with dotnet-ef, through the sample's own design-time startup project
 # (tools/demo/Elsa.Samples.Nuplane.Notes.Tooling), for both providers the sample supports.
 #
-# Usage:
-#   bash tools/demo/generate-notes-migrations.sh initial   # release 1.0.0: the Initial migration and its model snapshot
-#   bash tools/demo/generate-notes-migrations.sh tags      # release 1.1.0: the AddTags migration and its model snapshot
-#
 # The two releases are one project (see the project file), so the model changes between builds and each step builds
 # the version it describes:
 #   Migrations/Notes/<Provider>/      the Initial migration and the version-1 snapshot; compiled into both releases
@@ -18,12 +14,21 @@
 # Never run tools/ef/generate-module-migrations.sh for this module: it regenerates the first-party modules, and this
 # one is not part of that set.
 set -euo pipefail
+source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+
+usage() {
+  cat >&2 <<'USAGE'
+Usage:
+  bash tools/demo/generate-notes-migrations.sh initial   # release 1.0.0: the Initial migration and its model snapshot
+  bash tools/demo/generate-notes-migrations.sh tags      # release 1.1.0: the AddTags migration and its model snapshot
+USAGE
+  exit 2
+}
 
 step="${1:-}"
-[[ "$step" == "initial" || "$step" == "tags" ]] || { sed -n '2,8p' "${BASH_SOURCE[0]}" | sed 's/^# *//' >&2; exit 2; }
+[[ "$step" == "initial" || "$step" == "tags" ]] || usage
 
-root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
-cd "$root"
+cd "$demo_root"
 sample="samples/Elsa.Samples.Nuplane.Notes"
 project="$sample/Elsa.Samples.Nuplane.Notes.csproj"
 tooling="tools/demo/Elsa.Samples.Nuplane.Notes.Tooling/Elsa.Samples.Nuplane.Notes.Tooling.csproj"
@@ -33,7 +38,7 @@ providers=(Sqlite PostgreSql)
 # A schema belongs to a deployment, not to a migration, and generation never opens a connection.
 unset ELSA_EF_SCHEMA ELSA_EF_CONNECTION
 
-dotnet tool restore >/dev/null
+demo_quiet "Restoring the dotnet tools" dotnet tool restore
 
 build_tooling() {
   local log
