@@ -59,7 +59,7 @@ not automatic constitution violations.
 | Caching (cache manager + change-token signaling) | [`src/essentials/Caching/Memory/EXTENSION_POINTS.md`](src/essentials/Caching/Memory/EXTENSION_POINTS.md) |
 | Serialization (JSON converter sources) | [`src/essentials/Serialization/SystemText/EXTENSION_POINTS.md`](src/essentials/Serialization/SystemText/EXTENSION_POINTS.md) |
 | Locking (distributed lock provider) | [`src/essentials/Locking/FileSystem/EXTENSION_POINTS.md`](src/essentials/Locking/FileSystem/EXTENSION_POINTS.md) |
-| Cluster (membership provider and member report sources) | [`src/essentials/Cluster/Core/EXTENSION_POINTS.md`](src/essentials/Cluster/Core/EXTENSION_POINTS.md) |
+| Cluster (membership provider, member report sources and the shared schema dormancy check) | [`src/essentials/Cluster/Core/EXTENSION_POINTS.md`](src/essentials/Cluster/Core/EXTENSION_POINTS.md) |
 | Modularity API (shell feature-management surface; feature-catalog contributors and activation guards) | [`src/essentials/Modularity/Api/EXTENSION_POINTS.md`](src/essentials/Modularity/Api/EXTENSION_POINTS.md) |
 
 ### Expressions

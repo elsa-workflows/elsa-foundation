@@ -1,7 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!--
-    The cluster membership contract (spec 183, ADR 0078). Layer 1: abstractions and models only. It takes no
+    The cluster membership contract (spec 183, ADR 0078), and the shared schema dormancy check that sits beside it
+    (spec 182, FR-003). Layer 1: abstractions, models and the dormancy rule only. It takes no
     provider dependency - no EF Core, database engine or actor framework - and
     ArchitectureGuardTests.ClusterMembership keeps it that way (FR-002).
   -->
@@ -9,6 +10,12 @@
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Options" />
     <PackageReference Include="Microsoft.Extensions.Primitives" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The dormancy refusal the shared dormancy check raises derives from the write refusal every domain API already
+         answers (spec 182, FR-013). Elsa.Primitives takes no dependency at all. -->
+    <ProjectReference Include="..\..\Primitives\Primitives\Elsa.Primitives.csproj" />
   </ItemGroup>
 
 </Project>

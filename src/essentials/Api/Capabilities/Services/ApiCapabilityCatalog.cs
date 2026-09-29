@@ -90,13 +90,25 @@ public sealed class ApiCapabilityCatalog(
                 $"Capability '{capabilityId}' has incompatible contributions from features: {sources}.");
         }
 
+        // Spec 182, FR-007: one dormant contribution marks the whole capability dormant. The loud direction: a client told
+        // a capability is dormant explains a disabled control, while one told it is available calls an operation that is
+        // refused.
+        var dormantReasons = entries
+            .Select(entry => entry.DormantReason)
+            .OfType<string>()
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
         return new ApiCapabilityView(
             canonical.CapabilityId,
             canonical.ContractMajorVersion.ToString(System.Globalization.CultureInfo.InvariantCulture),
             links.Values
                 .OrderBy(link => link.Rel, StringComparer.Ordinal)
                 .Select(link => new ApiCapabilityLinkView(link.Rel, link.Href, link.Templated))
-                .ToArray());
+                .ToArray())
+        {
+            Status = dormantReasons.Length == 0 ? null : ApiCapabilityView.DormantStatus,
+            Reason = dormantReasons.Length == 0 ? null : string.Join(" ", dormantReasons)
+        };
     }
 
 }

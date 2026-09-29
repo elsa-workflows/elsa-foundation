@@ -16,6 +16,10 @@ remain in the [feature specification](../../../../specs/092-domain-owned-apis/sp
   derive public contracts from its own type name, a feature name, or endpoint reflection.
 - **Failure:** cancellation propagates. Provider failures and incompatible duplicate declarations fail document
   assembly; the catalog never silently advertises a partial or arbitrarily selected contract.
+- **Dormancy:** a Source whose feature is dormant ([spec 182](../../../../specs/182-dormant-features-until-finalization/spec.md),
+  FR-007) keeps contributing its declaration, with `DormantReason` set from `ISchemaDormancyCheck`'s caller-neutral
+  `SchemaAvailability.Reason`; it never omits it. The view is then marked `status: "dormant"` with that `reason`, and
+  one dormant contribution marks the whole capability dormant.
 
 The `ApiCapabilitiesCollecting` inline contribution event is available for framework modules that already use
 the event contribution pattern. Handlers append the same declaration type and obey the same duplicate rules.

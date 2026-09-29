@@ -2,7 +2,7 @@
 
 **Feature Branch**: `claude/2093-rollout-specs`
 **Created**: 2026-09-27
-**Status**: Approved
+**Status**: In progress — B6 ([#2102](https://github.com/elsa-workflows/elsa-foundation/issues/2102)) built the shared dormancy check, the refusal, the catalog, Attention and `/capabilities` reporting; `Elsa.Foundation.Host` does not yet compose the observation the check reads, as it composes no membership (see the 2026-09-29 note).
 **Input**: Workstream B6, [issue #2102](https://github.com/elsa-workflows/elsa-foundation/issues/2102), of the
 cluster-safe schema rollout program [#2093](https://github.com/elsa-workflows/elsa-foundation/issues/2093). A feature
 that needs data only a new persisted-schema version can hold stays dormant until that version is finalized. A dormant
@@ -241,6 +241,11 @@ the rows that happen to carry the column.
   unmet requirement (family and version) and why it is unmet. There are three cases: waiting for hosts, stated as
   "available once every host can read the new version"; held by an operator, with the hold's reason; or waiting for
   existing records to be upgraded (FR-005).
+
+  **2026-09-29 dated note (control room review, #2102).** "With the hold's reason" is the catalog's and Attention's
+  reason, not the domain-API refusal's: those are operator surfaces (FR-011), while a domain API returns its reason to
+  whoever sent the request. The held case's caller-facing text there says only that the version is held by an
+  operator, never the hold's own words or who placed it, because those may name hosts (FR-011).
 - **FR-009**: The Modularity feature catalog MUST carry each enabled feature's availability (available or dormant)
   and reason, through an `IFeatureCatalogContributor`. That adds a member to `FeatureCatalogItem` in
   `Elsa.Modularity.Core` and to the catalog response. It MUST NOT reuse `ReadError`, which means a manifest failure
@@ -258,10 +263,15 @@ the rows that happen to carry the column.
   never succeeds without it.
 - **FR-013**: The dormancy refusal MUST reuse spec 180's write refusal (Terms, FR-016a): the same exception type,
   unassignable to the same six types (`InvalidOperationException`, `ArgumentException`, `FormatException`,
-  `NotSupportedException`, `JsonException` and `InvalidDataException`), carrying the same stable code. A
-  feature-level dormancy refusal additionally carries the feature id when known and FR-008's reason; the store-level
-  backstop (FR-017) carries the family and the two versions alone, as spec 180 defines it. A test pins the
+  `NotSupportedException`, `JsonException` and `InvalidDataException`), and the same HTTP 409 mapping in every domain
+  API. A feature-level dormancy refusal additionally carries the feature id when known and FR-008's reason; the
+  store-level backstop (FR-017) carries the family and the two versions alone, as spec 180 defines it. A test pins the
   unassignability, as `EfSchemaVersionTests` does for the skew exception.
+
+  **2026-09-29 dated note (control room review, #2102).** "The same stable code" above is superseded: Q17 is the
+  decision of record, so the dormancy refusal carries its own stable code, `schema-version-not-finalized`, never the
+  store-level refusal's `schema-write-refused`. What both share is the exception type, the six-type unassignability
+  and every domain API's 409 mapping, not the code.
 - **FR-014**: Before raising a dormancy refusal, the host MUST refresh its observed finalized version if its last
   refresh is older than a short, rate-limited bound. A request that finalization already allows is then not refused
   on a stale view.
@@ -359,3 +369,44 @@ Recorded 2026-09-27, when the owner answered this spec's open questions on #2093
 - **Q16 — Where the shared check lives.** In the foundation package that holds the finalization and membership
   contracts (spec 181, spec 183), not in a package of its own (FR-003).
 - **Q17 — The refusal code.** Each API owns its codes, as Publishing's do. `schema-version-not-finalized` stays.
+
+**2026-09-29 note.** Found while building B6 (#2102); lands with the B6 PR, whose merge is the owner's approval.
+
+- **Where the check lives.** B5 built the finalization gate inside `Elsa.Persistence.EntityFramework`, which references
+  EF Core, so the only foundation package that holds a finalization or membership contract and is free of EF Core and
+  of any provider is `Elsa.Cluster.Core`, the membership contract. `ISchemaDormancyCheck`, the one rule
+  (`SchemaDormancyRule`), `[RequiresSchemaVersion]` and the source contract `IObservedSchemaFinalization` live there
+  (FR-001, FR-003). A `.Core` project holds no implementation (`ArchitectureGuardTests`), so the default check,
+  `SchemaDormancyCheck`, sits beside the membership default in `Elsa.Cluster.InProcess`, which is as free of providers.
+  The source over the EF gates, `EfObservedSchemaFinalization`, lives in `Elsa.Cluster.Readability`, which already
+  bridges persistence and membership so that neither depends on the other. `AddEfSchemaDormancy()` composes both, and
+  `AddEfSchemaReadability()` calls it.
+- **The refusal and its code.** The check is EF-free, so its refusal, `SchemaDormancyRefusedException`, lives in
+  `Elsa.Primitives` beside `SchemaWriteRefusedException` and derives from it, not from the EF
+  `EfSchemaWriteRefusedException`. That is what every domain API already answers with 409 (spec 181's 2026-09-28
+  note), so FR-015 holds for it without a new mapping; the shared envelope adds `feature` and `reason`. **Superseded
+  2026-09-29 (control room review, #2102):** it carries its own stable code, `schema-version-not-finalized`, not the
+  store-level `schema-write-refused` this note first reasoned to. Q17 is the decision of record — "each API owns its
+  codes… `schema-version-not-finalized` stays" — and this note's own claim that FR-013's "same stable code" required
+  sharing the store-level one was a misreading: FR-013 is amended the same day to say what is shared is the type, the
+  six-type unassignability and the 409 mapping, not the code. `SchemaWriteRefusedException.Code` is settable per
+  concrete type through a protected constructor parameter, defaulting to `SchemaWriteRefusedException.RefusalCode` for
+  a store-level refusal.
+- **A hold's own words reach operators only.** A domain API's refusal says the version is held by an operator, not the
+  hold's reason or who placed it, because an operator's words may name hosts (FR-011). The catalog and Attention, which
+  are operator surfaces, carry both, as FR-008 asks.
+- **More ways to be unmet than FR-008's three.** Besides waiting for hosts, a hold and completeness, a requirement is
+  unmet while this host has not adopted a finalized version because its membership lapsed (spec 181, FR-018), while this
+  host has read no record of the family (for instance because nothing composes the observation), when this build does
+  not read the version, and when the family's finalized version is one this host cannot read (spec 181, FR-012, which
+  Attention also reports as critical). Each refuses; none is ever read as available.
+- **`Elsa.Foundation.Host` observes nothing yet.** It composes no membership (spec 181's 2026-09-28 note) and no
+  observation of schema finalization, and its shells take every feature from a feed, so no feature there can compose
+  the EF-bound source for it. On it, every declared requirement is reported unmet because the host cannot tell, which is
+  refused and shown, never served. Composing `AddEfSchemaDormancy()` there belongs with composing membership there. The
+  mechanism itself needs no reload on either host kind: the check reads each gate's observation live.
+- **A feature this host has no class for** (a package not loaded) has no requirement the catalog can read, so its
+  availability is left unset rather than claimed.
+- **Nothing is dormant today.** Every chain has one version until 4.0 ships, so no first-party feature declares a
+  requirement, no background task derives new-version data (FR-018), and no capability source marks one dormant
+  (FR-007). The tests use a family whose build is at version 2 against a database finalized at 1.

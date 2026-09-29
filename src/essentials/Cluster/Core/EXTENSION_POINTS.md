@@ -17,6 +17,26 @@ and a durable provider is composed once on the host container, never per shell.
 - **Durable provider:** `EfClusterMembership` (`Elsa.Cluster.EntityFrameworkCore`, spec 183 B2), one shared table on SQLite, SQL Server, PostgreSQL or MySQL under its own `[EfModule("Cluster.Membership")]`, whose baseline also creates the module's finalization tables (spec 181, FR-002) and whose rows belong to the `ClusterMembership` schema family its `[EfSchemaFamily]` declares. A host composes it from configuration with `AddConfiguredClusterMembership(configuration)` (namespace `Elsa.Cluster.Hosting`), which registers nothing unless `Elsa:Cluster:Membership:EntityFrameworkCore:Enabled` is `true`; its store settings (`Provider`, `ConnectionString`, `ConnectionName`, `Schema`, `Pooling`, `CleanupPeriod`) sit beside that switch, and the host id and timings under `Elsa:Cluster:Membership`. `AddEfClusterMembership(options)` composes it in code. It migrates through the plain-host migrator only, joins while the host starts, heartbeats on a fixed interval, drains as the host stops and leaves once it has.
 - **Conformance:** a provider is supported only once it passes `ClusterMembershipConformanceTests` (`tests/essentials/Cluster/Testing`), supplying an `IClusterMembershipConformanceFixture`.
 
+### `ISchemaDormancyCheck` *(Core — `Elsa.Cluster.Core`)*
+- **Kind:** Replacement contract (§2.6.2), declared by `[SchemaDormancyReplacementContract]`. The shared dormancy check of [spec 182](../../../../specs/182-dormant-features-until-finalization/spec.md) (B6, [#2102](https://github.com/elsa-workflows/elsa-foundation/issues/2102)), FR-003: the one component every module asks "is schema family F at version V yet?". Modules never read a finalization record or compare versions themselves.
+- **Signature:** `Evaluate(requirements)` from memory, no I/O, for background work that skips while dormant (FR-018); `EvaluateAsync(requirements, ct)`, which re-reads an observation older than `SchemaDormancyOptions.RefreshBound` (default two seconds) before it answers unmet (FR-014); `EnsureAvailableAsync(requirements, featureId, ct)`, which raises `SchemaDormancyRefusedException` (`Elsa.Primitives`), spec 180's write refusal with the feature and a caller-neutral reason, which every domain API already answers with 409 (FR-012, FR-013, FR-015); `Observe()`; and `ReadStatusAsync(ct)`, the finalization gate's status with the members that cannot read a version, for operator surfaces only (FR-011).
+- **The rule:** `SchemaDormancyRule` (static, beside the contract), which every implementation applies: a requirement is met once this host writes the family at the version or later and, for a completeness requirement, once the finish record it observed names the version or later (spec 186). A family it has observed nothing of, a version its build does not read, or a finalized version it cannot read leaves the requirement unmet. `SchemaDormancyReasons` words each unmet requirement for callers and for operators.
+- **Default impl:** `SchemaDormancyCheck` (`Elsa.Cluster.InProcess`, beside the membership default), the rule over this container's `IObservedSchemaFinalization`. `TryAddSchemaDormancyCheck()` adds it unless a check is already composed, which then is the one used, and fails when two are.
+- **Call it:** where an operation, request field, query or background task accepts data only the newer version holds, before any write or other side effect (FR-002, FR-016). Nothing about dormancy changes composition (FR-006), and nothing depends on a restart or a shell reload (FR-019).
+
+### `IObservedSchemaFinalization` *(Core — `Elsa.Cluster.Core`)*
+- **Kind:** Replacement contract (§2.6.2), declared by `[SchemaDormancyReplacementContract]`; the source the check answers from, per container.
+- **Signature:** `Find(family)` and `Observe()` from memory; `RefreshAsync(family, maxAge, ct)`, one shared read per bound; `ReadStatusAsync(ct)`.
+- **Default impl:** none here. `EfObservedSchemaFinalization` (`Elsa.Cluster.Readability`) reads the container's EF finalization gates live. `AddEfSchemaDormancy()` composes it with the default check, and `AddEfSchemaReadability()` calls it, both registering by type so each shell reads its own gates. `AddObservedSchemaFinalization<T>()` composes a source and fails beside a different one. A container with no source observes nothing, so every declared requirement is reported unmet rather than available.
+
+---
+
+## Declarations
+
+### `[RequiresSchemaVersion(family, version)]` *(Core — `Elsa.Cluster.Core`)*
+- **Kind:** Static declaration on a shell feature class (spec 182, FR-001), in the style of `[UsesEfModule]`: constant arguments only, several allowed, `RequiresCompleteness = true` for a feature that queries the version's data and so also waits for the family's completeness (FR-005). Read by `SchemaVersionRequirement.DeclaredBy(type)` from attribute metadata by name.
+- **Consumed by:** the feature catalog's `FeatureAvailabilityCatalogContributor` and Modularity's Attention contributor (`Elsa.Modularity.Api`), which report the feature as dormant with its reason (FR-008 to FR-010), and by the feature's own operations, which pass its requirements to the check.
+
 ---
 
 ## Implementable contributor interfaces

@@ -33,19 +33,28 @@ public static class SchemaWriteRefusalProblem
     /// <summary>
     /// The refusal as a problem, its entries in this order: the message under <c>generalErrors</c>, so an envelope that
     /// shows only the first message shows it; then <c>code</c>, <c>family</c>, <c>writeVersion</c> and
-    /// <c>requiredVersion</c>, one value each.
+    /// <c>requiredVersion</c>, one value each. A dormancy refusal (spec 182, FR-013) adds its caller-neutral
+    /// <c>reason</c>, and its <c>feature</c> when it names one.
     /// </summary>
     public static EndpointProblem For(SchemaWriteRefusedException refusal)
     {
         ArgumentNullException.ThrowIfNull(refusal);
-        return new(StatusCode, new Dictionary<string, string[]>(StringComparer.Ordinal)
+        var errors = new Dictionary<string, string[]>(StringComparer.Ordinal)
         {
             ["generalErrors"] = [refusal.Message],
             ["code"] = [refusal.Code],
             ["family"] = [refusal.Family],
             ["writeVersion"] = [refusal.WriteVersion],
             ["requiredVersion"] = [refusal.RequiredVersion]
-        });
+        };
+        if (refusal is SchemaDormancyRefusedException dormancy)
+        {
+            if (dormancy.FeatureId is { } feature)
+                errors["feature"] = [feature];
+            errors["reason"] = [dormancy.Reason];
+        }
+
+        return new(StatusCode, errors);
     }
 
     /// <summary>

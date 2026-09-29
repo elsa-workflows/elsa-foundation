@@ -29,6 +29,7 @@
 
   <ItemGroup>
     <Compile Include="../../../Shared/FakeRuntimeFeatureCatalog.cs" Link="FakeRuntimeFeatureCatalog.cs" />
+    <Compile Include="../../../Shared/FakeObservedSchemaFinalization.cs" Link="FakeObservedSchemaFinalization.cs" />
     <Using Include="Elsa.Testing" />
   </ItemGroup>
 

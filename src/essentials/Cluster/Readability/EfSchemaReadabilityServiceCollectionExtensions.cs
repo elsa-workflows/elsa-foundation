@@ -1,4 +1,5 @@
 using Elsa.Cluster.Core.Contracts;
+using Elsa.Cluster.Core.Extensions;
 using Elsa.Cluster.Core.Models;
 using Elsa.Cluster.InProcess;
 using Elsa.Persistence.EntityFramework.SchemaFinalization;
@@ -29,6 +30,22 @@ public static class EfSchemaReadabilityServiceCollectionExtensions
         services.TryAddSingleton(new EfSchemaFinalizationObservations());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IMemberReportSource<ReadabilitySection>, EfSchemaReadabilitySource>());
         services.TryAddSingleton<IEfSchemaFleet, ClusterSchemaFleet>();
+        services.AddEfSchemaDormancy();
         return services.TryAddInProcessClusterMembership();
+    }
+
+    /// <summary>
+    /// Composes the shared dormancy check over what this container's EF finalization gates observe (spec 182, FR-003), so
+    /// a feature that needs data only a newer schema version holds stays dormant until its host observes that version as
+    /// finalized. <see cref="AddEfSchemaReadability"/> composes it; a host that composes no membership calls this alone.
+    /// </summary>
+    /// <remarks>
+    /// Both are registered by type, never by instance, so every shell container built from copies of the host's
+    /// registrations gets its own, reading the gates of the modules that shell admitted.
+    /// </remarks>
+    public static IServiceCollection AddEfSchemaDormancy(this IServiceCollection services)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        return services.TryAddSchemaDormancyCheck().AddObservedSchemaFinalization<EfObservedSchemaFinalization>();
     }
 }

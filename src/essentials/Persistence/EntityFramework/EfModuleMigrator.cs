@@ -101,6 +101,9 @@ public sealed class EfModuleMigrator<TContext>(
                 services.GetService<ILoggerFactory>()?.CreateLogger<EfModuleMigrator<TContext>>(),
                 publishBeforeRead: !migration.HostComposed);
             await gate.ActivateAsync(context, cancellationToken);
+            // Before the gate is registered, so whatever finds it can have it refresh or read its status on demand
+            // (spec 182, FR-014 and FR-022).
+            gate.UseContexts(WithContextAsync);
             services.GetService<EfSchemaFinalizationGates>()?.Register(typeof(TContext), gate);
             _gate = gate;
             _gateLoop = Task.Run(() => gate.RunAsync(WithContextAsync, _stopping.Token), CancellationToken.None);

@@ -36,6 +36,13 @@ are evaluated in the active shell scope for each document, so changing operation
 mutate static feature metadata. See [the extension-point catalog](EXTENSION_POINTS.md) for registration and
 compatibility obligations.
 
+A capability whose feature is dormant, waiting for a persisted-schema version to be finalized
+([spec 182](../../../../specs/182-dormant-features-until-finalization/spec.md), FR-007), is still advertised: its
+source sets `DormantReason` on the declaration from the shared dormancy check's caller-neutral reason, and the
+document carries `status: "dormant"` and that `reason` for it, so a client can explain a disabled control rather
+than hide it. One dormant contribution marks the whole capability dormant. An available capability carries
+neither member, so a document with nothing dormant is unchanged.
+
 The normative wire shape and multi-shell examples live in the
 [management API contract](../../../../specs/092-domain-owned-apis/contracts/management-api.openapi.yaml) and
 [quickstart](../../../../specs/092-domain-owned-apis/quickstart.md).

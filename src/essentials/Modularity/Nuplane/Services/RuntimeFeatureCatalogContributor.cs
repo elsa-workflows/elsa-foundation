@@ -30,6 +30,7 @@ public sealed class RuntimeFeatureCatalogContributor(IRuntimeFeatureCatalog runt
             // Runtime-resolved dependencies are always mandatory — CShells descriptors carry no optional flag.
             builder.Dependencies = descriptor.Dependencies.Select(id => new FeatureDependency(id, Optional: false)).ToArray();
             builder.DependenciesResolved = true;
+            builder.FeatureType ??= descriptor.StartupType;
 
             // Surface categories/settings declared via the source-only manifest hint attributes. The package-manifest
             // contributor runs after this one and overwrites with FeatureSourceKinds.Manifest, so manifest data wins
