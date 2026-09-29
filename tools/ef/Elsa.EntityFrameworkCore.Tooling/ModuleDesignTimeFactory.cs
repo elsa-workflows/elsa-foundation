@@ -33,7 +33,7 @@ public abstract class ModuleDesignTimeFactory<TContext>(string historyTable) : I
         var connection = Environment.GetEnvironmentVariable("ELSA_EF_CONNECTION") is { Length: > 0 } configured ? configured : placeholder;
         var schema = EfSchema.Normalize(typeof(TContext).Name, provider, Environment.GetEnvironmentVariable("ELSA_EF_SCHEMA"));
         var builder = new DbContextOptionsBuilder<TContext>();
-        EfRelationalProviderBinding.Use(builder, provider, connection, historyTable, typeof(TContext).Assembly.GetName().Name, schema);
+        EfRelationalProviderBinding.UseMigrationsFrom(builder, provider, connection, historyTable, typeof(TContext).Assembly, schema);
         return (TContext)Activator.CreateInstance(typeof(TContext), builder.Options)!;
     }
 

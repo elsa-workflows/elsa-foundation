@@ -2830,7 +2830,27 @@
         },
         {
           "type": "external",
+          "id": "CShells.Abstractions",
+          "version": "0.0.30-preview.159"
+        },
+        {
+          "type": "external",
           "id": "Microsoft.Extensions.Logging.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "external",
+          "id": "Nuplane.Loading.Abstractions",
+          "version": "0.0.11-preview.93"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration.Abstractions",
           "version": "10.0.10"
         },
         {
@@ -13021,11 +13041,6 @@
           "path": "tests/essentials/Cluster/Fixtures/FeedModule/Elsa.Cluster.Fixtures.FeedModule.csproj"
         },
         {
-          "type": "internal",
-          "id": "Elsa.Cluster.Fixtures.FeedModule",
-          "path": "tests/essentials/Cluster/Fixtures/FeedModuleV1/Elsa.Cluster.Fixtures.FeedModuleV1.csproj"
-        },
-        {
           "type": "external",
           "id": "Microsoft.EntityFrameworkCore.SqlServer",
           "version": "10.0.10"
@@ -13160,11 +13175,6 @@
         },
         {
           "type": "internal",
-          "id": "Elsa.Cluster.Fixtures.FeedModule",
-          "path": "tests/essentials/Cluster/Fixtures/FeedModuleV1/Elsa.Cluster.Fixtures.FeedModuleV1.csproj"
-        },
-        {
-          "type": "internal",
           "id": "Elsa.Cluster.Fixtures.MigratingModule",
           "path": "tests/essentials/Cluster/Fixtures/MigratingModule/Elsa.Cluster.Fixtures.MigratingModule.csproj"
         },
@@ -13231,40 +13241,6 @@
           "type": "external",
           "id": "CShells.AspNetCore.Abstractions",
           "version": "0.0.30-preview.159"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.EntityFrameworkCore",
-          "version": "10.0.10"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.EntityFrameworkCore.Relational",
-          "version": "10.0.10"
-        }
-      ]
-    },
-    {
-      "path": "tests/essentials/Cluster/Fixtures/FeedModuleV1/Elsa.Cluster.Fixtures.FeedModuleV1.csproj",
-      "name": "Elsa.Cluster.Fixtures.FeedModuleV1",
-      "kind": "test",
-      "domain": "Elsa.Cluster",
-      "sub_domain": "Fixtures.FeedModuleV1",
-      "role": "test",
-      "declared_target_framework": null,
-      "packable": false,
-      "package_id": null,
-      "line": null,
-      "edges": [
-        {
-          "type": "internal",
-          "id": "Elsa.Cluster.Core",
-          "path": "src/essentials/Cluster/Core/Elsa.Cluster.Core.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Persistence.EntityFramework",
-          "path": "src/essentials/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj"
         },
         {
           "type": "external",
@@ -13346,6 +13322,11 @@
         },
         {
           "type": "external",
+          "id": "CShells",
+          "version": "0.0.30-preview.159"
+        },
+        {
+          "type": "external",
           "id": "Microsoft.Extensions.DependencyInjection",
           "version": "10.0.10"
         },
@@ -13353,6 +13334,11 @@
           "type": "external",
           "id": "Microsoft.NET.Test.Sdk",
           "version": "18.0.0"
+        },
+        {
+          "type": "external",
+          "id": "Nuplane.Loading",
+          "version": "0.0.11-preview.93"
         },
         {
           "type": "external",

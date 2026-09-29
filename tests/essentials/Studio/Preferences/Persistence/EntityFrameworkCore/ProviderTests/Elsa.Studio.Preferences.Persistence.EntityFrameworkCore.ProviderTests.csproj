@@ -23,4 +23,9 @@
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Studio\Preferences\Persistence\EntityFrameworkCore\Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <!-- Asserts a module's migrations are bound by the assembly itself, never by name (spec 183, FR-021). -->
+    <Compile Include="..\..\..\..\..\Persistence\EntityFramework\Tests\MigrationsAssemblyAssert.cs" Link="MigrationsAssemblyAssert.cs" />
+  </ItemGroup>
 </Project>

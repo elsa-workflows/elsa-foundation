@@ -115,6 +115,7 @@
     <PackageVersion Include="Nuplane" Version="0.0.11-preview.93" />
     <PackageVersion Include="Nuplane.Admin" Version="0.0.11-preview.93" />
     <PackageVersion Include="Nuplane.Loading" Version="0.0.11-preview.93" />
+    <PackageVersion Include="Nuplane.Loading.Abstractions" Version="0.0.11-preview.93" />
     <PackageVersion Include="Nuplane.Sources.Directory" Version="0.0.11-preview.93" />
     <PackageVersion Include="Open.Linq.AsyncExtensions" Version="1.2.0" />
     <PackageVersion Include="OpenIddict.AspNetCore" Version="7.5.0" />

@@ -90,7 +90,8 @@ read, is exactly the failure that looks like success. It holds through five mech
    nothing. A displaced incarnation still counts until its own entry expires.
 4. **A report never claims more than every loaded reader can read** (FR-021, FR-022). The readable set is the
    intersection over every loaded declaration of the family, and a family leaves the report only when no declaration
-   of it remains loaded.
+   of it remains loaded. Amended 2026-09-29 (Decisions): a declaration an in-place upgrade has retired no longer
+   counts, and one is retired only once nothing in the host can still run it.
 5. **A lapsed member knows it** (FR-007), so spec 181's FR-018 can hold its gated writes to the version it last
    observed as finalized (spec 181, Decisions, Q22).
 
@@ -281,9 +282,13 @@ for identical fleets.
   to disagree with another's (FR-017; Decisions, Q20).
 - **A package installed through Nuplane on a running host.** Its family declarations are loaded before its shell
   generation prepares, so a publish then reports them (FR-020). A declaration still loaded in an older generation
-  narrows the readable set until that generation's load context is gone (FR-021). Today a host-integrated EF
-  module's previous release stays loaded after a reload, so that context is not released short of a restart: upgrade
-  such a module by restarting the host.
+  narrows the readable set until that generation's load context is gone (FR-021). Amended 2026-09-29 (Decisions):
+  Nuplane never unloads a host-integrated package's load context, so a host-integrated EF module's previous release
+  stays loaded after a reload, and "gone" would mean a restart; the older generation instead stops narrowing once it is
+  retired - Nuplane's active package set lists a newer generation of the same assembly, no shell generation that can
+  still run code composes from its load context, and the feature catalog the next shell generation is built from does
+  not name it (FR-021). Such a module is therefore upgraded in place, with no restart; restarting the host on the new
+  release still works, and is no longer required.
 - **A package removed on a running host.** Its families stay in the report until no declaration of them remains
   loaded. Removing them earlier would stop the host being counted while it can still write.
 - **The membership store is missing its tables.** Under `Validate` the EF provider's module is refused like any other
@@ -493,10 +498,34 @@ for identical fleets.
 - **FR-020**: The report MUST be derived only from the family declarations of spec 180's FR-001, read from every
   assembly loaded in the process, across every load context. No configuration can change it (MR-002). A publish
   recomputes it, so a package loaded through Nuplane is reported by the first publish after its assembly loads.
+  Amended 2026-09-29 (Decisions): except the declarations FR-021 retires.
 - **FR-021**: When several declarations of one family are loaded, for instance an old and a new shell generation
-  during a reload, the readable set reported MUST be their intersection.
+  during a reload, the readable set reported MUST be their intersection. Amended 2026-09-29 (Decisions): a declaration
+  MUST stop counting once it is retired, and MUST NOT stop counting before. It is retired when all three hold:
+  1. The host's package runtime has positive evidence that a newer generation replaced it: for Nuplane, its active
+     package set lists a loaded assembly of the same name and not this one, and this one is in a load context Nuplane
+     created.
+  2. No shell generation that can still run code composes a feature from its load context. A shell generation counts
+     from before its first initializer runs until its container has finished disposing: when it was drained, until
+     that drain completes, which the shell runtime completes only after the generation's service provider has been
+     disposed; otherwise, or when that drain fails, until its container has disposed everything it created after the
+     generation began. It counts every load context, other than the default one, of a feature its container names -
+     for CShells, every feature of the catalog snapshot it was built from, enabled or not - so a replaced declaration
+     beside an unchanged feature in the same load context keeps counting. A generation whose features cannot be read counts for every replaced
+     declaration.
+  3. The feature catalog the next shell generation will be built from names neither it nor a feature in its load
+     context. A catalog that has not been initialized yet, or that cannot be read, counts for every replaced
+     declaration: the first build may be reading any of them.
+
+  So while an old and a new generation are both live they are still intersected, and the old one stops counting as
+  soon as nothing that could run it is left, without a restart. A declaration in the default load context, in a load
+  context the package runtime did not create, or whose replacement is still loading or failed to load, is never
+  retired. The host publishes its report again when a shell generation that stops counting, or a refresh of the feature
+  catalog that stops naming it, retires one, so a gate waiting on it evaluates without waiting for another publish.
+  That publish runs after the shell generation's disposal, never inside it.
 - **FR-022**: A family MUST stay in the report while any declaration of it remains loaded, even after its modules are
-  disabled.
+  disabled. Amended 2026-09-29 (Decisions): any declaration FR-021 has not retired. A package removed, not replaced,
+  retires nothing.
 - **FR-023**: The contract MUST answer "can every counted member read family F at version V?" as a counting query with
   one requirement, taking an optional database identity (spec 181, FR-001). The answer is yes only when every counted
   member's readable set for F contains V. Otherwise it lists each counted member that cannot, with its readable set
@@ -622,7 +651,7 @@ The invariant tier is one FR per invariant of ADR 0078:
 | Requirement | Met by | Limits |
 |---|---|---|
 | MR-001 fleet view: host id, incarnation, status, liveness | FR-003 to FR-006, FR-009 | "Left" is written only by a graceful stop; a crashed member expires instead. |
-| MR-002 readability report derived from declarations only | FR-019 to FR-022 | Needs spec 180's FR-001 declarations, which do not exist yet. FR-021 narrows MR-002: the set reported is the intersection over loaded declarations. FR-019 also carries the database identity (Decisions, Q19). |
+| MR-002 readability report derived from declarations only | FR-019 to FR-022 | Needs spec 180's FR-001 declarations, which do not exist yet. FR-021 narrows MR-002: the set reported is the intersection over loaded declarations that are not retired (amended 2026-09-29). FR-019 also carries the database identity (Decisions, Q19). |
 | MR-003 read-after-write | FR-010, FR-011, FR-032 | Holds for fresh reads only, and not with a read replica. Spec 181 must use fresh reads for evaluation and confirmation. |
 | MR-004 publish before activate, including through Nuplane | FR-011, FR-020 | Membership provides the primitive and recomputes on demand. The ordering, publish and then read the record before activating, can only be enforced by the caller: spec 181's FR-013 and FR-015. |
 | MR-005 lapse awareness | FR-007, FR-027, FR-061 | The in-process provider never lapses. |
@@ -806,3 +835,43 @@ the feature that needs it answers 409 saying it waits for every host (FR-023; sp
 killed and restarted on the new release under the same host id, waits out its predecessor's expiry (User Story 4,
 FR-004b), and the version is then finalized and served on both. The same test with the provider left off shows each
 host finalizing on its own (FR-018a), and a host with the provider half configured refuses to start.
+
+Recorded 2026-09-29, amending FR-020 to FR-022 for an in-place upgrade; lands with the PR that implements it, whose merge
+is the owner's approval.
+
+- **A replaced package generation stops counting once it is retired, and not before.** Nuplane loads each
+  host-integrated package graph into a load context it never unloads, so an EF module upgraded in place on a running
+  host keeps its previous release's assembly loaded for the life of the process. FR-021's intersection over every
+  loaded declaration then pinned the upgraded host to what the previous release reads - [1] and [1, 2] intersect to
+  [1] - so the new version never finalized and every feature that needs it stayed dormant until a restart. The same
+  stale assembly made the EF activation guard's module catalog find the module declared twice. The fix keeps the
+  conservative direction in every transition: a declaration is retired only on positive evidence that a newer
+  generation replaced it in the host's active package set, and only once nothing that could run it is left. That is
+  every shell generation - an active one, including one whose reload failed, one still draining, or one still
+  initializing - from before its first initializer runs until its provider has been disposed, pinning every load
+  context of a feature its container names; and the next shell generation, which CShells builds from its runtime
+  feature catalog's current snapshot however stale: `Elsa.Foundation.Host` skips refreshing that catalog after a
+  reconcile while no shell is active, so with eager activation off, or after it failed, the first request would build
+  from a catalog that still names the old generation. Until then both generations are intersected, as before. The
+  host's evidence of replacement is Nuplane's catalog of the active package set, read on every publish; the evidence
+  that nothing still runs the old generation is CShells' shell containers, its drains and its feature catalog. The
+  finalization gates were considered and not chosen as that evidence: they live per shell container
+  and are registered only after admission, so they cannot speak for a generation that is about to publish, nor for a
+  family whose module no shell enables (FR-022). The activation guard, which judges the shell generation an apply is
+  about to build, stops counting a replaced generation at once. Research: "B3: what 'loaded' means".
+- **A module's migrations are bound by assembly, never by name.** The same in-place upgrade reached the new release's
+  migrations while each EF module package carried EF Core in its own package graph. A module named its migrations
+  assembly, EF Core resolves such a name with `Assembly.Load` from its own load context, and after an upgrade that was
+  the previous release's graph context, which the new release binds EF Core from, so the name reached the previous
+  release, whose migrations are keyed to the previous release's context type. The new release's context therefore saw
+  no migration of its own: under `Validate` a reload onto a release with an unapplied migration activated anyway, and
+  `AutoMigrate` would have applied nothing. Since #2151 `Elsa.Foundation.Host` carries and shares EF Core, so EF Core
+  resolves the name from the host's own load context, which reaches a package's assembly only through Nuplane's
+  host-integrated resolution of the active package set, and that answers with the new release; the previous release
+  stays loaded, in the non-collectible host-integrated package context Nuplane gave it, but the name no longer reaches
+  it there. Every module binding now hands EF Core the module's assembly itself
+  (`EfRelationalProviderBinding.UseMigrationsFrom`), as do the design-time factory and the Workbench's OpenIddict
+  context, so which release a module's migrations come from no longer depends on the load context EF Core resolves
+  names from, and a reload onto a release with an unapplied migration is refused by `EfDatabaseMigrator`'s `Validate`
+  check with the migration pending (ADR 0076), as a restart would be. This changes no requirement; it is recorded here
+  because it is the same in-place upgrade.

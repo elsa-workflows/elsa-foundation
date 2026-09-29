@@ -916,9 +916,9 @@ public sealed class EfToolingHostTests : IDisposable
     public async Task Script_refuses_a_module_name_that_produces_a_non_bare_file_name_and_writes_nothing()
     {
         // Loaded via AssemblyLoadContext.Default.LoadFromStream rather than SyntheticEfModules.Build's
-        // Assembly.Load(byte[]): the latter is not resolvable by simple name afterwards, and
-        // EfRelationalProviderBinding.Use configures the migrations assembly by name, which
-        // SecretsPostgreSqlDbContext's IMigrationsAssembly service resolves eagerly on first use.
+        // Assembly.Load(byte[]), so it is resolvable by simple name afterwards, as an assembly a host loads is.
+        // The tool binds the module's migrations assembly itself (EfRelationalProviderBinding.UseMigrationsFrom),
+        // which SecretsPostgreSqlDbContext's IMigrationsAssembly service reads eagerly on first use.
         var image = SyntheticEfModules.BuildImage(
             "Acme.Traversal.Modules",
             new SyntheticModule("Acme/Evil", "AcmeEvil", PostgreSql: typeof(SecretsPostgreSqlDbContext)));

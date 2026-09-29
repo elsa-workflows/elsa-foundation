@@ -77,13 +77,15 @@ public sealed class EfRelationalProviderBindingTests
         var builder = new DbContextOptionsBuilder();
         using var services = new ServiceCollection().BuildServiceProvider();
 
-        new EfModuleBinding("Test", "__EFMigrationsHistory_Test", "Test.Migrations", "Test", "Data Source=test-module.db")
+        var migrations = typeof(EfRelationalProviderBindingTests).Assembly;
+
+        new EfModuleBinding("Test", "__EFMigrationsHistory_Test", migrations, "Test", "Data Source=test-module.db")
             .Apply(builder, services, "Sqlite", null, null);
 
         var relational = builder.Options.Extensions.OfType<RelationalOptionsExtension>().Single();
         Assert.Equal("Data Source=test-module.db", relational.ConnectionString);
         Assert.Equal("__EFMigrationsHistory_Test", relational.MigrationsHistoryTableName);
-        Assert.Equal("Test.Migrations", relational.MigrationsAssembly);
+        MigrationsAssemblyAssert.BoundByTheAssemblyItself(migrations, relational);
     }
 
     [Fact]

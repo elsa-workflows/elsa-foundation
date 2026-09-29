@@ -18,7 +18,10 @@ internal static class FoundationHostComposition
     /// <summary>The fixture's persistence feature, which binds its context and admits it through its finalization gate.</summary>
     public const string EntityFrameworkCoreFeature = "FeedModuleFixtureEntityFrameworkCore";
 
-    /// <summary>The fixture's feature that needs version 2 of its family. The release before the fixture has none.</summary>
+    /// <summary>
+    /// The fixture's feature that needs version 2 of its family, the version its release writes. The release before the
+    /// fixture's carries it too, needing version 1, the one version that release reads.
+    /// </summary>
     public const string OrdersFeature = "FeedModuleFixtureOrders";
 
     /// <summary>The settings every boot test starts the host with, as configuration keys.</summary>

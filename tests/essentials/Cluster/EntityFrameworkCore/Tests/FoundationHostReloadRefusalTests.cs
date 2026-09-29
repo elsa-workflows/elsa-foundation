@@ -79,7 +79,28 @@ public sealed class FoundationHostReloadRefusalTests(FoundationHostFeed feed, Mi
         await HostLogsAsync($"Reloading shell '{ShellName}' after a Nuplane reconcile was refused");
         Assert.Contains(MigratingModule.AddColor, _host.Output, StringComparison.Ordinal);
 
-        await AssertRefusedThenAppliedThenReloadedAsync(runningVersion: "2.0.0 generation 1", reloadedVersion: "2.0.0");
+        await AssertRefusedThenAppliedThenReloadedAsync(runningVersion: "2.0.0 generation 1");
+    }
+
+    /// <summary>
+    /// The newer release installed into a running host's feed: the host reconciles, loads it beside the release its shell
+    /// runs, and reloads onto it, which the migration it adds refuses with a 409 while the release it replaces keeps
+    /// serving; the real tool applies the migration, and the same process then reloads onto the new release. Its
+    /// migrations are the new release's own: the module hands EF Core its assembly (spec 183, FR-021, amended 2026-09-29).
+    /// A name would reach the same release on this host, whose EF Core resolves it through Nuplane's resolution of the
+    /// active package set, so the binding is pinned by <c>MigrationsAssemblyAssert</c> rather than here.
+    /// </summary>
+    [Fact]
+    public async Task A_release_installed_on_a_running_host_whose_migration_is_not_applied_is_refused_with_a_409_until_the_persistence_tool_applies_it()
+    {
+        await MigrateAsync(generation: 1);
+        _host = await StartAsync(EfMigratePolicy.Validate, generation: 1, deployed: true);
+        Assert.Equal((HttpStatusCode.OK, "1.0.0 generation 1"), await Version());
+
+        File.Copy(migrating.Package(2), Path.Join(_host.PackagesDirectory, Path.GetFileName(migrating.Package(2))));
+        await HostLogsAsync($"Reloading shell '{ShellName}' after a Nuplane reconcile was refused");
+
+        await AssertRefusedThenAppliedThenReloadedAsync(runningVersion: "1.0.0 generation 1");
     }
 
     /// <summary>
@@ -107,10 +128,10 @@ public sealed class FoundationHostReloadRefusalTests(FoundationHostFeed feed, Mi
 
     /// <summary>
     /// The refusal, the tool and the reload of both: a 409 that names the shell, the module, the migration and the command while
-    /// the running generation keeps serving; the real tool applying the migration; and the same process reloading onto a
-    /// generation that has advanced.
+    /// the running generation, <paramref name="runningVersion"/>, keeps serving; the real tool applying the migration; and the
+    /// same process reloading onto the newer release, at a generation that has advanced.
     /// </summary>
-    private async Task AssertRefusedThenAppliedThenReloadedAsync(string runningVersion, string reloadedVersion)
+    private async Task AssertRefusedThenAppliedThenReloadedAsync(string runningVersion)
     {
         var (refused, problem) = await ReloadAsync();
 
@@ -146,7 +167,7 @@ public sealed class FoundationHostReloadRefusalTests(FoundationHostFeed feed, Mi
         var (status, version) = await Version();
         Assert.Equal(HttpStatusCode.OK, status);
         var parts = version.Split(" generation ");
-        Assert.Equal(reloadedVersion, parts[0]);
+        Assert.Equal("2.0.0", parts[0]);
         Assert.True(int.Parse(parts[1]) > 1, $"The shell's generation did not advance: {version}");
     }
 
