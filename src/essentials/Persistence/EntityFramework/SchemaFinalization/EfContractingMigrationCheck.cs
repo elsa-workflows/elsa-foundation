@@ -144,10 +144,9 @@ public static class EfContractingMigrationCheck
 
         var applied = (await context.Database.GetAppliedMigrationsAsync(cancellationToken)).ToHashSet(StringComparer.Ordinal);
         var seed = 0;
-        foreach (var migration in contracting.Where(migration => applied.Contains(migration.Id)))
+        // An opt-out that names no family names no version of this one either.
+        foreach (var version in contracting.Where(migration => applied.Contains(migration.Id)).Select(migration => migration.Family is null ? null : migration.Version))
         {
-            // An opt-out that names no family names no version of this one either.
-            var version = migration.Family is null ? null : migration.Version;
             var at = version is null ? -1 : IndexOf(readable, version);
             if (at < 0)
                 throw new EfSchemaActivationRefusedException(module, chain.Family, EfSchemaActivationRefusal.ContractedUnreadable, version, readable);

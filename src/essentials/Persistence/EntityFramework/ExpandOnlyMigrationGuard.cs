@@ -134,9 +134,15 @@ public static class ExpandOnlyMigrationGuard
                        $"SchemaFamily = \"{family}\" and the FinalizedVersion whose finalization makes the removal safe (spec 185 FR-023)");
         else if (!StringComparer.Ordinal.Equals(optOut.SchemaFamily, family))
             faults.Add($"its opt-out names schema family '{optOut.SchemaFamily}', but what it removes ({removed}) belongs to '{family}' (spec 185 FR-023)");
-        else if (!families.ReadableVersions.TryGetValue(family, out var versions) || !versions.Contains(optOut.FinalizedVersion, StringComparer.Ordinal))
-            faults.Add($"its opt-out names version '{optOut.FinalizedVersion}' of '{family}', which this build's chain for that family " +
-                       $"does not read ([{string.Join(", ", versions ?? [])}]) (spec 185 FR-023)");
+        else
+        {
+            // A family the build declares no chain for reads no version.
+            var versions = families.ReadableVersions.GetValueOrDefault(family) ?? [];
+            if (!versions.Contains(optOut.FinalizedVersion, StringComparer.Ordinal))
+                faults.Add($"its opt-out names version '{optOut.FinalizedVersion}' of '{family}', which this build's chain for that family " +
+                           $"does not read ([{string.Join(", ", versions)}]) (spec 185 FR-023)");
+        }
+
         return faults;
     }
 

@@ -239,7 +239,7 @@ public sealed class ContractingNote
 [EfSchemaUpcaster(ContractingModule.EarlierVersion, ContractingModule.CurrentVersion)]
 public sealed class ContractingProbeUpcaster : IEfSchemaUpcaster
 {
-    public string Upcast(EfSchemaContent content) => content.Value;
+    public EfSchemaRowContent Upcast(EfSchemaRowContent row) => row;
 }
 
 /// <summary>

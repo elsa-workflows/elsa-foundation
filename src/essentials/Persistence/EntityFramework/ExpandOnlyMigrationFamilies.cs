@@ -38,16 +38,17 @@ public sealed record ExpandOnlyMigrationFamilies(
     {
         ArgumentNullException.ThrowIfNull(families);
         ArgumentNullException.ThrowIfNull(moduleAssembly);
+        var stampedEntityTypes =
+            from entityType in modelBefore?.GetEntityTypes() ?? []
+            where !entityType.IsOwned() && entityType.FindProperty(EfSchemaVersion.ColumnName) is not null
+            let table = entityType.GetTableName()
+            where table is not null &&
+                  !table.StartsWith(EfSchemaFinalization.RecordTablePrefix, StringComparison.Ordinal) &&
+                  !table.StartsWith(EfSchemaFinalization.DatabaseIdentityTablePrefix, StringComparison.Ordinal)
+            select (EntityType: entityType, Table: table!);
         var stamped = new Dictionary<string, string?>(StringComparer.Ordinal);
-        foreach (var entityType in modelBefore?.GetEntityTypes() ?? [])
+        foreach (var (entityType, table) in stampedEntityTypes)
         {
-            if (entityType.IsOwned() ||
-                entityType.FindProperty(EfSchemaVersion.ColumnName) is null ||
-                entityType.GetTableName() is not { } table ||
-                table.StartsWith(EfSchemaFinalization.RecordTablePrefix, StringComparison.Ordinal) ||
-                table.StartsWith(EfSchemaFinalization.DatabaseIdentityTablePrefix, StringComparison.Ordinal))
-                continue;
-
             var family = FamilyOf(entityType, families, moduleAssembly);
             // Two entity types sharing one table that belong to different families leave the table's family unknown.
             stamped[table] = stamped.TryGetValue(table, out var existing) && !StringComparer.Ordinal.Equals(existing, family) ? null : family;
