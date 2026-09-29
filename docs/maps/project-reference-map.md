@@ -7,8 +7,8 @@ Records direct project references only.
 ## Summary
 
 - Source projects: 137
-- Test projects: 131
-- Direct project references: 1239
+- Test projects: 130
+- Direct project references: 1235
 
 ## Projects
 
@@ -200,11 +200,10 @@ Records direct project references only.
 | [Acme.Widgets](../../tests/essentials/Cli/Fixtures/Widgets/Acme.Widgets.csproj) | test | Other | - | false | Elsa.Persistence.EntityFramework |
 | [Elsa.Cli.Fixtures.WorkerContextHost](../../tests/essentials/Cli/Fixtures/WorkerContextHost/Elsa.Cli.Fixtures.WorkerContextHost.csproj) | test | Elsa.Cli | - | false | - |
 | [Elsa.Cli.Tests](../../tests/essentials/Cli/Tests/Elsa.Cli.Tests.csproj) | test | Elsa.Cli | - | false | Acme.Widgets<br>Elsa.Cli<br>Elsa.Cli.Fixtures.ClusterHost<br>Elsa.Cli.Fixtures.CollisionHost<br>Elsa.Cli.Fixtures.Host<br>Elsa.Cli.Fixtures.LegacyHost<br>Elsa.Cli.Fixtures.MinimalHost<br>Elsa.Cli.Fixtures.NuplaneCapabilityHost<br>Elsa.Cli.Fixtures.NuplaneHost<br>Elsa.Cli.Fixtures.PartialContextHost<br>Elsa.Cli.Fixtures.ResourceAwareLiveHost<br>Elsa.Cli.Fixtures.ShellsHost<br>Elsa.Cli.Fixtures.UnsupportedContextHost<br>Elsa.Cli.Fixtures.WorkerContextHost<br>Elsa.Cluster.Core<br>Elsa.Modularity.Planning |
-| [Elsa.Cluster.EntityFrameworkCore.ProviderTests](../../tests/essentials/Cluster/EntityFrameworkCore/ProviderTests/Elsa.Cluster.EntityFrameworkCore.ProviderTests.csproj) | test | Elsa.Cluster | - | false | Elsa.Cluster.EntityFrameworkCore.Testing<br>Elsa.Cluster.Fixtures.FeedModule<br>Elsa.Cluster.Fixtures.FeedModuleV1<br>Elsa.Foundation.Host |
+| [Elsa.Cluster.EntityFrameworkCore.ProviderTests](../../tests/essentials/Cluster/EntityFrameworkCore/ProviderTests/Elsa.Cluster.EntityFrameworkCore.ProviderTests.csproj) | test | Elsa.Cluster | - | false | Elsa.Cluster.EntityFrameworkCore.Testing<br>Elsa.Cluster.Fixtures.FeedModule<br>Elsa.Foundation.Host |
 | [Elsa.Cluster.EntityFrameworkCore.Testing](../../tests/essentials/Cluster/EntityFrameworkCore/Testing/Elsa.Cluster.EntityFrameworkCore.Testing.csproj) | test | Elsa.Cluster | - | false | Elsa.Cluster.EntityFrameworkCore<br>Elsa.Cluster.Readability<br>Elsa.Cluster.Testing |
-| [Elsa.Cluster.EntityFrameworkCore.Tests](../../tests/essentials/Cluster/EntityFrameworkCore/Tests/Elsa.Cluster.EntityFrameworkCore.Tests.csproj) | test | Elsa.Cluster | - | false | Elsa.Cli<br>Elsa.Cluster.EntityFrameworkCore.Testing<br>Elsa.Cluster.Fixtures.FeedModule<br>Elsa.Cluster.Fixtures.FeedModuleV1<br>Elsa.Cluster.Fixtures.MigratingModule<br>Elsa.Foundation.Host |
+| [Elsa.Cluster.EntityFrameworkCore.Tests](../../tests/essentials/Cluster/EntityFrameworkCore/Tests/Elsa.Cluster.EntityFrameworkCore.Tests.csproj) | test | Elsa.Cluster | - | false | Elsa.Cli<br>Elsa.Cluster.EntityFrameworkCore.Testing<br>Elsa.Cluster.Fixtures.FeedModule<br>Elsa.Cluster.Fixtures.MigratingModule<br>Elsa.Foundation.Host |
 | [Elsa.Cluster.Fixtures.FeedModule](../../tests/essentials/Cluster/Fixtures/FeedModule/Elsa.Cluster.Fixtures.FeedModule.csproj) | test | Elsa.Cluster | - | false | Elsa.Cluster.Core<br>Elsa.Persistence.EntityFramework |
-| [Elsa.Cluster.Fixtures.FeedModuleV1](../../tests/essentials/Cluster/Fixtures/FeedModuleV1/Elsa.Cluster.Fixtures.FeedModuleV1.csproj) | test | Elsa.Cluster | - | false | Elsa.Cluster.Core<br>Elsa.Persistence.EntityFramework |
 | [Elsa.Cluster.Fixtures.MigratingModule](../../tests/essentials/Cluster/Fixtures/MigratingModule/Elsa.Cluster.Fixtures.MigratingModule.csproj) | test | Elsa.Cluster | - | false | Elsa.Persistence.EntityFramework |
 | [Elsa.Cluster.Readability.Tests](../../tests/essentials/Cluster/Readability/Tests/Elsa.Cluster.Readability.Tests.csproj) | test | Elsa.Cluster | - | false | Elsa.Cluster.Readability<br>Elsa.Testing<br>Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore |
 | [Elsa.Cluster.Testing](../../tests/essentials/Cluster/Testing/Elsa.Cluster.Testing.csproj) | test | Elsa.Cluster | - | false | Elsa.Cluster.Core<br>Elsa.Serialization.SystemText<br>Elsa.Workflows.Runtime.Distributed |
@@ -294,7 +293,7 @@ Records direct project references only.
 | Elsa.Attention | 2 | 2 |
 | Elsa.Caching | 2 | 1 |
 | Elsa.Cli | 2 | 16 |
-| Elsa.Cluster | 4 | 9 |
+| Elsa.Cluster | 4 | 8 |
 | Elsa.Diagnostics | 8 | 8 |
 | Elsa.Events | 3 | 1 |
 | Elsa.Expressions | 9 | 3 |

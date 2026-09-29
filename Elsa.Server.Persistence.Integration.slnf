@@ -138,7 +138,6 @@
       "tests/essentials/Cluster/EntityFrameworkCore/ProviderTests/Elsa.Cluster.EntityFrameworkCore.ProviderTests.csproj",
       "tests/essentials/Cluster/EntityFrameworkCore/Testing/Elsa.Cluster.EntityFrameworkCore.Testing.csproj",
       "tests/essentials/Cluster/Fixtures/FeedModule/Elsa.Cluster.Fixtures.FeedModule.csproj",
-      "tests/essentials/Cluster/Fixtures/FeedModuleV1/Elsa.Cluster.Fixtures.FeedModuleV1.csproj",
       "tests/essentials/Cluster/Testing/Elsa.Cluster.Testing.csproj",
       "tests/essentials/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.ProviderTests.csproj",
       "tests/essentials/Diagnostics/StructuredLogs/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.ProviderTests.csproj",

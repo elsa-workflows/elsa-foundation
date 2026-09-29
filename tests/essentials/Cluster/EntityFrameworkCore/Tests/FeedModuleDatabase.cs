@@ -24,6 +24,12 @@ internal sealed class FeedModuleDatabase(Action<DbContextOptionsBuilder, string>
 
     public static readonly string[] Chain = ["1", "2"];
 
+    /// <summary>The one migration the fixture's next release adds.</summary>
+    public const string NextReleaseMigration = "20260929000000_FeedModuleAddTags";
+
+    /// <summary>The table <see cref="NextReleaseMigration"/> creates.</summary>
+    public const string TagsTable = "FeedModuleFixtureTags";
+
     /// <summary>Creates the module's finalization tables and the record a release at version 1 created, optionally held.</summary>
     public async Task SeedAsync(string? hold = null)
     {
@@ -41,6 +47,23 @@ internal sealed class FeedModuleDatabase(Action<DbContextOptionsBuilder, string>
         var store = new EfSchemaFinalizationStore(context);
         if (!(await store.ReleaseHoldAsync(Family, (await store.FindAsync(Family))!.Revision, null, "ops@example")).Applied)
             throw new InvalidOperationException("The hold was not released: the record changed under the release.");
+    }
+
+    /// <summary>
+    /// Applies the next release's migration out of process, as an operator does before a host that validates its
+    /// migrations may run that release: its table, and its row in the module's migrations history.
+    /// </summary>
+    public async Task ApplyNextReleaseMigrationAsync()
+    {
+        await using var context = Context();
+        var history = EfMigrationsHistory.TableName(HistoryModule);
+        // Names of the fixture's own, not input: nothing here needs parameters.
+        var sql = $"""
+                   CREATE TABLE "{TagsTable}" ("Id" INTEGER NOT NULL CONSTRAINT "PK_{TagsTable}" PRIMARY KEY, "Name" TEXT NOT NULL);
+                   CREATE TABLE IF NOT EXISTS "{history}" ("MigrationId" TEXT NOT NULL CONSTRAINT "PK_{history}" PRIMARY KEY, "ProductVersion" TEXT NOT NULL);
+                   INSERT INTO "{history}" ("MigrationId", "ProductVersion") VALUES ('{NextReleaseMigration}', '10.0.10');
+                   """;
+        await context.Database.ExecuteSqlRawAsync(sql);
     }
 
     public async Task<SchemaFinalizationRecord> RecordAsync()

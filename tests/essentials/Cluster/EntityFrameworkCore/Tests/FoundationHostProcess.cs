@@ -43,10 +43,10 @@ internal sealed class FoundationHostProcess : IAsyncDisposable
     /// <summary>
     /// Starts the host over <paramref name="packages"/>, a directory of <c>.nupkg</c> files it takes as its feed, with
     /// <paramref name="shells"/> as its <c>shells.json</c> and <paramref name="settings"/> as environment variables, and
-    /// returns once its shells are active.
+    /// returns once its shells are active, or, with <paramref name="awaitShells"/> false, once it listens.
     /// </summary>
-    public static Task<FoundationHostProcess> StartAsync(string shells, string packages, IReadOnlyDictionary<string, string> settings) =>
-        StartAsync(shells, Directory.EnumerateFiles(packages, "*.nupkg"), settings);
+    public static Task<FoundationHostProcess> StartAsync(string shells, string packages, IReadOnlyDictionary<string, string> settings, bool awaitShells = true) =>
+        StartAsync(shells, Directory.EnumerateFiles(packages, "*.nupkg"), settings, awaitShells: awaitShells);
 
     /// <summary>
     /// <see cref="StartAsync(string, string, IReadOnlyDictionary{string, string})"/> over exactly <paramref name="packageFiles"/>.
@@ -111,6 +111,32 @@ internal sealed class FoundationHostProcess : IAsyncDisposable
 
     /// <summary>The directory the host's feed reads, where a package dropped in is a package installed.</summary>
     public string PackagesDirectory => Path.Join(ContentRoot, "packages");
+
+    /// <summary>Whether the host process is still the one <see cref="StartAsync(string, string, IReadOnlyDictionary{string, string}, bool)"/> started, and still running.</summary>
+    public bool IsRunning => _started && !_process.HasExited;
+
+    /// <summary>
+    /// Upgrades a package in place, the way an operator does on a running host: every release of
+    /// <paramref name="packageId"/> leaves the host's feed folder and <paramref name="package"/> takes its place, written
+    /// under another name and moved in, so the folder's watcher never reads half a file. The host is not restarted.
+    /// </summary>
+    public void UpgradeInPlace(string packageId, string package)
+    {
+        foreach (var previous in Releases(PackagesDirectory, packageId).ToArray())
+            File.Delete(previous);
+
+        var staged = Path.Join(PackagesDirectory, Path.GetFileName(package) + ".partial");
+        File.Copy(package, staged);
+        File.Move(staged, Path.Join(PackagesDirectory, Path.GetFileName(package)));
+    }
+
+    /// <summary>
+    /// The <c>.nupkg</c> files in <paramref name="directory"/> that are a release of <paramref name="packageId"/>, whatever
+    /// their version, and not of a longer id it prefixes: <c>{id}.{version}.nupkg</c>, whose version starts with a digit.
+    /// </summary>
+    public static IEnumerable<string> Releases(string directory, string packageId) =>
+        Directory.EnumerateFiles(directory, $"{packageId}.*.nupkg")
+            .Where(file => char.IsAsciiDigit(Path.GetFileName(file)[packageId.Length + 1]));
 
     /// <summary>
     /// The packages Nuplane has active in this host, by id, at the version active, read from the store state the host

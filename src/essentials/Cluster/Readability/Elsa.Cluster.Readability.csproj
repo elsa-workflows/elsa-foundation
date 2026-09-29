@@ -12,8 +12,16 @@
     (ADR 0076), although Elsa.Foundation.Host now always carries the EF closure for its durable provider (#2151), and a module Nuplane loads
     with a private copy of Elsa.Persistence.EntityFramework still reaches the host's membership through the types both see.
   -->
+  <!--
+    Which package generations an in-place upgrade superseded (spec 183, FR-021, amended 2026-09-29): Nuplane's catalog of
+    the active package set says what was replaced, and CShells' shell lifecycle says when the last generation that could
+    still run it is gone. Their abstractions only, which both hosts that compose this share with their packages: a host
+    without Nuplane or CShells takes neither runtime by composing readability, and has nothing superseded.
+  -->
   <ItemGroup>
+    <PackageReference Include="CShells.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <PackageReference Include="Nuplane.Loading.Abstractions" />
   </ItemGroup>
 
   <ItemGroup>

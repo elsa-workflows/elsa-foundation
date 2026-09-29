@@ -28,14 +28,13 @@
 
   <!--
     The two-host boot scenario of the Tests project on PostgreSQL (#2151): its harness is linked, not copied. The built
-    Elsa.Foundation.Host and the two release fixtures it packs are build-order references only, exactly as in the Tests
+    Elsa.Foundation.Host and the fixture whose releases it packs are build-order references only, exactly as in the Tests
     project; nothing of them is loaded into this process.
   -->
   <ItemGroup>
     <Compile Include="..\Tests\FoundationHostFeed.cs;..\Tests\FoundationHostProcess.cs;..\Tests\FoundationHostComposition.cs;..\Tests\FoundationHostClusterScenario.cs;..\Tests\FeedModuleDatabase.cs;..\Tests\CapturedOutput.cs;..\Tests\Polling.cs;..\Tests\ChildProcess.cs" LinkBase="FoundationHost" />
     <ProjectReference Include="..\..\..\..\..\src\apps\Elsa.Foundation.Host\Elsa.Foundation.Host.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\..\Fixtures\FeedModule\Elsa.Cluster.Fixtures.FeedModule.csproj" ReferenceOutputAssembly="false" />
-    <ProjectReference Include="..\..\Fixtures\FeedModuleV1\Elsa.Cluster.Fixtures.FeedModuleV1.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
   <ItemGroup>

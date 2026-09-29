@@ -6,7 +6,11 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <!-- CShells itself, so its registry builds, reloads, drains and disposes the shell generations readability tracks. -->
+    <PackageReference Include="CShells" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <!-- Nuplane's own package load context, so a superseded generation is loaded exactly where Nuplane loads one. -->
+    <PackageReference Include="Nuplane.Loading" />
     <!-- Reads emitted declarations as metadata only, which is how spec 180's FR-001 requires them to be readable. -->
     <PackageReference Include="System.Reflection.MetadataLoadContext" />
     <PackageReference Include="xunit" />

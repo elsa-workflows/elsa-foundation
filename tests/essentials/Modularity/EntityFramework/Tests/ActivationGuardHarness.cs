@@ -24,7 +24,7 @@ namespace Elsa.Modularity.EntityFramework.Tests;
 /// </summary>
 internal sealed class FixedEfModuleAssemblySource(params Assembly[] assemblies) : IEfModuleAssemblySource
 {
-    public IReadOnlyList<Assembly> GetAssemblies() => assemblies;
+    public ValueTask<IReadOnlyList<Assembly>> GetAssembliesAsync(CancellationToken cancellationToken = default) => ValueTask.FromResult<IReadOnlyList<Assembly>>(assemblies);
 }
 
 /// <summary>

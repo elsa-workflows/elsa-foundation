@@ -1371,12 +1371,12 @@ public static class EfToolingHost
     private static DbContext CreateContext(EfModuleDescriptor descriptor, Type contextType, string provider, string connection, string? schema)
     {
         var builder = (DbContextOptionsBuilder)Activator.CreateInstance(typeof(DbContextOptionsBuilder<>).MakeGenericType(contextType))!;
-        EfRelationalProviderBinding.Use(
+        EfRelationalProviderBinding.UseMigrationsFrom(
             builder,
             provider,
             connection,
             descriptor.HistoryTableName,
-            descriptor.Assembly.GetName().Name,
+            descriptor.Assembly,
             schema);
         return (DbContext)Activator.CreateInstance(contextType, builder.Options)!;
     }

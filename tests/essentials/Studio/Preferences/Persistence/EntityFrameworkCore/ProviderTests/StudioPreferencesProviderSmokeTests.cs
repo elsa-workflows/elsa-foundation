@@ -1,4 +1,5 @@
 using Elsa.Studio.Preferences.Core.Contracts;
+using Elsa.Persistence.EntityFramework.Tests;
 using Elsa.Studio.Preferences.Core.Models;
 using Elsa.Studio.Preferences.Persistence.EntityFrameworkCore;
 using Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.DependencyInjection;
@@ -82,7 +83,7 @@ public sealed class StudioPreferencesMySqlSmokeTests(StudioPreferencesMySqlConta
             .OfType<RelationalOptionsExtension>()
             .Single();
         Assert.Equal(StudioPreferencesEfModule.HistoryTableName, relational.MigrationsHistoryTableName);
-        Assert.Equal(typeof(StudioPreferencesDbContext).Assembly.GetName().Name, relational.MigrationsAssembly);
+        MigrationsAssemblyAssert.BoundByTheAssemblyItself(typeof(StudioPreferencesDbContext).Assembly, relational);
 
         await context.Database.EnsureCreatedAsync();
         var key = new StudioPreferenceKey(

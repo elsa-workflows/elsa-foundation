@@ -58,7 +58,7 @@ public sealed class EfPendingMigrationActivationGuard(IServiceProvider services,
     {
         ArgumentNullException.ThrowIfNull(context);
 
-        var loaded = assemblies.GetAssemblies();
+        var loaded = await assemblies.GetAssembliesAsync(cancellationToken);
         var usages = EfProviderAgreement.Discover(loaded);
         var enabled = context.EnabledFeatures;
         var mapped = enabled
@@ -254,12 +254,12 @@ public sealed class EfPendingMigrationActivationGuard(IServiceProvider services,
         string? schema)
     {
         var builder = (DbContextOptionsBuilder)Activator.CreateInstance(typeof(DbContextOptionsBuilder<>).MakeGenericType(contextType))!;
-        EfRelationalProviderBinding.Use(
+        EfRelationalProviderBinding.UseMigrationsFrom(
             builder,
             provider,
             connection,
             descriptor.HistoryTableName,
-            descriptor.Assembly.GetName().Name,
+            descriptor.Assembly,
             schema);
         return (DbContext)Activator.CreateInstance(contextType, builder.Options)!;
     }
