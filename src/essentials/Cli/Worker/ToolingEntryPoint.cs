@@ -21,6 +21,7 @@ public sealed class ToolingEntryPoint
     private const string ContextTypeName = "Elsa.Persistence.EntityFramework.Tooling.EfToolingConfigurationContext";
     private const string ContextContractTypeName = "Elsa.Persistence.EntityFramework.Tooling.EfToolingContextContract";
     private const string CapabilitySelectionField = "CapabilitySelection";
+    private const string SkewAllowanceField = "SkewAllowance";
 
     /// <summary>Serialized the way the frozen tooling contract reads it: camelCase, and no null for a field a command would refuse.</summary>
     private static readonly JsonSerializerOptions RequestJson = new()
@@ -41,7 +42,8 @@ public sealed class ToolingEntryPoint
         MethodInfo describeBindingFailure,
         MethodInfo select,
         bool supportsCapabilitySelection,
-        ToolingContextApi? contextApi)
+        ToolingContextApi? contextApi,
+        bool supportsSkewAllowance = false)
     {
         this.runAsync = runAsync;
         this.providerPackageId = providerPackageId;
@@ -49,6 +51,7 @@ public sealed class ToolingEntryPoint
         this.select = select;
         this.contextApi = contextApi;
         SupportsCapabilitySelection = supportsCapabilitySelection;
+        SupportsSkewAllowance = supportsSkewAllowance;
     }
 
     /// <summary>
@@ -62,6 +65,13 @@ public sealed class ToolingEntryPoint
     /// produce an artifact.
     /// </remarks>
     public bool SupportsCapabilitySelection { get; }
+
+    /// <summary>
+    /// Whether this host's tooling contract carries the <c>skewAllowance</c> request field, which <c>status</c> judges the
+    /// cluster members' liveness with. A build that predates it lists no members and judges nothing, so the worker leaves the
+    /// field out rather than send what its closed contract would refuse.
+    /// </summary>
+    public bool SupportsSkewAllowance { get; }
 
     /// <summary>True only when the exact context factory, operation, disposable type, and versions agree.</summary>
     public bool SupportsConfigurationContext => contextApi is not null;
@@ -97,14 +107,15 @@ public sealed class ToolingEntryPoint
                 $"released beside this tool, {toolVersion}; upgrade the host's {HostClosure.PersistenceAssemblyName} to that version or newer.");
         }
 
-        var capabilitySelection = persistence.GetType(RequestTypeName, throwOnError: false)
-            ?.GetProperty(CapabilitySelectionField, BindingFlags.Public | BindingFlags.Instance) is not null;
+        var requestType = persistence.GetType(RequestTypeName, throwOnError: false);
+        var capabilitySelection = requestType?.GetProperty(CapabilitySelectionField, BindingFlags.Public | BindingFlags.Instance) is not null;
+        var skewAllowance = requestType?.GetProperty(SkewAllowanceField, BindingFlags.Public | BindingFlags.Instance) is not null;
         var contextApi = BindContextApi(
             hostType!,
             persistence.GetType(ContextTypeName, throwOnError: false),
             persistence.GetType(ContextContractTypeName, throwOnError: false));
 
-        return new(run, packageId, describe, canonical, capabilitySelection, contextApi);
+        return new(run, packageId, describe, canonical, capabilitySelection, contextApi, skewAllowance);
     }
 
     /// <summary>Refuses partial or version-skewed host context APIs instead of silently choosing v1.</summary>

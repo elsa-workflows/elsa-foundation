@@ -207,7 +207,7 @@ public static class EfToolingHost
             EfToolingCommands.Validate => await Validate(ordered, provider!, schema, actions, request.Connection!, cancellationToken),
             EfToolingCommands.PostMigrate => await PostMigrate(ordered, provider!, schema, actions, request.Connection!, cancellationToken),
             EfToolingCommands.Hold or EfToolingCommands.Release or EfToolingCommands.Status =>
-                await Finalization(command, ordered, provider!, schema, request.Finalization, request.Connection!, cancellationToken),
+                await Finalization(command, ordered, closure, provider!, schema, request.Finalization, SkewAllowance(request), request.Connection!, cancellationToken),
             _ => throw new InvalidOperationException($"Unreachable: '{command}' passed envelope validation without a handler.")
         };
     }
@@ -258,6 +258,7 @@ public static class EfToolingHost
             // same answer as "the selection agrees" and must not be required into looking like one.
             ("capabilitySelection", request.CapabilitySelection is not null, !list, false),
             ("connection", request.Connection is not null, opensDatabase, opensDatabase),
+            ("skewAllowance", request.SkewAllowance is not null, command == EfToolingCommands.Status, false),
             ("finalization", request.Finalization is not null, finalization, changesHolds),
             ("finalization.family", request.Finalization?.Family is not null, finalization, changesHolds),
             ("finalization.version", request.Finalization?.Version is not null, changesHolds, false),
@@ -960,12 +961,19 @@ public static class EfToolingHost
     /// because the rollback boundary has been crossed. A hold placed on a database whose family has no record yet
     /// creates the record first, at the oldest version this host's build reads, as the first activation would.
     /// </summary>
+    /// <remarks>
+    /// <c>status</c> also reads the cluster's members from the membership table in this database, through the provider the
+    /// host's closure carries (<see cref="IEfToolingFleetSource"/>), so each pending version names the counted members that
+    /// cannot read it (spec 181, FR-022) and the operator sees who is in the fleet without a query of their own.
+    /// </remarks>
     private static async Task<EfToolingResponse> Finalization(
         string command,
         IReadOnlyList<EfModuleDescriptor> modules,
+        IReadOnlyCollection<Assembly> closure,
         string provider,
         string? schema,
         EfToolingFinalizationRequest? request,
+        TimeSpan? skewAllowance,
         string connection,
         CancellationToken cancellationToken)
     {
@@ -982,6 +990,9 @@ public static class EfToolingHost
                     : $"Schema family '{family}' is owned by more than one selected module; select the one to act on with --modules.",
                 [.. owned.Select(candidate => candidate.Descriptor.Name)]);
 
+        var cluster = command == EfToolingCommands.Status
+            ? await ReadClusterAsync(closure, provider, connection, schema, skewAllowance, cancellationToken)
+            : null;
         var families = new List<EfToolingFinalizationFamily>(owned.Length);
         foreach (var (descriptor, chain) in owned)
         {
@@ -999,7 +1010,7 @@ public static class EfToolingHost
                     EfToolingCommands.Release => await ChangeHoldsAsync(context, chain, request!, place: false, cancellationToken),
                     _ => await new SchemaFinalization.EfSchemaFinalizationStore(context).FindAsync(chain.Family, cancellationToken)
                 };
-                families.Add(Describe(descriptor.Name, chain, record));
+                families.Add(Describe(descriptor.Name, chain.Family, chain.Module, chain.ReadableVersions, record, cluster?.Fleet));
             }
             catch (EfPendingMigrationsException failure)
             {
@@ -1024,8 +1035,127 @@ public static class EfToolingHost
         {
             ExitCode = EfToolingExitCode.Success,
             Command = command,
-            Finalization = new() { Provider = provider, Schema = schema, Families = families }
+            Finalization = new() { Provider = provider, Schema = schema, Families = families, Cluster = cluster?.Describe(families) }
         };
+    }
+
+    /// <summary>
+    /// The cluster's members from the membership table the connection reaches. Every way of not reading them is a marker on
+    /// the payload rather than an absence: a closure with no provider that keeps them in an EF module, a module with no
+    /// context for the engine, a table this database does not have and one that cannot be read each say so, because none is
+    /// the same as a cluster with nobody in it. None takes the families' own status away, which the operator asked for first.
+    /// </summary>
+    private static async Task<ClusterRead> ReadClusterAsync(
+        IReadOnlyCollection<Assembly> closure,
+        string provider,
+        string connection,
+        string? schema,
+        TimeSpan? skewAllowance,
+        CancellationToken cancellationToken)
+    {
+        var declared = Discover(closure);
+        var found = declared
+            .SelectMany(descriptor => FleetSourcesIn(descriptor.Assembly).Select(source => (Source: source, Module: EfModuleCatalog.Find(declared, source.ModuleName))))
+            .FirstOrDefault(candidate => candidate.Module is not null);
+        return found.Module is { } module
+            ? await ReadClusterAsync(found.Source, module, provider, connection, schema, skewAllowance, cancellationToken)
+            : ClusterRead.Unread(new() { Availability = EfToolingClusterAvailability.NoMembershipProvider });
+    }
+
+    /// <summary>The members <paramref name="source"/> reads from <paramref name="module"/>'s table, or the marker that says why it could not.</summary>
+    internal static async Task<ClusterRead> ReadClusterAsync(
+        IEfToolingFleetSource source,
+        EfModuleDescriptor module,
+        string provider,
+        string connection,
+        string? schema,
+        TimeSpan? skewAllowance,
+        CancellationToken cancellationToken)
+    {
+        if (module.ProviderContext(provider) is not { } contextType)
+        {
+            return ClusterRead.Unread(new()
+            {
+                Availability = EfToolingClusterAvailability.NoProviderContext,
+                Module = module.Name,
+                Note = $"'{module.Name}' has no context for provider '{provider}', so its members cannot be read here."
+            });
+        }
+
+        try
+        {
+            await using var context = CreateContext(module, contextType, provider, connection, schema);
+            try
+            {
+                await EfDatabaseMigrator.ApplyAsync(context, EfRelationalProviderBinding.ExpectedProviderName(provider), EfMigratePolicy.Validate, cancellationToken);
+            }
+            catch (EfPendingMigrationsException)
+            {
+                return ClusterRead.Unread(new()
+                {
+                    Availability = EfToolingClusterAvailability.NotMigrated,
+                    Module = module.Name,
+                    Note = $"'{module.Name}' has migrations not applied in this database, so it holds no members: a cluster of one."
+                });
+            }
+
+            return new ClusterRead(module.Name, await source.ReadAsync(context, skewAllowance, cancellationToken), null);
+        }
+        catch (Exception failure) when (failure is not EfToolingRefusal and not OperationCanceledException)
+        {
+            return ClusterRead.Unread(new()
+            {
+                Availability = EfToolingClusterAvailability.Unreadable,
+                Module = module.Name,
+                Note = EfToolingRedaction.Redact($"The members could not be read from '{module.Name}': {failure.Message}", connection)
+            });
+        }
+    }
+
+    /// <summary>The skew allowance a <c>status</c> request names, refused when it is not a non-negative <c>TimeSpan</c>.</summary>
+    private static TimeSpan? SkewAllowance(EfToolingRequest request)
+    {
+        if (request.SkewAllowance is null)
+            return null;
+
+        return TimeSpan.TryParse(request.SkewAllowance, System.Globalization.CultureInfo.InvariantCulture, out var skew) && skew >= TimeSpan.Zero
+            ? skew
+            : throw EfToolingRefusal.Usage("invalid-request", "The 'status' request is not valid.", [$"'skewAllowance' must be a non-negative time span such as 00:00:05, not '{request.SkewAllowance}'."]);
+    }
+
+    /// <summary>What <c>status</c> made of the cluster: the fleet it read, or the marker that says why it read none.</summary>
+    internal sealed record ClusterRead(string Module, EfToolingFleet? Fleet, EfToolingCluster? UnreadCluster)
+    {
+        public static ClusterRead Unread(EfToolingCluster cluster) => new(cluster.Module, null, cluster);
+
+        /// <summary>The payload, with each member's reads for the families this status lists, in each family's database.</summary>
+        public EfToolingCluster Describe(IReadOnlyList<EfToolingFinalizationFamily> families) => Fleet is { } fleet
+            ? new()
+            {
+                Availability = EfToolingClusterAvailability.Read,
+                Module = Module,
+                JudgedAt = fleet.JudgedAt,
+                SkewAllowance = fleet.SkewAllowance.ToString("c", System.Globalization.CultureInfo.InvariantCulture),
+                Members = fleet.MembersFor([.. families.Select(family => new EfToolingFamilyDatabase(family.Family, family.DatabaseIdentity))])
+            }
+            : UnreadCluster!;
+    }
+
+    private static IEnumerable<IEfToolingFleetSource> FleetSourcesIn(Assembly assembly)
+    {
+        Type[] types;
+        try
+        {
+            types = assembly.GetExportedTypes();
+        }
+        catch (Exception failure) when (failure is ReflectionTypeLoadException or FileNotFoundException or TypeLoadException)
+        {
+            return [];
+        }
+
+        return types
+            .Where(type => type is { IsAbstract: false, IsGenericTypeDefinition: false } && typeof(IEfToolingFleetSource).IsAssignableFrom(type) && type.GetConstructor(Type.EmptyTypes) is not null)
+            .Select(type => (IEfToolingFleetSource)Activator.CreateInstance(type)!);
     }
 
     /// <summary>
@@ -1068,13 +1198,19 @@ public static class EfToolingHost
         _ => "finalization-refused"
     };
 
-    private static EfToolingFinalizationFamily Describe(string module, EfSchemaChain chain, SchemaFinalizationRecord? record)
+    internal static EfToolingFinalizationFamily Describe(
+        string module,
+        string family,
+        string? owner,
+        IReadOnlyList<string> readable,
+        SchemaFinalizationRecord? record,
+        EfToolingFleet? fleet)
     {
-        var status = EfSchemaFamilyStatus.Describe(chain.Family, chain.Module, chain.ReadableVersions, record);
+        var status = EfSchemaFamilyStatus.Describe(family, owner, readable, record);
         return new()
         {
             Module = module,
-            Family = chain.Family,
+            Family = family,
             DatabaseIdentity = status.DatabaseIdentity,
             FinalizedVersion = status.FinalizedVersion,
             ReadableVersions = status.ReadableVersions,
@@ -1084,7 +1220,8 @@ public static class EfToolingHost
             {
                 Version = pending.Version,
                 State = pending.State == SchemaFinalizationState.ReadableEverywhere ? "readable-everywhere" : "pending",
-                HeldBy = [.. pending.HeldBy.Select(hold => hold.Reason)]
+                HeldBy = [.. pending.HeldBy.Select(hold => hold.Reason)],
+                WaitsFor = fleet?.Blockers(family, status.DatabaseIdentity, pending.Version)
             })],
             CompletionVersion = status.Finish?.CompletionVersion,
             BackfillRun = status.Finish?.Run is { } run
