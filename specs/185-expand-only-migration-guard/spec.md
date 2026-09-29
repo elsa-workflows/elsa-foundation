@@ -581,7 +581,7 @@ approval.
     a row into a `__EFMigrationsLock` table, one per database file and shared by every module in it, and deletes the row
     when it releases the lock. A hard process crash while EF holds the lock, such as a kill or a power loss rather than
     an exception, leaves the row behind, and every later apply against that file waits on it, retrying without end,
-    until the row is removed. SQL Server, PostgreSQL and MySQL take session-scoped locks that end with the connection.
+    until the row is removed. SQL Server, PostgreSQL and MySQL take locks the server releases when the connection ends.
     The seed-first path takes the lock twice in one apply where migrations come before the first contracting one, once
     for those and once for the contraction and the rest, so it has two such windows where a plain apply has one. After
     such a crash an operator makes sure no process is applying migrations to that file, deletes the row

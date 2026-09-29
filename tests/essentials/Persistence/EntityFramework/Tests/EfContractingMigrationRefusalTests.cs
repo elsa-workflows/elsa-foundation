@@ -181,8 +181,7 @@ public sealed class EfContractingMigrationRefusalTests : IAsyncLifetime
             () => atFirstContraction = Wait(() => ContractingPairModule.RecordsAsync(Connection)));
         var created = new RecordsCreated();
 
-        await using (var context = ContractingPairModule.Create(Connection, created))
-            await EfDatabaseMigrator.ApplyAsync(context, EfProviderNames.Sqlite);
+        await ApplyPairAsync(created);
 
         Assert.Equal([ContractingPairModule.First, ContractingPairModule.Second], created.Families);
         Assert.Equal([ContractingPairModule.First, ContractingPairModule.Second], atFirstContraction!.Keys.Order(StringComparer.Ordinal));
@@ -196,19 +195,15 @@ public sealed class EfContractingMigrationRefusalTests : IAsyncLifetime
     [Fact]
     public async Task A_racing_gate_that_leaves_the_families_below_their_versions_keeps_every_contraction_from_running()
     {
-        await using (var context = ContractingPairModule.Create(Connection, new BeforeFirstSave(async () =>
-                     {
-                         await using var older = ContractingPairModule.Create(Connection);
-                         await ContractingPairModule.OlderGate().ActivateAsync(older);
-                     })))
+        var refusal = await Assert.ThrowsAsync<EfContractingMigrationRefusedException>(() => ApplyPairAsync(new BeforeFirstSave(async () =>
         {
-            var refusal = await Assert.ThrowsAsync<EfContractingMigrationRefusedException>(() => EfDatabaseMigrator.ApplyAsync(context, EfProviderNames.Sqlite));
+            await using var older = ContractingPairModule.Create(Connection);
+            await ContractingPairModule.OlderGate().ActivateAsync(older);
+        })));
 
-            Assert.Equal([ContractingPairModule.ContractFirst, ContractingPairModule.ContractSecond], refusal.Refusals.Select(entry => entry.Migration));
-            Assert.All(refusal.Refusals, entry => Assert.Equal((EfContractingMigrationRefusalReason.NotFinalized, EarlierVersion), (entry.Reason, entry.FinalizedVersion)));
-            Assert.Equal([ContractingPairModule.Initial], refusal.Applied);
-        }
-
+        Assert.Equal([ContractingPairModule.ContractFirst, ContractingPairModule.ContractSecond], refusal.Refusals.Select(entry => entry.Migration));
+        Assert.All(refusal.Refusals, entry => Assert.Equal((EfContractingMigrationRefusalReason.NotFinalized, EarlierVersion), (entry.Reason, entry.FinalizedVersion)));
+        Assert.Equal([ContractingPairModule.Initial], refusal.Applied);
         Assert.Equal([ContractingPairModule.Initial], await ContractingPairModule.AppliedAsync(Connection));
     }
 
@@ -272,14 +267,10 @@ public sealed class EfContractingMigrationRefusalTests : IAsyncLifetime
             await EfSchemaFinalizationTestSupport.FinalizeAsync(new EfSchemaFinalizationStore(context), ContractingPairModule.First, Chain, CurrentVersion);
         }
 
-        await using (var context = ContractingPairModule.Create(Connection))
-        {
-            var refusal = await Assert.ThrowsAsync<EfContractingMigrationRefusedException>(() => EfDatabaseMigrator.ApplyAsync(context, EfProviderNames.Sqlite));
-            Assert.Equal(
-                new EfContractingMigrationRefusal(ContractingPairModule.ContractSecond, ContractingPairModule.Second, CurrentVersion, null, EfContractingMigrationRefusalReason.NoRecord),
-                Assert.Single(refusal.Refusals));
-        }
-
+        var refusal = await Assert.ThrowsAsync<EfContractingMigrationRefusedException>(() => ApplyPairAsync());
+        Assert.Equal(
+            new EfContractingMigrationRefusal(ContractingPairModule.ContractSecond, ContractingPairModule.Second, CurrentVersion, null, EfContractingMigrationRefusalReason.NoRecord),
+            Assert.Single(refusal.Refusals));
         Assert.Equal([ContractingPairModule.Initial], await ContractingPairModule.AppliedAsync(Connection));
     }
 

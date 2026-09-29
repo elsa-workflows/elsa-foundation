@@ -242,8 +242,9 @@ public static class EfContractingMigrationCheck
     /// Any other record counts as an admission, the loud direction: one a member or an operator created, one changed
     /// since, and one the migrator created for a contraction that has run. A gate that admits a module whose families all
     /// have a record creates none and leaves no trace, so a record the migrator created is no evidence that no gate has
-    /// admitted the module once its own contraction may have run. The records' columns are read first, so a record this
-    /// build's seed cannot have written is neither parsed nor followed by a read of the migrations-history table.
+    /// admitted the module once its own contraction may have run. Each record's revision and family are read first, so a
+    /// record changed since, or of a family no contracting migration names, is neither parsed nor followed by a read of
+    /// the migrations-history table.
     /// </remarks>
     private static async Task<bool> IsAdmittedAsync(
         DbContext context,
@@ -256,13 +257,11 @@ public static class EfContractingMigrationCheck
             return false;
         var rows = await context.Set<EfSchemaFinalizationRecordRow>()
             .AsNoTracking()
-            .Select(row => new { row.Family, row.Revision, row.SchemaVersion })
+            .Select(row => new { row.Family, row.Revision })
             .ToListAsync(cancellationToken);
         if (rows.Count == 0)
             return false;
-        if (rows.Any(row => row.Revision != 1 ||
-                            !StringComparer.Ordinal.Equals(row.SchemaVersion, EfSchemaFinalization.SchemaVersion) ||
-                            !contracting.Any(migration => StringComparer.Ordinal.Equals(migration.Family, row.Family))))
+        if (rows.Any(row => row.Revision != 1 || !contracting.Any(migration => StringComparer.Ordinal.Equals(migration.Family, row.Family))))
             return true;
 
         var store = new EfSchemaFinalizationStore(context);
