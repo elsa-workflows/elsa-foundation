@@ -1,5 +1,6 @@
-using Elsa.Persistence.EntityFramework.SchemaFinalization;
 using Xunit;
+using Elsa.Persistence.Schema.SchemaFinalization;
+using Elsa.Persistence.Schema;
 
 namespace Elsa.Persistence.EntityFramework.Tests;
 

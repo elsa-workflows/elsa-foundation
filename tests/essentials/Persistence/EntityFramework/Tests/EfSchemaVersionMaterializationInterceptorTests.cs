@@ -3,6 +3,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using Elsa.Persistence.Schema;
 
 namespace Elsa.Persistence.EntityFramework.Tests;
 

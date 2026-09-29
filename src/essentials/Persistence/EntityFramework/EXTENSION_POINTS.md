@@ -205,9 +205,11 @@ module and a host decide:
   and what the readability report names (spec 183, FR-019).
 - **Where these live.** `IEfSchemaFleet` and its answer types, `EfSchemaFinalizationObservations`, the finalization
   record's model and status, `EfSchemaFinalizationGates` with the `IEfSchemaModuleGate` view the dormancy check's
-  source reads, and `EfSchemaFamilyCatalog` with its descriptors are in `Elsa.Persistence.Schema`, under the same
-  namespaces, not in this assembly. That assembly references no EF Core, and every host shares it with every package
-  it loads (ADR 0067, amended 2026-09-29): an EF module Nuplane loads with its own copy of this assembly still finds
+  source reads, and `EfSchemaFamilyCatalog` with its descriptors are in `Elsa.Persistence.Schema`, not in this
+  assembly, and declared in that assembly's own namespaces: the catalog and its descriptors in `Elsa.Persistence.Schema`,
+  everything else in `Elsa.Persistence.Schema.SchemaFinalization`, the name of the folder they sit in (a consumer adds
+  `using Elsa.Persistence.Schema;` or `using Elsa.Persistence.Schema.SchemaFinalization;`). That assembly references no
+  EF Core, and every host shares it with every package it loads (ADR 0067, amended 2026-09-29): an EF module Nuplane loads with its own copy of this assembly still finds
   the host's fleet, observations and registry, because their types come from the host's copy of that one (#2143).
 - **Timings** come from `Elsa:Persistence:EntityFramework:Finalization` (`EvaluationInterval`, default 30 seconds;
   `RefreshInterval`, 15 seconds; `IntentWaitBound`, 2 minutes; `IntentPollInterval`, 1 second).

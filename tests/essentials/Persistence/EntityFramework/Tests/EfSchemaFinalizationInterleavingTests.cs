@@ -1,5 +1,6 @@
 using System.Data.Common;
 using Elsa.Persistence.EntityFramework.SchemaFinalization;
+using Elsa.Persistence.Schema.SchemaFinalization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Xunit;

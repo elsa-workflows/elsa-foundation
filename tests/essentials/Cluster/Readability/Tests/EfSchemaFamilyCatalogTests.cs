@@ -1,5 +1,5 @@
 using System.Reflection;
-using Elsa.Persistence.EntityFramework;
+using Elsa.Persistence.Schema;
 
 namespace Elsa.Cluster.Readability.Tests;
 

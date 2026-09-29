@@ -1,6 +1,7 @@
 using CShells.Lifecycle;
 using CShells.Features;
 using Elsa.Persistence.EntityFramework.SchemaFinalization;
+using Elsa.Persistence.Schema.SchemaFinalization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;

@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Elsa.Persistence.Schema.SchemaFinalization;
 
 namespace Elsa.Persistence.EntityFramework.SchemaFinalization;
 

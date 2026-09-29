@@ -6,6 +6,7 @@ using Elsa.Cluster.Core.Models;
 using Elsa.Cluster.Readability;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Persistence.EntityFramework.SchemaFinalization;
+using Elsa.Persistence.Schema.SchemaFinalization;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;

@@ -1,3 +1,5 @@
+using Elsa.Persistence.Schema.SchemaFinalization;
+
 namespace Elsa.Persistence.EntityFramework.SchemaFinalization;
 
 public static class EfSchemaFinalizationGatesExtensions

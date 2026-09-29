@@ -1,4 +1,5 @@
 using Elsa.Persistence.EntityFramework.SchemaFinalization;
+using Elsa.Persistence.Schema.SchemaFinalization;
 using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.Persistence.EntityFramework;

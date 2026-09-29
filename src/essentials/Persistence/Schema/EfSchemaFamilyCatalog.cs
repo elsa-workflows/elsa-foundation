@@ -194,7 +194,8 @@ public static class EfSchemaFamilyCatalog
 
     /// <summary>
     /// One chain entry, read from <paramref name="type"/>'s metadata exactly as a declaration's entries are, for a caller
-    /// that builds a declaration itself, as a tool or a test does.
+    /// that builds a declaration itself, as a tool or a test does. Public for the reflection catalog's consumers
+    /// (Elsa.Persistence.EntityFramework and its tests) rather than shared through InternalsVisibleTo.
     /// </summary>
     public static EfSchemaUpcasterDescriptor DescribeUpcaster(Type? type)
     {

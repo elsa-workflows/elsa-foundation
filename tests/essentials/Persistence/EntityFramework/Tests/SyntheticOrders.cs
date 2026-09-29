@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.EntityFrameworkCore;
+using Elsa.Persistence.Schema;
 using static Elsa.Persistence.EntityFramework.Tests.SchemaChains;
 
 namespace Elsa.Persistence.EntityFramework.Tests;

@@ -3,6 +3,7 @@ using CShells.Lifecycle;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Persistence.EntityFramework.SchemaFinalization;
 using Elsa.Persistence.EntityFramework.Tests;
+using Elsa.Persistence.Schema.SchemaFinalization;
 using Elsa.Studio.Preferences.Core;
 using Elsa.Studio.Preferences.Core.Contracts;
 using Elsa.Studio.Preferences.Core.Models;

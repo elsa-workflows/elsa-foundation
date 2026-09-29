@@ -1,5 +1,6 @@
 using System.Reflection;
 using Elsa.Persistence.EntityFramework;
+using Elsa.Persistence.Schema;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Metadata.Conventions;

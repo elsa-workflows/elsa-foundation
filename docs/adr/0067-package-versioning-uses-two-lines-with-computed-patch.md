@@ -81,6 +81,8 @@ be defined there. The set is:
 - `Elsa.Persistence.Schema`, the EF-free half of the schema-family surface: the finalization gate's view of the
   fleet, what a host observed of the finalization records, the registry of a container's gates that the dormancy
   check reads, the finalization record's model and status, and the reflection-only reader of family declarations.
+  The assembly declares its own namespaces, `Elsa.Persistence.Schema` and `Elsa.Persistence.Schema.SchemaFinalization`,
+  not those of `Elsa.Persistence.EntityFramework`, so a type's namespace names the assembly that owns it.
 
 They are not Line A under the rule above. Their types cross the boundary between host and package for the
 persistence and cluster domains, not for every domain, and they change with the cluster-safe schema rollout rather

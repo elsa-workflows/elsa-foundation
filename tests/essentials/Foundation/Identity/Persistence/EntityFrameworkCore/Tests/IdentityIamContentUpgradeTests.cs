@@ -4,6 +4,7 @@ using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Persistence.EntityFramework.Tests;
+using Elsa.Persistence.Schema;
 using Elsa.Workflows.Runtime.Core.Extensions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;

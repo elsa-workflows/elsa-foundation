@@ -1,4 +1,5 @@
 using Elsa.Persistence.EntityFramework.SchemaFinalization;
+using Elsa.Persistence.Schema.SchemaFinalization;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Microsoft.Extensions.DependencyInjection;
 

@@ -525,7 +525,8 @@ lands with the B5b PR, whose merge is the owner's approval.
   assembly's `IEfSchemaFleet` was a different type from the one the module asked for, and its gate found none: it
   admitted, and never finalized past the version its record was created at. `IEfSchemaFleet` and its answer types,
   `EfSchemaFinalizationObservations`, the record's model and status, the gate registry and the family catalog now live
-  in `Elsa.Persistence.Schema`, which references no EF Core, under their existing namespaces, and every host shares it
+  in `Elsa.Persistence.Schema`, which references no EF Core, under that assembly's own namespaces (`Elsa.Persistence.Schema`
+  for the catalog and its descriptors, `Elsa.Persistence.Schema.SchemaFinalization` for the rest), and every host shares it
   with `Elsa.Cluster.Core` ([ADR 0067](../../docs/adr/0067-package-versioning-uses-two-lines-with-computed-patch.md),
   amended 2026-09-29, "Host-composed shares"). `Elsa.Cluster.Readability` therefore takes no EF Core either.
 - **`Elsa.Foundation.Host` composes the fleet.** It calls `AddEfSchemaReadability` on its host container, as
