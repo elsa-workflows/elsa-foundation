@@ -96,9 +96,25 @@ internal sealed class FoundationHostProcess : IAsyncDisposable
     /// The packages Nuplane has active in this host, by id, at the version active, read from the store state the host
     /// wrote: what it acquired from its feeds, as opposed to what it found it already carries.
     /// </summary>
-    public IReadOnlyDictionary<string, string> ActivePackages() =>
-        JsonNode.Parse(File.ReadAllText(Path.Join(_contentRoot, ".nuplane", "store-state.json")))!["activeVersionById"]!.AsObject()
-            .ToDictionary(package => package.Key, package => package.Value!.GetValue<string>(), StringComparer.OrdinalIgnoreCase);
+    /// <remarks>
+    /// Nuplane rewrites the state file in place on every reconciliation, the periodic one included, so a read that races
+    /// one can find it half written; such a read is retried a few times rather than failing the test.
+    /// </remarks>
+    public IReadOnlyDictionary<string, string> ActivePackages()
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                return JsonNode.Parse(File.ReadAllText(Path.Join(_contentRoot, ".nuplane", "store-state.json")))!["activeVersionById"]!.AsObject()
+                    .ToDictionary(package => package.Key, package => package.Value!.GetValue<string>(), StringComparer.OrdinalIgnoreCase);
+            }
+            catch (Exception exception) when (attempt < 5 && exception is IOException or System.Text.Json.JsonException)
+            {
+                Thread.Sleep(TimeSpan.FromMilliseconds(200));
+            }
+        }
+    }
 
     /// <summary>The status a request to <paramref name="path"/> is answered with, and its body.</summary>
     public async Task<(HttpStatusCode Status, string Body)> GetAsync(string path)
