@@ -228,7 +228,15 @@ after each one.
   newest version every counted member can read, which can never be past any member's current version.
 - **A database with no record yet.** The first activation records the activating host's oldest readable version as
   finalized, then evaluates normally. On a fresh database, or one written only by the first gate-aware release, that
-  is exactly the version its rows carry.
+  is exactly the version its rows carry. *Amended 2026-09-29* ([spec 185](../185-expand-only-migration-guard/spec.md),
+  FR-023; [#2136](https://github.com/elsa-workflows/elsa-foundation/issues/2136)): the record starts no lower than the
+  latest version named by a contracting migration of the family already applied to the database, when that is later.
+  Such a migration ran before any gate admitted the module, since spec 185 refuses it once one has and the family is
+  below that version, and it removed what every earlier version reads: the schema serves none of those, and a record
+  started at one would admit a host that reads only them. A host whose chain does not read that version, or whose
+  applied contracting migration names none, refuses the module rather than creating the record. The version is read
+  from the activating host's own migrations and their opt-outs, so it holds when that host's release carries the
+  contracting migration; spec 185's Invariant states what holds when it does not.
 - **A host partitioned during finalization.** It was not counted. When it reconnects, FR-012 and FR-018 apply: it
   refreshes, finds a finalized version outside its readable set, and refuses writes to that family. Its reads of
   newer rows already raise skew (spec 180, FR-007).
@@ -307,7 +315,12 @@ after each one.
   post-migration audit, and before any shell task, seeder or store touches the module's tables. It throws a typed
   refusal, so the shell does not activate, as a pending migration under `Validate` does today. Amended 2026-09-28
   (spec 186, Decisions): the same check MUST also refuse the module when a family's finish record names a completion
-  version outside the host's readable set (spec 186, FR-020), for the same reason and at the same point.
+  version outside the host's readable set (spec 186, FR-020), for the same reason and at the same point. Amended
+  2026-09-29 (spec 185, FR-023; #2136): it MUST also refuse the module, at the same point, when a family has no record
+  yet and a contracting migration of it already applied names a version outside the host's readable set, or names none
+  (Edge Cases, "A database with no record yet"). FR-016 does not repeat that one at enable time: it needs a contracting
+  migration whose opt-out spec 185's build guard refuses for every first-party module, and this refusal still comes
+  before anything touches the module's tables.
 - **FR-016**: At enable time, under both `Validate` and `AutoMigrate`, an `IFeatureActivationGuard` MUST read the
   finalization record and apply the same check to every feature that `[UsesEfModule]` maps to the module, returning a
   `FeatureActivationRefusal` that the Modularity API renders as 409, with nothing saved. This is the narrowing spec

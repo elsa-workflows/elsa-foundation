@@ -74,6 +74,23 @@ The inventory, with paths, counts and the EF Core operation types the classifica
 the previous release makes, unless a reviewed opt-out on that migration names the exact operations that may, and why.
 Applying a contracting migration's opted-out removal never breaks a read that a host still finalized below it makes.
 
+*Qualified 2026-09-29* ([#2136](https://github.com/elsa-workflows/elsa-foundation/issues/2136)). The second sentence
+holds as stated on a database where a gate-aware host has admitted the module: the contracting migration applies only
+once its family's finalized version there is the one its opt-out names or later, a finalized version only moves forward,
+and a host that cannot read it is refused (spec 181, FR-015). On a database where no host has admitted the module yet,
+the migration applies with the rest of its batch, since no host reads what it removes there, and what holds instead is
+this: the first gate to admit the module creates the family's record at the version the migration names or later
+(spec 181, Edge Cases, "A database with no record yet"), so every host that cannot read that version is refused. That
+holds only when the first host to admit the module runs a release that carries the contracting migration, as the host
+that applied it under `AutoMigrate` does. It does not hold when a release older than the migration admits the module
+first: when two releases start on such a database at once and the older one's gate creates the record after the newer
+one's check found the module unadmitted and before the newer one's gate creates it; or when `dotnet elsa persistence
+apply`, or a host that stopped before its gate ran, applied the migration and an older release is the next to start.
+The older host is then admitted at the oldest version it reads, against a schema without what the migration removed.
+Its reads and writes of a removed column or table fail loudly, with the engine's error; a dropped index, key or
+constraint, or deleted data, that it relied on is missed silently. That lasts until it leaves the fleet and the family
+finalizes at the migration's version.
+
 It holds through five mechanisms, each tested separately (Success Criteria):
 
 1. **Operations, not source text, are inspected** (FR-004). The guard classifies what EF will execute, the same list
@@ -411,7 +428,10 @@ model does not know.
   opt-out.
 - **SC-006**: A contracting migration whose opt-out names family F and version V is refused, naming F and V, wherever
   `EfModuleMigrator` would apply or validate it and wherever the activation guard checks it, while F's finalized
-  version in the target database is below V, and applies or enables normally once it reaches V.
+  version in the target database is below V, and applies or enables normally once it reaches V. *Qualified
+  2026-09-29* (#2136): on a database where a gate-aware host has admitted the module. On one where none has, the
+  migration applies with its batch, and the record the first admitting gate creates for F starts at V or later, so a
+  release that reads only versions before V is refused there; the Invariant's qualification states when that fails.
 
 ## Assumptions
 
@@ -497,8 +517,19 @@ approval.
 - **Under `AutoMigrate` the activation guard reads the migrations-history table in one case**: once a contracting
   migration's family is found below its version, to learn whether that migration is pending. This narrows spec 171's
   FR-069 once more, as FR-025 requires. A module with no contracting migration opens nothing more than before.
+- **A contracted database's record starts at the contraction's version.** Found in review: a database no host had
+  admitted the module in took the contraction, and the first gate then created the family's record at its own oldest
+  readable version, possibly below the version the contraction names, so a still older release could later be
+  admitted against the reduced schema. The gate now creates a missing record at the latest version any applied
+  contracting migration of the family names, when that is later than the oldest it reads, and refuses the module when
+  it cannot place that version (spec 181, Edge Cases, "A database with no record yet", and FR-015, both amended
+  2026-09-29). It reads the migrations-history table for that only when the module has a contracting migration naming
+  the family, and only when the record is missing.
 - **Not covered, and why.** `dotnet elsa persistence script` produces SQL a DBA runs outside Elsa, so nothing checks
   the finalization record when that SQL runs; FR-024 names `apply` and the migrator only. The check runs before
   `MigrateAsync` takes EF's migration lock, which is sound once the module has been admitted, because a finalized
-  version only moves forward; on a database where it has not, two hosts of different releases starting at once can
-  interleave so the older one admits the module after the newer one's check passed.
+  version only moves forward; on a database where it has not, a release older than the contraction can be the first to
+  admit the module and create its record below the contraction's version, as the Invariant's qualification states:
+  by starting at once with the newer release, or by starting after the contraction was applied without a gate running.
+  Closing that would take the record created at the contraction's version before the contraction runs, by whatever
+  applies it; that is not built.
