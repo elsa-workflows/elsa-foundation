@@ -6,11 +6,12 @@ using static Elsa.Persistence.EntityFramework.Tests.SchemaChains;
 namespace Elsa.Persistence.EntityFramework.Tests;
 
 /// <summary>
-/// The synthetic family spec 180's store tests run on, whose rows have moved three times: version 2 added a currency, with
-/// a projection column of its own; version 3 added order lines to the order document; and version 4 moved the lines into
-/// a content column of their own, in one step over the whole row (#2144). Its upcasters ship committed fixture pairs and
-/// are proven as a module's would be (<see cref="AddCurrencyProof"/>, <see cref="AddLinesProof"/>,
-/// <see cref="MoveLinesProof"/>).
+/// The synthetic family spec 180's store tests run on, whose rows have moved four times: version 2 added a currency, with
+/// a projection column of its own; version 3 added order lines to the order document; version 4 moved the lines into
+/// a content column of their own, in one step over the whole row (#2144); and version 5 completes that move by dropping
+/// the order document's own copy of the lines, the removal half of FR-027's expand-only split. Its upcasters ship
+/// committed fixture pairs and are proven as a module's would be (<see cref="AddCurrencyProof"/>,
+/// <see cref="AddLinesProof"/>, <see cref="MoveLinesProof"/>, <see cref="RemoveLinesProof"/>).
 /// </summary>
 public static class SyntheticOrders
 {
@@ -19,7 +20,7 @@ public static class SyntheticOrders
     public const string ContentColumn = nameof(SyntheticOrdersDatabase.OrderRow.ContentJson);
     public const string LinesColumn = nameof(SyntheticOrdersDatabase.OrderRow.LinesJson);
 
-    internal static readonly EfSchemaChain Chain = Declare("4", Step<AddCurrency>(), Step<AddLines>(), Step<MoveLines>());
+    internal static readonly EfSchemaChain Chain = Declare("5", Step<AddCurrency>(), Step<AddLines>(), Step<MoveLines>(), Step<RemoveLines>());
 
     /// <summary>A chain of this family's table at <paramref name="current"/>, over <paramref name="upcasters"/>, oldest first.</summary>
     internal static EfSchemaChain Declare(string current, params EfSchemaUpcasterDescriptor[] upcasters) =>
@@ -78,13 +79,36 @@ public static class SyntheticOrders
         }
     }
 
+    /// <summary>
+    /// Version 5 completes the move version 4 began: the order document's own copy of the lines, kept beside the new
+    /// column so a version that still read the document directly was never broken, is dropped now that every read takes
+    /// the lines from their own column alone. This is FR-027's removal half of the expand-only split - the member is
+    /// removed only once no version the family can still finalize reads it from the document - and FR-022's old-format
+    /// round trip still holds for it: writing the domain value back at version 4's format restores the document's copy,
+    /// since a removal step introduces no member of its own for that proof to leave unset, and <see cref="FormatAt"/>
+    /// reconstructs every historical shape from the version alone, not by reversing this step (2026-09-29 note).
+    /// </summary>
+    [EfSchemaUpcaster("4", "5")]
+    public sealed class RemoveLines : IEfSchemaUpcaster
+    {
+        public EfSchemaRowContent Upcast(EfSchemaRowContent row)
+        {
+            UpcasterCalls.Remove();
+            var order = JsonNode.Parse(row[ContentColumn]!)!.AsObject();
+            order.Remove("Lines");
+            return row.With(ContentColumn, order.ToJsonString());
+        }
+    }
+
     /// <summary>The order in <paramref name="version"/>'s format: every member and column a later version introduced left unset.</summary>
     internal static EfSchemaRowContent FormatAt(Order order, string version)
     {
         var content = new JsonObject { ["Id"] = order.Id, ["Total"] = order.Total };
         if (Chain.IsAtOrAfter(version, "2"))
             content["Currency"] = order.Currency;
-        if (Chain.IsAtOrAfter(version, "3"))
+        // The document's own copy of the lines lives only from version 3, when it was their sole source, through
+        // version 4, when the column introduced that version still kept it beside them; version 5 removes it (#2144).
+        if (Chain.IsAtOrAfter(version, "3") && !Chain.IsAtOrAfter(version, "5"))
             content["Lines"] = LinesOf(order);
         return new EfSchemaRowContent(
             typeof(SyntheticOrdersDatabase.OrderRow),
@@ -100,6 +124,7 @@ public static class SyntheticOrders
         private static int currency;
         private static int lines;
         private static int move;
+        private static int remove;
 
         public static void Currency() => Interlocked.Increment(ref currency);
 
@@ -107,7 +132,10 @@ public static class SyntheticOrders
 
         public static void Move() => Interlocked.Increment(ref move);
 
-        public static (int Currency, int Lines, int Move) Snapshot() => (Volatile.Read(ref currency), Volatile.Read(ref lines), Volatile.Read(ref move));
+        public static void Remove() => Interlocked.Increment(ref remove);
+
+        public static (int Currency, int Lines, int Move, int Remove) Snapshot() =>
+            (Volatile.Read(ref currency), Volatile.Read(ref lines), Volatile.Read(ref move), Volatile.Read(ref remove));
     }
 }
 
@@ -119,6 +147,9 @@ public sealed class AddLinesProof() : EfSchemaUpcasterProof<SyntheticOrders.AddL
 
 /// <summary>FR-022's three proofs for <see cref="SyntheticOrders.MoveLines"/>, the step that moves data between two content columns.</summary>
 public sealed class MoveLinesProof() : EfSchemaUpcasterProof<SyntheticOrders.MoveLines, SyntheticOrders.Order>(SyntheticOrders.Family, new SyntheticOrdersProofStore());
+
+/// <summary>FR-022's three proofs for <see cref="SyntheticOrders.RemoveLines"/>, the removal half of the move between two content columns.</summary>
+public sealed class RemoveLinesProof() : EfSchemaUpcasterProof<SyntheticOrders.RemoveLines, SyntheticOrders.Order>(SyntheticOrders.Family, new SyntheticOrdersProofStore());
 
 /// <summary>The synthetic store's half of FR-022's proofs: each read puts the fixture's order row and reads it through the store.</summary>
 internal sealed class SyntheticOrdersProofStore : IEfSchemaUpcasterProofStore<SyntheticOrders.Order>, IAsyncDisposable
@@ -208,8 +239,11 @@ internal sealed class SyntheticOrdersDatabase : IAsyncDisposable
                 context.Orders.Add(row = new OrderRow { Id = order.Id });
             else
                 _ = Read(row, order.Id);
-            row.ContentJson = JsonSerializer.Serialize(order);
-            row.LinesJson = JsonSerializer.Serialize(order.Lines);
+            // The current format's own shape, not a flat serialization of the domain value: version 5 no longer
+            // restates the lines in the order document, so a write must not put them back there (#2144).
+            var content = SyntheticOrders.FormatAt(order, chain.CurrentVersion);
+            row.ContentJson = content[nameof(row.ContentJson)]!;
+            row.LinesJson = content[nameof(row.LinesJson)];
             row.Currency = order.Currency;
             row.SchemaVersion = chain.CurrentVersion;
             await context.SaveChangesAsync();
@@ -238,10 +272,11 @@ internal sealed class SyntheticOrdersDatabase : IAsyncDisposable
                 throw new InvalidDataException("The order content is not valid.", exception);
             }
 
-            // The lines column is where a read takes the lines from; the document restates them until a later version
-            // removes its copy, and the two are compared in one format, after the row was upcast as a whole.
-            if (order.Id != row.Id || order.Currency is null || order.Lines is null || !order.Lines.SequenceEqual(lines) ||
-                hasCurrency && order.Currency != row.Currency)
+            // The lines column is where a read takes the lines from, always: the upcast content is the current
+            // format's, which from version 5 on no longer restates them in the order document to compare against
+            // (#2144), so the domain value's own lines - whatever the document held, current format or not - are
+            // replaced with the column's below rather than checked against it.
+            if (order.Id != row.Id || order.Currency is null || hasCurrency && order.Currency != row.Currency)
                 throw new InvalidDataException("The order content does not match its projections.");
             return order with { Lines = lines };
         }

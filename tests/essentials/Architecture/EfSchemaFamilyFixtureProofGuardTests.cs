@@ -62,8 +62,9 @@ public sealed class EfSchemaFamilyFixtureProofGuardTests
             "is proven by one (spec 180, FR-022):");
 
     /// <summary>
-    /// The proof rule passes vacuously if the scan stops finding proofs, so it must find the synthetic family's three,
-    /// the step that moves data between two content columns of a row (#2144) among them.
+    /// The proof rule passes vacuously if the scan stops finding proofs, so it must find the synthetic family's four,
+    /// the steps that move data between two content columns of a row and then complete the move by removing the old
+    /// copy (#2144) among them.
     /// </summary>
     [Fact]
     public void Proof_scan_finds_the_synthetic_familys_proofs()
@@ -71,7 +72,8 @@ public sealed class EfSchemaFamilyFixtureProofGuardTests
         Assert.Contains(Proving.Proofs, proof => proof.Upcaster == "AddCurrency" && Proving.Resolve(proof.Family) == "SyntheticOrders");
         Assert.Contains(Proving.Proofs, proof => proof.Upcaster == "AddLines" && Proving.Resolve(proof.Family) == "SyntheticOrders");
         Assert.Contains(Proving.Proofs, proof => proof.Upcaster == "MoveLines" && Proving.Resolve(proof.Family) == "SyntheticOrders");
-        Assert.True(UpcasterFixtureRules.Pairs(UpcasterFixtures.Select(fixture => fixture.Path)).Count >= 3, "Expected the synthetic family's three fixture pairs.");
+        Assert.Contains(Proving.Proofs, proof => proof.Upcaster == "RemoveLines" && Proving.Resolve(proof.Family) == "SyntheticOrders");
+        Assert.True(UpcasterFixtureRules.Pairs(UpcasterFixtures.Select(fixture => fixture.Path)).Count >= 4, "Expected the synthetic family's four fixture pairs.");
     }
 
     [Theory]

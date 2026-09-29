@@ -177,9 +177,19 @@ public sealed class EfSchemaFamilyChainDeclarationGuardTests
 
             Row Write(Order order) => new() { Id = order.Id, SchemaVersion = Orders.SchemaVersion };
 
-            void Replace(Row row, Row replacement) => row.SchemaVersion = replacement.SchemaVersion;
+            void Replace(Row row, Row replacement)
+            {
+                row.ContentJson = replacement.ContentJson;
+                row.ClaimIdsJson = replacement.ClaimIdsJson;
+                row.SchemaVersion = replacement.SchemaVersion;
+            }
 
-            void Upgrade(Row row) => row.SchemaVersion = Invoices.Chain.CurrentVersion;
+            void Upgrade(Row row)
+            {
+                row.ContentJson = row.ContentJson;
+                row.ClaimIdsJson = row.ClaimIdsJson;
+                row.SchemaVersion = Invoices.Chain.CurrentVersion;
+            }
 
             Cursor Page() => new() { SchemaVersion = 1 };
 
@@ -191,6 +201,7 @@ public sealed class EfSchemaFamilyChainDeclarationGuardTests
             void Rewrite(Row row, Order order)
             {
                 row.ContentJson = Serialize(order);
+                row.ClaimIdsJson = Serialize(order);
                 row.SchemaVersion = Orders.SchemaVersion;
             }
 

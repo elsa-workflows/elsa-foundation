@@ -91,15 +91,16 @@ bindings) must be able to evolve without silently breaking already-suspended wor
   columns than it received, is corruption. A write stamps the current version on content it writes in the current format, so a
   row moves forward the next time it is written; a read never rewrites anything. A chain with a gap, a duplicate, a
   branch or a cycle, or one that does not end at the current version, fails the build
-  (`EfSchemaFamilyDeclarationGuardTests`) and the module's registration at startup. The two design contexts whose
+  (`EfSchemaFamilyChainDeclarationGuardTests`) and the module's registration at startup. The two design contexts whose
   content EF deserializes in value converters read their current version alone and declare no chain.
 - **A family declares which of its columns are content.** Beside `[EfSchemaFamily]`, `[EfSchemaContent(family,
   typeof(Entity), columns...)]` names the columns a read upcasts before it deserializes them and a write that changes
   them restamps; `[EfSchemaIntegrity(family, typeof(Entity), column, reason)]` names a document column compared as the
   bytes it was stored with, never upcast, and records why. Every document column of a stamped table is one or the other
   (`EfSchemaContentDeclarationTests`, against every module's model on every provider), and the guards read the
-  declaration: every read of a content column goes through the chain or deserializes nothing, and every write that
-  changes one, bulk updates included, restamps the row (`EfSchemaFamilyDeclarationGuardTests`). A column that restates
+  declaration: every read of a content column goes through the chain or deserializes nothing
+  (`EfSchemaFamilyContentReadGuardTests`), and every write that changes one, bulk updates included, restamps the row
+  (`EfSchemaFamilyRestampGuardTests`). A column that restates
   part of a row's content and is compared with it, such as a bookmark's payload or a checkpoint marker's id sets, is
   content, so both sides of the comparison are in one format.
 - **A golden-fixture gate freezes the wire format for the Distributed leaf only.** The
@@ -144,8 +145,9 @@ From 4.0 on, a change to what a family stores is a new version of that family ([
    deleted.
 5. When the upcaster reaches a column the stores edit in place, as Identity's coordinators edit a user's registries,
    the write upgrades the whole row first, upcasting every content column and restamping it, so a stamped row is never
-   partly in an older format (FR-014); `EfSchemaFamilyDeclarationGuardTests` fails an in-place content write that does
-   not restamp its row, directly or through a helper that does.
+   partly in an older format (FR-014); `EfSchemaFamilyRestampGuardTests` fails an in-place content write that does
+   not restamp its row, directly or through a helper that does, and fails a restamp that does not assign every
+   declared content column of its row from upcast values (#2144).
 
 ## Cross-execution stimulus routing (W7, E3-1 / E3-5)
 

@@ -58,9 +58,10 @@ store and every reader outside the module checks and upcasts through (FR-002, FR
 package loaded with its own copy of this assembly is still read. The family's readable set is its current version and
 every predecessor the chain reaches without a gap (FR-004), computed by one function for both the host's readability
 report ([spec 183](../../../../specs/183-cluster-membership/spec.md), FR-020) and every read, so a host never reports a
-version its reads refuse. `EfSchemaFamilyDeclarationGuardTests` fails the build when a family the stores check is
+version its reads refuse. `EfSchemaFamilyChainDeclarationGuardTests` fails the build when a family the stores check is
 undeclared, a check names its family by anything but its chain handle, a chain is unsound, or a write stamps anything
-but the declared current version or rewrites content without restamping.
+but the declared current version; `EfSchemaFamilyRestampGuardTests` fails a write that rewrites content without
+restamping, or a restamp that does not assign every declared content column of its row from upcast values (#2144).
 
 A family whose loaded declarations disagree on the owning module is isolated rather than taking the rest of the host's
 readability report down with it: its own entry credits no readable version - a host is counted for it and never for a
@@ -117,11 +118,13 @@ The declaration is what the guards read, so nothing is inferred from call sites.
 builds every first-party module's context on every provider and fails when a document column of a stamped table - a
 string column named `...Json`, `Content` or `Payload`, a payload column, or a domain value a converter stores as a
 string - is declared by neither attribute, or when a declared column is not in the model.
-`EfSchemaFamilyDeclarationGuardTests` fails when a column a store upcasts is not declared content by its family, when
-a read upcasts some of a row's declared content columns rather than all of them, names a value as another column's or
-upcasts a row as another table's, when a read of a declared content column in a source that can see its declaration -
-a presence check included - neither goes through the chain nor deserializes nothing, and when a write that changes
-one, an `ExecuteUpdate` included, does not restamp the row. A
+`EfSchemaFamilyContentIntegrityGuardTests` fails when a column a store upcasts is not declared content by its family,
+when a read upcasts some of a row's declared content columns rather than all of them, names a value as another
+column's or upcasts a row as another table's; `EfSchemaFamilyContentReadGuardTests` fails when a read of a declared
+content column in a source that can see its declaration - a presence check included - neither goes through the chain
+nor deserializes nothing; and `EfSchemaFamilyRestampGuardTests` fails when a write that changes one, an
+`ExecuteUpdate` included, does not restamp the row, or restamps a row without assigning every declared content
+column it did not otherwise write, from upcast values (#2144). A
 family EF materializes directly declares its content too; its reads meet the rule through the materialization
 interceptor, which accepts its current version alone, and its tracked writes through the context's stamping.
 
@@ -136,7 +139,7 @@ reads off it, and on the `ReadabilityEntry` the readability report carries it in
 that owns its family still names its module explicitly rather than reaching for the shared form to avoid the "exactly
 one EF module" rule. Several loaded copies of one shared declaration - two generations of a package, or the same
 mapping assembly loaded through two load contexts - are still read and intersected exactly like several copies of an
-owned family. `EfSchemaFamilyDeclarationGuardTests` reads a declaration's version from its *last* positional
+owned family. `EfSchemaFamilyChainDeclarationGuardTests` reads a declaration's version from its *last* positional
 argument, so it resolves both the two-argument shared form and the three-argument owned form the same way. A module's
 registration checks the chains of the families it owns and of the shared families this package declares, since every
 module's context maps them.

@@ -10,8 +10,10 @@ namespace Elsa.Persistence.EntityFramework.Tests;
 /// <see cref="SyntheticOrders"/> family. A row stamped 1 is read through the chain, left untouched by the read, and
 /// upgraded when it is next written; rows the chain cannot place are skew, and a readable row whose content is damaged
 /// is corruption. A row's two content columns are upcast together, so the step that moves the lines from the order
-/// document into their own column is seen by every read of an older row (#2144). FR-022's fixture proofs for the three
-/// upcasters are <see cref="AddCurrencyProof"/>, <see cref="AddLinesProof"/> and <see cref="MoveLinesProof"/>.
+/// document into their own column, and the later step that removes the document's now-redundant copy, are each seen by
+/// every read of an older row (#2144). FR-022's fixture proofs for the four upcasters are
+/// <see cref="AddCurrencyProof"/>, <see cref="AddLinesProof"/>, <see cref="MoveLinesProof"/> and
+/// <see cref="RemoveLinesProof"/>.
 /// </summary>
 public sealed class EfSchemaChainStoreTests : IAsyncDisposable
 {
@@ -46,15 +48,16 @@ public sealed class EfSchemaChainStoreTests : IAsyncDisposable
     }
 
     /// <summary>
-    /// The move is visible only through the whole row: read at version 4 with the lines column left empty, as a store that
-    /// upcast the order document alone would leave it, the same row is corrupt rather than read with no lines.
+    /// The move is visible only through the whole row: read at the current version with the lines column left empty, as
+    /// a store that upcast the order document alone would leave it, the same row is corrupt rather than read with no
+    /// lines - the document has carried none of its own since version 5 removed it (#2144).
     /// </summary>
     [Fact]
     public async Task A_current_row_without_its_lines_column_is_corrupt_rather_than_read_with_no_lines()
     {
-        await orders.PutAsync("order-4", "4", "EUR", """{"Id":"order-4","Total":42,"Currency":"EUR","Lines":["2 x widget"]}""");
+        await orders.PutAsync("order-5", "5", "EUR", """{"Id":"order-5","Total":42,"Currency":"EUR"}""");
 
-        await Assert.ThrowsAsync<InvalidDataException>(() => orders.Store().ReadAsync("order-4"));
+        await Assert.ThrowsAsync<InvalidDataException>(() => orders.Store().ReadAsync("order-5"));
     }
 
     /// <summary>US1, scenario 2: a read never rewrites a row, so its stamp and its stored content stay exactly as they were.</summary>
@@ -71,10 +74,11 @@ public sealed class EfSchemaChainStoreTests : IAsyncDisposable
 
     /// <summary>
     /// FR-013 and FR-014: the next write stamps the current version and writes the current format of every content column,
-    /// which is how a row moves forward; the row then reads without any upcaster running.
+    /// which is how a row moves forward; the row then reads without any upcaster running. The current format's document
+    /// no longer restates the lines version 5 moved into their own column (#2144), so a write never puts them back there.
     /// </summary>
     [Fact]
-    public async Task A_row_read_three_versions_behind_is_upgraded_when_it_is_next_written()
+    public async Task A_row_read_four_versions_behind_is_upgraded_when_it_is_next_written()
     {
         await orders.PutAsync("order-1", "1", null, """{"Id":"order-1","Total":42}""");
 
@@ -84,7 +88,13 @@ public sealed class EfSchemaChainStoreTests : IAsyncDisposable
         var (stamp, currency, content, lines) = await orders.RawAsync("order-1");
         Assert.Equal(Chain.CurrentVersion, stamp);
         Assert.Equal("EUR", currency);
-        Assert.Equal(Expected with { Total = 43 }, JsonSerializer.Deserialize<Order>(content));
+        using (var document = JsonDocument.Parse(content))
+        {
+            Assert.Equal("order-1", document.RootElement.GetProperty("Id").GetString());
+            Assert.Equal(43, document.RootElement.GetProperty("Total").GetInt32());
+            Assert.Equal("EUR", document.RootElement.GetProperty("Currency").GetString());
+            Assert.False(document.RootElement.TryGetProperty("Lines", out _), "Expected the document to carry no lines of its own once version 5 removed them.");
+        }
         Assert.Equal("[]", lines);
         var calls = UpcasterCalls.Snapshot();
         Assert.Equal(Expected with { Total = 43 }, await orders.Store().ReadAsync("order-1"));
@@ -95,17 +105,17 @@ public sealed class EfSchemaChainStoreTests : IAsyncDisposable
     [Fact]
     public async Task A_row_at_the_current_version_runs_no_upcaster()
     {
-        await orders.PutAsync("order-4", "4", "EUR", """{"Id":"order-4","Total":42,"Currency":"EUR","Lines":[]}""", "[]");
+        await orders.PutAsync("order-5", "5", "EUR", """{"Id":"order-5","Total":42,"Currency":"EUR"}""", "[]");
         var calls = UpcasterCalls.Snapshot();
 
-        _ = await orders.Store().ReadAsync("order-4");
+        _ = await orders.Store().ReadAsync("order-5");
 
         Assert.Equal(calls, UpcasterCalls.Snapshot());
     }
 
     /// <summary>US2, scenarios 1 and 3: above the chain, below it and unstamped are skew, and never reported as corruption.</summary>
     [Theory]
-    [InlineData("5")]
+    [InlineData("6")]
     [InlineData("0")]
     [InlineData("")]
     public async Task A_row_the_chain_cannot_place_is_skew_and_never_corruption(string stamp)
@@ -116,7 +126,7 @@ public sealed class EfSchemaChainStoreTests : IAsyncDisposable
 
         Assert.Equal(Family, skew.Family);
         Assert.Equal(stamp, skew.Found);
-        Assert.Equal(["1", "2", "3", "4"], skew.ReadableVersions);
+        Assert.Equal(["1", "2", "3", "4", "5"], skew.ReadableVersions);
     }
 
     /// <summary>US2, scenario 2 at read time: below a gap is skew, whatever upcasters the chain declares further down.</summary>
@@ -158,12 +168,12 @@ public sealed class EfSchemaChainStoreTests : IAsyncDisposable
     [Fact]
     public async Task A_write_refuses_to_replace_a_row_it_cannot_read()
     {
-        const string newer = """{"Id":"order-1","Total":42,"Currency":"EUR","Lines":[],"Gift":true}""";
-        await orders.PutAsync("order-1", "5", "EUR", newer, "[]");
+        const string newer = """{"Id":"order-1","Total":42,"Currency":"EUR","Gift":true}""";
+        await orders.PutAsync("order-1", "6", "EUR", newer, "[]");
 
         await Assert.ThrowsAsync<EfSchemaVersionSkewException>(() => orders.Store().SaveAsync(Expected));
 
-        Assert.Equal(("5", "EUR", newer, "[]"), await orders.RawAsync("order-1"));
+        Assert.Equal(("6", "EUR", newer, "[]"), await orders.RawAsync("order-1"));
     }
 
     [Fact]

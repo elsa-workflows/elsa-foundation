@@ -546,7 +546,24 @@ public sealed class EfIdentityAuthorityRelationshipCoordinator(
     private static void Prepare(UserRoleEntity row, string tenant, string user, string role) { row.SchemaVersion = IdentityIamEfModule.SchemaVersion; row.TenantId = tenant; row.TenantLookupKey = EfIdentityStoreSupport.TenantLookup(tenant); row.UserId = user; row.UserLookupKey = EfIdentityStoreSupport.Lookup(tenant, user); row.RoleId = role; row.RoleLookupKey = EfIdentityStoreSupport.Lookup(tenant, role); row.Revision = row.Revision == 0 ? 1 : row.Revision; }
     private static void Prepare(UserTokenEntity row, string tenant, string user) { row.SchemaVersion = IdentityIamEfModule.SchemaVersion; row.TenantId = tenant; row.TenantLookupKey = EfIdentityStoreSupport.TenantLookup(tenant); row.UserId = user; row.UserLookupKey = EfIdentityStoreSupport.Lookup(tenant, user); row.TokenKey = EfIdentityStoreSupport.CompoundKey(tenant, row.LoginProvider, row.Name); row.Revision = row.Revision == 0 ? 1 : row.Revision; }
     private static void Prepare(ExternalIdentityEntity row, string tenant, string user) { row.SchemaVersion = IdentityIamEfModule.SchemaVersion; row.TenantId = tenant; row.TenantLookupKey = EfIdentityStoreSupport.TenantLookup(tenant); row.ProviderLookupKey = EfIdentityStoreSupport.Lookup(tenant, row.Provider); row.ProviderSubjectLookupKey = EfIdentityStoreSupport.Lookup(tenant, row.ProviderSubject); row.ExternalOrderKey = EfIdentityStoreSupport.ExternalOrderKey(row.Provider, row.ProviderSubject); row.UserLookupKey = EfIdentityStoreSupport.Lookup(tenant, user); row.Revision = row.Revision == 0 ? 1 : row.Revision; }
-    private static void Prepare(TenantMembershipEntity row, string tenant, string user) { row.SchemaVersion = IdentityIamEfModule.SchemaVersion; row.TenantId = tenant; row.TenantLookupKey = EfIdentityStoreSupport.TenantLookup(tenant); row.UserId = user; row.UserLookupKey = EfIdentityStoreSupport.Lookup(tenant, user); row.Revision = row.Revision == 0 ? 1 : row.Revision; }
+    // A fresh row (no prior SchemaVersion) carries only current-format registries already, set by the caller before
+    // this runs; a row this ever receives with a prior stamp - not the case today - upcasts from it instead, so this
+    // restamps completely on its own (spec 180, FR-014; #2144).
+    private static void Prepare(TenantMembershipEntity row, string tenant, string user)
+    {
+        var content = row.SchemaVersion is null ? null : EfIdentityStoreSupport.Content(row);
+        if (content is not null)
+        {
+            row.RoleIdsJson = content[nameof(row.RoleIdsJson)]!;
+            row.DirectPermissionsJson = content[nameof(row.DirectPermissionsJson)]!;
+        }
+        row.SchemaVersion = IdentityIamEfModule.SchemaVersion;
+        row.TenantId = tenant;
+        row.TenantLookupKey = EfIdentityStoreSupport.TenantLookup(tenant);
+        row.UserId = user;
+        row.UserLookupKey = EfIdentityStoreSupport.Lookup(tenant, user);
+        row.Revision = row.Revision == 0 ? 1 : row.Revision;
+    }
     // Each of these five Apply overloads assigns every mapped non-key column of the existing row from a freshly
     // prepared one - a full rewrite, not a revision-only bump - so each restamps to the write version, as
     // Apply(TenantMembershipEntity, TenantMembershipEntity) below already does (spec 180, FR-014, 2026-09-28 note).

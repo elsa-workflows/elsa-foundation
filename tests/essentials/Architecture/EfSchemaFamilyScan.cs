@@ -3,6 +3,7 @@ using System.Text;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Text;
 
 namespace Elsa.Architecture.Tests;
 
@@ -56,12 +57,15 @@ internal sealed class SchemaFamilyScan
         _upcasters.Select(upcaster => (upcaster.Path, upcaster.Class, Resolve(upcaster.From), Resolve(upcaster.To))).ToArray();
 
     private readonly List<(string Path, CompilationUnitSyntax Root)> _roots = [];
-    private readonly List<(string Location, string Row, string Column, SyntaxNode? Member)> _memberWrites = [];
+    private readonly List<(string Location, string Path, string Row, string Column, SyntaxNode? Member)> _memberWrites = [];
     private readonly List<(string Name, int Arity, string[] Parameters, SyntaxNode Node)> _methods = [];
     private readonly HashSet<string> _stampedTypes = new(StringComparer.Ordinal);
 
     /// <summary>Each type's first base type, by simple name, as its base list names it.</summary>
     private readonly Dictionary<string, string> _baseTypes = new(StringComparer.Ordinal);
+
+    /// <summary>Each type's own property types, by simple name, keyed by (declaring type, property).</summary>
+    private readonly Dictionary<(string Type, string Property), string> _propertyTypes = new();
     private readonly List<(string Location, string Path, string Method, string Type, string Target, string Source, SyntaxNode Node)> _rowCopyCandidates = [];
 
     /// <summary>
@@ -325,7 +329,10 @@ internal sealed class SchemaFamilyScan
     /// </summary>
     private static string? DeclaredType(SyntaxNode node, string name)
     {
-        foreach (var ancestor in node.Ancestors())
+        // AncestorsAndSelf, not Ancestors: the restamp-completeness rule calls this with the enclosing member itself
+        // (the row's own stamp gives it no narrower node to start from), so the member's own parameters must be in
+        // reach, not just its ancestors' (#2144).
+        foreach (var ancestor in node.AncestorsAndSelf())
         {
             var parameters = ancestor switch
             {
@@ -380,6 +387,7 @@ internal sealed class SchemaFamilyScan
     [
         .. DeclarationViolations(), .. HandleViolations(), .. ChainViolations(), .. UpcasterViolations(),
         .. MaterializedFamilyViolations(), .. StampViolations(), .. RestampViolations(), .. FullRowRewriteViolations(),
+        .. RestampCompletenessViolations(),
         .. ColumnDeclarationViolations(), .. UpcastDeclarationViolations(),
         .. ContentReads(_ => true, (_, _) => true, new Dictionary<(string, string, string, string), string>()).Violations
     ];
@@ -464,6 +472,80 @@ internal sealed class SchemaFamilyScan
                      $"'{rewrite.Target}'; a full rewrite of a stamped row restamps to the write version, a write that only bumps a " +
                      "concurrency revision need not (spec 180, FR-014, 2026-09-28 note)."
             }));
+
+    /// <summary>
+    /// Every (member, row) this scan can prove rewrites the row wholesale by construction - a copy, SetValues, Update
+    /// or object-initializer replacement, the same three shapes <see cref="FullRowRewrites"/> recognises - keyed by
+    /// file and the enclosing member's span rather than by node identity, since two independent traversals of the
+    /// same tree are not guaranteed to hand back the same node instance. The restamp-completeness rule exempts
+    /// these: writing every mapped column already writes every declared content column too (spec 180, FR-014;
+    /// #2144).
+    /// </summary>
+    private IReadOnlySet<(string Path, TextSpan Span, string Row)>? _fullRowRewriteTargets;
+    private IReadOnlySet<(string Path, TextSpan Span, string Row)> FullRowRewriteTargets => _fullRowRewriteTargets ??= BuildFullRowRewriteTargets();
+
+    private IReadOnlySet<(string Path, TextSpan Span, string Row)> BuildFullRowRewriteTargets()
+    {
+        var targets = new HashSet<(string, TextSpan, string)>();
+        foreach (var candidate in _rowCopyCandidates.Where(candidate => _stampedTypes.Contains(candidate.Type) && CopiedColumns(candidate.Node, candidate.Target, candidate.Source).Count >= 2))
+            targets.Add((candidate.Path, candidate.Node.FullSpan, candidate.Target));
+        foreach (var candidate in _fullReplaceCandidates.Where(candidate => _stampedTypes.Contains(candidate.Type)))
+            targets.Add((candidate.Path, candidate.Node.FullSpan, candidate.Target));
+        foreach (var candidate in _replacementCandidates.Where(candidate => _stampedTypes.Contains(candidate.Type) && InitializerColumns(candidate.Initializer).Columns.Count >= 2))
+            targets.Add((candidate.Path, candidate.Node.FullSpan, candidate.Target));
+        return targets;
+    }
+
+    /// <summary>
+    /// The declared type of <paramref name="row"/> as read from <paramref name="member"/>: a simple identifier's
+    /// declared parameter or local type, or - for a chain of properties, such as <c>state.Entity</c> - that type's
+    /// own declared property, resolved one segment at a time from <see cref="_propertyTypes"/>. Null once a segment
+    /// this scan cannot resolve is reached.
+    /// </summary>
+    private string? RowEntityType(SyntaxNode member, string row)
+    {
+        var segments = row.Split('.');
+        var type = DeclaredType(member, segments[0]);
+        for (var index = 1; index < segments.Length && type is not null; index++)
+            type = _propertyTypes.GetValueOrDefault((type, segments[index]));
+        return type;
+    }
+
+    /// <summary>
+    /// Every member that stamps a row directly (<c>row.SchemaVersion = ...</c>) without, by construction, rewriting
+    /// the whole row, and does not assign every content column its row's entity type declares in the same member
+    /// (spec 180, FR-014; #2144): the restamp rule's other half, so a stamp never describes content a column was
+    /// left holding at its old value. This guard judges only a row this scan resolves to an entity with declared
+    /// content; anything else is left to <see cref="RestampViolations"/> and <see cref="FullRowRewriteViolations"/>.
+    /// </summary>
+    public IReadOnlyList<string> RestampCompletenessViolations()
+    {
+        var content = DeclaredColumns().Where(column => !column.Integrity).ToArray();
+        var wholeRow = FullRowRewriteTargets;
+        var violations = new List<string>();
+        foreach (var stamp in _memberWrites.Where(write => write.Column == "SchemaVersion" && write.Member is not null))
+        {
+            if (wholeRow.Contains((stamp.Path, stamp.Member!.FullSpan, stamp.Row)))
+                continue;
+            var entity = RowEntityType(stamp.Member!, stamp.Row);
+            if (entity is null)
+                continue;
+            var declared = content.Where(column => column.Entity == entity && column.Column is not null)
+                .Select(column => column.Column!).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+            if (declared.Length == 0)
+                continue;
+            var written = _memberWrites
+                .Where(write => write.Path == stamp.Path && write.Member is not null && write.Member.FullSpan == stamp.Member!.FullSpan && write.Row == stamp.Row)
+                .Select(write => write.Column)
+                .ToHashSet(StringComparer.Ordinal);
+            var missing = declared.Where(column => !written.Contains(column)).ToArray();
+            if (missing.Length > 0)
+                violations.Add($"{stamp.Location}: stamps '{stamp.Row}' but never assigns {Quoted(missing)} of its declared content in the same member; " +
+                               "a restamp rewrites every declared content column from upcast values, so no column is left at the row's old stamp (spec 180, FR-014; #2144).");
+        }
+
+        return Ordered(violations);
+    }
 
     /// <summary>The distinct columns, other than Revision and SchemaVersion, an object initializer assigns, and whether it assigns SchemaVersion itself.</summary>
     private static (IReadOnlyList<string> Columns, bool SetsSchemaVersion) InitializerColumns(InitializerExpressionSyntax initializer)
@@ -752,6 +834,11 @@ internal sealed class SchemaFamilyScan
             if (type.BaseList?.Types.FirstOrDefault()?.Type is { } baseType)
                 _baseTypes.TryAdd(type.Identifier.ValueText, Rightmost(baseType) ?? baseType.ToString());
 
+            // A property's own declared type, so the restamp-completeness rule can resolve a row reached through a
+            // chain of properties (`state.Entity`), not only a bare parameter or local (#2144).
+            foreach (var property in type.Members.OfType<PropertyDeclarationSyntax>())
+                _propertyTypes.TryAdd((type.Identifier.ValueText, property.Identifier.ValueText), Rightmost(property.Type) ?? property.Type.ToString());
+
             var upcaster = type.AttributeLists.SelectMany(list => list.Attributes).FirstOrDefault(attribute => UpcasterNames.Contains(Rightmost(attribute.Name), StringComparer.Ordinal));
             if (upcaster is not null)
             {
@@ -814,6 +901,7 @@ internal sealed class SchemaFamilyScan
             .Where(assignment => assignment.IsKind(SyntaxKind.SimpleAssignmentExpression) && assignment.Left is MemberAccessExpressionSyntax)
             .Select(assignment => (
                 Locate(path, assignment),
+                Normalize(path),
                 ((MemberAccessExpressionSyntax)assignment.Left).Expression.ToString(),
                 ((MemberAccessExpressionSyntax)assignment.Left).Name.Identifier.ValueText,
                 assignment.Ancestors().FirstOrDefault(node => node is MemberDeclarationSyntax or LocalFunctionStatementSyntax))));

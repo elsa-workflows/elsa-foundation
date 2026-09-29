@@ -33,7 +33,7 @@ using Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.Entitie
 [assembly: ManifestExtension("efModules", "Workflows.Runtime.Distributed.CommandTransport")]
 
 // The schema families these modules own (spec 180, FR-001), each at the version its skew check reads. A host's
-// readability report is derived from these alone (spec 183, FR-020); EfSchemaFamilyDeclarationGuardTests fails the
+// readability report is derived from these alone (spec 183, FR-020); EfSchemaFamilyChainDeclarationGuardTests fails the
 // build when a family the stores check is not declared here, or is declared at another version.
 [assembly: EfSchemaFamily(ExecutionPlacementEfModule.SchemaFamily, "Workflows.Runtime.Distributed.Placement", ExecutionPlacementEfModule.SchemaVersion)]
 [assembly: EfSchemaFamily(ExecutionCommandTransportEfModule.SchemaFamily, "Workflows.Runtime.Distributed.CommandTransport", ExecutionCommandTransportEfModule.SchemaVersion)]

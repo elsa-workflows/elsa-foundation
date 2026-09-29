@@ -409,7 +409,8 @@ public sealed class EfWorkflowAlterationStore(
             row.ScopeKey != EfRelationalIdentity.Encode(scope) ||
             row.ScopeKeyHash != EfRelationalIdentity.Hash(scope))
             throw new InvalidDataException("The alteration plan projections do not match its durable content.");
-        var plan = RuntimeArtifactJson.Deserialize<WorkflowAlterationPlanState>(PlanContent(row)[nameof(row.ContentJson)]!);
+        var content = PlanContent(row);
+        var plan = RuntimeArtifactJson.Deserialize<WorkflowAlterationPlanState>(content[nameof(row.ContentJson)]!);
         var idempotency = plan.AuthorityScope.TenantPartition + "\u001f" + plan.IdempotencyKeyHash;
         var valid =
             (expectedPlanId is null || StringComparer.Ordinal.Equals(plan.PlanId, expectedPlanId)) &&
@@ -427,7 +428,7 @@ public sealed class EfWorkflowAlterationStore(
         if (!valid)
             throw new InvalidDataException("The alteration plan projections do not match its durable content.");
 
-        ReadCleanup(row);
+        ReadCleanup(row, content);
         return plan;
     }
     /// <summary>
@@ -440,9 +441,13 @@ public sealed class EfWorkflowAlterationStore(
             row.SchemaVersion,
             (nameof(row.ContentJson), row.ContentJson),
             (nameof(row.CleanupSafeFailureJson), row.CleanupSafeFailureJson));
-    private static UnsealedCleanupIntent? ReadCleanup(WorkflowAlterationPlanEntity row)
+    /// <summary>
+    /// The row's cleanup intent, read from <paramref name="content"/> when the caller already upcast the row so the
+    /// chain runs once per read, or upcasting it itself otherwise (spec 180, FR-009; #2144).
+    /// </summary>
+    private static UnsealedCleanupIntent? ReadCleanup(WorkflowAlterationPlanEntity row, EfSchemaRowContent? content = null)
     {
-        var safeFailureJson = PlanContent(row)[nameof(row.CleanupSafeFailureJson)];
+        var safeFailureJson = (content ?? PlanContent(row))[nameof(row.CleanupSafeFailureJson)];
         if (row.CleanupTerminalStatus is null)
         {
             if (safeFailureJson is not null || row.CleanupCompletedAtUtcTicks is not null || row.CleanupDeletedCount != 0)

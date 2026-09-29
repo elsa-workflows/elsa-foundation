@@ -6,7 +6,7 @@ inventory were all retired (issue #1482). EF Core absence is now asserted by
 
 `schema-upcaster-fixtures.sha256` freezes every committed upcaster fixture pair (spec 180, FR-022): one
 `<sha-256>  <repo-relative path>` line per file under a `Fixtures/SchemaUpcasters` directory, hashed with line endings
-normalized. `EfSchemaFamilyDeclarationGuardTests` fails the build when a fixture is edited or deleted, or committed
+normalized. `EfSchemaFamilyFixtureProofGuardTests` fails the build when a fixture is edited or deleted, or committed
 without a line here. Add the line once the fixture's version ships; never change one.
 
 Each fixture is one row of one table, every content column the family declares for it, at
