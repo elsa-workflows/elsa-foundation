@@ -219,7 +219,10 @@ version serves once it is finalized (spec 182, FR-019). Without them nothing fai
 never finalizes past the version its record was created at, and every feature waiting on it is refused as not
 observed. `SharedAssemblyClosureGuardTests` fails the build when a host does not share both, and
 `FeedLoadedEfModuleTests` (`tests/essentials/Cluster/EntityFrameworkCore/Tests`) proves each direction on both hosts'
-configured shares. The durable EF membership provider (`AddConfiguredClusterMembership`) would bring EF Core into the
+configured shares, and `FoundationHostBootTests` (same project) boots the built `Elsa.Foundation.Host` as a child process over a
+directory feed of the packed fixture and `Elsa.Persistence.EntityFramework` (plus a second, resolve-only `closure` feed holding
+EF Core and the Sqlite engine, which the host does not carry), showing finalization at activation and dormancy ending once a
+hold is released. The durable EF membership provider (`AddConfiguredClusterMembership`) would bring EF Core into the
 host, so `Elsa.Foundation.Host` composes only the in-process default: it is a cluster of one.
 
 ### Generating the closure
