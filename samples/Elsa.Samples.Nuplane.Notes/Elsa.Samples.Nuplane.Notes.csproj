@@ -25,6 +25,8 @@
     <Description>Sample Nuplane-loaded EF module for the schema-rollout demo: a Notes table, and in release 1.1.0 an additive Tags column that a feature serves only once every host sharing the database can read it.</Description>
     <PackageTags>elsa;cshells;nuplane;sample;entity-framework;schema-rollout</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <!-- 1.x packages that depend on the dev build of the Elsa projects and on preview CShells packages: intended for a demo. -->
+    <NoWarn>$(NoWarn);NU5104</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
