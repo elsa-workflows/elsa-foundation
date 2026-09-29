@@ -805,6 +805,11 @@ public static class EfToolingHost
     /// leave the remaining modules' schemas unapplied for a reason that has nothing to do with them. Nothing
     /// here ever runs an action — exiting 0 with one outstanding is the failure this audit exists to
     /// prevent, and running it silently is the other.
+    /// <para>
+    /// A module whose pending batch holds a contracting migration its schema family is not yet finalized for is
+    /// refused by <see cref="EfDatabaseMigrator.ApplyAsync"/> before anything of that batch runs (spec 185, FR-024),
+    /// and reported as a refusal, exit code 2, naming the family and the version it waits for.
+    /// </para>
     /// </remarks>
     private static async Task<EfToolingResponse> Apply(
         IReadOnlyList<EfModuleDescriptor> modules,
@@ -836,6 +841,16 @@ public static class EfToolingHost
                     HistoryTable = descriptor.HistoryTableName,
                     Applied = pending
                 });
+            }
+            catch (SchemaFinalization.EfContractingMigrationRefusedException refusal)
+            {
+                // Spec 185, FR-024: a refusal, not a database failure — the database was read, and it says this module's
+                // pending batch may not run yet. Nothing of it was applied; modules before it in the order were.
+                throw EfToolingRefusal.Usage(
+                    "contracting-migration-refused",
+                    $"'{descriptor.Name}' was not applied: a pending contracting migration waits for its schema family's " +
+                    "version to be finalized, so none of its pending migrations was applied.",
+                    [EfToolingRedaction.Redact(refusal.Message, connection)]);
             }
             catch (Exception failure) when (failure is not EfToolingRefusal and not OperationCanceledException)
             {

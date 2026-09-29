@@ -206,7 +206,7 @@ public sealed class ExpandOnlyMigrationGuardTests
     {
         var operations = Build(migration => migration.DropColumn(name: "Legacy", table: Table));
 
-        var result = ExpandOnlyMigrationGuard.Evaluate(operations, OptOut("DropColumn elsa_example.Legacy"));
+        var result = ExpandOnlyMigrationGuard.Evaluate(operations, OptOut("DropColumn elsa_example.Legacy"), ExpandOnlyMigrationFamilies.None);
 
         Assert.True(result.Passed);
         Assert.Equal(["DropColumn elsa_example.Legacy"], result.Violations);
@@ -223,7 +223,7 @@ public sealed class ExpandOnlyMigrationGuardTests
             migration.RenameColumn(name: "OldName", table: Table, newName: "NewName");
         });
 
-        var result = ExpandOnlyMigrationGuard.Evaluate(operations, OptOut("DropColumn elsa_example.Legacy"));
+        var result = ExpandOnlyMigrationGuard.Evaluate(operations, OptOut("DropColumn elsa_example.Legacy"), ExpandOnlyMigrationFamilies.None);
 
         Assert.False(result.Passed);
         Assert.Equal(["RenameColumn elsa_example.OldName"], result.UnlistedViolations);
@@ -234,7 +234,7 @@ public sealed class ExpandOnlyMigrationGuardTests
     {
         var operations = Build(migration => migration.DropColumn(name: "Legacy", table: Table));
 
-        var result = ExpandOnlyMigrationGuard.Evaluate(operations, OptOut("DropColumn elsa_example.Legacy", "DropTable elsa_example"));
+        var result = ExpandOnlyMigrationGuard.Evaluate(operations, OptOut("DropColumn elsa_example.Legacy", "DropTable elsa_example"), ExpandOnlyMigrationFamilies.None);
 
         Assert.False(result.Passed);
         Assert.Equal(["DropTable elsa_example"], result.StaleOptOutEntries);
@@ -245,7 +245,7 @@ public sealed class ExpandOnlyMigrationGuardTests
     {
         var operations = Build(migration => migration.AddColumn<string>(name: "Note", table: Table, nullable: true));
 
-        var result = ExpandOnlyMigrationGuard.Evaluate(operations, OptOut("DropColumn elsa_example.Legacy"));
+        var result = ExpandOnlyMigrationGuard.Evaluate(operations, OptOut("DropColumn elsa_example.Legacy"), ExpandOnlyMigrationFamilies.None);
 
         Assert.False(result.Passed);
         Assert.Empty(result.Violations);
@@ -256,7 +256,7 @@ public sealed class ExpandOnlyMigrationGuardTests
     {
         var operations = Build(migration => migration.AddColumn<string>(name: "Note", table: Table, nullable: true));
 
-        var result = ExpandOnlyMigrationGuard.Evaluate(operations, optOut: null);
+        var result = ExpandOnlyMigrationGuard.Evaluate(operations, optOut: null, ExpandOnlyMigrationFamilies.None);
 
         Assert.True(result.Passed);
         Assert.False(result.HasOptOut);

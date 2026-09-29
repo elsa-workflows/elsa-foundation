@@ -7,4 +7,9 @@ namespace Elsa.Persistence.EntityFramework;
 /// apart from a genuine connectivity, credential or schema failure that <c>GetPendingMigrationsAsync</c>
 /// can throw as an <see cref="InvalidOperationException"/> too, before this check is ever reached.
 /// </summary>
-public sealed class EfPendingMigrationsException(string message) : InvalidOperationException(message);
+/// <remarks>
+/// Not sealed for one reason: <see cref="SchemaFinalization.EfContractingMigrationRefusedException"/> is a pending batch
+/// that also may not be applied yet (spec 185, FR-024), so every caller that already treats pending migrations as a
+/// negative result rather than a database failure does the same for it without a change.
+/// </remarks>
+public class EfPendingMigrationsException(string message) : InvalidOperationException(message);
