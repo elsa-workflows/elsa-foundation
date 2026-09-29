@@ -269,7 +269,7 @@ public static class EfContractingMigrationCheck
         var records = new List<SchemaFinalizationRecord>();
         foreach (var row in rows)
         {
-            if (await store.FindAsync(row.Family, cancellationToken) is not { History: [{ Transition: SchemaFinalizationTransition.Created, Actor.Member.HostId: var creator }] } record ||
+            if (await store.FindAsync(row.Family, cancellationToken) is not { History: [{ Transition: SchemaFinalizationTransition.Created, Actor.Member.HostId: var creator }, ..] } record ||
                 !creator.StartsWith(MigratorHostIdPrefix, StringComparison.Ordinal))
                 return true;
             records.Add(record);
