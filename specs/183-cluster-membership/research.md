@@ -139,6 +139,15 @@ finalization gates are per shell container and registered only after admission, 
 about to publish, nor for a family no shell enables. Nuplane exposing which contexts are current would not remove the
 need for the CShells half, so no upstream change was needed.
 
+The same stale generation reached the new release's migrations. `EfModuleBinding` named its migrations assembly, and EF
+Core's `MigrationsAssembly` resolves a name with `Assembly.Load` from its own load context before it looks at an
+assembly object (Microsoft.EntityFrameworkCore.Relational 10.0.10, `Migrations.Internal.MigrationsAssembly`'s
+constructor). EF Core is loaded in the previous release's graph context, so the name reached the previous release, whose
+migrations carry `[DbContext]` for the previous release's context type and matched nothing: under `Validate` a reload
+onto a release with an unapplied migration activated over the unmigrated database. `EfModuleBinding`, the activation
+guard's context and the persistence tool's now pass the module's assembly itself (`MigrationsAssembly(Assembly)`, which
+EF Core reads only when no name is set), so no module's migrations are resolved by name across load contexts.
+
 Shells are activated lazily on `Elsa.Foundation.Host` unless `Elsa:Boot:EagerShellActivation:Enabled` is set
 (`src/apps/Elsa.Foundation.Host/Shells/EagerShellActivationHostedService.cs`), and reloaded after a Nuplane reconcile
 by `ShellReloadOnPackagesChanged`. `Elsa.Workbench` registers `NullShellReloader`, so a new package version there

@@ -822,3 +822,11 @@ is the owner's approval.
   and are registered only after admission, so they cannot speak for a generation that is about to publish, nor for a
   family whose module no shell enables (FR-022). The activation guard, which judges the shell generation an apply is
   about to build, stops counting a replaced generation at once. Research: "B3: what 'loaded' means".
+- **A module's migrations are bound by assembly, never by name.** The same stale generation also reached the new
+  release's migrations: a module named its migrations assembly, EF Core resolved the name from the load context it was
+  loaded in, which still held the previous release, and the previous release's migrations are keyed to the previous
+  release's context type. The new release's context therefore saw no migration of its own, so under `Validate` a
+  reload onto a release with an unapplied migration activated anyway, and `AutoMigrate` would have applied nothing.
+  Every module binding now hands EF Core the module's assembly itself, so a reload onto such a release is refused by
+  `EfDatabaseMigrator`'s `Validate` check with the migration pending (ADR 0076), as a restart would be. This changes no
+  requirement; it is recorded here because it is the same in-place upgrade.
