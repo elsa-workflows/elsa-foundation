@@ -25,7 +25,7 @@ using Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Entities;
 // family the stores check is not declared here, or is declared at another version.
 [assembly: EfSchemaFamily(WorkflowsDesignEfModule.SchemaFamily, "Workflows.Design", WorkflowsDesignEfModule.SchemaVersion)]
 
-// Content and integrity columns: see EXTENSION_POINTS.md, "Content and integrity columns" (spec 180, FR-008, FR-009
+// Content and integrity columns: see src/essentials/Persistence/EntityFramework/EXTENSION_POINTS.md, "Content and integrity columns" (spec 180, FR-008, FR-009
 // and FR-014). EF materializes this context's rows directly, so the family declares no upcasters (same section).
 // An atomic write's receipt holds the result it replays to a retrying caller, deserialized into that result, so it is
 // content; its fingerprint is checked over the stored bytes first (FR-008) (#2140).

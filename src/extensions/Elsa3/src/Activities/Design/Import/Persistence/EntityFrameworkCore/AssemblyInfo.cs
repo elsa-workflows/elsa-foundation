@@ -29,7 +29,7 @@ using Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.Entities;
 // family the stores check is not declared here, or is declared at another version.
 [assembly: EfSchemaFamily(Elsa3ImportEfModule.SchemaFamily, "Elsa3.Activities.Design.Import", Elsa3ImportEfModule.SchemaVersion)]
 
-// Content and integrity columns: see EXTENSION_POINTS.md, "Content and integrity columns" (spec 180, FR-008, FR-009
+// Content and integrity columns: see src/essentials/Persistence/EntityFramework/EXTENSION_POINTS.md, "Content and integrity columns" (spec 180, FR-008, FR-009
 // and FR-014).
 [assembly: EfSchemaContent(Elsa3ImportEfModule.SchemaFamily, typeof(Elsa3ImportCollectionRecord), nameof(Elsa3ImportCollectionRecord.ContentJson))]
 [assembly: EfSchemaContent(Elsa3ImportEfModule.SchemaFamily, typeof(Elsa3ImportReceiptRecord), nameof(Elsa3ImportReceiptRecord.ContentJson))]

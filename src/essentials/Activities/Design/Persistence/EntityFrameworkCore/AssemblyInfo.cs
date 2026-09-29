@@ -25,7 +25,7 @@ using Elsa.Specifications.PackageManifest.Generator.Hints;
 // family the stores check is not declared here, or is declared at another version.
 [assembly: EfSchemaFamily(ActivitiesDesignEfModule.SchemaFamily, "Activities.Design", ActivitiesDesignEfModule.SchemaVersion)]
 
-// Content and integrity columns: see EXTENSION_POINTS.md, "Content and integrity columns" (spec 180, FR-008, FR-009
+// Content and integrity columns: see src/essentials/Persistence/EntityFramework/EXTENSION_POINTS.md, "Content and integrity columns" (spec 180, FR-008, FR-009
 // and FR-014). EF materializes this context's rows directly, so the family declares no upcasters (same section).
 // An atomic write's receipt replays its authoritative result, deserialized, and compares its mutated units with the
 // replayed request's serialization; an upgrade plan and its apply receipt are deserialized and compared with the

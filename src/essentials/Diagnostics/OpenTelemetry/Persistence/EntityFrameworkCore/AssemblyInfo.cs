@@ -27,7 +27,7 @@ using Elsa.Specifications.PackageManifest.Generator.Hints;
 // family the stores check is not declared here, or is declared at another version.
 [assembly: EfSchemaFamily(EfOpenTelemetryModule.SchemaFamily, "Diagnostics.OpenTelemetry", EfOpenTelemetryModule.SchemaVersion)]
 
-// Content and integrity columns: see EXTENSION_POINTS.md, "Content and integrity columns" (spec 180, FR-008, FR-009
+// Content and integrity columns: see src/essentials/Persistence/EntityFramework/EXTENSION_POINTS.md, "Content and integrity columns" (spec 180, FR-008, FR-009
 // and FR-014).
 // A trace summary's service and workflow memberships restate its payload, but each is deserialized and merged or
 // compared with the upcast payload, so each is content too (#2140).

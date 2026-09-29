@@ -26,6 +26,6 @@ using Elsa.Specifications.PackageManifest.Generator.Hints;
 // family the stores check is not declared here, or is declared at another version.
 [assembly: EfSchemaFamily(SecretsEfModule.SchemaFamily, "Secrets", SecretsEfModule.SchemaVersion)]
 
-// Content and integrity columns: see EXTENSION_POINTS.md, "Content and integrity columns" (spec 180, FR-008, FR-009
+// Content and integrity columns: see src/essentials/Persistence/EntityFramework/EXTENSION_POINTS.md, "Content and integrity columns" (spec 180, FR-008, FR-009
 // and FR-014).
 [assembly: EfSchemaContent(SecretsEfModule.SchemaFamily, typeof(SecretRecord), nameof(SecretRecord.Payload))]

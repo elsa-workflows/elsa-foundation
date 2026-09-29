@@ -38,6 +38,6 @@ using Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.Entitie
 [assembly: EfSchemaFamily(ExecutionPlacementEfModule.SchemaFamily, "Workflows.Runtime.Distributed.Placement", ExecutionPlacementEfModule.SchemaVersion)]
 [assembly: EfSchemaFamily(ExecutionCommandTransportEfModule.SchemaFamily, "Workflows.Runtime.Distributed.CommandTransport", ExecutionCommandTransportEfModule.SchemaVersion)]
 
-// Content and integrity columns: see EXTENSION_POINTS.md, "Content and integrity columns" (spec 180, FR-008, FR-009
+// Content and integrity columns: see src/essentials/Persistence/EntityFramework/EXTENSION_POINTS.md, "Content and integrity columns" (spec 180, FR-008, FR-009
 // and FR-014).
 [assembly: EfSchemaContent(ExecutionCommandTransportEfModule.SchemaFamily, typeof(ExecutionCommandTransportItemEntity), nameof(ExecutionCommandTransportItemEntity.PayloadJson))]

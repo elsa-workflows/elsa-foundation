@@ -82,4 +82,123 @@ public sealed class EfSchemaFamilyRestampGuardTests
         Assert.Contains("'Overwrite'", violation);
         Assert.Contains("never stamps 'target'", violation);
     }
+
+    /// <summary>
+    /// <c>Entry(target).CurrentValues.SetValues(source)</c> overwrites every mapped column of a tracked row the way
+    /// an explicit member-to-member copy does, so an unstamped one is caught the same way; a stamp added after it in
+    /// the same member clears it (spec 180, FR-014, 2026-09-28 note).
+    /// </summary>
+    [Fact]
+    public void Full_row_rewrite_detector_flags_an_unstamped_SetValues_and_leaves_a_stamped_one_alone()
+    {
+        var scan = Scan(
+            """
+            public sealed class Row
+            {
+                public string TenantId { get; set; } = "";
+                public string OwnerId { get; set; } = "";
+                public string SchemaVersion { get; set; } = "";
+            }
+
+            public sealed class Store
+            {
+                private void Overwrite(Context context, Row target, Row source)
+                {
+                    context.Entry(target).CurrentValues.SetValues(source);
+                }
+
+                private void Restamp(Context context, Row target, Row source)
+                {
+                    context.Entry(target).CurrentValues.SetValues(source);
+                    target.SchemaVersion = source.SchemaVersion;
+                }
+            }
+            """);
+
+        var violation = Assert.Single(scan.FullRowRewriteViolations());
+        Assert.Contains("'Overwrite'", violation);
+        Assert.Contains("via CurrentValues.SetValues", violation);
+        Assert.Contains("never stamps 'target'", violation);
+    }
+
+    /// <summary>
+    /// <c>context.Update(entity)</c> and <c>DbSet.Update(entity)</c> mark every mapped column of the row modified, so
+    /// an unstamped one is a full rewrite too; a stamp added after it in the same member clears it (spec 180, FR-014,
+    /// 2026-09-28 note).
+    /// </summary>
+    [Fact]
+    public void Full_row_rewrite_detector_flags_an_unstamped_Update_and_leaves_a_stamped_one_alone()
+    {
+        var scan = Scan(
+            """
+            public sealed class Row
+            {
+                public string TenantId { get; set; } = "";
+                public string OwnerId { get; set; } = "";
+                public string SchemaVersion { get; set; } = "";
+            }
+
+            public sealed class Store
+            {
+                private void Overwrite(Context context, Row target)
+                {
+                    context.Update(target);
+                }
+
+                private void Restamp(Context context, Row target)
+                {
+                    target.SchemaVersion = "current";
+                    context.Update(target);
+                }
+            }
+            """);
+
+        var violation = Assert.Single(scan.FullRowRewriteViolations());
+        Assert.Contains("'Overwrite'", violation);
+        Assert.Contains("calls Update on 'target'", violation);
+        Assert.Contains("never stamps 'target'", violation);
+    }
+
+    /// <summary>
+    /// A tracked row replaced in place by a freshly built instance assigning two or more of its mapped columns is a
+    /// full rewrite too; assigning SchemaVersion in the same initializer restamps it, and so does a stamp added after
+    /// it in the same member (spec 180, FR-014, 2026-09-28 note).
+    /// </summary>
+    [Fact]
+    public void Full_row_rewrite_detector_flags_an_unstamped_initializer_replacement_and_leaves_a_stamped_one_alone()
+    {
+        var scan = Scan(
+            """
+            public sealed class Row
+            {
+                public string TenantId { get; set; } = "";
+                public string OwnerId { get; set; } = "";
+                public string SchemaVersion { get; set; } = "";
+            }
+
+            public sealed class Store
+            {
+                private static void Overwrite(Row target, Row source)
+                {
+                    target = new Row { TenantId = source.TenantId, OwnerId = source.OwnerId };
+                }
+
+                private static void RestampInline(Row target, Row source)
+                {
+                    target = new Row { TenantId = source.TenantId, OwnerId = source.OwnerId, SchemaVersion = source.SchemaVersion };
+                }
+
+                private static void RestampAfter(Row target, Row source)
+                {
+                    target = new Row { TenantId = source.TenantId, OwnerId = source.OwnerId };
+                    target.SchemaVersion = source.SchemaVersion;
+                }
+            }
+            """);
+
+        var violation = Assert.Single(scan.FullRowRewriteViolations());
+        Assert.Contains("'Overwrite'", violation);
+        Assert.Contains("replaces 'target'", violation);
+        Assert.Contains("never stamps 'target'", violation);
+    }
 }

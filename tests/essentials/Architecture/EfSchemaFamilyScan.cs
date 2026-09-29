@@ -60,6 +60,22 @@ internal sealed class SchemaFamilyScan
     private readonly List<(string Name, int Arity, string[] Parameters, SyntaxNode Node)> _methods = [];
     private readonly HashSet<string> _stampedTypes = new(StringComparer.Ordinal);
     private readonly List<(string Location, string Path, string Method, string Type, string Target, string Source, SyntaxNode Node)> _rowCopyCandidates = [];
+
+    /// <summary>
+    /// Every <c>Entry(target).CurrentValues.SetValues(...)</c> and <c>Update(target)</c> call found in a method or
+    /// local function, where <c>target</c> names one of that member's own parameters: the two EF idioms that
+    /// overwrite every mapped column of a tracked row at once, so the full-row-rewrite rule judges them the same way
+    /// it judges an explicit member-to-member copy (spec 180, FR-014, 2026-09-28 note).
+    /// </summary>
+    private readonly List<(string Location, string Path, string Method, string Type, string Target, string Kind, SyntaxNode Node)> _fullReplaceCandidates = [];
+
+    /// <summary>
+    /// Every <c>target = new Type { A = ..., B = ... }</c> found in a method or local function, where <c>target</c>
+    /// names one of that member's own parameters: a row replaced in place by a freshly built instance, the third full
+    /// rewrite the rule recognises. The initializer, not just its columns, is kept, so a <c>SchemaVersion</c>
+    /// assignment inside it can be told from one added by a separate statement in the same member.
+    /// </summary>
+    private readonly List<(string Location, string Path, string Method, string Type, string Target, InitializerExpressionSyntax Initializer, SyntaxNode Node)> _replacementCandidates = [];
     private IReadOnlySet<(string Name, int Arity)>? _upcastingMethods;
     private IReadOnlySet<(string Name, int Arity, int Parameter)>? _stampingMethods;
     private IReadOnlyList<(string Location, string Path, string? Family, string? Entity, string? Column, bool Integrity, string? Reason)>? _declaredColumns;
@@ -270,22 +286,66 @@ internal sealed class SchemaFamilyScan
     /// alongside it - is left alone, since the owner's amendment holds only a full rewrite or a row replacement to the
     /// stamp.
     /// </summary>
-    public IReadOnlyList<(string Location, string Method, string Type, string Target, IReadOnlyList<string> CopiedColumns, bool Restamped)> FullRowRewrites =>
-        _rowCopyCandidates
-            .Where(candidate => _stampedTypes.Contains(candidate.Type))
-            .Select(candidate => (candidate, Copied: CopiedColumns(candidate.Node, candidate.Target, candidate.Source)))
-            .Where(item => item.Copied.Count >= 2)
-            .Select(item => (item.candidate.Location, item.candidate.Method, item.candidate.Type, item.candidate.Target, item.Copied,
-                Restamped: StampsRow(item.candidate.Node, item.candidate.Target, StampingMethods)))
-            .ToArray();
+    public IReadOnlyList<(string Location, string Method, string Type, string Target, IReadOnlyList<string> CopiedColumns, bool Restamped, string Kind)> FullRowRewrites
+    {
+        get
+        {
+            var copies = _rowCopyCandidates
+                .Where(candidate => _stampedTypes.Contains(candidate.Type))
+                .Select(candidate => (candidate, Copied: CopiedColumns(candidate.Node, candidate.Target, candidate.Source)))
+                .Where(item => item.Copied.Count >= 2)
+                .Select(item => (item.candidate.Location, item.candidate.Method, item.candidate.Type, item.candidate.Target, item.Copied,
+                    Restamped: StampsRow(item.candidate.Node, item.candidate.Target, StampingMethods), Kind: "Copy"));
+
+            // SetValues and Update always overwrite every mapped column of the row they take, so there is no column
+            // count to gate on the way the copy and initializer shapes are.
+            var replaces = _fullReplaceCandidates
+                .Where(candidate => _stampedTypes.Contains(candidate.Type))
+                .Select(candidate => (candidate.Location, candidate.Method, candidate.Type, candidate.Target,
+                    CopiedColumns: (IReadOnlyList<string>)["every mapped column"],
+                    Restamped: StampsRow(candidate.Node, candidate.Target, StampingMethods), Kind: candidate.Kind));
+
+            var initializers = _replacementCandidates
+                .Where(candidate => _stampedTypes.Contains(candidate.Type))
+                .Select(candidate => (candidate, Assigned: InitializerColumns(candidate.Initializer)))
+                .Where(item => item.Assigned.Columns.Count >= 2)
+                .Select(item => (item.candidate.Location, item.candidate.Method, item.candidate.Type, item.candidate.Target, item.Assigned.Columns,
+                    Restamped: item.Assigned.SetsSchemaVersion || StampsRow(item.candidate.Node, item.candidate.Target, StampingMethods), Kind: "Initializer"));
+
+            return copies.Concat(replaces).Concat(initializers).ToArray();
+        }
+    }
 
     public IReadOnlyList<string> FullRowRewriteViolations() =>
         Ordered(FullRowRewrites
             .Where(rewrite => !rewrite.Restamped)
-            .Select(rewrite => $"{rewrite.Location}: '{rewrite.Method}' rewrites {rewrite.CopiedColumns.Count} columns of '{rewrite.Type}' " +
-                                $"({string.Join(", ", rewrite.CopiedColumns)}) from its second parameter into '{rewrite.Target}' but never stamps " +
-                                $"'{rewrite.Target}'; a full rewrite of a stamped row restamps to the write version, a write that only bumps a " +
-                                "concurrency revision need not (spec 180, FR-014, 2026-09-28 note)."));
+            .Select(rewrite => rewrite.Kind switch
+            {
+                "SetValues" => $"{rewrite.Location}: '{rewrite.Method}' overwrites '{rewrite.Target}' of type '{rewrite.Type}' via " +
+                                $"CurrentValues.SetValues but never stamps '{rewrite.Target}'; a full rewrite of a stamped row restamps to the " +
+                                "write version (spec 180, FR-014, 2026-09-28 note).",
+                "Update" => $"{rewrite.Location}: '{rewrite.Method}' calls Update on '{rewrite.Target}' of type '{rewrite.Type}' but never stamps " +
+                            $"'{rewrite.Target}'; a full rewrite of a stamped row restamps to the write version (spec 180, FR-014, 2026-09-28 note).",
+                "Initializer" => $"{rewrite.Location}: '{rewrite.Method}' replaces '{rewrite.Target}' of type '{rewrite.Type}' with a new instance " +
+                                  $"assigning {rewrite.CopiedColumns.Count} columns ({string.Join(", ", rewrite.CopiedColumns)}) but never stamps " +
+                                  $"'{rewrite.Target}'; a full rewrite of a stamped row restamps to the write version (spec 180, FR-014, 2026-09-28 note).",
+                _ => $"{rewrite.Location}: '{rewrite.Method}' rewrites {rewrite.CopiedColumns.Count} columns of '{rewrite.Type}' " +
+                     $"({string.Join(", ", rewrite.CopiedColumns)}) from its second parameter into '{rewrite.Target}' but never stamps " +
+                     $"'{rewrite.Target}'; a full rewrite of a stamped row restamps to the write version, a write that only bumps a " +
+                     "concurrency revision need not (spec 180, FR-014, 2026-09-28 note)."
+            }));
+
+    /// <summary>The distinct columns, other than Revision and SchemaVersion, an object initializer assigns, and whether it assigns SchemaVersion itself.</summary>
+    private static (IReadOnlyList<string> Columns, bool SetsSchemaVersion) InitializerColumns(InitializerExpressionSyntax initializer)
+    {
+        var assigned = initializer.Expressions.OfType<AssignmentExpressionSyntax>()
+            .Where(assignment => assignment.Left is IdentifierNameSyntax)
+            .Select(assignment => ((IdentifierNameSyntax)assignment.Left).Identifier.ValueText)
+            .ToArray();
+        var setsSchemaVersion = assigned.Contains("SchemaVersion", StringComparer.Ordinal);
+        var columns = assigned.Where(column => column is not ("Revision" or "SchemaVersion")).Distinct(StringComparer.Ordinal).ToArray();
+        return (columns, setsSchemaVersion);
+    }
 
     /// <summary>The distinct columns, other than Revision, <paramref name="target"/> copies from <paramref name="source"/> in <paramref name="node"/>.</summary>
     private static IReadOnlyList<string> CopiedColumns(SyntaxNode node, string target, string source) =>
@@ -461,6 +521,48 @@ internal sealed class SchemaFamilyScan
                 first.Type is { } firstType && second.Type is { } secondType &&
                 (Rightmost(firstType) ?? firstType.ToString()) is { } typeName && typeName == (Rightmost(secondType) ?? secondType.ToString()))
                 _rowCopyCandidates.Add((Locate(path, node), Normalize(path), name!, typeName, first.Identifier.ValueText, second.Identifier.ValueText, node));
+
+            // SetValues, Update and an in-place object-initializer replacement, over any parameter of this member: the
+            // three other ways a stamped row is overwritten wholesale that the two-parameter copy shape above cannot
+            // see, since none of them takes the replacement as a second, same-typed parameter.
+            if (parameters is not null)
+            {
+                var declaredTypes = parameters.Parameters
+                    .Where(parameter => parameter.Type is not null)
+                    .ToDictionary(
+                        parameter => parameter.Identifier.ValueText,
+                        parameter => Rightmost(parameter.Type!) ?? parameter.Type!.ToString(),
+                        StringComparer.Ordinal);
+
+                foreach (var invocation in node.DescendantNodes().OfType<InvocationExpressionSyntax>())
+                {
+                    if (invocation is
+                        {
+                            Expression: MemberAccessExpressionSyntax
+                            {
+                                Name.Identifier.ValueText: "SetValues",
+                                Expression: MemberAccessExpressionSyntax { Name.Identifier.ValueText: "CurrentValues", Expression: InvocationExpressionSyntax entryCall }
+                            }
+                        } &&
+                        InvokedName(entryCall) == "Entry" &&
+                        entryCall.ArgumentList.Arguments is [{ Expression: IdentifierNameSyntax setValuesTarget }] &&
+                        declaredTypes.TryGetValue(setValuesTarget.Identifier.ValueText, out var setValuesType))
+                        _fullReplaceCandidates.Add((Locate(path, invocation), Normalize(path), name!, setValuesType, setValuesTarget.Identifier.ValueText, "SetValues", node));
+                    else if (InvokedName(invocation) == "Update" &&
+                             invocation.ArgumentList.Arguments is [{ Expression: IdentifierNameSyntax updateTarget }] &&
+                             declaredTypes.TryGetValue(updateTarget.Identifier.ValueText, out var updateType))
+                        _fullReplaceCandidates.Add((Locate(path, invocation), Normalize(path), name!, updateType, updateTarget.Identifier.ValueText, "Update", node));
+                }
+
+                foreach (var assignment in node.DescendantNodes().OfType<AssignmentExpressionSyntax>())
+                {
+                    if (assignment.IsKind(SyntaxKind.SimpleAssignmentExpression) &&
+                        assignment.Left is IdentifierNameSyntax replacedTarget &&
+                        declaredTypes.TryGetValue(replacedTarget.Identifier.ValueText, out var replacedType) &&
+                        assignment.Right is BaseObjectCreationExpressionSyntax { Initializer: { } initializer })
+                        _replacementCandidates.Add((Locate(path, assignment), Normalize(path), name!, replacedType, replacedTarget.Identifier.ValueText, initializer, node));
+                }
+            }
         }
         var constants = root.DescendantNodes()
             .OfType<VariableDeclaratorSyntax>()
