@@ -6,3 +6,5 @@ ef0aa3f9d3b230993f8f06f1a22e40ef116340737af414f931f670e62a2f961e  tests/essentia
 65d6aecc36c193905819b8c7df4f795429acecc5650d9c3e6a87d2f1ddcfcdd8  tests/essentials/Persistence/EntityFramework/Tests/Fixtures/SchemaUpcasters/SyntheticOrders/3-to-4/OrderRow.source.json
 c8aad079855b0fe81e36fe90ac350449057a497ca469a8edc96c11196e4f1e8b  tests/essentials/Persistence/EntityFramework/Tests/Fixtures/SchemaUpcasters/SyntheticOrders/4-to-5/OrderRow.expected.json
 053776676c6d20c6ea6e95c4da88c6941b24837be32ff7c0b66a54d743a701c2  tests/essentials/Persistence/EntityFramework/Tests/Fixtures/SchemaUpcasters/SyntheticOrders/4-to-5/OrderRow.source.json
+7e2bae34f240ed77ecf83a3cf8ee4cbdbbf6de1bbf90a4a212b694aa7e90a934  tests/essentials/Samples/Nuplane/Notes/Tests/Fixtures/SchemaUpcasters/SamplesNotes/1.0.0-to-2.0.0/NoteRecord.expected.json
+40ff89408df3629fabda0d7149ce8265bed17063ac77696c348824ea772d8792  tests/essentials/Samples/Nuplane/Notes/Tests/Fixtures/SchemaUpcasters/SamplesNotes/1.0.0-to-2.0.0/NoteRecord.source.json

@@ -7,7 +7,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 ## Summary
 
 - Source projects: 137
-- Test projects: 130
+- Test projects: 131
 - Domains: 31
 - Direct cross-domain references: 753
 
@@ -35,7 +35,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | Elsa.Persistence | 2 | 8 | feature/implementation<br>test |
 | Elsa.Pipelines | 1 | 0 | contract |
 | Elsa.Primitives | 2 | 2 | feature/implementation<br>test |
-| Elsa.Samples | 0 | 1 | test |
+| Elsa.Samples | 0 | 2 | test |
 | Elsa.Secrets | 5 | 7 | contract<br>feature/implementation<br>test |
 | Elsa.Serialization | 3 | 1 | contract<br>feature/implementation<br>test |
 | Elsa.Studio | 3 | 3 | contract<br>feature/implementation<br>test |
@@ -278,6 +278,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Primitives.Hosting.Tests](../../tests/essentials/Primitives/Hosting/Tests/Elsa.Primitives.Hosting.Tests.csproj) | test | Elsa.Primitives | Hosting.Tests | test | Elsa.Primitives.Hosting |
 | [Elsa.Primitives.Tests](../../tests/essentials/Primitives/Tests/Elsa.Primitives.Tests.csproj) | test | Elsa.Primitives | Tests | test | Elsa.Primitives |
 | [Elsa.Samples.Nuplane.Activities.Tests](../../tests/essentials/Samples/Nuplane/Activities/Tests/Elsa.Samples.Nuplane.Activities.Tests.csproj) | test | Elsa.Samples | Nuplane.Activities.Tests | test | Elsa.Activities.Design.Core<br>Elsa.Activities.Runtime.Core<br>Elsa.Samples.Nuplane.Activities |
+| [Elsa.Samples.Nuplane.Notes.Tests](../../tests/essentials/Samples/Nuplane/Notes/Tests/Elsa.Samples.Nuplane.Notes.Tests.csproj) | test | Elsa.Samples | Nuplane.Notes.Tests | test | Elsa.Samples.Nuplane.Notes |
 | [Elsa.Secrets.Nuplane.Tests](../../tests/essentials/Secrets/Nuplane/Tests/Elsa.Secrets.Nuplane.Tests.csproj) | test | Elsa.Secrets | Nuplane.Tests | test | Elsa.Secrets<br>Elsa.Secrets.Nuplane |
 | [Elsa.Secrets.Persistence.EntityFrameworkCore.MySql.Tests](../../tests/essentials/Secrets/Persistence/EntityFrameworkCore/MySql/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.MySql.Tests.csproj) | test | Elsa.Secrets | Persistence.EntityFrameworkCore.MySql.Tests | test | Elsa.Secrets<br>Elsa.Secrets.Persistence.EntityFrameworkCore |
 | [Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.PackageFeedProbe](../../tests/essentials/Secrets/Persistence/EntityFrameworkCore/PostgreSql/PackageFeedProbe/Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.PackageFeedProbe.csproj) | test | Elsa.Secrets | Persistence.EntityFrameworkCore.PostgreSql.PackageFeedProbe | test | Elsa.Persistence.EntityFramework<br>Elsa.Secrets<br>Elsa.Secrets.Core |

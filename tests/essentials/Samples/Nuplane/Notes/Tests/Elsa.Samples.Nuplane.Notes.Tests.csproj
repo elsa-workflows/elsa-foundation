@@ -1,0 +1,45 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" />
+    <PackageReference Include="coverlet.collector" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The sample is one project that builds as two releases. This project is compiled against release 1.1.0, which has the
+         upcaster and everything the proofs name; release 1.0.0 is built beside it (the target below), for its assembly only. -->
+    <ProjectReference Include="..\..\..\..\..\..\samples\Elsa.Samples.Nuplane.Notes\Elsa.Samples.Nuplane.Notes.csproj"
+                      AdditionalProperties="DemoVersion=2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- A private SQLite database per proof, and the mechanics of the upcaster proofs, compiled in as every EF module's
+         test project compiles them in. -->
+    <Compile Include="..\..\..\..\Persistence\EntityFramework\Tests\TemporarySqliteDatabase.cs" Link="TemporarySqliteDatabase.cs" />
+    <Compile Include="..\..\..\..\Persistence\EntityFramework\Tests\EfSchemaUpcasterFixtureSupport.cs" Link="EfSchemaUpcasterFixtureSupport.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The upcaster's fixture pair, frozen once committed (EfSchemaFamilyFixtureProofGuardTests). -->
+    <None Include="Fixtures\SchemaUpcasters\**\*" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <!--
+    Release 1.0.0 is the sample built as it is by default: its assembly is built here and copied under notes-v1/, where the
+    tests read it in a load context of their own. Two assemblies of one name, one process, nothing shared between them.
+  -->
+  <Target Name="CopyNotesRelease1" AfterTargets="Build">
+    <MSBuild Projects="..\..\..\..\..\..\samples\Elsa.Samples.Nuplane.Notes\Elsa.Samples.Nuplane.Notes.csproj" Properties="DemoVersion=1" Targets="Build">
+      <Output TaskParameter="TargetOutputs" ItemName="NotesRelease1" />
+    </MSBuild>
+    <Copy SourceFiles="@(NotesRelease1)" DestinationFolder="$(OutDir)notes-v1" />
+  </Target>
+
+</Project>
