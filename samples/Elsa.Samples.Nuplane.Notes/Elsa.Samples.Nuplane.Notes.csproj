@@ -1,0 +1,56 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    One project, two releases of one EF module: DemoVersion=1 (the default) is release 1.0.0, DemoVersion=2 is 1.1.0.
+    Everything that exists only in the second release lives under V2/, and the few lines that differ in shared files sit
+    behind DEMO_V2. Each version builds into folders of its own, so a solution build (version 1) and a build that
+    references version 2 never overwrite each other. See README.md.
+
+    The package Version comes from here rather than from -p:Version: a global Version would flow into the project
+    references packed as dependencies and ask the feed for Elsa.Persistence.EntityFramework at 1.1.0.
+  -->
+  <PropertyGroup>
+    <DemoVersion Condition="'$(DemoVersion)' == ''">1</DemoVersion>
+    <Version Condition="'$(DemoVersion)' == '2'">1.1.0</Version>
+    <Version Condition="'$(DemoVersion)' != '2'">1.0.0</Version>
+    <DefineConstants Condition="'$(DemoVersion)' == '2'">$(DefineConstants);DEMO_V2</DefineConstants>
+    <BaseOutputPath>bin/v$(DemoVersion)/</BaseOutputPath>
+    <IntermediateOutputPath>obj/v$(DemoVersion)/$(Configuration)/</IntermediateOutputPath>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <PackageId>Elsa.Samples.Nuplane.Notes</PackageId>
+    <Authors>Elsa Workflows</Authors>
+    <Description>Sample Nuplane-loaded EF module for the schema-rollout demo: a Notes table, and in release 1.1.0 an additive Tags column that a feature serves only once every host sharing the database can read it.</Description>
+    <PackageTags>elsa;cshells;nuplane;sample;entity-framework;schema-rollout</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Release 1.0.0 stops here: what 1.1.0 adds, and the model snapshot that describes it, is compiled in only by DemoVersion=2. -->
+    <Compile Remove="V2/**" Condition="'$(DemoVersion)' != '2'" />
+    <Compile Remove="Migrations/**/*ModelSnapshot.cs" Condition="'$(DemoVersion)' == '2' and '$(DemoKeepV1Snapshot)' != 'true'" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The features map endpoints, so a real Elsa.Foundation.Host that loads this package from a feed serves them. -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="CShells.AspNetCore.Abstractions" />
+    <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Packed at the package root, as every EF module package's is. -->
+    <None Update="nuplane.json" Pack="true" PackagePath="/" />
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\essentials\Persistence\EntityFramework\Elsa.Persistence.EntityFramework.csproj" />
+    <ProjectReference Include="..\..\src\essentials\Cluster\Core\Elsa.Cluster.Core.csproj" />
+  </ItemGroup>
+
+</Project>
