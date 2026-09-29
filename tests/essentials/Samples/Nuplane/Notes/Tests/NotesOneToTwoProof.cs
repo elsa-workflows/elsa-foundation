@@ -14,7 +14,7 @@ public sealed record NoteTags(string Text, string Tags);
 /// FR-022's three proofs for the notes family's one step, from 1.0.0 to 2.0.0, through the sample's own store: the upcast,
 /// the old-format round trip, and the read of a 1.0.0 row and a 2.0.0 row as the same note.
 /// </summary>
-public sealed class NotesOneToTwoProof() : EfSchemaUpcasterProof<NotesOneToTwo, NoteTags>("SamplesNotes", new NotesProofStore());
+public sealed class NotesOneToTwoProof() : EfSchemaUpcasterProof<NotesOneToTwo, NoteTags>(NotesModule.Family, new NotesProofStore());
 
 /// <summary>The store's half of FR-022's proofs: a fixture row is put in a SQLite database and read back through <see cref="NoteStore"/>.</summary>
 internal sealed class NotesProofStore : IEfSchemaUpcasterProofStore<NoteTags>, IAsyncDisposable
@@ -22,6 +22,7 @@ internal sealed class NotesProofStore : IEfSchemaUpcasterProofStore<NoteTags>, I
     private const string Id = "note-1";
     private const string Text = "a note";
     private readonly TemporarySqliteDatabase database = new("notes-proof");
+    private readonly ServiceProvider services = new ServiceCollection().BuildServiceProvider();
 
     public NotesProofStore()
     {
@@ -31,7 +32,7 @@ internal sealed class NotesProofStore : IEfSchemaUpcasterProofStore<NoteTags>, I
 
     public EfSchemaChain Chain => NotesModule.Chain;
 
-    public async Task<NoteTags> ReadAsync(EfSchemaUpcasterFixture fixture, string stamp, EfSchemaRowContent row)
+    public async Task<NoteTags> ReadAsync(EfSchemaUpcasterFixture _, string stamp, EfSchemaRowContent row)
     {
         await using (var context = NewContext())
         {
@@ -44,16 +45,20 @@ internal sealed class NotesProofStore : IEfSchemaUpcasterProofStore<NoteTags>, I
         }
 
         await using var reading = NewContext();
-        var note = (await new NoteStore(reading, new ServiceCollection().BuildServiceProvider()).ListWithTagsAsync()).Single();
+        var note = (await new NoteStore(reading, services).ListWithTagsAsync()).Single();
         return new NoteTags(note.Text, string.Join(',', note.Tags));
     }
 
-    public EfSchemaRowContent WriteAt(EfSchemaUpcasterFixture fixture, NoteTags value, string version) =>
+    public EfSchemaRowContent WriteAt(EfSchemaUpcasterFixture _, NoteTags value, string version) =>
         new(typeof(NoteRecord), (nameof(NoteRecord.TagsJson), Chain.IsAtOrAfter(version, NotesModule.TagsVersion)
             ? JsonSerializer.Serialize(value.Tags.Split(',', StringSplitOptions.RemoveEmptyEntries))
             : null));
 
-    public ValueTask DisposeAsync() => database.DisposeAsync();
+    public async ValueTask DisposeAsync()
+    {
+        await services.DisposeAsync();
+        await database.DisposeAsync();
+    }
 
     private NotesSqliteDbContext NewContext() =>
         new(new DbContextOptionsBuilder<NotesSqliteDbContext>().UseSqlite(database.ConnectionString).Options);

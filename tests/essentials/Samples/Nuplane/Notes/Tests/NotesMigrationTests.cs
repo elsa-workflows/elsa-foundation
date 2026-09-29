@@ -1,8 +1,9 @@
 using Elsa.Persistence.EntityFramework;
-using Elsa.Samples.Nuplane.Notes.Migrations.Notes.PostgreSql;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Migrations.Operations;
 using Xunit;
+using PostgreSqlMigrations = Elsa.Samples.Nuplane.Notes.Migrations.Notes.PostgreSql;
+using SqliteMigrations = Elsa.Samples.Nuplane.Notes.Migrations.Notes.Sqlite;
 
 namespace Elsa.Samples.Nuplane.Notes.Tests;
 
@@ -15,14 +16,14 @@ public sealed class NotesMigrationTests
 {
     public static TheoryData<string, Migration> AddTagsMigrations() => new()
     {
-        { "Sqlite", new Elsa.Samples.Nuplane.Notes.Migrations.Notes.Sqlite.AddTags() },
-        { "PostgreSql", new AddTags() }
+        { "Sqlite", new SqliteMigrations.AddTags() },
+        { "PostgreSql", new PostgreSqlMigrations.AddTags() }
     };
 
     public static TheoryData<string, Migration> InitialMigrations() => new()
     {
-        { "Sqlite", new Elsa.Samples.Nuplane.Notes.Migrations.Notes.Sqlite.Initial() },
-        { "PostgreSql", new Initial() }
+        { "Sqlite", new SqliteMigrations.Initial() },
+        { "PostgreSql", new PostgreSqlMigrations.Initial() }
     };
 
     [Theory]
@@ -40,12 +41,11 @@ public sealed class NotesMigrationTests
     [MemberData(nameof(InitialMigrations))]
     public void The_initial_migration_creates_the_notes_table_and_the_finalization_tables(string provider, Migration migration)
     {
-        var tables = migration.UpOperations.OfType<CreateTableOperation>().Select(table => table.Name).ToArray();
+        string[] tables = [.. migration.UpOperations.OfType<CreateTableOperation>().Select(table => table.Name).Order(StringComparer.Ordinal)];
 
-        Assert.True(
-            new[] { NotesModule.TableName, $"__ElsaSchemaFinalization_{NotesModule.HistoryModuleName}", $"__ElsaDatabaseIdentity_{NotesModule.HistoryModuleName}" }
-                .Order(StringComparer.Ordinal).SequenceEqual(tables.Order(StringComparer.Ordinal)),
-            $"{provider}: created {string.Join(", ", tables)}.");
+        Assert.Equal(
+            [.. new[] { NotesModule.TableName, $"__ElsaSchemaFinalization_{NotesModule.HistoryModuleName}", $"__ElsaDatabaseIdentity_{NotesModule.HistoryModuleName}" }.Order(StringComparer.Ordinal)],
+            tables);
         // The baseline knows nothing of tags: they arrive with 1.1.0, in a migration of their own.
         Assert.DoesNotContain(migration.UpOperations.OfType<CreateTableOperation>().SelectMany(table => table.Columns), column => column.Name == nameof(NoteRecord.TagsJson));
     }
