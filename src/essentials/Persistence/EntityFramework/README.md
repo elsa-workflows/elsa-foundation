@@ -87,7 +87,7 @@ Oracle container leg is the first of the three conditions ADR 0075 requires to r
 | `EfSchemaFinalization` / `EfSchemaFinalizationStore` | The finalization record of each schema family ([spec 181](../../../../specs/181-schema-finalization-gate/spec.md), FR-001 and FR-002), with spec 186's finish record inside it. Every module context maps two tables beside its own history table, `__ElsaSchemaFinalization_<Module>` and `__ElsaDatabaseIdentity_<Module>`, through `modelBuilder.MapSchemaFinalization(<HistoryModuleName>)`, and its own baseline migration creates them. The store keeps the record's rules: every change is a compare-and-set on the record's revision, the finalized version only moves forward along the writer's chain, a hold abandons the intent it covers in the same write, and the opaque database identity is created once, never from a connection string. When to finalize is the gate's decision (spec 181's B5, #2101), not the store's |
 | `EfPayloadCodec` / `EfPayloadColumns` | Encode a module's payload columns in band (`elsaz1.<codec>.<base64>`), so compressed and uncompressed rows coexist in one column with no schema change; refuses a declaration that is keyed, indexed, length-bounded, or on the excluded `ContentAuthority` family |
 | `ExpandOnlyMigrationGuard` / `ExpandOnlyMigrationOptOutAttribute` | Classify a migration's `Up` operations against the expand-only allowed list, and the reviewed, per-migration opt-out that permits exactly the destructive operations it lists ([spec 185](../../../../specs/185-expand-only-migration-guard/spec.md), #2104). On a contracting migration the opt-out also names the schema family and the version whose finalization makes the removal safe (FR-023, #2136); `ExpandOnlyMigrationFamilies` tells the guard which tables a stamped family covered before the migration |
-| `EfContractingMigrationCheck` | Refuses a context's whole pending batch, before anything runs, while it holds a contracting migration whose family is finalized below the version it names (spec 185 FR-024 and FR-025, #2136); `SeedVersionAsync` is the version the gate creates a missing record at, no lower than any applied contracting migration of the family names. See [Contracting migrations](#contracting-migrations-spec-185) |
+| `EfContractingMigrationCheck` | Refuses a context's whole pending batch, before anything runs, while it holds a contracting migration whose family is finalized below the version it names (spec 185 FR-024 and FR-025, #2136); on a database no host has admitted the module in, creates the family's record at that version before the contraction runs, as `migrator:<host id or machine name>`; `SeedVersionAsync` is the version the gate creates a missing record at, no lower than any applied contracting migration of the family names. See [Contracting migrations](#contracting-migrations-spec-185) |
 
 ## Shared persistence resources
 
@@ -439,13 +439,22 @@ Applying it waits for that version. While the family's finalized version in the 
 `EfDatabaseMigrator.ApplyAsync` refuses the context's whole pending batch before anything runs, with
 `EfContractingMigrationRefusedException` naming the migration, the family and both versions: under `AutoMigrate` at
 Prepare, under `Validate` instead of the plain pending report, in `dotnet elsa persistence apply` as a refusal (exit
-code 2), and at enable time as a 409 under both policies. A database no host has admitted the module in yet, such as
-a fresh install, is not refused, since nothing there reads what the batch removes; once one has, a family with no
-record is refused. The first gate to admit the module there then creates the family's record at the version the
-contraction names rather than at the oldest version its host reads, since the schema serves nothing earlier, so a
-release that reads only earlier versions is refused (`EfSchemaActivationRefusedException`); a host whose chain does not
-read that version is refused instead of creating the record. That relies on the first host to admit the module running
-a release that carries the contraction; spec 185's Invariant states when it does not.
+code 2), and at enable time as a 409 under both policies.
+
+A database no host has admitted the module in yet, which no family's record there shows, such as a fresh install, is
+not refused, since nothing there reads what the batch removes. The migrator seeds first instead: under `AutoMigrate`,
+and in `apply`, `EfDatabaseMigrator` applies the pending migrations before the first contracting one, creates each
+contracted family's record at the version its contraction names, as `migrator:<host id>` (the host's member in the
+fleet) or `migrator:<machine name>`, reads the records again, and only then applies the contracting migrations and
+the rest. A release that reads only earlier versions is then refused (`EfSchemaActivationRefusedException`) whether it
+starts after the apply, during it, or after a process that applied it ended between the seed and the contraction; if
+its gate created a record below the version first, the contraction is refused instead, with the migrations before it
+applied and named in the refusal. Once the module has been admitted, a family with no record is refused.
+
+SQL run outside Elsa, such as `script`'s, creates no record. For it the first gate to admit the module creates the
+family's record no lower than the version an applied contraction names, and a host whose chain does not read that
+version is refused instead of creating the record; that relies on the first host to admit the module running a release
+that carries the contraction, as spec 185's Invariant states.
 
 ## Post-migration actions
 

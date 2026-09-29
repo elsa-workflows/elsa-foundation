@@ -234,7 +234,8 @@ so a third-party module can run the same check from its own tests; the guard's o
 only over first-party modules. See the package README's table for both types. A contracting opt-out
 also names its schema family and version (FR-023, #2136); a third-party caller passes
 `ExpandOnlyMigrationFamilies.Before(...)` so the guard can tell one. Applying such a migration is
-checked for every module, first-party or not, by `EfDatabaseMigrator` (FR-024).
+checked for every module, first-party or not, by `EfDatabaseMigrator` (FR-024), which on a database
+no host has admitted the module in creates the family's finalization record before the migration runs.
 
 ## Ordinal string collation
 

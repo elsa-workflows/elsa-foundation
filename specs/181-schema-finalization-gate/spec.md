@@ -236,7 +236,9 @@ after each one.
   started at one would admit a host that reads only them. A host whose chain does not read that version, or whose
   applied contracting migration names none, refuses the module rather than creating the record. The version is read
   from the activating host's own migrations and their opt-outs, so it holds when that host's release carries the
-  contracting migration; spec 185's Invariant states what holds when it does not.
+  contracting migration; spec 185's Invariant states what holds when it does not. Since the migrator creates the record
+  before a contracting migration it applies (Decisions, 2026-09-29 note), this start matters only for a contraction
+  run outside Elsa, and a record the migrator created is the one the first activation finds.
 - **A host partitioned during finalization.** It was not counted. When it reconnects, FR-012 and FR-018 apply: it
   refreshes, finds a finalized version outside its readable set, and refuses writes to that family. Its reads of
   newer rows already raise skew (spec 180, FR-007).
@@ -529,3 +531,22 @@ rather than a record of its own.
   runtime as `IRuntimeSchemaFinalization`: the runnability entry names the database identity the gate read (spec 184,
   FR-008), a member whose writes to a Runtime family the gate refuses claims nothing and hands off what it holds
   (spec 184, FR-012), and a placement query names the database its execution lives in (spec 184, FR-009).
+
+**2026-09-29 note.** Recorded when the owner decided on [#2093](https://github.com/elsa-workflows/elsa-foundation/issues/2093)
+that the migrator seeds first; built by [#2136](https://github.com/elsa-workflows/elsa-foundation/issues/2136) with
+[spec 185](../185-expand-only-migration-guard/spec.md)'s FR-024 (its 2026-09-29 note, "The migrator seeds first").
+
+- **The migrator and the persistence tool create finalization records in exactly one case.** On a database where no
+  family of the module has a record yet, `EfDatabaseMigrator` under `AutoMigrate`, and so `EfModuleMigrator` at
+  Prepare and `dotnet elsa persistence apply`, creates the record of each family a pending contracting migration names
+  before any contracting migration runs, at the version that migration's opt-out names (the latest, where several
+  name one family), through the store's
+  get-or-create (FR-001), and the database identity with the first. It creates no other record, and none under
+  `Validate`. A record that already exists, because a gate created it first, is kept as it is, and the contracting
+  migration is refused if it is below the version.
+- **Its creator is recorded like a member.** The created entry of the history and of the finish record names the
+  member `migrator:<host id>` in the host's incarnation, where the host composes a fleet, or `migrator:<machine name>`
+  in a per-process incarnation, where it does not or the persistence tool applies.
+- **The module counts as admitted once a family's record exists**, not once its database identity does: a gate and a
+  seed both create the identity first, so an identity with no record is an admission or a seed cut short before its
+  first record, and nothing has read the module's rows.
