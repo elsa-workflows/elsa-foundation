@@ -33,7 +33,7 @@ These were audited from source, not assumed. Two of them invert what you would e
 
 **Blocking.** Every user story depends on the outcome value and the contract signature existing. No story can start until this phase completes.
 
-- [x] T003 Add the `SupersededByOtherOwner` value to `RuntimePostCommitOutboxClaimCompletionOutcome` in `src/Elsa/Workflows/Runtime/Core/Models/RuntimePostCommitOutbox.cs`, with an XML doc stating that nothing was written, the owning deliverer's completion governs, and the item stays recoverable by claim expiry and the sweep
+- [x] T003 Add the `SupersededByOtherOwner` value to `RuntimePostCommitOutboxClaimCompletionOutcome` in `src/Elsa/Workflows/Runtime/Core/Models/RuntimePostCommitOutbox.cs`, with an XML doc stating that nothing was written, the owning deliverer's completion governs, and a nonterminal item stays recoverable by claim expiry and the sweep
 - [x] T004 Change `IRuntimePostCommitOutboxStore.RecordDeliveryResultAsync` in `src/Elsa/Workflows/Runtime/Core/Contracts/IRuntimePostCommitOutboxStore.cs` to return `ValueTask<RuntimePostCommitOutboxClaimCompletionOutcome>`, documenting obligations C1–C7 from [contracts/outbox-delivery-recording.md](./contracts/outbox-delivery-recording.md#4-behavioural-contract-for-implementers)
 - [x] T005 Build the solution and capture the complete list of resulting compile errors — this list IS the blast radius, and it must match the three implementations named in [research.md R7](./research.md#r7--blast-radius-of-the-breaking-change). Investigate any site the research did not predict before proceeding
 
@@ -49,7 +49,7 @@ These were audited from source, not assumed. Two of them invert what you would e
 
 ### Implementation
 
-- [x] T006 [US1] Replace the throw in `EfRuntimePostCommitOutboxStore.RecordDeliveryResultAsync` in `src/Elsa/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfRuntimePostCommitOutboxStore.cs:158` with `return SupersededByOtherOwner`, writing nothing — no status, owner, fence, attempt count, failure message or availability change (FR-001, FR-003, obligations C1/C2). **Keep the terminal-item throw at :157 and the not-found throw intact** (C4, C5) — those are double-completion and missing-row bugs, not contention
+- [x] T006 [US1] Replace the throw in `EfRuntimePostCommitOutboxStore.RecordDeliveryResultAsync` in `src/Elsa/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfRuntimePostCommitOutboxStore.cs:158` with `return SupersededByOtherOwner`, writing nothing — no status, owner, fence, attempt count, failure message or availability change (FR-001, FR-003, obligations C1/C2). **Keep the unfenced terminal-item throw and not-found throw intact; check a positive foreign fence first, even after its owner completed** (C4, C5) — #2168 refined this distinction without changing the missing-row guard
 - [x] T007 [P] [US1] Update `InMemoryRuntimeCheckpointCommitStore.RecordDeliveryResultAsync` in `src/Elsa/Workflows/Runtime/Services/InMemoryRuntimeCheckpointCommitStore.cs` to return the same outcomes under the same conditions, so the in-memory and durable stores agree (FR-009)
 - [x] T008 [P] [US1] Update `CoalescingRuntimePostCommitOutboxStore.RecordDeliveryResultAsync` in `src/Elsa/Workflows/Runtime/Services/Coalescing/CoalescingRuntimePostCommitOutboxStore.cs:33` to return `Persisted` on the session-owned branch (a session-owned item has no durable claim and cannot be superseded) and to **propagate the inner store's outcome unchanged** on the pass-through branch — do not discard it and do not substitute `Persisted`
 - [x] T009 [US1] Thread the store's outcome through `RuntimePostCommitOutboxProcessor.RecordDeliveryResultAsync` in `src/Elsa/Workflows/Runtime/Services/RuntimePostCommitOutboxProcessor.cs:293`, replacing the unconditional `return Persisted` at :295 with the value the store returned
@@ -65,7 +65,7 @@ These were audited from source, not assumed. Two of them invert what you would e
 
 - [x] T014 [US1] Add the injected-steal test to `tests/Elsa/Workflows/Runtime/Tests/RuntimePostCommitOutboxProcessorTests.cs` (FR-016): one live-drain delivery whose store reports the item claimed by another owner at record time. Assert the process result reports the item as neither delivered nor failed, and that **no exception escapes**. Follow the file's existing fake-store idiom (see the `CompleteClaimAsync` fake at `:804`); xunit `Assert.*` only, no FluentAssertions
 - [x] T015 [P] [US1] Add a test asserting a superseded recording leaves the row untouched — status, owner, fence, attempt count and failure message all unchanged (FR-003, C2, C7)
-- [x] T016 [P] [US1] Add a test asserting a superseded item remains recoverable: claim expiry still makes it claimable and the sweep still redelivers it (FR-006, C3)
+- [x] T016 [P] [US1] Add a test asserting a superseded nonterminal item remains recoverable: claim expiry still makes it claimable and the sweep still redelivers it (FR-006, C3)
 
 ### The revert-to-red gate (FR-019) — H5 applies
 

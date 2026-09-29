@@ -28,7 +28,7 @@ The fix gives the delivery-record contract an outcome to return, adds a `Superse
 
 **Performance Goals**: No regression on the live-drain fast path. The whole reason the claim-less branch exists is to skip a durable claim round-trip; the fix must not reintroduce one. The added work is a comparison against already-loaded row state.
 
-**Constraints**: No database migration. No new NuGet dependency. No change to crash-recovery semantics — a superseded item must remain redeliverable by claim expiry and the sweep.
+**Constraints**: No database migration. No new NuGet dependency. No change to crash-recovery semantics — a superseded nonterminal item remains redeliverable by claim expiry and the sweep; an item already completed by its fenced owner remains terminal.
 
 **Scale/Scope**: 3 store implementations, 1 contract, 1 enum, 1 query model, 1 processor, 1 documentation comment. Roughly 10 production files and 4 test files.
 

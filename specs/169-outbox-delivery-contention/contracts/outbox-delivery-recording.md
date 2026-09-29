@@ -32,7 +32,8 @@ public interface IRuntimePostCommitOutboxStore
     /// <summary>
     /// Records a claim-less delivery result. Returns <see cref="RuntimePostCommitOutboxClaimCompletionOutcome.Persisted"/>
     /// when the result was written, or <see cref="RuntimePostCommitOutboxClaimCompletionOutcome.SupersededByOtherOwner"/>
-    /// when another deliverer owns the item, in which case NOTHING is written and the owner's completion governs.
+    /// when another deliverer owns the item or this caller does not hold its retained positive fence, in which case NOTHING
+    /// is written and the fenced owner's completion governs, including when that completion already made the item terminal.
     /// </summary>
     ValueTask<RuntimePostCommitOutboxClaimCompletionOutcome> RecordDeliveryResultAsync(
         RuntimePostCommitOutboxDeliveryResult result, CancellationToken cancellationToken = default);
@@ -94,9 +95,10 @@ public enum RuntimePostCommitOutboxClaimCompletionOutcome
 
     /// <summary>
     /// Another deliverer owns this item — it is Delivering under a different owner, or carries a fencing token from a
-    /// claim this caller does not hold. NOTHING was written: status, owner, fence, attempt count and failure message
-    /// are untouched, and the owning deliverer's completion governs. The item remains a crash backstop, recoverable
-    /// by claim expiry and the resumption sweep.
+    /// claim this claim-less caller does not hold. The retained fence is still foreign after the owner completes the item,
+    /// so this outcome also applies if that completion made it terminal. NOTHING was written: status, owner, fence,
+    /// attempt count and failure message are untouched. A nonterminal item remains a crash backstop, recoverable by claim
+    /// expiry and the resumption sweep; an item completed by its fenced owner stays terminal.
     /// </summary>
     SupersededByOtherOwner
 }
@@ -127,10 +129,10 @@ An implementation of `RecordDeliveryResultAsync(result, ct)` MUST:
 
 | # | Obligation |
 |---|---|
-| C1 | Return `SupersededByOtherOwner` when the item is in delivery under another owner, or carries a fencing token this caller does not hold. |
+| C1 | Return `SupersededByOtherOwner` when the item is in delivery under another owner, or carries a positive fencing token this claim-less caller does not hold. A retained foreign fence still supersedes after its owner completes the item. |
 | C2 | Write **nothing** when returning `SupersededByOtherOwner` — no status, owner, fence, attempt count, failure message or availability change. |
-| C3 | Leave a superseded item recoverable by claim expiry and the resumption sweep. |
-| C4 | Continue to **throw** when the item is already terminal. That is double-completion, not contention, and must stay loud. |
+| C3 | A superseded **nonterminal** item remains recoverable by claim expiry and the resumption sweep. If the fenced owner already completed the item, its terminal state remains authoritative. |
+| C4 | Continue to **throw** for an unfenced terminal item; that is a double-completion, not contention. A positive foreign fence takes precedence over terminal state and returns `SupersededByOtherOwner`, even after the fenced owner completed. |
 | C5 | Continue to **throw** when the item does not exist. |
 | C6 | Return `Persisted` when the result was written as presented. |
 | C7 | Not consume a delivery attempt when returning `SupersededByOtherOwner`. |
