@@ -415,6 +415,12 @@ public sealed class EfToolingFinalizationPayload
     public string Provider { get; init; } = "";
     public string? Schema { get; init; }
     public IReadOnlyList<EfToolingFinalizationFamily> Families { get; init; } = [];
+
+    /// <summary>
+    /// The cluster's members as the membership table in this database holds them, present on <c>status</c> only, and null
+    /// when this host's closure carries no cluster membership provider to read them with.
+    /// </summary>
+    public EfToolingCluster? Cluster { get; init; }
 }
 
 public sealed class EfToolingFinalizationFamily
@@ -487,8 +493,80 @@ public sealed class EfToolingPendingVersion
     /// <summary><c>pending</c> or <c>readable-everywhere</c>.</summary>
     public string State { get; init; } = "";
 
-    /// <summary>The reasons of the holds that keep it. The counted members that cannot read it are known only to a running host.</summary>
+    /// <summary>The reasons of the holds that keep it.</summary>
     public IReadOnlyList<string> HeldBy { get; init; } = [];
+
+    /// <summary>
+    /// The counted members that cannot read it yet, each with the versions it reads (spec 181, FR-022): empty when none
+    /// blocks it, and null when the fleet was not read (a <c>status</c> run whose closure carries no membership provider,
+    /// a membership table not created in this database, and every <c>hold</c> and <c>release</c>).
+    /// </summary>
+    public IReadOnlyList<EfToolingWaitingOn>? WaitsFor { get; init; }
+}
+
+/// <summary>A counted member that cannot read a pending version, and the versions of the family it does read.</summary>
+public sealed class EfToolingWaitingOn
+{
+    public string HostId { get; init; } = "";
+    public string Incarnation { get; init; } = "";
+
+    /// <summary>False when the member's report is in a form this build cannot interpret, which counts as reading nothing.</summary>
+    public bool ReportReadable { get; init; } = true;
+
+    public IReadOnlyList<string> Reads { get; init; } = [];
+}
+
+/// <summary>
+/// The membership table as one read of it shows it. <see cref="Note"/> says why <see cref="Members"/> is empty when the
+/// table could not be read here, which is not the same as a cluster with nobody in it.
+/// </summary>
+public sealed class EfToolingCluster
+{
+    public string Module { get; init; } = "";
+
+    /// <summary>The instant, on this tool's clock, that liveness was judged at; null when the table was not read.</summary>
+    public DateTimeOffset? JudgedAt { get; init; }
+
+    /// <summary>The skew allowance liveness was judged with: the membership default, since the tool reads no host configuration.</summary>
+    public string? SkewAllowance { get; init; }
+
+    /// <summary>Why the table could not be read, or null when it was.</summary>
+    public string? Note { get; init; }
+
+    public IReadOnlyList<EfToolingClusterMember> Members { get; init; } = [];
+}
+
+public sealed class EfToolingClusterMember
+{
+    public string HostId { get; init; } = "";
+    public string Incarnation { get; init; } = "";
+
+    /// <summary>The member's status by name: joining, active, draining or left.</summary>
+    public string Status { get; init; } = "";
+
+    /// <summary>Whether the reader counts the member: it has not left, and its heartbeat plus expiry and skew has not passed.</summary>
+    public bool Live { get; init; }
+
+    /// <summary>Whether a later incarnation of the host id has joined.</summary>
+    public bool Displaced { get; init; }
+
+    public DateTimeOffset LastHeartbeatAt { get; init; }
+
+    /// <summary>False when the member's entry is in a form this build cannot interpret, which counts as reading nothing.</summary>
+    public bool ReportReadable { get; init; } = true;
+
+    public IReadOnlyList<EfToolingClusterReads> Reads { get; init; } = [];
+}
+
+/// <summary>What one member reports it reads of one schema family.</summary>
+public sealed class EfToolingClusterReads
+{
+    public string Family { get; init; } = "";
+
+    /// <summary>The database whose finalization record the entry speaks for, or null when it speaks for every database.</summary>
+    public string? DatabaseIdentity { get; init; }
+
+    public IReadOnlyList<string> Versions { get; init; } = [];
 }
 
 public sealed class EfToolingErrorPayload

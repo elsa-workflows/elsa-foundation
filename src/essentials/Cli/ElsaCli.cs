@@ -23,7 +23,7 @@ internal static class ElsaCli
             OpensDatabase(WorkerCommands.PostMigrate, "Run each selected module's required post-migration actions against a database. The only command that runs one."),
             Finalization(WorkerCommands.Hold, "Hold a schema family's finalization, optionally at one version and every later one, with a reason. Refused once that version is finalized: the rollback boundary has been crossed."),
             Finalization(WorkerCommands.Release, "Release a hold on a schema family's finalization."),
-            Finalization(WorkerCommands.Status, "Report each selected schema family's finalized version, the versions still pending and why, any intent in flight, and its holds.")
+            Finalization(WorkerCommands.Status, "Report each selected schema family's finalized version, the versions still pending and why (a hold, or each cluster member that cannot read the version yet, with the versions it reads), any intent in flight, and its holds. Also lists the cluster members in the database's membership table: host id, status, last heartbeat and the versions each reads.")
         };
 
         var composition = new Command("composition", "Inspect and review feature selections.")

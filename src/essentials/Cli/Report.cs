@@ -94,8 +94,10 @@ internal static class Report
     /// <summary>
     /// Each family's finalization status (spec 181, FR-022): the finalized version, each pending version and the holds
     /// that keep it, any intent in flight and every hold, and what the finish record holds: the completion version, a
-    /// claimed backfill run and a withdrawn completion (spec 186, FR-021). Which counted members cannot read a version, and
-    /// how far a backfill has got, is known only to a running host, whose membership and memory this tool does not read.
+    /// claimed backfill run and a withdrawn completion (spec 186, FR-021). Under each pending version it names the counted
+    /// members that cannot read it (FR-022), and after the families it lists the cluster's members, both read from the
+    /// membership table in the database. How far a backfill has got is known only to a running host, whose memory this tool
+    /// does not read.
     /// </summary>
     internal static void WriteFinalization(TextWriter output, string command, JsonElement finalization)
     {
@@ -111,8 +113,17 @@ internal static class Report
             foreach (var pending in family.GetProperty("pending").EnumerateArray())
             {
                 var heldBy = pending.GetProperty("heldBy").EnumerateArray().Select(reason => reason.GetString()).ToArray();
+                var waitsFor = pending.TryGetProperty("waitsFor", out var waiting) && waiting.ValueKind == JsonValueKind.Array
+                    ? waiting.EnumerateArray().ToArray()
+                    : null;
                 output.WriteLine($"  {Text(pending, "version")}: {Text(pending, "state")}" +
-                                 (heldBy.Length > 0 ? $", held: {string.Join("; ", heldBy)}" : ", held by nothing; waits for every counted member to read it"));
+                                 (heldBy.Length > 0
+                                     ? $", held: {string.Join("; ", heldBy)}"
+                                     : waitsFor is { Length: 0 }
+                                         ? ", held by nothing; every counted member reads it, so it finalizes at the next evaluation"
+                                         : ", held by nothing; waits for every counted member to read it"));
+                foreach (var member in waitsFor ?? [])
+                    output.WriteLine($"    waits for: {Text(member, "hostId")} ({(member.GetProperty("reportReadable").GetBoolean() ? $"reads {Versions(member.GetProperty("reads"))}" : Unreadable)})");
             }
 
             foreach (var hold in family.GetProperty("holds").EnumerateArray())
@@ -125,6 +136,14 @@ internal static class Report
                 output.WriteLine($"  completion at {Text(withdrawn, "version")} withdrawn by {Text(withdrawn, "withdrawnBy")} at {Text(withdrawn, "at")}: {Optional(withdrawn, "reason")}");
         }
 
+        if (finalization.TryGetProperty("cluster", out var cluster) && cluster.ValueKind == JsonValueKind.Object)
+            WriteCluster(output, cluster, families);
+        else if (command == WorkerCommands.Status)
+        {
+            output.WriteLine();
+            output.WriteLine("members: this host only (this host's closure carries no cluster membership provider).");
+        }
+
         output.WriteLine();
         output.WriteLine(command switch
         {
@@ -133,6 +152,56 @@ internal static class Report
             _ => $"{families.Length} family(ies)."
         });
     }
+
+    private const string Unreadable = "reports what it reads in a form this tool cannot interpret; counts as reading nothing";
+
+    /// <summary>
+    /// The membership table's members, judged on this tool's clock: host id, status, whether it is counted, its last
+    /// heartbeat and, for each family listed above, the versions it reads. An entry that speaks for another database than a
+    /// family's is left out of that family's line, as the gate leaves it out of its count.
+    /// </summary>
+    private static void WriteCluster(TextWriter output, JsonElement cluster, JsonElement[] families)
+    {
+        output.WriteLine();
+        if (Optional(cluster, "note") is { } note)
+        {
+            output.WriteLine($"members: {note}");
+            return;
+        }
+
+        var members = cluster.GetProperty("members").EnumerateArray().ToArray();
+        output.WriteLine($"members: {members.Length} in {Text(cluster, "module")}, judged at {Text(cluster, "judgedAt")} with a skew allowance of {Text(cluster, "skewAllowance")}");
+        foreach (var member in members)
+        {
+            var displaced = member.GetProperty("displaced").GetBoolean();
+            var state = member.GetProperty("live").GetBoolean()
+                ? displaced ? "counted, displaced by a later incarnation" : "counted"
+                : Text(member, "status") == "Left" ? "left" : "expired";
+            output.WriteLine($"  {Text(member, "hostId")}: {Text(member, "status")}, {state}, last heartbeat {Text(member, "lastHeartbeatAt")}");
+            if (!member.GetProperty("reportReadable").GetBoolean())
+            {
+                output.WriteLine($"    {Unreadable}");
+                continue;
+            }
+
+            foreach (var family in families)
+            {
+                var identity = Optional(family, "databaseIdentity");
+                var reads = member.GetProperty("reads").EnumerateArray()
+                    .Where(entry => Text(entry, "family") == Text(family, "family")
+                                    && (Optional(entry, "databaseIdentity") is not { } entryIdentity || identity is null || entryIdentity == identity))
+                    .SelectMany(entry => entry.GetProperty("versions").EnumerateArray())
+                    .Select(version => version.GetString())
+                    .Distinct(StringComparer.Ordinal)
+                    .ToArray();
+                if (reads.Length > 0)
+                    output.WriteLine($"    {Text(family, "family")}: reads {string.Join(", ", reads)}");
+            }
+        }
+    }
+
+    private static string Versions(JsonElement versions) =>
+        versions.GetArrayLength() == 0 ? "nothing" : string.Join(", ", versions.EnumerateArray().Select(version => version.GetString()));
 
     private static string? Optional(JsonElement element, string name) =>
         element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
