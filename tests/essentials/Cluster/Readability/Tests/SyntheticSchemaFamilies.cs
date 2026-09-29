@@ -9,9 +9,16 @@ namespace Elsa.Cluster.Readability.Tests;
 /// <summary>
 /// One <c>[EfSchemaFamily]</c> declaration to emit. A <see langword="null"/> <see cref="Module"/> emits the
 /// two-argument constructor - a family shared by no single EF module - rather than naming one. <see cref="Upcasters"/>,
-/// oldest first, become the declaration's chain.
+/// oldest first, become the declaration's chain; <see cref="ContentAddressed"/> and <see cref="Rewriter"/> name types the
+/// image defines, as the declaration's own named arguments (spec 186).
 /// </summary>
-internal sealed record SyntheticFamily(string Name, string? Module, string CurrentVersion, IReadOnlyList<SyntheticUpcaster>? Upcasters = null);
+internal sealed record SyntheticFamily(
+    string Name,
+    string? Module,
+    string CurrentVersion,
+    IReadOnlyList<SyntheticUpcaster>? Upcasters = null,
+    IReadOnlyList<string>? ContentAddressed = null,
+    string? Rewriter = null);
 
 /// <summary>
 /// An upcaster type to emit: a concrete <see cref="IEfSchemaUpcaster"/> that returns its input, carrying
@@ -44,9 +51,13 @@ internal static class SyntheticSchemaFamilies
             modules.Select(module => new CustomAttributeBuilder(moduleConstructor, [module, typeof(object)])));
         var module = builder.DefineDynamicModule(assemblyName);
         foreach (var family in families)
-            builder.SetCustomAttribute(Declaration(family, (family.Upcasters ?? []).Select(upcaster => Emit(module, upcaster)).ToArray()));
+            builder.SetCustomAttribute(Declaration(
+                family,
+                (family.Upcasters ?? []).Select(upcaster => Emit(module, upcaster)).ToArray(),
+                (family.ContentAddressed ?? []).Select(name => Define(module, name)).ToArray(),
+                family.Rewriter is { } rewriter ? Define(module, rewriter) : null));
         var entities = columns.Select(column => column.Entity).Distinct(StringComparer.Ordinal)
-            .ToDictionary(name => name, name => module.DefineType(name, TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.Class).CreateType(), StringComparer.Ordinal);
+            .ToDictionary(name => name, name => Define(module, name), StringComparer.Ordinal);
         foreach (var column in columns)
             builder.SetCustomAttribute(column.Reason is null
                 ? new CustomAttributeBuilder(typeof(EfSchemaContentAttribute).GetConstructors().Single(), [column.Family, entities[column.Entity], new[] { column.Column }])
@@ -57,16 +68,28 @@ internal static class SyntheticSchemaFamilies
         return image.ToArray();
     }
 
-    private static CustomAttributeBuilder Declaration(SyntheticFamily family, Type[] upcasters)
+    private static CustomAttributeBuilder Declaration(SyntheticFamily family, Type[] upcasters, Type[] contentAddressed, Type? rewriter)
     {
         var constructor = family.Module is null
             ? typeof(EfSchemaFamilyAttribute).GetConstructor([typeof(string), typeof(string)])!
             : typeof(EfSchemaFamilyAttribute).GetConstructor([typeof(string), typeof(string), typeof(string)])!;
         object[] arguments = family.Module is null ? [family.Name, family.CurrentVersion] : [family.Name, family.Module, family.CurrentVersion];
-        return upcasters.Length == 0
-            ? new CustomAttributeBuilder(constructor, arguments)
-            : new CustomAttributeBuilder(constructor, arguments, [typeof(EfSchemaFamilyAttribute).GetProperty(nameof(EfSchemaFamilyAttribute.Upcasters))!], [upcasters]);
+        var named = new List<(string Property, object Value)>();
+        if (upcasters.Length > 0)
+            named.Add((nameof(EfSchemaFamilyAttribute.Upcasters), upcasters));
+        if (contentAddressed.Length > 0)
+            named.Add((nameof(EfSchemaFamilyAttribute.ContentAddressed), contentAddressed));
+        if (rewriter is not null)
+            named.Add((nameof(EfSchemaFamilyAttribute.Rewriter), rewriter));
+        return new CustomAttributeBuilder(
+            constructor,
+            arguments,
+            named.Select(argument => typeof(EfSchemaFamilyAttribute).GetProperty(argument.Property)!).ToArray(),
+            named.Select(argument => argument.Value).ToArray());
     }
+
+    private static Type Define(ModuleBuilder module, string name) =>
+        module.DefineType(name, TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.Class).CreateType();
 
     private static Type Emit(ModuleBuilder module, SyntheticUpcaster upcaster)
     {

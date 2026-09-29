@@ -29,6 +29,27 @@ public interface IEfSchemaFleet
     /// </summary>
     ValueTask<EfSchemaFleetAnswer> CountAsync(string family, string version, string databaseIdentity, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Reads the fleet fresh and answers the post-finalization backfill's settle condition (spec 186, FR-012 and MR-001):
+    /// "does every counted member report, for <paramref name="family"/> in the database whose identity is
+    /// <paramref name="databaseIdentity"/>, an observed finalized version among <paramref name="versions"/>?", listing
+    /// each counted member that does not. A member that reports no observed version, or whose report is unknown, does
+    /// not. Throws when the fleet cannot be read in full; it never answers from part of it.
+    /// </summary>
+    /// <param name="versions">The target version and every later one this host reads: the chain alone orders labels.</param>
+    ValueTask<EfSchemaFleetAnswer> CountObservingAsync(
+        string family,
+        IReadOnlyList<string> versions,
+        string databaseIdentity,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// How long a write a member began before it observed a newer finalized version can still be in flight once the
+    /// member reports observing it: the membership expiry period plus the skew allowance (spec 186, FR-012; spec 183,
+    /// FR-006). The backfill's default settle margin.
+    /// </summary>
+    TimeSpan SettleMargin { get; }
+
     /// <summary>A token that fires the next time the fleet changes, so evaluation need not wait for its interval (FR-005).</summary>
     IChangeToken GetChangeToken();
 }

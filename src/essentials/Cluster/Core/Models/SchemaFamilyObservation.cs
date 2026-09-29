@@ -28,6 +28,13 @@ namespace Elsa.Cluster.Core.Models;
 /// filled only on an operator read (<see cref="Contracts.ISchemaDormancyCheck.ReadStatusAsync"/>).
 /// </param>
 /// <param name="ObservedAt">When this host last read the record, or <see langword="null"/> before it has.</param>
+/// <param name="Backfill">
+/// This host's post-finalization backfill of the family, or <see langword="null"/> where none runs (spec 186, FR-021).
+/// </param>
+/// <param name="Withdrawal">
+/// The withdrawal of the family's completion, while no completion has been recorded since: a row below it turned up after
+/// it was recorded (spec 186, FR-018). Read from the record, so every host sees it.
+/// </param>
 public sealed record SchemaFamilyObservation(
     string Family,
     string? Module,
@@ -38,7 +45,9 @@ public sealed record SchemaFamilyObservation(
     string? CompletionVersion,
     IReadOnlyList<SchemaPendingVersion> Pending,
     SchemaIntentObservation? Intent,
-    DateTimeOffset? ObservedAt)
+    DateTimeOffset? ObservedAt,
+    SchemaBackfillObservation? Backfill = null,
+    SchemaCompletionWithdrawal? Withdrawal = null)
 {
     /// <summary>The position of <paramref name="version"/> along <see cref="ReadableVersions"/>, or -1 for a version it does not name.</summary>
     public int PositionOf(string? version)
@@ -75,3 +84,26 @@ public sealed record SchemaHoldObservation(string? Version, string Reason, strin
 
 /// <summary>A durable intent to finalize <paramref name="Version"/>, written by <paramref name="Member"/> at <paramref name="At"/> (spec 181, FR-006).</summary>
 public sealed record SchemaIntentObservation(string Version, string Member, DateTimeOffset At);
+
+/// <summary>
+/// What this host's post-finalization backfill reports of one family (spec 186, FR-021): what it is doing, the version it
+/// upgrades to and how far it has got, the counted members its settle condition waits for, and what blocks completion.
+/// </summary>
+/// <param name="State">What the backfill is doing: idle, complete, upgrading, settling, verifying, blocked, or leaving a run another worker claimed.</param>
+/// <param name="SettleWaitingFor">The counted members that have not observed the target yet, for operator surfaces only (spec 182, FR-011).</param>
+/// <param name="Blockers">One sentence per blocker of completion: skew, corruption, content-addressed rows, or no rewriter.</param>
+/// <param name="CompletenessUnreachable">
+/// True when content-addressed rows below the target remain, which nothing may upgrade, so the family can never be
+/// complete at it (spec 186, FR-011b and FR-022).
+/// </param>
+public sealed record SchemaBackfillObservation(
+    string State,
+    string? TargetVersion,
+    long RowsRewritten,
+    IReadOnlyList<string> SettleWaitingFor,
+    IReadOnlyList<string> Blockers,
+    bool CompletenessUnreachable,
+    string? Detail);
+
+/// <summary>A withdrawn completion (spec 186, FR-018): the version, who withdrew it and when, and why, naming the tables and counts.</summary>
+public sealed record SchemaCompletionWithdrawal(string Version, string WithdrawnBy, DateTimeOffset At, string? Reason);

@@ -1,5 +1,8 @@
+using Elsa.Persistence.EntityFramework;
+
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 
+[EfSchemaContentAddressed("Keyed by scope and artifact id, and the artifact id is the hash of the executable's content (ADR 0038).")]
 public sealed class WorkflowExecutableEntity
 {
     public string Id { get; set; } = null!;
@@ -27,6 +30,7 @@ public sealed class WorkflowExecutableCoordinationEntity
     public string IncarnationId { get; set; } = null!;
 }
 
+[EfSchemaContentAddressed("An executable activity template is identified by the hash of its content (ADR 0038), which its row projects as TemplateHash.")]
 public sealed class ExecutableActivityTemplateEntity
 {
     public string Id { get; set; } = null!;
@@ -43,6 +47,7 @@ public sealed class ExecutableActivityTemplateEntity
     public string IncarnationId { get; set; } = null!;
 }
 
+[EfSchemaContentAddressed("Keyed by scope and a template's content hash, which its content restates: it is the claim that makes that hash name one template, so a rewrite could forge the claim.")]
 public sealed class ExecutableActivityTemplateHashClaimEntity
 {
     public string Id { get; set; } = null!;
