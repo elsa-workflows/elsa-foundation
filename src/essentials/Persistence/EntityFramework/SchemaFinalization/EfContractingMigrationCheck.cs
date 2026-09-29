@@ -29,6 +29,15 @@ namespace Elsa.Persistence.EntityFramework.SchemaFinalization;
 /// the module has been admitted, a family with no record is refused, since nothing then shows its version finalized.
 /// </para>
 /// <para>
+/// <b>What such a database's record starts at.</b> A contracting migration applied there has removed what every version
+/// before the one it names reads, so the schema no longer serves those versions, and a record created at the admitting
+/// host's oldest readable version would admit a host that reads only them. <see cref="SeedVersionAsync"/> is the version
+/// the gate creates a family's record at instead: the latest version any applied contracting migration of the family
+/// names, when that is later than the oldest version the host reads (#2136). It is derived from the host's own
+/// migrations, so it holds when the first host to admit the module carries the contracting migration, as the host that
+/// applied it does; a build older than the migration that admits the module first knows nothing of it.
+/// </para>
+/// <para>
 /// A module with no contracting migration costs nothing here: the opt-outs are read as assembly metadata, by name, as
 /// <see cref="EfSchemaFamilyCatalog"/> reads declarations, and no database is opened. The migrations-history table is
 /// read only when a contracting migration's family is below its version, to learn whether it is pending.
@@ -101,6 +110,44 @@ public static class EfContractingMigrationCheck
         return IndexOf(chain.ReadableVersions, record.FinalizedVersion) >= requiredAt
             ? null
             : Refuse(migration, record.FinalizedVersion, EfContractingMigrationRefusalReason.NotFinalized);
+    }
+
+    /// <summary>
+    /// The version the module's gate creates <paramref name="chain"/>'s family's record at in <paramref name="context"/>'s
+    /// database (spec 181, Edge Cases, "A database with no record yet"): the oldest version this host reads, or, when a
+    /// contracting migration of the family has been applied there, the latest version any such migration names, if that
+    /// is later. The schema serves no version before it. The migrations-history table is read only when the module has a
+    /// contracting migration that names the family or names no family.
+    /// </summary>
+    /// <exception cref="EfSchemaActivationRefusedException">
+    /// An applied contracting migration of the family names a version this host's chain does not read, or names no
+    /// version or no family, so where the record would start cannot be placed. Refused rather than started at the oldest
+    /// version this host reads, which the schema may no longer serve.
+    /// </exception>
+    public static async Task<string> SeedVersionAsync(DbContext context, string module, EfSchemaChain chain, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(chain);
+        var readable = chain.ReadableVersions;
+        var contracting = ContractingMigrations(context)
+            .Where(migration => migration.Family is null || StringComparer.Ordinal.Equals(migration.Family, chain.Family))
+            .ToArray();
+        if (contracting.Length == 0)
+            return readable[0];
+
+        var applied = (await context.Database.GetAppliedMigrationsAsync(cancellationToken)).ToHashSet(StringComparer.Ordinal);
+        var seed = 0;
+        foreach (var migration in contracting.Where(migration => applied.Contains(migration.Id)))
+        {
+            // An opt-out that names no family names no version of this one either.
+            var version = migration.Family is null ? null : migration.Version;
+            var at = version is null ? -1 : IndexOf(readable, version);
+            if (at < 0)
+                throw new EfSchemaActivationRefusedException(module, chain.Family, EfSchemaActivationRefusal.ContractedUnreadable, version, readable);
+            seed = Math.Max(seed, at);
+        }
+
+        return readable[seed];
     }
 
     private static EfContractingMigrationRefusal Refuse(ContractingMigration migration, string? finalized, EfContractingMigrationRefusalReason reason) =>

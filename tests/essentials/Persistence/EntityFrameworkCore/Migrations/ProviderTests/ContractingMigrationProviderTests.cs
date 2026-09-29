@@ -39,4 +39,27 @@ public sealed class ContractingMigrationProviderTests
             Assert.Equal([Initial, Expand, DropObsolete, Contract], await AppliedAsync(Provider, connection));
             Assert.False(await HasColumnAsync(Provider, connection, RowsTable, "Legacy"));
         });
+
+    /// <summary>
+    /// A database no host has run the module in takes the contraction, and the record the first gate creates there starts
+    /// at the version it names, read from PostgreSQL's migrations history, so a release that reads only the earlier
+    /// version is refused.
+    /// </summary>
+    [SkippableFact]
+    public Task A_fresh_postgresql_database_takes_the_contraction_and_its_record_starts_at_the_version_it_names() =>
+        ProviderDatabase.RunAsync(Provider, async connection =>
+        {
+            await using (var context = Create(Provider, connection))
+            {
+                await EfDatabaseMigrator.ApplyAsync(context, EfProviderNames.PostgreSql);
+                await Gate(CurrentVersion).ActivateAsync(context);
+            }
+
+            Assert.Equal(CurrentVersion, (await RecordAsync(Provider, connection))!.FinalizedVersion);
+            await using (var context = Create(Provider, connection))
+            {
+                var refusal = await Assert.ThrowsAsync<EfSchemaActivationRefusedException>(() => Gate(EarlierVersion).ActivateAsync(context));
+                Assert.Equal((EfSchemaActivationRefusal.FinalizedUnreadable, CurrentVersion), (refusal.Refusal, refusal.Version));
+            }
+        });
 }

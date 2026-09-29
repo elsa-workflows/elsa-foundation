@@ -77,6 +77,25 @@ internal static class ContractingModule
         await EfSchemaFinalizationTestSupport.FinalizeAsync(new EfSchemaFinalizationStore(context), Family, chain ?? Chain, version);
     }
 
+    /// <summary>The family's finalization record, or null while no gate has created it.</summary>
+    public static async Task<SchemaFinalizationRecord?> RecordAsync(string provider, string connectionString)
+    {
+        await using var context = Create(provider, connectionString);
+        return await new EfSchemaFinalizationStore(context).FindAsync(Family);
+    }
+
+    /// <summary>
+    /// The module's finalization gate as a release whose family is at <paramref name="current"/> declares it: this
+    /// release, or with <see cref="EarlierVersion"/> the one before the family's change, which reads only that version.
+    /// </summary>
+    public static EfSchemaModuleGate Gate(string current, IEfSchemaFleet? fleet = null) =>
+        new(current == CurrentVersion
+                ? EfSchemaModuleFamilies.For(Name, typeof(ContractingDbContext).Assembly)
+                : EfSchemaModuleFamilies.FromDeclarations(Name, [new EfSchemaFamilyDescriptor(Family, Name, current, typeof(ContractingDbContext).Assembly)]),
+            fleet,
+            new EfSchemaFinalizationObservations(),
+            new EfSchemaFinalizationOptions());
+
     public static async Task<IReadOnlyList<string>> AppliedAsync(string provider, string connectionString)
     {
         await using var context = Create(provider, connectionString);

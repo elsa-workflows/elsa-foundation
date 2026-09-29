@@ -197,6 +197,74 @@ public sealed class EfContractingMigrationRefusalTests : IAsyncLifetime
         await EfDatabaseMigrator.ApplyAsync(context, EfProviderNames.Sqlite);
     }
 
+    // --- What the family's record starts at once a contraction has applied (spec 181's record creation) -----------
+
+    /// <summary>
+    /// Three hosts and a database no host has run the module in. host-old runs the release before the family's change, so
+    /// it reads only <see cref="EarlierVersion"/>, and it is live in the fleet: the family cannot finalize past that
+    /// version while it is. host-new runs the contracting release and is the first to run the module on this database, so
+    /// nothing refuses the contraction, and its gate creates the family's record. The record must start at
+    /// <see cref="CurrentVersion"/>, which the contraction names, not at <see cref="EarlierVersion"/>, the oldest version
+    /// host-new reads, since the schema no longer serves that. So host-late, starting later on the older release, is
+    /// refused rather than admitted against a schema without the column it reads.
+    /// </summary>
+    [Fact]
+    public async Task A_contraction_applied_on_a_fresh_database_starts_its_familys_record_at_its_version_so_an_older_host_is_refused()
+    {
+        var fleet = new FakeFleetState();
+        fleet.Add(new FakeMember("host-old").Reading(Family, EarlierVersion)).Published = true;
+        var newer = Migrator(EfMigratePolicy.AutoMigrate, new FakeFleet(fleet, fleet.Add(new FakeMember("host-new").Reading(Family, Chain))));
+
+        await newer.InitializeAsync();
+
+        Assert.False(await HasColumnAsync(Provider, Connection, RowsTable, "Legacy"));
+        var record = await RecordAsync(Provider, Connection);
+        Assert.Equal(CurrentVersion, record!.FinalizedVersion);
+        Assert.Equal((SchemaFinalizationTransition.Created, CurrentVersion), (record.History[0].Transition, record.History[0].Version));
+        var before = await SnapshotAsync();
+
+        var late = Gate(EarlierVersion, new FakeFleet(fleet, fleet.Add(new FakeMember("host-late").Reading(Family, EarlierVersion))));
+        await using var context = Create(Provider, Connection);
+        var refusal = await Assert.ThrowsAsync<EfSchemaActivationRefusedException>(() => late.ActivateAsync(context));
+
+        Assert.Equal((EfSchemaActivationRefusal.FinalizedUnreadable, Family, CurrentVersion), (refusal.Refusal, refusal.Family, refusal.Version));
+        Assert.Equal(before, await SnapshotAsync());
+    }
+
+    /// <summary>
+    /// Both ways: a contraction still pending leaves the schema serving the oldest version the host reads, and the record
+    /// starts there; once it has applied, the record starts at the version it names.
+    /// </summary>
+    [Theory]
+    [InlineData(DropObsolete, EarlierVersion)]
+    [InlineData(Contract, CurrentVersion)]
+    public async Task A_record_created_where_no_host_has_admitted_the_module_starts_at_the_version_an_applied_contraction_names(string appliedThrough, string startsAt)
+    {
+        await StageAsync(Provider, Connection, appliedThrough, finalized: null);
+
+        await using (var context = Create(Provider, Connection))
+            await Gate(CurrentVersion).ActivateAsync(context);
+
+        Assert.Equal(startsAt, (await RecordAsync(Provider, Connection))!.FinalizedVersion);
+    }
+
+    /// <summary>
+    /// A host that cannot place the version an applied contraction names cannot tell which of its versions the schema still
+    /// serves, so it is refused rather than starting the record at the oldest version it reads, and creates no record.
+    /// </summary>
+    [Fact]
+    public async Task A_host_whose_chain_does_not_read_the_version_an_applied_contraction_names_is_refused_and_creates_no_record()
+    {
+        await StageAsync(Provider, Connection, Contract, finalized: null);
+
+        await using var context = Create(Provider, Connection);
+        var refusal = await Assert.ThrowsAsync<EfSchemaActivationRefusedException>(() => Gate(EarlierVersion).ActivateAsync(context));
+
+        Assert.Equal((EfSchemaActivationRefusal.ContractedUnreadable, Family, CurrentVersion), (refusal.Refusal, refusal.Family, refusal.Version));
+        Assert.Contains($"removed what every version before '{CurrentVersion}' reads, and this host reads only [{EarlierVersion}]", refusal.Message, StringComparison.Ordinal);
+        Assert.Null(await RecordAsync(Provider, Connection));
+    }
+
     // --- dotnet elsa persistence (spec 171's apply and validate) -------------------------------------------------
 
     [Fact]
@@ -255,9 +323,11 @@ public sealed class EfContractingMigrationRefusalTests : IAsyncLifetime
         return await Assert.ThrowsAsync<EfContractingMigrationRefusedException>(() => EfDatabaseMigrator.ApplyAsync(context, EfProviderNames.Sqlite));
     }
 
-    private EfModuleMigrator<ContractingDbContext> Migrator(EfMigratePolicy policy)
+    private EfModuleMigrator<ContractingDbContext> Migrator(EfMigratePolicy policy, IEfSchemaFleet? fleet = null)
     {
         var services = new ServiceCollection();
+        if (fleet is not null)
+            services.AddSingleton(fleet);
         services.AddDbContext<ContractingDbContext>(options => Bind(options, Provider, Connection));
         services.AddEfModuleMigrations<ContractingDbContext>(Provider);
         services.Configure<EfMigrateOptions>(options => options.Policy = policy);

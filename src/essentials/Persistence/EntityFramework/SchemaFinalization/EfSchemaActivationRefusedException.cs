@@ -2,7 +2,8 @@ namespace Elsa.Persistence.EntityFramework.SchemaFinalization;
 
 /// <summary>
 /// The finalization gate's refusal to activate an EF module (spec 181, FR-014, FR-015 and FR-017): a family of the
-/// module has a finalized version, a completion version or an unresolved intent this host cannot read, so activating
+/// module has a finalized version, a completion version or an unresolved intent this host cannot read, or has no record
+/// yet in a schema a contracting migration left at a version this host cannot place (spec 185, FR-023), so activating
 /// the module could misread or rewrite rows. Thrown where a pending migration under <c>Validate</c> is, so the shell
 /// does not activate and nothing touches the module's tables.
 /// </summary>
@@ -36,7 +37,10 @@ public sealed class EfSchemaActivationRefusedException : InvalidOperationExcepti
 
     public EfSchemaActivationRefusal Refusal { get; }
 
-    /// <summary>The finalized, completion or intended version this host cannot read; null when no record could be read.</summary>
+    /// <summary>
+    /// The finalized, completion or intended version this host cannot read, or the version a contracting migration
+    /// contracted the schema to; null when no record could be read, or the contracting migration names no version.
+    /// </summary>
     public string? Version { get; }
 
     /// <summary>The versions of the family this host reads.</summary>
@@ -59,6 +63,14 @@ public sealed class EfSchemaActivationRefusedException : InvalidOperationExcepti
             EfSchemaActivationRefusal.IntentUnresolved =>
                 $"{head} has an intent to finalize '{version}' that did not resolve in time, and {reads}. Run a version of " +
                 $"the module that reads '{version}', or wait for the intent to be abandoned and start the host again.",
+            EfSchemaActivationRefusal.ContractedUnreadable when version is null =>
+                $"{head} has no finalization record in this database yet, and a contracting migration already applied here " +
+                "does not name the family and the version it contracts it to, so which versions the schema still serves " +
+                "cannot be told. Its ExpandOnlyMigrationOptOut must name both SchemaFamily and FinalizedVersion.",
+            EfSchemaActivationRefusal.ContractedUnreadable =>
+                $"{head} has no finalization record in this database yet, and a contracting migration already applied here " +
+                $"removed what every version before '{version}' reads, and {reads}. The schema serves no version before " +
+                $"'{version}', and this host cannot tell which of its own those are. Run a version of the module that reads '{version}'.",
             EfSchemaActivationRefusal.ReportNotPublished =>
                 $"{head} could not be activated because this host's readability report could not be published to cluster " +
                 "membership, and a host whose report the fleet cannot see must not read the finalization record. Check the " +
@@ -81,5 +93,11 @@ public enum EfSchemaActivationRefusal
     IntentUnresolved,
 
     /// <summary>This host's readability report could not be published before the record was read (FR-013).</summary>
-    ReportNotPublished
+    ReportNotPublished,
+
+    /// <summary>
+    /// A family has no record yet, and a contracting migration already applied names a version outside this host's
+    /// readable set, or none, so the version its record would start at cannot be placed (spec 185, FR-023).
+    /// </summary>
+    ContractedUnreadable
 }
