@@ -21,6 +21,7 @@
     <Compile Include="..\Tests\ModuleSchemaFinalizationScenario.cs" Link="ModuleSchemaFinalizationScenario.cs" />
     <Compile Include="..\..\..\EntityFramework\Tests\EfSchemaFinalizationTestSupport.cs" Link="EfSchemaFinalizationTestSupport.cs" />
     <Compile Include="..\..\..\EntityFramework\Tests\ContractingModule.cs" Link="ContractingModule.cs" />
+    <Compile Include="..\..\..\EntityFramework\Tests\ContractingSeedScenarios.cs" Link="ContractingSeedScenarios.cs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\..\..\src\essentials\Activities\Design\Persistence\EntityFrameworkCore\Elsa.Activities.Design.Persistence.EntityFrameworkCore.csproj" />
