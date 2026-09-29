@@ -150,7 +150,7 @@ and Nuplane does not keep them in step. `NativeEndpoints` behaves this way, and 
 fails with `FeatureNotFoundException` rather than a missing-file error.
 
 The reverse direction is kept in step by this repository instead. A shared assembly always resolves to
-the host's copy, whatever version the feed package was built against, so each host's
+the host's copy, whatever version the feed package was built against within the entry's major, so each host's
 `appsettings.json` also declares, under `Nuplane:HostProvidedPackages`, the package of every assembly it
 lists in `Nuplane:Loading:SharedAssemblies` — restating Nuplane's two defaults, because a configured list
 replaces them. `HostProvidedPackagesGuardTests` (`tests/essentials/Architecture`) fails the build when a
@@ -158,6 +158,19 @@ shared assembly's package is neither declared nor exempted by name. The declarat
 version check apply: a feed package that needs a newer version of a declared package than the host's
 `deps.json` carries is refused at reconciliation (see [What fails loudly](#what-fails-loudly)) instead of
 being bound to the older copy and failing later at a missing member.
+
+An entry takes effect only when Nuplane's matcher takes it, on the assembly's name, its public key token
+(`null` for an unsigned assembly, as every Elsa one is) and its major version, exactly. Every Elsa
+assembly's `AssemblyVersion` is its line's major, `4.0.0.0` in a source build and a computed one alike
+([ADR 0067](adr/0067-package-versioning-uses-two-lines-with-computed-patch.md),
+[#2150](https://github.com/elsa-workflows/elsa-foundation/issues/2150)), so every Elsa entry declares
+`"MajorVersion": 4`. `SharedAssemblyMajorVersionGuardTests` (`tests/essentials/Architecture`) binds each host's
+entries with Nuplane's own code and fails the build when one would not take the reference a package built
+against either build carries. A feed package that carries its own copy of a shared assembly, in its own files
+or acquired into its graph, then binds the host's copy (since Nuplane `0.0.11-preview.94`,
+[valence-works/nuplane#101](https://github.com/valence-works/nuplane/pull/101); before it no entry with a
+`null` token bound at all, and such a package loaded its own copy). An entry the matcher does not take is
+silent: the package loads its own copy, and its types stop being the host's.
 
 Both hosts declare all their shares, the Elsa ones included, when built with computed package versions, as CI
 builds their images
@@ -219,10 +232,13 @@ version serves once it is finalized (spec 182, FR-019). Without them nothing fai
 never finalizes past the version its record was created at, and every feature waiting on it is refused as not
 observed. `SharedAssemblyClosureGuardTests` fails the build when a host does not share both, and
 `FeedLoadedEfModuleTests` (`tests/essentials/Cluster/EntityFrameworkCore/Tests`) proves each direction on both hosts'
-configured shares, and `FoundationHostBootTests` (same project) boots the built `Elsa.Foundation.Host` as a child process over a
-directory feed of the packed fixture and `Elsa.Persistence.EntityFramework` (plus a second, resolve-only `closure` feed holding
-EF Core and the Sqlite engine, which the host does not carry), showing finalization at activation and dormancy ending once a
-hold is released. The durable EF membership provider (`AddConfiguredClusterMembership`) would bring EF Core into the
+configured shares, as Nuplane binds and matches them, and `FoundationHostBootTests` (same project) boots the built
+`Elsa.Foundation.Host` as a child process over a directory feed of the packed fixture and `Elsa.Persistence.EntityFramework`
+(plus a second, resolve-only `closure` feed holding EF Core and the Sqlite engine, which the host does not carry), showing
+finalization at activation and dormancy ending once a hold is released. It also boots the host over the fixture carrying its
+own copies of `Elsa.Persistence.Schema` and `Elsa.Cluster.Core`: with the shares as shipped the module binds the host's copies
+and finalizes, and with the `Elsa.Persistence.Schema` entry at another major it binds its own, admits, and is never observed
+(#2150). The durable EF membership provider (`AddConfiguredClusterMembership`) would bring EF Core into the
 host, so `Elsa.Foundation.Host` composes only the in-process default: it is a cluster of one.
 
 ### Generating the closure
@@ -502,6 +518,22 @@ all — a prefix entry such as `Elsa.` on a host that compiles in no Elsa featur
 supplied, and each such dependency is logged as a Warning (event 1035) naming the dependent package, the
 dependency and the range, so it is visible rather than silent. An *undeclared* package the host carries at
 an unsatisfying version is not refused either: it is acquired from the feed like any other dependency.
+
+A package that carries a **shared assembly the host cannot supply** is refused when it loads (since Nuplane
+`0.0.11-preview.94`, [valence-works/nuplane#101](https://github.com/valence-works/nuplane/pull/101)). Nuplane
+never loads a package's own copy of an assembly a `Nuplane:Loading:SharedAssemblies` entry matches, so when the
+host has no copy of it at the entry's major version, the package's whole graph fails to load, and every package in
+it is reported with the reason (category `Nuplane.Loading.PackageAutoLoadingObserver`):
+
+```
+Package Elsa.Cluster.Fixtures.FeedModule failed to load: Package 'Elsa.Persistence.EntityFramework@4.0.0-dev'
+  carries shared assembly 'Elsa.Persistence.EntityFramework' (public key token: unsigned, major version: 4),
+  which the shared-assembly policy leaves to the host, but the host has no copy of it with that major version.
+```
+
+The cycle is degraded, and at startup, under the default `Reconciliation:StartupFailurePolicy`, the host exits
+with a `NuplaneStartupReconciliationException` naming every failed package. So an entry for an assembly a host
+does not carry is not harmless: share only what the host itself references. `FoundationHostBootTests` pins it.
 
 What is not loud is the wildcard case above, because a pattern that matches nothing is
 indistinguishable from a feed that was asked for nothing.
