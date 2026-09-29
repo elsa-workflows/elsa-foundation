@@ -31,6 +31,7 @@ public sealed class NotesReleaseTests : IDisposable
         Assert.Equal("1.0.0", family.CurrentVersion);
         Assert.Empty(family.Upcasters);
         Assert.Empty(family.ContentColumns);
+        Assert.Null(family.Rewriter);
         Assert.Equal(["Initial", "Initial"], MigrationNames(assembly));
         Assert.Null(assembly.GetType("Elsa.Samples.Nuplane.Notes.NotesWithTagsFeature"));
         Assert.DoesNotContain(assembly.GetType("Elsa.Samples.Nuplane.Notes.NoteRecord")!.GetProperties(), property => property.Name == "TagsJson");
@@ -47,6 +48,7 @@ public sealed class NotesReleaseTests : IDisposable
         Assert.Equal(["1.0.0", "2.0.0"], family.ReadableVersions);
         Assert.Equal(typeof(NotesOneToTwo), Assert.Single(family.Upcasters).Type);
         Assert.Equal([nameof(NoteRecord.TagsJson)], family.ContentColumns.Select(column => column.Name));
+        Assert.Equal(typeof(NotesRewriter), family.Rewriter);
         Assert.Equal(["AddTags", "AddTags", "Initial", "Initial"], MigrationNames(assembly));
     }
 

@@ -1,3 +1,4 @@
+using Elsa.Persistence.EntityFramework.SchemaBackfill;
 using Elsa.Persistence.EntityFramework.Tests;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -65,6 +66,30 @@ public sealed class NotesMigrationExecutionTests : IAsyncDisposable
         var note = Assert.Single(await new NoteStore((NotesDbContext)context2, services).ListWithTagsAsync());
         Assert.Equal("written under 1.0.0", note.Text);
         Assert.Empty(note.Tags);
+    }
+
+    [Fact]
+    public async Task The_rewriter_brings_a_1_0_0_note_up_to_2_0_0_with_empty_tags_and_leaves_a_2_0_0_note_and_a_missing_one_alone()
+    {
+        await using (var context1 = release1.SqliteContext(database.ConnectionString))
+        {
+            await NotesRelease.MigrateAsync(context1);
+            await release1.AddNoteAsync(context1, "written under 1.0.0");
+        }
+
+        await using var context = release2.SqliteContext(database.ConnectionString);
+        await NotesRelease.MigrateAsync(context);
+        var store = new NoteStore((NotesDbContext)context, services);
+        var id = Rows($"SELECT Id FROM {NotesModule.TableName}", row => row.GetString(0)).Single();
+        EfSchemaRowToRewrite Ask(string key) => new(typeof(NoteRecord), [key], "1.0.0", NotesModule.TagsVersion);
+
+        Assert.Equal(EfSchemaRewriteOutcome.Rewritten, await store.RewriteAsync(Ask(id), NotesModule.TagsVersion));
+        Assert.Equal([("2.0.0", "[]")], Rows($"SELECT SchemaVersion, TagsJson FROM {NotesModule.TableName}", row => (row.GetString(0), row.GetString(1))));
+
+        Assert.Equal(EfSchemaRewriteOutcome.Missing, await store.RewriteAsync(Ask("no-such-note"), NotesModule.TagsVersion));
+        await store.AddTagsAsync(id, ["demo"]);
+        Assert.Equal(EfSchemaRewriteOutcome.AlreadyCurrent, await store.RewriteAsync(Ask(id), NotesModule.TagsVersion));
+        Assert.Equal([("2.0.0", "[\"demo\"]")], Rows($"SELECT SchemaVersion, TagsJson FROM {NotesModule.TableName}", row => (row.GetString(0), row.GetString(1))));
     }
 
     public async ValueTask DisposeAsync()

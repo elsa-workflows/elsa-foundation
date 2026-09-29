@@ -95,6 +95,7 @@ for feed in "${resolved[@]}"; do
     if compgen -G "$feed/Elsa.Persistence.EntityFramework.*.nupkg" >/dev/null; then
       demo_fail "$feed holds a copy of Elsa.Persistence.EntityFramework from an earlier pack, and this host carries its own. Delete it (rm $feed/Elsa.Persistence.EntityFramework.*.nupkg) and pack again."
     fi
+    echo "   Elsa.Persistence.EntityFramework is not packed: the host carries and shares it"
   elif ! compgen -G "$feed/Elsa.Persistence.EntityFramework.*.nupkg" >/dev/null; then
     echo "== packing Elsa.Persistence.EntityFramework into ${feed#"$demo_root"/} (this host does not carry it)"
     demo_quiet "Packing Elsa.Persistence.EntityFramework" dotnet pack "$persistence" -c "$configuration" -p:IsPackable=true -o "$feed" -nologo -v q
