@@ -3,45 +3,55 @@ using System.Runtime.Loader;
 using CShells.Features;
 using CShells.Lifecycle;
 using Elsa.Cluster.Core.Contracts;
-using Elsa.Cluster.Core.Models;
 using Elsa.Cluster.Core.Options;
 using Elsa.Persistence.Schema;
+using Elsa.Testing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 using Nuplane.Loading;
+using static Elsa.Cluster.Readability.Tests.UpgradedPackage;
 
 namespace Elsa.Cluster.Readability.Tests;
 
 /// <summary>
 /// Spec 183's FR-021, amended 2026-09-29: a package upgraded in place leaves its previous generation loaded in a Nuplane
-/// load context for the life of the process, and that generation stops counting for the readability report once a newer
-/// generation of the same assembly is the active one and no shell generation that has not been disposed still runs it.
-/// Two real Nuplane load contexts hold the family's two generations: the previous one at version 1, reading 1 alone, and
-/// the upgrade at version 2 with an upcaster from 1, reading both. Intersected, the host reads 1 and can never finalize 2.
+/// load context for the life of the process, and that generation stops counting for the readability report only once a
+/// newer generation of the same assembly is the active one and nothing that could still run it is left: no shell
+/// generation whose container has not finished disposing composes from its load context, and the feature catalog the next
+/// shell generation is built from does not name it.
 /// </summary>
 /// <remarks>
+/// <para>
 /// Both directions are pinned. Stopping too late looks like a healthy host that never finalizes; stopping too early
 /// credits a version a generation still running cannot read, which looks like success until it reads a row it refuses.
+/// </para>
+/// <para>
+/// A shell generation here is a container built as CShells builds one (<c>ShellProviderBuilder</c> in the pinned CShells):
+/// copies of the host's registrations but the lifecycle subscribers, which CShells never copies, plus the shell and the
+/// feature descriptors of the catalog snapshot it was built from; and every initializer is constructed before any runs.
+/// <see cref="SupersededPackageGenerationShellTests"/> drives the same through CShells itself.
+/// </para>
 /// </remarks>
 public sealed class SupersededPackageGenerationTests : IAsyncDisposable
 {
-    private static readonly string[] Both = ["1", "2"];
-    private static readonly string[] PreviousOnly = ["1"];
+    private static readonly TimeSpan Patience = TimeSpan.FromSeconds(10);
 
-    private readonly string _family = $"Upgraded{Guid.NewGuid():N}";
-    private readonly DirectoryInfo _files = Directory.CreateTempSubdirectory("elsa-superseded-generations-");
-    private readonly List<AssemblyLoadContext> _contexts = [];
-    private readonly PackageCatalog _catalog = new();
+    private readonly UpgradedPackage _package = new();
+    private readonly FeatureCatalog _features = new();
+    private readonly RecordingLogger _log = new();
+    private readonly List<ServiceProvider> _containers = [];
+    private readonly IServiceCollection _services;
     private readonly ServiceProvider _host;
-    private readonly Assembly _previous;
-    private readonly Assembly _current;
 
     public SupersededPackageGenerationTests()
     {
-        var assemblyName = $"Upgraded.Module{Guid.NewGuid():N}";
-        _previous = LoadIntoNuplaneContext(Image(assemblyName, new SyntheticFamily(_family, "Upgraded", "1")));
-        _current = LoadIntoNuplaneContext(Image(assemblyName, new SyntheticFamily(_family, "Upgraded", "2", [new SyntheticUpcaster("Upgraded.OneToTwo", "1", "2")])));
-
-        _host = Host(_catalog);
+        // The upgrade is the active package, and the feature catalog was refreshed onto it, as a reload after a reconcile
+        // leaves them; each test moves them from there.
+        _package.Catalog.Active = [_package.Current];
+        _features.Names(FeatureOf(_package.Current));
+        _services = HostServices(_package.Catalog, _features, _log);
+        _host = Bound(_services.BuildServiceProvider());
     }
 
     private ISupersededAssemblySource Generations => _host.GetRequiredService<ISupersededAssemblySource>();
@@ -49,12 +59,8 @@ public sealed class SupersededPackageGenerationTests : IAsyncDisposable
     private IShellLifecycleSubscriber Lifecycle => (IShellLifecycleSubscriber)Generations;
 
     [Fact]
-    public async Task Once_the_upgrade_is_the_active_package_the_previous_generation_stops_counting()
-    {
-        _catalog.Active = [_current];
-
+    public async Task Once_the_upgrade_is_the_active_package_the_previous_generation_stops_counting() =>
         Assert.Equal(Both, await ReadableAsync());
-    }
 
     /// <summary>
     /// Before the catalog lists the upgrade - its package is still loading, or it failed to load - nothing says the previous
@@ -63,54 +69,208 @@ public sealed class SupersededPackageGenerationTests : IAsyncDisposable
     [Fact]
     public async Task Until_the_catalog_lists_the_upgrade_both_generations_count()
     {
-        _catalog.Active = [_previous];
+        _package.Catalog.Active = [_package.Previous];
         Assert.Equal(PreviousOnly, await ReadableAsync());
 
-        _catalog.Active = [];
+        _package.Catalog.Active = [];
         Assert.Equal(PreviousOnly, await ReadableAsync());
     }
 
     /// <summary>
-    /// A shell generation that still runs the previous generation - one draining after a reload, or one whose reload failed
-    /// - keeps it counting, while the guard, which judges the generation about to be built, already sees only the upgrade.
-    /// Its disposal publishes the host's report again, so a gate waiting on it evaluates at once.
+    /// A shell generation is counted from before its first initializer runs - a module's migrator or finalization gate
+    /// reads rows there - with no lifecycle notification yet, and until its container has finished disposing, whose end
+    /// publishes the host's report again so a gate waiting on it evaluates at once. The guard, which judges the generation
+    /// about to be built, already sees only the upgrade.
     /// </summary>
     [Fact]
-    public async Task While_a_shell_generation_still_runs_the_previous_generation_both_count_and_its_disposal_republishes()
+    public async Task A_shell_generation_counts_from_before_its_first_initializer_until_its_container_is_disposed_and_that_republishes()
     {
-        _catalog.Active = [_current];
-        var draining = Shell(_previous.GetType("Upgraded.OrderRow", throwOnError: true)!);
-        await Lifecycle.OnStateChangedAsync(draining, ShellLifecycleState.Initializing, ShellLifecycleState.Active);
-        var membership = _host.GetRequiredService<IClusterMembership>();
-        await membership.PublishReportAsync();
+        var previous = Shell(FeatureOf(_package.Previous));
+        await PublishAsync();
 
         Assert.Equal(PreviousOnly, await ReadableAsync());
-        Assert.Contains(_previous, await Generations.GetReplacedAsync());
-        Assert.DoesNotContain(_previous, await Generations.GetRetiredAsync());
+        Assert.Contains(_package.Previous, await Generations.GetReplacedAsync());
+        Assert.DoesNotContain(_package.Previous, await Generations.GetRetiredAsync());
 
-        await Lifecycle.OnStateChangedAsync(draining, ShellLifecycleState.Drained, ShellLifecycleState.Disposed);
+        await previous.DisposeAsync();
 
         Assert.Equal(Both, await ReadableAsync());
-        Assert.Equal(Both, Entry((await membership.ReadFleetAsync(FleetReadMode.Cached)).Members.Single()).ReadableVersions);
+        Assert.Equal(Both, await PublishedAsync());
     }
 
     [Fact]
     public async Task A_shell_generation_that_runs_only_the_upgrade_holds_nothing_back()
     {
-        _catalog.Active = [_current];
-        await Lifecycle.OnStateChangedAsync(Shell(_current.GetType("Upgraded.OrderRow", throwOnError: true)!), ShellLifecycleState.Initializing, ShellLifecycleState.Active);
+        Shell(FeatureOf(_package.Current));
 
         Assert.Equal(Both, await ReadableAsync());
+    }
+
+    /// <summary>
+    /// A shell whose container is disposed while its drain is still under way is released only once that drain completes,
+    /// which CShells completes only after the shell's whole provider has been disposed: an earlier service of the container
+    /// may still be disposing, and running the previous generation, when this host's tracking is disposed.
+    /// </summary>
+    [Fact]
+    public async Task A_drained_shell_generation_counts_until_its_drain_completes()
+    {
+        var shell = new FakeShell();
+        var container = Shell(shell, FeatureOf(_package.Previous));
+        var drain = new FakeDrain();
+        shell.Drain = drain;
+        await PublishAsync();
+        await AdvanceAsync(shell, ShellLifecycleState.Active, ShellLifecycleState.Deactivating, ShellLifecycleState.Draining, ShellLifecycleState.Drained, ShellLifecycleState.Disposed);
+
+        await container.DisposeAsync();
+        Assert.Equal(PreviousOnly, await ReadableAsync());
+
+        drain.Complete(shell.Descriptor);
+        await UntilAsync(async () => (await ReadableAsync()).SequenceEqual(Both));
+        await UntilAsync(async () => (await PublishedAsync()).SequenceEqual(Both));
+    }
+
+    /// <summary>A drain that fails may have left the provider partly disposed and still running, so nothing is released.</summary>
+    [Fact]
+    public async Task A_shell_generation_whose_drain_fails_keeps_counting()
+    {
+        var shell = new FakeShell();
+        var container = Shell(shell, FeatureOf(_package.Previous));
+        var drain = new FakeDrain();
+        shell.Drain = drain;
+        await AdvanceAsync(shell, ShellLifecycleState.Active, ShellLifecycleState.Draining, ShellLifecycleState.Disposed);
+        await container.DisposeAsync();
+
+        drain.Fail();
+
+        await UntilAsync(() => Task.FromResult(_log.Warnings.Any(warning => warning.Exception is InvalidOperationException)));
+        Assert.Equal(PreviousOnly, await ReadableAsync());
     }
 
     /// <summary>A shell generation whose features cannot be read may be running anything, so nothing it could run retires.</summary>
     [Fact]
     public async Task A_shell_generation_whose_features_cannot_be_read_keeps_every_replaced_generation_counting()
     {
-        _catalog.Active = [_current];
-        await Lifecycle.OnStateChangedAsync(new FakeShell(new ServiceCollection().BuildServiceProvider()), ShellLifecycleState.Initializing, ShellLifecycleState.Active);
+        var shell = Shell(_ => { });
 
         Assert.Equal(PreviousOnly, await ReadableAsync());
+
+        await shell.DisposeAsync();
+        Assert.Equal(Both, await ReadableAsync());
+    }
+
+    /// <summary>
+    /// Whatever reading a shell generation's features throws, the generation is still tracked, and pins every replaced
+    /// generation: a read that fails is no evidence of what it composes.
+    /// </summary>
+    [Fact]
+    public async Task A_shell_generation_whose_features_throw_when_read_keeps_every_replaced_generation_counting()
+    {
+        var shell = Shell(services => services.AddSingleton<IReadOnlyCollection<ShellFeatureDescriptor>>(
+            _ => throw new InvalidOperationException("The feature descriptors could not be built.")));
+
+        Assert.Equal(PreviousOnly, await ReadableAsync());
+        Assert.Contains(_log.Warnings, warning => warning.Exception is InvalidOperationException);
+
+        await shell.DisposeAsync();
+        Assert.Equal(Both, await ReadableAsync());
+    }
+
+    /// <summary>
+    /// A graph context Nuplane keeps after an upgrade can still serve an unchanged package beside the replaced one. A shell
+    /// generation composing a feature from that unchanged package binds the replaced one from the same context, so the
+    /// whole context is pinned, not only the assemblies that were themselves replaced.
+    /// </summary>
+    [Fact]
+    public async Task A_replaced_assembly_in_the_load_context_of_a_live_feature_keeps_counting()
+    {
+        var sibling = _package.Load(
+            SyntheticSchemaFamilies.Image($"Upgraded.Sibling{Guid.NewGuid():N}", [], [], [new SyntheticFeature("Upgraded.SiblingFeature")]),
+            beside: _package.Previous);
+        _package.Catalog.Active = [_package.Current, sibling];
+        var shell = Shell(sibling.GetType("Upgraded.SiblingFeature", throwOnError: true)!);
+
+        Assert.Equal(PreviousOnly, await ReadableAsync());
+
+        await shell.DisposeAsync();
+        Assert.Equal(Both, await ReadableAsync());
+    }
+
+    /// <summary>
+    /// With no shell active - eager activation turned off, or failed after it had initialized the feature catalog - a
+    /// reconcile loads the upgrade, and a host that skips refreshing the catalog while no shell is active, as
+    /// <c>Elsa.Foundation.Host</c> does, leaves it naming the previous generation. The first request builds from it, so
+    /// the previous generation keeps counting until the catalog no longer names it.
+    /// </summary>
+    [Fact]
+    public async Task While_the_feature_catalog_names_the_previous_generation_it_keeps_counting_with_no_shell_active()
+    {
+        _features.Names(FeatureOf(_package.Previous));
+        Assert.Equal(PreviousOnly, await ReadableAsync());
+
+        _features.Names(FeatureOf(_package.Current));
+        Assert.Equal(Both, await ReadableAsync());
+    }
+
+    /// <summary>A catalog that lists the replaced assembly among those it scanned may compose from it too.</summary>
+    [Fact]
+    public async Task A_feature_catalog_that_scanned_the_previous_generation_keeps_it_counting()
+    {
+        _features.Names([FeatureOf(_package.Current)], scanned: [_package.Previous]);
+
+        Assert.Equal(PreviousOnly, await ReadableAsync());
+    }
+
+    /// <summary>
+    /// A catalog never refreshed is refreshed by the first build from whatever Nuplane lists then, and a build may be
+    /// reading it already, so every replaced generation counts until it has been; readability never refreshes it itself.
+    /// </summary>
+    [Fact]
+    public async Task Before_the_feature_catalog_is_initialized_every_replaced_generation_counts()
+    {
+        _features.Uninitialize();
+        Assert.Equal(PreviousOnly, await ReadableAsync());
+
+        _features.Names(FeatureOf(_package.Current));
+        Assert.Equal(Both, await ReadableAsync());
+    }
+
+    [Fact]
+    public async Task A_feature_catalog_that_cannot_be_read_keeps_every_replaced_generation_counting()
+    {
+        _features.Unreadable = true;
+
+        Assert.Equal(PreviousOnly, await ReadableAsync());
+        Assert.Contains(_log.Warnings, warning => warning.Exception is IOException);
+    }
+
+    /// <summary>
+    /// A shell whose container never constructed this host's tracking - a feature removed it - is still tracked, from its
+    /// first lifecycle notification, and since nothing then says when its provider is disposed, only a completed drain
+    /// releases it.
+    /// </summary>
+    [Fact]
+    public async Task A_shell_generation_this_host_did_not_see_initialize_is_tracked_from_its_first_notification_until_a_drain_completes()
+    {
+        var shell = new FakeShell();
+        var container = Container(shell, services =>
+        {
+            services.AddSingleton<IReadOnlyCollection<ShellFeatureDescriptor>>(Descriptors(FeatureOf(_package.Previous)));
+            services.RemoveAll<IShellInitializer>();
+        });
+        Assert.Equal(Both, await ReadableAsync());
+
+        await AdvanceAsync(shell, ShellLifecycleState.Active);
+        Assert.Equal(PreviousOnly, await ReadableAsync());
+        Assert.Single(_log.Warnings);
+
+        await container.DisposeAsync();
+        Assert.Equal(PreviousOnly, await ReadableAsync());
+
+        var drain = new FakeDrain();
+        shell.Drain = drain;
+        await AdvanceAsync(shell, ShellLifecycleState.Draining);
+        drain.Complete(shell.Descriptor);
+        await UntilAsync(async () => (await ReadableAsync()).SequenceEqual(Both));
     }
 
     /// <summary>Only a context Nuplane created can hold a replaced generation: a same-named copy anywhere else keeps counting.</summary>
@@ -118,101 +278,229 @@ public sealed class SupersededPackageGenerationTests : IAsyncDisposable
     public async Task A_previous_generation_outside_a_nuplane_context_keeps_counting()
     {
         var elsewhere = new AssemblyLoadContext($"not-nuplane-{Guid.NewGuid():N}", isCollectible: true);
-        _contexts.Add(elsewhere);
-        elsewhere.LoadFromAssemblyPath(_previous.Location);
-        _catalog.Active = [_current];
+        try
+        {
+            elsewhere.LoadFromAssemblyPath(_package.Previous.Location);
 
-        Assert.Contains(_previous, await Generations.GetRetiredAsync());
-        Assert.Equal(PreviousOnly, await ReadableAsync());
+            Assert.Contains(_package.Previous, await Generations.GetRetiredAsync());
+            Assert.Equal(PreviousOnly, await ReadableAsync());
+        }
+        finally
+        {
+            elsewhere.Unload();
+        }
     }
 
     [Fact]
     public async Task A_host_without_nuplane_counts_every_generation()
     {
-        await using var host = Host(catalog: null);
+        await using var host = Bound(HostServices(catalog: null, features: null, _log).BuildServiceProvider());
 
         Assert.Empty(await host.GetRequiredService<ISupersededAssemblySource>().GetRetiredAsync());
-        Assert.Equal(PreviousOnly, await ReadableAsync(host));
+        Assert.Equal(PreviousOnly, await _package.ReadableAsync(host));
+    }
+
+    /// <summary>
+    /// CShells binds the host's container first; a later binding - a shell container resolving the lifecycle subscriber,
+    /// say - must not move it onto a container whose copy of Nuplane's loader has loaded nothing.
+    /// </summary>
+    [Fact]
+    public async Task The_first_binding_is_kept()
+    {
+        ((NuplanePackageGenerations)Generations).BindTo(new ServiceCollection().BuildServiceProvider());
+
+        Assert.Contains(_package.Previous, await Generations.GetReplacedAsync());
+    }
+
+    /// <summary>
+    /// Nuplane's load contexts are matched by the name of the assembly that defines them, so composing readability takes
+    /// no Nuplane runtime; this fails first if the pinned Nuplane.Loading moves or renames the contexts it loads packages
+    /// into, which would otherwise leave every generation counting without a word.
+    /// </summary>
+    [Theory]
+    [InlineData("Nuplane.Loading.PackageAssemblyLoadContext")]
+    [InlineData("Nuplane.Loading.PackageGraphLoadContext")]
+    [InlineData("Nuplane.Loading.HostIntegratedPackageGraphLoadContext")]
+    public void The_load_contexts_matched_are_the_ones_the_pinned_Nuplane_Loading_defines(string context)
+    {
+        var nuplaneLoading = typeof(PackageAssemblyLoadContext).Assembly;
+
+        Assert.Equal(NuplanePackageGenerations.NuplaneLoadingAssembly, nuplaneLoading.GetName().Name);
+        Assert.True(typeof(AssemblyLoadContext).IsAssignableFrom(nuplaneLoading.GetType(context, throwOnError: true)));
     }
 
     public async ValueTask DisposeAsync()
     {
+        foreach (var container in _containers)
+            await container.DisposeAsync();
         await _host.DisposeAsync();
-        _contexts.ForEach(context => context.Unload());
-        try
-        {
-            _files.Delete(recursive: true);
-        }
-        catch (IOException)
-        {
-            // A file an unloading context still maps is left for the temp directory's own cleanup.
-        }
+        _package.Dispose();
     }
 
     /// <summary>
-    /// A host composed as Elsa.Foundation.Host composes it, with Nuplane's catalog when <paramref name="catalog"/> is given,
-    /// and bound the way CShells binds it: by resolving its lifecycle subscribers from the host's container.
+    /// A host composed as <c>Elsa.Foundation.Host</c> composes it, with Nuplane's catalog and CShells' feature catalog when
+    /// they are given.
     /// </summary>
-    private static ServiceProvider Host(PackageCatalog? catalog)
+    private static IServiceCollection HostServices(IPackageAssemblyCatalog? catalog, IRuntimeFeatureCatalog? features, RecordingLogger log)
     {
-        var services = new ServiceCollection().Configure<ClusterMembershipOptions>(options => options.HostId = $"superseded-{Guid.NewGuid():N}");
+        var services = new ServiceCollection()
+            .Configure<ClusterMembershipOptions>(options => options.HostId = $"superseded-{Guid.NewGuid():N}")
+            .AddSingleton<ILoggerFactory>(new RecordingLoggerFactory(log));
         if (catalog is not null)
-            services.AddSingleton<IPackageAssemblyCatalog>(catalog);
-        var host = services.AddEfSchemaReadability().BuildServiceProvider();
+            services.AddSingleton(catalog);
+        if (features is not null)
+            services.AddSingleton(features);
+        return services.AddEfSchemaReadability();
+    }
+
+    /// <summary>Binds <paramref name="host"/> the way CShells binds it: by resolving its lifecycle subscribers.</summary>
+    private static ServiceProvider Bound(ServiceProvider host)
+    {
         _ = host.GetServices<IShellLifecycleSubscriber>().ToArray();
         return host;
     }
 
-    private Task<IReadOnlyList<string>> ReadableAsync() => ReadableAsync(_host);
+    private ServiceProvider Shell(params Type[] features) => Shell(new FakeShell(), features);
 
-    private async Task<IReadOnlyList<string>> ReadableAsync(IServiceProvider host) =>
-        Entry(await host.GetServices<IMemberReportSource<ReadabilitySection>>().Single().ReadAsync()).ReadableVersions;
+    private ServiceProvider Shell(FakeShell shell, params Type[] features) =>
+        Shell(shell, services => services.AddSingleton<IReadOnlyCollection<ShellFeatureDescriptor>>(Descriptors(features)));
 
-    private ReadabilityEntry Entry(ReadabilitySection section) => section.Entries.Single(entry => entry.Family == _family);
+    private ServiceProvider Shell(Action<IServiceCollection> describe) => Shell(new FakeShell(), describe);
 
-    private ReadabilityEntry Entry(FleetMember member) => Entry(member.Report.Readability!);
-
-    private static byte[] Image(string assemblyName, SyntheticFamily family) =>
-        SyntheticSchemaFamilies.Image(assemblyName, ["Upgraded"], [new SyntheticColumn(family.Name, "Upgraded.OrderRow", "ContentJson")], family);
-
-    /// <summary>Loads <paramref name="image"/> the way Nuplane loads a package: from its file, into a context Nuplane defines.</summary>
-    private Assembly LoadIntoNuplaneContext(byte[] image)
+    /// <summary>A shell generation's container, with every initializer constructed, as CShells constructs them all before it runs any.</summary>
+    private ServiceProvider Shell(FakeShell shell, Action<IServiceCollection> describe)
     {
-        var path = Path.Join(_files.CreateSubdirectory(Guid.NewGuid().ToString("N")).FullName, "Upgraded.Module.dll");
-        File.WriteAllBytes(path, image);
-        var context = new PackageAssemblyLoadContext(path, [], new SharedAssemblyPolicyMatcher());
-        _contexts.Add(context);
-        return context.LoadFromAssemblyPath(path);
+        var container = Container(shell, describe);
+        _ = container.GetServices<IShellInitializer>().ToArray();
+        return container;
     }
 
-    private static FakeShell Shell(Type feature) =>
-        new(new ServiceCollection()
-            .AddSingleton<IReadOnlyCollection<ShellFeatureDescriptor>>([new ShellFeatureDescriptor("UpgradedOrders") { StartupType = feature }])
-            .BuildServiceProvider());
-
-    /// <summary>What Nuplane's catalog lists for the active package set: the assemblies of the one package these tests upgrade.</summary>
-    private sealed class PackageCatalog : IPackageAssemblyCatalog
+    private ServiceProvider Container(FakeShell shell, Action<IServiceCollection> describe)
     {
-        public IReadOnlyList<Assembly> Active { get; set; } = [];
-
-        public Task<IReadOnlyList<PackageAssemblies>> GetPackagedAssembliesAsync(CancellationToken cancellationToken) =>
-            Task.FromResult<IReadOnlyList<PackageAssemblies>>(Active.Count == 0 ? [] : [new PackageAssemblies("Upgraded.Module", "0.0.0", Active, [])]);
-
-        public Task<PackageAssemblies?> GetPackagedAssembliesAsync(string packageId, CancellationToken cancellationToken) =>
-            throw new NotSupportedException();
+        var services = new ServiceCollection();
+        foreach (var descriptor in _services.Where(descriptor => descriptor.ServiceType != typeof(IShellLifecycleSubscriber)))
+            services.Add(descriptor);
+        services.AddSingleton<IShell>(shell);
+        describe(services);
+        var container = services.BuildServiceProvider();
+        shell.ServiceProvider = container;
+        _containers.Add(container);
+        return container;
     }
 
-    /// <summary>A shell generation as a lifecycle subscriber sees it: a container that names the features it composed.</summary>
-    private sealed class FakeShell(IServiceProvider services) : IShell
+    private static IReadOnlyCollection<ShellFeatureDescriptor> Descriptors(params Type[] features) =>
+        [.. features.Select(feature => new ShellFeatureDescriptor(feature.Name) { StartupType = feature })];
+
+    private async Task AdvanceAsync(FakeShell shell, params ShellLifecycleState[] states)
+    {
+        foreach (var state in states)
+        {
+            var previous = shell.State;
+            shell.State = state;
+            await Lifecycle.OnStateChangedAsync(shell, previous, state);
+        }
+    }
+
+    private async Task PublishAsync() => await _host.GetRequiredService<IClusterMembership>().PublishReportAsync();
+
+    private Task<IReadOnlyList<string>> ReadableAsync() => _package.ReadableAsync(_host);
+
+    private Task<IReadOnlyList<string>> PublishedAsync() => _package.PublishedAsync(_host);
+
+    /// <summary>What happens on a drain's completion runs after it, not in it.</summary>
+    private static async Task UntilAsync(Func<Task<bool>> condition)
+    {
+        var deadline = DateTimeOffset.UtcNow + Patience;
+        while (!await condition())
+        {
+            Assert.True(DateTimeOffset.UtcNow < deadline, $"Not met within {Patience}.");
+            await Task.Delay(TimeSpan.FromMilliseconds(20));
+        }
+    }
+
+    /// <summary>A shell generation as a lifecycle subscriber and its own container see it.</summary>
+    private sealed class FakeShell : IShell
     {
         public ShellDescriptor Descriptor { get; } = ShellDescriptor.Create("default", 1);
 
-        public ShellLifecycleState State => ShellLifecycleState.Active;
+        public ShellLifecycleState State { get; set; } = ShellLifecycleState.Initializing;
 
-        public IServiceProvider ServiceProvider => services;
+        public IServiceProvider ServiceProvider { get; set; } = null!;
 
-        public IDrainOperation? Drain => null;
+        public IDrainOperation? Drain { get; set; }
 
         public IShellScope BeginScope() => throw new NotSupportedException();
+    }
+
+    /// <summary>A drain whose completion a test decides; CShells completes one only after the shell's provider is disposed.</summary>
+    private sealed class FakeDrain : IDrainOperation
+    {
+        private readonly TaskCompletionSource<DrainResult> _completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public DrainStatus Status => DrainStatus.Completed;
+
+        public DateTimeOffset? Deadline => null;
+
+        public Task<DrainResult> WaitAsync(CancellationToken cancellationToken = default) => _completion.Task.WaitAsync(cancellationToken);
+
+        public Task ForceAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+        public void Complete(ShellDescriptor shell) => _completion.SetResult(new DrainResult(shell, DrainStatus.Completed, TimeSpan.Zero, 0, []));
+
+        public void Fail() => _completion.SetException(new InvalidOperationException("The shell's provider threw while it was disposed."));
+    }
+
+    /// <summary>
+    /// What CShells' runtime feature catalog exposes: the current snapshot a build reads, which throws until the catalog is
+    /// initialized. It refuses to be refreshed or initialized: readability must never do either.
+    /// </summary>
+    private sealed class FeatureCatalog : IRuntimeFeatureCatalog
+    {
+        private RuntimeFeatureCatalogSnapshot? _snapshot;
+        private long _generation;
+
+        public bool Unreadable { get; set; }
+
+        public IRuntimeFeatureCatalogSnapshot CurrentSnapshot => Current is { } snapshot ? new View(snapshot.Generation, snapshot.RefreshedAt) : throw new InvalidOperationException("The runtime feature catalog has not been initialized.");
+
+        public void Names(params Type[] features) => Names(features, scanned: []);
+
+        public void Names(Type[] features, Assembly[] scanned)
+        {
+            var descriptors = Descriptors(features);
+            _snapshot = new RuntimeFeatureCatalogSnapshot(
+                ++_generation,
+                [.. features.Select(feature => feature.Assembly).Concat(scanned)],
+                descriptors,
+                descriptors.ToDictionary(descriptor => descriptor.Id, StringComparer.OrdinalIgnoreCase),
+                DateTimeOffset.UtcNow);
+        }
+
+        public void Uninitialize() => _snapshot = null;
+
+        public Task<RuntimeFeatureCatalogSnapshot> GetSnapshotAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(Current ?? throw new InvalidOperationException("Reading the detailed snapshot of an uninitialized catalog would initialize it."));
+
+        public Task EnsureInitializedAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException("Readability must not initialize the catalog.");
+
+        public Task<IRuntimeFeatureCatalogSnapshot> RefreshAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException("Readability must not refresh the catalog.");
+
+        private RuntimeFeatureCatalogSnapshot? Current => Unreadable ? throw new IOException("The feature catalog could not be read.") : _snapshot;
+
+        private sealed record View(long Generation, DateTimeOffset RefreshedAt) : IRuntimeFeatureCatalogSnapshot
+        {
+            public IReadOnlyList<RuntimeFeatureDescriptor> FeatureDescriptors => [];
+        }
+    }
+
+    private sealed class RecordingLoggerFactory(RecordingLogger log) : ILoggerFactory
+    {
+        public ILogger CreateLogger(string categoryName) => log;
+
+        public void AddProvider(ILoggerProvider provider) => throw new NotSupportedException();
+
+        public void Dispose()
+        {
+        }
     }
 }
