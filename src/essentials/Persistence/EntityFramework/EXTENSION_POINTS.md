@@ -208,7 +208,10 @@ migration's `Up` operations against a closed allowed list, and `ExpandOnlyMigrat
 the reviewed, per-migration permission for exactly the destructive operations it lists
 ([spec 185](../../../../specs/185-expand-only-migration-guard/spec.md), #2104). Both types are public
 so a third-party module can run the same check from its own tests; the guard's own enforcement runs
-only over first-party modules. See the package README's table for both types.
+only over first-party modules. See the package README's table for both types. A contracting opt-out
+also names its schema family and version (FR-023, #2136); a third-party caller passes
+`ExpandOnlyMigrationFamilies.Before(...)` so the guard can tell one. Applying such a migration is
+checked for every module, first-party or not, by `EfDatabaseMigrator` (FR-024).
 
 ## Ordinal string collation
 

@@ -85,7 +85,8 @@ Oracle container leg is the first of the three conditions ADR 0075 requires to r
 | `UnicodeOrdinalCasingTable` | The pinned Unicode simple-uppercase mappings that Secrets and OpenTelemetry project persisted ordinal-ignore-case search keys from; each consumer pins `ComputeMappingFingerprint()` in its algorithm id, so the table is never edited in place |
 | `EfSchemaFinalization` / `EfSchemaFinalizationStore` | The finalization record of each schema family ([spec 181](../../../../specs/181-schema-finalization-gate/spec.md), FR-001 and FR-002), with spec 186's finish record inside it. Every module context maps two tables beside its own history table, `__ElsaSchemaFinalization_<Module>` and `__ElsaDatabaseIdentity_<Module>`, through `modelBuilder.MapSchemaFinalization(<HistoryModuleName>)`, and its own baseline migration creates them. The store keeps the record's rules: every change is a compare-and-set on the record's revision, the finalized version only moves forward along the writer's chain, a hold abandons the intent it covers in the same write, and the opaque database identity is created once, never from a connection string. When to finalize is the gate's decision (spec 181's B5, #2101), not the store's |
 | `EfPayloadCodec` / `EfPayloadColumns` | Encode a module's payload columns in band (`elsaz1.<codec>.<base64>`), so compressed and uncompressed rows coexist in one column with no schema change; refuses a declaration that is keyed, indexed, length-bounded, or on the excluded `ContentAuthority` family |
-| `ExpandOnlyMigrationGuard` / `ExpandOnlyMigrationOptOutAttribute` | Classify a migration's `Up` operations against the expand-only allowed list, and the reviewed, per-migration opt-out that permits exactly the destructive operations it lists ([spec 185](../../../../specs/185-expand-only-migration-guard/spec.md), #2104) |
+| `ExpandOnlyMigrationGuard` / `ExpandOnlyMigrationOptOutAttribute` | Classify a migration's `Up` operations against the expand-only allowed list, and the reviewed, per-migration opt-out that permits exactly the destructive operations it lists ([spec 185](../../../../specs/185-expand-only-migration-guard/spec.md), #2104). On a contracting migration the opt-out also names the schema family and the version whose finalization makes the removal safe (FR-023, #2136); `ExpandOnlyMigrationFamilies` tells the guard which tables a stamped family covered before the migration |
+| `EfContractingMigrationCheck` | Refuses a context's whole pending batch, before anything runs, while it holds a contracting migration whose family is finalized below the version it names (spec 185 FR-024 and FR-025, #2136). See [Contracting migrations](#contracting-migrations-spec-185) |
 
 ## Shared persistence resources
 
@@ -420,6 +421,26 @@ dotnet elsa persistence release --host <dir> --provider PostgreSql --modules Wor
 
 A hold on a version already finalized is refused. No command finalizes, forces finalization or lowers a finalized
 version: going back past one means restoring a database backup taken before it.
+
+## Contracting migrations (spec 185)
+
+A change that is not expand-only ships in two releases: the first adds the new shape beside the old, the second
+removes the old one in a **contracting migration**. Its opt-out names the family and the version whose finalization
+makes the removal safe, and the build guard requires both exactly when the migration removes or renames something on
+a table a stamped family covers:
+
+```csharp
+[ExpandOnlyMigrationOptOut("Version 2 reads Replacement; once it is finalized nothing reads Legacy.", "#1234",
+    "DropColumn elsa_orders.Legacy", SchemaFamily = "Orders", FinalizedVersion = "2")]
+```
+
+Applying it waits for that version. While the family's finalized version in the target database is below it,
+`EfDatabaseMigrator.ApplyAsync` refuses the context's whole pending batch before anything runs, with
+`EfContractingMigrationRefusedException` naming the migration, the family and both versions: under `AutoMigrate` at
+Prepare, under `Validate` instead of the plain pending report, in `dotnet elsa persistence apply` as a refusal (exit
+code 2), and at enable time as a 409 under both policies. A database no host has admitted the module in yet, such as
+a fresh install, is not refused, since nothing there reads what the batch removes; once one has, a family with no
+record is refused.
 
 ## Post-migration actions
 

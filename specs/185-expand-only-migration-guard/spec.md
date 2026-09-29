@@ -475,3 +475,30 @@ Recorded 2026-09-28, when the owner answered Q26 on #2093.
 
 *2026-09-28:* operations that carry no table (raw SQL, database-level alterations, unknown kinds) are named by their
 operation kind alone, found while building #2104; lands with its PR, whose merge is the owner's approval.
+
+*2026-09-29 note.* Found while building FR-023 to FR-025
+([#2136](https://github.com/elsa-workflows/elsa-foundation/issues/2136)); lands with its PR, whose merge is the owner's
+approval.
+
+- **Which opt-outs are contracting.** One whose migration drops or renames something, or deletes data, on a table a
+  stamped schema family covered before the migration runs, read from the previous migration's target model. Additions
+  and alterations are not: an `AlterColumn` opt-out stays the reviewed "safe alteration" of Decisions. The opt-out's
+  `SchemaFamily` and `FinalizedVersion` are required exactly then and refused anywhere else, the version must be one
+  the family's chain reads in the build, and a migration that contracts two families is refused, since one opt-out
+  names one family and version.
+- **A database no host has admitted the module in is not refused.** Before the module's record table or its database
+  identity exists, no gate-aware host has read or written its rows there, so nothing reads what the batch removes; and
+  refusing there could never clear, because only an admitted module creates the record the check waits for. A fresh
+  install of a release that carries a contracting migration therefore applies it. Once the module has been admitted, a
+  family with no record is refused, the loud direction, as is a finalized version the build's chain does not place.
+- **The refusal is a pending batch that may not run yet.** It derives from `EfPendingMigrationsException`, so every
+  caller that reports pending migrations as a negative result still does. `dotnet elsa persistence apply` reports it
+  as a refusal (exit 2, `contracting-migration-refused`), `validate` as pending (exit 1).
+- **Under `AutoMigrate` the activation guard reads the migrations-history table in one case**: once a contracting
+  migration's family is found below its version, to learn whether that migration is pending. This narrows spec 171's
+  FR-069 once more, as FR-025 requires. A module with no contracting migration opens nothing more than before.
+- **Not covered, and why.** `dotnet elsa persistence script` produces SQL a DBA runs outside Elsa, so nothing checks
+  the finalization record when that SQL runs; FR-024 names `apply` and the migrator only. The check runs before
+  `MigrateAsync` takes EF's migration lock, which is sound once the module has been admitted, because a finalized
+  version only moves forward; on a database where it has not, two hosts of different releases starting at once can
+  interleave so the older one admits the module after the newer one's check passed.

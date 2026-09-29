@@ -18,6 +18,9 @@ namespace Elsa.Persistence.EntityFramework;
 /// in validate mode without a code change.
 /// </summary>
 /// <remarks>
+/// A pending contracting migration whose schema family is not yet finalized at the version its opt-out names refuses
+/// the whole pending batch here, under both policies, before any of it runs (spec 185, FR-024): that check is
+/// <see cref="EfDatabaseMigrator"/>'s, so the persistence tool's <c>apply</c> makes it too.
 /// Once the schema is current and its post-migration actions audited, the module's finalization gate admits it
 /// (spec 181, FR-015): a family whose finalized version this host cannot read refuses the module here, under both
 /// policies, before any shell task, seeder or store touches its tables, exactly as a pending migration under
