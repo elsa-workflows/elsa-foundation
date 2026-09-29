@@ -24,12 +24,14 @@ public sealed class ClusterMembershipReportUpcastTests
     /// <summary>
     /// The decision under test, in both directions that would look like success: a throw would fail the whole membership
     /// read, and reading the stored report as if it were current would credit the member with a report it never
-    /// published in this format.
+    /// published in this format. A step that drops the report column fails the row as surely as one that throws (#2144).
     /// </summary>
-    [Fact]
-    public void A_report_an_upcaster_fails_on_is_uninterpretable_and_never_fails_the_read()
+    [Theory]
+    [InlineData(typeof(Failing))]
+    [InlineData(typeof(DropsTheReport))]
+    public void A_report_an_upcaster_fails_on_is_uninterpretable_and_never_fails_the_read(Type upcaster)
     {
-        var chain = Chain("2", Step<Failing>("1", "2"));
+        var chain = Chain("2", new EfSchemaUpcasterDescriptor(upcaster, "1", "2"));
 
         var read = ReadReport(Row("1", Report), chain);
 
@@ -54,9 +56,12 @@ public sealed class ClusterMembershipReportUpcastTests
 
     private static ClusterMemberEntity Row(string stamp, string report) => new() { SchemaVersion = stamp, ReportJson = report };
 
+    /// <summary>The family's own declaration, content columns included, at <paramref name="current"/> over <paramref name="steps"/>.</summary>
     private static EfSchemaChain Chain(string current, params EfSchemaUpcasterDescriptor[] steps) =>
-        EfSchemaChain.For(new EfSchemaFamilyDescriptor(ClusterMembershipEfModule.SchemaFamily, ClusterMembershipEfModule.Name, current, typeof(ClusterMembershipReportUpcastTests).Assembly)
+        EfSchemaChain.For(EfSchemaFamilyCatalog.Discover([typeof(ClusterMembershipEfModule).Assembly])
+            .Single(family => family.Name == ClusterMembershipEfModule.SchemaFamily) with
         {
+            CurrentVersion = current,
             Upcasters = steps
         });
 
@@ -68,23 +73,28 @@ public sealed class ClusterMembershipReportUpcastTests
 
     private sealed class Failing : IEfSchemaUpcaster
     {
-        public string Upcast(EfSchemaContent content) => throw new FormatException("The report is not in this version's shape.");
+        public EfSchemaRowContent Upcast(EfSchemaRowContent row) => throw new FormatException("The report is not in this version's shape.");
+    }
+
+    private sealed class DropsTheReport : IEfSchemaUpcaster
+    {
+        public EfSchemaRowContent Upcast(EfSchemaRowContent row) => new(row.Entity);
     }
 
     private sealed class RenameSection : IEfSchemaUpcaster
     {
-        public string Upcast(EfSchemaContent content)
+        public EfSchemaRowContent Upcast(EfSchemaRowContent row)
         {
-            var report = JsonNode.Parse(content.Value)!.AsObject();
+            var report = JsonNode.Parse(row[nameof(ClusterMemberEntity.ReportJson)]!)!.AsObject();
             var section = report["legacyReadability"];
             report.Remove("legacyReadability");
             report["readability"] = section;
-            return report.ToJsonString();
+            return row.With(nameof(ClusterMemberEntity.ReportJson), report.ToJsonString());
         }
     }
 
     private sealed class Unchanged : IEfSchemaUpcaster
     {
-        public string Upcast(EfSchemaContent content) => content.Value;
+        public EfSchemaRowContent Upcast(EfSchemaRowContent row) => row;
     }
 }

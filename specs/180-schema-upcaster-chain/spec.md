@@ -505,3 +505,39 @@ extended so that a write assigning every mapped non-key column of a stamped row,
 stamp, while a write that only bumps a concurrency revision need not; Identity's child rows (claims, tokens, role
 links, external logins) are rewritten by that rule, so their full-rewrite paths now restamp to the write version.
 Lands with #2140's follow-up.
+
+**2026-09-29 note.** Built by B4c ([#2144](https://github.com/elsa-workflows/elsa-foundation/issues/2144)), following
+the owner's decision of 2026-09-28 on #2093: upcasters work per row, not per column. Real format changes span columns -
+a field split, data moved from one document column to another - and an upcaster that saw one column could not express
+them, nor keep a row from being read half upgraded. The requirements change as follows.
+
+- FR-003, FR-009 and FR-019: an upcaster receives and returns a whole row, `EfSchemaRowContent`: its table, named by the
+  type the family's `[EfSchemaContent]` declaration maps to it, and the decoded value of every content column that
+  declaration names, nulls included. A read upcasts a row's content columns together: a store names every declared
+  content column of the table where it reads it (`<Module>.Chain.Upcast<TEntity>(stamp, (column, value), ...)`) and
+  takes each from the result. The chain refuses a read whose columns are not exactly its table's declared ones, at every
+  readable version, the current one included, as a fault in the reading code; and a step that returns another table,
+  adds a column or drops one, as corruption, exactly as it reports a step that throws (FR-009). So a row is either at its
+  stamp or wholly upcast; it is never partly upcast, and no step adds or drops a column. The stamp is still settled
+  first: an unreadable stamp is skew whatever columns the read passes (FR-006).
+- FR-012: an upcaster still sees decoded content only, but it is now called for a null column, since a null column is
+  part of the row and a step may fill it. For the same reason whether a content column holds anything is read from the
+  upcast row, never from the stored one; the content-read guard no longer excuses a presence check.
+- FR-022: a fixture pair is one row of one table, `<family>/<from>-to-<to>/<table>.source.json` and `.expected.json`,
+  each a JSON object of the row's content columns. A string member is the text the column stores, verbatim; any other
+  value is a document the column stores serialized; a declared column the file omits is null, as it is on every row
+  written before the column existed, so a frozen fixture still loads after a later version adds a column. The table is
+  named by its entity type rather than its table name, since that is how the declaration names it, and the finalization
+  record's table has another name in every module. The three proofs compare whole rows. The synthetic family's
+  per-column fixtures were replaced by per-row ones; no version of that family ever shipped.
+- The acceptance: the synthetic family gains a fourth version whose one step moves the order lines from the order
+  document into a content column of their own, which every read from that version on takes them from. The document
+  keeps its copy of the lines, because FR-027 adds a new member beside the old one and removes the old one only at a
+  later version, so the third version's format is still written by leaving the new column unset.
+- The guards: a store read passes exactly its table's declared content columns, labels each value by the column it
+  reads, and names the row's own table where the syntax says what the row is, since two tables declaring the same
+  columns would hide a swapped table from the run-time check.
+- FR-025: a row at the current version now also costs one comparison of its columns with the declared ones.
+
+Every family is still at one version, so no row and no shipped fixture migrates. Lands with the B4c PR, whose merge is
+the owner's approval.

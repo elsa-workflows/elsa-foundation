@@ -157,5 +157,5 @@ public abstract class EfSchemaFinalizationClusterScenarioTests(EfClusterMembersh
 [EfSchemaUpcaster("1", "2")]
 public sealed class ScenarioUpcaster : IEfSchemaUpcaster
 {
-    public string Upcast(EfSchemaContent content) => content.Value;
+    public EfSchemaRowContent Upcast(EfSchemaRowContent row) => row;
 }

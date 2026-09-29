@@ -22,14 +22,15 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Tests;
 /// marker to every column they are given, by calling <see cref="EfIdentityStoreSupport.Upgrade(UserEntity, EfSchemaChain)"/>
 /// and its role overload directly (§2.23.3). Which columns count as content comes from the model the module
 /// maps, not from a list here, so a content column added to either entity without being added to the upgrade fails.
-/// EfSchemaFamilyDeclarationGuardTests holds the other half: every Identity IAM content read goes through the chain, and
-/// every in-place content write upgrades or stamps its row.
+/// EfSchemaFamilyContentReadGuardTests and EfSchemaFamilyRestampGuardTests hold the other half: every Identity IAM
+/// content read goes through the chain, and every in-place content write upgrades or stamps its row.
 /// </remarks>
 public sealed class IdentityIamContentUpgradeTests : IAsyncDisposable
 {
     private static readonly EfSchemaChain TwoStepChain = EfSchemaChain.For(
-        new EfSchemaFamilyDescriptor(IdentityIamEfModule.SchemaFamily, "Identity.Iam", "3", typeof(IdentityIamContentUpgradeTests).Assembly)
+        EfSchemaFamilyCatalog.Discover([typeof(IdentityIamEfModule).Assembly]).Single(family => family.Name == IdentityIamEfModule.SchemaFamily) with
         {
+            CurrentVersion = "3",
             Upcasters = [new(typeof(MarkTwo), "1", "2"), new(typeof(MarkThree), "2", "3")]
         });
 
@@ -166,20 +167,22 @@ public sealed class IdentityIamContentUpgradeTests : IAsyncDisposable
         }
     }
 
-    private static string Mark(EfSchemaContent content, string marker)
-    {
-        var values = JsonNode.Parse(content.Value)!.AsArray();
-        values.Add(marker);
-        return values.ToJsonString();
-    }
+    /// <summary>Appends <paramref name="marker"/> to every column of the row, the whole row in one step.</summary>
+    private static EfSchemaRowContent Mark(EfSchemaRowContent row, string marker) =>
+        row.Columns.Keys.Aggregate(row, (marked, column) =>
+        {
+            var values = JsonNode.Parse(marked[column]!)!.AsArray();
+            values.Add(marker);
+            return marked.With(column, values.ToJsonString());
+        });
 
     private sealed class MarkTwo : IEfSchemaUpcaster
     {
-        public string Upcast(EfSchemaContent content) => Mark(content, "v2");
+        public EfSchemaRowContent Upcast(EfSchemaRowContent row) => Mark(row, "v2");
     }
 
     private sealed class MarkThree : IEfSchemaUpcaster
     {
-        public string Upcast(EfSchemaContent content) => Mark(content, "v3");
+        public EfSchemaRowContent Upcast(EfSchemaRowContent row) => Mark(row, "v3");
     }
 }

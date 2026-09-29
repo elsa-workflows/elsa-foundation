@@ -58,9 +58,10 @@ store and every reader outside the module checks and upcasts through (FR-002, FR
 package loaded with its own copy of this assembly is still read. The family's readable set is its current version and
 every predecessor the chain reaches without a gap (FR-004), computed by one function for both the host's readability
 report ([spec 183](../../../../specs/183-cluster-membership/spec.md), FR-020) and every read, so a host never reports a
-version its reads refuse. `EfSchemaFamilyDeclarationGuardTests` fails the build when a family the stores check is
+version its reads refuse. `EfSchemaFamilyChainDeclarationGuardTests` fails the build when a family the stores check is
 undeclared, a check names its family by anything but its chain handle, a chain is unsound, or a write stamps anything
-but the declared current version or rewrites content without restamping.
+but the declared current version; `EfSchemaFamilyRestampGuardTests` fails a write that rewrites content without
+restamping, or a restamp that does not assign every declared content column of its row from upcast values (#2144).
 
 A family whose loaded declarations disagree on the owning module is isolated rather than taking the rest of the host's
 readability report down with it: its own entry credits no readable version - a host is counted for it and never for a
@@ -72,18 +73,26 @@ family and every conflicting declaration. Every other family is still reported n
 An upcaster is the extension point a module author adds when a family's stored content changes: a concrete
 `IEfSchemaUpcaster` with a public parameterless constructor and no injected services (FR-003), in the owning module's
 assembly beside the family's store code, carrying `[EfSchemaUpcaster(from, to)]` and listed at the end of the family's
-`Upcasters`. It is a pure, total function of the decoded content it is given (`EfSchemaContent`: the table, the
-column, the value) and returns content it has no change for as it received it (FR-019, FR-012). `EfSchemaChain.Upcast`
-runs the steps from a row's stamp to the current version, runs none at the current version (FR-021), refuses an
-unreadable stamp as skew, and reports a failing upcaster as corruption (FR-009). A chain with a gap, a duplicate, a
+`Upcasters`. It works on a whole row, not a column (#2144): it receives an `EfSchemaRowContent` - the table, named by
+the type the family's `[EfSchemaContent]` declaration maps to it, and every declared content column's decoded value,
+nulls included - and returns the same table's same columns, so one step can move or split data across columns. It is a
+pure, total function of that row and returns every column it has no change for as it received it, usually by changing
+columns with `EfSchemaRowContent.With` (FR-019, FR-012). A store reads a row with
+`<Module>.Chain.Upcast<TEntity>(row.SchemaVersion, (nameof(row.A), row.A), (nameof(row.B), row.B))`, naming every
+declared content column of the table, and takes each column from the result. `EfSchemaChain.Upcast` runs the steps
+from a row's stamp to the current version, runs none at the current version (FR-021), refuses an unreadable stamp as
+skew before anything else, refuses a read whose columns are not exactly its table's declared content columns at every
+version, the current one included, and reports a failing upcaster, or one that returns another table or adds or drops
+a column, as corruption (FR-009): a row is either at its stamp or wholly upcast. A chain with a gap, a duplicate, a
 branch or a cycle, or one that does not end at the current version, fails the build and is refused when the module
 registers (`AddEfModuleMigrations`), and a read never bridges a gap (FR-005). A family whose context EF materializes
 directly (`IEfSchemaVersionedContext`) declares no upcasters: its value converters deserialize the content before any
 upcaster could run, so `EfSchemaVersionMaterializationInterceptor` accepts its current version alone. Every upcaster
 ships a committed fixture pair under `Fixtures/SchemaUpcasters/<family>/<from>-to-<to>/` in its module's test project,
+one row per pair, `<table>.source.json` and `<table>.expected.json`, each a JSON object of the row's content columns,
 frozen by `tests/essentials/Architecture/Baselines/schema-upcaster-fixtures.sha256`, and a test class deriving directly
 from `EfSchemaUpcasterProof<TUpcaster, TValue>(family, store)`, which runs FR-022's three proofs over every pair of its
-step; the build fails without either (FR-022).
+step, comparing whole rows; the build fails without either (FR-022).
 
 `EfSchemaWriteRefusedException` is the write refusal (FR-016a): a write whose value needs a version later than the
 version the host may write. It carries a stable code, the family and both versions, and spec 182 derives from it for
@@ -109,9 +118,13 @@ The declaration is what the guards read, so nothing is inferred from call sites.
 builds every first-party module's context on every provider and fails when a document column of a stamped table - a
 string column named `...Json`, `Content` or `Payload`, a payload column, or a domain value a converter stores as a
 string - is declared by neither attribute, or when a declared column is not in the model.
-`EfSchemaFamilyDeclarationGuardTests` fails when a column a store upcasts is not declared content by its family, when
-a read of a declared content column in a source that can see its declaration neither goes through the chain nor
-deserializes nothing, and when a write that changes one, an `ExecuteUpdate` included, does not restamp the row. A
+`EfSchemaFamilyContentIntegrityGuardTests` fails when a column a store upcasts is not declared content by its family,
+when a read upcasts some of a row's declared content columns rather than all of them, names a value as another
+column's or upcasts a row as another table's; `EfSchemaFamilyContentReadGuardTests` fails when a read of a declared
+content column in a source that can see its declaration - a presence check included - neither goes through the chain
+nor deserializes nothing; and `EfSchemaFamilyRestampGuardTests` fails when a write that changes one, an
+`ExecuteUpdate` included, does not restamp the row, or restamps a row without assigning every declared content
+column it did not otherwise write, from upcast values (#2144). A
 family EF materializes directly declares its content too; its reads meet the rule through the materialization
 interceptor, which accepts its current version alone, and its tracked writes through the context's stamping.
 
@@ -126,7 +139,7 @@ reads off it, and on the `ReadabilityEntry` the readability report carries it in
 that owns its family still names its module explicitly rather than reaching for the shared form to avoid the "exactly
 one EF module" rule. Several loaded copies of one shared declaration - two generations of a package, or the same
 mapping assembly loaded through two load contexts - are still read and intersected exactly like several copies of an
-owned family. `EfSchemaFamilyDeclarationGuardTests` reads a declaration's version from its *last* positional
+owned family. `EfSchemaFamilyChainDeclarationGuardTests` reads a declaration's version from its *last* positional
 argument, so it resolves both the two-argument shared form and the three-argument owned form the same way. A module's
 registration checks the chains of the families it owns and of the shared families this package declares, since every
 module's context maps them.

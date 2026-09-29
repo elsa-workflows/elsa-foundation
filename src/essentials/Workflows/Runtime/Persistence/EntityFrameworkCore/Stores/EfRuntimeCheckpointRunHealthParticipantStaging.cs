@@ -119,7 +119,7 @@ internal static class EfRuntimeCheckpointRunHealthParticipantStaging
             }
 
             var projection = RuntimeArtifactJson.Deserialize<WorkflowRunHealthProjection>(
-                RuntimeOperationalStateEfModule.Chain.Upcast(row.SchemaVersion, RuntimeOperationalStateEfModule.WorkflowRunHealthTableName, nameof(row.ContentJson), row.ContentJson));
+                RuntimeOperationalStateEfModule.Chain.Upcast<WorkflowRunHealthStateEntity>(row.SchemaVersion, (nameof(row.ContentJson), row.ContentJson))[nameof(row.ContentJson)]!);
             ValidateProjection(projection);
             var startedAt = ReadStartedAt(row);
             if (projection.WorkflowExecutionId != expectedWorkflowExecutionId ||

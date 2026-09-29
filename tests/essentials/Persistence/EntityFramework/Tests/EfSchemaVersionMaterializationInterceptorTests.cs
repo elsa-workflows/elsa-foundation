@@ -230,7 +230,7 @@ public sealed class EfSchemaVersionMaterializationInterceptorTests : IDisposable
     [EfSchemaUpcaster("1", "2")]
     private sealed class ProbeOneToTwo : IEfSchemaUpcaster
     {
-        public string Upcast(EfSchemaContent content) => content.Value;
+        public EfSchemaRowContent Upcast(EfSchemaRowContent row) => row;
     }
 
     private sealed class UnversionedContext(DbContextOptions<UnversionedContext> options) : DbContext(options)

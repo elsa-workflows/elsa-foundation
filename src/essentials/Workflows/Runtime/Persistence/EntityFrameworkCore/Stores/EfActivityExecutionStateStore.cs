@@ -218,7 +218,7 @@ public sealed class EfActivityExecutionStateStore(
         if (row.ExecutionScopeId is not null && ActivityExecutionEfSupport.Decode(row.ExecutionScopeId) is { } executionScope &&
             row.ExecutionScopeIdHash != ActivityExecutionEfSupport.Hash(executionScope))
             throw new InvalidDataException("The persisted activity execution state execution-scope projection is corrupt.");
-        var state = RuntimeArtifactJson.Deserialize<ActivityExecutionState>(RuntimeActivityExecutionEfModule.Chain.Upcast(row.SchemaVersion, RuntimeActivityExecutionEfModule.ActivityExecutionStateTableName, nameof(row.ContentJson), row.ContentJson));
+        var state = RuntimeArtifactJson.Deserialize<ActivityExecutionState>(RuntimeActivityExecutionEfModule.Chain.Upcast<ActivityExecutionStateEntity>(row.SchemaVersion, (nameof(row.ContentJson), row.ContentJson))[nameof(row.ContentJson)]!);
         ActivityExecutionEfSupport.Validate(state);
         if (!StringComparer.Ordinal.Equals(state.Execution.WorkflowExecutionId, workflow) ||
             !StringComparer.Ordinal.Equals(state.Execution.ActivityExecutionId, activity) ||

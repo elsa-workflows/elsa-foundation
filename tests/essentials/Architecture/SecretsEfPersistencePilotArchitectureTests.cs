@@ -92,6 +92,7 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
         "src/essentials/Persistence/EntityFramework/EfSchemaIntegrityAttribute.cs",
         "src/essentials/Persistence/EntityFramework/EfSchemaMigrationsAssembly.cs",
         "src/essentials/Persistence/EntityFramework/EfSchemaOptionsExtension.cs",
+        "src/essentials/Persistence/EntityFramework/EfSchemaRowContent.cs",
         "src/essentials/Persistence/EntityFramework/EfSchemaUpcasterAttribute.cs",
         "src/essentials/Persistence/EntityFramework/EfSchemaVersion.cs",
         "src/essentials/Persistence/EntityFramework/EfSchemaVersionMaterializationInterceptor.cs",

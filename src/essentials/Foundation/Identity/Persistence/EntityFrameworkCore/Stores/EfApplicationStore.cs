@@ -141,7 +141,13 @@ public sealed class EfApplicationStore(
         entity.SchemaVersion = IdentityIamEfModule.SchemaVersion;
     }
 
-    private static ApplicationRecord Map(ApplicationEntity entity) =>
+    private static ApplicationRecord Map(ApplicationEntity entity) => Map(entity, IdentityIamEfModule.Chain.Upcast<ApplicationEntity>(
+        entity.SchemaVersion,
+        (nameof(entity.AllowedGrantTypesJson), entity.AllowedGrantTypesJson),
+        (nameof(entity.ScopesJson), entity.ScopesJson)));
+
+    /// <summary>The application <paramref name="entity"/> holds, its two sets read from its content columns upcast together (spec 180, FR-009; #2144).</summary>
+    private static ApplicationRecord Map(ApplicationEntity entity, EfSchemaRowContent content) =>
         new(
             entity.ApplicationId,
             entity.TenantId,
@@ -149,8 +155,8 @@ public sealed class EfApplicationStore(
             entity.DisplayName,
             (ApplicationType)entity.Type,
             (ResourceOwnership)entity.Ownership,
-            IdentityApplicationSetCodec.Deserialize(IdentityIamEfModule.Chain.Upcast(entity.SchemaVersion, IdentityIamEfModule.ApplicationTableName, nameof(entity.AllowedGrantTypesJson), entity.AllowedGrantTypesJson)),
-            IdentityApplicationSetCodec.Deserialize(IdentityIamEfModule.Chain.Upcast(entity.SchemaVersion, IdentityIamEfModule.ApplicationTableName, nameof(entity.ScopesJson), entity.ScopesJson)));
+            IdentityApplicationSetCodec.Deserialize(content[nameof(entity.AllowedGrantTypesJson)]!),
+            IdentityApplicationSetCodec.Deserialize(content[nameof(entity.ScopesJson)]!));
 
     private static bool Matches(ApplicationEntity entity, string tenantId, string applicationId) =>
         EfSchemaVersion.Readable(IdentityIamEfModule.Chain, entity.SchemaVersion) &&

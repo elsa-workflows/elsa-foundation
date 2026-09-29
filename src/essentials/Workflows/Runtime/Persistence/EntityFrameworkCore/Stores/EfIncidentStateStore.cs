@@ -144,8 +144,8 @@ public sealed class EfIncidentStateStore(
                 throw new InvalidDataException("The incident-state row scope, schema, or revision projection is corrupt.");
             }
 
-            var state = RuntimeArtifactJson.Deserialize<IncidentState>(RuntimeOperationalStateEfModule.Chain.Upcast(
-                row.SchemaVersion, RuntimeOperationalStateEfModule.IncidentTableName, nameof(row.ContentJson), row.ContentJson));
+            var state = RuntimeArtifactJson.Deserialize<IncidentState>(RuntimeOperationalStateEfModule.Chain.Upcast<IncidentStateEntity>(
+                row.SchemaVersion, (nameof(row.ContentJson), row.ContentJson))[nameof(row.ContentJson)]!);
             Validate(state);
             if ((expectedWorkflowExecutionId is not null && state.WorkflowExecutionId != expectedWorkflowExecutionId) ||
                 (expectedIncidentId is not null && state.IncidentId != expectedIncidentId) ||

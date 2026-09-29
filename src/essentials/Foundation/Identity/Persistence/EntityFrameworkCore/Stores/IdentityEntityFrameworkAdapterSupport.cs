@@ -1,3 +1,4 @@
+using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Persistence.EntityFramework;
 using Microsoft.EntityFrameworkCore;
 
@@ -25,11 +26,14 @@ public static class IdentityEntityFrameworkAdapterSupport
     public static IReadOnlySet<string> DeserializeSet(string? json) => EfIdentityStoreSupport.DeserializeSet(json);
 
     /// <summary>
-    /// An id-set content column of an Identity IAM row, upcast through the family's one chain before it is parsed, so an
-    /// adapter outside the owning module reads an older row exactly as the module's own stores do (spec 180, FR-010).
+    /// An id-set content column of a user row, read from the row's content columns upcast together through the family's
+    /// one chain before any is parsed, so an adapter outside the owning module reads an older row exactly as the module's
+    /// own stores do (spec 180, FR-010; #2144).
     /// </summary>
-    public static IReadOnlySet<string> ReadSet(string? schemaVersion, string table, string column, string? json) =>
-        EfIdentityStoreSupport.ReadSet(schemaVersion, table, column, json);
+    public static IReadOnlySet<string> ReadSet(UserEntity user, string column) => EfIdentityStoreSupport.ReadSet(user, column);
+
+    /// <summary>An id-set content column of a role row, read as <see cref="ReadSet(UserEntity, string)"/> reads a user's.</summary>
+    public static IReadOnlySet<string> ReadSet(RoleEntity role, string column) => EfIdentityStoreSupport.ReadSet(role, column);
 
     public static Task<T> ReadAsync<T>(DbContext context, string operation, Func<Task<T>> readAsync) =>
         EfIdentityStoreSupport.ReadAsync(context, operation, readAsync);

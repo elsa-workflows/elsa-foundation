@@ -695,8 +695,8 @@ public sealed class EfExecutionCommandTransport(
     {
         EfSchemaVersion.EnsureReadable(ExecutionCommandTransportEfModule.Chain, row.SchemaVersion);
         EnsureItemIdentity(row, scope);
-        var item = Deserialize<ExecutionCommandTransportItem>(ExecutionCommandTransportEfModule.Chain.Upcast(
-            row.SchemaVersion, ExecutionCommandTransportEfModule.TransportItemTableName, nameof(row.PayloadJson), row.PayloadJson));
+        var item = Deserialize<ExecutionCommandTransportItem>(ExecutionCommandTransportEfModule.Chain.Upcast<ExecutionCommandTransportItemEntity>(
+            row.SchemaVersion, (nameof(row.PayloadJson), row.PayloadJson))[nameof(row.PayloadJson)]!);
         var rowEnqueuedAt = ReadTimestamp(row.EnqueuedAtUtcTicks, row.EnqueuedAtOffsetMinutes);
         var rowLeaseExpiresAt = row.LeaseOwnerId is null
             ? (DateTimeOffset?)null

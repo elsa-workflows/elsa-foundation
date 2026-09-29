@@ -17,9 +17,15 @@ public sealed class EfSchemaFamilyContentIntegrityGuardTests
             "SchemaFamily constant, the entity with typeof and each column with nameof; an integrity column records why it is compared " +
             "as stored bytes (spec 180, FR-008 and FR-009):");
 
+    /// <summary>
+    /// What a store hands the chain is exactly one row's declared content (#2144): every column it upcasts is declared
+    /// content, a read passes every declared content column of the row's table together, labels each value by the column
+    /// it reads, and names the row's own table.
+    /// </summary>
     [Fact]
-    public void Every_column_a_store_upcasts_is_declared_content_by_its_family() =>
+    public void Every_column_a_store_upcasts_is_declared_content_by_its_family_and_read_with_the_rest_of_its_row() =>
         AssertNone(Persistence.UpcastDeclarationViolations(), "A column a store reads through a family's chain is that family's content, so the " +
-            "family declares it with [EfSchemaContent] and the read and restamp rules hold every other read and write of it " +
-            "(spec 180, FR-009 and FR-014):");
+            "family declares it with [EfSchemaContent] and the read and restamp rules hold every other read and write of it; and a " +
+            "read upcasts every declared content column of a row together, each under its own name, as a row of its own table " +
+            "(spec 180, FR-009 and FR-014; #2144):");
 }

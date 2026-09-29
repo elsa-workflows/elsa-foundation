@@ -323,11 +323,10 @@ public sealed class EfProviderConfigurationStore(
                 entity.SupportsRefresh,
                 entity.SupportsRevocation,
                 (PermissionPropagationMode)entity.PermissionPropagation),
-            IdentityProviderConfigurationSettingsCodec.Deserialize(IdentityProviderConfigurationEfModule.Chain.Upcast(
-                entity.SchemaVersion,
-                entity is TenantProviderConfigurationEntity ? IdentityProviderConfigurationEfModule.TenantTableName : IdentityProviderConfigurationEfModule.GlobalTableName,
-                nameof(entity.SettingsJson),
-                entity.SettingsJson)));
+            IdentityProviderConfigurationSettingsCodec.Deserialize((entity is TenantProviderConfigurationEntity
+                ? IdentityProviderConfigurationEfModule.Chain.Upcast<TenantProviderConfigurationEntity>(entity.SchemaVersion, (nameof(entity.SettingsJson), entity.SettingsJson))
+                : IdentityProviderConfigurationEfModule.Chain.Upcast<GlobalProviderConfigurationEntity>(entity.SchemaVersion, (nameof(entity.SettingsJson), entity.SettingsJson)))
+                [nameof(entity.SettingsJson)]!));
     }
 
     private static IdentityEntityFrameworkPersistenceException Failure(string message, Exception exception) => EfIdentityStoreSupport.Failure(message, exception);

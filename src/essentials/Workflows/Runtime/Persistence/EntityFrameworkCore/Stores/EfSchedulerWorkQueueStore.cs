@@ -510,7 +510,7 @@ public sealed class EfSchedulerWorkQueueStore(
         RuntimeSchedulerWorkItem item;
         try
         {
-            item = RuntimeArtifactJson.Deserialize<RuntimeSchedulerWorkItem>(RuntimeOperationalStateEfModule.Chain.Upcast(row.SchemaVersion, RuntimeOperationalStateEfModule.SchedulerWorkTableName, nameof(row.ContentJson), row.ContentJson));
+            item = RuntimeArtifactJson.Deserialize<RuntimeSchedulerWorkItem>(RuntimeOperationalStateEfModule.Chain.Upcast<SchedulerWorkItemEntity>(row.SchemaVersion, (nameof(row.ContentJson), row.ContentJson))[nameof(row.ContentJson)]!);
         }
         catch (Exception exception) when (exception is System.Text.Json.JsonException or ArgumentException or InvalidOperationException or NotSupportedException)
         {

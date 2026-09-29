@@ -435,8 +435,8 @@ public sealed class EfDurableTimerStore(
     {
         try
         {
-            return RuntimeArtifactJson.Deserialize<DurableTimer>(RuntimeOperationalStateEfModule.Chain.Upcast(
-                row.SchemaVersion, RuntimeOperationalStateEfModule.DurableTimerTableName, nameof(row.ContentJson), row.ContentJson));
+            return RuntimeArtifactJson.Deserialize<DurableTimer>(RuntimeOperationalStateEfModule.Chain.Upcast<DurableTimerEntity>(
+                row.SchemaVersion, (nameof(row.ContentJson), row.ContentJson))[nameof(row.ContentJson)]!);
         }
         catch (Exception exception) when (exception is JsonException or ArgumentException or InvalidOperationException or NotSupportedException)
         {

@@ -332,11 +332,12 @@ public sealed class EfRuntimeCheckpointCommitStore(
         }
 
         var workflowExecutionId = EfRuntimeOperationalStoreSupport.Decode(row.WorkflowExecutionId);
+        EfSchemaRowContent upcast;
         MarkerDocument content;
         try
         {
-            var stored = Upcast(row, nameof(row.ContentJson), row.ContentJson);
-            content = JsonSerializer.Deserialize<MarkerDocument>(stored, JsonOptions)
+            upcast = Content(row);
+            content = JsonSerializer.Deserialize<MarkerDocument>(upcast[nameof(row.ContentJson)]!, JsonOptions)
                       ?? throw new InvalidDataException();
         }
         catch (Exception exception) when (exception is JsonException or InvalidDataException or NotSupportedException)
@@ -348,8 +349,8 @@ public sealed class EfRuntimeCheckpointCommitStore(
             !StringComparer.Ordinal.Equals(content.WorkflowExecutionId, workflowExecutionId) ||
             content.OccurredAt.UtcTicks != row.OccurredAtUtcTicks ||
             !StringComparer.Ordinal.Equals(content.Fingerprint, row.Fingerprint) ||
-            !IdsEqual(content.PendingPostCommitWorkIds, Upcast(row, nameof(row.PendingPostCommitWorkIdsJson), row.PendingPostCommitWorkIdsJson), "pending post-commit work") ||
-            !IdsEqual(content.ConsumedSchedulerWorkItemIds, Upcast(row, nameof(row.ConsumedSchedulerWorkItemIdsJson), row.ConsumedSchedulerWorkItemIdsJson), "consumed scheduler work"))
+            !IdsEqual(content.PendingPostCommitWorkIds, upcast[nameof(row.PendingPostCommitWorkIdsJson)]!, "pending post-commit work") ||
+            !IdsEqual(content.ConsumedSchedulerWorkItemIds, upcast[nameof(row.ConsumedSchedulerWorkItemIdsJson)]!, "consumed scheduler work"))
         {
             throw new InvalidDataException("The persisted runtime checkpoint marker content does not match its projections.");
         }
@@ -358,12 +359,16 @@ public sealed class EfRuntimeCheckpointCommitStore(
     }
 
     /// <summary>
-    /// A content column of the marker <paramref name="row"/>, upcast from its stamp to the current version. The id sets
-    /// restate the content document's, and are compared with it and returned to a replay, so they are content too (spec
-    /// 180, FR-009; #2140).
+    /// The content columns of the marker <paramref name="row"/>, upcast together from its stamp to the current version
+    /// (spec 180, FR-009; #2144). The id sets restate the content document's, and are compared with it and returned to a
+    /// replay, so they are content too (#2140).
     /// </summary>
-    private static string Upcast(RuntimeCheckpointCommitEntity row, string column, string content) =>
-        RuntimeOperationalStateEfModule.Chain.Upcast(row.SchemaVersion, RuntimeOperationalStateEfModule.CheckpointCommitTableName, column, content);
+    private static EfSchemaRowContent Content(RuntimeCheckpointCommitEntity row) =>
+        RuntimeOperationalStateEfModule.Chain.Upcast<RuntimeCheckpointCommitEntity>(
+            row.SchemaVersion,
+            (nameof(row.ContentJson), row.ContentJson),
+            (nameof(row.PendingPostCommitWorkIdsJson), row.PendingPostCommitWorkIdsJson),
+            (nameof(row.ConsumedSchedulerWorkItemIdsJson), row.ConsumedSchedulerWorkItemIdsJson));
 
     private static bool IdsEqual(IReadOnlyCollection<string> content, string projectionJson, string label) =>
         content.SequenceEqual(DeserializeIds(projectionJson, label), StringComparer.Ordinal);
@@ -383,10 +388,11 @@ public sealed class EfRuntimeCheckpointCommitStore(
             throw new InvalidDataException("The persisted runtime checkpoint marker does not match its checkpoint identity.");
         }
 
+        var upcast = Content(marker);
         return new RuntimeCheckpointCommitStoreResult(
-            DeserializeIds(Upcast(marker, nameof(marker.PendingPostCommitWorkIdsJson), marker.PendingPostCommitWorkIdsJson), "pending post-commit work"))
+            DeserializeIds(upcast[nameof(marker.PendingPostCommitWorkIdsJson)]!, "pending post-commit work"))
         {
-            ConsumedSchedulerWorkItemIds = DeserializeIds(Upcast(marker, nameof(marker.ConsumedSchedulerWorkItemIdsJson), marker.ConsumedSchedulerWorkItemIdsJson), "consumed scheduler work")
+            ConsumedSchedulerWorkItemIds = DeserializeIds(upcast[nameof(marker.ConsumedSchedulerWorkItemIdsJson)]!, "consumed scheduler work")
         };
     }
 

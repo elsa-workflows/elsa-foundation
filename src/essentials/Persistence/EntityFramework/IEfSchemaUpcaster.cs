@@ -1,8 +1,8 @@
 namespace Elsa.Persistence.EntityFramework;
 
 /// <summary>
-/// Transforms one schema family's stored content from one version to its immediate successor (spec 180, FR-003). The
-/// type carries <see cref="EfSchemaUpcasterAttribute"/> naming the two versions, and the family's
+/// Transforms one schema family's stored rows from one version to its immediate successor (spec 180, FR-003). The type
+/// carries <see cref="EfSchemaUpcasterAttribute"/> naming the two versions, and the family's
 /// <see cref="EfSchemaFamilyAttribute.Upcasters"/> lists it in chain order.
 /// </summary>
 /// <remarks>
@@ -13,27 +13,24 @@ namespace Elsa.Persistence.EntityFramework;
 /// every thread.
 /// </para>
 /// <para>
-/// <see cref="Upcast"/> must be a pure, total function of its input over every valid document at the source version
+/// It works on a whole row, not a column (owner decision of 2026-09-28 on #2093): <see cref="Upcast"/> receives every
+/// content column the family declares for the row's table (<see cref="EfSchemaContentAttribute"/>), so one step can
+/// move or split data across columns, and returns every one of them, so a row is never left half upgraded. It changes
+/// the columns it has a change for, usually with <see cref="EfSchemaRowContent.With"/>, and returns the others exactly
+/// as it received them; that includes a column a later version introduced, which it did not know when it shipped and
+/// which is null on the rows it reads. <see cref="EfSchemaChain"/> refuses a result that adds a column, drops one or
+/// names another table.
+/// </para>
+/// <para>
+/// <see cref="Upcast"/> must be a pure, total function of its input over every valid row at the source version
 /// (FR-019): no clock, randomness, environment, culture, configuration, I/O or service, so two hosts upcasting the same
-/// stored content produce byte-identical output. It preserves every identity the row carries and every identity derived
-/// from its content (FR-020). It sees decoded content only (FR-012) and is never called for a null column. It receives
-/// every content column of the family, so it returns content it has no change for exactly as it received it. A throw,
-/// or a null result, reports the row as corrupt (FR-009).
+/// stored row produce byte-identical output. It preserves every identity the row carries and every identity derived
+/// from its content (FR-020). It sees decoded content only (FR-012); a null value is a column the row stores as null. A
+/// throw, a null result, or a result that is not the same row's declared columns reports the row as corrupt (FR-009).
 /// </para>
 /// </remarks>
 public interface IEfSchemaUpcaster
 {
-    /// <summary>Returns <paramref name="content"/> as the successor version stores it.</summary>
-    string Upcast(EfSchemaContent content);
+    /// <summary>Returns <paramref name="row"/> as the successor version stores it: the same table, the same columns.</summary>
+    EfSchemaRowContent Upcast(EfSchemaRowContent row);
 }
-
-/// <summary>
-/// One decoded content column of a schema family's row, as <see cref="IEfSchemaUpcaster.Upcast"/> receives it.
-/// </summary>
-/// <param name="Table">
-/// The table's name, as the owning module's constants spell it; for a table every EF module maps under a name of its
-/// own, such as the finalization record, the shared prefix of that name.
-/// </param>
-/// <param name="Column">The name of the entity property that maps the column.</param>
-/// <param name="Value">The column's decoded content at the upcaster's source version.</param>
-public readonly record struct EfSchemaContent(string Table, string Column, string Value);

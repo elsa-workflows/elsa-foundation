@@ -58,7 +58,7 @@ internal static class Elsa3ImportRecordCodec
         EnsureEnvelope(record.SchemaVersion, record.ContentJson, record.ContentHash);
         EnsureResidual(record.Handle, handle, "collection handle");
         EnsureScopeResiduals(record.TenantId, record.UserId, accessScope);
-        var collection = Deserialize<CollectionDocument>(Elsa3ImportEfModule.Chain.Upcast(record.SchemaVersion, Elsa3ImportEfModule.CollectionTable, nameof(record.ContentJson), record.ContentJson)).Collection
+        var collection = Deserialize<CollectionDocument>(Elsa3ImportEfModule.Chain.Upcast<Elsa3ImportCollectionRecord>(record.SchemaVersion, (nameof(record.ContentJson), record.ContentJson))[nameof(record.ContentJson)]!).Collection
                          ?? throw new InvalidDataException("The Elsa 3 import collection row has no collection.");
         if (!StringComparer.Ordinal.Equals(collection.Handle, handle) ||
             !SameScope(collection.AccessScope, accessScope) ||
@@ -106,7 +106,7 @@ internal static class Elsa3ImportRecordCodec
         EnsureScopeResiduals(record.TenantId, record.UserId, accessScope);
         if (string.IsNullOrWhiteSpace(record.CommitAttemptId))
             throw new InvalidDataException("The Elsa 3 import receipt row has no commit attempt.");
-        var receipt = Deserialize<ReceiptDocument>(Elsa3ImportEfModule.Chain.Upcast(record.SchemaVersion, Elsa3ImportEfModule.ReceiptTable, nameof(record.ContentJson), record.ContentJson)).Receipt
+        var receipt = Deserialize<ReceiptDocument>(Elsa3ImportEfModule.Chain.Upcast<Elsa3ImportReceiptRecord>(record.SchemaVersion, (nameof(record.ContentJson), record.ContentJson))[nameof(record.ContentJson)]!).Receipt
                       ?? throw new InvalidDataException("The Elsa 3 import receipt row has no receipt.");
         if (!StringComparer.Ordinal.Equals(receipt.ReceiptId, receiptId) ||
             !StringComparer.Ordinal.Equals(receipt.IdempotencyKey, Decode(record.IdempotencyKey, "idempotency key")) ||

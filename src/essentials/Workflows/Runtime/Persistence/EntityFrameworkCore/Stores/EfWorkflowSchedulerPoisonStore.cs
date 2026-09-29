@@ -172,7 +172,7 @@ public sealed class EfWorkflowSchedulerPoisonStore(
                 row.ScopeKeyHash != EfRuntimeOperationalStoreSupport.Hash(scope))
                 throw new InvalidDataException("The scheduler-poison row scope, schema, or revision projection is corrupt.");
 
-            var record = RuntimeArtifactJson.Deserialize<RuntimeSchedulerPoisonRecord>(RuntimeSchedulerPoisonEfModule.Chain.Upcast(row.SchemaVersion, RuntimeSchedulerPoisonEfModule.TableName, nameof(row.ContentJson), row.ContentJson));
+            var record = RuntimeArtifactJson.Deserialize<RuntimeSchedulerPoisonRecord>(RuntimeSchedulerPoisonEfModule.Chain.Upcast<WorkflowSchedulerPoisonEntity>(row.SchemaVersion, (nameof(row.ContentJson), row.ContentJson))[nameof(row.ContentJson)]!);
             ValidateRecord(record);
             if ((expectedWorkflowExecutionId is not null && record.WorkflowExecutionId != expectedWorkflowExecutionId) ||
                 (expectedWorkItemId is not null && record.WorkItemId != expectedWorkItemId) ||
