@@ -112,6 +112,33 @@ the same enumeration. Two consequences the spec relies on:
 - An assembly in the default context is never unloaded. A host that bundles version 1 and receives version 2 through
   Nuplane reports the intersection until it restarts. That is conservative, and spec 181's status names the host.
 
+**Amended 2026-09-29** (spec, Decisions; FR-021). The first bullet did not hold for Nuplane's host-integrated packages,
+and neither bullet named them. Nuplane loads each host-integrated package graph into a
+`HostIntegratedPackageGraphLoadContext` that is not collectible, and its reconcile skips non-collectible contexts when
+it unloads a superseded package (nuplane `src/Nuplane.Loading/PackageLoader.cs`, `UnloadUnreferencedContexts`, at the
+commit `0.0.11-preview.93` was packed from). An upgraded module's previous release therefore stayed in the enumeration
+for the life of the process: the report intersected [1] with [1, 2] until a restart, the new version never finalized,
+and the activation guard's `EfModuleCatalog` found the module declared twice. An upgrade reloads only the packages that
+changed: the new release loads into a graph of its own and binds to the dependencies still published from the old
+graph, so the old graph's context keeps serving current assemblies and cannot be dropped as a whole.
+
+Both enumerations now subtract what the host's `ISupersededAssemblySource` (`Elsa.Persistence.Schema`) names, and both
+hosts compose one through `AddEfSchemaReadability`: `NuplanePackageGenerations` (`src/essentials/Cluster/Readability`).
+It names an assembly *replaced* when it is in a load context whose type `Nuplane.Loading` defines, and Nuplane's
+`IPackageAssemblyCatalog` lists a loaded assembly of the same name for the active package set but not this one; and
+*retired* when it is replaced and no CShells shell generation that has not been disposed composes a feature from a
+replaced assembly in the same load context. The readability report subtracts the retired set, so both generations are
+intersected until the last shell generation running the old one is disposed, and the host publishes again at that
+disposal, since nothing else republishes a report whose declarations did not change. The guard subtracts the replaced
+set, because the generation an apply builds composes the active package set.
+
+Two alternatives were weighed. Nuplane's active set alone drops the old generation before the shell generation running
+it has drained, and drops a family entirely while its replacement is still loading or failed to load, because the
+catalog then lists neither generation; that is the direction that credits a version a live reader cannot read. The
+finalization gates are per shell container and registered only after admission, so they cannot speak for a generation
+about to publish, nor for a family no shell enables. Nuplane exposing which contexts are current would not remove the
+need for the CShells half, so no upstream change was needed.
+
 Shells are activated lazily on `Elsa.Foundation.Host` unless `Elsa:Boot:EagerShellActivation:Enabled` is set
 (`src/apps/Elsa.Foundation.Host/Shells/EagerShellActivationHostedService.cs`), and reloaded after a Nuplane reconcile
 by `ShellReloadOnPackagesChanged`. `Elsa.Workbench` registers `NullShellReloader`, so a new package version there
