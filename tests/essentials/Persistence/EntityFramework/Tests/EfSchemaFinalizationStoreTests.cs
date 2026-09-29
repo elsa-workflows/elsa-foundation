@@ -1,3 +1,5 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Elsa.Persistence.EntityFramework.SchemaFinalization;
 using Elsa.Persistence.Schema;
 using Elsa.Persistence.Schema.SchemaFinalization;
@@ -463,15 +465,16 @@ public sealed class EfSchemaFinalizationStoreTests : IAsyncLifetime
         Applied(await Store().ClaimBackfillAsync(Family, finalized.Revision, "3", Chain, HostA, "worker-a", TimeSpan.FromMinutes(2)));
         var claimedJson = await FinishJsonAsync();
 
+        Assert.NotNull(claimedJson);
         Assert.Contains("\"run\"", claimedJson, StringComparison.Ordinal);
-        var options = new System.Text.Json.JsonSerializerOptions
+        var options = new JsonSerializerOptions
         {
-            PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase,
-            Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() },
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            Converters = { new JsonStringEnumConverter() },
             RespectNullableAnnotations = true,
             RespectRequiredConstructorParameters = true
         };
-        Assert.Equal("1", System.Text.Json.JsonSerializer.Deserialize<FinishBeforeClaims>(claimedJson, options)!.CompletionVersion);
+        Assert.Equal("1", JsonSerializer.Deserialize<FinishBeforeClaims>(claimedJson, options)!.CompletionVersion);
     }
 
     /// <summary>

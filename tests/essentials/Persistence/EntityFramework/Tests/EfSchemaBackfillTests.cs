@@ -1,9 +1,9 @@
 using Elsa.Persistence.EntityFramework.SchemaBackfill;
 using Elsa.Persistence.EntityFramework.SchemaFinalization;
-using Elsa.Persistence.Schema;
 using Elsa.Persistence.Schema.SchemaFinalization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Time.Testing;
 using Xunit;
 using static Elsa.Persistence.EntityFramework.Tests.BackfillDatabase;
 
@@ -18,7 +18,10 @@ namespace Elsa.Persistence.EntityFramework.Tests;
 public sealed class EfSchemaBackfillTests : IAsyncLifetime
 {
     private readonly TemporarySqliteDatabase file = new("schema-backfill");
-    private readonly ManualClock clock = new(new DateTimeOffset(2026, 9, 29, 12, 0, 0, TimeSpan.Zero));
+    private static readonly TimeSpan AuditInterval = TimeSpan.FromHours(1);
+    private static readonly string RecordTable = EfSchemaFinalization.RecordTableName(BackfillFamily.HistoryModule);
+
+    private readonly FakeTimeProvider clock = new(new DateTimeOffset(2026, 9, 29, 12, 0, 0, TimeSpan.Zero));
     private readonly FakeFleetState fleet = new();
     private readonly List<BackfillHost> hosts = [];
     private readonly Dictionary<string, FakeMember> members = new(StringComparer.Ordinal);
@@ -30,9 +33,15 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
 
     public async Task DisposeAsync()
     {
-        foreach (var host in hosts)
-            await host.DisposeAsync();
-        await file.DisposeAsync();
+        try
+        {
+            foreach (var host in hosts)
+                await host.DisposeAsync();
+        }
+        finally
+        {
+            await file.DisposeAsync();
+        }
     }
 
     /// <summary>User Story 1, acceptance 1 and 2; SC-001 and FR-014.</summary>
@@ -233,10 +242,12 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
         Assert.Equal((EfSchemaBackfillBlockerKind.ContentAddressed, BackfillFamily.ReceiptsTable, 2L), (blocker.Kind, blocker.Table, blocker.Count));
         Assert.True(host.Status.BlockedByContentAddressedRows);
 
-        // A receipt a version-2 writer produced sits beside them: once the old ones are gone, the family completes.
+        // A receipt a version-2 writer produced sits beside them: once the old ones are gone, the family completes when it
+        // is next surveyed, an audit interval on (FR-023).
         await using (var context = host.Context())
             await context.Receipts.Where(row => row.SchemaVersion == "1").ExecuteDeleteAsync();
         await database.SeedAsync(Receipt("hash-3", "2"));
+        clock.Advance(AuditInterval);
         await host.RunOnceAsync();
 
         Assert.Equal("2", (await database.RecordAsync()).Finish!.CompletionVersion);
@@ -256,7 +267,11 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
 
         await host.RunOnceAsync();
 
-        Assert.Equal("1", (await database.RecordAsync()).Finish!.CompletionVersion);
+        // The audit of the completion standing at 1 cannot place the unstamped and retired rows at or after it, so it
+        // withdraws it (FR-018); the run towards 2 is blocked by them.
+        var record = await database.RecordAsync();
+        Assert.Null(record.Finish);
+        Assert.Contains($"table '{BackfillFamily.OrdersTable}': 2 (with a stamp this host cannot read)", record.FinishHistory[^1].Reason);
         Assert.Equal(EfSchemaBackfillState.Blocked, host.Status.State);
         var skew = Assert.Single(host.Status.Blockers, blocker => blocker.Kind == EfSchemaBackfillBlockerKind.Skew);
         Assert.Equal(2, skew.Count);
@@ -268,6 +283,7 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
 
         await using (var context = host.Context())
             await context.Orders.Where(row => row.Id == "corrupt" || row.Id == "unstamped" || row.Id == "retired").ExecuteDeleteAsync();
+        clock.Advance(AuditInterval);
         await host.RunOnceAsync();
 
         Assert.Equal("2", (await database.RecordAsync()).Finish!.CompletionVersion);
@@ -509,9 +525,9 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// FR-018, both ways within one run: a run towards a newer finalized version that meets a row below the completion
-    /// that stands withdraws it, naming the table and the count, before it records the newer one; the rows between the
-    /// two versions are not stragglers and withdraw nothing.
+    /// FR-018, both ways within one round: a host towards a newer finalized version whose audit meets a row below the
+    /// completion that stands withdraws it, naming the table and the count, before it records the newer one; the rows
+    /// between the two versions are not stragglers and withdraw nothing.
     /// </summary>
     [Fact]
     public async Task A_run_towards_a_newer_version_that_meets_a_row_below_the_standing_completion_withdraws_it_before_recording_the_newer_one()
@@ -527,9 +543,246 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
 
         var history = (await database.RecordAsync()).FinishHistory;
         Assert.Equal((SchemaFinishTransition.Withdrawn, "2"), (history[^2].Transition, history[^2].Version));
-        Assert.Contains($"'{BackfillFamily.OrdersTable}': 1 (rewritten)", history[^2].Reason);
+        Assert.Contains($"'{BackfillFamily.OrdersTable}': 1 (to be rewritten)", history[^2].Reason);
+        Assert.Single(history, entry => entry.Transition == SchemaFinishTransition.Withdrawn);
         Assert.Equal((SchemaFinishTransition.Completed, "3"), (history[^1].Transition, history[^1].Version));
         Assert.All(await database.SnapshotAsync(), row => Assert.Contains(" 3 ", row));
+    }
+
+    /// <summary>
+    /// FR-018, the case a crash would hide: the audit, the upgrade pass and the verification pass each withdraw the
+    /// completion before they rewrite the first row they find below it, so a host that dies before that rewrite leaves the
+    /// straggler reported, not under a completion that still stands. The row itself is left for the next run.
+    /// </summary>
+    [Theory]
+    [InlineData("the audit")]
+    [InlineData("the upgrade pass")]
+    [InlineData("the verification pass")]
+    public async Task A_pass_that_dies_before_rewriting_a_straggler_has_already_withdrawn_the_completion(string pass)
+    {
+        await SeedFamilyAsync();
+        var host = await CompleteAtTwoThenAsync(pass == "the audit" ? "2" : "3");
+        var seeded = false;
+        Task SeedStraggler()
+        {
+            seeded = true;
+            // After every order the pass has already selected, so it meets the row later in the same pass.
+            return database.SeedAsync(Order("z-straggler", 5));
+        }
+
+        switch (pass)
+        {
+            case "the audit":
+                await SeedStraggler();
+                clock.Advance(AuditInterval);
+                break;
+            case "the upgrade pass":
+                host.Probe.AfterWrite = row => !seeded && row.Entity == typeof(BackfillOrderRow) ? SeedStraggler() : Task.CompletedTask;
+                break;
+            case "the verification pass":
+                host.Probe.BeforeCommand = text => !seeded && host.Status.State == EfSchemaBackfillState.Verifying && text.Contains(BackfillFamily.OrdersTable, StringComparison.Ordinal)
+                    ? SeedStraggler()
+                    : Task.CompletedTask;
+                break;
+        }
+
+        host.Probe.BeforeWrite = row => BackfillProbe.Key(row) == "BackfillOrderRow:z-straggler" ? throw new HostKilledException() : Task.CompletedTask;
+
+        await Assert.ThrowsAsync<HostKilledException>(() => host.RunOnceAsync());
+
+        var record = await database.RecordAsync();
+        Assert.Null(record.Finish);
+        var withdrawal = record.FinishHistory[^1];
+        Assert.Equal((SchemaFinishTransition.Withdrawn, "2"), (withdrawal.Transition, withdrawal.Version));
+        Assert.Contains($"'{BackfillFamily.OrdersTable}': 1", withdrawal.Reason);
+        Assert.Contains(await database.SnapshotAsync(), row => row.StartsWith("order z-straggler 1 r1", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// FR-013 and FR-014, the case that looks like success: a verification pass that finds nothing, but during which
+    /// another worker withdrew the completion over a straggler it found, records nothing, and the pass after it does.
+    /// </summary>
+    [Fact]
+    public async Task A_withdrawal_that_lands_during_a_verification_pass_keeps_it_from_recording_completion()
+    {
+        await SeedFamilyAsync();
+        var host = await HostAsync("host-a");
+        var withdrawn = false;
+        host.Probe.BeforeCommand = async text =>
+        {
+            if (withdrawn || host.Status.State != EfSchemaBackfillState.Verifying || !text.Contains(BackfillFamily.OrdersTable, StringComparison.Ordinal))
+                return;
+            withdrawn = true;
+            await WithStoreAsync(async store =>
+                await store.WithdrawCompletionAsync(BackfillFamily.Family, (await store.FindAsync(BackfillFamily.Family))!.Revision, HostB, "host-b found a straggler"));
+        };
+
+        await host.RunOnceAsync();
+
+        Assert.True(withdrawn);
+        Assert.All(await database.SnapshotAsync(), row => Assert.Contains(" 2 ", row));
+        var record = await database.RecordAsync();
+        Assert.Null(record.Finish);
+        Assert.Equal((SchemaFinishTransition.Withdrawn, "1"), (record.FinishHistory[^1].Transition, record.FinishHistory[^1].Version));
+        Assert.Equal(EfSchemaBackfillState.Verifying, host.Status.State);
+        Assert.Contains("withdrawn while the verification pass ran", host.Status.Detail);
+
+        await host.RunOnceAsync();
+
+        Assert.Equal("2", (await database.RecordAsync()).Finish!.CompletionVersion);
+    }
+
+    /// <summary>
+    /// FR-018: a standing completion is audited on its interval even while this host's target is ahead of it, so a
+    /// straggler below it is reported by a host whose own run cannot make progress, here for want of a rewriter.
+    /// </summary>
+    [Fact]
+    public async Task A_standing_completion_is_audited_while_the_hosts_target_is_ahead_of_it()
+    {
+        await SeedFamilyAsync();
+        var previous = await HostAsync("host-previous");
+        await previous.RunOnceAsync();
+        members["host-previous"].Live = false;
+        await database.SeedAsync(Order("straggler", 5));
+        var host = await HostAsync("host-a", families: BackfillFamily.Families("3", rewriter: false));
+
+        await host.RunOnceAsync();
+
+        var record = await database.RecordAsync();
+        Assert.Null(record.Finish);
+        Assert.Equal("3", record.FinalizedVersion);
+        Assert.Equal((SchemaFinishTransition.Withdrawn, "2"), (record.FinishHistory[^1].Transition, record.FinishHistory[^1].Version));
+        Assert.Contains($"'{BackfillFamily.OrdersTable}': 1 (with no rewriter to upgrade them)", record.FinishHistory[^1].Reason);
+        Assert.Equal(EfSchemaBackfillBlockerKind.NoRewriter, Assert.Single(host.Status.Blockers).Kind);
+        Assert.NotNull(host.Status.LastAuditAt);
+    }
+
+    /// <summary>
+    /// FR-012 after FR-018: once a completion is withdrawn, verification waits a full settle margin again before it may
+    /// record one, however long ago the settle condition first held.
+    /// </summary>
+    [Fact]
+    public async Task After_a_withdrawal_verification_waits_a_full_settle_margin_again()
+    {
+        var margin = TimeSpan.FromSeconds(35);
+        await SeedFamilyAsync();
+        var host = await HostAsync("host-a", margin: margin);
+        await host.RunOnceAsync();
+        clock.Advance(margin);
+        await host.RunOnceAsync();
+        Assert.Equal("2", (await database.RecordAsync()).Finish!.CompletionVersion);
+
+        await database.SeedAsync(Order("straggler", 7));
+        clock.Advance(AuditInterval);
+        await host.RunOnceAsync();
+        Assert.Null((await database.RecordAsync()).Finish);
+
+        await host.RunOnceAsync();
+        clock.Advance(margin - TimeSpan.FromSeconds(1));
+        await host.RunOnceAsync();
+
+        Assert.Null((await database.RecordAsync()).Finish);
+        Assert.Equal(EfSchemaBackfillState.Settling, host.Status.State);
+
+        clock.Advance(TimeSpan.FromSeconds(1));
+        await host.RunOnceAsync();
+
+        Assert.Equal("2", (await database.RecordAsync()).Finish!.CompletionVersion);
+    }
+
+    /// <summary>
+    /// FR-018, both ways across a race: an audit withdraws only a completion that rows below it contradict when it
+    /// withdraws. Here another worker rewrote the straggler the audit counted and recorded the completion again before the
+    /// audit's withdrawal landed, so that completion stands; the audit's own withdrawal of the one it examined is the
+    /// other direction, proven above.
+    /// </summary>
+    [Fact]
+    public async Task An_audit_does_not_withdraw_a_completion_recorded_again_after_it_counted_the_straggler()
+    {
+        await SeedFamilyAsync();
+        var host = await HostAsync("host-a");
+        await host.RunOnceAsync();
+        await database.SeedAsync(Order("straggler", 7));
+        clock.Advance(AuditInterval);
+        var raced = false;
+        host.Probe.BeforeCommand = async text =>
+        {
+            if (raced || !text.TrimStart().StartsWith("UPDATE", StringComparison.OrdinalIgnoreCase) || !text.Contains(RecordTable, StringComparison.Ordinal))
+                return;
+            raced = true;
+            // Another worker, between the audit's count and its withdrawal: it rewrites the straggler, withdraws the
+            // completion over it, and a new verification pass records it again.
+            await using (var context = database.Context())
+            {
+                var row = await context.Orders.SingleAsync(order => order.Id == "straggler");
+                BackfillStore.Write(row, BackfillStore.Read(host.Gate.Families.Chains.Single(), row), "2");
+                await context.SaveChangesAsync();
+            }
+
+            await WithStoreAsync(async store =>
+            {
+                var withdrawn = await store.WithdrawCompletionAsync(BackfillFamily.Family, (await store.FindAsync(BackfillFamily.Family))!.Revision, HostB, "host-b found a straggler");
+                await store.RecordCompletionAsync(BackfillFamily.Family, withdrawn.Record.Revision, "2", clock.GetUtcNow(), clock.GetUtcNow(), BackfillFamily.Chain, HostB);
+            });
+        };
+
+        await host.RunOnceAsync();
+
+        Assert.True(raced);
+        var record = await database.RecordAsync();
+        Assert.Equal(("2", "host-b"), (record.Finish!.CompletionVersion, record.Finish.RecordedBy.Member!.HostId));
+        Assert.Equal(SchemaFinishTransition.Completed, record.FinishHistory[^1].Transition);
+        Assert.Single(record.FinishHistory, entry => entry.Transition == SchemaFinishTransition.Withdrawn);
+    }
+
+    /// <summary>
+    /// FR-023: a family blocked by rows nothing may upgrade is surveyed again at the audit interval, not every round, so
+    /// a blocker that persists costs one selection by stamp per interval; a new target is surveyed at once.
+    /// </summary>
+    [Fact]
+    public async Task A_blocked_family_is_surveyed_again_at_the_audit_interval_not_every_round()
+    {
+        await SeedFamilyAsync();
+        await database.SeedAsync(Receipt("hash-1"));
+        var host = await HostAsync("host-a");
+        await host.RunOnceAsync();
+        Assert.Equal(EfSchemaBackfillState.Blocked, host.Status.State);
+        var selections = 0;
+        host.Probe.BeforeCommand = text =>
+        {
+            if (new[] { BackfillFamily.OrdersTable, BackfillFamily.LinesTable, BackfillFamily.ReceiptsTable }.Any(table => text.Contains(table, StringComparison.Ordinal)))
+                selections++;
+            return Task.CompletedTask;
+        };
+
+        await host.RunOnceAsync();
+        clock.Advance(AuditInterval - TimeSpan.FromSeconds(1));
+        await host.RunOnceAsync();
+
+        Assert.Equal(0, selections);
+        Assert.Equal(EfSchemaBackfillState.Blocked, host.Status.State);
+        Assert.Equal(EfSchemaBackfillBlockerKind.ContentAddressed, Assert.Single(host.Status.Blockers).Kind);
+
+        clock.Advance(TimeSpan.FromSeconds(1));
+        await host.RunOnceAsync();
+
+        Assert.True(selections > 0);
+        Assert.Equal(EfSchemaBackfillState.Blocked, host.Status.State);
+    }
+
+    /// <summary>
+    /// A host that has recorded the family complete at 2, then, for <paramref name="current"/> "3", a host that writes 3 in
+    /// its place, whose first round's audit of 2 finds nothing.
+    /// </summary>
+    private async Task<BackfillHost> CompleteAtTwoThenAsync(string current)
+    {
+        var host = await HostAsync("host-previous");
+        await host.RunOnceAsync();
+        Assert.Equal("2", (await database.RecordAsync()).Finish!.CompletionVersion);
+        if (current == "2")
+            return host;
+        members["host-previous"].Live = false;
+        return await HostAsync("host-a", current: current);
     }
 
     private async Task WithStoreAsync(Func<EfSchemaFinalizationStore, Task> action)
@@ -586,7 +839,7 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
         BatchSize = 2,
         BatchPause = TimeSpan.Zero,
         ClaimDuration = claim ?? TimeSpan.FromMinutes(1),
-        AuditInterval = TimeSpan.FromHours(1),
+        AuditInterval = AuditInterval,
         VerificationPasses = verificationPasses
     };
 
@@ -602,6 +855,8 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
 
     private static IReadOnlyList<string> Receipts(IEnumerable<string> snapshot) =>
         snapshot.Where(row => row.StartsWith("receipt", StringComparison.Ordinal)).ToArray();
+
+    private static readonly SchemaFinalizationMember HostB = new("host-b", "b");
 
     private sealed class HostKilledException : Exception;
 

@@ -87,8 +87,9 @@ public sealed class EfSchemaFamilyAttribute : Attribute
     /// The entity types of the family whose rows are content-addressed (spec 186, FR-010b): their identity is derived
     /// from their stored content, so rewriting one would change or forge it, as with a workflow executable or an
     /// executable activity template (ADR 0038). The post-finalization backfill never rewrites them (FR-010a), and a family
-    /// that holds any below a version is never recorded complete at it (FR-011a). <c>EfSchemaContentAddressedGuardTests</c>
-    /// fails the build when a table holding executables is not named here.
+    /// that holds any below a version is never recorded complete at it (FR-011a). Each is marked
+    /// <see cref="EfSchemaContentAddressedAttribute"/> with its reason too, and <c>EfSchemaContentAddressedDeclarationTests</c>
+    /// fails the build when a first-party stamped table is named here but not marked, or marked but not named here.
     /// </summary>
     public Type[] ContentAddressed { get; set; } = [];
 

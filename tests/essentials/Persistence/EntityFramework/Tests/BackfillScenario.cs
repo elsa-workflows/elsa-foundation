@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Data.Common;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Elsa.Persistence.EntityFramework.SchemaBackfill;
@@ -6,8 +7,8 @@ using Elsa.Persistence.EntityFramework.SchemaFinalization;
 using Elsa.Persistence.Schema;
 using Elsa.Persistence.Schema.SchemaFinalization;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Primitives;
 
 namespace Elsa.Persistence.EntityFramework.Tests;
 
@@ -128,6 +129,7 @@ public sealed class BackfillLineRow
 }
 
 /// <summary>A content-addressed row: its key is the hash of its content, so rewriting it would forge its identity.</summary>
+[EfSchemaContentAddressed("Keyed by the hash of its content.")]
 public sealed class BackfillReceiptRow
 {
     public string Hash { get; set; } = "";
@@ -286,6 +288,9 @@ public sealed class BackfillProbe
 
     public Func<EfSchemaRowToRewrite, Task>? AfterWrite { get; set; }
 
+    /// <summary>Runs before each command a context of this host sends, with its text: where a test races a pass or a record write.</summary>
+    public Func<string, Task>? BeforeCommand { get; set; }
+
     public IReadOnlyList<string> AskedRows => _asked.ToArray();
 
     public IReadOnlyList<string> WrittenRows => _written.ToArray();
@@ -298,7 +303,34 @@ public sealed class BackfillProbe
 
     public Task AfterWriteAsync(EfSchemaRowToRewrite row) => AfterWrite?.Invoke(row) ?? Task.CompletedTask;
 
+    public Task BeforeCommandAsync(string text) => BeforeCommand?.Invoke(text) ?? Task.CompletedTask;
+
     public static string Key(EfSchemaRowToRewrite row) => $"{row.Entity.Name}:{string.Join("/", row.Key)}";
+}
+
+/// <summary>Hands every command a host's context sends to its probe before it runs.</summary>
+internal sealed class ProbedCommands(BackfillProbe probe) : DbCommandInterceptor
+{
+    public override async ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
+        DbCommand command, CommandEventData eventData, InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
+    {
+        await probe.BeforeCommandAsync(command.CommandText);
+        return result;
+    }
+
+    public override async ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(
+        DbCommand command, CommandEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
+    {
+        await probe.BeforeCommandAsync(command.CommandText);
+        return result;
+    }
+
+    public override async ValueTask<InterceptionResult<object>> ScalarExecutingAsync(
+        DbCommand command, CommandEventData eventData, InterceptionResult<object> result, CancellationToken cancellationToken = default)
+    {
+        await probe.BeforeCommandAsync(command.CommandText);
+        return result;
+    }
 }
 
 /// <summary>
@@ -315,6 +347,8 @@ public sealed class BackfillDatabase(Func<DbContextOptionsBuilder, DbContextOpti
         {
             builder.UseApplicationServiceProvider(services);
             EfSchemaWriteGateInterceptor.EnsureAdded(builder);
+            if (services.GetService<BackfillProbe>() is { } probe)
+                builder.AddInterceptors(new ProbedCommands(probe));
         }
 
         return new BackfillContext((DbContextOptions<BackfillContext>)builder.Options);
@@ -400,7 +434,6 @@ public sealed class BackfillHost : IAsyncDisposable
             new EfSchemaFinalizationOptions { IntentWaitBound = TimeSpan.FromSeconds(2), IntentPollInterval = TimeSpan.FromMilliseconds(20) },
             time);
         Backfill = new EfSchemaBackfill(Gate, fleet, options, time);
-        Gate.UseBackfill(Backfill);
     }
 
     public EfSchemaModuleGate Gate { get; }
@@ -457,42 +490,4 @@ public sealed class BackfillHost : IAsyncDisposable
     }
 
     public ValueTask DisposeAsync() => _services.DisposeAsync();
-}
-
-/// <summary>
-/// A host alone in its fleet, as the in-process membership makes it: it reads everything its build reads, and the
-/// settle condition holds once its own gate has observed the version.
-/// </summary>
-public sealed class SoloBackfillFleet(EfSchemaFinalizationObservations observations, string hostId = "solo") : IEfSchemaFleet
-{
-    private readonly SchemaFinalizationMember _member = new(hostId, Guid.NewGuid().ToString("N"));
-
-    public TimeSpan SettleMargin { get; set; } = TimeSpan.Zero;
-
-    public EfSchemaFleetStanding GetLocalStanding() => new(_member, false);
-
-    public ValueTask PublishAsync(CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
-
-    public ValueTask<EfSchemaFleetAnswer> CountAsync(string family, string version, string databaseIdentity, CancellationToken cancellationToken = default) =>
-        ValueTask.FromResult(new EfSchemaFleetAnswer(true, []));
-
-    public ValueTask<EfSchemaFleetAnswer> CountObservingAsync(string family, IReadOnlyList<string> versions, string databaseIdentity, CancellationToken cancellationToken = default)
-    {
-        var observed = observations.Find(family).ObservedFinalizedVersion;
-        return ValueTask.FromResult(observed is not null && versions.Contains(observed, StringComparer.Ordinal)
-            ? new EfSchemaFleetAnswer(true, [])
-            : new EfSchemaFleetAnswer(false, [$"{hostId} has observed [{observed ?? "nothing"}]"]));
-    }
-
-    public IChangeToken GetChangeToken() => new CancellationChangeToken(CancellationToken.None);
-}
-
-/// <summary>A clock a test moves by hand, for claims, the settle margin and the audit interval.</summary>
-public sealed class ManualClock(DateTimeOffset start) : TimeProvider
-{
-    private DateTimeOffset _now = start;
-
-    public override DateTimeOffset GetUtcNow() => _now;
-
-    public void Advance(TimeSpan by) => _now += by;
 }

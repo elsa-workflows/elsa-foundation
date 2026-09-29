@@ -250,8 +250,8 @@ public sealed class SchemaDormancyScenarioTests : IAsyncLifetime
     {
         await SaveAsync(new Order("old-1", null), new Order("old-2", null));
         await ActivateAsync();
+        // The gate's status carries the backfill's once it is built over the gate (spec 186, FR-021).
         var backfill = new EfSchemaBackfill(_gate, _fleet, new EfSchemaBackfillOptions(), _time);
-        _gate.UseBackfill(backfill);
         var needsComplete = new SchemaVersionRequirement(_family, "2", requiresCompleteness: true);
 
         await backfill.RunOnceAsync(WithScopeAsync);

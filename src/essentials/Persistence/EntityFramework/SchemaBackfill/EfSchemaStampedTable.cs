@@ -47,7 +47,7 @@ internal sealed class EfSchemaStampedTable
     /// <summary>The table's name, with its schema when it has one: how the backfill's reports name it.</summary>
     public string Name { get; }
 
-    /// <summary>Whether the family declares the table content-addressed, so the backfill never rewrites its rows (FR-010a).</summary>
+    /// <summary>Whether the table is content-addressed, so the backfill never rewrites its rows (FR-010a): see <see cref="IsContentAddressed"/>.</summary>
     public bool ContentAddressed { get; }
 
     /// <summary>
@@ -64,11 +64,16 @@ internal sealed class EfSchemaStampedTable
             .Where(entityType => entityType.GetTableName() is not null && !entityType.HasSharedClrType && EfSchemaModuleFamilies.IsStamped(entityType))
             .Where(entityType => StringComparer.Ordinal.Equals(families.FamilyOf(entityType.ClrType)?.Family, declaration.Name))
             .OrderBy(entityType => entityType.GetTableName(), StringComparer.Ordinal)
-            .Select(entityType => new EfSchemaStampedTable(
-                entityType,
-                declaration.ContentAddressed.Any(type => type.IsAssignableFrom(entityType.ClrType))))
+            .Select(entityType => new EfSchemaStampedTable(entityType, IsContentAddressed(declaration, entityType.ClrType)))
             .ToArray();
     }
+
+    /// <summary>
+    /// Whether <paramref name="declaration"/>'s family names <paramref name="entity"/> content-addressed, or the entity is
+    /// marked <see cref="EfSchemaContentAddressedAttribute"/>: either keeps its rows from ever being rewritten (FR-010a).
+    /// </summary>
+    public static bool IsContentAddressed(EfSchemaFamilyDescriptor declaration, Type entity) =>
+        declaration.ContentAddressed.Any(type => type.IsAssignableFrom(entity)) || entity.IsDefined(typeof(EfSchemaContentAddressedAttribute), inherit: false);
 
     /// <summary>
     /// At most <paramref name="take"/> rows <paramref name="stamps"/> selects, ordered by key and after
@@ -90,7 +95,7 @@ internal sealed class EfSchemaStampedTable
         ArgumentNullException.ThrowIfNull(stamps);
         if (stamps.IsEmpty)
             return Task.FromResult(0L);
-        return (Task<long>)CountMethod.MakeGenericMethod(Entity).Invoke(null, [this, context, stamps, cancellationToken])!;
+        return (Task<long>)CountMethod.MakeGenericMethod(Entity).Invoke(null, [context, stamps, cancellationToken])!;
     }
 
     /// <summary>A row's key as a report names it: its values, in the model's order.</summary>
@@ -133,13 +138,8 @@ internal sealed class EfSchemaStampedTable
         return rows.Select(values => new EfSchemaStampedRow(values[..^1], (string?)values[^1])).ToArray();
     }
 
-    private static async Task<long> CountCoreAsync<TEntity>(
-        EfSchemaStampedTable table,
-        DbContext context,
-        EfSchemaStampFilter stamps,
-        CancellationToken cancellationToken) where TEntity : class
+    private static async Task<long> CountCoreAsync<TEntity>(DbContext context, EfSchemaStampFilter stamps, CancellationToken cancellationToken) where TEntity : class
     {
-        _ = table;
         var row = Expression.Parameter(typeof(TEntity), "row");
         var predicate = stamps.Predicate(Property(row, typeof(string), EfSchemaVersion.ColumnName));
         return await context.Set<TEntity>().AsNoTracking().LongCountAsync(Expression.Lambda<Func<TEntity, bool>>(predicate, row), cancellationToken);
@@ -186,19 +186,21 @@ internal sealed class EfSchemaStampedTable
             return Expression.GreaterThan(Expression.Convert(column, number), Expression.Convert(bound, number));
         }
 
+        if (key.GetValueConverter() is not null)
+            throw Unorderable(key, "it is stored through a value converter, so its order in the database need not be its order here", null);
         try
         {
-            if (key.GetValueConverter() is not null)
-                throw new InvalidOperationException("The key part is stored through a value converter.");
             return Expression.GreaterThan(column, bound);
         }
         catch (InvalidOperationException exception)
         {
-            throw new NotSupportedException(
-                $"Table '{Name}' of {Entity.Name} has a key part '{key.Name}' of type {key.ClrType.Name}, which has no order the backfill can resume a batch after.",
-                exception);
+            // The type defines no ">" the query could translate.
+            throw Unorderable(key, "its type defines no order", exception);
         }
     }
+
+    private NotSupportedException Unorderable(IProperty key, string why, Exception? inner) =>
+        new($"Table '{Name}' of {Entity.Name} has a key part '{key.Name}' of type {key.ClrType.Name}, which has no order the backfill can resume a batch after: {why}.", inner);
 
     private static Expression Property(ParameterExpression row, Type type, string name) =>
         Expression.Call(PropertyMethod.MakeGenericMethod(type), row, Expression.Constant(name));

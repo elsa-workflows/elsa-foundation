@@ -1,9 +1,8 @@
 using Elsa.Persistence.EntityFramework.SchemaBackfill;
-using Elsa.Persistence.EntityFramework.SchemaFinalization;
-using Elsa.Persistence.Schema;
 using Elsa.Persistence.Schema.SchemaFinalization;
 using Elsa.Persistence.EntityFramework.Tests;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Time.Testing;
 using Xunit;
 using static Elsa.Persistence.EntityFramework.Tests.BackfillDatabase;
 
@@ -32,20 +31,24 @@ public sealed class BackfillProviderTests
     private static Task RunAsync(string provider, Func<DbContextOptionsBuilder, string, DbContextOptionsBuilder> use) =>
         ProviderDatabase.RunAsync(provider, async connection =>
         {
-            var clock = new ManualClock(new DateTimeOffset(2026, 9, 29, 12, 0, 0, TimeSpan.Zero));
+            var clock = new FakeTimeProvider(new DateTimeOffset(2026, 9, 29, 12, 0, 0, TimeSpan.Zero));
             var database = new BackfillDatabase(builder => use(builder, connection));
             await database.CreateAsync(clock);
             await database.SeedAsync(
                 Order("o1", 10), Order("o2", 20), Order("o3", 30), Order("o4", 40), Order("o5", 50), Order("o6", 60), Order("o7", 70),
                 Line("o1", 1), Line("o1", 2), Line("o2", 1), Line("o2", 2), Line("o3", 10),
                 Receipt("hash-1", "2"));
-            var observations = new EfSchemaFinalizationObservations();
+            // A host alone in its fleet, as the in-process membership makes it: the settle condition holds once its own gate
+            // has observed the version.
+            var fleet = new FakeFleetState();
+            var member = fleet.Add(new FakeMember("solo").Reading(BackfillFamily.Family, BackfillFamily.Chain));
+            member.Observations = new EfSchemaFinalizationObservations();
             await using var host = new BackfillHost(
                 database,
-                new SoloBackfillFleet(observations),
+                new FakeFleet(fleet, member),
                 new EfSchemaBackfillOptions { BatchSize = 2, BatchPause = TimeSpan.Zero },
                 clock,
-                observations: observations);
+                observations: member.Observations);
             await host.ActivateAsync();
             var raced = false;
             host.Probe.BeforeWrite = async row =>

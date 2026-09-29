@@ -59,6 +59,7 @@ public sealed class EfSchemaModuleGate : IEfSchemaModuleGate
     private string? _admittedIncarnation;
     private DateTimeOffset _refreshedAt = DateTimeOffset.MinValue;
     private Func<Func<DbContext, Task>, CancellationToken, Task>? _withContext;
+    private IEfSchemaBackfillStatusSource? _backfill;
 
     /// <param name="families">The families of the module this gate guards.</param>
     /// <param name="fleet">This host's view of the fleet, or null when the host composes none.</param>
@@ -153,19 +154,17 @@ public sealed class EfSchemaModuleGate : IEfSchemaModuleGate
             WriteVersion = state?.WriteVersion,
             WritesRefused = state?.WritesRefused ?? false,
             ObservedAt = observedAt,
-            Backfill = Backfill?.StatusOf(chain.Family)
+            Backfill = _backfill?.StatusOf(chain.Family)
         };
     }
 
     /// <summary>
-    /// The module's post-finalization backfill in this shell, once the module's migrator has started it (spec 186): the
-    /// gate's status carries what it reports of each family (FR-021).
+    /// Makes this gate's status carry what <paramref name="source"/> reports of each family's post-finalization backfill
+    /// (spec 186, FR-021). The module's backfill supplies it when it is built over this gate; the gate knows the backfill
+    /// through nothing else.
     /// </summary>
-    public SchemaBackfill.EfSchemaBackfill? Backfill { get; private set; }
-
-    /// <summary>Gives the gate the module's backfill, whose status its own then carries (spec 186, FR-021). The module's migrator supplies it.</summary>
-    public void UseBackfill(SchemaBackfill.EfSchemaBackfill backfill) =>
-        Backfill = backfill ?? throw new ArgumentNullException(nameof(backfill));
+    internal void ReportBackfillFrom(IEfSchemaBackfillStatusSource source) =>
+        _backfill = source ?? throw new ArgumentNullException(nameof(source));
 
     /// <summary>
     /// Gives the gate a way to open a fresh context of its module on demand, as <see cref="RunAsync"/>'s argument does, so

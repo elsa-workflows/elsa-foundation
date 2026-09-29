@@ -12,6 +12,8 @@
     <PackageReference Include="Testcontainers.PostgreSql" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="Xunit.SkippableFact" />
+    <!-- The backfill scenario's clock, shared with the SQLite suite (BackfillScenario.cs). -->
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" />
     <PackageReference Include="coverlet.collector" PrivateAssets="all" />
@@ -20,6 +22,7 @@
     <Compile Include="..\Tests\ModuleContextCatalog.cs" Link="ModuleContextCatalog.cs" />
     <Compile Include="..\Tests\ModuleSchemaFinalizationScenario.cs" Link="ModuleSchemaFinalizationScenario.cs" />
     <Compile Include="..\..\..\EntityFramework\Tests\BackfillScenario.cs" Link="BackfillScenario.cs" />
+    <Compile Include="..\..\..\EntityFramework\Tests\FakeFleet.cs" Link="FakeFleet.cs" />
     <Compile Include="..\..\..\EntityFramework\Tests\EfSchemaFinalizationTestSupport.cs" Link="EfSchemaFinalizationTestSupport.cs" />
     <Compile Include="..\..\..\EntityFramework\Tests\ContractingModule.cs" Link="ContractingModule.cs" />
     <Compile Include="..\..\..\EntityFramework\Tests\ContractingSeedScenarios.cs" Link="ContractingSeedScenarios.cs" />

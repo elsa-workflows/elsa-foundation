@@ -1,6 +1,3 @@
-using System.Globalization;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
 namespace Elsa.Persistence.EntityFramework.SchemaBackfill;
@@ -76,36 +73,15 @@ internal sealed class EfSchemaBackfillOptionsConfigurator(IServiceProvider servi
 {
     public void Configure(EfSchemaBackfillOptions options)
     {
-        var section = services.GetService<IConfiguration>()?.GetSection(EfSchemaBackfillOptions.SectionName);
-        if (section is null)
+        if (EfSettingsSection.Of(services, EfSchemaBackfillOptions.SectionName) is not { } section)
             return;
-        options.BatchSize = ReadNumber(section, nameof(options.BatchSize)) ?? options.BatchSize;
-        options.VerificationPasses = ReadNumber(section, nameof(options.VerificationPasses)) ?? options.VerificationPasses;
-        options.BatchPause = ReadSpan(section, nameof(options.BatchPause)) ?? options.BatchPause;
-        options.CheckInterval = ReadSpan(section, nameof(options.CheckInterval)) ?? options.CheckInterval;
-        options.AuditInterval = ReadSpan(section, nameof(options.AuditInterval)) ?? options.AuditInterval;
-        options.SettleMargin = ReadSpan(section, nameof(options.SettleMargin)) ?? options.SettleMargin;
-        options.ClaimDuration = ReadSpan(section, nameof(options.ClaimDuration)) ?? options.ClaimDuration;
+        options.BatchSize = section.WholeNumber(nameof(options.BatchSize)) ?? options.BatchSize;
+        options.VerificationPasses = section.WholeNumber(nameof(options.VerificationPasses)) ?? options.VerificationPasses;
+        options.BatchPause = section.TimeSpan(nameof(options.BatchPause)) ?? options.BatchPause;
+        options.CheckInterval = section.TimeSpan(nameof(options.CheckInterval)) ?? options.CheckInterval;
+        options.AuditInterval = section.TimeSpan(nameof(options.AuditInterval)) ?? options.AuditInterval;
+        options.SettleMargin = section.TimeSpan(nameof(options.SettleMargin)) ?? options.SettleMargin;
+        options.ClaimDuration = section.TimeSpan(nameof(options.ClaimDuration)) ?? options.ClaimDuration;
         options.Validate();
-    }
-
-    private static int? ReadNumber(IConfigurationSection section, string key)
-    {
-        var value = section[key];
-        if (string.IsNullOrWhiteSpace(value))
-            return null;
-        return int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
-            ? parsed
-            : throw new InvalidOperationException($"Configuration '{EfSchemaBackfillOptions.SectionName}:{key}' is '{value}', which is not a whole number.");
-    }
-
-    private static TimeSpan? ReadSpan(IConfigurationSection section, string key)
-    {
-        var value = section[key];
-        if (string.IsNullOrWhiteSpace(value))
-            return null;
-        return TimeSpan.TryParse(value, CultureInfo.InvariantCulture, out var parsed)
-            ? parsed
-            : throw new InvalidOperationException($"Configuration '{EfSchemaBackfillOptions.SectionName}:{key}' is '{value}', which is not a time span such as '00:00:30'.");
     }
 }

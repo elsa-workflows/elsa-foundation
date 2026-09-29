@@ -129,7 +129,6 @@ public sealed class EfModuleMigrator<TContext>(
                 services.GetService<IOptions<EfSchemaBackfillOptions>>()?.Value ?? new EfSchemaBackfillOptions(),
                 services.GetService<TimeProvider>(),
                 services.GetService<ILoggerFactory>()?.CreateLogger<EfSchemaBackfill>());
-            gate.UseBackfill(backfill);
             _backfillLoop = Task.Run(() => backfill.RunAsync(WithBackfillScopeAsync, _stopping.Token), CancellationToken.None);
         }
         finally
@@ -145,11 +144,14 @@ public sealed class EfModuleMigrator<TContext>(
             await action(context);
     }
 
+    /// <summary>
+    /// The backfill's scope: a fresh one of the shell, with the module's context. A shell that cannot resolve the context
+    /// fails the backfill's round rather than skipping its work, which the backfill would otherwise read as "nothing found".
+    /// </summary>
     private async Task WithBackfillScopeAsync(Func<EfSchemaBackfillScope, Task> action, CancellationToken cancellationToken)
     {
         await using var scope = scopes.CreateAsyncScope();
-        if (scope.ServiceProvider.GetService<TContext>() is { } context)
-            await action(new EfSchemaBackfillScope(scope.ServiceProvider, context));
+        await action(new EfSchemaBackfillScope(scope.ServiceProvider, scope.ServiceProvider.GetRequiredService<TContext>()));
     }
 
     private async Task StopGateAsync()
