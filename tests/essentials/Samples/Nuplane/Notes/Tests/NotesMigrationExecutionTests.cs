@@ -2,6 +2,7 @@ using Elsa.Persistence.EntityFramework.SchemaBackfill;
 using Elsa.Persistence.EntityFramework.Tests;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -21,6 +22,7 @@ public sealed class NotesMigrationExecutionTests : IAsyncDisposable
     private readonly NotesRelease release1 = NotesRelease.One();
     private readonly NotesRelease release2 = NotesRelease.Two();
     private readonly ServiceProvider services = new ServiceCollection().BuildServiceProvider();
+    private readonly List<NotesDbContext> release2Contexts = [];
 
     [Theory]
     [InlineData(1)]
@@ -53,51 +55,118 @@ public sealed class NotesMigrationExecutionTests : IAsyncDisposable
     [Fact]
     public async Task A_row_written_under_release_1_reads_as_no_tags_through_release_2_and_the_upcaster()
     {
-        await using (var context1 = release1.SqliteContext(database.ConnectionString))
-        {
-            await NotesRelease.MigrateAsync(context1);
-            await release1.AddNoteAsync(context1, "written under 1.0.0");
-        }
+        await AddNoteUnderRelease1Async();
+        var store = NewStore();
+        await NotesRelease.MigrateAsync(release2Contexts[^1], release2.SqliteMigrationId("AddTags"));
 
-        await using var context2 = release2.SqliteContext(database.ConnectionString);
-        await NotesRelease.MigrateAsync(context2, release2.SqliteMigrationId("AddTags"));
-
-        Assert.Equal([("1.0.0", null)], Rows($"SELECT SchemaVersion, TagsJson FROM {NotesModule.TableName}", row => (row.GetString(0), row.IsDBNull(1) ? null : row.GetString(1))));
-        var note = Assert.Single(await new NoteStore((NotesDbContext)context2, services).ListWithTagsAsync());
+        Assert.Equal([("1.0.0", null)], NoteStamps());
+        var note = Assert.Single(await store.ListWithTagsAsync());
         Assert.Equal("written under 1.0.0", note.Text);
         Assert.Empty(note.Tags);
     }
 
     [Fact]
-    public async Task The_rewriter_brings_a_1_0_0_note_up_to_2_0_0_with_empty_tags_and_leaves_a_2_0_0_note_and_a_missing_one_alone()
+    public async Task The_rewriter_brings_a_1_0_0_note_up_to_2_0_0_with_empty_tags()
     {
-        await using (var context1 = release1.SqliteContext(database.ConnectionString))
-        {
-            await NotesRelease.MigrateAsync(context1);
-            await release1.AddNoteAsync(context1, "written under 1.0.0");
-        }
-
-        await using var context = release2.SqliteContext(database.ConnectionString);
-        await NotesRelease.MigrateAsync(context);
-        var store = new NoteStore((NotesDbContext)context, services);
-        var id = Rows($"SELECT Id FROM {NotesModule.TableName}", row => row.GetString(0)).Single();
-        EfSchemaRowToRewrite Ask(string key) => new(typeof(NoteRecord), [key], "1.0.0", NotesModule.TagsVersion);
+        var id = await AddNoteUnderRelease1Async();
+        var store = await MigrateToRelease2Async();
 
         Assert.Equal(EfSchemaRewriteOutcome.Rewritten, await store.RewriteAsync(Ask(id), NotesModule.TagsVersion));
-        Assert.Equal([("2.0.0", "[]")], Rows($"SELECT SchemaVersion, TagsJson FROM {NotesModule.TableName}", row => (row.GetString(0), row.GetString(1))));
+        Assert.Equal([("2.0.0", "[]")], NoteStamps());
+    }
+
+    [Fact]
+    public async Task The_rewriter_leaves_a_note_already_at_2_0_0_alone()
+    {
+        var id = await AddNoteUnderRelease1Async();
+        var store = await MigrateToRelease2Async();
+        await store.AddTagsAsync(id, ["demo"]);
+
+        Assert.Equal(EfSchemaRewriteOutcome.AlreadyCurrent, await NewStore().RewriteAsync(Ask(id), NotesModule.TagsVersion));
+        Assert.Equal([("2.0.0", "[\"demo\"]")], NoteStamps());
+    }
+
+    [Fact]
+    public async Task The_rewriter_reports_a_note_that_no_longer_exists_as_missing()
+    {
+        await AddNoteUnderRelease1Async();
+        var store = await MigrateToRelease2Async();
 
         Assert.Equal(EfSchemaRewriteOutcome.Missing, await store.RewriteAsync(Ask("no-such-note"), NotesModule.TagsVersion));
-        await store.AddTagsAsync(id, ["demo"]);
-        Assert.Equal(EfSchemaRewriteOutcome.AlreadyCurrent, await store.RewriteAsync(Ask(id), NotesModule.TagsVersion));
-        Assert.Equal([("2.0.0", "[\"demo\"]")], Rows($"SELECT SchemaVersion, TagsJson FROM {NotesModule.TableName}", row => (row.GetString(0), row.GetString(1))));
+        Assert.Equal([("1.0.0", null)], NoteStamps());
+    }
+
+    [Fact]
+    public async Task The_rewriter_reports_a_conflict_and_writes_nothing_when_the_note_changes_between_its_read_and_its_save()
+    {
+        var id = await AddNoteUnderRelease1Async();
+        await MigrateToRelease2Async();
+        // Another writer of the same note, as a host tagging it would be, lands after the rewriter has read the row and before it saves.
+        var racing = NewStore();
+        var rewriting = NewStore(new BeforeSave(() => racing.AddTagsAsync(id, ["raced"])));
+
+        Assert.Equal(EfSchemaRewriteOutcome.Conflict, await rewriting.RewriteAsync(Ask(id), NotesModule.TagsVersion));
+        Assert.Equal([("2.0.0", "[\"raced\"]")], NoteStamps());
+    }
+
+    [Fact]
+    public async Task The_rewriter_refuses_to_write_a_note_below_the_version_it_must_reach()
+    {
+        var id = await AddNoteUnderRelease1Async();
+        var store = await MigrateToRelease2Async();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => store.RewriteAsync(Ask(id), "1.0.0"));
+        Assert.Equal([("1.0.0", null)], NoteStamps());
+    }
+
+    [Fact]
+    public async Task The_rewriter_refuses_to_write_when_the_finalization_gate_has_not_admitted_the_module()
+    {
+        var id = await AddNoteUnderRelease1Async();
+        var store = await MigrateToRelease2Async();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => store.RewriteAsync(Ask(id)));
+        Assert.Equal([("1.0.0", null)], NoteStamps());
     }
 
     public async ValueTask DisposeAsync()
     {
+        foreach (var context in release2Contexts)
+            await context.DisposeAsync();
         release1.Dispose();
         await services.DisposeAsync();
         await database.DisposeAsync();
     }
+
+    private static EfSchemaRowToRewrite Ask(string key) => new(typeof(NoteRecord), [key], "1.0.0", NotesModule.TagsVersion);
+
+    /// <summary>Migrates the database to release 1.0.0 and adds one note through that release, which stamps it 1.0.0. Returns its id.</summary>
+    private async Task<string> AddNoteUnderRelease1Async()
+    {
+        await using var context1 = release1.SqliteContext(database.ConnectionString);
+        await NotesRelease.MigrateAsync(context1);
+        await release1.AddNoteAsync(context1, "written under 1.0.0");
+        return Rows($"SELECT Id FROM {NotesModule.TableName}", row => row.GetString(0)).Single();
+    }
+
+    /// <summary>Applies release 1.1.0's migrations and returns a store on a new release 1.1.0 context.</summary>
+    private async Task<NoteStore> MigrateToRelease2Async()
+    {
+        var store = NewStore();
+        await NotesRelease.MigrateAsync(release2Contexts[^1]);
+        return store;
+    }
+
+    private NoteStore NewStore(params IInterceptor[] interceptors)
+    {
+        var context = (NotesDbContext)release2.SqliteContext(database.ConnectionString, interceptors);
+        release2Contexts.Add(context);
+        return new NoteStore(context, services);
+    }
+
+    /// <summary>The stamp and the tags of every note, as the table holds them.</summary>
+    private (string Stamp, string? Tags)[] NoteStamps() =>
+        Rows($"SELECT SchemaVersion, TagsJson FROM {NotesModule.TableName}", row => (row.GetString(0), row.IsDBNull(1) ? null : row.GetString(1)));
 
     private NotesRelease Release(int release) => release == 1 ? release1 : release2;
 
@@ -116,5 +185,15 @@ public sealed class NotesMigrationExecutionTests : IAsyncDisposable
         while (reader.Read())
             rows.Add(read(reader));
         return [.. rows];
+    }
+
+    /// <summary>Runs <paramref name="action"/> when a save is about to start: after the rewriter has read its row, before it writes it.</summary>
+    private sealed class BeforeSave(Func<Task> action) : SaveChangesInterceptor
+    {
+        public override async ValueTask<InterceptionResult<int>> SavingChangesAsync(DbContextEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
+        {
+            await action();
+            return result;
+        }
     }
 }

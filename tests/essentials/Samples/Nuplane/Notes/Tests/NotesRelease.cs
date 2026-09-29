@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Runtime.Loader;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.Extensions.DependencyInjection;
@@ -31,11 +32,11 @@ internal sealed class NotesRelease : IDisposable
 
     public Assembly Assembly => loaded.Value.Assembly;
 
-    /// <summary>A Sqlite context of this release on <paramref name="connectionString"/>, with no provider calls beyond the connection.</summary>
-    public DbContext SqliteContext(string connectionString)
+    /// <summary>A Sqlite context of this release on <paramref name="connectionString"/>, with no provider calls beyond the connection and the given interceptors.</summary>
+    public DbContext SqliteContext(string connectionString, params IInterceptor[] interceptors)
     {
         var options = (DbContextOptionsBuilder)Activator.CreateInstance(typeof(DbContextOptionsBuilder<>).MakeGenericType(TypeNamed("NotesSqliteDbContext")))!;
-        return (DbContext)Activator.CreateInstance(TypeNamed("NotesSqliteDbContext"), options.UseSqlite(connectionString).Options)!;
+        return (DbContext)Activator.CreateInstance(TypeNamed("NotesSqliteDbContext"), options.UseSqlite(connectionString).AddInterceptors(interceptors).Options)!;
     }
 
     /// <summary>The id of this release's Sqlite migration <paramref name="name"/>, as the history table records it.</summary>

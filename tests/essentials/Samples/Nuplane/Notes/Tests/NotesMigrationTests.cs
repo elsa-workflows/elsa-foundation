@@ -9,8 +9,8 @@ namespace Elsa.Samples.Nuplane.Notes.Tests;
 
 /// <summary>
 /// The 1.1.0 migration is what makes a rolling upgrade safe: the hosts still on 1.0.0 keep working against the migrated
-/// database. It runs through <see cref="ExpandOnlyMigrationGuard"/>, the same check spec 185 holds every first-party
-/// migration to, and the baseline creates the finalization tables the module's gate keeps its record in.
+/// database. It runs through <see cref="ExpandOnlyMigrationGuard"/>, the check every first-party
+/// migration is held to, and the baseline creates the finalization tables the module's gate keeps its record in.
 /// </summary>
 public sealed class NotesMigrationTests
 {

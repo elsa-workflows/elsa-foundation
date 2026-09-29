@@ -24,7 +24,7 @@ The upcaster is what lets 1.1.0 read what 1.0.0 wrote. A row written by release 
 `TagsJson` is empty; when 1.1.0 reads such a row, the upcaster (`NotesOneToTwo`) turns it into a row with an empty list of
 tags before the code sees it, and the code that reads tags relies on that: a row that comes out of the upcast without tags is
 treated as corruption and refused, not read as "no tags". A 2.0.0 row is left as it is. The rewriter (`NotesRewriter`) is what
-the host's post-finalization backfill (spec 186) calls, one row at a time, once `2.0.0` is finalized: it upcasts each row still
+the host's post-finalization backfill calls, one row at a time, once `2.0.0` is finalized: it upcasts each row still
 stamped `1.0.0` and writes it back stamped `2.0.0`, after which the family is recorded complete at `2.0.0` (`persistence status`
 says `complete from 2.0.0`). Without it the host would log the family as blocked, because a family with an upcaster and no
 rewriter cannot be completed.
@@ -232,5 +232,7 @@ not among them.
 `tests/essentials/Samples/Nuplane/Notes/Tests` builds both releases and checks what each declares (schema version, upcaster,
 content columns, migrations, feature requirement); applies `Initial` and then `AddTags` to a real Sqlite database and checks the
 schema and that each release's model matches its snapshot; writes a note under release 1.0.0 and reads it through release 1.1.0
-as a note with no tags; runs `AddTags` through the expand-only migration guard; and proves the upcaster over a committed pair
+as a note with no tags; runs the rewriter against a real database, once for each outcome it can answer (rewritten, already current,
+missing, and a conflict provoked by a write between its read and its save) and checks it refuses to write below the version it was
+asked to reach; runs `AddTags` through the expand-only migration guard; and proves the upcaster over a committed pair
 of fixture rows (`Fixtures/SchemaUpcasters/SamplesNotes/1.0.0-to-2.0.0`).

@@ -20,14 +20,14 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- A private SQLite database per proof, and the mechanics of spec 180's FR-022 proofs, compiled in as every EF module's
+    <!-- A private SQLite database per proof, and the mechanics of the upcaster proofs, compiled in as every EF module's
          test project compiles them in. -->
     <Compile Include="..\..\..\..\Persistence\EntityFramework\Tests\TemporarySqliteDatabase.cs" Link="TemporarySqliteDatabase.cs" />
     <Compile Include="..\..\..\..\Persistence\EntityFramework\Tests\EfSchemaUpcasterFixtureSupport.cs" Link="EfSchemaUpcasterFixtureSupport.cs" />
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Spec 180, FR-022: the upcaster's fixture pair, frozen once committed (EfSchemaFamilyFixtureProofGuardTests). -->
+    <!-- The upcaster's fixture pair, frozen once committed (EfSchemaFamilyFixtureProofGuardTests). -->
     <None Include="Fixtures\SchemaUpcasters\**\*" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 

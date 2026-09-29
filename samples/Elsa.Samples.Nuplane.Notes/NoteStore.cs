@@ -30,7 +30,9 @@ public sealed partial class NoteStore(NotesDbContext context, IServiceProvider s
     /// is running beside an older one, that is still the older version, so rows this host writes stay readable by every
     /// host that shares the database. Before the gate has admitted the module, the oldest version this build reads.
     /// </summary>
-    private string WriteVersion() =>
-        services.GetService<EfSchemaFinalizationGates>()?.FindModuleGate(typeof(NotesDbContext))?.StateOf(NotesModule.Family)?.WriteVersion
-        ?? NotesModule.Chain.ReadableVersions[0];
+    private string WriteVersion() => AdmittedWriteVersion() ?? NotesModule.Chain.ReadableVersions[0];
+
+    /// <summary>The write version the finalization gate keeps for the family, or null before the gate has admitted the module.</summary>
+    private string? AdmittedWriteVersion() =>
+        services.GetService<EfSchemaFinalizationGates>()?.FindModuleGate(typeof(NotesDbContext))?.StateOf(NotesModule.Family)?.WriteVersion;
 }

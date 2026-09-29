@@ -104,6 +104,7 @@ namespace Elsa.Samples.Nuplane.Notes.Migrations.Notes.PostgreSql
                         .HasColumnType("character varying(64)");
 
                     b.Property<string>("SchemaVersion")
+                        .IsConcurrencyToken()
                         .IsRequired()
                         .HasMaxLength(32)
                         .HasColumnType("character varying(32)");

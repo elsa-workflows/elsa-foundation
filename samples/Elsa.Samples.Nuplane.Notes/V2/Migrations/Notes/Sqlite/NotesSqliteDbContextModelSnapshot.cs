@@ -100,11 +100,13 @@ namespace Elsa.Samples.Nuplane.Notes.Migrations.Notes.Sqlite
                         .HasColumnType("TEXT");
 
                     b.Property<string>("SchemaVersion")
+                        .IsConcurrencyToken()
                         .IsRequired()
                         .HasMaxLength(32)
                         .HasColumnType("TEXT");
 
                     b.Property<string>("TagsJson")
+                        .IsConcurrencyToken()
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Text")

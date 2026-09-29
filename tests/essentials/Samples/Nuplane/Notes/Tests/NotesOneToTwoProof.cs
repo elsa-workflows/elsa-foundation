@@ -11,12 +11,12 @@ namespace Elsa.Samples.Nuplane.Notes.Tests;
 public sealed record NoteTags(string Text, string Tags);
 
 /// <summary>
-/// FR-022's three proofs for the notes family's one step, from 1.0.0 to 2.0.0, through the sample's own store: the upcast,
+/// The three upcaster proofs for the notes family's one step, from 1.0.0 to 2.0.0, through the sample's own store: the upcast,
 /// the old-format round trip, and the read of a 1.0.0 row and a 2.0.0 row as the same note.
 /// </summary>
 public sealed class NotesOneToTwoProof() : EfSchemaUpcasterProof<NotesOneToTwo, NoteTags>(NotesModule.Family, new NotesProofStore());
 
-/// <summary>The store's half of FR-022's proofs: a fixture row is put in a SQLite database and read back through <see cref="NoteStore"/>.</summary>
+/// <summary>The store's half of the upcaster proofs: a fixture row is put in a SQLite database and read back through <see cref="NoteStore"/>.</summary>
 internal sealed class NotesProofStore : IEfSchemaUpcasterProofStore<NoteTags>, IAsyncDisposable
 {
     private const string Id = "note-1";
