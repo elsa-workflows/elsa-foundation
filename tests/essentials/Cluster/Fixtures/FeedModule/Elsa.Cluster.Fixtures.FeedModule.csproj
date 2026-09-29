@@ -9,9 +9,38 @@
       the module's finalization gate reached the host's fleet, and its feature asks the shared dormancy check before it
       serves, so it shows whether the host's check sees the module's gate.
     </Description>
-    <!-- Above the release before it, FeedModuleV1's, which packs under this package id too (#2151). -->
+    <!-- Between the release before it and the release after it, which pack under this package id too. -->
     <Version>2.0.0</Version>
   </PropertyGroup>
+
+  <!--
+    The releases before and after this one, which FoundationHostFeed packs with -p:FeedModuleRelease=previous or =next,
+    each built into a folder of its own named by FixtureBuildRoot, as every fixture with several releases is built.
+    - previous (1.0.0): its family is at version 1 with no upcaster, so it reads version 1 alone, and its orders feature
+      serves at 1. A host on it beside a host on this release is the cluster whose finalization of 2 has to wait for it
+      (#2151), and a host upgraded in place from it shows that finalization no longer waits for the release it replaced
+      (spec 183, FR-021, amended 2026-09-29).
+    - next (3.0.0): this release plus one migration, so a host that validates its migrations has one pending when it
+      reloads onto it.
+  -->
+  <PropertyGroup Condition="'$(FixtureBuildRoot)' != ''">
+    <OutputPath>$(FixtureBuildRoot)bin/</OutputPath>
+    <IntermediateOutputPath>$(FixtureBuildRoot)obj/</IntermediateOutputPath>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(FeedModuleRelease)' == 'previous'">
+    <DefineConstants>$(DefineConstants);FEED_MODULE_PREVIOUS_RELEASE</DefineConstants>
+    <Version>1.0.0</Version>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(FeedModuleRelease)' == 'next'">
+    <Version>3.0.0</Version>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="FeedModuleOneToTwo.cs" Condition="'$(FeedModuleRelease)' == 'previous'" />
+    <Compile Remove="FeedModuleAddTags.cs" Condition="'$(FeedModuleRelease)' != 'next'" />
+  </ItemGroup>
 
   <ItemGroup>
     <!-- The feature maps one endpoint, so a real Elsa.Foundation.Host that loads this fixture from a feed shows its

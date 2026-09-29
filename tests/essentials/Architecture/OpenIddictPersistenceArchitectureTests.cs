@@ -13,7 +13,7 @@ namespace Elsa.Architecture.Tests;
 /// </summary>
 public sealed class OpenIddictPersistenceArchitectureTests
 {
-    private const string WorkbenchVendorRegistrationSha256 = "bdf6f2979f6ce37a39e71ac42b787e6f22bf2be00d07aef35664e3166acab275";
+    private const string WorkbenchVendorRegistrationSha256 = "8dc4be11633a927ffa72b13d9ca30dab4438579bd98466dd111facb931d7b65c";
 
     private static readonly string[] WorkbenchOpenIddictEfPackages =
     [
@@ -35,7 +35,7 @@ public sealed class OpenIddictPersistenceArchitectureTests
             ["Sqlite/Migrations/20260704221407_Initial.Designer.cs"] = "e49cc98bb32378c17bbad75fd3bbb071f3d70e7dbf654cc00019282d38e67e79",
             ["Sqlite/Migrations/20260704221407_Initial.cs"] = "d73cc67a51181faa7b1d454fd45bb897f458ecb46156e45dba7aa8cc15229b28",
             ["Sqlite/Migrations/OpenIddictIdentityDbContextModelSnapshot.cs"] = "88338ae62df8596eab3f87d007b121252f373c8670ac1d131d098692b48e27b6",
-            ["Sqlite/OpenIddictIdentityDbContextFactory.cs"] = "e6ecc4bbf730d140886b207a3591ae1f027c2930c79938fdd06d0b236803d3ee",
+            ["Sqlite/OpenIddictIdentityDbContextFactory.cs"] = "ee2d3de5e2a2b4c9909bd3f8d075f7f65dab9ee1263ecd5d7e1ce25709b50736",
             ["WorkbenchOpenIddictEntityFrameworkCoreOptions.cs"] = "d2442a8e30c18f022cb91806a74a3477f3e6bf136178454d1ac8ca5fbf89d4a1"
         };
 

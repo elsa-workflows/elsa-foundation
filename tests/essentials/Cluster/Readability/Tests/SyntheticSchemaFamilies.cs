@@ -2,7 +2,9 @@ using System.Reflection;
 using System.Reflection.Emit;
 using System.Runtime.InteropServices;
 using System.Runtime.Loader;
+using CShells.Features;
 using Elsa.Persistence.EntityFramework;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Cluster.Readability.Tests;
 
@@ -27,6 +29,12 @@ internal sealed record SyntheticFamily(
 internal sealed record SyntheticUpcaster(string TypeName, string? From, string? To);
 
 /// <summary>
+/// A CShells feature to emit: a public class of that full name implementing <see cref="IShellFeature"/>, whose
+/// <c>ConfigureServices</c> registers nothing, so CShells discovers it and a shell can enable it by its name.
+/// </summary>
+internal sealed record SyntheticFeature(string TypeName);
+
+/// <summary>
 /// One <c>[EfSchemaContent]</c> column, or with a <see cref="Reason"/> one <c>[EfSchemaIntegrity]</c> column, to emit for
 /// <see cref="Family"/>, on an entity type the image defines as <see cref="Entity"/>.
 /// </summary>
@@ -42,7 +50,15 @@ internal static class SyntheticSchemaFamilies
     public static byte[] Image(string assemblyName, string[] modules, params SyntheticFamily[] families) =>
         Image(assemblyName, modules, [], families);
 
-    public static byte[] Image(string assemblyName, string[] modules, IReadOnlyList<SyntheticColumn> columns, params SyntheticFamily[] families)
+    public static byte[] Image(string assemblyName, string[] modules, IReadOnlyList<SyntheticColumn> columns, params SyntheticFamily[] families) =>
+        Image(assemblyName, modules, columns, [], families);
+
+    public static byte[] Image(
+        string assemblyName,
+        string[] modules,
+        IReadOnlyList<SyntheticColumn> columns,
+        IReadOnlyList<SyntheticFeature> features,
+        params SyntheticFamily[] families)
     {
         var moduleConstructor = typeof(EfModuleAttribute).GetConstructor([typeof(string), typeof(Type)])!;
         var builder = new PersistedAssemblyBuilder(
@@ -63,9 +79,27 @@ internal static class SyntheticSchemaFamilies
                 ? new CustomAttributeBuilder(typeof(EfSchemaContentAttribute).GetConstructors().Single(), [column.Family, entities[column.Entity], new[] { column.Column }])
                 : new CustomAttributeBuilder(typeof(EfSchemaIntegrityAttribute).GetConstructors().Single(), [column.Family, entities[column.Entity], column.Column, column.Reason]));
 
+        foreach (var feature in features)
+            Emit(module, feature);
+
         using var image = new MemoryStream();
         builder.Save(image);
         return image.ToArray();
+    }
+
+    private static void Emit(ModuleBuilder module, SyntheticFeature feature)
+    {
+        var type = module.DefineType(feature.TypeName, TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.Class, typeof(object), [typeof(IShellFeature)]);
+        type.DefineDefaultConstructor(MethodAttributes.Public);
+        var contract = typeof(IShellFeature).GetMethod(nameof(IShellFeature.ConfigureServices))!;
+        var method = type.DefineMethod(
+            contract.Name,
+            MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.Final | MethodAttributes.HideBySig | MethodAttributes.NewSlot,
+            typeof(void),
+            [typeof(IServiceCollection)]);
+        method.GetILGenerator().Emit(OpCodes.Ret);
+        type.DefineMethodOverride(method, contract);
+        type.CreateType();
     }
 
     private static CustomAttributeBuilder Declaration(SyntheticFamily family, Type[] upcasters, Type[] contentAddressed, Type? rewriter)

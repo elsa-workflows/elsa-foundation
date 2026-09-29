@@ -475,14 +475,6 @@
         "resolved": "0.0.11-preview.94",
         "contentHash": "YtytvT0fC6hyfz1GonNjNdw13jN1Ps3Zl0A+OK8/cZxuL/dUGQbVnWlV82vJkQo6TTmegXRXZx1gOvfGkpXm0g=="
       },
-      "Nuplane.Loading.Abstractions": {
-        "type": "Transitive",
-        "resolved": "0.0.11-preview.94",
-        "contentHash": "vjTnc+rW+guSOUq1CXpmxp3KKBLxOpazOVHV0nHOji7w5lS7+GLRzYvEyPs/LARwxo9weJO3ie8gF5/F10UIgg==",
-        "dependencies": {
-          "Nuplane.Abstractions": "0.0.11-preview.94"
-        }
-      },
       "OpenIddict": {
         "type": "Transitive",
         "resolved": "7.5.0",
@@ -1122,9 +1114,11 @@
       "elsa.cluster.readability": {
         "type": "Project",
         "dependencies": {
+          "CShells.Abstractions": "[0.0.30-preview.159, )",
           "Elsa.Cluster.Core": "[4.0.0-dev, )",
           "Elsa.Cluster.InProcess": "[4.0.0-dev, )",
-          "Elsa.Persistence.Schema": "[4.0.0-dev, )"
+          "Elsa.Persistence.Schema": "[4.0.0-dev, )",
+          "Nuplane.Loading.Abstractions": "[0.0.11-preview.94, )"
         }
       },
       "elsa.diagnostics.consolelogstreaming": {
@@ -2480,6 +2474,15 @@
           "Nuplane": "0.0.11-preview.94",
           "Nuplane.Abstractions": "0.0.11-preview.94",
           "Nuplane.Loading.Abstractions": "0.0.11-preview.94"
+        }
+      },
+      "Nuplane.Loading.Abstractions": {
+        "type": "CentralTransitive",
+        "requested": "[0.0.11-preview.94, )",
+        "resolved": "0.0.11-preview.94",
+        "contentHash": "vjTnc+rW+guSOUq1CXpmxp3KKBLxOpazOVHV0nHOji7w5lS7+GLRzYvEyPs/LARwxo9weJO3ie8gF5/F10UIgg==",
+        "dependencies": {
+          "Nuplane.Abstractions": "0.0.11-preview.94"
         }
       },
       "Nuplane.Sources.Directory": {

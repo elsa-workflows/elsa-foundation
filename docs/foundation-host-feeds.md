@@ -289,6 +289,28 @@ two hosts over one database with the EF provider enabled, and shows that neither
 the closure feed that offers it. Its PostgreSQL twin also shows that the host maps one copy of Npgsql, EF Core and
 `Elsa.Persistence.EntityFramework`, and two of the engine assembly (the host's and the one Nuplane injected).
 
+An EF module upgraded in place leaves its previous release loaded: Nuplane loads each host-integrated package graph
+into a load context it never unloads. `AddEfSchemaReadability` therefore also composes the host's superseded-generation
+source, `NuplanePackageGenerations` (spec 183, FR-021, amended 2026-09-29), which the readability report and the EF
+activation guard both subtract through. It calls a release *replaced* once Nuplane's catalog of the active package set
+lists a newer release of the same assembly, and *retired* once nothing on the host could still run it: no shell
+generation composes a feature from its load context - counted from before a generation's first initializer runs until
+its drain, or otherwise its container's disposal, has completed - and CShells' runtime feature catalog, which the next
+generation is built from, names nothing in it. A generation whose drain fails stops counting only once its container
+has disposed what it created for it, since until then its provider may be only partly disposed. The guard stops
+reading a release once it is replaced; the report, once it is retired, and the host publishes its report again then,
+so the new version finalizes without a restart. That publish never runs inside CShells' disposal of a shell: the
+generation is marked released there, and one loop of the host's own publishes after it, taking every release made
+meanwhile into a single publish, and only when something retired. CShells raises nothing when it refreshes its feature
+catalog, so while a replaced release is held back by the catalog alone the host reads the catalog's snapshot generation
+once a second, and publishes again once a refresh has lifted the pin. Until then the report intersects both releases. That includes a host whose shells are not active, since it does not
+refresh the feature catalog after a reconcile then: with `Elsa:Boot:EagerShellActivation:Enabled` set to `false` and no
+request yet, the catalog is not initialized, and the previous release counts until the first request initializes it
+from the upgrade; after an eager activation that failed once it had initialized the catalog, the first request builds
+the previous release, which then counts until a reload - the next reconcile, or `/_module-management/reload` -
+refreshes the catalog and drains that shell. `FoundationHostBootTests` upgrades the fixture in place on a running host
+both with eager activation and without it.
+
 ### Generating the closure
 
 Maintain the **roots** by hand — they map one-to-one onto the shell features in `shells.json`. Generate
@@ -725,12 +747,13 @@ Elsa__Cluster__Membership__EntityFrameworkCore__ConnectionString="Host=db;Databa
 version, but the version is finalized only once every live host can read it (spec 181). Until then that host writes the
 old version, and a feature that needs the new one answers `409` with code `schema-version-not-finalized`, saying it
 becomes available once every host can read the version (spec 182); the gate's status names each host that cannot yet
-(spec 181, FR-022; `dotnet elsa persistence status` prints it, below). Upgrade the other hosts by restarting each on the new release. A hot reload is not enough: an EF
-module package loads host-integrated, and today the previous release of such a module stays loaded after a reload (its
-load context is not released until the host restarts). A host reports only the versions every loaded declaration of a
-family reads (spec 183, FR-021, FR-022), so it goes on counting as unable to read the new version until it restarts. Once the last
-host is on the new release, the version finalizes on its own and the feature serves on every host, with no restart of
-the hosts that already had it. A host that is stopped leaves the fleet; one that crashes is still counted until its
+(spec 181, FR-022; `dotnet elsa persistence status` prints it, below). Upgrade the other hosts to the new release, in place or by restarting each on it. In place, drop the
+new package into each host's feed: the host reconciles, reloads its shells onto it, and stops counting the previous
+release once nothing on it can run that release any more, although the release stays loaded in the load context
+Nuplane gave it, which is never unloaded (spec 183, FR-021, amended 2026-09-29; see above). A host reports only the
+versions every declaration it has not retired reads, so until then it goes on counting as unable to read the new
+version. Once the last host is on the new release, the version finalizes on its own and the feature serves on every
+host, with no restart of the hosts that already had it. A host that is stopped leaves the fleet; one that crashes is still counted until its
 entry expires.
 
 **Seeing which host holds a version back.** One command, from any machine that can reach the shared database, shows the

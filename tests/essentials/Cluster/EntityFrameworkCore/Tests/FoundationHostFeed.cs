@@ -7,10 +7,12 @@ namespace Elsa.Cluster.EntityFrameworkCore.Tests;
 /// <summary>
 /// The feeds the host loads from: the fixture, packed by the SDK from the build this test assembly was built with, in
 /// <see cref="Directory"/>, the same with the fixture carrying its own copies of two shared assemblies, in
-/// <see cref="CarryingDirectory"/>, and the release of it before, packed from <c>FeedModuleV1</c> under the same package
-/// id, in <see cref="PreviousDirectory"/>; and, in <see cref="ClosureDirectory"/>, everything they and the EF provider
-/// engine depend on - <c>Elsa.Persistence.EntityFramework</c>'s restore closure, EF Core, the Sqlite engine and what they
-/// need - copied from the package cache this project's restore filled.
+/// <see cref="CarryingDirectory"/>; its releases before and after, packed under the same package id by
+/// <see cref="PackReleaseAsync"/>, the release before, which reads only version 1 of its family, in
+/// <see cref="PreviousDirectory"/>, and the release after, which adds one migration, as <see cref="NextPackage"/>; and, in
+/// <see cref="ClosureDirectory"/>, everything they and the EF provider engine depend on -
+/// <c>Elsa.Persistence.EntityFramework</c>'s restore closure, EF Core, the Sqlite engine and what they need - copied from
+/// the package cache this project's restore filled.
 /// </summary>
 /// <remarks>
 /// The host carries EF Core, the engines and <c>Elsa.Persistence.EntityFramework</c> for its cluster membership (#2151), so
@@ -21,12 +23,13 @@ namespace Elsa.Cluster.EntityFrameworkCore.Tests;
 /// </remarks>
 public sealed class FoundationHostFeed : IAsyncLifetime
 {
+    /// <summary>The fixture's package id, which all of its releases share.</summary>
+    public const string FixturePackageId = "Elsa.Cluster.Fixtures.FeedModule";
+
     /// <summary>Packing a built project takes seconds; this is the ceiling for a <c>dotnet</c> that will never return.</summary>
     private static readonly TimeSpan DotnetTimeout = TimeSpan.FromMinutes(3);
 
-    private static readonly string Fixture = Path.Join("tests", "essentials", "Cluster", "Fixtures", "FeedModule", "Elsa.Cluster.Fixtures.FeedModule.csproj");
-
-    private static readonly string PreviousFixture = Path.Join("tests", "essentials", "Cluster", "Fixtures", "FeedModuleV1", "Elsa.Cluster.Fixtures.FeedModuleV1.csproj");
+    private static readonly string Fixture = Path.Join(FoundationHostProcess.RepoRoot, "tests", "essentials", "Cluster", "Fixtures", "FeedModule", $"{FixturePackageId}.csproj");
 
     /// <summary>The EF persistence project's restore: every package it needs, which the packed package declares.</summary>
     private static readonly string PersistenceAssets = Path.Join(FoundationHostProcess.RepoRoot, "src", "essentials", "Persistence", "EntityFramework", "obj", "project.assets.json");
@@ -45,9 +48,6 @@ public sealed class FoundationHostFeed : IAsyncLifetime
 
     private readonly DirectoryInfo _root = System.IO.Directory.CreateTempSubdirectory("elsa-foundation-host-feeds-");
 
-    /// <summary>The fixture's package id, which is its project's name.</summary>
-    public const string FixturePackage = "Elsa.Cluster.Fixtures.FeedModule";
-
     /// <summary>The shares whose own copies the fixture's package in <see cref="CarryingDirectory"/> carries.</summary>
     public static readonly string[] CarriedShares = ["Elsa.Cluster.Core", "Elsa.Persistence.Schema"];
 
@@ -64,18 +64,28 @@ public sealed class FoundationHostFeed : IAsyncLifetime
     /// <summary>The release of the fixture's package before it, which reads only version 1 of its family.</summary>
     public string PreviousDirectory => Path.Join(_root.FullName, "previous");
 
+    /// <summary>The release before the fixture's, which a host started on <see cref="PreviousDirectory"/> loads.</summary>
+    public string PreviousPackage => FoundationHostProcess.Releases(PreviousDirectory, FixturePackageId).Single();
+
+    /// <summary>The fixture's own release, the package an in-place upgrade from <see cref="PreviousPackage"/> drops into a running host's feed.</summary>
+    public string FixturePackage => FoundationHostProcess.Releases(Directory, FixturePackageId).Single();
+
+    /// <summary>The release after the fixture's: the fixture plus a migration a host that validates has to have applied.</summary>
+    public string NextPackage => FoundationHostProcess.Releases(Path.Join(_root.FullName, "next"), FixturePackageId).Single();
+
     /// <summary>The packages those depend on, which the host only resolves from.</summary>
     public string ClosureDirectory => Path.Join(_root.FullName, "closure");
 
     public async Task InitializeAsync()
     {
-        foreach (var (project, output) in new[] { (Fixture, Directory), (PreviousFixture, PreviousDirectory) })
-            await DotnetAsync("pack", Path.Join(FoundationHostProcess.RepoRoot, project), "--no-build", "-c", FoundationHostProcess.Configuration, "-p:IsPackable=true", "-o", output);
+        await DotnetAsync("pack", Fixture, "--no-build", "-c", FoundationHostProcess.Configuration, "-p:IsPackable=true", "-o", Directory);
+        foreach (var release in new[] { "previous", "next" })
+            await PackReleaseAsync(Fixture, Path.Join(_root.FullName, "build", release), Path.Join(_root.FullName, release), $"FeedModuleRelease={release}");
 
         System.IO.Directory.CreateDirectory(CarryingDirectory);
         foreach (var package in System.IO.Directory.EnumerateFiles(Directory, "*.nupkg"))
             File.Copy(package, Path.Join(CarryingDirectory, Path.GetFileName(package)));
-        AddCarriedShares(System.IO.Directory.EnumerateFiles(CarryingDirectory, $"{FixturePackage}.*.nupkg").Single());
+        AddCarriedShares(System.IO.Directory.EnumerateFiles(CarryingDirectory, $"{FixturePackageId}.*.nupkg").Single());
 
         System.IO.Directory.CreateDirectory(ClosureDirectory);
         // Both restores prune what ASP.NET's shared framework carries, which the host does not offer Nuplane, so the EF
@@ -97,7 +107,7 @@ public sealed class FoundationHostFeed : IAsyncLifetime
     private static void AddCarriedShares(string package)
     {
         using var archive = ZipFile.Open(package, ZipArchiveMode.Update);
-        var fixture = archive.Entries.Single(entry => entry.Name == $"{FixturePackage}.dll");
+        var fixture = archive.Entries.Single(entry => entry.Name == $"{FixturePackageId}.dll");
         foreach (var share in CarriedShares)
             archive.CreateEntryFromFile(Path.Join(AppContext.BaseDirectory, $"{share}.dll"), $"{fixture.FullName[..^fixture.Name.Length]}{share}.dll");
     }
@@ -135,11 +145,26 @@ public sealed class FoundationHostFeed : IAsyncLifetime
     }
 
     /// <summary>
+    /// Packs a release of the fixture <paramref name="project"/> other than the one its build left into
+    /// <paramref name="output"/>, the one way every fixture with several releases is packed: <paramref name="properties"/>
+    /// select the release's sources and version in the project, and <c>FixtureBuildRoot</c> builds it into
+    /// <paramref name="buildRoot"/>, so the fixture's own build output, which the rest of the run shares, is left as it was.
+    /// The project references are built already, by this project's build: building them again into these folders would
+    /// pack their sources twice over and race the build everything else uses.
+    /// </summary>
+    internal static Task PackReleaseAsync(string project, string buildRoot, string output, params string[] properties) =>
+        DotnetAsync(
+        [
+            "pack", project, "--no-restore", "-c", FoundationHostProcess.Configuration, "-p:IsPackable=true", "-p:BuildProjectReferences=false",
+            $"-p:FixtureBuildRoot={buildRoot}{Path.DirectorySeparatorChar}", .. properties.Select(property => $"-p:{property}"), "-o", output
+        ]);
+
+    /// <summary>
     /// Runs <c>dotnet</c> to completion and fails with everything it wrote if it exits non-zero or outlasts
     /// <see cref="DotnetTimeout"/>, when its whole process tree is killed. MSBuild is kept from leaving nodes behind: they
     /// would inherit the redirected pipes, and reading them to the end would then never return.
     /// </summary>
-    internal static async Task DotnetAsync(params string[] arguments)
+    private static async Task DotnetAsync(params string[] arguments)
     {
         var startInfo = new ProcessStartInfo(FoundationHostProcess.DotnetPath, [.. arguments, "-nodeReuse:false"]);
         startInfo.Environment["MSBUILDDISABLENODEREUSE"] = "1";

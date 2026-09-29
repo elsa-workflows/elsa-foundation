@@ -102,6 +102,11 @@
         "resolved": "10.0.10",
         "contentHash": "jSOCVxEwCd4Aq925kJVz1kSO1EpX2OHYKL04qVREXkDU7Ce3pVDdHPYm+fEy8y/th2kJf/DAstRHpJAqoNWP8w=="
       },
+      "Nuplane.Abstractions": {
+        "type": "Transitive",
+        "resolved": "0.0.11-preview.94",
+        "contentHash": "YtytvT0fC6hyfz1GonNjNdw13jN1Ps3Zl0A+OK8/cZxuL/dUGQbVnWlV82vJkQo6TTmegXRXZx1gOvfGkpXm0g=="
+      },
       "Validation": {
         "type": "Transitive",
         "resolved": "2.5.51",
@@ -188,10 +193,12 @@
       "elsa.cluster.readability": {
         "type": "Project",
         "dependencies": {
+          "CShells.Abstractions": "[0.0.30-preview.159, )",
           "Elsa.Cluster.Core": "[4.0.0-dev, )",
           "Elsa.Cluster.InProcess": "[4.0.0-dev, )",
           "Elsa.Persistence.Schema": "[4.0.0-dev, )",
-          "Microsoft.Extensions.Logging.Abstractions": "[10.0.10, )"
+          "Microsoft.Extensions.Logging.Abstractions": "[10.0.10, )",
+          "Nuplane.Loading.Abstractions": "[0.0.11-preview.94, )"
         }
       },
       "elsa.cluster.testing": {
@@ -510,6 +517,15 @@
         "requested": "[10.0.10, )",
         "resolved": "10.0.10",
         "contentHash": "5wu/GrYVd8mG2DVUw3vFJzF+O336TyTGg/Kmcgw9bfwYhCoFiV5lR5QeEmKecJyrW4W54nMfD3p3589E8a7czQ=="
+      },
+      "Nuplane.Loading.Abstractions": {
+        "type": "CentralTransitive",
+        "requested": "[0.0.11-preview.94, )",
+        "resolved": "0.0.11-preview.94",
+        "contentHash": "vjTnc+rW+guSOUq1CXpmxp3KKBLxOpazOVHV0nHOji7w5lS7+GLRzYvEyPs/LARwxo9weJO3ie8gF5/F10UIgg==",
+        "dependencies": {
+          "Nuplane.Abstractions": "0.0.11-preview.94"
+        }
       }
     }
   }

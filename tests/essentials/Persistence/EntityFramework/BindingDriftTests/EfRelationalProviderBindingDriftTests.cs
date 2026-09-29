@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Xml.Linq;
+using Elsa.Persistence.EntityFramework.Tests;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Xunit;
@@ -42,17 +43,24 @@ public sealed class EfRelationalProviderBindingDriftTests
         Assert.Equal(engine.Package, EfRelationalProviderBinding.ProviderPackageId(provider));
         Assert.Null(EfRelationalProviderBinding.DescribeBindingFailure(provider));
 
-        var builder = new DbContextOptionsBuilder();
-        EfRelationalProviderBinding.Use(builder, provider, engine.ConnectionString, HistoryTable, MigrationsAssembly);
-
-        var relational = builder.Options.Extensions.OfType<RelationalOptionsExtension>().Single();
-        Assert.Equal(engine.ConnectionString, relational.ConnectionString);
-        Assert.Equal(HistoryTable, relational.MigrationsHistoryTableName);
+        var relational = Bind(engine, builder => EfRelationalProviderBinding.Use(builder, provider, engine.ConnectionString, HistoryTable, MigrationsAssembly));
         Assert.Equal(MigrationsAssembly, relational.MigrationsAssembly);
+    }
 
-        using var context = new DbContext(builder.Options);
-        Assert.Equal(engine.ProviderName, context.Database.ProviderName);
-        Assert.Equal(engine.ProviderName, EfRelationalProviderBinding.ExpectedProviderName(provider));
+    /// <summary>
+    /// The path every module binding takes (spec 183, FR-021, amended 2026-09-29): the options builder's
+    /// <c>MigrationsAssembly(Assembly)</c> overload, which a provider upgrade could drop or reshape exactly as it could the
+    /// name overload.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(Providers))]
+    public void The_binding_by_assembly_resolves_against_the_pinned_provider_package(string provider)
+    {
+        var engine = Engines.Single(candidate => candidate.Provider == provider);
+        var migrations = typeof(EfRelationalProviderBindingDriftTests).Assembly;
+
+        var relational = Bind(engine, builder => EfRelationalProviderBinding.UseMigrationsFrom(builder, provider, engine.ConnectionString, HistoryTable, migrations));
+        MigrationsAssemblyAssert.BoundByTheAssemblyItself(migrations, relational);
     }
 
     [Theory]
@@ -63,6 +71,22 @@ public sealed class EfRelationalProviderBindingDriftTests
                             ?? throw new InvalidOperationException($"{package} carries no informational version.");
 
         Assert.Equal(NormalizeVersion(PinnedVersions()[package]), NormalizeVersion(informational));
+    }
+
+    /// <summary>Binds <paramref name="engine"/> with <paramref name="bind"/>, and checks what every binding must configure.</summary>
+    private static RelationalOptionsExtension Bind(Engine engine, Action<DbContextOptionsBuilder> bind)
+    {
+        var builder = new DbContextOptionsBuilder();
+        bind(builder);
+
+        var relational = builder.Options.Extensions.OfType<RelationalOptionsExtension>().Single();
+        Assert.Equal(engine.ConnectionString, relational.ConnectionString);
+        Assert.Equal(HistoryTable, relational.MigrationsHistoryTableName);
+
+        using var context = new DbContext(builder.Options);
+        Assert.Equal(engine.ProviderName, context.Database.ProviderName);
+        Assert.Equal(engine.ProviderName, EfRelationalProviderBinding.ExpectedProviderName(engine.Provider));
+        return relational;
     }
 
     private static TheoryData<string> Data(Func<Engine, string> select)

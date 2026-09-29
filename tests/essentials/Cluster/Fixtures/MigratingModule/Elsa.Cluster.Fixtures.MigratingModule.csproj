@@ -9,13 +9,14 @@
     </Description>
     <!-- The generation the migrations are built for; a build of the second passes -p:MigratingModuleGeneration=2. -->
     <MigratingModuleGeneration Condition="'$(MigratingModuleGeneration)' == ''">1</MigratingModuleGeneration>
+    <Version>$(MigratingModuleGeneration).0.0</Version>
   </PropertyGroup>
 
   <!-- Where a generation is built when packing it for a feed, so two generations of one project never share output folders. It is
        set here, not passed as OutputPath or IntermediateOutputPath, which would flow to the project references too. -->
-  <PropertyGroup Condition="'$(MigratingModuleBuildRoot)' != ''">
-    <OutputPath>$(MigratingModuleBuildRoot)bin/</OutputPath>
-    <IntermediateOutputPath>$(MigratingModuleBuildRoot)obj/</IntermediateOutputPath>
+  <PropertyGroup Condition="'$(FixtureBuildRoot)' != ''">
+    <OutputPath>$(FixtureBuildRoot)bin/</OutputPath>
+    <IntermediateOutputPath>$(FixtureBuildRoot)obj/</IntermediateOutputPath>
   </PropertyGroup>
 
   <ItemGroup Condition="'$(MigratingModuleGeneration)' != '2'">
