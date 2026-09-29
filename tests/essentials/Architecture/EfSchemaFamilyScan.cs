@@ -305,13 +305,14 @@ internal sealed class SchemaFamilyScan
                     violations.Add($"{location}: passes {Quoted(passed)} of '{entity}', but its family declares {Quoted(declared)}; a read upcasts every " +
                                    "declared content column of a row together, so no row is upcast in part (spec 180, FR-009; #2144).");
 
-                foreach (var row in columns.Select(column => column.Value).OfType<MemberAccessExpressionSyntax>()
+                foreach (var (row, type) in columns.Select(column => column.Value).OfType<MemberAccessExpressionSyntax>()
                              .Select(access => access.Expression).OfType<IdentifierNameSyntax>()
-                             .Select(identifier => identifier.Identifier.ValueText).Distinct(StringComparer.Ordinal))
+                             .Select(identifier => identifier.Identifier.ValueText).Distinct(StringComparer.Ordinal)
+                             .Select(row => (row, type: DeclaredType(invocation, row)))
+                             .Where(candidate => candidate.type is not null && candidate.type != entity && !DerivesFrom(entity, candidate.type)))
                 {
-                    if (DeclaredType(invocation, row) is { } type && type != entity && !DerivesFrom(entity, type))
-                        violations.Add($"{location}: upcasts '{row}', a '{type}', as a row of '{entity}'; a row is upcast as its own table's, whose steps " +
-                                       "are the ones written for it (spec 180, FR-009; #2144).");
+                    violations.Add($"{location}: upcasts '{row}', a '{type}', as a row of '{entity}'; a row is upcast as its own table's, whose steps " +
+                                   "are the ones written for it (spec 180, FR-009; #2144).");
                 }
             }
         }
@@ -533,10 +534,9 @@ internal sealed class SchemaFamilyScan
         var content = DeclaredColumns().Where(column => !column.Integrity).ToArray();
         var wholeRow = FullRowRewriteTargets;
         var violations = new List<string>();
-        foreach (var stamp in _memberWrites.Where(write => write.Column == "SchemaVersion" && write.Member is not null))
+        foreach (var stamp in _memberWrites.Where(write => write.Column == "SchemaVersion" && write.Member is not null &&
+                                                            !wholeRow.Contains((write.Path, write.Member!.FullSpan, write.Row))))
         {
-            if (wholeRow.Contains((stamp.Path, stamp.Member!.FullSpan, stamp.Row)))
-                continue;
             var entity = RowEntityType(stamp.Member!, stamp.Row);
             if (entity is null)
                 continue;
@@ -558,10 +558,9 @@ internal sealed class SchemaFamilyScan
         // column of that type must be assigned in the initializer, or, when the creation names a row, by a later
         // write to that row in the same member. A creation the full-row-rewrite rule already counts - a reassignment
         // of a declared parameter with two or more assigned columns - is left to that rule instead (#2144).
-        foreach (var creation in _stampedCreations.Where(creation => _stampedTypes.Contains(creation.Type)))
+        foreach (var creation in _stampedCreations.Where(creation => _stampedTypes.Contains(creation.Type) &&
+                     !(creation.Row is not null && creation.Member is not null && wholeRow.Contains((creation.Path, creation.Member.FullSpan, creation.Row)))))
         {
-            if (creation.Row is not null && creation.Member is not null && wholeRow.Contains((creation.Path, creation.Member.FullSpan, creation.Row)))
-                continue;
             var declared = content.Where(column => column.Entity == creation.Type && column.Column is not null)
                 .Select(column => column.Column!).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
             if (declared.Length == 0)
