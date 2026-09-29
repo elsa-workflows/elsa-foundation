@@ -237,9 +237,22 @@ of them is never acquired, and the module binds the host's copy: the one `dotnet
 through, since it runs through the host's own `Elsa.Persistence.EntityFramework` and matches `[EfModule]` by type. A
 module that needs a newer EF Core than the host carries is refused (`host-version-unsatisfied`); on a computed build
 the same holds for `Elsa.Persistence.EntityFramework`. A source build leaves that one undeclared, so a feed module built
-against a newer one still loads, with a copy of its own that the module reaches membership through just as well, but
-that `dotnet elsa persistence` against this host does not see. `Elsa.Workbench` carries `Elsa.Persistence.EntityFramework`
+against a computed-version `Elsa.Persistence.EntityFramework` still loads, with a copy of its own that the module reaches
+membership through just as well, but that `dotnet elsa persistence` against this host does not see (see the builds that
+work, below). `Elsa.Workbench` carries `Elsa.Persistence.EntityFramework`
 too and does not share it, so an EF module loaded there from a feed keeps a copy of its own.
+
+**Which builds work together.** Build the host and the EF module packages from one commit. Two combinations work:
+
+- a source-built host with EF modules packed from the same tree (dev versions on both sides);
+- a computed-version host with modules from the matching computed feed.
+
+The trap is the mix. Until [#2150](https://github.com/elsa-workflows/elsa-foundation/issues/2150) lands, a source-built
+host that is fed a computed-version EF module acquires a private `Elsa.Persistence.EntityFramework`, because its share is
+undeclared there and every computed version falls outside the dev version's range. This holds for any computed-version
+package, not only a newer one. The module still loads and activates, but `dotnet elsa persistence` against that host
+silently does not see it. #2150 (Nuplane `0.0.11-preview.94` shared-assembly matching plus the `AssemblyVersion` major
+pin) removes the trap.
 
 **Do not name them as feed roots.** A root is always acquired, and Nuplane `0.0.11-preview.93` loads every assembly a
 host-integrated package graph holds without consulting `Nuplane:Loading:SharedAssemblies`
@@ -257,7 +270,8 @@ configured shares, a module carrying its own copy of `Elsa.Persistence.EntityFra
 of the packed fixture, plus a second, resolve-only `closure` feed holding EF Core and the Sqlite engine's closure,
 showing finalization at activation and dormancy ending once a hold is released. `FoundationHostClusterBootTests` boots
 two of them over one database with the EF provider enabled, and shows that neither acquired any of what it carries from
-the closure feed that offers it.
+the closure feed that offers it. Its PostgreSQL twin also shows that the host maps one copy of Npgsql, EF Core and
+`Elsa.Persistence.EntityFramework`, and two of the engine assembly (the host's and the one Nuplane injected).
 
 ### Generating the closure
 
@@ -625,15 +639,16 @@ version, but the version is finalized only once every live host can read it (spe
 old version, and a feature that needs the new one answers `409` with code `schema-version-not-finalized`, saying it
 becomes available once every host can read the version (spec 182); the gate's status names each host that cannot yet
 (spec 181, FR-022). Upgrade the other hosts by restarting each on the new release. A hot reload is not enough: an EF
-module package loads host-integrated, so the old release's assemblies stay loaded after a reload, and a host reports only
-the versions every loaded declaration of a family reads (spec 183, FR-021, FR-022), so it goes on counting as unable to
-read the new version until it restarts. Once the last
+module package loads host-integrated, and today the previous release of such a module stays loaded after a reload (its
+load context is not released until the host restarts). A host reports only the versions every loaded declaration of a
+family reads (spec 183, FR-021, FR-022), so it goes on counting as unable to read the new version until it restarts. Once the last
 host is on the new release, the version finalizes on its own and the feature serves on every host, with no restart of
 the hosts that already had it. A host that is stopped leaves the fleet; one that crashes is still counted until its
 entry expires.
 
 `FoundationHostClusterBootTests` (`tests/essentials/Cluster/EntityFrameworkCore/Tests`) runs this whole sequence on two
-built hosts over one SQLite database.
+built hosts over one SQLite database, and `PostgreSqlFoundationHostClusterTests` (`.../ProviderTests`, in a container) on
+one PostgreSQL database.
 
 ## Related
 

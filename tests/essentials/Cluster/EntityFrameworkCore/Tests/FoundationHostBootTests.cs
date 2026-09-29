@@ -17,7 +17,8 @@ namespace Elsa.Cluster.EntityFrameworkCore.Tests;
 /// <see cref="FoundationHostFeed"/> from the package cache that restoring this project filled, so the run needs no network
 /// and a host that acquired a second copy could; <see cref="FoundationHostClusterBootTests"/> asserts it does not.
 /// </remarks>
-public sealed class FoundationHostBootTests(FoundationHostFeed feed) : IClassFixture<FoundationHostFeed>, IAsyncLifetime
+[Collection(FoundationHostCollection.Name)]
+public sealed class FoundationHostBootTests(FoundationHostFeed feed) : IAsyncLifetime
 {
     private static readonly TimeSpan Patience = TimeSpan.FromSeconds(30);
     private readonly string _file = Path.Join(Path.GetTempPath(), $"elsa-foundation-host-boot-{Guid.NewGuid():N}.db");
@@ -84,13 +85,6 @@ public sealed class FoundationHostBootTests(FoundationHostFeed feed) : IClassFix
 
     private Task<(HttpStatusCode Status, string Text)> Orders() => OrdersAsync(_host!);
 
-    private async Task WaitUntilAsync(Func<Task<bool>> condition)
-    {
-        var deadline = DateTimeOffset.UtcNow + Patience;
-        while (!await condition())
-        {
-            Assert.True(DateTimeOffset.UtcNow < deadline, $"Not met within {Patience}. Host output:{Environment.NewLine}{_host!.Output}");
-            await Task.Delay(TimeSpan.FromMilliseconds(100));
-        }
-    }
+    private Task WaitUntilAsync(Func<Task<bool>> condition) =>
+        Polling.UntilAsync(condition, Patience, TimeSpan.FromMilliseconds(100), () => $"Host output:{Environment.NewLine}{_host!.Output}");
 }

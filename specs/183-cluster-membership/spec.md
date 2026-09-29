@@ -281,7 +281,9 @@ for identical fleets.
   to disagree with another's (FR-017; Decisions, Q20).
 - **A package installed through Nuplane on a running host.** Its family declarations are loaded before its shell
   generation prepares, so a publish then reports them (FR-020). A declaration still loaded in an older generation
-  narrows the readable set until that generation's load context is gone (FR-021).
+  narrows the readable set until that generation's load context is gone (FR-021). Today a host-integrated EF
+  module's previous release stays loaded after a reload, so that context is not released short of a restart: upgrade
+  such a module by restarting the host.
 - **A package removed on a running host.** Its families stay in the report until no declaration of them remains
   loaded. Removing them earlier would stop the host being counted while it can still write.
 - **The membership store is missing its tables.** Under `Validate` the EF provider's module is refused like any other

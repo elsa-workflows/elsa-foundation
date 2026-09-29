@@ -336,15 +336,8 @@ public sealed class SchemaDormancyScenarioTests : IAsyncLifetime
 
     private EfSchemaFinalizationStore Store(DbContext context) => new(context, _time);
 
-    private static async Task WaitUntilAsync(Func<bool> condition)
-    {
-        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(20);
-        while (!condition())
-        {
-            Assert.True(DateTime.UtcNow < deadline, "The gate's background refresh did not end the dormancy.");
-            await Task.Delay(20);
-        }
-    }
+    private static Task WaitUntilAsync(Func<bool> condition) =>
+        Polling.UntilAsync(condition, TimeSpan.FromSeconds(20), TimeSpan.FromMilliseconds(20), "The gate's background refresh did not end the dormancy.");
 
     private DormancyContext Context()
     {

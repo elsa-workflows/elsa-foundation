@@ -35,7 +35,8 @@ WORKDIR /src
 # ignores a missing import -- see the same step in the Workbench Dockerfile.
 COPY *.props *.targets NuGet.config ./
 
-# Restore inputs: the host, its shared endpoint-metadata project, Line A, its cluster membership, and the computed-production-settings
+# Restore inputs: the host, its shared endpoint-metadata project, Line A, its cluster membership, the EF closure that membership's
+# durable provider carries (Elsa.Persistence.EntityFramework plus the EF Core packages, #2151), and the computed-production-settings
 # swap Elsa.Foundation.Host.csproj imports from src/apps/ (shared with Elsa.Workbench.csproj, #2126) -- MSBuild
 # treats a missing <Import> as an error, not a no-op the way it does for the root files above, so this one has
 # to be copied before restore too, or restore fails outright with MSB4019 rather than silently.
@@ -95,7 +96,7 @@ COPY src/essentials/Tasks/Core/ src/essentials/Tasks/Core/
 # which gives every Elsa assembly, and every Elsa package in the deps.json, the version
 # the feed carries, and makes Elsa.Foundation.Host.csproj ship
 # ComputedVersions/appsettings.Production.json, which declares the Line A shares
-# and the host-composed ones host-provided. The restore has to see it too: deps.json takes a project reference's
+# and the host-composed ones (the cluster contracts, Elsa.Persistence.EntityFramework and the EF Core packages) host-provided. The restore has to see it too: deps.json takes a project reference's
 # version from the restore, not the build, so a publish alone would stamp the assemblies
 # and still record the dev versions. The restore above stays free of it and keeps its
 # cache; this one only rewrites the assets file from the packages that stage downloaded.

@@ -34,6 +34,9 @@ namespace Elsa.Cluster.EntityFrameworkCore.Tests;
 /// </remarks>
 public sealed class FeedLoadedEfModuleTests : IAsyncLifetime
 {
+    /// <summary>The persistence assembly a module in this suite carries a copy of, on both hosts (see the remarks above).</summary>
+    private const string PrivatePersistence = "Elsa.Persistence.EntityFramework";
+
     private static readonly TimeSpan Patience = TimeSpan.FromSeconds(20);
     private readonly string _file = Path.Join(Path.GetTempPath(), $"elsa-feed-module-{Guid.NewGuid():N}.db");
     private readonly List<IAsyncDisposable> _owned = [];
@@ -191,9 +194,6 @@ public sealed class FeedLoadedEfModuleTests : IAsyncLifetime
         await Assert.ThrowsAsync<InvalidOperationException>(loaded.PlaceOrderAsync);
     }
 
-    /// <summary>The persistence assembly a module in this suite carries a copy of, on both hosts (see the remarks above).</summary>
-    private const string PrivatePersistence = "Elsa.Persistence.EntityFramework";
-
     private async Task<FeedLoadedModuleHost> StartAsync(string host, Action<IServiceCollection>? composeMembership = null, params string[] withheld)
     {
         var loaded = await FeedLoadedModuleHost.StartAsync(host, ConnectionString, composeMembership, [.. withheld, PrivatePersistence]);
@@ -215,13 +215,5 @@ public sealed class FeedLoadedEfModuleTests : IAsyncLifetime
         Assert.DoesNotContain(loaded.Package.Assemblies, assembly => assembly.GetName().Name is "Elsa.Persistence.Schema" or "Elsa.Cluster.Core");
     }
 
-    private static async Task WaitUntilAsync(Func<bool> condition)
-    {
-        var deadline = DateTimeOffset.UtcNow + Patience;
-        while (!condition())
-        {
-            Assert.True(DateTimeOffset.UtcNow < deadline, $"Not met within {Patience}.");
-            await Task.Delay(TimeSpan.FromMilliseconds(50));
-        }
-    }
+    private static Task WaitUntilAsync(Func<bool> condition) => Polling.UntilAsync(condition, Patience, TimeSpan.FromMilliseconds(50));
 }

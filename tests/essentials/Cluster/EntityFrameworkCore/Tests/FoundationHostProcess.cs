@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Net;
 using System.ComponentModel;
 using System.Reflection;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 
 namespace Elsa.Cluster.EntityFrameworkCore.Tests;
@@ -100,7 +101,7 @@ internal sealed class FoundationHostProcess : IAsyncDisposable
     /// Nuplane rewrites the state file in place on every reconciliation, the periodic one included, so a read that races
     /// one can find it half written; such a read is retried a few times rather than failing the test.
     /// </remarks>
-    public IReadOnlyDictionary<string, string> ActivePackages()
+    public async Task<IReadOnlyDictionary<string, string>> ActivePackagesAsync()
     {
         for (var attempt = 1; ; attempt++)
         {
@@ -109,11 +110,31 @@ internal sealed class FoundationHostProcess : IAsyncDisposable
                 return JsonNode.Parse(File.ReadAllText(Path.Join(_contentRoot, ".nuplane", "store-state.json")))!["activeVersionById"]!.AsObject()
                     .ToDictionary(package => package.Key, package => package.Value!.GetValue<string>(), StringComparer.OrdinalIgnoreCase);
             }
-            catch (Exception exception) when (attempt < 5 && exception is IOException or System.Text.Json.JsonException)
+            catch (Exception exception) when (attempt < 5 && exception is IOException or JsonException)
             {
-                Thread.Sleep(TimeSpan.FromMilliseconds(200));
+                await Task.Delay(TimeSpan.FromMilliseconds(200));
             }
         }
+    }
+
+    /// <summary>
+    /// The managed assemblies (<c>.dll</c> files) the host process has mapped, by path, as the operating system reports them:
+    /// <c>/proc/pid/maps</c> on Linux, <c>lsof</c> elsewhere. It shows which copy of an assembly a host loaded, and from where.
+    /// </summary>
+    public async Task<IReadOnlyList<string>> MappedAssembliesAsync()
+    {
+        var maps = $"/proc/{_process.Id}/maps";
+        IEnumerable<string> paths;
+        if (File.Exists(maps))
+            paths = (await File.ReadAllLinesAsync(maps)).Select(line => line.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)[^1]);
+        else
+        {
+            using var lsof = Process.Start(new ProcessStartInfo("lsof", ["-nP", "-Fn", "-p", _process.Id.ToString()]) { RedirectStandardOutput = true })!;
+            paths = (await lsof.StandardOutput.ReadToEndAsync()).Split('\n').Where(line => line.StartsWith('n')).Select(line => line[1..]);
+            await lsof.WaitForExitAsync();
+        }
+
+        return [.. paths.Where(path => path.EndsWith(".dll", StringComparison.OrdinalIgnoreCase)).Distinct().Order(StringComparer.Ordinal)];
     }
 
     /// <summary>The status a request to <paramref name="path"/> is answered with, and its body.</summary>

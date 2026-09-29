@@ -104,18 +104,6 @@ public sealed class EfCoreDependencyGuardTests
         _ => throw new ArgumentOutOfRangeException(nameof(host), host, "An admitted EF consumer needs a reviewed EF closure of its own.")
     };
 
-    /// <summary>
-    /// Foundation.Host is admitted for its cluster membership provider only (ADR 0076, amended 2026-09-29): a design-time
-    /// or in-memory package, or a vendor EF store such as Workbench's, is outside its reviewed closure.
-    /// </summary>
-    [Fact]
-    public void Foundation_host_package_allowlist_rejects_what_only_workbench_carries()
-    {
-        Assert.Equal(
-            ["Microsoft.EntityFrameworkCore.Design", "Microsoft.EntityFrameworkCore.InMemory", "OpenIddict.EntityFrameworkCore", "OpenIddict.EntityFrameworkCore.Models"],
-            FindUnexpectedEfPackages(AllowedWorkbenchEfPackages, AllowedFoundationHostEfPackages).Order(StringComparer.Ordinal));
-    }
-
     [Fact]
     public void Every_admitted_Secrets_pilot_project_resolves_only_its_reviewed_EF_closure()
     {

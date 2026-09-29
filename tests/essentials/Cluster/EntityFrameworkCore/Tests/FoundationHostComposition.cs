@@ -22,14 +22,14 @@ internal static class FoundationHostComposition
     public const string OrdersFeature = "FeedModuleFixtureOrders";
 
     /// <summary>The settings every boot test starts the host with, as configuration keys.</summary>
-    public static Dictionary<string, string> Settings(FoundationHostFeed feed) => new()
+    public static Dictionary<string, string> Settings(FoundationHostFeed feed, string provider = "Sqlite") => new()
     {
         // A second feed beside the host's own `packages` one, which resolves what the packages there depend on and holds
         // nothing the host loads on its own account: with no include patterns it is a source, not a list of roots.
         ["Nuplane:Setup:Feeds:1:Name"] = "closure",
         ["Nuplane:Setup:Feeds:1:DirectoryPath"] = feed.ClosureDirectory,
         // The one engine the module's ef-provider capability offers that this database uses.
-        ["Nuplane:Capabilities:ef-provider"] = "Sqlite",
+        ["Nuplane:Capabilities:ef-provider"] = provider,
         [$"{EfSchemaFinalizationOptions.SectionName}:{nameof(EfSchemaFinalizationOptions.EvaluationInterval)}"] = "00:00:00.200",
         [$"{EfSchemaFinalizationOptions.SectionName}:{nameof(EfSchemaFinalizationOptions.RefreshInterval)}"] = "00:00:00.100"
     };
@@ -41,17 +41,23 @@ internal static class FoundationHostComposition
     /// left at its default, so a module the host composes on its own container, the cluster membership table, migrates
     /// itself as the host starts.
     /// </summary>
-    public static string Shells(string connectionString, params string[] features)
+    public static string Shells(string connectionString, params string[] features) => ShellsOn("Sqlite", connectionString, features);
+
+    /// <inheritdoc cref="Shells"/>
+    /// <param name="provider">The engine the fixture's persistence feature binds, by its <c>Provider</c> setting.</param>
+    public static string ShellsOn(string provider, string connectionString, params string[] features)
     {
         var enabled = new JsonObject();
         foreach (var feature in features)
-            enabled[feature] = feature == EntityFrameworkCoreFeature ? new JsonObject { ["ConnectionString"] = connectionString } : new JsonObject();
+            enabled[feature] = feature == EntityFrameworkCoreFeature
+                ? new JsonObject { ["ConnectionString"] = connectionString, ["Provider"] = provider }
+                : new JsonObject();
 
-        var configuration = new JsonObject { ["WebRouting"] = new JsonObject { ["Path"] = "" } };
-        var policy = configuration;
-        foreach (var segment in EfMigrateOptions.SectionName.Split(':'))
-            policy = (JsonObject)(policy[segment] ??= new JsonObject());
-        policy[nameof(EfMigrateOptions.Policy)] = nameof(EfMigratePolicy.Validate);
+        var configuration = new JsonObject
+        {
+            ["WebRouting"] = new JsonObject { ["Path"] = "" },
+            [$"{EfMigrateOptions.SectionName}:{nameof(EfMigrateOptions.Policy)}"] = nameof(EfMigratePolicy.Validate)
+        };
 
         return new JsonObject
         {

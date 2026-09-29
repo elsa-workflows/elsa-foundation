@@ -49,14 +49,10 @@ internal sealed class FeedLoadedModuleHost : IAsyncDisposable
     /// <summary>A scope of the activated shell.</summary>
     public IServiceProvider Shell => _scope.ServiceProvider;
 
-    /// <summary>
-    /// The fixture's family. The fixture's names are restated here because the fixture is never loaded where this code
-    /// runs; <see cref="StartAsync"/> refuses a fixture whose own constants say otherwise.
-    /// </summary>
-    public const string Family = "FeedModuleFixtureOrders";
+    /// <summary>The fixture's family, and its migrations-history name, restated by <see cref="FeedModuleDatabase"/>.</summary>
+    public const string Family = FeedModuleDatabase.Family;
 
-    /// <summary>The module's migrations-history name, which names its finalization tables.</summary>
-    public const string HistoryModule = "ElsaFeedModuleFixture";
+    public const string HistoryModule = FeedModuleDatabase.HistoryModule;
 
     /// <summary>The EF module, as its <c>[EfModule]</c> names it.</summary>
     public const string ModuleName = "FeedModuleFixture";
@@ -135,30 +131,14 @@ internal sealed class FeedLoadedModuleHost : IAsyncDisposable
         SqliteConnection.ClearAllPools();
     }
 
-    /// <summary>Creates the module's finalization tables and the record a release at version 1 created, optionally held.</summary>
-    public static async Task SeedAsync(string connectionString, string? hold = null)
-    {
-        await using var context = SeedContext.Create(connectionString);
-        await context.Database.EnsureCreatedAsync();
-        var store = new EfSchemaFinalizationStore(context);
-        var created = await store.GetOrCreateAsync(Family, "1", Chain, SchemaFinalizationActor.OfOperator("release-1"));
-        if (hold is not null && !(await store.PlaceHoldAsync(Family, created.Revision, null, hold, "ops@example", Chain)).Applied)
-            throw new InvalidOperationException("The hold was not placed: the record changed under the seed.");
-    }
+    /// <summary>The fixture's database on SQLite.</summary>
+    private static FeedModuleDatabase Sqlite(string connectionString) => new((builder, cs) => builder.UseSqlite(cs), connectionString);
 
-    public static async Task ReleaseHoldAsync(string connectionString)
-    {
-        await using var context = SeedContext.Create(connectionString);
-        var store = new EfSchemaFinalizationStore(context);
-        if (!(await store.ReleaseHoldAsync(Family, (await store.FindAsync(Family))!.Revision, null, "ops@example")).Applied)
-            throw new InvalidOperationException("The hold was not released: the record changed under the release.");
-    }
+    public static Task SeedAsync(string connectionString, string? hold = null) => Sqlite(connectionString).SeedAsync(hold);
 
-    public static async Task<SchemaFinalizationRecord> RecordAsync(string connectionString)
-    {
-        await using var context = SeedContext.Create(connectionString);
-        return (await new EfSchemaFinalizationStore(context).FindAsync(Family))!;
-    }
+    public static Task ReleaseHoldAsync(string connectionString) => Sqlite(connectionString).ReleaseHoldAsync();
+
+    public static Task<SchemaFinalizationRecord> RecordAsync(string connectionString) => Sqlite(connectionString).RecordAsync();
 
     /// <summary>Deletes a SQLite database file and the journal, WAL and shared-memory files beside it.</summary>
     public static void DeleteDatabaseFiles(string file)
@@ -167,7 +147,7 @@ internal sealed class FeedLoadedModuleHost : IAsyncDisposable
             File.Delete(path);
     }
 
-    public static readonly string[] Chain = ["1", "2"];
+    public static readonly string[] Chain = FeedModuleDatabase.Chain;
 
     private static string FixturePath => Path.Join(AppContext.BaseDirectory, "feed-module", "Elsa.Cluster.Fixtures.FeedModule.dll");
 
@@ -185,16 +165,6 @@ internal sealed class FeedLoadedModuleHost : IAsyncDisposable
             .Select(entry => entry["Name"])
             .OfType<string>()
     ];
-
-    /// <summary>The fixture module's finalization tables, mapped from the test's side to seed and read them.</summary>
-    private sealed class SeedContext(DbContextOptions<SeedContext> options) : DbContext(options)
-    {
-        public static SeedContext Create(string connectionString) =>
-            new(new DbContextOptionsBuilder<SeedContext>().UseSqlite(connectionString).Options);
-
-        protected override void OnModelCreating(ModelBuilder modelBuilder) =>
-            modelBuilder.MapSchemaFinalization(HistoryModule).IndexSchemaVersionStamps();
-    }
 }
 
 /// <summary>

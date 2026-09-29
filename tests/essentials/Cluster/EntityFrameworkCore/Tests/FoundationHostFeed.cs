@@ -29,8 +29,17 @@ public sealed class FoundationHostFeed : IAsyncLifetime
     /// <summary>The EF persistence project's restore: every package it needs, which the packed package declares.</summary>
     private static readonly string PersistenceAssets = Path.Join(FoundationHostProcess.RepoRoot, "src", "essentials", "Persistence", "EntityFramework", "obj", "project.assets.json");
 
-    /// <summary>This project's restore, which carries the Sqlite engine and the rest of what it needs.</summary>
-    private static readonly string TestAssets = Path.Join(FoundationHostProcess.RepoRoot, "tests", "essentials", "Cluster", "EntityFrameworkCore", "Tests", "obj", "project.assets.json");
+    /// <summary>
+    /// The restore of the test project this is compiled into (<c>Tests</c>, or <c>ProviderTests</c>, which links this file),
+    /// which carries the engine it runs on and the rest of what it needs.
+    /// </summary>
+    private static readonly string TestAssets = Path.Join(
+        FoundationHostProcess.RepoRoot, "tests", "essentials", "Cluster", "EntityFrameworkCore",
+        typeof(FoundationHostFeed).Assembly.GetName().Name![(typeof(FoundationHostFeed).Assembly.GetName().Name!.LastIndexOf('.') + 1)..],
+        "obj", "project.assets.json");
+
+    /// <summary>The engine packages the tests run on; the restore of a project that does not use one does not name it.</summary>
+    private static readonly string[] Engines = ["Microsoft.EntityFrameworkCore.Sqlite", "Npgsql.EntityFrameworkCore.PostgreSQL"];
 
     private readonly DirectoryInfo _root = System.IO.Directory.CreateTempSubdirectory("elsa-foundation-host-feeds-");
 
@@ -51,7 +60,7 @@ public sealed class FoundationHostFeed : IAsyncLifetime
         System.IO.Directory.CreateDirectory(ClosureDirectory);
         // Both restores prune what ASP.NET's shared framework carries, which the host does not offer Nuplane, so the EF
         // persistence project's, a class library, is the one that names EF Core's own closure.
-        foreach (var package in Packages(PersistenceAssets).Concat(Packages(TestAssets, "Microsoft.EntityFrameworkCore.Sqlite")).Distinct())
+        foreach (var package in Packages(PersistenceAssets).Concat(Packages(TestAssets, Engines)).Distinct())
             File.Copy(package, Path.Join(ClosureDirectory, Path.GetFileName(package)), overwrite: true);
     }
 

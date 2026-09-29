@@ -8,8 +8,8 @@
     AddEfSchemaReadability, which also brings the in-process membership default.
 
     It takes no EF Core (#2143): Elsa.Persistence.Schema is the EF-free half of the schema-family surface, and every host
-    shares it with the packages it loads, together with Elsa.Cluster.Core. So a host composes this without carrying EF
-    (ADR 0076), as Elsa.Foundation.Host does unless it enables the durable EF provider (#2151), and a module Nuplane loads
+    shares it with the packages it loads, together with Elsa.Cluster.Core. So a host can compose this without carrying EF
+    (ADR 0076), although Elsa.Foundation.Host now always carries the EF closure for its durable provider (#2151), and a module Nuplane loads
     with a private copy of Elsa.Persistence.EntityFramework still reaches the host's membership through the types both see.
   -->
   <ItemGroup>
