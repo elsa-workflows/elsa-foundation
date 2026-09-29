@@ -13,9 +13,10 @@ namespace Elsa.Cluster.EntityFrameworkCore;
 /// assembly (<see cref="IEfToolingFleetSource"/>).
 /// </summary>
 /// <remarks>
-/// Liveness is judged on this process's clock with the provider's default skew allowance, because the tool reads no host
-/// configuration; a host configured with another allowance may count a member the tool lists as expired, or the reverse,
-/// within that difference. Which members block a version is the counting query the finalization gate itself asks
+/// Liveness is judged on this process's clock with the skew allowance the tool names, or the provider's default when it
+/// names none. A host configured with another allowance may count a member the tool lists as expired, or the reverse,
+/// within that difference. Each member is judged by <see cref="StoredMember.ToFleetMember"/>, the judgement the provider's
+/// own fleet view uses, and which members block a version is the counting query the finalization gate itself asks
 /// (<see cref="ReadsSchemaVersion"/>), so the tool and the gate cannot disagree about who counts or what reading means.
 /// </remarks>
 public sealed class EfClusterMembershipToolingSource(TimeProvider clock) : IEfToolingFleetSource
@@ -26,37 +27,27 @@ public sealed class EfClusterMembershipToolingSource(TimeProvider clock) : IEfTo
 
     public string ModuleName => ClusterMembershipEfModule.Name;
 
-    public async Task<EfToolingFleet> ReadAsync(DbContext context, CancellationToken cancellationToken = default)
+    public async Task<EfToolingFleet> ReadAsync(DbContext context, TimeSpan? skewAllowance = null, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(context);
         if (context is not ClusterMembershipDbContext membership)
             throw new ArgumentException($"Expected a {nameof(ClusterMembershipDbContext)}, not {context.GetType().Name}.", nameof(context));
 
-        var skew = new ClusterMembershipOptions().SkewAllowance;
+        var skew = skewAllowance ?? new ClusterMembershipOptions().SkewAllowance;
         var judgedAt = clock.GetUtcNow();
-        var stored = (await membership.Members.AsNoTracking().ToListAsync(cancellationToken)).Select(StoredMember.From).ToArray();
-        var view = new FleetView(
-            ClusterProviderKind.Durable,
-            FleetReadMode.Fresh,
-            judgedAt,
-            stored.Select(member => new FleetMember(
-                member.Identity,
-                member.Status,
-                member.HeartbeatAt,
-                member.ExpiryPeriod,
-                member.IsLive(judgedAt, skew),
-                IsDisplaced: !member.IsCurrent,
-                member.Report,
-                member.ReportRevision,
-                [])).ToArray());
+        var judged = (await membership.Members.AsNoTracking().ToListAsync(cancellationToken))
+            .Select(StoredMember.From)
+            .Select(stored => (Stored: stored, Member: stored.ToFleetMember(judgedAt, skew)))
+            .ToArray();
+        var view = new FleetView(ClusterProviderKind.Durable, FleetReadMode.Fresh, judgedAt, [.. judged.Select(judgement => judgement.Member)]);
 
         return new EfToolingFleet(
             judgedAt,
             skew,
-            [.. view.Members
-                .OrderBy(member => member.HostId, StringComparer.Ordinal)
-                .ThenByDescending(member => member.LastHeartbeatAt)
-                .Select(Describe)],
+            families => [.. judged
+                .OrderBy(judgement => judgement.Member.HostId, StringComparer.Ordinal)
+                .ThenByDescending(judgement => judgement.Member.LastHeartbeatAt)
+                .Select(judgement => Describe(judgement.Stored, judgement.Member, families))],
             (family, databaseIdentity, version) => MemberQuery
                 .Counting(new ReadsSchemaVersion(family, version, databaseIdentity))
                 .Evaluate(view)
@@ -66,32 +57,43 @@ public sealed class EfClusterMembershipToolingSource(TimeProvider clock) : IEfTo
                     HostId = failure.Member.HostId,
                     Incarnation = failure.Member.Identity.Incarnation.Value,
                     ReportReadable = HasReadableReport(failure.Member),
-                    Reads = [.. ReadsOf(failure.Member, family, databaseIdentity)]
+                    Reads = [.. ReadsOf(failure.Member, family, databaseIdentity) ?? []]
                 })
                 .ToArray());
     }
 
     private static bool HasReadableReport(FleetMember member) => member.Report is { IsUnknown: false, Readability: not null };
 
-    private static EfToolingClusterMember Describe(FleetMember member) => new()
+    /// <summary>
+    /// The member as the tool lists it. A row this build cannot interpret says its status is unknown: the status it defaults
+    /// to for judging is not one the row stated.
+    /// </summary>
+    private static EfToolingClusterMember Describe(StoredMember stored, FleetMember member, IReadOnlyList<EfToolingFamilyDatabase> families) => new()
     {
         HostId = member.HostId,
         Incarnation = member.Identity.Incarnation.Value,
-        Status = member.Status.ToString(),
+        Status = stored.IsInterpretable ? member.Status.ToString() : EfToolingClusterMember.UnknownStatus,
         Live = member.IsLive,
         Displaced = member.IsDisplaced,
         LastHeartbeatAt = member.LastHeartbeatAt,
         ReportReadable = HasReadableReport(member),
-        Reads = member.Report.Readability?.Entries
-            .Select(entry => new EfToolingClusterReads { Family = entry.Family, DatabaseIdentity = entry.DatabaseIdentity, Versions = entry.ReadableVersions })
-            .OrderBy(reads => reads.Family, StringComparer.Ordinal)
-            .ToArray() ?? []
+        Reads =
+        [
+            .. families.Select(family => (family.Family, Versions: ReadsOf(member, family.Family, family.DatabaseIdentity)))
+                .Where(reads => reads.Versions is not null)
+                .Select(reads => new EfToolingClusterReads { Family = reads.Family, Versions = [.. reads.Versions!] })
+        ]
     };
 
-    /// <summary>The versions of <paramref name="family"/> the member reads for the database, across the entries that speak for it.</summary>
-    private static IEnumerable<string> ReadsOf(FleetMember member, string family, string? databaseIdentity) =>
-        member.Report.Readability?.Entries
+    /// <summary>
+    /// The versions of <paramref name="family"/> the member reads for the database, across the entries that speak for it, or
+    /// <see langword="null"/> when it reports no entry that does, or nothing this build can interpret.
+    /// </summary>
+    private static IEnumerable<string>? ReadsOf(FleetMember member, string family, string? databaseIdentity)
+    {
+        var entries = member.Report.Readability?.Entries
             .Where(entry => string.Equals(entry.Family, family, StringComparison.Ordinal) && entry.AppliesTo(databaseIdentity))
-            .SelectMany(entry => entry.ReadableVersions)
-            .Distinct(StringComparer.Ordinal) ?? [];
+            .ToArray();
+        return entries is { Length: > 0 } ? entries.SelectMany(entry => entry.ReadableVersions).Distinct(StringComparer.Ordinal) : null;
+    }
 }

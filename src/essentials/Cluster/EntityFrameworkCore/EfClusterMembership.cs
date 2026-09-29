@@ -498,14 +498,14 @@ public sealed class EfClusterMembership : IClusterMembership
     /// (FR-037 to FR-042). Called with <see cref="_gate"/> held.</summary>
     private FleetMember Judge(StoredMember stored, DateTimeOffset now)
     {
-        var isLive = stored.IsLive(now, _skewAllowance);
+        var member = stored.ToFleetMember(now, _skewAllowance);
         var hostId = stored.Identity.HostId;
         List<MemberCondition>? conditions = null;
         void Add(MemberConditionKind kind, IReadOnlyList<string> hostIds, string message) => (conditions ??= []).Add(new MemberCondition(kind, hostIds, message));
 
         if (!stored.IsCurrent)
             Add(MemberConditionKind.Displaced, [hostId], $"A later incarnation of host id '{hostId}' has joined; incarnation '{stored.Identity.Incarnation}' is displaced.");
-        if (!isLive && !stored.HasLeft)
+        if (!member.IsLive && !stored.HasLeft)
             Add(MemberConditionKind.Lapsed, [hostId], $"Host id '{hostId}' has not renewed within its expiry period and the skew allowance; it has lapsed.");
         if (!stored.IsInterpretable)
             Add(MemberConditionKind.UninterpretableEntry, [hostId], $"This reader cannot interpret the entry of host id '{hostId}', incarnation '{stored.Identity.Incarnation}'; it counts as reading nothing.");
@@ -514,16 +514,7 @@ public sealed class EfClusterMembership : IClusterMembership
         if (stored.Identity == _identity && _hadFailedFreshRead)
             Add(MemberConditionKind.FailedFreshRead, [_hostId], $"The previous fresh read by host id '{_hostId}' failed.");
 
-        return new FleetMember(
-            stored.Identity,
-            stored.Status,
-            stored.HeartbeatAt,
-            stored.ExpiryPeriod,
-            isLive,
-            IsDisplaced: !stored.IsCurrent,
-            stored.Report,
-            stored.ReportRevision,
-            conditions ?? []);
+        return conditions is null ? member : member with { Conditions = conditions };
     }
 
     /// <summary>

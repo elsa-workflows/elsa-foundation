@@ -64,9 +64,11 @@ public sealed class WorkerLaunchTests
         Assert.Equal(
             [
                 "Command", "Connection", "ConnectionEnv", "ContextSource", "ContextVersion", "DepsFile", "Environment", "Finalization", "HostDirectory",
-                "HostName", "Output", "PackageRoots", "Provider", "Resource", "Restore", "Schema", "Selection", "Shell", "Shells", "Version"
+                "HostName", "Output", "PackageRoots", "Provider", "Resource", "Restore", "Schema", "Selection", "Shell", "Shells", "SkewAllowance", "Version"
             ],
             fields);
+        // SkewAllowance is `status`'s one further input: a time span the host's configured membership skew or the operator's
+        // flag names, parsed by this tool before it travels, so no string of another shape can carry a credential there.
         // Spec 181's hold, release and status name a schema family, a version, a reason and an operator identity, and
         // nothing a feed credential could travel in.
         Assert.Equal(

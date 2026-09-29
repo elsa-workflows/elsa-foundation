@@ -33,10 +33,7 @@ public sealed partial class ArchitectureGuardTests
         ("Elsa.Persistence.EntityFramework", "Elsa.Persistence.EntityFrameworkCore.Migrations.Tests"),
         // The worker's reflected host-context API stays internal; CLI tests verify exact and
         // partial shape negotiation without making those details part of its public surface.
-        ("Elsa.Cli.Worker", "Elsa.Cli.Tests"),
-        // The report stays internal to the CLI front end; its tests render the JSON a host's tooling answers with
-        // (a pending version naming the hosts it waits for, the cluster's members) without a process per case.
-        ("Elsa.Cli", "Elsa.Cli.Tests")
+        ("Elsa.Cli.Worker", "Elsa.Cli.Tests")
     ];
 
     private static readonly Regex AssemblyInternalsVisibleToPattern = new(@"assembly\s*:\s*InternalsVisibleTo", RegexOptions.Compiled);

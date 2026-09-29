@@ -158,6 +158,7 @@ internal static class WorkerRunner
                     selection = Selection(request.Selection),
                     shells = Shells(request),
                     capabilitySelection,
+                    skewAllowance = tooling.SupportsSkewAllowance ? request.SkewAllowance : null,
                     finalization = request.Finalization is { } finalization
                         ? new { family = finalization.Family, version = finalization.Version, reason = finalization.Reason, @operator = finalization.Operator }
                         : null,

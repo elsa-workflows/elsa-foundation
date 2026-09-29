@@ -10,6 +10,12 @@ namespace Elsa.Cli;
 /// </summary>
 internal static class Report
 {
+    private const string Unreadable = "reports what it reads in a form this tool cannot interpret; counts as reading nothing";
+
+    /// <summary>The <c>cluster.availability</c> markers this tool prints something of its own for; any other says why in its note. The names are the tooling contract's.</summary>
+    private const string ClusterRead = "read";
+    private const string ClusterNoMembershipProvider = "no-membership-provider";
+
     /// <summary>
     /// Discovery is a whole-closure operation: one unreadable <c>[EfModule]</c> declaration withholds every
     /// module, by design (a module silently dropped from a migration artifact is worse than a refusal). The
@@ -116,12 +122,7 @@ internal static class Report
                 var waitsFor = pending.TryGetProperty("waitsFor", out var waiting) && waiting.ValueKind == JsonValueKind.Array
                     ? waiting.EnumerateArray().ToArray()
                     : null;
-                output.WriteLine($"  {Text(pending, "version")}: {Text(pending, "state")}" +
-                                 (heldBy.Length > 0
-                                     ? $", held: {string.Join("; ", heldBy)}"
-                                     : waitsFor is { Length: 0 }
-                                         ? ", held by nothing; every counted member reads it, so it finalizes at the next evaluation"
-                                         : ", held by nothing; waits for every counted member to read it"));
+                output.WriteLine($"  {Text(pending, "version")}: {Text(pending, "state")}{PendingSuffix(heldBy, waitsFor)}");
                 foreach (var member in waitsFor ?? [])
                     output.WriteLine($"    waits for: {Text(member, "hostId")} ({(member.GetProperty("reportReadable").GetBoolean() ? $"reads {Versions(member.GetProperty("reads"))}" : Unreadable)})");
             }
@@ -140,8 +141,9 @@ internal static class Report
             WriteCluster(output, cluster, families);
         else if (command == WorkerCommands.Status)
         {
+            // A tooling build that predates the property says nothing about the cluster, which is not the same as saying there is none.
             output.WriteLine();
-            output.WriteLine("members: this host only (this host's closure carries no cluster membership provider).");
+            output.WriteLine("members: cluster membership not reported by this host's tooling.");
         }
 
         output.WriteLine();
@@ -153,29 +155,42 @@ internal static class Report
         });
     }
 
-    private const string Unreadable = "reports what it reads in a form this tool cannot interpret; counts as reading nothing";
+    /// <summary>What follows a pending version: the holds that keep it, or what the members read says of the rest, and no more than that.</summary>
+    private static string PendingSuffix(string?[] heldBy, JsonElement[]? waitsFor)
+    {
+        if (heldBy.Length > 0)
+            return $", held: {string.Join("; ", heldBy)}";
+
+        return waitsFor is { Length: 0 }
+            ? ", held by nothing; no member counted here blocks it"
+            : ", held by nothing; waits for every counted member to read it";
+    }
 
     /// <summary>
-    /// The membership table's members, judged on this tool's clock: host id, status, whether it is counted, its last
-    /// heartbeat and, for each family listed above, the versions it reads. An entry that speaks for another database than a
-    /// family's is left out of that family's line, as the gate leaves it out of its count.
+    /// The membership table's members, judged on this tool's clock: host id, status, whether it is live, its last heartbeat
+    /// and, for each family listed above, the versions it reads, all as the host's tooling computed them. A live member that
+    /// reports nothing about a family is said not to be counted for it.
     /// </summary>
     private static void WriteCluster(TextWriter output, JsonElement cluster, JsonElement[] families)
     {
         output.WriteLine();
-        if (Optional(cluster, "note") is { } note)
+        switch (Optional(cluster, "availability"))
         {
-            output.WriteLine($"members: {note}");
-            return;
+            case ClusterNoMembershipProvider:
+                output.WriteLine("members: this host only (this host's closure carries no cluster membership provider).");
+                return;
+            case not null and not ClusterRead:
+                output.WriteLine($"members: {Optional(cluster, "note") ?? "not read here."}");
+                return;
         }
 
         var members = cluster.GetProperty("members").EnumerateArray().ToArray();
         output.WriteLine($"members: {members.Length} in {Text(cluster, "module")}, judged at {Moment(cluster, "judgedAt")} with a skew allowance of {Text(cluster, "skewAllowance")}");
         foreach (var member in members)
         {
-            var displaced = member.GetProperty("displaced").GetBoolean();
-            var state = member.GetProperty("live").GetBoolean()
-                ? displaced ? "counted, displaced by a later incarnation" : "counted"
+            var live = member.GetProperty("live").GetBoolean();
+            var state = live
+                ? member.GetProperty("displaced").GetBoolean() ? "live, displaced by a later incarnation" : "live"
                 : Text(member, "status") == "Left" ? "left" : "expired";
             output.WriteLine($"  {Text(member, "hostId")}: {Text(member, "status")}, {state}, last heartbeat {Moment(member, "lastHeartbeatAt")}");
             if (!member.GetProperty("reportReadable").GetBoolean())
@@ -184,18 +199,13 @@ internal static class Report
                 continue;
             }
 
-            foreach (var family in families)
+            var reads = member.GetProperty("reads").EnumerateArray().ToDictionary(entry => Text(entry, "family"), entry => entry.GetProperty("versions"), StringComparer.Ordinal);
+            foreach (var name in families.Select(family => Text(family, "family")))
             {
-                var identity = Optional(family, "databaseIdentity");
-                var reads = member.GetProperty("reads").EnumerateArray()
-                    .Where(entry => Text(entry, "family") == Text(family, "family")
-                                    && (Optional(entry, "databaseIdentity") is not { } entryIdentity || identity is null || entryIdentity == identity))
-                    .SelectMany(entry => entry.GetProperty("versions").EnumerateArray())
-                    .Select(version => version.GetString())
-                    .Distinct(StringComparer.Ordinal)
-                    .ToArray();
-                if (reads.Length > 0)
-                    output.WriteLine($"    {Text(family, "family")}: reads {string.Join(", ", reads)}");
+                if (reads.TryGetValue(name, out var versions))
+                    output.WriteLine($"    {name}: reads {Versions(versions)}");
+                else if (live)
+                    output.WriteLine($"    {name}: reports nothing, so it is not counted for it");
             }
         }
     }

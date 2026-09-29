@@ -32,11 +32,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- The report's rendering is tested against the JSON the host's tooling answers with, without a process per case. -->
-    <InternalsVisibleTo Include="Elsa.Cli.Tests" />
-  </ItemGroup>
-
-  <ItemGroup>
     <!-- Offline composition inspection uses the shared pure planner; it never enters the persistence worker. -->
     <ProjectReference Include="..\Modularity\Planning\Elsa.Modularity.Planning.csproj" />
   </ItemGroup>

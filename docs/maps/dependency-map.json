@@ -12389,8 +12389,8 @@
         },
         {
           "type": "internal",
-          "id": "Elsa.Secrets.Persistence.EntityFrameworkCore",
-          "path": "src/essentials/Secrets/Persistence/EntityFrameworkCore/Elsa.Secrets.Persistence.EntityFrameworkCore.csproj"
+          "id": "Elsa.Cluster.Fixtures.FeedModule",
+          "path": "tests/essentials/Cluster/Fixtures/FeedModule/Elsa.Cluster.Fixtures.FeedModule.csproj"
         },
         {
           "type": "external",

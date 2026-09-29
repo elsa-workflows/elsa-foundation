@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using Elsa.Persistence.EntityFramework.SchemaFinalization;
@@ -198,7 +199,7 @@ public sealed class EfToolingFinalizationTests : IAsyncLifetime
         var fleet = new EfToolingFleet(
             DateTimeOffset.UnixEpoch,
             TimeSpan.FromSeconds(5),
-            [],
+            _ => [],
             (family, databaseIdentity, version) => family == SecretsEfModule.SchemaFamily && databaseIdentity == record.DatabaseIdentity && version == "next"
                 ? [new EfToolingWaitingOn { HostId = "host-a", Incarnation = "a", Reads = [SecretsEfModule.SchemaVersion] }]
                 : []);
@@ -211,6 +212,49 @@ public sealed class EfToolingFinalizationTests : IAsyncLifetime
         Assert.Equal("host-a", waiting.HostId);
         Assert.Equal([SecretsEfModule.SchemaVersion], waiting.Reads);
         Assert.Null(unread.WaitsFor);
+    }
+
+    /// <summary>
+    /// A closure with no membership provider says so by an explicit marker on the cluster, which is what lets the CLI say
+    /// "this host only" for it and nothing of the kind for a payload that carries no cluster at all.
+    /// </summary>
+    [Fact]
+    public async Task Status_of_a_closure_with_no_membership_provider_carries_an_explicit_marker()
+    {
+        var status = await RunAsync(Status(), [typeof(SecretsSqliteDbContext).Assembly]);
+
+        Assert.Equal(EfToolingExitCode.Success, status.ExitCode);
+        var cluster = status.Response.GetProperty("finalization").GetProperty("cluster");
+        Assert.Equal(EfToolingClusterAvailability.NoMembershipProvider, cluster.GetProperty("availability").GetString());
+        Assert.Empty(cluster.GetProperty("members").EnumerateArray());
+        Assert.All(status.Response.GetProperty("finalization").GetProperty("families").EnumerateArray(), family =>
+            Assert.All(family.GetProperty("pending").EnumerateArray(), pending => Assert.False(pending.TryGetProperty("waitsFor", out _))));
+    }
+
+    /// <summary>A closure that carries the provider, over a database whose membership table was never created, says that and not that there is no provider.</summary>
+    [Fact]
+    public async Task Status_of_a_database_without_the_membership_table_carries_a_distinct_marker_and_says_why()
+    {
+        var status = await RunAsync(Status());
+
+        Assert.Equal(EfToolingExitCode.Success, status.ExitCode);
+        var cluster = status.Response.GetProperty("finalization").GetProperty("cluster");
+        Assert.Equal(EfToolingClusterAvailability.NotMigrated, cluster.GetProperty("availability").GetString());
+        Assert.Equal("Cluster.Membership", cluster.GetProperty("module").GetString());
+        Assert.Contains("migrations not applied", cluster.GetProperty("note").GetString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Status_takes_a_skew_allowance_and_nothing_else_does_and_a_bad_one_is_refused()
+    {
+        Assert.Equal(EfToolingExitCode.Success, (await RunAsync(Status("00:00:02"))).ExitCode);
+        Assert.Equal(EfToolingExitCode.Refusal, (await RunAsync(Status("soon"))).ExitCode);
+        Assert.Equal(EfToolingExitCode.Refusal, (await RunAsync(Status("-00:00:02"))).ExitCode);
+        Assert.Equal(EfToolingExitCode.Refusal, (await RunAsync(new
+        {
+            version = 1, command = "release", provider = "Sqlite", selection = Modules("Secrets"), connection = Connection, skewAllowance = "00:00:02",
+            finalization = new { family = SecretsEfModule.SchemaFamily, @operator = "ops@example" }
+        })).ExitCode);
     }
 
     [Fact]
@@ -235,6 +279,11 @@ public sealed class EfToolingFinalizationTests : IAsyncLifetime
         finalization = new { family = SecretsEfModule.SchemaFamily, version, reason = "canary of the next release", @operator = "ops@example" }
     });
 
+    private object Status(string? skewAllowance = null) => new
+    {
+        version = 1, command = "status", provider = "Sqlite", selection = Modules("Secrets"), connection = Connection, skewAllowance
+    };
+
     private object Release(string? version) => new
     {
         version = 1,
@@ -253,11 +302,11 @@ public sealed class EfToolingFinalizationTests : IAsyncLifetime
         return await new EfSchemaFinalizationStore(context).FindAsync(SecretsEfModule.SchemaFamily);
     }
 
-    private static async Task<Run> RunAsync(object request)
+    private static async Task<Run> RunAsync(object request, IEnumerable<Assembly>? closure = null)
     {
         using var input = new MemoryStream(JsonSerializer.SerializeToUtf8Bytes(request, Json));
         using var output = new MemoryStream();
-        var exitCode = await EfToolingHost.RunAsync(input, output, ModuleContextCatalog.Modules);
+        var exitCode = await EfToolingHost.RunAsync(input, output, closure ?? ModuleContextCatalog.Modules);
         using var response = JsonDocument.Parse(Encoding.UTF8.GetString(output.ToArray()));
         return new Run(exitCode, response.RootElement.Clone());
     }
