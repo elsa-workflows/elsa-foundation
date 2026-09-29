@@ -1,6 +1,7 @@
 using Elsa.Persistence.EntityFramework;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Studio.Preferences.Persistence.EntityFrameworkCore;
+using Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.Entities;
 
 // The single, discoverable declaration of this module (ADR 0076 D2). EfModuleCatalog.Discover reads this,
 // and EfModuleBinding.For derives the registration class's binding from it (#1872).
@@ -22,3 +23,7 @@ using Elsa.Studio.Preferences.Persistence.EntityFrameworkCore;
 // report is derived from it alone (spec 183, FR-020); EfSchemaFamilyDeclarationGuardTests fails the build when a
 // family the stores check is not declared here, or is declared at another version.
 [assembly: EfSchemaFamily(StudioPreferencesEfModule.SchemaFamily, "Studio.Preferences", StudioPreferencesEfModule.SchemaVersion)]
+
+// Content and integrity columns: see src/essentials/Persistence/EntityFramework/EXTENSION_POINTS.md, "Content and integrity columns" (spec 180, FR-008, FR-009
+// and FR-014).
+[assembly: EfSchemaContent(StudioPreferencesEfModule.SchemaFamily, typeof(StudioPreferenceRecord), nameof(StudioPreferenceRecord.ValueJson))]

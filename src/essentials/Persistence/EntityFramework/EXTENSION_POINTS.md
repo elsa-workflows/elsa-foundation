@@ -92,6 +92,29 @@ API answers with a 409 in its own envelope (`Elsa.Api.AspNetCore`'s `SchemaWrite
 resolves no EF Core. A store lets it leave as itself, as it does the skew exception: a store that wraps it in a
 failure of its own turns the 409 into that failure's status.
 
+### Content and integrity columns
+
+Beside its `[EfSchemaFamily]`, a module declares which columns of the family's tables are content: one
+`[EfSchemaContent(family, typeof(Entity), columns...)]` per table, naming the type the context maps to the table and
+its content columns with `nameof`. Content is what a read upcasts through the family's chain before it deserializes it,
+and what a write that changes it restamps the row for (spec 180, FR-009 and FR-014). A document column that is instead
+compared as the bytes it was stored with - a projection or integrity datum, read before any upcast (FR-008) and never
+deserialized - is declared with `[EfSchemaIntegrity(family, typeof(Entity), column, reason)]`, and the reason is
+required, since a column deserialized into a current type, or compared with anything this build serializes, is
+content. `EfSchemaFamilyCatalog` reads both onto the family's descriptor (`ContentColumns`, `IntegrityColumns`) and
+refuses discovery for a declaration naming a family its assembly does not declare, a blank column, an integrity column
+without a reason, or a column declared twice.
+
+The declaration is what the guards read, so nothing is inferred from call sites. `EfSchemaContentDeclarationTests`
+builds every first-party module's context on every provider and fails when a document column of a stamped table - a
+string column named `...Json`, `Content` or `Payload`, a payload column, or a domain value a converter stores as a
+string - is declared by neither attribute, or when a declared column is not in the model.
+`EfSchemaFamilyDeclarationGuardTests` fails when a column a store upcasts is not declared content by its family, when
+a read of a declared content column in a source that can see its declaration neither goes through the chain nor
+deserializes nothing, and when a write that changes one, an `ExecuteUpdate` included, does not restamp the row. A
+family EF materializes directly declares its content too; its reads meet the rule through the materialization
+interceptor, which accepts its current version alone, and its tracked writes through the context's stamping.
+
 ### Shared families (no single owning module)
 
 Shared mapping code - code that is not itself an `[EfModule]` but writes rows into several EF modules' contexts, such

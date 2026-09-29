@@ -1,4 +1,5 @@
 using Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore;
+using Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
 
@@ -25,3 +26,17 @@ using Elsa.Specifications.PackageManifest.Generator.Hints;
 // report is derived from it alone (spec 183, FR-020); EfSchemaFamilyDeclarationGuardTests fails the build when a
 // family the stores check is not declared here, or is declared at another version.
 [assembly: EfSchemaFamily(EfOpenTelemetryModule.SchemaFamily, "Diagnostics.OpenTelemetry", EfOpenTelemetryModule.SchemaVersion)]
+
+// Content and integrity columns: see src/essentials/Persistence/EntityFramework/EXTENSION_POINTS.md, "Content and integrity columns" (spec 180, FR-008, FR-009
+// and FR-014).
+// A trace summary's service and workflow memberships restate its payload, but each is deserialized and merged or
+// compared with the upcast payload, so each is content too (#2140).
+[assembly: EfSchemaContent(EfOpenTelemetryModule.SchemaFamily, typeof(OpenTelemetryResourceEntity), nameof(OpenTelemetryResourceEntity.PayloadJson))]
+[assembly: EfSchemaContent(EfOpenTelemetryModule.SchemaFamily, typeof(OpenTelemetryTraceEntity), nameof(OpenTelemetryTraceEntity.PayloadJson))]
+[assembly: EfSchemaContent(EfOpenTelemetryModule.SchemaFamily, typeof(OpenTelemetryTraceSummaryEntity),
+    nameof(OpenTelemetryTraceSummaryEntity.PayloadJson), nameof(OpenTelemetryTraceSummaryEntity.ServiceMembershipJson),
+    nameof(OpenTelemetryTraceSummaryEntity.WorkflowMembershipJson))]
+[assembly: EfSchemaContent(EfOpenTelemetryModule.SchemaFamily, typeof(OpenTelemetrySpanEntity), nameof(OpenTelemetrySpanEntity.PayloadJson))]
+[assembly: EfSchemaContent(EfOpenTelemetryModule.SchemaFamily, typeof(OpenTelemetryMetricInstrumentEntity), nameof(OpenTelemetryMetricInstrumentEntity.PayloadJson))]
+[assembly: EfSchemaContent(EfOpenTelemetryModule.SchemaFamily, typeof(OpenTelemetryMetricPointEntity), nameof(OpenTelemetryMetricPointEntity.PayloadJson))]
+[assembly: EfSchemaContent(EfOpenTelemetryModule.SchemaFamily, typeof(OpenTelemetryLogEntity), nameof(OpenTelemetryLogEntity.PayloadJson))]
