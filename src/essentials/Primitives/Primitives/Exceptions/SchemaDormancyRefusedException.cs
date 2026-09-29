@@ -4,12 +4,13 @@ namespace Elsa.Primitives.Exceptions;
 /// Spec 182's dormancy refusal (FR-013): an operation needs data that only a schema version this host may not use yet
 /// can hold, so it is refused whole, before any write or other side effect, and nothing it carried is dropped to make it
 /// fit. The shared dormancy check raises it; it carries the feature when known and the reason on top of spec 180's write
-/// refusal, whose code, family and versions it keeps.
+/// refusal, whose type, family and versions it keeps, and it carries its own stable code (Q17): <see cref="RefusalCode"/>,
+/// never the store-level <see cref="SchemaWriteRefusedException.RefusalCode"/>.
 /// </summary>
 /// <remarks>
 /// <para>
 /// A <see cref="SchemaWriteRefusedException"/>, so every domain API already answers it with HTTP 409 in its own problem
-/// envelope, carrying the same stable code, and no catch filter or fault ladder that names
+/// envelope, carrying <see cref="RefusalCode"/>, and no catch filter or fault ladder that names
 /// <see cref="InvalidOperationException"/>, <see cref="ArgumentException"/>, <see cref="FormatException"/>,
 /// <see cref="NotSupportedException"/> or <c>JsonException</c> turns it into corruption or a 400.
 /// </para>
@@ -22,8 +23,12 @@ namespace Elsa.Primitives.Exceptions;
 /// </remarks>
 public sealed class SchemaDormancyRefusedException : SchemaWriteRefusedException
 {
+    /// <summary>The stable code every problem envelope that reports a dormancy refusal carries (spec 182, Q17), distinct
+    /// from the store-level <see cref="SchemaWriteRefusedException.RefusalCode"/>.</summary>
+    public new const string RefusalCode = "schema-version-not-finalized";
+
     public SchemaDormancyRefusedException(string family, string observedVersion, string requiredVersion, string? featureId, string reason)
-        : base(family, observedVersion, requiredVersion, Describe(family, observedVersion, requiredVersion, featureId, reason))
+        : base(family, observedVersion, requiredVersion, Describe(family, observedVersion, requiredVersion, featureId, reason), RefusalCode)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(reason);
         FeatureId = string.IsNullOrWhiteSpace(featureId) ? null : featureId;

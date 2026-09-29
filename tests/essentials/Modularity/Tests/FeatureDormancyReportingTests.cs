@@ -26,7 +26,7 @@ public sealed class FeatureDormancyReportingTests
 {
     private const string Family = "Orders";
     private static readonly DateTimeOffset Now = DateTimeOffset.Parse("2026-09-29T10:00:00Z");
-    private readonly ObservedFamilies _observed = new();
+    private readonly FakeObservedSchemaFinalization _observed = new();
     private readonly SchemaDormancyCheck _check;
 
     public FeatureDormancyReportingTests() => _check = new SchemaDormancyCheck(Options.Create(new SchemaDormancyOptions()), _observed);
@@ -178,38 +178,5 @@ public sealed class FeatureDormancyReportingTests
 
         public Task<FeatureApplyResult> ApplyAsync(FeatureApplyRequest request, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
-    }
-
-    /// <summary>An observation a test sets, whose operator read adds the blockers it was given.</summary>
-    private sealed class ObservedFamilies : IObservedSchemaFinalization
-    {
-        private readonly Dictionary<string, (SchemaFamilyObservation Family, string[] Blockers)> _families = new(StringComparer.Ordinal);
-
-        public bool FailStatus { get; set; }
-
-        public int StatusReads { get; private set; }
-
-        public void Set(SchemaFamilyObservation family, string[]? blockers = null) => _families[family.Family] = (family, blockers ?? []);
-
-        public SchemaFamilyObservation? Find(string family) => _families.TryGetValue(family, out var found) ? found.Family : null;
-
-        public IReadOnlyList<SchemaFamilyObservation> Observe() => _families.Values.Select(found => found.Family).ToArray();
-
-        public ValueTask RefreshAsync(string family, TimeSpan maxAge, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
-
-        public ValueTask<IReadOnlyList<SchemaFamilyObservation>> ReadStatusAsync(CancellationToken cancellationToken = default)
-        {
-            StatusReads++;
-            if (FailStatus)
-                throw new TimeoutException("The fleet could not be read.");
-            return ValueTask.FromResult<IReadOnlyList<SchemaFamilyObservation>>(_families.Values
-                .Select(found => found.Family with
-                {
-                    Pending = found.Blockers.Length == 0
-                        ? found.Family.Pending
-                        : [new SchemaPendingVersion("2", false, [], found.Blockers)]
-                })
-                .ToArray());
-        }
     }
 }

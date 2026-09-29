@@ -241,6 +241,11 @@ the rows that happen to carry the column.
   unmet requirement (family and version) and why it is unmet. There are three cases: waiting for hosts, stated as
   "available once every host can read the new version"; held by an operator, with the hold's reason; or waiting for
   existing records to be upgraded (FR-005).
+
+  **2026-09-29 dated note (control room review, #2102).** "With the hold's reason" is the catalog's and Attention's
+  reason, not the domain-API refusal's: those are operator surfaces (FR-011), while a domain API returns its reason to
+  whoever sent the request. The held case's caller-facing text there says only that the version is held by an
+  operator, never the hold's own words or who placed it, because those may name hosts (FR-011).
 - **FR-009**: The Modularity feature catalog MUST carry each enabled feature's availability (available or dormant)
   and reason, through an `IFeatureCatalogContributor`. That adds a member to `FeatureCatalogItem` in
   `Elsa.Modularity.Core` and to the catalog response. It MUST NOT reuse `ReadError`, which means a manifest failure
@@ -258,10 +263,15 @@ the rows that happen to carry the column.
   never succeeds without it.
 - **FR-013**: The dormancy refusal MUST reuse spec 180's write refusal (Terms, FR-016a): the same exception type,
   unassignable to the same six types (`InvalidOperationException`, `ArgumentException`, `FormatException`,
-  `NotSupportedException`, `JsonException` and `InvalidDataException`), carrying the same stable code. A
-  feature-level dormancy refusal additionally carries the feature id when known and FR-008's reason; the store-level
-  backstop (FR-017) carries the family and the two versions alone, as spec 180 defines it. A test pins the
+  `NotSupportedException`, `JsonException` and `InvalidDataException`), and the same HTTP 409 mapping in every domain
+  API. A feature-level dormancy refusal additionally carries the feature id when known and FR-008's reason; the
+  store-level backstop (FR-017) carries the family and the two versions alone, as spec 180 defines it. A test pins the
   unassignability, as `EfSchemaVersionTests` does for the skew exception.
+
+  **2026-09-29 dated note (control room review, #2102).** "The same stable code" above is superseded: Q17 is the
+  decision of record, so the dormancy refusal carries its own stable code, `schema-version-not-finalized`, never the
+  store-level refusal's `schema-write-refused`. What both share is the exception type, the six-type unassignability
+  and every domain API's 409 mapping, not the code.
 - **FR-014**: Before raising a dormancy refusal, the host MUST refresh its observed finalized version if its last
   refresh is older than a short, rate-limited bound. A request that finalization already allows is then not refused
   on a stale view.
@@ -374,9 +384,14 @@ Recorded 2026-09-27, when the owner answered this spec's open questions on #2093
 - **The refusal and its code.** The check is EF-free, so its refusal, `SchemaDormancyRefusedException`, lives in
   `Elsa.Primitives` beside `SchemaWriteRefusedException` and derives from it, not from the EF
   `EfSchemaWriteRefusedException`. That is what every domain API already answers with 409 (spec 181's 2026-09-28
-  note), so FR-015 holds for it without a new mapping; the shared envelope adds `feature` and `reason`. It carries the
-  code spec 180's write refusal shipped with, `schema-write-refused`, as FR-013 requires ("the same stable code"). Q17's
-  `schema-version-not-finalized` predates B4 naming that code, and would have given the two refusals different codes.
+  note), so FR-015 holds for it without a new mapping; the shared envelope adds `feature` and `reason`. **Superseded
+  2026-09-29 (control room review, #2102):** it carries its own stable code, `schema-version-not-finalized`, not the
+  store-level `schema-write-refused` this note first reasoned to. Q17 is the decision of record — "each API owns its
+  codes… `schema-version-not-finalized` stays" — and this note's own claim that FR-013's "same stable code" required
+  sharing the store-level one was a misreading: FR-013 is amended the same day to say what is shared is the type, the
+  six-type unassignability and the 409 mapping, not the code. `SchemaWriteRefusedException.Code` is settable per
+  concrete type through a protected constructor parameter, defaulting to `SchemaWriteRefusedException.RefusalCode` for
+  a store-level refusal.
 - **A hold's own words reach operators only.** A domain API's refusal says the version is held by an operator, not the
   hold's reason or who placed it, because an operator's words may name hosts (FR-011). The catalog and Attention, which
   are operator surfaces, carry both, as FR-008 asks.

@@ -102,12 +102,12 @@ public sealed class SchemaWriteRefusalMappingGuardTests
             foreach (var endpoint in endpoints)
             {
                 var (status, body) = await FailAsync(app.Services, endpoint, DormancyProbe());
-                if (status != StatusCodes.Status409Conflict || !CarriesTheRefusal(body) || !CarriesTheDormancy(body))
+                if (status != StatusCodes.Status409Conflict || !CarriesFamilyAndVersions(body) || !CarriesTheDormancy(body))
                     wrong.Add($"{endpoint.DisplayName} ({endpoint.RoutePattern.RawText}) answered {status}: {body}");
             }
         }
 
-        Assert.True(wrong.Count == 0, $"{feature.Name}: {wrong.Count} of {endpoints.Length} endpoints do not answer a dormancy refusal with 409, its code, feature and reason:{Environment.NewLine}{string.Join(Environment.NewLine, wrong)}");
+        Assert.True(wrong.Count == 0, $"{feature.Name}: {wrong.Count} of {endpoints.Length} endpoints do not answer a dormancy refusal with 409, its own code ({SchemaDormancyRefusedException.RefusalCode}), feature and reason:{Environment.NewLine}{string.Join(Environment.NewLine, wrong)}");
     }
 
     /// <summary>
@@ -179,11 +179,12 @@ public sealed class SchemaWriteRefusalMappingGuardTests
         Assert.Contains(("writeVersion", ProbeWriteVersion), pairs);
         Assert.Contains(("requiredVersion", ProbeRequiredVersion), pairs);
 
-        // A dormancy refusal adds its feature and its caller-neutral reason as entries of their own (spec 182, FR-013).
+        // A dormancy refusal carries its own code (spec 182, Q17), never the store-level one, plus its feature and its
+        // caller-neutral reason as entries of their own (FR-013).
         var (dormantStatus, dormant) = await host.GetAsync("/contained/dormant");
         Assert.Equal(HttpStatusCode.Conflict, dormantStatus);
         var dormantErrors = dormant.GetProperty("errors");
-        Assert.Equal(SchemaWriteRefusedException.RefusalCode, dormantErrors.GetProperty("code")[0].GetString());
+        Assert.Equal(SchemaDormancyRefusedException.RefusalCode, dormantErrors.GetProperty("code")[0].GetString());
         Assert.Equal(ProbeFeature, dormantErrors.GetProperty("feature")[0].GetString());
         Assert.Equal(ProbeReason, dormantErrors.GetProperty("reason")[0].GetString());
         Assert.False(errors.TryGetProperty("feature", out _), "A store's refusal names no feature.");
@@ -234,12 +235,16 @@ public sealed class SchemaWriteRefusalMappingGuardTests
             .Where(path => !IsBuildOutput(path))
             .Select(path => (Path.GetRelativePath(RepoRoot, path).Replace(Path.DirectorySeparatorChar, '/'), File.ReadAllText(path)));
 
+    /// <summary>Proves the dormancy refusal answers with its own code (spec 182, Q17), never the store-level one.</summary>
     private static bool CarriesTheDormancy(string body) =>
+        body.Contains(SchemaDormancyRefusedException.RefusalCode, StringComparison.Ordinal) &&
         body.Contains(ProbeFeature, StringComparison.Ordinal) &&
         body.Contains(ProbeReason, StringComparison.Ordinal);
 
     private static bool CarriesTheRefusal(string body) =>
-        body.Contains(SchemaWriteRefusedException.RefusalCode, StringComparison.Ordinal) &&
+        body.Contains(SchemaWriteRefusedException.RefusalCode, StringComparison.Ordinal) && CarriesFamilyAndVersions(body);
+
+    private static bool CarriesFamilyAndVersions(string body) =>
         body.Contains(ProbeFamily, StringComparison.Ordinal) &&
         body.Contains(ProbeWriteVersion, StringComparison.Ordinal) &&
         body.Contains(ProbeRequiredVersion, StringComparison.Ordinal);

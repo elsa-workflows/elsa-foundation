@@ -178,7 +178,7 @@ public sealed class SchemaDormancyCheckTests
 
         Assert.Equal(1, _observed.Refreshes);
         Assert.Equal((Family, "1", "2", "OrdersApi"), (refusal.Family, refusal.WriteVersion, refusal.RequiredVersion, refusal.FeatureId));
-        Assert.Equal(SchemaWriteRefusedException.RefusalCode, refusal.Code);
+        Assert.Equal(SchemaDormancyRefusedException.RefusalCode, refusal.Code);
         Assert.Contains("once every host can read version '2'", refusal.Reason, StringComparison.Ordinal);
     }
 
@@ -280,33 +280,4 @@ public sealed class SchemaDormancyCheckTests
         public ValueTask<IReadOnlyList<SchemaFamilyObservation>> ReadStatusAsync(CancellationToken cancellationToken = default) =>
             ValueTask.FromResult<IReadOnlyList<SchemaFamilyObservation>>([]);
     }
-}
-
-/// <summary>An observation a test sets directly, counting the refreshes the check asks for.</summary>
-internal class FakeObservedSchemaFinalization : IObservedSchemaFinalization
-{
-    private readonly Dictionary<string, SchemaFamilyObservation> _families = new(StringComparer.Ordinal);
-
-    public int Refreshes { get; private set; }
-
-    public TimeSpan? LastMaxAge { get; private set; }
-
-    public Action? OnRefresh { get; set; }
-
-    public void Set(SchemaFamilyObservation family) => _families[family.Family] = family;
-
-    public SchemaFamilyObservation? Find(string family) => _families.GetValueOrDefault(family);
-
-    public IReadOnlyList<SchemaFamilyObservation> Observe() => _families.Values.ToArray();
-
-    public ValueTask RefreshAsync(string family, TimeSpan maxAge, CancellationToken cancellationToken = default)
-    {
-        Refreshes++;
-        LastMaxAge = maxAge;
-        OnRefresh?.Invoke();
-        return ValueTask.CompletedTask;
-    }
-
-    public ValueTask<IReadOnlyList<SchemaFamilyObservation>> ReadStatusAsync(CancellationToken cancellationToken = default) =>
-        ValueTask.FromResult(Observe());
 }

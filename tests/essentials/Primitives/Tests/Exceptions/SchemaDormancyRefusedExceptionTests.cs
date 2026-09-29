@@ -4,8 +4,9 @@ using Xunit;
 namespace Elsa.Primitives.Tests.Exceptions;
 
 /// <summary>
-/// Spec 182, FR-013 and SC-006: the dormancy refusal is spec 180's write refusal, with the same code and versions, plus
-/// the feature and a caller-neutral reason, and no filter that turns an exception into corruption or a 400 catches it.
+/// Spec 182, FR-013 and SC-006: the dormancy refusal is spec 180's write refusal, keeping its type and versions, but
+/// carrying its own stable code (Q17), plus the feature and a caller-neutral reason, and no filter that turns an
+/// exception into corruption or a 400 catches it.
 /// </summary>
 public sealed class SchemaDormancyRefusedExceptionTests
 {
@@ -27,11 +28,12 @@ public sealed class SchemaDormancyRefusedExceptionTests
         Assert.False(caught.IsInstanceOfType(Refusal), $"SchemaDormancyRefusedException must not be catchable as {caught.Name}.");
 
     [Fact]
-    public void The_refusal_is_the_write_refusal_every_domain_api_answers_with_its_code_family_and_versions()
+    public void The_refusal_is_the_write_refusal_every_domain_api_answers_with_its_own_code_family_and_versions()
     {
         SchemaWriteRefusedException refusal = Refusal;
 
-        Assert.Equal(SchemaWriteRefusedException.RefusalCode, refusal.Code);
+        Assert.Equal(SchemaDormancyRefusedException.RefusalCode, refusal.Code);
+        Assert.NotEqual(SchemaWriteRefusedException.RefusalCode, refusal.Code);
         Assert.Equal(("Orders", "1", "2"), (refusal.Family, refusal.WriteVersion, refusal.RequiredVersion));
     }
 

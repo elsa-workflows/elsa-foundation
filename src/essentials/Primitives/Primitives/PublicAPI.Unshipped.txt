@@ -50,6 +50,7 @@ Elsa.Primitives.Exceptions.EntityNotFoundException.EntityNotFoundException(strin
 Elsa.Primitives.Exceptions.FeatureConfigurationException
 Elsa.Primitives.Exceptions.FeatureConfigurationException.FeatureConfigurationException() -> void
 Elsa.Primitives.Exceptions.FeatureConfigurationException.FeatureConfigurationException(string? message) -> void
+const Elsa.Primitives.Exceptions.SchemaDormancyRefusedException.RefusalCode = "schema-version-not-finalized" -> string!
 Elsa.Primitives.Exceptions.SchemaDormancyRefusedException
 Elsa.Primitives.Exceptions.SchemaDormancyRefusedException.FeatureId.get -> string?
 Elsa.Primitives.Exceptions.SchemaDormancyRefusedException.Reason.get -> string!
@@ -59,6 +60,7 @@ Elsa.Primitives.Exceptions.SchemaWriteRefusedException.Code.get -> string!
 Elsa.Primitives.Exceptions.SchemaWriteRefusedException.Family.get -> string!
 Elsa.Primitives.Exceptions.SchemaWriteRefusedException.RequiredVersion.get -> string!
 Elsa.Primitives.Exceptions.SchemaWriteRefusedException.SchemaWriteRefusedException(string! family, string! writeVersion, string! requiredVersion, string! message) -> void
+Elsa.Primitives.Exceptions.SchemaWriteRefusedException.SchemaWriteRefusedException(string! family, string! writeVersion, string! requiredVersion, string! message, string! code) -> void
 Elsa.Primitives.Exceptions.SchemaWriteRefusedException.WriteVersion.get -> string!
 Elsa.Primitives.Extensions.CollectionExtensions
 Elsa.Primitives.Extensions.ObjectExtensions
