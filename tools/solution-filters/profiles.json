@@ -60,6 +60,7 @@
         "Elsa.Primitives.Hosting.Tests",
         "Elsa.Primitives.Tests",
         "Elsa.Samples.Nuplane.Activities.Tests",
+        "Elsa.Samples.Nuplane.Notes.Tests",
         "Elsa.Serialization.Core",
         "Elsa.Serialization.SystemText",
         "Elsa.Serialization.Tests",

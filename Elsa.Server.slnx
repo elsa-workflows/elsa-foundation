@@ -39,6 +39,7 @@
   </Folder>
   <Folder Name="/samples/">
     <Project Path="samples/Elsa.Samples.Nuplane.Activities/Elsa.Samples.Nuplane.Activities.csproj" />
+    <Project Path="samples/Elsa.Samples.Nuplane.Notes/Elsa.Samples.Nuplane.Notes.csproj" />
   </Folder>
   <Folder Name="/solution/">
     <File Path=".gitignore" />
@@ -46,6 +47,9 @@
     <File Path="NuGet.config" />
   </Folder>
   <Folder Name="/tools/" />
+  <Folder Name="/tools/demo/">
+    <Project Path="tools/demo/Elsa.Samples.Nuplane.Notes.Tooling/Elsa.Samples.Nuplane.Notes.Tooling.csproj" />
+  </Folder>
   <Folder Name="/tools/ef/">
     <Project Path="tools/ef/Elsa.EntityFrameworkCore.Tooling/Elsa.EntityFrameworkCore.Tooling.csproj" />
   </Folder>
@@ -506,6 +510,9 @@
   <Folder Name="/tests/essentials/Samples/Nuplane/" />
   <Folder Name="/tests/essentials/Samples/Nuplane/Activities/">
     <Project Path="tests/essentials/Samples/Nuplane/Activities/Tests/Elsa.Samples.Nuplane.Activities.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/essentials/Samples/Nuplane/Notes/">
+    <Project Path="tests/essentials/Samples/Nuplane/Notes/Tests/Elsa.Samples.Nuplane.Notes.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/essentials/Secrets/">
     <Project Path="tests/essentials/Secrets/Tests/Elsa.Secrets.Tests.csproj" />
