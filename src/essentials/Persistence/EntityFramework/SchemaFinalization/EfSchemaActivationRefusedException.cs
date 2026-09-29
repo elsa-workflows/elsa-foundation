@@ -1,3 +1,5 @@
+using Elsa.Persistence.Schema;
+
 namespace Elsa.Persistence.EntityFramework.SchemaFinalization;
 
 /// <summary>
@@ -12,7 +14,7 @@ namespace Elsa.Persistence.EntityFramework.SchemaFinalization;
 /// carries a connection string or any other restored secret (spec 171, FR-061): none of its parts is taken from
 /// configuration.
 /// </remarks>
-public sealed class EfSchemaActivationRefusedException : InvalidOperationException
+public sealed class EfSchemaActivationRefusedException : InvalidOperationException, IEfModuleRefusal
 {
     public EfSchemaActivationRefusedException(
         string module,
@@ -31,6 +33,14 @@ public sealed class EfSchemaActivationRefusedException : InvalidOperationExcepti
 
     /// <summary>The EF module that was refused.</summary>
     public string Module { get; }
+
+    string IEfModuleRefusal.Code => IEfModuleRefusal.SchemaActivationRefusedCode;
+
+    /// <summary>A refusal to activate concerns the schema family's record, never a migration that is pending.</summary>
+    IReadOnlyList<string> IEfModuleRefusal.PendingMigrations => [];
+
+    /// <summary>Its remedy depends on the refusal and is in the message: running a version that reads the family, or restoring a backup.</summary>
+    string? IEfModuleRefusal.Command => null;
 
     /// <summary>The schema family whose record refused it.</summary>
     public string Family { get; }

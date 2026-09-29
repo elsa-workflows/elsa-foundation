@@ -1,3 +1,5 @@
+using Elsa.Persistence.Schema;
+
 namespace Elsa.Persistence.EntityFramework.SchemaFinalization;
 
 /// <summary>
@@ -26,19 +28,15 @@ public sealed class EfContractingMigrationRefusedException : EfPendingMigrations
         IReadOnlyList<string> pending,
         IReadOnlyList<EfContractingMigrationRefusal> refusals,
         IReadOnlyList<string>? applied = null)
-        : base(Describe(module, pending, refusals, applied))
+        : base(module, pending, Describe(module, pending, refusals, applied))
     {
-        Module = module;
-        Pending = pending;
         Refusals = refusals;
         Applied = applied ?? [];
     }
 
-    /// <summary>The EF module whose pending batch was withheld.</summary>
-    public string Module { get; }
-
-    /// <summary>Every pending migration of the context this refusal withheld, none of which was applied.</summary>
-    public IReadOnlyList<string> Pending { get; }
+    // Module is the EF module whose pending batch was withheld, and Pending every pending migration of the context this
+    // refusal withheld, none of which was applied: both are the base exception's.
+    public override string Code => IEfModuleRefusal.ContractingMigrationRefusedCode;
 
     /// <summary>Each pending contracting migration that may not be applied yet, and why.</summary>
     public IReadOnlyList<EfContractingMigrationRefusal> Refusals { get; }

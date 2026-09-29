@@ -388,9 +388,15 @@ Under `Validate` a database that is behind fails `EfDatabaseMigrator.ApplyAsync`
 fails activation:
 
 ```
-RuntimeSqliteDbContext has pending migrations: 20260911000000_Initial. Apply them out of
-process (tools/ef/module-migrate.sh) or set Elsa:Persistence:EntityFramework:Migrate:Policy to AutoMigrate.
+EF module 'Runtime' has pending migrations: 20260911000000_Initial. Apply them out of process with
+`dotnet elsa persistence apply --host <path> --modules Runtime --provider Sqlite --connection-env ELSA_EF_CONNECTION`,
+or set Elsa:Persistence:EntityFramework:Migrate:Policy to AutoMigrate.
 ```
+
+The exception is an `IEfModuleRefusal` (in `Elsa.Persistence.Schema`, which every host shares with the packages it loads),
+as are `EfContractingMigrationRefusedException` and `EfSchemaActivationRefusedException`. A host that carries no copy of this
+assembly reads the module, the pending migration ids, a stable `Code` and the command from it, without naming the
+exception's type: an EF module package's exception is a different type from any the host could reference.
 
 ## Schema finalization (spec 181)
 

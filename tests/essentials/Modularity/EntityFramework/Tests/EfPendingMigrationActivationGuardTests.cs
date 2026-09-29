@@ -43,7 +43,7 @@ public sealed class EfPendingMigrationActivationGuardTests : IDisposable
             $"Nothing was saved. Apply them out of process, then enable the feature again:{Environment.NewLine}" +
             // SQLite cannot be scripted idempotently (ADR 0076 D5), so `apply` is what the operator is told
             // to run there; a `script` command would name one that refuses.
-            $"  dotnet elsa persistence apply --modules Secrets --provider Sqlite --connection-env ELSA_CONNECTION{Environment.NewLine}" +
+            $"  dotnet elsa persistence apply --modules Secrets --provider Sqlite --connection-env ELSA_EF_CONNECTION{Environment.NewLine}" +
             // Secrets declares a post-migration action, so the whole path is named, not only its first step.
             "  dotnet elsa persistence post-migrate --modules Secrets --provider Sqlite",
             refusal.Reason);
