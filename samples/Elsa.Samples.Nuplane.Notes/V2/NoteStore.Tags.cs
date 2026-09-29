@@ -9,13 +9,6 @@ public sealed record NoteWithTags(string Id, string Text, DateTimeOffset Created
 /// <summary>What release 1.1.0 adds to the store: reading and writing a note's tags.</summary>
 public sealed partial class NoteStore
 {
-    /// <summary>
-    /// A row is written in the format of the version this host may write. Before 2.0.0 is finalized that is 1.0.0, whose
-    /// rows have no tags column to fill, so it stays null; from then on a new row starts with an empty list.
-    /// </summary>
-    partial void InitializeContent(NoteRecord record, string writeVersion) =>
-        record.TagsJson = writeVersion == NotesModule.TagsVersion ? "[]" : null;
-
     public async Task<IReadOnlyList<NoteWithTags>> ListWithTagsAsync(CancellationToken cancellationToken = default)
     {
         var rows = await context.Notes.AsNoTracking().ToListAsync(cancellationToken);
@@ -38,9 +31,15 @@ public sealed partial class NoteStore
 
     private static NoteWithTags ToNoteWithTags(NoteRecord row) => new(row.Id, row.Text, row.CreatedAt, TagsOf(row));
 
+    /// <summary>
+    /// The tags of a row, as the family's chain upcasts it. Whatever the row's version, what comes out of the chain has
+    /// its tags, so a missing value here means the upcaster or the row is broken, and it is not read as no tags.
+    /// </summary>
     private static string[] TagsOf(NoteRecord row)
     {
         var content = NotesModule.Chain.Upcast<NoteRecord>(row.SchemaVersion, (nameof(NoteRecord.TagsJson), row.TagsJson));
-        return content[nameof(NoteRecord.TagsJson)] is { } json ? JsonSerializer.Deserialize<string[]>(json) ?? [] : [];
+        var json = content[nameof(NoteRecord.TagsJson)]
+            ?? throw new InvalidOperationException($"Note '{row.Id}' has no tags after it was upcast from version {row.SchemaVersion}. The notes upcaster or the row is broken.");
+        return JsonSerializer.Deserialize<string[]>(json) ?? [];
     }
 }

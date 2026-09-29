@@ -15,22 +15,6 @@ public sealed record Note(string Id, string Text, DateTimeOffset CreatedAt);
 /// </summary>
 public sealed partial class NoteStore(NotesDbContext context, IServiceProvider services)
 {
-    public async Task<Note> AddAsync(string text, CancellationToken cancellationToken = default)
-    {
-        var writeVersion = WriteVersion();
-        var record = new NoteRecord
-        {
-            Id = Guid.NewGuid().ToString("N"),
-            Text = text,
-            CreatedAt = DateTimeOffset.UtcNow,
-            SchemaVersion = writeVersion
-        };
-        InitializeContent(record, writeVersion);
-        context.Notes.Add(record);
-        await context.SaveChangesAsync(cancellationToken);
-        return new Note(record.Id, record.Text, record.CreatedAt);
-    }
-
     public async Task<IReadOnlyList<Note>> ListAsync(CancellationToken cancellationToken = default)
     {
         var rows = await context.Notes.AsNoTracking()
@@ -49,7 +33,4 @@ public sealed partial class NoteStore(NotesDbContext context, IServiceProvider s
     private string WriteVersion() =>
         services.GetService<EfSchemaFinalizationGates>()?.FindModuleGate(typeof(NotesDbContext))?.StateOf(NotesModule.Family)?.WriteVersion
         ?? NotesModule.Chain.ReadableVersions[0];
-
-    /// <summary>Fills a new row's content columns in the format of <paramref name="writeVersion"/>.</summary>
-    partial void InitializeContent(NoteRecord record, string writeVersion);
 }
