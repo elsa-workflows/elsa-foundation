@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Elsa.Cli.Worker;
+using Elsa.Modularity.Planning.Bridge;
 using Elsa.Modularity.Planning.Json;
 using Elsa.Modularity.Planning.Models;
 using Xunit;
@@ -43,6 +44,7 @@ public sealed class CompositionAcceptCliTests
         Assert.Equal(ToolExitCode.Success, accepted.ExitCode);
         Assert.True(accepted.ResponseSent);
         Assert.False(accepted.TimedOut);
+        Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(fixture.AcceptedOutputPath));
         Assert.DoesNotContain(Canary, accepted.Output + accepted.Error, StringComparison.Ordinal);
         using (var preview = ReadPreview(accepted.Output + accepted.Error))
         {
@@ -71,6 +73,14 @@ public sealed class CompositionAcceptCliTests
             File.ReadAllText(Path.Join(candidate, "shells.json")),
             File.ReadAllText(Path.Join(candidate, "shells.Production.json")), "default");
         Assert.Equal(new[] { "A", "C" }, readback.EnabledFeatureIds);
+        var mutated = JsonNode.Parse(File.ReadAllText(fixture.AcceptedOutputPath))!;
+        Assert.Empty(mutated["accepted"]!["locks"]!.AsArray());
+        mutated["accepted"]!["featureIds"] = new JsonArray("A");
+        File.WriteAllText(fixture.AcceptedOutputPath, mutated.ToJsonString(s_json));
+        var revertedAcceptance = RunGenerate(fixture, fixture.AcceptedOutputPath, staleCandidate);
+        Assert.Contains("bridge-selection-drift", revertedAcceptance.Error, StringComparison.Ordinal);
+        Assert.Equal(ToolExitCode.Refusal, revertedAcceptance.ExitCode);
+        Assert.False(Directory.Exists(staleCandidate));
         var findings = ReadFindingCodes(acceptedPlan.Output);
         Assert.Contains("inventory-unverified", findings);
         Assert.Contains("persistence-unverified", findings);
@@ -85,8 +95,11 @@ public sealed class CompositionAcceptCliTests
         fixture.WriteAcceptedComposition();
         var authored = JsonNode.Parse(File.ReadAllText(fixture.OutputPath))!.AsObject();
         var accepted = authored["accepted"]!.AsObject();
-        accepted["featureIds"] = new JsonArray("A", "B");
-        accepted["locks"] = new JsonArray(Lock("A", "package-a-" + Canary), Lock("B", "package-b"));
+        accepted["featureIds"] = new JsonArray("A", "B", "C");
+        accepted["locks"] = new JsonArray(Lock("A", "package-a-" + Canary), Lock("B", "package-b"),
+            new JsonObject { ["featureId"] = "C", ["kind"] = "hostBundled", ["evidenceSource"] = "historical" });
+        authored["add"] = new JsonArray("A", "C", "D");
+        var expectedLocks = new JsonArray(accepted["locks"]![0]!.DeepClone(), accepted["locks"]![2]!.DeepClone());
         authored["settings"]!["opaque"] = new JsonObject { ["nested"] = Canary };
         authored["resources"]!["opaque"] = Canary;
         var settings = authored["settings"]!.DeepClone();
@@ -98,16 +111,79 @@ public sealed class CompositionAcceptCliTests
         Assert.Equal(ToolExitCode.Success, run.ExitCode);
         Assert.DoesNotContain(Canary, run.Output + run.Error, StringComparison.Ordinal);
         using var preview = ReadPreview(run.Output + run.Error);
-        Assert.Equal(new[] { "A" }, Strings(preview.RootElement.GetProperty("retainedLockFeatureIds")));
+        Assert.Equal(new[] { "A", "C" }, Strings(preview.RootElement.GetProperty("retainedLockFeatureIds")));
         Assert.Equal(new[] { "B" }, Strings(preview.RootElement.GetProperty("droppedLockFeatureIds")));
         Assert.Equal(new[] { "B" }, Strings(preview.RootElement.GetProperty("removedFeatureIds")));
 
         var output = JsonNode.Parse(File.ReadAllText(fixture.AcceptedOutputPath))!.AsObject();
         Assert.True(JsonNode.DeepEquals(settings, output["settings"]));
         Assert.True(JsonNode.DeepEquals(resources, output["resources"]));
-        Assert.Equal(new[] { "A" }, Strings(output["accepted"]!["featureIds"]!.AsArray()));
-        Assert.Equal("package-a-" + Canary, output["accepted"]!["locks"]![0]!["packageId"]!.GetValue<string>());
-        Assert.Single(output["accepted"]!["locks"]!.AsArray());
+        Assert.Equal(new[] { "A", "C", "D" }, Strings(output["accepted"]!["featureIds"]!.AsArray()));
+        Assert.True(JsonNode.DeepEquals(expectedLocks, output["accepted"]!["locks"]));
+        AssertOnlyAcceptedSelectionChanged(authored, output);
+    }
+
+    [Fact]
+    public async Task Bundled_profile_and_group_edits_keep_their_pins_and_accept_without_new_locks()
+    {
+        if (OperatingSystem.IsWindows())
+            return;
+        using var fixture = new CompositionBridgeFixture();
+        var initialized = DotnetElsa.Run("composition", "init", "--profile", "embedded-runtime@1",
+            "--group", "diagnostics-ef@1", "--output", fixture.OutputPath);
+        Assert.Equal(ToolExitCode.Success, initialized.ExitCode);
+        var input = JsonNode.Parse(File.ReadAllText(fixture.OutputPath))!.AsObject();
+        input["add"] = new JsonArray("CustomCapability");
+        File.WriteAllText(fixture.OutputPath, input.ToJsonString(s_json));
+
+        var run = await PseudoTerminalCli.RunElsaAsync("Type accept to write the accepted composition: ", "accept",
+            ["composition", "accept", "--composition", fixture.OutputPath, "--output", fixture.AcceptedOutputPath]);
+
+        Assert.Equal(ToolExitCode.Success, run.ExitCode);
+        var output = JsonNode.Parse(File.ReadAllText(fixture.AcceptedOutputPath))!.AsObject();
+        AssertOnlyAcceptedSelectionChanged(input, output);
+        Assert.Contains("CustomCapability", Strings(output["accepted"]!["featureIds"]!.AsArray()));
+        Assert.Equal(21, output["accepted"]!["featureIds"]!.AsArray().Count);
+        Assert.Empty(output["accepted"]!["locks"]!.AsArray());
+        using var preview = ReadPreview(run.Output + run.Error);
+        Assert.Contains(preview.RootElement.GetProperty("findings").EnumerateArray(),
+            finding => finding.GetProperty("code").GetString() == "inventory-unverified");
+    }
+
+    [Fact]
+    public async Task Workspace_profile_drives_acceptance_and_keeps_its_pin_for_subsequent_planning()
+    {
+        if (OperatingSystem.IsWindows())
+            return;
+        using var fixture = new CompositionBridgeFixture();
+        fixture.WriteAcceptedComposition();
+        var profilePath = WriteWorkspaceProfile(fixture.OutputPath, ["A", "C"]);
+        var definition = SelectionJsonReader.ParseWorkspaceProfile(File.ReadAllText(profilePath)).Definition;
+        var input = JsonNode.Parse(File.ReadAllText(fixture.OutputPath))!.AsObject();
+        input["profile"] = JsonSerializer.SerializeToNode(
+            new DefinitionReference("workspace", "profile", definition.Id, definition.Version, definition.Digest), s_json);
+        input["add"] = new JsonArray();
+        input["remove"] = new JsonArray();
+        File.WriteAllText(fixture.OutputPath, input.ToJsonString(s_json));
+
+        var run = await fixture.RunAcceptInteractiveAsync("accept", profilePath);
+
+        Assert.Equal(ToolExitCode.Success, run.ExitCode);
+        Assert.DoesNotContain(Canary, run.Output + run.Error, StringComparison.Ordinal);
+        using var preview = ReadPreview(run.Output + run.Error);
+        Assert.Equal(new[] { "A", "C" }, Strings(preview.RootElement.GetProperty("candidateFeatureIds")));
+        Assert.Equal(new[] { "A" }, Strings(preview.RootElement.GetProperty("acceptedFeatureIds")));
+        var output = JsonNode.Parse(File.ReadAllText(fixture.AcceptedOutputPath))!.AsObject();
+        AssertOnlyAcceptedSelectionChanged(input, output);
+        Assert.Equal(new[] { "A", "C" }, Strings(output["accepted"]!["featureIds"]!.AsArray()));
+
+        var planned = DotnetElsa.Run("composition", "plan", "--catalog", fixture.CatalogPath,
+            "--composition", fixture.AcceptedOutputPath, "--workspace-profile", profilePath, "--format", "json");
+        Assert.Equal(ToolExitCode.Success, planned.ExitCode);
+        using var plan = JsonDocument.Parse(planned.Output);
+        Assert.Equal(new[] { "A", "C" }, Strings(plan.RootElement.GetProperty("candidate").GetProperty("featureIds")));
+        Assert.Equal(new[] { "A", "C" }, Strings(plan.RootElement.GetProperty("accepted").GetProperty("featureIds")));
+        Assert.DoesNotContain("candidate-re-resolution", ReadFindingCodes(planned.Output));
     }
 
     [Fact]
@@ -341,12 +417,12 @@ public sealed class CompositionAcceptCliTests
         ["evidenceSource"] = "accepted-canary"
     };
 
-    private static string WriteWorkspaceProfile(string compositionPath)
+    private static string WriteWorkspaceProfile(string compositionPath, string[]? members = null)
     {
         var directory = Path.GetDirectoryName(compositionPath)!;
         var path = Path.Join(directory, "workspace-profile.json");
-        var draft = new SelectionDefinition("profile", "unused", "1", new string('0', 64), ["A"],
-            "Safe rationale", "Unused profile", "A valid but unused workspace profile.", []);
+        var draft = new SelectionDefinition("profile", "local-profile", "1", new string('0', 64), [.. members ?? ["A"]],
+            Canary, "Local profile", "A pinned workspace profile.", []);
         var definition = draft with { Digest = SelectionDigest.ComputeDefinitionDigest(draft) };
         var profileJson = JsonSerializer.SerializeToNode(definition, s_json)!.AsObject();
         profileJson["schemaVersion"] = "1";
@@ -377,34 +453,17 @@ public sealed class CompositionAcceptCliTests
 
     private static JsonDocument ReadPreview(string output)
     {
-        var depth = 0;
-        var inString = false;
-        var escaped = false;
-        var start = output.IndexOf('{');
-        Assert.True(start >= 0, "The interactive command did not emit its review preview.");
-        for (var index = start; index < output.Length; index++)
-        {
-            var character = output[index];
-            if (inString)
-            {
-                if (escaped)
-                    escaped = false;
-                else if (character == '\\')
-                    escaped = true;
-                else if (character == '"')
-                    inString = false;
-                continue;
-            }
+        var end = output.IndexOf("Type accept to write the accepted composition: ", StringComparison.Ordinal);
+        Assert.True(end >= 0, "The interactive command did not emit its review prompt.");
+        return JsonDocument.Parse(output[..end]);
+    }
 
-            if (character == '"')
-                inString = true;
-            else if (character == '{')
-                depth++;
-            else if (character == '}' && --depth == 0)
-                return JsonDocument.Parse(output[start..(index + 1)]);
-        }
-
-        throw new Xunit.Sdk.XunitException("The interactive command emitted an incomplete review preview.");
+    private static void AssertOnlyAcceptedSelectionChanged(JsonObject input, JsonObject output)
+    {
+        var expected = input.DeepClone().AsObject();
+        expected["accepted"]!["featureIds"] = output["accepted"]!["featureIds"]!.DeepClone();
+        expected["accepted"]!["locks"] = output["accepted"]!["locks"]!.DeepClone();
+        Assert.True(JsonNode.DeepEquals(expected, output));
     }
 
     private static string[] Strings(JsonElement array) => [.. array.EnumerateArray().Select(item => item.GetString()!)];

@@ -137,7 +137,6 @@ public static class CompositionFilePublisher
         Action recheck,
         CancellationToken cancellationToken)
     {
-
         string? stagingPath = null;
         try
         {
