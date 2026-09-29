@@ -1,4 +1,4 @@
-namespace Elsa.Persistence.EntityFramework.SchemaFinalization;
+namespace Elsa.Persistence.Schema.SchemaFinalization;
 
 /// <summary>
 /// One schema family's finalization status in one database (spec 181, FR-022): the finalized version, each version

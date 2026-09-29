@@ -1,6 +1,6 @@
 using System.Collections.Concurrent;
 
-namespace Elsa.Persistence.EntityFramework.SchemaFinalization;
+namespace Elsa.Persistence.Schema.SchemaFinalization;
 
 /// <summary>
 /// The finalization gates of one container: a shell's, or a plain host's. A module's migrator registers its gate here

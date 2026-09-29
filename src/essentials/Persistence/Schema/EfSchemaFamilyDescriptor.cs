@@ -1,6 +1,6 @@
 using System.Reflection;
 
-namespace Elsa.Persistence.EntityFramework;
+namespace Elsa.Persistence.Schema;
 
 /// <summary>
 /// What <see cref="EfSchemaFamilyCatalog.Discover"/> read off one <c>[EfSchemaFamily]</c> declaration: the

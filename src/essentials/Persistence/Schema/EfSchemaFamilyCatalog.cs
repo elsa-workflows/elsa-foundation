@@ -1,6 +1,6 @@
 using System.Reflection;
 
-namespace Elsa.Persistence.EntityFramework;
+namespace Elsa.Persistence.Schema;
 
 /// <summary>
 /// The one place that reads <c>[EfSchemaFamily]</c> declarations off a set of assemblies (spec 180, FR-001). Every

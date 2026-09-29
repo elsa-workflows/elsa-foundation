@@ -1,6 +1,8 @@
 using System.Reflection;
 using Elsa.Cluster.Core.Models;
 using Elsa.Persistence.EntityFramework;
+using Elsa.Persistence.Schema;
+using Elsa.Persistence.Schema.SchemaFinalization;
 using Elsa.Testing;
 using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
@@ -91,7 +93,7 @@ public sealed class EfSchemaReadabilitySourceTests : IDisposable
     [Fact]
     public void An_entry_names_the_database_this_host_read_only_while_that_is_the_one_database_it_serves()
     {
-        var observations = new Elsa.Persistence.EntityFramework.SchemaFinalization.EfSchemaFinalizationObservations();
+        var observations = new EfSchemaFinalizationObservations();
         var family = RuntimeArtifactEfModule.SchemaFamily;
         ReadabilityEntry Entry() => EfSchemaReadabilitySource.Read(EfSchemaFamilyCatalog.Discover([RuntimeModule]), observations: observations)
             .Entries.Single(entry => entry.Family == family);

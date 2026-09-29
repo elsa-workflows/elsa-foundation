@@ -1,4 +1,4 @@
-namespace Elsa.Persistence.EntityFramework.SchemaFinalization;
+namespace Elsa.Persistence.Schema.SchemaFinalization;
 
 /// <summary>
 /// One EF module's finalization gate in one container (spec 181), as a reader that references no EF Core sees it: what
