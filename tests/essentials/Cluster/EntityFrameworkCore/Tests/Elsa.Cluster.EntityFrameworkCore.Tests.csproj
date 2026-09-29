@@ -53,6 +53,20 @@
     <ProjectReference Include="..\..\Fixtures\FeedModuleV1\Elsa.Cluster.Fixtures.FeedModuleV1.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
+  <!--
+    Build-order only, and packed by MigratingModuleFeed in two generations: the persistence tool the reload
+    refusal tests run against the host's output directory, and the EF module with real migrations they upgrade. The
+    module's names are linked in as source, so nothing of the module is loaded into this process.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\..\src\essentials\Cli\Elsa.Cli.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\..\Fixtures\MigratingModule\Elsa.Cluster.Fixtures.MigratingModule.csproj" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\Fixtures\MigratingModule\MigratingModule.cs" Link="MigratingModule.cs" />
+  </ItemGroup>
+
   <Target Name="CopyFeedModuleFixture" AfterTargets="Build">
     <Copy SourceFiles="@(FeedModuleFixture)" DestinationFolder="$(OutDir)feed-module" SkipUnchangedFiles="true" />
   </Target>
