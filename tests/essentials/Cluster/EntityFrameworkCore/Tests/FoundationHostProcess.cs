@@ -26,12 +26,14 @@ internal sealed class FoundationHostProcess : IAsyncDisposable
     private readonly CapturedOutput _output = new();
     private readonly TaskCompletionSource<Uri> _listening = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly HttpClient _client = new();
+    private readonly bool _awaitShells;
     private bool _started;
 
-    private FoundationHostProcess(Process process, string contentRoot)
+    private FoundationHostProcess(Process process, string contentRoot, bool awaitShells)
     {
         _process = process;
         _contentRoot = contentRoot;
+        _awaitShells = awaitShells;
     }
 
     /// <summary>The host's console output so far, for assertion messages.</summary>
@@ -42,21 +44,33 @@ internal sealed class FoundationHostProcess : IAsyncDisposable
     /// <paramref name="shells"/> as its <c>shells.json</c> and <paramref name="settings"/> as environment variables, and
     /// returns once its shells are active.
     /// </summary>
-    public static async Task<FoundationHostProcess> StartAsync(string shells, string packages, IReadOnlyDictionary<string, string> settings)
+    public static Task<FoundationHostProcess> StartAsync(string shells, string packages, IReadOnlyDictionary<string, string> settings) =>
+        StartAsync(shells, Directory.EnumerateFiles(packages, "*.nupkg"), settings);
+
+    /// <summary>
+    /// <see cref="StartAsync(string, string, IReadOnlyDictionary{string, string})"/> over exactly <paramref name="packageFiles"/>.
+    /// With <paramref name="deployed"/>, the host runs from a copy of its build output that is also its content root, as an operator's
+    /// published host does: the persistence tool reads that directory's own <c>.nuplane</c> state, the package set the running host
+    /// last reconciled, which a host running from its build output with a content root of its own never leaves there. With
+    /// <paramref name="awaitShells"/> false it returns once the host listens, for a host whose shell is expected not to activate.
+    /// </summary>
+    public static async Task<FoundationHostProcess> StartAsync(string shells, IEnumerable<string> packageFiles, IReadOnlyDictionary<string, string> settings, bool deployed = false, bool awaitShells = true)
     {
         var contentRoot = Directory.CreateTempSubdirectory("elsa-foundation-host-boot-").FullName;
         try
         {
+            if (deployed)
+                CopyDirectory(Path.GetDirectoryName(AssemblyPath)!, contentRoot);
             foreach (var file in new[] { "appsettings.json", "appsettings.Development.json" })
-                File.Copy(Path.Join(SourceDirectory, file), Path.Join(contentRoot, file));
+                File.Copy(Path.Join(SourceDirectory, file), Path.Join(contentRoot, file), overwrite: true);
             File.WriteAllText(Path.Join(contentRoot, "shells.json"), shells);
             var feed = Directory.CreateDirectory(Path.Join(contentRoot, "packages")).FullName;
-            foreach (var package in Directory.EnumerateFiles(packages, "*.nupkg"))
+            foreach (var package in packageFiles)
                 File.Copy(package, Path.Join(feed, Path.GetFileName(package)));
 
             // Kestrel reserves its own ephemeral port: picking a free one and releasing it races other test processes.
             var startInfo = new ProcessStartInfo(DotnetPath,
-                [AssemblyPath, "--contentRoot", contentRoot, "--urls", "http://127.0.0.1:0"])
+                [deployed ? Path.Join(contentRoot, Host + ".dll") : AssemblyPath, "--contentRoot", contentRoot, "--urls", "http://127.0.0.1:0"])
             {
                 WorkingDirectory = contentRoot,
                 RedirectStandardOutput = true,
@@ -72,7 +86,7 @@ internal sealed class FoundationHostProcess : IAsyncDisposable
             foreach (var (key, value) in settings)
                 startInfo.Environment[key.Replace(":", "__", StringComparison.Ordinal)] = value;
 
-            var host = new FoundationHostProcess(new Process { StartInfo = startInfo }, contentRoot);
+            var host = new FoundationHostProcess(new Process { StartInfo = startInfo }, contentRoot, awaitShells);
             try
             {
                 await host.StartAndWaitUntilReadyAsync();
@@ -91,11 +105,34 @@ internal sealed class FoundationHostProcess : IAsyncDisposable
         }
     }
 
+    /// <summary>The host's content root and, when it was started <c>deployed</c>, its own directory: what <c>--host</c> names to the persistence tool.</summary>
+    public string ContentRoot => _contentRoot;
+
+    /// <summary>The directory the host's feed reads, where a package dropped in is a package installed.</summary>
+    public string PackagesDirectory => Path.Join(_contentRoot, "packages");
+
     /// <summary>The status a request to <paramref name="path"/> is answered with, and its body.</summary>
     public async Task<(HttpStatusCode Status, string Body)> GetAsync(string path)
     {
         using var response = await _client.GetAsync(path);
         return (response.StatusCode, await response.Content.ReadAsStringAsync());
+    }
+
+    /// <summary>The status a <c>POST</c> to <paramref name="path"/> is answered with, and its body, with <paramref name="headers"/> on the request.</summary>
+    public async Task<(HttpStatusCode Status, string Body)> PostAsync(string path, IReadOnlyDictionary<string, string> headers)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, path);
+        foreach (var (name, value) in headers)
+            request.Headers.Add(name, value);
+        try
+        {
+            using var response = await _client.SendAsync(request);
+            return (response.StatusCode, await response.Content.ReadAsStringAsync());
+        }
+        catch (TaskCanceledException exception)
+        {
+            throw new InvalidOperationException($"{Host} did not answer POST {path} in time. Host output:{Environment.NewLine}{Output}", exception);
+        }
     }
 
     /// <summary>
@@ -122,6 +159,20 @@ internal sealed class FoundationHostProcess : IAsyncDisposable
         {
             _process.Dispose();
             TryDelete(_contentRoot);
+        }
+    }
+
+    /// <summary>The build output, less the folders a host run in place from it leaves behind: its feed and its Nuplane state.</summary>
+    private static void CopyDirectory(string source, string destination)
+    {
+        foreach (var file in Directory.EnumerateFiles(source, "*", SearchOption.AllDirectories))
+        {
+            var relative = Path.GetRelativePath(source, file);
+            if (relative.StartsWith("packages" + Path.DirectorySeparatorChar, StringComparison.Ordinal) || relative.StartsWith(".nuplane" + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+                continue;
+
+            Directory.CreateDirectory(Path.GetDirectoryName(Path.Join(destination, relative))!);
+            File.Copy(file, Path.Join(destination, relative), overwrite: true);
         }
     }
 
@@ -154,7 +205,7 @@ internal sealed class FoundationHostProcess : IAsyncDisposable
                 throw Failure($"exited with code {_process.ExitCode} before its shells were active");
             if (_client.BaseAddress is null && _listening.Task.IsCompletedSuccessfully)
                 _client.BaseAddress = await _listening.Task;
-            if (_client.BaseAddress is not null && await IsReadyAsync())
+            if (_client.BaseAddress is not null && (!_awaitShells || await IsReadyAsync()))
                 return;
             if (DateTimeOffset.UtcNow > deadline)
                 throw Failure($"did not activate its shells within {ReadyTimeout}");

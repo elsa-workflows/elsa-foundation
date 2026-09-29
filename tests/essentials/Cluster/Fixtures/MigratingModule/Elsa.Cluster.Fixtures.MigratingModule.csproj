@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>
+      An EF module with real migrations that a real Elsa.Foundation.Host loads from a directory feed, packed in two
+      generations: generation 1 carries one migration and generation 2 carries a second, so installing the newer
+      package leaves the database with a pending migration. It maps no entity and no schema family: what it exercises is
+      the host's refusal to activate a shell over a database that is behind, and the persistence tool that catches it up.
+    </Description>
+    <!-- The generation the migrations are built for; a build of the second passes -p:MigratingModuleGeneration=2. -->
+    <MigratingModuleGeneration Condition="'$(MigratingModuleGeneration)' == ''">1</MigratingModuleGeneration>
+  </PropertyGroup>
+
+  <!-- Where a generation is built when packing it for a feed, so two generations of one project never share output folders. It is
+       set here, not passed as OutputPath or IntermediateOutputPath, which would flow to the project references too. -->
+  <PropertyGroup Condition="'$(MigratingModuleBuildRoot)' != ''">
+    <OutputPath>$(MigratingModuleBuildRoot)bin/</OutputPath>
+    <IntermediateOutputPath>$(MigratingModuleBuildRoot)obj/</IntermediateOutputPath>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(MigratingModuleGeneration)' != '2'">
+    <Compile Remove="Migrations/V2/**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The feature maps one endpoint, so the host shows over HTTP which generation of the package its shell runs. -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="CShells.AspNetCore.Abstractions" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Packed at the package root, as every EF module package's is, when the fixture is packed for a feed. -->
+    <None Update="nuplane.json" Pack="true" PackagePath="/" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\..\src\essentials\Persistence\EntityFramework\Elsa.Persistence.EntityFramework.csproj" />
+  </ItemGroup>
+
+</Project>

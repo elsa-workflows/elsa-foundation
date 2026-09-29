@@ -89,7 +89,7 @@ public sealed class FoundationHostFeed : IAsyncLifetime
     /// <see cref="DotnetTimeout"/>, when its whole process tree is killed. MSBuild is kept from leaving nodes behind: they
     /// would inherit the redirected pipes, and reading them to the end would then never return.
     /// </summary>
-    private static async Task DotnetAsync(params string[] arguments)
+    internal static async Task DotnetAsync(params string[] arguments)
     {
         var startInfo = new ProcessStartInfo(FoundationHostProcess.DotnetPath, [.. arguments, "-nodeReuse:false"])
         {

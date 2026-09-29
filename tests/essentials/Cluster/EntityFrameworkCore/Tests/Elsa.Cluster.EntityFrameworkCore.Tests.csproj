@@ -42,6 +42,15 @@
     <ProjectReference Include="..\..\..\..\..\src\apps\Elsa.Foundation.Host\Elsa.Foundation.Host.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
+  <!--
+    Build-order only, and packed by FoundationHostFeed in two generations (#demo): the persistence tool the reload
+    refusal tests run against the host's output directory, and the EF module with real migrations they upgrade.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\..\src\essentials\Cli\Elsa.Cli.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\..\Fixtures\MigratingModule\Elsa.Cluster.Fixtures.MigratingModule.csproj" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
   <Target Name="CopyFeedModuleFixture" AfterTargets="Build">
     <Copy SourceFiles="@(FeedModuleFixture)" DestinationFolder="$(OutDir)feed-module" SkipUnchangedFiles="true" />
   </Target>
