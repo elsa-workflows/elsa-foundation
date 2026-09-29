@@ -34,6 +34,15 @@
   </ItemGroup>
 
   <!--
+    Which of the fixture's references are the host's is decided by Nuplane's own binding, validation and matcher over the
+    host's appsettings.json (#2150), not by name, so a share that would not match on the real host does not match here.
+  -->
+  <ItemGroup>
+    <PackageReference Include="Nuplane.Loading" />
+    <Compile Include="../../../../Shared/NuplaneSharedAssemblyPolicy.cs" Link="NuplaneSharedAssemblyPolicy.cs" />
+  </ItemGroup>
+
+  <!--
     Build-order only, and the fixture's packing beside it (#2143): FoundationHostBootTests start the host's own build
     output as a child process, over a directory feed holding the fixture and the EF persistence package it carries a
     private copy of, exactly as an operator runs it. Nothing from the host is loaded into this process.

@@ -7,6 +7,7 @@ using Elsa.Cluster.Readability;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Persistence.EntityFramework.SchemaFinalization;
 using Elsa.Persistence.Schema.SchemaFinalization;
+using Elsa.Testing;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -19,7 +20,8 @@ namespace Elsa.Cluster.EntityFrameworkCore.Tests;
 /// <c>Elsa.Workbench</c> do (<see cref="EfSchemaReadabilityServiceCollectionExtensions.AddEfSchemaReadability"/>), and
 /// activates a real CShells shell whose features come from the feed-module fixture, loaded the way Nuplane loads a
 /// package: into a load context of its own, carrying its own copy of every Elsa assembly the host does not share (#2143).
-/// The host's shares are read from the host's own <c>appsettings.json</c>, so removing one there is what these tests see.
+/// The host's shares are read from the host's own <c>appsettings.json</c> and matched by Nuplane's own matcher (#2150), so
+/// removing one there, or declaring it at a major its assembly is not built with, is what these tests see.
 /// </summary>
 internal sealed class FeedLoadedModuleHost : IAsyncDisposable
 {
@@ -72,9 +74,7 @@ internal sealed class FeedLoadedModuleHost : IAsyncDisposable
         Action<IServiceCollection>? composeMembership = null,
         params string[] withheld)
     {
-        var package = new PackageLoadContext(
-            SharedAssemblies(host).Except(withheld, StringComparer.OrdinalIgnoreCase),
-            hostCarriesEntityFramework: host != FoundationHost);
+        var package = new PackageLoadContext(SharedAssemblies(host).Without(withheld), hostCarriesEntityFramework: host != FoundationHost);
         var module = package.LoadFromAssemblyPath(FixturePath);
         foreach (var (name, expected) in new[] { ("Family", Family), ("HistoryModuleName", HistoryModule), ("Name", ModuleName) })
         {
@@ -176,17 +176,12 @@ internal sealed class FeedLoadedModuleHost : IAsyncDisposable
     private static string Constant(Assembly module, string name) =>
         (string)module.GetType("Elsa.Cluster.Fixtures.FeedModule.FeedModule", throwOnError: true)!.GetField(name)!.GetRawConstantValue()!;
 
-    /// <summary>The names under the host's <c>Nuplane:Loading:SharedAssemblies</c>, as the host reads them.</summary>
-    public static IReadOnlyList<string> SharedAssemblies(string host) =>
-    [
-        .. new ConfigurationBuilder()
+    /// <summary>The host's <c>Nuplane:Loading:SharedAssemblies</c>, from its <c>appsettings.json</c>, as Nuplane binds and validates them.</summary>
+    public static NuplaneSharedAssemblyPolicy SharedAssemblies(string host) =>
+        NuplaneSharedAssemblyPolicy.Bind(new ConfigurationBuilder()
             .AddJsonFile(Path.Join(FoundationHostProcess.RepoRoot, "src", "apps", host, "appsettings.json"))
             .Build()
-            .GetSection("Nuplane:Loading:SharedAssemblies")
-            .GetChildren()
-            .Select(entry => entry["Name"])
-            .OfType<string>()
-    ];
+            .GetSection("Nuplane"));
 
     /// <summary>The fixture module's finalization tables, mapped from the test's side to seed and read them.</summary>
     private sealed class SeedContext(DbContextOptions<SeedContext> options) : DbContext(options)
@@ -208,23 +203,21 @@ internal sealed class FeedLoadedModuleHost : IAsyncDisposable
 /// the host finds the module's migrations assembly. Anything else, the framework and CShells, is the test process's.
 /// </summary>
 /// <remarks>
-/// A share is matched by name. Nuplane's matcher also compares the entry's major version, which each host now declares as
-/// its Elsa assemblies' AssemblyVersion major (#2150), and its public key token, which this harness does not model: a host
-/// entry's <c>"PublicKeyToken": null</c> does not bind to Nuplane's options at all today (#2150). A computed image is
-/// still consistent because it declares every share host-provided, so Nuplane never acquires one into a package graph and
-/// the package falls back to the host's copy. This harness asserts the intent both lists state: a shared assembly is the
-/// host's copy.
+/// A share is decided as the real host decides it (#2150): by Nuplane's own matcher, over the entries Nuplane binds and
+/// validates from the host's <c>appsettings.json</c>, on the name, public key token and major version the fixture's
+/// reference carries. An entry that would not match on the real host, such as one declaring another major than the
+/// assembly is built with, does not match here either, and the package loads its own copy.
 /// </remarks>
 internal sealed class PackageLoadContext : AssemblyLoadContext, IDisposable
 {
     private static readonly string[] Directories = [Path.Join(AppContext.BaseDirectory, "feed-module"), AppContext.BaseDirectory];
-    private readonly HashSet<string> _shared;
+    private readonly NuplaneSharedAssemblyPolicy _shared;
     private readonly string[] _private;
 
-    public PackageLoadContext(IEnumerable<string> shared, bool hostCarriesEntityFramework = true)
+    public PackageLoadContext(NuplaneSharedAssemblyPolicy shared, bool hostCarriesEntityFramework = true)
         : base($"feed-module-package-{Guid.NewGuid():N}", isCollectible: false)
     {
-        _shared = shared.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        _shared = shared;
         _private = hostCarriesEntityFramework ? ["Elsa."] : ["Elsa.", "Microsoft.EntityFrameworkCore"];
         Default.Resolving += ResolveForHost;
     }
@@ -235,7 +228,7 @@ internal sealed class PackageLoadContext : AssemblyLoadContext, IDisposable
     {
         if (assemblyName.Name is not { } name)
             return null;
-        if (_shared.Contains(name))
+        if (_shared.Shares(assemblyName))
             return Default.LoadFromAssemblyName(assemblyName);
         if (!_private.Any(prefix => name.StartsWith(prefix, StringComparison.Ordinal)))
             return null;
