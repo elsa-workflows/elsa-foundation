@@ -7,6 +7,8 @@ namespace Elsa.Cli.Tests;
 
 public sealed class CandidateWorkerOperationTests
 {
+    private const string PrivateCanaryRootPrefix = "candidate-private-canary-2177-";
+
     [Theory]
     [InlineData("restore")]
     [InlineData("connection")]
@@ -118,6 +120,75 @@ public sealed class CandidateWorkerOperationTests
         Assert.False(File.Exists(action));
     }
 
+    [Theory]
+    [InlineData("state")]
+    [InlineData("probe")]
+    [InlineData("negative")]
+    public async Task Built_candidate_worker_uses_the_observed_package_root_route_without_mutating_it(string route)
+    {
+        var host = HostLayout.Resolve(DotnetElsa.Host("ResourceAwareLiveHost"));
+        using var packages = new TempDirectory($"{PrivateCanaryRootPrefix}packages-");
+        using var sentinels = new TempDirectory($"{PrivateCanaryRootPrefix}sentinels-");
+        const string package = "Acme.Widgets";
+        const string version = "1.4.2";
+        var installPath = NuplanePackageRootFixture.InstallInto(packages.Path, package, version, complete: route == "probe");
+        var stateFile = Path.Join(packages.Path, NuplaneInstallRoot.StateFileName);
+        var markerFile = Path.Join(installPath, NuplaneInstallRoot.ReadyMarker);
+        if (route == "state")
+            NuplanePackageRootFixture.WriteStateFile(packages.Path, package, version, installPath);
+
+        var filesBefore = SnapshotPackageFiles(packages.Path);
+        DateTime? markerTimestampBefore = File.Exists(markerFile) ? File.GetLastWriteTimeUtc(markerFile) : null;
+        var database = sentinels.File("must-not-create.db");
+        var context = sentinels.File("context-constructed.txt");
+        var action = sentinels.File("action-constructed.txt");
+        var request = ForHost(host, database) with { PackageRoots = [packages.Path] };
+        var run = await RunChild(host, request, new Dictionary<string, string>
+        {
+            ["ELSA_RESOURCE_PROBE_CONTEXT_MARKER"] = context,
+            ["ELSA_RESOURCE_PROBE_ACTION_MARKER"] = action
+        });
+
+        Assert.Empty(run.Error);
+        Assert.DoesNotContain(PrivateCanaryRootPrefix, run.Text);
+        Assert.DoesNotContain("private-console-canary", run.Text);
+        Assert.DoesNotContain("private-connection-canary", run.Text);
+        var response = JsonSerializer.Deserialize<WorkerResponse>(run.Output, WorkerContract.Json)!;
+        Assert.Equal(route == "negative" ? 3 : 0, run.ExitCode);
+        Assert.Equal(run.ExitCode, response.ExitCode);
+        if (route == "negative")
+        {
+            Assert.Equal("candidate-host-unavailable", response.Error?.Code);
+            Assert.Null(response.Tooling);
+        }
+        else
+        {
+            Assert.Null(response.Error);
+            var resolution = response.Tooling!.Value.GetProperty("configurationResolution");
+            var participant = Assert.Single(resolution.GetProperty("participants").EnumerateArray());
+            Assert.Equal("ResourceProbe", participant.GetProperty("feature").GetString());
+            Assert.Equal("RootDefault", participant.GetProperty("selection").GetString());
+            Assert.Equal("primary", participant.GetProperty("resource").GetString());
+            Assert.Equal("Sqlite", participant.GetProperty("provider").GetString());
+            Assert.Equal("Probe", participant.GetProperty("connectionReference").GetString());
+        }
+
+        Assert.False(File.Exists(database));
+        Assert.False(File.Exists(context));
+        Assert.False(File.Exists(action));
+        Assert.Equal(route == "state", File.Exists(stateFile));
+        Assert.Equal(route == "probe", File.Exists(markerFile));
+        var markerTimestampAfter = File.Exists(markerFile) ? File.GetLastWriteTimeUtc(markerFile) : (DateTime?)null;
+        Assert.Equal(markerTimestampBefore, markerTimestampAfter);
+        var filesAfter = SnapshotPackageFiles(packages.Path);
+        Assert.Equal(filesBefore.Keys.Order(StringComparer.Ordinal).ToArray(), filesAfter.Keys.Order(StringComparer.Ordinal).ToArray());
+        foreach (var (path, bytes) in filesBefore)
+            Assert.True(bytes.AsSpan().SequenceEqual(filesAfter[path]), $"Package-root file changed: {path}.");
+        Assert.DoesNotContain(
+            Directory.EnumerateDirectories(packages.Path, "*", SearchOption.AllDirectories).Select(Path.GetFileName),
+            NuplaneInstallRoot.StagingDirectory);
+    }
+
     [Fact]
     public async Task Built_candidate_worker_refuses_an_old_host_without_legacy_fallback()
     {
@@ -198,6 +269,10 @@ public sealed class CandidateWorkerOperationTests
     {
         return new CandidateWorkerOperation(closure).RunAsync(request, token);
     }
+
+    private static Dictionary<string, byte[]> SnapshotPackageFiles(string root) =>
+        Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories)
+            .ToDictionary(path => Path.GetRelativePath(root, path), File.ReadAllBytes, StringComparer.Ordinal);
 
     private static WorkerRequest Request() => new()
     {
