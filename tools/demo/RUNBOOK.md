@@ -12,8 +12,8 @@ and only turns on the feature that needs the new schema once **every host** that
   upgraded in place, and the moment it can read the new schema the feature goes live on both hosts.
 
 The whole thing is scripted in `tools/demo/rehearse.sh`. It runs this runbook end to end, and it uses the same helpers you type
-(`tools/demo/helpers.sh`: `note`, `notes`, `withtags`, `tag`, `reload`, `status`, `waitfor`), so what it asserts is what you see: every status code
-and every output line promised below, in setup and in both acts. The one thing it does not rehearse is `prepack.sh` (minutes long); it
+(`tools/demo/helpers.sh`: `note`, `notes`, `withtags`, `tag`, `reload`, `status`, `waitfor`), so what it asserts is what you see: the status codes
+and the output lines the **Expect** items below promise, in setup and in both acts. The one thing it does not rehearse is `prepack.sh` (minutes long); it
 requires that to have run. Run it before every presentation (see the last section).
 
 ## The cast
@@ -441,11 +441,11 @@ waitfor 5201
 ```
 
 - **Audience sees:** one line, then a row of dots that ends when host A has switched. No restart, and nothing else to run: A's database was migrated by B's apply, so the host switches by itself.
-  `waitfor` is the on-screen signal: it polls `with-tags` on A, which answers 404 while A still runs 1.0.0, and says `switched: with-tags answers HTTP 409 after N s` at the first answer
-  that is not a 404. Refresh browser tab 2 meanwhile if you like: it too goes from the blank 404 to the 409 reason.
+  `waitfor` is the on-screen signal: it polls `with-tags` on A twice a second, which answers 404 while A still runs 1.0.0, and says `switched: with-tags answers HTTP 200 after N s` at the first answer
+  that is not a 404. Refresh browser tab 2 meanwhile if you like: it too goes from the blank 404 to the notes (or, for a moment, to the 409 reason).
 - **Say:** "Host A gets the same release the same way. Its database is already migrated, so there is no refusal: it installs, switches, and now reads 2.0.0 too. It never left the cluster."
-- **Expect:** `published Elsa.Samples.Nuplane.Notes.1.1.0.nupkg to artifacts/demo/hosts/a/feed`, then `waiting for the host on port 5201 to switch....... switched: with-tags answers HTTP 409 after 11 s`
-  (or `HTTP 200`, when the version finalized between two polls of the half second). About ten seconds after the publish host A's log says it reloaded its shell; A's tab shows nothing you need to look at.
+- **Expect:** `published Elsa.Samples.Nuplane.Notes.1.1.0.nupkg to artifacts/demo/hosts/a/feed`, then `waiting for the host on port 5201 to switch.................. switched: with-tags answers HTTP 200 after 9 s`.
+  It says `HTTP 409` instead when a poll lands in the short moment between A's switch and its evaluation of the schema version (see 2.6): both are right, the point is that the 404 is over. About ten seconds after the publish host A's log says it reloaded its shell; A's tab shows nothing you need to look at.
 - **Time:** 10 to 15 s until A has installed and switched (measured: 11.5 s under load).
 - **If it goes wrong:** no `switched:` line after 40 s: is the file in the feed (`ls artifacts/demo/hosts/a/feed`)? Use the Act 2 fallback below. `waitfor` gives up after 180 s and says so; Ctrl-C ends it earlier.
 
@@ -466,8 +466,9 @@ status a
 - **Say:** "The moment every host could read 2.0.0, the platform turned the feature on, everywhere, without anybody flipping anything. The old notes read as 'no tags' through the upcaster.
   In the background the host now rewrites the old rows into the new format; when none is left, the version is recorded complete."
 - **Expect:** `HTTP 200` twice, then the status below. On host A the answers go **404** (A not switched yet, what `waitfor` waited out), then **409** (A has switched and is evaluating the schema version; the
-  reason is the one from 2.3), then **200**: after `waitfor` you are already past the 404, so `withtags 5201` is a 409 for up to about two seconds or straight a 200. Host B has answered 409 since 2.2 and turns to 200 at the same moment.
-  The same 409-then-200 follows every switch of a host to release 1.1.0 (after `reload` in 1.6, and after a restart in the fallbacks): if you see the 409, say "it is checking that this is safe", wait two seconds, repeat.
+  reason is the one from 2.3), then **200**. The 409 is short on A, often too short to be seen (the evaluation runs every 2 s, and A has just re-published what it reads), so after `waitfor` `withtags 5201` is a 200 or, for
+  a moment, a 409. Host B has answered 409 since 2.2 and turns to 200 up to two seconds after A: if `withtags 5202` is still a 409, say "it is checking that this is safe", wait two seconds, repeat.
+  The same 409-then-200 follows every switch of a host to release 1.1.0 (after `reload` in 1.6, and after a restart in the fallbacks).
 
   ```
   SamplesNotes (Samples.Notes): finalized at 2.0.0; this host reads [1.0.0, 2.0.0]
@@ -477,7 +478,7 @@ status a
     host-b: Active, live, ...   SamplesNotes: reads 1.0.0, 2.0.0
   ```
   Run `status` again after about 20 s (a good moment for questions): `complete from 2.0.0`.
-- **Time:** finalization 0 to 3 s after A switched (repeat `withtags` if you get 409 for a moment); `complete from 2.0.0` 16 to 20 s after finalization (measured: 18 to 20 s; 30 to 34 s after the publish).
+- **Time:** finalization 0 to 3 s after A switched, on B up to 2 s later (repeat `withtags` if you get 409 for a moment); `complete from 2.0.0` 16 to 20 s after finalization (measured: 18 to 20 s; 30 to 34 s after the publish).
 - **If it goes wrong:** still 409 after 30 s and `waits for: host-a` in `status a`: A has not switched (see 2.5). A `waits for:` line naming a host you did not start: a leftover member from an earlier rehearsal: `bash tools/demo/reset.sh` and set up again.
 
 ### Act 2 fallback: stop, publish, start host A

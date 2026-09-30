@@ -342,6 +342,7 @@ if [[ " $acts " == *" 1 "* ]]; then
     expect_match "the module's row" "$out" '^01 +Samples\.Notes +NotesSqliteDbContext +__EFMigrationsHistory_ElsaSamplesNotes +1 *$'
 
     step "Act 1.6 (fallback) the next request activates the shell"
+    expect_eq "readiness stays 503 until the first request" 503 "$(http_code "http://127.0.0.1:$port_solo/health/ready")"
     stage notes "$port_solo"
     expect_eq "the shell is active and lists the notes" 2 "$(line_count "$out")"
     reloaded_at="$(now)"
