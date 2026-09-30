@@ -99,8 +99,9 @@ public sealed class CandidateInspectionTests
             Assert.True(generated.ResponseSent);
             Assert.False(generated.TimedOut);
             Assert.Contains("Candidate host files generated.", generated.Output, StringComparison.Ordinal);
-            Assert.DoesNotContain(CandidateInspectionFixture.PrivateCanary, generated.Text, StringComparison.Ordinal);
-            Assert.DoesNotContain(fixture.DatabasePath, generated.Text, StringComparison.Ordinal);
+            var generatedText = generated.Output + generated.Error;
+            Assert.DoesNotContain(CandidateInspectionFixture.PrivateCanary, generatedText, StringComparison.Ordinal);
+            Assert.DoesNotContain(fixture.DatabasePath, generatedText, StringComparison.Ordinal);
 
             var candidate = CompositionFileSource.Open(fixture.CandidateOutputDirectory, fixture.ShellId, fixture.Environment).Snapshot;
             var overlayJson = candidate.ReadText(candidate.Selection.ShellOverlayFileName);
@@ -112,6 +113,11 @@ public sealed class CandidateInspectionTests
             var merged = CshellsSourceReader.Read(candidate.ReadText("shells.json"), overlayJson, fixture.ShellId);
             Assert.DoesNotContain(CandidateInspectionFixture.OpenTelemetryEfFeatureId, merged.EnabledFeatureIds);
             Assert.Contains(CandidateInspectionFixture.OpenTelemetryEfFeatureId, merged.DisabledFeatureIds);
+            Assert.Contains(CandidateInspectionFixture.PrivateCanary,
+                candidate.ReadText("appsettings.json"), StringComparison.Ordinal);
+            using var generatedSettings = JsonDocument.Parse(candidate.ReadText("appsettings.json"));
+            Assert.Equal(CandidateInspectionFixture.PrivateCanary,
+                generatedSettings.RootElement.GetProperty("UnknownLocal").GetProperty("Nested").GetString());
         }
         else
             Assert.False(Directory.Exists(fixture.CandidateOutputDirectory));

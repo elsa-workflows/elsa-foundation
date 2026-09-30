@@ -150,7 +150,9 @@ public sealed class CandidateInspectionLifecycleTests
         };
 
         capture.VerifyUnchanged();
-        var response = await new CandidateWorkerProcess().RunAsync(host, request, 60, CancellationToken.None);
+        var worker = Path.Join(Path.GetDirectoryName(DotnetElsa.ToolAssembly), WorkerProcess.WorkerAssemblyFileName);
+        var response = await new CandidateWorkerProcess(workerAssembly: worker)
+            .RunAsync(host, request, 60, CancellationToken.None);
         Assert.Equal(ToolExitCode.Success, response.ExitCode);
         Assert.Null(response.Error);
         Assert.NotNull(response.Tooling);
