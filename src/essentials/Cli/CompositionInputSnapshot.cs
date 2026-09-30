@@ -12,7 +12,7 @@ internal sealed class CompositionInputSnapshot
 
     public static CompositionInputSnapshot Open(IEnumerable<string> paths)
     {
-        var files = new Dictionary<string, byte[]>(PathComparer());
+        var files = new Dictionary<string, byte[]>(StringComparer.Ordinal);
         foreach (var path in paths)
         {
             var fullPath = FullPath(path);
@@ -170,10 +170,6 @@ internal sealed class CompositionInputSnapshot
 
     private static string FindLinuxStat() => File.Exists("/usr/bin/stat") ? "/usr/bin/stat" :
         File.Exists("/bin/stat") ? "/bin/stat" : string.Empty;
-
-    private static StringComparer PathComparer() => OperatingSystem.IsWindows()
-        ? StringComparer.OrdinalIgnoreCase
-        : StringComparer.Ordinal;
 
     private static CliRefusal Unreadable() =>
         CliRefusal.Resolution("composition-input-unreadable", "A supplied composition input could not be read as a regular local file.");
