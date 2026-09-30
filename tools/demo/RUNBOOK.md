@@ -57,10 +57,12 @@ The limits that remain. Say them plainly; the customer will respect it, and each
 
 - **Concurrent versions need expand-only (additive) migrations.** A migration that removes or renames something is refused until the version that makes it safe is finalized (or, on a database no host has used yet, the removal is
   seeded first). The build enforces additive migrations for the modules we ship; a module of the customer's own can run the same check in its own tests, and the platform does not detect an undeclared destructive migration at apply time.
-- **The migration must be applied before the new version activates.** By design: the host refuses to migrate underneath the operator (the policy the demo runs with, `Validate`), and says which command to run. It is the one manual step of the demo.
+- **The migration must be applied before the new version activates.** By design. Under the policy the demo runs with (`Validate`) the host refuses to migrate underneath the operator and says which command to run: it is the one manual step of the demo. Under the
+  library's default policy (`AutoMigrate`) the host applies the migration itself at that point; either way the new version never runs against a schema it has not got.
 - **Every host must be configured as a cluster member.** A host that is not counts only itself, and nothing warns about it.
 - **Finalization is one way.** After a version is finalized, a host still on the older release is refused; the way back is a database restore, not a rollback.
 - **Hot reload is the Foundation.Host feed model.** The Workbench does not reload a running shell when a package arrives; it takes effect at its next restart. A replaced release stays in memory until the host restarts, and there is no drain step for work in flight when the shell is swapped.
+  The reload bridge skips its catalog refresh while no shell is active, so a host whose start-up activation failed can keep serving the old release after an upgrade until a reload (issue 2164, presenter only).
 - **A narrow timing window (issue 2164, presenter only).** A shell that is being built while the platform decides whether every host can read the new version is invisible to that decision until it reaches its first initializer. It needs an upstream CShells change, planned after this demo.
 - **`POST /_module-management/reconcile` never answers (issue 2159, presenter only).** The demo never calls it: the folder watcher reconciles, and `reload` is the only endpoint used.
 
@@ -464,7 +466,7 @@ rows a
   written by B on release 1.1.0  1.0.0   NULL
   ```
 - **Time:** instant.
-- **If it goes wrong:** `HTTP 200` here would mean 2.0.0 is already finalized: host A was upgraded earlier, or was stopped. `bash tools/demo/reset.sh` and rehearse again. `rows` says `error: ... docker`: Docker is not running or the container is gone (see the troubleshooting table).
+- **If it goes wrong:** `HTTP 200` here would mean 2.0.0 is already finalized: host A was upgraded earlier, or was stopped. `bash tools/demo/reset.sh` and rehearse again. `rows` says `No such container`: Docker is not running or the container is gone (see the troubleshooting table).
 
 ### 2.4 `persistence status` names the host it waits for
 
@@ -558,8 +560,8 @@ rows a
   written after finalization on A  2.0.0   []
   ```
   Run `status` again after about 20 s (a good moment for questions): `complete from 2.0.0`. 2.7 shows it, with `rows` once more.
-- **Time:** finalization 0 to 3 s after A switched, on B up to 2 s later (repeat `withtags` if you get 409 for a moment); the old rows are rewritten within a few seconds of it (measured in five rehearsals: three times not yet at the moment both hosts first answered 200 and all four rewritten 4 s later, twice already all four;
-  so the in-between state, new rows at `2.0.0` beside old rows at `1.0.0`, lasts up to four seconds, and the runbook does not promise it); `complete from 2.0.0` 16 to 20 s after finalization (measured: 18 to 20 s; 27 to 34 s after the publish).
+- **Time:** finalization 0 to 3 s after A switched, on B up to 2 s later (repeat `withtags` if you get 409 for a moment); the old rows are rewritten within a few seconds of it (measured in five rehearsals: in four the old rows were still at `1.0.0` when both hosts first answered 200 and all were rewritten 2 to 4 s after the finalization, in one they had been rewritten already;
+  so the in-between state, new rows at `2.0.0` beside old rows at `1.0.0`, lasts a few seconds at most, and the runbook does not promise it); `complete from 2.0.0` 16 to 20 s after finalization (measured: 18 to 20 s; 27 to 34 s after the publish).
 - **If it goes wrong:** still 409 after 30 s and `waits for: host-a` in `status a`: A has not switched (see 2.5). A `waits for:` line naming a host you did not start: a leftover member from an earlier rehearsal: `bash tools/demo/reset.sh` and set up again.
 
 ### 2.7 The old rows are brought up to date
@@ -642,7 +644,7 @@ bash tools/demo/rehearse.sh --act 1 --fallback
 ```
 
 It begins with `reset.sh`, follows this runbook step by step (hosts started one after the other, in-place upgrades, no interaction), runs the very helpers of `tools/demo/helpers.sh` that you type,
-asserts the status codes and output lines above, checks that nothing the audience sees shows the repository path or a home folder, prints the time of every step and the moments measured (install, finalization, completion), lists any spec or requirement numbers a host logged, and cleans up on exit,
+asserts the status codes and output lines above, and the schema version stored on each row (`rows`) before the upgrade, after the finalization and after the backfill, checks that nothing the audience sees shows the repository path or a home folder, prints the time of every step and the moments measured (install, finalization, completion), lists any spec or requirement numbers a host logged, and cleans up on exit,
 success or failure. Its host logs are kept in `artifacts/demo-rehearsal/`. It uses the ports 5101, 5201 and 5202 (`DEMO_PORT_SOLO`, `DEMO_PORT_A`, `DEMO_PORT_B` change them): stop a live demo first.
 
 ## Troubleshooting
@@ -664,6 +666,7 @@ success or failure. Its host logs are kept in `artifacts/demo-rehearsal/`. It us
 | `run-host.sh` says host `a` is **already running** | The same host name started twice | Stop it (Ctrl-C in its tab) or `bash tools/demo/reset.sh` |
 | `publish.sh`, `pack.sh` or `run-host.sh` says the feed **holds a copy of `Elsa.Persistence.EntityFramework`** | An earlier pack put one in a feed; the host carries its own, and a second copy hides the module from `dotnet elsa persistence` (it then reports no `Samples.Notes`) | `rm artifacts/demo/hosts/NAME/feed/Elsa.Persistence.EntityFramework.*.nupkg` for that host, then repeat the step. Or start clean: `bash tools/demo/reset.sh` |
 | `dotnet elsa persistence` lists **no `Samples.Notes`** | The tool reads what the host installed, and the host has not reconciled its feed yet | Add `--restore` on the first call (as in setup), or wait until the host is ready |
+| `rows a` or `rows b` says `No such container`, or prints nothing | The PostgreSQL container is not running (`rows a` and `rows b` ask it through `docker exec`), or `DEMO_PG_CONTAINER` renamed it | `docker ps --filter name=elsa-demo-pg`; start Docker and redo S6 if it is gone. `rows solo` reads the Sqlite file `artifacts/demo/notes.db` and needs no container |
 | `persistence status` shows `Cluster.Membership has migrations not applied` | The command lacks `--modules Samples.Notes,Cluster.Membership` | Use the `status` helper (it always passes both modules), not a hand-typed command |
 | `status` shows no `waits for:` line while A is still on 1.0.0 | A hand-typed command lacks `--skew-allowance 00:00:02`, so members are judged with 5 s instead of the hosts' 2 s | Use the `status` helper, which passes it |
 | Host takes over a minute to be ready | The machine is loaded | `uptime`; wait; start the presentation after `/health/ready` is 200 on all three hosts |
