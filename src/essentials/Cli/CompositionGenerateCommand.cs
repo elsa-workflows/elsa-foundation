@@ -28,11 +28,12 @@ internal static class CompositionGenerateCommand
         var catalog = new Option<string>("--catalog") { Description = "Optional pinned selection catalog JSON. Defaults to the bundled Foundation catalog." };
         var composition = Required("--composition", "Accepted authored composition JSON.");
         var review = new Option<string>("--setting-review") { Description = "Optional local setting safety review JSON." };
+        var workspaceProfiles = new Option<string[]>("--workspace-profile") { Description = "Optional workspace-profile JSON file. Repeatable." };
         var output = Required("--output-dir", "Fresh candidate host-file directory.");
         var handoffHost = new Option<string>("--handoff-host") { Description = "Safe host alias for an optional candidate handoff. Does not deploy or activate." };
         var command = new Command("generate", "Review and publish a fresh candidate host-file directory.")
         {
-            host, shell, environment, catalog, composition, review, output, handoffHost
+            host, shell, environment, catalog, composition, review, workspaceProfiles, output, handoffHost
         };
 
         command.SetAction((result, cancellationToken) => Task.FromResult(Guarded(() => Run(
@@ -42,6 +43,7 @@ internal static class CompositionGenerateCommand
             result.GetValue(catalog),
             result.GetRequiredValue(composition),
             result.GetValue(review),
+            result.GetValue(workspaceProfiles) ?? [],
             result.GetRequiredValue(output),
             result.GetValue(handoffHost),
             cancellationToken), "generated")));
@@ -55,18 +57,30 @@ internal static class CompositionGenerateCommand
         string? catalogPath,
         string compositionPath,
         string? reviewPath,
+        IReadOnlyList<string> workspaceProfilePaths,
         string outputDirectory,
         string? handoffHost,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var source = CompositionFileSource.Open(hostDirectory, shellId, environment);
-        var authored = SelectionJsonReader.ParseComposition(ReadInput(compositionPath));
+        var suppliedPaths = new List<string> { compositionPath };
+        if (catalogPath is not null)
+            suppliedPaths.Add(catalogPath);
+        if (reviewPath is not null)
+            suppliedPaths.Add(reviewPath);
+        suppliedPaths.AddRange(workspaceProfilePaths);
+        var inputs = CompositionInputSnapshot.Open(suppliedPaths);
+
+        var authored = SelectionJsonReader.ParseComposition(inputs.ReadText(compositionPath));
         var catalog = catalogPath is null
             ? FoundationSelectionCatalog.LoadFor(authored.Catalog)
-            : SelectionJsonReader.ParseCatalog(ReadInput(catalogPath));
-        var settingReview = reviewPath is null ? null : SettingReviewReader.Parse(ReadInput(reviewPath));
-        var candidate = CompositionCandidateBuilder.Build(source.Snapshot, catalog, authored, settingReview);
+            : SelectionJsonReader.ParseCatalog(inputs.ReadText(catalogPath));
+        var settingReview = reviewPath is null ? null : SettingReviewReader.Parse(inputs.ReadText(reviewPath));
+        var profiles = workspaceProfilePaths
+            .Select(path => SelectionJsonReader.ParseWorkspaceProfile(inputs.ReadText(path)))
+            .ToArray();
+        var candidate = CompositionCandidateBuilder.Build(source.Snapshot, catalog, authored, settingReview, profiles);
 
         var findings = SafeFindings(candidate.Plan);
         Console.Out.WriteLine(JsonSerializer.Serialize(new { Changes = SafeChanges(candidate.Changes).ToArray(), Findings = findings }, s_json));
@@ -90,7 +104,11 @@ internal static class CompositionGenerateCommand
             outputDirectory,
             hostDirectory,
             candidate.Files,
-            source.VerifyUnchanged,
+            () =>
+            {
+                source.VerifyUnchanged();
+                inputs.VerifyUnchanged();
+            },
             cancellationToken);
         if (handoff is not null)
         {

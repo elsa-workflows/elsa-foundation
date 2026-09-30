@@ -150,6 +150,46 @@ public sealed class CompositionCandidateTests
     }
 
     [Fact]
+    public void Supplied_workspace_profile_drives_the_same_candidate_planner()
+    {
+        var (snapshot, catalog, _, _) = Fixture();
+        var definition = PlannerFixture.Definition("profile", "local-runtime", ["A", "C"]);
+        var authored = PlannerFixture.Authored(
+            catalog,
+            profile: PlannerFixture.Ref(definition, origin: "workspace"),
+            accepted: ["A", "C"]);
+
+        var candidate = CompositionCandidateBuilder.Build(
+            snapshot,
+            catalog,
+            authored,
+            review: null,
+            [new WorkspaceProfile("1", definition)]);
+
+        Assert.Equal(new[] { "A", "C" }, candidate.Plan.SelectedFeatureIds.ToArray());
+        var readback = CshellsSourceReader.Read(
+            System.Text.Encoding.UTF8.GetString(candidate.Files["shells.json"]),
+            System.Text.Encoding.UTF8.GetString(candidate.Files["shells.Production.json"]),
+            "default");
+        Assert.Equal(new[] { "A", "C" }, readback.EnabledFeatureIds.ToArray());
+    }
+
+    [Fact]
+    public void Workspace_profile_collection_is_required_by_the_new_overload()
+    {
+        var (snapshot, catalog, authored, review) = Fixture();
+
+        var exception = Assert.Throws<ArgumentNullException>(() => CompositionCandidateBuilder.Build(
+            snapshot,
+            catalog,
+            authored,
+            review,
+            (IReadOnlyCollection<WorkspaceProfile>)null!));
+
+        Assert.Equal("workspaceProfiles", exception.ParamName);
+    }
+
+    [Fact]
     public void Known_required_removal_refuses_before_candidate_generation()
     {
         var (snapshot, _, _, _) = Fixture();

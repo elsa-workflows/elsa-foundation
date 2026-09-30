@@ -1,6 +1,8 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
 using Elsa.Cli.Worker;
+using Elsa.Modularity.Planning.Models;
 using Xunit;
 
 namespace Elsa.Cli.Tests;
@@ -9,6 +11,12 @@ public sealed class CompositionGenerateCliTests
 {
     private const string ConnectionCanary = "COMPOSITION_BRIDGE_CONNECTION_CANARY_NOT_A_SECRET";
     private const string UnknownCanary = "COMPOSITION_BRIDGE_UNKNOWN_CANARY_NOT_A_SECRET";
+    private const string ProfileInputCanary = "COMPOSITION_PROFILE_INPUT_CANARY_NOT_A_SECRET";
+    private static readonly JsonSerializerOptions s_json = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        Converters = { new JsonStringEnumConverter() }
+    };
 
     [Fact]
     public async Task Approved_generation_changes_only_the_reviewed_existing_base_field_and_preserves_every_source()
@@ -210,6 +218,120 @@ public sealed class CompositionGenerateCliTests
         AssertRedacted(run.Output + run.Error);
     }
 
+    [Theory]
+    [InlineData("composition")]
+    [InlineData("catalog")]
+    [InlineData("setting-review")]
+    [InlineData("selected-profile")]
+    [InlineData("unused-profile")]
+    public async Task Any_supplied_input_change_after_review_refuses_and_cleans_staging(string inputKind)
+    {
+        if (OperatingSystem.IsWindows())
+            return;
+
+        using var fixture = new CompositionBridgeFixture();
+        var setup = PrepareWorkspaceGeneration(fixture);
+        var changedPath = inputKind switch
+        {
+            "composition" => fixture.OutputPath,
+            "catalog" => fixture.CatalogPath,
+            "setting-review" => fixture.ReviewPath,
+            "selected-profile" => setup.SelectedPath,
+            _ => setup.UnusedPath
+        };
+
+        var run = await fixture.RunGenerateInteractiveAsync(
+            "generate",
+            workspaceProfilePaths: setup.Paths,
+            inputToChangeAtReview: changedPath,
+            replacementText: "{}");
+
+        Assert.Equal(ToolExitCode.ResolutionFailure, run.ExitCode);
+        Assert.True(run.ResponseSent);
+        Assert.Contains("composition-input-changed", run.Output + run.Error, StringComparison.Ordinal);
+        AssertNoCandidateOrStaging(fixture);
+        AssertRedacted(run.Output + run.Error);
+    }
+
+    [Fact]
+    public void Missing_workspace_profile_argument_or_file_refuses_without_output()
+    {
+        using var fixture = new CompositionBridgeFixture();
+        var setup = PrepareWorkspaceGeneration(fixture);
+
+        var missingArgument = fixture.RunGenerate(workspaceProfilePaths: [setup.UnusedPath]);
+        Assert.Equal(ToolExitCode.Refusal, missingArgument.ExitCode);
+        Assert.Contains("bridge-selection-drift", missingArgument.Error, StringComparison.Ordinal);
+        AssertNoCandidateOrStaging(fixture);
+
+        var missingPath = Path.Join(Path.GetDirectoryName(setup.SelectedPath)!, $"missing-{ProfileInputCanary}.json");
+        var missingFile = fixture.RunGenerate(workspaceProfilePaths: [setup.UnusedPath, missingPath]);
+        Assert.Equal(ToolExitCode.ResolutionFailure, missingFile.ExitCode);
+        Assert.Contains("composition-input-unreadable", missingFile.Error, StringComparison.Ordinal);
+        Assert.DoesNotContain(ProfileInputCanary, missingFile.Text, StringComparison.Ordinal);
+        AssertNoCandidateOrStaging(fixture);
+        AssertRedacted(missingArgument.Text + missingFile.Text);
+    }
+
+    [Fact]
+    public void Mismatched_valid_workspace_profile_refuses_without_output()
+    {
+        using var fixture = new CompositionBridgeFixture();
+        var setup = PrepareWorkspaceGeneration(fixture);
+        var mismatch = fixture.WriteWorkspaceProfile("mismatched-profile.json", "selected-profile", "3", ["A", "C"]);
+
+        var run = fixture.RunGenerate(workspaceProfilePaths: [setup.UnusedPath, mismatch.Path]);
+
+        Assert.Equal(ToolExitCode.Refusal, run.ExitCode);
+        Assert.Contains("bridge-selection-drift", run.Error, StringComparison.Ordinal);
+        AssertNoCandidateOrStaging(fixture);
+        AssertRedacted(run.Text);
+    }
+
+    [Theory]
+    [InlineData("malformed", "bridge-source-invalid")]
+    [InlineData("digest-invalid", "bridge-source-invalid")]
+    [InlineData("duplicate-same-path", "bridge-authored-invalid")]
+    [InlineData("duplicate-distinct-files", "bridge-authored-invalid")]
+    public void Invalid_or_duplicate_workspace_profile_snapshots_refuse_without_output(string inputKind, string expectedCode)
+    {
+        using var fixture = new CompositionBridgeFixture();
+        var setup = PrepareWorkspaceGeneration(fixture);
+        IReadOnlyList<string> profiles;
+        switch (inputKind)
+        {
+            case "malformed":
+                var malformedPath = Path.Join(
+                    Path.GetDirectoryName(setup.SelectedPath)!,
+                    $"malformed-{ProfileInputCanary}.json");
+                File.WriteAllText(malformedPath, $$"""{"payload":"{{ProfileInputCanary}}"}""");
+                profiles = [setup.UnusedPath, malformedPath];
+                break;
+            case "digest-invalid":
+                var profile = JsonNode.Parse(File.ReadAllText(setup.SelectedPath))!;
+                profile["digest"] = new string('f', 64);
+                File.WriteAllText(setup.SelectedPath, profile.ToJsonString(s_json));
+                profiles = setup.Paths;
+                break;
+            case "duplicate-same-path":
+                profiles = [setup.UnusedPath, setup.SelectedPath, setup.SelectedPath];
+                break;
+            default:
+                var copyPath = Path.Join(Path.GetDirectoryName(setup.SelectedPath)!, "selected-profile-copy.json");
+                File.Copy(setup.SelectedPath, copyPath);
+                profiles = [setup.UnusedPath, setup.SelectedPath, copyPath];
+                break;
+        }
+
+        var run = fixture.RunGenerate(workspaceProfilePaths: profiles);
+
+        Assert.Equal(ToolExitCode.Refusal, run.ExitCode);
+        Assert.Contains(expectedCode, run.Error, StringComparison.Ordinal);
+        Assert.DoesNotContain(ProfileInputCanary, run.Text, StringComparison.Ordinal);
+        AssertNoCandidateOrStaging(fixture);
+        AssertRedacted(run.Text);
+    }
+
     [Fact]
     public async Task Missing_destination_parent_refuses_without_partial_candidate()
     {
@@ -232,5 +354,34 @@ public sealed class CompositionGenerateCliTests
     {
         Assert.DoesNotContain(ConnectionCanary, text, StringComparison.Ordinal);
         Assert.DoesNotContain(UnknownCanary, text, StringComparison.Ordinal);
+    }
+
+    private static WorkspaceGenerationSetup PrepareWorkspaceGeneration(CompositionBridgeFixture fixture)
+    {
+        fixture.WriteAcceptedComposition();
+        var unused = fixture.WriteWorkspaceProfile("unused-profile.json", "unused-profile", "1", ["A"]);
+        var selected = fixture.WriteWorkspaceProfile("selected-profile.json", "selected-profile", "2", ["A", "C"]);
+        var authored = JsonNode.Parse(File.ReadAllText(fixture.OutputPath))!.AsObject();
+        authored["profile"] = JsonSerializer.SerializeToNode(
+            new DefinitionReference("workspace", "profile", selected.Definition.Id, selected.Definition.Version, selected.Definition.Digest),
+            s_json);
+        authored["add"] = new JsonArray();
+        authored["remove"] = new JsonArray();
+        authored["accepted"]!["featureIds"] = new JsonArray("A", "C");
+        File.WriteAllText(fixture.OutputPath, authored.ToJsonString(s_json));
+        return new WorkspaceGenerationSetup(unused.Path, selected.Path);
+    }
+
+    private static void AssertNoCandidateOrStaging(CompositionBridgeFixture fixture)
+    {
+        Assert.False(Directory.Exists(fixture.CandidateDirectory));
+        var parent = Path.GetDirectoryName(fixture.CandidateDirectory)!;
+        var name = Path.GetFileName(fixture.CandidateDirectory);
+        Assert.Empty(Directory.GetFileSystemEntries(parent, $".{name}.*.tmp"));
+    }
+
+    private sealed record WorkspaceGenerationSetup(string UnusedPath, string SelectedPath)
+    {
+        public string[] Paths => [UnusedPath, SelectedPath];
     }
 }

@@ -61,34 +61,61 @@ internal sealed class CompositionBridgeFixture : IDisposable
             "--environment", "Production", "--catalog", CatalogPath,
             "--setting-review", ReviewPath, "--output", OutputPath]);
 
-    public CliRun RunGenerate(string environment = "Production") => DotnetElsa.RunWithStdinAsync(string.Empty,
-        "composition", "generate", "--host-dir", HostDirectory, "--shell", "default",
-        "--environment", environment, "--catalog", CatalogPath,
-        "--composition", OutputPath, "--setting-review", ReviewPath,
-        "--output-dir", CandidateDirectory).GetAwaiter().GetResult();
+    public CliRun RunGenerate(
+        string environment = "Production",
+        string? compositionPath = null,
+        string? outputDirectory = null,
+        IReadOnlyList<string>? workspaceProfilePaths = null) =>
+        DotnetElsa.RunWithStdinAsync(string.Empty, GenerateArguments(
+            environment,
+            compositionPath,
+            outputDirectory,
+            workspaceProfilePaths)).GetAwaiter().GetResult();
 
     public Task<PseudoTerminalCliRun> RunGenerateInteractiveAsync(
         string response,
         string? sourceFileToChangeAtReview = null,
         string? outputDirectory = null,
+        string? handoffHost = null,
+        string? compositionPath = null,
+        IReadOnlyList<string>? workspaceProfilePaths = null,
+        string? inputToChangeAtReview = null,
+        string? replacementText = null)
+    {
+        var args = GenerateArguments(
+            compositionPath: compositionPath,
+            outputDirectory: outputDirectory,
+            workspaceProfilePaths: workspaceProfilePaths,
+            handoffHost: handoffHost);
+        var sourceMutationPath = sourceFileToChangeAtReview is null
+            ? null
+            : Path.Join(HostDirectory, sourceFileToChangeAtReview);
+        return PseudoTerminalCli.RunElsaAsync(
+            "Type generate to write the candidate: ", response, args,
+            beforeResponsePath: inputToChangeAtReview ?? sourceMutationPath,
+            beforeResponseText: inputToChangeAtReview is not null ? replacementText ?? "{}" :
+                sourceMutationPath is not null ? "{}" : null);
+    }
+
+    public string[] GenerateArguments(
+        string environment = "Production",
+        string? compositionPath = null,
+        string? outputDirectory = null,
+        IReadOnlyList<string>? workspaceProfilePaths = null,
         string? handoffHost = null)
     {
         var args = new List<string>
         {
             "composition", "generate", "--host-dir", HostDirectory, "--shell", "default",
-            "--environment", "Production", "--catalog", CatalogPath,
-            "--composition", OutputPath, "--setting-review", ReviewPath,
-            "--output-dir", outputDirectory ?? CandidateDirectory
+            "--environment", environment, "--catalog", CatalogPath,
+            "--composition", compositionPath ?? OutputPath, "--setting-review", ReviewPath
         };
+        foreach (var workspaceProfilePath in workspaceProfilePaths ?? [])
+            args.AddRange(["--workspace-profile", workspaceProfilePath]);
+        args.AddRange(["--output-dir", outputDirectory ?? CandidateDirectory]);
         if (handoffHost is not null)
-        {
-            args.Add("--handoff-host");
-            args.Add(handoffHost);
-        }
-        return PseudoTerminalCli.RunElsaAsync(
-            "Type generate to write the candidate: ", response, args.ToArray(),
-            beforeResponsePath: sourceFileToChangeAtReview is null ? null : Path.Join(HostDirectory, sourceFileToChangeAtReview),
-            beforeResponseText: sourceFileToChangeAtReview is null ? null : "{}");
+            args.AddRange(["--handoff-host", handoffHost]);
+        return [.. args];
     }
 
     public Task<PseudoTerminalCliRun> RunAcceptInteractiveAsync(
@@ -146,6 +173,32 @@ internal sealed class CompositionBridgeFixture : IDisposable
         var authored = JsonNode.Parse(JsonSerializer.Serialize(imported.Authored, s_json))!;
         authored["settings"]!["A"]!["Limit"] = limit;
         File.WriteAllText(OutputPath, authored.ToJsonString(s_json));
+    }
+
+    public (string Path, SelectionDefinition Definition) WriteWorkspaceProfile(
+        string fileName,
+        string id,
+        string version,
+        IEnumerable<string> members,
+        string rationale = "Reviewed workspace profile fixture",
+        IEnumerable<DependencyExplanation>? explanations = null)
+    {
+        var draft = new SelectionDefinition(
+            "profile",
+            id,
+            version,
+            new string('0', 64),
+            [.. members],
+            rationale,
+            "Local profile",
+            "A pinned workspace profile.",
+            [.. explanations ?? []]);
+        var definition = draft with { Digest = SelectionDigest.ComputeDefinitionDigest(draft) };
+        var path = _directory.File(fileName);
+        var profileJson = JsonSerializer.SerializeToNode(definition, s_json)!.AsObject();
+        profileJson["schemaVersion"] = "1";
+        File.WriteAllText(path, profileJson.ToJsonString(s_json));
+        return (path, definition);
     }
 
     public void Dispose() => _directory.Dispose();

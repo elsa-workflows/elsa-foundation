@@ -30,11 +30,20 @@ public static class CompositionCandidateBuilder
         SourceSnapshot snapshot,
         SelectionCatalog catalog,
         AuthoredComposition authored,
-        SettingReviewDocument? review)
+        SettingReviewDocument? review) =>
+        Build(snapshot, catalog, authored, review, Array.Empty<WorkspaceProfile>());
+
+    public static CompositionCandidate Build(
+        SourceSnapshot snapshot,
+        SelectionCatalog catalog,
+        AuthoredComposition authored,
+        SettingReviewDocument? review,
+        IReadOnlyCollection<WorkspaceProfile> workspaceProfiles)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
         ArgumentNullException.ThrowIfNull(catalog);
         ArgumentNullException.ThrowIfNull(authored);
+        ArgumentNullException.ThrowIfNull(workspaceProfiles);
         if (authored.Catalog is null || authored.Accepted is null)
             throw Refuse("bridge-authored-invalid", "The authored composition is missing its catalog or accepted selection.");
 
@@ -72,7 +81,7 @@ public static class CompositionCandidateBuilder
         SelectionPlan plan;
         try
         {
-            plan = SelectionPlanner.Plan(catalog, authored, persistence: BuildPersistenceEvidence(authored));
+            plan = SelectionPlanner.Plan(catalog, authored, workspaceProfiles: workspaceProfiles, persistence: BuildPersistenceEvidence(authored));
         }
         catch (SelectionDocumentException)
         {

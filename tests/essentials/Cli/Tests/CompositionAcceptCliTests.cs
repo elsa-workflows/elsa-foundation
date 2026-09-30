@@ -13,6 +13,7 @@ namespace Elsa.Cli.Tests;
 public sealed class CompositionAcceptCliTests
 {
     private const string Canary = "COMPOSITION_ACCEPT_OPAQUE_CANARY_NOT_A_SECRET";
+    private const string DependencyCanary = "COMPOSITION_ACCEPT_DEPENDENCY_REASON_CANARY_NOT_A_SECRET";
     private static readonly JsonSerializerOptions s_json = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
     [Fact]
@@ -35,7 +36,7 @@ public sealed class CompositionAcceptCliTests
         }
 
         var staleCandidate = Path.Join(Path.GetDirectoryName(fixture.OutputPath)!, "stale-candidate");
-        var stale = RunGenerate(fixture, fixture.OutputPath, staleCandidate);
+        var stale = fixture.RunGenerate(compositionPath: fixture.OutputPath, outputDirectory: staleCandidate);
         Assert.Equal(ToolExitCode.Refusal, stale.ExitCode);
         Assert.Contains("bridge-selection-drift", stale.Error, StringComparison.Ordinal);
         Assert.False(Directory.Exists(staleCandidate));
@@ -66,7 +67,10 @@ public sealed class CompositionAcceptCliTests
         }
 
         var candidate = Path.Join(Path.GetDirectoryName(fixture.OutputPath)!, "accepted-candidate");
-        var generated = await RunGenerateInteractiveAsync(fixture, fixture.AcceptedOutputPath, candidate);
+        var generated = await fixture.RunGenerateInteractiveAsync(
+            "generate",
+            compositionPath: fixture.AcceptedOutputPath,
+            outputDirectory: candidate);
         Assert.Equal(ToolExitCode.Success, generated.ExitCode);
         Assert.True(Directory.Exists(candidate));
         var readback = CshellsSourceReader.Read(
@@ -77,7 +81,9 @@ public sealed class CompositionAcceptCliTests
         Assert.Empty(mutated["accepted"]!["locks"]!.AsArray());
         mutated["accepted"]!["featureIds"] = new JsonArray("A");
         File.WriteAllText(fixture.AcceptedOutputPath, mutated.ToJsonString(s_json));
-        var revertedAcceptance = RunGenerate(fixture, fixture.AcceptedOutputPath, staleCandidate);
+        var revertedAcceptance = fixture.RunGenerate(
+            compositionPath: fixture.AcceptedOutputPath,
+            outputDirectory: staleCandidate);
         Assert.Contains("bridge-selection-drift", revertedAcceptance.Error, StringComparison.Ordinal);
         Assert.Equal(ToolExitCode.Refusal, revertedAcceptance.ExitCode);
         Assert.False(Directory.Exists(staleCandidate));
@@ -151,25 +157,43 @@ public sealed class CompositionAcceptCliTests
     }
 
     [Fact]
-    public async Task Workspace_profile_drives_acceptance_and_keeps_its_pin_for_subsequent_planning()
+    public async Task Workspace_profile_drives_plan_accept_and_generation_with_exact_readback()
     {
         if (OperatingSystem.IsWindows())
             return;
         using var fixture = new CompositionBridgeFixture();
         fixture.WriteAcceptedComposition();
-        var profilePath = WriteWorkspaceProfile(fixture.OutputPath, ["A", "C"]);
-        var definition = SelectionJsonReader.ParseWorkspaceProfile(File.ReadAllText(profilePath)).Definition;
+        var unused = fixture.WriteWorkspaceProfile(
+            "unused-profile.json", "unused-profile", "1", ["A"], rationale: Canary);
+        var selected = fixture.WriteWorkspaceProfile(
+            "selected-profile.json", "local-profile", "1", ["A", "C"],
+            rationale: Canary,
+            explanations: [new DependencyExplanation("A", "C", "optional", DependencyCanary)]);
+        var profiles = new[] { unused.Path, selected.Path };
         var input = JsonNode.Parse(File.ReadAllText(fixture.OutputPath))!.AsObject();
         input["profile"] = JsonSerializer.SerializeToNode(
-            new DefinitionReference("workspace", "profile", definition.Id, definition.Version, definition.Digest), s_json);
+            new DefinitionReference("workspace", "profile", selected.Definition.Id, selected.Definition.Version, selected.Definition.Digest), s_json);
         input["add"] = new JsonArray();
         input["remove"] = new JsonArray();
         File.WriteAllText(fixture.OutputPath, input.ToJsonString(s_json));
 
-        var run = await fixture.RunAcceptInteractiveAsync("accept", profilePath);
+        var initialPlan = DotnetElsa.Run(
+            "composition", "plan", "--catalog", fixture.CatalogPath,
+            "--composition", fixture.OutputPath,
+            "--workspace-profile", unused.Path,
+            "--workspace-profile", selected.Path,
+            "--format", "json");
+        Assert.Equal(ToolExitCode.Success, initialPlan.ExitCode);
+        using (var initialPlanDocument = JsonDocument.Parse(initialPlan.Output))
+        {
+            Assert.Equal(new[] { "A", "C" }, Strings(initialPlanDocument.RootElement.GetProperty("candidate").GetProperty("featureIds")));
+            Assert.Equal(new[] { "A" }, Strings(initialPlanDocument.RootElement.GetProperty("accepted").GetProperty("featureIds")));
+        }
+
+        var run = await fixture.RunAcceptInteractiveAsync("accept", profiles);
 
         Assert.Equal(ToolExitCode.Success, run.ExitCode);
-        Assert.DoesNotContain(Canary, run.Output + run.Error, StringComparison.Ordinal);
+        AssertCanariesAbsent(initialPlan.Text + run.Output + run.Error);
         using var preview = ReadPreview(run.Output + run.Error);
         Assert.Equal(new[] { "A", "C" }, Strings(preview.RootElement.GetProperty("candidateFeatureIds")));
         Assert.Equal(new[] { "A" }, Strings(preview.RootElement.GetProperty("acceptedFeatureIds")));
@@ -177,13 +201,50 @@ public sealed class CompositionAcceptCliTests
         AssertOnlyAcceptedSelectionChanged(input, output);
         Assert.Equal(new[] { "A", "C" }, Strings(output["accepted"]!["featureIds"]!.AsArray()));
 
-        var planned = DotnetElsa.Run("composition", "plan", "--catalog", fixture.CatalogPath,
-            "--composition", fixture.AcceptedOutputPath, "--workspace-profile", profilePath, "--format", "json");
+        var planned = DotnetElsa.Run(
+            "composition", "plan", "--catalog", fixture.CatalogPath,
+            "--composition", fixture.AcceptedOutputPath,
+            "--workspace-profile", unused.Path,
+            "--workspace-profile", selected.Path,
+            "--format", "json");
         Assert.Equal(ToolExitCode.Success, planned.ExitCode);
         using var plan = JsonDocument.Parse(planned.Output);
         Assert.Equal(new[] { "A", "C" }, Strings(plan.RootElement.GetProperty("candidate").GetProperty("featureIds")));
         Assert.Equal(new[] { "A", "C" }, Strings(plan.RootElement.GetProperty("accepted").GetProperty("featureIds")));
         Assert.DoesNotContain("candidate-re-resolution", ReadFindingCodes(planned.Output));
+        Assert.Contains("inventory-unverified", ReadFindingCodes(planned.Output));
+        Assert.Contains("persistence-unverified", ReadFindingCodes(planned.Output));
+
+        var source = Directory.GetFiles(fixture.HostDirectory, "*.json")
+            .ToDictionary(path => Path.GetFileName(path), File.ReadAllBytes, StringComparer.Ordinal);
+        var generated = await fixture.RunGenerateInteractiveAsync(
+            "generate",
+            handoffHost: "workbench-a",
+            compositionPath: fixture.AcceptedOutputPath,
+            workspaceProfilePaths: profiles);
+
+        Assert.Equal(ToolExitCode.Success, generated.ExitCode);
+        Assert.True(generated.ResponseSent);
+        Assert.False(generated.TimedOut);
+        Assert.Contains("inventory-unverified", generated.Output, StringComparison.Ordinal);
+        Assert.Contains("persistence-unverified", generated.Output, StringComparison.Ordinal);
+        AssertCanariesAbsent(planned.Text + generated.Output + generated.Error);
+        var readback = CshellsSourceReader.Read(
+            File.ReadAllText(Path.Join(fixture.CandidateDirectory, "shells.json")),
+            File.ReadAllText(Path.Join(fixture.CandidateDirectory, "shells.Production.json")),
+            "default");
+        Assert.Equal(new[] { "A", "C" }, readback.EnabledFeatureIds);
+        var candidateFiles = Directory.GetFiles(fixture.CandidateDirectory, "*.json")
+            .ToDictionary(path => Path.GetFileName(path), File.ReadAllBytes, StringComparer.Ordinal);
+        Assert.Equal(source.Keys.Order(StringComparer.Ordinal), candidateFiles.Keys.Order(StringComparer.Ordinal));
+        foreach (var (name, bytes) in source)
+        {
+            Assert.Equal(bytes, File.ReadAllBytes(Path.Join(fixture.HostDirectory, name)));
+            if (name != "shells.Production.json")
+                Assert.Equal(bytes, candidateFiles[name]);
+        }
+        foreach (var candidateFile in Directory.GetFiles(fixture.CandidateDirectory, "*.json"))
+            AssertCanariesAbsent(File.ReadAllText(candidateFile));
     }
 
     [Fact]
@@ -474,28 +535,21 @@ public sealed class CompositionAcceptCliTests
         return path;
     }
 
-    private static SelectionDefinition WriteWorkspaceProfileAtPath(string path, string id, string version, string[] members)
+    private static SelectionDefinition WriteWorkspaceProfileAtPath(
+        string path,
+        string id,
+        string version,
+        string[] members,
+        DependencyExplanation[]? explanations = null)
     {
         var draft = new SelectionDefinition("profile", id, version, new string('0', 64), [.. members],
-            Canary, "Local profile", "A pinned workspace profile.", []);
+            Canary, "Local profile", "A pinned workspace profile.", [.. explanations ?? []]);
         var definition = draft with { Digest = SelectionDigest.ComputeDefinitionDigest(draft) };
         var profileJson = JsonSerializer.SerializeToNode(definition, s_json)!.AsObject();
         profileJson["schemaVersion"] = "1";
         File.WriteAllText(path, profileJson.ToJsonString(s_json));
         return definition;
     }
-
-    private static CliRun RunGenerate(CompositionBridgeFixture fixture, string composition, string outputDirectory) =>
-        DotnetElsa.Run("composition", "generate", "--host-dir", fixture.HostDirectory,
-            "--shell", "default", "--environment", "Production", "--catalog", fixture.CatalogPath,
-            "--composition", composition, "--setting-review", fixture.ReviewPath, "--output-dir", outputDirectory);
-
-    private static Task<PseudoTerminalCliRun> RunGenerateInteractiveAsync(
-        CompositionBridgeFixture fixture, string composition, string outputDirectory) =>
-        PseudoTerminalCli.RunElsaAsync("Type generate to write the candidate: ", "generate",
-            ["composition", "generate", "--host-dir", fixture.HostDirectory,
-                "--shell", "default", "--environment", "Production", "--catalog", fixture.CatalogPath,
-                "--composition", composition, "--setting-review", fixture.ReviewPath, "--output-dir", outputDirectory]);
 
     private static void AssertUnreadable(CompositionBridgeFixture fixture, string profilePath)
     {
@@ -528,5 +582,11 @@ public sealed class CompositionAcceptCliTests
         using var document = JsonDocument.Parse(plan);
         return [.. document.RootElement.GetProperty("findings").EnumerateArray()
             .Select(item => item.GetProperty("code").GetString()!)];
+    }
+
+    private static void AssertCanariesAbsent(string text)
+    {
+        Assert.DoesNotContain(Canary, text, StringComparison.Ordinal);
+        Assert.DoesNotContain(DependencyCanary, text, StringComparison.Ordinal);
     }
 }
