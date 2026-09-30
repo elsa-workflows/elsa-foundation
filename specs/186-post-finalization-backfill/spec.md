@@ -632,8 +632,10 @@ is the owner's approval of what follows, found while building.
   gate stops, and the gate stops when its loops have ended, so a round that could still write is never reported as over;
   or until its activation fails or is cancelled, which ends it at once, since a shell that failed to start has no
   migrator to stop and would otherwise be reported active for good, holding every backfill of the family back. A
-  migrator that stops while its gate is being admitted waits for the admission and deactivates the gate that comes of
-  it, and one that has stopped admits nothing more. Activity is kept per database: a tenant whose shell stopped is not
+  migrator that stops while its gate is being admitted cancels the admission, so a store call that hangs cannot stall
+  the stop or leave the activation active without bound, waits for it to end and deactivates the gate that comes of it,
+  and one that has stopped admits nothing more. Each gate is one owner: several shells activating one family, or the two
+  generations of a reload, keep it active until the last owner stops. Activity is kept per database: a tenant whose shell stopped is not
   held active by another tenant's, in another database, and stopping the last gate of a database forgets what the host
   read there. Not done: an entry that names no database, because the host serves the family in several whose records
   are read, is active while any of them has a gate, so one tenant still running can hold the others' settle back; one
@@ -641,8 +643,9 @@ is the owner's approval of what follows, found while building.
   its own, says every module is active, since saying otherwise could let a settle pass early.
 - **The settle margin has a floor.** The configured `SettleMargin` may lengthen the fleet's margin, the membership expiry
   period plus the skew allowance, and never shortens it: a shorter value is raised to the fleet's, with a warning once
-  per worker, rather than refused, so a timing does not stop a host from starting. The margin must cover what it takes a
-  deactivation to reach the report, one heartbeat, and a shell's last writes, which can outlast its drain (30 seconds
-  unless CShells is configured otherwise; Elsa cannot read it, so a host that lengthens the drain past the fleet's margin
-  lengthens `SettleMargin` with it). The defaults satisfy both: 35 seconds against a 10 second heartbeat and a 30 second
-  drain.
+  per worker, rather than refused, so a timing does not stop a host from starting. The floor is FR-012's bound on writes
+  begun before the writer observed the finalized version, which can still be in flight when the member reports observing
+  it. It is not about shell drains: a shell's migrator is disposed, and its module deactivated, only after the CShells
+  drain (30 seconds plus 3 seconds grace) has ended, the margin starts only once the report already shows the member
+  inactive, and after deactivation the write check throws on the disposed provider, so no authorised write follows.
+  Operators need not lengthen `SettleMargin` when they lengthen the drain.

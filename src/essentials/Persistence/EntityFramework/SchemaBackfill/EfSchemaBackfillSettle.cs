@@ -109,11 +109,11 @@ internal sealed class EfSchemaBackfillSettle(
 
     /// <summary>
     /// The margin the condition waits: the configured one, never less than the fleet's own (<see cref="IEfSchemaFleet.SettleMargin"/>).
-    /// A member reports its module's deactivation at its next publish, one heartbeat later, and a shell's last writes can
-    /// outlast its drain (30 seconds unless CShells is configured otherwise), so a margin below what the fleet needs to
-    /// see a member leave, which is at least both under the defaults, would let verification start while a write from a
-    /// member the condition no longer counts is still in flight. The setting can lengthen the margin, for a longer drain; a
-    /// shorter one is raised to the fleet's and said once, not refused, so a host does not fail to start over a timing.
+    /// The floor bounds writes begun before the writer observed the finalized version, which can still be in flight when
+    /// the member reports observing it (spec 186, FR-012, "The settle margin has a floor"). It is not about a member's
+    /// shell drain: a shell's module is deactivated only after the drain has ended, and the margin starts only once the
+    /// report shows the member inactive. The setting can lengthen the margin; a shorter one is raised to the fleet's and
+    /// said once, not refused, so a host does not fail to start over a timing.
     /// </summary>
     private TimeSpan EffectiveMargin(IEfSchemaFleet fleet)
     {

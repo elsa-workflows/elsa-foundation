@@ -904,8 +904,9 @@ reads an entry written by any other version it does not know. That has these eff
 - Every counted answer waits. A member with an unknown report fails every requirement (FR-016), so finalization of a
   version (spec 181) and the backfill's settle condition (spec 186, FR-012) wait until every host is upgraded, and the
   status names the hosts it is waiting on. Nothing finalizes or settles early.
-- Placement considers no member whose report is unknown (FR-016), so a mixed fleet places on members of its own build
-  only until the last host is upgraded. It refuses no member and stops no host from starting.
+- Placement candidates exclude a member whose report is unknown (FR-016). Routing is unaffected, since claims are decided
+  by the local runtime check; work that only a member with an unknown report could run is reported as unplaceable until
+  the last host is upgraded. It refuses no member and stops no host from starting.
 - A host restarted under a stable host id waits out its earlier incarnation's expiry period plus the skew allowance
   before it rejoins (User Story 4), as it always did; the upgrade adds no wait of its own.
 

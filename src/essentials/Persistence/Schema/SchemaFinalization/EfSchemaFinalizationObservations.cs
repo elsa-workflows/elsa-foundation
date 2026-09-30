@@ -22,24 +22,17 @@ namespace Elsa.Persistence.Schema.SchemaFinalization;
 /// report has one entry per family; otherwise, or before any record is read, none is reported.
 /// </para>
 /// <para>
-/// <b>An entry says whether the family's module is active.</b> A module is active in a database from the moment a gate has
-/// admitted it there, in any shell, until every gate that did has stopped, so a family whose module was disabled, or was
-/// never enabled, is not active (spec 183, FR-019; the rationale is on <c>ReadabilityEntry.ModuleActive</c>). Activity
-/// is tracked per database, not per family: an entry that names a database is active only while a gate for that database
-/// is, so a tenant whose shell stopped does not stay active in the report because another tenant's, in another database,
-/// still is. An activation between publishing its report and reading its record counts as active too, and hands over to
-/// the gate's own activity without a moment in between, since it is about to write. An entry that names none, because the host serves the family in several databases whose records are read, or
-/// an activation is pending, applies to every database and is active while a gate for any of them is: the conservative
-/// direction. Each gate is one owner, so several shells activating one family, or one gate reporting twice, never leave it
-/// active after the last of them stops.
+/// <b>An entry says whether the family's module is active</b>, per database, from a gate's admission until every gate
+/// that admitted it there has stopped (spec 183, FR-019; the rationale is on <c>ReadabilityEntry.ModuleActive</c>). The
+/// rules are stated once, in spec 186, "When a module is active in the report" (FR-012), and not restated here. An entry
+/// that names no database is active while a gate for any database is: the conservative direction. Not modelled: one entry
+/// per database.
 /// </para>
 /// <para>
-/// <b>Stopping the last gate of a database forgets what this host read there.</b> The entry then names the databases
-/// whose gates remain, or none when none does, which counts for every database. A module activated in that database again
-/// reads its record afresh and refuses itself when the finalized version is not one it reads (spec 181, FR-013 to FR-015),
-/// so forgetting cannot let it write what a count left it out of. A database read by no gate at all, since its activation
-/// was refused before it began, is not forgotten. Not modelled: one entry per database, which would let an entry that
-/// names none be active for exactly the databases that have a gate; today it is active for all of them while any does.
+/// <b>Stopping the last gate of a database forgets what this host read there</b> (spec 186, same section). The entry then
+/// names the databases whose gates remain, or none when none does, which counts for every database. A module activated
+/// there again reads its record afresh and refuses itself when the finalized version is not one it reads (spec 181,
+/// FR-013 to FR-015), so forgetting cannot let it write what a count left it out of.
 /// </para>
 /// </remarks>
 public sealed class EfSchemaFinalizationObservations

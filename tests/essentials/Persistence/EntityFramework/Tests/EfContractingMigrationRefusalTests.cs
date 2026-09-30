@@ -151,7 +151,8 @@ public sealed class EfContractingMigrationRefusalTests : IAsyncLifetime
     /// <summary>
     /// A stop that arrives while the gate is being admitted must still end the module's activity: the stop takes the
     /// admission lock, so the gate that activates after it began is deactivated too, and a migrator that has stopped admits
-    /// nothing more. The barrier holds the admission at its first publish, so the stop begins before the gate exists.
+    /// nothing more, and the stop cancels the admission in flight. The barrier holds the admission at its first publish, so
+    /// the stop begins before the gate exists.
     /// </summary>
     [Fact]
     public async Task A_migrator_stopped_while_its_gate_is_being_admitted_leaves_the_module_inactive()
@@ -172,9 +173,39 @@ public sealed class EfContractingMigrationRefusalTests : IAsyncLifetime
         await inAdmission.Task.WaitAsync(TimeSpan.FromSeconds(30));
         var stopping = migrator.StopAsync(CancellationToken.None);
         release.SetResult();
-        await Task.WhenAll(initializing, stopping).WaitAsync(TimeSpan.FromSeconds(30));
+        await stopping.WaitAsync(TimeSpan.FromSeconds(30));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => initializing.WaitAsync(TimeSpan.FromSeconds(30)));
 
         Assert.False(observations.Find(Family).ModuleActive);
+    }
+
+    /// <summary>
+    /// A stop cancels an admission that is in flight: a store call that hangs during activation neither stalls the stop nor
+    /// leaves the module reported active. The barrier holds the activation at its first publish until the stop cancels it.
+    /// </summary>
+    [Fact]
+    public async Task A_migrator_stopped_during_a_hung_activation_cancels_it_and_leaves_the_module_inactive()
+    {
+        var observations = new EfSchemaFinalizationObservations();
+        var state = new FakeFleetState();
+        var fleet = new FakeFleet(state, state.Add(new FakeMember("host-new").Reading(Family, Chain)));
+        var inActivation = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        fleet.BeforePublish = () =>
+        {
+            inActivation.TrySetResult();
+            return Task.Delay(Timeout.Infinite);
+        };
+        var migrator = Migrator(EfMigratePolicy.AutoMigrate, fleet, observations: observations);
+
+        var initializing = migrator.InitializeAsync();
+        await inActivation.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        Assert.True(observations.Find(Family).ModuleActive);
+
+        await migrator.StopAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(30));
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => initializing.WaitAsync(TimeSpan.FromSeconds(30)));
+        Assert.False(observations.Find(Family).ModuleActive);
+        Assert.Null(migrator.Gate);
     }
 
     [Fact]

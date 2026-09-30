@@ -219,9 +219,9 @@ module and a host decide:
   a version past the one each record was created at: the conservative direction, which only ever delays.
 - **`EfSchemaFinalizationObservations`**, registered once by instance on the host container, is what the gates read
   and what the readability report names (spec 183, FR-019). It also says whether each family's module is active in the
-  host, per database: a gate marks its families active in its database when it admits the module, and ends that when it
-  stops or its activation fails (`Activate` and `Deactivate`, one owner per gate). Stopping the last gate of a database
-  forgets what was read there. Only the backfill's settle condition reads it (spec 186, FR-012).
+  host, per database, from a gate's admission until it stops or its activation fails (`Activate` and `Deactivate`); the
+  rules are in spec 186, "When a module is active in the report". Only the backfill's settle condition reads it (spec 186,
+  FR-012).
 - **Where these live.** `IEfSchemaFleet` and its answer types, `EfSchemaFinalizationObservations`, the finalization
   record's model and status, `EfSchemaFinalizationGates` with the `IEfSchemaModuleGate` view the dormancy check's
   source reads, `EfSchemaFamilyCatalog` with its descriptors, and `IEfModuleRefusal`, which every EF module's refusal to

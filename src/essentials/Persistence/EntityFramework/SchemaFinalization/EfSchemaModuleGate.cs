@@ -479,7 +479,8 @@ public sealed class EfSchemaModuleGate : IEfSchemaModuleGate
     /// <summary>
     /// Ends what <see cref="ActivateAsync"/> reported: the module is no longer active in this host, as its report says from
     /// the next publish, and this gate records nothing more it reads. Its migrator calls it once the gate's loops have
-    /// stopped, and <see cref="ActivateAsync"/> when it fails; a repeat changes nothing.
+    /// stopped, and <see cref="ActivateAsync"/> when it fails; a repeat changes nothing. The rules for when a module is active
+    /// are spec 186's, "When a module is active in the report".
     /// </summary>
     internal void Deactivate()
     {
