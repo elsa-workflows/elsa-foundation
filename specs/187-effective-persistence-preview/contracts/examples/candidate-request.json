@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "host": {
+    "name": "Example.Host",
+    "directory": "/example/host"
+  },
+  "candidate": {
+    "version": 1,
+    "source": "captured-workbench-json-v1",
+    "invocationId": "11111111111111111111111111111111",
+    "captureId": "22222222222222222222222222222222",
+    "shell": "default",
+    "environment": "Production",
+    "acceptedFeatureIds": [],
+    "removedFeatureIds": [],
+    "files": [
+      {
+        "name": "appsettings.json",
+        "captureId": "22222222222222222222222222222222",
+        "content": "e30="
+      },
+      {
+        "name": "shells.Production.json",
+        "captureId": "22222222222222222222222222222222",
+        "content": "eyJDU2hlbGxzIjp7IlNoZWxscyI6eyJkZWZhdWx0Ijp7fX19fQ=="
+      },
+      {
+        "name": "shells.json",
+        "captureId": "22222222222222222222222222222222",
+        "content": "eyJDU2hlbGxzIjp7IlNoZWxscyI6eyJkZWZhdWx0Ijp7IkZlYXR1cmVzIjp7fX19fX0="
+      }
+    ]
+  }
+}

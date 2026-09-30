@@ -46,9 +46,11 @@ The initial backlog was published on 2026-09-23. The persistence boundary and ef
 
 ## Epic Outcomes
 
+The [effective-persistence spike #2172](https://github.com/elsa-workflows/elsa-foundation/issues/2172) delivered its reviewed real-entry-point probe through [PR #2174](https://github.com/elsa-workflows/elsa-foundation/pull/2174), with successful exact-main gates. [Specification #2175](https://github.com/elsa-workflows/elsa-foundation/issues/2175) now defines [accepted candidate inspection](../../specs/187-effective-persistence-preview/spec.md): one post-edit file capture, actual host-default/dependency reconciliation, host-owned configured-value preparation and a safe projection. It does not implement the preview or close #1962's broader external-provenance/portable unknown-export outcomes.
+
 The developer editing slice [#2165](https://github.com/elsa-workflows/elsa-foundation/issues/2165) adds [review and acceptance of an edited exact selection](../reports/runtime-composition/edited-selection-acceptance.md) without hand-maintaining the accepted feature list. Its review and delivery gates are recorded on the issue. Project 51 and native issue state were refreshed through the supported REST API after GraphQL reached its rate limit. The builder study [#2064](https://github.com/elsa-workflows/elsa-foundation/issues/2064) is Todo / Blocked awaiting six real participants, and Authoring/Worker profile publication still requires the documented API/identity decisions and host evidence.
 
-The next concrete developer leaf is [#2166](https://github.com/elsa-workflows/elsa-foundation/issues/2166): supply pinned workspace profiles to candidate generation and recheck every candidate-driving local input before publication. It is Todo / Blocked on #2165's shared input boundary, with native parent/dependency links. Planning already supports workspace profiles; generation currently does not. Keep one active delivery leaf and promote this follow-on after the acceptance delivery passes its gates.
+Workspace-profile generation [#2166](https://github.com/elsa-workflows/elsa-foundation/issues/2166) delivered through [PR #2173](https://github.com/elsa-workflows/elsa-foundation/pull/2173), with exact-main CI/Maps and applicable gates passed. Plan, accept and generation now consume supplied pinned workspace profiles and recheck all captured local inputs. [#2175](https://github.com/elsa-workflows/elsa-foundation/issues/2175) is the sole active delivery leaf; implementation of its effective-persistence preview follows reviewed specification delivery.
 
 | Epic | Initial planning depth |
 |---|---|
@@ -74,6 +76,7 @@ Existing [connection-guard #1902](https://github.com/elsa-workflows/elsa-foundat
 - [Selected-host evidence investigation](../reports/runtime-composition/selected-host-evidence-boundary.md)
 - [Composition import/export investigation](../reports/runtime-composition/import-export-boundary.md)
 - [Developer effective-persistence investigation #2172](../reports/runtime-composition/developer-persistence-evidence.md)
+- [Accepted candidate effective-persistence specification #2175](../../specs/187-effective-persistence-preview/spec.md)
 - [Composition apply/recovery boundary](../reports/runtime-composition/apply-recovery-boundary.md)
 - [Source-to-generation attestation investigation](../reports/runtime-composition/source-generation-attestation.md)
 - [Workbench source-snapshot boundary](../reports/runtime-composition/workbench-source-snapshot.md)

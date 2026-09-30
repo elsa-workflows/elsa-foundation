@@ -1,6 +1,6 @@
 # Generating from pinned workspace profiles
 
-Implementation boundary for [#2166](https://github.com/elsa-workflows/elsa-foundation/issues/2166), following the [profile selection contract](../../../specs/174-profile-selection-planner/contracts/selection-planner-v1.md), the [file bridge contract](../../../specs/176-composition-file-bridge/contracts/file-bridge-v1.md), and the existing [edited-selection acceptance](edited-selection-acceptance.md) flow. Delivery still requires the issue's review, CI, merge, and post-merge gates.
+Implementation boundary for [#2166](https://github.com/elsa-workflows/elsa-foundation/issues/2166), following the [profile selection contract](../../../specs/174-profile-selection-planner/contracts/selection-planner-v1.md), the [file bridge contract](../../../specs/176-composition-file-bridge/contracts/file-bridge-v1.md), and the existing [edited-selection acceptance](edited-selection-acceptance.md) flow. Delivered through [PR #2173](https://github.com/elsa-workflows/elsa-foundation/pull/2173), canonical merge `d18ee00a9e9bb6908718571a348d4303a8695e54`, after independent/root review and applicable exact-head/main gates; [main CI](https://github.com/elsa-workflows/elsa-foundation/actions/runs/36667956159) and [Maps](https://github.com/elsa-workflows/elsa-foundation/actions/runs/36667955933) passed. The issue records the partial merge response and source-identical metadata retry; unavailable Copilot is not approval.
 
 ## Developer flow
 
