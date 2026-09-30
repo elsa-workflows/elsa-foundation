@@ -45,6 +45,12 @@ public sealed class EfToolingHostTests : IDisposable
 
     private static readonly Regex IsoTimestamp = new(@"\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}", RegexOptions.Compiled);
 
+    /// <summary>The build metadata after the "+" of the tool's informational version, its source revision, or null when this build embeds none.</summary>
+    private static readonly string? BuildMetadata =
+        typeof(EfToolingHost).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion is { } version && version.IndexOf('+') is var plus and >= 0 && plus < version.Length - 1
+            ? version[(plus + 1)..]
+            : null;
+
     private readonly string root = Directory.CreateTempSubdirectory("elsa-ef-tooling-").FullName;
 
     /// <summary>
@@ -294,9 +300,12 @@ public sealed class EfToolingHostTests : IDisposable
             Assert.DoesNotContain(DateTime.UtcNow.ToString("yyyy-MM-dd"), text, StringComparison.Ordinal);
             // The placeholder connection the contexts were configured with never reaches the artifact.
             Assert.DoesNotContain("elsa_design_time", text, StringComparison.Ordinal);
-            // Nor does the tool's own version (FR-043); the versions in the manifest are EF's and the caller's.
-            if (typeof(EfToolingHost).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion is { } toolVersion)
-                Assert.DoesNotContain(toolVersion, text, StringComparison.Ordinal);
+            // Nor does the tool's own build stamp (FR-043); the versions in the manifest are EF's and the caller's. The stamp is
+            // the "+<source revision>" the build appends to the informational version. Without one the version is a bare
+            // "1.0.0", which is no stamp: a migration's DEFAULT '1.0.0' legitimately carries the same text.
+            // A build that embeds no source revision has no build-specific stamp to leak, so there is nothing to assert.
+            if (BuildMetadata is { } stamp)
+                Assert.DoesNotContain(stamp, text, StringComparison.Ordinal);
         }
     }
 
