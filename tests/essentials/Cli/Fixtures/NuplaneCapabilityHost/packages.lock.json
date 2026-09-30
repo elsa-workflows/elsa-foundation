@@ -16,9 +16,9 @@
       },
       "Nuplane": {
         "type": "Direct",
-        "requested": "[0.0.11-preview.93, )",
-        "resolved": "0.0.11-preview.93",
-        "contentHash": "kiT/I92j/Ii1Omqt3SBdnkxcV1Yd3rCbaUaojag4SVofoCoEBYnAYzNUD2OKVPTmoxdYGltQ0e+KHEBnBkj0bg==",
+        "requested": "[0.0.11-preview.94, )",
+        "resolved": "0.0.11-preview.94",
+        "contentHash": "teZUZqilxgEoDR7hgQsLd30YTi944Fle9Zm/uaxkWmrDR2HL/4pYGsZxiI0+E3yWhI0EU/gKkg25hwbWkTzRoQ==",
         "dependencies": {
           "Microsoft.Extensions.Configuration.Binder": "10.0.3",
           "Microsoft.Extensions.DependencyInjection": "10.0.3",
@@ -31,36 +31,36 @@
           "NuGet.Protocol": "6.13.1",
           "NuGet.Resolver": "6.13.1",
           "NuGet.Versioning": "6.13.1",
-          "Nuplane.Abstractions": "0.0.11-preview.93",
+          "Nuplane.Abstractions": "0.0.11-preview.94",
           "Polly.Extensions": "8.6.5"
         }
       },
       "Nuplane.Loading": {
         "type": "Direct",
-        "requested": "[0.0.11-preview.93, )",
-        "resolved": "0.0.11-preview.93",
-        "contentHash": "DDjOwFDtpn6mu1AZDF8z22W5MDkAzLgvGeTrIKXsxrMuCgoISYzLenVma5zm0j0Zvg6THNPIQxj2tFhb4G1GVg==",
+        "requested": "[0.0.11-preview.94, )",
+        "resolved": "0.0.11-preview.94",
+        "contentHash": "oOQZffOydgpM+cmfCMqgE1/SPCt2FcsLOv9yHJh+Zrg0ZSO0n1QpWamlv8vspqx+0LG0w6BTcbjZafQmEetj9g==",
         "dependencies": {
           "Microsoft.Extensions.Configuration.Binder": "10.0.3",
           "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.3",
           "Microsoft.Extensions.Logging.Abstractions": "10.0.3",
           "Microsoft.Extensions.Options": "10.0.3",
-          "Nuplane": "0.0.11-preview.93",
-          "Nuplane.Abstractions": "0.0.11-preview.93",
-          "Nuplane.Loading.Abstractions": "0.0.11-preview.93"
+          "Nuplane": "0.0.11-preview.94",
+          "Nuplane.Abstractions": "0.0.11-preview.94",
+          "Nuplane.Loading.Abstractions": "0.0.11-preview.94"
         }
       },
       "Nuplane.Sources.Directory": {
         "type": "Direct",
-        "requested": "[0.0.11-preview.93, )",
-        "resolved": "0.0.11-preview.93",
-        "contentHash": "QFwtIU6GH95hqwPOkD7mWmzj1+raE+jwItbh7ruoWX3U5F9cpMezEGaNF8hvkxBaQvVwH2pm+/S9ttIi9tKxvg==",
+        "requested": "[0.0.11-preview.94, )",
+        "resolved": "0.0.11-preview.94",
+        "contentHash": "rTQulXlOYiGhgIiFFBAd0lAgeqlvLVb8cpuzoOmk2lTBB9ArVOWJ9Qpmr70M3FHEJ0SM1uG7kaEKt7EH+EswTw==",
         "dependencies": {
           "Microsoft.Extensions.Configuration.Binder": "10.0.3",
           "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.3",
           "Microsoft.Extensions.Hosting.Abstractions": "10.0.3",
           "Microsoft.Extensions.Logging.Abstractions": "10.0.3",
-          "Nuplane": "0.0.11-preview.93"
+          "Nuplane": "0.0.11-preview.94"
         }
       },
       "JetBrains.Annotations": {
@@ -260,8 +260,8 @@
       },
       "Nuplane.Abstractions": {
         "type": "Transitive",
-        "resolved": "0.0.11-preview.93",
-        "contentHash": "PF7GT5dr7dMxrIcFlafy6qfk645Z0PXsSlfvTWD/qspy4YF2VAPxT5zJ3Pmg5i/Oic5yyDNFh1SzqpL9oSk0oQ=="
+        "resolved": "0.0.11-preview.94",
+        "contentHash": "YtytvT0fC6hyfz1GonNjNdw13jN1Ps3Zl0A+OK8/cZxuL/dUGQbVnWlV82vJkQo6TTmegXRXZx1gOvfGkpXm0g=="
       },
       "Polly.Core": {
         "type": "Transitive",
@@ -504,11 +504,11 @@
       },
       "Nuplane.Loading.Abstractions": {
         "type": "CentralTransitive",
-        "requested": "[0.0.11-preview.93, )",
-        "resolved": "0.0.11-preview.93",
-        "contentHash": "iN7hHfuGcwffLxqScWAdY/94/nSKMOB7dz1PvFilK9brsmXY2G+DahBuwTcBpHNX6h3oT6KwP4q3V1jaEYB7xA==",
+        "requested": "[0.0.11-preview.94, )",
+        "resolved": "0.0.11-preview.94",
+        "contentHash": "vjTnc+rW+guSOUq1CXpmxp3KKBLxOpazOVHV0nHOji7w5lS7+GLRzYvEyPs/LARwxo9weJO3ie8gF5/F10UIgg==",
         "dependencies": {
-          "Nuplane.Abstractions": "0.0.11-preview.93"
+          "Nuplane.Abstractions": "0.0.11-preview.94"
         }
       }
     }

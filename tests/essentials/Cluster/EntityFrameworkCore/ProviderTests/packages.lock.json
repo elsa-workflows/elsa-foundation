@@ -366,8 +366,8 @@
       },
       "Nuplane.Abstractions": {
         "type": "Transitive",
-        "resolved": "0.0.11-preview.93",
-        "contentHash": "PF7GT5dr7dMxrIcFlafy6qfk645Z0PXsSlfvTWD/qspy4YF2VAPxT5zJ3Pmg5i/Oic5yyDNFh1SzqpL9oSk0oQ=="
+        "resolved": "0.0.11-preview.94",
+        "contentHash": "YtytvT0fC6hyfz1GonNjNdw13jN1Ps3Zl0A+OK8/cZxuL/dUGQbVnWlV82vJkQo6TTmegXRXZx1gOvfGkpXm0g=="
       },
       "SharpZipLib": {
         "type": "Transitive",
@@ -548,7 +548,7 @@
           "Elsa.Cluster.InProcess": "[4.0.0-dev, )",
           "Elsa.Persistence.Schema": "[4.0.0-dev, )",
           "Microsoft.Extensions.Logging.Abstractions": "[10.0.10, )",
-          "Nuplane.Loading.Abstractions": "[0.0.11-preview.93, )"
+          "Nuplane.Loading.Abstractions": "[0.0.11-preview.94, )"
         }
       },
       "elsa.cluster.testing": {
@@ -923,11 +923,11 @@
       },
       "Nuplane.Loading.Abstractions": {
         "type": "CentralTransitive",
-        "requested": "[0.0.11-preview.93, )",
-        "resolved": "0.0.11-preview.93",
-        "contentHash": "iN7hHfuGcwffLxqScWAdY/94/nSKMOB7dz1PvFilK9brsmXY2G+DahBuwTcBpHNX6h3oT6KwP4q3V1jaEYB7xA==",
+        "requested": "[0.0.11-preview.94, )",
+        "resolved": "0.0.11-preview.94",
+        "contentHash": "vjTnc+rW+guSOUq1CXpmxp3KKBLxOpazOVHV0nHOji7w5lS7+GLRzYvEyPs/LARwxo9weJO3ie8gF5/F10UIgg==",
         "dependencies": {
-          "Nuplane.Abstractions": "0.0.11-preview.93"
+          "Nuplane.Abstractions": "0.0.11-preview.94"
         }
       }
     }
