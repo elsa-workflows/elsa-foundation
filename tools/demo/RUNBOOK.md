@@ -119,7 +119,7 @@ bash tools/demo/elsa.sh persistence apply --restore --host artifacts/demo/hosts/
 bash tools/demo/run-host.sh b --port 5202 --provider PostgreSql --cluster host-b --fast-membership --management-key-env DEMO_KEY --prepare-only
 ```
 
-- **Expect:** the apply prints both modules: `Cluster.Membership` (applied `0` or `1`) and `Samples.Notes`. One `apply` creates the tables for both hosts: they share the database.
+- **Expect:** the apply prints both modules, `Cluster.Membership` and `Samples.Notes`, one migration applied each. One `apply` creates the tables for both hosts: they share the database.
 
 In tab **A**, then, only when host A is ready, in tab **B** (starting both in the same instant makes them race to create the cluster's
 identity row; see the troubleshooting table):
