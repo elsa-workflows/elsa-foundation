@@ -57,13 +57,21 @@ internal sealed class CandidateInspectionFixture : IDisposable
     public string Environment => "Production";
 
     public string DatabasePath => Path.Join(SourceDirectory, "must-not-create.db");
+    public string ContextMarkerPath => _directory.File("context-constructed.txt");
+    public string ActionMarkerPath => _directory.File("action-constructed.txt");
+    public IReadOnlyDictionary<string, string> SentinelEnvironment => new Dictionary<string, string>
+    {
+        ["ELSA_RESOURCE_PROBE_CONTEXT_MARKER"] = ContextMarkerPath,
+        ["ELSA_RESOURCE_PROBE_ACTION_MARKER"] = ActionMarkerPath
+    };
 
-    public void UseDiagnosticsSource()
+    public void UseDiagnosticsSource(bool includeOpenTelemetryEf = true)
     {
         var shells = JsonNode.Parse(File.ReadAllText(Path.Join(SourceDirectory, "shells.json")))!;
         var features = shells["CShells"]!["Shells"]![ShellId]!["Features"]!.AsObject();
         features[OpenTelemetryFeatureId] = new JsonObject();
-        features[OpenTelemetryEfFeatureId] = new JsonObject();
+        if (includeOpenTelemetryEf)
+            features[OpenTelemetryEfFeatureId] = new JsonObject();
         File.WriteAllText(Path.Join(SourceDirectory, "shells.json"), shells.ToJsonString());
         var appsettings = JsonNode.Parse(File.ReadAllText(Path.Join(SourceDirectory, "appsettings.json")))!;
         appsettings["ProbeDefaults"] = new JsonObject { ["EnableDiagnostics"] = true };
@@ -152,6 +160,8 @@ internal sealed class CandidateInspectionFixture : IDisposable
         foreach (var (name, bytes) in _sourceBytes)
             Assert.Equal(bytes, File.ReadAllBytes(Path.Join(SourceDirectory, name)));
         Assert.False(File.Exists(DatabasePath));
+        Assert.False(File.Exists(ContextMarkerPath));
+        Assert.False(File.Exists(ActionMarkerPath));
     }
 
     public void Dispose() => _directory.Dispose();

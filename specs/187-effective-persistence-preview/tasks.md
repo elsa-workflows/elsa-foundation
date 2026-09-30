@@ -43,7 +43,7 @@ Foundation execution evidence is recorded in [implementation evidence](implement
 **Independent test**: A08–A13 and old-command no-worker controls.
 
 - [ ] T015 [US3] Write failing bounded-byte/identity/version/console/process/cancellation/drift branch tests in `tests/essentials/Cli/Tests/CandidateProcessTests.cs` and `CandidateInspectionTests.cs`, plus producer boundary tests in `tests/essentials/Persistence/EntityFrameworkCore/Migrations/Tests/EfCandidateInspectionTests.cs`; stub dependencies for each logic implementation and retain real child adverse tests.
-- [ ] T016 [US3] Implement bounded candidate process try/finally in `src/essentials/Cli/WorkerProcess.cs`, including literal mode argument, timeout, every I/O/cancellation stage, discarded stderr, kill-tree+wait and cleanup-failure outcome; legacy launches unchanged.
+- [ ] T016 [US3] Implement bounded candidate process try/finally in `src/essentials/Cli/CandidateWorkerProcess.cs`, including literal mode argument, timeout, every I/O/cancellation stage, discarded stderr, kill-tree+wait and cleanup-failure outcome; legacy launches unchanged.
 - [ ] T017 [US3] Enforce request/response bounds and fixed errors in `src/essentials/Cli/Worker/Program.cs`, `WorkerContract.cs`, `WorkerRunner.cs` and host candidate operation; suppress raw console before host code; recheck full inputs immediately before output in `src/essentials/Cli/CompositionInspectCommand.cs`.
 - [ ] T018 [US3] Execute actual child cancellation/flood/timeout, stale/mixed/unused-profile capture, malformed/oversized exchange, unknown retention and no-access/canary sentinels in `tests/essentials/Cli/Tests/CandidateProcessTests.cs`, `CandidateInspectionTests.cs` and existing migrations fixtures; no surviving process/partial output.
 

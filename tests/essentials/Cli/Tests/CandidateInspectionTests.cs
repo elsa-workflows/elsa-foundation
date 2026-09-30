@@ -16,16 +16,18 @@ public sealed class CandidateInspectionTests
     ];
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task Accepted_import_and_workspace_edits_reach_real_host_preview_without_generation(bool workspace)
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task Accepted_import_and_workspace_edits_reach_real_host_preview_without_generation(bool workspace, bool fileEfEnabled)
     {
         if (OperatingSystem.IsWindows())
             return; // The existing PTY helper exercises these journeys on supported Unix hosts.
         using var fixture = new CandidateInspectionFixture();
-        var profile = await PrepareAcceptedEditAsync(fixture, workspace);
+        var profile = await PrepareAcceptedEditAsync(fixture, workspace, fileEfEnabled);
 
-        var inspection = DotnetElsa.Run(fixture.InspectionArguments("json", profile));
+        var inspection = DotnetElsa.Run(fixture.SentinelEnvironment, fixture.InspectionArguments("json", profile));
 
         Assert.Equal(ToolExitCode.Success, inspection.ExitCode);
         using var document = JsonDocument.Parse(inspection.Output);
@@ -55,7 +57,7 @@ public sealed class CandidateInspectionTests
         Assert.Equal("unobserved", resolution.GetProperty("runtimeParity").GetString());
         Assert.Equal("unobserved", resolution.GetProperty("activation").GetString());
 
-        var text = DotnetElsa.Run(fixture.InspectionArguments("text", profile));
+        var text = DotnetElsa.Run(fixture.SentinelEnvironment, fixture.InspectionArguments("text", profile));
         Assert.Equal(ToolExitCode.Success, text.ExitCode);
         Assert.Contains("primary", text.Output, StringComparison.Ordinal);
         Assert.Contains("Sqlite", text.Output, StringComparison.Ordinal);
@@ -68,7 +70,7 @@ public sealed class CandidateInspectionTests
             Assert.DoesNotContain("invocationId", output, StringComparison.Ordinal);
             Assert.DoesNotContain("captureId", output, StringComparison.Ordinal);
         }
-        var subsequentPlan = DotnetElsa.Run(PlanArguments(fixture, profile));
+        var subsequentPlan = DotnetElsa.Run(fixture.SentinelEnvironment, PlanArguments(fixture, profile));
         Assert.Equal(ToolExitCode.Success, subsequentPlan.ExitCode);
         using var planned = JsonDocument.Parse(subsequentPlan.Output);
         Assert.Equal(ExpectedSelection, Strings(planned.RootElement.GetProperty("candidate").GetProperty("featureIds")));
@@ -88,7 +90,7 @@ public sealed class CandidateInspectionTests
         using var fixture = new CandidateInspectionFixture();
         var profile = await PrepareAcceptedEditAsync(fixture, workspace);
 
-        var refusal = DotnetElsa.Run(fixture.InspectionArguments("json", profile, trust: false));
+        var refusal = DotnetElsa.Run(fixture.SentinelEnvironment, fixture.InspectionArguments("json", profile, trust: false));
 
         Assert.Equal(ToolExitCode.Refusal, refusal.ExitCode);
         Assert.Equal(string.Empty, refusal.Output);
@@ -98,9 +100,33 @@ public sealed class CandidateInspectionTests
         fixture.AssertInputsUnchanged();
     }
 
-    private static async Task<string?> PrepareAcceptedEditAsync(CandidateInspectionFixture fixture, bool workspace)
+    [Theory]
+    [InlineData("trust", "candidate-trust-required")]
+    [InlineData("format", "composition-format-invalid")]
+    [InlineData("timeout-low", "candidate-request-invalid")]
+    [InlineData("timeout-high", "candidate-request-invalid")]
+    public void Invalid_inspection_options_refuse_before_reading_unavailable_private_inputs(string mutation, string code)
     {
-        fixture.UseDiagnosticsSource();
+        var arguments = new List<string>
+        {
+            "composition", "inspect", "--host", "/private-input-canary/missing-host",
+            "--host-dir", "/private-input-canary/missing-source", "--shell", "default",
+            "--environment", "Production", "--composition", "/private-input-canary/missing-composition"
+        };
+        if (mutation != "trust") arguments.Add("--trust-host-code");
+        if (mutation == "format") arguments.AddRange(["--format", "xml"]);
+        if (mutation == "timeout-low") arguments.AddRange(["--timeout-seconds", "0"]);
+        if (mutation == "timeout-high") arguments.AddRange(["--timeout-seconds", "301"]);
+        var refusal = DotnetElsa.Run([.. arguments]);
+        Assert.Equal(ToolExitCode.Refusal, refusal.ExitCode);
+        Assert.Empty(refusal.Output);
+        Assert.Contains(code, refusal.Error, StringComparison.Ordinal);
+        Assert.DoesNotContain("private-input-canary", refusal.Text, StringComparison.Ordinal);
+    }
+
+    private static async Task<string?> PrepareAcceptedEditAsync(CandidateInspectionFixture fixture, bool workspace, bool fileEfEnabled = true)
+    {
+        fixture.UseDiagnosticsSource(fileEfEnabled);
         fixture.WriteBundledCatalog();
         string? profile = null;
         if (workspace)
