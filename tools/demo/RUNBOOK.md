@@ -218,7 +218,9 @@ reload 5101
   {
     "module": "Samples.Notes",
     "code": "pending-migrations",
-    "pendingMigrations": [ "…_AddTags" ],
+    "pendingMigrations": [
+      "…_AddTags"
+    ],
     "command": "dotnet elsa persistence apply --host \"…/artifacts/demo/hosts/solo\" --modules Samples.Notes --provider Sqlite --connection-env ELSA_EF_CONNECTION"
   }
   ```
@@ -248,6 +250,11 @@ bash tools/demo/elsa.sh persistence apply --host artifacts/demo/hosts/solo --env
 
 ```bash
 reload 5101
+```
+
+Say the first sentence below, and only then, about five seconds later:
+
+```bash
 withtags 5101
 tag 5101 demo
 notes 5101
@@ -256,8 +263,9 @@ notes 5101
 - **Audience sees:** `HTTP 200`, the same notes now with `"tags":[]`, then one note with its tag, and the original endpoint unchanged. In the browser, reload tab 1: blank 404 becomes the notes.
 - **Say:** "The host switched to release 1.1.0 without a restart. The notes written by release 1.0.0 have no tags column value: the upcaster reads them as
   'no tags'. And the old endpoint carries on."
-- **Expect:** `reload` prints `HTTP 200` and `{ "features": 4, "reloaded": 1 }`; `withtags` prints `HTTP 200` and the notes with `"tags":[]`; `tag` prints the note with `"tags":["demo"]`.
-- **Time:** under 3 s. The new endpoints turn on when the host has re-evaluated the schema version, which it does every 5 s: the first `withtags` can be `HTTP 409` (`schema-version-not-finalized`) for up to 5 s. Say "it is checking that this is safe", and repeat.
+- **Expect:** `reload` prints `HTTP 200` and `{ "features": 4, "reloaded": 1 }` (as three lines of JSON); `withtags` prints `HTTP 200` and the notes with `"tags":[]`; `tag` prints the note with `"tags":["demo"]`.
+- **Time:** the reload is under 3 s. The new endpoints turn on when the host has re-evaluated the schema version, which it does every 5 s, so a `withtags` right after the reload is
+  `HTTP 409` (`schema-version-not-finalized`) about half the time: that is why the first command is separate. If you see it, say "it is checking that this is safe", wait, and repeat.
 - **If it goes wrong:** `HTTP 409` on `reload` again: the apply did not run (or ran against another database): repeat 1.5 and read its table. `withtags` still 409 after ten seconds:
   `bash tools/demo/elsa.sh persistence status --host artifacts/demo/hosts/solo --environment Development --provider Sqlite --modules Samples.Notes --family SamplesNotes` says why.
 
