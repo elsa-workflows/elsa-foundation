@@ -3,6 +3,8 @@ using System.Text.Json.Nodes;
 using Elsa.Cluster.Core.Options;
 using Elsa.Cluster.Hosting;
 using Elsa.Primitives.Exceptions;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using static Elsa.Cluster.EntityFrameworkCore.Tests.FeedModuleDatabase;
 using static Elsa.Cluster.EntityFrameworkCore.Tests.FoundationHostComposition;
 
@@ -106,6 +108,36 @@ public abstract class FoundationHostClusterScenario(FoundationHostFeed feed, str
         await AfterUpgradeAsync(newer, upgraded);
     }
 
+    /// <summary>
+    /// #2162: two hosts that start at the same moment, on a database whose schema is applied but which no host has admitted
+    /// its modules in, both create the cluster membership module's database identity and finalization record, and race each
+    /// other's insert. The loser reads the winner's row and carries on, so both become ready, join, and neither writes a
+    /// failure to its log. The schema is applied first, as the runbook's <c>persistence apply</c> does, because two hosts
+    /// racing to create the migrations history table is EF Core's own and logs failures of its own. The race is only likely
+    /// here, not forced: the store-level tests force it, and this shows real hosts start through it.
+    /// </summary>
+    [SkippableFact]
+    public async Task Two_hosts_started_at_the_same_moment_become_ready_and_join_and_neither_logs_a_failure()
+    {
+        Skip.If(SkipReason is not null, SkipReason);
+        await ApplyMembershipSchemaAsync();
+
+        var hosts = await Task.WhenAll(StartAsync(feed.Directory, Clustered(Older)), StartAsync(feed.Directory, Clustered(Newer)));
+
+        await WaitUntilAsync(async () => (await ReadableByMemberAsync()).Keys.Order(StringComparer.Ordinal).SequenceEqual([Older, Newer]));
+        Assert.All(hosts, host => Assert.False(host.Output.Contains("fail:", StringComparison.Ordinal), $"A host logged a failure:{Environment.NewLine}{host.Output}"));
+    }
+
+    /// <summary>The membership module's migrations and nothing else: its tables exist, and no identity or record does yet.</summary>
+    private async Task ApplyMembershipSchemaAsync()
+    {
+        var services = new ServiceCollection();
+        services.AddEfClusterMembership(new EfClusterMembershipOptions { Provider = provider, ConnectionString = ConnectionString });
+        await using var root = services.BuildServiceProvider();
+        await using var scope = root.CreateAsyncScope();
+        await scope.ServiceProvider.GetRequiredService<ClusterMembershipDbContext>().Database.MigrateAsync();
+    }
+
     /// <summary>Runs once the fleet has finalized and both hosts serve, for what only one engine has to show.</summary>
     private protected virtual Task AfterUpgradeAsync(FoundationHostProcess newer, FoundationHostProcess upgraded) => Task.CompletedTask;
 
@@ -120,7 +152,8 @@ public abstract class FoundationHostClusterScenario(FoundationHostFeed feed, str
             settings[key] = value;
 
         var host = await FoundationHostProcess.StartAsync(ShellsOn(provider, ConnectionString, features), packages, settings);
-        _hosts.Add(host);
+        lock (_hosts)
+            _hosts.Add(host);
         return host;
     }
 

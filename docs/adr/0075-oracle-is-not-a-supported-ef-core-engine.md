@@ -211,3 +211,34 @@ Costs and risks:
 | 2026-09-17 | Assessment posted | Issue #1803 recorded what a fifth engine costs in Elsa 4 and what Elsa 3 actually did for Oracle, with file and line evidence on both sides. |
 | 2026-09-17 | Recommendation | Defer with a named trigger, and do the unsupported-status documentation now. The deciding factor was the three items Elsa 3 cannot seed, not the migration file count. |
 | 2026-09-19 | ADR 0075 accepted | Sipke Schoorstra accepted the recommendation. D1 stays at four engines, the status and the Elsa 3 route are documented, and the trigger is recorded as a three-part condition. |
+| 2026-09-30 | Amendment | The Context's "almost no provider-specific SQL" claim gains two named sites, `EfInsertIfAbsent` (#2162) and `EfSchemaFinalizationCheck`, guarded by `RawSqlArchitectureTests`; the decision is unchanged. |
+
+## Amendment — 2026-09-30, factual
+
+The Context section's sentence that "across `src/` there are no `FromSqlRaw`, `FromSqlInterpolated`, `ExecuteSqlRaw`,
+`ExecuteSqlInterpolated` or `migrationBuilder.Sql(` calls, and no `IsSqlite()`-style provider branching in any store" is no
+longer literally true, and did not need to be for the decision: it is one input to the estimate of what a fifth engine
+costs, not a rule this ADR sets. Two production files now send raw SQL, and each carries a per-engine shape:
+
+- `EfInsertIfAbsent`, added by #2162: one helper, four engines (`ON CONFLICT DO NOTHING` on SQLite and PostgreSQL, `ON
+  DUPLICATE KEY UPDATE` on MySQL, one `INSERT ... SELECT ... WHERE NOT EXISTS` statement with `UPDLOCK, HOLDLOCK` on SQL
+  Server). It is used only for the two startup seeds hosts race to create, the database identity row and each family's first
+  finalization record, because a losing `SaveChanges` insert makes EF log two errors before any store can treat the loss as
+  benign. It is provider-specific SQL for a race-prone write behind fixed provider-neutral behavior, which ADR 0073, D3
+  ("The Secrets recipe is the starting point, not a universal Runtime design") leaves open: its list of what stays the
+  default ends with "provider-specific physical mechanics behind fixed provider-neutral behavior", and it asks Runtime-style
+  workloads to preserve their semantics "naturally in EF and provider-specific SQL". D3 does not name race-prone writes;
+  that reading is this amendment's.
+- `EfSchemaFinalizationCheck`, older: a read-only lookup of a record table in each engine's own catalog, sent as an ADO
+  command, because the check runs where the migrations history cannot be trusted to exist.
+
+The Context's picture of "one place a provider's dialect is written out" was already imprecise before this change:
+`EfSchemaFinalizationCheck`, a read-only catalog lookup, already sent provider-branching SQL. Only `EfInsertIfAbsent` is new.
+
+ADR 0074, D3 ("Conflict classification walks the exception chain"), and the Persistence README's `EfWriteRetry` row make
+retry plus conflict classification the standing pattern for race-prone writes. `EfInsertIfAbsent` deliberately departs from it
+for the two startup seeds: the classified retry is correct, but EF logs the failed command at error level before any handler
+runs, and a benign startup race must not log an error.
+
+The cost of a fifth engine therefore includes a fifth shape in `EfInsertIfAbsent`, and the revisit condition in D4 is not
+changed by it. `RawSqlArchitectureTests` now names every production file that sends raw SQL, so the set cannot grow unseen.

@@ -28,7 +28,7 @@ public sealed class RuntimeExecutionPlacementPersistenceArchitectureTests
             .Select(File.ReadAllText)
             .ToArray();
         Assert.DoesNotContain(source, text => text.Contains("IQueryable", StringComparison.Ordinal));
-        Assert.DoesNotContain(source, text => text.Contains("FromSql", StringComparison.Ordinal));
+        // Raw SQL, FromSql included, is guarded for all of src/ by RawSqlArchitectureTests, which names the only files that send it.
     }
 
     [Fact]
