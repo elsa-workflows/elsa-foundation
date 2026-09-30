@@ -239,6 +239,62 @@ public sealed class CandidateWorkerOperationTests
         AssertDefaultProcessRefusal("candidate-inspection-timeout", timeoutSeconds: 15,
             holdComposer: true, expectDescendant: true);
 
+    [Fact]
+    public async Task Candidate_worker_process_cancels_a_real_child_while_its_stdin_write_is_blocked()
+    {
+        var host = HostLayout.Resolve(DotnetElsa.Host("ResourceAwareLiveHost"));
+        using var sentinels = new TempDirectory($"{PrivateCanaryRootPrefix}stdin-child-");
+        var worker = sentinels.File("stdin-child.dll");
+        File.Copy(Path.Join(host.Directory, host.Name + ".dll"), worker);
+        var marker = sentinels.File("candidate-stdin-started.txt");
+        var database = sentinels.File("must-not-create.db");
+        var request = ForHost(host, database);
+        // Four admitted 1 MiB sources yield more than 5 MiB of private stdin. The real child
+        // acknowledges a bounded 4 KiB header, then stops reading, leaving the pipe write pending.
+        var content = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(
+            "{\"Padding\":\"" + new string('x', 1024 * 1024 - 14) + "\"}"));
+        request = request with
+        {
+            HostDirectory = sentinels.Path,
+            Candidate = request.Candidate! with
+            {
+                Files = new[]
+                {
+                    "appsettings.json", "appsettings.Production.json", "shells.json", "shells.Production.json"
+                }.Select(name => new WorkerCandidateFile
+                {
+                    Name = name, CaptureId = request.Candidate.CaptureId, Content = content
+                }).ToArray()
+            }
+        };
+        Assert.Equal(1024 * 1024, Convert.FromBase64String(content).Length);
+        using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+        var run = new CandidateWorkerProcess(workerAssembly: worker).RunAsync(host, request, 60, cancellation.Token);
+        try
+        {
+            Assert.True(await WaitForMarkerOrCompletion(run, marker, TimeSpan.FromSeconds(30)),
+                "The real child must acknowledge stdin before write-stage cancellation.");
+            Assert.True(TryReadProcessIdentity(marker, out _));
+            Assert.False(run.IsCompleted);
+            cancellation.Cancel();
+            var refusal = await Assert.ThrowsAsync<CliRefusal>(() => run.WaitAsync(TimeSpan.FromSeconds(15)));
+            Assert.Equal("candidate-inspection-cancelled", refusal.Code);
+            Assert.Equal(ToolExitCode.Refusal, refusal.ExitCode);
+            Assert.DoesNotContain(PrivateCanaryRootPrefix, refusal.ToString(), StringComparison.Ordinal);
+            Assert.False(IsMarkedProcessRunning(marker), "The stdin-blocked child must be reaped before refusal.");
+            Assert.False(File.Exists(database));
+        }
+        finally
+        {
+            cancellation.Cancel();
+            try { await run.WaitAsync(TimeSpan.FromSeconds(10)); }
+            catch (CliRefusal) { }
+            catch (OperationCanceledException) { }
+            catch (TimeoutException) { }
+            await KillMarkedProcessIfStillRunning(marker);
+        }
+    }
+
     private static async Task AssertDefaultProcessRefusal(string expectedCode, int timeoutSeconds,
         bool holdComposer = false, bool cancelAfterStart = false, int standardErrorBytes = 0, int standardOutputBytes = 0,
         bool expectDescendant = false)

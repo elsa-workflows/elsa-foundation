@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.Text;
+using System.Text.Json;
 using CShells.Configuration;
 using CShells.Features;
 using Elsa.Persistence.EntityFramework;
@@ -19,6 +20,25 @@ using Microsoft.Extensions.DependencyInjection;
 
 if (args.Length > 0 && args[0] == "--candidate-test-descendant")
     return RunCandidateTestDescendant(args);
+
+// This fixture can also act as a finite stdin-blocked child for the real process-owner proof.
+// The shipped worker still uses its own assembly; only that explicit test selects this entrypoint.
+if (args.Length == 1 && args[0] == "--candidate-inspection")
+{
+    var header = new byte[4096];
+    Console.OpenStandardInput().ReadExactly(header);
+    var reader = new Utf8JsonReader(header, isFinalBlock: false, state: default);
+    while (reader.Read())
+    {
+        if (reader.TokenType != JsonTokenType.PropertyName || !reader.ValueTextEquals("hostDirectory"u8))
+            continue;
+        if (!reader.Read() || reader.TokenType != JsonTokenType.String)
+            return 2;
+        var marker = Path.Join(reader.GetString()!, "candidate-stdin-started.txt");
+        return RunCandidateTestDescendant(["--candidate-test-descendant", marker, "60000"]);
+    }
+    return 2;
+}
 
 return 0;
 
