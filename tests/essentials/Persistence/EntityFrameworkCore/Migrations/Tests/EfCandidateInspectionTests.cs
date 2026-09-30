@@ -383,6 +383,7 @@ public sealed class EfCandidateInspectionTests : IDisposable
     [Theory]
     [InlineData("root-default-distinct-equal")]
     [InlineData("root-default-same-reference")]
+    [InlineData("environment-resource-override")]
     [InlineData("shell-default-explicit-binding")]
     [InlineData("feature-disabled-removed")]
     public async Task Runtime_and_candidate_resolve_the_same_targets_from_one_file_capture(string scenario)
@@ -425,9 +426,11 @@ public sealed class EfCandidateInspectionTests : IDisposable
             AssertTarget(run, resolution, StructuredLogs, "logs", "Sqlite", "Logs", "ShellBinding", "shell-composed");
             AssertTarget(run, resolution, OpenTelemetry, "shell", "Sqlite", "Shell", "ShellDefault", "shell-composed");
         }
-        else if (scenario == "feature-disabled-removed")
+        else if (scenario is "feature-disabled-removed" or "environment-resource-override")
         {
             AssertTarget(run, resolution, StructuredLogs, "primary", "Sqlite", "Primary", "RootDefault", "root");
+            if (scenario == "environment-resource-override")
+                AssertTarget(run, resolution, OpenTelemetry, "primary", "Sqlite", "Primary", "RootDefault", "root");
         }
 
         if (scenario == "feature-disabled-removed")
@@ -456,6 +459,15 @@ public sealed class EfCandidateInspectionTests : IDisposable
         Assert.Equal("partial", resolution.GetProperty("resolution").GetString());
         Assert.Equal(["exact-file-provenance-unavailable", "legacy-target-unprojected"],
             StringValues(resolution.GetProperty("unresolved")));
+        var expectedParticipants = new[] { Runtime, StructuredLogs, OpenTelemetry }.Order(StringComparer.Ordinal);
+        Assert.Equal(expectedParticipants, run.RuntimeDetails.ResolvedParticipants
+            .Select(participant => participant.Participant.FeatureId).Order(StringComparer.Ordinal));
+        Assert.Equal(expectedParticipants, resolution.GetProperty("participants").EnumerateArray()
+            .Select(participant => participant.GetProperty("feature").GetString()!).Order(StringComparer.Ordinal));
+        AssertRuntimeAndCandidateTargetsAgree(run, resolution);
+        Assert.Equal("not-applicable", resolution.GetProperty("configuredValueAffinity").GetString());
+        Assert.All(run.RuntimeDetails.ResolvedParticipants,
+            participant => Assert.Equal(PersistenceSelectionKind.Legacy, participant.Selection));
         Assert.All(resolution.GetProperty("participants").EnumerateArray(), participant =>
         {
             Assert.Equal("Legacy", participant.GetProperty("selection").GetString());
@@ -488,7 +500,8 @@ public sealed class EfCandidateInspectionTests : IDisposable
     {
         var run = await RunSameCaptureAsync(scenario);
 
-        Assert.NotNull(run.RuntimeFailure);
+        Assert.Equal($"EF persistence preparation refused: {refusalCode}", run.RuntimeFailure);
+        Assert.Null(run.RuntimePatch);
         Assert.Equal([refusalCode], run.RuntimeDetails.RefusalCodes.Order(StringComparer.Ordinal));
         Assert.Equal(EfToolingExitCode.Refusal, run.CandidateExitCode);
         Assert.Equal("refused", run.CandidateResponse.GetProperty("status").GetString());
@@ -652,6 +665,12 @@ public sealed class EfCandidateInspectionTests : IDisposable
 
             switch (scenario)
             {
+                case "environment-resource-override":
+                    rootPersistence["DefaultResource"] = "root-base";
+                    resources["root-base"] = new JsonObject { ["Provider"] = "Sqlite", ["ConnectionName"] = "PrimaryBase" };
+                    resources["primary"]!["Provider"] = "PostgreSql";
+                    resources["primary"]!["ConnectionName"] = "PrimaryBase";
+                    break;
                 case "missing-root-resource":
                     rootPersistence["DefaultResource"] = "missing";
                     break;
@@ -731,6 +750,17 @@ public sealed class EfCandidateInspectionTests : IDisposable
                 }
             }
         };
+        if (scenario == "root-default-distinct-equal")
+            shellSettings["CShells"]!["Shells"]![Shell]!["Configuration"] = new JsonObject
+            {
+                ["Elsa"] = new JsonObject
+                {
+                    ["Persistence"] = new JsonObject
+                    {
+                        ["Bindings"] = new JsonObject { [StructuredLogs] = "primary", [OpenTelemetry] = "primary" }
+                    }
+                }
+            };
         var shellEnvironmentSettings = new JsonObject
         {
             ["CShells"] = new JsonObject
@@ -754,7 +784,25 @@ public sealed class EfCandidateInspectionTests : IDisposable
             ["Telemetry"] = $"Data Source={DatabasePath};Password={telemetryValue}",
             ["RuntimeShared"] = $"Data Source={DatabasePath};Password={ConnectionCanary}"
         };
+        // The environment must override an existing private named value, not merely add a new key.
+        applicationSettings["ConnectionStrings"] = new JsonObject
+        {
+            ["Logs"] = $"Data Source={DatabasePath};Password={DifferentConnectionCanary}",
+            ["PrimaryBase"] = $"Data Source={DatabasePath};Password={DifferentConnectionCanary}"
+        };
         var applicationEnvironmentSettings = new JsonObject { ["ConnectionStrings"] = connections };
+        if (scenario == "environment-resource-override")
+            applicationEnvironmentSettings["Elsa"] = new JsonObject
+            {
+                ["Persistence"] = new JsonObject
+                {
+                    ["DefaultResource"] = "primary",
+                    ["Resources"] = new JsonObject
+                    {
+                        ["primary"] = new JsonObject { ["Provider"] = "Sqlite", ["ConnectionName"] = "Primary" }
+                    }
+                }
+            };
 
         // These four byte arrays are the only file capture. Runtime and candidate input below both consume them.
         return new Dictionary<string, byte[]>(StringComparer.Ordinal)
@@ -768,6 +816,9 @@ public sealed class EfCandidateInspectionTests : IDisposable
 
     private void AssertRuntimeAndCandidateTargetsAgree(SameCaptureRun run, JsonElement resolution)
     {
+        Assert.NotNull(run.RuntimePatch);
+        Assert.Equal(run.RuntimeDetails.Patch.ConfigurationData.OrderBy(item => item.Key, StringComparer.Ordinal),
+            run.RuntimePatch.ConfigurationData.OrderBy(item => item.Key, StringComparer.Ordinal));
         var runtimeByFeature = run.RuntimeDetails.ResolvedParticipants.ToDictionary(
             participant => participant.Participant.FeatureId, StringComparer.Ordinal);
         var candidateRows = resolution.GetProperty("participants").EnumerateArray().ToArray();
@@ -814,6 +865,8 @@ public sealed class EfCandidateInspectionTests : IDisposable
         Assert.Equal(connectionReference, runtime.ConnectionName);
         Assert.Equal(selection, runtime.Selection.ToString());
         Assert.Equal(selectorScope, runtime.Source.Scope);
+        Assert.Equal(provider, run.RuntimePatch!.ConfigurationData[$"{feature}:Provider"]);
+        Assert.Equal(connectionReference, run.RuntimePatch.ConfigurationData[$"{feature}:ConnectionName"]);
         var rows = resolution.GetProperty("participants").EnumerateArray()
             .Where(row => row.GetProperty("feature").GetString() == feature).ToArray();
         Assert.NotEmpty(rows);

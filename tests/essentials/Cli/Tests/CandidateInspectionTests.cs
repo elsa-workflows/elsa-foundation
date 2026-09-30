@@ -157,6 +157,13 @@ public sealed class CandidateInspectionTests
         var unusedProfile = fixture.WriteWorkspaceProfile("unused-profile.json", "unused-candidate", "1",
             [CandidateInspectionFixture.StructuredLogsFeatureId]).Path;
 
+        var missingReview = DotnetElsa.Run(fixture.SentinelEnvironment, fixture.InspectionArguments(
+            "json", [selectedProfile, unusedProfile]));
+        Assert.Equal(ToolExitCode.Refusal, missingReview.ExitCode);
+        Assert.Empty(missingReview.Output);
+        Assert.Contains("bridge-portable-unsafe", missingReview.Error, StringComparison.Ordinal);
+        Assert.DoesNotContain(CandidateInspectionFixture.PrivateCanary, missingReview.Text, StringComparison.Ordinal);
+
         var inspection = DotnetElsa.Run(fixture.SentinelEnvironment, fixture.InspectionArguments(
             "json", [selectedProfile, unusedProfile], settingReviewPath: fixture.SettingReviewPath));
 
