@@ -448,7 +448,8 @@ if [[ " $acts " == *" 2 "* ]]; then
   wait_until "with-tags answers 200 on a" 120 with_tags_ok "$port_a"
   measure "2.0.0 finalized $(elapsed "$published_at") s after the publish to a (both hosts kept running)"
   # Not asserted, only reported: how far the host's backfill has come at the moment both hosts answer, which is a race by design.
-  measure "rows at the moment both hosts answer 200: $(notes_in "$(rows a)" '2\.0\.0' '\[\]') of 4 notes at 2.0.0 already, $(notes_in "$(rows a)" '1\.0\.0' 'NULL') still at 1.0.0"
+  snapshot="$(rows a)"
+  measure "rows at the moment both hosts answer 200: $(notes_in "$snapshot" '2\.0\.0' '\[\]') of 4 notes at 2.0.0 already, $(notes_in "$snapshot" '1\.0\.0' 'NULL') still at 1.0.0"
   stage withtags "$port_a"
   expect_eq "with-tags on a" "HTTP 200" "$(first_line "$out")"
   no_tags_on "$out"
