@@ -373,7 +373,7 @@ public sealed class WorkflowDrainHeartbeatContextIsolationTests
             {
                 await drain.WaitAsync(TimeSpan.FromSeconds(30));
             }
-            catch (Exception)
+            catch (OperationCanceledException)
             {
                 // Cancellation is the expected drain outcome.
             }
@@ -406,8 +406,16 @@ public sealed class WorkflowDrainHeartbeatContextIsolationTests
         {
             var keeper = new SqliteConnection(
                 $"Data Source=file:runtime-heartbeat-{Guid.NewGuid():N};Mode=Memory;Cache=Shared;Pooling=False");
-            await keeper.OpenAsync();
-            return new SharedMemoryDatabase(keeper);
+            try
+            {
+                await keeper.OpenAsync();
+                return new SharedMemoryDatabase(keeper);
+            }
+            catch
+            {
+                await keeper.DisposeAsync();
+                throw;
+            }
         }
 
         public ServiceProvider BuildProvider(
