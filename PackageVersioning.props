@@ -23,12 +23,20 @@
         file as a build input of every package and refuses an import whose path it cannot resolve statically.
       - Dev. Without that file PackageVersion is <the project's line's major.minor>.0-dev, from ElsaVersion or
         ElsaContractsVersion in VersionLines.props, which sorts below every version the calculator computes on that
-        line. Version is left to the SDK's default, so a dev build's assemblies, and every activity version and
-        assembly-qualified name derived from them, stay what they were before package versions were computed.
+        line. Version is left to the SDK's default, so a dev build's informational version, and every activity version
+        derived from it, stay what they were before package versions were computed.
 
-    Nothing else may set PackageVersion, nor, with computed input, Version, and ElsaVerifyPackageVersion fails the
-    build or the pack when something did. One exception stands: without computed input, a Version that arrived from
-    outside every build file - a global /p:Version - becomes the package version, so a local pack can still name one.
+    Either way, AssemblyVersion is <the project's line's major>.0.0.0, today 4.0.0.0 on both lines (#2150, ADR 0067
+    amended 2026-09-29). A host shares an Elsa assembly with the packages it loads through a Nuplane
+    Loading:SharedAssemblies entry, and Nuplane matches an entry on the requested reference's major version exactly, so
+    the major has to be the same in a source build, in every computed build and in every package built against either;
+    SharedAssemblyMajorVersionGuardTests holds each host's declared major to it. FileVersion and InformationalVersion
+    keep the full version the SDK derives from Version, so a file still says which build it came from.
+
+    Nothing else may set PackageVersion, nor AssemblyVersion, nor, with computed input, Version, and
+    ElsaVerifyPackageVersion fails the build or the pack when something did. One exception stands: without computed
+    input, a Version that arrived from outside every build file - a global /p:Version - becomes the package version, so
+    a local pack can still name one.
     packages.yml passes none (spec 150 FR-005), and tests/essentials/Versioning/Publisher/Tests/PackagesWorkflowTests.cs
     holds it to that. Every other pack-time effect this file and PackageRanges.targets add - bounded ranges, the nuspec
     range check, the input fingerprint - is gated on computed input alone (ElsaVersionComputationCommit set), so a pack
@@ -47,6 +55,7 @@
     <_ElsaSourceDirectory>$([MSBuild]::EnsureTrailingSlash('$(MSBuildThisFileDirectory)src'))</_ElsaSourceDirectory>
     <_ElsaLineVersion>$(ElsaVersion)</_ElsaLineVersion>
     <_ElsaLineVersion Condition="'$(ElsaVersionLine)' == 'A'">$(ElsaContractsVersion)</_ElsaLineVersion>
+    <_ElsaAssemblyVersion>$([System.Version]::Parse('$(_ElsaLineVersion)').Major).0.0.0</_ElsaAssemblyVersion>
   </PropertyGroup>
 
   <!-- _ElsaPackageVersion is set exactly for the projects this file versions; every target below keys on it. -->
@@ -56,8 +65,19 @@
     <_ElsaPackageVersion Condition="'$(ElsaComputedPackageVersion)' != ''">$(ElsaComputedPackageVersion)</_ElsaPackageVersion>
     <Version Condition="'$(ElsaComputedPackageVersion)' != ''">$(ElsaComputedPackageVersion)</Version>
     <PackageVersion>$(_ElsaPackageVersion)</PackageVersion>
+    <AssemblyVersion>$(_ElsaAssemblyVersion)</AssemblyVersion>
     <RepositoryCommit Condition="'$(ElsaVersionComputationCommit)' != ''">$(ElsaVersionComputationCommit)</RepositoryCommit>
   </PropertyGroup>
+
+  <!--
+    The SDK's GetAssemblyVersion target defaults FileVersion to AssemblyVersion, which is now only the line's major. This
+    gives FileVersion what the SDK would have derived from Version with AssemblyVersion unset, before that target runs.
+  -->
+  <Target Name="ElsaKeepFullFileVersion" BeforeTargets="GetAssemblyVersion" Condition="'$(_ElsaPackageVersion)' != '' and '$(FileVersion)' == ''">
+    <GetAssemblyVersion NuGetVersion="$(Version)">
+      <Output TaskParameter="AssemblyVersion" PropertyName="FileVersion" />
+    </GetAssemblyVersion>
+  </Target>
 
   <!--
     The version checks every build and every pack runs, including the _GetProjectVersion a pack asks of each project
@@ -80,6 +100,10 @@
     <Error Code="ELSAPV004"
            Condition="'$(_ElsaPackageVersion)' != '' and '$(PackageVersion)' != '$(_ElsaPackageVersion)'"
            Text="$(MSBuildProjectName) evaluates PackageVersion as '$(PackageVersion)', but its package version is '$(_ElsaPackageVersion)'. PackageVersion comes from PackageVersioning.props alone (spec 150 FR-005): not from this project file, not from a nested Directory.Build.props/.targets, and not from /p:PackageVersion." />
+
+    <Error Code="ELSAPV008"
+           Condition="'$(_ElsaPackageVersion)' != '' and '$(AssemblyVersion)' != '$(_ElsaAssemblyVersion)'"
+           Text="$(MSBuildProjectName) evaluates AssemblyVersion as '$(AssemblyVersion)', but every Elsa assembly on line $(ElsaVersionLine) is '$(_ElsaAssemblyVersion)', its line's major (#2150). A host shares an Elsa assembly only when the reference's major equals the one its Nuplane:Loading:SharedAssemblies entry declares, so AssemblyVersion comes from PackageVersioning.props alone: not from this project file, not from a nested Directory.Build.props/.targets, and not from /p:AssemblyVersion." />
 
   </Target>
 

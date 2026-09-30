@@ -4,7 +4,9 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Services.Executions;
 using Elsa.Workflows.Runtime.Services.Incidents;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Workflows.Runtime.Services.Scheduler;
 
@@ -17,20 +19,23 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
     private readonly WorkflowDrainOrchestratorOptions _options;
     private readonly IRuntimeExecutionOwnershipService _ownershipService;
     private readonly IRuntimeExecutionOwnershipContextAccessor _ownershipContextAccessor;
+    private readonly IPersistenceOperationScopeFactory? _heartbeatScopeFactory;
     private readonly IRuntimeCoalescingDrainScopeFactory? _coalescingScopeFactory;
     private readonly IRuntimeLiveDrainDeliveryAccessor? _liveDrainDeliveryAccessor;
     private readonly IRuntimeCheckpointCadenceResolver? _cadenceResolver;
     private readonly TimeProvider _timeProvider;
 
     /// <summary>
-    /// Creates the orchestrator. C1 (#1227): the six telescoping constructors collapsed into this single primary
-    /// constructor: six required collaborators followed by optional collaborators that default to their
-    /// no-op/system implementations. The ownership service and the ownership context accessor are <b>required by
+    /// Creates the orchestrator for a caller-owned ownership service. C1 (#1227): the six telescoping constructors
+    /// collapsed into this single primary constructor: six required collaborators followed by optional collaborators
+    /// that default to their no-op/system implementations. The ownership service and the ownership context accessor are <b>required by
     /// construction</b> so the single-writer lease, which fences every checkpoint commit made during the drain
     /// and cancels the drain when the lease is lost, can never be silently disabled by picking a narrower
     /// constructor. The drain observers are required for the same reason: they decide fault outcomes (blocking
     /// incidents, poison projection, incident strategy resolution), so the set must be handed in deliberately. So is
-    /// the checkpoint rule violation faulter (#1780), which decides the outcome of an execution a rule refused.
+    /// the checkpoint rule violation faulter (#1780), which decides the outcome of an execution a rule refused. The
+    /// legacy path is rejected when the default ownership service is backed by scoped persistence; use
+    /// <see cref="CreateScoped"/> to renew through an isolated partition-bound operation scope.
     /// </summary>
     public WorkflowDrainOrchestrator(
         IWorkflowSchedulerDrainer schedulerDrainer,
@@ -44,6 +49,69 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         IRuntimeLiveDrainDeliveryAccessor? liveDrainDeliveryAccessor = null,
         IRuntimeCheckpointCadenceResolver? cadenceResolver = null,
         TimeProvider? timeProvider = null)
+        : this(
+            schedulerDrainer,
+            postCommitOutboxProcessor,
+            schedulerDrainObservers,
+            checkpointRuleViolationFaulter,
+            ownershipService,
+            ownershipContextAccessor,
+            options,
+            coalescingScopeFactory,
+            liveDrainDeliveryAccessor,
+            cadenceResolver,
+            timeProvider,
+            heartbeatScopeFactory: null)
+    {
+    }
+
+    /// <summary>
+    /// Creates an orchestrator whose lease heartbeats run in a fresh persistence operation scope bound to the command
+    /// partition. The foreground scope continues to own acquisition, checkpoint work, and release.
+    /// </summary>
+    public static WorkflowDrainOrchestrator CreateScoped(
+        IPersistenceOperationScopeFactory heartbeatScopeFactory,
+        IWorkflowSchedulerDrainer schedulerDrainer,
+        IRuntimePostCommitOutboxProcessor postCommitOutboxProcessor,
+        IEnumerable<IWorkflowSchedulerDrainObserver> schedulerDrainObservers,
+        CheckpointRuleViolationWorkflowFaulter checkpointRuleViolationFaulter,
+        IRuntimeExecutionOwnershipService ownershipService,
+        IRuntimeExecutionOwnershipContextAccessor ownershipContextAccessor,
+        WorkflowDrainOrchestratorOptions? options = null,
+        IRuntimeCoalescingDrainScopeFactory? coalescingScopeFactory = null,
+        IRuntimeLiveDrainDeliveryAccessor? liveDrainDeliveryAccessor = null,
+        IRuntimeCheckpointCadenceResolver? cadenceResolver = null,
+        TimeProvider? timeProvider = null)
+    {
+        ArgumentNullException.ThrowIfNull(heartbeatScopeFactory);
+        return new WorkflowDrainOrchestrator(
+            schedulerDrainer,
+            postCommitOutboxProcessor,
+            schedulerDrainObservers,
+            checkpointRuleViolationFaulter,
+            ownershipService,
+            ownershipContextAccessor,
+            options,
+            coalescingScopeFactory,
+            liveDrainDeliveryAccessor,
+            cadenceResolver,
+            timeProvider,
+            heartbeatScopeFactory);
+    }
+
+    private WorkflowDrainOrchestrator(
+        IWorkflowSchedulerDrainer schedulerDrainer,
+        IRuntimePostCommitOutboxProcessor postCommitOutboxProcessor,
+        IEnumerable<IWorkflowSchedulerDrainObserver> schedulerDrainObservers,
+        CheckpointRuleViolationWorkflowFaulter checkpointRuleViolationFaulter,
+        IRuntimeExecutionOwnershipService ownershipService,
+        IRuntimeExecutionOwnershipContextAccessor ownershipContextAccessor,
+        WorkflowDrainOrchestratorOptions? options,
+        IRuntimeCoalescingDrainScopeFactory? coalescingScopeFactory,
+        IRuntimeLiveDrainDeliveryAccessor? liveDrainDeliveryAccessor,
+        IRuntimeCheckpointCadenceResolver? cadenceResolver,
+        TimeProvider? timeProvider,
+        IPersistenceOperationScopeFactory? heartbeatScopeFactory)
     {
         ArgumentNullException.ThrowIfNull(schedulerDrainer);
         ArgumentNullException.ThrowIfNull(postCommitOutboxProcessor);
@@ -52,6 +120,15 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         ArgumentNullException.ThrowIfNull(ownershipService);
         ArgumentNullException.ThrowIfNull(ownershipContextAccessor);
 
+        if (heartbeatScopeFactory is null && ownershipService is RuntimeExecutionOwnershipService runtimeOwnership &&
+            runtimeOwnership.RequiresIsolatedHeartbeatScope)
+        {
+            throw new InvalidOperationException(
+                "The default ownership service uses scoped persistence and requires heartbeat isolation. " +
+                "Construct the orchestrator with WorkflowDrainOrchestrator.CreateScoped and an " +
+                "IPersistenceOperationScopeFactory.");
+        }
+
         _schedulerDrainer = schedulerDrainer;
         _postCommitOutboxProcessor = postCommitOutboxProcessor;
         _schedulerDrainObservers = schedulerDrainObservers.ToArray();
@@ -59,6 +136,7 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         _options = options ?? new WorkflowDrainOrchestratorOptions();
         _ownershipService = ownershipService;
         _ownershipContextAccessor = ownershipContextAccessor;
+        _heartbeatScopeFactory = heartbeatScopeFactory;
         _coalescingScopeFactory = coalescingScopeFactory;
         _liveDrainDeliveryAccessor = liveDrainDeliveryAccessor;
         _cadenceResolver = cadenceResolver;
@@ -87,7 +165,7 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         using (var renewalStop = new CancellationTokenSource())
         using (var drainCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
         {
-            var renewalTask = RenewOwnershipUntilStoppedAsync(lease, renewalStop.Token, drainCancellation);
+            var renewalTask = RenewOwnershipUntilStoppedAsync(lease, envelope.Partition, renewalStop.Token, drainCancellation);
             RuntimeSchedulerDrainResult? result = null;
             Exception? drainFailure = null;
             Exception? renewalFailure = null;
@@ -166,6 +244,7 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
 
     private async Task RenewOwnershipUntilStoppedAsync(
         RuntimeExecutionLease lease,
+        WorkflowExecutionPartition partition,
         CancellationToken stopToken,
         CancellationTokenSource drainCancellation)
     {
@@ -177,7 +256,7 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
             RuntimeExecutionOwnershipTransitionResult heartbeat;
             try
             {
-                heartbeat = await _ownershipService.HeartbeatAsync(lease, stopToken);
+                heartbeat = await HeartbeatAsync(lease, partition, stopToken);
             }
             catch (OperationCanceledException) when (stopToken.IsCancellationRequested)
             {
@@ -195,6 +274,21 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
             await drainCancellation.CancelAsync();
             throw new RuntimeExecutionOwnershipLostException(lease, "heartbeat", heartbeat.Status);
         }
+    }
+
+    private async ValueTask<RuntimeExecutionOwnershipTransitionResult> HeartbeatAsync(
+        RuntimeExecutionLease lease,
+        WorkflowExecutionPartition partition,
+        CancellationToken cancellationToken)
+    {
+        if (_heartbeatScopeFactory is null)
+            return await _ownershipService.HeartbeatAsync(lease, cancellationToken);
+
+        await using var scope = await _heartbeatScopeFactory.CreateAsync(
+            new PersistenceScope(partition.Value),
+            cancellationToken);
+        var ownershipService = scope.ServiceProvider.GetRequiredService<IRuntimeExecutionOwnershipService>();
+        return await ownershipService.HeartbeatAsync(lease, cancellationToken);
     }
 
     private async ValueTask<RuntimeSchedulerDrainResult> DrainCoreAsync(

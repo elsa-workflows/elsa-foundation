@@ -372,6 +372,23 @@ public sealed class SupersededPackageGenerationTests : IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// Nuplane leaves an assembly its shared-assembly policy matches out of the catalog, where it once listed the host's
+    /// copy: a copy of one that a package context nevertheless holds - a package whose share did not match, say - is
+    /// never named by the catalog, so it is never judged replaced, and no version it could read is credited away.
+    /// </summary>
+    [Fact]
+    public async Task A_package_private_copy_of_an_assembly_the_catalog_leaves_out_is_never_replaced()
+    {
+        var hostCopy = typeof(IClusterMembership).Assembly;
+        var copy = _package.Load(await File.ReadAllBytesAsync(hostCopy.Location), $"{hostCopy.GetName().Name}.dll");
+
+        Assert.NotSame(hostCopy, copy);
+        Assert.Equal(hostCopy.GetName().Name, copy.GetName().Name);
+        Assert.DoesNotContain(copy, await Generations.GetReplacedAsync());
+        Assert.DoesNotContain(copy, await Generations.GetRetiredAsync());
+    }
+
     [Fact]
     public async Task A_host_without_nuplane_counts_every_generation()
     {

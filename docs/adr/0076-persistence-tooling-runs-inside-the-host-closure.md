@@ -96,14 +96,15 @@ longer describes the host. Features still arrive from feeds: no EF module, EF fe
   selected, because Nuplane refuses a module that declares it while nothing selects it. The package the selection
   injects is acquired as a root; for SQLite it carries no assembly, and for the other three its assembly is loaded into
   the module's graph unused, its dependencies being the host's.
-- **Where Nuplane does not yet enforce it.** In Nuplane `0.0.11-preview.93` a share entry with a null token is dropped by
-  the configuration binder, and a host-integrated package graph loads every assembly it holds without consulting the
-  share matcher ([#2150](https://github.com/elsa-workflows/elsa-foundation/issues/2150) carries the upstream fix and the
-  `AssemblyVersion` pin the Elsa entries' major needs). So an operator who names any of these packages as a feed root,
-  which always acquires it, gives the module a private copy. Once the fix lands the share entries take effect inside
-  such a graph too, and the module binds the host's copy whatever the feed offered. In a source build that trades
-  today's private copy of `Elsa.Persistence.EntityFramework` for the #1144 exemption's late failure, a newer module bound
-  to the host's older dev copy, which every exempted Elsa share already accepts.
+- **Where Nuplane enforces it.** Since Nuplane `0.0.11-preview.94`
+  ([#2150](https://github.com/elsa-workflows/elsa-foundation/issues/2150)) a share entry is honoured inside a
+  host-integrated package graph too: a package's own copy of a shared assembly is skipped, whether it arrived as a
+  dependency or as a feed root, and the module binds the host's copy whenever the major matches. Every Elsa entry's
+  `MajorVersion` is the line's major because every Elsa assembly's `AssemblyVersion` is (ADR 0067, amended 2026-09-29),
+  and `SharedAssemblyMajorVersionGuardTests` holds each entry to the assembly the host really carries. A share the host
+  has no copy of refuses the package graph, so both hosts' entries are held to being carried. In a source build the #1144
+  exemption still leaves `Elsa.Persistence.EntityFramework` undeclared, so a newer module binds the host's older dev
+  copy, as every exempted Elsa share already does.
 - **Nothing else changes.** D1's worker still runs on the host's own closure, which for this host now includes
   `Elsa.Persistence.EntityFramework`; D9's guard is still not composed on this host.
   `EfCoreDependencyGuardTests` admits the host with a reviewed closure of its own: EF Core, Abstractions, Analyzers and

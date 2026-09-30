@@ -20,6 +20,13 @@ public sealed class RuntimeExecutionOwnershipService : IRuntimeExecutionOwnershi
     private readonly TimeProvider _timeProvider;
     private readonly RuntimeExecutionOwnershipOptions _options;
 
+    /// <summary>
+    /// The compatibility constructor can safely share its ownership service with the foreground drain only when the
+    /// backing store is the built-in concurrency-safe in-memory store. Scoped stores require an isolated operation
+    /// scope for renewal.
+    /// </summary>
+    internal bool RequiresIsolatedHeartbeatScope => _operationalStateStore is not InMemoryExecutionLivenessStateStore;
+
     public RuntimeExecutionOwnershipService(IExecutionLivenessStateStore operationalStateStore)
         : this(operationalStateStore, TimeProvider.System, new RuntimeExecutionOwnershipOptions())
     {

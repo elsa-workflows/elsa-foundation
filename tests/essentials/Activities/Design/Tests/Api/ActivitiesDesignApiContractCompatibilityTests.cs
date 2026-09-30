@@ -6,6 +6,7 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.RegularExpressions;
 using Xunit;
 
 namespace Elsa.Activities.Design.Tests.Api;
@@ -199,7 +200,7 @@ public sealed class ActivitiesDesignApiContractCompatibilityTests
         // It moved once when the contracts left the Api.Core assembly: a constructed generic type's
         // FullName embeds its arguments' assembly-qualified names, so the strings changed while the
         // JSON wire shape did not.
-        Assert.Equal("29f2f67d23618d6d2151fc688e01858eacb22d9126cb1b1769d16709b297bab5", PublicShapeHash(ContractTypes));
+        Assert.Equal("ab75d4e023e453ab54c0c577340190644cbdedc610e7b31b57b63404f0bb4285", PublicShapeHash(ContractTypes));
     }
 
     [Fact]
@@ -229,6 +230,9 @@ public sealed class ActivitiesDesignApiContractCompatibilityTests
     private static string PublicShapeHash(IEnumerable<Type> types)
     {
         var shape = string.Join("\n", types.OrderBy(type => type.FullName, StringComparer.Ordinal).Select(type => $"{type.FullName}\n{PublicShape(type)}"));
+        // A constructed generic type's FullName embeds assembly-qualified names. Strip Version, Culture and PublicKeyToken so a
+        // line-major AssemblyVersion bump (#2150) does not churn the baseline while the public surface is unchanged.
+        shape = Regex.Replace(shape, @", Version=[^,\]]+, Culture=[^,\]]+, PublicKeyToken=[^,\]]+", string.Empty);
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(shape))).ToLowerInvariant();
     }
 }

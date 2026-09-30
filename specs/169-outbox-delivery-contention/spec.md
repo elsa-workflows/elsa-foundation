@@ -146,7 +146,7 @@ A team implementing a new persistence provider for the outbox cannot produce a s
 - **FR-003**: A superseded recording MUST NOT modify the item's delivery state, its owner, its fencing token, or its attempt count.
 - **FR-004**: A superseded recording MUST NOT count toward the delivered count that the drain orchestrator uses as its loop-continuation signal.
 - **FR-005**: A superseded recording MUST NOT count as a delivery failure, and MUST NOT cause the drain to report a delivery-failed stop reason.
-- **FR-006**: A superseded item MUST remain a crash backstop: it stays recoverable by claim expiry and the resumption sweep exactly as it is today.
+- **FR-006**: A superseded nonterminal item MUST remain a crash backstop: it stays recoverable by claim expiry and the resumption sweep exactly as it is today. If its fenced owner has completed it, the owner's terminal outcome remains authoritative and it is not reopened for recovery.
 
 **Contract shape (D3)**
 

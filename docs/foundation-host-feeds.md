@@ -152,7 +152,7 @@ and Nuplane does not keep them in step. `NativeEndpoints` behaves this way, and 
 fails with `FeatureNotFoundException` rather than a missing-file error.
 
 The reverse direction is kept in step by this repository instead. A shared assembly always resolves to
-the host's copy, whatever version the feed package was built against, so each host's
+the host's copy, whatever version the feed package was built against within the entry's major, so each host's
 `appsettings.json` also declares, under `Nuplane:HostProvidedPackages`, the package of every assembly it
 lists in `Nuplane:Loading:SharedAssemblies` — restating Nuplane's two defaults, because a configured list
 replaces them. `HostProvidedPackagesGuardTests` (`tests/essentials/Architecture`) fails the build when a
@@ -160,6 +160,19 @@ shared assembly's package is neither declared nor exempted by name. The declarat
 version check apply: a feed package that needs a newer version of a declared package than the host's
 `deps.json` carries is refused at reconciliation (see [What fails loudly](#what-fails-loudly)) instead of
 being bound to the older copy and failing later at a missing member.
+
+An entry takes effect only when Nuplane's matcher takes it, on the assembly's name, its public key token
+(`null` for an unsigned assembly, as every Elsa one is) and its major version, exactly. Every Elsa
+assembly's `AssemblyVersion` is its line's major, `4.0.0.0` in a source build and a computed one alike
+([ADR 0067](adr/0067-package-versioning-uses-two-lines-with-computed-patch.md),
+[#2150](https://github.com/elsa-workflows/elsa-foundation/issues/2150)), so every Elsa entry declares
+`"MajorVersion": 4`. `SharedAssemblyMajorVersionGuardTests` (`tests/essentials/Architecture`) binds each host's
+entries with Nuplane's own code and fails the build when one would not take the reference a package built
+against either build carries. A feed package that carries its own copy of a shared assembly, in its own files
+or acquired into its graph, then binds the host's copy (since Nuplane `0.0.11-preview.94`,
+[valence-works/nuplane#101](https://github.com/valence-works/nuplane/pull/101); before it no entry with a
+`null` token bound at all, and such a package loaded its own copy). An entry the matcher does not take is
+silent: the package loads its own copy, and its types stop being the host's.
 
 Both hosts declare all their shares, the Elsa ones included, when built with computed package versions, as CI
 builds their images
@@ -236,10 +249,10 @@ and `Elsa.Persistence.EntityFramework` in a build with computed versions. So a f
 of them is never acquired, and the module binds the host's copy: the one `dotnet elsa persistence` discovers modules
 through, since it runs through the host's own `Elsa.Persistence.EntityFramework` and matches `[EfModule]` by type. A
 module that needs a newer EF Core than the host carries is refused (`host-version-unsatisfied`); on a computed build
-the same holds for `Elsa.Persistence.EntityFramework`. A source build leaves that one undeclared, so a feed module built
-against a computed-version `Elsa.Persistence.EntityFramework` still loads, with a copy of its own that the module reaches
-membership through just as well, but that `dotnet elsa persistence` against this host does not see (see the builds that
-work, below). `Elsa.Workbench` carries `Elsa.Persistence.EntityFramework`
+the same holds for `Elsa.Persistence.EntityFramework`. A source build leaves that one undeclared, so it is not refused
+there for being newer: a feed module built against a computed-version `Elsa.Persistence.EntityFramework` binds the host's
+copy, its own being skipped as a shared assembly whenever the major matches, and the host's is the dev build (see the
+builds that work, below). `Elsa.Workbench` carries `Elsa.Persistence.EntityFramework`
 too and does not share it, so an EF module loaded there from a feed keeps a copy of its own.
 
 **Which builds work together.** Build the host and the EF module packages from one commit. Two combinations work:
@@ -247,29 +260,32 @@ too and does not share it, so an EF module loaded there from a feed keeps a copy
 - a source-built host with EF modules packed from the same tree (dev versions on both sides);
 - a computed-version host with modules from the matching computed feed.
 
-The trap is the mix. Until [#2150](https://github.com/elsa-workflows/elsa-foundation/issues/2150) lands, a source-built
-host that is fed a computed-version EF module acquires a private `Elsa.Persistence.EntityFramework`, because its share is
-undeclared there and every computed version falls outside the dev version's range. This holds for any computed-version
-package, not only a newer one. The module still loads and activates, but `dotnet elsa persistence` against that host
-silently does not see it. #2150 (Nuplane `0.0.11-preview.94` shared-assembly matching plus the `AssemblyVersion` major
-pin) removes the trap.
+The mix is the one to avoid. A source-built host fed a computed-version EF module binds the host's copy of
+`Elsa.Persistence.EntityFramework` (since Nuplane `0.0.11-preview.94` the module's own is skipped, the major being the
+same in both builds, [#2150](https://github.com/elsa-workflows/elsa-foundation/issues/2150)), but that copy is the dev
+build, and the host's undeclared Elsa shares are exempt from the version check
+([ADR 0067](adr/0067-package-versioning-uses-two-lines-with-computed-patch.md)). A module that needs something newer
+than the dev build carries fails late, at a missing member, instead of being refused at reconciliation.
 
-**Do not name them as feed roots.** A root is always acquired, and Nuplane `0.0.11-preview.93` loads every assembly a
-host-integrated package graph holds without consulting `Nuplane:Loading:SharedAssemblies`
-([#2150](https://github.com/elsa-workflows/elsa-foundation/issues/2150) tracks the upstream fix), so a module whose
-graph holds its own `Elsa.Persistence.EntityFramework` or EF Core binds that copy. Leave `Elsa.Persistence.EntityFramework`,
-EF Core (`Microsoft.EntityFrameworkCore`, `.Abstractions`, `.Relational`) and the engines' driver closures
-(`Microsoft.Data.Sqlite*`, `SQLitePCLRaw.*`, `Npgsql`, `MySql.Data`, `Microsoft.Data.SqlClient*`) out of your roots; see
-[Generating the closure](#generating-the-closure). The engine package itself may stay, since the `ef-provider`
-selection injects it as a root anyway. Once the fix lands the shares take effect inside such a graph as well, and a
-copy named by accident is no longer the one a module binds.
+**Naming a shared assembly as a feed root is harmless; naming a driver is not.** A root is always acquired. Since
+Nuplane `0.0.11-preview.94` ([#2150](https://github.com/elsa-workflows/elsa-foundation/issues/2150)) the copy of
+`Elsa.Persistence.EntityFramework` or EF Core (`Microsoft.EntityFrameworkCore`, `.Abstractions`, `.Relational`) a root
+brings is skipped, and the module binds the host's, so those need not be kept out of your roots, though nothing is gained
+by naming them. The engines' driver closures (`Microsoft.Data.Sqlite*`, `SQLitePCLRaw.*`, `Npgsql`, `MySql.Data`,
+`Microsoft.Data.SqlClient*`) are carried by the host but not shared, so a root for one brings a second copy of it: leave
+them out of your roots; see [Generating the closure](#generating-the-closure). The engine package itself may stay, since
+the `ef-provider` selection injects it as a root anyway.
 
 `FeedLoadedEfModuleTests` (`tests/essentials/Cluster/EntityFrameworkCore/Tests`) proves each direction on both hosts'
-configured shares, a module carrying its own copy of `Elsa.Persistence.EntityFramework` included.
-`FoundationHostBootTests` (same project) boots the built `Elsa.Foundation.Host` as a child process over a directory feed
-of the packed fixture, plus a second, resolve-only `closure` feed holding EF Core and the Sqlite engine's closure,
-showing finalization at activation and dormancy ending once a hold is released. `FoundationHostClusterBootTests` boots
-two of them over one database with the EF provider enabled, and shows that neither acquired any of what it carries from
+configured shares, as Nuplane binds and matches them, a module carrying its own copy of `Elsa.Persistence.EntityFramework`
+included. `FoundationHostBootTests` (same project) boots the built `Elsa.Foundation.Host` as a child process over a
+directory feed of the packed fixture, plus a second, resolve-only `closure` feed holding EF Core and the Sqlite engine's
+closure, showing finalization at activation and dormancy ending once a hold is released. It also boots the host over the
+fixture carrying its own copies of `Elsa.Persistence.Schema` and `Elsa.Cluster.Core`: with the shares as shipped the
+module binds the host's copies and finalizes, and with the `Elsa.Cluster.Core` entry at another major it binds its
+own, admits, and its feature cannot reach the host's dormancy check (#2150). And it boots the host with an added share for an assembly the host does not
+carry, which refuses the package that carries it and stops the host. `FoundationHostClusterBootTests` boots
+two hosts over one database with the EF provider enabled, and shows that neither acquired any of what it carries from
 the closure feed that offers it. Its PostgreSQL twin also shows that the host maps one copy of Npgsql, EF Core and
 `Elsa.Persistence.EntityFramework`, and two of the engine assembly (the host's and the one Nuplane injected).
 
@@ -584,6 +600,24 @@ all — a prefix entry such as `Elsa.` on a host that compiles in no Elsa featur
 supplied, and each such dependency is logged as a Warning (event 1035) naming the dependent package, the
 dependency and the range, so it is visible rather than silent. An *undeclared* package the host carries at
 an unsatisfying version is not refused either: it is acquired from the feed like any other dependency.
+
+A package that carries a **shared assembly the host cannot supply** is refused when it loads (since Nuplane
+`0.0.11-preview.94`, [valence-works/nuplane#101](https://github.com/valence-works/nuplane/pull/101)). Nuplane
+never loads a package's own copy of an assembly a `Nuplane:Loading:SharedAssemblies` entry matches, so when the
+host has no copy of it at the entry's major version, the package's whole graph fails to load, and every package in
+it is reported with the reason (category `Nuplane.Loading.PackageAutoLoadingObserver`):
+
+```
+Package Acme.Widgets failed to load: Package 'Acme.Contracts@1.0.0'
+  carries shared assembly 'Acme.Contracts' (public key token: unsigned, major version: 1),
+  which the shared-assembly policy leaves to the host, but the host has no copy of it with that major version.
+```
+
+The cycle is degraded, and at startup, under the default `Reconciliation:StartupFailurePolicy`, the host exits
+with a `NuplaneStartupReconciliationException` naming every failed package. So an entry for an assembly a host
+does not carry is not harmless: share only what the host itself references. `FoundationHostBootTests` pins the
+refusal, and `SharedAssemblyMajorVersionGuardTests` fails the build when either host declares a share its build output
+does not carry.
 
 What is not loud is the wildcard case above, because a pattern that matches nothing is
 indistinguishable from a feed that was asked for nothing.
