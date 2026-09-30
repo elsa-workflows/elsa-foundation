@@ -138,6 +138,9 @@ public sealed class ResourceProbeShellDefaults : IEfToolingShellDefaults
 
     private static void ConfigureAdverseChild(IConfigurationSection probeDefaults)
     {
+        if (probeDefaults.GetValue<bool>("ThrowPrivateCanary"))
+            throw new InvalidOperationException(PrivateCanaryPrefix + "composer-exception");
+
         if (probeDefaults["StartedMarker"] is { Length: > 0 } marker)
         {
             using var process = Process.GetCurrentProcess();
