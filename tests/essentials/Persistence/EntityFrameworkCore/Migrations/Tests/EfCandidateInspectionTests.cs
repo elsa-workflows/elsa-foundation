@@ -2,7 +2,13 @@ using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using CShells;
+using CShells.Features;
+using CShells.Lifecycle;
+using Elsa.Modularity.EntityFramework;
+using Elsa.Persistence.EntityFramework.ResourceResolution;
 using Elsa.Persistence.EntityFramework.Tooling;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Xunit;
 
@@ -17,9 +23,13 @@ public sealed class EfCandidateInspectionTests : IDisposable
     private const string Shell = "candidate-probe";
     private const string Environment = "Production";
     private const string Runtime = "WorkflowsRuntimeEntityFrameworkCore";
+    private const string RuntimeWorkflowExecution = "WorkflowsRuntimeWorkflowExecutionEntityFrameworkCorePersistence";
+    private const string StructuredLogs = "DiagnosticsStructuredLogsEntityFrameworkCore";
+    private const string OpenTelemetry = "DiagnosticsOpenTelemetryEntityFrameworkCore";
     private const string ConnectionCanary = "candidate-connection-private-2177";
     private const string UnknownSettingCanary = "candidate-unknown-private-2177";
     private const string MalformedFileCanary = "candidate-malformed-private-2177";
+    private const string DifferentConnectionCanary = "candidate-different-connection-private-2177";
     private const string InvocationId = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     private const string CaptureId = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 
@@ -370,6 +380,486 @@ public sealed class EfCandidateInspectionTests : IDisposable
         Assert.False(File.Exists(DatabasePath));
     }
 
+    [Theory]
+    [InlineData("root-default-distinct-equal")]
+    [InlineData("root-default-same-reference")]
+    [InlineData("shell-default-explicit-binding")]
+    [InlineData("feature-disabled-removed")]
+    public async Task Runtime_and_candidate_resolve_the_same_targets_from_one_file_capture(string scenario)
+    {
+        var run = await RunSameCaptureAsync(scenario);
+
+        Assert.Null(run.RuntimeFailure);
+        Assert.Empty(run.RuntimeDetails.RefusalCodes);
+        Assert.Equal(EfToolingExitCode.Success, run.CandidateExitCode);
+        Assert.Equal("ok", run.CandidateResponse.GetProperty("status").GetString());
+        var resolution = run.CandidateResponse.GetProperty("configurationResolution");
+        Assert.Equal(Shell, resolution.GetProperty("shell").GetString());
+        Assert.Equal(Environment, resolution.GetProperty("environment").GetString());
+        Assert.Equal("checked", resolution.GetProperty("configuredValueAffinity").GetString());
+        Assert.Equal("not-performed", resolution.GetProperty("targetVerification").GetString());
+        Assert.Equal("unobserved", resolution.GetProperty("runtimeParity").GetString());
+        Assert.Equal(["exact-file-provenance-unavailable"], StringValues(resolution.GetProperty("unresolved")));
+        Assert.Equal(run.AcceptedFeatureIds, StringValues(resolution.GetProperty("selection").GetProperty("acceptedFeatureIds")));
+        Assert.Equal(run.AcceptedFeatureIds, StringValues(resolution.GetProperty("selection").GetProperty("requestedFeatureIds")));
+        Assert.Equal(run.AcceptedFeatureIds, StringValues(resolution.GetProperty("selection").GetProperty("effectiveFeatureIds")));
+        AssertRuntimeAndCandidateTargetsAgree(run, resolution);
+
+        if (scenario is "root-default-distinct-equal" or "root-default-same-reference")
+            Assert.True(AreConnectionValuesEqual(run.FileBytes, "Logs", "Telemetry"));
+
+        if (scenario == "shell-default-explicit-binding")
+            AssertTarget(run, resolution, Runtime, "shell", "Sqlite", "Shell", "ShellDefault", "shell-composed");
+        else
+            AssertTarget(run, resolution, Runtime, "primary", "Sqlite", "Primary", "RootDefault", "root");
+
+        if (scenario is "root-default-distinct-equal" or "root-default-same-reference")
+        {
+            var telemetryResource = scenario == "root-default-same-reference" ? "logs" : "telemetry";
+            AssertTarget(run, resolution, StructuredLogs, "logs", "Sqlite", "Logs", "ShellBinding", "shell-composed");
+            AssertTarget(run, resolution, OpenTelemetry, telemetryResource, "Sqlite",
+                scenario == "root-default-same-reference" ? "Logs" : "Telemetry", "ShellBinding", "shell-composed");
+        }
+        else if (scenario == "shell-default-explicit-binding")
+        {
+            AssertTarget(run, resolution, StructuredLogs, "logs", "Sqlite", "Logs", "ShellBinding", "shell-composed");
+            AssertTarget(run, resolution, OpenTelemetry, "shell", "Sqlite", "Shell", "ShellDefault", "shell-composed");
+        }
+        else if (scenario == "feature-disabled-removed")
+        {
+            AssertTarget(run, resolution, StructuredLogs, "primary", "Sqlite", "Primary", "RootDefault", "root");
+        }
+
+        if (scenario == "feature-disabled-removed")
+        {
+            Assert.DoesNotContain(OpenTelemetry, run.RuntimeDetails.ResolvedParticipants
+                .Select(participant => participant.Participant.FeatureId));
+            Assert.DoesNotContain(resolution.GetProperty("participants").EnumerateArray(), participant =>
+                participant.GetProperty("feature").GetString() == OpenTelemetry);
+            Assert.Contains(OpenTelemetry, StringValues(resolution.GetProperty("selection").GetProperty("disabledFeatureIds")));
+        }
+
+        AssertPrivateInputsRemainPrivate(run);
+    }
+
+    [Fact]
+    public async Task All_legacy_partial_targets_remain_null_in_runtime_and_candidate_evidence()
+    {
+        var run = await RunSameCaptureAsync("all-legacy-partial");
+
+        Assert.Null(run.RuntimeFailure);
+        Assert.Empty(run.RuntimeDetails.RefusalCodes);
+        Assert.False(run.RuntimeDetails.HasApplicableResource);
+        Assert.Empty(run.RuntimePatch!.ConfigurationData);
+        Assert.Equal(EfToolingExitCode.Success, run.CandidateExitCode);
+        var resolution = run.CandidateResponse.GetProperty("configurationResolution");
+        Assert.Equal("partial", resolution.GetProperty("resolution").GetString());
+        Assert.Equal(["exact-file-provenance-unavailable", "legacy-target-unprojected"],
+            StringValues(resolution.GetProperty("unresolved")));
+        Assert.All(resolution.GetProperty("participants").EnumerateArray(), participant =>
+        {
+            Assert.Equal("Legacy", participant.GetProperty("selection").GetString());
+            Assert.Equal(JsonValueKind.Null, participant.GetProperty("resource").ValueKind);
+            Assert.Equal(JsonValueKind.Null, participant.GetProperty("provider").ValueKind);
+            Assert.Equal(JsonValueKind.Null, participant.GetProperty("connectionReference").ValueKind);
+            Assert.Equal(JsonValueKind.Null, participant.GetProperty("resourceScope").ValueKind);
+        });
+        AssertPrivateInputsRemainPrivate(run);
+    }
+
+    [Theory]
+    [InlineData("missing-root-resource", "resource-not-found")]
+    [InlineData("missing-binding-resource", "resource-not-found")]
+    [InlineData("null-root-selection", "resource-selection-invalid")]
+    [InlineData("blank-root-selection", "resource-selection-invalid")]
+    [InlineData("null-binding-selection", "resource-selection-invalid")]
+    [InlineData("blank-binding-selection", "resource-selection-invalid")]
+    [InlineData("null-provider", "resource-definition-invalid")]
+    [InlineData("blank-provider", "resource-definition-invalid")]
+    [InlineData("null-connection-reference", "resource-definition-invalid")]
+    [InlineData("blank-connection-reference", "resource-definition-invalid")]
+    [InlineData("authored-legacy-conflict", "resource-legacy-conflict")]
+    [InlineData("mixed-diagnostic-ownership", "resource-ownership-unresolved")]
+    [InlineData("unequal-diagnostic-values", "resource-context-conflict")]
+    [InlineData("shared-context-provider-split", "resource-context-conflict")]
+    [InlineData("shared-context-schema-split", "resource-context-conflict")]
+    [InlineData("opaque-composer-configurator", "resource-configurator-unsupported")]
+    public async Task Runtime_and_candidate_refuse_the_same_captured_configuration(string scenario, string refusalCode)
+    {
+        var run = await RunSameCaptureAsync(scenario);
+
+        Assert.NotNull(run.RuntimeFailure);
+        Assert.Equal([refusalCode], run.RuntimeDetails.RefusalCodes.Order(StringComparer.Ordinal));
+        Assert.Equal(EfToolingExitCode.Refusal, run.CandidateExitCode);
+        Assert.Equal("refused", run.CandidateResponse.GetProperty("status").GetString());
+        Assert.Equal(refusalCode, run.CandidateResponse.GetProperty("error").GetProperty("code").GetString());
+        Assert.False(run.CandidateResponse.TryGetProperty("configurationResolution", out _));
+        AssertPrivateInputsRemainPrivate(run);
+
+        if (scenario == "unequal-diagnostic-values")
+        {
+            Assert.False(AreConnectionValuesEqual(run.FileBytes, "Logs", "Telemetry"));
+            Assert.Equal(EfToolingExitCode.Success, run.LegacyV2ExitCode);
+            var offline = run.LegacyV2Response!.Value.GetProperty("configurationContext");
+            Assert.Equal(["expected-connection-unchecked", "target-affinity-unverified"],
+                StringValues(offline.GetProperty("unresolved")));
+        }
+
+        if (scenario == "opaque-composer-configurator")
+            Assert.Equal(0, EfToolingHostTestDefaults.OpaqueConfiguratorExecutionCount);
+    }
+
+    [Fact]
+    public async Task Explicit_removal_refuses_when_the_declared_host_default_readds_a_feature_absent_from_files()
+    {
+        var run = await RunSameCaptureAsync("host-default-readds-removed-runtime");
+
+        Assert.Null(run.RuntimeFailure);
+        Assert.Contains(run.RuntimeDetails.ResolvedParticipants,
+            participant => participant.Participant.FeatureId == Runtime);
+        Assert.Equal(EfToolingExitCode.Refusal, run.CandidateExitCode);
+        Assert.Equal("candidate-selection-conflict", run.CandidateResponse.GetProperty("error").GetProperty("code").GetString());
+        Assert.Equal("required-disabled", run.CandidateResponse.GetProperty("error").GetProperty("reason").GetString());
+        Assert.Equal(Runtime, run.CandidateResponse.GetProperty("error").GetProperty("feature").GetString());
+        Assert.False(run.CandidateResponse.TryGetProperty("configurationResolution", out _));
+        AssertPrivateInputsRemainPrivate(run);
+    }
+
+    private async Task<SameCaptureRun> RunSameCaptureAsync(string scenario)
+    {
+        if (scenario == "opaque-composer-configurator")
+            Interlocked.Exchange(ref EfToolingHostTestDefaults.OpaqueConfiguratorExecutionCount, 0);
+        var files = BuildSameCaptureFiles(scenario);
+        using var configuration = ReadConfiguration(files);
+        var runtimeContext = EfConfigurationProbeTests.ComposeRuntimeContext(configuration, Shell);
+
+        ShellSettingsPreparationResult? patch = null;
+        string? runtimeFailure = null;
+        try
+        {
+            patch = await new EfPersistenceShellSettingsPreparer(configuration)
+                .PrepareAsync(runtimeContext, CancellationToken.None);
+        }
+        catch (InvalidOperationException failure)
+        {
+            runtimeFailure = failure.Message;
+        }
+
+        // This detached projection is inspected only after the production runtime preparer ran above.
+        var details = EfPersistencePreparation.Prepare(runtimeContext, configuration,
+            EfConfigurationProbeTests.HostAssemblies, verifyConnectionValues: true);
+        var accepted = runtimeContext.EnabledFeatureIds.Order(StringComparer.Ordinal).ToArray();
+        string[] removed = scenario switch
+        {
+            "feature-disabled-removed" => [OpenTelemetry],
+            "host-default-readds-removed-runtime" => [Runtime],
+            _ => []
+        };
+        if (scenario == "host-default-readds-removed-runtime")
+            accepted = accepted.Where(id => !StringComparer.Ordinal.Equals(id, Runtime)).ToArray();
+
+        var candidate = CreateCandidate(accepted, files, removed);
+        var candidateFiles = candidate.Request["candidate"]!["files"]!.AsArray();
+        Assert.Equal(4, candidateFiles.Count);
+        foreach (var file in candidateFiles)
+        {
+            var fileObject = file!.AsObject();
+            var name = fileObject["name"]!.GetValue<string>();
+            var decoded = Convert.FromBase64String(fileObject["content"]!.GetValue<string>());
+            Assert.True(files[name].AsSpan().SequenceEqual(decoded),
+                "The candidate payload must retain each captured file byte-for-byte.");
+        }
+        using var candidateResponse = new MemoryStream();
+        var operation = new EfCandidateInspectionOperation(() => EfConfigurationProbeTests.HostAssemblies);
+        var candidateExitCode = await RunOperationAsync(operation, candidate.Request, candidateResponse, CancellationToken.None);
+        var candidateJson = Encoding.UTF8.GetString(candidateResponse.ToArray());
+        using var candidateDocument = JsonDocument.Parse(candidateJson);
+
+        int? legacyV2ExitCode = null;
+        JsonElement? legacyV2Response = null;
+        if (scenario == "unequal-diagnostic-values")
+        {
+            var assembly = typeof(EfToolingHostTests).Assembly;
+            using var context = new EfToolingConfigurationContext(
+                EfToolingConfigurationContext.WorkbenchJson,
+                Path.GetDirectoryName(assembly.Location)!, assembly.GetName().Name!, Environment, Shell,
+                explicitSelection: true, configuration);
+            using var request = new MemoryStream(
+                Encoding.UTF8.GetBytes("""{"version":2,"command":"list","selection":{"kind":"from-host"}}"""));
+            using var response = new MemoryStream();
+            legacyV2ExitCode = await EfToolingContextOperation.RunAsync(
+                request, response, context, EfConfigurationProbeTests.HostAssemblies, CancellationToken.None);
+            using var legacyV2Document = JsonDocument.Parse(response.ToArray());
+            legacyV2Response = legacyV2Document.RootElement.Clone();
+        }
+
+        return new SameCaptureRun(files, runtimeContext, patch, runtimeFailure, details,
+            candidateExitCode, candidateJson, candidateDocument.RootElement.Clone(), accepted,
+            legacyV2ExitCode, legacyV2Response);
+    }
+
+    private Dictionary<string, byte[]> BuildSameCaptureFiles(string scenario)
+    {
+        var featureDescriptors = FeatureDiscovery.DiscoverFeatures(EfConfigurationProbeTests.HostAssemblies)
+            .ToDictionary(feature => feature.Id, StringComparer.OrdinalIgnoreCase);
+        var isContextSplit = scenario is "shared-context-provider-split" or "shared-context-schema-split";
+        var isDefaultRemoval = scenario == "host-default-readds-removed-runtime";
+        var isDisabledRemoval = scenario == "feature-disabled-removed";
+        var directFeatureIds = new List<string> { StructuredLogs, OpenTelemetry };
+        if (!isDefaultRemoval)
+            directFeatureIds.Insert(0, Runtime);
+        if (isDisabledRemoval)
+            directFeatureIds.Remove(OpenTelemetry);
+        if (isContextSplit)
+            directFeatureIds.Add(RuntimeWorkflowExecution);
+
+        var orderedFeatureIds = new FeatureDependencyResolver()
+            .GetOrderedFeatures(directFeatureIds, featureDescriptors).ToArray();
+        if (isDefaultRemoval)
+            orderedFeatureIds = orderedFeatureIds.Where(id => !StringComparer.Ordinal.Equals(id, Runtime)).ToArray();
+        var features = new JsonObject();
+        foreach (var id in orderedFeatureIds)
+        {
+            var setting = new JsonObject { ["UnknownCandidateSetting"] = UnknownSettingCanary };
+            if (scenario == "all-legacy-partial" && id == Runtime)
+                setting["Provider"] = "Sqlite";
+            if (scenario == "mixed-diagnostic-ownership" && id == OpenTelemetry)
+                AddLegacyTarget(setting, "LegacyTelemetry");
+            if (scenario == "authored-legacy-conflict" && id == Runtime)
+                setting["ConnectionString"] = $"Data Source={DatabasePath};Password={ConnectionCanary}";
+            if (scenario == "shared-context-schema-split" && id is Runtime or RuntimeWorkflowExecution)
+                setting["Schema"] = id == Runtime ? "schema-runtime" : "schema-execution";
+            features[id] = setting;
+        }
+
+        if (isDisabledRemoval)
+            features[OpenTelemetry] = false;
+
+        var rootPersistence = new JsonObject { ["UnmodeledSetting"] = UnknownSettingCanary };
+        var applicationSettings = new JsonObject();
+        if (scenario != "all-legacy-partial")
+        {
+            var primaryProvider = isContextSplit && scenario != "shared-context-provider-split" ? "PostgreSql" : "Sqlite";
+            var runtimeProvider = scenario == "shared-context-provider-split" ? "PostgreSql" : primaryProvider;
+            var resources = new JsonObject
+            {
+                ["primary"] = new JsonObject { ["Provider"] = primaryProvider, ["ConnectionName"] = "Primary" },
+                ["shell"] = new JsonObject { ["Provider"] = "Sqlite", ["ConnectionName"] = "Shell" },
+                ["logs"] = new JsonObject { ["Provider"] = "Sqlite", ["ConnectionName"] = "Logs" },
+                ["telemetry"] = new JsonObject { ["Provider"] = "Sqlite", ["ConnectionName"] = "Telemetry" },
+                ["runtime-other"] = new JsonObject { ["Provider"] = runtimeProvider, ["ConnectionName"] = "RuntimeShared" }
+            };
+
+            switch (scenario)
+            {
+                case "missing-root-resource":
+                    rootPersistence["DefaultResource"] = "missing";
+                    break;
+                case "null-root-selection":
+                    rootPersistence["DefaultResource"] = null;
+                    break;
+                case "blank-root-selection":
+                    rootPersistence["DefaultResource"] = "";
+                    break;
+                default:
+                    if (scenario is not "mixed-diagnostic-ownership")
+                        rootPersistence["DefaultResource"] = "primary";
+                    break;
+            }
+
+            if (scenario is "null-provider" or "blank-provider")
+                resources["primary"]!["Provider"] = scenario == "null-provider" ? null : "";
+            if (scenario is "null-connection-reference" or "blank-connection-reference")
+                resources["primary"]!["ConnectionName"] = scenario == "null-connection-reference" ? null : "";
+            rootPersistence["Resources"] = resources;
+            applicationSettings["Elsa"] = new JsonObject { ["Persistence"] = rootPersistence };
+        }
+        else
+        {
+            // A partial legacy provider value proves the host must leave all target identities unprojected.
+            applicationSettings["Elsa"] = new JsonObject { ["Persistence"] = rootPersistence };
+        }
+
+        applicationSettings["ProbeDefaults"] = new JsonObject
+        {
+            ["AddRuntimeEfFeature"] = isDefaultRemoval,
+            ["AddOpaqueRuntimeConfigurator"] = scenario == "opaque-composer-configurator"
+        };
+        applicationSettings["Elsa"]!["Persistence"]!["UnmodeledSetting"] = UnknownSettingCanary;
+
+        var shellPersistence = new JsonObject();
+        if (scenario == "shell-default-explicit-binding")
+            shellPersistence["DefaultResource"] = "shell";
+        if (scenario == "missing-binding-resource")
+            shellPersistence["Bindings"] = new JsonObject { [StructuredLogs] = "missing" };
+        else if (scenario is "null-binding-selection" or "blank-binding-selection")
+            shellPersistence["Bindings"] = new JsonObject
+            {
+                [StructuredLogs] = scenario == "null-binding-selection" ? null : ""
+            };
+        else if (scenario == "shell-default-explicit-binding")
+            shellPersistence["Bindings"] = new JsonObject { [StructuredLogs] = "logs" };
+        else if (scenario == "mixed-diagnostic-ownership")
+            shellPersistence["Bindings"] = new JsonObject { [StructuredLogs] = "logs" };
+        else if (scenario is "root-default-distinct-equal" or "unequal-diagnostic-values")
+            shellPersistence["Bindings"] = new JsonObject
+            {
+                [StructuredLogs] = "logs",
+                [OpenTelemetry] = "telemetry"
+            };
+        else if (scenario == "root-default-same-reference")
+            shellPersistence["Bindings"] = new JsonObject
+            {
+                [StructuredLogs] = "logs",
+                [OpenTelemetry] = "logs"
+            };
+        else if (isContextSplit)
+            shellPersistence["Bindings"] = new JsonObject { [RuntimeWorkflowExecution] = "runtime-other" };
+
+        var shellSettings = new JsonObject
+        {
+            ["CShells"] = new JsonObject
+            {
+                ["Shells"] = new JsonObject
+                {
+                    [Shell] = new JsonObject
+                    {
+                        ["Name"] = Shell,
+                        ["Features"] = features,
+                        ["Configuration"] = new JsonObject()
+                    }
+                }
+            }
+        };
+        var shellEnvironmentSettings = new JsonObject
+        {
+            ["CShells"] = new JsonObject
+            {
+                ["Shells"] = new JsonObject
+                {
+                    [Shell] = new JsonObject
+                    {
+                        ["Configuration"] = new JsonObject { ["Elsa"] = new JsonObject { ["Persistence"] = shellPersistence } }
+                    }
+                }
+            }
+        };
+
+        var telemetryValue = scenario == "unequal-diagnostic-values" ? DifferentConnectionCanary : ConnectionCanary;
+        var connections = new JsonObject
+        {
+            ["Primary"] = $"Data Source={DatabasePath};Password={ConnectionCanary}",
+            ["Shell"] = $"Data Source={DatabasePath};Password={ConnectionCanary}",
+            ["Logs"] = $"Data Source={DatabasePath};Password={ConnectionCanary}",
+            ["Telemetry"] = $"Data Source={DatabasePath};Password={telemetryValue}",
+            ["RuntimeShared"] = $"Data Source={DatabasePath};Password={ConnectionCanary}"
+        };
+        var applicationEnvironmentSettings = new JsonObject { ["ConnectionStrings"] = connections };
+
+        // These four byte arrays are the only file capture. Runtime and candidate input below both consume them.
+        return new Dictionary<string, byte[]>(StringComparer.Ordinal)
+        {
+            ["appsettings.json"] = Encoding.UTF8.GetBytes(applicationSettings.ToJsonString()),
+            ["appsettings.Production.json"] = Encoding.UTF8.GetBytes(applicationEnvironmentSettings.ToJsonString()),
+            ["shells.json"] = Encoding.UTF8.GetBytes(shellSettings.ToJsonString()),
+            ["shells.Production.json"] = Encoding.UTF8.GetBytes(shellEnvironmentSettings.ToJsonString())
+        };
+    }
+
+    private void AssertRuntimeAndCandidateTargetsAgree(SameCaptureRun run, JsonElement resolution)
+    {
+        var runtimeByFeature = run.RuntimeDetails.ResolvedParticipants.ToDictionary(
+            participant => participant.Participant.FeatureId, StringComparer.Ordinal);
+        var candidateRows = resolution.GetProperty("participants").EnumerateArray().ToArray();
+        var candidateFeatures = candidateRows.Select(row => row.GetProperty("feature").GetString()!)
+            .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+        var runtimeFeatures = runtimeByFeature.Values
+            .Where(participant => participant.Participant.ModuleNames.Count != 0)
+            .Select(participant => participant.Participant.FeatureId).Order(StringComparer.Ordinal).ToArray();
+        Assert.Equal(runtimeFeatures, candidateFeatures);
+        foreach (var group in candidateRows.GroupBy(row => row.GetProperty("feature").GetString()!, StringComparer.Ordinal))
+            Assert.Equal(runtimeByFeature[group.Key].Participant.ModuleNames.Order(StringComparer.Ordinal),
+                group.Select(row => row.GetProperty("module").GetString()!).Order(StringComparer.Ordinal));
+
+        foreach (var row in candidateRows)
+        {
+            var feature = row.GetProperty("feature").GetString()!;
+            var runtime = runtimeByFeature[feature];
+            Assert.Equal(runtime.ResourceName, NullableString(row.GetProperty("resource")));
+            Assert.Equal(runtime.Provider, NullableString(row.GetProperty("provider")));
+            Assert.Equal(runtime.ConnectionName, NullableString(row.GetProperty("connectionReference")));
+            Assert.Equal(runtime.Selection.ToString(), row.GetProperty("selection").GetString());
+            Assert.Equal(runtime.Source.Scope, NullableString(row.GetProperty("selectorScope")));
+            if (runtime.Selection == PersistenceSelectionKind.Legacy)
+            {
+                Assert.Equal(JsonValueKind.Null, row.GetProperty("resourceScope").ValueKind);
+                Assert.Equal("unavailable", row.GetProperty("exactFileProvenance").GetString());
+            }
+            else
+            {
+                var definition = run.RuntimeDetails.ResourceDefinitions[runtime.ResourceName!];
+                Assert.Equal(definition.Source.Scope, NullableString(row.GetProperty("resourceScope")));
+                Assert.Equal("unavailable", row.GetProperty("exactFileProvenance").GetString());
+            }
+        }
+    }
+
+    private static void AssertTarget(SameCaptureRun run, JsonElement resolution, string feature,
+        string resource, string provider, string connectionReference, string selection, string selectorScope)
+    {
+        var runtime = Assert.Single(run.RuntimeDetails.ResolvedParticipants,
+            participant => participant.Participant.FeatureId == feature);
+        Assert.Equal(resource, runtime.ResourceName);
+        Assert.Equal(provider, runtime.Provider);
+        Assert.Equal(connectionReference, runtime.ConnectionName);
+        Assert.Equal(selection, runtime.Selection.ToString());
+        Assert.Equal(selectorScope, runtime.Source.Scope);
+        var rows = resolution.GetProperty("participants").EnumerateArray()
+            .Where(row => row.GetProperty("feature").GetString() == feature).ToArray();
+        Assert.NotEmpty(rows);
+        Assert.All(rows, row =>
+        {
+            Assert.Equal(resource, row.GetProperty("resource").GetString());
+            Assert.Equal(provider, row.GetProperty("provider").GetString());
+            Assert.Equal(connectionReference, row.GetProperty("connectionReference").GetString());
+            Assert.Equal(selection, row.GetProperty("selection").GetString());
+            Assert.Equal(selectorScope, row.GetProperty("selectorScope").GetString());
+            Assert.Equal("root", row.GetProperty("resourceScope").GetString());
+            Assert.Equal("unavailable", row.GetProperty("exactFileProvenance").GetString());
+        });
+    }
+
+    private void AssertPrivateInputsRemainPrivate(SameCaptureRun run)
+    {
+        var patchJson = run.RuntimePatch is null ? string.Empty : JsonSerializer.Serialize(run.RuntimePatch);
+        var v2Json = run.LegacyV2Response?.GetRawText() ?? string.Empty;
+        var visible = string.Join('\n', patchJson, run.RuntimeFailure, run.CandidateResponseJson, v2Json);
+        var capturedFiles = string.Join('\n', run.FileBytes.Values.Select(bytes => Encoding.UTF8.GetString(bytes)));
+        Assert.True(capturedFiles.Contains(ConnectionCanary, StringComparison.Ordinal),
+            "The private candidate files should include the connection-value control.");
+        foreach (var canary in new[] { ConnectionCanary, DifferentConnectionCanary, UnknownSettingCanary, DatabasePath })
+            Assert.False(visible.Contains(canary, StringComparison.Ordinal),
+                "A public patch, refusal diagnostic, or tooling response exposed private candidate content.");
+        Assert.Empty(Directory.EnumerateFiles(temporaryDirectory));
+    }
+
+    private static string? NullableString(JsonElement value) =>
+        value.ValueKind == JsonValueKind.Null ? null : value.GetString();
+
+    private static bool AreConnectionValuesEqual(IReadOnlyDictionary<string, byte[]> files, string first, string second)
+    {
+        using var document = JsonDocument.Parse(files["appsettings.Production.json"]);
+        var connections = document.RootElement.GetProperty("ConnectionStrings");
+        return StringComparer.Ordinal.Equals(connections.GetProperty(first).GetString(), connections.GetProperty(second).GetString());
+    }
+
+    private static void AddLegacyTarget(JsonObject settings, string connectionName)
+    {
+        settings["Provider"] = "Sqlite";
+        settings["ConnectionName"] = connectionName;
+        settings["ConnectionString"] = $"Host=localhost;Password={ConnectionCanary}";
+    }
+
     private CandidateFixture CreateRuntimeCandidate(
         bool malformedEnvironmentOverlay = false,
         bool acceptedGraphMismatch = false)
@@ -394,7 +884,8 @@ public sealed class EfCandidateInspectionTests : IDisposable
         return CreateCandidate(acceptedFeatureIds, files);
     }
 
-    private CandidateFixture CreateCandidate(string[] acceptedFeatureIds, Dictionary<string, byte[]> files)
+    private CandidateFixture CreateCandidate(string[] acceptedFeatureIds, Dictionary<string, byte[]> files,
+        IReadOnlyList<string>? removedFeatureIds = null)
     {
         var hostAssembly = typeof(EfToolingHostTests).Assembly;
         var candidate = new JsonObject
@@ -406,7 +897,7 @@ public sealed class EfCandidateInspectionTests : IDisposable
             ["shell"] = Shell,
             ["environment"] = Environment,
             ["acceptedFeatureIds"] = StringArray(acceptedFeatureIds),
-            ["removedFeatureIds"] = new JsonArray(),
+            ["removedFeatureIds"] = StringArray(removedFeatureIds ?? Array.Empty<string>()),
             ["files"] = FileArray(files)
         };
         var request = new JsonObject
@@ -589,4 +1080,17 @@ public sealed class EfCandidateInspectionTests : IDisposable
     }
 
     private sealed record CandidateFixture(JsonObject Request, string[] AcceptedFeatureIds);
+
+    private sealed record SameCaptureRun(
+        IReadOnlyDictionary<string, byte[]> FileBytes,
+        ShellSettingsPreparationContext RuntimeContext,
+        ShellSettingsPreparationResult? RuntimePatch,
+        string? RuntimeFailure,
+        EfPersistencePreparationResult RuntimeDetails,
+        int CandidateExitCode,
+        string CandidateResponseJson,
+        JsonElement CandidateResponse,
+        string[] AcceptedFeatureIds,
+        int? LegacyV2ExitCode,
+        JsonElement? LegacyV2Response);
 }
