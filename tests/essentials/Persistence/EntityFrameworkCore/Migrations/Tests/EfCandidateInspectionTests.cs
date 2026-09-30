@@ -644,7 +644,6 @@ public sealed class EfCandidateInspectionTests : IDisposable
         }
 
         AssertPrivateInputsRemainPrivate(run);
-
     }
 
     [Fact]
@@ -761,7 +760,7 @@ public sealed class EfCandidateInspectionTests : IDisposable
             .SelectMany(feature => feature.Dependencies.Select(dependency => (Parent: feature.Id, Dependency: dependency)))
             .First(edge => originalRequested.Contains(edge.Dependency) && descriptors.ContainsKey(edge.Dependency));
 
-        Assert.True(descriptors[edge.Parent].Dependencies.Contains(edge.Dependency, StringComparer.Ordinal));
+        Assert.Contains(edge.Dependency, descriptors[edge.Parent].Dependencies, StringComparer.Ordinal);
         Assert.Contains(edge.Parent, originalRequested);
         Assert.Contains(edge.Dependency, originalRequested);
 
