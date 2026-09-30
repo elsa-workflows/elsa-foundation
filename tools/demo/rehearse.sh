@@ -127,6 +127,9 @@ cleanup() {
   exit $status
 }
 trap cleanup EXIT
+# A signal must not read as success: without these the cleanup would see the status of the last command that finished.
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 # ------------------------------------------------------------------------------------------------------------- doing things
 
