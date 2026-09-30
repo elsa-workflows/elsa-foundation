@@ -1,3 +1,4 @@
+using System.Data.Common;
 using Elsa.Persistence.EntityFramework.SchemaFinalization;
 using Elsa.Persistence.EntityFramework.Tooling;
 using Elsa.Persistence.Schema;
@@ -201,7 +202,7 @@ public sealed class EfContractingMigrationRefusalTests : IAsyncLifetime
     [Fact]
     public async Task A_racing_gate_that_leaves_the_families_below_their_versions_keeps_every_contraction_from_running()
     {
-        var refusal = await Assert.ThrowsAsync<EfContractingMigrationRefusedException>(() => ApplyPairAsync(new BeforeFirstSave(async () =>
+        var refusal = await Assert.ThrowsAsync<EfContractingMigrationRefusedException>(() => ApplyPairAsync(new BeforeFirstFinalizationInsert(async () =>
         {
             await using var older = ContractingPairModule.Create(Connection);
             await ContractingPairModule.OlderGate().ActivateAsync(older);
@@ -611,18 +612,19 @@ public sealed class EfContractingMigrationRefusalTests : IAsyncLifetime
     }
 
     /// <summary>The family of every finalization record the context it is added to creates, in the order it creates them.</summary>
-    private sealed class RecordsCreated : SaveChangesInterceptor
+    private sealed class RecordsCreated : DbCommandInterceptor
     {
         public List<string> Families { get; } = [];
 
-        public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
-            DbContextEventData eventData,
+        public override ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(
+            DbCommand command,
+            CommandEventData eventData,
             InterceptionResult<int> result,
             CancellationToken cancellationToken = default)
         {
-            Families.AddRange(eventData.Context!.ChangeTracker.Entries<EfSchemaFinalizationRecordRow>()
-                .Where(entry => entry.State == Microsoft.EntityFrameworkCore.EntityState.Added)
-                .Select(entry => entry.Entity.Family));
+            // The record's key, its family, is the first column of the insert.
+            if (CreatesFinalizationRow(command, EfSchemaFinalization.RecordTablePrefix))
+                Families.Add((string)command.Parameters[0].Value!);
             return ValueTask.FromResult(result);
         }
     }
