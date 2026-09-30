@@ -18,7 +18,7 @@ dotnet elsa composition plan --composition embedded-composition.json --format js
 dotnet elsa composition accept --composition embedded-composition.json --output accepted-composition.json
 ```
 
-Acceptance displays the exact added/removed IDs and retained/dropped lock IDs, then requires typing `accept`. It preserves authored settings, resources and pins, retaining historical locks only for features still selected. It rechecks every supplied input before writing and never overwrites an existing file. Missing host and persistence evidence stays unverified. Use the resulting `accepted-composition.json` with generation. For a custom workspace profile, pass the same pinned file with repeated `--workspace-profile` options to plan, accept, and generate; its [generation delivery gate](../reports/runtime-composition/workspace-profile-generation.md) is tracked by [#2166](https://github.com/elsa-workflows/elsa-foundation/issues/2166).
+Acceptance displays the exact added/removed IDs and retained/dropped lock IDs, then requires typing `accept`. It preserves authored settings, resources and pins, retaining historical locks only for features still selected. It rechecks every supplied input before writing and never overwrites an existing file. Missing host and persistence evidence stays unverified. Use the resulting `accepted-composition.json` with generation. For a custom workspace profile, pass the same pinned file with `--workspace-profile` to each of plan, accept, and generate; its [generation delivery gate](../reports/runtime-composition/workspace-profile-generation.md) is tracked by [#2166](https://github.com/elsa-workflows/elsa-foundation/issues/2166).
 
 To prepare host files for one selected shell and environment:
 

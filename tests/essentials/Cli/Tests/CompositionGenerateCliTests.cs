@@ -288,6 +288,22 @@ public sealed class CompositionGenerateCliTests
         AssertRedacted(run.Text);
     }
 
+    [Fact]
+    public void Workspace_profile_missing_a_reviewed_required_dependency_refuses_without_output()
+    {
+        using var fixture = new CompositionBridgeFixture();
+        var setup = PrepareWorkspaceGeneration(fixture,
+            [new DependencyExplanation("A", "D", "required", ProfileInputCanary)]);
+
+        var run = fixture.RunGenerate(workspaceProfilePaths: setup.Paths);
+
+        Assert.Equal(ToolExitCode.Refusal, run.ExitCode);
+        Assert.Contains("bridge-required-dependency-missing", run.Error, StringComparison.Ordinal);
+        Assert.DoesNotContain(ProfileInputCanary, run.Text, StringComparison.Ordinal);
+        AssertNoCandidateOrStaging(fixture);
+        AssertRedacted(run.Text);
+    }
+
     [Theory]
     [InlineData("malformed", "bridge-source-invalid")]
     [InlineData("digest-invalid", "bridge-source-invalid")]
@@ -356,11 +372,14 @@ public sealed class CompositionGenerateCliTests
         Assert.DoesNotContain(UnknownCanary, text, StringComparison.Ordinal);
     }
 
-    private static WorkspaceGenerationSetup PrepareWorkspaceGeneration(CompositionBridgeFixture fixture)
+    private static WorkspaceGenerationSetup PrepareWorkspaceGeneration(
+        CompositionBridgeFixture fixture,
+        IReadOnlyList<DependencyExplanation>? explanations = null)
     {
         fixture.WriteAcceptedComposition();
         var unused = fixture.WriteWorkspaceProfile("unused-profile.json", "unused-profile", "1", ["A"]);
-        var selected = fixture.WriteWorkspaceProfile("selected-profile.json", "selected-profile", "2", ["A", "C"]);
+        var selected = fixture.WriteWorkspaceProfile("selected-profile.json", "selected-profile", "2", ["A", "C"],
+            explanations: explanations);
         var authored = JsonNode.Parse(File.ReadAllText(fixture.OutputPath))!.AsObject();
         authored["profile"] = JsonSerializer.SerializeToNode(
             new DefinitionReference("workspace", "profile", selected.Definition.Id, selected.Definition.Version, selected.Definition.Digest),
