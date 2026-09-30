@@ -291,24 +291,17 @@ public sealed class CandidateWorkerResponseTests
         Assert.DoesNotContain("canary", refusal.Message);
     }
 
-    private static WorkerCandidatePayload Candidate() => new()
+    private static WorkerCandidatePayload Candidate()
     {
-        Version = 1,
-        Source = "captured-workbench-json-v1",
-        InvocationId = InvocationId,
-        CaptureId = CaptureId,
-        Shell = "default",
-        Environment = "Production",
-        AcceptedFeatureIds = ["ResourceProbe"],
-        RemovedFeatureIds = [],
-        Files =
-        [
-            new() { Name = "appsettings.json", CaptureId = CaptureId, Content = "e30=" },
-            new() { Name = "shells.json", CaptureId = CaptureId, Content = "e30=" },
-            new() { Name = "shells.Production.json", CaptureId = CaptureId, Content = "e30=" },
-            new() { Name = "appsettings.Production.json", CaptureId = CaptureId, Content = "e30=" }
-        ]
-    };
+        var candidate = CandidateWorkerRequestFixture.Create().Candidate!;
+        return candidate with
+        {
+            InvocationId = InvocationId,
+            CaptureId = CaptureId,
+            AcceptedFeatureIds = ["ResourceProbe"],
+            Files = candidate.Files!.Select(file => file with { CaptureId = CaptureId }).ToArray()
+        };
+    }
 
     private static string HostRefusal(WorkerCandidatePayload candidate, string code)
     {

@@ -43,6 +43,14 @@ public static class WorkerContract
         "resource-definition-invalid", "resource-configurator-unsupported", "resource-required-feature-disabled",
         "resource-legacy-conflict", "resource-ownership-unresolved", "resource-context-conflict"
     };
+    private static readonly HashSet<string> CandidateWorkerResponseFields = new(StringComparer.Ordinal)
+    {
+        "version", "exitCode", "tooling", "error"
+    };
+    private static readonly HashSet<string> CandidateWorkerErrorFields = new(StringComparer.Ordinal)
+    {
+        "code", "message", "details"
+    };
     private static readonly HashSet<string> CandidateSelectionConflictReasons = new(StringComparer.Ordinal)
     {
         "unknown", "unavailable", "requested-extra", "requested-missing", "expanded-extra", "required-disabled", "case-collision"
@@ -165,16 +173,107 @@ public static class WorkerContract
         }
     }
 
-    /// <summary>Parses the private worker response returned by a candidate inspection process.</summary>
-    /// <remarks>TEMPORARY permissive baseline stub; replace only after the expected-red tests have run.</remarks>
+    /// <summary>Parses the bounded private worker response returned by a candidate inspection process.</summary>
     public static WorkerResponse ParseCandidateWorkerResponse(
         ReadOnlyMemory<byte> utf8Response,
         WorkerCandidatePayload expectedCandidate,
         int processExitCode)
     {
         ArgumentNullException.ThrowIfNull(expectedCandidate);
-        return JsonSerializer.Deserialize<WorkerResponse>(utf8Response.Span, Json)!;
+        if (utf8Response.Length > CandidateHostResponseMaxBytes)
+            throw WorkerRefusal.Resolution("candidate-response-too-large", "The candidate host response exceeds the supported bound.");
+
+        try
+        {
+            ValidateCandidatePayload(expectedCandidate);
+        }
+        catch (JsonException)
+        {
+            throw InvalidCandidateHostResponse();
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(utf8Response,
+                new JsonDocumentOptions { MaxDepth = CandidateJsonMaxDepth });
+            var root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Object || HasDuplicateFields(root) ||
+                root.EnumerateObject().Any(property => !CandidateWorkerResponseFields.Contains(property.Name)) ||
+                !root.TryGetProperty("version", out var version) || version.ValueKind != JsonValueKind.Number ||
+                !version.TryGetInt32(out var versionValue) || versionValue != Version ||
+                !root.TryGetProperty("exitCode", out var exitCode) || exitCode.ValueKind != JsonValueKind.Number ||
+                !exitCode.TryGetInt32(out var exitCodeValue) || exitCodeValue != processExitCode)
+                throw InvalidCandidateHostResponse();
+
+            var hasTooling = root.TryGetProperty("tooling", out var tooling) && tooling.ValueKind != JsonValueKind.Null;
+            var hasError = root.TryGetProperty("error", out var error) && error.ValueKind != JsonValueKind.Null;
+            if (hasTooling == hasError)
+                throw InvalidCandidateHostResponse();
+
+            if (hasTooling)
+            {
+                ValidateCandidateHostResponse(tooling, expectedCandidate, processExitCode);
+                return new WorkerResponse
+                {
+                    Version = Version,
+                    ExitCode = exitCodeValue,
+                    Tooling = tooling.Clone()
+                };
+            }
+
+            var code = ReadCandidateWorkerErrorCode(error, exitCodeValue);
+            return new WorkerResponse
+            {
+                Version = Version,
+                ExitCode = exitCodeValue,
+                Error = new WorkerError { Code = code, Message = CandidateWorkerErrorMessage(code) }
+            };
+        }
+        catch (WorkerRefusal)
+        {
+            throw;
+        }
+        catch (JsonException)
+        {
+            throw InvalidCandidateHostResponse();
+        }
     }
+
+    private static string ReadCandidateWorkerErrorCode(JsonElement error, int exitCode)
+    {
+        if (error.ValueKind != JsonValueKind.Object || HasDuplicateFields(error) ||
+            error.EnumerateObject().Any(property => !CandidateWorkerErrorFields.Contains(property.Name)) ||
+            !error.TryGetProperty("code", out var codeElement) || codeElement.ValueKind != JsonValueKind.String)
+            throw InvalidCandidateHostResponse();
+
+        if (error.TryGetProperty("message", out var message) && message.ValueKind != JsonValueKind.String)
+            throw InvalidCandidateHostResponse();
+        if (error.TryGetProperty("details", out var details) &&
+            (details.ValueKind != JsonValueKind.Array || details.GetArrayLength() != 0))
+            throw InvalidCandidateHostResponse();
+
+        var code = codeElement.GetString()!;
+        var isUsageRefusal = code is "candidate-request-invalid" or "candidate-request-too-large";
+        var isResolutionRefusal = code is "candidate-host-unavailable" or "candidate-closure-changed" or
+            "candidate-capability-unavailable" or "candidate-response-invalid" or "candidate-response-too-large";
+        if (isUsageRefusal && exitCode == ToolExitCode.Refusal ||
+            isResolutionRefusal && exitCode == ToolExitCode.ResolutionFailure)
+            return code;
+
+        throw InvalidCandidateHostResponse();
+    }
+
+    private static string CandidateWorkerErrorMessage(string code) => code switch
+    {
+        "candidate-request-invalid" => CandidateRequestInvalidMessage,
+        "candidate-request-too-large" => "The candidate host request exceeds the supported bound.",
+        "candidate-host-unavailable" => "The selected installed host closure could not be inspected.",
+        "candidate-closure-changed" => "The selected installed host closure changed during inspection.",
+        "candidate-capability-unavailable" => "The selected host has no complete candidate inspection capability.",
+        "candidate-response-invalid" => CandidateHostResponseInvalidMessage,
+        "candidate-response-too-large" => "The candidate host response exceeds the supported bound.",
+        _ => throw InvalidCandidateHostResponse()
+    };
 
     private static async Task<T> ReadBoundedCandidateJsonAsync<T>(
         Stream stream,
