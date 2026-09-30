@@ -113,6 +113,7 @@ public sealed class CandidateWorkerProcess
         using var deadlineLease = deadline;
         ICandidateProcessHandle? handle = null;
         var streams = new List<Stream>(3);
+        var exchangeTasks = new List<Task>(4);
         WorkerResponse? response = null;
         CliRefusal? refusalResult = null;
         ExceptionDispatchInfo? fatalFailure = null;
@@ -130,20 +131,26 @@ public sealed class CandidateWorkerProcess
             Stream? output = null;
             Stream? error = null;
             Exception? streamFailure = null;
-            TryGetStream(() => ownedHandle.StandardInput, streams, value => input = value, ref streamFailure);
-            TryGetStream(() => ownedHandle.StandardOutput, streams, value => output = value, ref streamFailure);
-            TryGetStream(() => ownedHandle.StandardError, streams, value => error = value, ref streamFailure);
+            Exception? fatalStreamFailure = null;
+            TryGetStream(() => ownedHandle.StandardInput, streams, value => input = value,
+                ref streamFailure, ref fatalStreamFailure);
+            TryGetStream(() => ownedHandle.StandardOutput, streams, value => output = value,
+                ref streamFailure, ref fatalStreamFailure);
+            TryGetStream(() => ownedHandle.StandardError, streams, value => error = value,
+                ref streamFailure, ref fatalStreamFailure);
 
+            if (fatalStreamFailure is not null)
+                throw fatalStreamFailure;
             if (cancelledDuringStart || cancellationToken.IsCancellationRequested)
                 throw new OperationCanceledException(cancellationToken);
-            ThrowIfTimedOut(deadline, operationStarted, timeoutSeconds);
+            ThrowIfTimedOut(deadline.Token, operationStarted, timeoutSeconds);
             if (streamFailure is not null)
                 throw streamFailure;
             if (input is null || output is null || error is null)
                 throw new InvalidOperationException();
 
             response = await ExchangeAsync(ownedHandle, input, output, error, requestBytes, request,
-                timeoutSeconds, operationStarted, deadline.Token, cancellationToken).ConfigureAwait(false);
+                timeoutSeconds, operationStarted, deadline.Token, cancellationToken, exchangeTasks).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -176,7 +183,7 @@ public sealed class CandidateWorkerProcess
 
         CleanupResult cleanup = default;
         if (handle is not null)
-            cleanup = await CleanupAsync(handle, streams).ConfigureAwait(false);
+            cleanup = await CleanupAsync(handle, streams, exchangeTasks).ConfigureAwait(false);
 
         // A process-trust exception remains visible after owned resources have been handled.
         fatalFailure?.Throw();
@@ -199,18 +206,21 @@ public sealed class CandidateWorkerProcess
 
     private async Task<WorkerResponse> ExchangeAsync(ICandidateProcessHandle handle, Stream input, Stream output,
         Stream error, byte[] requestBytes, WorkerRequest request, int timeoutSeconds, long operationStarted,
-        CancellationToken deadlineToken, CancellationToken cancellationToken)
+        CancellationToken deadlineToken, CancellationToken cancellationToken, ICollection<Task> ownedTasks)
     {
         using var exchange = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadlineToken);
         var writeTask = WriteRequestAndCloseAsync(input, requestBytes, exchange.Token);
         var outputTask = ReadResponseAsync(output, exchange.Token);
         var errorTask = DrainErrorAsync(error, exchange.Token);
         var pumps = new List<Task> { writeTask, outputTask, errorTask };
+        foreach (var pump in pumps)
+            ownedTasks.Add(pump);
         Task waitTask;
         try
         {
             waitTask = handle.WaitForExitAsync(exchange.Token) ?? throw new InvalidOperationException();
             pumps.Add(waitTask);
+            ownedTasks.Add(waitTask);
         }
         catch
         {
@@ -354,7 +364,7 @@ public sealed class CandidateWorkerProcess
     }
 
     private static void TryGetStream(Func<Stream> get, ICollection<Stream> streams, Action<Stream> assign,
-        ref Exception? firstFailure)
+        ref Exception? firstFailure, ref Exception? fatalFailure)
     {
         try
         {
@@ -369,27 +379,51 @@ public sealed class CandidateWorkerProcess
         }
         catch (Exception failure)
         {
-            firstFailure ??= failure;
+            fatalFailure ??= failure;
         }
     }
 
-    private async Task<CleanupResult> CleanupAsync(ICandidateProcessHandle handle, IReadOnlyCollection<Stream> streams)
+    private async Task<CleanupResult> CleanupAsync(ICandidateProcessHandle handle, IReadOnlyCollection<Stream> streams,
+        IReadOnlyCollection<Task> exchangeTasks)
     {
         var failed = false;
         ExceptionDispatchInfo? fatalFailure = null;
-        var started = clock.GetTimestamp();
+        var cleanupClock = clock;
+        long started = 0;
         CancellationTokenSource? cleanupDeadline = null;
         try
         {
-            cleanupDeadline = new CancellationTokenSource(CleanupTimeout, clock);
-        }
-        catch (Exception failure) when (IsNonFatal(failure))
-        {
-            failed = true;
+            started = cleanupClock.GetTimestamp();
+            cleanupDeadline = new CancellationTokenSource(CleanupTimeout, cleanupClock);
         }
         catch (Exception failure)
         {
-            fatalFailure = ExceptionDispatchInfo.Capture(failure);
+            RecordCleanupFailure(failure, ref failed, ref fatalFailure);
+            cleanupClock = TimeProvider.System;
+            try
+            {
+                started = cleanupClock.GetTimestamp();
+                cleanupDeadline = new CancellationTokenSource(CleanupTimeout, cleanupClock);
+            }
+            catch (Exception fallbackFailure)
+            {
+                RecordCleanupFailure(fallbackFailure, ref failed, ref fatalFailure);
+            }
+        }
+
+        TimeSpan Remaining()
+        {
+            if (cleanupDeadline is null)
+                return TimeSpan.Zero;
+            try
+            {
+                return CleanupTimeout - cleanupClock.GetElapsedTime(started);
+            }
+            catch (Exception failure)
+            {
+                RecordCleanupFailure(failure, ref failed, ref fatalFailure);
+                return TimeSpan.Zero;
+            }
         }
 
         bool exited = false;
@@ -413,27 +447,22 @@ public sealed class CandidateWorkerProcess
                 RecordCleanupFailure(failure, ref failed, ref fatalFailure);
             }
 
-            if (cleanupDeadline is not null)
+            try
             {
-                var remaining = CleanupTimeout - clock.GetElapsedTime(started);
-                if (remaining <= TimeSpan.Zero)
+                var wait = handle.WaitForExitAsync(cleanupDeadline?.Token ?? CancellationToken.None)
+                           ?? throw new InvalidOperationException();
+                ObserveFaults([wait]);
+                var remaining = Remaining();
+                if (remaining <= TimeSpan.Zero || cleanupDeadline is null)
                     failed = true;
                 else
                 {
-                    try
-                    {
-                        var wait = handle.WaitForExitAsync(cleanupDeadline.Token) ?? throw new InvalidOperationException();
-                        await wait.WaitAsync(remaining, clock, cleanupDeadline.Token).ConfigureAwait(false);
-                    }
-                    catch (Exception failure)
-                    {
-                        RecordCleanupFailure(failure, ref failed, ref fatalFailure);
-                    }
+                    await wait.WaitAsync(remaining, cleanupClock, cleanupDeadline.Token).ConfigureAwait(false);
                 }
             }
-            else
+            catch (Exception failure)
             {
-                failed = true;
+                RecordCleanupFailure(failure, ref failed, ref fatalFailure);
             }
         }
 
@@ -449,29 +478,30 @@ public sealed class CandidateWorkerProcess
 
         foreach (var stream in streams)
         {
+            Task dispose;
             try
             {
-                if (cleanupDeadline is null)
-                {
-                    // We could not establish the cleanup deadline. Start disposal so every owned
-                    // stream gets a close attempt, but do not let a non-cooperative async disposer
-                    // make RunAsync unbounded.
-                    failed = true;
-                    var dispose = stream.DisposeAsync().AsTask();
-                    ObserveFaults([dispose]);
-                    continue;
-                }
-
-                var remaining = CleanupTimeout - clock.GetElapsedTime(started);
-                if (remaining <= TimeSpan.Zero)
-                {
-                    failed = true;
-                    continue;
-                }
-
-                var dispose = stream.DisposeAsync().AsTask();
+                dispose = stream.DisposeAsync().AsTask();
                 ObserveFaults([dispose]);
-                await dispose.WaitAsync(remaining, clock, cleanupDeadline.Token).ConfigureAwait(false);
+            }
+            catch (Exception failure)
+            {
+                RecordCleanupFailure(failure, ref failed, ref fatalFailure);
+                continue;
+            }
+
+            var remaining = Remaining();
+            if (cleanupDeadline is null || remaining <= TimeSpan.Zero)
+            {
+                // Always initiate every close attempt, even after the shared deadline expires.
+                // Do not await an uncooperative async disposer past the cleanup budget.
+                failed = true;
+                continue;
+            }
+
+            try
+            {
+                await dispose.WaitAsync(remaining, cleanupClock, cleanupDeadline.Token).ConfigureAwait(false);
             }
             catch (Exception failure)
             {
@@ -488,7 +518,44 @@ public sealed class CandidateWorkerProcess
             RecordCleanupFailure(failure, ref failed, ref fatalFailure);
         }
 
-        cleanupDeadline?.Dispose();
+        if (exchangeTasks.Count > 0)
+        {
+            ObserveFaults(exchangeTasks);
+            var allStopped = Task.WhenAll(exchangeTasks);
+            var remaining = Remaining();
+            if (!allStopped.IsCompleted && cleanupDeadline is not null && remaining > TimeSpan.Zero)
+            {
+                try
+                {
+                    await allStopped.WaitAsync(remaining, cleanupClock, cleanupDeadline.Token).ConfigureAwait(false);
+                }
+                catch (Exception)
+                {
+                    // Pump failures were already mapped by the exchange. Here only unfinished
+                    // pumps indicate that owned stream/process cleanup did not quiesce in time.
+                }
+            }
+
+            if (exchangeTasks.Any(task => !task.IsCompleted))
+                failed = true;
+            foreach (var task in exchangeTasks.Where(task => task.IsFaulted))
+            {
+                foreach (var taskFailure in task.Exception!.Flatten().InnerExceptions)
+                {
+                    if (!IsNonFatal(taskFailure))
+                        fatalFailure ??= ExceptionDispatchInfo.Capture(taskFailure);
+                }
+            }
+        }
+
+        try
+        {
+            cleanupDeadline?.Dispose();
+        }
+        catch (Exception failure)
+        {
+            RecordCleanupFailure(failure, ref failed, ref fatalFailure);
+        }
         return new CleanupResult(failed, fatalFailure);
     }
 
