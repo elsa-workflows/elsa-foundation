@@ -16,7 +16,7 @@ public sealed class PackageVersionBuildCheckTests : IDisposable
 
     /// <summary>Prints the versions the fixture evaluated, after every check has run.</summary>
     private const string ShowVersion =
-        """<Target Name="ShowVersion" AfterTargets="BeforeBuild"><Message Importance="high" Text="PackageVersion=$(PackageVersion) Version=$(Version) RepositoryCommit=$(RepositoryCommit)." /></Target>""";
+        """<Target Name="ShowVersion" AfterTargets="BeforeBuild"><Message Importance="high" Text="PackageVersion=$(PackageVersion) Version=$(Version) RepositoryCommit=$(RepositoryCommit). AssemblyVersion=$(AssemblyVersion)." /></Target>""";
 
     private readonly DirectoryInfo scratch = Directory.CreateTempSubdirectory(nameof(PackageVersionBuildCheckTests));
     private readonly string root;
@@ -24,8 +24,9 @@ public sealed class PackageVersionBuildCheckTests : IDisposable
     public PackageVersionBuildCheckTests() => root = MsBuildFixture.CopyRootBuildFiles(scratch.FullName);
 
     /// <summary>
-    /// Without computed input a package is its line's dev version, and the assembly version is left to the SDK, so a dev
-    /// build's assemblies - and every activity version and assembly-qualified name derived from them - do not change.
+    /// Without computed input a package is its line's dev version, and Version is left to the SDK, so a dev build's
+    /// informational version - and every activity version derived from it - does not change. Its assembly version is its
+    /// line's major, as a computed build's is (#2150).
     /// </summary>
     [Fact]
     public void Without_computed_input_a_package_is_its_lines_dev_version()
@@ -33,7 +34,7 @@ public sealed class PackageVersionBuildCheckTests : IDisposable
         var (exitCode, output) = MsBuildFixture.Run("Fixture.LineB", ShowVersion, repositoryRoot: root);
 
         Assert.True(exitCode == 0, $"build failed with exit {exitCode}:\n{output}");
-        Assert.Contains("PackageVersion=4.0.0-dev Version= RepositoryCommit=.", output);
+        Assert.Contains("PackageVersion=4.0.0-dev Version= RepositoryCommit=. AssemblyVersion=4.0.0.0.", output);
     }
 
     /// <summary>
@@ -47,20 +48,21 @@ public sealed class PackageVersionBuildCheckTests : IDisposable
 
         Assert.True(exitCode == 0, $"build failed with exit {exitCode}:\n{output}");
         Assert.Contains("PackageVersion= Version=2.1.0 ", output);
+        Assert.Contains("AssemblyVersion=.", output);
     }
 
     /// <summary>
     /// MSBuild consumes the same line properties the calculator reads: a Line A project takes ElsaContractsVersion and a
-    /// Line B project ElsaVersion. Both are 4.0 today, so a copy of the root build files with the lines apart tells them
-    /// apart.
+    /// Line B project ElsaVersion, for its dev version and for its assembly version's major alike. Both are 4.0 today, so
+    /// a copy of the root build files with the lines apart, majors included, tells them apart.
     /// </summary>
     [Theory]
-    [InlineData(false, "4.1.0-dev")]
-    [InlineData(true, "4.3.0-dev")]
-    public void The_dev_version_comes_from_the_projects_own_line(bool lineA, string expected)
+    [InlineData(false, "5.1.0-dev", "5.0.0.0")]
+    [InlineData(true, "4.3.0-dev", "4.0.0.0")]
+    public void The_dev_version_and_the_assembly_version_come_from_the_projects_own_line(bool lineA, string expected, string assemblyVersion)
     {
         var linesApart = MsBuildFixture.CopyRootBuildFiles(scratch.CreateSubdirectory("lines-apart").FullName, versionLines => versionLines
-            .Replace("<ElsaVersion>4.0</ElsaVersion>", "<ElsaVersion>4.1</ElsaVersion>", StringComparison.Ordinal)
+            .Replace("<ElsaVersion>4.0</ElsaVersion>", "<ElsaVersion>5.1</ElsaVersion>", StringComparison.Ordinal)
             .Replace("<ElsaContractsVersion>4.0</ElsaContractsVersion>", "<ElsaContractsVersion>4.3</ElsaContractsVersion>", StringComparison.Ordinal));
 
         var (exitCode, output) = MsBuildFixture.Run(
@@ -68,9 +70,13 @@ public sealed class PackageVersionBuildCheckTests : IDisposable
 
         Assert.True(exitCode == 0, $"build failed with exit {exitCode}:\n{output}");
         Assert.Contains($"PackageVersion={expected} ", output);
+        Assert.Contains($"AssemblyVersion={assemblyVersion}.", output);
     }
 
-    /// <summary>Computed input sets the package version and the assembly version alike, and the nuspec's source commit.</summary>
+    /// <summary>
+    /// Computed input sets the package version and Version alike, and the nuspec's source commit; the assembly version
+    /// stays its line's major, the same as a dev build's, so a host shares it with a package built either way (#2150).
+    /// </summary>
     [Fact]
     public void Computed_input_sets_the_versions_and_the_repository_commit()
     {
@@ -78,7 +84,7 @@ public sealed class PackageVersionBuildCheckTests : IDisposable
             "Fixture.LineB", ShowVersion, repositoryRoot: root, importFirst: Computed(("Fixture.LineB", "4.0.8-preview")));
 
         Assert.True(exitCode == 0, $"build failed with exit {exitCode}:\n{output}");
-        Assert.Contains($"PackageVersion=4.0.8-preview Version=4.0.8-preview RepositoryCommit={Commit}.", output);
+        Assert.Contains($"PackageVersion=4.0.8-preview Version=4.0.8-preview RepositoryCommit={Commit}. AssemblyVersion=4.0.0.0.", output);
     }
 
     /// <summary>
@@ -103,6 +109,9 @@ public sealed class PackageVersionBuildCheckTests : IDisposable
         { "", ["PackageVersion=1.2.3"], false, "ELSAPV004" },
         { "<PropertyGroup><PackageVersion>1.2.3</PackageVersion></PropertyGroup>", [], false, "ELSAPV004" },
         { "<PropertyGroup><PackageVersion>1.2.3</PackageVersion></PropertyGroup>", [], true, "ELSAPV004" },
+        // Nothing sets AssemblyVersion either: a host's share declares its major (#2150).
+        { "<PropertyGroup><AssemblyVersion>1.0.0.0</AssemblyVersion></PropertyGroup>", [], false, "ELSAPV008" },
+        { "", ["AssemblyVersion=4.0.8.0"], true, "ELSAPV008" },
     };
 
     [Theory]

@@ -49,10 +49,11 @@ internal sealed class UpgradedPackage : IDisposable
     /// <summary>
     /// Loads <paramref name="image"/> the way Nuplane loads a package, from its file: into a Nuplane load context of its
     /// own, or into <paramref name="beside"/>'s, as a graph context holds every package of its graph.
+    /// It is named <paramref name="fileName"/>, which a copy of an assembly the host has must carry as the host's does.
     /// </summary>
-    public Assembly Load(byte[] image, Assembly? beside = null)
+    public Assembly Load(byte[] image, string fileName = "Upgraded.Package.dll", Assembly? beside = null)
     {
-        var path = Path.Join(_files.CreateSubdirectory(Guid.NewGuid().ToString("N")).FullName, "Upgraded.Package.dll");
+        var path = Path.Join(_files.CreateSubdirectory(Guid.NewGuid().ToString("N")).FullName, fileName);
         File.WriteAllBytes(path, image);
         if (beside is not null)
             return AssemblyLoadContext.GetLoadContext(beside)!.LoadFromAssemblyPath(path);

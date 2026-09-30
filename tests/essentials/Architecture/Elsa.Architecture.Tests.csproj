@@ -85,6 +85,12 @@
     <ProjectReference Include="..\..\..\tools\maps\Elsa.Maps.Generator\Elsa.Maps.Generator.csproj" />
   </ItemGroup>
 
+  <!-- SharedAssemblyMajorVersionGuardTests binds, validates and matches each host's shares with Nuplane's own code (#2150). -->
+  <ItemGroup>
+    <PackageReference Include="Nuplane.Loading" />
+    <Compile Include="../../Shared/NuplaneSharedAssemblyPolicy.cs" Link="Support/NuplaneSharedAssemblyPolicy.cs" />
+  </ItemGroup>
+
   <ItemGroup>
     <None Include="..\..\..\specs\092-domain-owned-apis\contracts\management-api.openapi.yaml"
           Link="Contracts\management-api.openapi.yaml"

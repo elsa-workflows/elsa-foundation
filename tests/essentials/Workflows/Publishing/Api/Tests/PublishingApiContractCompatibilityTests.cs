@@ -5,6 +5,7 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.RegularExpressions;
 using Xunit;
 
 namespace Elsa.Workflows.Publishing.Api.Tests;
@@ -66,12 +67,12 @@ public sealed class PublishingApiContractCompatibilityTests
                                                        type != typeof(RuntimePreflightProblemDetails)).ToArray();
         var legacyHash = PublicShapeHash(legacyTypes);
         Assert.Equal(
-            "502fe0f1102ec5a547573fc3081cde488d870d0b87d16e24fd0ce3f7e5459faf",
+            "ed180bec792b7e994966c0f57b3936520df0f9d78ff10f15e3f1dacc5e8f80ea",
             legacyHash);
 
         var actualHash = PublicShapeHash(ContractTypes);
         Assert.True(
-            actualHash == "8cda99df2adaf1626c2d16c837f7ff15341e01f60a5e8afcab530c253cfbe870",
+            actualHash == "cab748e2899be96e66a7c74ad45765dfdb0fb417a1d884070b60aa45bf0be269",
             $"The Publishing API public-shape hash changed to {actualHash}.");
     }
 
@@ -102,6 +103,9 @@ public sealed class PublishingApiContractCompatibilityTests
     private static string PublicShapeHash(IEnumerable<Type> types)
     {
         var shape = string.Join("\n", types.OrderBy(type => type.FullName, StringComparer.Ordinal).Select(type => $"{type.FullName}\n{PublicShape(type)}"));
+        // A constructed generic type's FullName embeds assembly-qualified names. Strip Version, Culture and PublicKeyToken so a
+        // line-major AssemblyVersion bump (#2150) does not churn the baseline while the public surface is unchanged.
+        shape = Regex.Replace(shape, @", Version=[^,\]]+, Culture=[^,\]]+, PublicKeyToken=[^,\]]+", string.Empty);
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(shape))).ToLowerInvariant();
     }
 }
