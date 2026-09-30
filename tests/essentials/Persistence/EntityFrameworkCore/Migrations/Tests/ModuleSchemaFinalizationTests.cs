@@ -46,6 +46,7 @@ public sealed class ModuleSchemaFinalizationTests : IDisposable
         await ModuleContextCatalog.InstallAllAsync("Sqlite", connection);
         await ModuleSchemaFinalizationScenario.AssertRecordTablesAsync("Sqlite", connection, expected: true);
 
+        await ModuleSchemaFinalizationScenario.RunStartupRaceAsync("Sqlite", connection);
         await ModuleSchemaFinalizationScenario.RunAsync("Sqlite", connection);
     }
 

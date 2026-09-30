@@ -17,6 +17,7 @@
   <ItemGroup>
     <!-- Stages a finalization by another build. -->
     <Compile Include="..\..\..\EntityFramework\Tests\EfSchemaFinalizationTestSupport.cs" Link="EfSchemaFinalizationTestSupport.cs" />
+    <Compile Include="..\..\..\EntityFramework\Tests\StartupInsertRace.cs" Link="StartupInsertRace.cs" />
     <!-- The synthetic module with a contracting migration, scanned by the expand-only guard (spec 185, FR-022, FR-023). -->
     <Compile Include="..\..\..\EntityFramework\Tests\ContractingModule.cs" Link="ContractingModule.cs" />
   </ItemGroup>

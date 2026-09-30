@@ -24,6 +24,7 @@ public sealed class ModuleSchemaFinalizationProviderTests
         await ModuleSchemaFinalizationScenario.AssertRecordTablesAsync(provider, connection, expected: false);
         await ModuleContextCatalog.InstallAllAsync(provider, connection);
         await ModuleSchemaFinalizationScenario.AssertRecordTablesAsync(provider, connection, expected: true);
+        await ModuleSchemaFinalizationScenario.RunStartupRaceAsync(provider, connection);
         await ModuleSchemaFinalizationScenario.RunAsync(provider, connection);
     });
 }

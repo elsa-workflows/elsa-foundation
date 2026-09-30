@@ -1,6 +1,8 @@
+using Elsa.Persistence.EntityFramework;
 using Elsa.Persistence.EntityFramework.SchemaFinalization;
 using Elsa.Persistence.EntityFramework.Tests;
 using Elsa.Persistence.Schema.SchemaFinalization;
+using Microsoft.EntityFrameworkCore;
 using Xunit;
 
 namespace Elsa.Persistence.EntityFrameworkCore.Migrations.Tests;
@@ -15,6 +17,37 @@ internal static class ModuleSchemaFinalizationScenario
     private static readonly string[] Chain = ["1.0.0", "2.0.0", "3.0.0"];
     private static readonly SchemaFinalizationMember HostA = new("host-a", "incarnation-a");
     private static readonly SchemaFinalizationMember HostB = new("host-b", "incarnation-b");
+
+    /// <summary>
+    /// #2162: for each module context, two hosts that start together on a database no host has touched both read "no
+    /// record" and "no identity", and both insert. The loser of each insert reads the winner's row and carries on with
+    /// the same identity, one row of each is left, and EF logs no error. Run it before <see cref="RunAsync"/>, while the
+    /// modules' identity rows do not exist yet.
+    /// </summary>
+    public static async Task RunStartupRaceAsync(string provider, string connectionString, string? schema = null)
+    {
+        foreach (var type in ModuleContextCatalog.Contexts(provider))
+        {
+            var module = ModuleContextCatalog.HistoryTable(type)[EfMigrationsHistory.TablePrefix.Length..];
+            var race = StartupInsertRace.Begin(2, EfSchemaFinalization.RecordTableName(module), EfSchemaFinalization.DatabaseIdentityTableName(module));
+            await using var first = ModuleContextCatalog.Create(type, connectionString, race.Configure, schema);
+            await using var second = ModuleContextCatalog.Create(type, connectionString, race.Configure, schema);
+
+            var records = await Task.WhenAll(
+                new EfSchemaFinalizationStore(first).GetOrCreateAsync(Family, Chain[0], Chain, SchemaFinalizationActor.Of(HostA)),
+                new EfSchemaFinalizationStore(second).GetOrCreateAsync(Family, Chain[0], Chain, SchemaFinalizationActor.Of(HostB)));
+
+            Assert.True(race.EveryContextWasHeldAtEveryTable, $"{type.Name}: the hosts did not both read before either wrote.");
+            Assert.Empty(race.Errors);
+            var identity = Assert.Single(records.Select(record => record.DatabaseIdentity).Distinct(StringComparer.Ordinal));
+            Assert.Equal(records[0].Family, records[1].Family);
+            await using var reader = ModuleContextCatalog.Create(type, connectionString, schema: schema);
+            Assert.Equal(identity, await new EfSchemaFinalizationStore(reader).GetOrCreateDatabaseIdentityAsync());
+            Assert.Equal(records[0].Revision, (await new EfSchemaFinalizationStore(reader).FindAsync(Family))!.Revision);
+            Assert.Equal(1, await reader.Set<EfSchemaFinalizationRecordRow>().CountAsync());
+            Assert.Equal(1, await reader.Set<EfDatabaseIdentityRow>().CountAsync());
+        }
+    }
 
     /// <summary>
     /// For each module context: a record is created and finalized forward, a backwards finalization is refused, the
