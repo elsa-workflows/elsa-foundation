@@ -97,12 +97,22 @@ internal sealed class CompositionBridgeFixture : IDisposable
         string? inputToChangeAtReview = null,
         string? replacementText = null)
     {
+        var workspaceProfilePaths = workspaceProfilePath is null ? Array.Empty<string>() : new[] { workspaceProfilePath };
+        return RunAcceptInteractiveAsync(response, workspaceProfilePaths, inputToChangeAtReview, replacementText);
+    }
+
+    public Task<PseudoTerminalCliRun> RunAcceptInteractiveAsync(
+        string response,
+        IReadOnlyList<string> workspaceProfilePaths,
+        string? inputToChangeAtReview = null,
+        string? replacementText = null)
+    {
         var args = new List<string>
         {
             "composition", "accept", "--composition", OutputPath,
             "--catalog", CatalogPath, "--output", AcceptedOutputPath
         };
-        if (workspaceProfilePath is not null)
+        foreach (var workspaceProfilePath in workspaceProfilePaths)
             args.AddRange(["--workspace-profile", workspaceProfilePath]);
         return PseudoTerminalCli.RunElsaAsync(
             "Type accept to write the accepted composition: ", response, args.ToArray(),

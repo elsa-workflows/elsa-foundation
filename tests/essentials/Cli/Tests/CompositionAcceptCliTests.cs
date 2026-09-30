@@ -187,6 +187,55 @@ public sealed class CompositionAcceptCliTests
     }
 
     [Fact]
+    public async Task Case_distinct_workspace_profiles_are_both_parsed_and_unused_input_changes_are_rejected()
+    {
+        if (OperatingSystem.IsWindows())
+            return;
+        using var fixture = new CompositionBridgeFixture();
+        fixture.WriteAcceptedComposition();
+
+        var profileDirectory = Path.GetDirectoryName(fixture.OutputPath)!;
+        var unusedPath = Path.Join(profileDirectory, "profile.json");
+        var selectedPath = Path.Join(profileDirectory, "Profile.json");
+        var unused = WriteWorkspaceProfileAtPath(unusedPath, "unused-profile", "1", ["A"]);
+        if (File.Exists(selectedPath))
+            return; // The current volume resolves these case-only paths to the same file.
+        var selected = WriteWorkspaceProfileAtPath(selectedPath, "selected-profile", "2", ["A", "C"]);
+        Assert.NotEqual(unused.Id, selected.Id);
+        Assert.NotEqual(unused.Version, selected.Version);
+        Assert.NotEqual(unused.Digest, selected.Digest);
+
+        var input = JsonNode.Parse(File.ReadAllText(fixture.OutputPath))!.AsObject();
+        input["profile"] = JsonSerializer.SerializeToNode(
+            new DefinitionReference("workspace", "profile", selected.Id, selected.Version, selected.Digest), s_json);
+        input["add"] = new JsonArray();
+        input["remove"] = new JsonArray();
+        File.WriteAllText(fixture.OutputPath, input.ToJsonString(s_json));
+
+        // The selected profile is the second case-only path, so a comparer that folds Unix paths
+        // would collapse it with the first (unused) profile and fail to resolve this pin.
+        var accepted = await fixture.RunAcceptInteractiveAsync("accept", [unusedPath, selectedPath]);
+        Assert.Equal(ToolExitCode.Success, accepted.ExitCode);
+        using (var preview = ReadPreview(accepted.Output + accepted.Error))
+        {
+            Assert.Equal(new[] { "A", "C" }, Strings(preview.RootElement.GetProperty("candidateFeatureIds")));
+            Assert.Equal(new[] { "A" }, Strings(preview.RootElement.GetProperty("acceptedFeatureIds")));
+        }
+
+        var acceptedDocument = JsonNode.Parse(File.ReadAllText(fixture.AcceptedOutputPath))!.AsObject();
+        Assert.Equal("selected-profile", acceptedDocument["profile"]!["id"]!.GetValue<string>());
+        Assert.Equal(new[] { "A", "C" }, Strings(acceptedDocument["accepted"]!["featureIds"]!.AsArray()));
+
+        File.Delete(fixture.AcceptedOutputPath);
+        var changed = await fixture.RunAcceptInteractiveAsync(
+            "accept", [selectedPath, unusedPath], inputToChangeAtReview: unusedPath, replacementText: "{}");
+        Assert.Equal(ToolExitCode.ResolutionFailure, changed.ExitCode);
+        Assert.Contains("composition-input-changed", changed.Output + changed.Error, StringComparison.Ordinal);
+        Assert.False(File.Exists(fixture.AcceptedOutputPath));
+        Assert.Empty(Directory.GetFiles(profileDirectory, ".accepted.json.*.tmp"));
+    }
+
+    [Fact]
     public async Task Accept_preserves_omitted_and_explicit_null_optional_fields()
     {
         if (OperatingSystem.IsWindows())
@@ -421,13 +470,19 @@ public sealed class CompositionAcceptCliTests
     {
         var directory = Path.GetDirectoryName(compositionPath)!;
         var path = Path.Join(directory, "workspace-profile.json");
-        var draft = new SelectionDefinition("profile", "local-profile", "1", new string('0', 64), [.. members ?? ["A"]],
+        WriteWorkspaceProfileAtPath(path, "local-profile", "1", members ?? ["A"]);
+        return path;
+    }
+
+    private static SelectionDefinition WriteWorkspaceProfileAtPath(string path, string id, string version, string[] members)
+    {
+        var draft = new SelectionDefinition("profile", id, version, new string('0', 64), [.. members],
             Canary, "Local profile", "A pinned workspace profile.", []);
         var definition = draft with { Digest = SelectionDigest.ComputeDefinitionDigest(draft) };
         var profileJson = JsonSerializer.SerializeToNode(definition, s_json)!.AsObject();
         profileJson["schemaVersion"] = "1";
         File.WriteAllText(path, profileJson.ToJsonString(s_json));
-        return path;
+        return definition;
     }
 
     private static CliRun RunGenerate(CompositionBridgeFixture fixture, string composition, string outputDirectory) =>

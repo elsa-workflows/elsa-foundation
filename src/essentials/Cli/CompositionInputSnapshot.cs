@@ -148,7 +148,7 @@ internal sealed class CompositionInputSnapshot
                 }
                 catch (Exception)
                 {
-                    // Best effort; the bounded cleanup wait below still decides whether to accept the result.
+                    // Timeout always refuses; still attempt the bounded cleanup wait if termination fails.
                 }
                 if (!process.WaitForExit(1_000))
                     return false;
@@ -171,7 +171,7 @@ internal sealed class CompositionInputSnapshot
     private static string FindLinuxStat() => File.Exists("/usr/bin/stat") ? "/usr/bin/stat" :
         File.Exists("/bin/stat") ? "/bin/stat" : string.Empty;
 
-    private static StringComparer PathComparer() => OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()
+    private static StringComparer PathComparer() => OperatingSystem.IsWindows()
         ? StringComparer.OrdinalIgnoreCase
         : StringComparer.Ordinal;
 
