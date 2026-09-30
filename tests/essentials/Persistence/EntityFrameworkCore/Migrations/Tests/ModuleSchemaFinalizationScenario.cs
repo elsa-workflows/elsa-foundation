@@ -3,6 +3,9 @@ using Elsa.Persistence.EntityFramework.SchemaFinalization;
 using Elsa.Persistence.EntityFramework.Tests;
 using Elsa.Persistence.Schema.SchemaFinalization;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Storage;
 using Xunit;
 
 namespace Elsa.Persistence.EntityFrameworkCore.Migrations.Tests;
@@ -44,8 +47,25 @@ internal static class ModuleSchemaFinalizationScenario
             await using var reader = ModuleContextCatalog.Create(type, connectionString, schema: schema);
             Assert.Equal(identity, await new EfSchemaFinalizationStore(reader).GetOrCreateDatabaseIdentityAsync());
             Assert.Equal(records[0].Revision, (await new EfSchemaFinalizationStore(reader).FindAsync(Family))!.Revision);
-            Assert.Equal(1, await reader.Set<EfSchemaFinalizationRecordRow>().CountAsync());
-            Assert.Equal(1, await reader.Set<EfDatabaseIdentityRow>().CountAsync());
+            Assert.Equal(1, await RowCountAsync(reader, EfSchemaFinalization.RecordTableName(module)));
+            Assert.Equal(1, await RowCountAsync(reader, EfSchemaFinalization.DatabaseIdentityTableName(module)));
+        }
+    }
+
+    private static async Task<long> RowCountAsync(DbContext context, string table)
+    {
+        var sql = context.GetService<ISqlGenerationHelper>();
+        var schema = context.Model.GetEntityTypes().First(entity => entity.GetTableName() == table).GetSchema();
+        await using var command = context.Database.GetDbConnection().CreateCommand();
+        command.CommandText = $"SELECT COUNT(*) FROM {sql.DelimitIdentifier(table, schema)}";
+        await context.Database.OpenConnectionAsync();
+        try
+        {
+            return Convert.ToInt64(await command.ExecuteScalarAsync());
+        }
+        finally
+        {
+            await context.Database.CloseConnectionAsync();
         }
     }
 
