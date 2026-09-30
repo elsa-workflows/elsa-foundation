@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Elsa.Cli.Worker;
+using Elsa.Modularity.Planning.Bridge;
 using Xunit;
 
 namespace Elsa.Cli.Tests;
@@ -20,15 +21,25 @@ public sealed class CandidateInspectionTests
     [InlineData(false, true)]
     [InlineData(true, false)]
     [InlineData(true, true)]
-    public async Task Accepted_import_and_workspace_edits_reach_real_host_preview_without_generation(bool workspace, bool fileEfEnabled)
+    public async Task Accepted_import_and_workspace_edits_reach_real_host_preview_and_file_absent_generation(bool workspace, bool fileEfEnabled)
     {
         if (OperatingSystem.IsWindows())
             return; // The existing PTY helper exercises these journeys on supported Unix hosts.
         using var fixture = new CandidateInspectionFixture();
-        var profile = await PrepareAcceptedEditAsync(fixture, workspace, fileEfEnabled);
+        var generateAbsentComposerDefault = workspace && !fileEfEnabled;
+        var profile = await PrepareAcceptedEditAsync(fixture, workspace, fileEfEnabled,
+            includeReviewedSetting: generateAbsentComposerDefault);
+        var settingReviewPath = generateAbsentComposerDefault ? fixture.SettingReviewPath : null;
+        if (generateAbsentComposerDefault)
+        {
+            var source = fixture.CaptureSource().Snapshot;
+            var fileSelection = CshellsSourceReader.Read(source.ReadText("shells.json"),
+                source.ReadText(source.Selection.ShellOverlayFileName), fixture.ShellId);
+            Assert.DoesNotContain(CandidateInspectionFixture.OpenTelemetryEfFeatureId, fileSelection.EnabledFeatureIds);
+        }
 
         var inspection = DotnetElsa.Run(fixture.SentinelEnvironment, fixture.InspectionArguments(
-            "json", profile is null ? null : [profile]));
+            "json", profile is null ? null : [profile], settingReviewPath: settingReviewPath));
 
         Assert.Equal(ToolExitCode.Success, inspection.ExitCode);
         using var document = JsonDocument.Parse(inspection.Output);
@@ -59,7 +70,8 @@ public sealed class CandidateInspectionTests
         Assert.Equal("unobserved", resolution.GetProperty("activation").GetString());
 
         var text = DotnetElsa.Run(fixture.SentinelEnvironment, fixture.InspectionArguments(
-            workspaceProfiles: profile is null ? null : [profile], timeoutSeconds: 300));
+            workspaceProfiles: profile is null ? null : [profile], timeoutSeconds: 300,
+            settingReviewPath: settingReviewPath));
         Assert.Equal(ToolExitCode.Success, text.ExitCode);
         Assert.StartsWith("Candidate: ", text.Output, StringComparison.Ordinal);
         Assert.Contains("primary", text.Output, StringComparison.Ordinal);
@@ -78,9 +90,34 @@ public sealed class CandidateInspectionTests
         using var planned = JsonDocument.Parse(subsequentPlan.Output);
         Assert.Equal(ExpectedSelection, Strings(planned.RootElement.GetProperty("candidate").GetProperty("featureIds")));
         Assert.Equal("unchecked", planned.RootElement.GetProperty("persistence").GetProperty("status").GetString());
+        Assert.False(Directory.Exists(fixture.CandidateOutputDirectory));
+
+        if (generateAbsentComposerDefault)
+        {
+            var generated = await fixture.RunGenerateInteractiveAsync(profile!, settingReviewPath!);
+            Assert.Equal(ToolExitCode.Success, generated.ExitCode);
+            Assert.True(generated.ResponseSent);
+            Assert.False(generated.TimedOut);
+            Assert.Contains("Candidate host files generated.", generated.Output, StringComparison.Ordinal);
+            Assert.DoesNotContain(CandidateInspectionFixture.PrivateCanary, generated.Text, StringComparison.Ordinal);
+            Assert.DoesNotContain(fixture.DatabasePath, generated.Text, StringComparison.Ordinal);
+
+            var candidate = CompositionFileSource.Open(fixture.CandidateOutputDirectory, fixture.ShellId, fixture.Environment).Snapshot;
+            var overlayJson = candidate.ReadText(candidate.Selection.ShellOverlayFileName);
+            using var overlayDocument = JsonDocument.Parse(overlayJson);
+            var featureOverlay = overlayDocument.RootElement.GetProperty("CShells").GetProperty("Shells")
+                .GetProperty(fixture.ShellId).GetProperty("Features");
+            Assert.Equal(JsonValueKind.False, featureOverlay.GetProperty(CandidateInspectionFixture.OpenTelemetryEfFeatureId).ValueKind);
+
+            var merged = CshellsSourceReader.Read(candidate.ReadText("shells.json"), overlayJson, fixture.ShellId);
+            Assert.DoesNotContain(CandidateInspectionFixture.OpenTelemetryEfFeatureId, merged.EnabledFeatureIds);
+            Assert.Contains(CandidateInspectionFixture.OpenTelemetryEfFeatureId, merged.DisabledFeatureIds);
+        }
+        else
+            Assert.False(Directory.Exists(fixture.CandidateOutputDirectory));
+
         fixture.AssertSourcesUnchanged();
         fixture.AssertInputsUnchanged();
-        Assert.False(Directory.Exists(Path.Join(fixture.SourceDirectory, "candidate")));
     }
 
     [Theory]
@@ -208,7 +245,7 @@ public sealed class CandidateInspectionTests
         Assert.DoesNotContain("private-input-canary", refusal.Text, StringComparison.Ordinal);
     }
 
-    private static async Task<string?> PrepareAcceptedEditAsync(CandidateInspectionFixture fixture, bool workspace,
+    internal static async Task<string?> PrepareAcceptedEditAsync(CandidateInspectionFixture fixture, bool workspace,
         bool fileEfEnabled = true, bool includeReviewedSetting = false)
     {
         fixture.UseDiagnosticsSource(fileEfEnabled);

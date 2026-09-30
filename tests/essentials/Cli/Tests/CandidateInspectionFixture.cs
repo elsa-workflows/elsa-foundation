@@ -52,6 +52,8 @@ internal sealed class CandidateInspectionFixture : IDisposable
 
     public string InputDirectory { get; }
 
+    public string CandidateOutputDirectory => _directory.File("generated-candidate");
+
     public string ShellId => "default";
 
     public string Environment => "Production";
@@ -170,6 +172,19 @@ internal sealed class CandidateInspectionFixture : IDisposable
         if (trust)
             arguments.Add("--trust-host-code");
         return [.. arguments];
+    }
+
+    public Task<PseudoTerminalCliRun> RunGenerateInteractiveAsync(string workspaceProfilePath, string settingReviewPath)
+    {
+        var arguments = new List<string>
+        {
+            "composition", "generate", "--host-dir", SourceDirectory, "--shell", ShellId,
+            "--environment", Environment, "--catalog", InputPath("catalog.json"),
+            "--composition", InputPath("accepted.json"), "--setting-review", settingReviewPath,
+            "--workspace-profile", workspaceProfilePath, "--output-dir", CandidateOutputDirectory
+        };
+        return PseudoTerminalCli.RunElsaAsync(
+            "Type generate to write the candidate: ", "generate", arguments);
     }
 
     public string InputPath(string name)
