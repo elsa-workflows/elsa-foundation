@@ -303,6 +303,7 @@ public sealed class EfToolingHostTests : IDisposable
             // Nor does the tool's own build stamp (FR-043); the versions in the manifest are EF's and the caller's. The stamp is
             // the "+<source revision>" the build appends to the informational version. Without one the version is a bare
             // "1.0.0", which is no stamp: a migration's DEFAULT '1.0.0' legitimately carries the same text.
+            // A build that embeds no source revision has no build-specific stamp to leak, so there is nothing to assert.
             if (BuildMetadata is { } stamp)
                 Assert.DoesNotContain(stamp, text, StringComparison.Ordinal);
         }

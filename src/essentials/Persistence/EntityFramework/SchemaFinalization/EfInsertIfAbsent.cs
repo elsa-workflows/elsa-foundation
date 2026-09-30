@@ -27,6 +27,9 @@ namespace Elsa.Persistence.EntityFramework.SchemaFinalization;
 /// not serialize access", MySQL at <c>REPEATABLE READ</c> keeps the winner's row out of the loser's read-back after an
 /// earlier read, and on MySQL a winner that rolls back deadlocks the waiters. No first-party caller has one, so a context
 /// with a <see cref="Microsoft.EntityFrameworkCore.Infrastructure.DatabaseFacade.CurrentTransaction"/> is refused.
+/// The guard sees only an EF-owned transaction; an ambient <c>System.Transactions.TransactionScope</c> is invisible to it,
+/// so a caller that wraps the call in one gets the engine-specific limits above. The statement is idempotent, so retrying
+/// it is safe, but it runs outside <c>SaveChanges</c>, so an execution strategy configured to retry on failure does not retry it.
 /// </para>
 /// <para>
 /// It goes through EF's command pipeline, so command interceptors and logging see it, but not through

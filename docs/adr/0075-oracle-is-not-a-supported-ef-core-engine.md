@@ -232,5 +232,13 @@ costs, not a rule this ADR sets. Two production files now send raw SQL, and each
 - `EfSchemaFinalizationCheck`, older: a read-only lookup of a record table in each engine's own catalog, sent as an ADO
   command, because the check runs where the migrations history cannot be trusted to exist.
 
+The Context's picture of "one place a provider's dialect is written out" was already imprecise before this change:
+`EfSchemaFinalizationCheck`, a read-only catalog lookup, already sent provider-branching SQL. Only `EfInsertIfAbsent` is new.
+
+ADR 0074, D3 ("Conflict classification walks the exception chain"), and the Persistence README's `EfWriteRetry` row make
+retry plus conflict classification the standing pattern for race-prone writes. `EfInsertIfAbsent` deliberately departs from it
+for the two startup seeds: the classified retry is correct, but EF logs the failed command at error level before any handler
+runs, and a benign startup race must not log an error.
+
 The cost of a fifth engine therefore includes a fifth shape in `EfInsertIfAbsent`, and the revisit condition in D4 is not
 changed by it. `RawSqlArchitectureTests` now names every production file that sends raw SQL, so the set cannot grow unseen.

@@ -58,6 +58,15 @@ public sealed partial class RawSqlArchitectureTests
     [InlineData("var rows = context.Database.SqlQueryRaw<int>(sql);", true)]
     [InlineData("migrationBuilder.Sql(\"update t set a = 1\");", true)]
     [InlineData("command.CommandText = sql;", true)]
+    [InlineData("var command = new SqlCommand(\"select 1\", connection);", true)]
+    [InlineData("var command = new NpgsqlCommand($\"select {id}\");", true)]
+    [InlineData("var command = new Command(\"serve\", \"Starts the host.\");", false)]
+    [InlineData("using var command = new DbCommandStub(connection) { CommandText = sql };", true)]
+    [InlineData("var rows = await command.ExecuteNonQueryAsync(cancellationToken);", true)]
+    [InlineData("var value = command.ExecuteScalar();", true)]
+    [InlineData("await using var reader = await command.ExecuteReaderAsync();", true)]
+    [InlineData("var command = new CreateOrderCommand(request);", false)]
+    [InlineData("if (CommandText == null) return;", false)]
     [InlineData("// migrationBuilder.Sql is not used anywhere in src/.", false)]
     [InlineData("/// <see cref=\"DbContext.ExecuteSqlRaw\"/> is not used.", false)]
     [InlineData("ActivityAuthorityClause.Sql(ActivityAuthorityCheck.KindInDomain, sql);", false)]
@@ -74,6 +83,6 @@ public sealed partial class RawSqlArchitectureTests
 
     private static bool SendsRawSql(string line) => !line.TrimStart().StartsWith("//", StringComparison.Ordinal) && RawSql().IsMatch(line);
 
-    [GeneratedRegex(@"\b(?:ExecuteSql(?:Raw|Interpolated)?(?:Async)?|FromSql(?:Raw|Interpolated)?|SqlQuery(?:Raw)?)\s*[<(]|\bmigrationBuilder\s*\.\s*Sql\s*\(|\.CommandText\s*=")]
+    [GeneratedRegex(@"\b(?:ExecuteSql(?:Raw|Interpolated)?(?:Async)?|FromSql(?:Raw|Interpolated)?|SqlQuery(?:Raw)?)\s*[<(]|\bmigrationBuilder\s*\.\s*Sql\s*\(|\bCommandText\s*=(?!=)|\bnew\s+(?:Sql|Npgsql|MySql|Sqlite|Db|Oracle)\w*Command\s*\(|\.Execute(?:NonQuery|Scalar|Reader)(?:Async)?\s*\(")]
     private static partial Regex RawSql();
 }
