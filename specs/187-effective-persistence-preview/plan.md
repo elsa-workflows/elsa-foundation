@@ -45,7 +45,6 @@ specs/187-effective-persistence-preview/
   contracts/cli-inspect-v1.md
   contracts/candidate-inspection-v1.md
   contracts/acceptance-proof-matrix.md
-  checklists/requirements.md
 ```
 
 ### Source Code (repository root)
