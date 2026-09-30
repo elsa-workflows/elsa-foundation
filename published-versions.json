@@ -399,8 +399,8 @@
     },
     {
       "package_id": "Elsa.Persistence.EntityFramework",
-      "version": "4.0.11-preview",
-      "commit": "1d09d8a07dab8f163b4f937b69eff1c20cc7c03c"
+      "version": "4.0.12-preview",
+      "commit": "2ba40c6f4fe1910e0edb1ded2fd0d92996a1ad97"
     },
     {
       "package_id": "Elsa.Persistence.Schema",
