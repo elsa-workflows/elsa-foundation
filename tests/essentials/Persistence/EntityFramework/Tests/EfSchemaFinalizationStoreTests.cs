@@ -368,7 +368,7 @@ public sealed class EfSchemaFinalizationStoreTests : IAsyncLifetime
 
         var identities = await Task.WhenAll(stores.Select(store => store.GetOrCreateDatabaseIdentityAsync()));
 
-        Assert.True(race.EveryContextWasHeldBeforeItsInsert, "The creators did not both read before either wrote.");
+        Assert.True(race.EveryContextWasHeldBeforeItsInsert, "The creators were not both at their insert before either wrote.");
         Assert.Single(identities.Distinct());
         Assert.Equal(identities[0], await Store().FindDatabaseIdentityAsync());
         Assert.Equal(1, await Context().Set<EfDatabaseIdentityRow>().CountAsync());
@@ -386,13 +386,30 @@ public sealed class EfSchemaFinalizationStoreTests : IAsyncLifetime
             stores[0].GetOrCreateAsync(Family, "1", Chain, Operator),
             stores[1].GetOrCreateAsync(Family, "1", Chain, SchemaFinalizationActor.OfOperator("someone-else")));
 
-        Assert.True(race.EveryContextWasHeldBeforeItsInsert, "The creators did not both read before either wrote.");
+        Assert.True(race.EveryContextWasHeldBeforeItsInsert, "The creators were not both at their insert before either wrote.");
         Assert.Equal(records[0], records[1], RecordComparer);
         Assert.Single(records.Select(record => record.DatabaseIdentity).Distinct());
         Assert.Equal(records[0].DatabaseIdentity, await Store().FindDatabaseIdentityAsync());
         Assert.Equal(1, await Context().Set<EfSchemaFinalizationRecordRow>().CountAsync());
         Assert.Equal(1, await Context().Set<EfDatabaseIdentityRow>().CountAsync());
         Assert.Empty(race.Errors);
+    }
+
+    /// <summary>
+    /// #2162: the startup seeds are created in autocommit, which is where the engines agree on the loser's outcome, so a
+    /// context that already has a transaction open is refused rather than left to behave differently per engine.
+    /// </summary>
+    [Fact]
+    public async Task A_seed_is_refused_on_a_context_with_a_transaction_open_and_nothing_is_written()
+    {
+        var context = Context();
+        await using var transaction = await context.Database.BeginTransactionAsync();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => new EfSchemaFinalizationStore(context).GetOrCreateDatabaseIdentityAsync());
+        await Assert.ThrowsAsync<InvalidOperationException>(() => new EfSchemaFinalizationStore(context).GetOrCreateAsync(Family, "1", Chain, Operator));
+
+        await transaction.RollbackAsync();
+        Assert.Null(await Store().FindDatabaseIdentityAsync());
     }
 
     /// <summary>
