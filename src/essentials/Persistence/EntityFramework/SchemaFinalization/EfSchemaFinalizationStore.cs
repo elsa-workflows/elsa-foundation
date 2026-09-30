@@ -24,8 +24,9 @@ namespace Elsa.Persistence.EntityFramework.SchemaFinalization;
 /// </para>
 /// <para>
 /// <b>The database identity is created once.</b> It is a random value, never derived from a connection string, written
-/// under one fixed key. Of two hosts that create it at once, the second's insert fails on that key and it reads the
-/// first's. Every record copies it when the record is created.
+/// under one fixed key. Of two hosts that create it at once, the second's insert does nothing on that key, and no
+/// failure is logged for it (<see cref="EfInsertIfAbsent"/>), and it reads the first's. Every record copies it when the
+/// record is created, and a record created by two hosts at once is the first's the same way.
 /// </para>
 /// <para>
 /// The store saves through the context it is given, and refuses one that holds unsaved changes of its own, so a
@@ -95,23 +96,11 @@ public sealed class EfSchemaFinalizationStore
             DatabaseIdentity = Guid.NewGuid().ToString("N"),
             SchemaVersion = EfSchemaFinalization.SchemaVersion
         };
-        Identities.Add(row);
-        try
-        {
-            await context.SaveChangesAsync(cancellationToken);
-            return row.DatabaseIdentity;
-        }
-        catch (Exception exception) when (EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.UniqueKey))
-        {
-            // Another creator inserted first, and its identity is the database's.
-            Detach(row);
-            return await FindDatabaseIdentityAsync(cancellationToken)
-                   ?? throw new InvalidOperationException("The database identity insert lost to another, yet no identity can be read.", exception);
-        }
-        finally
-        {
-            Detach(row);
-        }
+        await EfInsertIfAbsent.InsertAsync(context, row, cancellationToken);
+
+        // Read back, not returned: if another creator inserted first, its identity is the database's.
+        return await FindDatabaseIdentityAsync(cancellationToken)
+               ?? throw new InvalidOperationException("The database identity was inserted, yet no identity can be read.");
     }
 
     /// <summary>The family's record, or null when it has none in this database yet.</summary>
@@ -179,23 +168,11 @@ public sealed class EfSchemaFinalizationStore
             FinishHistory: [new SchemaFinishHistoryEntry(SchemaFinishTransition.Completed, initialVersion, creator, at)]);
         var row = new EfSchemaFinalizationRecordRow { Family = family, DatabaseIdentity = identity };
         Write(row, record);
-        Records.Add(row);
-        try
-        {
-            await context.SaveChangesAsync(cancellationToken);
-            return record;
-        }
-        catch (Exception exception) when (EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.UniqueKey))
-        {
-            // Another creator inserted this family's record first; it stands, and this one is not written.
-            Detach(row);
-            return await FindAsync(family, cancellationToken)
-                   ?? throw new InvalidOperationException($"The record insert for '{family}' lost to another, yet no record can be read.", exception);
-        }
-        finally
-        {
-            Detach(row);
-        }
+        await EfInsertIfAbsent.InsertAsync(context, row, cancellationToken);
+
+        // Read back, not returned: if another creator inserted this family's record first, it stands and this one is not written.
+        return await FindAsync(family, cancellationToken)
+               ?? throw new InvalidOperationException($"The record for '{family}' was inserted, yet no record can be read.");
     }
 
     /// <summary>Pending to readable everywhere: records the durable intent to finalize <paramref name="version"/> (spec 181, FR-006).</summary>
