@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "22f3cda1c638cf9ba44e429da23b81aef762538b",
+  "last_publish_commit": "a94a54cb396965e7b0a0e9b7336e5356410f0d19",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -669,8 +669,8 @@
     },
     {
       "package_id": "dotnet-elsa",
-      "version": "4.0.3-preview",
-      "commit": "22f3cda1c638cf9ba44e429da23b81aef762538b"
+      "version": "4.0.4-preview",
+      "commit": "a94a54cb396965e7b0a0e9b7336e5356410f0d19"
     }
   ]
 }
