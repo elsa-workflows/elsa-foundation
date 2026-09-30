@@ -895,3 +895,20 @@ built without saying is active, so a report that predates the field, which this 
 any other writer that does not say, still hold the settle condition back. The stored envelope names the field, so a
 report without it reads as unknown, as a report missing any entry field does. The report leaves a module's
 deactivation to the next publish, and the settle margin covers writes in flight until then.
+
+**2026-09-30 compatibility note (#2153).** `moduleActive` is a required field of the stored readability entry and the
+family is not bumped for it, decided for this pre-release stage. The envelope is strict in both directions (FR-012), so
+in a fleet that mixes a build with the field and one without, each reads the other's report as unknown, exactly as it
+reads an entry written by any other version it does not know. That has these effects, and only these:
+
+- Every counted answer waits. A member with an unknown report fails every requirement (FR-016), so finalization of a
+  version (spec 181) and the backfill's settle condition (spec 186, FR-012) wait until every host is upgraded, and the
+  status names the hosts it is waiting on. Nothing finalizes or settles early.
+- Placement considers no member whose report is unknown (FR-016), so a mixed fleet places on members of its own build
+  only until the last host is upgraded. It refuses no member and stops no host from starting.
+- A host restarted under a stable host id waits out its earlier incarnation's expiry period plus the skew allowance
+  before it rejoins (User Story 4), as it always did; the upgrade adds no wait of its own.
+
+Before the first stable release the ClusterMembership family MUST be bumped, with an upcaster that reads an entry
+without `moduleActive` as active, the direction that counts the member, so that a rolling upgrade between two stable
+releases does not stall finalization while its hosts are mixed.

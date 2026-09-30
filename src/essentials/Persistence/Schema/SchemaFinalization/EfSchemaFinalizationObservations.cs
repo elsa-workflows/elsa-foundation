@@ -14,20 +14,32 @@ namespace Elsa.Persistence.Schema.SchemaFinalization;
 /// <see cref="Find"/> names an identity only when every record of the family this host has read carries that one
 /// identity, and no activation of the family is between publishing its report and reading its record (FR-013): an
 /// activation about to read a database it has not read before cannot yet name that database, so until it has, the
-/// entry names none, which counts for every database. Identities are never forgotten, so a family whose module was
-/// disabled keeps being counted where it was. Each of these can only delay finalization, never hasten it.
+/// entry names none, which counts for every database. A database whose last gate has stopped is forgotten, below; every
+/// other rule here can only delay finalization, never hasten it.
 /// </para>
 /// <para>
 /// The observed finalized version is reported only while every database this host has read agrees on it, since the
 /// report has one entry per family; otherwise, or before any record is read, none is reported.
 /// </para>
 /// <para>
-/// <b>An entry says whether the family's module is active.</b> A module is active from the moment a gate has admitted
-/// it, in any shell, until that gate stops, so a family whose module was disabled, or was never enabled, keeps the
-/// versions it observed but is not active. That is what lets the backfill's settle condition (spec 186, FR-012) leave a
-/// host that only loads the family's declaration out of what it waits for, while every readability count still counts it.
-/// Each gate is one owner, so several shells activating one family, or one gate reporting twice, never leave it active
-/// after the last of them stops.
+/// <b>An entry says whether the family's module is active.</b> A module is active in a database from the moment a gate has
+/// admitted it there, in any shell, until every gate that did has stopped, so a family whose module was disabled, or was
+/// never enabled, is not active (spec 183, FR-019; the rationale is on <c>ReadabilityEntry.ModuleActive</c>). Activity
+/// is tracked per database, not per family: an entry that names a database is active only while a gate for that database
+/// is, so a tenant whose shell stopped does not stay active in the report because another tenant's, in another database,
+/// still is. An activation between publishing its report and reading its record counts as active too, and hands over to
+/// the gate's own activity without a moment in between, since it is about to write. An entry that names none, because the host serves the family in several databases whose records are read, or
+/// an activation is pending, applies to every database and is active while a gate for any of them is: the conservative
+/// direction. Each gate is one owner, so several shells activating one family, or one gate reporting twice, never leave it
+/// active after the last of them stops.
+/// </para>
+/// <para>
+/// <b>Stopping the last gate of a database forgets what this host read there.</b> The entry then names the databases
+/// whose gates remain, or none when none does, which counts for every database. A module activated in that database again
+/// reads its record afresh and refuses itself when the finalized version is not one it reads (spec 181, FR-013 to FR-015),
+/// so forgetting cannot let it write what a count left it out of. A database read by no gate at all, since its activation
+/// was refused before it began, is not forgotten. Not modelled: one entry per database, which would let an entry that
+/// names none be active for exactly the databases that have a gate; today it is active for all of them while any does.
 /// </para>
 /// </remarks>
 public sealed class EfSchemaFinalizationObservations
@@ -61,29 +73,43 @@ public sealed class EfSchemaFinalizationObservations
     }
 
     /// <summary>
-    /// Marks <paramref name="families"/> active in this host for <paramref name="owner"/>, the gate that admitted their
-    /// module, until <see cref="Deactivate"/>. Repeating it for one owner changes nothing.
+    /// Marks <paramref name="families"/> active in the database <paramref name="databaseIdentity"/> for
+    /// <paramref name="owner"/>, the gate that admitted their module there, until <see cref="Deactivate"/>. Repeating it
+    /// for one owner changes nothing.
     /// </summary>
-    public void Activate(object owner, IEnumerable<string> families)
+    public void Activate(IEfSchemaModuleGate owner, string databaseIdentity, IEnumerable<string> families)
+    {
+        ArgumentNullException.ThrowIfNull(owner);
+        ArgumentException.ThrowIfNullOrWhiteSpace(databaseIdentity);
+        ArgumentNullException.ThrowIfNull(families);
+        lock (_gate)
+        {
+            foreach (var family in families)
+                For(family).DatabaseOf(databaseIdentity).Owners.Add(owner);
+        }
+    }
+
+    /// <summary>
+    /// Ends what <see cref="Activate"/> began for <paramref name="owner"/>: a database stays active while another owner
+    /// holds it, and is forgotten, with what was read there, when the last owner leaves.
+    /// </summary>
+    public void Deactivate(IEfSchemaModuleGate owner, IEnumerable<string> families)
     {
         ArgumentNullException.ThrowIfNull(owner);
         ArgumentNullException.ThrowIfNull(families);
         lock (_gate)
         {
             foreach (var family in families)
-                For(family).ActiveOwners.Add(owner);
-        }
-    }
-
-    /// <summary>Ends what <see cref="Activate"/> began for <paramref name="owner"/>: the family stays active while another owner holds it.</summary>
-    public void Deactivate(object owner, IEnumerable<string> families)
-    {
-        ArgumentNullException.ThrowIfNull(owner);
-        ArgumentNullException.ThrowIfNull(families);
-        lock (_gate)
-        {
-            foreach (var observations in families.Select(For))
-                observations.ActiveOwners.Remove(owner);
+            {
+                if (!_families.TryGetValue(family, out var observations))
+                    continue;
+                foreach (var (identity, database) in observations.Databases.Where(entry => entry.Value.Owners.Contains(owner)).ToArray())
+                {
+                    database.Owners.Remove(owner);
+                    if (database.Owners.Count == 0)
+                        observations.Databases.Remove(identity);
+                }
+            }
         }
     }
 
@@ -93,12 +119,12 @@ public sealed class EfSchemaFinalizationObservations
         ArgumentException.ThrowIfNullOrWhiteSpace(databaseIdentity);
         ArgumentException.ThrowIfNullOrWhiteSpace(finalizedVersion);
         lock (_gate)
-            For(family).Versions[databaseIdentity] = finalizedVersion;
+            For(family).DatabaseOf(databaseIdentity).Version = finalizedVersion;
     }
 
     /// <summary>
     /// The database identity and observed finalized version <paramref name="family"/>'s report entry carries, each
-    /// <see langword="null"/> when the rules above say it names none, and whether its module is active.
+    /// <see langword="null"/> when the rules above say it names none, and whether its module is active for what it names.
     /// </summary>
     public EfSchemaFamilyObservation Find(string family)
     {
@@ -108,15 +134,16 @@ public sealed class EfSchemaFinalizationObservations
             if (!_families.TryGetValue(family, out var observations))
                 return EfSchemaFamilyObservation.None;
 
-            var active = observations.ActiveOwners.Count > 0;
-            if (observations.Versions.Count == 0)
-                return EfSchemaFamilyObservation.None with { ModuleActive = active };
+            // An activation in progress counts as active: it is about to write, and may write before its report says so.
+            var anyActive = observations.PendingActivations > 0 || observations.Databases.Values.Any(database => database.Owners.Count > 0);
+            var versions = observations.Databases.Values.Select(database => database.Version).OfType<string>().Distinct(StringComparer.Ordinal).ToArray();
+            if (versions.Length == 0)
+                return EfSchemaFamilyObservation.None with { ModuleActive = anyActive };
 
-            var identity = observations.PendingActivations == 0 && observations.Versions.Count == 1
-                ? observations.Versions.Keys.Single()
-                : null;
-            var versions = observations.Versions.Values.Distinct(StringComparer.Ordinal).ToArray();
-            return new EfSchemaFamilyObservation(identity, versions.Length == 1 ? versions[0] : null, active);
+            // The entry names the one database only while that is the whole truth, and then "any database" is that one;
+            // otherwise it speaks for every database, and is active while a gate of any of them is.
+            var identity = observations.PendingActivations == 0 && observations.Databases.Count == 1 ? observations.Databases.Keys.Single() : null;
+            return new EfSchemaFamilyObservation(identity, versions.Length == 1 ? versions[0] : null, anyActive);
         }
     }
 
@@ -132,17 +159,32 @@ public sealed class EfSchemaFinalizationObservations
     {
         public int PendingActivations { get; set; }
 
-        public HashSet<object> ActiveOwners { get; } = new(ReferenceEqualityComparer.Instance);
+        public Dictionary<string, DatabaseObservations> Databases { get; } = new(StringComparer.Ordinal);
 
-        public Dictionary<string, string> Versions { get; } = new(StringComparer.Ordinal);
+        public DatabaseObservations DatabaseOf(string identity)
+        {
+            if (!Databases.TryGetValue(identity, out var database))
+                Databases[identity] = database = new DatabaseObservations();
+            return database;
+        }
+    }
+
+    /// <summary>What this host read of one family in one database, and the gates that are active there.</summary>
+    private sealed class DatabaseObservations
+    {
+        public string? Version { get; set; }
+
+        public HashSet<IEfSchemaModuleGate> Owners { get; } = new(ReferenceEqualityComparer.Instance);
     }
 }
 
 /// <summary>
 /// What a family's report entry says about the records this host has read, each part null when it names none, and
-/// whether the family's module is active in this host.
+/// whether the family's module is active for what it names. Every part is said, since a default for the last would be the
+/// wrong one for some caller: <see cref="None"/> is the observation of a family no gate has admitted.
 /// </summary>
-public sealed record EfSchemaFamilyObservation(string? DatabaseIdentity, string? ObservedFinalizedVersion, bool ModuleActive = false)
+public sealed record EfSchemaFamilyObservation(string? DatabaseIdentity, string? ObservedFinalizedVersion, bool ModuleActive)
 {
-    public static EfSchemaFamilyObservation None { get; } = new(null, null);
+    /// <summary>Nothing read and no module active: what a family whose declaration is loaded and whose module no gate admitted has.</summary>
+    public static EfSchemaFamilyObservation None { get; } = new(null, null, false);
 }

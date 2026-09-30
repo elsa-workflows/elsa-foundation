@@ -21,6 +21,7 @@ internal sealed class EfSchemaBackfillSettle(
 {
     private readonly object _lock = new();
     private readonly Dictionary<string, Margin> _margins = new(StringComparer.Ordinal);
+    private bool _raisedMarginLogged;
 
     /// <summary>What the condition says of a family now.</summary>
     public enum Outcome
@@ -96,7 +97,7 @@ internal sealed class EfSchemaBackfillSettle(
                 _margins[family] = margin = new Margin(target, now, history.Count);
         }
 
-        var length = options.SettleMargin ?? fleet.SettleMargin;
+        var length = EffectiveMargin(fleet);
         if (now - margin.Since < length)
         {
             status.Update(family, current => current with { SettleWaitingFor = [], Detail = $"Every counted member has observed '{target}'; verification starts at {margin.Since + length:u}." });
@@ -104,6 +105,36 @@ internal sealed class EfSchemaBackfillSettle(
         }
 
         return (Outcome.Settled, margin.HistoryMark);
+    }
+
+    /// <summary>
+    /// The margin the condition waits: the configured one, never less than the fleet's own (<see cref="IEfSchemaFleet.SettleMargin"/>).
+    /// A member reports its module's deactivation at its next publish, one heartbeat later, and a shell's last writes can
+    /// outlast its drain (30 seconds unless CShells is configured otherwise), so a margin below what the fleet needs to
+    /// see a member leave, which is at least both under the defaults, would let verification start while a write from a
+    /// member the condition no longer counts is still in flight. The setting can lengthen the margin, for a longer drain; a
+    /// shorter one is raised to the fleet's and said once, not refused, so a host does not fail to start over a timing.
+    /// </summary>
+    private TimeSpan EffectiveMargin(IEfSchemaFleet fleet)
+    {
+        var floor = fleet.SettleMargin;
+        if (options.SettleMargin is not { } configured)
+            return floor;
+        if (configured >= floor)
+            return configured;
+
+        lock (_lock)
+        {
+            if (!_raisedMarginLogged)
+            {
+                _raisedMarginLogged = true;
+                logger.LogWarning(
+                    "The backfill's settle margin {Configured} is shorter than the {Floor} this fleet needs to see a member stop writing (its membership expiry plus the skew allowance), so the fleet's is used (spec 186, FR-012).",
+                    configured, floor);
+            }
+        }
+
+        return floor;
     }
 
     /// <summary>When this worker first saw the condition hold for a target, and where the finish history stood then.</summary>

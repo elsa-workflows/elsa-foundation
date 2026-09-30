@@ -348,7 +348,8 @@ after one run with no membership table.
   member is counted for this only while its module is active in it for the family, as its readability entry says
   (spec 183, FR-019; amended 2026-09-30, Decisions): a member that loads the family's declaration without activating
   its module writes none of the family's rows and is not waited for. The
-  margin is configurable, and defaults to the membership expiry period plus the skew allowance (spec 183, FR-006). Under
+  margin is configurable, defaults to the membership expiry period plus the skew allowance (spec 183, FR-006), and is
+  never shorter than that (2026-09-30 note, #2153). Under
   the in-process provider the host is the only counted member.
 - **FR-013**: The verification pass MUST be a complete pass over every rewritable table of the family, starting after
   the settle condition holds, that finds no row below the target version. A row it finds is rewritten, and the
@@ -624,3 +625,24 @@ is the owner's approval of what follows, found while building.
   the family's rows, and a module admitted afterwards adopts the finalized version it reads, which is no lower than the
   target, so no row below it can be written by a member the condition did not wait for. The margin covers a module's
   last writes, since the host reports its deactivation only from its next publish.
+- **When a module is active in the report.** From the report a gate publishes before it reads the family's record, since
+  an activation in progress is about to write, through the end of its admission, where it hands over to the gate's own
+  activity with no moment between and before the gate makes a write version visible, so the report never says a module is
+  not active while it can write a row of the family; a refused admission stops counting once it is refused. Until its
+  gate stops, and the gate stops when its loops have ended, so a round that could still write is never reported as over;
+  or until its activation fails or is cancelled, which ends it at once, since a shell that failed to start has no
+  migrator to stop and would otherwise be reported active for good, holding every backfill of the family back. A
+  migrator that stops while its gate is being admitted waits for the admission and deactivates the gate that comes of
+  it, and one that has stopped admits nothing more. Activity is kept per database: a tenant whose shell stopped is not
+  held active by another tenant's, in another database, and stopping the last gate of a database forgets what the host
+  read there. Not done: an entry that names no database, because the host serves the family in several whose records
+  are read, is active while any of them has a gate, so one tenant still running can hold the others' settle back; one
+  entry per database would settle that. A report built with no observations to ask, a hand-built source or a shell with
+  its own, says every module is active, since saying otherwise could let a settle pass early.
+- **The settle margin has a floor.** The configured `SettleMargin` may lengthen the fleet's margin, the membership expiry
+  period plus the skew allowance, and never shortens it: a shorter value is raised to the fleet's, with a warning once
+  per worker, rather than refused, so a timing does not stop a host from starting. The margin must cover what it takes a
+  deactivation to reach the report, one heartbeat, and a shell's last writes, which can outlast its drain (30 seconds
+  unless CShells is configured otherwise; Elsa cannot read it, so a host that lengthens the drain past the fleet's margin
+  lengthens `SettleMargin` with it). The defaults satisfy both: 35 seconds against a 10 second heartbeat and a 30 second
+  drain.

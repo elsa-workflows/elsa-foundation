@@ -149,6 +149,48 @@ public sealed class EfContractingMigrationRefusalTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// A stop that arrives while the gate is being admitted must still end the module's activity: the stop takes the
+    /// admission lock, so the gate that activates after it began is deactivated too, and a migrator that has stopped admits
+    /// nothing more. The barrier holds the admission at its first publish, so the stop begins before the gate exists.
+    /// </summary>
+    [Fact]
+    public async Task A_migrator_stopped_while_its_gate_is_being_admitted_leaves_the_module_inactive()
+    {
+        var observations = new EfSchemaFinalizationObservations();
+        var state = new FakeFleetState();
+        var fleet = new FakeFleet(state, state.Add(new FakeMember("host-new").Reading(Family, Chain)));
+        var inAdmission = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        fleet.BeforePublish = async () =>
+        {
+            inAdmission.TrySetResult();
+            await release.Task;
+        };
+        var migrator = Migrator(EfMigratePolicy.AutoMigrate, fleet, observations: observations);
+
+        var initializing = migrator.InitializeAsync();
+        await inAdmission.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        var stopping = migrator.StopAsync(CancellationToken.None);
+        release.SetResult();
+        await Task.WhenAll(initializing, stopping).WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.False(observations.Find(Family).ModuleActive);
+    }
+
+    [Fact]
+    public async Task A_migrator_that_has_stopped_admits_no_module_after()
+    {
+        var observations = new EfSchemaFinalizationObservations();
+        var migrator = Migrator(EfMigratePolicy.AutoMigrate, observations: observations);
+        await migrator.StopAsync(CancellationToken.None);
+
+        await migrator.InitializeAsync();
+
+        Assert.Null(migrator.Gate);
+        Assert.False(observations.Find(Family).ModuleActive);
+    }
+
+    /// <summary>
     /// Tables that exist without a database identity were migrated, but no gate-aware host has admitted the module: nothing
     /// is pending before the contraction, so the record is created at once and the contraction runs.
     /// </summary>

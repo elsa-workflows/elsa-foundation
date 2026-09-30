@@ -55,9 +55,8 @@ namespace Elsa.Cluster.Readability;
 /// </para>
 /// <para>
 /// An entry also says whether the family's module is active in this host: admitted by a gate that has not stopped
-/// (FR-019, amended 2026-09-30). Readability counts every entry, active or not (FR-022); only the backfill's settle
-/// condition leaves out the entries of a module that is not active, since such a host writes none of the family's rows
-/// (spec 186, FR-012).
+/// (FR-019, amended 2026-09-30; see <see cref="ReadabilityEntry.ModuleActive"/>). With no observations to ask, every entry
+/// is active.
 /// </para>
 /// </remarks>
 public sealed class EfSchemaReadabilitySource(
@@ -93,13 +92,16 @@ public sealed class EfSchemaReadabilitySource(
             .Select(family => Observed(Entry(family, logger ?? NullLogger.Instance), observations)));
 
     /// <summary>
-    /// <paramref name="entry"/> with the database identity and observed finalized version this host read, if any, and
-    /// whether the family's module is active: a family whose declaration is loaded and whose module no gate has admitted is
-    /// not (spec 183, FR-019).
+    /// <paramref name="entry"/> with the database identity, observed finalized version and activity this host recorded, if
+    /// any. A source built with no <see cref="EfSchemaFinalizationObservations"/>, or given another instance than the
+    /// gates report to, cannot tell which modules are active, so it leaves every entry active, the direction that counts the
+    /// member (<see cref="ReadabilityEntry.ModuleActive"/>).
     /// </summary>
     private static ReadabilityEntry Observed(ReadabilityEntry entry, EfSchemaFinalizationObservations? observations)
     {
-        var observed = observations?.Find(entry.Family) ?? EfSchemaFamilyObservation.None;
+        if (observations is null)
+            return entry;
+        var observed = observations.Find(entry.Family);
         return new ReadabilityEntry(entry.Family, entry.EfModule, entry.ReadableVersions, observed.DatabaseIdentity, observed.ObservedFinalizedVersion, observed.ModuleActive);
     }
 
@@ -119,7 +121,7 @@ public sealed class EfSchemaReadabilitySource(
                 declarations.Key,
                 string.Join(", ", declarations.Select(declaration => $"'{declaration.Module ?? "no module (shared)"}' in {declaration.Assembly.GetName().Name}")));
 
-            return new ReadabilityEntry(declarations.Key, modules.Order(StringComparer.Ordinal).First(), [], moduleActive: false);
+            return new ReadabilityEntry(declarations.Key, modules.Order(StringComparer.Ordinal).First(), []);
         }
 
         foreach (var declaration in declarations.Where(declaration => declaration.Defects.Count > 0))
@@ -135,6 +137,6 @@ public sealed class EfSchemaReadabilitySource(
             .Select(declaration => declaration.ReadableVersions.AsEnumerable())
             .Aggregate((versions, next) => versions.Intersect(next, StringComparer.Ordinal));
 
-        return new ReadabilityEntry(declarations.Key, modules[0], readable, moduleActive: false);
+        return new ReadabilityEntry(declarations.Key, modules[0], readable);
     }
 }

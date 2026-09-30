@@ -42,6 +42,7 @@ public sealed class EfModuleMigrator<TContext>(
 {
     private readonly SemaphoreSlim _admission = new(1, 1);
     private readonly CancellationTokenSource _stopping = new();
+    private int _disposed;
     private EfSchemaModuleGate? _gate;
     private Task? _gateLoop;
     private Task? _backfillLoop;
@@ -57,6 +58,9 @@ public sealed class EfModuleMigrator<TContext>(
 
     public async ValueTask DisposeAsync()
     {
+        // A container may dispose one registration through both interfaces; the second finds nothing left to stop.
+        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+            return;
         await StopGateAsync();
         _stopping.Dispose();
         _admission.Dispose();
@@ -101,7 +105,8 @@ public sealed class EfModuleMigrator<TContext>(
         await _admission.WaitAsync(cancellationToken);
         try
         {
-            if (_gate is not null)
+            // A migrator that has stopped admits nothing: whatever it admitted now would never be deactivated.
+            if (_gate is not null || _stopping.IsCancellationRequested)
                 return;
             var families = EfSchemaModuleFamilies.For(migration.Module, typeof(TContext).Assembly);
             // A context that owns no schema family, such as a test's own, has nothing to finalize.
@@ -154,24 +159,43 @@ public sealed class EfModuleMigrator<TContext>(
         await action(new EfSchemaBackfillScope(scope.ServiceProvider, scope.ServiceProvider.GetRequiredService<TContext>()));
     }
 
+    /// <summary>
+    /// Stops the gate's loops and ends the module's activity in the report. It waits for an admission in flight to finish
+    /// (its bound is the finalization options' intent wait), and a stopped migrator admits nothing after, so a gate that
+    /// activates as the migrator stops is deactivated here rather than left active for good.
+    /// </summary>
     private async Task StopGateAsync()
     {
         if (!_stopping.IsCancellationRequested)
             await _stopping.CancelAsync();
-        foreach (var loop in new[] { _gateLoop, _backfillLoop }.OfType<Task>())
+        await _admission.WaitAsync();
+        try
         {
+            // After the loops, so the report keeps saying the module is active while a round of it could still write rows,
+            // and whether or not one of them faulted.
             try
             {
-                await loop;
+                foreach (var loop in new[] { _gateLoop, _backfillLoop }.OfType<Task>())
+                {
+                    try
+                    {
+                        await loop;
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        // The loop was stopped mid-round; a shell or host that is disposing is not failing.
+                    }
+                }
             }
-            catch (OperationCanceledException)
+            finally
             {
-                // The loop was stopped mid-round; a shell or host that is disposing is not failing.
+                _gate?.Deactivate();
             }
         }
-
-        // After the loops, so the report keeps saying the module is active while a round of it could still write rows.
-        _gate?.Deactivate();
+        finally
+        {
+            _admission.Release();
+        }
     }
 }
 

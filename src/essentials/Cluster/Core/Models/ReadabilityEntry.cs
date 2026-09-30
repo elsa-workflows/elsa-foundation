@@ -8,11 +8,6 @@ namespace Elsa.Cluster.Core.Models;
 /// identity counts for every database. <see cref="EfModule"/> is <see langword="null"/> for a family shared by no single
 /// EF module (spec 180, FR-001).
 /// </summary>
-/// <remarks>
-/// A loaded declaration credits <see cref="ReadableVersions"/> whether or not the module is active, so a family still
-/// counts for "can every member read V" (spec 183, FR-022). Only <see cref="ModuleActive"/> says the host can write the
-/// family's rows, which is all the backfill's settle condition waits on (spec 186, FR-012).
-/// </remarks>
 public sealed record ReadabilityEntry
 {
     public ReadabilityEntry(
@@ -58,10 +53,14 @@ public sealed record ReadabilityEntry
     /// <see langword="null"/> before it has read one.</summary>
     public string? ObservedFinalizedVersion { get; }
 
-    /// <summary>Whether the family's module is active in this host: admitted by a finalization gate that has not stopped,
-    /// so this host can write the family's rows. <see langword="false"/> for a family whose declaration is loaded and
-    /// whose module no shell has activated, or no longer does. An entry built without saying is active, the direction
-    /// that counts the member.</summary>
+    /// <summary>
+    /// Whether the family's module is active in this host: admitted by a finalization gate that has not stopped, so this
+    /// host can write the family's rows. <see langword="false"/> for a family whose declaration is loaded and whose module
+    /// no shell has activated, or no longer does: such a host writes none of the family's rows, so the backfill's settle
+    /// condition does not wait for it (spec 186, FR-012; spec 183, FR-019, amended 2026-09-30). A loaded declaration
+    /// credits <see cref="ReadableVersions"/> either way, so every readability count still counts the family (spec 183,
+    /// FR-022). An entry built without saying is active, the direction that counts the member.
+    /// </summary>
     public bool ModuleActive { get; }
 
     /// <summary>Whether this entry speaks for <paramref name="databaseIdentity"/>: it names it, it names none, or no

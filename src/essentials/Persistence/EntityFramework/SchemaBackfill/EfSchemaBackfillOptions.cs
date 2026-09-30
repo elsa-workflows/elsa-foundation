@@ -39,7 +39,10 @@ public sealed class EfSchemaBackfillOptions
 
     /// <summary>
     /// How long the settle condition must have held before the verification pass starts (FR-012), or null for the
-    /// membership expiry period plus the skew allowance, which the fleet reports.
+    /// membership expiry period plus the skew allowance, which the fleet reports. It may lengthen that margin, for a shell
+    /// drain longer than the 30 seconds CShells allows by default, and never shortens it: a member's deactivation reaches
+    /// the report one heartbeat later and its shell's last writes can outlast the drain, so a smaller value is raised to the
+    /// fleet's, with a warning.
     /// </summary>
     public TimeSpan? SettleMargin { get; set; }
 

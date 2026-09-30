@@ -57,6 +57,7 @@ public sealed class EfSchemaModuleGate : IEfSchemaModuleGate
     private Dictionary<string, (SchemaFinalizationRecord Record, DateTimeOffset At)> _observed = new(StringComparer.Ordinal);
     private string? _databaseIdentity;
     private string? _admittedIncarnation;
+    private bool _deactivated;
     private DateTimeOffset _refreshedAt = DateTimeOffset.MinValue;
     private Func<Func<DbContext, Task>, CancellationToken, Task>? _withContext;
     private IEfSchemaBackfillStatusSource? _backfill;
@@ -227,26 +228,36 @@ public sealed class EfSchemaModuleGate : IEfSchemaModuleGate
     {
         ArgumentNullException.ThrowIfNull(context);
         var standing = _fleet?.GetLocalStanding();
+        // A refused admission throws here, and was never active. One that is admitted is active from the end of its
+        // admission, before the write version below is visible, the first moment this gate lets a row be written.
         var admitted = await AdmitAsync(context, _publishBeforeRead ? PublishFirst.WaitingUpToTheBound : PublishFirst.No, cancellationToken);
-        Adopt(admitted.Identity, admitted.Records, mayAdvance: true);
-        lock (_lock)
-            _admittedIncarnation = _publishBeforeRead ? standing?.Member.Incarnation : null;
-        // From here this host writes the module's families, which is what its readability report says (spec 183, FR-019).
-        _observations.Activate(this, FamilyNames());
-
-        await PublishQuietlyAsync(cancellationToken);
         try
         {
-            await EvaluateAsync(context, cancellationToken);
-        }
-        catch (Exception exception) when (exception is not OperationCanceledException)
-        {
-            // The module is admitted: what it may write is settled. An evaluation that cannot read the fleet now only
-            // delays finalization to the next round, so it does not refuse the activation.
-            _logger.LogWarning(exception, "EF module {Module} was admitted, but its first evaluation failed; the next round tries again.", Module);
-        }
+            Adopt(admitted.Identity, admitted.Records, mayAdvance: true);
+            lock (_lock)
+                _admittedIncarnation = _publishBeforeRead ? standing?.Member.Incarnation : null;
 
-        await RefreshAsync(context, cancellationToken);
+            await PublishQuietlyAsync(cancellationToken);
+            try
+            {
+                await EvaluateAsync(context, cancellationToken);
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                // The module is admitted: what it may write is settled. An evaluation that cannot read the fleet now only
+                // delays finalization to the next round, so it does not refuse the activation.
+                _logger.LogWarning(exception, "EF module {Module} was admitted, but its first evaluation failed; the next round tries again.", Module);
+            }
+
+            await RefreshAsync(context, cancellationToken);
+        }
+        catch
+        {
+            // An activation that fails or is cancelled leaves no module for the migrator to stop, so nothing else would
+            // ever end the activity reported above.
+            Deactivate();
+            throw;
+        }
     }
 
     /// <summary>
@@ -465,9 +476,39 @@ public sealed class EfSchemaModuleGate : IEfSchemaModuleGate
         return changed;
     }
 
-    /// <summary>Ends what <see cref="ActivateAsync"/> reported: the module is no longer active in this host, as its report says
-    /// from the next publish. Its migrator calls it once the gate's loops have stopped; a repeat changes nothing.</summary>
-    internal void Deactivate() => _observations.Deactivate(this, FamilyNames());
+    /// <summary>
+    /// Ends what <see cref="ActivateAsync"/> reported: the module is no longer active in this host, as its report says from
+    /// the next publish, and this gate records nothing more it reads. Its migrator calls it once the gate's loops have
+    /// stopped, and <see cref="ActivateAsync"/> when it fails; a repeat changes nothing.
+    /// </summary>
+    internal void Deactivate()
+    {
+        // Set under the lock every recording takes, so nothing this gate reads afterwards, a refresh on demand among it,
+        // brings back the observation the deactivation forgets.
+        lock (_lock)
+            _deactivated = true;
+        _observations.Deactivate(this, FamilyNames());
+    }
+
+    /// <summary>Reports the module active in <paramref name="identity"/>, unless this gate has been deactivated, so an on-demand refresh after the stop cannot bring the activity back.</summary>
+    private void MarkActive(string identity, string[] families)
+    {
+        lock (_lock)
+        {
+            if (!_deactivated)
+                _observations.Activate(this, identity, families);
+        }
+    }
+
+    /// <summary>Records what this gate read, unless it has been deactivated.</summary>
+    private void RecordObservation(string family, string identity, string version)
+    {
+        lock (_lock)
+        {
+            if (!_deactivated)
+                _observations.Observe(family, identity, version);
+        }
+    }
 
     private string[] FamilyNames() => Families.Chains.Select(chain => chain.Family).ToArray();
 
@@ -486,7 +527,9 @@ public sealed class EfSchemaModuleGate : IEfSchemaModuleGate
             foreach (var chain in Families.Chains)
                 records[chain.Family] = await AdmitAsync(context, store, chain, identity, member, cancellationToken);
             foreach (var (family, record) in records)
-                _observations.Observe(family, identity, record.FinalizedVersion);
+                RecordObservation(family, identity, record.FinalizedVersion);
+            // Before the activation stops being pending, so the report never has a moment in which the module is neither.
+            MarkActive(identity, names);
             return new Admission(identity, records);
         }
         finally
@@ -648,7 +691,7 @@ public sealed class EfSchemaModuleGate : IEfSchemaModuleGate
                         "Schema family {Family} of EF module {Module} is finalized at {Finalized}, which this host cannot read (it reads {Readable}). " +
                         "Every write to the family is refused (spec 181, FR-012).",
                         chain.Family, Module, record.FinalizedVersion, string.Join(", ", chain.ReadableVersions));
-                _observations.Observe(chain.Family, identity, next.WriteVersion);
+                RecordObservation(chain.Family, identity, next.WriteVersion);
             }
 
             _states = states;

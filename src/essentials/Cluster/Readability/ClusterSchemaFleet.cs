@@ -13,7 +13,7 @@ namespace Elsa.Cluster.Readability;
 /// counting query is the contract's <see cref="ReadsSchemaVersion"/> requirement over a fresh read (MR-007; spec 183,
 /// FR-023), which counts every live member whose report speaks for the database, a displaced-but-live one and one with
 /// an unknown report included. The backfill's settle condition counts fewer: only a member whose module is active for the
-/// family, since one that merely loads its declaration writes none of its rows (spec 186, FR-012).
+/// family (<see cref="ReadabilityEntry.ModuleActive"/>; spec 186, FR-012).
 /// </summary>
 /// <remarks>
 /// Under the in-process provider the fleet is this host alone, so a version this host reads finalizes at once

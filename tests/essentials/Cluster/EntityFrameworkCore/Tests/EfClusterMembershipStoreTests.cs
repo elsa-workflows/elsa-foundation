@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Text.Json.Nodes;
 using Elsa.Cluster.Core.Contracts;
 using Elsa.Cluster.Core.Exceptions;
 using Elsa.Cluster.Core.Models;
@@ -52,12 +53,25 @@ public sealed class EfClusterMembershipStoreTests : IAsyncDisposable
     /// finalized version, so the report reads as unknown instead.
     /// </summary>
     [Theory]
-    [InlineData("\"databaseIdentity\":null")]
-    [InlineData("\"databaseIdentity\":null,\"observedFinalizedVersion\":null")]
-    [InlineData("\"databaseIdentity\":null,\"moduleActive\":true")]
-    public Task A_report_missing_an_entry_field_is_returned_as_unknown_rather_than_read_with_a_default(string fields) =>
-        AssertStoredReportReadsAsUnknownAsync(
-            $$$"""{"readability":{"entries":[{"family":"{{{Family}}}","efModule":"M","readableVersions":["1"],{{{fields}}}}]},"runnability":null}""");
+    [InlineData("databaseIdentity")]
+    [InlineData("observedFinalizedVersion")]
+    [InlineData("moduleActive")]
+    public Task A_report_missing_an_entry_field_is_returned_as_unknown_rather_than_read_with_a_default(string omitted)
+    {
+        var entry = new JsonObject
+        {
+            ["family"] = Family,
+            ["efModule"] = "M",
+            ["readableVersions"] = new JsonArray("1"),
+            ["databaseIdentity"] = null,
+            ["observedFinalizedVersion"] = null,
+            ["moduleActive"] = true
+        };
+        Assert.True(entry.Remove(omitted), $"{omitted} is not a field of the entry this test builds.");
+
+        return AssertStoredReportReadsAsUnknownAsync(
+            new JsonObject { ["readability"] = new JsonObject { ["entries"] = new JsonArray(entry) }, ["runnability"] = null }.ToJsonString());
+    }
 
     /// <summary>
     /// Runnability entries are held to the same strictness (spec 184, FR-008): a consumer with a field this build does not
