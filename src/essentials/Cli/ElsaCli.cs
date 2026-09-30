@@ -30,6 +30,7 @@ internal static class ElsaCli
         {
             CompositionInitCommand.Build(),
             CompositionPlanCommand.Build(),
+            CompositionAcceptCommand.Build(),
             CompositionImportCommand.Build(),
             CompositionGenerateCommand.Build()
         };
