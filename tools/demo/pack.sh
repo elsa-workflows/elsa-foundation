@@ -6,7 +6,7 @@ set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 usage() {
-  cat >&2 <<'USAGE'
+  cat <<'USAGE'
 Usage: bash tools/demo/pack.sh <1|2> [--host NAME]... [--feed DIR]... [--closure DIR] [--no-host]
 
   1                release 1.0.0 of Elsa.Samples.Nuplane.Notes
@@ -26,26 +26,27 @@ directory feed cannot read. The feed is flat, `<id>.<version>.nupkg` files side 
 
 Needs python3, and the packages the restore already put in the NuGet cache, so the closure needs no network.
 USAGE
-  exit 2
 }
 
-release="${1:-}"
-[[ "$release" == "1" || "$release" == "2" ]] || usage
+case "${1:-}" in
+  -h|--help) usage; exit 0 ;;
+  ""|-*) demo_fail "Give the release to pack, 1 or 2, first: bash tools/demo/pack.sh <1|2> (see --help)." ;;
+esac
+release="$1"
+demo_release_version "$release" >/dev/null
 shift
 
 feeds=()
 closure="artifacts/demo/closure"
 build_host=1
 while [[ $# -gt 0 ]]; do
-  # Every option but these two takes a value.
-  [[ "$1" != --* || "$1" == --no-host || "$1" == --help || $# -ge 2 ]] || usage
   case "$1" in
-    --host) feeds+=("artifacts/demo/hosts/$2/feed"); shift 2 ;;
-    --feed) feeds+=("$2"); shift 2 ;;
-    --closure) closure="$2"; shift 2 ;;
+    --host) demo_need_value "$@"; feeds+=("artifacts/demo/hosts/$2/feed"); shift 2 ;;
+    --feed) demo_need_value "$@"; feeds+=("$2"); shift 2 ;;
+    --closure) demo_need_value "$@"; closure="$2"; shift 2 ;;
     --no-host) build_host=0; shift ;;
-    -h|--help) usage ;;
-    *) echo "unknown argument: $1" >&2; usage ;;
+    -h|--help) usage; exit 0 ;;
+    *) demo_fail "unknown argument '$1' (see --help)." ;;
   esac
 done
 [[ ${#feeds[@]} -gt 0 ]] || feeds=("artifacts/demo/hosts/a/feed")
@@ -149,5 +150,7 @@ PY
 
 for feed in "${resolved[@]}"; do
   echo "== feed: ${feed#"$demo_root"/}"
-  ls -1 "$feed" | sed 's/^/     /'
+  for file in "$feed"/*; do
+    echo "     ${file##*/}"
+  done
 done

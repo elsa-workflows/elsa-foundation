@@ -5,7 +5,7 @@ set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 usage() {
-  cat >&2 <<'USAGE'
+  cat <<'USAGE'
 Usage: bash tools/demo/run-host.sh NAME --port PORT [--provider Sqlite|PostgreSql] [--policy Validate|AutoMigrate]
                                    [--cluster HOSTID [--fast-membership]] [--management-key-env VAR]
                                    [--feed DIR] [--closure DIR] [--prepare-only]
@@ -32,16 +32,21 @@ the engine to load and the migrate policy, and a shells.json enabling the Notes 
                            re-composes the shells
   --prepare-only           write the host directory and stop
 
+The host's process id is recorded in artifacts/demo/pids/NAME.pid, which tools/demo/reset.sh stops it by. A second host of the same
+name, or a host on a port that is in use, is refused.
+
 The database connection is taken from ELSA_EF_CONNECTION, the variable `dotnet elsa persistence` reads, and handed to the
 host as an environment variable: it is never written to disk or printed. When it is unset, Sqlite uses the default file,
 artifacts/demo/notes.db. Two hosts that share a database run with the same ELSA_EF_CONNECTION.
 Relative paths are relative to the repository root.
 USAGE
-  exit 2
 }
 
-name="${1:-}"
-[[ -n "$name" && "$name" != -* ]] || usage
+case "${1:-}" in
+  -h|--help) usage; exit 0 ;;
+  ""|-*) demo_fail "Give the host a name: bash tools/demo/run-host.sh NAME --port PORT (see --help)." ;;
+esac
+name="$1"
 shift
 
 port=""
@@ -54,26 +59,27 @@ fast_membership=0
 management_key_env=""
 prepare_only=0
 while [[ $# -gt 0 ]]; do
-  # Every option but these three takes a value.
-  [[ "$1" != --* || "$1" == --prepare-only || "$1" == --fast-membership || "$1" == --help || $# -ge 2 ]] || usage
   case "$1" in
-    --port) port="$2"; shift 2 ;;
-    --provider) provider="$2"; shift 2 ;;
-    --policy) policy="$2"; shift 2 ;;
-    --feed) feed="$2"; shift 2 ;;
-    --closure) closure="$2"; shift 2 ;;
-    --cluster) cluster_host_id="$2"; shift 2 ;;
-    --management-key-env) management_key_env="$2"; shift 2 ;;
+    --port) demo_need_value "$@"; port="$2"; shift 2 ;;
+    --provider) demo_need_value "$@"; provider="$2"; shift 2 ;;
+    --policy) demo_need_value "$@"; policy="$2"; shift 2 ;;
+    --feed) demo_need_value "$@"; feed="$2"; shift 2 ;;
+    --closure) demo_need_value "$@"; closure="$2"; shift 2 ;;
+    --cluster) demo_need_value "$@"; cluster_host_id="$2"; shift 2 ;;
+    --management-key-env) demo_need_value "$@"; management_key_env="$2"; shift 2 ;;
     --fast-membership) fast_membership=1; shift ;;
     --prepare-only) prepare_only=1; shift ;;
-    -h|--help) usage ;;
-    *) echo "unknown argument: $1" >&2; usage ;;
+    -h|--help) usage; exit 0 ;;
+    *) demo_fail "unknown argument '$1' (see --help)." ;;
   esac
 done
-[[ -n "$port" ]] || { echo "--port is required" >&2; usage; }
+[[ -n "$port" ]] || demo_fail "--port is required (see --help)."
+[[ "$port" =~ ^[0-9]+$ ]] || demo_fail "--port is a number, not '$port'."
+[[ "$policy" == "Validate" || "$policy" == "AutoMigrate" ]] || demo_fail "--policy is Validate or AutoMigrate, not '$policy'."
 [[ "$provider" == "Sqlite" || "$provider" == "PostgreSql" ]] || demo_fail "--provider is Sqlite or PostgreSql, not '$provider'."
 [[ "$fast_membership" -eq 0 || -n "$cluster_host_id" ]] || demo_fail "--fast-membership needs --cluster."
 
+demo_require rsync
 demo_require_python
 host="$(demo_dir "artifacts/demo/hosts/$name")"
 feed="$(demo_dir "${feed:-artifacts/demo/hosts/$name/feed}")"
@@ -101,6 +107,10 @@ built="$source_dir/bin/Release/net10.0"
 if [[ -n "$cluster_host_id" && ! -f "$built/Elsa.Cluster.EntityFrameworkCore.dll" ]]; then
   demo_fail "--cluster needs a host build that carries the EF cluster membership provider (Elsa.Cluster.EntityFrameworkCore.dll), and this build does not."
 fi
+
+# One host per name: the copy below rewrites the directory a running host is using.
+running="$(demo_host_pid "$name")"
+[[ -z "$running" ]] || demo_fail "Host $name is already running (process $running). Stop it (kill $running) before starting it again."
 
 rsync -a --exclude '.nuplane/' --exclude 'feed/' --exclude 'shells.json' --exclude 'appsettings.Development.json' "$built/" "$host/"
 
@@ -132,7 +142,7 @@ appsettings = {
     },
     "Elsa": {"Persistence": {"EntityFramework": {
         "Migrate": {"Policy": policy},
-        "Finalization": {"EvaluationInterval": "00:00:05", "RefreshInterval": "00:00:02"},
+        "Finalization": {"EvaluationInterval": "00:00:02", "RefreshInterval": "00:00:02"},
         "Backfill": {"CheckInterval": "00:00:05"},
     }}},
 }
@@ -174,6 +184,15 @@ fi
 [[ -z "$management_key" ]] || echo "management:     POST /_module-management/reload, key from \$$management_key_env"
 echo "persistence:    bash tools/demo/elsa.sh persistence apply --host ${host#"$demo_root"/} --environment Development --provider $provider --modules $modules"
 [[ "$prepare_only" -eq 0 ]] || exit 0
+
+# One host per port. A second start would otherwise fail deep in the host's own log.
+if demo_port_in_use "$port"; then
+  demo_fail "Port $port is already in use on 127.0.0.1. Give this host another --port, or stop what is listening: lsof -nP -iTCP:$port -sTCP:LISTEN"
+fi
+
+# The pid file is what tools/demo/reset.sh stops the host by; the shell becomes the host below, so $$ is the host's process.
+mkdir -p "$demo_pids"
+echo "$$" >"$demo_pids/$name.pid"
 
 cd "$host"
 ASPNETCORE_ENVIRONMENT=Development exec dotnet Elsa.Foundation.Host.dll --contentRoot "$host" --urls "http://127.0.0.1:$port"

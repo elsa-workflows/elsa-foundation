@@ -17,16 +17,20 @@ set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 usage() {
-  cat >&2 <<'USAGE'
+  cat <<'USAGE'
 Usage:
   bash tools/demo/generate-notes-migrations.sh initial   # release 1.0.0: the Initial migration and its model snapshot
   bash tools/demo/generate-notes-migrations.sh tags      # release 1.1.0: the AddTags migration and its model snapshot
 USAGE
-  exit 2
 }
 
 step="${1:-}"
-[[ "$step" == "initial" || "$step" == "tags" ]] || usage
+case "$step" in
+  initial|tags) ;;
+  -h|--help) usage; exit 0 ;;
+  "") demo_fail "Give the step to generate: initial or tags (see --help)." ;;
+  *) demo_fail "unknown argument '$step': the steps are initial and tags (see --help)." ;;
+esac
 
 cd "$demo_root"
 sample="samples/Elsa.Samples.Nuplane.Notes"
