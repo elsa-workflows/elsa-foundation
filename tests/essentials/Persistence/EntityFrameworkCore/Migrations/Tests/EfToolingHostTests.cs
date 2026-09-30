@@ -1294,5 +1294,7 @@ public sealed class EfToolingHostTestDefaults : IEfToolingShellDefaults
 {
     public void Configure(ShellBuilder builder, IConfiguration configuration)
     {
+        if (StringComparer.OrdinalIgnoreCase.Equals(configuration["ProbeDefaults:AddRuntimeEfFeature"], "true"))
+            builder.WithFeature("WorkflowsRuntimeEntityFrameworkCore");
     }
 }

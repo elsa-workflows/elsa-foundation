@@ -38,8 +38,12 @@
     <!-- Include the real dependency closure of Publishing EF's shell feature for tooling composition tests. -->
     <ProjectReference Include="..\..\..\..\..\..\src\essentials\Workflows\Publishing\Elsa.Workflows.Publishing.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\essentials\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\essentials\Workflows\Runtime\Resumption\Elsa.Workflows.Runtime.Resumption.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\essentials\Events\Elsa.Events.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\essentials\Api\Capabilities\Elsa.Api.Capabilities.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\essentials\Tasks\Elsa.Tasks.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\essentials\Cli\Elsa.Cli.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\essentials\Modularity\EntityFramework\Elsa.Modularity.EntityFramework.csproj" />
     <!-- Guards spec 171 FR-019: every design-time factory line corresponds to a declared provider context
          and vice versa. This project already references all four provider engines and every module
          project, so it can also reference the tooling project rather than duplicating its factory list. -->
