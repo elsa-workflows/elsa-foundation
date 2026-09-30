@@ -278,7 +278,7 @@ public sealed class EfCandidateInspectionTests : IDisposable
 
     [Theory]
     [InlineData(64, EfToolingExitCode.Success)]
-    [InlineData(65, EfToolingExitCode.ResolutionFailure)]
+    [InlineData(65, EfToolingExitCode.Refusal)]
     public async Task Host_enforces_decoded_source_json_depth_at_sixty_four_nested_objects(int depth, int expectedExitCode)
     {
         var candidate = CreateRuntimeCandidate();
@@ -313,10 +313,13 @@ public sealed class EfCandidateInspectionTests : IDisposable
     }
 
     [Theory]
-    [InlineData("[\"candidate-source-private-2177\"]")]
-    [InlineData("{\"Private\":\"candidate-source-private-2177\",\"private\":\"second-value\"}")]
-    public async Task Host_rejects_unsupported_decoded_source_shapes_before_assembly_discovery(string sourceJson)
+    [InlineData("array")]
+    [InlineData("case-duplicate")]
+    public async Task Host_rejects_unsupported_decoded_source_shapes_before_assembly_discovery(string shape)
     {
+        var sourceJson = shape == "array"
+            ? "[\"candidate-source-private-2177\"]"
+            : "{\"Private\":\"candidate-source-private-2177\",\"private\":\"second-value\"}";
         var candidate = CreateRuntimeCandidate();
         ReplaceCandidateFile(candidate.Request, "appsettings.Production.json", Encoding.UTF8.GetBytes(sourceJson));
         var discoveryCalls = 0;

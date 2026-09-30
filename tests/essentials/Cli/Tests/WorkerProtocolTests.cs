@@ -162,7 +162,7 @@ public sealed class WorkerProtocolTests
 
         Assert.NotNull(request);
         Assert.Equal(4, request.Candidate!.Files!.Count);
-        Assert.Equal(filesAtLimit * fileLimit, request.Candidate.Files.Sum(file => Convert.FromBase64String(file.Content!).Length));
+        Assert.Equal(fileSizes.Sum(), request.Candidate.Files.Sum(file => Convert.FromBase64String(file.Content!).Length));
     }
 
     [Fact]
@@ -187,7 +187,7 @@ public sealed class WorkerProtocolTests
         var parsed = await ReadCandidateRequestAsync(request.ToJsonString());
 
         Assert.Equal(
-            ["appsettings.json", "shells.json", "shells.Production.json"],
+            ["appsettings.json", "shells.Production.json", "shells.json"],
             parsed!.Candidate!.Files!.Select(file => file.Name).Order(StringComparer.Ordinal));
     }
 
