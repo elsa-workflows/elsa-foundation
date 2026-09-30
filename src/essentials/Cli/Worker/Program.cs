@@ -3,9 +3,17 @@ using System.Text.Json;
 
 // The worker speaks exactly one protocol on exactly two streams: a request in, one response out. Anything
 // else the host's closure decides to print — a logger, a module's own Console.WriteLine — is redirected to
-// stderr first, so it reaches the operator without corrupting the response the front end parses.
+// stderr in normal mode. Candidate mode suppresses both console streams because configuration is private.
 var response = Console.OpenStandardOutput();
-Console.SetOut(Console.Error);
+var candidateMode = args is ["--candidate-inspection"];
+if (candidateMode)
+{
+    // Suppress both managed console streams before parsing or loading any selected host code.
+    Console.SetOut(TextWriter.Null);
+    Console.SetError(TextWriter.Null);
+}
+else
+    Console.SetOut(Console.Error);
 
 using var cancellation = new CancellationTokenSource();
 Console.CancelKeyPress += (_, eventArgs) =>
@@ -17,19 +25,35 @@ Console.CancelKeyPress += (_, eventArgs) =>
 WorkerResponse result;
 try
 {
-    var request = await WorkerContract.ReadRequestAsync(Console.OpenStandardInput(), cancellation.Token);
+    var request = candidateMode
+        ? await WorkerContract.ReadCandidateRequestAsync(Console.OpenStandardInput(), cancellation.Token)
+        : await WorkerContract.ReadRequestAsync(Console.OpenStandardInput(), cancellation.Token);
     result = request is null
-        ? Failed("invalid-request", "The worker was given an empty request.")
-        : await WorkerRunner.RunAsync(request, cancellation.Token);
+        ? candidateMode ? Failed("candidate-request-invalid", "The candidate worker request is invalid.")
+            : Failed("invalid-request", "The worker was given an empty request.")
+        : candidateMode ? await WorkerRunner.RunCandidateAsync(request, cancellation.Token)
+            : await WorkerRunner.RunAsync(request, cancellation.Token);
 }
 catch (JsonException)
 {
-    result = Failed("invalid-request", "The worker was not given a valid closed request.");
+    result = candidateMode ? Failed("candidate-request-invalid", "The candidate worker request is invalid.")
+        : Failed("invalid-request", "The worker was not given a valid closed request.");
+}
+catch (WorkerRefusal refusal) when (candidateMode)
+{
+    result = refusal.Code == "candidate-request-too-large"
+        ? Failed("candidate-request-too-large", "The candidate request exceeds the supported size limit.")
+        : Failed("candidate-request-invalid", "The candidate worker request is invalid.");
 }
 catch (OperationCanceledException)
 {
     // Cancelled, not failed: the front end reports the interruption, and no artifact is claimed either way.
     return ToolExitCode.Refusal;
+}
+catch (Exception failure) when (candidateMode && (failure is BadImageFormatException || WorkerRunner.IsNonFatal(failure)))
+{
+    result = new() { ExitCode = ToolExitCode.ResolutionFailure,
+        Error = new() { Code = "candidate-host-unavailable", Message = "The selected installed host closure could not be inspected." } };
 }
 
 await JsonSerializer.SerializeAsync(response, result, WorkerContract.Json, cancellation.Token);

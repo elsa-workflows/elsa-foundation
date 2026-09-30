@@ -53,8 +53,11 @@ public sealed class WorkerLaunchTests
     /// Asserted as the whole field set rather than as an absence, for the same reason
     /// <see cref="The_launch_is_built_from_the_host_layout_alone"/> counts the arguments: a later edit that
     /// adds a field which could carry feed configuration has to change this list, and changing it is the
-    /// moment to ask whether the value belongs on this side of the boundary at all. Only
-    /// <see cref="WorkerRequest.Connection"/> carries a secret, and D7 already accounts for it.
+    /// moment to ask whether the value belongs on this side of the boundary at all.
+    /// <see cref="WorkerRequest.Connection"/> carries a live-command secret. Candidate inspection can
+    /// carry captured private configuration, but only over bounded stdin in its separate mode: legacy
+    /// requests reject Candidate, and candidate requests reject Restore and live connection fields.
+    /// WorkerProtocolTests assert those separations; the launch arguments above remain layout-only.
     /// </remarks>
     [Fact]
     public void A_restore_travels_as_a_flag_and_the_request_has_nowhere_for_a_feed_credential_to_land()
@@ -63,7 +66,7 @@ public sealed class WorkerLaunchTests
 
         Assert.Equal(
             [
-                "Command", "Connection", "ConnectionEnv", "ContextSource", "ContextVersion", "DepsFile", "Environment", "Finalization", "HostDirectory",
+                "Candidate", "Command", "Connection", "ConnectionEnv", "ContextSource", "ContextVersion", "DepsFile", "Environment", "Finalization", "HostDirectory",
                 "HostName", "Output", "PackageRoots", "Provider", "Resource", "Restore", "Schema", "Selection", "Shell", "Shells", "SkewAllowance", "Version"
             ],
             fields);

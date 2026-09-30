@@ -61,6 +61,11 @@ public sealed class ResourceProbeShellDefaults : IEfToolingShellDefaults
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(configuration);
+        if (configuration.GetValue<bool>("ProbeDefaults:WriteConsoleCanary"))
+        {
+            Console.WriteLine("private-console-canary");
+            Console.Error.WriteLine("private-console-canary");
+        }
         if (configuration.GetValue<bool>("ProbeDefaults:EnableDiagnostics"))
         {
             builder.WithFeature("DiagnosticsStructuredLogsEntityFrameworkCore");

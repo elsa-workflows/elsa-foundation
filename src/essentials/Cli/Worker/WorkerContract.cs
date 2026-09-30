@@ -240,6 +240,26 @@ public static class WorkerContract
 
     private static void ValidateCandidateRequest(JsonElement root, WorkerRequest request)
     {
+        ValidateCandidateFields(request);
+        if (!root.TryGetProperty("hostDirectory", out _) || !root.TryGetProperty("hostName", out _) ||
+            !root.TryGetProperty("depsFile", out _) || !root.TryGetProperty("packageRoots", out _) ||
+            !root.TryGetProperty("candidate", out _))
+            throw InvalidCandidateRequest();
+    }
+
+    /// <summary>Rechecks candidate-only admission before any installed-closure operation.</summary>
+    /// <exception cref="WorkerRefusal">The request is not an admitted file-only candidate operation.</exception>
+    public static void ValidateCandidateRequest(WorkerRequest request)
+    {
+        try { ValidateCandidateFields(request); }
+        catch (JsonException)
+        { throw WorkerRefusal.Usage("candidate-request-invalid", CandidateRequestInvalidMessage); }
+    }
+
+    private static void ValidateCandidateFields(WorkerRequest request)
+    {
+        if (request is null)
+            throw InvalidCandidateRequest();
         var candidate = request.Candidate;
         if (request.Version != Version || request.Command != WorkerCommands.InspectCandidate ||
             string.IsNullOrWhiteSpace(request.HostDirectory) || string.IsNullOrWhiteSpace(request.HostName) ||
@@ -250,11 +270,6 @@ public static class WorkerContract
             request.ContextSource is not null || request.ContextVersion is not null || request.Resource is not null ||
             request.Shells is not null || request.ConnectionEnv is not null || request.Connection is not null ||
             request.Finalization is not null || request.SkewAllowance is not null)
-            throw InvalidCandidateRequest();
-
-        if (!root.TryGetProperty("hostDirectory", out _) || !root.TryGetProperty("hostName", out _) ||
-            !root.TryGetProperty("depsFile", out _) || !root.TryGetProperty("packageRoots", out _) ||
-            !root.TryGetProperty("candidate", out _))
             throw InvalidCandidateRequest();
 
         ValidateCandidatePayload(candidate);

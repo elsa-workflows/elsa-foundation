@@ -52,24 +52,26 @@ internal sealed class NuplanePackageSet
     /// (FR-073) — which is also why a run that would need two different kinds of load is refused rather
     /// than silently loading one of them.
     /// </summary>
-    public static async Task<NuplanePackageSet> LoadAsync(IReadOnlyList<string> packageRoots, string hostDirectory, CancellationToken cancellationToken)
+    public static async Task<NuplanePackageSet> LoadAsync(IReadOnlyList<string> packageRoots, string hostDirectory,
+        CancellationToken cancellationToken, CandidateClosureObservation? observation = null)
     {
         if (packageRoots.Count == 0)
         {
             var hostState = NuplaneInstallRoot.DefaultStateFile(hostDirectory);
-            return File.Exists(hostState) ? await FromStateAsync(hostState, cancellationToken) : None;
+            return StateExists(hostState) ? await FromStateAsync(hostState, cancellationToken, observation) : None;
         }
 
-        var stateFiles = packageRoots
-            .Select(root => Path.Join(root, NuplaneInstallRoot.StateFileName))
-            .Where(File.Exists)
-            .ToArray();
-        var probeRoots = packageRoots
-            .Where(root => !File.Exists(Path.Join(root, NuplaneInstallRoot.StateFileName)))
-            .ToArray();
+        // Candidate routing derives from the same observed presence used by drift verification.
+        var routes = packageRoots.Select(root =>
+        {
+            var state = Path.Join(root, NuplaneInstallRoot.StateFileName);
+            return (Root: root, State: state, HasState: StateExists(state));
+        }).ToArray();
+        var stateFiles = routes.Where(route => route.HasState).Select(route => route.State).ToArray();
+        var probeRoots = routes.Where(route => !route.HasState).Select(route => route.Root).ToArray();
 
         if (stateFiles.Length == 1 && probeRoots.Length == 0)
-            return await FromStateAsync(stateFiles[0], cancellationToken);
+            return await FromStateAsync(stateFiles[0], cancellationToken, observation);
 
         if (stateFiles.Length > 0)
         {
@@ -81,16 +83,24 @@ internal sealed class NuplanePackageSet
                  .. probeRoots.Select(root => $"'{root}' has none.")]);
         }
 
-        return await FromProbeAsync(probeRoots, cancellationToken);
+        return await FromProbeAsync(probeRoots, cancellationToken, observation);
+
+        bool StateExists(string path) => observation is null ? File.Exists(path) : observation.ObserveFile(path, required: false);
     }
 
     /// <summary>
     /// The state file is the only source that records which packages a host loads together, so it is read
     /// through Nuplane's own reader and loaded through the entry point that keeps that grouping (FR-005).
     /// </summary>
-    private static async Task<NuplanePackageSet> FromStateAsync(string stateFile, CancellationToken cancellationToken)
+    private static async Task<NuplanePackageSet> FromStateAsync(string stateFile, CancellationToken cancellationToken,
+        CandidateClosureObservation? observation)
     {
-        var loaded = await Guarded(() => NuplaneLoader.FromStateAsync(stateFile, cancellationToken), stateFile);
+        var loaded = await Guarded(() => NuplaneLoader.FromStateAsync(stateFile, cancellationToken,
+            observation is null ? null : packages =>
+            {
+                observation.ObservePackages(packages, []);
+                observation.VerifyUnchanged();
+            }), stateFile);
         if (loaded.Packages.Count == 0)
         {
             throw WorkerRefusal.Resolution(
@@ -106,7 +116,8 @@ internal sealed class NuplanePackageSet
     /// completion markers on disk and handed to the loader as one graph (FR-006). Everything that can be
     /// decided without Nuplane is decided here, before the loader is ever reached.
     /// </summary>
-    private static async Task<NuplanePackageSet> FromProbeAsync(IReadOnlyList<string> roots, CancellationToken cancellationToken)
+    private static async Task<NuplanePackageSet> FromProbeAsync(IReadOnlyList<string> roots, CancellationToken cancellationToken,
+        CandidateClosureObservation? observation)
     {
         var installed = roots.SelectMany(NuplaneInstallRoot.Probe).ToArray();
         if (installed.Length == 0)
@@ -126,6 +137,12 @@ internal sealed class NuplanePackageSet
             .ToArray();
         if (duplicates.Length > 0)
             throw WorkerRefusal.Resolution("packages-ambiguous", "More than one --packages root installs the same package.", duplicates);
+
+        if (observation is not null)
+        {
+            observation.ObservePackages(installed, roots);
+            observation.VerifyUnchanged();
+        }
 
         var failures = await Guarded(
             () => NuplaneLoader.FromPackagesAsync(installed, cancellationToken),
