@@ -16,8 +16,8 @@ namespace Elsa.Persistence.EntityFramework.SchemaFinalization;
 /// errors of its own (the failed command and the failed save) before any handler sees the exception, so a race that is
 /// benign by design would still put <c>fail:</c> lines in the loser's log. The statement is therefore one that cannot
 /// fail on a duplicate: each engine's own insert-unless-present form, which the database decides atomically. This is the
-/// one place in <c>src/</c> that writes engine-specific SQL, permitted for race-prone writes by ADR 0073, D3, and guarded
-/// to this file by <c>RawSqlArchitectureTests</c>. No portable statement is both atomic and error-free: a
+/// one place in <c>src/</c> that writes engine-specific SQL (provider-specific mechanics behind provider-neutral behavior,
+/// ADR 0073, D3), and <c>RawSqlArchitectureTests</c> keeps it that way. No portable statement is both atomic and error-free: a
 /// <c>WHERE NOT EXISTS</c> guard alone loses the race at the key, and on SQL Server it must be one statement with the
 /// insert, because a guard that is a statement of its own releases its lock before the insert runs.
 /// </para>
