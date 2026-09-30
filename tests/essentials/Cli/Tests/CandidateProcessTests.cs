@@ -113,11 +113,15 @@ public sealed class CandidateProcessTests
     {
         using var fixture = new ProcessFixture();
         var release = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
-        fixture.Handle.Output = new ControlledStream { Read = (_, _) => new ValueTask<int>(release.Task) };
+        fixture.Handle.Output = new ControlledStream
+        {
+            Read = (_, _) => { fixture.StageEntered.TrySetResult(); return new ValueTask<int>(release.Task); }
+        };
         fixture.Handle.OnDispose = () => release.TrySetResult(0);
         fixture.Handle.Wait = token => fixture.Handle.Exited ? Task.CompletedTask : Task.Delay(Timeout.Infinite, token);
         var pending = fixture.Runner.RunAsync(Host, fixture.Request, 1);
-        await fixture.AwaitLaunchOrCompletion(pending);
+        await fixture.AwaitStageOrCompletion(pending);
+        Assert.True(fixture.StageEntered.Task.IsCompletedSuccessfully);
         fixture.Clock.Advance(TimeSpan.FromSeconds(1));
         var refusal = await Assert.ThrowsAsync<CliRefusal>(() => pending);
         Assert.Equal("candidate-inspection-timeout", refusal.Code);
@@ -253,12 +257,22 @@ public sealed class CandidateProcessTests
     {
         using var fixture = new ProcessFixture();
         var never = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
-        fixture.Handle.Output = new ControlledStream { Read = (_, _) => new ValueTask<int>(never.Task) };
+        var readCompleted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        fixture.Handle.Output = new ControlledStream
+        {
+            Read = async (_, _) =>
+            {
+                fixture.StageEntered.TrySetResult();
+                try { return await never.Task; }
+                finally { readCompleted.TrySetResult(); }
+            }
+        };
         fixture.Handle.Wait = token => fixture.Handle.Exited ? Task.CompletedTask : Task.Delay(Timeout.Infinite, token);
         var pending = fixture.Runner.RunAsync(Host, fixture.Request, 1);
         try
         {
-            await fixture.AwaitLaunchOrCompletion(pending);
+            await fixture.AwaitStageOrCompletion(pending);
+            Assert.True(fixture.StageEntered.Task.IsCompletedSuccessfully);
             fixture.Clock.Advance(TimeSpan.FromSeconds(1));
             await Task.WhenAny(pending, fixture.Clock.CleanupTimerCreated.Task).WaitAsync(TimeSpan.FromSeconds(30));
             fixture.Clock.Advance(TimeSpan.FromSeconds(5));
@@ -269,6 +283,8 @@ public sealed class CandidateProcessTests
         finally
         {
             never.TrySetResult(0);
+            if (fixture.StageEntered.Task.IsCompletedSuccessfully)
+                await readCompleted.Task.WaitAsync(TimeSpan.FromSeconds(30));
         }
     }
 

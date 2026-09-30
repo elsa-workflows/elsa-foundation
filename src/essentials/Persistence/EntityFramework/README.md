@@ -117,6 +117,17 @@ Secrets, distributed stores, Dashboard readers, private stores, and unknown/cust
 inherit a resource automatically. Resource names are references, not proof that two contexts share a
 physical database or transaction; required affinity is checked by the owning EF/runtime operation.
 
+The opt-in [`composition inspect`](../../Cli/README.md#inspecting-an-accepted-runtime-candidate)
+command previews an accepted, edited file candidate through the host's candidate-inspection capability.
+It uses the declared host defaults, actual CShells dependency closure and shared resource preparer with
+configured connection-value checks enabled. The Elsa-owned inspection path detects incompatible
+configured targets without opening a database; the declared composer is arbitrary trusted code and
+remains unsandboxed. Its separate `configurationResolution` projection exposes logical identities and
+checked scopes, keeps legacy targets unprojected, and labels connectivity, physical target, migration
+readiness and running-host parity as unverified or unobserved. It does not replace the live migration
+connection match or the dedicated layout/database evidence above. See
+[spec 187](../../../../specs/187-effective-persistence-preview/spec.md) for the capture and trust boundary.
+
 ## Retry policy
 
 Accepted [ADR 0074](../../../../docs/adr/0074-first-party-ef-stores-retry-in-bounded-application-loops.md):

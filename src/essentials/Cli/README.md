@@ -2,6 +2,7 @@
 
 The `dotnet elsa` command-line tool: `list`, `plan`, `script`, `script-check`, `apply`, `validate` and `post-migrate`,
 and the schema finalization gate's `hold`, `release` and `status` ([spec 181](../../../specs/181-schema-finalization-gate/spec.md)).
+The `composition` commands init, plan, import, accept, generate, and inspect an authored runtime selection.
 
 Designed by [spec 171](../../../specs/171-persistence-script-cli/spec.md) and
 [ADR 0076](../../../docs/adr/0076-persistence-tooling-runs-inside-the-host-closure.md).
@@ -108,6 +109,62 @@ intent retains its existing path. These checks do not make arbitrary resource sp
 shared-target receipt covers the enabled default-shell Runtime, Workflows Design, Activities Design, and
 Publishing module set. It does not establish individual data behavior for every opt-in Runtime feature.
 The separate Structured Logs/OpenTelemetry target remains pending its dedicated host/database proof.
+
+## Inspecting an accepted runtime candidate
+
+Use `composition inspect` after editing and accepting a composition, before generating host files:
+
+```sh
+dotnet elsa composition inspect \
+  --host ./host-output \
+  --host-dir ./host-config \
+  --shell default \
+  --environment Production \
+  --composition ./accepted.json \
+  --trust-host-code \
+  --format json
+```
+
+`--host` is the installed framework-dependent host output containing its assembly, runtimeconfig and
+deps file. `--host-dir` is the separate directory containing the source Workbench JSON files. The
+composition must have a current accepted exact selection. Supply `--catalog` for an external pinned
+catalog and repeat `--workspace-profile` for supplied workspace definitions; acceptance and generation
+use these selection inputs too. Supply `--setting-review` when the settings edits require that review;
+import and generation also consume setting review, while acceptance has no setting-review option. Each invocation captures its inputs independently; inspection does not pin a later
+generation run. Supplied unused profile files are also captured and rechecked. Repeat `--packages` only
+for already installed package roots. Inspection does not support `--restore` or acquire packages.
+
+The command freezes the captured source and intent inputs, builds the post-edit candidate in memory
+once, and sends it over private stdin to the worker in the selected host closure. The host's independently versioned candidate
+capability composes defaults, resolves actual feature dependencies, reconciles the exact accepted set,
+and runs the shared EF resource preparer with configured connection-value comparisons enabled. Explicit
+removals disable code-only host defaults too. A required disabled feature, extra dependency, unavailable
+feature, stale accepted selection or conflicting persistence layout refuses instead of silently changing
+the selection. Installed closure metadata is observed and rechecked, with the documented ABA,
+pre-Main and unfingerprinted-asset limits; this is not atomic package-integrity proof. Older hosts without
+this capability refuse; inspection does not fall back to their live or legacy tooling path.
+
+The output contains `plan` and a separate `configurationResolution`. The latter reports logical resource,
+provider and connection-reference choices and the scope of their selectors. Connection values, captured
+file bytes and private correlation tokens are omitted. The plan's persistence remains `unchecked`:
+inspection does not prove a physical target, connectivity, schema/migration readiness, activation or parity
+with a separately running host. Legacy targets remain unprojected. Exact winning-file provenance and
+external environment/CLI/custom configuration providers are unverified in this file-only operation.
+
+`--trust-host-code` is required because the declared host composer executes in the child; this is not a
+sandbox for arbitrary host code. The Elsa-owned inspection path does not activate a shell, open a
+database or run migrations; arbitrary trusted composer code is not constrained by that guarantee.
+The Elsa-owned path does not write source files or publish a temporary candidate directory. All captured
+inputs are rechecked before a complete preview is written; a changed input refuses without a partial preview.
+The output defaults to text; `--format json` provides the same facts. `--timeout-seconds` defaults to 60
+and accepts 1–300. The worker exchange is byte-bounded, stderr is drained and discarded, and owned child
+cleanup has a separate finite budget.
+
+A subsequent `composition plan --composition ./accepted.json` still performs file-only planning and
+reports persistence as unchecked. Inspecting does not amend the accepted document or attach a readiness
+verdict. The complete boundary and proof requirements are in
+[spec 187](../../../specs/187-effective-persistence-preview/spec.md) and its
+[candidate-inspection contract](../../../specs/187-effective-persistence-preview/contracts/candidate-inspection-v1.md).
 
 ## Restoring a host's package set (`--restore`)
 

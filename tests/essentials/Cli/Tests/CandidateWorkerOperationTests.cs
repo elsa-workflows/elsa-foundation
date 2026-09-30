@@ -343,6 +343,37 @@ public sealed class CandidateWorkerOperationTests
         {
             return false;
         }
+        catch (InvalidOperationException)
+        {
+            return false;
+        }
+        catch (System.ComponentModel.Win32Exception) when (!OperatingSystem.IsWindows())
+        {
+            // macOS can retain a terminated descendant as a zombie while StartTime is unavailable.
+            // Only an absent PID or explicit zombie state proves non-execution; all other errors fail.
+            var start = new ProcessStartInfo("/bin/ps")
+            {
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true
+            };
+            start.ArgumentList.Add("-p");
+            start.ArgumentList.Add(identity.Pid.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            start.ArgumentList.Add("-o");
+            start.ArgumentList.Add("stat=");
+            using var observer = Process.Start(start) ?? throw new InvalidOperationException("Process observation failed.");
+            if (!observer.WaitForExit(5000))
+            {
+                observer.Kill(entireProcessTree: true);
+                Assert.True(observer.WaitForExit(5000), "The owned process observer did not terminate.");
+                throw new TimeoutException("Process observation did not complete.");
+            }
+            var state = observer.StandardOutput.ReadToEnd().Trim();
+            Assert.Contains(observer.ExitCode, new[] { 0, 1 });
+            if (state.Length == 0 && observer.ExitCode == 1 || state.StartsWith('Z'))
+                return false;
+            throw;
+        }
     }
 
     private static async Task KillMarkedProcessIfStillRunning(string marker)
