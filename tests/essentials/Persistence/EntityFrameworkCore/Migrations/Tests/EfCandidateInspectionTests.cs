@@ -644,6 +644,7 @@ public sealed class EfCandidateInspectionTests : IDisposable
         }
 
         AssertPrivateInputsRemainPrivate(run);
+
     }
 
     [Fact]
@@ -697,6 +698,8 @@ public sealed class EfCandidateInspectionTests : IDisposable
     [InlineData("shared-context-provider-split", "resource-context-conflict")]
     [InlineData("shared-context-schema-split", "resource-context-conflict")]
     [InlineData("opaque-composer-configurator", "resource-configurator-unsupported")]
+    [InlineData("inline-resource-identity", "resource-selection-invalid")]
+    [InlineData("inline-connection-identity", "resource-definition-invalid")]
     public async Task Runtime_and_candidate_refuse_the_same_captured_configuration(string scenario, string refusalCode)
     {
         var run = await RunSameCaptureAsync(scenario);
@@ -709,6 +712,11 @@ public sealed class EfCandidateInspectionTests : IDisposable
         Assert.Equal(refusalCode, run.CandidateResponse.GetProperty("error").GetProperty("code").GetString());
         Assert.False(run.CandidateResponse.TryGetProperty("configurationResolution", out _));
         AssertPrivateInputsRemainPrivate(run);
+
+        if (scenario is "inline-resource-identity" or "inline-connection-identity")
+            Assert.Contains(InlineIdentityCanary(),
+                string.Join('\n', run.FileBytes.Values.Select(bytes => Encoding.UTF8.GetString(bytes))),
+                StringComparison.Ordinal);
 
         if (scenario == "unequal-diagnostic-values")
         {
@@ -739,11 +747,144 @@ public sealed class EfCandidateInspectionTests : IDisposable
         AssertPrivateInputsRemainPrivate(run);
     }
 
-    private async Task<SameCaptureRun> RunSameCaptureAsync(string scenario)
+    [Fact]
+    public async Task Candidate_refuses_an_authored_removal_that_disables_a_real_required_descriptor_edge()
+    {
+        var files = BuildSameCaptureFiles("root-default-distinct-equal");
+        using var originalConfiguration = ReadConfiguration(files);
+        var originalContext = EfConfigurationProbeTests.ComposeRuntimeContext(originalConfiguration, Shell);
+        var descriptors = FeatureDiscovery.DiscoverFeatures(EfConfigurationProbeTests.HostAssemblies)
+            .ToDictionary(feature => feature.Id, StringComparer.OrdinalIgnoreCase);
+        var originalRequested = originalContext.RequestedFeatureIds.ToHashSet(StringComparer.Ordinal);
+        var edge = originalContext.OrderedFeatures
+            .Where(feature => originalRequested.Contains(feature.Id))
+            .SelectMany(feature => feature.Dependencies.Select(dependency => (Parent: feature.Id, Dependency: dependency)))
+            .First(edge => originalRequested.Contains(edge.Dependency) && descriptors.ContainsKey(edge.Dependency));
+
+        Assert.True(descriptors[edge.Parent].Dependencies.Contains(edge.Dependency, StringComparer.Ordinal));
+        Assert.Contains(edge.Parent, originalRequested);
+        Assert.Contains(edge.Dependency, originalRequested);
+
+        DisableShellFeature(files, edge.Dependency);
+        using var disabledConfiguration = ReadConfiguration(files);
+        var disabledContext = EfConfigurationProbeTests.ComposeRuntimeContext(disabledConfiguration, Shell);
+        Assert.Contains(edge.Parent, disabledContext.RequestedFeatureIds);
+        Assert.DoesNotContain(edge.Dependency, disabledContext.RequestedFeatureIds);
+        Assert.Contains(edge.Dependency, disabledContext.DisabledFeatureIds);
+        Assert.Contains(edge.Dependency, disabledContext.EnabledFeatureIds);
+
+        var acceptedFeatureIds = disabledContext.RequestedFeatureIds.Order(StringComparer.Ordinal).ToArray();
+        Assert.DoesNotContain(edge.Dependency, acceptedFeatureIds);
+        var candidate = CreateCandidate(acceptedFeatureIds, files, [edge.Dependency]);
+        using var response = new MemoryStream();
+        var operation = new EfCandidateInspectionOperation(() => EfConfigurationProbeTests.HostAssemblies);
+
+        var exitCode = await RunOperationAsync(operation, candidate.Request, response, CancellationToken.None);
+        var responseJson = Encoding.UTF8.GetString(response.ToArray());
+        using var document = JsonDocument.Parse(responseJson);
+        var root = document.RootElement;
+
+        Assert.Equal(EfToolingExitCode.Refusal, exitCode);
+        Assert.Equal("candidate-selection-conflict", root.GetProperty("error").GetProperty("code").GetString());
+        Assert.Equal("required-disabled", root.GetProperty("error").GetProperty("reason").GetString());
+        Assert.Equal(edge.Dependency, root.GetProperty("error").GetProperty("feature").GetString());
+        Assert.False(root.TryGetProperty("configurationResolution", out _));
+        AssertNoPrivateCandidateValues(responseJson);
+        Assert.False(File.Exists(DatabasePath));
+        Assert.Empty(Directory.EnumerateFiles(temporaryDirectory));
+    }
+
+    [Theory]
+    [InlineData("unknown")]
+    [InlineData("case-alias")]
+    public async Task Candidate_operation_rejects_an_unknown_or_case_aliased_accepted_id_from_real_descriptors(string mutation)
+    {
+        var files = BuildSameCaptureFiles("root-default-distinct-equal");
+        using var configuration = ReadConfiguration(files);
+        var context = EfConfigurationProbeTests.ComposeRuntimeContext(configuration, Shell);
+        var descriptors = FeatureDiscovery.DiscoverFeatures(EfConfigurationProbeTests.HostAssemblies)
+            .ToDictionary(feature => feature.Id, StringComparer.OrdinalIgnoreCase);
+        var accepted = context.RequestedFeatureIds.ToArray();
+        string invalidId;
+        string expectedReason;
+
+        if (mutation == "unknown")
+        {
+            invalidId = "CandidateBoundaryUnknownFeature";
+            Assert.False(descriptors.ContainsKey(invalidId));
+            accepted = [.. accepted, invalidId];
+            expectedReason = "unknown";
+        }
+        else
+        {
+            var actualId = descriptors[Runtime].Id;
+            Assert.Contains(actualId, accepted);
+            invalidId = actualId.ToLowerInvariant();
+            Assert.NotEqual(actualId, invalidId);
+            accepted = accepted.Select(id => StringComparer.Ordinal.Equals(id, actualId) ? invalidId : id).ToArray();
+            expectedReason = "case-collision";
+        }
+
+        accepted = accepted.Order(StringComparer.Ordinal).ToArray();
+        var candidate = CreateCandidate(accepted, files);
+        using var response = new MemoryStream();
+        var operation = new EfCandidateInspectionOperation(() => EfConfigurationProbeTests.HostAssemblies);
+
+        var exitCode = await RunOperationAsync(operation, candidate.Request, response, CancellationToken.None);
+        var responseJson = Encoding.UTF8.GetString(response.ToArray());
+        using var document = JsonDocument.Parse(responseJson);
+        var root = document.RootElement;
+
+        Assert.Equal(EfToolingExitCode.Refusal, exitCode);
+        Assert.Equal("candidate-selection-conflict", root.GetProperty("error").GetProperty("code").GetString());
+        Assert.Equal(expectedReason, root.GetProperty("error").GetProperty("reason").GetString());
+        Assert.Equal(invalidId, root.GetProperty("error").GetProperty("feature").GetString());
+        Assert.False(root.TryGetProperty("configurationResolution", out _));
+        AssertNoPrivateCandidateValues(responseJson);
+        Assert.False(File.Exists(DatabasePath));
+        Assert.Empty(Directory.EnumerateFiles(temporaryDirectory));
+    }
+
+    [Fact]
+    public async Task Deleting_an_explicit_diagnostic_binding_changes_runtime_and_candidate_targets_from_the_same_edited_bytes()
+    {
+        var before = await RunSameCaptureAsync("shell-default-explicit-binding");
+        Assert.Null(before.RuntimeFailure);
+        Assert.Equal(EfToolingExitCode.Success, before.CandidateExitCode);
+        var beforeResolution = before.CandidateResponse.GetProperty("configurationResolution");
+        AssertRuntimeAndCandidateTargetsAgree(before, beforeResolution);
+        AssertTarget(before, beforeResolution, StructuredLogs, "logs", "Sqlite", "Logs", "ShellBinding", "shell-composed");
+        AssertTarget(before, beforeResolution, OpenTelemetry, "shell", "Sqlite", "Shell", "ShellDefault", "shell-composed");
+        Assert.Equal("logs", ExplicitBinding(before.FileBytes, StructuredLogs));
+
+        var afterFiles = CloneFileBytes(before.FileBytes);
+        DeleteExplicitBinding(afterFiles, StructuredLogs);
+        Assert.Null(ExplicitBinding(afterFiles, StructuredLogs));
+        Assert.False(before.FileBytes["shells.Production.json"].AsSpan()
+            .SequenceEqual(afterFiles["shells.Production.json"]));
+        foreach (var name in before.FileBytes.Keys.Where(name => name != "shells.Production.json"))
+            Assert.True(before.FileBytes[name].AsSpan().SequenceEqual(afterFiles[name]));
+
+        var after = await RunSameCaptureAsync("shell-default-explicit-binding", afterFiles);
+        Assert.Null(after.RuntimeFailure);
+        Assert.Equal(EfToolingExitCode.Success, after.CandidateExitCode);
+        Assert.Equal(before.AcceptedFeatureIds, after.AcceptedFeatureIds);
+        var afterResolution = after.CandidateResponse.GetProperty("configurationResolution");
+        AssertRuntimeAndCandidateTargetsAgree(after, afterResolution);
+        AssertTarget(after, afterResolution, StructuredLogs, "shell", "Sqlite", "Shell", "ShellDefault", "shell-composed");
+        AssertTarget(after, afterResolution, OpenTelemetry, "shell", "Sqlite", "Shell", "ShellDefault", "shell-composed");
+
+        AssertPrivateInputsRemainPrivate(before);
+        AssertPrivateInputsRemainPrivate(after);
+        Assert.False(File.Exists(DatabasePath));
+        Assert.Empty(Directory.EnumerateFiles(temporaryDirectory));
+    }
+
+    private async Task<SameCaptureRun> RunSameCaptureAsync(string scenario, Dictionary<string, byte[]>? capturedFiles = null)
     {
         if (scenario == "opaque-composer-configurator")
             Interlocked.Exchange(ref EfToolingHostTestDefaults.OpaqueConfiguratorExecutionCount, 0);
-        var files = BuildSameCaptureFiles(scenario);
+        var files = capturedFiles ?? BuildSameCaptureFiles(scenario);
         using var configuration = ReadConfiguration(files);
         var runtimeContext = EfConfigurationProbeTests.ComposeRuntimeContext(configuration, Shell);
 
@@ -812,6 +953,8 @@ public sealed class EfCandidateInspectionTests : IDisposable
             legacyV2ExitCode, legacyV2Response);
     }
 
+    private static string InlineIdentityCanary() => "Data Source=fixture.db;Password=inline-reference-private-2177";
+
     private Dictionary<string, byte[]> BuildSameCaptureFiles(string scenario)
     {
         var featureDescriptors = FeatureDiscovery.DiscoverFeatures(EfConfigurationProbeTests.HostAssemblies)
@@ -875,6 +1018,15 @@ public sealed class EfCandidateInspectionTests : IDisposable
                 case "missing-root-resource":
                     rootPersistence["DefaultResource"] = "missing";
                     break;
+                case "inline-resource-identity":
+                    rootPersistence["DefaultResource"] = InlineIdentityCanary();
+                    resources.Remove("primary");
+                    resources[InlineIdentityCanary()] = new JsonObject
+                    {
+                        ["Provider"] = "Sqlite",
+                        ["ConnectionName"] = "Primary"
+                    };
+                    break;
                 case "null-root-selection":
                     rootPersistence["DefaultResource"] = null;
                     break;
@@ -886,6 +1038,9 @@ public sealed class EfCandidateInspectionTests : IDisposable
                         rootPersistence["DefaultResource"] = "primary";
                     break;
             }
+
+            if (scenario == "inline-connection-identity")
+                resources["primary"]!["ConnectionName"] = InlineIdentityCanary();
 
             if (scenario is "null-provider" or "blank-provider")
                 resources["primary"]!["Provider"] = scenario == "null-provider" ? null : "";
@@ -985,6 +1140,8 @@ public sealed class EfCandidateInspectionTests : IDisposable
             ["Telemetry"] = $"Data Source={DatabasePath};Password={telemetryValue}",
             ["RuntimeShared"] = $"Data Source={DatabasePath};Password={ConnectionCanary}"
         };
+        if (scenario == "inline-connection-identity")
+            connections[InlineIdentityCanary()] = $"Data Source={DatabasePath};Password={ConnectionCanary}";
         // The environment must override an existing private named value, not merely add a new key.
         applicationSettings["ConnectionStrings"] = new JsonObject
         {
@@ -1091,7 +1248,10 @@ public sealed class EfCandidateInspectionTests : IDisposable
         var capturedFiles = string.Join('\n', run.FileBytes.Values.Select(bytes => Encoding.UTF8.GetString(bytes)));
         Assert.True(capturedFiles.Contains(ConnectionCanary, StringComparison.Ordinal),
             "The private candidate files should include the connection-value control.");
-        foreach (var canary in new[] { ConnectionCanary, DifferentConnectionCanary, UnknownSettingCanary, DatabasePath })
+        foreach (var canary in new[]
+                 {
+                     ConnectionCanary, DifferentConnectionCanary, UnknownSettingCanary, InlineIdentityCanary(), DatabasePath
+                 })
             Assert.False(visible.Contains(canary, StringComparison.Ordinal),
                 "A public patch, refusal diagnostic, or tooling response exposed private candidate content.");
         Assert.Empty(Directory.EnumerateFiles(temporaryDirectory));
@@ -1256,6 +1416,36 @@ public sealed class EfCandidateInspectionTests : IDisposable
         }
     }
 
+    private static void DisableShellFeature(Dictionary<string, byte[]> files, string featureId)
+    {
+        var shellSettings = JsonNode.Parse(Encoding.UTF8.GetString(files["shells.json"]))!.AsObject();
+        var features = shellSettings["CShells"]!["Shells"]![Shell]!["Features"]!.AsObject();
+        Assert.True(features.ContainsKey(featureId));
+        features[featureId] = false;
+        files["shells.json"] = Encoding.UTF8.GetBytes(shellSettings.ToJsonString());
+    }
+
+    private static Dictionary<string, byte[]> CloneFileBytes(IReadOnlyDictionary<string, byte[]> files) =>
+        files.ToDictionary(pair => pair.Key, pair => pair.Value.ToArray(), StringComparer.Ordinal);
+
+    private static string? ExplicitBinding(IReadOnlyDictionary<string, byte[]> files, string featureId)
+    {
+        var shellOverlay = JsonNode.Parse(Encoding.UTF8.GetString(files["shells.Production.json"]))!.AsObject();
+        return shellOverlay["CShells"]?["Shells"]?[Shell]?["Configuration"]?["Elsa"]?["Persistence"]?
+            ["Bindings"]?[featureId]?.GetValue<string>();
+    }
+
+    private static void DeleteExplicitBinding(Dictionary<string, byte[]> files, string featureId)
+    {
+        var shellOverlay = JsonNode.Parse(Encoding.UTF8.GetString(files["shells.Production.json"]))!.AsObject();
+        var persistence = shellOverlay["CShells"]!["Shells"]![Shell]!["Configuration"]!["Elsa"]!["Persistence"]!.AsObject();
+        var bindings = persistence["Bindings"]!.AsObject();
+        Assert.True(bindings.Remove(featureId));
+        if (bindings.Count == 0)
+            persistence.Remove("Bindings");
+        files["shells.Production.json"] = Encoding.UTF8.GetBytes(shellOverlay.ToJsonString());
+    }
+
     private static JsonArray FileArray(IReadOnlyDictionary<string, byte[]> files)
     {
         var result = new JsonArray();
@@ -1338,6 +1528,7 @@ public sealed class EfCandidateInspectionTests : IDisposable
         foreach (var value in new[]
                  {
                      ConnectionCanary, UnknownSettingCanary, MalformedFileCanary, DifferentConnectionCanary,
+                     InlineIdentityCanary(),
                      DatabasePath, "Data Source="
                  }.Concat(additionalValues))
             Assert.DoesNotContain(value, responseJson, StringComparison.Ordinal);
