@@ -498,10 +498,10 @@ public sealed class EfSchemaModuleGateTests : IAsyncLifetime
     {
         var observations = new EfSchemaFinalizationObservations();
         var (running, stopped) = (Gate(Families("2"), fleet: null), Gate(Families("2"), fleet: null));
-        foreach (var (gate, database) in new[] { (running, "database-x"), (stopped, "database-y") })
+        foreach (var (gate, identity) in new[] { (running, "database-x"), (stopped, "database-y") })
         {
-            observations.Observe(Family, database, "2");
-            observations.Activate(gate, database, [Family]);
+            observations.Observe(Family, identity, "2");
+            observations.Activate(gate, identity, [Family]);
         }
 
         // Both run: the entry speaks for every database, and is active while any gate is.
@@ -524,15 +524,15 @@ public sealed class EfSchemaModuleGateTests : IAsyncLifetime
     public async Task An_activation_is_active_in_the_report_it_publishes_before_reading_its_record()
     {
         var observations = new EfSchemaFinalizationObservations();
-        var fleet = Fleet("host-a", "1", "2");
+        var publishing = Fleet("host-a", "1", "2");
         var activeWhenPublishing = new List<bool>();
-        fleet.BeforePublish = () =>
+        publishing.BeforePublish = () =>
         {
             activeWhenPublishing.Add(observations.Find(Family).ModuleActive);
             return Task.CompletedTask;
         };
 
-        await Gate(Families("2"), fleet, observations).ActivateAsync(Context());
+        await Gate(Families("2"), publishing, observations).ActivateAsync(Context());
 
         // Every publish of the activation, the one before the record is read among them.
         Assert.NotEmpty(activeWhenPublishing);

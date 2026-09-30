@@ -92,10 +92,8 @@ public sealed class EfSchemaFinalizationObservations
         ArgumentNullException.ThrowIfNull(families);
         lock (_gate)
         {
-            foreach (var family in families)
+            foreach (var observations in families.Where(_families.ContainsKey).Select(family => _families[family]))
             {
-                if (!_families.TryGetValue(family, out var observations))
-                    continue;
                 foreach (var (identity, database) in observations.Databases.Where(entry => entry.Value.Owners.Contains(owner)).ToArray())
                 {
                     database.Owners.Remove(owner);
