@@ -310,6 +310,60 @@ public sealed class EfCandidateInspectionTests : IDisposable
         Assert.False(File.Exists(DatabasePath));
     }
 
+    [Theory]
+    [InlineData(1022, EfToolingExitCode.Success)]
+    [InlineData(1023, EfToolingExitCode.ResolutionFailure)]
+    public async Task Public_operation_bounds_participant_and_finding_rows_together(int moduleCount, int expectedExitCode)
+    {
+        var featureId = $"SyntheticCandidateParticipant{moduleCount}";
+        var syntheticAssembly = SyntheticEfModules.BuildParticipantFeature(
+            $"Elsa.Candidate.Participants.{Guid.NewGuid():N}", featureId, moduleCount);
+        var candidate = CreateCandidate([featureId], BuildFiles([featureId], includeResourceConfiguration: false));
+        var discoveryCalls = 0;
+        var operation = new EfCandidateInspectionOperation(() =>
+        {
+            discoveryCalls++;
+            return [.. EfConfigurationProbeTests.HostAssemblies, syntheticAssembly];
+        });
+        using var response = new MemoryStream();
+
+        var exitCode = await RunOperationAsync(operation, candidate.Request, response, CancellationToken.None);
+
+        Assert.Equal(expectedExitCode, exitCode);
+        Assert.Equal(1, discoveryCalls);
+        using var document = JsonDocument.Parse(response.ToArray());
+        var root = document.RootElement;
+        Assert.Equal(InvocationId, root.GetProperty("invocationId").GetString());
+        Assert.Equal(CaptureId, root.GetProperty("captureId").GetString());
+        Assert.Equal(expectedExitCode, root.GetProperty("exitCode").GetInt32());
+        if (expectedExitCode == EfToolingExitCode.Success)
+        {
+            Assert.Equal("ok", root.GetProperty("status").GetString());
+            var resolution = root.GetProperty("configurationResolution");
+            var participants = resolution.GetProperty("participants").EnumerateArray().ToArray();
+            var findings = StringValues(resolution.GetProperty("unresolved"));
+            Assert.Equal(moduleCount, participants.Length);
+            Assert.Equal(["exact-file-provenance-unavailable", "legacy-target-unprojected"], findings);
+            Assert.Equal(1024, participants.Length + findings.Length);
+            Assert.All(participants, participant =>
+            {
+                Assert.Equal(featureId, participant.GetProperty("feature").GetString());
+                Assert.Equal("Legacy", participant.GetProperty("selection").GetString());
+                Assert.Equal(JsonValueKind.Null, participant.GetProperty("resource").ValueKind);
+                Assert.Equal(JsonValueKind.Null, participant.GetProperty("provider").ValueKind);
+                Assert.Equal(JsonValueKind.Null, participant.GetProperty("connectionReference").ValueKind);
+            });
+        }
+        else
+        {
+            Assert.Equal("refused", root.GetProperty("status").GetString());
+            Assert.Equal("candidate-host-unavailable", root.GetProperty("error").GetProperty("code").GetString());
+            Assert.False(root.TryGetProperty("configurationResolution", out _));
+            Assert.Equal(["code"], root.GetProperty("error").EnumerateObject().Select(property => property.Name));
+        }
+        Assert.False(File.Exists(DatabasePath));
+    }
+
     private CandidateFixture CreateRuntimeCandidate(
         bool malformedEnvironmentOverlay = false,
         bool acceptedGraphMismatch = false)
@@ -331,6 +385,11 @@ public sealed class EfCandidateInspectionTests : IDisposable
         }
 
         string[] acceptedFeatureIds = acceptedGraphMismatch ? [] : closure;
+        return CreateCandidate(acceptedFeatureIds, files);
+    }
+
+    private CandidateFixture CreateCandidate(string[] acceptedFeatureIds, Dictionary<string, byte[]> files)
+    {
         var hostAssembly = typeof(EfToolingHostTests).Assembly;
         var candidate = new JsonObject
         {
@@ -358,12 +417,16 @@ public sealed class EfCandidateInspectionTests : IDisposable
         return new CandidateFixture(request, acceptedFeatureIds);
     }
 
-    private Dictionary<string, byte[]> BuildFiles(IReadOnlyList<string> featureIds, bool malformedEnvironmentOverlay = false)
+    private Dictionary<string, byte[]> BuildFiles(
+        IReadOnlyList<string> featureIds,
+        bool malformedEnvironmentOverlay = false,
+        bool includeResourceConfiguration = true)
     {
-        var applicationSettings = new JsonObject
+        var applicationSettings = new JsonObject();
+        if (includeResourceConfiguration)
         {
-            ["ProbeDefaults"] = new JsonObject { ["AddRuntimeEfFeature"] = false },
-            ["Elsa"] = new JsonObject
+            applicationSettings["ProbeDefaults"] = new JsonObject { ["AddRuntimeEfFeature"] = false };
+            applicationSettings["Elsa"] = new JsonObject
             {
                 ["Persistence"] = new JsonObject
                 {
@@ -374,12 +437,12 @@ public sealed class EfCandidateInspectionTests : IDisposable
                     },
                     ["UnknownCandidateSetting"] = UnknownSettingCanary
                 }
-            },
-            ["ConnectionStrings"] = new JsonObject
+            };
+            applicationSettings["ConnectionStrings"] = new JsonObject
             {
                 ["Primary"] = $"Data Source={DatabasePath};Password={ConnectionCanary}"
-            }
-        };
+            };
+        }
         var features = new JsonObject();
         foreach (var featureId in featureIds)
             features[featureId] = new JsonObject { ["UnknownProbeSetting"] = UnknownSettingCanary };
