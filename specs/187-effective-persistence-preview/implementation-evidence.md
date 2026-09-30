@@ -151,6 +151,10 @@ Executed focused evidence in the existing CLI project:
 
 No new test project, EF provider/container matrix or CI cadence change. These are focused component/actor proofs, not complete configuration parity, all adverse obligations or delivery.
 
+## Frontend checkpoint maps
+
+After `5b3c501aa`, all maps were regenerated and the byte-for-byte check passed. Only `docs/maps/test-map.md` and `docs/maps/extension-point-map.md` changed: four new CLI test/helper links and the candidate-inspection capability heading, with no removed links. Manifest, project/package/dependency counts and both reviewed generated findings reports remain byte-identical. These maps describe this tree; they are not the final architecture/full-suite/exact-head/main delivery gate.
+
 ## Still required
 
 No acceptance matrix row is closed by these foundations. Complete host branch/parity and decoded-file boundary coverage, the full real-child adverse matrix and command conditional/error coverage remain required. Focused installed-closure dispatch, closed response contents, frontend formatting and actual actor removal proof exist above; they do not substitute for the full runtime-preparer matrix or acceptance audit. T005 and T007–T020, plus the full affected suites, architecture/maps, exact-head review/CI and exact-main delivery gates remain open. The specification stays **In progress**.
