@@ -23,6 +23,8 @@ public sealed class EfSchemaFinalizationStoreTests : IAsyncLifetime
     private static readonly SchemaFinalizationMember HostA = new("host-a", "incarnation-a");
     private static readonly SchemaFinalizationMember HostB = new("host-b", "incarnation-b");
     private static readonly SchemaFinalizationActor Operator = SchemaFinalizationActor.OfOperator("ops@example");
+    private static readonly string IdentityTable = EfSchemaFinalization.DatabaseIdentityTableName("ElsaFinalizationTests");
+    private static readonly string RecordTable = EfSchemaFinalization.RecordTableName("ElsaFinalizationTests");
 
     private readonly TemporarySqliteDatabase database = new("schema-finalization");
     private readonly List<DbContext> contexts = [];
@@ -355,6 +357,45 @@ public sealed class EfSchemaFinalizationStoreTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// #2162: hosts that start together on a fresh database all read "no identity" and then insert. Whichever loses
+    /// reads the winner's row and carries on, and neither logs a failure for it, because the loss is by design.
+    /// </summary>
+    [Fact]
+    public async Task Two_creators_that_both_read_no_identity_before_either_inserts_agree_on_one_and_log_no_error()
+    {
+        var race = StartupInsertRace.Begin(2, IdentityTable);
+        var stores = new[] { RacingStore(race), RacingStore(race) };
+
+        var identities = await Task.WhenAll(stores.Select(store => store.GetOrCreateDatabaseIdentityAsync()));
+
+        Assert.True(race.EveryContextWasHeldAtEveryTable, "The creators did not both read before either wrote.");
+        Assert.Single(identities.Distinct());
+        Assert.Equal(identities[0], await Store().FindDatabaseIdentityAsync());
+        Assert.Equal(1, await Context().Set<EfDatabaseIdentityRow>().CountAsync());
+        Assert.Empty(race.Errors);
+    }
+
+    /// <summary>#2162: the same for the record every family starts with, which two hosts seed at once.</summary>
+    [Fact]
+    public async Task Two_creators_that_both_read_no_record_before_either_inserts_agree_on_one_and_log_no_error()
+    {
+        var race = StartupInsertRace.Begin(2, RecordTable, IdentityTable);
+        var stores = new[] { RacingStore(race), RacingStore(race) };
+
+        var records = await Task.WhenAll(
+            stores[0].GetOrCreateAsync(Family, "1", Chain, Operator),
+            stores[1].GetOrCreateAsync(Family, "1", Chain, SchemaFinalizationActor.OfOperator("someone-else")));
+
+        Assert.True(race.EveryContextWasHeldAtEveryTable, "The creators did not both read before either wrote.");
+        Assert.Equal(records[0], records[1], RecordComparer);
+        Assert.Single(records.Select(record => record.DatabaseIdentity).Distinct());
+        Assert.Equal(records[0].DatabaseIdentity, await Store().FindDatabaseIdentityAsync());
+        Assert.Equal(1, await Context().Set<EfSchemaFinalizationRecordRow>().CountAsync());
+        Assert.Equal(1, await Context().Set<EfDatabaseIdentityRow>().CountAsync());
+        Assert.Empty(race.Errors);
+    }
+
+    /// <summary>
     /// Spec 181, Decisions, Q11: never derived from a connection string. The same connection string in front of a fresh
     /// database is a different database, and gets a different identity.
     /// </summary>
@@ -625,6 +666,8 @@ public sealed class EfSchemaFinalizationStoreTests : IAsyncLifetime
 
     private EfSchemaFinalizationStore Store(params IInterceptor[] interceptors) => new(Context(interceptors), new FixedClock(Now));
 
+    private EfSchemaFinalizationStore RacingStore(StartupInsertRace race) => new(Context(race.Configure), new FixedClock(Now));
+
     private EfSchemaFinalizationStore StoreAt(DateTimeOffset now) => new(Context(), new FixedClock(now));
 
     private async Task<string?> FinishJsonAsync() =>
@@ -637,12 +680,15 @@ public sealed class EfSchemaFinalizationStoreTests : IAsyncLifetime
         DateTimeOffset? VerificationEndedAt,
         SchemaFinalizationActor RecordedBy);
 
-    private FinalizationContext Context(params IInterceptor[] interceptors)
+    private FinalizationContext Context(params IInterceptor[] interceptors) => Context(_ => { }, interceptors);
+
+    private FinalizationContext Context(Action<DbContextOptionsBuilder> configure, params IInterceptor[] interceptors)
     {
-        var context = new FinalizationContext(new DbContextOptionsBuilder<FinalizationContext>()
+        var builder = new DbContextOptionsBuilder<FinalizationContext>()
             .UseSqlite(database.ConnectionString)
-            .AddInterceptors(interceptors)
-            .Options);
+            .AddInterceptors(interceptors);
+        configure(builder);
+        var context = new FinalizationContext(builder.Options);
         contexts.Add(context);
         return context;
     }
