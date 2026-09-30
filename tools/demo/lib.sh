@@ -14,11 +14,8 @@ demo_staging="$demo_artifacts/staging"
 demo_pids="$demo_artifacts/pids"
 demo_closure="$demo_artifacts/closure"
 
-# The PostgreSQL container of the two-host demo. DEMO_PG_CONTAINER and DEMO_PG_PORT move it, for a machine where the name or the
-# port is taken.
+# The PostgreSQL container of the two-host demo. DEMO_PG_CONTAINER renames it, for a machine where the name is taken.
 demo_pg_container="${DEMO_PG_CONTAINER:-elsa-demo-pg}"
-demo_pg_port="${DEMO_PG_PORT:-55432}"
-demo_pg_connection="Host=127.0.0.1;Port=$demo_pg_port;Database=elsa;Username=postgres;Password=demo"
 
 demo_fail() {
   echo "error: $*" >&2

@@ -8,15 +8,17 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 usage() {
   cat >&2 <<'USAGE'
-Usage: bash tools/demo/rehearse.sh [--act 1|2] [--keep]
+Usage: bash tools/demo/rehearse.sh [--act 1|2] [--fallback] [--keep]
 
 Needs the releases staged (bash tools/demo/prepack.sh), Docker with the cached postgres:16-alpine image for Act 2, curl, and
 python3. It starts with tools/demo/reset.sh, so it stops any demo host of this checkout, and it ends the same way.
 
   --act 1|2   rehearse one act only
+  --fallback  Act 1 by the fallback route of the runbook: stop the host, publish 1.1.0, start it again
   --keep      do not clean up on exit: the hosts keep running and the container stays, for looking around (stop them with reset.sh)
 
-Ports: DEMO_PORT_SOLO (5101), DEMO_PORT_A (5201), DEMO_PORT_B (5202); the container: DEMO_PG_CONTAINER and DEMO_PG_PORT.
+Ports: DEMO_PORT_SOLO (5101), DEMO_PORT_A (5201), DEMO_PORT_B (5202); the container: DEMO_PG_CONTAINER. The container's own
+port is a free one that Docker picks.
 The exit status is 0 only when every assertion held.
 USAGE
   exit 2
@@ -24,10 +26,12 @@ USAGE
 
 acts="1 2"
 keep=0
+fallback=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --act) [[ "${2:-}" == "1" || "${2:-}" == "2" ]] || usage; acts="$2"; shift 2 ;;
     --keep) keep=1; shift ;;
+    --fallback) fallback=1; shift ;;
     -h|--help) usage ;;
     *) echo "unknown argument: $1" >&2; usage ;;
   esac
@@ -56,6 +60,7 @@ b_dir="artifacts/demo/hosts/b"
 
 now() { python3 -c 'import time; print(f"{time.time():.3f}")'; }
 timings=()
+measures=()
 step_name=""
 step_started=""
 begun="$(now)"
@@ -72,6 +77,10 @@ end_step() {
   [[ -z "$step_name" ]] || timings+=("$(python3 -c "import sys; print(f'{float(sys.argv[1]) - float(sys.argv[2]):7.1f} s  {sys.argv[3]}')" "$(now)" "$step_started" "$step_name")")
   step_name=""
 }
+
+# elapsed SINCE: seconds since a timestamp of now(), one decimal.
+elapsed() { python3 -c "import sys; print(f'{float(sys.argv[1]) - float(sys.argv[2]):.1f}')" "$(now)" "$1"; }
+measure() { measures+=("$*"); echo "    measured: $*"; }
 
 ok() { echo "    ok: $*"; }
 
@@ -94,7 +103,15 @@ cleanup() {
   echo
   echo "=== timings"
   printf '%s\n' "${timings[@]}"
+  if [[ ${#measures[@]} -gt 0 ]]; then
+    echo "=== measured"
+    printf '  %s\n' "${measures[@]}"
+  fi
   echo "  total $(python3 -c "import sys; print(f'{float(sys.argv[1]) - float(sys.argv[2]):.0f}')" "$(now)" "$begun") s"
+  echo "=== screen hygiene: lines that show an internal spec or FR number"
+  echo "  in command and HTTP output: $(grep -hE '[Ss]pec [0-9]+|FR-[0-9]+' "$logs/screen.txt" 2>/dev/null | sort -u | wc -l | tr -d ' ')"
+  echo "  in host logs:"
+  grep -hE '[Ss]pec [0-9]+|FR-[0-9]+' "$logs"/*.log 2>/dev/null | cut -c1-200 | sort | uniq -c | sed 's/^/    /' || true
   if [[ "$keep" -eq 1 ]]; then
     echo "=== --keep: hosts and container left running; bash tools/demo/reset.sh stops and removes them"
   else
@@ -114,6 +131,7 @@ run() {
   echo "  \$ $*"
   local status=0
   out="$("$@" 2>&1)" || status=$?
+  printf '%s\n' "$out" >>"$logs/screen.txt"
   if [[ -n "$out" ]]; then printf '%s\n' "$out" | cut -c1-240 | head -n 14 | sed 's/^/      /'; fi
   [[ "$status" -eq 0 ]] || fail "exited $status: $*"
 }
@@ -139,6 +157,7 @@ request() {
   [[ -z "$data" ]] || args+=(-H 'content-type: application/json' -d "$data")
   code="$(curl "${args[@]}" "http://127.0.0.1:$port$path")" || fail "curl $method $path on port $port failed"
   body="$(<"$logs/body")"
+  printf '%s\n' "$body" >>"$logs/screen.txt"
   echo "  \$ curl -X $method :$port$path -> $code $(printf '%s' "$body" | cut -c1-150)"
 }
 reload() { request POST "$1" /_module-management/reload; }
@@ -168,6 +187,7 @@ ready() { # NAME PORT: the script becomes the host, so the job's process id is t
   [[ "$(curl -s -o /dev/null -w '%{http_code}' -m 5 "http://127.0.0.1:$2/health/ready" || true)" == "200" ]]
 }
 wait_ready() { wait_until "host $1 ready" 300 ready "$1" "$2"; }
+with_tags_ok() { [[ "$(curl -s -o /dev/null -w '%{http_code}' -m 20 "http://127.0.0.1:$1/demo/notes/with-tags" || true)" == "200" ]]; }
 refusals() { grep -c "was refused" "$logs/$1.log" || true; }
 refused_again() { [[ "$(refusals "$1")" -gt "$2" ]]; } # NAME COUNT-BEFORE
 
@@ -209,7 +229,10 @@ fi
 
 if [[ " $acts " == *" 2 "* ]]; then
   step "Setup: PostgreSQL container"
-  run docker run -d --name "$demo_pg_container" -e POSTGRES_PASSWORD=demo -e POSTGRES_DB=elsa -p "127.0.0.1:$demo_pg_port:5432" postgres:16-alpine
+  run docker run -d --name "$demo_pg_container" -e POSTGRES_PASSWORD=demo -e POSTGRES_DB=elsa -p 127.0.0.1::5432 postgres:16-alpine
+  pg_port="$(docker port "$demo_pg_container" 5432/tcp | head -n 1 | sed 's/.*://')"
+  [[ -n "$pg_port" ]] || fail "Docker did not publish a port for $demo_pg_container"
+  demo_pg_connection="Host=127.0.0.1;Port=$pg_port;Database=elsa;Username=postgres;Password=demo"
   pg_up() { docker exec "$demo_pg_container" pg_isready -q -h 127.0.0.1 -U postgres -d elsa; }
   wait_until "PostgreSQL accepts connections" 90 pg_up
 
@@ -249,24 +272,51 @@ if [[ " $acts " == *" 1 "* ]]; then
   expect_has "the migration is in the change" "$full_change" "AddTags"
   expect_has "the package version is shown" "$full_change" "1.1.0"
 
-  step "Act 1.3-4 publish 1.1.0; the host installs it; /reload is refused (409)"
-  publish_and_wait_for_refusal 2 solo
-  reload "$port_solo"
-  expect_eq "reload is refused" 409 "$code"
-  expect_has "the refusal names the module" "$body" '"module":"Samples.Notes"'
-  expect_has "the refusal names the migration" "$body" "AddTags"
-  expect_has "the refusal names the apply command" "$body" "dotnet elsa persistence apply"
-  request GET "$port_solo" /demo/notes
-  expect_eq "the host keeps serving 1.0.0 meanwhile" 200 "$code"
+  if [[ "$fallback" -eq 0 ]]; then
+    step "Act 1.3-4 publish 1.1.0; the host installs it; /reload is refused (409)"
+    publish_and_wait_for_refusal 2 solo
+    reload "$port_solo"
+    expect_eq "reload is refused" 409 "$code"
+    expect_has "the refusal names the module" "$body" '"module":"Samples.Notes"'
+    expect_has "the refusal names the migration" "$body" "AddTags"
+    expect_has "the refusal names the apply command" "$body" "dotnet elsa persistence apply"
+    request GET "$port_solo" /demo/notes
+    expect_eq "the host keeps serving 1.0.0 meanwhile" 200 "$code"
 
-  step "Act 1.5 dotnet elsa persistence apply"
-  run bash tools/demo/elsa.sh persistence apply --host "$solo_dir" "${sqlite_target[@]}"
-  expect_has "the apply names the module" "$out" "Samples.Notes"
+    step "Act 1.5 dotnet elsa persistence apply"
+    run bash tools/demo/elsa.sh persistence apply --host "$solo_dir" "${sqlite_target[@]}"
+    expect_has "the apply names the module" "$out" "Samples.Notes"
 
-  step "Act 1.6 /reload answers 200; with-tags works; old notes show tags []"
-  reload "$port_solo"
-  expect_eq "reload succeeds" 200 "$code"
-  expect_has "one shell reloaded" "$body" '"reloaded":1'
+    step "Act 1.6 /reload answers 200; with-tags works; old notes show tags []"
+    reload "$port_solo"
+    expect_eq "reload succeeds" 200 "$code"
+    expect_has "one shell reloaded" "$body" '"reloaded":1'
+    reloaded_at="$(now)"
+  else
+    step "Act 1.3-4 (fallback) stop the host, publish 1.1.0, start it: refused at start"
+    kill -TERM "$(demo_host_pid solo)"
+    gone() { ! kill -0 "$(<"$logs/solo.job")" 2>/dev/null; }
+    wait_until "host solo stopped" 60 gone
+    run bash tools/demo/publish.sh 2 --host solo
+    start_host solo "$port_solo"
+    listening() { [[ "$(curl -s -o /dev/null -w '%{http_code}' -m 5 "http://127.0.0.1:$port_solo/health/ready" || true)" != "000" ]]; }
+    wait_until "host solo answers again" 300 listening
+    request GET "$port_solo" /demo/notes
+    expect_eq "the shell is refused" 500 "$code"
+    grep -q "has pending migrations" "$logs/solo.log" || fail "the host log does not say why the shell was refused"
+    ok "the host log says the migrations are pending"
+
+    step "Act 1.5 (fallback) dotnet elsa persistence apply"
+    run bash tools/demo/elsa.sh persistence apply --host "$solo_dir" "${sqlite_target[@]}"
+    expect_has "the apply names the module" "$out" "Samples.Notes"
+
+    step "Act 1.6 (fallback) the next request activates the shell"
+    request GET "$port_solo" /demo/notes
+    expect_eq "the shell is active" 200 "$code"
+    reloaded_at="$(now)"
+  fi
+  wait_until "with-tags answers 200 on solo" 60 with_tags_ok "$port_solo"
+  measure "with-tags on solo answered 200 $(elapsed "$reloaded_at") s after the shell was re-composed"
   request GET "$port_solo" /demo/notes/with-tags
   expect_eq "with-tags answers" 200 "$code"
   expect_has "the old note has no tags" "$body" '"tags":[]'
@@ -313,25 +363,32 @@ if [[ " $acts " == *" 2 "* ]]; then
   expect_has "2.0.0 waits for host-a" "$out" "waits for: host-a (reads 1.0.0)"
   expect_has "finalized still at 1.0.0" "$out" "finalized at 1.0.0"
 
-  step "Act 2.5 upgrade a in place"
+  step "Act 2.5 upgrade a in place: no restart, no reload"
+  reloads_before="$(grep -c "Reloaded 1 active shell" "$logs/a.log" || true)"
   run bash tools/demo/publish.sh 2 --host a
-  wait_until "host a installed the release" 180 grep -q "Loaded package Elsa.Samples.Nuplane.Notes@1.1.0" "$logs/a.log"
-  reload "$port_a"
-  echo "    (a is on a migrated database already; the reload answered $code)"
-  [[ "$code" == "200" || "$code" == "409" ]] || fail "reload of a answered $code"
+  published_at="$(now)"
+  a_reloaded() { [[ "$(grep -c "Reloaded 1 active shell" "$logs/a.log" || true)" -gt "$reloads_before" ]]; }
+  wait_until "host a installed the release and reloaded its own shell" 180 a_reloaded
+  measure "host a installed 1.1.0 and reloaded $(elapsed "$published_at") s after the publish"
+  no_refusal="$(grep -c "was refused" "$logs/a.log" || true)"
+  [[ "$no_refusal" -eq 0 ]] || fail "host a refused the reload $no_refusal time(s), though its database was already migrated"
+  ok "host a was not refused (its database was migrated by b's apply)"
 
   step "Act 2.6 the version finalizes: both answer 200, status says finalized at 2.0.0"
-  finalized_on_a() { [[ "$(curl -s -o /dev/null -w '%{http_code}' -m 20 "http://127.0.0.1:$port_a/demo/notes/with-tags" || true)" == "200" ]]; }
-  finalized_on_b() { [[ "$(curl -s -o /dev/null -w '%{http_code}' -m 20 "http://127.0.0.1:$port_b/demo/notes/with-tags" || true)" == "200" ]]; }
-  wait_until "with-tags answers 200 on b" 120 finalized_on_b
-  wait_until "with-tags answers 200 on a" 120 finalized_on_a
+  wait_until "with-tags answers 200 on b" 120 with_tags_ok "$port_b"
+  wait_until "with-tags answers 200 on a" 120 with_tags_ok "$port_a"
+  measure "2.0.0 finalized $(elapsed "$published_at") s after the publish to a (both hosts kept running)"
   request GET "$port_a" /demo/notes/with-tags
   expect_has "a's old notes have no tags" "$body" '"tags":[]'
-  complete_at_2() { with_pg bash tools/demo/elsa.sh persistence status --host "$a_dir" "${pg_target[@]}" "${status_fast[@]}" --family SamplesNotes >"$logs/status.txt" 2>&1 && grep -q "complete from 2.0.0" "$logs/status.txt"; }
-  wait_until "status says complete from 2.0.0" 120 complete_at_2
-  status_text="$(<"$logs/status.txt")"
-  expect_has "finalized at 2.0.0" "$status_text" "finalized at 2.0.0"
-  printf '%s\n' "$status_text" | sed 's/^/      /'
+  request GET "$port_b" /demo/notes/with-tags
+  expect_eq "with-tags on b" 200 "$code"
+  backfill_complete() { grep -q "is complete at 2.0.0" "$logs/a.log" "$logs/b.log"; }
+  wait_until "the backfill logged completion" 120 backfill_complete
+  measure "the backfill completed $(elapsed "$published_at") s after the publish to a"
+  run with_pg bash tools/demo/elsa.sh persistence status --host "$a_dir" "${pg_target[@]}" "${status_fast[@]}" --family SamplesNotes
+  expect_has "finalized at 2.0.0" "$out" "finalized at 2.0.0"
+  expect_has "complete from 2.0.0" "$out" "complete from 2.0.0"
+  expect_has "host-a reads 2.0.0" "$out" "host-a: Active, live"
 fi
 
 end_step
