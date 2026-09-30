@@ -294,7 +294,8 @@ public static class RuntimeCoreServiceCollectionExtensions
         // constructor the container could satisfy. The factory injects each optional collaborator with GetService so the
         // live-drain accessor and the cadence resolver are wired in every configuration (C1, #1227).
         services.TryAddScoped<IWorkflowDrainOrchestrator>(serviceProvider =>
-            new WorkflowDrainOrchestrator(
+            WorkflowDrainOrchestrator.CreateScoped(
+                serviceProvider.GetRequiredService<IPersistenceOperationScopeFactory>(),
                 serviceProvider.GetRequiredService<IWorkflowSchedulerDrainer>(),
                 serviceProvider.GetRequiredService<IRuntimePostCommitOutboxProcessor>(),
                 serviceProvider.GetServices<IWorkflowSchedulerDrainObserver>(),
