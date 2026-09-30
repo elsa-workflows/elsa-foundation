@@ -51,7 +51,7 @@ Check the tools once: `command -v docker jq curl python3 rsync` prints five path
 
 ### S2. Open the tabs
 
-Six terminal tabs, all in the repository root, named as in the cast table. Paste this into **1** and **2** (it defines the helpers
+Five terminal tabs (1, 2, S, A, B), all in the repository root, named as in the cast table. Paste this into **1** and **2** (it defines the helpers
 the acts use; the audience never sees it):
 
 ```bash
