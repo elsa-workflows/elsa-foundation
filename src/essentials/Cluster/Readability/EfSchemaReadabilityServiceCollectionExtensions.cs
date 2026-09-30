@@ -34,6 +34,13 @@ public static class EfSchemaReadabilityServiceCollectionExtensions
     /// container has finished disposing. On a host without Nuplane, or without CShells, it never names anything
     /// superseded, and the report reads every load context as before.
     /// </para>
+    /// <para>
+    /// The host's <see cref="IEfSchemaFleet"/> (through <see cref="ShellServiceSharingExtensions.ShareWithShells{TService}"/>)
+    /// and, unless a durable provider replaces it, its in-process <see cref="IClusterMembership"/> (as the EF provider's
+    /// member is) are one instance each too, shared with every shell container: a gate counting the fleet in a shell asks the
+    /// membership the host publishes through, not a second one of the shell's own. The host-composition guard test in
+    /// <c>Elsa.Modularity.Tests</c> holds that for both real hosts.
+    /// </para>
     /// </remarks>
     public static IServiceCollection AddEfSchemaReadability(this IServiceCollection services)
     {
@@ -48,7 +55,9 @@ public static class EfSchemaReadabilityServiceCollectionExtensions
         }
 
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IMemberReportSource<ReadabilitySection>, EfSchemaReadabilitySource>());
-        services.TryAddSingleton<IEfSchemaFleet, ClusterSchemaFleet>();
+        // The host's one fleet, which is what its own membership answers for: a shell's copy would be a second instance of it.
+        if (!services.Any(descriptor => descriptor.ServiceType == typeof(IEfSchemaFleet)))
+            services.AddSingleton<IEfSchemaFleet, ClusterSchemaFleet>().ShareWithShells<IEfSchemaFleet>();
         services.AddEfSchemaDormancy();
         return services.TryAddInProcessClusterMembership();
     }

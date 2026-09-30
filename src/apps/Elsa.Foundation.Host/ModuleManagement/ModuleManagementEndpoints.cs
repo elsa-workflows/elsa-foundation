@@ -5,6 +5,7 @@ using CShells.Lifecycle;
 using Elsa.Api.AspNetCore;
 using Elsa.Foundation.Host.Shells;
 using Nuplane.Admin;
+using Nuplane.Reconciliation;
 
 namespace Elsa.Foundation.Host.ModuleManagement;
 
@@ -33,20 +34,17 @@ public static class ModuleManagementEndpoints
         group.AddEndpointFilter(async (context, next) =>
             Authorized(context.HttpContext, options) ? await next(context) : Results.Unauthorized());
 
-        // Inline hot-apply. This is the race-free way to make an added/updated feed package go live without a
-        // restart. TriggerReconcileAsync runs the FULL reconcile cycle and returns only once it has completed
-        // — including the completion phase where Nuplane's auto-loader loads any new package's assemblies into
-        // their load contexts. ONLY THEN do we refresh the runtime feature catalog (so feature ids rebind to
-        // the now-loaded assemblies) and reload the active shells (so they compose the new endpoints from the
-        // refreshed catalog). Doing the refresh/reload from a package-change observer instead would run too
-        // early (assembly not loaded yet) and would re-enter and stall the cycle.
+        // The handler only triggers the cycle and answers with its outcome, once the cycle has finished. What makes a package
+        // that cycle added live in the running shells is ShellReloadOnPackagesChanged, the Nuplane observer that refreshes the
+        // runtime feature catalog and reloads the active shells at the reconciled phase, after the auto-loader has loaded the
+        // new assemblies (see docs/foundation-host-feeds.md, "Hot reload is a Foundation.Host behavior, not a product one").
         //
         // The operations come from the host's root provider, never from the request's. The path-less shell resolves this
         // request, so the request's provider is that shell's, and CShells copies every root registration into every shell:
-        // Nuplane's singletons there are second instances. A reconcile enqueued on the shell's copy of the trigger queue is
-        // read by no dispatcher, so it waits for ever (#2159). Only the root's queue has the dispatcher that runs it.
+        // Nuplane's singletons there are second instances. A reconcile enqueued on a shell's copy of the trigger queue is read
+        // by no dispatcher, so it waits for ever (#2159); only the root's queue has the dispatcher that runs it.
         group.MapPost("/reconcile", async (CancellationToken ct) =>
-            Results.Ok(await endpoints.ServiceProvider.GetRequiredService<INuplaneAdminOperations>().TriggerReconcileAsync(ct)));
+            ReconcileResult(await endpoints.ServiceProvider.GetRequiredService<INuplaneAdminOperations>().TriggerReconcileAsync(ct)));
 
         group.MapPost("/reload", async (IRuntimeFeatureCatalog runtimeFeatureCatalog, IShellRegistry registry, CancellationToken ct) =>
         {
@@ -62,6 +60,49 @@ public static class ModuleManagementEndpoints
 
         return endpoints;
     }
+
+    /// <summary>
+    /// The answer to a reconcile, by the outcome Nuplane reports: 200 when the cycle ran (completed, or accepted and still
+    /// running), 409 when it was rejected because another cycle or another process already holds the store, so the request is
+    /// well formed and repeating it once that has cleared is what 409 says, and 503 when the reconcile service could not run it.
+    /// The outcome code travels as its name, never its number. Refusals use the same problem document as a refused reload,
+    /// carrying the outcome, Nuplane's reason and the correlation id that ties the request to the cycle's log lines.
+    /// </summary>
+    private static IResult ReconcileResult(ManualReconcileOutcome outcome)
+    {
+        var name = outcome.OutcomeCode.ToString();
+        return outcome.OutcomeCode switch
+        {
+            ManualReconcileOutcomeCode.Completed or ManualReconcileOutcomeCode.Accepted => Results.Ok(new
+            {
+                outcomeCode = name,
+                correlationId = outcome.CorrelationId,
+                reasonCode = outcome.ReasonCode,
+                runResult = outcome.RunResult
+            }),
+            ManualReconcileOutcomeCode.Rejected => ReconcileProblem(outcome, "Reconcile rejected", StatusCodes.Status409Conflict, outcome.ReasonCode switch
+            {
+                "single-flight-active" => "Another reconcile cycle is already running in this host, so this request did nothing. Repeat it once that cycle has finished.",
+                "store-lock-unavailable" => "Another process owns the package store, so this request did nothing. Repeat it once that process has released it.",
+                _ => "The reconcile was rejected, so this request did nothing."
+            }),
+            ManualReconcileOutcomeCode.Unavailable => ReconcileProblem(outcome, "Reconcile unavailable", StatusCodes.Status503ServiceUnavailable,
+                "The reconcile service could not run the cycle. The reason is the failure it reported."),
+            _ => throw new InvalidOperationException($"Nuplane reported a reconcile outcome, {name}, that this host does not map to a status.")
+        };
+    }
+
+    private static IResult ReconcileProblem(ManualReconcileOutcome outcome, string title, int status, string detail) =>
+        Results.Problem(
+            title: title,
+            detail: detail,
+            statusCode: status,
+            extensions: new Dictionary<string, object?>
+            {
+                ["outcomeCode"] = outcome.OutcomeCode.ToString(),
+                ["reasonCode"] = outcome.ReasonCode,
+                ["correlationId"] = outcome.CorrelationId
+            });
 
     /// <summary>
     /// A reload that left at least one shell on its previous generation. 409 when every such shell was refused by an EF module,

@@ -34,9 +34,6 @@ public sealed class FoundationHostBootTests(FoundationHostFeed feed) : IAsyncLif
     /// </summary>
     private static readonly TimeSpan UpgradePatience = TimeSpan.FromSeconds(90);
 
-    /// <summary>The header the host's module-management API reads its key from, restated: the host is never loaded into this process.</summary>
-    private const string ModuleManagementKeyHeader = "X-Elsa-Module-Management-Key";
-
     private const string ModuleManagementKey = "foundation-host-boot-tests";
 
     private readonly string _file = Path.Join(Path.GetTempPath(), $"elsa-foundation-host-boot-{Guid.NewGuid():N}.db");
@@ -46,19 +43,7 @@ public sealed class FoundationHostBootTests(FoundationHostFeed feed) : IAsyncLif
 
     public Task InitializeAsync() => Task.CompletedTask;
 
-    /// <summary>Stops the host before its database is deleted, and deletes it even if stopping the host failed.</summary>
-    public async Task DisposeAsync()
-    {
-        try
-        {
-            if (_host is not null)
-                await _host.DisposeAsync();
-        }
-        finally
-        {
-            DeleteDatabaseFiles(_file);
-        }
-    }
+    public Task DisposeAsync() => StopHostAndDeleteDatabaseAsync(_host, _file);
 
     /// <summary>
     /// The module finalizes its new version at activation as a single host (spec 181, FR-021) and its feature serves at
@@ -208,7 +193,7 @@ public sealed class FoundationHostBootTests(FoundationHostFeed feed) : IAsyncLif
         Assert.Equal("1", (await RecordAsync(ConnectionString)).FinalizedVersion);
 
         await ApplyNextReleaseMigrationAsync(ConnectionString);
-        var (reloaded, body) = await _host.PostAsync("/_module-management/reload", new Dictionary<string, string> { [ModuleManagementKeyHeader] = ModuleManagementKey });
+        var (reloaded, body) = await _host.PostModuleManagementAsync("/_module-management/reload", ModuleManagementKey);
         Assert.True(reloaded == HttpStatusCode.OK, $"Reload answered {reloaded}: {body}");
 
         await WaitUntilAsync(async () => (await RecordAsync(ConnectionString)).FinalizedVersion == "2", UpgradePatience);
@@ -243,8 +228,8 @@ public sealed class FoundationHostBootTests(FoundationHostFeed feed) : IAsyncLif
     {
         var settings = Settings(feed);
         settings["Elsa:Boot:EagerShellActivation:Enabled"] = eagerActivation.ToString();
-        settings["Elsa:ModuleManagement:Enabled"] = moduleManagement.ToString();
-        settings["Elsa:ModuleManagement:ApiKey"] = ModuleManagementKey;
+        if (moduleManagement)
+            EnableModuleManagement(settings, ModuleManagementKey);
         foreach (var (key, value) in overrides ?? [])
             settings[key] = value;
 

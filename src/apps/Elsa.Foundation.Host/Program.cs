@@ -10,6 +10,7 @@ using Elsa.Foundation.Host.Shells;
 using Nuplane;
 using Nuplane.Admin;
 using Nuplane.Loading.Hosting.Builder;
+using Nuplane.Reconciliation;
 using Nuplane.Sources.Directory.Configuration;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -111,6 +112,13 @@ if (EagerShellActivationHostedService.IsEnabled(configuration))
 var moduleManagement = ModuleManagementOptions.Read(configuration);
 if (moduleManagement.Enabled)
     builder.Services.AddNuplaneAdmin();
+
+// Nuplane registers its trigger ingress, reconcile coordinator and admin operations by type or by factory, so every shell
+// container CShells builds from copies of these registrations would hold second instances of them, and a reconcile enqueued
+// on a shell's copy of the queue is read by no dispatcher (#2159). Shells resolve the host's own instead.
+builder.Services.ShareWithShells<IReconciliationTriggerIngress>();
+if (moduleManagement.Enabled)
+    builder.Services.ShareWithShells<ManualReconcileCoordinator>().ShareWithShells<INuplaneAdminOperations>();
 
 var app = builder.Build();
 

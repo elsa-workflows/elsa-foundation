@@ -154,6 +154,20 @@ internal sealed class FeedLoadedModuleHost : IAsyncDisposable
 
     public static Task<SchemaFinalizationRecord> RecordAsync(string connectionString) => Sqlite(connectionString).RecordAsync();
 
+    /// <summary>Stops <paramref name="host"/>, if one was started, before its database <paramref name="file"/> is deleted, and deletes it even if stopping the host failed.</summary>
+    public static async Task StopHostAndDeleteDatabaseAsync(FoundationHostProcess? host, string file)
+    {
+        try
+        {
+            if (host is not null)
+                await host.DisposeAsync();
+        }
+        finally
+        {
+            DeleteDatabaseFiles(file);
+        }
+    }
+
     /// <summary>Deletes a SQLite database file and the journal, WAL and shared-memory files beside it.</summary>
     public static void DeleteDatabaseFiles(string file)
     {

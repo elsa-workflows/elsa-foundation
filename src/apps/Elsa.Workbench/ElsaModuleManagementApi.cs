@@ -32,13 +32,26 @@ internal static class ElsaModuleManagementApi
             .WithHostCredentialEnforcement(ManagementApiKeyAuthentication.HeaderName, "Elsa.Workbench");
         group.AddEndpointFilter(RequireManagementApiKeyAsync);
 
+        // Every route that triggers, waits for, or reads the outcome of a Nuplane reconcile takes the operations from the
+        // host's root provider, never from the request's. The path-less shell resolves these requests, so the request's
+        // provider is that shell's, and CShells copies every root registration into every shell: Nuplane's trigger queue
+        // there is a second instance, read by no dispatcher, so a reconcile enqueued on it waits for ever (#2159). Only the
+        // root's queue has the dispatcher that runs it. The registry route is the one that also needs the shell's own
+        // feature catalog, which is why it goes through IModuleRegistryService; the package list it reads beside that
+        // catalog comes from the operations the composition shares with every shell (ShareWithShells in Program.cs).
+        var host = endpoints.ServiceProvider;
+        INuplaneAdminOperations HostOperations() => host.GetRequiredService<INuplaneAdminOperations>();
+
         group.MapGet("/registry", GetRegistryAsync);
-        group.MapPost("/packages/upload", UploadPackageAsync)
+        group.MapPost("/packages/upload", (HttpRequest request, [FromServices] IWebHostEnvironment environment, CancellationToken cancellationToken) =>
+                UploadPackageAsync(request, HostOperations(), environment, cancellationToken))
             .Accepts<IFormFile>("multipart/form-data")
             .DisableAntiforgery();
-        group.MapDelete("/packages/drop-folder/{fileName}", DeleteDropFolderPackageAsync);
-        group.MapPost("/reconcile", TriggerReconcileAsync);
-        group.MapPost("/prune", PrunePackagesAsync);
+        group.MapDelete("/packages/drop-folder/{fileName}", (string fileName, [FromServices] IWebHostEnvironment environment, [FromServices] IHostApplicationLifetime applicationLifetime, [FromServices] ILoggerFactory loggerFactory, CancellationToken cancellationToken) =>
+            DeleteDropFolderPackageAsync(fileName, HostOperations(), environment, applicationLifetime, loggerFactory, cancellationToken));
+        group.MapPost("/reconcile", (CancellationToken cancellationToken) => TriggerReconcileAsync(HostOperations(), cancellationToken));
+        group.MapPost("/prune", (ModuleManagementPruneRequest request, [FromServices] IWebHostEnvironment environment, [FromServices] IOptions<CleanupPolicyOptions> cleanupOptions, CancellationToken cancellationToken) =>
+            PrunePackagesAsync(request, HostOperations(), environment, cleanupOptions, cancellationToken));
         group.MapPost("/feeds", AddFeedAsync);
         group.MapPut("/feeds/{name}", UpdateFeedAsync);
         group.MapDelete("/feeds/{name}", DeleteFeedAsync);
@@ -75,8 +88,8 @@ internal static class ElsaModuleManagementApi
 
     private static async Task<IResult> UploadPackageAsync(
         HttpRequest request,
-        [FromServices] INuplaneAdminOperations nuplaneAdmin,
-        [FromServices] IWebHostEnvironment environment,
+        INuplaneAdminOperations nuplaneAdmin,
+        IWebHostEnvironment environment,
         CancellationToken cancellationToken)
     {
         if (!request.HasFormContentType)
@@ -114,10 +127,10 @@ internal static class ElsaModuleManagementApi
 
     private static async Task<IResult> DeleteDropFolderPackageAsync(
         string fileName,
-        [FromServices] IServiceScopeFactory scopeFactory,
-        [FromServices] IWebHostEnvironment environment,
-        [FromServices] IHostApplicationLifetime applicationLifetime,
-        [FromServices] ILoggerFactory loggerFactory,
+        INuplaneAdminOperations nuplaneAdmin,
+        IWebHostEnvironment environment,
+        IHostApplicationLifetime applicationLifetime,
+        ILoggerFactory loggerFactory,
         CancellationToken cancellationToken)
     {
         var safeFileName = Path.GetFileName(fileName);
@@ -132,7 +145,7 @@ internal static class ElsaModuleManagementApi
 
         File.Delete(path);
         QueueReconciliation(
-            scopeFactory,
+            nuplaneAdmin,
             applicationLifetime,
             loggerFactory.CreateLogger("Elsa.Workbench.ModuleManagementDelete"),
             "package deletion");
@@ -146,7 +159,7 @@ internal static class ElsaModuleManagementApi
     }
 
     private static void QueueReconciliation(
-        IServiceScopeFactory scopeFactory,
+        INuplaneAdminOperations nuplaneAdmin,
         IHostApplicationLifetime applicationLifetime,
         ILogger logger,
         string operation)
@@ -160,8 +173,6 @@ internal static class ElsaModuleManagementApi
 
             try
             {
-                using var scope = scopeFactory.CreateScope();
-                var nuplaneAdmin = scope.ServiceProvider.GetRequiredService<INuplaneAdminOperations>();
                 var outcome = await nuplaneAdmin.TriggerReconcileAsync(stoppingToken);
 
                 logger.LogInformation(
@@ -181,7 +192,7 @@ internal static class ElsaModuleManagementApi
         });
     }
 
-    private static async Task<IResult> TriggerReconcileAsync([FromServices] INuplaneAdminOperations nuplaneAdmin, CancellationToken cancellationToken)
+    private static async Task<IResult> TriggerReconcileAsync(INuplaneAdminOperations nuplaneAdmin, CancellationToken cancellationToken)
     {
         var outcome = await nuplaneAdmin.TriggerReconcileAsync(cancellationToken);
         return Results.Ok(new ModuleManagementOperationResponse(
@@ -194,9 +205,9 @@ internal static class ElsaModuleManagementApi
 
     private static async Task<IResult> PrunePackagesAsync(
         ModuleManagementPruneRequest request,
-        [FromServices] INuplaneAdminOperations nuplaneAdmin,
-        [FromServices] IWebHostEnvironment environment,
-        [FromServices] IOptions<CleanupPolicyOptions> cleanupOptions,
+        INuplaneAdminOperations nuplaneAdmin,
+        IWebHostEnvironment environment,
+        IOptions<CleanupPolicyOptions> cleanupOptions,
         CancellationToken cancellationToken)
     {
         var packages = await nuplaneAdmin.GetPackagesAsync(cancellationToken);
