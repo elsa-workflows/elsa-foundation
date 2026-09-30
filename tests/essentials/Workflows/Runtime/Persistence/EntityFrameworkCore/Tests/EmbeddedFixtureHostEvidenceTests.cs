@@ -121,6 +121,36 @@ public sealed class EmbeddedFixtureHostEvidenceTests : IDisposable
     }
 
     [Fact]
+    public async Task Heartbeat_operation_scope_uses_the_same_named_resource_and_partition_with_a_distinct_context()
+    {
+        await using var host = CreateHost();
+        var shell = await host.GetRequiredService<IShellRegistry>().GetOrActivateAsync(ShellName);
+        var operationScopeFactory = shell.ServiceProvider.GetRequiredService<IPersistenceOperationScopeFactory>();
+        var partition = new PersistenceScope("heartbeat-resource-probe");
+
+        await using var foreground = await operationScopeFactory.CreateAsync(partition);
+        await using var heartbeat = await operationScopeFactory.CreateAsync(partition);
+
+        var foregroundContext = foreground.ServiceProvider.GetRequiredService<RuntimeDbContext>();
+        var heartbeatContext = heartbeat.ServiceProvider.GetRequiredService<RuntimeDbContext>();
+        Assert.Equal(partition.Value, foreground.ServiceProvider.GetRequiredService<IPersistenceAccessContextAccessor>()
+            .Current.RequireScope().Value);
+        Assert.Equal(partition.Value, heartbeat.ServiceProvider.GetRequiredService<IPersistenceAccessContextAccessor>()
+            .Current.RequireScope().Value);
+        Assert.Equal(ResourceName, foreground.ServiceProvider.GetRequiredService<RuntimeWorkflowExecutionEntityFrameworkCoreOptions>()
+            .ConnectionName);
+        Assert.Equal(ResourceName, heartbeat.ServiceProvider.GetRequiredService<RuntimeWorkflowExecutionEntityFrameworkCoreOptions>()
+            .ConnectionName);
+        Assert.Equal(ResourceName, foreground.ServiceProvider.GetRequiredService<RuntimeOperationalStateEntityFrameworkCoreOptions>()
+            .ConnectionName);
+        Assert.Equal(ResourceName, heartbeat.ServiceProvider.GetRequiredService<RuntimeOperationalStateEntityFrameworkCoreOptions>()
+            .ConnectionName);
+        Assert.Equal(databasePath, foregroundContext.Database.GetDbConnection().DataSource);
+        Assert.Equal(databasePath, heartbeatContext.Database.GetDbConnection().DataSource);
+        Assert.NotEqual(foregroundContext.ContextId.InstanceId, heartbeatContext.ContextId.InstanceId);
+    }
+
+    [Fact]
     public async Task Raw_cshells_configuration_readds_explicitly_disabled_runtime_dependency()
     {
         var selectedIds = SelectedFeatureIds.Concat(DependencyFeatureIds)

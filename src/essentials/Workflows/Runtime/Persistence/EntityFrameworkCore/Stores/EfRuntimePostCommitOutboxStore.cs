@@ -154,17 +154,18 @@ public sealed class EfRuntimePostCommitOutboxStore(
         var row = await LoadAsync(scope, result.OutboxItemId, tracking: true, cancellationToken)
                    ?? throw NotFound(result.OutboxItemId);
         var current = ReadChecked(row, scope, result.OutboxItemId);
-        if (current.IsTerminal)
-            throw new InvalidOperationException($"Post-commit outbox item '{result.OutboxItemId}' is already terminal.");
         // Contention is legitimate, not exceptional: a live drain skips the durable claim round-trip while the resumption
         // sweep claims with no execution filter, so the sweep can take this item between this caller's read and this write.
-        // Report the loss and write nothing — the owning deliverer's completion governs, and the durable item stays a crash
-        // backstop that claim expiry and the sweep redeliver idempotently.
+        // Check the retained fence before terminal state: even after a fenced owner completes, a claim-less caller still
+        // does not hold that fence. Report the loss and write nothing; a nonterminal item remains a crash backstop that
+        // claim expiry and the sweep redeliver idempotently, while an owner-completed item stays terminal.
         if (current.Status == RuntimePostCommitOutboxStatus.Delivering || current.DeliveryFencingToken > 0)
         {
             Detach(row);
             return RuntimePostCommitOutboxClaimCompletionOutcome.SupersededByOtherOwner;
         }
+        if (current.IsTerminal)
+            throw new InvalidOperationException($"Post-commit outbox item '{result.OutboxItemId}' is already terminal.");
 
         var attemptCount = RuntimePostCommitRetryPolicy.SaturatingIncrement(current.DeliveryAttemptCount);
         var status = NormalizeDeliveryStatus(current, result.Status, attemptCount);
