@@ -17,7 +17,25 @@ using Microsoft.Extensions.DependencyInjection;
     PostMigration = [typeof(ResourceProbePostMigrationAction)])]
 [assembly: EfToolingShellDefaults(typeof(ResourceProbeShellDefaults))]
 
+if (args.Length > 0 && args[0] == "--candidate-test-descendant")
+    return RunCandidateTestDescendant(args);
+
 return 0;
+
+static int RunCandidateTestDescendant(string[] arguments)
+{
+    if (arguments.Length != 3 || arguments[1].Length == 0 ||
+        !int.TryParse(arguments[2], NumberStyles.None, CultureInfo.InvariantCulture, out var requestedHold))
+        return 2;
+
+    var holdMilliseconds = Math.Clamp(requestedHold, 0, 120_000);
+    using var process = Process.GetCurrentProcess();
+    var identity = FormattableString.Invariant($"{process.Id}|{process.StartTime.ToUniversalTime().Ticks}");
+    File.WriteAllText(arguments[1], identity, Encoding.ASCII);
+    if (holdMilliseconds > 0)
+        Thread.Sleep(holdMilliseconds);
+    return 0;
+}
 
 [ShellFeature(name: "ResourceProbe", DisplayName = "Resource probe")]
 [UsesEfModule("Acme.ResourceProbe")]
@@ -72,6 +90,7 @@ public sealed class ResourceProbeShellDefaults : IEfToolingShellDefaults
 
     internal static string? ContextMarkerPath { get; private set; }
     internal static string? ActionMarkerPath { get; private set; }
+    internal static string? DescendantMarkerPath { get; private set; }
 
     public void Configure(ShellBuilder builder, IConfiguration configuration)
     {
@@ -83,6 +102,7 @@ public sealed class ResourceProbeShellDefaults : IEfToolingShellDefaults
         {
             ContextMarkerPath = probeDefaults["ContextMarker"];
             ActionMarkerPath = probeDefaults["ActionMarker"];
+            DescendantMarkerPath = probeDefaults["DescendantMarker"];
             ConfigureAdverseChild(probeDefaults);
         }
 
@@ -106,6 +126,9 @@ public sealed class ResourceProbeShellDefaults : IEfToolingShellDefaults
             var identity = FormattableString.Invariant($"{process.Id}|{process.StartTime.ToUniversalTime().Ticks}");
             File.WriteAllText(marker, identity, Encoding.ASCII);
         }
+
+        // Descendant spawning stays inert until the root has run the marker-baseline case.
+        _ = DescendantMarkerPath;
 
         var holdMilliseconds = ReadBoundedValue(probeDefaults, "HoldMilliseconds", MaximumHoldMilliseconds);
         if (holdMilliseconds > 0)

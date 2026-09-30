@@ -234,12 +234,19 @@ public sealed class CandidateWorkerOperationTests
         AssertDefaultProcessRefusal("candidate-response-too-large", timeoutSeconds: 60,
             standardErrorBytes: 256 * 1024, standardOutputBytes: 4 * 1024 * 1024 + 1);
 
+    [Fact]
+    public Task Candidate_worker_process_timeout_reaps_a_descendant_of_the_composer_child() =>
+        AssertDefaultProcessRefusal("candidate-inspection-timeout", timeoutSeconds: 15,
+            holdComposer: true, expectDescendant: true);
+
     private static async Task AssertDefaultProcessRefusal(string expectedCode, int timeoutSeconds,
-        bool holdComposer = false, bool cancelAfterStart = false, int standardErrorBytes = 0, int standardOutputBytes = 0)
+        bool holdComposer = false, bool cancelAfterStart = false, int standardErrorBytes = 0, int standardOutputBytes = 0,
+        bool expectDescendant = false)
     {
         var host = HostLayout.Resolve(DotnetElsa.Host("ResourceAwareLiveHost"));
         using var sentinels = new TempDirectory($"{PrivateCanaryRootPrefix}adverse-child-");
         var started = sentinels.File("worker-started.txt");
+        var descendant = expectDescendant ? sentinels.File("descendant-started.txt") : null;
         var database = sentinels.File("must-not-create.db");
         var context = sentinels.File("context-constructed.txt");
         var action = sentinels.File("action-constructed.txt");
@@ -250,6 +257,7 @@ public sealed class CandidateWorkerOperationTests
             ["HoldMilliseconds"] = holdComposer ? 60_000 : 0,
             ["StandardErrorBytes"] = standardErrorBytes,
             ["StandardOutputBytes"] = standardOutputBytes,
+            ["DescendantMarker"] = descendant ?? string.Empty,
             ["ContextMarker"] = context,
             ["ActionMarker"] = action
         };
@@ -260,9 +268,12 @@ public sealed class CandidateWorkerOperationTests
 
         try
         {
-            var startedOrCompleted = await WaitForMarkerOrCompletion(run, started, TimeSpan.FromSeconds(60));
-            Assert.True(startedOrCompleted && TryReadProcessIdentity(started, out _),
-                "The real worker completed or failed to reach the fixture composer before recording its private process marker.");
+            var parentStarted = await WaitForMarkerOrCompletion(run, started, TimeSpan.FromSeconds(60));
+            var descendantStarted = descendant is null ||
+                await WaitForMarkerOrCompletion(run, descendant, TimeSpan.FromSeconds(60));
+            Assert.True(parentStarted && TryReadProcessIdentity(started, out _) && descendantStarted &&
+                        (descendant is null || TryReadProcessIdentity(descendant, out _)),
+                "The real worker completed or failed to record the required private process identity markers.");
 
             if (cancelAfterStart)
                 cancellation.Cancel();
@@ -274,6 +285,8 @@ public sealed class CandidateWorkerOperationTests
             Assert.DoesNotContain(PrivateCanaryRootPrefix, refusal.Message);
             Assert.DoesNotContain(PrivateCanaryRootPrefix, string.Join("\n", refusal.Details));
             Assert.False(IsMarkedProcessRunning(started), "The candidate worker returned while its marked child was still alive.");
+            if (descendant is not null)
+                Assert.False(IsMarkedProcessRunning(descendant), "The candidate worker returned while its marked descendant was still alive.");
             Assert.False(File.Exists(database));
             Assert.False(File.Exists(context));
             Assert.False(File.Exists(action));
@@ -285,6 +298,8 @@ public sealed class CandidateWorkerOperationTests
             catch (CliRefusal) { }
             catch (OperationCanceledException) { }
             catch (TimeoutException) { }
+            if (descendant is not null)
+                await KillMarkedProcessIfStillRunning(descendant);
             await KillMarkedProcessIfStillRunning(started);
         }
     }
