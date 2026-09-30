@@ -384,8 +384,8 @@
     },
     {
       "package_id": "Elsa.Modularity.EntityFramework",
-      "version": "4.0.2-preview",
-      "commit": "cc418b0e450a683aae1fd1f58ee807ee3510b3dd"
+      "version": "4.0.3-preview",
+      "commit": "2ba40c6f4fe1910e0edb1ded2fd0d92996a1ad97"
     },
     {
       "package_id": "Elsa.Modularity.Nuplane",
