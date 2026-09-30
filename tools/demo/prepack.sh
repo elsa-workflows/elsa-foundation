@@ -6,7 +6,7 @@ set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 usage() {
-  cat >&2 <<'USAGE'
+  cat <<'USAGE'
 Usage: bash tools/demo/prepack.sh
 
 Builds Elsa.Foundation.Host and the elsa tool from this checkout, warms the tool up, packs release 1.0.0 and release 1.1.0 of
@@ -16,10 +16,13 @@ the commit that was checked out when it ran.
 
 Then, on stage:  bash tools/demo/publish.sh <1|2> --host NAME
 USAGE
-  exit 2
 }
 
-[[ $# -eq 0 ]] || usage
+case "${1:-}" in
+  "") ;;
+  -h|--help) usage; exit 0 ;;
+  *) demo_fail "unknown argument '$1' (see --help)." ;;
+esac
 
 demo_require_python
 cd "$demo_root"
@@ -35,13 +38,14 @@ bash tools/demo/pack.sh 2 --feed "$demo_staging/2" --closure "$demo_closure" --n
 # The tool is rebuilt (a stale build would silently not match the host), then run once so the first call on stage is a fast one.
 echo "== building and warming up the elsa tool"
 ELSA_DEMO_REBUILD=1 bash tools/demo/elsa.sh persistence status --help >/dev/null
-bash tools/demo/elsa.sh persistence status --help >/dev/null
 
 for release in 1 2; do
-  package="$demo_staging/$release/Elsa.Samples.Nuplane.Notes.$(demo_release_version "$release").nupkg"
+  package="$(demo_staged_package "$release")"
   [[ -f "$package" ]] || demo_fail "Release $release was not staged: ${package#"$demo_root"/} is missing."
 done
 
 echo "== staged"
-ls -1 "$demo_staging"/1/*.nupkg "$demo_staging"/2/*.nupkg | sed "s|^$demo_root/|     |"
+for release in 1 2; do
+  echo "     $(demo_staged_package "$release" | sed "s|^$demo_root/||")"
+done
 echo "   ready in $((SECONDS - started)) s. On stage: bash tools/demo/publish.sh <1|2> --host NAME"

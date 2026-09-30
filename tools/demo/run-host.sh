@@ -5,7 +5,7 @@ set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 usage() {
-  cat >&2 <<'USAGE'
+  cat <<'USAGE'
 Usage: bash tools/demo/run-host.sh NAME --port PORT [--provider Sqlite|PostgreSql] [--policy Validate|AutoMigrate]
                                    [--cluster HOSTID [--fast-membership]] [--management-key-env VAR]
                                    [--feed DIR] [--closure DIR] [--prepare-only]
@@ -40,11 +40,13 @@ host as an environment variable: it is never written to disk or printed. When it
 artifacts/demo/notes.db. Two hosts that share a database run with the same ELSA_EF_CONNECTION.
 Relative paths are relative to the repository root.
 USAGE
-  exit 2
 }
 
-name="${1:-}"
-[[ -n "$name" && "$name" != -* ]] || usage
+case "${1:-}" in
+  -h|--help) usage; exit 0 ;;
+  ""|-*) demo_fail "Give the host a name: bash tools/demo/run-host.sh NAME --port PORT (see --help)." ;;
+esac
+name="$1"
 shift
 
 port=""
@@ -58,7 +60,7 @@ management_key_env=""
 prepare_only=0
 while [[ $# -gt 0 ]]; do
   # Every option but these three takes a value.
-  [[ "$1" != --* || "$1" == --prepare-only || "$1" == --fast-membership || "$1" == --help || $# -ge 2 ]] || usage
+  [[ "$1" != --* || "$1" == --prepare-only || "$1" == --fast-membership || "$1" == --help || $# -ge 2 ]] || demo_fail "$1 needs a value (see --help)."
   case "$1" in
     --port) port="$2"; shift 2 ;;
     --provider) provider="$2"; shift 2 ;;
@@ -69,14 +71,17 @@ while [[ $# -gt 0 ]]; do
     --management-key-env) management_key_env="$2"; shift 2 ;;
     --fast-membership) fast_membership=1; shift ;;
     --prepare-only) prepare_only=1; shift ;;
-    -h|--help) usage ;;
-    *) echo "unknown argument: $1" >&2; usage ;;
+    -h|--help) usage; exit 0 ;;
+    *) demo_fail "unknown argument '$1' (see --help)." ;;
   esac
 done
-[[ -n "$port" ]] || { echo "--port is required" >&2; usage; }
+[[ -n "$port" ]] || demo_fail "--port is required (see --help)."
+[[ "$port" =~ ^[0-9]+$ ]] || demo_fail "--port is a number, not '$port'."
+[[ "$policy" == "Validate" || "$policy" == "AutoMigrate" ]] || demo_fail "--policy is Validate or AutoMigrate, not '$policy'."
 [[ "$provider" == "Sqlite" || "$provider" == "PostgreSql" ]] || demo_fail "--provider is Sqlite or PostgreSql, not '$provider'."
 [[ "$fast_membership" -eq 0 || -n "$cluster_host_id" ]] || demo_fail "--fast-membership needs --cluster."
 
+demo_require rsync
 demo_require_python
 host="$(demo_dir "artifacts/demo/hosts/$name")"
 feed="$(demo_dir "${feed:-artifacts/demo/hosts/$name/feed}")"
@@ -139,7 +144,7 @@ appsettings = {
     },
     "Elsa": {"Persistence": {"EntityFramework": {
         "Migrate": {"Policy": policy},
-        "Finalization": {"EvaluationInterval": "00:00:05", "RefreshInterval": "00:00:02"},
+        "Finalization": {"EvaluationInterval": "00:00:02", "RefreshInterval": "00:00:02"},
         "Backfill": {"CheckInterval": "00:00:05"},
     }}},
 }
@@ -183,7 +188,7 @@ echo "persistence:    bash tools/demo/elsa.sh persistence apply --host ${host#"$
 [[ "$prepare_only" -eq 0 ]] || exit 0
 
 # One host per port. A second start would otherwise fail deep in the host's own log.
-if (exec 3<>"/dev/tcp/127.0.0.1/$port") 2>/dev/null; then
+if demo_port_in_use "$port"; then
   demo_fail "Port $port is already in use on 127.0.0.1. Give this host another --port, or stop what is listening: lsof -nP -iTCP:$port -sTCP:LISTEN"
 fi
 

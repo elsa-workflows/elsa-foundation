@@ -5,20 +5,20 @@ set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 usage() {
-  cat >&2 <<'USAGE'
+  cat <<'USAGE'
 Usage: bash tools/demo/show-change.sh [--all]
 
 Prints the release 1.1.0 change of samples/Elsa.Samples.Nuplane.Notes as a readable diff.
   --all   also print the generated migration designers, model snapshots and the PostgreSql migration
 USAGE
-  exit 2
 }
 
 show_all=0
 case "${1:-}" in
   "") ;;
   --all) show_all=1 ;;
-  *) usage ;;
+  -h|--help) usage; exit 0 ;;
+  *) demo_fail "unknown argument '$1' (see --help)." ;;
 esac
 
 cd "$demo_root/samples/Elsa.Samples.Nuplane.Notes"

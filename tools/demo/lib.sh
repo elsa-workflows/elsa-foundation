@@ -1,4 +1,5 @@
-# Shared by the tools/demo scripts: sourced, never run.
+# shellcheck shell=bash disable=SC2034
+# Shared by the tools/demo scripts: sourced, never run. (SC2034: the variables are used by the scripts that source it.)
 
 demo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 demo_artifacts="$demo_root/artifacts/demo"
@@ -28,6 +29,15 @@ demo_dir() {
   local path="$1"
   [[ "$path" == /* ]] || path="$demo_root/$path"
   mkdir -p "$path" && (cd "$path" && pwd -P)
+}
+
+# demo_require COMMAND...: every command must be on the PATH, or the script stops naming the first one that is not, with the way
+# to install it.
+demo_require() {
+  local command
+  for command in "$@"; do
+    command -v "$command" >/dev/null 2>&1 || demo_fail "$command is not installed or not on the PATH. On macOS: brew install $command (Docker: install Docker Desktop)."
+  done
 }
 
 # python3 writes the demo's JSON (a proper encoder, so no value is ever spliced into JSON text) and walks a restore's
@@ -62,14 +72,28 @@ demo_release_version() {
   esac
 }
 
+# demo_staged_package RELEASE: the path where prepack.sh stages that release's package (which need not exist yet).
+demo_staged_package() {
+  local version
+  version="$(demo_release_version "$1")" || exit 1
+  echo "$demo_staging/$1/Elsa.Samples.Nuplane.Notes.$version.nupkg"
+}
+
+# demo_port_in_use PORT: succeeds when something already listens on 127.0.0.1:PORT.
+demo_port_in_use() {
+  (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null
+}
+
 # demo_host_pid NAME: the process id recorded for host NAME when that process is still a demo host, and nothing otherwise. A
 # recorded id alone is not enough: the number may since have been given to another process, which nothing here may ever signal.
+# A demo host is the host dll started by run-host.sh, whose content root is a folder under artifacts/demo/hosts.
 demo_host_pid() {
-  local file="$demo_pids/$1.pid" pid
+  local file="$demo_pids/$1.pid" pid command
   [[ -f "$file" ]] || return 0
   pid="$(<"$file")"
   [[ "$pid" =~ ^[0-9]+$ ]] || return 0
-  if ps -p "$pid" -o command= 2>/dev/null | grep -q "Elsa.Foundation.Host.dll"; then
+  command="$(ps -ww -p "$pid" -o command= 2>/dev/null || true)"
+  if [[ "$command" == *"Elsa.Foundation.Host.dll"* && "$command" == *"--contentRoot $demo_artifacts/hosts/"* ]]; then
     echo "$pid"
   fi
 }

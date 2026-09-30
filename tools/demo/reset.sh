@@ -5,23 +5,26 @@ set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 usage() {
-  cat >&2 <<'USAGE'
+  cat <<'USAGE'
 Usage: bash tools/demo/reset.sh [--all]
 
 Stops every demo host recorded in artifacts/demo/pids (by process id, and only a process that is still a demo host; nothing is
 ever stopped by name), removes the PostgreSQL container (elsa-demo-pg, or DEMO_PG_CONTAINER) and everything under artifacts/demo
 except the staged releases and the closure feed, which prepack.sh spent minutes making.
   --all   remove the staged releases and the closure feed as well; run tools/demo/prepack.sh again afterwards
+
+It exits 1 when Docker could not be asked about the container (a daemon that is not running): everything else is still cleaned.
 USAGE
-  exit 2
 }
 
 remove_all=0
 case "${1:-}" in
   "") ;;
   --all) remove_all=1 ;;
-  *) usage ;;
+  -h|--help) usage; exit 0 ;;
+  *) demo_fail "unknown argument '$1' (see --help)." ;;
 esac
+[[ $# -le 1 ]] || demo_fail "unknown argument '$2' (see --help)."
 
 # Hosts first, so nothing holds a database or a directory open while it is removed. SIGTERM lets a host leave the cluster
 # cleanly; only a host that has not stopped after 30 s is killed.
@@ -48,8 +51,16 @@ if [[ -d "$demo_pids" ]]; then
   done
 fi
 
+docker_failed=0
 if command -v docker >/dev/null 2>&1; then
-  if [[ -n "$(docker ps -a --filter "name=^/$demo_pg_container\$" --format '{{.ID}}')" ]]; then
+  # docker's own status is tested apart from what it printed: a daemon that is down prints nothing on stdout, and that must
+  # not read as "no container".
+  listed_status=0
+  listed="$(docker ps -a --filter "name=^/$demo_pg_container\$" --format '{{.ID}}' 2>&1)" || listed_status=$?
+  if [[ "$listed_status" -ne 0 ]]; then
+    echo "container $demo_pg_container: docker ps failed (exit $listed_status), so the container was not looked for: ${listed:-no output}" >&2
+    docker_failed=1
+  elif [[ -n "$listed" ]]; then
     docker rm -f "$demo_pg_container" >/dev/null
     echo "container $demo_pg_container: removed"
   else
@@ -69,5 +80,9 @@ if [[ -d "$demo_artifacts" ]]; then
     rm -rf "$path"
     echo "removed ${path#"$demo_root"/}"
   done
+fi
+if [[ "$docker_failed" -eq 1 ]]; then
+  echo "demo state is clean, except that Docker did not answer: start Docker, then run bash tools/demo/reset.sh again" >&2
+  exit 1
 fi
 echo "demo state is clean"

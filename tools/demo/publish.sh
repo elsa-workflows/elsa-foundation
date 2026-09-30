@@ -5,7 +5,7 @@ set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 usage() {
-  cat >&2 <<'USAGE'
+  cat <<'USAGE'
 Usage: bash tools/demo/publish.sh <1|2> --host NAME [--feed DIR]
 
   1               release 1.0.0 of Elsa.Samples.Nuplane.Notes
@@ -16,27 +16,28 @@ Usage: bash tools/demo/publish.sh <1|2> --host NAME [--feed DIR]
 The release must have been staged by tools/demo/prepack.sh. The package is copied beside the feed and then renamed into it, so
 the host's folder watcher never sees a half-written file.
 USAGE
-  exit 2
 }
 
-release="${1:-}"
-[[ "$release" == "1" || "$release" == "2" ]] || usage
+case "${1:-}" in
+  -h|--help) usage; exit 0 ;;
+  ""|-*) demo_fail "Give the release to publish, 1 or 2, first: bash tools/demo/publish.sh <1|2> --host NAME (see --help)." ;;
+esac
+release="$1"
+package="$(demo_staged_package "$release")" || exit 1
 shift
 
 feed=""
 while [[ $# -gt 0 ]]; do
-  [[ "$1" != --* || "$1" == --help || $# -ge 2 ]] || usage
+  [[ "$1" != --* || "$1" == --help || $# -ge 2 ]] || demo_fail "$1 needs a value (see --help)."
   case "$1" in
     --host) feed="artifacts/demo/hosts/$2/feed"; shift 2 ;;
     --feed) feed="$2"; shift 2 ;;
-    -h|--help) usage ;;
-    *) echo "unknown argument: $1" >&2; usage ;;
+    -h|--help) usage; exit 0 ;;
+    *) demo_fail "unknown argument '$1' (see --help)." ;;
   esac
 done
-[[ -n "$feed" ]] || { echo "--host is required" >&2; usage; }
+[[ -n "$feed" ]] || demo_fail "--host or --feed is required (see --help)."
 
-version="$(demo_release_version "$release")"
-package="$demo_staging/$release/Elsa.Samples.Nuplane.Notes.$version.nupkg"
 [[ -f "$package" ]] || demo_fail "Release $release is not staged (${package#"$demo_root"/} is missing). Run: bash tools/demo/prepack.sh"
 
 feed="$(demo_dir "$feed")"

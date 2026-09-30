@@ -4,7 +4,7 @@ set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 usage() {
-  cat >&2 <<'USAGE'
+  cat <<'USAGE'
 Usage: bash tools/demo/elsa.sh <dotnet elsa arguments>
 
   ELSA_EF_CONNECTION='Data Source=...' bash tools/demo/elsa.sh persistence apply \
@@ -17,10 +17,10 @@ The tool runs inside the host's own dependency closure and reads the packages th
 directory tools/demo/run-host.sh made, after that host has reconciled its feed at least once, or with --restore.
 The tool is built once; delete src/essentials/Cli/bin, or set ELSA_DEMO_REBUILD=1, after changing it.
 USAGE
-  exit 2
 }
 
-[[ $# -gt 0 && "$1" != -h && "$1" != --help ]] || usage
+[[ $# -gt 0 ]] || demo_fail "Give the dotnet elsa arguments to run, e.g. persistence status (see --help)."
+[[ "$1" != -h && "$1" != --help ]] || { usage; exit 0; }
 
 cli="$demo_root/src/essentials/Cli/bin/Release/net10.0/Elsa.Cli.dll"
 if [[ ! -f "$cli" || -n "${ELSA_DEMO_REBUILD:-}" ]]; then
