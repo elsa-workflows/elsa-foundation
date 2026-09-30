@@ -8,6 +8,18 @@ demo_artifacts="$demo_root/artifacts/demo"
 demo_sqlite_file="$demo_artifacts/notes.db"
 demo_sqlite_connection="Data Source=$demo_sqlite_file;Pooling=False"
 
+# Where prepack.sh stages the two releases (staging/1 and staging/2) for publish.sh, where run-host.sh records the process id of
+# each host it starts (pids/NAME.pid) for reset.sh, and the resolve-only closure feed.
+demo_staging="$demo_artifacts/staging"
+demo_pids="$demo_artifacts/pids"
+demo_closure="$demo_artifacts/closure"
+
+# The PostgreSQL container of the two-host demo. DEMO_PG_CONTAINER and DEMO_PG_PORT move it, for a machine where the name or the
+# port is taken.
+demo_pg_container="${DEMO_PG_CONTAINER:-elsa-demo-pg}"
+demo_pg_port="${DEMO_PG_PORT:-55432}"
+demo_pg_connection="Host=127.0.0.1;Port=$demo_pg_port;Database=elsa;Username=postgres;Password=demo"
+
 demo_fail() {
   echo "error: $*" >&2
   exit 1
@@ -42,4 +54,25 @@ demo_quiet() {
     exit "$status"
   fi
   rm -f "$log"
+}
+
+# demo_release_version RELEASE: the package version of a release, 1 -> 1.0.0 and 2 -> 1.1.0 (see the Notes project file).
+demo_release_version() {
+  case "$1" in
+    1) echo "1.0.0" ;;
+    2) echo "1.1.0" ;;
+    *) demo_fail "There is no release '$1'; the releases are 1 and 2." ;;
+  esac
+}
+
+# demo_host_pid NAME: the process id recorded for host NAME when that process is still a demo host, and nothing otherwise. A
+# recorded id alone is not enough: the number may since have been given to another process, which nothing here may ever signal.
+demo_host_pid() {
+  local file="$demo_pids/$1.pid" pid
+  [[ -f "$file" ]] || return 0
+  pid="$(<"$file")"
+  [[ "$pid" =~ ^[0-9]+$ ]] || return 0
+  if ps -p "$pid" -o command= 2>/dev/null | grep -q "Elsa.Foundation.Host.dll"; then
+    echo "$pid"
+  fi
 }

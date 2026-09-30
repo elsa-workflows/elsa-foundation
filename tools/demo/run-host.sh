@@ -102,6 +102,10 @@ if [[ -n "$cluster_host_id" && ! -f "$built/Elsa.Cluster.EntityFrameworkCore.dll
   demo_fail "--cluster needs a host build that carries the EF cluster membership provider (Elsa.Cluster.EntityFrameworkCore.dll), and this build does not."
 fi
 
+# One host per name: the copy below rewrites the directory a running host is using.
+running="$(demo_host_pid "$name")"
+[[ -z "$running" ]] || demo_fail "Host $name is already running (process $running). Stop it (kill $running) before starting it again."
+
 rsync -a --exclude '.nuplane/' --exclude 'feed/' --exclude 'shells.json' --exclude 'appsettings.Development.json' "$built/" "$host/"
 
 # The two files are written by a JSON encoder from the values above; the connection is in neither. NotesWithTags is listed from
@@ -174,6 +178,15 @@ fi
 [[ -z "$management_key" ]] || echo "management:     POST /_module-management/reload, key from \$$management_key_env"
 echo "persistence:    bash tools/demo/elsa.sh persistence apply --host ${host#"$demo_root"/} --environment Development --provider $provider --modules $modules"
 [[ "$prepare_only" -eq 0 ]] || exit 0
+
+# One host per port. A second start would otherwise fail deep in the host's own log.
+if (exec 3<>"/dev/tcp/127.0.0.1/$port") 2>/dev/null; then
+  demo_fail "Port $port is already in use on 127.0.0.1. Give this host another --port, or stop what is listening: lsof -nP -iTCP:$port -sTCP:LISTEN"
+fi
+
+# The pid file is what tools/demo/reset.sh stops the host by; the shell becomes the host below, so $$ is the host's process.
+mkdir -p "$demo_pids"
+echo "$$" >"$demo_pids/$name.pid"
 
 cd "$host"
 ASPNETCORE_ENVIRONMENT=Development exec dotnet Elsa.Foundation.Host.dll --contentRoot "$host" --urls "http://127.0.0.1:$port"
