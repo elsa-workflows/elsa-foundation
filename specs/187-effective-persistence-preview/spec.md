@@ -1,10 +1,10 @@
 # Feature Specification: Effective persistence preview for accepted runtime candidates
 
-**Feature Branch**: `1307-effective-persistence-preview`
+**Feature Branch**: `1307-effective-persistence-preview` (specification); `codex/2177-effective-persistence-preview` (implementation)
 
 **Created**: 2026-09-30
 
-**Status**: Approved — independently/root-reviewed specification task [#2175](https://github.com/elsa-workflows/elsa-foundation/issues/2175); implementation has not started.
+**Status**: In progress — reviewed specification #2175 delivered through PR #2178; implementation story [#2177](https://github.com/elsa-workflows/elsa-foundation/issues/2177) owns all tasks and complete actor/configuration/adverse proof. No implementation delivery is claimed.
 
 **Input**: Program [#1959](https://github.com/elsa-workflows/elsa-foundation/issues/1959), developer epic [#1962](https://github.com/elsa-workflows/elsa-foundation/issues/1962), and the delivered [persistence evidence investigation](../../docs/reports/runtime-composition/developer-persistence-evidence.md). Preserve granular selection, shared defaults, explicit overrides and legacy compatibility while explaining edited compositions before deployment.
 

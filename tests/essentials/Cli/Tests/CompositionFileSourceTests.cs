@@ -2,11 +2,355 @@ using Xunit;
 using Elsa.Modularity.Planning.Bridge;
 using Elsa.Modularity.Planning.Json;
 using Elsa.Modularity.Planning.Models;
+using System.Diagnostics;
+using System.Text;
 
 namespace Elsa.Cli.Tests;
 
 public sealed class CompositionFileSourceTests
 {
+    private const int FileLimit = 1024 * 1024;
+
+    [Fact]
+    public void Candidate_reader_counts_bytes_without_trusting_stream_length_and_disposes_the_stream()
+    {
+        using var bytes = new NonSeekingStream([1, 2, 3, 4]);
+        var checks = 0;
+        var reader = new CompositionFileReader(_ => checks++, _ => bytes);
+
+        Assert.Equal(new byte[] { 1, 2, 3, 4 }, reader.Read("private-file-canary", 4));
+        Assert.Equal(2, checks);
+        Assert.True(bytes.Disposed);
+    }
+
+    [Fact]
+    public void Candidate_reader_refuses_the_first_byte_over_the_bound_without_reading_the_rest()
+    {
+        using var bytes = new NonSeekingStream(new byte[256]);
+        var reader = new CompositionFileReader(_ => { }, _ => bytes);
+
+        var refusal = Assert.Throws<CliRefusal>(() => reader.Read("private-file-canary", 4));
+
+        Assert.Equal("candidate-capture-invalid", refusal.Code);
+        Assert.Equal(5, bytes.BytesRead);
+        Assert.True(bytes.Disposed);
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(FileLimit + 1)]
+    public void Candidate_reader_refuses_unsupported_limits_before_opening(int limit)
+    {
+        var reader = new CompositionFileReader(_ => throw new InvalidOperationException("must not check"),
+            _ => throw new InvalidOperationException("must not open"));
+
+        Assert.Equal("candidate-capture-invalid", Assert.Throws<CliRefusal>(() => reader.Read("unused", limit)).Code);
+    }
+
+    [Fact]
+    public void Candidate_reader_requires_both_file_dependencies()
+    {
+        Assert.Throws<ArgumentNullException>(() => new CompositionFileReader(null!, _ => Stream.Null));
+        Assert.Throws<ArgumentNullException>(() => new CompositionFileReader(_ => { }, null!));
+    }
+
+    [Fact]
+    public void Candidate_reader_wraps_stream_failures_and_disposes_the_owned_stream()
+    {
+        using var stream = new UnreadableStream();
+        var reader = new CompositionFileReader(_ => { }, _ => stream);
+
+        var refusal = Assert.Throws<CliRefusal>(() => reader.Read("private-path-canary", 4));
+
+        Assert.Equal("composition-input-unreadable", refusal.Code);
+        Assert.DoesNotContain("private", refusal.ToString(), StringComparison.Ordinal);
+        Assert.True(stream.Disposed);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Capture_requires_a_path_collection(bool candidate)
+    {
+        Assert.Throws<ArgumentNullException>(() => candidate
+            ? CompositionInputSnapshot.OpenForCandidate(null!)
+            : CompositionInputSnapshot.Open(null!));
+    }
+
+    [Theory]
+    [InlineData("null")]
+    [InlineData("disposed")]
+    [InlineData("unreadable")]
+    [InlineData("limit")]
+    public void Candidate_reader_sanitizes_failed_or_invalid_openers(string failure)
+    {
+        var reader = new CompositionFileReader(_ => { }, _ =>
+        {
+            if (failure == "null")
+                return null!;
+            if (failure == "disposed")
+            {
+                var stream = new MemoryStream();
+                stream.Dispose();
+                return stream;
+            }
+            throw CliRefusal.Usage(failure == "limit" ? "candidate-capture-invalid" : "private-code-canary", "private-message-canary");
+        });
+
+        var refusal = Assert.Throws<CliRefusal>(() => reader.Read("private-path-canary", 4));
+
+        Assert.Equal(failure == "limit" ? "candidate-capture-invalid" : "composition-input-unreadable", refusal.Code);
+        Assert.DoesNotContain("private", refusal.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Candidate_reader_accepts_empty_input_at_a_zero_remaining_budget()
+    {
+        var reader = new CompositionFileReader(_ => { }, _ => new MemoryStream());
+
+        Assert.Empty(reader.Read("unused", 0));
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    public void Candidate_reader_checks_regular_file_before_and_after_read_with_fixed_errors(int failedCheck)
+    {
+        using var bytes = new NonSeekingStream([1]);
+        var checks = 0;
+        var opens = 0;
+        var reader = new CompositionFileReader(_ =>
+        {
+            if (++checks == failedCheck)
+                throw new IOException("private-file-canary");
+        }, _ => { opens++; return bytes; });
+
+        var refusal = Assert.Throws<CliRefusal>(() => reader.Read("private-file-canary", 4));
+
+        Assert.Equal("composition-input-unreadable", refusal.Code);
+        Assert.DoesNotContain("private-file-canary", refusal.ToString(), StringComparison.Ordinal);
+        Assert.Equal(failedCheck == 1 ? 0 : 1, opens);
+        if (opens != 0)
+            Assert.True(bytes.Disposed);
+    }
+
+    [Fact]
+    public void Candidate_source_retains_selected_and_unused_bytes_and_rechecks_with_the_same_reader()
+    {
+        using var fixture = new LocalFixture();
+        var supplied = System.IO.Directory.GetFiles(fixture.Directory).ToDictionary(path => Path.GetFileName(path)!, File.ReadAllBytes);
+        var reader = new CompositionFileReader(_ => { }, path => new MemoryStream(supplied[Path.GetFileName(path)]!));
+        var source = CandidateSource(fixture, reader);
+
+        Assert.All(supplied, file => Assert.Equal(file.Value, source.Snapshot.CopyBytes(file.Key!)));
+        source.VerifyUnchanged();
+        supplied["shells.Staging.json"] = Encoding.UTF8.GetBytes("{}");
+
+        var refusal = Assert.Throws<CliRefusal>(source.VerifyUnchanged);
+        Assert.Equal("bridge-source-changed", refusal.Code);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Candidate_source_limits_the_complete_context_including_unused_siblings(bool fileCount)
+    {
+        using var fixture = new LocalFixture();
+        foreach (var file in System.IO.Directory.GetFiles(fixture.Directory))
+            File.WriteAllText(file, "{}");
+        var totalFiles = fileCount ? 33 : 9;
+        for (var i = 6; i < totalFiles; i++)
+            File.WriteAllText(Path.Join(fixture.Directory, $"shells.Env{i}.json"), "{}");
+        var reader = new CompositionFileReader(_ => { }, _ => new MemoryStream(new byte[fileCount ? 0 : FileLimit]));
+
+        var refusal = Assert.Throws<CliRefusal>(() => CandidateSource(fixture, reader));
+
+        Assert.Equal("candidate-capture-invalid", refusal.Code);
+        Assert.DoesNotContain(fixture.Directory, refusal.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Candidate_capture_accepts_exact_context_bounds_and_keeps_normal_readers_unbounded()
+    {
+        using var fixture = new LocalFixture();
+        for (var i = 6; i < 8; i++)
+            File.WriteAllText(Path.Join(fixture.Directory, $"shells.Env{i}.json"), "{}");
+        var reader = new CompositionFileReader(_ => { }, _ => new MemoryStream(Encoding.UTF8.GetBytes(new string(' ', FileLimit))));
+
+        var source = CandidateSource(fixture, reader);
+        Assert.Equal(8, source.Snapshot.FileNames.Length);
+        source.VerifyUnchanged();
+
+        var oversized = Path.Join(fixture.Directory, "appsettings.json");
+        File.WriteAllText(oversized, new string(' ', FileLimit + 1));
+        Assert.Equal(FileLimit + 1, CompositionFileSource.Open(fixture.Directory, "default", "Production")
+            .Snapshot.CopyBytes("appsettings.json").Length);
+        Assert.Equal("candidate-capture-invalid", Assert.Throws<CliRefusal>(() => CandidateSource(fixture)).Code);
+    }
+
+    [Fact]
+    public void Candidate_input_capture_keeps_unused_profiles_frozen_and_rechecks_them()
+    {
+        using var directory = new TempDirectory("elsa-candidate-input-");
+        var selected = directory.File("accepted.json");
+        var unused = directory.File("unused-profile.json");
+        File.WriteAllText(selected, "{}");
+        File.WriteAllText(unused, "{}");
+        var content = new Dictionary<string, byte[]> { [selected] = Encoding.UTF8.GetBytes("{}"), [unused] = Encoding.UTF8.GetBytes("{\"unused\":true}") };
+        var reader = new CompositionFileReader(_ => { }, path => new MemoryStream(content[path]));
+        var input = CompositionInputSnapshot.OpenForCandidate([selected, unused, selected], reader);
+
+        Assert.Equal("{\"unused\":true}", input.ReadText(unused));
+        input.VerifyUnchanged();
+        content[unused] = Encoding.UTF8.GetBytes("{}");
+
+        Assert.Equal("{\"unused\":true}", input.ReadText(unused));
+        Assert.Equal("composition-input-changed", Assert.Throws<CliRefusal>(() => input.VerifyUnchanged()).Code);
+    }
+
+    [Fact]
+    public void Candidate_inputs_deduplicate_normalized_paths_and_accept_exact_context_bounds()
+    {
+        using var directory = new TempDirectory("elsa-candidate-input-");
+        var paths = Enumerable.Range(0, 8).Select(i => directory.File($"input{i}.json")).ToArray();
+        var checks = 0;
+        var reader = new CompositionFileReader(_ => checks++, _ => new MemoryStream(new byte[FileLimit]));
+        var input = CompositionInputSnapshot.OpenForCandidate([.. paths, paths[0]], reader);
+
+        Assert.Equal(16, checks);
+        input.VerifyUnchanged();
+        Assert.Equal(32, checks);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Candidate_input_text_refuses_unknown_path_and_invalid_encoding_without_values(bool invalidEncoding)
+    {
+        using var directory = new TempDirectory("elsa-candidate-input-");
+        var path = directory.File("input.json");
+        var reader = new CompositionFileReader(_ => { }, _ => new MemoryStream([0xff]));
+        var input = CompositionInputSnapshot.OpenForCandidate([path], reader);
+
+        var refusal = Assert.Throws<CliRefusal>(() => input.ReadText(invalidEncoding ? path : directory.File("private-canary.json")));
+
+        Assert.Equal(invalidEncoding ? "composition-input-invalid" : "composition-input-unreadable", refusal.Code);
+        Assert.DoesNotContain("private-canary", refusal.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Candidate_input_growth_or_loss_after_capture_is_a_drift_refusal()
+    {
+        using var directory = new TempDirectory("elsa-candidate-input-");
+        var path = directory.File("input.json");
+        File.WriteAllText(path, "{}");
+        var input = CompositionInputSnapshot.OpenForCandidate([path]);
+        File.WriteAllText(path, new string(' ', FileLimit + 1));
+
+        Assert.Equal("composition-input-changed", Assert.Throws<CliRefusal>(input.VerifyUnchanged).Code);
+        File.Delete(path);
+        Assert.Equal("composition-input-changed", Assert.Throws<CliRefusal>(input.VerifyUnchanged).Code);
+    }
+
+    [Fact]
+    public void Existing_intent_reader_keeps_its_unbounded_behavior()
+    {
+        using var directory = new TempDirectory("elsa-candidate-input-");
+        var path = directory.File("input.json");
+        File.WriteAllText(path, new string(' ', FileLimit + 1));
+        var input = CompositionInputSnapshot.Open([path]);
+
+        Assert.Equal(FileLimit + 1, input.ReadText(path).Length);
+        input.VerifyUnchanged();
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Candidate_source_detects_added_or_removed_unused_siblings(bool remove)
+    {
+        using var fixture = new LocalFixture();
+        var source = CandidateSource(fixture);
+        if (remove)
+            File.Delete(Path.Join(fixture.Directory, "shells.Staging.json"));
+        else
+            File.WriteAllText(Path.Join(fixture.Directory, "shells.New.json"), "{}");
+
+        Assert.Equal("bridge-source-changed", Assert.Throws<CliRefusal>(source.VerifyUnchanged).Code);
+    }
+
+    [Theory]
+    [InlineData(33, 0)]
+    [InlineData(9, FileLimit)]
+    [InlineData(1, FileLimit + 1)]
+    public void Candidate_inputs_enforce_unique_file_count_actual_file_bytes_and_context_bytes(int count, int size)
+    {
+        using var directory = new TempDirectory("elsa-candidate-input-");
+        var paths = Enumerable.Range(0, count).Select(i => directory.File($"input{i}.json")).ToArray();
+        var reader = new CompositionFileReader(_ => { }, _ => new MemoryStream(new byte[size]));
+
+        Assert.Equal("candidate-capture-invalid", Assert.Throws<CliRefusal>(() => CompositionInputSnapshot.OpenForCandidate(paths, reader)).Code);
+    }
+
+    [Theory]
+    [InlineData("shells.Unused.json", false)]
+    [InlineData("unused-profile.json", true)]
+    public void Candidate_capture_refuses_unused_fifo_before_content_read(string name, bool intent)
+    {
+        if (OperatingSystem.IsWindows())
+            return;
+        using var fixture = new LocalFixture();
+        var fifo = Path.Join(fixture.Directory, name);
+        using (var process = Process.Start(new ProcessStartInfo("/usr/bin/mkfifo") { ArgumentList = { fifo } }))
+        {
+            Assert.NotNull(process);
+            Assert.True(process.WaitForExit(2_000));
+            Assert.Equal(0, process.ExitCode);
+        }
+
+        var refusal = Assert.Throws<CliRefusal>(() =>
+        {
+            if (intent)
+                _ = CompositionInputSnapshot.OpenForCandidate([fifo]);
+            else
+                _ = CandidateSource(fixture);
+        });
+
+        Assert.Equal(intent ? "composition-input-unreadable" : "bridge-source-unreadable", refusal.Code);
+    }
+
+    private static CompositionFileSource CandidateSource(LocalFixture fixture, CompositionFileReader? reader = null) =>
+        CompositionFileSource.OpenForCandidate(fixture.Directory, "default", "Production", reader);
+
+    private sealed class NonSeekingStream(byte[] bytes) : MemoryStream(bytes)
+    {
+        public bool Disposed { get; private set; }
+        public int BytesRead { get; private set; }
+        public override long Length => throw new NotSupportedException("Length must not govern byte bounds.");
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            var read = base.Read(buffer, offset, count);
+            BytesRead += read;
+            return read;
+        }
+        protected override void Dispose(bool disposing)
+        {
+            Disposed = true;
+            base.Dispose(disposing);
+        }
+    }
+
+    private sealed class UnreadableStream : MemoryStream
+    {
+        public bool Disposed { get; private set; }
+        public override int Read(byte[] buffer, int offset, int count) => throw new IOException("private-stream-canary");
+        protected override void Dispose(bool disposing)
+        {
+            Disposed = true;
+            base.Dispose(disposing);
+        }
+    }
+
     [Fact]
     public void Open_freezes_supported_siblings_and_rechecks_unselected_files()
     {

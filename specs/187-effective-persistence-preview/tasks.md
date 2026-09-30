@@ -1,17 +1,19 @@
 # Tasks: Effective persistence preview
 
 **Input**: [plan](plan.md), [spec](spec.md), research, data model and contracts.
-**Status**: Planned implementation tasks; all unchecked. Issue2175 delivers this contract only. One coherent implementation issue/PR will own T001–T020 after review and specification delivery.
+**Status**: Implementation in progress under #2177, following delivered specification #2175 / PR #2178. One coherent implementation issue/PR owns T001–T020; checks below record actual completed work, not delivery.
 
 ## Phase 1: Setup
 
-- [ ] T001 Refresh/claim the linked implementation issue and inspect accepted contracts in `specs/187-effective-persistence-preview/`; recheck matching PRs and preserve dirty work.
-- [ ] T002 Define shared real-host/captured-input fixture helpers in `tests/essentials/Cli/Tests/` and reuse existing built host fixtures; own deterministic teardown, with no new project/suite.
+- [X] T001 Refresh/claim the linked implementation issue and inspect accepted contracts in `specs/187-effective-persistence-preview/`; recheck matching PRs and preserve dirty work.
+- [X] T002 Define shared real-host/captured-input fixture helpers in `tests/essentials/Cli/Tests/` and reuse existing built host fixtures; own deterministic teardown, with no new project/suite.
 
 ## Phase 2: Foundational
 
-- [ ] T003 Write failing strict candidate/legacy-envelope contract tests in `tests/essentials/Cli/Tests/WorkerProtocolTests.cs`, then define private candidate version1 request/response shapes and command admission in `src/essentials/Cli/Worker/WorkerContract.cs`, with legacy envelopes unchanged and live fields forbidden.
-- [ ] T004 Write failing source-byte/nonregular/drift tests with stubbed file dependencies in `tests/essentials/Cli/Tests/CompositionFileSourceTests.cs`, then add candidate-specific bounded immutable source capture/recheck to `src/essentials/Cli/CompositionFileSource.cs` and `CompositionInputSnapshot.cs`; all supplied profiles including unused files share invocation ownership with candidate bytes; reuse/extract fail-closed regular-file preflight so FIFO/device sources refuse before reads.
+- [X] T003 Write failing strict candidate/legacy-envelope contract tests in `tests/essentials/Cli/Tests/WorkerProtocolTests.cs`, then define private candidate version1 request/response shapes and command admission in `src/essentials/Cli/Worker/WorkerContract.cs`, with legacy envelopes unchanged and live fields forbidden.
+- [X] T004 Write failing source-byte/nonregular/drift/ownership tests with stubbed file dependencies in `tests/essentials/Cli/Tests/CompositionFileSourceTests.cs` and `tests/essentials/Cli/Tests/CompositionInspectionCaptureTests.cs`, then add candidate-specific bounded immutable source capture/recheck in `src/essentials/Cli/CompositionFileReader.cs`, `src/essentials/Cli/CompositionFileSource.cs`, `src/essentials/Cli/CompositionInputSnapshot.cs` and `src/essentials/Cli/CompositionInspectionCapture.cs`; one owner validates finite selection identities before one Build call and retains all supplied profiles including unused files with candidate bytes; reuse/extract fail-closed regular-file preflight so FIFO/device sources refuse before reads.
+
+Foundation execution evidence is recorded in [implementation evidence](implementation-evidence.md). These checks do not close the actor/runtime/adverse acceptance rows.
 
 ## Phase 3: User Story 1 — Inspect accepted edits (P1)
 

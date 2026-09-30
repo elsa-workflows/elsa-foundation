@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -20,6 +21,32 @@ public static class WorkerContract
     /// <summary>The only envelope version this build speaks in either direction.</summary>
     public const int Version = 2;
 
+    private const int CandidateRequestMaxBytes = 8 * 1024 * 1024;
+    private const int CandidateHostResponseMaxBytes = 4 * 1024 * 1024;
+    private const int CandidateJsonMaxDepth = 64;
+    private const string CandidateRequestInvalidMessage = "The candidate worker request is invalid.";
+    private const string CandidateHostResponseInvalidMessage = "The candidate host response is invalid.";
+    private const int CandidateFileMaxBytes = 1024 * 1024;
+    private const int CandidateFilesMaxBytes = 4 * 1024 * 1024;
+    private static readonly HashSet<string> CandidateHostResponseFields = new(StringComparer.Ordinal)
+    {
+        "version", "invocationId", "captureId", "status", "exitCode", "configurationResolution", "error"
+    };
+    private static readonly HashSet<string> CandidateHostErrorFields = new(StringComparer.Ordinal)
+    {
+        "code", "reason", "feature", "resource"
+    };
+    private static readonly HashSet<string> CandidateHostErrorCodes = new(StringComparer.Ordinal)
+    {
+        "candidate-selection-conflict", "resource-selection-invalid", "resource-not-found",
+        "resource-definition-invalid", "resource-configurator-unsupported", "resource-required-feature-disabled",
+        "resource-legacy-conflict", "resource-ownership-unresolved", "resource-context-conflict"
+    };
+    private static readonly HashSet<string> CandidateSelectionConflictReasons = new(StringComparer.Ordinal)
+    {
+        "unknown", "unavailable", "requested-extra", "requested-missing", "expanded-extra", "required-disabled", "case-collision"
+    };
+
     /// <summary>
     /// Case-sensitive camelCase with unmapped members refused, matching the tooling contract: a worker and a
     /// front end from different builds must fail loudly rather than silently ignore a field one of them
@@ -40,8 +67,276 @@ public static class WorkerContract
         if (document.RootElement.ValueKind != JsonValueKind.Object ||
             !document.RootElement.TryGetProperty("version", out _) || HasDuplicateFields(document.RootElement))
             throw new JsonException("The worker request is not a closed versioned object.");
+
+        if (document.RootElement.TryGetProperty("candidate", out _) ||
+            (document.RootElement.TryGetProperty("command", out var command) &&
+             command.ValueKind == JsonValueKind.String && command.GetString() == WorkerCommands.InspectCandidate))
+            throw new JsonException("The worker request is not a legacy operation.");
+
         return document.RootElement.Deserialize<WorkerRequest>(Json);
     }
+
+    /// <summary>Reads the additive candidate operation through its bounded, closed v1 payload parser.</summary>
+    public static async Task<WorkerRequest?> ReadCandidateRequestAsync(Stream stream, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await ReadBoundedCandidateJsonAsync(stream, CandidateRequestMaxBytes,
+                () => WorkerRefusal.Usage("candidate-request-too-large", "The candidate request exceeds the supported size limit."),
+                root =>
+                {
+                    if (root.ValueKind != JsonValueKind.Object ||
+                        !root.TryGetProperty("version", out _) || HasDuplicateFields(root))
+                        throw InvalidCandidateRequest();
+
+                    var request = root.Deserialize<WorkerRequest>(Json);
+                    if (request is null)
+                        throw InvalidCandidateRequest();
+                    ValidateCandidateRequest(root, request);
+                    return request;
+                },
+                cancellationToken);
+        }
+        catch (JsonException)
+        {
+            throw InvalidCandidateRequest();
+        }
+    }
+
+    /// <summary>Reads and validates the private candidate host envelope while preserving its original JSON value.</summary>
+    public static async Task<JsonElement> ReadCandidateHostResponseAsync(
+        Stream stream,
+        string expectedInvocationId,
+        string expectedCaptureId,
+        int processExitCode,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await ReadBoundedCandidateJsonAsync(stream, CandidateHostResponseMaxBytes,
+                () => WorkerRefusal.Resolution("candidate-response-too-large", "The candidate host response exceeds the supported size limit."),
+                root =>
+                {
+                    ValidateCandidateHostResponse(root, expectedInvocationId, expectedCaptureId, processExitCode);
+                    return root.Clone();
+                },
+                cancellationToken);
+        }
+        catch (JsonException)
+        {
+            throw InvalidCandidateHostResponse();
+        }
+    }
+
+    private static async Task<T> ReadBoundedCandidateJsonAsync<T>(
+        Stream stream,
+        int maxBytes,
+        Func<WorkerRefusal> oversizedRefusal,
+        Func<JsonElement, T> parse,
+        CancellationToken cancellationToken)
+    {
+        var buffer = ArrayPool<byte>.Shared.Rent(maxBytes + 1);
+        try
+        {
+            var length = 0;
+            while (true)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var read = await stream.ReadAsync(buffer.AsMemory(length, maxBytes + 1 - length), cancellationToken);
+                if (read == 0)
+                    break;
+                length += read;
+                if (length > maxBytes)
+                    throw oversizedRefusal();
+            }
+
+            using var document = JsonDocument.Parse(buffer.AsMemory(0, length),
+                new JsonDocumentOptions { MaxDepth = CandidateJsonMaxDepth });
+            return parse(document.RootElement);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer, clearArray: true);
+        }
+    }
+
+    private static void ValidateCandidateHostResponse(
+        JsonElement root,
+        string expectedInvocationId,
+        string expectedCaptureId,
+        int processExitCode)
+    {
+        if (!IsToken(expectedInvocationId) || !IsToken(expectedCaptureId) ||
+            string.Equals(expectedInvocationId, expectedCaptureId, StringComparison.Ordinal) ||
+            root.ValueKind != JsonValueKind.Object || HasDuplicateFields(root) ||
+            root.EnumerateObject().Any(property => !CandidateHostResponseFields.Contains(property.Name)) ||
+            !root.TryGetProperty("version", out var version) || version.ValueKind != JsonValueKind.Number ||
+            !version.TryGetInt32(out var versionValue) || versionValue != 1 ||
+            !root.TryGetProperty("invocationId", out var invocationId) || invocationId.ValueKind != JsonValueKind.String ||
+            invocationId.GetString() != expectedInvocationId ||
+            !root.TryGetProperty("captureId", out var captureId) || captureId.ValueKind != JsonValueKind.String ||
+            captureId.GetString() != expectedCaptureId ||
+            !root.TryGetProperty("status", out var status) || status.ValueKind != JsonValueKind.String ||
+            !root.TryGetProperty("exitCode", out var exitCode) || exitCode.ValueKind != JsonValueKind.Number ||
+            !exitCode.TryGetInt32(out var exitCodeValue) || exitCodeValue != processExitCode)
+            throw InvalidCandidateHostResponse();
+
+        var statusValue = status.GetString();
+        var hasResolution = root.TryGetProperty("configurationResolution", out var resolution);
+        var hasError = root.TryGetProperty("error", out var error);
+        if (statusValue == "ok")
+        {
+            if (processExitCode != ToolExitCode.Success || !hasResolution || hasError ||
+                resolution.ValueKind != JsonValueKind.Object)
+                throw InvalidCandidateHostResponse();
+            return;
+        }
+
+        if (statusValue != "refused" || processExitCode != ToolExitCode.Refusal ||
+            hasResolution || !hasError || error.ValueKind != JsonValueKind.Object)
+            throw InvalidCandidateHostResponse();
+
+        ValidateCandidateHostError(error);
+    }
+
+    private static void ValidateCandidateHostError(JsonElement error)
+    {
+        if (HasDuplicateFields(error) ||
+            error.EnumerateObject().Any(property => !CandidateHostErrorFields.Contains(property.Name)) ||
+            !error.TryGetProperty("code", out var code) || code.ValueKind != JsonValueKind.String ||
+            !CandidateHostErrorCodes.Contains(code.GetString() ?? string.Empty))
+            throw InvalidCandidateHostResponse();
+
+        var codeValue = code.GetString();
+        var hasReason = error.TryGetProperty("reason", out var reason);
+        if (hasReason && (codeValue != "candidate-selection-conflict" || reason.ValueKind != JsonValueKind.String ||
+            !CandidateSelectionConflictReasons.Contains(reason.GetString() ?? string.Empty)))
+            throw InvalidCandidateHostResponse();
+
+        foreach (var identityName in new[] { "feature", "resource" })
+        {
+            if (error.TryGetProperty(identityName, out var identity) &&
+                (identity.ValueKind != JsonValueKind.String ||
+                 !(identityName == "feature"
+                     ? IsSafeCandidateReference(identity.GetString())
+                     : IsSafePublicResourceIdentity(identity.GetString()))))
+                throw InvalidCandidateHostResponse();
+        }
+    }
+
+    private static bool IsSafePublicResourceIdentity(string? value) => value is { Length: > 0 and <= 128 } &&
+        (char.IsAsciiLetter(value[0]) || value[0] == '_') &&
+        value.All(character => char.IsAsciiLetterOrDigit(character) || character is '_' or '-' or '.') &&
+        !string.Equals(value, "true", StringComparison.OrdinalIgnoreCase) &&
+        !string.Equals(value, "false", StringComparison.OrdinalIgnoreCase) &&
+        !string.Equals(value, "null", StringComparison.OrdinalIgnoreCase);
+
+    private static WorkerRefusal InvalidCandidateHostResponse() => WorkerRefusal.Resolution(
+        "candidate-response-invalid", CandidateHostResponseInvalidMessage);
+
+    private static void ValidateCandidateRequest(JsonElement root, WorkerRequest request)
+    {
+        var candidate = request.Candidate;
+        if (request.Version != Version || request.Command != WorkerCommands.InspectCandidate ||
+            string.IsNullOrWhiteSpace(request.HostDirectory) || string.IsNullOrWhiteSpace(request.HostName) ||
+            string.IsNullOrWhiteSpace(request.DepsFile) || request.PackageRoots is null ||
+            request.PackageRoots.Any(string.IsNullOrWhiteSpace) || candidate is null || request.Restore ||
+            request.Selection is not null || request.Provider is not null || request.Schema is not null ||
+            request.Output is not null || request.Environment is not null || request.Shell is not null ||
+            request.ContextSource is not null || request.ContextVersion is not null || request.Resource is not null ||
+            request.Shells is not null || request.ConnectionEnv is not null || request.Connection is not null ||
+            request.Finalization is not null || request.SkewAllowance is not null)
+            throw InvalidCandidateRequest();
+
+        if (!root.TryGetProperty("hostDirectory", out _) || !root.TryGetProperty("hostName", out _) ||
+            !root.TryGetProperty("depsFile", out _) || !root.TryGetProperty("packageRoots", out _) ||
+            !root.TryGetProperty("candidate", out _))
+            throw InvalidCandidateRequest();
+
+        ValidateCandidatePayload(candidate);
+    }
+
+    private static void ValidateCandidatePayload(WorkerCandidatePayload candidate)
+    {
+        if (candidate.Version != 1 || candidate.Source != "captured-workbench-json-v1" ||
+            !IsToken(candidate.InvocationId) || !IsToken(candidate.CaptureId) ||
+            string.Equals(candidate.InvocationId, candidate.CaptureId, StringComparison.Ordinal) ||
+            !IsSafeCandidateReference(candidate.Shell) || !IsSafeEnvironment(candidate.Environment) ||
+            candidate.Files is null ||
+            !IsValidCandidateSelection(candidate.AcceptedFeatureIds, candidate.RemovedFeatureIds) ||
+            !IsOrdinallySorted(candidate.AcceptedFeatureIds!) || !IsOrdinallySorted(candidate.RemovedFeatureIds!))
+            throw InvalidCandidateRequest();
+
+        var expectedNames = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "appsettings.json", "shells.json", $"shells.{candidate.Environment}.json"
+        };
+        var optionalAppsettingsOverlay = $"appsettings.{candidate.Environment}.json";
+        if (candidate.Files.Count == 4)
+            expectedNames.Add(optionalAppsettingsOverlay);
+        if (candidate.Files.Count is not (3 or 4))
+            throw InvalidCandidateRequest();
+
+        var actualNames = new HashSet<string>(StringComparer.Ordinal);
+        var totalBytes = 0;
+        foreach (var file in candidate.Files)
+        {
+            if (file is null || file.CaptureId != candidate.CaptureId || file.Content is null ||
+                !expectedNames.Contains(file.Name ?? string.Empty) || !actualNames.Add(file.Name!) ||
+                !TryValidateCanonicalBase64(file.Content, ref totalBytes))
+                throw InvalidCandidateRequest();
+        }
+
+        if (!actualNames.SetEquals(expectedNames))
+            throw InvalidCandidateRequest();
+    }
+
+    /// <summary>Shared frontend/worker admission for finite, safe, case-unambiguous selection identities.</summary>
+    /// <remarks>Authored order is unrestricted; the wire reader additionally requires ordinal sorting.</remarks>
+    public static bool IsValidCandidateSelection(IReadOnlyList<string>? accepted, IReadOnlyList<string>? removed) =>
+        accepted is not null && removed is not null && accepted.Count <= 4096 && removed.Count <= 4096 &&
+        accepted.All(IsSafeCandidateReference) && removed.All(IsSafeCandidateReference) &&
+        accepted.Distinct(StringComparer.OrdinalIgnoreCase).Count() == accepted.Count &&
+        removed.Distinct(StringComparer.OrdinalIgnoreCase).Count() == removed.Count &&
+        !accepted.Intersect(removed, StringComparer.OrdinalIgnoreCase).Any();
+
+    private static bool IsOrdinallySorted(IReadOnlyList<string> values)
+    {
+        string? previous = null;
+        foreach (var value in values)
+        {
+            if (previous is not null && StringComparer.Ordinal.Compare(previous, value) >= 0)
+                return false;
+            previous = value;
+        }
+        return true;
+    }
+
+    private static bool TryValidateCanonicalBase64(string value, ref int totalBytes)
+    {
+        var maxEncodedBytes = ((CandidateFileMaxBytes + 2) / 3) * 4;
+        if (value.Length > maxEncodedBytes || value.Length % 4 != 0)
+            return false;
+
+        var decoded = new byte[Math.Min(CandidateFileMaxBytes, value.Length / 4 * 3)];
+        if (!Convert.TryFromBase64String(value, decoded, out var written) ||
+            written > CandidateFileMaxBytes || totalBytes > CandidateFilesMaxBytes - written ||
+            !string.Equals(Convert.ToBase64String(decoded.AsSpan(0, written)), value, StringComparison.Ordinal))
+            return false;
+        totalBytes += written;
+        return true;
+    }
+
+    private static bool IsToken(string? value) => value is { Length: 32 } &&
+        value.All(ch => ch is >= '0' and <= '9' or >= 'a' and <= 'f');
+
+    private static bool IsSafeCandidateReference(string? value) => value is { Length: > 0 and <= 128 } &&
+        value.All(ch => char.IsAsciiLetterOrDigit(ch) || ch is '.' or '_' or '-' or '/' or '+');
+
+    private static bool IsSafeEnvironment(string? value) => value is { Length: > 0 and <= 128 } &&
+        value.All(ch => char.IsAsciiLetterOrDigit(ch) || ch is '_' or '-');
+
+    private static JsonException InvalidCandidateRequest() => new(CandidateRequestInvalidMessage);
 
     public static bool HasDuplicateFields(JsonElement value)
     {
@@ -75,6 +370,9 @@ public static class WorkerCommands
 
     /// <summary>Reports each schema family's finalization status (spec 181, FR-020, FR-022).</summary>
     public const string Status = "status";
+
+    /// <summary>The private, configuration-only candidate inspection operation.</summary>
+    public const string InspectCandidate = "inspect-candidate";
 
     public static readonly string[] All = [List, Plan, Script, Apply, Validate, PostMigrate, Hold, Release, Status];
 
@@ -195,6 +493,53 @@ public sealed record WorkerRequest
     /// from <c>--connection-env</c>, and never logged, echoed, or included in a refusal.
     /// </summary>
     public string? Connection { get; init; }
+
+    /// <summary>Versioned, file-only input accepted exclusively by <see cref="WorkerCommands.InspectCandidate"/>.</summary>
+    public WorkerCandidatePayload? Candidate { get; init; }
+}
+
+/// <summary>Closed v1 candidate payload for the configuration-only worker operation.</summary>
+public sealed record WorkerCandidatePayload
+{
+    [JsonRequired]
+    public int Version { get; init; }
+
+    [JsonRequired]
+    public string? Source { get; init; }
+
+    [JsonRequired]
+    public string? InvocationId { get; init; }
+
+    [JsonRequired]
+    public string? CaptureId { get; init; }
+
+    [JsonRequired]
+    public string? Shell { get; init; }
+
+    [JsonRequired]
+    public string? Environment { get; init; }
+
+    [JsonRequired]
+    public IReadOnlyList<string>? AcceptedFeatureIds { get; init; }
+
+    [JsonRequired]
+    public IReadOnlyList<string>? RemovedFeatureIds { get; init; }
+
+    [JsonRequired]
+    public IReadOnlyList<WorkerCandidateFile>? Files { get; init; }
+}
+
+/// <summary>One captured source layer in a candidate request.</summary>
+public sealed record WorkerCandidateFile
+{
+    [JsonRequired]
+    public string? Name { get; init; }
+
+    [JsonRequired]
+    public string? CaptureId { get; init; }
+
+    [JsonRequired]
+    public string? Content { get; init; }
 }
 
 /// <summary>What a finalization command names (spec 181, FR-019): the family, an optional version, the reason and the operator.</summary>
