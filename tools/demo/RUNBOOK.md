@@ -12,9 +12,12 @@ and only turns on the feature that needs the new schema once **every host** that
   upgraded in place, and the moment it can read the new schema the feature goes live on both hosts.
 
 The whole thing is scripted in `tools/demo/rehearse.sh`. It runs this runbook end to end, and it uses the same helpers you type
-(`tools/demo/helpers.sh`: `note`, `notes`, `withtags`, `tag`, `reload`, `status`, `waitfor`), so what it asserts is what you see: the status codes
+(`tools/demo/helpers.sh`: `note`, `notes`, `withtags`, `tag`, `reload`, `status`, `waitfor`, `rows`), so what it asserts is what you see: the status codes
 and the output lines the **Expect** items below promise, in setup and in both acts. The one thing it does not rehearse is `prepack.sh` (minutes long); it
 requires that to have run. Run it before every presentation (see the last section).
+
+The demo also answers the three questions the customer asked at the demo of 2026-09-21: see "Your three questions from last time" below. Each act carries a
+boxed line to say at the step that answers a question, and Act 2 ends with a recap.
 
 ## The cast
 
@@ -32,6 +35,44 @@ Ports 5101, 5201 and 5202 and the container name `elsa-demo-pg` are the demo's. 
 
 Every `bash` block below is meant to be pasted into an interactive zsh: none contains a `#` comment or a backtick (zsh does not treat `#` as a
 comment on the command line unless `interactive_comments` is set, so a pasted comment is run as a command and fails).
+
+## Your three questions from last time
+
+At the previous demo the customer asked three things. This demo answers each one live, on the running system, so the answers below are what the platform does **now**, not what we
+promised then. Each step that answers a question carries a boxed line to say, marked with the question; the recap at the end of Act 2 (2.8) closes all three.
+
+| Question | Where it is answered | What the audience sees |
+|---|---|---|
+| **1. "How about hot reload, can it still run?"** | Act 1, steps 1.3 to 1.6; Act 2, step 2.5 | A new module version is installed by a host that keeps running. It is held back while its database migration is pending. Host A then switches with no restart and no reload |
+| **2. "What when we have multiple pods?"** | Act 2, steps 2.1 to 2.6 | Two hosts on one database. The new version is turned on only once every live host can read it, and `status` names the host that holds it back |
+| **3. "Multiple module versions needing different schemas"** | Act 2, steps 2.2 to 2.7 | Version 1 and version 2 run side by side against one table, and `rows` shows each row's stored version. Version 2 reads old rows, keeps its new feature dormant with a reason, and, for a family whose author wrote the upcaster and the rewriter, a background pass brings the old rows up to date |
+
+What has changed since the last demo, in one line each (presenter's reference, not for the screen):
+
+- Hot reload no longer stops at "the host reloads whatever arrived": a module that needs a newer host than the one running is refused when the feed reconciles, and one whose migration is pending is refused at the reload, with the command that resolves it.
+- Hosts that share a database now know each other (cluster membership). A schema version is finalized only when every live host reports that it can read it, so the order the hosts upgrade in no longer matters. Last time this was a stated gap.
+- A new version reads the rows of its predecessor through an upcaster, writes the old format until it is finalized, and rewrites the old rows afterwards. Last time the rule was "one writer version at a time".
+
+The limits that remain. Say them plainly; the customer will respect it, and each has a plain answer:
+
+- **Concurrent versions need expand-only (additive) migrations, and that is the module author's rule.** The platform refuses a migration that removes or renames something only when its author declares it contracting (an
+  `ExpandOnlyMigrationOptOut` naming the SchemaFamily and the FinalizedVersion), and only for tables that a stamped schema family covers; the refusal lasts until that version is finalized. An undeclared destructive migration in a customer module
+  is not detected at apply time. The build enforces additive migrations for the modules we ship; a module of the customer's own can run the same check in its own tests.
+- **The migration must be applied before the new version activates.** By design. Under the policy the demo runs with (`Validate`) the host refuses to migrate underneath the operator and says which command to run: it is the one manual step of the demo. Under the
+  library's default policy (`AutoMigrate`) the host applies the migration itself at that point; either way the new version never runs against a schema it has not got.
+- **Every host must be configured as a cluster member.** A host that is not counts only itself, and nothing warns about it.
+- **Finalization is one way.** After a version is finalized, a host still on the older release is refused, and a finalized version only ever moves forward: there is no rollback of it.
+- **Hot reload is the Foundation.Host feed model.** The Workbench does not reload a running shell when a package arrives; it takes effect at its next restart. A replaced release stays in memory until the host restarts.
+  When the shell is swapped, the previous generation is drained: CShells waits for its open scopes (in-flight requests) to finish, and gives up after 30 seconds by default, so a request still running then is cut off. Elsa adds nothing above that:
+  it registers no drain handler and no workflow-level quiescence, so work that does not hold a scope of the old shell is not waited for.
+- **The background rewrite covers only the families that ask for it.** It runs for a family that declares an upcaster and a rewriter, and the module author writes both. Rows that are content-addressed are never rewritten, and they keep the family from being recorded as complete.
+- **A narrow timing window.** A shell that is being built while the platform decides whether every host can read the new version is invisible to that decision until it reaches its first initializer. It needs an upstream CShells change, planned after this demo.
+
+Presenter only (do not screen-share this block; the issue numbers are for you):
+
+- Issue 2164: the reload bridge skips its catalog refresh while no shell is active, so a host whose start-up activation failed can keep serving the old release after an upgrade until a reload. The narrow timing window above is also 2164.
+- Issue 2159: `POST /_module-management/reconcile` never answers. The demo never calls it: the folder watcher reconciles, and `reload` is the only endpoint used.
+- Issue 2162: two hosts started in the same instant log a duplicate key error on the cluster's identity row (see the troubleshooting table).
 
 ## Setup (before the audience, about 20 minutes, most of it waiting)
 
@@ -110,6 +151,7 @@ The helpers, all typed from the repository root:
 | `status HOST` | `dotnet elsa persistence status` for host `solo` (Sqlite) or `a` or `b` (PostgreSQL, with the 2 s skew allowance the hosts' `--fast-membership` needs) |
 | `waitfor PORT` | waits until the host on that port answers `with-tags` with anything but 404, and says so |
 | `pgconn` | points this tab's `ELSA_EF_CONNECTION` at the PostgreSQL container (never printed) |
+| `rows HOST` | the Notes table itself, one line per note: the version stamp each row was written in, and its tags as stored. `solo` reads the Sqlite file, `a` and `b` ask the PostgreSQL container (`docker exec` and `psql`; one database, so both show the same rows) |
 
 Tab **1** must not have a database connection in its environment (Act 1 uses the default Sqlite file):
 
@@ -216,11 +258,12 @@ note 5101 "hello from release 1.0.0"
 note 5101 "a second note"
 notes 5101
 withtags 5101
+rows solo
 ```
 
-- **Audience sees:** two JSON notes created, the list, and `HTTP 404` for `with-tags`.
+- **Audience sees:** two JSON notes created, the list, `HTTP 404` for `with-tags`, and then what is stored: both notes stamped `1.0.0`, and no tags column yet (`(no column yet)`). This is the "before" shot for question 3.
 - **Say:** "This is a normal module in a running host: a table, two endpoints. Release 1.0.0 has no tags: that endpoint does not exist yet."
-- **Expect:** each `note` prints `{"id":"...","text":"...","createdAt":"..."}`; `notes` prints two lines; `withtags` prints `HTTP 404` and nothing else.
+- **Expect:** each `note` prints `{"id":"...","text":"...","createdAt":"..."}`; `notes` prints two lines; `withtags` prints `HTTP 404` and nothing else; `rows solo` prints the header `note schema tags` and two lines, each `1.0.0` with `(no column yet)`.
 - **Time:** under a second.
 - **If it goes wrong:** nothing answers: the host is not up, look in tab S. `note` prints nothing: `curl -i localhost:5101/demo/notes` to see the status.
 
@@ -244,6 +287,9 @@ bash tools/demo/show-change.sh | less -R
 ```bash
 bash tools/demo/publish.sh 2 --host solo
 ```
+
+> **Your question 1: "How about hot reload, can it still run?"**
+> "Yes, and this is it. The host is running right now and serves traffic. I am dropping a new module version into its feed, and I will not restart anything."
 
 - **Audience sees:** one line.
 - **Say:** "That is publishing to the feed the host watches. Nothing is restarted."
@@ -312,10 +358,14 @@ tag 5101 demo
 notes 5101
 ```
 
+> **Your question 1, answered:**
+> "That was hot reload: a new module version, picked up by a running host with no restart. It was held back until its database migration was applied, and the host told us so; for up to two seconds after the reload it also answered 409 while it re-checked that the new version was safe. Then it switched."
+
 - **Audience sees:** `HTTP 200`, the same notes now with `"tags":[]`, then one note with its tag, and the original endpoint unchanged. In the browser, reload tab 1: blank 404 becomes the notes.
 - **Say:** "The host switched to release 1.1.0 without a restart. The notes written by release 1.0.0 have no tags column value: the upcaster reads them as
   'no tags'. And the old endpoint carries on."
 - **Expect:** `reload` prints `HTTP 200` and the four lines of JSON `{`, `"features": 4,`, `"reloaded": 1` and `}`; `withtags` prints `HTTP 200` and the notes with `"tags":[]`; `tag` prints the note with `"tags":["demo"]`.
+- **Optional:** `rows solo` again shows what is stored: the note that was just tagged is stamped `2.0.0` with `["demo"]` (the rehearsal asserts it). The other note is `1.0.0` or, once the host's background pass has reached it, `2.0.0`.
 - **Time:** the reload is under 3 s. Once the reload has answered, the new endpoint exists, so `withtags` answers 409 and then 200, never 404 again: the feature turns on when the host has
   re-evaluated the schema version, which it does every 2 s. A `withtags` right after the reload is sometimes `HTTP 409` (`schema-version-not-finalized`), for up to two seconds: that is why the first command is separate.
   If you see it, say "it is checking that this is safe", wait, and repeat.
@@ -342,6 +392,9 @@ If the package is not staged and there is no time: `bash tools/demo/pack.sh 2 --
 ## Act 2: two hosts, one database (PostgreSQL)
 
 Switch to tab **2** (it holds `ELSA_EF_CONNECTION`). `docker ps --filter name=elsa-demo-pg` shows the container if anybody asks where the database is.
+
+> **Your question 2: "What when we have multiple pods?"**
+> "Here are two hosts on one database. Watch what the platform does when they are not on the same release: we upgrade them one at a time, on purpose."
 
 ### 2.1 Both hosts on release 1.0.0
 
@@ -382,6 +435,9 @@ bash tools/demo/elsa.sh persistence apply --host artifacts/demo/hosts/b --enviro
 reload 5202
 ```
 
+> **Your question 3: "Multiple module versions needing different schemas"**
+> "Version 2 needs a new column. The migration only adds it, and nothing is dropped or changed, so host A, still on version 1, carries on against the migrated database. That is the rule that lets two versions share one table."
+
 - **Audience sees:** the same refusal as in Act 1 (`HTTP 409`, module, migration, apply command), the apply, then `HTTP 200`.
 - **Say:** "Same drill on host B, but now the database is shared. Watch host A: it is untouched, and it is still on 1.0.0." (`note 5201 "A keeps writing"` if you want to show it.)
   "The migration only adds a nullable column, so A keeps working against it."
@@ -393,21 +449,34 @@ reload 5202
 
 ```bash
 withtags 5202
-note 5201 "host A, still on 1.0.0"
+note 5201 "written by A on release 1.0.0"
+note 5202 "written by B on release 1.1.0"
+rows a
 ```
 
-- **Audience sees:** `HTTP 409` and a reason; refresh browser tab 3 for the same reason in the raw response. Host A keeps taking writes.
+> **Your question 3, live:** "Host B runs the new release, yet the row it just wrote is stamped with the old schema version, 1.0.0, exactly like host A's. A host writes the old format until every host can read the new one, so no row exists that any host cannot read, and the new feature stays dormant, with its reason, until then."
+
+- **Audience sees:** `HTTP 409` and a reason; refresh browser tab 3 for the same reason in the raw response. Host A keeps taking writes. Then `rows`: four notes, all stamped `1.0.0`, and an empty (`NULL`) tags column.
 - **Say:** "Host B runs release 1.1.0 and could serve tags, but host A cannot read them. If B wrote tags, A would meet rows it cannot understand. So the feature stays
-  dormant, and the request is refused whole: nothing is half-saved."
+  dormant, and the request is refused whole: nothing is half-saved." Then, for `rows`: "This is the table itself, not an answer from a host. Every row carries the schema version it was written in.
+  Both hosts wrote 1.0.0, including B, which runs the new release: it will not write the new format until A can read it. The tags column exists, because the migration ran, but nothing has filled it."
 - **Expect:**
 
   ```
   HTTP 409
   {"code":"schema-version-not-finalized","feature":"NotesWithTags","reason":"It becomes available once every host can read version '2.0.0' of schema family 'SamplesNotes'.","message":"Feature 'NotesWithTags' is dormant: ... The request was refused whole, and nothing it carried was saved."}
   ```
-  and the `note` on A answers normally.
+  and both `note` calls answer normally, then:
+
+  ```
+  note                           schema  tags
+  written on host A              1.0.0   NULL
+  written on host B              1.0.0   NULL
+  written by A on release 1.0.0  1.0.0   NULL
+  written by B on release 1.1.0  1.0.0   NULL
+  ```
 - **Time:** instant.
-- **If it goes wrong:** `HTTP 200` here would mean 2.0.0 is already finalized: host A was upgraded earlier, or was stopped. `bash tools/demo/reset.sh` and rehearse again.
+- **If it goes wrong:** `HTTP 200` here would mean 2.0.0 is already finalized: host A was upgraded earlier, or was stopped. `bash tools/demo/reset.sh` and rehearse again. `rows` says `No such container`: Docker is not running or the container is gone (see the troubleshooting table).
 
 ### 2.4 `persistence status` names the host it waits for
 
@@ -416,6 +485,9 @@ status b
 ```
 
 - **Audience sees:** the pending version, the name of the blocker, and the fleet with what each host reads.
+
+> **Your question 2, answered:** "The platform is designed not to race. A new version is turned on only once every live host can read it, and `status` names the host holding it back. If a host crashes instead of stopping, it stops counting when its membership expires: 12 seconds in this demo, 35 by default."
+
 - **Say:** "It does not just say 'not yet': it says who it waits for and why. Host A reads only 1.0.0. Upgrade A, and it releases."
 - **Expect:**
 
@@ -440,6 +512,8 @@ bash tools/demo/publish.sh 2 --host a
 waitfor 5201
 ```
 
+> **Your question 1, once more:** "Host A gets the new version the same way: dropped into its feed, no restart, and this time no reload command either. Its database is already migrated, so nothing holds it back."
+
 - **Audience sees:** one line, then a row of dots that ends when host A has switched. No restart, and nothing else to run: A's database was migrated by B's apply, so the host switches by itself.
   `waitfor` is the on-screen signal: it polls `with-tags` on A twice a second, which answers 404 while A still runs 1.0.0, and says `switched: with-tags answers HTTP 200 after N s` at the first answer
   that is not a 404. Refresh browser tab 2 meanwhile if you like: it too goes from the blank 404 to the notes (or, for a moment, to the 409 reason).
@@ -460,11 +534,19 @@ stops being counted, which is why the older stop-publish-start route also finali
 withtags 5201
 withtags 5202
 status a
+note 5202 "written after finalization on B"
+note 5201 "written after finalization on A"
+rows a
 ```
 
-- **Audience sees:** `HTTP 200` on both, the notes written before the upgrade with `"tags":[]`. In the browser, reload tabs 2 and 3: 404 and the 409 reason are gone.
+> **Your question 3, the rest:** "Both hosts serve tags now. Version 2 reads the old rows through an upcaster, so they show no tags rather than an error, and rows written from now on are stamped 2.0.0. The host is rewriting the old rows in the background, so within a few seconds the table reads 2.0.0 throughout."
+>
+> **Your question 2, the rest:** "Nobody flipped a switch on either host. The moment the last live host could read the new version, it turned on everywhere."
+
+- **Audience sees:** `HTTP 200` on both, the notes written before the upgrade with `"tags":[]`. In the browser, reload tabs 2 and 3: 404 and the 409 reason are gone. Then `rows`: the two notes just written are stamped `2.0.0` with `[]`. The four from before are either still `1.0.0` with `NULL` or already rewritten to `2.0.0` with `[]`: the host starts its background pass within seconds of the finalization, so which one you see is a matter of timing, and both are right.
 - **Say:** "The moment every host could read 2.0.0, the platform turned the feature on, everywhere, without anybody flipping anything. The old notes read as 'no tags' through the upcaster.
-  In the background the host now rewrites the old rows into the new format; when none is left, the version is recorded complete."
+  In the background the host rewrites the old rows into the new format; when none is left, the version is recorded complete." For `rows`: "The two notes I just wrote are stamped 2.0.0: from now on, a host writes the new format.
+  The older four were 1.0.0 a minute ago. The host rewrites them itself, within seconds of the finalization; if any still says 1.0.0, run `rows` again in a moment."
 - **Expect:** `HTTP 200` twice, then the status below. On host A the answers go **404** (A not switched yet, what `waitfor` waited out), then **409** (A has switched and is evaluating the schema version; the
   reason is the one from 2.3), then **200**. The 409 is short on A, often too short to be seen (the evaluation runs every 2 s, and A has just re-published what it reads), so after `waitfor` `withtags 5201` is a 200 or, for
   a moment, a 409. Host B has answered 409 since 2.2 and turns to 200 up to two seconds after A: if `withtags 5202` is still a 409, say "it is checking that this is safe", wait two seconds, repeat.
@@ -473,13 +555,69 @@ status a
   ```
   SamplesNotes (Samples.Notes): finalized at 2.0.0; this host reads [1.0.0, 2.0.0]
     complete from 1.0.0        <- for about 20 s after finalization, then: complete from 2.0.0
+    backfill to 2.0.0 claimed by host-a (...) until ...    <- while the backfill runs, a line like this
   members: 2 in Cluster.Membership, ...
     host-a: Active, live, ...   SamplesNotes: reads 1.0.0, 2.0.0
     host-b: Active, live, ...   SamplesNotes: reads 1.0.0, 2.0.0
   ```
-  Run `status` again after about 20 s (a good moment for questions): `complete from 2.0.0`.
-- **Time:** finalization 0 to 3 s after A switched, on B up to 2 s later (repeat `withtags` if you get 409 for a moment); `complete from 2.0.0` 16 to 20 s after finalization (measured: 18 to 20 s; 30 to 34 s after the publish).
+  and the `rows` of the two new notes, with the older four beside them:
+
+  ```
+  note                             schema  tags
+  written on host A                2.0.0   []
+  ...
+  written after finalization on B  2.0.0   []
+  written after finalization on A  2.0.0   []
+  ```
+  Run `status` again after about 20 s (a good moment for questions): `complete from 2.0.0`. 2.7 shows it, with `rows` once more.
+- **Time:** finalization 0 to 3 s after A switched, on B up to 2 s later (repeat `withtags` if you get 409 for a moment); the old rows are rewritten within a few seconds of it (measured in five rehearsals: in four the old rows were still at `1.0.0` when both hosts first answered 200 and all were rewritten 2 to 4 s after the finalization, in one they had been rewritten already;
+  so the in-between state, new rows at `2.0.0` beside old rows at `1.0.0`, lasts a few seconds at most, and the runbook does not promise it); `complete from 2.0.0` 16 to 20 s after finalization (measured: 18 to 20 s; 27 to 34 s after the publish).
 - **If it goes wrong:** still 409 after 30 s and `waits for: host-a` in `status a`: A has not switched (see 2.5). A `waits for:` line naming a host you did not start: a leftover member from an earlier rehearsal: `bash tools/demo/reset.sh` and set up again.
+
+### 2.7 The old rows are brought up to date
+
+About twenty seconds after the version finalized, from tab 2 (the rewrite itself is over within seconds; the twenty seconds are the platform making sure that no row of the old version is left, and recording the version complete):
+
+```bash
+status a
+rows a
+```
+
+> **Your question 3, closed:** "Every row, old and new, is stamped 2.0.0 now. The two versions ran side by side on one table, and nobody had to stop anything or rewrite the data by hand."
+
+- **Audience sees:** `complete from 2.0.0`, and `rows` with every note stamped `2.0.0` and a tag list (`[]`): the four notes written before the finalization were rewritten by the host in the background.
+- **Say:** "The host did that itself, one row at a time, once every host could read the new version. When no row of the old version is left, the platform records the version complete: that is this line. Until then, the old rows stayed readable through the upcaster."
+- **Expect:**
+
+  ```
+  note                             schema  tags
+  written on host A                2.0.0   []
+  written on host B                2.0.0   []
+  written by A on release 1.0.0    2.0.0   []
+  written by B on release 1.1.0    2.0.0   []
+  written after finalization on B  2.0.0   []
+  written after finalization on A  2.0.0   []
+  ```
+- **Time:** `complete from 2.0.0` 16 to 20 s after finalization, as in 2.6. If `rows` still shows `1.0.0`, run it again in a few seconds; `status a` says `complete from 2.0.0` when the last old row is gone.
+- **If it goes wrong:** rows still at `1.0.0` after a minute: `status a` shows what the family waits for, and the log of tab A or B says why the backfill is not moving.
+
+### 2.8 Recap: your three questions
+
+Read this out, or show it. Two sentences per question, the limits included.
+
+> **1. "How about hot reload, can it still run?"**
+> Yes: a running host installs a new module version from its feed and switches to it in place, with no restart; it is held back while its database migration is pending, a contracting migration is refused until its version is finalized, the new feature stays dormant until the schema version is finalized, and a package that needs a newer host is refused when the host declares that package as its own and carries it in its deps.json.
+> The limits are that this is how the Foundation host works (the Workbench picks a new package up at its next restart), that a replaced release stays in memory until the host restarts, and that the old shell is drained, not cut off: in-flight requests are waited for up to 30 seconds by default, and Elsa adds no workflow-level quiescence on top.
+>
+> **2. "What when we have multiple pods?"**
+> Hosts that share a database form a cluster and a new module version is turned on only once every live host can read it, so the order you upgrade in does not matter, `persistence status` names the host still holding it back, and a crashed host stops counting once its membership expires (12 seconds here, 35 by default).
+> The limits are that every host must be configured as a cluster member (one that is not counts only itself, and nothing warns you), and that a host that sleeps or stalls for longer than its membership lasts is dropped and has to rejoin.
+>
+> **3. "Multiple module versions needing different schemas"**
+> Yes, as long as the versions' migrations only add: versions 1 and 2 run side by side on one table, version 2 reads old rows through an upcaster and keeps its new feature dormant, with the reason, until every host can read it, and for a family whose author wrote an upcaster and a rewriter a background pass then brings the old rows up to 2.0.0.
+> The limits are that keeping migrations additive while versions overlap is the module author's rule: the platform refuses a migration that removes or renames something only when its author declares it contracting (an `ExpandOnlyMigrationOptOut` naming the family and the finalized version), and only for tables a stamped schema family covers, so an undeclared destructive migration is not detected at apply time. Also, content-addressed rows are never rewritten and keep the family from being recorded complete, the migration must be applied before the new version activates (by design: the host tells you the command), and once a version is finalized a host on the older release is refused.
+>
+> **Two rough edges we are closing:** a very narrow timing window while a host builds its new shell, and the explicit reconcile call, which this demo never uses: the folder watcher does that work.
 
 ### Act 2 fallback: stop, publish, start host A
 
@@ -516,18 +654,18 @@ bash tools/demo/rehearse.sh --act 1 --fallback
 ```
 
 It begins with `reset.sh`, follows this runbook step by step (hosts started one after the other, in-place upgrades, no interaction), runs the very helpers of `tools/demo/helpers.sh` that you type,
-asserts the status codes and output lines above, checks that nothing the audience sees shows the repository path or a home folder, prints the time of every step and the moments measured (install, finalization, completion), lists any spec or requirement numbers a host logged, and cleans up on exit,
+asserts the status codes and output lines above, and the schema version stored on each row (`rows`) before the upgrade, after the finalization and after the backfill, checks that nothing the audience sees shows the repository path or a home folder, prints the time of every step and the moments measured (install, finalization, completion), lists any spec or requirement numbers a host logged, and cleans up on exit,
 success or failure. Its host logs are kept in `artifacts/demo-rehearsal/`. It uses the ports 5101, 5201 and 5202 (`DEMO_PORT_SOLO`, `DEMO_PORT_A`, `DEMO_PORT_B` change them): stop a live demo first.
 
 ## Troubleshooting
 
 | Symptom | Cause | What to do |
 |---|---|---|
-| A host logs a **duplicate key** error at start, on the cluster's identity row | Two hosts started in the same instant both tried to create it; the loser logs the error and carries on (issue 2162) | Harmless if the host goes on to `Now listening`. Avoid it: start A, wait for `/health/ready` 200, then start B. If a host did not come up, Ctrl-C it and start it again |
+| A host logs a **duplicate key** error at start, on the cluster's identity row | Two hosts started in the same instant both tried to create it; the loser logs the error and carries on | Harmless if the host goes on to `Now listening`. Avoid it: start A, wait for `/health/ready` 200, then start B. If a host did not come up, Ctrl-C it and start it again |
 | `/health/ready` says **503** after `apply`, and requests answer **500** | A host that was started already refused (the fallback route): the readiness probe does not activate a shell | Send a real request: `notes 5101`. It activates the shell; `/health/ready` follows |
 | `reload` says **200** with `"features": 3` instead of 409 | The host has not installed 1.1.0 yet | Wait five seconds, repeat |
 | `reload` answers **401**, **403** or **404** | Module management is off, or the key differs | The host must be started with `--management-key-env DEMO_KEY`; `echo $DEMO_KEY` in the tab must match the one in the host's tab |
-| `POST /_module-management/reconcile` never answers | A known defect (issue 2159) | Never call it. The folder watcher reconciles by itself; `reload` is the only endpoint the demo uses |
+| `POST /_module-management/reconcile` never answers | A known defect | Never call it. The folder watcher reconciles by itself; `reload` is the only endpoint the demo uses |
 | A host was **killed or crashed** (or the laptop slept: see the next row) and is restarted | Its membership row lingers until it expires: about 12 s with `--fast-membership` (up to 35 s with the defaults); `status` still shows it `live` meanwhile, and a version waits for it | Wait about 15 s, then start it. A host stopped with Ctrl-C leaves at once and needs no wait |
 | The **laptop slept** or the lid was closed | The hosts' heartbeats stopped, so a host may have been dropped from the cluster (its membership expires after about 12 s), and a host that lapsed and rejoined has not adopted the finalized schema version yet. The audience would see a **409** on `withtags` whose reason reads `It becomes available once this host adopts version '2.0.0' ... until it has rejoined the cluster` (`NotYetAdopted`), or a fleet in `status` that lists a host that is not `live`, or a member missing | After waking wait about 15 s, then run `status a`. Both hosts `Active, live` and no odd `waits for:` line: carry on. If a host lapsed, restart both hosts one after the other: Ctrl-C in tab **A** (a clean stop leaves at once), start it again with the S6 commands, wait for `/health/ready` 200, then the same for tab **B**. Prevent it with `caffeinate -dimsu` (S3) and the lid open |
 | **Docker**: `docker ps` or `docker exec` fails, `pgconn` says the container does not run, or hosts cannot reach PostgreSQL | The daemon is down, or the `postgres:16-alpine` image was evicted (and Wi-Fi is off, so it cannot be pulled), or Docker restarted and the container's dynamic port changed, so every tab's `ELSA_EF_CONNECTION` is stale | Start Docker, then `bash tools/demo/reset.sh` (it reports a dead daemon instead of saying "none") and redo the PostgreSQL setup (S6), the hosts included: `pgconn` in every tab that runs a host or a command |
@@ -538,6 +676,7 @@ success or failure. Its host logs are kept in `artifacts/demo-rehearsal/`. It us
 | `run-host.sh` says host `a` is **already running** | The same host name started twice | Stop it (Ctrl-C in its tab) or `bash tools/demo/reset.sh` |
 | `publish.sh`, `pack.sh` or `run-host.sh` says the feed **holds a copy of `Elsa.Persistence.EntityFramework`** | An earlier pack put one in a feed; the host carries its own, and a second copy hides the module from `dotnet elsa persistence` (it then reports no `Samples.Notes`) | `rm artifacts/demo/hosts/NAME/feed/Elsa.Persistence.EntityFramework.*.nupkg` for that host, then repeat the step. Or start clean: `bash tools/demo/reset.sh` |
 | `dotnet elsa persistence` lists **no `Samples.Notes`** | The tool reads what the host installed, and the host has not reconciled its feed yet | Add `--restore` on the first call (as in setup), or wait until the host is ready |
+| `rows a` or `rows b` says `No such container`, or prints nothing | The PostgreSQL container is not running (`rows a` and `rows b` ask it through `docker exec`), or `DEMO_PG_CONTAINER` renamed it | `docker ps --filter name=elsa-demo-pg`; start Docker and redo S6 if it is gone. `rows solo` reads the Sqlite file `artifacts/demo/notes.db` and needs no container |
 | `persistence status` shows `Cluster.Membership has migrations not applied` | The command lacks `--modules Samples.Notes,Cluster.Membership` | Use the `status` helper (it always passes both modules), not a hand-typed command |
 | `status` shows no `waits for:` line while A is still on 1.0.0 | A hand-typed command lacks `--skew-allowance 00:00:02`, so members are judged with 5 s instead of the hosts' 2 s | Use the `status` helper, which passes it |
 | Host takes over a minute to be ready | The machine is loaded | `uptime`; wait; start the presentation after `/health/ready` is 200 on all three hosts |
