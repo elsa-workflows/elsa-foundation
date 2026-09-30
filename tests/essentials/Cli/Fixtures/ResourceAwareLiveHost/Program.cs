@@ -61,5 +61,10 @@ public sealed class ResourceProbeShellDefaults : IEfToolingShellDefaults
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(configuration);
+        if (configuration.GetValue<bool>("ProbeDefaults:EnableDiagnostics"))
+        {
+            builder.WithFeature("DiagnosticsStructuredLogsEntityFrameworkCore");
+            builder.WithFeature("DiagnosticsOpenTelemetryEntityFrameworkCore");
+        }
     }
 }

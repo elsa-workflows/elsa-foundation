@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using CShells;
 using CShells.Configuration;
 using CShells.Features;
 using Elsa.Persistence.EntityFramework.ResourceResolution;
@@ -152,10 +153,7 @@ public sealed class EfToolingConfigurationContext : IDisposable
             var closure = hostAssemblies.Where(x => !x.IsDynamic).Distinct().ToArray();
             var descriptors = FeatureDiscovery.DiscoverFeatures(closure)
                 .ToDictionary(x => x.Id, StringComparer.OrdinalIgnoreCase);
-            var builder = new ShellBuilder(shell);
-            hostDefaults.Configure(builder, snapshot);
-            builder.FromConfiguration(snapshot.GetSection($"CShells:Shells:{shell}"));
-            var settings = builder.Build();
+            var settings = ComposeShell(hostDefaults, snapshot, shell);
             var result = EfPersistencePreparation.Prepare(settings, descriptors, snapshot, closure,
                 verifyConnectionValues: false);
             var enabled = result.ActiveFeatureIds.ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -179,6 +177,15 @@ public sealed class EfToolingConfigurationContext : IDisposable
             // Composition and discovery exceptions can contain authored values or paths.
             throw EfToolingRefusal.Resolution("host-composition-unavailable", "The selected host shell could not be composed for tooling.");
         }
+    }
+
+    /// <summary>Uses the runtime composer and standard selected-shell merge without activating features.</summary>
+    internal static ShellSettings ComposeShell(IEfToolingShellDefaults hostDefaults, IConfiguration configuration, string shell)
+    {
+        var builder = new ShellBuilder(shell);
+        hostDefaults.Configure(builder, configuration);
+        builder.FromConfiguration(configuration.GetSection($"CShells:Shells:{shell}"));
+        return builder.Build();
     }
 
     private static bool HasResourceHint(IConfiguration snapshot)

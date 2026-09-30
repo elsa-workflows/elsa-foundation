@@ -60,6 +60,13 @@ public static class EfToolingHost
         CancellationToken cancellationToken) =>
         EfToolingContextOperation.RunAsync(request, response, context, LoadedAssemblies(), cancellationToken);
 
+    /// <summary>Inspects a candidate from supplied file bytes using this host's loaded feature closure.</summary>
+    public static Task<int> RunCandidateInspectionAsync(
+        Stream request,
+        Stream response,
+        CancellationToken cancellationToken) =>
+        new EfCandidateInspectionOperation(LoadedAssemblies).RunAsync(request, response, cancellationToken);
+
     /// <summary>
     /// Runs one command, reading the request from <paramref name="request"/> to its end and writing exactly
     /// one response to <paramref name="response"/>. The returned code is the same one the response carries,

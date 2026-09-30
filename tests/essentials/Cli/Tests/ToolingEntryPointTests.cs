@@ -339,6 +339,86 @@ public sealed class ToolingEntryPointTests
         Assert.Null(descriptor.ProviderContext("MySql"));
     }
 
+    [Fact]
+    public void Candidate_capability_requires_the_exact_independently_versioned_streamed_api()
+    {
+        var operation = ToolingEntryPoint.BindCandidateInspection(typeof(CompleteCandidateHost), typeof(CurrentCandidateProtocol));
+
+        Assert.Equal("RunCandidateInspectionAsync", operation.Name);
+        Assert.Equal(typeof(Task<int>), operation.ReturnType);
+        Assert.Equal(typeof(CompleteCandidateHost), operation.DeclaringType);
+        Assert.Equal(new[] { typeof(Stream), typeof(Stream), typeof(CancellationToken) },
+            operation.GetParameters().Select(parameter => parameter.ParameterType));
+    }
+
+    [Theory]
+    [InlineData("missing-host")]
+    [InlineData("legacy-host")]
+    [InlineData("missing-contract")]
+    [InlineData("wrong-version")]
+    [InlineData("mutable-version")]
+    [InlineData("wrong-return")]
+    [InlineData("wrong-signature")]
+    [InlineData("instance-method")]
+    [InlineData("generic-method")]
+    [InlineData("wrong-version-type")]
+    public void Candidate_capability_refuses_old_partial_or_skewed_hosts_without_legacy_fallback(string scenario)
+    {
+        var host = scenario switch
+        {
+            "missing-host" => null,
+            "legacy-host" => typeof(LegacyHost),
+            "wrong-return" => typeof(WrongReturnCandidateHost),
+            "wrong-signature" => typeof(WrongSignatureCandidateHost),
+            "instance-method" => typeof(InstanceCandidateHost),
+            "generic-method" => typeof(GenericCandidateHost),
+            _ => typeof(CompleteCandidateHost)
+        };
+        var protocol = scenario switch
+        {
+            "missing-contract" => null,
+            "wrong-version" => typeof(UnknownCandidateProtocol),
+            "mutable-version" => typeof(MutableCandidateProtocol),
+            "wrong-version-type" => typeof(WrongTypeCandidateProtocol),
+            _ => typeof(CurrentCandidateProtocol)
+        };
+
+        var refusal = Assert.Throws<WorkerRefusal>(() => ToolingEntryPoint.BindCandidateInspection(host, protocol));
+
+        Assert.Equal("candidate-capability-unavailable", refusal.Code);
+        Assert.Equal(ToolExitCode.ResolutionFailure, refusal.ExitCode);
+        Assert.Equal("The selected host has no complete candidate inspection capability.", refusal.Message);
+    }
+
+    private static class CurrentCandidateProtocol { public const int Version = 1; }
+    private static class UnknownCandidateProtocol { public const int Version = 99; }
+    private static class WrongTypeCandidateProtocol { public const string Version = "1"; }
+    private static class MutableCandidateProtocol { public static readonly int Version = 1; }
+    private static class CompleteCandidateHost
+    {
+        public static Task<int> RunCandidateInspectionAsync(Stream request, Stream response,
+            CancellationToken cancellationToken) => Task.FromResult(0);
+    }
+    private static class WrongReturnCandidateHost
+    {
+        public static Task<string> RunCandidateInspectionAsync(Stream request, Stream response,
+            CancellationToken cancellationToken) => Task.FromResult("private-2177");
+    }
+    private static class WrongSignatureCandidateHost
+    {
+        public static Task<int> RunCandidateInspectionAsync(Stream request, Stream response) => Task.FromResult(0);
+    }
+    private static class GenericCandidateHost
+    {
+        public static Task<int> RunCandidateInspectionAsync<T>(Stream request, Stream response,
+            CancellationToken cancellationToken) => Task.FromResult(0);
+    }
+    private sealed class InstanceCandidateHost
+    {
+        public Task<int> RunCandidateInspectionAsync(Stream request, Stream response,
+            CancellationToken cancellationToken) => Task.FromResult(0);
+    }
+
     private static class LegacyHost { }
 
     private sealed class TestContext : IDisposable

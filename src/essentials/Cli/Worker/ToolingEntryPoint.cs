@@ -118,6 +118,31 @@ public sealed class ToolingEntryPoint
         return new(run, packageId, describe, canonical, capabilitySelection, contextApi, skewAllowance);
     }
 
+    /// <summary>Binds only the independently versioned candidate API, with no legacy tooling fallback.</summary>
+    public static MethodInfo BindCandidateInspection(Type? hostType, Type? operationContract)
+    {
+        try
+        {
+            var version = operationContract?.GetField("Version", BindingFlags.Public | BindingFlags.Static);
+            var run = hostType?.GetMethod("RunCandidateInspectionAsync", BindingFlags.Public | BindingFlags.Static,
+                [typeof(Stream), typeof(Stream), typeof(CancellationToken)]);
+            if (version?.IsLiteral != true || version.FieldType != typeof(int) || version.GetRawConstantValue() is not 1 ||
+                run is null || run.ContainsGenericParameters || run.ReturnType != typeof(Task<int>))
+                throw WorkerRefusal.Resolution("candidate-capability-unavailable",
+                    "The selected host has no complete candidate inspection capability.");
+            return run;
+        }
+        catch (WorkerRefusal)
+        {
+            throw;
+        }
+        catch (Exception failure) when (WorkerRunner.IsNonFatal(failure))
+        {
+            throw WorkerRefusal.Resolution("candidate-capability-unavailable",
+                "The selected host has no complete candidate inspection capability.");
+        }
+    }
+
     /// <summary>Refuses partial or version-skewed host context APIs instead of silently choosing v1.</summary>
     internal static ToolingContextApi? BindContextApi(Type hostType, Type? contextType, Type? operationContract)
     {

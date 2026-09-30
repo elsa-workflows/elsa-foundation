@@ -1,3 +1,8 @@
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using Elsa.Modularity.Planning.Catalog;
+using Elsa.Modularity.Planning.Json;
+using Elsa.Modularity.Planning.Models;
 using Xunit;
 
 namespace Elsa.Cli.Tests;
@@ -7,9 +12,17 @@ internal sealed class CandidateInspectionFixture : IDisposable
 {
     public const string ResourceProbeFeatureId = "ResourceProbe";
     public const string ResourceProbeModuleId = "Acme.ResourceProbe";
+    public const string StructuredLogsFeatureId = "DiagnosticsStructuredLogs";
+    public const string StructuredLogsEfFeatureId = "DiagnosticsStructuredLogsEntityFrameworkCore";
+    public const string OpenTelemetryFeatureId = "DiagnosticsOpenTelemetry";
+    public const string OpenTelemetryEfFeatureId = "DiagnosticsOpenTelemetryEntityFrameworkCore";
+    public const string PrivateCanary = "candidate-local-value-canary-2177";
+
+    private static readonly JsonSerializerOptions Json = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
     private readonly TempDirectory _directory = new("elsa-candidate-inspection-");
     private readonly Dictionary<string, byte[]> _initialInputBytes = new(StringComparer.Ordinal);
+    private IReadOnlyDictionary<string, byte[]> _sourceBytes;
 
     public CandidateInspectionFixture()
     {
@@ -29,6 +42,7 @@ internal sealed class CandidateInspectionFixture : IDisposable
             {"ConnectionStrings":{"Probe":"Data Source=:memory:"},"Elsa":{"Persistence":{"DefaultResource":"primary","Resources":{"primary":{"Provider":"Sqlite","ConnectionName":"Probe"}}}}}
             """);
         File.WriteAllText(Path.Join(SourceDirectory, "appsettings.Production.json"), "{}");
+        _sourceBytes = Directory.GetFiles(SourceDirectory).ToDictionary(path => Path.GetFileName(path)!, File.ReadAllBytes);
     }
 
     /// <summary>The compiled host closure passed to the CLI's --host option; source files live separately.</summary>
@@ -41,6 +55,71 @@ internal sealed class CandidateInspectionFixture : IDisposable
     public string ShellId => "default";
 
     public string Environment => "Production";
+
+    public string DatabasePath => Path.Join(SourceDirectory, "must-not-create.db");
+
+    public void UseDiagnosticsSource()
+    {
+        var shells = JsonNode.Parse(File.ReadAllText(Path.Join(SourceDirectory, "shells.json")))!;
+        var features = shells["CShells"]!["Shells"]![ShellId]!["Features"]!.AsObject();
+        features[OpenTelemetryFeatureId] = new JsonObject();
+        features[OpenTelemetryEfFeatureId] = new JsonObject();
+        File.WriteAllText(Path.Join(SourceDirectory, "shells.json"), shells.ToJsonString());
+        var appsettings = JsonNode.Parse(File.ReadAllText(Path.Join(SourceDirectory, "appsettings.json")))!;
+        appsettings["ProbeDefaults"] = new JsonObject { ["EnableDiagnostics"] = true };
+        appsettings["ConnectionStrings"]!["Probe"] = $"Data Source={DatabasePath};Password={PrivateCanary}";
+        appsettings["UnknownLocal"] = new JsonObject { ["Nested"] = PrivateCanary };
+        File.WriteAllText(Path.Join(SourceDirectory, "appsettings.json"), appsettings.ToJsonString());
+        _sourceBytes = Directory.GetFiles(SourceDirectory).ToDictionary(path => Path.GetFileName(path)!, File.ReadAllBytes);
+    }
+
+    public void WriteBundledCatalog() => WriteInput("catalog.json", JsonSerializer.Serialize(FoundationSelectionCatalog.Load(), Json));
+
+    public string WriteWorkspaceStart()
+    {
+        var draft = new SelectionDefinition("profile", "candidate-local", "1", new string('0', 64),
+            [OpenTelemetryFeatureId, OpenTelemetryEfFeatureId, ResourceProbeFeatureId],
+            "Reviewed workspace starting selection", "Local candidate", "Local source-backed selection", []);
+        var definition = draft with { Digest = SelectionDigest.ComputeDefinitionDigest(draft) };
+        var document = JsonSerializer.SerializeToNode(definition, Json)!.AsObject();
+        document["schemaVersion"] = "1";
+        WriteInput("profile.json", document.ToJsonString());
+        var catalog = FoundationSelectionCatalog.Load();
+        var authored = new AuthoredComposition("1", new CatalogPin(catalog.Id, catalog.Version, catalog.Digest),
+            new DefinitionReference("workspace", "profile", definition.Id, definition.Version, definition.Digest),
+            [], [], [], new AcceptedSelection(catalog.Digest, [], []), null, null);
+        // This input is intentionally edited next; only frozen inspection inputs are tracked.
+        File.WriteAllText(InputPath("authored.json"), JsonSerializer.Serialize(authored, Json));
+        return InputPath("profile.json");
+    }
+
+    public void EditDiagnosticSelection()
+    {
+        var authored = JsonNode.Parse(File.ReadAllText(InputPath("authored.json")))!;
+        authored["add"]!.AsArray().Add(StructuredLogsFeatureId);
+        authored["add"]!.AsArray().Add(StructuredLogsEfFeatureId);
+        authored["remove"]!.AsArray().Add(OpenTelemetryEfFeatureId);
+        File.WriteAllText(InputPath("authored.json"), authored.ToJsonString());
+    }
+
+    public void TrackAcceptedInput() => _initialInputBytes[InputPath("accepted.json")] = File.ReadAllBytes(InputPath("accepted.json"));
+
+    public string[] InspectionArguments(string format, string? workspaceProfile = null, bool trust = true)
+    {
+        var arguments = new List<string>
+        {
+            "composition", "inspect", "--host", HostAssemblyDirectory, "--host-dir", SourceDirectory,
+            "--shell", ShellId, "--environment", Environment, "--composition", InputPath("accepted.json"),
+            "--format", format
+        };
+        if (workspaceProfile is not null)
+            arguments.AddRange(["--workspace-profile", workspaceProfile]);
+        else
+            arguments.AddRange(["--catalog", InputPath("catalog.json")]);
+        if (trust)
+            arguments.Add("--trust-host-code");
+        return [.. arguments];
+    }
 
     public string InputPath(string name)
     {
@@ -65,6 +144,14 @@ internal sealed class CandidateInspectionFixture : IDisposable
         foreach (var (path, expected) in _initialInputBytes)
             Assert.True(File.Exists(path) && expected.AsSpan().SequenceEqual(File.ReadAllBytes(path)),
                 "A supplied candidate-inspection input changed during the test journey.");
+    }
+
+    public void AssertSourcesUnchanged()
+    {
+        Assert.Equal(_sourceBytes.Keys.Order(), Directory.GetFiles(SourceDirectory).Select(Path.GetFileName).Order());
+        foreach (var (name, bytes) in _sourceBytes)
+            Assert.Equal(bytes, File.ReadAllBytes(Path.Join(SourceDirectory, name)));
+        Assert.False(File.Exists(DatabasePath));
     }
 
     public void Dispose() => _directory.Dispose();
