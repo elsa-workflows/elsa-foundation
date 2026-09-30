@@ -72,7 +72,7 @@ Presenter only (do not screen-share this block; the issue numbers are for you):
 
 - Issue 2164: the reload bridge skips its catalog refresh while no shell is active, so a host whose start-up activation failed can keep serving the old release after an upgrade until a reload. The narrow timing window above is also 2164.
 - Issue 2159: `POST /_module-management/reconcile` never answers. The demo never calls it: the folder watcher reconciles, and `reload` is the only endpoint used.
-- Issue 2162: two hosts started in the same instant log a duplicate key error on the cluster's identity row (see the troubleshooting table).
+- Issue 2162 (fixed): two hosts started in the same instant used to log a duplicate key error on the cluster's identity row. They no longer do, so starting them one after the other is not required; it stays in the steps as harmless advice, and the troubleshooting table keeps the symptom for a build from before the fix.
 
 ## Setup (before the audience, about 20 minutes, most of it waiting)
 
@@ -215,7 +215,7 @@ bash tools/demo/run-host.sh b --port 5202 --provider PostgreSql --cluster host-b
 
 - **Expect:** the apply prints both modules, `Cluster.Membership` and `Samples.Notes`, one migration applied each. One `apply` creates the tables for both hosts: they share the database.
 
-In tab **A** (starting both hosts in the same instant makes them race to create the cluster's identity row; see the troubleshooting table):
+In tab **A** (starting the hosts one after the other is no longer required, since a host that loses the race to create the cluster's identity row now reads the winner's and logs nothing; it stays here as harmless advice, and a build from before #2162 logs a duplicate key error for it, see the troubleshooting table):
 
 ```bash
 source tools/demo/helpers.sh
@@ -661,7 +661,7 @@ success or failure. Its host logs are kept in `artifacts/demo-rehearsal/`. It us
 
 | Symptom | Cause | What to do |
 |---|---|---|
-| A host logs a **duplicate key** error at start, on the cluster's identity row | Two hosts started in the same instant both tried to create it; the loser logs the error and carries on | Harmless if the host goes on to `Now listening`. Avoid it: start A, wait for `/health/ready` 200, then start B. If a host did not come up, Ctrl-C it and start it again |
+| A host built before #2162 logs a **duplicate key** error at start, on the cluster's identity row | Two hosts started in the same instant both tried to create it; the loser logged the error and carried on. A current build logs nothing for it | Harmless if the host goes on to `Now listening`. Avoid it: start A, wait for `/health/ready` 200, then start B. If a host did not come up, Ctrl-C it and start it again |
 | `/health/ready` says **503** after `apply`, and requests answer **500** | A host that was started already refused (the fallback route): the readiness probe does not activate a shell | Send a real request: `notes 5101`. It activates the shell; `/health/ready` follows |
 | `reload` says **200** with `"features": 3` instead of 409 | The host has not installed 1.1.0 yet | Wait five seconds, repeat |
 | `reload` answers **401**, **403** or **404** | Module management is off, or the key differs | The host must be started with `--management-key-env DEMO_KEY`; `echo $DEMO_KEY` in the tab must match the one in the host's tab |
