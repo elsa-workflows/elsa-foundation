@@ -49,7 +49,9 @@ Shared EF preparation owns provider/resource pair selection, authored presence, 
 
 ## Safe response
 
-The host returns one closed response: version1, invocationId, captureId, status (`ok` or `refused`), exitCode, and exactly one of configurationResolution/error. Worker/frontend check token equality and process exit consistency. The worker carries this host document in the existing private WorkerResponse version2 Tooling field, preserving its exact host document after validation; pre-host failure uses the existing outer Error shape with an admitted fixed code. Candidate frontend validates both envelope layers, never the old v1/v2 tooling parser. Every error code maps to a fixed local message; no remote free-text message is printed.
+For an admitted correlated request, the host returns one closed response: version1, invocationId, captureId, status (`ok` or `refused`), exitCode, and exactly one of configurationResolution/error. Worker/frontend check token equality and process exit consistency. The worker carries this host document in the existing private WorkerResponse version2 Tooling field, preserving its exact host document after validation; pre-host failure uses the existing outer Error shape with an admitted fixed code. Candidate frontend validates both envelope layers, never the old v1/v2 tooling parser. Every error code maps to a fixed local message; no remote free-text message is printed.
+
+Correlated host input refusals additionally admit candidate-request-invalid, candidate-request-too-large and candidate-capture-invalid with exit2; malformed decoded selected-file JSON uses candidate-capture-invalid. They carry no reason or target preview. If a malformed/oversized host request cannot establish valid independent correlation tokens, the host returns exit2 with no response bytes rather than inventing identities. Such a missing/uncorrelated host exchange is candidate-response-invalid at the worker boundary. Frontend/worker request admission rejects invalid private requests before host dispatch; these direct malformed-host calls are not accepted frontend journeys.
 
 Successful configurationResolution fields:
 

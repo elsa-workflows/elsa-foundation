@@ -252,6 +252,36 @@ public sealed class WorkerProtocolTests
         Assert.Equal("required-disabled", refused.RootElement.GetProperty("error").GetProperty("reason").GetString());
     }
 
+    [Theory]
+    [InlineData("candidate-request-invalid")]
+    [InlineData("candidate-request-too-large")]
+    [InlineData("candidate-capture-invalid")]
+    public async Task Candidate_host_response_reader_admits_correlated_input_refusals(string code)
+    {
+        var response = JsonNode.Parse(CandidateHostRefusalJson)!.AsObject();
+        response["error"] = new JsonObject { ["code"] = code };
+
+        using var refused = await ReadCandidateHostResponseAsync(response.ToJsonString(), processExitCode: 2);
+
+        Assert.Equal(code, refused.RootElement.GetProperty("error").GetProperty("code").GetString());
+        Assert.False(refused.RootElement.TryGetProperty("configurationResolution", out _));
+    }
+
+    [Theory]
+    [InlineData("candidate-request-invalid", "feature")]
+    [InlineData("candidate-request-invalid", "resource")]
+    [InlineData("candidate-request-too-large", "feature")]
+    [InlineData("candidate-request-too-large", "resource")]
+    [InlineData("candidate-capture-invalid", "feature")]
+    [InlineData("candidate-capture-invalid", "resource")]
+    public async Task Candidate_input_refusals_cannot_carry_target_identities(string code, string field)
+    {
+        var response = JsonNode.Parse(CandidateHostRefusalJson)!.AsObject();
+        response["error"] = new JsonObject { ["code"] = code, [field] = "SafeTarget" };
+
+        await AssertCandidateHostResponseRefusesAsync(response.ToJsonString(), processExitCode: 2);
+    }
+
     [Fact]
     public async Task Candidate_host_response_reader_bounds_actual_bytes_and_refuses_oversize_with_a_safe_code()
     {

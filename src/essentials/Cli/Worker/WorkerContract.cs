@@ -38,6 +38,7 @@ public static class WorkerContract
     };
     private static readonly HashSet<string> CandidateHostErrorCodes = new(StringComparer.Ordinal)
     {
+        "candidate-request-invalid", "candidate-request-too-large", "candidate-capture-invalid",
         "candidate-selection-conflict", "resource-selection-invalid", "resource-not-found",
         "resource-definition-invalid", "resource-configurator-unsupported", "resource-required-feature-disabled",
         "resource-legacy-conflict", "resource-ownership-unresolved", "resource-context-conflict"
@@ -208,6 +209,9 @@ public static class WorkerContract
             throw InvalidCandidateHostResponse();
 
         var codeValue = code.GetString();
+        if (codeValue is "candidate-request-invalid" or "candidate-request-too-large" or "candidate-capture-invalid" &&
+            error.EnumerateObject().Count() != 1)
+            throw InvalidCandidateHostResponse();
         var hasReason = error.TryGetProperty("reason", out var reason);
         if (hasReason && (codeValue != "candidate-selection-conflict" || reason.ValueKind != JsonValueKind.String ||
             !CandidateSelectionConflictReasons.Contains(reason.GetString() ?? string.Empty)))

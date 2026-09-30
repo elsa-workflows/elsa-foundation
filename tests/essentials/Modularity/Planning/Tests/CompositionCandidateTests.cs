@@ -150,6 +150,100 @@ public sealed class CompositionCandidateTests
     }
 
     [Fact]
+    public void Explicit_remove_absent_from_file_selection_is_materialized_without_losing_other_content()
+    {
+        var (snapshot, catalog, _, _) = Fixture();
+        snapshot = WithShells(snapshot,
+            """{"CShells":{"Shells":{"default":{"Features":{"A":{"Existing":"PRESERVE"}}}}}}""",
+            """{"CShells":{"Shells":{"default":{"Features":{}}}},"Other":"UNCHANGED"}""");
+        var authored = PlannerFixture.Authored(catalog, add: ["A"], remove: ["C"], accepted: ["A"]);
+
+        var candidate = CompositionCandidateBuilder.Build(snapshot, catalog, authored, null);
+
+        Assert.Equal(snapshot.ReadText("shells.json"), System.Text.Encoding.UTF8.GetString(candidate.Files["shells.json"]));
+        using var overlay = JsonDocument.Parse(candidate.Files["shells.Production.json"]);
+        var features = overlay.RootElement.GetProperty("CShells").GetProperty("Shells").GetProperty("default").GetProperty("Features");
+        Assert.False(features.GetProperty("C").GetBoolean());
+        Assert.Equal("UNCHANGED", overlay.RootElement.GetProperty("Other").GetString());
+        Assert.Contains(candidate.Changes, change => change.FeatureId == "C" && change.ValueType == "feature-disabled" && change.SourceLayer == "overlay");
+        Assert.DoesNotContain("PRESERVE", JsonSerializer.Serialize(candidate.Changes));
+    }
+
+    [Fact]
+    public void Explicit_remove_keeps_an_existing_selected_overlay_false_byte_for_byte()
+    {
+        var (snapshot, catalog, _, _) = Fixture();
+        snapshot = WithShells(snapshot,
+            """{"CShells":{"Shells":{"default":{"Features":{"A":true}}}}}""",
+            """{"CShells":{"Shells":{"default":{"Features":{"C":false}}}},"Other":"UNCHANGED"}""");
+        var authored = PlannerFixture.Authored(catalog, add: ["A"], remove: ["C"], accepted: ["A"]);
+
+        var candidate = CompositionCandidateBuilder.Build(snapshot, catalog, authored, null);
+
+        Assert.All(snapshot.FileNames, name => Assert.Equal(snapshot.CopyBytes(name), candidate.Files[name]));
+        Assert.Empty(candidate.Changes);
+    }
+
+    [Fact]
+    public void Explicit_remove_materializes_selected_overlay_false_when_base_is_already_disabled()
+    {
+        var (snapshot, catalog, _, _) = Fixture();
+        snapshot = WithShells(snapshot,
+            """{"CShells":{"Shells":{"default":{"Features":{"A":true,"C":false}}}}}""",
+            """{"CShells":{"Shells":{"default":{"Features":{}}}},"Other":"UNCHANGED"}""");
+        var authored = PlannerFixture.Authored(catalog, add: ["A"], remove: ["C"], accepted: ["A"]);
+
+        var candidate = CompositionCandidateBuilder.Build(snapshot, catalog, authored, null);
+
+        Assert.Equal(snapshot.ReadText("shells.json"), System.Text.Encoding.UTF8.GetString(candidate.Files["shells.json"]));
+        using var overlay = JsonDocument.Parse(candidate.Files["shells.Production.json"]);
+        var features = overlay.RootElement.GetProperty("CShells").GetProperty("Shells").GetProperty("default").GetProperty("Features");
+        Assert.False(features.GetProperty("C").GetBoolean());
+        Assert.Equal("UNCHANGED", overlay.RootElement.GetProperty("Other").GetString());
+        Assert.Contains(candidate.Changes, change => change.FeatureId == "C" && change.ValueType == "feature-disabled" && change.SourceLayer == "overlay");
+    }
+
+    [Fact]
+    public void Explicit_remove_refuses_selected_overlay_settings_instead_of_discarding_them()
+    {
+        var (snapshot, catalog, _, _) = Fixture();
+        snapshot = WithShells(snapshot,
+            """{"CShells":{"Shells":{"default":{"Features":{"A":true}}}}}""",
+            """{"CShells":{"Shells":{"default":{"Features":{"C":{"Private":"RETAINED_SETTING_CANARY"}}}}}}""");
+        var authored = PlannerFixture.Authored(catalog, add: ["A"], remove: ["C"], accepted: ["A"]);
+
+        var exception = Assert.Throws<CompositionImportException>(() =>
+            CompositionCandidateBuilder.Build(snapshot, catalog, authored, null));
+
+        Assert.Equal("bridge-activation-mapping-unresolved", exception.Code);
+        Assert.DoesNotContain("RETAINED_SETTING_CANARY", exception.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Explicit_remove_absent_from_array_selection_refuses_the_unsupported_source_shape()
+    {
+        var (snapshot, catalog, _, _) = Fixture();
+        snapshot = WithShells(snapshot,
+            """{"CShells":{"Shells":{"default":{"Features":["A"]}}}}""", "{}");
+        var authored = PlannerFixture.Authored(catalog, add: ["A"], remove: ["C"], accepted: ["A"]);
+
+        AssertCode("bridge-activation-shape-unsupported", () =>
+            CompositionCandidateBuilder.Build(snapshot, catalog, authored, null));
+    }
+
+    [Fact]
+    public void Explicit_remove_refuses_a_case_equivalent_disabled_source_entry()
+    {
+        var (snapshot, catalog, _, _) = Fixture();
+        snapshot = WithShells(snapshot,
+            """{"CShells":{"Shells":{"default":{"Features":{"A":true,"c":false}}}}}""", "{}");
+        var authored = PlannerFixture.Authored(catalog, add: ["A"], remove: ["C"], accepted: ["A"]);
+
+        AssertCode("bridge-activation-mapping-unresolved", () =>
+            CompositionCandidateBuilder.Build(snapshot, catalog, authored, null));
+    }
+
+    [Fact]
     public void Supplied_workspace_profile_drives_the_same_candidate_planner()
     {
         var (snapshot, catalog, _, _) = Fixture();

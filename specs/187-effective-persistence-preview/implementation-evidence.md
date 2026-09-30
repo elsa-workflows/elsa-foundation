@@ -34,6 +34,20 @@ Each source mutation was restored in `finally`; after restoration, the 140-case 
 
 These failures executed assertions against deliberately broken production behavior; they were not compilation failures.
 
+## Actor, host and removal baselines: T005–T006
+
+Executed in the existing CLI, Planning and migrations projects on 2026-09-30; no new suite or provider container was introduced.
+
+- Real built CLI journeys: both import/edit/accept and workspace-profile/edit/accept reached the accepted input, then their preview expectations failed on the missing `composition inspect` command. Both corresponding missing-trust expectations failed on that same absent command. In the combined run, these four new actor expectations were red; three pre-existing resource-aware live CLI checks and three new correlated-input-refusal admission cases passed (10 executed, zero skipped).
+- Host capability/public operation: repaired test-only compile errors before counting evidence. All seven expectations then executed red on the missing streamed host capability or public operation. The real fixture separately composed its descriptor closure before attempting the missing operation. Temporary operation-type reflection must become direct public calls when production lands; reflective capability negotiation remains under test.
+- Independent review tightened correlated input refusals: six feature/resource-bearing input-refusal cases executed red before the reader was changed to admit code-only errors. The malformed selected-file host expectation now checks version, both correlation tokens and the exact closed top-level error envelope.
+- Restored focused capture/framing run after that correction: **155 executed, 155 passed, zero skipped**. This is source/input/protocol evidence, not a passing host or actor journey.
+- Shared candidate builder removal baseline: the first four cases yielded three red and one settings-preservation control green. Two additional base-disabled/overlay-idempotence cases brought the baseline to six executed, four red and two green. After the narrow union-of-explicit-removals fix, **all 16 existing and new candidate-builder cases passed, zero skipped**. Independent and root review found no remaining defect in that delta.
+- Deliberately removing the explicit-removal union made the absent-feature assertion fail while the existing-overlay-false control passed (two executed, one red, one green). Restoring the source returned all 16 candidate-builder cases to green. The shared builder is corrected; survival of that false declaration through the real host merge remains an integration gate.
+- Worker capability-negotiation baseline: nine cases executed red on the missing binder; they require exact independently versioned streamed negotiation without any legacy fallback.
+
+The new worker capability-negotiation expectations are tracked separately from host production. These baselines do not close T005 or any acceptance-matrix row; per-owner branch, actor integration, configuration parity and adverse/process obligations remain open.
+
 ## Still required
 
-No acceptance matrix row is closed by these foundations. Host capability/operation, decoded file admission, shared builder removal materialization, installed-closure worker dispatch, full response contents, CLI command/formatting, real actor/runtime parity and child lifecycle/adverse proofs remain incomplete. T005–T020 and the full affected suites, architecture/maps, exact-head review/CI and exact-main delivery gates remain open. The specification stays **In progress**.
+No acceptance matrix row is closed by these foundations. Host capability/operation, decoded file admission, actual host removal preservation, installed-closure worker dispatch, full response contents, CLI command/formatting, real actor/runtime parity and child lifecycle/adverse proofs remain incomplete. T005 and T007–T020, plus the full affected suites, architecture/maps, exact-head review/CI and exact-main delivery gates remain open. The specification stays **In progress**.

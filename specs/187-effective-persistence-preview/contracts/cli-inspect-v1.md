@@ -23,6 +23,8 @@ Before launch and immediately before final output, recheck all captured inputs. 
 
 Human stdout and JSON derive from one validated result and contain safe exact selection/reasons plus a separate configurationResolution projection. Do not set Planning.PersistenceEvidence.Status=checked: its broader physical/schema/migration evidence is not supplied here. CLI strips private correlation tokens and file entries. Public input errors use existing codes where safe, but fixed messages and no source path, arbitrary rationale, raw excerpt or exception text. Progress/refusal text uses stderr; no partial JSON, raw host stdout/stderr or secret-bearing hashes.
 
+JSON output contains `plan` (the existing safe composition-plan projection) and `configurationResolution` (the validated public host projection). It does not expose the private host or worker envelope. Human output renders those same two projections.
+
 | Outcome | Exit | Output |
 |---|---:|---|
 | Complete valid configuration projection, including explicit unavailable legacy/provenance/live checks | 0 | One safe human or JSON preview. Resolved configuration is not runtime readiness. |
