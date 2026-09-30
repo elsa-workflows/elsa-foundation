@@ -666,7 +666,7 @@ public sealed class ToolingEntryPointTests : IDisposable
         public static CandidateInvocationState For(string invocationId) => States[invocationId];
 
         public static string SuccessResponse(string invocation, string capture) =>
-            $"{{\"version\":1,\"invocationId\":\"{invocation}\",\"captureId\":\"{capture}\",\"status\":\"ok\",\"exitCode\":0,\"configurationResolution\":{{}}}}";
+            CandidateHostResponseFixtures.SuccessJson(invocation, capture);
 
         public static string RefusalResponse(string invocation, string capture) =>
             $"{{\"version\":1,\"invocationId\":\"{invocation}\",\"captureId\":\"{capture}\",\"status\":\"refused\",\"exitCode\":2,\"error\":{{\"code\":\"candidate-capture-invalid\"}}}}";

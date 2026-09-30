@@ -47,6 +47,42 @@ public static class WorkerContract
     {
         "unknown", "unavailable", "requested-extra", "requested-missing", "expanded-extra", "required-disabled", "case-collision"
     };
+    private static readonly HashSet<string> CandidateConfigurationResolutionFields = new(StringComparer.Ordinal)
+    {
+        "source", "shell", "environment", "resolution", "selection", "participants", "configuredValueAffinity",
+        "targetVerification", "runtimeParity", "packageReachability", "connectivity", "schemaReadiness",
+        "migrationReadiness", "activation", "externalInputs", "unresolved"
+    };
+    private static readonly HashSet<string> CandidateResolutionSelectionFields = new(StringComparer.Ordinal)
+    {
+        "acceptedFeatureIds", "requestedFeatureIds", "effectiveFeatureIds", "disabledFeatureIds", "implicitFeatureIds"
+    };
+    private static readonly HashSet<string> CandidateResolutionParticipantFields = new(StringComparer.Ordinal)
+    {
+        "feature", "module", "selection", "resource", "provider", "connectionReference", "selectorScope",
+        "resourceScope", "exactFileProvenance"
+    };
+    private static readonly HashSet<string> CandidateParticipantSelections = new(StringComparer.Ordinal)
+    {
+        "Legacy", "ShellBinding", "ShellDefault", "RootDefault"
+    };
+    private static readonly HashSet<string> CandidateProviders = new(StringComparer.Ordinal)
+    {
+        "Sqlite", "SqlServer", "PostgreSql", "MySql"
+    };
+    private static readonly HashSet<string> CandidateScopes = new(StringComparer.Ordinal)
+    {
+        "root", "shell-composed", "shell-authored", "feature", "unavailable"
+    };
+    private static readonly HashSet<string> CandidateUnresolvedCodes = new(StringComparer.Ordinal)
+    {
+        "legacy-target-unprojected", "exact-file-provenance-unavailable", "resource-participant-unenrolled",
+        "resource-scope-unsupported"
+    };
+    private static readonly HashSet<string> CandidatePartialUnresolvedCodes = new(StringComparer.Ordinal)
+    {
+        "legacy-target-unprojected", "resource-participant-unenrolled", "resource-scope-unsupported"
+    };
 
     /// <summary>
     /// Case-sensitive camelCase with unmapped members refused, matching the tooling contract: a worker and a
@@ -190,6 +226,7 @@ public static class WorkerContract
             if (processExitCode != ToolExitCode.Success || !hasResolution || hasError ||
                 resolution.ValueKind != JsonValueKind.Object)
                 throw InvalidCandidateHostResponse();
+            ValidateCandidateConfigurationResolution(resolution);
             return;
         }
 
@@ -198,6 +235,215 @@ public static class WorkerContract
             throw InvalidCandidateHostResponse();
 
         ValidateCandidateHostError(error);
+    }
+
+    private static void ValidateCandidateConfigurationResolution(JsonElement resolution)
+    {
+        if (!HasExactlyFields(resolution, CandidateConfigurationResolutionFields) ||
+            !HasStringValue(resolution, "source", "captured-workbench-json-v1") ||
+            !TryGetString(resolution, "shell", out var shell) || !IsSafeCandidateReference(shell) ||
+            !TryGetString(resolution, "environment", out var environment) || !IsSafeEnvironment(environment) ||
+            !TryGetString(resolution, "resolution", out var resolutionValue) ||
+            resolutionValue is not ("resolved" or "partial") ||
+            !TryGetString(resolution, "configuredValueAffinity", out var affinity) ||
+            affinity is not ("checked" or "not-applicable") ||
+            !HasStringValue(resolution, "targetVerification", "not-performed") ||
+            !HasStringValue(resolution, "runtimeParity", "unobserved") ||
+            !HasStringValue(resolution, "packageReachability", "unverified") ||
+            !HasStringValue(resolution, "connectivity", "unverified") ||
+            !HasStringValue(resolution, "schemaReadiness", "unverified") ||
+            !HasStringValue(resolution, "migrationReadiness", "unverified") ||
+            !HasStringValue(resolution, "activation", "unobserved") ||
+            !HasStringValue(resolution, "externalInputs", "unverified") ||
+            !resolution.TryGetProperty("selection", out var selection) ||
+            !TryValidateCandidateResolutionSelection(selection, out var acceptedFeatureIds) ||
+            !resolution.TryGetProperty("participants", out var participants) || participants.ValueKind != JsonValueKind.Array ||
+            !resolution.TryGetProperty("unresolved", out var unresolvedElement) ||
+            !TryReadSortedUnresolvedCodes(unresolvedElement, out var unresolvedCodes) ||
+            participants.GetArrayLength() > 1024 - unresolvedCodes.Length)
+            throw InvalidCandidateHostResponse();
+
+        var accepted = new HashSet<string>(acceptedFeatureIds, StringComparer.Ordinal);
+        var hasLegacyParticipant = false;
+        var hasUnavailableResourceScope = false;
+        string? previousFeature = null;
+        string? previousModule = null;
+        foreach (var participant in participants.EnumerateArray())
+        {
+            if (!TryValidateCandidateParticipant(participant, accepted, out var feature, out var module,
+                    out var legacy, out var unavailableResourceScope))
+                throw InvalidCandidateHostResponse();
+
+            if (previousFeature is not null)
+            {
+                var order = StringComparer.Ordinal.Compare(previousFeature, feature);
+                if (order > 0 || (order == 0 && StringComparer.Ordinal.Compare(previousModule, module) >= 0))
+                    throw InvalidCandidateHostResponse();
+            }
+            previousFeature = feature;
+            previousModule = module;
+            hasLegacyParticipant |= legacy;
+            hasUnavailableResourceScope |= unavailableResourceScope;
+        }
+
+        var unresolved = new HashSet<string>(unresolvedCodes, StringComparer.Ordinal);
+        var hasExactFileProvenanceUnavailable = unresolved.Contains("exact-file-provenance-unavailable");
+        if (participants.GetArrayLength() > 0 && !hasExactFileProvenanceUnavailable ||
+            hasLegacyParticipant && !unresolved.Contains("legacy-target-unprojected") ||
+            hasUnavailableResourceScope && !unresolved.Contains("resource-scope-unsupported"))
+            throw InvalidCandidateHostResponse();
+
+        var needsPartial = unresolvedCodes.Any(CandidatePartialUnresolvedCodes.Contains);
+        if ((resolutionValue == "partial") != needsPartial)
+            throw InvalidCandidateHostResponse();
+    }
+
+    private static bool TryValidateCandidateResolutionSelection(JsonElement selection, out string[] acceptedFeatureIds)
+    {
+        acceptedFeatureIds = [];
+        if (!HasExactlyFields(selection, CandidateResolutionSelectionFields) ||
+            !selection.TryGetProperty("acceptedFeatureIds", out var acceptedElement) ||
+            !TryReadSortedCandidateIds(acceptedElement, out var accepted) ||
+            !selection.TryGetProperty("requestedFeatureIds", out var requestedElement) ||
+            !TryReadSortedCandidateIds(requestedElement, out var requested) ||
+            !selection.TryGetProperty("effectiveFeatureIds", out var effectiveElement) ||
+            !TryReadSortedCandidateIds(effectiveElement, out var effective) ||
+            !selection.TryGetProperty("disabledFeatureIds", out var disabledElement) ||
+            !TryReadSortedCandidateIds(disabledElement, out var disabled) ||
+            !selection.TryGetProperty("implicitFeatureIds", out var implicitElement) ||
+            !TryReadSortedCandidateIds(implicitElement, out var implicitIds) ||
+            !accepted.SequenceEqual(requested, StringComparer.Ordinal) ||
+            !accepted.SequenceEqual(effective, StringComparer.Ordinal) || implicitIds.Length != 0 ||
+            disabled.Intersect(accepted, StringComparer.OrdinalIgnoreCase).Any())
+            return false;
+
+        acceptedFeatureIds = accepted;
+        return true;
+    }
+
+    private static bool TryValidateCandidateParticipant(
+        JsonElement participant,
+        HashSet<string> acceptedFeatureIds,
+        out string feature,
+        out string module,
+        out bool legacy,
+        out bool unavailableResourceScope)
+    {
+        feature = string.Empty;
+        module = string.Empty;
+        legacy = false;
+        unavailableResourceScope = false;
+        if (!HasExactlyFields(participant, CandidateResolutionParticipantFields) ||
+            !TryGetString(participant, "feature", out feature) || !IsSafeCandidateReference(feature) ||
+            !acceptedFeatureIds.Contains(feature) ||
+            !TryGetString(participant, "module", out module) || !IsSafeCandidateReference(module) ||
+            !TryGetString(participant, "selection", out var selection) || !CandidateParticipantSelections.Contains(selection) ||
+            !TryGetNullableString(participant, "resource", out var resource) ||
+            !TryGetNullableString(participant, "provider", out var provider) ||
+            !TryGetNullableString(participant, "connectionReference", out var connectionReference) ||
+            !TryGetNullableString(participant, "selectorScope", out var selectorScope) ||
+            !TryGetNullableString(participant, "resourceScope", out var resourceScope) ||
+            !HasStringValue(participant, "exactFileProvenance", "unavailable"))
+            return false;
+
+        if (resource is not null && !IsSafePublicResourceIdentity(resource) ||
+            connectionReference is not null && !IsSafePublicResourceIdentity(connectionReference) ||
+            provider is not null && !CandidateProviders.Contains(provider) ||
+            selectorScope is not null && !CandidateScopes.Contains(selectorScope) ||
+            resourceScope is not null && !CandidateScopes.Contains(resourceScope))
+            return false;
+
+        legacy = selection == "Legacy";
+        if (legacy)
+        {
+            if (resource is not null || provider is not null || connectionReference is not null)
+                return false;
+        }
+        else if (resource is null || provider is null || connectionReference is null)
+            return false;
+
+        unavailableResourceScope = resourceScope == "unavailable";
+        return true;
+    }
+
+    private static bool TryReadSortedCandidateIds(JsonElement element, out string[] values)
+    {
+        values = [];
+        if (element.ValueKind != JsonValueKind.Array || element.GetArrayLength() > 4096)
+            return false;
+
+        var result = new string[element.GetArrayLength()];
+        var caseInsensitive = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        string? previous = null;
+        var index = 0;
+        foreach (var item in element.EnumerateArray())
+        {
+            if (item.ValueKind != JsonValueKind.String)
+                return false;
+            var value = item.GetString();
+            if (!IsSafeCandidateReference(value) || !caseInsensitive.Add(value!) ||
+                previous is not null && StringComparer.Ordinal.Compare(previous, value) >= 0)
+                return false;
+            result[index++] = value!;
+            previous = value;
+        }
+
+        values = result;
+        return true;
+    }
+
+    private static bool TryReadSortedUnresolvedCodes(JsonElement element, out string[] values)
+    {
+        values = [];
+        if (element.ValueKind != JsonValueKind.Array || element.GetArrayLength() > 1024)
+            return false;
+
+        var result = new string[element.GetArrayLength()];
+        string? previous = null;
+        var index = 0;
+        foreach (var item in element.EnumerateArray())
+        {
+            if (item.ValueKind != JsonValueKind.String)
+                return false;
+            var value = item.GetString();
+            if (value is null || !CandidateUnresolvedCodes.Contains(value) ||
+                previous is not null && StringComparer.Ordinal.Compare(previous, value) >= 0)
+                return false;
+            result[index++] = value;
+            previous = value;
+        }
+
+        values = result;
+        return true;
+    }
+
+    private static bool HasExactlyFields(JsonElement value, HashSet<string> expectedFields) =>
+        value.ValueKind == JsonValueKind.Object && value.EnumerateObject().Count() == expectedFields.Count &&
+        value.EnumerateObject().All(property => expectedFields.Contains(property.Name));
+
+    private static bool HasStringValue(JsonElement value, string name, string expected) =>
+        TryGetString(value, name, out var actual) && actual == expected;
+
+    private static bool TryGetString(JsonElement value, string name, out string result)
+    {
+        result = string.Empty;
+        if (!value.TryGetProperty(name, out var property) || property.ValueKind != JsonValueKind.String)
+            return false;
+        result = property.GetString()!;
+        return true;
+    }
+
+    private static bool TryGetNullableString(JsonElement value, string name, out string? result)
+    {
+        result = null;
+        if (!value.TryGetProperty(name, out var property))
+            return false;
+        if (property.ValueKind == JsonValueKind.Null)
+            return true;
+        if (property.ValueKind != JsonValueKind.String)
+            return false;
+        result = property.GetString();
+        return result is not null;
     }
 
     private static void ValidateCandidateHostError(JsonElement error)

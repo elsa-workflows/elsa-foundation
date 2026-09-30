@@ -15,9 +15,7 @@ public sealed class WorkerProtocolTests
     private const string CandidateRequestJson = """
         {"version":2,"command":"inspect-candidate","hostDirectory":"/compiled-host","hostName":"FixtureHost","depsFile":"/compiled-host/FixtureHost.deps.json","packageRoots":[],"restore":false,"candidate":{"version":1,"source":"captured-workbench-json-v1","invocationId":"11111111111111111111111111111111","captureId":"22222222222222222222222222222222","shell":"default","environment":"Production","acceptedFeatureIds":["ResourceProbe"],"removedFeatureIds":[],"files":[{"name":"appsettings.json","captureId":"22222222222222222222222222222222","content":"e30="},{"name":"shells.json","captureId":"22222222222222222222222222222222","content":"e30="},{"name":"shells.Production.json","captureId":"22222222222222222222222222222222","content":"e30="},{"name":"appsettings.Production.json","captureId":"22222222222222222222222222222222","content":"e30="}]}}
         """;
-    private const string CandidateHostSuccessJson = """
-        {"version":1,"invocationId":"11111111111111111111111111111111","captureId":"22222222222222222222222222222222","status":"ok","exitCode":0,"configurationResolution":{"pendingPublicProjectionValidation":true}}
-        """;
+    private static string CandidateHostSuccessJson => CandidateHostResponseFixtures.SuccessJson(CandidateInvocationId, CandidateCaptureId);
     private const string CandidateHostRefusalJson = """
         {"version":1,"invocationId":"11111111111111111111111111111111","captureId":"22222222222222222222222222222222","status":"refused","exitCode":2,"error":{"code":"candidate-selection-conflict","reason":"required-disabled","feature":"ResourceProbe","resource":"primary"}}
         """;
@@ -244,7 +242,7 @@ public sealed class WorkerProtocolTests
         using var success = await ReadCandidateHostResponseAsync(CandidateHostSuccessJson, processExitCode: 0);
         Assert.Equal("ok", success.RootElement.GetProperty("status").GetString());
         Assert.Equal(1, success.RootElement.GetProperty("version").GetInt32());
-        Assert.True(success.RootElement.GetProperty("configurationResolution").GetProperty("pendingPublicProjectionValidation").GetBoolean());
+        Assert.Equal("captured-workbench-json-v1", success.RootElement.GetProperty("configurationResolution").GetProperty("source").GetString());
 
         using var refused = await ReadCandidateHostResponseAsync(CandidateHostRefusalJson, processExitCode: 2);
         Assert.Equal("refused", refused.RootElement.GetProperty("status").GetString());
