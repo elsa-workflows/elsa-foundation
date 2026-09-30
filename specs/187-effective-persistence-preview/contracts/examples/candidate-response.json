@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "invocationId": "11111111111111111111111111111111",
+  "captureId": "22222222222222222222222222222222",
+  "status": "ok",
+  "exitCode": 0,
+  "configurationResolution": {
+    "source": "captured-workbench-json-v1",
+    "shell": "default",
+    "environment": "Production",
+    "resolution": "resolved",
+    "selection": {
+      "acceptedFeatureIds": [],
+      "requestedFeatureIds": [],
+      "effectiveFeatureIds": [],
+      "disabledFeatureIds": [],
+      "implicitFeatureIds": []
+    },
+    "participants": [],
+    "configuredValueAffinity": "not-applicable",
+    "targetVerification": "not-performed",
+    "runtimeParity": "unobserved",
+    "packageReachability": "unverified",
+    "connectivity": "unverified",
+    "schemaReadiness": "unverified",
+    "migrationReadiness": "unverified",
+    "activation": "unobserved",
+    "externalInputs": "unverified",
+    "unresolved": [
+      "exact-file-provenance-unavailable"
+    ]
+  }
+}

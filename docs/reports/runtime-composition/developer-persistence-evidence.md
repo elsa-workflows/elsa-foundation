@@ -1,8 +1,10 @@
 # Developer persistence evidence boundary
 
-Status: investigation in progress for [#2172](https://github.com/elsa-workflows/elsa-foundation/issues/2172), under developer composition epic [#1962](https://github.com/elsa-workflows/elsa-foundation/issues/1962) and program [#1959](https://github.com/elsa-workflows/elsa-foundation/issues/1959). Source audit baseline: verified main `d18ee00a9e9bb6908718571a348d4303a8695e54`. The production-path probe is integrated and root verification passed the full affected migrations project (382/382, including all 10 probe cases) and architecture guard (599/599). Independent correctness/report review is complete; PR and exact-main delivery gates remain pending. This report does not amend a public API, protocol, export policy or constitution.
+Status: delivered investigation for [#2172](https://github.com/elsa-workflows/elsa-foundation/issues/2172), under developer composition epic [#1962](https://github.com/elsa-workflows/elsa-foundation/issues/1962) and program [#1959](https://github.com/elsa-workflows/elsa-foundation/issues/1959). Source audit baseline: verified main `d18ee00a9e9bb6908718571a348d4303a8695e54`. The production-path probe is integrated and root verification passed the full affected migrations project (382/382, including all 10 probe cases) and architecture guard (599/599). Independent correctness/report review is complete; [PR #2174](https://github.com/elsa-workflows/elsa-foundation/pull/2174) merged as `867d5696a0e2c24b6e99b9b666fea9ede609d477`; all applicable exact-main gates passed ([CI](https://github.com/elsa-workflows/elsa-foundation/actions/runs/36675178705), [Maps](https://github.com/elsa-workflows/elsa-foundation/actions/runs/36675178497)). The corrected late-review process record remains on the issue/PR; unavailable Copilot is not approval. This report does not amend a public API, protocol, export policy or constitution.
 
 Elsa constitution §E4 remains deferred. This investigation follows the existing accepted tooling and file-bridge contracts; it does not ratify a general configuration policy by implication.
+
+Follow-up: [spec187 / #2175](../../../specs/187-effective-persistence-preview/spec.md) defines the next accepted-candidate operation; its publication does not implement it or close broader external/unknown-export outcomes.
 
 ## Question and outcome
 
