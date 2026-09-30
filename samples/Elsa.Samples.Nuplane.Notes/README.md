@@ -89,6 +89,11 @@ uses the file `artifacts/demo/notes.db`; PostgreSql always needs it (`--provider
 
 Requirements: `dotnet`, `rsync`, `curl` and a working `python3` (the scripts check for it and say so when it is missing). The PostgreSQL walkthrough also needs Docker and the `postgres:16-alpine` image.
 
+To present it, use `tools/demo/RUNBOOK.md`: the script for both acts, with every command, expected output and timing.
+`bash tools/demo/prepack.sh` does everything slow beforehand and stages both releases; `bash tools/demo/publish.sh <1|2> --host NAME`
+is then a file copy into that host's feed; `bash tools/demo/reset.sh` puts everything back; `bash tools/demo/rehearse.sh` plays
+both acts unattended and asserts what the runbook promises.
+
 ### Walkthrough: one host
 
 Release 1.0.0 first, then 1.1.0, on one host. The policy is `Validate`, so a host whose database is behind refuses to start
@@ -214,19 +219,15 @@ curl localhost:5101/demo/notes/with-tags           # 200 at the next evaluation 
 
 ## Known limitations
 
-- **Hot-installing 1.1.0 into a running 1.0.0 host is not refused yet, and does not complete.** The folder watcher installs the
-  package and reloads the shell without a restart, and the new endpoints appear, but the host goes on counting the 1.0.0
-  assembly it already loaded, so it never finalizes `2.0.0` and `NotesWithTags` stays at 409 until the host restarts. Stop the
-  host, pack, and start it again, as in the walkthroughs.
 - `dotnet elsa persistence` reads the packages a host has installed, so a host must have reconciled its feed at least once
   (or the tool must be run with `--restore`) before the tool can see the module.
-- No host or tool lists the cluster's members. The walkthrough reads the membership table (`elsa_cluster_members`) with `psql`,
-  and `persistence status` shows the finalized version and that `2.0.0` "waits for every counted member to read it" without
-  naming the member that cannot yet.
 - Start the two hosts one after the other, not in the same instant: when both create the membership database's identity row
   at once, the loser logs a duplicate-key error on that insert at startup and carries on.
-- `POST /_module-management/reload` re-composes the shells; it does not by itself say why a shell refused to activate. The host's
-  log does.
+- Do not call `POST /_module-management/reconcile`: it does not answer. The folder watcher reconciles a feed by itself, and
+  `/reload` is the only management endpoint the demo uses.
+- The walkthroughs below stop, pack and start a host. Since in-place upgrades work, that is the fallback: dropping 1.1.0 into a
+  running host's feed installs it, the host refuses to switch while `AddTags` is pending (`/reload` answers 409 naming the module
+  and the `persistence apply` command), and after the apply `/reload` answers 200. `tools/demo/RUNBOOK.md` shows that route.
 
 ## Regenerating the migrations
 

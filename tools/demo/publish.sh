@@ -13,8 +13,8 @@ Usage: bash tools/demo/publish.sh <1|2> --host NAME [--feed DIR]
   --host NAME     publish into the feed of host NAME, artifacts/demo/hosts/NAME/feed, the feed tools/demo/run-host.sh gives it
   --feed DIR      publish into DIR instead of a host's feed (relative paths are relative to the repository root)
 
-The release must have been staged by tools/demo/prepack.sh. The package is copied under a name the watcher does not match and
-then renamed into place, so the host never sees a half-written file.
+The release must have been staged by tools/demo/prepack.sh. The package is copied beside the feed and then renamed into it, so
+the host's folder watcher never sees a half-written file.
 USAGE
   exit 2
 }

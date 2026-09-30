@@ -364,10 +364,10 @@ if [[ " $acts " == *" 2 "* ]]; then
   expect_has "finalized still at 1.0.0" "$out" "finalized at 1.0.0"
 
   step "Act 2.5 upgrade a in place: no restart, no reload"
-  reloads_before="$(grep -c "Reloaded 1 active shell" "$logs/a.log" || true)"
   run bash tools/demo/publish.sh 2 --host a
   published_at="$(now)"
-  a_reloaded() { [[ "$(grep -c "Reloaded 1 active shell" "$logs/a.log" || true)" -gt "$reloads_before" ]]; }
+  # Host a has never loaded 1.1.0 before, so that line marks the install; the reload that follows it is the host switching over.
+  a_reloaded() { sed -n '/Loaded package Elsa.Samples.Nuplane.Notes@1.1.0/,$p' "$logs/a.log" | grep -q "Reloaded 1 active shell"; }
   wait_until "host a installed the release and reloaded its own shell" 180 a_reloaded
   measure "host a installed 1.1.0 and reloaded $(elapsed "$published_at") s after the publish"
   no_refusal="$(grep -c "was refused" "$logs/a.log" || true)"

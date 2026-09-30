@@ -32,6 +32,9 @@ the engine to load and the migrate policy, and a shells.json enabling the Notes 
                            re-composes the shells
   --prepare-only           write the host directory and stop
 
+The host's process id is recorded in artifacts/demo/pids/NAME.pid, which tools/demo/reset.sh stops it by. A second host of the same
+name, or a host on a port that is in use, is refused.
+
 The database connection is taken from ELSA_EF_CONNECTION, the variable `dotnet elsa persistence` reads, and handed to the
 host as an environment variable: it is never written to disk or printed. When it is unset, Sqlite uses the default file,
 artifacts/demo/notes.db. Two hosts that share a database run with the same ELSA_EF_CONNECTION.
