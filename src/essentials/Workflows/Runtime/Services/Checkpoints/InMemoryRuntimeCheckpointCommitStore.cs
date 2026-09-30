@@ -352,14 +352,14 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
             if (!_state.OutboxItems.TryGetValue(result.OutboxItemId, out var existing))
                 throw new InvalidOperationException($"Post-commit outbox item '{result.OutboxItemId}' was not found.");
 
-            if (existing.IsTerminal)
-                throw new InvalidOperationException($"Post-commit outbox item '{result.OutboxItemId}' is already terminal.");
             // Same ownership test the durable store applies, so both stores answer a contended claim-less recording
-            // identically: write nothing and report the loss. The fencing-token arm matters because the token never
-            // resets, so a released claim leaves the item deliverable while still fenced.
+            // identically: write nothing and report the loss. The fencing token is checked before terminal state because
+            // a completed owner still leaves its positive fence on the row; a claim-less caller does not hold that fence.
             if (existing.Status == RuntimePostCommitOutboxStatus.Delivering || existing.DeliveryFencingToken > 0)
                 return new ValueTask<RuntimePostCommitOutboxClaimCompletionOutcome>(
                     RuntimePostCommitOutboxClaimCompletionOutcome.SupersededByOtherOwner);
+            if (existing.IsTerminal)
+                throw new InvalidOperationException($"Post-commit outbox item '{result.OutboxItemId}' is already terminal.");
 
             var deliveryAttemptCount = RuntimePostCommitRetryPolicy.SaturatingIncrement(existing.DeliveryAttemptCount);
             var status = NormalizeDeliveryStatus(existing, result.Status, deliveryAttemptCount);

@@ -122,6 +122,43 @@ public sealed class RuntimePostCommitOutboxStoreTests
         Assert.Null(current.DeliveredAt);
     }
 
+    [Theory]
+    [InlineData(RuntimePostCommitOutboxStatus.Delivered, RuntimePostCommitOutboxStatus.Delivered)]
+    [InlineData(RuntimePostCommitOutboxStatus.Delivered, RuntimePostCommitOutboxStatus.FailedFinal)]
+    [InlineData(RuntimePostCommitOutboxStatus.FailedFinal, RuntimePostCommitOutboxStatus.Delivered)]
+    [InlineData(RuntimePostCommitOutboxStatus.FailedFinal, RuntimePostCommitOutboxStatus.FailedFinal)]
+    public async Task CompletedClaim_ReportsSupersededForLateClaimlessSuccessOrFailure(
+        RuntimePostCommitOutboxStatus ownerResultStatus,
+        RuntimePostCommitOutboxStatus lateResultStatus)
+    {
+        var store = new InMemoryRuntimeCheckpointCommitStore();
+        await store.AddPendingForTestingAsync(NewOutboxItem("outbox-completed", "intent-completed", "wfexec-1"));
+        var ownerClaim = Assert.Single(await store.ClaimAsync(new RuntimePostCommitOutboxClaimRequest(
+            "sweep-owner", _now, TimeSpan.FromMinutes(1), 10)));
+        var ownerResult = new RuntimePostCommitOutboxDeliveryResult(
+            "outbox-completed",
+            ownerResultStatus,
+            _now.AddSeconds(1),
+            ownerResultStatus == RuntimePostCommitOutboxStatus.FailedFinal ? "owner failure" : null);
+
+        Assert.Equal(
+            RuntimePostCommitOutboxClaimCompletionOutcome.Persisted,
+            await store.CompleteClaimAsync(new RuntimePostCommitOutboxClaimCompletion(ownerClaim, ownerResult)));
+        var beforeLateResult = await store.FindAsync("outbox-completed");
+        Assert.NotNull(beforeLateResult);
+        Assert.Equal(ownerResultStatus, beforeLateResult.Status);
+        Assert.True(beforeLateResult.DeliveryFencingToken > 0);
+
+        var outcome = await store.RecordDeliveryResultAsync(new RuntimePostCommitOutboxDeliveryResult(
+            "outbox-completed",
+            lateResultStatus,
+            _now.AddSeconds(2),
+            lateResultStatus == RuntimePostCommitOutboxStatus.FailedFinal ? "late failure" : null));
+
+        Assert.Equal(RuntimePostCommitOutboxClaimCompletionOutcome.SupersededByOtherOwner, outcome);
+        Assert.True(beforeLateResult.IsEquivalentTo(await store.FindAsync("outbox-completed")));
+    }
+
     [Fact]
     public async Task InMemoryRuntimeCheckpointCommitStore_RejectsNonPendingSaveAndConflictingDuplicate()
     {
