@@ -7,6 +7,7 @@
 #   withtags PORT       GET /demo/notes/with-tags        tag PORT TAG   tag the first note
 #   reload PORT         POST /_module-management/reload  status HOST    persistence status (solo, a or b)
 #   waitfor PORT [S]    wait for host PORT to switch     pgconn         point this tab at the demo PostgreSQL
+#   rows HOST           the Notes table: each row's schema version and tags, read from the database itself (solo, a or b)
 
 for _demo_tool in curl jq; do
   command -v "$_demo_tool" >/dev/null 2>&1 || { echo "error: $_demo_tool is not installed (brew install $_demo_tool)" >&2; return 1; }
@@ -70,6 +71,34 @@ waitfor() {
     sleep 0.5
   done
   echo " switched: with-tags answers HTTP $code after $((SECONDS - started)) s"
+}
+
+# HOST is solo (the Sqlite file) or a or b (the PostgreSQL container, through docker exec and psql: a and b share one database, so
+# both show the same rows). One line per note, oldest first: the schema version stamped on the row when it was written, and its tags column as
+# stored (NULL: written by release 1.0.0, which has no such column to fill; [] or a list: written by 2.0.0). It reads the tables
+# themselves, so it shows what is stored and not what a host answers. A database the AddTags migration has not reached yet has no
+# tags column, and says so.
+rows() {
+  local table=elsa_samples_notes container="${DEMO_PG_CONTAINER:-elsa-demo-pg}" file=artifacts/demo/notes.db query tags
+  command -v column >/dev/null 2>&1 || { echo "error: column is not installed" >&2; return 1; }
+  case "$1" in
+    solo)
+      command -v sqlite3 >/dev/null 2>&1 || { echo "error: sqlite3 is not installed (brew install sqlite)" >&2; return 1; }
+      [ -f "$file" ] || { echo "error: there is no Sqlite database at $file yet" >&2; return 1; }
+      tags="'(no column yet)'"
+      [ "$(sqlite3 -readonly "$file" "select count(*) from pragma_table_info('$table') where name = 'TagsJson'")" = 1 ] && tags="coalesce(TagsJson, 'NULL')"
+      query="select Text as note, SchemaVersion as schema, $tags as tags from $table order by CreatedAt"
+      sqlite3 -readonly -header -separator '|' "$file" "$query" | column -t -s '|'
+      ;;
+    a|b)
+      command -v docker >/dev/null 2>&1 || { echo "error: docker is not installed" >&2; return 1; }
+      tags="'(no column yet)'"
+      [ "$(docker exec "$container" psql -U postgres -d elsa -X -At -c "select count(*) from information_schema.columns where table_name = '$table' and column_name = 'TagsJson'")" = 1 ] && tags="coalesce(\"TagsJson\", 'NULL')"
+      query="select \"Text\" as note, \"SchemaVersion\" as schema, $tags as tags from $table order by \"CreatedAt\""
+      docker exec "$container" psql -U postgres -d elsa -X -q -A -F '|' -P footer=off -c "$query" | column -t -s '|'
+      ;;
+    *) echo "usage: rows solo|a|b" >&2; return 1 ;;
+  esac
 }
 
 # The PostgreSQL connection of the demo container, whose port Docker picked. It is exported for this tab only, and never printed.

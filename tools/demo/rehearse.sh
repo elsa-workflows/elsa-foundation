@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Runs tools/demo/RUNBOOK.md end to end without anyone at the keyboard: Act 1 on Sqlite (one host, upgraded in place) and Act 2 on
 # PostgreSQL (two hosts sharing a database, each upgraded in place). What the presenter types is what runs here: the helpers
-# (note, withtags, reload, tag, status, waitfor, pgconn's connection) come from tools/demo/helpers.sh, the file the runbook
+# (note, withtags, reload, tag, status, waitfor, rows, pgconn's connection) come from tools/demo/helpers.sh, the file the runbook
 # sources, and the status codes and output lines the runbook promises are asserted on their output. The timing of every step is
 # printed at the end; the hosts and the container are removed on exit, and the host logs are kept in artifacts/demo-rehearsal.
 # Not rehearsed: prepack.sh, which takes minutes and which this script only requires to have run.
@@ -188,6 +188,12 @@ no_tags_on() {
   expect_eq "no note carries a tag" 0 "$(printf '%s\n' "$1" | tail -n +2 | grep -vc '"tags":\[\]' || true)"
 }
 
+# notes_in OUTPUT SCHEMA TAGS: how many of the notes that rows printed carry that schema version (a literal) and that tags value
+# (an extended regex: NULL, \[\], ...), the header line left out.
+notes_in() { printf '%s\n' "$1" | tail -n +2 | grep -cE "[ ]$2 +$3\$" || true; }
+# note_count OUTPUT: how many notes rows printed.
+note_count() { echo $(($(line_count "$1") - 1)); }
+
 # wait_until DESCRIPTION SECONDS COMMAND...: polls once a second.
 wait_until() {
   local description="$1" limit="$2" waited=0
@@ -288,6 +294,9 @@ if [[ " $acts " == *" 1 "* ]]; then
   expect_eq "two notes are listed" 2 "$(line_count "$out")"
   stage withtags "$port_solo"
   expect_eq "with-tags does not exist in 1.0.0, and nothing follows the status" "HTTP 404" "$out"
+  stage rows solo
+  expect_match "rows lists the columns" "$out" '^note +schema +tags$'
+  expect_eq "both notes are stamped 1.0.0, before the tags column exists" 2 "$(notes_in "$out" '1\.0\.0' '\(no column yet\)')"
 
   step "Act 1.2 show the change"
   stage bash tools/demo/show-change.sh
@@ -355,6 +364,9 @@ if [[ " $acts " == *" 1 "* ]]; then
   no_tags_on "$out"
   stage tag "$port_solo" demo
   expect_has "the tag is on the note" "$out" '"tags":["demo"]'
+  stage rows solo
+  expect_eq "two notes are stored" 2 "$(note_count "$out")"
+  expect_eq "the tagged note was restamped 2.0.0" 1 "$(notes_in "$out" '2\.0\.0' '\["demo"\]')"
   stage notes "$port_solo"
   expect_eq "the base endpoint still works" 2 "$(line_count "$out")"
 fi
@@ -397,8 +409,17 @@ if [[ " $acts " == *" 2 "* ]]; then
   expect_has "the feature" "$out" '"feature":"NotesWithTags"'
   expect_has "the reason" "$out" "every host can read version '2.0.0' of schema family 'SamplesNotes'"
   expect_has "nothing was saved" "$out" "The request was refused whole, and nothing it carried was saved."
-  stage note "$port_a" "host A, still on 1.0.0"
-  expect_has "a keeps writing" "$out" '"text":"host A, still on 1.0.0"'
+  stage note "$port_a" "written by A on release 1.0.0"
+  expect_has "a keeps writing" "$out" '"text":"written by A on release 1.0.0"'
+  stage note "$port_b" "written by B on release 1.1.0"
+  expect_has "b writes too" "$out" '"text":"written by B on release 1.1.0"'
+  stage rows a
+  expect_eq "four notes are stored" 4 "$(note_count "$out")"
+  expect_eq "every note is still stamped 1.0.0, with nothing in its tags" 4 "$(notes_in "$out" '1\.0\.0' 'NULL')"
+  expect_match "b runs 1.1.0 and still wrote the old schema version" "$out" '^written by B on release 1\.1\.0 +1\.0\.0 +NULL$'
+  rows_on_a="$out"
+  stage rows b
+  expect_eq "a and b show one database" "$rows_on_a" "$out"
 
   step "Act 2.4 persistence status names host-a"
   pg_status b
@@ -434,6 +455,13 @@ if [[ " $acts " == *" 2 "* ]]; then
   pg_status a
   expect_has "finalized at 2.0.0" "$out" "SamplesNotes (Samples.Notes): finalized at 2.0.0; this host reads [1.0.0, 2.0.0]"
   expect_eq "both hosts read 2.0.0" 2 "$(printf '%s\n' "$out" | grep -c 'SamplesNotes: reads 1.0.0, 2.0.0 *$' || true)"
+  stage note "$port_b" "written after finalization on B"
+  stage note "$port_a" "written after finalization on A"
+  stage rows a
+  expect_eq "six notes are stored" 6 "$(note_count "$out")"
+  expect_match "a note written on b is stamped 2.0.0, with an empty tag list" "$out" '^written after finalization on B +2\.0\.0 +\[\]$'
+  expect_match "a note written on a is stamped 2.0.0, with an empty tag list" "$out" '^written after finalization on A +2\.0\.0 +\[\]$'
+  measure "rows straight after finalization: $(notes_in "$out" '2\.0\.0' '\[\]') of 6 notes at 2.0.0, $(notes_in "$out" '1\.0\.0' 'NULL') still at 1.0.0"
   backfill_complete() { grep -q "is complete at 2.0.0" "$logs/a.log" "$logs/b.log"; }
   wait_until "the backfill logged completion" 120 backfill_complete
   measure "the backfill completed $(elapsed "$published_at") s after the publish to a"
@@ -441,6 +469,12 @@ if [[ " $acts " == *" 2 "* ]]; then
   expect_has "complete from 2.0.0" "$out" "complete from 2.0.0"
   expect_match "host-a is live" "$out" '^ +host-a: Active, live'
   expect_match "host-b is live" "$out" '^ +host-b: Active, live'
+
+  step "Act 2.7 the backfill: every row is 2.0.0"
+  stage rows a
+  expect_eq "six notes are stored" 6 "$(note_count "$out")"
+  expect_eq "every note is stamped 2.0.0, with a tag list" 6 "$(notes_in "$out" '2\.0\.0' '\[\]')"
+  expect_eq "no note is left at 1.0.0" 0 "$(notes_in "$out" '1\.0\.0' '.+')"
 fi
 
 step "Screen hygiene"
