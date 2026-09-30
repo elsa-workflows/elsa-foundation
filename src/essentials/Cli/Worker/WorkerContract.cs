@@ -165,6 +165,17 @@ public static class WorkerContract
         }
     }
 
+    /// <summary>Parses the private worker response returned by a candidate inspection process.</summary>
+    /// <remarks>TEMPORARY permissive baseline stub; replace only after the expected-red tests have run.</remarks>
+    public static WorkerResponse ParseCandidateWorkerResponse(
+        ReadOnlyMemory<byte> utf8Response,
+        WorkerCandidatePayload expectedCandidate,
+        int processExitCode)
+    {
+        ArgumentNullException.ThrowIfNull(expectedCandidate);
+        return JsonSerializer.Deserialize<WorkerResponse>(utf8Response.Span, Json)!;
+    }
+
     private static async Task<T> ReadBoundedCandidateJsonAsync<T>(
         Stream stream,
         int maxBytes,
