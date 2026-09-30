@@ -59,6 +59,7 @@ internal sealed class CandidateInspectionFixture : IDisposable
     public string DatabasePath => Path.Join(SourceDirectory, "must-not-create.db");
     public string ContextMarkerPath => _directory.File("context-constructed.txt");
     public string ActionMarkerPath => _directory.File("action-constructed.txt");
+    public string SettingReviewPath => InputPath("setting-review.json");
     public IReadOnlyDictionary<string, string> SentinelEnvironment => new Dictionary<string, string>
     {
         ["ELSA_RESOURCE_PROBE_CONTEXT_MARKER"] = ContextMarkerPath,
@@ -85,20 +86,50 @@ internal sealed class CandidateInspectionFixture : IDisposable
 
     public string WriteWorkspaceStart()
     {
-        var draft = new SelectionDefinition("profile", "candidate-local", "1", new string('0', 64),
+        var (path, definition) = WriteWorkspaceProfile("profile.json", "candidate-local", "1",
             [OpenTelemetryFeatureId, OpenTelemetryEfFeatureId, ResourceProbeFeatureId],
-            "Reviewed workspace starting selection", "Local candidate", "Local source-backed selection", []);
-        var definition = draft with { Digest = SelectionDigest.ComputeDefinitionDigest(draft) };
-        var document = JsonSerializer.SerializeToNode(definition, Json)!.AsObject();
-        document["schemaVersion"] = "1";
-        WriteInput("profile.json", document.ToJsonString());
+            "Reviewed workspace starting selection");
         var catalog = FoundationSelectionCatalog.Load();
         var authored = new AuthoredComposition("1", new CatalogPin(catalog.Id, catalog.Version, catalog.Digest),
             new DefinitionReference("workspace", "profile", definition.Id, definition.Version, definition.Digest),
             [], [], [], new AcceptedSelection(catalog.Digest, [], []), null, null);
         // This input is intentionally edited next; only frozen inspection inputs are tracked.
         File.WriteAllText(InputPath("authored.json"), JsonSerializer.Serialize(authored, Json));
-        return InputPath("profile.json");
+        return path;
+    }
+
+    public (string Path, SelectionDefinition Definition) WriteWorkspaceProfile(string name, string id, string version,
+        IEnumerable<string> members, string rationale = "Reviewed workspace profile fixture")
+    {
+        var draft = new SelectionDefinition("profile", id, version, new string('0', 64), [.. members],
+            rationale, "Local candidate", "Local source-backed selection", []);
+        var definition = draft with { Digest = SelectionDigest.ComputeDefinitionDigest(draft) };
+        var document = JsonSerializer.SerializeToNode(definition, Json)!.AsObject();
+        document["schemaVersion"] = "1";
+        var path = InputPath(name);
+        WriteInput(name, document.ToJsonString());
+        return (path, definition);
+    }
+
+    public void AddReviewedInspectionSetting()
+    {
+        var source = JsonNode.Parse(File.ReadAllText(Path.Join(SourceDirectory, "shells.json")))!;
+        source["CShells"]!["Shells"]![ShellId]!["Features"]![ResourceProbeFeatureId]!["InspectionLabel"] = "source-label";
+        File.WriteAllText(Path.Join(SourceDirectory, "shells.json"), source.ToJsonString());
+        _sourceBytes = Directory.GetFiles(SourceDirectory).ToDictionary(path => Path.GetFileName(path)!, File.ReadAllBytes);
+        WriteInput("setting-review.json", $$"""
+            {"schemaVersion":"1","fields":[{"featureId":"{{ResourceProbeFeatureId}}","pointer":"/InspectionLabel","type":"string","portable":true}]}
+            """);
+    }
+
+    public void EditReviewedInspectionSetting()
+    {
+        var authored = JsonNode.Parse(File.ReadAllText(InputPath("authored.json")))!;
+        authored["settings"] = new JsonObject
+        {
+            [ResourceProbeFeatureId] = new JsonObject { ["InspectionLabel"] = "reviewed-label" }
+        };
+        File.WriteAllText(InputPath("authored.json"), authored.ToJsonString());
     }
 
     public void EditDiagnosticSelection()
@@ -112,18 +143,30 @@ internal sealed class CandidateInspectionFixture : IDisposable
 
     public void TrackAcceptedInput() => _initialInputBytes[InputPath("accepted.json")] = File.ReadAllBytes(InputPath("accepted.json"));
 
-    public string[] InspectionArguments(string format, string? workspaceProfile = null, bool trust = true)
+    public string[] InspectionArguments(string? format = null, IReadOnlyList<string>? workspaceProfiles = null, bool trust = true,
+        int? timeoutSeconds = null, string? settingReviewPath = null, string? hostDirectory = null,
+        IReadOnlyList<string>? packageRoots = null)
     {
+        if (timeoutSeconds is < 1 or > 300)
+            throw new ArgumentOutOfRangeException(nameof(timeoutSeconds), "Inspection timeout must be between 1 and 300 seconds.");
         var arguments = new List<string>
         {
-            "composition", "inspect", "--host", HostAssemblyDirectory, "--host-dir", SourceDirectory,
+            "composition", "inspect", "--host", hostDirectory ?? HostAssemblyDirectory, "--host-dir", SourceDirectory,
             "--shell", ShellId, "--environment", Environment, "--composition", InputPath("accepted.json"),
-            "--format", format
         };
-        if (workspaceProfile is not null)
-            arguments.AddRange(["--workspace-profile", workspaceProfile]);
+        if (format is not null)
+            arguments.AddRange(["--format", format]);
+        if (workspaceProfiles is { Count: > 0 })
+            foreach (var profile in workspaceProfiles)
+                arguments.AddRange(["--workspace-profile", profile]);
         else
             arguments.AddRange(["--catalog", InputPath("catalog.json")]);
+        if (settingReviewPath is not null)
+            arguments.AddRange(["--setting-review", settingReviewPath]);
+        foreach (var packageRoot in packageRoots ?? [])
+            arguments.AddRange(["--packages", packageRoot]);
+        if (timeoutSeconds is { } seconds)
+            arguments.AddRange(["--timeout-seconds", seconds.ToString(System.Globalization.CultureInfo.InvariantCulture)]);
         if (trust)
             arguments.Add("--trust-host-code");
         return [.. arguments];

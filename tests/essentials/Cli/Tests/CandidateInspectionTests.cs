@@ -27,7 +27,8 @@ public sealed class CandidateInspectionTests
         using var fixture = new CandidateInspectionFixture();
         var profile = await PrepareAcceptedEditAsync(fixture, workspace, fileEfEnabled);
 
-        var inspection = DotnetElsa.Run(fixture.SentinelEnvironment, fixture.InspectionArguments("json", profile));
+        var inspection = DotnetElsa.Run(fixture.SentinelEnvironment, fixture.InspectionArguments(
+            "json", profile is null ? null : [profile]));
 
         Assert.Equal(ToolExitCode.Success, inspection.ExitCode);
         using var document = JsonDocument.Parse(inspection.Output);
@@ -57,8 +58,10 @@ public sealed class CandidateInspectionTests
         Assert.Equal("unobserved", resolution.GetProperty("runtimeParity").GetString());
         Assert.Equal("unobserved", resolution.GetProperty("activation").GetString());
 
-        var text = DotnetElsa.Run(fixture.SentinelEnvironment, fixture.InspectionArguments("text", profile));
+        var text = DotnetElsa.Run(fixture.SentinelEnvironment, fixture.InspectionArguments(
+            workspaceProfiles: profile is null ? null : [profile], timeoutSeconds: 300));
         Assert.Equal(ToolExitCode.Success, text.ExitCode);
+        Assert.StartsWith("Candidate: ", text.Output, StringComparison.Ordinal);
         Assert.Contains("primary", text.Output, StringComparison.Ordinal);
         Assert.Contains("Sqlite", text.Output, StringComparison.Ordinal);
         Assert.Contains("Probe", text.Output, StringComparison.Ordinal);
@@ -90,7 +93,8 @@ public sealed class CandidateInspectionTests
         using var fixture = new CandidateInspectionFixture();
         var profile = await PrepareAcceptedEditAsync(fixture, workspace);
 
-        var refusal = DotnetElsa.Run(fixture.SentinelEnvironment, fixture.InspectionArguments("json", profile, trust: false));
+        var refusal = DotnetElsa.Run(fixture.SentinelEnvironment, fixture.InspectionArguments(
+            "json", profile is null ? null : [profile], trust: false));
 
         Assert.Equal(ToolExitCode.Refusal, refusal.ExitCode);
         Assert.Equal(string.Empty, refusal.Output);
@@ -98,6 +102,79 @@ public sealed class CandidateInspectionTests
         Assert.DoesNotContain(CandidateInspectionFixture.PrivateCanary, refusal.Text, StringComparison.Ordinal);
         fixture.AssertSourcesUnchanged();
         fixture.AssertInputsUnchanged();
+    }
+
+    [Fact]
+    public void Inspection_refuses_a_missing_trusted_host_without_echoing_its_path()
+    {
+        if (OperatingSystem.IsWindows())
+            return;
+        using var fixture = new CandidateInspectionFixture();
+        var missingHost = fixture.InputPath($"{CandidateInspectionFixture.PrivateCanary}-missing-host");
+        Assert.False(Directory.Exists(missingHost));
+
+        var refusal = DotnetElsa.Run(fixture.SentinelEnvironment, fixture.InspectionArguments(
+            "json", hostDirectory: missingHost));
+
+        Assert.Equal(ToolExitCode.ResolutionFailure, refusal.ExitCode);
+        Assert.Empty(refusal.Output);
+        Assert.Contains("error [candidate-host-unavailable]:", refusal.Error, StringComparison.Ordinal);
+        Assert.Contains("selected installed host layout could not be inspected", refusal.Error, StringComparison.Ordinal);
+        Assert.DoesNotContain(CandidateInspectionFixture.PrivateCanary, refusal.Text, StringComparison.Ordinal);
+        fixture.AssertSourcesUnchanged();
+    }
+
+    [Fact]
+    public async Task Inspection_closes_a_missing_package_root_refusal_without_echoing_its_path()
+    {
+        if (OperatingSystem.IsWindows())
+            return;
+        using var fixture = new CandidateInspectionFixture();
+        await PrepareAcceptedEditAsync(fixture, workspace: false);
+        var missingPackages = fixture.InputPath($"{CandidateInspectionFixture.PrivateCanary}-missing-packages");
+        Assert.False(Directory.Exists(missingPackages));
+
+        var refusal = DotnetElsa.Run(fixture.SentinelEnvironment, fixture.InspectionArguments(
+            "json", packageRoots: [missingPackages]));
+
+        Assert.Equal(ToolExitCode.ResolutionFailure, refusal.ExitCode);
+        Assert.Empty(refusal.Output);
+        Assert.Contains("error [candidate-host-unavailable]:", refusal.Error, StringComparison.Ordinal);
+        Assert.Contains("selected installed host closure could not be inspected", refusal.Error, StringComparison.Ordinal);
+        Assert.DoesNotContain(CandidateInspectionFixture.PrivateCanary, refusal.Text, StringComparison.Ordinal);
+        fixture.AssertSourcesUnchanged();
+        fixture.AssertInputsUnchanged();
+    }
+
+    [Fact]
+    public async Task Inspection_forwards_review_and_repeated_workspace_profiles_without_changing_inputs()
+    {
+        if (OperatingSystem.IsWindows())
+            return;
+        using var fixture = new CandidateInspectionFixture();
+        var selectedProfile = await PrepareAcceptedEditAsync(fixture, workspace: true, includeReviewedSetting: true)
+            ?? throw new InvalidOperationException("Workspace preparation did not return its selected profile.");
+        var unusedProfile = fixture.WriteWorkspaceProfile("unused-profile.json", "unused-candidate", "1",
+            [CandidateInspectionFixture.StructuredLogsFeatureId]).Path;
+
+        var inspection = DotnetElsa.Run(fixture.SentinelEnvironment, fixture.InspectionArguments(
+            "json", [selectedProfile, unusedProfile], settingReviewPath: fixture.SettingReviewPath));
+
+        Assert.Equal(ToolExitCode.Success, inspection.ExitCode);
+        using var document = JsonDocument.Parse(inspection.Output);
+        var root = document.RootElement;
+        Assert.Equal(ExpectedSelection, Strings(root.GetProperty("plan").GetProperty("accepted").GetProperty("featureIds")));
+        Assert.Equal("unchecked", root.GetProperty("plan").GetProperty("persistence").GetProperty("status").GetString());
+        var selection = root.GetProperty("configurationResolution").GetProperty("selection");
+        foreach (var name in new[] { "acceptedFeatureIds", "requestedFeatureIds", "effectiveFeatureIds" })
+            Assert.Equal(ExpectedSelection, Strings(selection.GetProperty(name)));
+        Assert.DoesNotContain(CandidateInspectionFixture.PrivateCanary, inspection.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain(fixture.DatabasePath, inspection.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain("invocationId", inspection.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain("captureId", inspection.Text, StringComparison.Ordinal);
+        fixture.AssertSourcesUnchanged();
+        fixture.AssertInputsUnchanged();
+        Assert.False(Directory.Exists(Path.Join(fixture.SourceDirectory, "candidate")));
     }
 
     [Theory]
@@ -124,9 +201,12 @@ public sealed class CandidateInspectionTests
         Assert.DoesNotContain("private-input-canary", refusal.Text, StringComparison.Ordinal);
     }
 
-    private static async Task<string?> PrepareAcceptedEditAsync(CandidateInspectionFixture fixture, bool workspace, bool fileEfEnabled = true)
+    private static async Task<string?> PrepareAcceptedEditAsync(CandidateInspectionFixture fixture, bool workspace,
+        bool fileEfEnabled = true, bool includeReviewedSetting = false)
     {
         fixture.UseDiagnosticsSource(fileEfEnabled);
+        if (includeReviewedSetting)
+            fixture.AddReviewedInspectionSetting();
         fixture.WriteBundledCatalog();
         string? profile = null;
         if (workspace)
@@ -143,6 +223,8 @@ public sealed class CandidateInspectionTests
             Assert.DoesNotContain(CandidateInspectionFixture.PrivateCanary, imported.Output + imported.Error, StringComparison.Ordinal);
         }
         fixture.EditDiagnosticSelection();
+        if (includeReviewedSetting)
+            fixture.EditReviewedInspectionSetting();
         var arguments = new List<string>
         {
             "composition", "accept", "--composition", fixture.InputPath("authored.json"),
