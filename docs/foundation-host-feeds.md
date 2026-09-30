@@ -720,7 +720,8 @@ The answer carries Nuplane's `ManualReconcileOutcome`, with its code by name. Th
 | `Completed` | `200` | The cycle ran to its end. `runResult.skipped` is `false`. |
 | `Accepted` | `200` | Nuplane's code for a cycle still in progress. This request waits for the cycle, so the pinned Nuplane does not produce it here. |
 | `Rejected` | `409` | The cycle did not run, because another cycle is already running in this host (`single-flight-active`) or another process owns the store (`store-lock-unavailable`). Repeat the request once that has cleared. |
-| `Unavailable` | `503` | The reconcile service failed to run the cycle. `reasonCode` is the failure's message. |
+| `Unavailable` | `503` | The reconcile service failed to run the cycle. `reasonCode` is `reconcile-service-failed`; the failure's message is logged at `Error` with the `correlationId`, never returned, because it can hold paths, feed addresses or connection details. |
+| any other code | `500` | A Nuplane newer than this host's reported an outcome code it does not map, so it cannot say whether the cycle ran. `outcomeCode` is the number, `reasonCode` is `reconcile-outcome-unrecognized`, and the host logs it at `Error` with the `correlationId`. |
 
 A `200` is the outcome itself, in camelCase JSON:
 
@@ -732,7 +733,7 @@ A `200` is the outcome itself, in camelCase JSON:
   "runResult": {
     "skipped": false,
     "changeSet": {
-      "added": [ { "id": "Acme.Widgets", "version": "2.0.0", "feedName": "local-packages", "installPath": "...", "installedAt": "...", "sourceName": "local-packages" } ],
+      "added": [ { "id": "Acme.Widgets", "version": "2.0.0", "feedName": "local-packages", "sourceName": "local-packages", "installedAt": "2026-09-30T10:15:59.101+00:00" } ],
       "updated": [],
       "removed": [],
       "correlationId": "6a1d09e5dc654ded863555321a055673",
@@ -747,15 +748,15 @@ A `200` is the outcome itself, in camelCase JSON:
 
 | Field | Meaning |
 | --- | --- |
-| `outcomeCode` | The outcome's name: `Completed`, `Accepted`, `Rejected` or `Unavailable`. |
+| `outcomeCode` | The outcome's name: `Completed`, `Accepted`, `Rejected` or `Unavailable`; the number for a code this host does not know. |
 | `correlationId` | Ties the request to the cycle's log lines. |
-| `reasonCode` | For a rejected outcome, `single-flight-active` or `store-lock-unavailable`; for an unavailable one, the exception's message; `null` for the others. |
+| `reasonCode` | For a rejected outcome, `single-flight-active` or `store-lock-unavailable`; for an unavailable one, `reconcile-service-failed`; `null` for the others. |
 | `runResult` | The cycle's result. `skipped` is `true` when the cycle did nothing, and `skipReason` says why: `0` not skipped, `1` another cycle was already running in this host, `2` another process owns the store. |
-| `runResult.changeSet` | The packages the cycle `added` and `updated`, and the ids it `removed`. An empty feed, or one that changed nothing, has all three empty. Packages acquired as dependencies or by capability selection are listed with the ones asked for; `sourceName` says which. |
+| `runResult.changeSet` | The packages the cycle `added` and `updated` (id, version, feed, source and when it was installed; not where on the host's disk), and the ids it `removed`. An empty feed, or one that changed nothing, has all three empty. Packages acquired as dependencies or by capability selection are listed with the ones asked for; `sourceName` says which. |
 | `runResult.failedPackages` / `isDegraded` | The ids of packages that failed to load, and whether the cycle finished degraded. |
 
-A `409` or `503` is an `application/problem+json` document, as for a refused `reload`, with the standard `type`, `title`,
-`status` and `detail` and these fields: `outcomeCode` (`Rejected` or `Unavailable`), `reasonCode` (as above) and
+A `409`, `503` or `500` is an `application/problem+json` document, as for a refused `reload`, with the standard `type`, `title`,
+`status` and `detail` and these fields: `outcomeCode` (`Rejected`, `Unavailable` or the unknown code's number), `reasonCode` (as above) and
 `correlationId`.
 
 The request runs through the host's own Nuplane operations, not the ones its shell holds. CShells copies every host
@@ -763,8 +764,9 @@ registration into every shell, and a registration made by instance is shared by 
 factory is copied and instantiated again, so a shell has its own instance of Nuplane's trigger queue, and a reconcile
 queued on that copy is one no dispatcher reads (#2159). The host takes the operations from its root provider for that
 reason, and its composition shares the operations, the coordinator and the trigger ingress with every shell, so a shell
-that resolves them gets the host's instance; `HostOwnedServicesAreSharedWithShellsTests` holds that for the host's own
-stateful services as well. `FoundationHostReconcileTests` pins the answers on the built host, and
+that resolves them gets the host's instance. `HostOwnedServicesAreSharedWithShellsTests` holds that for every Elsa and Nuplane
+singleton the host registers: it builds both hosts, activates a shell, and fails on any that the shell holds a second
+instance of and that the test does not list with a reason a shell's own copy is right or unreachable. `FoundationHostReconcileTests` pins the answers on the built host, and
 `FoundationHostReconcileEndpointTests` the statuses of each outcome.
 
 ## Running several hosts as a cluster

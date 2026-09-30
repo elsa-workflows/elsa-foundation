@@ -35,11 +35,12 @@ public static class EfSchemaReadabilityServiceCollectionExtensions
     /// superseded, and the report reads every load context as before.
     /// </para>
     /// <para>
-    /// The host's <see cref="IEfSchemaFleet"/> (through <see cref="ShellServiceSharingExtensions.ShareWithShells{TService}"/>)
-    /// and, unless a durable provider replaces it, its in-process <see cref="IClusterMembership"/> (as the EF provider's
-    /// member is) are one instance each too, shared with every shell container: a gate counting the fleet in a shell asks the
-    /// membership the host publishes through, not a second one of the shell's own. The host-composition guard test in
-    /// <c>Elsa.Modularity.Tests</c> holds that for both real hosts.
+    /// The host's <see cref="IEfSchemaFleet"/> is one instance for the whole host, shared with every shell container through
+    /// <see cref="ShellServiceSharingExtensions.ShareWithShells{TService}"/>: it is always built in the host's container, so it
+    /// counts through the membership the host publishes through, and a gate in a shell asks that one, not a second fleet of the
+    /// shell's own. The in-process <see cref="IClusterMembership"/> is not shared: each shell container builds its own, because a
+    /// shell's runnability source publishes through the member of its own container. The host-composition guard test in
+    /// <c>Elsa.Modularity.Tests</c> holds both for the real hosts.
     /// </para>
     /// </remarks>
     public static IServiceCollection AddEfSchemaReadability(this IServiceCollection services)

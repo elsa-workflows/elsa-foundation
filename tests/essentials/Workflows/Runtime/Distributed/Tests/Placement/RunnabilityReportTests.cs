@@ -1,6 +1,7 @@
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Cluster.Core.Contracts;
 using Elsa.Cluster.Core.Models;
+using Elsa.Cluster.InProcess;
 using Elsa.Cluster.Testing.Runtime;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -101,6 +102,31 @@ public sealed class RunnabilityReportTests : IAsyncDisposable
         var section = await first.GetRequiredService<IMemberReportSource<RunnabilitySection>>().ReadAsync();
         Assert.Equal(2, section.Entries.Count);
         Assert.Equal(section, await second.GetRequiredService<IMemberReportSource<RunnabilitySection>>().ReadAsync());
+    }
+
+    /// <summary>
+    /// A shell whose host composed no report still publishes its own entry, through the in-process membership of its own
+    /// container, when the host composes the in-process default that every shell container is built with a copy of: the member
+    /// is built from the report sources of the container that asks, so it is per shell, and a reload's new container gets a
+    /// fresh one that carries nothing of the generation before it.
+    /// </summary>
+    [Fact]
+    public async Task A_shell_on_a_host_without_the_report_publishes_its_own_entry_and_a_reload_yields_a_fresh_member()
+    {
+        var host = new ServiceCollection();
+        host.TryAddInProcessClusterMembership();
+
+        await using var first = Shell(host);
+        var member = first.GetRequiredService<IClusterMembership>();
+        first.GetRequiredService<ShellRunnabilityRegistry>().Record(first.GetRequiredService<DistributedRuntimeShell>(), new RunnabilityEntry([new RunnableConsumer(ApprovalsConsumer, ["1"])], [], []));
+
+        var published = Assert.Single((await member.PublishReportAsync()).Report.Runnability!.Entries);
+        Assert.Equal(["1"], Assert.Single(published.Consumers).SchemaVersions);
+
+        await using var reloaded = Shell(host);
+        var freshMember = reloaded.GetRequiredService<IClusterMembership>();
+        Assert.NotSame(member, freshMember);
+        Assert.Empty((await freshMember.PublishReportAsync()).Report.Runnability!.Entries);
     }
 
     public ValueTask DisposeAsync() => _cluster.DisposeAsync();

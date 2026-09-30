@@ -51,6 +51,17 @@ and a durable provider is composed once on the host container, never per shell.
 
 ---
 
+## Host composition helpers
+
+### `ShareWithShells<TService>()` *(`Elsa.Cluster.Readability`, namespace `Elsa.Cluster.Readability`)*
+- **Kind:** Composition helper on `IServiceCollection`, not a contract. It is here because Readability is where a host that runs shells already composes its cluster services; it depends on CShells' lifecycle abstractions only and is not specific to clusters.
+- **For:** a stateful singleton the host composes on its own container that another package registered by type or by factory. CShells builds every shell container from copies of the host's registrations and instantiates such a registration again in each, so a shell holds a second instance of the host's state: Nuplane's reconcile trigger queue in a shell is read by no dispatcher, so a reconcile queued on it waits for ever (#2159). A registration by instance is shared already and needs nothing.
+- **Use:** after the service is registered, `services.ShareWithShells<TService>()`. The host builds it as before, in its own container; a shell container resolves what the host's container resolves for the same type. The host's container is found through the lifecycle subscriber CShells resolves from it before it builds any shell, the capture `NuplanePackageGenerations` uses too.
+- **Limits:** singletons only, registered before the call. The service must not be `IDisposable` or `IAsyncDisposable`: a container disposes what its factories return, so a shell drain would dispose the host's instance. A registration by type that is disposable is refused when shared, and any disposable instance is refused where it is created or handed to a shell, which is its first resolution. It does not make a service *safe* to reach from a shell, only the same object: state a shell must keep of its own (the in-process membership, whose report sources are per shell) is left unshared on purpose.
+- **Held by:** `HostOwnedServicesAreSharedWithShellsTests` (`tests/essentials/Modularity/Tests`) builds `Elsa.Foundation.Host` and `Elsa.Workbench`, and fails for every Elsa or Nuplane singleton the host registers that a shell holds a second instance of and that the test does not list with a reason.
+
+---
+
 ## Cross-references
 
 - Repo-wide index: [`../../../../EXTENSION_POINTS.md`](../../../../EXTENSION_POINTS.md).
