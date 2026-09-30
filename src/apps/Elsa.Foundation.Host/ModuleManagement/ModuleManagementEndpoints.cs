@@ -40,8 +40,13 @@ public static class ModuleManagementEndpoints
         // the now-loaded assemblies) and reload the active shells (so they compose the new endpoints from the
         // refreshed catalog). Doing the refresh/reload from a package-change observer instead would run too
         // early (assembly not loaded yet) and would re-enter and stall the cycle.
-        group.MapPost("/reconcile", async (INuplaneAdminOperations admin, CancellationToken ct) =>
-            Results.Ok(await admin.TriggerReconcileAsync(ct)));
+        //
+        // The operations come from the host's root provider, never from the request's. The path-less shell resolves this
+        // request, so the request's provider is that shell's, and CShells copies every root registration into every shell:
+        // Nuplane's singletons there are second instances. A reconcile enqueued on the shell's copy of the trigger queue is
+        // read by no dispatcher, so it waits for ever (#2159). Only the root's queue has the dispatcher that runs it.
+        group.MapPost("/reconcile", async (CancellationToken ct) =>
+            Results.Ok(await endpoints.ServiceProvider.GetRequiredService<INuplaneAdminOperations>().TriggerReconcileAsync(ct)));
 
         group.MapPost("/reload", async (IRuntimeFeatureCatalog runtimeFeatureCatalog, IShellRegistry registry, CancellationToken ct) =>
         {

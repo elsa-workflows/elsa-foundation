@@ -699,6 +699,54 @@ with a reloader that does reload it, so a feature change applied through that sh
 refreshes the feature catalog and rebuilds that one shell. That is a side effect of applying feature
 configuration, not a response to reconciliation.
 
+## Reconciling on demand
+
+`POST /_module-management/reconcile` (with `Elsa:ModuleManagement:Enabled` and the `X-Elsa-Module-Management-Key`
+header, like `reload`) runs one reconcile cycle now, the same cycle the folder watcher and the poll interval run, and
+answers once it has finished, including the shell reload the hot-reload observer above performs when the cycle applied
+a change. A package dropped into the feed is therefore live in the running shells when the request returns. The
+answer is Nuplane's `ManualReconcileOutcome`, serialized as `200` with camelCase JSON:
+
+```json
+{
+  "outcomeCode": 0,
+  "correlationId": "6a1d09e5dc654ded863555321a055673",
+  "runResult": {
+    "skipped": false,
+    "changeSet": {
+      "added": [ { "id": "Acme.Widgets", "version": "2.0.0", "feedName": "local-packages", "installPath": "...", "installedAt": "...", "sourceName": "local-packages" } ],
+      "updated": [],
+      "removed": [],
+      "correlationId": "6a1d09e5dc654ded863555321a055673",
+      "timestamp": "2026-09-30T10:15:59.419047+00:00"
+    },
+    "failedPackages": [],
+    "isDegraded": false,
+    "skipReason": 0
+  },
+  "reasonCode": null
+}
+```
+
+| Field | Meaning |
+| --- | --- |
+| `outcomeCode` | A number: `0` completed, `1` accepted and still running, `2` rejected, `3` unavailable. |
+| `correlationId` | Ties the request to the cycle's log lines. |
+| `runResult` | The cycle's result; `null` when `outcomeCode` is `3`. |
+| `runResult.skipped` | `true` when the cycle did nothing; `skipReason` says why: `0` not skipped, `1` another cycle was already running in this host, `2` another process owns the store. |
+| `runResult.changeSet` | The packages the cycle `added` and `updated`, and the ids it `removed`. An empty feed, or one that changed nothing, has all three empty. Packages acquired as dependencies or by capability selection are listed with the ones asked for; `sourceName` says which. |
+| `runResult.failedPackages` / `isDegraded` | The ids of packages that failed to load, and whether the cycle finished degraded. |
+| `reasonCode` | For a rejected outcome, `single-flight-active` or `store-lock-unavailable`; for an unavailable one, the exception's message; otherwise `null`. |
+
+The status is `200` whatever `outcomeCode` says, so a caller that needs to know the cycle ran reads `outcomeCode` and
+`runResult.skipped`. A shell whose reload was refused after the cycle is not reported here: the host logs it, and
+`reload` answers it with the `409` above.
+
+The request runs through the host's own Nuplane operations, not the ones its shell holds: CShells copies every host
+registration into every shell, so a shell has its own instance of each Nuplane singleton, and a reconcile queued on the
+shell's copy of the trigger queue is one no dispatcher reads (#2159). `FoundationHostReconcileTests` pins the answer on
+an empty feed and on a feed that gained a package.
+
 ## Running several hosts as a cluster
 
 With nothing configured each `Elsa.Foundation.Host` is a cluster of one: the in-process membership default, which writes
