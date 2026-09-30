@@ -130,12 +130,12 @@ html[data-theme="material-design"][data-theme-mode="dark"] {
 }
 
 /*
- * Signature themes — Meridian, Drift, Schematic, Atelier.
+ * Signature themes — Meridian, Drift, Schematic, Atelier, Elsa Cloud.
  *
  * Their colours, fonts and radii come from the theme definitions (foundationThemes.ts) through
  * ThemeProvider. What lives here is what a definition cannot carry: elevation recipes and a few
- * layer-2 refinements. Every one of these themes defines all four modes; the dark-scheme block
- * below therefore covers both Dark and Dim.
+ * layer-2 refinements. Every one of these themes defines all four modes; a dark-scheme block
+ * therefore covers both Dark and Dim: the shared one below for the first four, and Elsa Cloud's own.
  */
 html[data-theme="meridian"] {
   --shadow-sm: 0 1px 2px oklch(0.25 0.03 265 / 0.07);
@@ -178,6 +178,19 @@ html[data-theme="atelier"] {
   --studio-section-title-size: 19px;
 }
 
+/* Elsa Cloud separates cards from the ground by a hairline border first and a soft shadow second, so
+   elevation stays subtle in every mode. This is its light recipe; Dark and Dim override it below with
+   a recipe of their own rather than the shared dark one. Titles are medium weight, not bold. */
+html[data-theme="elsa-cloud"] {
+  --shadow-sm: 0 1px 2px oklch(0.2 0.02 285 / 0.06);
+  --shadow-md: 0 1px 2px oklch(0.2 0.02 285 / 0.05), 0 6px 16px -6px oklch(0.2 0.02 285 / 0.12);
+  --shadow-lg: 0 2px 6px oklch(0.2 0.02 285 / 0.05), 0 18px 44px -12px oklch(0.2 0.02 285 / 0.2);
+  --shadow-xl: 0 4px 10px oklch(0.2 0.02 285 / 0.06), 0 28px 64px -14px oklch(0.2 0.02 285 / 0.26);
+  --studio-surface-raised: var(--card);
+  --studio-accent-soft: color-mix(in srgb, var(--primary) 12%, transparent);
+  --studio-title-weight: 600;
+}
+
 html:is([data-theme="meridian"], [data-theme="drift"], [data-theme="schematic"], [data-theme="atelier"])[data-theme-mode="dark"] {
   --shadow-sm: 0 1px 2px oklch(0 0 0 / 0.3);
   --shadow-md: 0 1px 2px oklch(0 0 0 / 0.3), 0 8px 20px -6px oklch(0 0 0 / 0.45);
@@ -186,14 +199,24 @@ html:is([data-theme="meridian"], [data-theme="drift"], [data-theme="schematic"],
   --studio-accent-soft: color-mix(in srgb, var(--primary) 18%, transparent);
 }
 
+/* Elsa Cloud's dark recipe: lighter and tighter than the shared one, matching the console's subtle shadows. */
+html[data-theme="elsa-cloud"][data-theme-mode="dark"] {
+  --shadow-sm: 0 1px 2px oklch(0 0 0 / 0.25);
+  --shadow-md: 0 1px 2px oklch(0 0 0 / 0.25), 0 6px 14px -6px oklch(0 0 0 / 0.4);
+  --shadow-lg: 0 2px 6px oklch(0 0 0 / 0.25), 0 14px 32px -12px oklch(0 0 0 / 0.5);
+  --shadow-xl: 0 4px 10px oklch(0 0 0 / 0.3), 0 22px 48px -14px oklch(0 0 0 / 0.56);
+  --studio-accent-soft: color-mix(in srgb, var(--primary) 16%, transparent);
+}
+
 /*
  * High contrast — applies to every theme that defines the mode. Depth comes from borders, never
  * from shadow; focus is the solid ring colour; tinted-chip text is brightened to stay >= 7:1 on
  * the black ground. Shadows are zero-size rather than `none` so compositions that append a ring
- * (`var(--shadow-sm), 0 0 0 1px …`) stay valid. The extra `[data-theme-mode]` lifts specificity
- * above the per-theme dark-scheme blocks, which High contrast also matches.
+ * (`var(--shadow-sm), 0 0 0 1px …`) stay valid. The extra `[data-theme]` and `[data-theme-mode]`
+ * lift specificity above every per-theme dark-scheme block, which High contrast also matches, so
+ * the result does not depend on source order.
  */
-html[data-theme-mode][data-theme-appearance="high-contrast"] {
+html[data-theme][data-theme-mode][data-theme-appearance="high-contrast"] {
   --shadow-sm: 0 0 0 0 transparent;
   --shadow-md: 0 0 0 0 transparent;
   --shadow-lg: 0 0 0 0 transparent;

@@ -855,7 +855,7 @@ const materialMode = (
   }
 });
 
-// The four signature themes lead the list: the first entry is the out-of-box default.
+// The signature themes lead the list: the first entry is the out-of-box default.
 export const builtInThemeDefinitions: Theme[] = [
   ...foundationThemeDefinitions.map(toTheme),
   createThemeDefinition(

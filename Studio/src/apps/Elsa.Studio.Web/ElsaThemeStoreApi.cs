@@ -27,6 +27,7 @@ internal static class ElsaThemeStoreApi
         "drift",
         "schematic",
         "atelier",
+        "elsa-cloud",
         "black-glass",
         "stone",
         "paper",

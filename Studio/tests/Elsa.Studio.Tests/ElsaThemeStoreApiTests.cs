@@ -75,14 +75,19 @@ public sealed class ElsaThemeStoreApiTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.BadRequest, defaultResponse.StatusCode);
     }
 
-    [Fact]
-    public async Task MeridianCanBeSetAsTheDefaultBuiltInTheme()
+    [Theory]
+    [InlineData("meridian")]
+    [InlineData("drift")]
+    [InlineData("schematic")]
+    [InlineData("atelier")]
+    [InlineData("elsa-cloud")]
+    public async Task EverySignatureThemeCanBeSetAsTheDefaultBuiltInTheme(string themeId)
     {
-        var response = await _client.PutAsJsonAsync("/_elsa/theme-store/default", new { ThemeId = "meridian" });
+        var response = await _client.PutAsJsonAsync("/_elsa/theme-store/default", new { ThemeId = themeId });
         response.EnsureSuccessStatusCode();
         var store = await response.Content.ReadFromJsonAsync<ThemeStoreResponse>();
 
-        Assert.Equal("meridian", store?.DefaultThemeId);
+        Assert.Equal(themeId, store?.DefaultThemeId);
     }
 
     [Fact]

@@ -50,8 +50,8 @@ Optionally supply `--font-display` (title face; defaults to `--font-sans`).
 ### Modes and the `<html>` attributes
 
 Studio offers four modes: `light`, `dark`, `dim` and `high-contrast`. Every theme defines Light
-and Dark; Dim and High contrast are optional per theme (the four signature themes — Meridian,
-Drift, Schematic, Atelier — define all four). ThemeProvider sets two attributes:
+and Dark; Dim and High contrast are optional per theme (the five signature themes — Meridian,
+Drift, Schematic, Atelier, Elsa Cloud — define all four). ThemeProvider sets two attributes:
 
 | Attribute | Values | Meaning |
 | --- | --- | --- |
@@ -220,7 +220,7 @@ vocabulary. A module that wants the glass idiom under `black-glass` guards on
    `[data-theme-appearance="high-contrast"]` for a High-contrast-only adjustment the tokens
    cannot express, and `[data-theme-layout="…"]` for arrangement (see [Modes and the `<html>` attributes](#modes-and-the-html-attributes)).
 4. **Gate every material treatment on `[data-theme-material]`.** Flat themes (`meridian`,
-   `drift`, `schematic`, `atelier`, `harbor`, `borealis`, `ember`, `orchid`, `hot-pink`, `coral`,
+   `drift`, `schematic`, `atelier`, `elsa-cloud`, `harbor`, `borealis`, `ember`, `orchid`, `hot-pink`, `coral`,
    `graphite`) must stay flat. Any rule
    consuming a `--studio-material-*` token belongs inside an `html[data-theme-material] …`
    guard.

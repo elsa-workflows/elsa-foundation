@@ -55,7 +55,8 @@ const signatureModes = foundationThemeIds.flatMap(id =>
 
 describe("signature themes", () => {
   it("lead the built-in list with Meridian as the out-of-box default", () => {
-    expect(builtInThemeDefinitions.slice(0, 4).map(theme => theme.id)).toEqual(["meridian", "drift", "schematic", "atelier"]);
+    expect(builtInThemeDefinitions.slice(0, foundationThemeIds.length).map(theme => theme.id)).toEqual([...foundationThemeIds]);
+    expect(foundationThemeIds[0]).toBe("meridian");
     expect(normalizeThemeStore().defaultThemeId).toBe("meridian");
   });
 
@@ -92,8 +93,8 @@ describe("signature themes", () => {
   });
 
   it("gives each signature theme its layout, and every other built-in the classic one", () => {
-    expect(foundationThemeIds.map(id => getTheme(id)!.layout)).toEqual(["classic", "floating", "workbench", "editorial"]);
-    expect(builtInThemeDefinitions.slice(4).every(theme => theme.layout === undefined)).toBe(true);
+    expect(foundationThemeIds.map(id => getTheme(id)!.layout)).toEqual(["classic", "floating", "workbench", "editorial", "classic"]);
+    expect(builtInThemeDefinitions.slice(foundationThemeIds.length).every(theme => theme.layout === undefined)).toBe(true);
   });
 
   it.each(foundationThemeIds)("%s high contrast is black-grounded with a bright accent", id => {
