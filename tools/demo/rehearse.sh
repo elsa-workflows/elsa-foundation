@@ -465,6 +465,9 @@ if [[ " $acts " == *" 2 "* ]]; then
   expect_match "a note written on b is stamped 2.0.0, with an empty tag list" "$out" '^written after finalization on B +2\.0\.0 +\[\]$'
   expect_match "a note written on a is stamped 2.0.0, with an empty tag list" "$out" '^written after finalization on A +2\.0\.0 +\[\]$'
   measure "rows a few seconds after finalization: $(notes_in "$out" '2\.0\.0' '\[\]') of 6 notes at 2.0.0, $(notes_in "$out" '1\.0\.0' 'NULL') still at 1.0.0"
+  all_rewritten() { [[ "$(notes_in "$(rows a)" '2\.0\.0' '\[\]')" -eq 6 ]]; }
+  wait_until "the four old rows are rewritten to 2.0.0" 120 all_rewritten
+  measure "the old rows were all at 2.0.0 $(elapsed "$published_at") s after the publish to a"
   backfill_complete() { grep -q "is complete at 2.0.0" "$logs/a.log" "$logs/b.log"; }
   wait_until "the backfill logged completion" 120 backfill_complete
   measure "the backfill completed $(elapsed "$published_at") s after the publish to a"
