@@ -37,6 +37,13 @@ internal static class FoundationHostComposition
         [$"{EfSchemaFinalizationOptions.SectionName}:{nameof(EfSchemaFinalizationOptions.RefreshInterval)}"] = "00:00:00.100"
     };
 
+    /// <summary>Turns the host's module-management endpoints on, behind <paramref name="key"/>: <c>reconcile</c> and <c>reload</c>, which <see cref="FoundationHostProcess.PostModuleManagementAsync"/> calls.</summary>
+    public static void EnableModuleManagement(IDictionary<string, string> settings, string key)
+    {
+        settings["Elsa:ModuleManagement:Enabled"] = "true";
+        settings["Elsa:ModuleManagement:ApiKey"] = key;
+    }
+
     /// <summary>
     /// A <c>shells.json</c> with one shell that enables <paramref name="features"/> of the fixture over
     /// <paramref name="connectionString"/>. The shell validates its modules' migrations rather than applying them, because

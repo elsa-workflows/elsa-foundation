@@ -93,7 +93,7 @@ public sealed class NuplanePackageGenerations : ISupersededAssemblySource, IShel
     /// <summary>The generation each shell CShells has shown this host belongs to, so a lifecycle notification finds it.</summary>
     private readonly ConditionalWeakTable<IShell, Generation> _shells = new();
 
-    private IServiceProvider? _host;
+    private readonly HostContainer _host = new();
     private ILogger _logger = NullLogger.Instance;
 
     /// <summary>1 while a republish has been asked for and its loop has not yet taken it up.</summary>
@@ -108,7 +108,7 @@ public sealed class NuplanePackageGenerations : ISupersededAssemblySource, IShel
     /// <summary>1 while the feature catalog is watched for a refresh.</summary>
     private int _watchingCatalog;
 
-    private IServiceProvider? Host => Volatile.Read(ref _host);
+    private IServiceProvider? Host => _host.Root;
 
     /// <summary>
     /// Binds this instance to the host's own container and returns it as the lifecycle subscriber CShells' registry
@@ -118,7 +118,7 @@ public sealed class NuplanePackageGenerations : ISupersededAssemblySource, IShel
     public IShellLifecycleSubscriber BindTo(IServiceProvider host)
     {
         ArgumentNullException.ThrowIfNull(host);
-        if (Interlocked.CompareExchange(ref _host, host, null) is null)
+        if (_host.Bind(host))
             _logger = host.GetService<ILoggerFactory>()?.CreateLogger<NuplanePackageGenerations>() ?? NullLogger<NuplanePackageGenerations>.Instance;
         return this;
     }

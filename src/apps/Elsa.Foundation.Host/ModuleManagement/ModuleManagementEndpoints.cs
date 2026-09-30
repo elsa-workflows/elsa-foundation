@@ -4,7 +4,10 @@ using CShells.Features;
 using CShells.Lifecycle;
 using Elsa.Api.AspNetCore;
 using Elsa.Foundation.Host.Shells;
+using Nuplane.Abstractions;
 using Nuplane.Admin;
+using Nuplane.Reconciliation;
+using Nuplane.Reconciliation.Models;
 
 namespace Elsa.Foundation.Host.ModuleManagement;
 
@@ -33,15 +36,18 @@ public static class ModuleManagementEndpoints
         group.AddEndpointFilter(async (context, next) =>
             Authorized(context.HttpContext, options) ? await next(context) : Results.Unauthorized());
 
-        // Inline hot-apply. This is the race-free way to make an added/updated feed package go live without a
-        // restart. TriggerReconcileAsync runs the FULL reconcile cycle and returns only once it has completed
-        // — including the completion phase where Nuplane's auto-loader loads any new package's assemblies into
-        // their load contexts. ONLY THEN do we refresh the runtime feature catalog (so feature ids rebind to
-        // the now-loaded assemblies) and reload the active shells (so they compose the new endpoints from the
-        // refreshed catalog). Doing the refresh/reload from a package-change observer instead would run too
-        // early (assembly not loaded yet) and would re-enter and stall the cycle.
-        group.MapPost("/reconcile", async (INuplaneAdminOperations admin, CancellationToken ct) =>
-            Results.Ok(await admin.TriggerReconcileAsync(ct)));
+        // The handler only triggers the cycle and answers with its outcome, once the cycle has finished. What makes a package
+        // that cycle added live in the running shells is ShellReloadOnPackagesChanged, the Nuplane observer that refreshes the
+        // runtime feature catalog and reloads the active shells at the reconciled phase, after the auto-loader has loaded the
+        // new assemblies (see docs/foundation-host-feeds.md, "Hot reload is a Foundation.Host behavior, not a product one").
+        //
+        // The operations come from the host's root provider, never from the request's. The path-less shell resolves this
+        // request, so the request's provider is that shell's, and CShells copies every root registration into every shell:
+        // Nuplane's singletons there are second instances. A reconcile enqueued on a shell's copy of the trigger queue is read
+        // by no dispatcher, so it waits for ever (#2159); only the root's queue has the dispatcher that runs it.
+        var logger = endpoints.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("Elsa.Foundation.Host.ModuleManagement");
+        group.MapPost("/reconcile", async (CancellationToken ct) =>
+            ReconcileResult(await endpoints.ServiceProvider.GetRequiredService<INuplaneAdminOperations>().TriggerReconcileAsync(ct), logger));
 
         group.MapPost("/reload", async (IRuntimeFeatureCatalog runtimeFeatureCatalog, IShellRegistry registry, CancellationToken ct) =>
         {
@@ -56,6 +62,95 @@ public static class ModuleManagementEndpoints
         });
 
         return endpoints;
+    }
+
+    /// <summary>The reason code of a 503: the service failed, and what it reported is logged with the correlation id, not returned.</summary>
+    private const string ReconcileServiceFailed = "reconcile-service-failed";
+
+    /// <summary>The reason code of a 500 for an outcome code this host does not know, one a newer Nuplane added.</summary>
+    private const string ReconcileOutcomeUnrecognized = "reconcile-outcome-unrecognized";
+
+    /// <summary>
+    /// The answer to a reconcile, by the outcome Nuplane reports: 200 when the cycle ran (completed, or accepted and still
+    /// running), 409 when it was rejected because another cycle or another process already holds the store, so the request is
+    /// well formed and repeating it once that has cleared is what 409 says, 503 when the reconcile service could not run it, and
+    /// 500 for an outcome code this host does not know. The outcome code travels as its name, never its number, except an unknown code, which has no name. Refusals use the
+    /// same problem document as a refused reload, carrying the outcome, a fixed reason code and the correlation id that ties the request to the cycle's log lines. The message of a failure the
+    /// service reported can hold paths, feed addresses or connection details, so it is logged with the correlation id and never
+    /// returned; nor is any package's install path.
+    /// </summary>
+    private static IResult ReconcileResult(ManualReconcileOutcome outcome, ILogger logger)
+    {
+        var name = outcome.OutcomeCode.ToString();
+        switch (outcome.OutcomeCode)
+        {
+            case ManualReconcileOutcomeCode.Completed or ManualReconcileOutcomeCode.Accepted:
+                return Results.Ok(new
+                {
+                    outcomeCode = name,
+                    correlationId = outcome.CorrelationId,
+                    reasonCode = outcome.ReasonCode,
+                    runResult = outcome.RunResult is { } run ? ReconcileRun.From(run) : null
+                });
+            case ManualReconcileOutcomeCode.Rejected:
+                return ReconcileProblem(outcome, "Reconcile rejected", StatusCodes.Status409Conflict, outcome.ReasonCode, outcome.ReasonCode switch
+                {
+                    "single-flight-active" => "Another reconcile cycle is already running in this host, so this request did nothing. Repeat it once that cycle has finished.",
+                    "store-lock-unavailable" => "Another process owns the package store, so this request did nothing. Repeat it once that process has released it.",
+                    _ => "The reconcile was rejected, so this request did nothing."
+                });
+            case ManualReconcileOutcomeCode.Unavailable:
+                logger.LogError("The reconcile service failed to run the cycle. CorrelationId={CorrelationId}, Reason={Reason}", outcome.CorrelationId, outcome.ReasonCode);
+                return ReconcileProblem(outcome, "Reconcile unavailable", StatusCodes.Status503ServiceUnavailable, ReconcileServiceFailed,
+                    "The reconcile service failed to run the cycle. The host logged the failure under the correlation id.");
+            default:
+                logger.LogError("Nuplane reported reconcile outcome {OutcomeCode}, which this host does not map to a status. CorrelationId={CorrelationId}, Reason={Reason}", (int)outcome.OutcomeCode, outcome.CorrelationId, outcome.ReasonCode);
+                return ReconcileProblem(outcome, "Reconcile outcome not recognized", StatusCodes.Status500InternalServerError, ReconcileOutcomeUnrecognized,
+                    $"Nuplane reported reconcile outcome {(int)outcome.OutcomeCode}, which this host does not map to a status, so it cannot say whether the cycle ran. The host logged it under the correlation id.");
+        }
+    }
+
+    private static IResult ReconcileProblem(ManualReconcileOutcome outcome, string title, int status, string? reasonCode, string detail) =>
+        Results.Problem(
+            title: title,
+            detail: detail,
+            statusCode: status,
+            extensions: new Dictionary<string, object?>
+            {
+                ["outcomeCode"] = outcome.OutcomeCode.ToString(),
+                ["reasonCode"] = reasonCode,
+                ["correlationId"] = outcome.CorrelationId
+            });
+
+    /// <summary>
+    /// What a cycle did, without where it put it: Nuplane's run result names each package's install path, an absolute path on
+    /// this host, which no client needs to know what changed. A package is its id, version and the feed and source it came from.
+    /// </summary>
+    private sealed record ReconcileRun(bool Skipped, int SkipReason, ReconcileChangeSet ChangeSet, IReadOnlyList<string> FailedPackages, bool IsDegraded)
+    {
+        public static ReconcileRun From(ReconciliationRunResult run) => new(
+            run.Skipped,
+            (int)run.SkipReason,
+            new ReconcileChangeSet(
+                [.. run.ChangeSet.Added.Select(ReconciledPackage.From)],
+                [.. run.ChangeSet.Updated.Select(ReconciledPackage.From)],
+                run.ChangeSet.Removed,
+                run.ChangeSet.CorrelationId,
+                run.ChangeSet.Timestamp),
+            run.FailedPackages,
+            run.IsDegraded);
+    }
+
+    private sealed record ReconcileChangeSet(
+        IReadOnlyList<ReconciledPackage> Added,
+        IReadOnlyList<ReconciledPackage> Updated,
+        IReadOnlyList<string> Removed,
+        string CorrelationId,
+        DateTimeOffset Timestamp);
+
+    private sealed record ReconciledPackage(string Id, string Version, string FeedName, string SourceName, DateTimeOffset InstalledAt)
+    {
+        public static ReconciledPackage From(ResolvedPackage package) => new(package.Id, package.Version, package.FeedName, package.SourceName, package.InstalledAt);
     }
 
     /// <summary>

@@ -292,8 +292,6 @@ curl localhost:5101/demo/notes/with-tags
   (or the tool must be run with `--restore`) before the tool can see the module.
 - Start the two hosts one after the other, not in the same instant: when both create the membership database's identity row
   at once, the loser logs a duplicate-key error on that insert at startup and carries on.
-- Do not call `POST /_module-management/reconcile`: it does not answer. The folder watcher reconciles a feed by itself, and
-  `/reload` is the only management endpoint the demo uses.
 - The walkthroughs below stop, pack and start a host. Since in-place upgrades work, that is the fallback: dropping 1.1.0 into a
   running host's feed installs it, the host refuses to switch while `AddTags` is pending (`/reload` answers 409 naming the module
   and the `persistence apply` command), and after the apply `/reload` answers 200. `tools/demo/RUNBOOK.md` shows that route.

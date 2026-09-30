@@ -71,7 +71,6 @@ The limits that remain. Say them plainly; the customer will respect it, and each
 Presenter only (do not screen-share this block; the issue numbers are for you):
 
 - Issue 2164: the reload bridge skips its catalog refresh while no shell is active, so a host whose start-up activation failed can keep serving the old release after an upgrade until a reload. The narrow timing window above is also 2164.
-- Issue 2159: `POST /_module-management/reconcile` never answers. The demo never calls it: the folder watcher reconciles, and `reload` is the only endpoint used.
 
 ## Setup (before the audience, about 20 minutes, most of it waiting)
 
@@ -323,7 +322,7 @@ reload 5101
   ```
 - **Time:** the host takes about 10 s (10 to 17 s under load) to install; the `reload` call itself 1 to 3 s.
 - **If it goes wrong:** `HTTP 200` with `"features": 3`: the host has not seen the package yet; wait five seconds and `reload 5101` again. `4xx` other than 409:
-  the host was started without `--management-key-env DEMO_KEY`, or the key in this tab differs (`echo $DEMO_KEY`). Never call the `/reconcile` endpoint (troubleshooting table).
+  the host was started without `--management-key-env DEMO_KEY`, or the key in this tab differs (`echo $DEMO_KEY`).
 
 ### 1.5 Apply the migration
 
@@ -616,7 +615,7 @@ Read this out, or show it. Two sentences per question, the limits included.
 > Yes, as long as the versions' migrations only add: versions 1 and 2 run side by side on one table, version 2 reads old rows through an upcaster and keeps its new feature dormant, with the reason, until every host can read it, and for a family whose author wrote an upcaster and a rewriter a background pass then brings the old rows up to 2.0.0.
 > The limits are that keeping migrations additive while versions overlap is the module author's rule: the platform refuses a migration that removes or renames something only when its author declares it contracting (an `ExpandOnlyMigrationOptOut` naming the family and the finalized version), and only for tables a stamped schema family covers, so an undeclared destructive migration is not detected at apply time. Also, content-addressed rows are never rewritten and keep the family from being recorded complete, the migration must be applied before the new version activates (by design: the host tells you the command), and once a version is finalized a host on the older release is refused.
 >
-> **Two rough edges we are closing:** a very narrow timing window while a host builds its new shell, and the explicit reconcile call, which this demo never uses: the folder watcher does that work.
+> **A rough edge we are closing:** a very narrow timing window while a host builds its new shell.
 
 ### Act 2 fallback: stop, publish, start host A
 
@@ -664,7 +663,6 @@ success or failure. Its host logs are kept in `artifacts/demo-rehearsal/`. It us
 | `/health/ready` says **503** after `apply`, and requests answer **500** | A host that was started already refused (the fallback route): the readiness probe does not activate a shell | Send a real request: `notes 5101`. It activates the shell; `/health/ready` follows |
 | `reload` says **200** with `"features": 3` instead of 409 | The host has not installed 1.1.0 yet | Wait five seconds, repeat |
 | `reload` answers **401**, **403** or **404** | Module management is off, or the key differs | The host must be started with `--management-key-env DEMO_KEY`; `echo $DEMO_KEY` in the tab must match the one in the host's tab |
-| `POST /_module-management/reconcile` never answers | A known defect | Never call it. The folder watcher reconciles by itself; `reload` is the only endpoint the demo uses |
 | A host was **killed or crashed** (or the laptop slept: see the next row) and is restarted | Its membership row lingers until it expires: about 12 s with `--fast-membership` (up to 35 s with the defaults); `status` still shows it `live` meanwhile, and a version waits for it | Wait about 15 s, then start it. A host stopped with Ctrl-C leaves at once and needs no wait |
 | The **laptop slept** or the lid was closed | The hosts' heartbeats stopped, so a host may have been dropped from the cluster (its membership expires after about 12 s), and a host that lapsed and rejoined has not adopted the finalized schema version yet. The audience would see a **409** on `withtags` whose reason reads `It becomes available once this host adopts version '2.0.0' ... until it has rejoined the cluster` (`NotYetAdopted`), or a fleet in `status` that lists a host that is not `live`, or a member missing | After waking wait about 15 s, then run `status a`. Both hosts `Active, live` and no odd `waits for:` line: carry on. If a host lapsed, restart both hosts one after the other: Ctrl-C in tab **A** (a clean stop leaves at once), start it again with the S6 commands, wait for `/health/ready` 200, then the same for tab **B**. Prevent it with `caffeinate -dimsu` (S3) and the lid open |
 | **Docker**: `docker ps` or `docker exec` fails, `pgconn` says the container does not run, or hosts cannot reach PostgreSQL | The daemon is down, or the `postgres:16-alpine` image was evicted (and Wi-Fi is off, so it cannot be pulled), or Docker restarted and the container's dynamic port changed, so every tab's `ELSA_EF_CONNECTION` is stale | Start Docker, then `bash tools/demo/reset.sh` (it reports a dead daemon instead of saying "none") and redo the PostgreSQL setup (S6), the hosts included: `pgconn` in every tab that runs a host or a command |
