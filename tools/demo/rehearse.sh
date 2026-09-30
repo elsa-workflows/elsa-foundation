@@ -189,8 +189,9 @@ no_tags_on() {
 }
 
 # notes_in OUTPUT SCHEMA TAGS: how many of the notes that rows printed carry that schema version (a literal) and that tags value
-# (an extended regex: NULL, \[\], ...), the header line left out.
-notes_in() { printf '%s\n' "$1" | tail -n +2 | grep -cE "[ ]$2 +$3\$" || true; }
+# (an extended regex: NULL, \[\], ...), the header line left out. The column is padded by two spaces at least, which is what tells
+# it from a note whose text ends in a version.
+notes_in() { printf '%s\n' "$1" | tail -n +2 | grep -cE "[ ]{2}$2 +$3\$" || true; }
 # note_count OUTPUT: how many notes rows printed.
 note_count() { echo $(($(line_count "$1") - 1)); }
 
@@ -446,6 +447,8 @@ if [[ " $acts " == *" 2 "* ]]; then
   wait_until "with-tags answers 200 on b" 120 with_tags_ok "$port_b"
   wait_until "with-tags answers 200 on a" 120 with_tags_ok "$port_a"
   measure "2.0.0 finalized $(elapsed "$published_at") s after the publish to a (both hosts kept running)"
+  # Not asserted, only reported: how far the host's backfill has come at the moment both hosts answer, which is a race by design.
+  measure "rows at the moment both hosts answer 200: $(notes_in "$(rows a)" '2\.0\.0' '\[\]') of 4 notes at 2.0.0 already, $(notes_in "$(rows a)" '1\.0\.0' 'NULL') still at 1.0.0"
   stage withtags "$port_a"
   expect_eq "with-tags on a" "HTTP 200" "$(first_line "$out")"
   no_tags_on "$out"
@@ -461,7 +464,7 @@ if [[ " $acts " == *" 2 "* ]]; then
   expect_eq "six notes are stored" 6 "$(note_count "$out")"
   expect_match "a note written on b is stamped 2.0.0, with an empty tag list" "$out" '^written after finalization on B +2\.0\.0 +\[\]$'
   expect_match "a note written on a is stamped 2.0.0, with an empty tag list" "$out" '^written after finalization on A +2\.0\.0 +\[\]$'
-  measure "rows straight after finalization: $(notes_in "$out" '2\.0\.0' '\[\]') of 6 notes at 2.0.0, $(notes_in "$out" '1\.0\.0' 'NULL') still at 1.0.0"
+  measure "rows a few seconds after finalization: $(notes_in "$out" '2\.0\.0' '\[\]') of 6 notes at 2.0.0, $(notes_in "$out" '1\.0\.0' 'NULL') still at 1.0.0"
   backfill_complete() { grep -q "is complete at 2.0.0" "$logs/a.log" "$logs/b.log"; }
   wait_until "the backfill logged completion" 120 backfill_complete
   measure "the backfill completed $(elapsed "$published_at") s after the publish to a"

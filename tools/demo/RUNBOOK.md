@@ -39,7 +39,7 @@ comment on the command line unless `interactive_comments` is set, so a pasted co
 ## Your three questions from last time
 
 At the previous demo the customer asked three things. This demo answers each one live, on the running system, so the answers below are what the platform does **now**, not what we
-promised then. Each step that answers a question carries a boxed line to say, marked with the question; the recap at the end of Act 2 (2.7) closes all three.
+promised then. Each step that answers a question carries a boxed line to say, marked with the question; the recap at the end of Act 2 (2.8) closes all three.
 
 | Question | Where it is answered | What the audience sees |
 |---|---|---|
@@ -545,9 +545,54 @@ rows a
     host-a: Active, live, ...   SamplesNotes: reads 1.0.0, 2.0.0
     host-b: Active, live, ...   SamplesNotes: reads 1.0.0, 2.0.0
   ```
-  Run `status` again after about 20 s (a good moment for questions): `complete from 2.0.0`. `rows` is the second thing to show then, see 2.7.
+  Run `status` again after about 20 s (a good moment for questions): `complete from 2.0.0`. `rows` is the second thing to show then: see 2.7.
 - **Time:** finalization 0 to 3 s after A switched, on B up to 2 s later (repeat `withtags` if you get 409 for a moment); `complete from 2.0.0` 16 to 20 s after finalization (measured: 18 to 20 s; 30 to 34 s after the publish).
 - **If it goes wrong:** still 409 after 30 s and `waits for: host-a` in `status a`: A has not switched (see 2.5). A `waits for:` line naming a host you did not start: a leftover member from an earlier rehearsal: `bash tools/demo/reset.sh` and set up again.
+
+### 2.7 The old rows are brought up to date
+
+About twenty seconds after the version finalized (the moment `status` says `complete from 2.0.0`), from tab 2:
+
+```bash
+status a
+rows a
+```
+
+> **Your question 3, closed:** "Every row, old and new, is stamped 2.0.0 now. The two versions ran side by side on one table, and nobody had to stop anything or rewrite the data by hand."
+
+- **Audience sees:** `complete from 2.0.0`, and `rows` with every note stamped `2.0.0` and a tag list (`[]`): the four notes written before the finalization were rewritten by the host in the background.
+- **Say:** "The host did that itself, one row at a time, once every host could read the new version. When no row of the old version is left, the platform records the version complete. Until then, the old rows stayed readable through the upcaster."
+- **Expect:**
+
+  ```
+  note                            schema  tags
+  written on host A               2.0.0   []
+  written on host B               2.0.0   []
+  written by A on release 1.0.0   2.0.0   []
+  written by B on release 1.1.0   2.0.0   []
+  written after finalization on B 2.0.0   []
+  written after finalization on A 2.0.0   []
+  ```
+- **Time:** 16 to 20 s after finalization, as in 2.6. If `rows` still shows `1.0.0`, run it again in a few seconds; `status a` says `complete from 2.0.0` when the last old row is gone.
+- **If it goes wrong:** rows still at `1.0.0` after a minute: `status a` shows what the family waits for, and the log of tab A or B says why the backfill is not moving.
+
+### 2.8 Recap: your three questions
+
+Read this out, or show it. Two sentences per question, the limits included.
+
+> **1. "How about hot reload, can it still run?"**
+> Yes: a running host installs a new module version from its feed and switches to it in place, with no restart, and it is held back only while its database migration is pending or when the host is too old for the package.
+> The limits are that this is how the Foundation host works (the Workbench picks a new package up at its next restart), that a replaced release stays in memory until the host restarts, and that no drain step is added for work already in flight.
+>
+> **2. "What when we have multiple pods?"**
+> Hosts that share a database form a cluster and a new module version is turned on only once every live host can read it, so the order you upgrade in does not matter, `persistence status` names the host still holding it back, and a crashed host stops counting once its membership expires (12 seconds here, 35 by default).
+> The limits are that every host must be configured as a cluster member (one that is not counts only itself, and nothing warns you), and that a host that sleeps or stalls for longer than its membership lasts is dropped and has to rejoin.
+>
+> **3. "Multiple module versions needing different schemas"**
+> Yes, as long as the new version's migration only adds: versions 1 and 2 run side by side on one table, version 2 reads old rows through an upcaster and keeps its new feature dormant, with the reason, until every host can read it, and a background pass then brings every old row up to 2.0.0.
+> The limits are that a migration which removes or renames something is refused until the version that makes it safe is finalized, that the migration must be applied before the new version activates (by design: the host tells you the command), and that once a version is finalized a host on the older release is refused.
+>
+> **Two rough edges we are closing:** a very narrow timing window while a host builds its new shell, and the explicit reconcile call, which this demo never uses: the folder watcher does that work.
 
 ### Act 2 fallback: stop, publish, start host A
 

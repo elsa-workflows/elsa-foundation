@@ -77,7 +77,7 @@ waitfor() {
 # both show the same rows). One line per note, oldest first: the schema version stamped on the row when it was written, and its tags column as
 # stored (NULL: written by release 1.0.0, which has no such column to fill; [] or a list: written by 2.0.0). It reads the tables
 # themselves, so it shows what is stored and not what a host answers. A database the AddTags migration has not reached yet has no
-# tags column, and says so.
+# tags column, and says so. (The Sqlite file is in WAL mode, which a read-only open cannot serve without its -shm file: the query only selects.)
 rows() {
   local table=elsa_samples_notes container="${DEMO_PG_CONTAINER:-elsa-demo-pg}" file=artifacts/demo/notes.db query tags
   command -v column >/dev/null 2>&1 || { echo "error: column is not installed" >&2; return 1; }
@@ -86,9 +86,9 @@ rows() {
       command -v sqlite3 >/dev/null 2>&1 || { echo "error: sqlite3 is not installed (brew install sqlite)" >&2; return 1; }
       [ -f "$file" ] || { echo "error: there is no Sqlite database at $file yet" >&2; return 1; }
       tags="'(no column yet)'"
-      [ "$(sqlite3 -readonly "$file" "select count(*) from pragma_table_info('$table') where name = 'TagsJson'")" = 1 ] && tags="coalesce(TagsJson, 'NULL')"
+      [ "$(sqlite3 "$file" "select count(*) from pragma_table_info('$table') where name = 'TagsJson'")" = 1 ] && tags="coalesce(TagsJson, 'NULL')"
       query="select Text as note, SchemaVersion as schema, $tags as tags from $table order by CreatedAt"
-      sqlite3 -readonly -header -separator '|' "$file" "$query" | column -t -s '|'
+      sqlite3 -header -separator '|' "$file" "$query" | column -t -s '|'
       ;;
     a|b)
       command -v docker >/dev/null 2>&1 || { echo "error: docker is not installed" >&2; return 1; }
