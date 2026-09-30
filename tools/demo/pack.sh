@@ -40,12 +40,10 @@ feeds=()
 closure="artifacts/demo/closure"
 build_host=1
 while [[ $# -gt 0 ]]; do
-  # Every option but these two takes a value.
-  [[ "$1" != --* || "$1" == --no-host || "$1" == --help || $# -ge 2 ]] || demo_fail "$1 needs a value (see --help)."
   case "$1" in
-    --host) feeds+=("artifacts/demo/hosts/$2/feed"); shift 2 ;;
-    --feed) feeds+=("$2"); shift 2 ;;
-    --closure) closure="$2"; shift 2 ;;
+    --host) demo_need_value "$@"; feeds+=("artifacts/demo/hosts/$2/feed"); shift 2 ;;
+    --feed) demo_need_value "$@"; feeds+=("$2"); shift 2 ;;
+    --closure) demo_need_value "$@"; closure="$2"; shift 2 ;;
     --no-host) build_host=0; shift ;;
     -h|--help) usage; exit 0 ;;
     *) demo_fail "unknown argument '$1' (see --help)." ;;

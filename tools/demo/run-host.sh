@@ -59,16 +59,14 @@ fast_membership=0
 management_key_env=""
 prepare_only=0
 while [[ $# -gt 0 ]]; do
-  # Every option but these three takes a value.
-  [[ "$1" != --* || "$1" == --prepare-only || "$1" == --fast-membership || "$1" == --help || $# -ge 2 ]] || demo_fail "$1 needs a value (see --help)."
   case "$1" in
-    --port) port="$2"; shift 2 ;;
-    --provider) provider="$2"; shift 2 ;;
-    --policy) policy="$2"; shift 2 ;;
-    --feed) feed="$2"; shift 2 ;;
-    --closure) closure="$2"; shift 2 ;;
-    --cluster) cluster_host_id="$2"; shift 2 ;;
-    --management-key-env) management_key_env="$2"; shift 2 ;;
+    --port) demo_need_value "$@"; port="$2"; shift 2 ;;
+    --provider) demo_need_value "$@"; provider="$2"; shift 2 ;;
+    --policy) demo_need_value "$@"; policy="$2"; shift 2 ;;
+    --feed) demo_need_value "$@"; feed="$2"; shift 2 ;;
+    --closure) demo_need_value "$@"; closure="$2"; shift 2 ;;
+    --cluster) demo_need_value "$@"; cluster_host_id="$2"; shift 2 ;;
+    --management-key-env) demo_need_value "$@"; management_key_env="$2"; shift 2 ;;
     --fast-membership) fast_membership=1; shift ;;
     --prepare-only) prepare_only=1; shift ;;
     -h|--help) usage; exit 0 ;;

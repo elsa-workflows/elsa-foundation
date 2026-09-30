@@ -28,10 +28,9 @@ shift
 
 feed=""
 while [[ $# -gt 0 ]]; do
-  [[ "$1" != --* || "$1" == --help || $# -ge 2 ]] || demo_fail "$1 needs a value (see --help)."
   case "$1" in
-    --host) feed="artifacts/demo/hosts/$2/feed"; shift 2 ;;
-    --feed) feed="$2"; shift 2 ;;
+    --host) demo_need_value "$@"; feed="artifacts/demo/hosts/$2/feed"; shift 2 ;;
+    --feed) demo_need_value "$@"; feed="$2"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) demo_fail "unknown argument '$1' (see --help)." ;;
   esac

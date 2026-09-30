@@ -350,7 +350,7 @@ if [[ " $acts " == *" 1 "* ]]; then
   measure "with-tags on solo answered 200 $(elapsed "$reloaded_at") s after the shell was re-composed"
   stage withtags "$port_solo"
   expect_eq "with-tags answers" "HTTP 200" "$(first_line "$out")"
-  expect_eq "both old notes are listed" 3 "$(line_count "$out")"
+  expect_eq "the status line and both old notes are printed, in lines" 3 "$(line_count "$out")"
   no_tags_on "$out"
   stage tag "$port_solo" demo
   expect_has "the tag is on the note" "$out" '"tags":["demo"]'
@@ -372,7 +372,7 @@ if [[ " $acts " == *" 2 "* ]]; then
   expect_match "two members" "$out" '^members: 2 in Cluster\.Membership, judged at .* with a skew allowance of 00:00:02$'
   expect_match "host-a is live" "$out" '^ +host-a: Active, live, last heartbeat '
   expect_match "host-b is live" "$out" '^ +host-b: Active, live, last heartbeat '
-  expect_eq "both hosts read 1.0.0" 2 "$(printf '%s\n' "$out" | grep -c 'SamplesNotes: reads 1.0.0$' || true)"
+  expect_eq "both hosts read 1.0.0" 2 "$(printf '%s\n' "$out" | grep -c 'SamplesNotes: reads 1.0.0 *$' || true)"
 
   step "Act 2.2 upgrade b in place: publish, refused (409), apply, reload (200)"
   publish_and_wait_for_refusal 2 b
@@ -432,7 +432,7 @@ if [[ " $acts " == *" 2 "* ]]; then
   no_tags_on "$out"
   pg_status a
   expect_has "finalized at 2.0.0" "$out" "SamplesNotes (Samples.Notes): finalized at 2.0.0; this host reads [1.0.0, 2.0.0]"
-  expect_eq "both hosts read 2.0.0" 2 "$(printf '%s\n' "$out" | grep -c 'SamplesNotes: reads 1.0.0, 2.0.0$' || true)"
+  expect_eq "both hosts read 2.0.0" 2 "$(printf '%s\n' "$out" | grep -c 'SamplesNotes: reads 1.0.0, 2.0.0 *$' || true)"
   backfill_complete() { grep -q "is complete at 2.0.0" "$logs/a.log" "$logs/b.log"; }
   wait_until "the backfill logged completion" 120 backfill_complete
   measure "the backfill completed $(elapsed "$published_at") s after the publish to a"

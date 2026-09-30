@@ -31,6 +31,11 @@ demo_dir() {
   mkdir -p "$path" && (cd "$path" && pwd -P)
 }
 
+# demo_need_value "$@": in the branch of an option that takes a value, stops with a reason when that value is missing.
+demo_need_value() {
+  [[ $# -ge 2 ]] || demo_fail "$1 needs a value (see --help)."
+}
+
 # demo_require COMMAND...: every command must be on the PATH, or the script stops naming the first one that is not, with the way
 # to install it.
 demo_require() {
