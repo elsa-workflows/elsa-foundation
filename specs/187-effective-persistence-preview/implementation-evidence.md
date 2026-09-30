@@ -87,6 +87,10 @@ A bounded supporting worker prepared the shared install/state fixture and three 
 
 Independent review cleared the route fixture extraction and corrected adverse cases. The worker supporting model was `gpt-6-luna` at xhigh; root retains integration/QA. T005 and T007–T020 remain unchecked and the specification remains In progress. Actual command/actor, complete runtime-preparer parity, strict producer/consumer contents, production process ownership, maps/architecture/full affected suites and delivery gates remain open.
 
+## Current map checkpoint
+
+After the route/content baseline commit, root refreshed all generated maps and ran the byte-for-byte map check successfully. Seven map files changed: the candidate fixture's existing diagnostics project references and new Nuplane package references, owned test-file links, spec In progress/task state, and the corresponding manifest/dependency counts. No linked test file was removed. Both generated findings reports were reviewed and remain byte-identical: no new runtime-to-design signal or direct package-version cluster. This is current navigation evidence, not the final architecture/CI/delivery gate; later source changes require a fresh check.
+
 ## Still required
 
 No acceptance matrix row is closed by these foundations. Complete host branch/parity and decoded-file boundary coverage, actual host removal preservation, installed-closure worker dispatch, full response contents, CLI command/formatting, real actor/runtime parity and child lifecycle/adverse proofs remain incomplete. T005 and T007–T020, plus the full affected suites, architecture/maps, exact-head review/CI and exact-main delivery gates remain open. The specification stays **In progress**.

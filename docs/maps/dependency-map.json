@@ -12761,6 +12761,16 @@
       "edges": [
         {
           "type": "internal",
+          "id": "Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore",
+          "path": "src/essentials/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore",
+          "path": "src/essentials/Diagnostics/StructuredLogs/Persistence/EntityFrameworkCore/Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Persistence.EntityFramework",
           "path": "src/essentials/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj"
         },
@@ -12773,6 +12783,16 @@
           "type": "external",
           "id": "Microsoft.EntityFrameworkCore.Sqlite",
           "version": "10.0.10"
+        },
+        {
+          "type": "external",
+          "id": "Nuplane",
+          "version": "0.0.11-preview.94"
+        },
+        {
+          "type": "external",
+          "id": "Nuplane.Loading",
+          "version": "0.0.11-preview.94"
         }
       ]
     },
