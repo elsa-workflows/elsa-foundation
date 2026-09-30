@@ -60,7 +60,7 @@ The limits that remain. Say them plainly; the customer will respect it, and each
 - **The migration must be applied before the new version activates.** By design. Under the policy the demo runs with (`Validate`) the host refuses to migrate underneath the operator and says which command to run: it is the one manual step of the demo. Under the
   library's default policy (`AutoMigrate`) the host applies the migration itself at that point; either way the new version never runs against a schema it has not got.
 - **Every host must be configured as a cluster member.** A host that is not counts only itself, and nothing warns about it.
-- **Finalization is one way.** After a version is finalized, a host still on the older release is refused; the way back is a database restore, not a rollback.
+- **Finalization is one way.** After a version is finalized, a host still on the older release is refused, and a finalized version only ever moves forward: there is no rollback of it.
 - **Hot reload is the Foundation.Host feed model.** The Workbench does not reload a running shell when a package arrives; it takes effect at its next restart. A replaced release stays in memory until the host restarts, and there is no drain step for work in flight when the shell is swapped.
   The reload bridge skips its catalog refresh while no shell is active, so a host whose start-up activation failed can keep serving the old release after an upgrade until a reload (issue 2164, presenter only).
 - **A narrow timing window (issue 2164, presenter only).** A shell that is being built while the platform decides whether every host can read the new version is invisible to that decision until it reaches its first initializer. It needs an upstream CShells change, planned after this demo.
@@ -356,6 +356,7 @@ notes 5101
 - **Say:** "The host switched to release 1.1.0 without a restart. The notes written by release 1.0.0 have no tags column value: the upcaster reads them as
   'no tags'. And the old endpoint carries on."
 - **Expect:** `reload` prints `HTTP 200` and the four lines of JSON `{`, `"features": 4,`, `"reloaded": 1` and `}`; `withtags` prints `HTTP 200` and the notes with `"tags":[]`; `tag` prints the note with `"tags":["demo"]`.
+- **Optional:** `rows solo` shows what is stored: the note that was just tagged is stamped `2.0.0` with `["demo"]` (the rehearsal asserts it). The other note is `1.0.0` or, once the host's background pass has reached it, `2.0.0`.
 - **Time:** the reload is under 3 s. Once the reload has answered, the new endpoint exists, so `withtags` answers 409 and then 200, never 404 again: the feature turns on when the host has
   re-evaluated the schema version, which it does every 2 s. A `withtags` right after the reload is sometimes `HTTP 409` (`schema-version-not-finalized`), for up to two seconds: that is why the first command is separate.
   If you see it, say "it is checking that this is safe", wait, and repeat.
