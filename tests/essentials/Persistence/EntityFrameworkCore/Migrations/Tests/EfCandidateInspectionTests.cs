@@ -313,6 +313,8 @@ public sealed class EfCandidateInspectionTests : IDisposable
     [Theory]
     [InlineData(1022, EfToolingExitCode.Success)]
     [InlineData(1023, EfToolingExitCode.ResolutionFailure)]
+    [InlineData(1024, EfToolingExitCode.ResolutionFailure)]
+    [InlineData(1025, EfToolingExitCode.ResolutionFailure)]
     public async Task Public_operation_bounds_participant_and_finding_rows_together(int moduleCount, int expectedExitCode)
     {
         var featureId = $"SyntheticCandidateParticipant{moduleCount}";
@@ -327,6 +329,20 @@ public sealed class EfCandidateInspectionTests : IDisposable
         });
         using var response = new MemoryStream();
 
+        if (expectedExitCode == EfToolingExitCode.ResolutionFailure)
+        {
+            // Host availability failures are scoped exceptions; the worker maps them to its fixed
+            // outer refusal. They are not a new exit-3 host-response shape in the v1 contract.
+            var refusal = await Assert.ThrowsAsync<EfToolingRefusal>(() =>
+                RunOperationAsync(operation, candidate.Request, response, CancellationToken.None));
+            Assert.Equal("candidate-host-unavailable", refusal.Code);
+            Assert.Equal(expectedExitCode, refusal.ExitCode);
+            Assert.Equal(1, discoveryCalls);
+            Assert.Empty(response.ToArray());
+            Assert.False(File.Exists(DatabasePath));
+            return;
+        }
+
         var exitCode = await RunOperationAsync(operation, candidate.Request, response, CancellationToken.None);
 
         Assert.Equal(expectedExitCode, exitCode);
@@ -336,31 +352,21 @@ public sealed class EfCandidateInspectionTests : IDisposable
         Assert.Equal(InvocationId, root.GetProperty("invocationId").GetString());
         Assert.Equal(CaptureId, root.GetProperty("captureId").GetString());
         Assert.Equal(expectedExitCode, root.GetProperty("exitCode").GetInt32());
-        if (expectedExitCode == EfToolingExitCode.Success)
+        Assert.Equal("ok", root.GetProperty("status").GetString());
+        var resolution = root.GetProperty("configurationResolution");
+        var participants = resolution.GetProperty("participants").EnumerateArray().ToArray();
+        var findings = StringValues(resolution.GetProperty("unresolved"));
+        Assert.Equal(moduleCount, participants.Length);
+        Assert.Equal(["exact-file-provenance-unavailable", "legacy-target-unprojected"], findings);
+        Assert.Equal(1024, participants.Length + findings.Length);
+        Assert.All(participants, participant =>
         {
-            Assert.Equal("ok", root.GetProperty("status").GetString());
-            var resolution = root.GetProperty("configurationResolution");
-            var participants = resolution.GetProperty("participants").EnumerateArray().ToArray();
-            var findings = StringValues(resolution.GetProperty("unresolved"));
-            Assert.Equal(moduleCount, participants.Length);
-            Assert.Equal(["exact-file-provenance-unavailable", "legacy-target-unprojected"], findings);
-            Assert.Equal(1024, participants.Length + findings.Length);
-            Assert.All(participants, participant =>
-            {
-                Assert.Equal(featureId, participant.GetProperty("feature").GetString());
-                Assert.Equal("Legacy", participant.GetProperty("selection").GetString());
-                Assert.Equal(JsonValueKind.Null, participant.GetProperty("resource").ValueKind);
-                Assert.Equal(JsonValueKind.Null, participant.GetProperty("provider").ValueKind);
-                Assert.Equal(JsonValueKind.Null, participant.GetProperty("connectionReference").ValueKind);
-            });
-        }
-        else
-        {
-            Assert.Equal("refused", root.GetProperty("status").GetString());
-            Assert.Equal("candidate-host-unavailable", root.GetProperty("error").GetProperty("code").GetString());
-            Assert.False(root.TryGetProperty("configurationResolution", out _));
-            Assert.Equal(["code"], root.GetProperty("error").EnumerateObject().Select(property => property.Name));
-        }
+            Assert.Equal(featureId, participant.GetProperty("feature").GetString());
+            Assert.Equal("Legacy", participant.GetProperty("selection").GetString());
+            Assert.Equal(JsonValueKind.Null, participant.GetProperty("resource").ValueKind);
+            Assert.Equal(JsonValueKind.Null, participant.GetProperty("provider").ValueKind);
+            Assert.Equal(JsonValueKind.Null, participant.GetProperty("connectionReference").ValueKind);
+        });
         Assert.False(File.Exists(DatabasePath));
     }
 

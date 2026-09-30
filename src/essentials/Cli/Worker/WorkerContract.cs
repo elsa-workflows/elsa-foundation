@@ -197,6 +197,40 @@ public static class WorkerContract
         }
     }
 
+    /// <summary>Validates the full host exchange against the candidate whose bytes were sent.</summary>
+    /// <exception cref="WorkerRefusal">The host exchange does not describe that candidate.</exception>
+    public static void ValidateCandidateHostResponse(
+        JsonElement root,
+        WorkerCandidatePayload candidate,
+        int processExitCode)
+    {
+        ArgumentNullException.ThrowIfNull(candidate);
+        try
+        {
+            ValidateCandidatePayload(candidate);
+        }
+        catch (JsonException)
+        {
+            throw InvalidCandidateHostResponse();
+        }
+        ValidateCandidateHostResponse(root, candidate.InvocationId ?? string.Empty,
+            candidate.CaptureId ?? string.Empty, processExitCode);
+
+        if (root.GetProperty("status").GetString() != "ok")
+            return;
+
+        var resolution = root.GetProperty("configurationResolution");
+        var selection = resolution.GetProperty("selection");
+        var accepted = selection.GetProperty("acceptedFeatureIds").EnumerateArray().Select(id => id.GetString()!);
+        var disabled = selection.GetProperty("disabledFeatureIds").EnumerateArray()
+            .Select(id => id.GetString()!).ToHashSet(StringComparer.Ordinal);
+        if (!HasStringValue(resolution, "shell", candidate.Shell!) ||
+            !HasStringValue(resolution, "environment", candidate.Environment!) ||
+            !accepted.SequenceEqual(candidate.AcceptedFeatureIds!, StringComparer.Ordinal) ||
+            candidate.RemovedFeatureIds!.Any(id => !disabled.Contains(id)))
+            throw InvalidCandidateHostResponse();
+    }
+
     private static void ValidateCandidateHostResponse(
         JsonElement root,
         string expectedInvocationId,
@@ -265,6 +299,7 @@ public static class WorkerContract
 
         var accepted = new HashSet<string>(acceptedFeatureIds, StringComparer.Ordinal);
         var hasLegacyParticipant = false;
+        var hasResourceParticipant = false;
         var hasUnavailableResourceScope = false;
         string? previousFeature = null;
         string? previousModule = null;
@@ -283,13 +318,15 @@ public static class WorkerContract
             previousFeature = feature;
             previousModule = module;
             hasLegacyParticipant |= legacy;
+            hasResourceParticipant |= !legacy;
             hasUnavailableResourceScope |= unavailableResourceScope;
         }
 
         var unresolved = new HashSet<string>(unresolvedCodes, StringComparer.Ordinal);
         var hasExactFileProvenanceUnavailable = unresolved.Contains("exact-file-provenance-unavailable");
-        if (participants.GetArrayLength() > 0 && !hasExactFileProvenanceUnavailable ||
-            hasLegacyParticipant && !unresolved.Contains("legacy-target-unprojected") ||
+        if ((participants.GetArrayLength() > 0) != hasExactFileProvenanceUnavailable ||
+            hasLegacyParticipant != unresolved.Contains("legacy-target-unprojected") ||
+            (affinity == "checked") != hasResourceParticipant ||
             hasUnavailableResourceScope && !unresolved.Contains("resource-scope-unsupported"))
             throw InvalidCandidateHostResponse();
 
@@ -356,7 +393,7 @@ public static class WorkerContract
         legacy = selection == "Legacy";
         if (legacy)
         {
-            if (resource is not null || provider is not null || connectionReference is not null)
+            if (resource is not null || provider is not null || connectionReference is not null || resourceScope is not null)
                 return false;
         }
         else if (resource is null || provider is null || connectionReference is null)

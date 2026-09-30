@@ -18,7 +18,6 @@ public sealed class CandidateResolutionTests
     [InlineData("resource-ids")]
     [InlineData("partial")]
     [InlineData("boundary")]
-    [InlineData("empty-checked")]
     [InlineData("partial-unenrolled")]
     [InlineData("selection-boundary")]
     public async Task Valid_resource_legacy_and_empty_projections_remain_honest(string kind)
@@ -77,9 +76,14 @@ public sealed class CandidateResolutionTests
     [InlineData("unresolved-wrong-type")]
     [InlineData("missing-scope-evidence")]
     [InlineData("resolved-with-unavailable-evidence")]
+    [InlineData("empty-checked")]
+    [InlineData("resource-not-applicable")]
+    [InlineData("empty-provenance-evidence")]
+    [InlineData("empty-legacy-evidence")]
+    [InlineData("legacy-resource-scope")]
     public async Task Unsafe_or_inconsistent_projection_refuses_without_exporting_peer_values(string mutation)
     {
-        var kind = mutation is "legacy-with-target" or "missing-legacy-evidence" ? "legacy" :
+        var kind = mutation is "legacy-with-target" or "missing-legacy-evidence" or "legacy-resource-scope" ? "legacy" :
             mutation is "unresolved-order" or "missing-scope-evidence" ? "partial" :
             mutation == "resolved-with-unavailable-evidence" ? "partial-unenrolled" : "resource";
         var response = Response(kind);
@@ -148,6 +152,25 @@ public sealed class CandidateResolutionTests
             case "unresolved-wrong-type": body["unresolved"] = "private-projection-canary"; break;
             case "missing-scope-evidence": body["unresolved"] = new JsonArray("exact-file-provenance-unavailable", "resource-participant-unenrolled"); break;
             case "resolved-with-unavailable-evidence": body["resolution"] = "resolved"; break;
+            case "empty-checked":
+                SetIds(selection);
+                participants.Clear();
+                body["unresolved"] = new JsonArray();
+                break;
+            case "resource-not-applicable": body["configuredValueAffinity"] = "not-applicable"; break;
+            case "empty-provenance-evidence":
+                SetIds(selection);
+                participants.Clear();
+                body["configuredValueAffinity"] = "not-applicable";
+                break;
+            case "empty-legacy-evidence":
+                SetIds(selection);
+                participants.Clear();
+                body["configuredValueAffinity"] = "not-applicable";
+                body["resolution"] = "partial";
+                body["unresolved"] = new JsonArray("legacy-target-unprojected");
+                break;
+            case "legacy-resource-scope": row!["resourceScope"] = "root"; break;
         }
         using var stream = new MemoryStream(JsonSerializer.SerializeToUtf8Bytes(response));
         var refusal = await Assert.ThrowsAsync<WorkerRefusal>(() =>
@@ -202,7 +225,7 @@ public sealed class CandidateResolutionTests
         {
             SetIds(selection);
             participants.Clear();
-            body["configuredValueAffinity"] = kind == "empty-checked" ? "checked" : "not-applicable";
+            body["configuredValueAffinity"] = "not-applicable";
             body["unresolved"] = new JsonArray();
         }
         else if (kind == "partial-unenrolled")
@@ -218,6 +241,7 @@ public sealed class CandidateResolutionTests
             SetIds(selection, Enumerable.Range(0, 4096).Select(index => $"Feature{index:D4}").ToArray());
             participants.Clear();
             body["unresolved"] = new JsonArray();
+            body["configuredValueAffinity"] = "not-applicable";
         }
 
         if (kind == "resource-ids")

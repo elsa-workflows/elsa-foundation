@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using Elsa.Cli.Worker;
 
 namespace Elsa.Cli.Tests;
 
@@ -55,4 +56,28 @@ internal static class CandidateHostResponseFixtures
     };
 
     public static string SuccessJson(string invocationId, string captureId) => Success(invocationId, captureId).ToJsonString();
+
+    public static JsonObject Success(WorkerCandidatePayload candidate)
+    {
+        var response = Success(candidate.InvocationId!, candidate.CaptureId!);
+        var body = response["configurationResolution"]!.AsObject();
+        body["shell"] = candidate.Shell;
+        body["environment"] = candidate.Environment;
+        var selection = body["selection"]!.AsObject();
+        foreach (var field in new[] { "acceptedFeatureIds", "requestedFeatureIds", "effectiveFeatureIds" })
+            selection[field] = new JsonArray(candidate.AcceptedFeatureIds!
+                .Select(id => (JsonNode?)JsonValue.Create(id)).ToArray());
+        selection["disabledFeatureIds"] = new JsonArray(candidate.RemovedFeatureIds!
+            .Select(id => (JsonNode?)JsonValue.Create(id)).ToArray());
+        var participants = body["participants"]!.AsArray();
+        if (candidate.AcceptedFeatureIds!.Count != 0)
+            participants[0]!["feature"] = candidate.AcceptedFeatureIds![0];
+        else
+        {
+            participants.Clear();
+            body["configuredValueAffinity"] = "not-applicable";
+            body["unresolved"] = new JsonArray();
+        }
+        return response;
+    }
 }

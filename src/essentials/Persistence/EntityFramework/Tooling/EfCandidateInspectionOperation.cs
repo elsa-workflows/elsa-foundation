@@ -52,6 +52,7 @@ public sealed class EfCandidateInspectionOperation
     }
 
     /// <summary>Reads one bounded private request and writes one correlated, redacted host response.</summary>
+    /// <exception cref="EfToolingRefusal">The selected host cannot inspect the candidate within the supported projection bounds.</exception>
     public async Task<int> RunAsync(Stream request, Stream response, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -470,6 +471,9 @@ public sealed class EfCandidateInspectionOperation
 
         if (rows.Count != 0)
             unresolved.Add("exact-file-provenance-unavailable");
+
+        if (rows.Count > MaximumRows - unresolved.Count)
+            throw HostUnavailable();
 
         var orderedUnresolved = unresolved.Order(StringComparer.Ordinal).ToArray();
         var partial = unresolved.Any(code => code != "exact-file-provenance-unavailable");

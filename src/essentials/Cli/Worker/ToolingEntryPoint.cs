@@ -244,6 +244,7 @@ public sealed class ToolingEntryPoint
                 candidate.CaptureId ?? string.Empty,
                 processExitCode,
                 cancellationToken);
+            WorkerContract.ValidateCandidateHostResponse(tooling, candidate, processExitCode);
             return new WorkerResponse { ExitCode = processExitCode, Tooling = tooling };
         }
         catch (WorkerRefusal)

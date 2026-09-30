@@ -5,6 +5,7 @@ using System.Collections.Concurrent;
 using System.Reflection;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Xunit;
 
 namespace Elsa.Cli.Tests;
@@ -418,6 +419,78 @@ public sealed class ToolingEntryPointTests : IDisposable
         Assert.Equal(3, root.GetProperty("candidate").GetProperty("files").GetArrayLength());
     }
 
+    [Theory]
+    [InlineData("shell")]
+    [InlineData("environment")]
+    [InlineData("selection")]
+    [InlineData("removal")]
+    public async Task Candidate_invocation_refuses_valid_projection_for_different_candidate_contents(string mutation)
+    {
+        var payload = Candidate() with { RemovedFeatureIds = ["Removed"] };
+        var state = CandidateHostState.For(payload);
+        state.ExpectedCandidate = payload;
+        Assert.Equal(0, (await InvokeCandidateApiAsync(HostMethod(nameof(CandidateHost.Success)),
+            "Example.Host", "/compiled/host", payload, CancellationToken.None)).ExitCode);
+        state.TransformSuccess = response =>
+        {
+            var body = response["configurationResolution"]!.AsObject();
+            var selection = body["selection"]!.AsObject();
+            switch (mutation)
+            {
+                case "shell": body["shell"] = "OtherShell"; break;
+                case "environment": body["environment"] = "OtherEnvironment"; break;
+                case "selection":
+                    foreach (var field in new[] { "acceptedFeatureIds", "requestedFeatureIds", "effectiveFeatureIds" })
+                        selection[field] = new JsonArray("OtherFeature");
+                    body["participants"]![0]!["feature"] = "OtherFeature";
+                    break;
+                case "removal": selection["disabledFeatureIds"] = new JsonArray(); break;
+            }
+        };
+
+        var refusal = await Assert.ThrowsAsync<WorkerRefusal>(() => InvokeCandidateApiAsync(
+            HostMethod(nameof(CandidateHost.Success)), "Example.Host", "/compiled/host", payload, CancellationToken.None));
+        Assert.Equal("candidate-response-invalid", refusal.Code);
+        Assert.Equal(3, refusal.ExitCode);
+        Assert.DoesNotContain("Other", refusal.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Candidate_invocation_accepts_additional_observed_disabled_features()
+    {
+        var payload = Candidate();
+        CandidateHostState.For(payload).TransformSuccess = response =>
+            response["configurationResolution"]!["selection"]!["disabledFeatureIds"]!.AsArray().Add("OtherDisabled");
+        var result = await InvokeCandidateApiAsync(HostMethod(nameof(CandidateHost.Success)),
+            "Example.Host", "/compiled/host", payload, CancellationToken.None);
+        Assert.Equal(0, result.ExitCode);
+    }
+
+    [Theory]
+    [InlineData("version")]
+    [InlineData("source")]
+    [InlineData("file-capture")]
+    public async Task Candidate_invocation_refuses_an_invalid_expected_capture(string mutation)
+    {
+        var payload = Candidate();
+        payload = mutation switch
+        {
+            "version" => payload with { Version = 99 },
+            "source" => payload with { Source = "OtherSource" },
+            _ => payload with { Files = payload.Files!.Select((file, index) => index == 0
+                ? file with { CaptureId = "cccccccccccccccccccccccccccccccc" } : file).ToArray() }
+        };
+        CandidateHostState.For(payload).ExpectedCandidate = payload;
+        var refusal = await Assert.ThrowsAsync<WorkerRefusal>(() => InvokeCandidateApiAsync(
+            HostMethod(nameof(CandidateHost.Success)), "Example.Host", "/compiled/host", payload, CancellationToken.None));
+        Assert.Equal("candidate-response-invalid", refusal.Code);
+        Assert.Equal(3, refusal.ExitCode);
+    }
+
+    [Fact]
+    public void Candidate_response_validation_requires_an_expected_candidate() =>
+        Assert.Throws<ArgumentNullException>(() => WorkerContract.ValidateCandidateHostResponse(default, null!, 0));
+
     [Fact]
     public async Task Candidate_invocation_preserves_a_valid_redacted_host_refusal()
     {
@@ -625,7 +698,7 @@ public sealed class ToolingEntryPointTests : IDisposable
         var capture = Guid.NewGuid().ToString("N");
         CandidateHostState.Register(invocation);
         candidateInvocationIds.Add(invocation);
-        return new WorkerCandidatePayload
+        var payload = new WorkerCandidatePayload
         {
             Version = 1,
             Source = "captured-workbench-json-v1",
@@ -642,6 +715,8 @@ public sealed class ToolingEntryPointTests : IDisposable
                 new WorkerCandidateFile { Name = "shells.Production.json", CaptureId = capture, Content = Convert.ToBase64String("{}"u8.ToArray()) }
             ]
         };
+        CandidateHostState.For(invocation).ExpectedCandidate = payload;
+        return payload;
     }
 
     private static Task<WorkerResponse> InvokeCandidateApiAsync(
@@ -665,8 +740,15 @@ public sealed class ToolingEntryPointTests : IDisposable
         public static CandidateInvocationState For(WorkerCandidatePayload payload) => States[payload.InvocationId!];
         public static CandidateInvocationState For(string invocationId) => States[invocationId];
 
-        public static string SuccessResponse(string invocation, string capture) =>
-            CandidateHostResponseFixtures.SuccessJson(invocation, capture);
+        public static string SuccessResponse(string invocation, string capture)
+        {
+            var state = For(invocation);
+            var response = CandidateHostResponseFixtures.Success(state.ExpectedCandidate!);
+            response["invocationId"] = invocation;
+            response["captureId"] = capture;
+            state.TransformSuccess?.Invoke(response);
+            return response.ToJsonString();
+        }
 
         public static string RefusalResponse(string invocation, string capture) =>
             $"{{\"version\":1,\"invocationId\":\"{invocation}\",\"captureId\":\"{capture}\",\"status\":\"refused\",\"exitCode\":2,\"error\":{{\"code\":\"candidate-capture-invalid\"}}}}";
@@ -674,6 +756,8 @@ public sealed class ToolingEntryPointTests : IDisposable
 
     private sealed class CandidateInvocationState
     {
+        public WorkerCandidatePayload? ExpectedCandidate { get; set; }
+        public Action<JsonObject>? TransformSuccess { get; set; }
         public string? LastRequest { get; set; }
         public int InvocationCount { get; set; }
         public Action? CancelCurrent { get; set; }
@@ -840,11 +924,15 @@ public sealed class ToolingEntryPointTests : IDisposable
             var candidate = document.RootElement.GetProperty("candidate");
             var invocation = candidate.GetProperty("invocationId").GetString()!;
             var capture = candidate.GetProperty("captureId").GetString()!;
-            if (wrongCorrelation)
-                invocation = "cccccccccccccccccccccccccccccccc";
             var json = refused
                 ? CandidateHostState.RefusalResponse(invocation, capture)
                 : CandidateHostState.SuccessResponse(invocation, capture);
+            if (wrongCorrelation)
+            {
+                var changed = JsonNode.Parse(json)!;
+                changed["invocationId"] = "cccccccccccccccccccccccccccccccc";
+                json = changed.ToJsonString();
+            }
             await response.WriteAsync(Encoding.UTF8.GetBytes(json), cancellationToken);
             return exitCode;
         }

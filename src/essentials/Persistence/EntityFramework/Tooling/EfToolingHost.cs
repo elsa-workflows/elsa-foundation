@@ -61,6 +61,7 @@ public static class EfToolingHost
         EfToolingContextOperation.RunAsync(request, response, context, LoadedAssemblies(), cancellationToken);
 
     /// <summary>Inspects a candidate from supplied file bytes using this host's loaded feature closure.</summary>
+    /// <exception cref="EfToolingRefusal">The selected host closure or bounded projection is unavailable; the worker emits its fixed outer refusal.</exception>
     public static Task<int> RunCandidateInspectionAsync(
         Stream request,
         Stream response,
