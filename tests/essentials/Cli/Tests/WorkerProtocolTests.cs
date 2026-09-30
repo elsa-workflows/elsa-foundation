@@ -144,8 +144,83 @@ public sealed class WorkerProtocolTests
             WorkerContract.ReadCandidateRequestAsync(input, cancellation.Token));
     }
 
+    [Theory]
+    [InlineData(1)]
+    [InlineData(4)]
+    public async Task Candidate_reader_accepts_exact_per_file_and_aggregate_decoded_limits(int filesAtLimit)
+    {
+        const int fileLimit = 1024 * 1024;
+        // Four selected layers are the complete file set, so a valid aggregate can reach 4 MiB but cannot exceed it.
+        var fileSizes = Enumerable.Repeat(2, 4).ToArray();
+        for (var index = 0; index < filesAtLimit; index++)
+            fileSizes[index] = fileLimit;
+
+        var json = CandidateRequestWithFileSizes(fileSizes).ToJsonString();
+        Assert.True(Encoding.UTF8.GetByteCount(json) < 8 * 1024 * 1024);
+
+        var request = await ReadCandidateRequestAsync(json);
+
+        Assert.NotNull(request);
+        Assert.Equal(4, request.Candidate!.Files!.Count);
+        Assert.Equal(filesAtLimit * fileLimit, request.Candidate.Files.Sum(file => Convert.FromBase64String(file.Content!).Length));
+    }
+
     [Fact]
-    public async Task Candidate_reader_refuses_json_deeper_than_sixty_four_levels_without_echoing_content()
+    public async Task Candidate_reader_rejects_one_byte_over_the_decoded_per_file_limit()
+    {
+        const int fileLimit = 1024 * 1024;
+        var json = CandidateRequestWithFileSizes([fileLimit + 1, 2, 2, 2]).ToJsonString();
+
+        var refusal = await Assert.ThrowsAsync<JsonException>(() => ReadCandidateRequestAsync(json));
+
+        Assert.Equal("The candidate worker request is invalid.", refusal.Message);
+    }
+
+    [Fact]
+    public async Task Candidate_reader_accepts_the_three_required_layers_without_the_optional_appsettings_overlay()
+    {
+        var request = JsonNode.Parse(CandidateRequestJson)!.AsObject();
+        var files = request["candidate"]!["files"]!.AsArray();
+        var optional = files.Single(file => file!["name"]!.GetValue<string>() == "appsettings.Production.json");
+        files.Remove(optional);
+
+        var parsed = await ReadCandidateRequestAsync(request.ToJsonString());
+
+        Assert.Equal(
+            ["appsettings.json", "shells.json", "shells.Production.json"],
+            parsed!.Candidate!.Files!.Select(file => file.Name).Order(StringComparer.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("appsettings.json")]
+    [InlineData("shells.json")]
+    [InlineData("shells.Production.json")]
+    public async Task Candidate_reader_requires_each_base_and_selected_environment_layer(string missingName)
+    {
+        var request = JsonNode.Parse(CandidateRequestJson)!.AsObject();
+        var files = request["candidate"]!["files"]!.AsArray();
+        var missing = files.Single(file => file!["name"]!.GetValue<string>() == missingName);
+        files.Remove(missing);
+
+        var refusal = await Assert.ThrowsAsync<JsonException>(() => ReadCandidateRequestAsync(request.ToJsonString()));
+
+        Assert.Equal("The candidate worker request is invalid.", refusal.Message);
+    }
+
+    [Fact]
+    public async Task Candidate_reader_rejects_noncanonical_base64_even_when_it_decodes_to_the_same_bytes()
+    {
+        Assert.Equal(Convert.FromBase64String("e30="), Convert.FromBase64String("e31="));
+        var request = JsonNode.Parse(CandidateRequestJson)!.AsObject();
+        request["candidate"]!["files"]![0]!["content"] = "e31=";
+
+        var refusal = await Assert.ThrowsAsync<JsonException>(() => ReadCandidateRequestAsync(request.ToJsonString()));
+
+        Assert.Equal("The candidate worker request is invalid.", refusal.Message);
+    }
+
+    [Fact]
+    public async Task Candidate_reader_refuses_an_overdeep_unknown_outer_field_without_echoing_content()
     {
         var nested = new string('[', 65) + "0" + new string(']', 65);
         var json = CandidateRequestJson[..^1] + ",\"nested\":" + nested + "}";
@@ -415,6 +490,26 @@ public sealed class WorkerProtocolTests
     {
         using var input = new MemoryStream(Encoding.UTF8.GetBytes(json));
         return await WorkerContract.ReadCandidateRequestAsync(input, CancellationToken.None);
+    }
+
+    private static JsonObject CandidateRequestWithFileSizes(IReadOnlyList<int> fileSizes)
+    {
+        var request = JsonNode.Parse(CandidateRequestJson)!.AsObject();
+        var files = request["candidate"]!["files"]!.AsArray();
+        Assert.Equal(files.Count, fileSizes.Count);
+        for (var index = 0; index < fileSizes.Count; index++)
+            files[index]!["content"] = Convert.ToBase64String(PadJsonObjectToSize(fileSizes[index]));
+        return request;
+    }
+
+    private static byte[] PadJsonObjectToSize(int size)
+    {
+        var source = Encoding.UTF8.GetBytes("{}");
+        Assert.True(source.Length <= size);
+        var result = new byte[size];
+        source.CopyTo(result, 0);
+        Array.Fill(result, (byte)' ', source.Length, size - source.Length);
+        return result;
     }
 
     private static JsonArray SelectionIds(int count) => new(Enumerable.Range(0, count)

@@ -30,6 +30,7 @@ public sealed class EfCandidateInspectionTests : IDisposable
     private const string UnknownSettingCanary = "candidate-unknown-private-2177";
     private const string MalformedFileCanary = "candidate-malformed-private-2177";
     private const string DifferentConnectionCanary = "candidate-different-connection-private-2177";
+    private const int MaximumCandidateFileBytes = 1024 * 1024;
     private const string InvocationId = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     private const string CaptureId = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 
@@ -148,21 +149,218 @@ public sealed class EfCandidateInspectionTests : IDisposable
         Assert.Empty(Directory.EnumerateFiles(temporaryDirectory));
     }
 
-    [Fact]
-    public async Task Host_refuses_when_the_selected_shell_environment_layer_is_missing()
+    [Theory]
+    [InlineData("appsettings.json")]
+    [InlineData("shells.json")]
+    [InlineData("shells.Production.json")]
+    public async Task Host_refuses_when_a_required_source_layer_is_missing(string missingLayer)
     {
         var candidate = CreateRuntimeCandidate();
         var files = (JsonArray)candidate.Request["candidate"]!["files"]!;
-        var selectedLayer = files.Single(file => file!["name"]!.GetValue<string>() == "shells.Production.json");
+        var selectedLayer = files.Single(file => file!["name"]!.GetValue<string>() == missingLayer);
         files.Remove(selectedLayer);
+        var discoveryCalls = 0;
+        var operation = CreateTrackingOperation(() => discoveryCalls++);
         using var response = new MemoryStream();
 
-        var exitCode = await RunCandidateAsync(candidate.Request, response, CancellationToken.None);
+        var exitCode = await RunOperationAsync(operation, candidate.Request, response, CancellationToken.None);
         using var document = JsonDocument.Parse(response.ToArray());
 
         Assert.Equal(2, exitCode);
         Assert.Equal("candidate-request-invalid", document.RootElement.GetProperty("error").GetProperty("code").GetString());
+        Assert.False(document.RootElement.TryGetProperty("configurationResolution", out _));
+        Assert.Equal(0, discoveryCalls);
         Assert.False(File.Exists(DatabasePath));
+        Assert.Empty(Directory.EnumerateFiles(temporaryDirectory));
+    }
+
+    [Fact]
+    public async Task Host_refuses_an_unselected_environment_layer_before_assembly_discovery()
+    {
+        var candidate = CreateRuntimeCandidate();
+        var files = (JsonArray)candidate.Request["candidate"]!["files"]!;
+        var layer = files.Single(file => file!["name"]!.GetValue<string>() == "appsettings.Production.json");
+        layer!["name"] = "appsettings.Staging.json";
+        var discoveryCalls = 0;
+        var operation = CreateTrackingOperation(() => discoveryCalls++);
+        using var response = new MemoryStream();
+
+        var exitCode = await RunOperationAsync(operation, candidate.Request, response, CancellationToken.None);
+        var responseJson = Encoding.UTF8.GetString(response.ToArray());
+        using var document = JsonDocument.Parse(responseJson);
+        var root = document.RootElement;
+
+        Assert.Equal(2, exitCode);
+        Assert.Equal("candidate-request-invalid", root.GetProperty("error").GetProperty("code").GetString());
+        Assert.False(root.TryGetProperty("configurationResolution", out _));
+        Assert.Equal(0, discoveryCalls);
+        AssertNoPrivateCandidateValues(responseJson);
+        Assert.False(File.Exists(DatabasePath));
+        Assert.Empty(Directory.EnumerateFiles(temporaryDirectory));
+    }
+
+    [Fact]
+    public async Task Host_accepts_the_three_required_layers_without_the_optional_appsettings_overlay()
+    {
+        var candidate = CreateRuntimeCandidate();
+        var files = (JsonArray)candidate.Request["candidate"]!["files"]!;
+        var optionalLayer = files.Single(file => file!["name"]!.GetValue<string>() == "appsettings.Production.json");
+        files.Remove(optionalLayer);
+        var discoveryCalls = 0;
+        var operation = CreateTrackingOperation(() => discoveryCalls++);
+        using var response = new MemoryStream();
+
+        var exitCode = await RunOperationAsync(operation, candidate.Request, response, CancellationToken.None);
+        var responseJson = Encoding.UTF8.GetString(response.ToArray());
+        using var document = JsonDocument.Parse(responseJson);
+
+        Assert.Equal(0, exitCode);
+        Assert.Equal("ok", document.RootElement.GetProperty("status").GetString());
+        Assert.Equal(1, discoveryCalls);
+        AssertNoPrivateCandidateValues(responseJson);
+        Assert.False(File.Exists(DatabasePath));
+        Assert.Empty(Directory.EnumerateFiles(temporaryDirectory));
+    }
+
+    [Fact]
+    public async Task Host_accepts_four_one_mebibyte_sources_at_the_exact_per_file_and_aggregate_limits()
+    {
+        var candidate = CreateRuntimeCandidate();
+        var files = (JsonArray)candidate.Request["candidate"]!["files"]!;
+        foreach (var fileNode in files)
+        {
+            var file = Assert.IsType<JsonObject>(fileNode);
+            var bytes = Convert.FromBase64String(file["content"]!.GetValue<string>());
+            file["content"] = Convert.ToBase64String(PadWithSpaces(bytes, MaximumCandidateFileBytes));
+        }
+
+        var requestJson = candidate.Request.ToJsonString();
+        Assert.True(Encoding.UTF8.GetByteCount(requestJson) < 8 * 1024 * 1024);
+        var discoveryCalls = 0;
+        var operation = CreateTrackingOperation(() => discoveryCalls++);
+        using var response = new MemoryStream();
+
+        var exitCode = await RunOperationAsync(operation, candidate.Request, response, CancellationToken.None);
+        var responseJson = Encoding.UTF8.GetString(response.ToArray());
+        using var document = JsonDocument.Parse(responseJson);
+
+        Assert.Equal(0, exitCode);
+        Assert.Equal("ok", document.RootElement.GetProperty("status").GetString());
+        Assert.Equal(1, discoveryCalls);
+        AssertNoPrivateCandidateValues(responseJson);
+        Assert.False(File.Exists(DatabasePath));
+        Assert.Empty(Directory.EnumerateFiles(temporaryDirectory));
+    }
+
+    [Fact]
+    public async Task Host_refuses_one_byte_over_the_decoded_file_limit_before_assembly_discovery()
+    {
+        var candidate = CreateRuntimeCandidate();
+        ReplaceCandidateFile(candidate.Request, "appsettings.Production.json",
+            PadWithSpaces(Encoding.UTF8.GetBytes("{}"), MaximumCandidateFileBytes + 1));
+        var discoveryCalls = 0;
+        var operation = CreateTrackingOperation(() => discoveryCalls++);
+        using var response = new MemoryStream();
+
+        var exitCode = await RunOperationAsync(operation, candidate.Request, response, CancellationToken.None);
+        var responseJson = Encoding.UTF8.GetString(response.ToArray());
+        using var document = JsonDocument.Parse(responseJson);
+        var root = document.RootElement;
+
+        Assert.Equal(2, exitCode);
+        Assert.Equal("candidate-request-invalid", root.GetProperty("error").GetProperty("code").GetString());
+        Assert.False(root.TryGetProperty("configurationResolution", out _));
+        Assert.Equal(0, discoveryCalls);
+        AssertNoPrivateCandidateValues(responseJson);
+        Assert.False(File.Exists(DatabasePath));
+        Assert.Empty(Directory.EnumerateFiles(temporaryDirectory));
+    }
+
+    [Theory]
+    [InlineData(64, EfToolingExitCode.Success)]
+    [InlineData(65, EfToolingExitCode.ResolutionFailure)]
+    public async Task Host_enforces_decoded_source_json_depth_at_sixty_four_nested_objects(int depth, int expectedExitCode)
+    {
+        var candidate = CreateRuntimeCandidate();
+        ReplaceCandidateFile(candidate.Request, "appsettings.Production.json",
+            NestedObjectJson(depth, depth == 65 ? JsonSerializer.Serialize(MalformedFileCanary) : "0"));
+        var discoveryCalls = 0;
+        var operation = CreateTrackingOperation(() => discoveryCalls++);
+        using var response = new MemoryStream();
+
+        var exitCode = await RunOperationAsync(operation, candidate.Request, response, CancellationToken.None);
+        var responseJson = Encoding.UTF8.GetString(response.ToArray());
+        using var document = JsonDocument.Parse(responseJson);
+        var root = document.RootElement;
+
+        Assert.Equal(expectedExitCode, exitCode);
+        if (depth == 64)
+        {
+            Assert.Equal("ok", root.GetProperty("status").GetString());
+            Assert.True(root.TryGetProperty("configurationResolution", out _));
+            Assert.Equal(1, discoveryCalls);
+        }
+        else
+        {
+            Assert.Equal("candidate-capture-invalid", root.GetProperty("error").GetProperty("code").GetString());
+            Assert.False(root.TryGetProperty("configurationResolution", out _));
+            Assert.Equal(0, discoveryCalls);
+        }
+
+        AssertNoPrivateCandidateValues(responseJson);
+        Assert.False(File.Exists(DatabasePath));
+        Assert.Empty(Directory.EnumerateFiles(temporaryDirectory));
+    }
+
+    [Theory]
+    [InlineData("[\"candidate-source-private-2177\"]")]
+    [InlineData("{\"Private\":\"candidate-source-private-2177\",\"private\":\"second-value\"}")]
+    public async Task Host_rejects_unsupported_decoded_source_shapes_before_assembly_discovery(string sourceJson)
+    {
+        var candidate = CreateRuntimeCandidate();
+        ReplaceCandidateFile(candidate.Request, "appsettings.Production.json", Encoding.UTF8.GetBytes(sourceJson));
+        var discoveryCalls = 0;
+        var operation = CreateTrackingOperation(() => discoveryCalls++);
+        using var response = new MemoryStream();
+
+        var exitCode = await RunOperationAsync(operation, candidate.Request, response, CancellationToken.None);
+        var responseJson = Encoding.UTF8.GetString(response.ToArray());
+        using var document = JsonDocument.Parse(responseJson);
+        var root = document.RootElement;
+
+        Assert.Equal(2, exitCode);
+        Assert.Equal("candidate-capture-invalid", root.GetProperty("error").GetProperty("code").GetString());
+        Assert.False(root.TryGetProperty("configurationResolution", out _));
+        Assert.Equal(0, discoveryCalls);
+        AssertNoPrivateCandidateValues(responseJson, "candidate-source-private-2177", "second-value");
+        Assert.False(File.Exists(DatabasePath));
+        Assert.Empty(Directory.EnumerateFiles(temporaryDirectory));
+    }
+
+    [Fact]
+    public async Task Host_rejects_noncanonical_base64_before_assembly_discovery()
+    {
+        Assert.Equal(Convert.FromBase64String("e30="), Convert.FromBase64String("e31="));
+        var candidate = CreateRuntimeCandidate();
+        var file = ((JsonArray)candidate.Request["candidate"]!["files"]!).Single(node =>
+            node!["name"]!.GetValue<string>() == "appsettings.json");
+        file!["content"] = "e31=";
+        var discoveryCalls = 0;
+        var operation = CreateTrackingOperation(() => discoveryCalls++);
+        using var response = new MemoryStream();
+
+        var exitCode = await RunOperationAsync(operation, candidate.Request, response, CancellationToken.None);
+        var responseJson = Encoding.UTF8.GetString(response.ToArray());
+        using var document = JsonDocument.Parse(responseJson);
+        var root = document.RootElement;
+
+        Assert.Equal(2, exitCode);
+        Assert.Equal("candidate-capture-invalid", root.GetProperty("error").GetProperty("code").GetString());
+        Assert.False(root.TryGetProperty("configurationResolution", out _));
+        Assert.Equal(0, discoveryCalls);
+        AssertNoPrivateCandidateValues(responseJson);
+        Assert.False(File.Exists(DatabasePath));
+        Assert.Empty(Directory.EnumerateFiles(temporaryDirectory));
     }
 
     [Fact]
@@ -1108,6 +1306,38 @@ public sealed class EfCandidateInspectionTests : IDisposable
         json.CopyTo(result, 0);
         Array.Fill(result, (byte)' ', json.Length, size - json.Length);
         return result;
+    }
+
+    private static byte[] NestedObjectJson(int objectDepth, string leafJson)
+    {
+        var json = leafJson;
+        for (var depth = 0; depth < objectDepth; depth++)
+            json = "{\"nested\":" + json + "}";
+        return Encoding.UTF8.GetBytes(json);
+    }
+
+    private static void ReplaceCandidateFile(JsonObject request, string name, byte[] bytes)
+    {
+        var file = ((JsonArray)request["candidate"]!["files"]!).Single(node =>
+            node!["name"]!.GetValue<string>() == name);
+        file!["content"] = Convert.ToBase64String(bytes);
+    }
+
+    private static EfCandidateInspectionOperation CreateTrackingOperation(Action onDiscovery) =>
+        new(() =>
+        {
+            onDiscovery();
+            return EfConfigurationProbeTests.HostAssemblies;
+        });
+
+    private void AssertNoPrivateCandidateValues(string responseJson, params string[] additionalValues)
+    {
+        foreach (var value in new[]
+                 {
+                     ConnectionCanary, UnknownSettingCanary, MalformedFileCanary, DifferentConnectionCanary,
+                     DatabasePath, "Data Source="
+                 }.Concat(additionalValues))
+            Assert.DoesNotContain(value, responseJson, StringComparison.Ordinal);
     }
 
     private sealed class CountingStream(byte[] bytes) : MemoryStream(bytes, writable: false)
