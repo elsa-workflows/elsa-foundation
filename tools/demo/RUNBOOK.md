@@ -522,17 +522,19 @@ stops being counted, which is why the older stop-publish-start route also finali
 withtags 5201
 withtags 5202
 status a
-note 5202 "written after finalization"
+note 5202 "written after finalization on B"
+note 5201 "written after finalization on A"
 rows a
 ```
 
-> **Your question 3, the rest:** "Both hosts serve tags now. Version 2 reads the old rows through an upcaster, so they show no tags rather than an error, and rows written from now on are stamped 2.0.0. A background pass rewrites the old rows, and when it has finished, every row is 2.0.0."
+> **Your question 3, the rest:** "Both hosts serve tags now. Version 2 reads the old rows through an upcaster, so they show no tags rather than an error, and rows written from now on are stamped 2.0.0. The host has already started rewriting the old rows in the background, so the table now reads 2.0.0 throughout."
 >
 > **Your question 2, the rest:** "Nobody flipped a switch on either host. The moment the last live host could read the new version, it turned on everywhere."
 
-- **Audience sees:** `HTTP 200` on both, the notes written before the upgrade with `"tags":[]`. In the browser, reload tabs 2 and 3: 404 and the 409 reason are gone. Then `rows`: the new note is stamped `2.0.0` with `[]`.
+- **Audience sees:** `HTTP 200` on both, the notes written before the upgrade with `"tags":[]`. In the browser, reload tabs 2 and 3: 404 and the 409 reason are gone. Then `rows`: the two notes just written are stamped `2.0.0` with `[]`, and so are the four from before.
 - **Say:** "The moment every host could read 2.0.0, the platform turned the feature on, everywhere, without anybody flipping anything. The old notes read as 'no tags' through the upcaster.
-  In the background the host now rewrites the old rows into the new format; when none is left, the version is recorded complete."
+  In the background the host rewrites the old rows into the new format; when none is left, the version is recorded complete." For `rows`: "The two notes I just wrote are stamped 2.0.0: from now on, a host writes the new format.
+  So are the older four, in 1.0.0 a minute ago. The host rewrote them itself, within seconds of the finalization."
 - **Expect:** `HTTP 200` twice, then the status below. On host A the answers go **404** (A not switched yet, what `waitfor` waited out), then **409** (A has switched and is evaluating the schema version; the
   reason is the one from 2.3), then **200**. The 409 is short on A, often too short to be seen (the evaluation runs every 2 s, and A has just re-published what it reads), so after `waitfor` `withtags 5201` is a 200 or, for
   a moment, a 409. Host B has answered 409 since 2.2 and turns to 200 up to two seconds after A: if `withtags 5202` is still a 409, say "it is checking that this is safe", wait two seconds, repeat.
@@ -541,17 +543,28 @@ rows a
   ```
   SamplesNotes (Samples.Notes): finalized at 2.0.0; this host reads [1.0.0, 2.0.0]
     complete from 1.0.0        <- for about 20 s after finalization, then: complete from 2.0.0
+    backfill to 2.0.0 claimed by host-a (...) until ...    <- while the host rewrites the old rows, a few seconds
   members: 2 in Cluster.Membership, ...
     host-a: Active, live, ...   SamplesNotes: reads 1.0.0, 2.0.0
     host-b: Active, live, ...   SamplesNotes: reads 1.0.0, 2.0.0
   ```
-  Run `status` again after about 20 s (a good moment for questions): `complete from 2.0.0`. `rows` is the second thing to show then: see 2.7.
-- **Time:** finalization 0 to 3 s after A switched, on B up to 2 s later (repeat `withtags` if you get 409 for a moment); `complete from 2.0.0` 16 to 20 s after finalization (measured: 18 to 20 s; 30 to 34 s after the publish).
+  and the `rows` of the two new notes, with the older four beside them:
+
+  ```
+  note                             schema  tags
+  written on host A                2.0.0   []
+  ...
+  written after finalization on B  2.0.0   []
+  written after finalization on A  2.0.0   []
+  ```
+  Run `status` again after about 20 s (a good moment for questions): `complete from 2.0.0`. 2.7 shows it, with `rows` once more.
+- **Time:** finalization 0 to 3 s after A switched, on B up to 2 s later (repeat `withtags` if you get 409 for a moment); the old rows are rewritten within a few seconds of it (measured: all four already at `2.0.0` when both hosts first answered 200, so the
+  in-between state, new rows at 2.0.0 beside old rows at 1.0.0, is too short to show, and the runbook does not promise it); `complete from 2.0.0` 16 to 20 s after finalization (measured: 18 to 20 s; 27 to 34 s after the publish).
 - **If it goes wrong:** still 409 after 30 s and `waits for: host-a` in `status a`: A has not switched (see 2.5). A `waits for:` line naming a host you did not start: a leftover member from an earlier rehearsal: `bash tools/demo/reset.sh` and set up again.
 
 ### 2.7 The old rows are brought up to date
 
-About twenty seconds after the version finalized (the moment `status` says `complete from 2.0.0`), from tab 2:
+About twenty seconds after the version finalized, from tab 2 (the rewrite itself is over within seconds; the twenty seconds are the platform making sure that no row of the old version is left, and recording the version complete):
 
 ```bash
 status a
@@ -561,19 +574,19 @@ rows a
 > **Your question 3, closed:** "Every row, old and new, is stamped 2.0.0 now. The two versions ran side by side on one table, and nobody had to stop anything or rewrite the data by hand."
 
 - **Audience sees:** `complete from 2.0.0`, and `rows` with every note stamped `2.0.0` and a tag list (`[]`): the four notes written before the finalization were rewritten by the host in the background.
-- **Say:** "The host did that itself, one row at a time, once every host could read the new version. When no row of the old version is left, the platform records the version complete. Until then, the old rows stayed readable through the upcaster."
+- **Say:** "The host did that itself, one row at a time, once every host could read the new version. When no row of the old version is left, the platform records the version complete: that is this line. Until then, the old rows stayed readable through the upcaster."
 - **Expect:**
 
   ```
-  note                            schema  tags
-  written on host A               2.0.0   []
-  written on host B               2.0.0   []
-  written by A on release 1.0.0   2.0.0   []
-  written by B on release 1.1.0   2.0.0   []
-  written after finalization on B 2.0.0   []
-  written after finalization on A 2.0.0   []
+  note                             schema  tags
+  written on host A                2.0.0   []
+  written on host B                2.0.0   []
+  written by A on release 1.0.0    2.0.0   []
+  written by B on release 1.1.0    2.0.0   []
+  written after finalization on B  2.0.0   []
+  written after finalization on A  2.0.0   []
   ```
-- **Time:** 16 to 20 s after finalization, as in 2.6. If `rows` still shows `1.0.0`, run it again in a few seconds; `status a` says `complete from 2.0.0` when the last old row is gone.
+- **Time:** `complete from 2.0.0` 16 to 20 s after finalization, as in 2.6. If `rows` still shows `1.0.0`, run it again in a few seconds; `status a` says `complete from 2.0.0` when the last old row is gone.
 - **If it goes wrong:** rows still at `1.0.0` after a minute: `status a` shows what the family waits for, and the log of tab A or B says why the backfill is not moving.
 
 ### 2.8 Recap: your three questions
