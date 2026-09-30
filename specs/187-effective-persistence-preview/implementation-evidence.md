@@ -117,6 +117,10 @@ The narrow combined count guard runs after all findings are accumulated and befo
 
 These tests do not close T007/T012 or claim a complete preparer matrix, all per-implementation branches, real frontend actor/process lifecycle, final affected suites or delivery gates.
 
+## Response checkpoint maps
+
+After `537bb0a67`, root regenerated all maps and the byte-for-byte check passed. Only test-map.md changed, adding the shared CandidateHostResponseFixtures.cs link; no links were removed and manifest/project/package counts stayed byte-identical. Both v1/v2 findings reports remain byte-identical and were reviewed: no direct package-version cluster or new runtime-to-design signal. This is current navigation evidence, not a final architecture/full-suite/head/main gate.
+
 ## Still required
 
 No acceptance matrix row is closed by these foundations. Complete host branch/parity and decoded-file boundary coverage, actual host removal preservation, installed-closure worker dispatch, full response contents, CLI command/formatting, real actor/runtime parity and child lifecycle/adverse proofs remain incomplete. T005 and T007–T020, plus the full affected suites, architecture/maps, exact-head review/CI and exact-main delivery gates remain open. The specification stays **In progress**.
