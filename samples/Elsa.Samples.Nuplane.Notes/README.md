@@ -51,10 +51,12 @@ of its own, so a build of one never overwrites the other.
 
 ## Build, pack, feed layout
 
+Release 1.0.0 into `artifacts/demo/hosts/a/feed`, then release 1.1.0 into the same feed, then release 1.1.0 into the feed of host b only:
+
 ```bash
-bash tools/demo/pack.sh 1     # release 1.0.0, into artifacts/demo/hosts/a/feed
-bash tools/demo/pack.sh 2     # release 1.1.0, into the same feed
-bash tools/demo/pack.sh 2 --host b    # into the feed of host b only
+bash tools/demo/pack.sh 1
+bash tools/demo/pack.sh 2
+bash tools/demo/pack.sh 2 --host b
 ```
 
 `pack.sh` builds `Elsa.Foundation.Host` (skip with `--no-host`), packs the module into the feed of each `--host` given (default
@@ -87,37 +89,65 @@ The database connection is taken from the environment variable `ELSA_EF_CONNECTI
 The scripts hand it to the host as an environment variable and never write it to disk or print it. When it is unset, Sqlite
 uses the file `artifacts/demo/notes.db`; PostgreSql always needs it (`--provider PostgreSql`).
 
-Requirements: `dotnet`, `rsync`, `curl` and a working `python3` (the scripts check for it and say so when it is missing). The PostgreSQL walkthrough also needs Docker and the `postgres:16-alpine` image.
+Requirements: `dotnet`, `rsync`, `curl`, `jq` and a working `python3` (the scripts check for the tools they use and name the one that is missing). The PostgreSQL walkthrough also needs Docker and the `postgres:16-alpine` image.
+
+To present it, use `tools/demo/RUNBOOK.md`: the script for both acts, with every command, expected output and timing.
+`bash tools/demo/prepack.sh` does everything slow beforehand and stages both releases; `bash tools/demo/publish.sh <1|2> --host NAME`
+is then a file copy into that host's feed; `bash tools/demo/reset.sh` puts everything back; `bash tools/demo/rehearse.sh` plays
+both acts unattended. The commands the presenter types (`note`, `withtags`, `reload`, `status`, `waitfor`, ...) are the shell functions of
+`tools/demo/helpers.sh`, which the runbook sources and `rehearse.sh` sources too, so the rehearsal asserts the output of exactly what is typed.
 
 ### Walkthrough: one host
 
 Release 1.0.0 first, then 1.1.0, on one host. The policy is `Validate`, so a host whose database is behind refuses to start
 the module rather than migrate underneath the operator; the migration is applied by the tool.
 
+Every block here can be pasted into an interactive zsh: there is no comment inside one (zsh runs a pasted `#` line as a command), so what a
+command prints or means is said in the text around it.
+
+First, release 1.0.0. The tool installs the feed's packages for the host and creates the database.
+
 ```bash
 HOST=(--host artifacts/demo/hosts/a --environment Development --provider Sqlite --modules Samples.Notes)
-
-# 1. Release 1.0.0. The tool installs the feed's packages for the host and creates the database.
 bash tools/demo/pack.sh 1
 bash tools/demo/run-host.sh a --port 5101 --prepare-only
 bash tools/demo/elsa.sh persistence apply --restore "${HOST[@]}"
-bash tools/demo/run-host.sh a --port 5101                             # keep it running in its own terminal
+```
+
+Start the host in its own terminal, and use it from this one. Release 1.0.0 has no `with-tags` endpoint, so the last request is a 404.
+
+```bash
+bash tools/demo/run-host.sh a --port 5101
+```
+
+```bash
 curl -X POST localhost:5101/demo/notes -H 'content-type: application/json' -d '{"text":"hello"}'
 curl localhost:5101/demo/notes
-curl -i localhost:5101/demo/notes/with-tags                           # 404: release 1.0.0 has no such endpoint
+curl -i localhost:5101/demo/notes/with-tags
+```
 
-# 2. Stop the host, pack release 1.1.0 into the same feed, start it again.
+Second, stop the host, pack release 1.1.0 into the same feed, and start it again. The host installs 1.1.0 and refuses the shell, saying why:
+`NotesSqliteDbContext has pending migrations: <id>_AddTags. Apply them out of process (dotnet elsa persistence apply) ...`.
+
+```bash
 bash tools/demo/pack.sh 2 --no-host
 bash tools/demo/run-host.sh a --port 5101
-#    The host installs 1.1.0 and refuses the shell, saying why:
-#    NotesSqliteDbContext has pending migrations: <id>_AddTags. Apply them out of process (dotnet elsa persistence apply) ...
-curl -i localhost:5101/demo/notes                                     # 500, and /health/ready is 503
+```
 
-# 3. Apply the migration.
-bash tools/demo/elsa.sh persistence apply "${HOST[@]}"                # applies AddTags
-curl localhost:5101/demo/notes                                        # the next request activates the shell
-curl localhost:5101/demo/notes/with-tags                              # 200 within seconds; the old notes have "tags": []
-curl -X POST localhost:5101/demo/notes/<id>/tags -H 'content-type: application/json' -d '{"tags":["demo"]}'
+The request is a 500, and `/health/ready` is 503:
+
+```bash
+curl -i localhost:5101/demo/notes
+```
+
+Third, apply the migration (`AddTags`). The next request activates the shell, and `with-tags` answers 200 within seconds, with `"tags": []` on the old notes.
+Replace `NOTE_ID` with the id of a note that `GET /demo/notes` printed.
+
+```bash
+bash tools/demo/elsa.sh persistence apply "${HOST[@]}"
+curl localhost:5101/demo/notes
+curl localhost:5101/demo/notes/with-tags
+curl -X POST localhost:5101/demo/notes/NOTE_ID/tags -H 'content-type: application/json' -d '{"tags":["demo"]}'
 ```
 
 If the shell does not activate by itself after the apply, re-compose it: start the host with a management key and post to
@@ -146,44 +176,78 @@ in about 12 s rather than 35. The margin is deliberate: a heartbeat that stalls 
 drop a 1.0.0 host from the count in the middle of the demo, which would finalize `2.0.0` early. The same steps run on Sqlite (one machine only):
 leave the container out and leave `ELSA_EF_CONNECTION` unset, and drop `--provider PostgreSql`.
 
+First, a database. Cached images only: `postgres:16-alpine`.
+
 ```bash
-# 0. A database. Cached images only: postgres:16-alpine.
 docker run -d --name elsa-demo-pg -e POSTGRES_PASSWORD=demo -e POSTGRES_DB=elsa -p 127.0.0.1:55432:5432 postgres:16-alpine
 export ELSA_EF_CONNECTION="Host=127.0.0.1;Port=55432;Database=elsa;Username=postgres;Password=demo"
 MODULES=Samples.Notes,Cluster.Membership
 DB=(--environment Development --provider PostgreSql --modules $MODULES)
+```
 
-# 1. Both hosts on release 1.0.0, each with its own feed. Start host a, wait until it is ready, then host b.
+Second, both hosts on release 1.0.0, each with its own feed. The `apply` creates both modules' tables.
+
+```bash
 bash tools/demo/pack.sh 1 --host a --host b
 bash tools/demo/run-host.sh a --port 5101 --provider PostgreSql --cluster host-a --fast-membership --prepare-only
-bash tools/demo/elsa.sh persistence apply --restore --host artifacts/demo/hosts/a "${DB[@]}"   # creates both modules' tables
-bash tools/demo/run-host.sh a --port 5101 --provider PostgreSql --cluster host-a --fast-membership   # terminal 1
-bash tools/demo/run-host.sh b --port 5102 --provider PostgreSql --cluster host-b --fast-membership   # terminal 2
-docker exec elsa-demo-pg psql -U postgres elsa -c 'select "HostId","Status" from elsa_cluster_members'   # host-a and host-b, Active
+bash tools/demo/elsa.sh persistence apply --restore --host artifacts/demo/hosts/a "${DB[@]}"
+```
+
+Start host a in terminal 1, wait until it is ready, then host b in terminal 2:
+
+```bash
+bash tools/demo/run-host.sh a --port 5101 --provider PostgreSql --cluster host-a --fast-membership
+```
+
+```bash
+bash tools/demo/run-host.sh b --port 5102 --provider PostgreSql --cluster host-b --fast-membership
+```
+
+The membership table lists host-a and host-b, both Active. A note written on one host is listed from either: one database.
+
+```bash
+docker exec elsa-demo-pg psql -U postgres elsa -c 'select "HostId","Status" from elsa_cluster_members'
 curl -X POST localhost:5101/demo/notes -H 'content-type: application/json' -d '{"text":"written on a"}'
 curl -X POST localhost:5102/demo/notes -H 'content-type: application/json' -d '{"text":"written on b"}'
-curl localhost:5101/demo/notes                                        # both notes, from either host: one database
+curl localhost:5101/demo/notes
+```
 
-# 2. Host b moves to release 1.1.0; host a stays on 1.0.0. Stop host b (Ctrl-C), then:
+Third, host b moves to release 1.1.0 while host a stays on 1.0.0. Stop host b (Ctrl-C), then pack and start it again. It is refused: `AddTags` is pending.
+
+```bash
 bash tools/demo/pack.sh 2 --host b
-bash tools/demo/run-host.sh b --port 5102 --provider PostgreSql --cluster host-b --fast-membership  # refused: AddTags is pending
-bash tools/demo/elsa.sh persistence apply --host artifacts/demo/hosts/b "${DB[@]}"                # applies AddTags
-curl localhost:5102/demo/notes                                        # the next request activates b's shell: 200
-curl -i localhost:5102/demo/notes/with-tags                           # 409 schema-version-not-finalized: host a reads only 1.0.0
-curl -X POST localhost:5101/demo/notes -H 'content-type: application/json' -d '{"text":"a, still 1.0.0"}'   # 200
-bash tools/demo/elsa.sh persistence status --host artifacts/demo/hosts/b "${DB[@]}" --family SamplesNotes
-#    SamplesNotes: finalized at 1.0.0; this host reads [1.0.0, 2.0.0]
-#      2.0.0: pending, held by nothing; waits for every counted member to read it
+bash tools/demo/run-host.sh b --port 5102 --provider PostgreSql --cluster host-b --fast-membership
+```
 
-# 3. Host a follows. Stop host a (Ctrl-C), then:
+Apply `AddTags`. The next request activates b's shell (200), and `with-tags` on b is 409 `schema-version-not-finalized` because host a reads only 1.0.0. A write to host a still answers 200.
+The status ends with `2.0.0: pending, held by nothing; waits for every counted member to read it`.
+
+```bash
+bash tools/demo/elsa.sh persistence apply --host artifacts/demo/hosts/b "${DB[@]}"
+curl localhost:5102/demo/notes
+curl -i localhost:5102/demo/notes/with-tags
+curl -X POST localhost:5101/demo/notes -H 'content-type: application/json' -d '{"text":"a, still 1.0.0"}'
+bash tools/demo/elsa.sh persistence status --host artifacts/demo/hosts/b "${DB[@]}" --family SamplesNotes
+```
+
+Fourth, host a follows. Stop host a (Ctrl-C), then pack and start it again. With host a gone `with-tags` answers 200 on both hosts, and the old notes have `"tags": []`.
+The status says `finalized at 2.0.0`, and `complete from 2.0.0` once the backfill has rewritten the old rows (see the timings below).
+
+```bash
 bash tools/demo/pack.sh 2 --host a --no-host
 bash tools/demo/run-host.sh a --port 5101 --provider PostgreSql --cluster host-a --fast-membership
-curl localhost:5101/demo/notes/with-tags                              # 200 on both hosts; old notes have "tags": []
-curl localhost:5102/demo/notes/with-tags
-bash tools/demo/elsa.sh persistence status --host artifacts/demo/hosts/a "${DB[@]}"
-#    SamplesNotes: finalized at 2.0.0, and "complete from 2.0.0" once the backfill has rewritten the old rows (see the timings below)
+```
 
-docker rm -f elsa-demo-pg                                             # when done
+```bash
+curl localhost:5101/demo/notes/with-tags
+curl localhost:5102/demo/notes/with-tags
+bash tools/demo/elsa.sh persistence status --host artifacts/demo/hosts/a "${DB[@]}" --family SamplesNotes
+```
+
+When done:
+
+```bash
+docker rm -f elsa-demo-pg
 ```
 
 Timings on a laptop, to plan the pauses: `pack.sh` 5 to 15 s once the host is built (up to a minute or two while other builds
@@ -202,31 +266,37 @@ it is ready the status usually says `complete from 2.0.0` already; before then i
 
 A hold keeps a version from finalizing until an operator releases it: a canary. Place it before the host runs 1.1.0.
 
+Hold the family, start the host, and ask for `with-tags`. The answer is 409: "It is held by an operator: version '2.0.0' of schema family 'SamplesNotes' ...".
+Writing a note still works: the row is stamped 1.0.0 with no tags.
+
 ```bash
-bash tools/demo/elsa.sh persistence hold    "${HOST[@]}" --family SamplesNotes --version 2.0.0 --reason "canary" --operator me
+bash tools/demo/elsa.sh persistence hold "${HOST[@]}" --family SamplesNotes --version 2.0.0 --reason "canary" --operator me
 bash tools/demo/run-host.sh a --port 5101
-curl -i localhost:5101/demo/notes/with-tags        # 409: "It is held by an operator: version '2.0.0' of schema family 'SamplesNotes' ..."
-curl -X POST localhost:5101/demo/notes ...          # still works; the row is stamped 1.0.0 with no tags
-bash tools/demo/elsa.sh persistence status  "${HOST[@]}" --family SamplesNotes
+```
+
+```bash
+curl -i localhost:5101/demo/notes/with-tags
+bash tools/demo/elsa.sh persistence status "${HOST[@]}" --family SamplesNotes
+```
+
+Release the hold. `with-tags` answers 200 at the next evaluation (2 seconds here), with no restart.
+
+```bash
 bash tools/demo/elsa.sh persistence release "${HOST[@]}" --family SamplesNotes --version 2.0.0 --operator me
-curl localhost:5101/demo/notes/with-tags           # 200 at the next evaluation (5 seconds here), no restart
+curl localhost:5101/demo/notes/with-tags
 ```
 
 ## Known limitations
 
-- **Hot-installing 1.1.0 into a running 1.0.0 host is not refused yet, and does not complete.** The folder watcher installs the
-  package and reloads the shell without a restart, and the new endpoints appear, but the host goes on counting the 1.0.0
-  assembly it already loaded, so it never finalizes `2.0.0` and `NotesWithTags` stays at 409 until the host restarts. Stop the
-  host, pack, and start it again, as in the walkthroughs.
 - `dotnet elsa persistence` reads the packages a host has installed, so a host must have reconciled its feed at least once
   (or the tool must be run with `--restore`) before the tool can see the module.
-- No host or tool lists the cluster's members. The walkthrough reads the membership table (`elsa_cluster_members`) with `psql`,
-  and `persistence status` shows the finalized version and that `2.0.0` "waits for every counted member to read it" without
-  naming the member that cannot yet.
 - Start the two hosts one after the other, not in the same instant: when both create the membership database's identity row
   at once, the loser logs a duplicate-key error on that insert at startup and carries on.
-- `POST /_module-management/reload` re-composes the shells; it does not by itself say why a shell refused to activate. The host's
-  log does.
+- Do not call `POST /_module-management/reconcile`: it does not answer. The folder watcher reconciles a feed by itself, and
+  `/reload` is the only management endpoint the demo uses.
+- The walkthroughs below stop, pack and start a host. Since in-place upgrades work, that is the fallback: dropping 1.1.0 into a
+  running host's feed installs it, the host refuses to switch while `AddTags` is pending (`/reload` answers 409 naming the module
+  and the `persistence apply` command), and after the apply `/reload` answers 200. `tools/demo/RUNBOOK.md` shows that route.
 
 ## Regenerating the migrations
 
