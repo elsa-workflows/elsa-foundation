@@ -1,3 +1,6 @@
+using System.Diagnostics;
+using System.Globalization;
+using System.Text;
 using CShells.Configuration;
 using CShells.Features;
 using Elsa.Persistence.EntityFramework;
@@ -63,6 +66,10 @@ public sealed class ResourceProbePostMigrationAction : IEfPostMigrationAction
 
 public sealed class ResourceProbeShellDefaults : IEfToolingShellDefaults
 {
+    private const int MaximumHoldMilliseconds = 120_000;
+    private const int MaximumFloodBytes = 16 * 1024 * 1024;
+    private const string PrivateCanaryPrefix = "candidate-private-canary-2177-";
+
     internal static string? ContextMarkerPath { get; private set; }
     internal static string? ActionMarkerPath { get; private set; }
 
@@ -93,7 +100,45 @@ public sealed class ResourceProbeShellDefaults : IEfToolingShellDefaults
 
     private static void ConfigureAdverseChild(IConfigurationSection probeDefaults)
     {
-        // Kept inert for the expected-red baseline. Root owns adding the child behaviors after review.
-        _ = probeDefaults;
+        if (probeDefaults["StartedMarker"] is { Length: > 0 } marker)
+        {
+            using var process = Process.GetCurrentProcess();
+            var identity = FormattableString.Invariant($"{process.Id}|{process.StartTime.ToUniversalTime().Ticks}");
+            File.WriteAllText(marker, identity, Encoding.ASCII);
+        }
+
+        var holdMilliseconds = ReadBoundedValue(probeDefaults, "HoldMilliseconds", MaximumHoldMilliseconds);
+        if (holdMilliseconds > 0)
+            Thread.Sleep(holdMilliseconds);
+
+        var standardErrorBytes = ReadBoundedValue(probeDefaults, "StandardErrorBytes", MaximumFloodBytes);
+        if (standardErrorBytes > 0)
+            WriteCanaryBytes(Console.OpenStandardError(), "stderr", standardErrorBytes);
+
+        var standardOutputBytes = ReadBoundedValue(probeDefaults, "StandardOutputBytes", MaximumFloodBytes);
+        if (standardOutputBytes > 0)
+            WriteCanaryBytes(Console.OpenStandardOutput(), "stdout", standardOutputBytes);
+    }
+
+    private static int ReadBoundedValue(IConfiguration configuration, string key, int maximum) =>
+        int.TryParse(configuration[key], NumberStyles.None, CultureInfo.InvariantCulture, out var value)
+            ? Math.Min(value, maximum)
+            : 0;
+
+    private static void WriteCanaryBytes(Stream output, string streamName, int byteCount)
+    {
+        var pattern = Encoding.ASCII.GetBytes($"{PrivateCanaryPrefix}{streamName}|");
+        var buffer = new byte[Math.Min(64 * 1024, byteCount)];
+        for (var index = 0; index < buffer.Length; index++)
+            buffer[index] = pattern[index % pattern.Length];
+
+        var remaining = byteCount;
+        while (remaining > 0)
+        {
+            var count = Math.Min(buffer.Length, remaining);
+            output.Write(buffer, 0, count);
+            remaining -= count;
+        }
+        output.Flush();
     }
 }
