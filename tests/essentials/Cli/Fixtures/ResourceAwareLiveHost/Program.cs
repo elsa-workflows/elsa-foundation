@@ -90,7 +90,6 @@ public sealed class ResourceProbeShellDefaults : IEfToolingShellDefaults
 
     internal static string? ContextMarkerPath { get; private set; }
     internal static string? ActionMarkerPath { get; private set; }
-    internal static string? DescendantMarkerPath { get; private set; }
 
     public void Configure(ShellBuilder builder, IConfiguration configuration)
     {
@@ -102,7 +101,6 @@ public sealed class ResourceProbeShellDefaults : IEfToolingShellDefaults
         {
             ContextMarkerPath = probeDefaults["ContextMarker"];
             ActionMarkerPath = probeDefaults["ActionMarker"];
-            DescendantMarkerPath = probeDefaults["DescendantMarker"];
             ConfigureAdverseChild(probeDefaults);
         }
 
@@ -127,8 +125,19 @@ public sealed class ResourceProbeShellDefaults : IEfToolingShellDefaults
             File.WriteAllText(marker, identity, Encoding.ASCII);
         }
 
-        // Descendant spawning stays inert until the root has run the marker-baseline case.
-        _ = DescendantMarkerPath;
+        if (probeDefaults["DescendantMarker"] is { Length: > 0 } descendantMarker)
+        {
+            // Standard streams are inherited so the child remains inside the worker's owned process tree.
+            var start = new ProcessStartInfo("dotnet") { UseShellExecute = false };
+            start.ArgumentList.Add(typeof(ResourceProbeShellDefaults).Assembly.Location);
+            start.ArgumentList.Add("--candidate-test-descendant");
+            start.ArgumentList.Add(descendantMarker);
+            start.ArgumentList.Add("60000");
+            using (Process.Start(start) ?? throw new InvalidOperationException("The test descendant did not start."))
+            {
+                // Disposing the handle does not terminate the launched child.
+            }
+        }
 
         var holdMilliseconds = ReadBoundedValue(probeDefaults, "HoldMilliseconds", MaximumHoldMilliseconds);
         if (holdMilliseconds > 0)
