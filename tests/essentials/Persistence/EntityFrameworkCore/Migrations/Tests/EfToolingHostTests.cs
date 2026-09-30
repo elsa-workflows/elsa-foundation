@@ -1299,6 +1299,11 @@ public sealed class EfToolingHostTestDefaults : IEfToolingShellDefaults
     {
         if (StringComparer.OrdinalIgnoreCase.Equals(configuration["ProbeDefaults:AddRuntimeEfFeature"], "true"))
             builder.WithFeature("WorkflowsRuntimeEntityFrameworkCore");
+        if (StringComparer.OrdinalIgnoreCase.Equals(configuration["ProbeDefaults:AddDiagnosticEfFeatures"], "true"))
+        {
+            builder.WithFeature("DiagnosticsStructuredLogsEntityFrameworkCore");
+            builder.WithFeature("DiagnosticsOpenTelemetryEntityFrameworkCore");
+        }
         if (StringComparer.OrdinalIgnoreCase.Equals(configuration["ProbeDefaults:AddOpaqueRuntimeConfigurator"], "true"))
             builder.WithFeature<RuntimeEntityFrameworkCoreFeature>(_ => Interlocked.Increment(ref OpaqueConfiguratorExecutionCount));
     }

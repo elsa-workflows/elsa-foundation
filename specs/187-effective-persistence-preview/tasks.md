@@ -1,7 +1,7 @@
 # Tasks: Effective persistence preview
 
 **Input**: [plan](plan.md), [spec](spec.md), research, data model and contracts.
-**Status**: Implementation in progress under #2177, following delivered specification #2175 / PR #2178. One coherent implementation issue/PR owns T001–T020; checks below record actual completed work, not delivery.
+**Status**: Implementation in progress under #2177, following delivered specification #2175 / PR #2178. One coherent implementation issue/PR owns T001–T020; checks below record actual completed work, not delivery. Local acceptance and final affected regression gates are complete; T020 retains PR, exact-head CI/review and post-merge obligations.
 
 ## Phase 1: Setup
 
@@ -20,36 +20,36 @@ Foundation execution evidence is recorded in [implementation evidence](implement
 **Goal**: One actual candidate, one host producer and one visible safe preview.
 **Independent test**: A01–A03/A05/A14 through real built CLI/worker/host, both import and workspace-profile starting paths.
 
-- [ ] T005 [US1] Write failing actor/capability/consumer expectations and per-implementation stubbed public-surface branch tests in `tests/essentials/Cli/Tests/CandidateInspectionTests.cs` and `tests/essentials/Persistence/EntityFrameworkCore/Migrations/Tests/EfCandidateInspectionTests.cs`; cover every new logic class, then retain those objectives through implementation.
+- [X] T005 [US1] Write failing actor/capability/consumer expectations and per-implementation stubbed public-surface branch tests in `tests/essentials/Cli/Tests/CandidateInspectionTests.cs` and `tests/essentials/Persistence/EntityFrameworkCore/Migrations/Tests/EfCandidateInspectionTests.cs`; cover every new logic class, then retain those objectives through implementation.
 - [X] T006 [US1] Write failing absent-file removal/retained setting/source-shape cases in `tests/essentials/Modularity/Planning/Tests/CompositionCandidateTests.cs`, then correct `src/essentials/Modularity/Planning/Bridge/CompositionCandidateBuilder.cs` to emit safe selected-overlay false declarations.
-- [ ] T007 [US1] Add independent version1 capability and streamed operation in `src/essentials/Persistence/EntityFramework/Tooling/EfCandidateInspectionContract.cs`, `EfCandidateInspectionOperation.cs` and `EfToolingHost.cs`; validate compiled assembly layout separately, reuse real composer/configuration merge and CShells descriptors/dependency resolver, and invoke shared preparation true.
-- [ ] T008 [US1] Add candidate-only capability/installed-closure dispatch in `src/essentials/Cli/Worker/ToolingEntryPoint.cs`, `WorkerRunner.cs` and `Program.cs`; satisfy failing branch tests, reject Restore before its call and prevent live-reader fallback.
-- [ ] T009 [US1] Add explicit command and registration in `src/essentials/Cli/CompositionInspectCommand.cs` and `ElsaCli.cs`, using accepted pins, one Build call, separate host/source arguments and trust flag; satisfy conditional/default/error unit tests before actor acceptance.
-- [ ] T010 [US1] Execute T005's real producer serialization→worker→consumer→human/JSON and both accepted-input journeys in `tests/essentials/Cli/Tests/CandidateInspectionTests.cs`, using actual host EF operation rather than a fake response as parity evidence.
+- [X] T007 [US1] Add independent version1 capability and streamed operation in `src/essentials/Persistence/EntityFramework/Tooling/EfCandidateInspectionContract.cs`, `EfCandidateInspectionOperation.cs` and `EfToolingHost.cs`; validate compiled assembly layout separately, reuse real composer/configuration merge and CShells descriptors/dependency resolver, and invoke shared preparation true.
+- [X] T008 [US1] Add candidate-only capability/installed-closure dispatch in `src/essentials/Cli/Worker/ToolingEntryPoint.cs`, `WorkerRunner.cs` and `Program.cs`; satisfy failing branch tests, reject Restore before its call and prevent live-reader fallback.
+- [X] T009 [US1] Add explicit command and registration in `src/essentials/Cli/CompositionInspectCommand.cs` and `ElsaCli.cs`, using accepted pins, one Build call, separate host/source arguments and trust flag; satisfy conditional/default/error unit tests before actor acceptance.
+- [X] T010 [US1] Execute T005's real producer serialization→worker→consumer→human/JSON and both accepted-input journeys in `tests/essentials/Cli/Tests/CandidateInspectionTests.cs`, using actual host EF operation rather than a fake response as parity evidence.
 
 ## Phase 4: User Story 2 — Conflicts and evidence limits (P1)
 
 **Goal**: Targets/refusals match runtime preparation while evidence limits remain visible.
 **Independent test**: A04–A07/A14, actual default/edge/value comparisons and old v2 compatibility.
 
-- [ ] T011 [US2] Write failing runtime/host target, refusal and per-implementation branch tests in `tests/essentials/Persistence/EntityFrameworkCore/Migrations/Tests/EfCandidateInspectionTests.cs` and `tests/essentials/Cli/Tests/CandidateInspectionTests.cs`, including defaults, descriptor conflicts and distinct connection values.
-- [ ] T012 [US2] Implement exact accepted/requested/expanded reconciliation and removed/disabled-required refusals in `src/essentials/Persistence/EntityFramework/Tooling/EfCandidateInspectionOperation.cs`, and scope/target projection in `EfCandidateInspectionContract.cs`; legacy fields remain unprojected, old v2 affinity=false and runtime modes unchanged.
-- [ ] T013 [US2] Validate closed response contents/correlation and render configurationResolution with safe plan reasons in `src/essentials/Cli/CompositionInspectCommand.cs`; satisfy all new consumer branches and do not promote Planning.PersistenceEvidence.
-- [ ] T014 [US2] Execute actual runtime shell preparer/host candidate comparisons over identical candidate configuration in `tests/essentials/Persistence/EntityFrameworkCore/Migrations/Tests/EfCandidateInspectionTests.cs`; prove targets/refusals and old v2 compatibility with real enrolled assemblies.
+- [X] T011 [US2] Write failing runtime/host target, refusal and per-implementation branch tests in `tests/essentials/Persistence/EntityFrameworkCore/Migrations/Tests/EfCandidateInspectionTests.cs` and `tests/essentials/Cli/Tests/CandidateInspectionTests.cs`, including defaults, descriptor conflicts and distinct connection values.
+- [X] T012 [US2] Implement exact accepted/requested/expanded reconciliation and removed/disabled-required refusals in `src/essentials/Persistence/EntityFramework/Tooling/EfCandidateInspectionOperation.cs`, and scope/target projection in `EfCandidateInspectionContract.cs`; legacy fields remain unprojected, old v2 affinity=false and runtime modes unchanged.
+- [X] T013 [US2] Validate closed response contents/correlation and render configurationResolution with safe plan reasons in `src/essentials/Cli/CompositionInspectCommand.cs`; satisfy all new consumer branches and do not promote Planning.PersistenceEvidence.
+- [X] T014 [US2] Execute actual runtime shell preparer/host candidate comparisons over identical candidate configuration in `tests/essentials/Persistence/EntityFrameworkCore/Migrations/Tests/EfCandidateInspectionTests.cs`; prove targets/refusals and old v2 compatibility with real enrolled assemblies.
 
 ## Phase 5: User Story 3 — Safe failure and recovery (P2)
 
 **Goal**: Bounded transport, source stability, confidentiality and real process cleanup.
 **Independent test**: A08–A13 and old-command no-worker controls.
 
-- [ ] T015 [US3] Write failing bounded-byte/identity/version/console/process/cancellation/drift branch tests in `tests/essentials/Cli/Tests/CandidateProcessTests.cs` and `CandidateInspectionTests.cs`, plus producer boundary tests in `tests/essentials/Persistence/EntityFrameworkCore/Migrations/Tests/EfCandidateInspectionTests.cs`; stub dependencies for each logic implementation and retain real child adverse tests.
-- [ ] T016 [US3] Implement bounded candidate process try/finally in `src/essentials/Cli/CandidateWorkerProcess.cs`, including literal mode argument, timeout, every I/O/cancellation stage, discarded stderr, kill-tree+wait and cleanup-failure outcome; legacy launches unchanged.
-- [ ] T017 [US3] Enforce request/response bounds and fixed errors in `src/essentials/Cli/Worker/Program.cs`, `WorkerContract.cs`, `WorkerRunner.cs` and host candidate operation; suppress raw console before host code; recheck full inputs immediately before output in `src/essentials/Cli/CompositionInspectCommand.cs`.
-- [ ] T018 [US3] Execute actual child cancellation/flood/timeout, stale/mixed/unused-profile capture, malformed/oversized exchange, unknown retention and no-access/canary sentinels in `tests/essentials/Cli/Tests/CandidateProcessTests.cs`, `CandidateInspectionTests.cs` and existing migrations fixtures; no surviving process/partial output.
+- [X] T015 [US3] Write failing bounded-byte/identity/version/console/process/cancellation/drift branch tests in `tests/essentials/Cli/Tests/CandidateProcessTests.cs` and `CandidateInspectionTests.cs`, plus producer boundary tests in `tests/essentials/Persistence/EntityFrameworkCore/Migrations/Tests/EfCandidateInspectionTests.cs`; stub dependencies for each logic implementation and retain real child adverse tests.
+- [X] T016 [US3] Implement bounded candidate process try/finally in `src/essentials/Cli/CandidateWorkerProcess.cs`, including literal mode argument, timeout, every I/O/cancellation stage, discarded stderr, kill-tree+wait and cleanup-failure outcome; legacy launches unchanged.
+- [X] T017 [US3] Enforce request/response bounds and fixed errors in `src/essentials/Cli/Worker/Program.cs`, `WorkerContract.cs`, `WorkerRunner.cs` and host candidate operation; suppress raw console before host code; recheck full inputs immediately before output in `src/essentials/Cli/CompositionInspectCommand.cs`.
+- [X] T018 [US3] Execute actual child cancellation/flood/timeout, stale/mixed/unused-profile capture, malformed/oversized exchange, unknown retention and no-access/canary sentinels in `tests/essentials/Cli/Tests/CandidateProcessTests.cs`, `CandidateInspectionTests.cs` and existing migrations fixtures; no surviving process/partial output.
 
 ## Phase 6: Polish and complete integration
 
-- [ ] T019 Run all proof rows and meaningful selection/capture/affinity/lifecycle mutation controls; update `src/essentials/Cli/README.md`, `src/essentials/Persistence/EntityFramework/README.md` and `src/essentials/Persistence/EntityFramework/EXTENSION_POINTS.md` and evidence under `specs/187-effective-persistence-preview/`; root audits actual producer-consumer scope and DRY teardown.
+- [X] T019 Run all proof rows and meaningful selection/capture/affinity/lifecycle mutation controls; update `src/essentials/Cli/README.md`, `src/essentials/Persistence/EntityFramework/README.md` and `src/essentials/Persistence/EntityFramework/EXTENSION_POINTS.md` and evidence under `specs/187-effective-persistence-preview/`; root audits actual producer-consumer scope and DRY teardown.
 - [ ] T020 Run final affected suites plus architecture/maps all/check, review generated findings and exact diff, obtain independent/root/exact-head review+CI and exact-main CI/Maps; update `specs/187-effective-persistence-preview/spec.md` to Implemented and synchronize issue/program/project delivery only after proof.
 
 ## Dependencies and parallel opportunities

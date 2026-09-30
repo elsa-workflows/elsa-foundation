@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Collections.Immutable;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -6,6 +7,9 @@ using CShells;
 using CShells.Features;
 using CShells.Lifecycle;
 using Elsa.Modularity.EntityFramework;
+using Elsa.Modularity.Planning.Bridge;
+using Elsa.Modularity.Planning.Catalog;
+using Elsa.Modularity.Planning.Models;
 using Elsa.Persistence.EntityFramework.ResourceResolution;
 using Elsa.Persistence.EntityFramework.Tooling;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
@@ -879,6 +883,60 @@ public sealed class EfCandidateInspectionTests : IDisposable
         Assert.Empty(Directory.EnumerateFiles(temporaryDirectory));
     }
 
+    [Fact]
+    public async Task Built_candidate_runtime_and_v1_agree_while_original_host_v2_retains_both_diagnostic_defaults()
+    {
+        var originalFiles = BuildSameCaptureFiles("root-default-distinct-equal");
+        var application = JsonNode.Parse(originalFiles["appsettings.json"])!.AsObject();
+        application["ProbeDefaults"]!["AddDiagnosticEfFeatures"] = true;
+        originalFiles["appsettings.json"] = Encoding.UTF8.GetBytes(application.ToJsonString());
+        var shells = JsonNode.Parse(originalFiles["shells.json"])!.AsObject();
+        var originalFeatures = shells["CShells"]!["Shells"]![Shell]!["Features"]!.AsObject();
+        Assert.True(originalFeatures.Remove(StructuredLogs));
+        Assert.True(originalFeatures.Remove(OpenTelemetry));
+        originalFiles["shells.json"] = Encoding.UTF8.GetBytes(shells.ToJsonString());
+        var snapshot = SourceSnapshot.Freeze(
+            new SourceSelection(Shell, Environment, "shells.Production.json", "appsettings.Production.json"), originalFiles);
+        using var originalConfiguration = ReadConfiguration(originalFiles);
+        var originalContext = EfConfigurationProbeTests.ComposeRuntimeContext(originalConfiguration, Shell);
+        Assert.Contains(StructuredLogs, originalContext.RequestedFeatureIds);
+        Assert.Contains(OpenTelemetry, originalContext.RequestedFeatureIds);
+        var accepted = originalContext.EnabledFeatureIds.Where(id => id != OpenTelemetry).Order(StringComparer.Ordinal).ToArray();
+        var catalog = FoundationSelectionCatalog.Load();
+        var authored = new AuthoredComposition("1", new CatalogPin(catalog.Id, catalog.Version, catalog.Digest),
+            null, [], accepted.ToImmutableArray(), [OpenTelemetry],
+            new AcceptedSelection(catalog.Digest, accepted.ToImmutableArray(), []), null, null);
+        var built = CompositionCandidateBuilder.Build(snapshot, catalog, authored, review: null);
+        var editedFiles = built.Files.ToDictionary(file => file.Key, file => file.Value, StringComparer.Ordinal);
+        var editedSelection = CshellsSourceReader.Read(Encoding.UTF8.GetString(editedFiles["shells.json"]),
+            Encoding.UTF8.GetString(editedFiles["shells.Production.json"]), Shell);
+        Assert.Contains(StructuredLogs, editedSelection.EnabledFeatureIds);
+        Assert.Contains(OpenTelemetry, editedSelection.DisabledFeatureIds);
+        Assert.DoesNotContain(OpenTelemetry, editedSelection.EnabledFeatureIds);
+
+        var edited = await RunSameCaptureAsync("feature-disabled-removed", editedFiles);
+        Assert.Null(edited.RuntimeFailure);
+        Assert.Equal(EfToolingExitCode.Success, edited.CandidateExitCode);
+        var resolution = edited.CandidateResponse.GetProperty("configurationResolution");
+        AssertRuntimeAndCandidateTargetsAgree(edited, resolution);
+        Assert.Equal(accepted, edited.AcceptedFeatureIds);
+        Assert.Equal(new[] { StructuredLogs, Runtime }, resolution.GetProperty("participants").EnumerateArray()
+            .Select(row => row.GetProperty("feature").GetString()!).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal));
+        AssertTarget(edited, resolution, StructuredLogs, "logs", "Sqlite", "Logs", "ShellBinding", "shell-composed");
+        var (originalExit, originalV2) = await RunLegacyV2Async(originalConfiguration);
+        Assert.Equal(EfToolingExitCode.Success, originalExit);
+        Assert.Contains(originalV2.GetProperty("configurationContext").GetProperty("participants").EnumerateArray(),
+            row => row.GetProperty("feature").GetString() == OpenTelemetry);
+        Assert.Contains(originalV2.GetProperty("configurationContext").GetProperty("participants").EnumerateArray(),
+            row => row.GetProperty("feature").GetString() == StructuredLogs);
+        Assert.DoesNotContain(resolution.GetProperty("participants").EnumerateArray(),
+            row => row.GetProperty("feature").GetString() == OpenTelemetry);
+        foreach (var file in originalFiles)
+            Assert.True(snapshot.ContentMatches(file.Key, file.Value), "Building and inspecting must retain original captured bytes.");
+        AssertNoPrivateCandidateValues(originalV2.GetRawText());
+        AssertPrivateInputsRemainPrivate(edited);
+    }
+
     private async Task<SameCaptureRun> RunSameCaptureAsync(string scenario, Dictionary<string, byte[]>? capturedFiles = null)
     {
         if (scenario == "opaque-composer-configurator")
@@ -932,24 +990,27 @@ public sealed class EfCandidateInspectionTests : IDisposable
         int? legacyV2ExitCode = null;
         JsonElement? legacyV2Response = null;
         if (scenario == "unequal-diagnostic-values")
-        {
-            var assembly = typeof(EfToolingHostTests).Assembly;
-            using var context = new EfToolingConfigurationContext(
-                EfToolingConfigurationContext.WorkbenchJson,
-                Path.GetDirectoryName(assembly.Location)!, assembly.GetName().Name!, Environment, Shell,
-                explicitSelection: true, configuration);
-            using var request = new MemoryStream(
-                Encoding.UTF8.GetBytes("""{"version":2,"command":"list","selection":{"kind":"from-host"}}"""));
-            using var response = new MemoryStream();
-            legacyV2ExitCode = await EfToolingContextOperation.RunAsync(
-                request, response, context, EfConfigurationProbeTests.HostAssemblies, CancellationToken.None);
-            using var legacyV2Document = JsonDocument.Parse(response.ToArray());
-            legacyV2Response = legacyV2Document.RootElement.Clone();
-        }
+            (legacyV2ExitCode, legacyV2Response) = await RunLegacyV2Async(configuration);
 
         return new SameCaptureRun(files, runtimeContext, patch, runtimeFailure, details,
             candidateExitCode, candidateJson, candidateDocument.RootElement.Clone(), accepted,
             legacyV2ExitCode, legacyV2Response);
+    }
+
+    private static async Task<(int ExitCode, JsonElement Response)> RunLegacyV2Async(IConfigurationRoot configuration)
+    {
+        var assembly = typeof(EfToolingHostTests).Assembly;
+        using var context = new EfToolingConfigurationContext(
+            EfToolingConfigurationContext.WorkbenchJson,
+            Path.GetDirectoryName(assembly.Location)!, assembly.GetName().Name!, Environment, Shell,
+            explicitSelection: true, configuration);
+        using var request = new MemoryStream(
+            Encoding.UTF8.GetBytes("""{"version":2,"command":"list","selection":{"kind":"from-host"}}"""));
+        using var response = new MemoryStream();
+        var exitCode = await EfToolingContextOperation.RunAsync(
+            request, response, context, EfConfigurationProbeTests.HostAssemblies, CancellationToken.None);
+        using var document = JsonDocument.Parse(response.ToArray());
+        return (exitCode, document.RootElement.Clone());
     }
 
     private static string InlineIdentityCanary() => "Data Source=fixture.db;Password=inline-reference-private-2177";

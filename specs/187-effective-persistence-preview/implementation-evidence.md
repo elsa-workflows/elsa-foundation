@@ -211,3 +211,38 @@ On 2026-10-01 root reviewed and integrated bounded test-only worker commit `c1ef
 Focused candidate plus existing probe gate passed **67/67,zero skipped** (`candidate-semantic-host-green.trx`). Root replaced only the production reconciliation call with null temporarily: all three new descriptor/unknown/case negatives failed on expected refusal2 versus actual success0, while the valid real-producer control passed (`candidate-reconcile-mutation.trx`: four executed,three failed,one passed,zero skipped). Source restored in finally; root corrected a collection assertion style and rebuilt the same full focused gate, **67/67,zero skipped** (`candidate-semantic-host-restored-green.trx`). No production policy change, provider container or CI cadence change.
 
 A02 exact original-host v2 versus edited-candidate comparison remains under source audit before its completion claim. Final full migrations, maps, artifact scan, delivery review and CI/main gates remain required; no PR/push/merge is claimed.
+
+## Final local acceptance and regression gate
+
+The remaining A02 comparison is now joined in `Built_candidate_runtime_and_v1_agree_while_original_host_v2_retains_both_diagnostic_defaults`: both diagnostic EF features are absent from original source declarations but selected by the actual declared composer; the real shared candidate builder adds Structured Logs and explicitly disables OpenTelemetry. Runtime preparation and the public v1 producer consume the exact built candidate bytes; old v2 separately consumes retained original configuration and still reports both diagnostics. Original capture remains unchanged. The existing actual CLI import/workspace actors remain the acceptance/edit lifecycle proof. Focused host/probe gate: **68/68,zero skipped** (`candidate-original-v2-green.trx`).
+
+Root then substituted only source-snapshot bytes for candidate bytes in the production capture payload. All four actual CLI actor variants failed with expected success0 versus refusal2 (`candidate-original-source-mutation.trx`); production was restored in finally before final rebuilt regression gates. This demonstrates that the accepted actor depends on post-edit bytes rather than original-host selection.
+
+Final serial local gates on the restored production sources and complete test delta:
+
+| Gate | Executed / passed / skipped | Artifact |
+|---|---|---|
+| Full CLI | 722 / 722 / 0 | `candidate-cli-final.trx` |
+| Full Planning | 112 / 112 / 0 | `candidate-planning-final.trx` |
+| Full EF migrations | 440 / 440 / 0 | `candidate-migrations-final.trx` |
+| Full architecture | 599 / 599 / 0 | `candidate-architecture-final.trx` |
+| Maps all, then check | Both exit0 | `maps-final-all.log`, `maps-final-check.log` |
+
+Map refresh changed no bytes. Manifest and both generated findings remain identical to the reviewed prior snapshot; root rechecked the unchanged findings boundaries recorded above. No workflow, new project, provider matrix or test cadence change. Only the existing ResourceAwareLiveHost fixture has additional declared dependencies, already covered by the architecture inventory and full CLI gate.
+
+Fresh bounded artifact scan (`/tmp/runtime-composition-2177-final-artifact-scan.json`) verified sixteen passing TRX files plus their logs: **32 artifacts**, **15 known fixture canaries** including the inline identity control, and raw/SHA256/SHA512 variants, **zero matches**. Final gate TRX counters were parsed: positive execution, zero failures and zero unexecuted cases. Deliberately unsafe historical red controls remain separately retained; they are not passing production evidence. Private candidate files retain unknown local values by design, with actual generation assertions confirming retention.
+
+Independent read-only acceptance audit reviewed `0c07cce65` plus the exact two-test-file delta and found no material finding or remaining local behavior proof gap for A01–A14 / T005,T007–T018. Root reviewed the same delta, actual gate counters, mutation restoration, source boundaries and DRY v2 helper. A11's marked real composer cancellation has stdout-read and exit waits concurrently pending after request parsing; deterministic branch tests isolate stages. This does not claim separately isolated real-child read/exit cases. T019 is complete after the restored gates and scan. T020 remains open for delivery PR, exact-head reviews/CI and exact-main CI/Maps. The specification and program remain in progress; no merge or deployed/live readiness outcome is claimed.
+
+Local proof index (the acceptance matrix remains the requirement source):
+
+| Rows | Actual proof anchors |
+|---|---|
+| A01–A03 | `CandidateInspectionTests`, joined original-v2/built-candidate fact above, same-byte preparer matrix; actual original-byte and explicit-removal actor mutations |
+| A04 | Actual discovered required-edge, unknown/case and default-readdition negatives; Reconcile-only mutation three failures plus one valid control |
+| A05–A07 | Actual runtime preparer/public producer identical-byte target/refusal matrix, binding DELETE before/after, inline identity negatives, old v2 value-affinity control |
+| A08 | Capture owner drift/ownership tests plus actual unused-profile lifecycle mutation after composer dispatch and final-recheck bite |
+| A09–A10 | Actual stale/FIFO/capability/installed-closure actors, strict protocol/capture/producer bounds, real serialized artifacts and mutated consumer controls |
+| A11 | Real blocked-stdin, composer/read/exit cancellation, flood, timeout and descendant cleanup; deterministic stage/failure branches and kill-tree mutation |
+| A12–A13 | Actual private unknown retention/generation, console/exception canaries, fresh passing artifact scan, original-file and database/context/action/acquisition sentinels |
+| A14 | One real owned worker response through JSON/text formatter and unchecked plan companion |
