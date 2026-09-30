@@ -34,7 +34,10 @@ public sealed class ResourceProbeDbContext : DbContext
 {
     public ResourceProbeDbContext(DbContextOptions<ResourceProbeDbContext> options) : base(options)
     {
-        if (Environment.GetEnvironmentVariable("ELSA_RESOURCE_PROBE_CONTEXT_MARKER") is { Length: > 0 } path)
+        var marker = ResourceProbeShellDefaults.ContextMarkerPath;
+        if (marker is not { Length: > 0 })
+            marker = Environment.GetEnvironmentVariable("ELSA_RESOURCE_PROBE_CONTEXT_MARKER");
+        if (marker is { Length: > 0 } path)
             File.WriteAllText(path, "constructed");
     }
 }
@@ -43,7 +46,10 @@ public sealed class ResourceProbePostMigrationAction : IEfPostMigrationAction
 {
     public ResourceProbePostMigrationAction()
     {
-        if (Environment.GetEnvironmentVariable("ELSA_RESOURCE_PROBE_ACTION_MARKER") is { Length: > 0 } path)
+        var marker = ResourceProbeShellDefaults.ActionMarkerPath;
+        if (marker is not { Length: > 0 })
+            marker = Environment.GetEnvironmentVariable("ELSA_RESOURCE_PROBE_ACTION_MARKER");
+        if (marker is { Length: > 0 } path)
             File.WriteAllText(path, "constructed");
     }
 
@@ -57,10 +63,22 @@ public sealed class ResourceProbePostMigrationAction : IEfPostMigrationAction
 
 public sealed class ResourceProbeShellDefaults : IEfToolingShellDefaults
 {
+    internal static string? ContextMarkerPath { get; private set; }
+    internal static string? ActionMarkerPath { get; private set; }
+
     public void Configure(ShellBuilder builder, IConfiguration configuration)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(configuration);
+
+        var probeDefaults = configuration.GetSection("ProbeDefaults");
+        if (probeDefaults.Exists())
+        {
+            ContextMarkerPath = probeDefaults["ContextMarker"];
+            ActionMarkerPath = probeDefaults["ActionMarker"];
+            ConfigureAdverseChild(probeDefaults);
+        }
+
         if (configuration.GetValue<bool>("ProbeDefaults:WriteConsoleCanary"))
         {
             Console.WriteLine("private-console-canary");
@@ -71,5 +89,11 @@ public sealed class ResourceProbeShellDefaults : IEfToolingShellDefaults
             builder.WithFeature("DiagnosticsStructuredLogsEntityFrameworkCore");
             builder.WithFeature("DiagnosticsOpenTelemetryEntityFrameworkCore");
         }
+    }
+
+    private static void ConfigureAdverseChild(IConfigurationSection probeDefaults)
+    {
+        // Kept inert for the expected-red baseline. Root owns adding the child behaviors after review.
+        _ = probeDefaults;
     }
 }

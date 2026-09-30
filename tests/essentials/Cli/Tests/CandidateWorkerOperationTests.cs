@@ -221,7 +221,147 @@ public sealed class CandidateWorkerOperationTests
         Assert.DoesNotContain("canary", run.Text);
     }
 
-    private static WorkerRequest ForHost(HostLayout host, string? databasePath = null) => Request() with
+    [Fact]
+    public Task Candidate_worker_process_times_out_and_reaps_the_composer_child() =>
+        AssertDefaultProcessRefusal("candidate-inspection-timeout", timeoutSeconds: 15, holdComposer: true);
+
+    [Fact]
+    public Task Candidate_worker_process_cancels_and_reaps_the_composer_child() =>
+        AssertDefaultProcessRefusal("candidate-inspection-cancelled", timeoutSeconds: 120, holdComposer: true, cancelAfterStart: true);
+
+    [Fact]
+    public Task Candidate_worker_process_bounds_a_child_that_floods_stderr_then_stdout() =>
+        AssertDefaultProcessRefusal("candidate-response-too-large", timeoutSeconds: 60,
+            standardErrorBytes: 256 * 1024, standardOutputBytes: 4 * 1024 * 1024 + 1);
+
+    private static async Task AssertDefaultProcessRefusal(string expectedCode, int timeoutSeconds,
+        bool holdComposer = false, bool cancelAfterStart = false, int standardErrorBytes = 0, int standardOutputBytes = 0)
+    {
+        var host = HostLayout.Resolve(DotnetElsa.Host("ResourceAwareLiveHost"));
+        using var sentinels = new TempDirectory($"{PrivateCanaryRootPrefix}adverse-child-");
+        var started = sentinels.File("worker-started.txt");
+        var database = sentinels.File("must-not-create.db");
+        var context = sentinels.File("context-constructed.txt");
+        var action = sentinels.File("action-constructed.txt");
+        var probeDefaults = new Dictionary<string, object>
+        {
+            ["WriteConsoleCanary"] = false,
+            ["StartedMarker"] = started,
+            ["HoldMilliseconds"] = holdComposer ? 60_000 : 0,
+            ["StandardErrorBytes"] = standardErrorBytes,
+            ["StandardOutputBytes"] = standardOutputBytes,
+            ["ContextMarker"] = context,
+            ["ActionMarker"] = action
+        };
+        var request = ForHost(host, database, probeDefaults);
+        var worker = Path.Join(Path.GetDirectoryName(DotnetElsa.ToolAssembly), WorkerProcess.WorkerAssemblyFileName);
+        using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(75));
+        var run = new CandidateWorkerProcess(workerAssembly: worker).RunAsync(host, request, timeoutSeconds, cancellation.Token);
+
+        try
+        {
+            var startedOrCompleted = await WaitForMarkerOrCompletion(run, started, TimeSpan.FromSeconds(60));
+            Assert.True(startedOrCompleted && TryReadProcessIdentity(started, out _),
+                "The real worker completed or failed to reach the fixture composer before recording its private process marker.");
+
+            if (cancelAfterStart)
+                cancellation.Cancel();
+
+            var refusal = await Assert.ThrowsAsync<CliRefusal>(() => run.WaitAsync(TimeSpan.FromSeconds(30)));
+            Assert.Equal(expectedCode, refusal.Code);
+            Assert.Equal(expectedCode == "candidate-inspection-cancelled" ? ToolExitCode.Refusal : ToolExitCode.ResolutionFailure,
+                refusal.ExitCode);
+            Assert.DoesNotContain(PrivateCanaryRootPrefix, refusal.Message);
+            Assert.DoesNotContain(PrivateCanaryRootPrefix, string.Join("\n", refusal.Details));
+            Assert.False(IsMarkedProcessRunning(started), "The candidate worker returned while its marked child was still alive.");
+            Assert.False(File.Exists(database));
+            Assert.False(File.Exists(context));
+            Assert.False(File.Exists(action));
+        }
+        finally
+        {
+            cancellation.Cancel();
+            try { await run.WaitAsync(TimeSpan.FromSeconds(10)); }
+            catch (CliRefusal) { }
+            catch (OperationCanceledException) { }
+            catch (TimeoutException) { }
+            await KillMarkedProcessIfStillRunning(started);
+        }
+    }
+
+    private static async Task<bool> WaitForMarkerOrCompletion(Task run, string marker, TimeSpan maximumWait)
+    {
+        var stopAt = Stopwatch.GetTimestamp() + (long)(maximumWait.TotalSeconds * Stopwatch.Frequency);
+        while (Stopwatch.GetTimestamp() < stopAt)
+        {
+            if (TryReadProcessIdentity(marker, out _))
+                return true;
+            if (run.IsCompleted)
+                return false;
+            await Task.Delay(TimeSpan.FromMilliseconds(100));
+        }
+        return false;
+    }
+
+    private static bool TryReadProcessIdentity(string marker, out (int Pid, long StartedAtTicks) identity)
+    {
+        identity = default;
+        if (!File.Exists(marker))
+            return false;
+        var parts = File.ReadAllText(marker).Split('|', StringSplitOptions.TrimEntries);
+        if (parts.Length != 2 || !int.TryParse(parts[0], out var pid) || !long.TryParse(parts[1], out var startedAtTicks))
+            return false;
+        identity = (pid, startedAtTicks);
+        return true;
+    }
+
+    private static bool IsMarkedProcessRunning(string marker)
+    {
+        if (!TryReadProcessIdentity(marker, out var identity))
+            return false;
+        try
+        {
+            using var process = Process.GetProcessById(identity.Pid);
+            return !process.HasExited && process.StartTime.ToUniversalTime().Ticks == identity.StartedAtTicks;
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+    }
+
+    private static async Task KillMarkedProcessIfStillRunning(string marker)
+    {
+        if (!TryReadProcessIdentity(marker, out var identity))
+            return;
+        try
+        {
+            using var process = Process.GetProcessById(identity.Pid);
+            if (process.StartTime.ToUniversalTime().Ticks != identity.StartedAtTicks || process.HasExited)
+                return;
+            process.Kill(entireProcessTree: true);
+            using var cleanup = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            await process.WaitForExitAsync(cleanup.Token);
+        }
+        catch (ArgumentException)
+        {
+            // The marked child has already exited.
+        }
+        catch (InvalidOperationException)
+        {
+            // The marked child has already exited.
+        }
+        catch (System.ComponentModel.Win32Exception)
+        {
+            // The marked child has already exited or is no longer owned by this test.
+        }
+        catch (OperationCanceledException)
+        {
+            // Cleanup was bounded; do not wait indefinitely on a broken test child.
+        }
+    }
+
+    private static WorkerRequest ForHost(HostLayout host, string? databasePath = null, object? probeDefaults = null) => Request() with
     {
         HostDirectory = host.Directory, HostName = host.Name, DepsFile = host.DepsFile,
         Candidate = Request().Candidate! with
@@ -231,7 +371,7 @@ public sealed class CandidateWorkerOperationTests
             {
                 ("appsettings.json", JsonSerializer.Serialize(new
                 {
-                    ProbeDefaults = new { WriteConsoleCanary = true },
+                    ProbeDefaults = probeDefaults ?? new { WriteConsoleCanary = true },
                     ConnectionStrings = new { Probe = $"Data Source={databasePath ?? ":memory:"};Password=private-connection-canary" },
                     Elsa = new { Persistence = new { DefaultResource = "primary", Resources = new { primary = new { Provider = "Sqlite", ConnectionName = "Probe" } } } }
                 })),
