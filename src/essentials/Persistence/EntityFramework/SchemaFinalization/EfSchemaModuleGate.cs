@@ -231,6 +231,8 @@ public sealed class EfSchemaModuleGate : IEfSchemaModuleGate
         Adopt(admitted.Identity, admitted.Records, mayAdvance: true);
         lock (_lock)
             _admittedIncarnation = _publishBeforeRead ? standing?.Member.Incarnation : null;
+        // From here this host writes the module's families, which is what its readability report says (spec 183, FR-019).
+        _observations.Activate(this, FamilyNames());
 
         await PublishQuietlyAsync(cancellationToken);
         try
@@ -463,9 +465,15 @@ public sealed class EfSchemaModuleGate : IEfSchemaModuleGate
         return changed;
     }
 
+    /// <summary>Ends what <see cref="ActivateAsync"/> reported: the module is no longer active in this host, as its report says
+    /// from the next publish. Its migrator calls it once the gate's loops have stopped; a repeat changes nothing.</summary>
+    internal void Deactivate() => _observations.Deactivate(this, FamilyNames());
+
+    private string[] FamilyNames() => Families.Chains.Select(chain => chain.Family).ToArray();
+
     private async Task<Admission> AdmitAsync(DbContext context, PublishFirst publish, CancellationToken cancellationToken)
     {
-        var names = Families.Chains.Select(chain => chain.Family).ToArray();
+        var names = FamilyNames();
         _observations.BeginActivation(names);
         try
         {

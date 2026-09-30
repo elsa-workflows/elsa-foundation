@@ -132,6 +132,23 @@ public sealed class EfContractingMigrationRefusalTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// The module is active in the host's readability report while its migrator runs its gate, and stops being once the
+    /// migrator stops, as a disposed shell's does (spec 183, FR-019, amended 2026-09-30).
+    /// </summary>
+    [Fact]
+    public async Task A_migrator_that_stops_ends_its_modules_activity_in_the_hosts_report()
+    {
+        var observations = new EfSchemaFinalizationObservations();
+        var migrator = Migrator(EfMigratePolicy.AutoMigrate, observations: observations);
+
+        await migrator.InitializeAsync();
+        Assert.True(observations.Find(Family).ModuleActive);
+
+        await migrator.StopAsync(CancellationToken.None);
+        Assert.False(observations.Find(Family).ModuleActive);
+    }
+
+    /// <summary>
     /// Tables that exist without a database identity were migrated, but no gate-aware host has admitted the module: nothing
     /// is pending before the contraction, so the record is created at once and the contraction runs.
     /// </summary>
@@ -627,11 +644,17 @@ public sealed class EfContractingMigrationRefusalTests : IAsyncLifetime
         }
     }
 
-    private EfModuleMigrator<ContractingDbContext> Migrator(EfMigratePolicy policy, IEfSchemaFleet? fleet = null, IInterceptor[]? interceptors = null)
+    private EfModuleMigrator<ContractingDbContext> Migrator(
+        EfMigratePolicy policy,
+        IEfSchemaFleet? fleet = null,
+        IInterceptor[]? interceptors = null,
+        EfSchemaFinalizationObservations? observations = null)
     {
         var services = new ServiceCollection();
         if (fleet is not null)
             services.AddSingleton(fleet);
+        if (observations is not null)
+            services.AddSingleton(observations);
         services.AddDbContext<ContractingDbContext>(options => Bind(options.AddInterceptors(interceptors ?? []), Provider, Connection));
         services.AddEfModuleMigrations<ContractingDbContext>(Provider);
         services.Configure<EfMigrateOptions>(options => options.Policy = policy);

@@ -169,6 +169,9 @@ public sealed class EfModuleMigrator<TContext>(
                 // The loop was stopped mid-round; a shell or host that is disposing is not failing.
             }
         }
+
+        // After the loops, so the report keeps saying the module is active while a round of it could still write rows.
+        _gate?.Deactivate();
     }
 }
 

@@ -9,15 +9,17 @@ namespace Elsa.Cluster.Core.Models;
 /// <remarks>
 /// <para>
 /// The entries that speak for the database are those for the family that name its identity or name none. For
-/// <see cref="MemberQueryPurpose.Counting"/>, a member whose report has such entries meets the requirement only when
-/// every one of them reports an observed finalized version among <see cref="Versions"/>; one that reports none, because
-/// the member has not read the record or reads databases that disagree, does not. A member with no such entry cannot
-/// write the family's rows in that database and meets it vacuously. A member whose report is unknown, or has no
-/// readability section, fails: a member that cannot say what it writes never lets a backfill verify.
+/// <see cref="MemberQueryPurpose.Counting"/>, only those whose module is active in the member count (spec 183, FR-019,
+/// amended 2026-09-30): a member that loads the family's declaration without activating its module writes none of its
+/// rows, so it cannot hold a backfill back. A member whose counted entries include one that reports no observed finalized
+/// version among <see cref="Versions"/>, because the member has not read the record or reads databases that disagree,
+/// does not meet the requirement. A member with no counted entry cannot write the family's rows in that database and meets
+/// it vacuously. A member whose report is unknown, or has no readability section, fails: a member that cannot say what it
+/// writes never lets a backfill verify.
 /// </para>
 /// <para>
 /// For <see cref="MemberQueryPurpose.Placement"/>, a member meets it only when at least one entry speaks for the database
-/// and every one that does reports a version among <see cref="Versions"/>.
+/// and every one that does, active or not, reports a version among <see cref="Versions"/>.
 /// </para>
 /// </remarks>
 public sealed record ObservesFinalizedSchemaVersion : MemberRequirement
@@ -46,7 +48,8 @@ public sealed record ObservesFinalizedSchemaVersion : MemberRequirement
 
     internal override bool IsMetBy(FleetMember member, MemberQueryPurpose purpose) =>
         ReadabilitySection.EveryEntryMeets(member, Family, DatabaseIdentity, purpose,
-            entry => entry.ObservedFinalizedVersion is { } observed && Versions.Contains(observed, StringComparer.Ordinal));
+            entry => (purpose == MemberQueryPurpose.Counting && !entry.ModuleActive) ||
+                     (entry.ObservedFinalizedVersion is { } observed && Versions.Contains(observed, StringComparer.Ordinal)));
 
     public bool Equals(ObservesFinalizedSchemaVersion? other) =>
         other is not null &&

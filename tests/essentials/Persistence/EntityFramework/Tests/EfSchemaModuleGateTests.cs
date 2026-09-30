@@ -322,14 +322,48 @@ public sealed class EfSchemaModuleGateTests : IAsyncLifetime
 
         await gate.ActivateAsync(Context());
         var identity = (await RecordAsync()).DatabaseIdentity;
-        Assert.Equal(new EfSchemaFamilyObservation(identity, "2"), observations.Find(Family));
+        Assert.Equal(new EfSchemaFamilyObservation(identity, "2", ModuleActive: true), observations.Find(Family));
 
         // A second database: named nowhere while it is being read, and afterwards neither, since the host now serves both.
         observations.BeginActivation([Family]);
         Assert.Null(observations.Find(Family).DatabaseIdentity);
         observations.Observe(Family, "another-database", "1");
         observations.EndActivation([Family]);
-        Assert.Equal(new EfSchemaFamilyObservation(null, null), observations.Find(Family));
+        Assert.Equal(new EfSchemaFamilyObservation(null, null, ModuleActive: true), observations.Find(Family));
+    }
+
+    /// <summary>
+    /// Spec 183's FR-019, amended 2026-09-30: the module is active in the report from admission until its gate stops, and a
+    /// gate that is refused, or has not yet admitted, never made it so. It is the fact the backfill's settle condition
+    /// counts on (spec 186, FR-012).
+    /// </summary>
+    [Fact]
+    public async Task The_family_is_active_from_the_moment_its_gate_admits_the_module_until_the_gate_stops()
+    {
+        var observations = new EfSchemaFinalizationObservations();
+        var gate = Gate(Families("2"), Fleet("host-a", "1", "2"), observations);
+        Assert.False(observations.Find(Family).ModuleActive);
+
+        await gate.ActivateAsync(Context());
+        Assert.True(observations.Find(Family).ModuleActive);
+
+        gate.Deactivate();
+        gate.Deactivate();
+        var stopped = observations.Find(Family);
+        Assert.False(stopped.ModuleActive);
+        Assert.Equal("2", stopped.ObservedFinalizedVersion);
+    }
+
+    [Fact]
+    public async Task A_module_the_gate_refuses_is_never_active()
+    {
+        var observations = new EfSchemaFinalizationObservations();
+        await Gate(Families("3"), Fleet("host-new", "1", "2", "3")).ActivateAsync(Context());
+        var refused = Gate(Families("2"), Fleet("host-rolled-back", "1", "2"), observations);
+
+        await Assert.ThrowsAsync<EfSchemaActivationRefusedException>(() => refused.ActivateAsync(Context()));
+
+        Assert.False(observations.Find(Family).ModuleActive);
     }
 
     /// <summary>

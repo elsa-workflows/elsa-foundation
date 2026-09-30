@@ -21,6 +21,14 @@ namespace Elsa.Persistence.Schema.SchemaFinalization;
 /// The observed finalized version is reported only while every database this host has read agrees on it, since the
 /// report has one entry per family; otherwise, or before any record is read, none is reported.
 /// </para>
+/// <para>
+/// <b>An entry says whether the family's module is active.</b> A module is active from the moment a gate has admitted
+/// it, in any shell, until that gate stops, so a family whose module was disabled, or was never enabled, keeps the
+/// versions it observed but is not active. That is what lets the backfill's settle condition (spec 186, FR-012) leave a
+/// host that only loads the family's declaration out of what it waits for, while every readability count still counts it.
+/// Each gate is one owner, so several shells activating one family, or one gate reporting twice, never leave it active
+/// after the last of them stops.
+/// </para>
 /// </remarks>
 public sealed class EfSchemaFinalizationObservations
 {
@@ -52,6 +60,33 @@ public sealed class EfSchemaFinalizationObservations
         }
     }
 
+    /// <summary>
+    /// Marks <paramref name="families"/> active in this host for <paramref name="owner"/>, the gate that admitted their
+    /// module, until <see cref="Deactivate"/>. Repeating it for one owner changes nothing.
+    /// </summary>
+    public void Activate(object owner, IEnumerable<string> families)
+    {
+        ArgumentNullException.ThrowIfNull(owner);
+        ArgumentNullException.ThrowIfNull(families);
+        lock (_gate)
+        {
+            foreach (var family in families)
+                For(family).ActiveOwners.Add(owner);
+        }
+    }
+
+    /// <summary>Ends what <see cref="Activate"/> began for <paramref name="owner"/>: the family stays active while another owner holds it.</summary>
+    public void Deactivate(object owner, IEnumerable<string> families)
+    {
+        ArgumentNullException.ThrowIfNull(owner);
+        ArgumentNullException.ThrowIfNull(families);
+        lock (_gate)
+        {
+            foreach (var observations in families.Select(For))
+                observations.ActiveOwners.Remove(owner);
+        }
+    }
+
     /// <summary>Records that this host read <paramref name="family"/>'s record in the database <paramref name="databaseIdentity"/>.</summary>
     public void Observe(string family, string databaseIdentity, string finalizedVersion)
     {
@@ -63,21 +98,25 @@ public sealed class EfSchemaFinalizationObservations
 
     /// <summary>
     /// The database identity and observed finalized version <paramref name="family"/>'s report entry carries, each
-    /// <see langword="null"/> when the rules above say it names none.
+    /// <see langword="null"/> when the rules above say it names none, and whether its module is active.
     /// </summary>
     public EfSchemaFamilyObservation Find(string family)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(family);
         lock (_gate)
         {
-            if (!_families.TryGetValue(family, out var observations) || observations.Versions.Count == 0)
+            if (!_families.TryGetValue(family, out var observations))
                 return EfSchemaFamilyObservation.None;
+
+            var active = observations.ActiveOwners.Count > 0;
+            if (observations.Versions.Count == 0)
+                return EfSchemaFamilyObservation.None with { ModuleActive = active };
 
             var identity = observations.PendingActivations == 0 && observations.Versions.Count == 1
                 ? observations.Versions.Keys.Single()
                 : null;
             var versions = observations.Versions.Values.Distinct(StringComparer.Ordinal).ToArray();
-            return new EfSchemaFamilyObservation(identity, versions.Length == 1 ? versions[0] : null);
+            return new EfSchemaFamilyObservation(identity, versions.Length == 1 ? versions[0] : null, active);
         }
     }
 
@@ -93,12 +132,17 @@ public sealed class EfSchemaFinalizationObservations
     {
         public int PendingActivations { get; set; }
 
+        public HashSet<object> ActiveOwners { get; } = new(ReferenceEqualityComparer.Instance);
+
         public Dictionary<string, string> Versions { get; } = new(StringComparer.Ordinal);
     }
 }
 
-/// <summary>What a family's report entry says about the records this host has read: each part null when it names none.</summary>
-public sealed record EfSchemaFamilyObservation(string? DatabaseIdentity, string? ObservedFinalizedVersion)
+/// <summary>
+/// What a family's report entry says about the records this host has read, each part null when it names none, and
+/// whether the family's module is active in this host.
+/// </summary>
+public sealed record EfSchemaFamilyObservation(string? DatabaseIdentity, string? ObservedFinalizedVersion, bool ModuleActive = false)
 {
     public static EfSchemaFamilyObservation None { get; } = new(null, null);
 }

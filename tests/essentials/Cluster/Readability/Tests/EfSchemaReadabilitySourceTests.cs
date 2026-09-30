@@ -26,25 +26,25 @@ public sealed class EfSchemaReadabilitySourceTests : IDisposable
     // declaration is dropped, or declared at another version, is caught here.
     private static readonly ReadabilityEntry[] PublishingFamilies =
     [
-        new(PublishingLedgerEfModule.SchemaFamily, Publishing, [PublishingLedgerEfModule.ContentSchemaVersion]),
-        new(PublishingPolicyProjectionEfModule.SchemaFamily, Publishing, [PublishingPolicyProjectionEfModule.SchemaVersion]),
-        new(PublishingSnapshotReviewEfModule.SchemaFamily, Publishing, [PublishingSnapshotReviewEfModule.SchemaVersion])
+        new(PublishingLedgerEfModule.SchemaFamily, Publishing, [PublishingLedgerEfModule.ContentSchemaVersion], moduleActive: false),
+        new(PublishingPolicyProjectionEfModule.SchemaFamily, Publishing, [PublishingPolicyProjectionEfModule.SchemaVersion], moduleActive: false),
+        new(PublishingSnapshotReviewEfModule.SchemaFamily, Publishing, [PublishingSnapshotReviewEfModule.SchemaVersion], moduleActive: false)
     ];
 
     private static readonly ReadabilityEntry[] RuntimeFamilies =
     [
-        new(BookmarkStateEfModule.SchemaFamily, Runtime, [BookmarkStateEfModule.SchemaVersion]),
-        new(RuntimeActivationSlotEfModule.SchemaFamily, Runtime, [RuntimeActivationSlotEfModule.SchemaVersion]),
-        new(RuntimeActivityExecutionEfModule.SchemaFamily, Runtime, [RuntimeActivityExecutionEfModule.SchemaVersion]),
-        new(RuntimeArtifactEfModule.SchemaFamily, Runtime, [RuntimeArtifactEfModule.SchemaVersion]),
-        new(RuntimeOperationalStateEfModule.SchemaFamily, Runtime, [RuntimeOperationalStateEfModule.SchemaVersion]),
-        new(RuntimePostCommitOutboxEfModule.SchemaFamily, Runtime, [RuntimePostCommitOutboxEfModule.SchemaVersion]),
-        new(RuntimeSchedulerPoisonEfModule.SchemaFamily, Runtime, [RuntimeSchedulerPoisonEfModule.SchemaVersion]),
-        new(RuntimeTriggerBindingEfModule.SchemaFamily, Runtime, [RuntimeTriggerBindingEfModule.SchemaVersion]),
-        new(RuntimeWorkflowAlterationEfModule.SchemaFamily, Runtime, [RuntimeWorkflowAlterationEfModule.SchemaVersion]),
-        new(RuntimeWorkflowDispatchEfModule.SchemaFamily, Runtime, [RuntimeWorkflowDispatchEfModule.SchemaVersion]),
-        new(RuntimeWorkflowExecutionEfModule.SchemaFamily, Runtime, [RuntimeWorkflowExecutionEfModule.SchemaVersion]),
-        new(RuntimeWorkflowTestScopeEfModule.SchemaFamily, Runtime, [RuntimeWorkflowTestScopeEfModule.SchemaVersion])
+        new(BookmarkStateEfModule.SchemaFamily, Runtime, [BookmarkStateEfModule.SchemaVersion], moduleActive: false),
+        new(RuntimeActivationSlotEfModule.SchemaFamily, Runtime, [RuntimeActivationSlotEfModule.SchemaVersion], moduleActive: false),
+        new(RuntimeActivityExecutionEfModule.SchemaFamily, Runtime, [RuntimeActivityExecutionEfModule.SchemaVersion], moduleActive: false),
+        new(RuntimeArtifactEfModule.SchemaFamily, Runtime, [RuntimeArtifactEfModule.SchemaVersion], moduleActive: false),
+        new(RuntimeOperationalStateEfModule.SchemaFamily, Runtime, [RuntimeOperationalStateEfModule.SchemaVersion], moduleActive: false),
+        new(RuntimePostCommitOutboxEfModule.SchemaFamily, Runtime, [RuntimePostCommitOutboxEfModule.SchemaVersion], moduleActive: false),
+        new(RuntimeSchedulerPoisonEfModule.SchemaFamily, Runtime, [RuntimeSchedulerPoisonEfModule.SchemaVersion], moduleActive: false),
+        new(RuntimeTriggerBindingEfModule.SchemaFamily, Runtime, [RuntimeTriggerBindingEfModule.SchemaVersion], moduleActive: false),
+        new(RuntimeWorkflowAlterationEfModule.SchemaFamily, Runtime, [RuntimeWorkflowAlterationEfModule.SchemaVersion], moduleActive: false),
+        new(RuntimeWorkflowDispatchEfModule.SchemaFamily, Runtime, [RuntimeWorkflowDispatchEfModule.SchemaVersion], moduleActive: false),
+        new(RuntimeWorkflowExecutionEfModule.SchemaFamily, Runtime, [RuntimeWorkflowExecutionEfModule.SchemaVersion], moduleActive: false),
+        new(RuntimeWorkflowTestScopeEfModule.SchemaFamily, Runtime, [RuntimeWorkflowTestScopeEfModule.SchemaVersion], moduleActive: false)
     ];
 
     private readonly List<PackageLoadContext> _packages = [];
@@ -109,6 +109,40 @@ public sealed class EfSchemaReadabilitySourceTests : IDisposable
         Assert.Equal((null, "1.0.0"), (Entry().DatabaseIdentity, Entry().ObservedFinalizedVersion));
     }
 
+    /// <summary>
+    /// Spec 183's FR-019, amended 2026-09-30: an entry says whether the family's module is active in this host, so the
+    /// backfill's settle condition can leave out a host that only loads the declaration (spec 186, FR-012). Loading it
+    /// keeps it in the report, and so in every readability count (FR-022); it stays observed after the module stops.
+    /// </summary>
+    [Fact]
+    public void An_entry_says_its_module_is_active_from_when_a_gate_admits_it_until_every_gate_that_did_has_stopped()
+    {
+        var observations = new EfSchemaFinalizationObservations();
+        var family = RuntimeArtifactEfModule.SchemaFamily;
+        var (shellA, shellB) = (new object(), new object());
+        ReadabilityEntry Entry() => EfSchemaReadabilitySource.Read(EfSchemaFamilyCatalog.Discover([RuntimeModule]), observations: observations)
+            .Entries.Single(entry => entry.Family == family);
+
+        Assert.False(Entry().ModuleActive);
+
+        observations.Observe(family, "database-a", "1.0.0");
+        Assert.False(Entry().ModuleActive);
+
+        observations.Activate(shellA, [family]);
+        observations.Activate(shellA, [family]);
+        observations.Activate(shellB, [family]);
+        Assert.True(Entry().ModuleActive);
+
+        observations.Deactivate(shellA, [family]);
+        Assert.True(Entry().ModuleActive);
+
+        observations.Deactivate(shellB, [family]);
+        var stopped = Entry();
+        Assert.False(stopped.ModuleActive);
+        Assert.Equal("1.0.0", stopped.ObservedFinalizedVersion);
+        Assert.Equal([RuntimeArtifactEfModule.SchemaVersion], stopped.ReadableVersions);
+    }
+
     [Fact]
     public void Every_loaded_declaration_of_a_family_narrows_what_the_host_reports_it_can_read()
     {
@@ -139,7 +173,7 @@ public sealed class EfSchemaReadabilitySourceTests : IDisposable
     [Fact]
     public void A_host_that_has_loaded_the_finalization_assembly_reports_its_shared_family_with_no_module() =>
         Assert.Contains(
-            new ReadabilityEntry(EfSchemaFinalization.SchemaFamily, null, [EfSchemaFinalization.SchemaVersion]),
+            new ReadabilityEntry(EfSchemaFinalization.SchemaFamily, null, [EfSchemaFinalization.SchemaVersion], moduleActive: false),
             Read(typeof(EfSchemaFinalization).Assembly).Entries);
 
     [Fact]
@@ -192,7 +226,7 @@ public sealed class EfSchemaReadabilitySourceTests : IDisposable
     [Fact]
     public void An_unchanged_host_publishes_an_equal_report_whatever_order_its_assemblies_load_in()
     {
-        ReadabilityEntry[] expected = [new("Invoices", "Sales", ["2"]), new("Orders", "Sales", ["1"])];
+        ReadabilityEntry[] expected = [new("Invoices", "Sales", ["2"], moduleActive: false), new("Orders", "Sales", ["1"], moduleActive: false)];
 
         Assert.Equal(expected, EfSchemaReadabilitySource.Read([Declaration("Orders", "1"), Declaration("Invoices", "2")]).Entries);
         Assert.Equal(expected, EfSchemaReadabilitySource.Read([Declaration("Invoices", "2"), Declaration("Orders", "1")]).Entries);
@@ -212,7 +246,7 @@ public sealed class EfSchemaReadabilitySourceTests : IDisposable
         Assert.Empty(package.GetCustomAttributes<EfSchemaFamilyAttribute>());
 
         var entry = Assert.Single((await new EfSchemaReadabilitySource().ReadAsync()).Entries, entry => entry.Family == family.Name);
-        Assert.Equal(new ReadabilityEntry(family.Name, "Packaged", ["4"]), entry);
+        Assert.Equal(new ReadabilityEntry(family.Name, "Packaged", ["4"], moduleActive: false), entry);
     }
 
     [Fact]

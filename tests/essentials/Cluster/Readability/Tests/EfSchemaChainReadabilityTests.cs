@@ -24,7 +24,7 @@ public sealed class EfSchemaChainReadabilityTests : IDisposable
     {
         var entry = Assert.Single((await new EfSchemaReadabilitySource().ReadAsync()).Entries, entry => entry.Family == ChainedSchemaFamilies.Orders);
 
-        Assert.Equal(new ReadabilityEntry(ChainedSchemaFamilies.Orders, ChainedSchemaFamilies.Module, ["1", "2", "3"]), entry);
+        Assert.Equal(new ReadabilityEntry(ChainedSchemaFamilies.Orders, ChainedSchemaFamilies.Module, ["1", "2", "3"], moduleActive: false), entry);
     }
 
     /// <summary>

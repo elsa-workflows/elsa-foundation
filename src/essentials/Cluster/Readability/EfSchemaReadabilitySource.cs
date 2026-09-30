@@ -53,6 +53,12 @@ namespace Elsa.Cluster.Readability;
 /// counts for every database: the conservative direction (FR-019; Decisions, Q19). Naming the database read most
 /// recently instead would let a second database this host serves finalize a version it cannot read.
 /// </para>
+/// <para>
+/// An entry also says whether the family's module is active in this host: admitted by a gate that has not stopped
+/// (FR-019, amended 2026-09-30). Readability counts every entry, active or not (FR-022); only the backfill's settle
+/// condition leaves out the entries of a module that is not active, since such a host writes none of the family's rows
+/// (spec 186, FR-012).
+/// </para>
 /// </remarks>
 public sealed class EfSchemaReadabilitySource(
     ILogger<EfSchemaReadabilitySource>? logger = null,
@@ -86,12 +92,15 @@ public sealed class EfSchemaReadabilitySource(
             .OrderBy(family => family.Key, StringComparer.Ordinal)
             .Select(family => Observed(Entry(family, logger ?? NullLogger.Instance), observations)));
 
-    /// <summary><paramref name="entry"/> with the database identity and observed finalized version this host read, if any.</summary>
+    /// <summary>
+    /// <paramref name="entry"/> with the database identity and observed finalized version this host read, if any, and
+    /// whether the family's module is active: a family whose declaration is loaded and whose module no gate has admitted is
+    /// not (spec 183, FR-019).
+    /// </summary>
     private static ReadabilityEntry Observed(ReadabilityEntry entry, EfSchemaFinalizationObservations? observations)
     {
-        if (observations?.Find(entry.Family) is not { } observed || observed == EfSchemaFamilyObservation.None)
-            return entry;
-        return new ReadabilityEntry(entry.Family, entry.EfModule, entry.ReadableVersions, observed.DatabaseIdentity, observed.ObservedFinalizedVersion);
+        var observed = observations?.Find(entry.Family) ?? EfSchemaFamilyObservation.None;
+        return new ReadabilityEntry(entry.Family, entry.EfModule, entry.ReadableVersions, observed.DatabaseIdentity, observed.ObservedFinalizedVersion, observed.ModuleActive);
     }
 
     private static ReadabilityEntry Entry(IGrouping<string, EfSchemaFamilyDescriptor> declarations, ILogger logger)
@@ -110,7 +119,7 @@ public sealed class EfSchemaReadabilitySource(
                 declarations.Key,
                 string.Join(", ", declarations.Select(declaration => $"'{declaration.Module ?? "no module (shared)"}' in {declaration.Assembly.GetName().Name}")));
 
-            return new ReadabilityEntry(declarations.Key, modules.Order(StringComparer.Ordinal).First(), []);
+            return new ReadabilityEntry(declarations.Key, modules.Order(StringComparer.Ordinal).First(), [], moduleActive: false);
         }
 
         foreach (var declaration in declarations.Where(declaration => declaration.Defects.Count > 0))
@@ -126,6 +135,6 @@ public sealed class EfSchemaReadabilitySource(
             .Select(declaration => declaration.ReadableVersions.AsEnumerable())
             .Aggregate((versions, next) => versions.Intersect(next, StringComparer.Ordinal));
 
-        return new ReadabilityEntry(declarations.Key, modules[0], readable);
+        return new ReadabilityEntry(declarations.Key, modules[0], readable, moduleActive: false);
     }
 }
