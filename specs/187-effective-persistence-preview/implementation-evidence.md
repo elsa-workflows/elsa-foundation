@@ -246,3 +246,9 @@ Local proof index (the acceptance matrix remains the requirement source):
 | A11 | Real blocked-stdin, composer/read/exit cancellation, flood, timeout and descendant cleanup; deterministic stage/failure branches and kill-tree mutation |
 | A12–A13 | Actual private unknown retention/generation, console/exception canaries, fresh passing artifact scan, original-file and database/context/action/acquisition sentinels |
 | A14 | One real owned worker response through JSON/text formatter and unchecked plan companion |
+
+## Delivery PR and task-count map correction
+
+Ready PR [#2183](https://github.com/elsa-workflows/elsa-foundation/pull/2183) opened at clean `70eaf08effef0143a254d2ac09c46ad67e0310de`, with Copilot requested through the PR creation command. Independent exact-head review is clear; the committed two-test-file delta matches the prior reviewed snapshot. No production source changed after the reviewed `55eed213e` head. Local final full gate counts above remain applicable.
+
+The last delivery map check ran after completed task checkboxes were committed and correctly refused stale `docs/maps/spec-status-map.md`; prior all/check had preceded those checkbox changes. PR Maps at70eaf failed for that same task-count change. Root regenerated all maps, reviewed the sole changed spec187 row (19tasks done,1open) and unchanged manifest/findings, then check passed (both commands exit0). The generated spec map is committed explicitly with this evidence correction. This is bookkeeping drift fixed before merge, not a behavior regression or a passed old-head map gate. T020 and the spec/program remain in progress pending current-head CI/review and exact-main gates.
