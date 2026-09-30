@@ -73,6 +73,7 @@ Existing [connection-guard #1902](https://github.com/elsa-workflows/elsa-foundat
 - [Developer plan command contract](../reports/runtime-composition/developer-plan-command-contract.md)
 - [Selected-host evidence investigation](../reports/runtime-composition/selected-host-evidence-boundary.md)
 - [Composition import/export investigation](../reports/runtime-composition/import-export-boundary.md)
+- [Developer effective-persistence investigation #2172](../reports/runtime-composition/developer-persistence-evidence.md)
 - [Composition apply/recovery boundary](../reports/runtime-composition/apply-recovery-boundary.md)
 - [Source-to-generation attestation investigation](../reports/runtime-composition/source-generation-attestation.md)
 - [Workbench source-snapshot boundary](../reports/runtime-composition/workbench-source-snapshot.md)

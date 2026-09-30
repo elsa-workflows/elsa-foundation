@@ -2,6 +2,8 @@
 
 Status: reviewed discovery completed for [#1966](https://github.com/elsa-workflows/elsa-foundation/issues/1966). Approved for specification input; not an implementation contract.
 
+This is the historical #1966 baseline. The current developer-inspection seam and remaining snapshot/provenance/export gaps are tracked by [#2172](https://github.com/elsa-workflows/elsa-foundation/issues/2172) in the [developer persistence evidence report](developer-persistence-evidence.md); the baseline's implementation-blocked statement below describes that earlier stage.
+
 Source baseline: `e738badd1f9ddc2974248079de43d21440ba5afd`. This follows the [reviewed persistence-boundary result](https://github.com/elsa-workflows/elsa-foundation/issues/1965#issuecomment-5798240404). The program remains blocked from implementation until #1967 reconciles both reports.
 
 ## Confirmed tooling flow
