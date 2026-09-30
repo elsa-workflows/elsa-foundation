@@ -265,7 +265,7 @@ notes 5101
   'no tags'. And the old endpoint carries on."
 - **Expect:** `reload` prints `HTTP 200` and `{ "features": 4, "reloaded": 1 }` (as three lines of JSON); `withtags` prints `HTTP 200` and the notes with `"tags":[]`; `tag` prints the note with `"tags":["demo"]`.
 - **Time:** the reload is under 3 s. The new endpoints turn on when the host has re-evaluated the schema version, which it does every 5 s, so a `withtags` right after the reload is
-  `HTTP 409` (`schema-version-not-finalized`) about half the time: that is why the first command is separate. If you see it, say "it is checking that this is safe", wait, and repeat.
+  sometimes `HTTP 409` (`schema-version-not-finalized`), for up to five seconds: that is why the first command is separate. If you see it, say "it is checking that this is safe", wait, and repeat.
 - **If it goes wrong:** `HTTP 409` on `reload` again: the apply did not run (or ran against another database): repeat 1.5 and read its table. `withtags` still 409 after ten seconds:
   `bash tools/demo/elsa.sh persistence status --host artifacts/demo/hosts/solo --environment Development --provider Sqlite --modules Samples.Notes --family SamplesNotes` says why.
 
@@ -393,8 +393,8 @@ bash tools/demo/publish.sh 2 --host a
 - **If it goes wrong:** nothing after 40 s: is the file in the feed (`ls artifacts/demo/hosts/a/feed`)? Use the Act 2 fallback below.
 
 **What actually happens, verified:** host A does **not** have to leave the fleet. When it unloads the 1.0.0 assembly, it publishes its readability report again
-(now `1.0.0, 2.0.0`), the cluster counts every live member as able to read 2.0.0, and the version finalizes on its next evaluation, about 2 s after A switched
-(13.8 s after the publish, both hosts running the whole time). The same happens the other way round when a host is stopped: a host that leaves the cluster
+(now `1.0.0, 2.0.0`), the cluster counts every live member as able to read 2.0.0, and the version finalizes on its next evaluation, 0 to 3 s after A switched
+(11 to 14 s after the publish in seven rehearsals, both hosts running the whole time). The same happens the other way round when a host is stopped: a host that leaves the cluster
 stops being counted, which is why the older stop-publish-start route also finalizes, even before the restarted host is back.
 
 ### 2.6 The version finalizes: both hosts answer 200
@@ -418,7 +418,7 @@ bash tools/demo/elsa.sh persistence status --host artifacts/demo/hosts/a --envir
     host-b: Active, live, ...   SamplesNotes: reads 1.0.0, 2.0.0
   ```
   Run `status` again after about 20 s (a good moment for questions): `complete from 2.0.0`.
-- **Time:** finalization 1 to 5 s after A switched (repeat `withtags` if you get 409 for a moment); `complete from 2.0.0` 16 to 20 s after finalization (measured: 19.7 s).
+- **Time:** finalization 1 to 5 s after A switched (repeat `withtags` if you get 409 for a moment); `complete from 2.0.0` 16 to 20 s after finalization (measured: 18 to 20 s; 30 to 34 s after the publish).
 - **If it goes wrong:** still 409 after 30 s and `waits for: host-a`: A has not switched (see 2.5). A `waits for:` line naming a host you did not start: a leftover member from an earlier rehearsal: `bash tools/demo/reset.sh` and set up again.
 
 ### Act 2 fallback: stop, publish, start host A
