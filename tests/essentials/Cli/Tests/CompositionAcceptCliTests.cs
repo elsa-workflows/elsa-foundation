@@ -204,8 +204,8 @@ public sealed class CompositionAcceptCliTests
         Assert.Equal(ToolExitCode.Success, run.ExitCode);
         var output = JsonNode.Parse(File.ReadAllText(fixture.AcceptedOutputPath))!.AsObject();
         Assert.False(output.ContainsKey("settings"));
-        Assert.True(output.ContainsKey("resources"));
-        Assert.Null(output["resources"]);
+        Assert.True(output.TryGetPropertyValue("resources", out var resources));
+        Assert.Null(resources);
     }
 
     [Theory]
