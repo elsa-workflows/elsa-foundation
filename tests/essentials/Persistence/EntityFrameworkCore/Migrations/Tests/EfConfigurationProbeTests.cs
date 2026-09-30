@@ -29,7 +29,7 @@ namespace Elsa.Persistence.EntityFrameworkCore.Migrations.Tests;
 /// Exercises effective persistence selection through the real shell-settings and host-list boundaries.
 /// These cases inspect configuration only; they never activate a feature or open a database.
 /// </summary>
-public sealed class EfEffectivePersistenceConfigurationProbeTests : IDisposable
+public sealed class EfConfigurationProbeTests : IDisposable
 {
     private const string Shell = "persistence-probe";
     private const string Runtime = "WorkflowsRuntimeEntityFrameworkCore";
@@ -40,8 +40,6 @@ public sealed class EfEffectivePersistenceConfigurationProbeTests : IDisposable
     private const string DifferentConnectionCanary = "different-target-canary-2172";
     private const string UnknownSettingCanary = "raw-unknown-setting-canary-2172";
     private const string InlineIdentityCanary = "Data Source=fixture.db;Password=inline-reference-canary-2172";
-
-    private static readonly string[] DiagnosticFeatureIds = [StructuredLogs, OpenTelemetry];
 
     private static readonly Assembly[] HostAssemblies = new[]
     {
@@ -484,11 +482,7 @@ public sealed class EfEffectivePersistenceConfigurationProbeTests : IDisposable
         var persistence = new JsonObject();
         if (options.IncludeShellDefault)
             persistence["DefaultResource"] = "shell-base";
-        if (options.AllLegacy)
-        {
-            // Legacy feature settings are deliberately present to prove they remain outside the resource patch.
-        }
-        else if (options.MixedDiagnostics)
+        if (options.MixedDiagnostics)
         {
             persistence["Bindings"] = new JsonObject { [StructuredLogs] = "logs-base" };
         }
@@ -496,7 +490,7 @@ public sealed class EfEffectivePersistenceConfigurationProbeTests : IDisposable
         {
             persistence["Bindings"] = new JsonObject { [RuntimeWorkflowExecution] = "runtime-other" };
         }
-        else
+        else if (!options.AllLegacy)
         {
             persistence["Bindings"] = DiagnosticBindings(options.SameDiagnosticsReference, production: false);
         }
@@ -507,9 +501,9 @@ public sealed class EfEffectivePersistenceConfigurationProbeTests : IDisposable
             {
                 ["Shells"] = new JsonObject
                 {
-                    [options.ShellName] = new JsonObject
+                    [Shell] = new JsonObject
                     {
-                        ["Name"] = options.ShellName,
+                        ["Name"] = Shell,
                         ["Features"] = features,
                         ["Configuration"] = new JsonObject
                         {
@@ -544,7 +538,7 @@ public sealed class EfEffectivePersistenceConfigurationProbeTests : IDisposable
             {
                 ["Shells"] = new JsonObject
                 {
-                    [options.ShellName] = new JsonObject
+                    [Shell] = new JsonObject
                     {
                         ["Configuration"] = new JsonObject
                         {
@@ -574,13 +568,9 @@ public sealed class EfEffectivePersistenceConfigurationProbeTests : IDisposable
         ["ConnectionName"] = connectionName
     };
 
-    private static JsonObject Feature(string? provider = null, string? connectionName = null, string? schema = null)
+    private static JsonObject Feature(string? schema = null)
     {
         var settings = new JsonObject { ["UnknownProbeSetting"] = UnknownSettingCanary };
-        if (provider is not null)
-            settings["Provider"] = provider;
-        if (connectionName is not null)
-            settings["ConnectionName"] = connectionName;
         if (schema is not null)
             settings["Schema"] = schema;
         return settings;
@@ -745,7 +735,6 @@ public sealed class EfEffectivePersistenceConfigurationProbeTests : IDisposable
 
     private sealed record ProbeOptions
     {
-        public string ShellName { get; init; } = Shell;
         public bool IncludeRootDefault { get; init; } = true;
         public string RootDefaultResource { get; init; } = "primary";
         public bool IncludeShellDefault { get; init; }

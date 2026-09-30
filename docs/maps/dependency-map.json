@@ -15374,6 +15374,11 @@
         },
         {
           "type": "internal",
+          "id": "dotnet-elsa",
+          "path": "src/essentials/Cli/Elsa.Cli.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Cluster.EntityFrameworkCore",
           "path": "src/essentials/Cluster/EntityFrameworkCore/Elsa.Cluster.EntityFrameworkCore.csproj"
         },
@@ -15404,6 +15409,16 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Modularity.EntityFramework",
+          "path": "src/essentials/Modularity/EntityFramework/Elsa.Modularity.EntityFramework.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Modularity.Planning",
+          "path": "src/essentials/Modularity/Planning/Elsa.Modularity.Planning.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Secrets.Persistence.EntityFrameworkCore",
           "path": "src/essentials/Secrets/Persistence/EntityFrameworkCore/Elsa.Secrets.Persistence.EntityFrameworkCore.csproj"
         },
@@ -15411,6 +15426,11 @@
           "type": "internal",
           "id": "Elsa.Studio.Preferences.Persistence.EntityFrameworkCore",
           "path": "src/essentials/Studio/Preferences/Persistence/EntityFrameworkCore/Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Tasks",
+          "path": "src/essentials/Tasks/Elsa.Tasks.csproj"
         },
         {
           "type": "internal",
@@ -15446,6 +15466,11 @@
           "type": "internal",
           "id": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore",
           "path": "src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Runtime.Resumption",
+          "path": "src/essentials/Workflows/Runtime/Resumption/Elsa.Workflows.Runtime.Resumption.csproj"
         },
         {
           "type": "internal",

@@ -44,6 +44,7 @@
     <ProjectReference Include="..\..\..\..\..\..\src\essentials\Tasks\Elsa.Tasks.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\essentials\Cli\Elsa.Cli.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\essentials\Modularity\EntityFramework\Elsa.Modularity.EntityFramework.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\essentials\Modularity\Planning\Elsa.Modularity.Planning.csproj" />
     <!-- Guards spec 171 FR-019: every design-time factory line corresponds to a declared provider context
          and vice versa. This project already references all four provider engines and every module
          project, so it can also reference the tooling project rather than duplicating its factory list. -->
