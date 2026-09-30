@@ -182,11 +182,11 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
         public static ContentRoot For(string host)
         {
             var content = new ContentRoot();
-            var source = Path.Combine(RepositoryRoot(), "src", "apps", host);
+            var source = Path.Join(RepositoryRoot(), "src", "apps", host);
             foreach (var file in new[] { "appsettings.json", "appsettings.Development.json" })
-                File.Copy(Path.Combine(source, file), Path.Combine(content._directory, file));
-            Directory.CreateDirectory(Path.Combine(content._directory, "packages"));
-            File.WriteAllText(Path.Combine(content._directory, "shells.json"), $$"""{ "CShells": { "Shells": { "{{ProbeShell}}": { "Name": "{{ProbeShell}}", "Features": {} } } } }""");
+                File.Copy(Path.Join(source, file), Path.Join(content._directory, file));
+            Directory.CreateDirectory(Path.Join(content._directory, "packages"));
+            File.WriteAllText(Path.Join(content._directory, "shells.json"), $$"""{ "CShells": { "Shells": { "{{ProbeShell}}": { "Name": "{{ProbeShell}}", "Features": {} } } } }""");
             return content;
         }
 
@@ -197,7 +197,7 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
                 "--contentRoot", _directory,
                 "--environment", "Development",
                 "--urls", "http://127.0.0.1:0",
-                "--Nuplane:Setup:StateFilePath", Path.Combine(_directory, ".nuplane", "store-state.json"),
+                "--Nuplane:Setup:StateFilePath", Path.Join(_directory, ".nuplane", "store-state.json"),
                 // The Foundation.Host maps and composes its module-management operations only when this is on; Workbench always does.
                 "--Elsa:ModuleManagement:Enabled", "true",
                 "--Elsa:ModuleManagement:ApiKey", "guard-test-key"
@@ -208,7 +208,7 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
                     "--Elsa:Cluster:Membership:HostId", "guard-test-host",
                     "--Elsa:Cluster:Membership:EntityFrameworkCore:Enabled", "true",
                     "--Elsa:Cluster:Membership:EntityFrameworkCore:Provider", "Sqlite",
-                    "--Elsa:Cluster:Membership:EntityFrameworkCore:ConnectionString", $"Data Source={Path.Combine(_directory, "membership.db")};Pooling=False"
+                    "--Elsa:Cluster:Membership:EntityFrameworkCore:ConnectionString", $"Data Source={Path.Join(_directory, "membership.db")};Pooling=False"
                 ]);
 
             return [.. arguments];
@@ -230,7 +230,7 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
         {
             for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
             {
-                if (File.Exists(Path.Combine(directory.FullName, "Elsa.Server.slnx")))
+                if (File.Exists(Path.Join(directory.FullName, "Elsa.Server.slnx")))
                     return directory.FullName;
             }
 
@@ -263,6 +263,7 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
             }
             catch (TargetInvocationException exception) when (exception.InnerException is HostAbortedException)
             {
+                // The abort is how the capture stops the entry point once the host is built.
             }
             finally
             {
