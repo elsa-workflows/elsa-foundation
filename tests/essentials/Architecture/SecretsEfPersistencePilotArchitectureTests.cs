@@ -261,6 +261,7 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
         "tests/essentials/Persistence/EntityFramework/Tests/EfToolingTargetSelectionTests.cs",
         "tests/essentials/Persistence/EntityFramework/Tests/EfWriteRetryTests.cs",
         "tests/essentials/Persistence/EntityFramework/Tests/FakeFleet.cs",
+        "tests/essentials/Persistence/EntityFramework/Tests/FinalizationInsert.cs",
         "tests/essentials/Persistence/EntityFramework/Tests/MigrationsAssemblyAssert.cs",
         "tests/essentials/Persistence/EntityFramework/Tests/PersistenceConfigurationAdapterTests.cs",
         "tests/essentials/Persistence/EntityFramework/Tests/PersistenceResolutionEvidenceTests.cs",

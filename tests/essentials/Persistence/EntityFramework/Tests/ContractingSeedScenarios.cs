@@ -157,18 +157,6 @@ internal static class ContractingSeedScenarios
     /// <summary>Runs <paramref name="read"/> to completion from EF's synchronous logging callback, off any synchronization context.</summary>
     public static T Wait<T>(Func<Task<T>> read) => Task.Run(read).GetAwaiter().GetResult();
 
-    /// <summary>
-    /// Whether <paramref name="command"/> creates a row of a finalization table (<paramref name="table"/> when given, else the
-    /// record or identity table of any module). The store creates them with an insert-unless-present statement sent outside
-    /// <c>SaveChanges</c> (#2162), so a test that pins a moment in a seed pins the command, not the save.
-    /// </summary>
-    internal static bool CreatesFinalizationRow(DbCommand command, string? table = null) =>
-        command.CommandText.Contains("INSERT INTO", StringComparison.OrdinalIgnoreCase) &&
-        (table is null
-            ? command.CommandText.Contains(EfSchemaFinalization.RecordTablePrefix, StringComparison.Ordinal) ||
-              command.CommandText.Contains(EfSchemaFinalization.DatabaseIdentityTablePrefix, StringComparison.Ordinal)
-            : command.CommandText.Contains(table, StringComparison.Ordinal));
-
     /// <summary>Runs an action once, before the first finalization row the context it is added to creates.</summary>
     internal sealed class BeforeFirstFinalizationInsert(Func<Task> action) : DbCommandInterceptor
     {
@@ -180,7 +168,7 @@ internal static class ContractingSeedScenarios
             InterceptionResult<int> result,
             CancellationToken cancellationToken = default)
         {
-            if (CreatesFinalizationRow(command) && Interlocked.Exchange(ref _action, null) is { } run)
+            if (FinalizationInsert.IntoAnyFinalizationTable(command) && Interlocked.Exchange(ref _action, null) is { } run)
                 await run();
             return result;
         }
@@ -194,7 +182,7 @@ internal static class ContractingSeedScenarios
             CommandExecutedEventData eventData,
             int result,
             CancellationToken cancellationToken = default) =>
-            CreatesFinalizationRow(command, table) ? throw new ProcessEndedException() : ValueTask.FromResult(result);
+            FinalizationInsert.Into(command, table) ? throw new ProcessEndedException() : ValueTask.FromResult(result);
     }
 
     internal sealed class ProcessEndedException() : Exception("The process ended here.");

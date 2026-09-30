@@ -368,7 +368,7 @@ public sealed class EfSchemaFinalizationStoreTests : IAsyncLifetime
 
         var identities = await Task.WhenAll(stores.Select(store => store.GetOrCreateDatabaseIdentityAsync()));
 
-        Assert.True(race.EveryContextWasHeldAtEveryTable, "The creators did not both read before either wrote.");
+        Assert.True(race.EveryContextWasHeldBeforeItsInsert, "The creators did not both read before either wrote.");
         Assert.Single(identities.Distinct());
         Assert.Equal(identities[0], await Store().FindDatabaseIdentityAsync());
         Assert.Equal(1, await Context().Set<EfDatabaseIdentityRow>().CountAsync());
@@ -386,7 +386,7 @@ public sealed class EfSchemaFinalizationStoreTests : IAsyncLifetime
             stores[0].GetOrCreateAsync(Family, "1", Chain, Operator),
             stores[1].GetOrCreateAsync(Family, "1", Chain, SchemaFinalizationActor.OfOperator("someone-else")));
 
-        Assert.True(race.EveryContextWasHeldAtEveryTable, "The creators did not both read before either wrote.");
+        Assert.True(race.EveryContextWasHeldBeforeItsInsert, "The creators did not both read before either wrote.");
         Assert.Equal(records[0], records[1], RecordComparer);
         Assert.Single(records.Select(record => record.DatabaseIdentity).Distinct());
         Assert.Equal(records[0].DatabaseIdentity, await Store().FindDatabaseIdentityAsync());

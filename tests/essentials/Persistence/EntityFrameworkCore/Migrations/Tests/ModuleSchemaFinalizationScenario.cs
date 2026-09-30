@@ -4,7 +4,6 @@ using Elsa.Persistence.EntityFramework.Tests;
 using Elsa.Persistence.Schema.SchemaFinalization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Storage;
 using Xunit;
 
@@ -21,18 +20,23 @@ internal static class ModuleSchemaFinalizationScenario
     private static readonly SchemaFinalizationMember HostA = new("host-a", "incarnation-a");
     private static readonly SchemaFinalizationMember HostB = new("host-b", "incarnation-b");
 
+    private const int StressCreators = 8;
+    private const int StressFamilies = 25;
+
     /// <summary>
     /// #2162: for each module context, two hosts that start together on a database no host has touched both read "no
     /// record" and "no identity", and both insert. The loser of each insert reads the winner's row and carries on with
-    /// the same identity, one row of each is left, and EF logs no error. Run it before <see cref="RunAsync"/>, while the
-    /// modules' identity rows do not exist yet.
+    /// the same identity, one row of each is left, and EF logs no error. Both are held at their insert until both have
+    /// reached it (<see cref="StartupInsertRace"/>), so the engine, not the scheduler, decides the race. Run it before
+    /// <see cref="RunAsync"/>, while the modules' identity rows do not exist yet.
     /// </summary>
     public static async Task RunStartupRaceAsync(string provider, string connectionString, string? schema = null)
     {
         foreach (var type in ModuleContextCatalog.Contexts(provider))
         {
-            var module = ModuleContextCatalog.HistoryTable(type)[EfMigrationsHistory.TablePrefix.Length..];
-            var race = StartupInsertRace.Begin(2, EfSchemaFinalization.RecordTableName(module), EfSchemaFinalization.DatabaseIdentityTableName(module));
+            var module = ModuleOf(type);
+            var (recordTable, identityTable) = (EfSchemaFinalization.RecordTableName(module), EfSchemaFinalization.DatabaseIdentityTableName(module));
+            var race = StartupInsertRace.Begin(2, recordTable, identityTable);
             await using var first = ModuleContextCatalog.Create(type, connectionString, race.Configure, schema);
             await using var second = ModuleContextCatalog.Create(type, connectionString, race.Configure, schema);
 
@@ -40,17 +44,68 @@ internal static class ModuleSchemaFinalizationScenario
                 new EfSchemaFinalizationStore(first).GetOrCreateAsync(Family, Chain[0], Chain, SchemaFinalizationActor.Of(HostA)),
                 new EfSchemaFinalizationStore(second).GetOrCreateAsync(Family, Chain[0], Chain, SchemaFinalizationActor.Of(HostB)));
 
-            Assert.True(race.EveryContextWasHeldAtEveryTable, $"{type.Name}: the hosts did not both read before either wrote.");
+            Assert.True(race.EveryContextWasHeldBeforeItsInsert, $"{type.Name}: the hosts were not both at their insert before either wrote.");
             Assert.Empty(race.Errors);
             var identity = Assert.Single(records.Select(record => record.DatabaseIdentity).Distinct(StringComparer.Ordinal));
             Assert.Equal(records[0].Family, records[1].Family);
             await using var reader = ModuleContextCatalog.Create(type, connectionString, schema: schema);
-            Assert.Equal(identity, await new EfSchemaFinalizationStore(reader).GetOrCreateDatabaseIdentityAsync());
-            Assert.Equal(records[0].Revision, (await new EfSchemaFinalizationStore(reader).FindAsync(Family))!.Revision);
-            Assert.Equal(1, await RowCountAsync(reader, EfSchemaFinalization.RecordTableName(module)));
-            Assert.Equal(1, await RowCountAsync(reader, EfSchemaFinalization.DatabaseIdentityTableName(module)));
+            var readerStore = new EfSchemaFinalizationStore(reader);
+            Assert.Equal(identity, await readerStore.GetOrCreateDatabaseIdentityAsync());
+            Assert.Equal(records[0].Revision, (await readerStore.FindAsync(Family))!.Revision);
+            Assert.Equal(1, await RowCountAsync(reader, recordTable));
+            Assert.Equal(1, await RowCountAsync(reader, identityTable));
         }
     }
+
+    /// <summary>
+    /// #2162: for each module context, <see cref="StressCreators"/> creators, each on a connection of its own, create the
+    /// same <see cref="StressFamilies"/> families' records, all of them starting each family together, without a hold. Of
+    /// every family's creators exactly one inserts, all of them read the same record back, EF logs no error, and the
+    /// table gains one row per family. The identity is raced on the first family of a database no host has touched, and
+    /// stays one row.
+    /// </summary>
+    public static async Task RunStartupStressAsync(string provider, string connectionString, string? schema = null)
+    {
+        foreach (var type in ModuleContextCatalog.Contexts(provider))
+        {
+            var module = ModuleOf(type);
+            var (recordTable, identityTable) = (EfSchemaFinalization.RecordTableName(module), EfSchemaFinalization.DatabaseIdentityTableName(module));
+            var race = StartupInsertRace.Record();
+            var contexts = Enumerable.Range(0, StressCreators).Select(_ => ModuleContextCatalog.Create(type, connectionString, race.Configure, schema)).ToArray();
+            try
+            {
+                var creators = contexts.Select((context, index) => (Store: new EfSchemaFinalizationStore(context), Actor: SchemaFinalizationActor.OfOperator($"creator-{index}"))).ToArray();
+                var recordsBefore = await RowCountAsync(contexts[0], recordTable);
+                for (var family = 0; family < StressFamilies; family++)
+                {
+                    var name = $"Stress{family}";
+                    var start = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                    var creations = creators.Select(async creator =>
+                    {
+                        await start.Task;
+                        return await creator.Store.GetOrCreateAsync(name, Chain[0], Chain, creator.Actor);
+                    }).ToArray();
+                    start.SetResult();
+
+                    var records = await Task.WhenAll(creations);
+                    Assert.True(
+                        records.Select(record => (record.DatabaseIdentity, record.Revision, record.History[0].Actor)).Distinct().Count() == 1,
+                        $"{type.Name}: the creators of '{name}' did not all read the same record back.");
+                }
+
+                Assert.Empty(race.Errors);
+                Assert.Equal(recordsBefore + StressFamilies, await RowCountAsync(contexts[0], recordTable));
+                Assert.Equal(1, await RowCountAsync(contexts[0], identityTable));
+            }
+            finally
+            {
+                foreach (var context in contexts)
+                    await context.DisposeAsync();
+            }
+        }
+    }
+
+    private static string ModuleOf(Type context) => ModuleContextCatalog.HistoryTable(context)[EfMigrationsHistory.TablePrefix.Length..];
 
     private static async Task<long> RowCountAsync(DbContext context, string table)
     {

@@ -622,9 +622,8 @@ public sealed class EfContractingMigrationRefusalTests : IAsyncLifetime
             InterceptionResult<int> result,
             CancellationToken cancellationToken = default)
         {
-            // The record's key, its family, is the first column of the insert.
-            if (CreatesFinalizationRow(command, EfSchemaFinalization.RecordTablePrefix))
-                Families.Add((string)command.Parameters[0].Value!);
+            if (FinalizationInsert.IntoAnyRecordTable(command))
+                Families.Add((string)FinalizationInsert.Value(command, nameof(EfSchemaFinalizationRecordRow.Family))!);
             return ValueTask.FromResult(result);
         }
     }
