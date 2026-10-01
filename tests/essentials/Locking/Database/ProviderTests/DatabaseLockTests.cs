@@ -126,6 +126,7 @@ public abstract class DatabaseLockTests(LockDatabase database) : IAsyncDisposabl
             int most;
             while (running > (most = Volatile.Read(ref _mostAtOnce)) && Interlocked.CompareExchange(ref _mostAtOnce, running, most) != most)
             {
+                // Retry until the high-water mark is at least `running`: another thread raced the compare-and-swap.
             }
 
             return new Exit(this);
