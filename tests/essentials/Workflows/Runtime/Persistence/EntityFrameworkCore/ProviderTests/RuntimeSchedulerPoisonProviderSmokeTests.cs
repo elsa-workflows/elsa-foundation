@@ -17,6 +17,11 @@ public sealed class RuntimeSchedulerPoisonPostgreSqlSmokeTests(RuntimeBookmarksP
         fixture,
         connection => new RuntimePostgreSqlDbContext(new DbContextOptionsBuilder<RuntimePostgreSqlDbContext>().UseNpgsql(connection).Options),
         RuntimePostgreSqlDbContext.ExpectedProviderName);
+
+    [SkippableFact]
+    public Task PostgreSql_scheduler_poison_records_a_long_execution_id() => RuntimeSchedulerPoisonProviderSmoke.RunLongExecutionIdAsync(
+        fixture,
+        connection => new RuntimePostgreSqlDbContext(new DbContextOptionsBuilder<RuntimePostgreSqlDbContext>().UseNpgsql(connection).Options));
 }
 
 [Collection(RuntimeBookmarksSqlServerFixture.CollectionName)]
@@ -27,6 +32,11 @@ public sealed class RuntimeSchedulerPoisonSqlServerSmokeTests(RuntimeBookmarksSq
         fixture,
         connection => new RuntimeSqlServerDbContext(new DbContextOptionsBuilder<RuntimeSqlServerDbContext>().UseSqlServer(connection).Options),
         RuntimeSqlServerDbContext.ExpectedProviderName);
+
+    [SkippableFact]
+    public Task SqlServer_scheduler_poison_records_a_long_execution_id() => RuntimeSchedulerPoisonProviderSmoke.RunLongExecutionIdAsync(
+        fixture,
+        connection => new RuntimeSqlServerDbContext(new DbContextOptionsBuilder<RuntimeSqlServerDbContext>().UseSqlServer(connection).Options));
 }
 
 [Collection(RuntimeBookmarksMySqlFixture.CollectionName)]
@@ -37,6 +47,11 @@ public sealed class RuntimeSchedulerPoisonMySqlSmokeTests(RuntimeBookmarksMySqlF
         fixture,
         connection => new RuntimeMySqlDbContext(new DbContextOptionsBuilder<RuntimeMySqlDbContext>().UseMySQL(connection).Options),
         RuntimeMySqlDbContext.ExpectedProviderName);
+
+    [SkippableFact]
+    public Task MySql_scheduler_poison_records_a_long_execution_id() => RuntimeSchedulerPoisonProviderSmoke.RunLongExecutionIdAsync(
+        fixture,
+        connection => new RuntimeMySqlDbContext(new DbContextOptionsBuilder<RuntimeMySqlDbContext>().UseMySQL(connection).Options));
 }
 
 internal static class RuntimeSchedulerPoisonProviderSmoke
@@ -89,6 +104,33 @@ internal static class RuntimeSchedulerPoisonProviderSmoke
             competing.Entry(right).State = EntityState.Modified;
             await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() => competing.SaveChangesAsync());
         }
+    }
+
+    /// <summary>
+    /// A DispatchWorkflow child execution id is 83 characters, and a keyed start's is 80. The store writes the
+    /// encoded identity, which is wider than the raw identity limit: this column once held 128 characters, and
+    /// a provider that enforces length rejected the poison write.
+    /// </summary>
+    public static async Task RunLongExecutionIdAsync(
+        RuntimeBookmarksProviderFixture fixture,
+        Func<string, RuntimeDbContext> createContext)
+    {
+        Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? "The native provider is unavailable.");
+        var scope = $"native-long-id-{Guid.NewGuid():N}";
+        var record = Record(4, new string('c', 83));
+
+        await using (var context = createContext(fixture.ConnectionString))
+        {
+            await context.Database.EnsureCreatedAsync();
+            await Store(context, scope).RecordAsync(record);
+        }
+
+        await using var restarted = createContext(fixture.ConnectionString);
+        var store = Store(restarted, scope);
+        var found = await store.FindAsync(record.WorkflowExecutionId, record.WorkItemId);
+        Assert.NotNull(found);
+        Assert.Equal(record.WorkflowExecutionId, found!.WorkflowExecutionId);
+        Assert.Equal(record.WorkItemId, (await store.ListAsync(record.WorkflowExecutionId)).Single().WorkItemId);
     }
 
     private static EfWorkflowSchedulerPoisonStore Store(RuntimeDbContext context, string scope) =>

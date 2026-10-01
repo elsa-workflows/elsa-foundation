@@ -2603,8 +2603,8 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
 
                     b.Property<string>("WorkflowExecutionId")
                         .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("varchar(128)");
+                        .HasMaxLength(344)
+                        .HasColumnType("varchar(344)");
 
                     b.Property<string>("WorkflowExecutionIdHash")
                         .IsRequired()
