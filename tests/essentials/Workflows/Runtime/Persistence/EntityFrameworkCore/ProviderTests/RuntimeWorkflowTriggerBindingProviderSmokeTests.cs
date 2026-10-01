@@ -50,6 +50,12 @@ internal static class RuntimeWorkflowTriggerBindingProviderSmoke
         Assert.Single((await store.ListByStimulusTypeAsync(new WorkflowTriggerBindingTypePageQuery("Event", 1, firstPage.NextContinuationToken))).Items);
         Assert.Single((await store.ListByStimulusAsync(new WorkflowTriggerBindingPageQuery("Event", "native-event"))).Items);
 
+        // The convergence projection (#2190) must stay exact under the provider's default collation: SQL Server and
+        // MySQL compare text case-insensitively, so a DISTINCT over the hash alone would fold these two together.
+        await store.SaveAsync(binding with { TriggerBindingId = WorkflowTriggerBinding.BuildId("artifact-c", "node-c", "Native-Event"), ArtifactId = "artifact-c", ExecutableNodeId = "node-c", StimulusHash = "Native-Event" });
+        await store.SaveAsync(binding with { TriggerBindingId = WorkflowTriggerBinding.BuildId("artifact-d", "node-d", "native-event"), ArtifactId = "artifact-d", ExecutableNodeId = "node-d" });
+        Assert.Equal(["Native-Event", "native-event", "native-event-2"], (await store.ListActiveStimulusHashesAsync("Event")).Order(StringComparer.Ordinal));
+
         var activationBinding = binding with
         {
             TriggerBindingId = WorkflowTriggerBinding.BuildId("native-activation", "artifact-a", "node-a", "native-event"),

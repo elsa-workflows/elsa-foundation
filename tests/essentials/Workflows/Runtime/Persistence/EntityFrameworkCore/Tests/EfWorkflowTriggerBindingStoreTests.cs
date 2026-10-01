@@ -123,6 +123,35 @@ public sealed class EfWorkflowTriggerBindingStoreTests
     }
 
     [Fact]
+    public async Task Active_stimulus_hashes_are_the_exact_distinct_hashes_of_the_active_bindings_of_one_type()
+    {
+        // The HTTP route-table convergence check (#2190) compares this projection between reads; it must cover exactly
+        // what ListByStimulusTypeAsync pages, and agree with the contract's default over the in-memory store.
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        await using var context = new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connection).Options);
+        await context.Database.EnsureCreatedAsync();
+        IWorkflowTriggerBindingStore store = new EfWorkflowTriggerBindingStore(context, new Accessor("tenant-a"));
+        IWorkflowTriggerBindingStore memory = new InMemoryWorkflowTriggerBindingStore();
+        var prepared = Binding("e", "activation-e", "prepared");
+        foreach (var target in new[] { store, memory })
+        {
+            await target.SaveAsync(Binding("a", null, "same"));
+            await target.SaveAsync(Binding("b", null, "same", artifactId: "artifact-b"));
+            await target.SaveAsync(Binding("c", null, "Same"));
+            await target.SaveAsync(Binding("d", null, "other-type") with { StimulusType = "OtherEvent" });
+            await target.PrepareActivationAsync("activation-e", [prepared]);
+        }
+        await new EfWorkflowTriggerBindingStore(context, new Accessor("tenant-b")).SaveAsync(Binding("f", null, "other-scope"));
+
+        Assert.Equal(["Same", "same"], (await store.ListActiveStimulusHashesAsync("Event")).Order(StringComparer.Ordinal));
+        Assert.Equal(["Same", "same"], (await memory.ListActiveStimulusHashesAsync("Event")).Order(StringComparer.Ordinal));
+
+        await store.ActivateAsync("activation-e", null);
+        Assert.Equal(["Same", "prepared", "same"], (await store.ListActiveStimulusHashesAsync("Event")).Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
     public async Task Preparation_reconciles_activation_rows_saved_before_projection_state()
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");

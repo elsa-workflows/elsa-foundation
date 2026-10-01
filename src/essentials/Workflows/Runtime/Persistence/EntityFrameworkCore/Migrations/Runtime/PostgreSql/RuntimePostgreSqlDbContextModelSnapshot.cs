@@ -482,6 +482,11 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
 
                     b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash");
 
+                    b.HasIndex("ScopeKeyHash", "StimulusTypeLookupKey", "ExpiresAtUtcTicks")
+                        .HasDatabaseName("IX_elsa_runtime_bookmark_state_route_convergence");
+
+                    b.HasIndex("ScopeKeyHash", "StimulusTypeLookupKey", "ExpiresAtUtcTicks").HasAnnotation("Npgsql:IndexInclude", new[] { "StimulusLookupKey", "StimulusHash" });
+
                     b.ToTable("elsa_runtime_bookmark_state", (string)null);
                 });
 
@@ -2851,6 +2856,11 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.HasIndex("ScopeKeyHash", "ActivationIdHash", "TriggerBindingIdHash");
 
                     b.HasIndex("ScopeKeyHash", "ArtifactIdHash", "TriggerBindingIdHash");
+
+                    b.HasIndex("ScopeKeyHash", "StimulusTypeLookupKey", "IsActive")
+                        .HasDatabaseName("IX_elsa_runtime_trigger_binding_route_convergence");
+
+                    b.HasIndex("ScopeKeyHash", "StimulusTypeLookupKey", "IsActive").HasAnnotation("Npgsql:IndexInclude", new[] { "StimulusLookupKey", "StimulusHash" });
 
                     b.HasIndex("ScopeKeyHash", "TriggerBindingIdHash", "TriggerBindingId")
                         .IsUnique();

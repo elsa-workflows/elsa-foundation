@@ -115,6 +115,24 @@ public sealed class InMemoryBookmarkStateStore : IBookmarkStateStore, IBookmarkS
         }
     }
 
+    public ValueTask<IReadOnlyCollection<string>> ListWaitingStimulusHashesByTypeAsync(
+        string stimulusType,
+        DateTimeOffset evaluatedAt,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(stimulusType);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (_syncRoot)
+        {
+            return ValueTask.FromResult(StimulusHashes.DistinctOrdinal(_states.Values
+                .Where(state =>
+                    StringComparer.Ordinal.Equals(state.StimulusType, stimulusType) &&
+                    (state.ExpiresAt is null || state.ExpiresAt > evaluatedAt))
+                .Select(state => state.StimulusHash)));
+        }
+    }
+
     private RuntimeStorePage<BookmarkState> PageStimulus(
         RuntimeStorePageRequest query,
         string queryBinding,

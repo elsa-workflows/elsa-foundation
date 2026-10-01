@@ -2,10 +2,12 @@ using System.Diagnostics;
 using System.Reflection;
 using CShells.DependencyInjection;
 using CShells.Lifecycle;
+using Elsa.Attention.Core;
 using Elsa.Cluster.Core.Contracts;
 using Elsa.Cluster.Core.Models;
 using Elsa.Foundation.DataProtection.EntityFrameworkCore;
 using Elsa.Foundation.Host.ModuleManagement;
+using Elsa.Foundation.Host.Shells;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Persistence.Schema.SchemaFinalization;
 using Elsa.Workbench;
@@ -140,6 +142,10 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
         // The allowlist and the other things this compared are only worth anything if the comparison saw the services it exists for.
         Assert.Contains(typeof(IReconciliationTriggerIngress), compared.Select(service => service.Type));
         Assert.Contains(typeof(IEfSchemaFleet), compared.Select(service => service.Type));
+        // The Foundation.Host's record of the shells it could not activate, and the Attention contributor that lists them from inside
+        // whichever shell is active, are the host's own instances there (#2202).
+        if (host == "Elsa.Foundation.Host")
+            Assert.All([typeof(ShellActivationTracker), typeof(IAttentionContributor)], type => Assert.Contains(type, compared.Select(service => service.Type)));
         if (durableMembership)
             Assert.Contains(typeof(EfDataProtectionKeyRepository), compared.Select(service => service.Type));
     }
