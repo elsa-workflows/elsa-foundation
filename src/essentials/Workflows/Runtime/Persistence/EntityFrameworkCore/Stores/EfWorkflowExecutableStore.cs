@@ -43,8 +43,7 @@ public sealed class EfWorkflowExecutableStore(
             {
                 var artifactId = item.Identity.ArtifactId;
                 var id = CreateId(scope, artifactId);
-                var artifact = await FindExecutableAsync(scope, artifactId, id, cancellationToken);
-                var coordination = await FindCoordinationAsync(scope, artifactId, id, cancellationToken);
+                var (artifact, coordination) = await FindPairAsync(scope, artifactId, id, cancellationToken);
                 if (artifact is null && coordination is null)
                     pending.Add((item, id));
                 else if (artifact is null || coordination is null)
@@ -405,8 +404,7 @@ public sealed class EfWorkflowExecutableStore(
 
             try
             {
-                var artifact = await FindExecutableAsync(scope, artifactId, id, cancellationToken);
-                var coordination = await FindCoordinationAsync(scope, artifactId, id, cancellationToken);
+                var (artifact, coordination) = await FindPairAsync(scope, artifactId, id, cancellationToken);
 
                 if (artifact is null && coordination is null)
                 {
@@ -507,14 +505,37 @@ public sealed class EfWorkflowExecutableStore(
                      x.ArtifactIdHash == Hash(artifactId) &&
                      x.ArtifactId == Encode(artifactId),
                 cancellationToken));
+    // A writer can commit between these statements. Reobserve an incoherent pair once, clearing tracked
+    // entities so a delete/recreate cannot keep the old incarnation. Callers still classify the final pair.
+    private async Task<(WorkflowExecutableEntity? Artifact, WorkflowExecutableCoordinationEntity? Coordination)> FindPairAsync(
+        string scope,
+        string artifactId,
+        string id,
+        CancellationToken cancellationToken)
+    {
+        (WorkflowExecutableEntity? Artifact, WorkflowExecutableCoordinationEntity? Coordination) pair = default;
+        for (var attempt = 0; attempt < 2; attempt++)
+        {
+            if (attempt > 0)
+                context.ChangeTracker.Clear();
+            var artifact = await FindExecutableAsync(scope, artifactId, id, cancellationToken);
+            var coordination = await FindCoordinationAsync(scope, artifactId, id, cancellationToken);
+            pair = (artifact, coordination);
+            if (artifact is null && coordination is null ||
+                artifact is not null && coordination is not null &&
+                StringComparer.Ordinal.Equals(artifact.IncarnationId, coordination.IncarnationId))
+                break;
+        }
+        return pair;
+    }
+
     private async Task<(WorkflowExecutableEntity Artifact, WorkflowExecutableCoordinationEntity Coordination)?> LoadPairAsync(
         string scope,
         string artifactId,
         CancellationToken cancellationToken)
     {
         var id = CreateId(scope, artifactId);
-        var artifact = await FindExecutableAsync(scope, artifactId, id, cancellationToken);
-        var coordination = await FindCoordinationAsync(scope, artifactId, id, cancellationToken);
+        var (artifact, coordination) = await FindPairAsync(scope, artifactId, id, cancellationToken);
         if (artifact is null && coordination is null)
             return null;
         if (artifact is null || coordination is null)

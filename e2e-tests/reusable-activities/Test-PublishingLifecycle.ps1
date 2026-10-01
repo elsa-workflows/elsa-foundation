@@ -94,7 +94,8 @@ $restored = Assert-Write -Ctx $ctx -Label "restore route identity wins over body
     -Body @{ definitionId = "body-definition-must-not-win-$tag"; slotName = "body-slot-must-not-win" } `
     -ExpectStatus 200 `
     -Validate { param($response) $response.Json.definitionId -eq $definitionId -and $response.Json.slotName -eq "default" }
-Assert-LifecycleCondition "slot transitioned away from the original active publication" ($retired.Json.activePublicationId -ne $slot.Json.activePublicationId)
+Assert-LifecycleCondition "unpublish cleared the previously active activation" (
+    $null -ne $slot.Json.activeActivationId -and $null -eq $retired.Json.activePublicationId)
 Assert-LifecycleCondition "slot restore completed for the route-owned slot" ($restored.Json.definitionId -eq $definitionId)
 
 # Reusable-activity publication and durable receipt replay.
