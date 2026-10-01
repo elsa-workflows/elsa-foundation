@@ -4,6 +4,7 @@ using Elsa.Foundation.Identity.Core.Ownership;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Models;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Options;
+using System.Diagnostics.CodeAnalysis;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -24,7 +25,7 @@ public sealed class IdentitySeedCoordinator(
 {
     private const int MaxSeedConvergenceAttempts = 8;
 
-    /// <summary>The pause before a re-read grows by this much per failed attempt, so nodes that lost a race together drift apart.</summary>
+    /// <summary>The pause before a re-read grows by this much per failed attempt, plus up to this much random jitter, so nodes that lost a race together drift apart.</summary>
     private static readonly TimeSpan ConvergenceBackoffStep = TimeSpan.FromMilliseconds(25);
 
     /// <summary>
@@ -99,12 +100,12 @@ public sealed class IdentitySeedCoordinator(
                     expectedPermissions,
                     System: true);
                 var result = await RevisionRoleStore.SaveWithRevisionAsync(role, expectedRevision: null, cancellationToken);
-                return result.Status is IamRevisionSaveStatus.Saved ? Attempt<RoleRecord>.Done(role) : default;
+                return result.Status is IamRevisionSaveStatus.Saved ? Attempt<RoleRecord>.Done(role) : Attempt<RoleRecord>.Retry;
             }
 
             var revisioned = await RevisionRoleStore.FindWithRevisionAsync(tenantId, existing.Id, cancellationToken);
             if (revisioned is null)
-                return default;
+                return Attempt<RoleRecord>.Retry;
 
             existing = revisioned.Record;
             if (expectedPermissions.All(existing.Permissions.Contains) && existing.System)
@@ -115,7 +116,7 @@ public sealed class IdentitySeedCoordinator(
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
             var converged = existing with { Permissions = mergedPermissions, System = true };
             var save = await RevisionRoleStore.SaveWithRevisionAsync(converged, revisioned.Revision, cancellationToken);
-            return save.Status is IamRevisionSaveStatus.Saved ? Attempt<RoleRecord>.Done(converged) : default;
+            return save.Status is IamRevisionSaveStatus.Saved ? Attempt<RoleRecord>.Done(converged) : Attempt<RoleRecord>.Retry;
         }, cancellationToken);
     }
 
@@ -187,7 +188,7 @@ public sealed class IdentitySeedCoordinator(
                     // (its lockout write finds a row this user object has no revision for) instead of returning a
                     // failure. Re-read on the next attempt and converge on the peer's row.
                     lostCreateRace = exception;
-                    return default;
+                    return Attempt<SeedResult>.Retry;
                 }
             }
 
@@ -223,7 +224,7 @@ public sealed class IdentitySeedCoordinator(
                 DirectPermissions = directPermissions
             };
             var result = await RevisionUserStore.SaveWithRevisionAsync(converged, revisioned.Revision, cancellationToken);
-            return result.Status is IamRevisionSaveStatus.Saved ? Settled : default;
+            return result.Status is IamRevisionSaveStatus.Saved ? Settled : Attempt<bool>.Retry;
         }, cancellationToken);
     }
 
@@ -245,7 +246,7 @@ public sealed class IdentitySeedCoordinator(
                     new HashSet<string>(StringComparer.OrdinalIgnoreCase) { roleId },
                     new HashSet<string>(StringComparer.OrdinalIgnoreCase));
                 var create = await RevisionMembershipStore.SaveWithRevisionAsync(membership, expectedRevision: null, cancellationToken);
-                return create.Status is IamRevisionSaveStatus.Saved ? Settled : default;
+                return create.Status is IamRevisionSaveStatus.Saved ? Settled : Attempt<bool>.Retry;
             }
 
             var existing = revisioned.Record;
@@ -261,23 +262,41 @@ public sealed class IdentitySeedCoordinator(
                 RoleIds = roleIds,
                 DirectPermissions = directPermissions
             }, revisioned.Revision, cancellationToken);
-            return result.Status is IamRevisionSaveStatus.Saved ? Settled : default;
+            return result.Status is IamRevisionSaveStatus.Saved ? Settled : Attempt<bool>.Retry;
         }, cancellationToken);
     }
 
-    /// <summary>The outcome of one convergence attempt: <c>default</c> means a conditional-write conflict, so try again.</summary>
-    private readonly record struct Attempt<T>(bool Converged, T? Value)
+    /// <summary>The outcome of one convergence attempt: <see cref="Done"/> with the converged value, or <see cref="Retry"/> after a conditional-write conflict.</summary>
+    private readonly record struct Attempt<T>
     {
-        public static Attempt<T> Done(T value) => new(true, value);
+        private readonly bool converged;
+        private readonly T? value;
+
+        private Attempt(T value)
+        {
+            converged = true;
+            this.value = value;
+        }
+
+        public static Attempt<T> Retry => default;
+
+        public static Attempt<T> Done(T value) => new(value);
+
+        public bool TryGetDone([MaybeNullWhen(false)] out T result)
+        {
+            result = value;
+            return converged;
+        }
     }
 
     private static Attempt<bool> Settled => Attempt<bool>.Done(true);
 
     /// <summary>
     /// The one bounded convergence loop every seeding step uses. <paramref name="attemptConvergence"/> returns
-    /// <see cref="Attempt{T}.Done"/> once the state has converged and <c>default</c> after a conditional-write conflict;
-    /// an <see cref="IdentityRevisionConflictException"/> counts as a conflict too. A growing pause precedes each re-read
-    /// so concurrent nodes do not retry in lockstep. Running out of attempts reports the last such exception, when there
+    /// <see cref="Attempt{T}.Done"/> once the state has converged and <see cref="Attempt{T}.Retry"/> after a
+    /// conditional-write conflict; an <see cref="IdentityRevisionConflictException"/> counts as a conflict too. A pause that
+    /// grows with the attempt number, plus up to one step of random jitter, precedes each re-read so concurrent nodes that
+    /// lost a race together do not retry in lockstep. Running out of attempts reports the last such exception, when there
     /// was one, as the cause.
     /// </summary>
     private async Task<T> ConvergeAsync<T>(string subject, Func<Task<Attempt<T>>> attemptConvergence, CancellationToken cancellationToken)
@@ -287,13 +306,12 @@ public sealed class IdentitySeedCoordinator(
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (attempt > 0)
-                await Task.Delay(ConvergenceBackoffStep * attempt, timeProvider ?? TimeProvider.System, cancellationToken);
+                await Task.Delay(ConvergenceBackoffStep * (attempt + Random.Shared.NextDouble()), timeProvider ?? TimeProvider.System, cancellationToken);
 
             try
             {
-                var outcome = await attemptConvergence();
-                if (outcome.Converged)
-                    return outcome.Value!;
+                if ((await attemptConvergence()).TryGetDone(out var converged))
+                    return converged;
             }
             catch (IdentityRevisionConflictException exception)
             {

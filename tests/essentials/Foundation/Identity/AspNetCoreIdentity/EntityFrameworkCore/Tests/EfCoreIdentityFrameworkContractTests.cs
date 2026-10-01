@@ -332,6 +332,21 @@ public sealed class EfCoreIdentityFrameworkContractTests
     }
 
     [Fact]
+    public async Task Role_remove_on_a_stale_user_revision_throws_the_revision_conflict_type()
+    {
+        await using var scenario = await EfCoreIdentityScenario.CreateAsync();
+        var role = await scenario.CreateRoleAsync("Operators");
+        var user = await scenario.CreateUserAsync("StaleRoleRemove");
+        Assert.True((await scenario.Users.AddToRoleAsync(user, role.Name!)).Succeeded);
+        var staleStamp = user.ConcurrencyStamp;
+        Assert.True((await scenario.Users.AddClaimAsync(user, new Claim("department", "operations"))).Succeeded);
+        user.ConcurrencyStamp = staleStamp;
+
+        var store = scenario.Services.GetRequiredService<IUserRoleStore<AspNetCoreIdentityUser>>();
+        await Assert.ThrowsAsync<IdentityRevisionConflictException>(() => store.RemoveFromRoleAsync(user, role.Name!, CancellationToken.None));
+    }
+
+    [Fact]
     public async Task External_login_ownership_conflict_stays_a_plain_invalid_operation()
     {
         await using var scenario = await EfCoreIdentityScenario.CreateAsync();
