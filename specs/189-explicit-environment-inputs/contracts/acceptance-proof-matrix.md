@@ -65,6 +65,13 @@ With at most four selected files and a 1 MiB cap per file, the 4 MiB aggregate c
 
 The test must calculate encoded bytes before allocation and retain the final serialized request/response ceilings as authoritative. A per-part pass is not evidence that a combined maximum fits.
 
+Exact/one-over 4 MiB controls through the independently bounded worker response transport may use
+legal trailing JSON whitespace. Label these as transport evidence, not claims that the host produced
+a maximum-size result. Any bound on the successful host producer must account for the actual JSON
+encoder: admitted feature identities include `+`, whose encoded byte cost can exceed one byte per
+ASCII character. A plain character-count bound is insufficient to establish an unreachable producer
+boundary. Do not pad a host-produced payload or expand its public shape to manufacture that proof.
+
 ## Evidence discipline
 
 The matrix is a plan-to-proof assignment, not a test report. Until implementation and gates run, every row remains unchecked. Root review must distinguish config-only inspection evidence, public Workbench closure evidence, old file-only compatibility evidence, and real database/provider persistence evidence. No skipped or fixture-only case may be reported as a passed end-to-end Workbench result.

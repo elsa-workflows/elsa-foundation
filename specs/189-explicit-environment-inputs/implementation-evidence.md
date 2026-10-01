@@ -209,3 +209,119 @@ assertion alone could not prove overlay consumption. Those controls are being st
 new projects, host enrollment, or test cadence. The closed raw overlay shape cannot admit a depth-64
 nested object; existing selected-source JSON depth controls remain the authoritative reachable depth
 boundary instead of inventing a valid deep overlay specimen.
+
+## Remaining boundaries and actual Workbench diagnosis
+
+The explicit direct-host request boundary at code head `e9146a163` returned **two executed/passed,
+zero failed/skipped**, covering exactly 8 MiB and the first byte over through the public host wrapper.
+Actual TRX: `runtime-2292-host-exact-request.trx`; log: `/tmp/runtime-2292-host-exact-request.log`.
+
+The additional frontend boundary selection at `9f6176b32` returned **ten executed, nine passed, one
+failed, zero skipped** (`runtime-2292-frontend-boundary-controls.trx`). The exact 4,096 removal fixture
+still carried settings for the removed feature in its environment layer; the existing bridge correctly
+refused to discard those settings. The test-only repair at `05ddd8907` removes that overlay entry and
+reuses the explicit-success response setup. The other nine cases exercised exact/one-over private-file,
+request and response byte bounds, admitted selection size, the 300-second timeout option endpoint and
+mechanical fake-child post-dispatch file drift. That drift case remains separate from an actual-child
+or whole-command drift proof. The corrected selection's terminal result is recorded separately.
+
+The focused actual Workbench diagnosis at `6f4c97cbf` executed once and failed with fixed code
+`candidate-host-unavailable` (`runtime-2292-workbench-diagnosis.trx`). Temporary stage-only diagnostics
+then showed that the host operation was not reached; no configuration values, paths, fingerprints or
+exception text were recorded. All three instrumented source files were restored byte-identically in
+`finally`, and both actual Workbench and CLI outputs were rebuilt successfully after restoration. The
+diagnostic run itself is not acceptance evidence.
+
+Root found a pre-existing runtime-owned `.nuplane/store-state.json` in the shared Workbench build
+output with an empty active package set. The existing package loader observes that file before host
+loading and refuses the empty set. A bounded control temporarily renamed that file, ran the same
+actual Workbench public-command test, and restored the original file byte-identically in `finally`.
+The control returned **one executed/passed, zero failed/skipped**
+(`runtime-2292-workbench-empty-state-control.trx`; log:
+`/tmp/runtime-2292-workbench-empty-state-control.log`), reaching both explicit-input and old no-option
+Workbench invocations. No production package policy or refusal guard was changed. The permanent
+harness repair will use a disposable fresh installation of the actual built Workbench closure,
+preserving its compiled bytes/layout while omitting unrelated runtime-owned package state; its result
+must be verified separately. The actual positive overlay case is also being strengthened to demonstrate
+a changed safe resource/reference projection rather than an unchanged connection value.
+
+## Restored frontend boundaries and fresh-installation actor retry
+
+At code head `05ddd8907`, the corrected frontend boundary selection returned **ten executed/passed,
+zero failed/skipped**. Actual TRX: `runtime-2292-frontend-boundaries-restored.trx`; log:
+`/tmp/runtime-2292-frontend-boundaries-restored.log`. This covers the exact/one-over private file,
+request and response byte controls, reachable 4,096 selection admission, the 300-second endpoint,
+and mechanical post-dispatch drift. The fake child remains identified as such.
+
+The fresh Workbench installation and stronger positive overlay fixture were committed through
+`36264f7eb`. The copied real DLL, deps and runtimeconfig are checked byte-for-byte against the actual
+built output; unrelated runtime-owned `.nuplane` state is omitted. The explicit positive input selects
+a different source-declared resource/connection reference and fills its initially blank connection,
+so a successful changed public projection would demonstrate consumption of the overlay.
+
+That actual actor retry **did not pass**: `runtime-2292-workbench-actors-restored.trx` records
+**31 executed, 28 passed, three failed, zero skipped**, all three with fixed
+`candidate-host-unavailable`. Log: `/tmp/runtime-2292-workbench-actors-restored.log`. The earlier
+empty-state quarantine control remains its bounded causal observation, but does not prove that the
+permanent fresh-installation harness is sufficient. Root is diagnosing the copied closure separately;
+Workbench success, repeatability, recovery and all-three-story acceptance remain unproven.
+
+Root reviewed and integrated an actual owned-child drift control through `0febe5ecd`. It wraps only
+the real child's stdout and changes the original private file after the first real response read,
+then requires the final capture recheck to refuse before rendering. Review repaired an assertion
+that queried the underlying `Process` after disposal: the wrapper now observes exit before disposal
+and guarantees teardown. This test has not yet executed. Its scope is the actual Workbench child plus
+the final capture seam, not a complete public-command injection journey.
+
+## Physical-path repair and verified actual operator journey
+
+The isolated diagnostic narrowed the copied installation refusal to **host location mismatch** after
+layout/dependency preparation: the actual assembly name matched, but its location did not ordinally
+match the supplied temporary path. Only fixed stage labels were recorded. The macOS temporary path
+passes through a symlinked ancestor, so the fixture now resolves existing ancestor links before
+creating its disposable installation (`059d0f307`). Production name/location validation is unchanged;
+the original Workbench output and package state remain untouched. Temporary diagnostic production
+source was restored and outputs rebuilt in the isolated checkout before its focused successful run.
+
+Root then ran the full `CandidateInspectionTests` class at `059d0f307`:
+
+```text
+dotnet test tests/essentials/Cli/Tests/Elsa.Cli.Tests.csproj --no-restore --filter 'FullyQualifiedName~CandidateInspectionTests' --logger 'trx;LogFileName=runtime-2292-actual-actors-physical-path.trx' --verbosity quiet
+```
+
+The actual TRX records **32 executed/passed, zero failed/skipped**; log:
+`/tmp/runtime-2292-actual-actors-physical-path.log`. On this macOS run, the Workbench success case reaches
+both the explicit overlay and old file-only public invocations. The changed source-declared resource
+and connection reference prove overlay consumption; caller ambient values do not enter the result.
+Fresh public invocations repeat the same safe projection. External selection divergence refuses, the
+existing interactive accept workflow publishes a fresh accepted file, and a fresh capture succeeds;
+the required-edge companion still refuses. The actual Foundation Host remains unenrolled.
+
+The actual-child drift control now also requires a successful real Workbench response with the
+explicit source and `supplied-intended` state before checking drift (`0ceb0fd86`). It passed in the
+same run: the original private file changes after the first real stdout read, the final capture recheck
+returns `composition-input-changed`, the private capture is disposed, and the real child exits before
+its handle is disposed. The file is restored and source/input preservation is checked. This is the
+actual child plus final capture seam; no whole-command injection hook or Windows journey is claimed.
+
+The full affected projects, separate provider regression, complete diff/architecture review, final
+maps and hosted PR/resulting-main gates remain open. This actor pass does not mark Spec 189 Implemented.
+
+## Explicit-lane row boundary and producer-size audit
+
+Root integrated the additional direct explicit-lane combined-row controls at `166e12b8a`, reusing
+the existing persisted synthetic participant metadata and arrangement. The actual focused run of
+`Public_operation_bounds_participant_and_finding_rows_together` returned **six executed/passed,
+zero failed/skipped** in `runtime-2292-both-lane-row-bound.trx`; log:
+`/tmp/runtime-2292-both-lane-row-bound.log`. Both lanes accept 1,022 participants plus two findings
+and refuse 1,023 plus two without partial output; the existing additional old-lane overflows remain.
+The explicit success asserts its own source and `supplied-intended` state. This is configuration-only
+producer evidence, not a database or Workbench process journey.
+
+Root rejected an audit's character-count argument that the 4 MiB host response limit was unreachable.
+The admitted feature identity grammar includes `+`, and the default JSON writer escapes it with a
+larger encoded representation. Existing exact/one-over worker transport controls remain valid, but
+are not substituted for actual producer-size evidence. A bounded actual-producer control is being
+developed using the existing persisted synthetic feature helper and the normal host
+composition/reconciliation/preparation path; no production hook, payload padding, new project or
+runtime host enrollment is introduced. No result from that pending control is claimed here.
