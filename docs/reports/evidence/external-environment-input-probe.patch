@@ -3,9 +3,9 @@ index fba18224d..b14fcc3bd 100644
 --- a/tests/essentials/Persistence/EntityFrameworkCore/Migrations/Tests/EfCandidateInspectionTests.cs
 +++ b/tests/essentials/Persistence/EntityFrameworkCore/Migrations/Tests/EfCandidateInspectionTests.cs
 @@ -43,6 +43,206 @@ public sealed class EfCandidateInspectionTests : IDisposable
- 
+
      public void Dispose() => Directory.Delete(temporaryDirectory, recursive: true);
- 
+
 +    // Temporary #2184 discovery only. The capture below is test-owned; no production API accepts it.
 +    [Fact]
 +    public async Task Spike_external_environment_is_a_real_divergent_control_for_file_only_candidate_inspection()

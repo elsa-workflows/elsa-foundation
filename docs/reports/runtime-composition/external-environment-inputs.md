@@ -28,7 +28,7 @@ The detached root cannot reread ambient inputs on `Reload`, but it is still a mu
 
 ## Executed evidence
 
-The retained [noncompiled prototype patch](../evidence/external-environment-input-probe.patch) adds temporary cases/helpers to the existing `EfCandidateInspectionTests` fixture. Code-artifact SHA-256: `9fcb9bea69f3a2748e618c20e85f3001c5f36401de4f66373cb71a867ac5f9e8`. This identifies source code, never configuration values. No new project or permanent suite was added. The patch was removed before the restored full-suite run.
+The retained [noncompiled prototype patch](../evidence/external-environment-input-probe.patch) adds temporary cases/helpers to the existing `EfCandidateInspectionTests` fixture. Code-artifact SHA-256: `86cb40227844e01146eb378002dac1a87d41afc8b3cbb51f9c6eec88b2280fcd`. This identifies source code, never configuration values. No new project or permanent suite was added. The patch was removed before the restored full-suite run.
 
 | Probe | Actual observation |
 |---|---|
@@ -101,3 +101,5 @@ Root reviewed the full provider chain, repaired the initial harness issue, execu
 Generated maps were deliberately refreshed and checked at this source; no map or manifest bytes changed. Root reviewed both generated findings: 137 source projects, 131 test projects, 105 features, 219 specs, zero direct package-version clusters, four existing unindexed extension catalogs and zero runtime-to-design reference signals. Report-relative links, code-artifact digest, private-value/digest scans, clean patch apply and whitespace checks pass. Hosted exact-head review/CI and resulting-main gates remain required for report delivery.
 
 Hosted review round 1 identified an overstatement of candidate v1’s file count. The report now distinguishes its three required streams and optional appsettings environment overlay from this prototype’s four-file fixture. Root checked the actual parser and existing optional-overlay acceptance test. The other finding corrected summary spacing; neither change alters the retained probe source or executed results.
+
+Final full-PR diff review normalized two empty context lines in the retained patch. Root verified both patch forms produce the identical applied source tree through isolated Git indexes, and the normalized patch still applies cleanly. Only the code-artifact digest changes; executed probe and restored-suite results retain their original source scope.
