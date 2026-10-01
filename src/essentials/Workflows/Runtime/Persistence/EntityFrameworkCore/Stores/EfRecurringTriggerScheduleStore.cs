@@ -6,14 +6,26 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Storage;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 
 /// <summary>Concrete opt-in EF adapter for recurring Timer/Cron start schedules.</summary>
 /// <remarks>
+/// <para>
 /// The JSON envelope remains authoritative. Relational columns are bounded lookup and ordering projections,
 /// and every mutation advances the row revision so due-occurrence claims use provider CAS.
+/// </para>
+/// <para>
+/// A switch reads each activation projection as its state row and its schedule rows, in separate statements. Every write
+/// that changes whether a schedule serves, or the projection's immutable content, moves the state in the transaction that
+/// writes the rows: preparing, switching and deleting a projection create, move or delete its state. So rows read while
+/// the state stood still belong to it, and a state that moved while they were read is read again, never taken for a
+/// corrupt projection (#2265). Claiming, renewing, settling and releasing an occurrence, and deleting one schedule, write a
+/// row and move no state. That is safe: they change only what no projection check compares (the cursor, which the
+/// immutable fingerprints leave out, the claim columns, and a row's presence, which an active projection does not require,
+/// while a prepared one refuses the delete), and the row's own revision moves, so a switch that read the row loses its
+/// write and reads again. <see cref="SaveAsync"/> refuses to change a schedule a projection manages.
+/// </para>
 /// </remarks>
 public sealed class EfRecurringTriggerScheduleStore(
     RuntimeDbContext context,
@@ -27,12 +39,6 @@ public sealed class EfRecurringTriggerScheduleStore(
     private const string ArtifactCursorPurpose = "ef-runtime-recurring-schedule-artifact-v1";
     private const int MaterializationBatchSize = 256;
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
-
-    // A switch reads each projection as its state row and its schedule rows, in separate statements. Only a switch changes
-    // whether a schedule serves, and it moves the state's revision in the same transaction, so rows read while the state
-    // stood still belong to it. A switch committed by another call in between is a race this retries, not a corrupt
-    // projection: two completions of one slot, as two nodes starting together run them, make the same switch (#2265).
-    private static readonly EfWriteRetry Switches = new(EfWriteRetry.DefaultMaxAttempts, EfWriteConflict.Concurrency);
 
     public async ValueTask<RecurringTriggerSchedule> SaveAsync(RecurringTriggerSchedule schedule, CancellationToken cancellationToken = default)
     {
@@ -103,7 +109,7 @@ public sealed class EfRecurringTriggerScheduleStore(
             ActivationProjectionStateLifecycle.EnsurePreparable(existingState.IsActive, existingState.Revision, "recurring-schedule", activationId);
             if (ProjectionMatches(existingState, existingRows, scope, activationId) && ProjectionsEqual(existingRows, prepared, scope))
             {
-                await CommitAndClearAsync(transaction, cancellationToken, noChanges: true);
+                await context.CommitAndClearAsync(transaction, cancellationToken, noChanges: true);
                 return;
             }
             throw new InvalidOperationException($"Recurring-schedule activation projection '{activationId}' is already prepared with different state.");
@@ -125,16 +131,16 @@ public sealed class EfRecurringTriggerScheduleStore(
 
         try
         {
-            await CommitAndClearAsync(transaction, cancellationToken);
+            await context.CommitAndClearAsync(transaction, cancellationToken);
         }
         catch (DbUpdateConcurrencyException exception)
         {
-            await RollbackAndClearAsync(transaction);
+            await context.RollbackAndClearAsync(transaction);
             throw new InvalidOperationException($"Recurring-schedule activation projection '{activationId}' changed concurrently; retry the operation.", exception);
         }
         catch (Exception exception) when (EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.UniqueKey))
         {
-            await RollbackAndClearAsync(transaction);
+            await context.RollbackAndClearAsync(transaction);
             var winner = await ActivationState(scope, activationId, cancellationToken);
             var winnerRows = await RowsForActivation(scope, activationId, cancellationToken);
             if (winner is not null &&
@@ -145,7 +151,7 @@ public sealed class EfRecurringTriggerScheduleStore(
         }
         catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception))
         {
-            await RollbackAndClearAsync(transaction);
+            await context.RollbackAndClearAsync(transaction);
             throw new InvalidOperationException($"Recurring-schedule activation projection '{activationId}' could not be committed.", exception);
         }
     }
@@ -201,18 +207,19 @@ public sealed class EfRecurringTriggerScheduleStore(
         cancellationToken.ThrowIfCancellationRequested();
         var scope = RequireScope();
         var operation = $"Recurring-schedule activation projection '{activationId}'";
-        await Switches.RunUntilSettledAsync<bool>(
+        await EfRuntimeOperationalStoreSupport.ProjectionSwitches.RunUntilSettledAsync<bool>(
             context,
             () => TrySwitchAsync(scope, activationId, replacedActivationId, operation, cancellationToken),
-            conflict => throw Changed(operation, conflict),
+            conflict => throw EfRuntimeOperationalStoreSupport.CommitFailure(operation, conflict),
             cancellationToken);
     }
 
     /// <summary>
     /// One attempt at <see cref="ActivateAsync"/>. It reads both projections first and decides only once neither state moved
-    /// while they were read, so a switch another call committed in between is read again, never taken for corruption or for
-    /// a replaced activation that no longer serves. A switch committed after the reads, or a claim on a row it rewrites,
-    /// loses this attempt's write to the revisions it read, and the next attempt reads them again (#2265).
+    /// while they were read, so a switch, or a deletion and a new preparation, another call committed in between is read
+    /// again, never taken for corruption or for a replaced activation that no longer serves. A switch committed after the
+    /// reads, or a claim on a row it rewrites, loses this attempt's write to the revisions it read, and the next attempt reads
+    /// them again; so does a deadlock that chose this attempt's write as its victim (#2265).
     /// </summary>
     private async ValueTask<EfWriteAttempt<bool>> TrySwitchAsync(string scope, string activationId, string? replacedActivationId, string operation, CancellationToken cancellationToken)
     {
@@ -226,7 +233,7 @@ public sealed class EfRecurringTriggerScheduleStore(
         if (await StateMovedAsync(scope, activationId, candidate, cancellationToken) ||
             distinct && await StateMovedAsync(scope, replacedActivationId!, replaced, cancellationToken))
         {
-            await RollbackAndClearAsync(transaction);
+            await context.RollbackAndClearAsync(transaction);
             return EfWriteAttempt<bool>.Retry();
         }
 
@@ -238,7 +245,7 @@ public sealed class EfRecurringTriggerScheduleStore(
             await EnsureActiveProjectionAsync(candidate, candidateRows, scope, activationId, cancellationToken);
             if (replaced is { IsActive: true })
                 throw new InvalidOperationException($"Recurring-schedule activation '{activationId}' is active while replaced activation '{replacedActivationId}' is still active.");
-            await CommitAndClearAsync(transaction, cancellationToken, noChanges: true);
+            await context.CommitAndClearAsync(transaction, cancellationToken, noChanges: true);
             return true;
         }
         EnsurePreparedProjection(candidate, candidateRows, scope, activationId);
@@ -270,7 +277,7 @@ public sealed class EfRecurringTriggerScheduleStore(
             replaced.Revision = checked(replaced.Revision + 1);
             UpdateStateContent(replaced, scope);
         }
-        return await TryCommitMutationAndClearAsync(transaction, cancellationToken, operation) is { } conflict
+        return await context.TryCommitAndClearAsync(transaction, EfRuntimeOperationalStoreSupport.ProjectionSwitches, operation, cancellationToken) is { } conflict
             ? EfWriteAttempt<bool>.Retry(conflict)
             : true;
     }
@@ -314,6 +321,7 @@ public sealed class EfRecurringTriggerScheduleStore(
         var scope = RequireScope();
         context.ChangeTracker.Clear();
         await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+        // Rows, then state, without ActivateAsync's re-read: a switch committed between them fails this loudly as corrupt (#2265).
         var rows = await RowsForActivation(scope, activationId, cancellationToken);
         foreach (var row in rows)
         {
@@ -329,7 +337,7 @@ public sealed class EfRecurringTriggerScheduleStore(
             context.RecurringTriggerScheduleProjectionStates.Remove(state.Entity);
         }
         context.RecurringTriggerSchedules.RemoveRange(rows);
-        await CommitMutationAndClearAsync(transaction, cancellationToken, $"Recurring-schedule activation projection '{activationId}' deletion");
+        await context.CommitMutationAndClearAsync(transaction, $"Recurring-schedule activation projection '{activationId}' deletion", cancellationToken);
     }
 
     public async ValueTask<RecurringTriggerSchedule?> FindAsync(string scheduleId, CancellationToken cancellationToken = default)
@@ -486,6 +494,7 @@ public sealed class EfRecurringTriggerScheduleStore(
         var states = await StatesForArtifact(scope, artifactId, cancellationToken);
         foreach (var activationId in activationRows.Concat(states.Select(x => x.ActivationId)).Distinct(StringComparer.Ordinal))
         {
+            // Rows, then state, without ActivateAsync's re-read: a switch committed between them fails this loudly as corrupt (#2265).
             var all = await RowsForActivation(scope, activationId, cancellationToken);
             if (all.Any(x => !StringComparer.Ordinal.Equals(x.ArtifactId, Encode(artifactId))))
                 throw new InvalidDataException($"Recurring-schedule activation '{activationId}' does not match artifact ownership '{artifactId}'.");
@@ -500,7 +509,7 @@ public sealed class EfRecurringTriggerScheduleStore(
             }
         }
         context.RecurringTriggerSchedules.RemoveRange(rows);
-        await CommitMutationAndClearAsync(transaction, cancellationToken, $"Recurring-schedule artifact '{artifactId}' deletion");
+        await context.CommitMutationAndClearAsync(transaction, $"Recurring-schedule artifact '{artifactId}' deletion", cancellationToken);
     }
 
     public async ValueTask DeleteAsync(string scheduleId, CancellationToken cancellationToken = default)
@@ -603,38 +612,8 @@ public sealed class EfRecurringTriggerScheduleStore(
         }
     }
 
-    private async Task CommitAndClearAsync(IDbContextTransaction transaction, CancellationToken ct, bool noChanges = false)
-    { if (!noChanges) await context.SaveChangesAsync(ct); await transaction.CommitAsync(ct); context.ChangeTracker.Clear(); }
-
-    private async Task CommitMutationAndClearAsync(IDbContextTransaction transaction, CancellationToken ct, string operation)
-    {
-        if (await TryCommitMutationAndClearAsync(transaction, ct, operation) is { } conflict)
-            throw Changed(operation, conflict);
-    }
-
-    /// <summary>Commits, or rolls back and returns the lost race when another writer moved a revision the commit expected.</summary>
-    private async Task<DbUpdateConcurrencyException?> TryCommitMutationAndClearAsync(IDbContextTransaction transaction, CancellationToken ct, string operation)
-    {
-        try { await CommitAndClearAsync(transaction, ct); return null; }
-        catch (DbUpdateConcurrencyException exception) { await RollbackAndClearAsync(transaction); return exception; }
-        catch (Exception exception) when (EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.Transient)) { await RollbackAndClearAsync(transaction); throw new InvalidOperationException($"{operation} encountered a transient write conflict; retry the operation.", exception); }
-        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception)) { await RollbackAndClearAsync(transaction); throw new InvalidOperationException($"{operation} could not be committed.", exception); }
-    }
-
-    private async Task RollbackAndClearAsync(IDbContextTransaction transaction)
-    { try { await transaction.RollbackAsync(); } catch { } context.ChangeTracker.Clear(); }
-
-    private static InvalidOperationException Changed(string operation, Exception? conflict) => new($"{operation} changed concurrently; retry the operation.", conflict);
-
-    /// <summary>
-    /// Whether the projection state of <paramref name="activationId"/> no longer stands at the revision <paramref name="read"/>
-    /// had, or no longer stands missing when it was. Read without tracking, so a tracked state cannot answer for the row.
-    /// </summary>
-    private async Task<bool> StateMovedAsync(string scope, string activationId, ProjectionStateSnapshot? read, CancellationToken ct) =>
-        await context.RecurringTriggerScheduleProjectionStates.AsNoTracking()
-            .Where(x => x.Id == ProjectionId(scope, activationId))
-            .Select(x => (long?)x.Revision)
-            .SingleOrDefaultAsync(ct) != read?.Revision;
+    private Task<bool> StateMovedAsync(string scope, string activationId, ProjectionStateSnapshot? read, CancellationToken ct) =>
+        EfRuntimeOperationalStoreSupport.StateMovedAsync(context.RecurringTriggerScheduleProjectionStates.Where(x => x.Id == ProjectionId(scope, activationId)), read?.Entity, ct);
 
     private async Task<bool> ManagedByActivationAsync(RecurringTriggerSchedule current, RecurringTriggerSchedule proposed, string scope, CancellationToken cancellationToken)
     {

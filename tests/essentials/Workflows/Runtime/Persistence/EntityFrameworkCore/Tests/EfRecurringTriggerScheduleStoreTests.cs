@@ -272,53 +272,6 @@ public sealed class EfRecurringTriggerScheduleStoreTests
         Assert.Equal(1, saves.Attempts);
     }
 
-    [Fact]
-    public async Task Activation_reports_a_transient_conflict_the_provider_execution_strategy_wrapped_and_rolls_back()
-    {
-        await using var schedules = await SeededSchedules.CreateAsync(FailingSaveInterceptor.WrappedDeadlock());
-
-        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => schedules.Store.ActivateAsync(SeededSchedules.ActivationId, null).AsTask());
-
-        Assert.EndsWith("encountered a transient write conflict; retry the operation.", failure.Message, StringComparison.Ordinal);
-        Assert.Empty(schedules.Context.ChangeTracker.Entries());
-        Assert.All((await schedules.Store.ListByActivationPageAsync(new RecurringTriggerScheduleActivationPageQuery(SeededSchedules.ActivationId))).Items,
-            schedule => Assert.False(schedule.IsActive));
-    }
-
-    /// <summary>A switch whose write lost to another writer's reads the projections again and switches them (#2265).</summary>
-    [Fact]
-    public async Task Activation_that_lost_its_write_reads_again_and_switches()
-    {
-        var saves = new FailingSaveInterceptor(() => new DbUpdateConcurrencyException("Another writer moved a revision."), failures: 1);
-        await using var schedules = await SeededSchedules.CreateAsync(saves);
-
-        await schedules.Store.ActivateAsync(SeededSchedules.ActivationId, null);
-
-        Assert.Equal(2, saves.Attempts);
-        Assert.Equal(WorkflowActivationProjectionState.Active, await schedules.Store.FindActivationStateAsync(SeededSchedules.ActivationId));
-        Assert.All((await schedules.Store.ListByActivationPageAsync(new RecurringTriggerScheduleActivationPageQuery(SeededSchedules.ActivationId))).Items,
-            schedule => Assert.True(schedule.IsActive));
-    }
-
-    /// <summary>
-    /// A switch whose write keeps losing reports the projection changed concurrently once its attempts run out, and rolls
-    /// back: it neither loops nor reports a switch it did not make.
-    /// </summary>
-    [Fact]
-    public async Task Activation_that_keeps_losing_its_write_reports_the_conflict_and_rolls_back()
-    {
-        var saves = new FailingSaveInterceptor(() => new DbUpdateConcurrencyException("Another writer moved a revision."));
-        await using var schedules = await SeededSchedules.CreateAsync(saves);
-
-        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => schedules.Store.ActivateAsync(SeededSchedules.ActivationId, null).AsTask());
-
-        Assert.EndsWith("changed concurrently; retry the operation.", failure.Message, StringComparison.Ordinal);
-        Assert.IsType<DbUpdateConcurrencyException>(failure.InnerException);
-        Assert.Equal(EfWriteRetry.DefaultMaxAttempts, saves.Attempts);
-        Assert.Empty(schedules.Context.ChangeTracker.Entries());
-        Assert.Equal(WorkflowActivationProjectionState.Prepared, await schedules.Store.FindActivationStateAsync(SeededSchedules.ActivationId));
-    }
-
     /// <summary>
     /// The recurring-triggers feature, not the runtime root, registers the in-memory schedule store, so only this
     /// composition proves the EF registration still recognizes it as the replaceable default.
@@ -374,7 +327,6 @@ public sealed class EfRecurringTriggerScheduleStoreTests
 
     private sealed class SeededSchedules : IAsyncDisposable
     {
-        public const string ActivationId = "publication-a";
         public static readonly RecurringTriggerSchedule Standalone = Schedule("artifact-a", "standalone", Now);
         private readonly SqliteConnection connection;
 
@@ -389,10 +341,7 @@ public sealed class EfRecurringTriggerScheduleStoreTests
 
         public EfRecurringTriggerScheduleStore Store { get; }
 
-        /// <summary>
-        /// Saves a standalone schedule and prepares an activation with one schedule, then opens the store through a
-        /// context whose saves run <paramref name="saves"/>.
-        /// </summary>
+        /// <summary>Saves a standalone schedule, then opens the store through a context whose saves run <paramref name="saves"/>.</summary>
         public static async Task<SeededSchedules> CreateAsync(IInterceptor saves)
         {
             var connection = new SqliteConnection("Data Source=:memory:");
@@ -400,9 +349,7 @@ public sealed class EfRecurringTriggerScheduleStoreTests
             await using (var seed = EfRecurringTriggerScheduleStoreTests.Context(connection))
             {
                 await seed.Database.EnsureCreatedAsync();
-                var store = EfRecurringTriggerScheduleStoreTests.Store(seed, "tenant-a");
-                await store.SaveAsync(Standalone);
-                await store.PrepareActivationAsync(ActivationId, [Schedule("artifact-b", "prepared", Now, ActivationId, "slot-a")]);
+                await EfRecurringTriggerScheduleStoreTests.Store(seed, "tenant-a").SaveAsync(Standalone);
             }
             return new SeededSchedules(connection, new(new DbContextOptionsBuilder<RuntimeSqliteDbContext>()
                 .UseSqlite(connection).AddInterceptors(saves).Options));

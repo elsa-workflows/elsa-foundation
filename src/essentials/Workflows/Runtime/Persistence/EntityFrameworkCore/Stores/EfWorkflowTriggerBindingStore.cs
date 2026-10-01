@@ -10,18 +10,23 @@ using Microsoft.EntityFrameworkCore;
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 
 /// <summary>Concrete opt-in EF adapter for the durable workflow trigger-binding index.</summary>
+/// <remarks>
+/// An activation projection is its state row and its binding rows, read in separate statements. Every write that changes
+/// whether a row serves, or the projection's immutable content, moves the state in the transaction that writes the rows:
+/// preparing, switching and deleting a projection create, move or delete its state. So rows read while the state stood
+/// still belong to it, and a state that moved while they were read is read again, never taken for a corrupt projection:
+/// two completions of one slot, as two nodes starting together run them, make the same switch (#2265).
+/// <see cref="SaveAsync"/> writes a binding row and moves no state. That is safe: it serves the artifact-scoped index,
+/// whose rows belong to no projection; one that rewrote an activation's row would leave it disagreeing with a state that
+/// stood still, which is reported as the corruption it is; and the row's own revision moves, so a switch that read the row
+/// loses its write and reads again.
+/// </remarks>
 public sealed class EfWorkflowTriggerBindingStore(
     RuntimeDbContext context,
     IPersistenceAccessContextAccessor accessContextAccessor) : IWorkflowTriggerBindingStore
 {
     private const string ProjectionKind = "triggerBindings";
     private const int MaterializationBatchSize = 256;
-
-    // A projection is its state row and its binding rows, read in separate statements. Every activation-scoped write moves
-    // the state's revision (or creates or deletes the state) in the transaction that writes the rows, so rows read while the
-    // state stood still belong to it. A switch committed by another call in between is a race this retries, not a corrupt
-    // projection: two completions of one slot, as two nodes starting together run them, make the same switch (#2265).
-    private static readonly EfWriteRetry Switches = new(EfWriteRetry.DefaultMaxAttempts, EfWriteConflict.Concurrency);
 
     public async ValueTask<WorkflowTriggerBinding> SaveAsync(WorkflowTriggerBinding binding, CancellationToken cancellationToken = default)
     {
@@ -79,7 +84,7 @@ public sealed class EfWorkflowTriggerBindingStore(
             ActivationProjectionStateLifecycle.EnsurePreparable(state.IsActive, state.Revision, "trigger-binding", activationId);
             if (ProjectionMatches(state, existing, scope, activationId) && ProjectionsEqual(existing, prepared, scope))
             {
-                await CommitAndClearAsync(transaction, cancellationToken, noChanges: true);
+                await context.CommitAndClearAsync(transaction, cancellationToken, noChanges: true);
                 return;
             }
             throw new InvalidOperationException($"Trigger-binding activation projection '{activationId}' is already prepared with different state.");
@@ -106,16 +111,16 @@ public sealed class EfWorkflowTriggerBindingStore(
         });
         try
         {
-            await CommitAndClearAsync(transaction, cancellationToken);
+            await context.CommitAndClearAsync(transaction, cancellationToken);
         }
         catch (DbUpdateConcurrencyException exception)
         {
-            await RollbackAndClearAsync(transaction);
+            await context.RollbackAndClearAsync(transaction);
             throw new InvalidOperationException($"Trigger-binding activation projection '{activationId}' changed concurrently; retry the operation.", exception);
         }
         catch (Exception exception) when (EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.UniqueKey))
         {
-            await RollbackAndClearAsync(transaction);
+            await context.RollbackAndClearAsync(transaction);
             var winner = await context.WorkflowTriggerBindingProjectionStates.AsNoTracking().SingleOrDefaultAsync(x => x.Id == ProjectionId(scope, activationId), cancellationToken);
             var winnerRows = await RowsForActivation(scope, activationId, cancellationToken);
             if (winner is not null &&
@@ -126,7 +131,7 @@ public sealed class EfWorkflowTriggerBindingStore(
         }
         catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception))
         {
-            await RollbackAndClearAsync(transaction);
+            await context.RollbackAndClearAsync(transaction);
             throw new InvalidOperationException($"Trigger-binding activation projection '{activationId}' could not be committed.", exception);
         }
     }
@@ -141,18 +146,19 @@ public sealed class EfWorkflowTriggerBindingStore(
         cancellationToken.ThrowIfCancellationRequested();
         var scope = RequireScope();
         var operation = $"Trigger-binding activation projection '{activationId}'";
-        await Switches.RunUntilSettledAsync<bool>(
+        await EfRuntimeOperationalStoreSupport.ProjectionSwitches.RunUntilSettledAsync<bool>(
             context,
             () => TrySwitchAsync(scope, activationId, replacedActivationId, operation, cancellationToken),
-            conflict => throw Changed(operation, conflict),
+            conflict => throw EfRuntimeOperationalStoreSupport.CommitFailure(operation, conflict),
             cancellationToken);
     }
 
     /// <summary>
     /// One attempt at <see cref="ActivateAsync"/>. It reads both projections first and decides only once neither state moved
-    /// while they were read, so a switch another call committed in between is read again, never taken for corruption or for
-    /// a replaced activation that no longer serves. A switch committed after the reads loses this attempt's write to the
-    /// revisions it read, and the next attempt finds it made (#2265).
+    /// while they were read, so a switch, or a deletion and a new preparation, another call committed in between is read
+    /// again, never taken for corruption or for a replaced activation that no longer serves. A switch committed after the
+    /// reads loses this attempt's write to the revisions it read, and the next attempt finds it made; so does a deadlock that
+    /// chose this attempt's write as its victim (#2265).
     /// </summary>
     private async ValueTask<EfWriteAttempt<bool>> TrySwitchAsync(string scope, string activationId, string? replacedActivationId, string operation, CancellationToken cancellationToken)
     {
@@ -166,7 +172,7 @@ public sealed class EfWorkflowTriggerBindingStore(
         if (await StateMovedAsync(scope, activationId, candidate, cancellationToken) ||
             distinct && await StateMovedAsync(scope, replacedActivationId!, replaced, cancellationToken))
         {
-            await RollbackAndClearAsync(transaction);
+            await context.RollbackAndClearAsync(transaction);
             return EfWriteAttempt<bool>.Retry();
         }
 
@@ -181,7 +187,7 @@ public sealed class EfWorkflowTriggerBindingStore(
         {
             if (replaced is not { IsActive: true })
             {
-                await CommitAndClearAsync(transaction, cancellationToken, noChanges: true);
+                await context.CommitAndClearAsync(transaction, cancellationToken, noChanges: true);
                 return true;
             }
             throw new InvalidOperationException($"Activation '{activationId}' is active while replaced activation '{replacedActivationId}' is still active.");
@@ -197,7 +203,7 @@ public sealed class EfWorkflowTriggerBindingStore(
             foreach (var row in replacedRows) SetActive(row, false);
             replaced.IsActive = false; replaced.Revision = checked(replaced.Revision + 1);
         }
-        return await TryCommitMutationAndClearAsync(transaction, cancellationToken, operation) is { } conflict
+        return await context.TryCommitAndClearAsync(transaction, EfRuntimeOperationalStoreSupport.ProjectionSwitches, operation, cancellationToken) is { } conflict
             ? EfWriteAttempt<bool>.Retry(conflict)
             : true;
     }
@@ -208,9 +214,9 @@ public sealed class EfWorkflowTriggerBindingStore(
         cancellationToken.ThrowIfCancellationRequested();
         var scope = RequireScope();
         // The answer is the state's alone, so rows that match it confirm it whenever they were read. Rows that do not match
-        // it are corrupt only if the state stood still while they were read; otherwise a switch committed in between, and
-        // the state is read again (#2265).
-        return await Switches.RunUntilSettledAsync<WorkflowActivationProjectionState>(
+        // it are corrupt only if the state stood still while they were read; otherwise a switch, or a deletion and a new
+        // preparation, committed in between, and the state is read again (#2265).
+        return await EfRuntimeOperationalStoreSupport.ProjectionSwitches.RunUntilSettledAsync<WorkflowActivationProjectionState>(
             context,
             async () =>
             {
@@ -226,7 +232,7 @@ public sealed class EfWorkflowTriggerBindingStore(
                     ? EfWriteAttempt<WorkflowActivationProjectionState>.Retry()
                     : throw ProjectionMismatch(activationId);
             },
-            _ => throw new InvalidOperationException($"Trigger-binding activation projection '{activationId}' kept changing while it was read; retry the operation."),
+            _ => throw EfRuntimeOperationalStoreSupport.ChangedConcurrently($"Trigger-binding activation projection '{activationId}'", null),
             cancellationToken);
     }
 
@@ -252,6 +258,7 @@ public sealed class EfWorkflowTriggerBindingStore(
         cancellationToken.ThrowIfCancellationRequested();
         var scope = RequireScope();
         await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+        // Rows, then state, without ActivateAsync's re-read: a switch committed between them fails this loudly as corrupt (#2265).
         var rows = await RowsForActivation(scope, activationId, cancellationToken);
         foreach (var row in rows)
             _ = Read(row, scope, Decode(row.TriggerBindingId));
@@ -262,7 +269,7 @@ public sealed class EfWorkflowTriggerBindingStore(
             EnsureProjection(state, rows, scope, activationId);
             context.WorkflowTriggerBindingProjectionStates.Remove(state);
         }
-        await CommitMutationAndClearAsync(transaction, cancellationToken, $"Trigger-binding activation projection '{activationId}' deletion");
+        await context.CommitMutationAndClearAsync(transaction, $"Trigger-binding activation projection '{activationId}' deletion", cancellationToken);
     }
 
     public async ValueTask<int> DeleteByArtifactAsync(string artifactId, CancellationToken cancellationToken = default)
@@ -279,13 +286,14 @@ public sealed class EfWorkflowTriggerBindingStore(
             _ = Read(row, scope);
         foreach (var activation in rows.Select(x => x.ActivationId).Where(x => x is not null).Distinct(StringComparer.Ordinal))
         {
+            // Rows, then state, without ActivateAsync's re-read: a switch committed between them fails this loudly as corrupt (#2265).
             var all = await RowsForActivation(scope, Decode(activation!), cancellationToken);
             if (all.Any(x => x.ArtifactId != Encode(artifactId))) throw new InvalidOperationException($"Cannot delete artifact '{artifactId}' because its activation contains another artifact.");
             var state = await context.WorkflowTriggerBindingProjectionStates.SingleOrDefaultAsync(x => x.Id == ProjectionId(scope, Decode(activation!)), cancellationToken);
             if (state is not null) { EnsureProjection(state, all, scope, Decode(activation!)); context.WorkflowTriggerBindingProjectionStates.Remove(state); }
         }
         context.WorkflowTriggerBindings.RemoveRange(rows);
-        await CommitMutationAndClearAsync(transaction, cancellationToken, $"Trigger-binding artifact '{artifactId}' deletion");
+        await context.CommitMutationAndClearAsync(transaction, $"Trigger-binding artifact '{artifactId}' deletion", cancellationToken);
         return rows.Length;
     }
 
@@ -368,57 +376,8 @@ public sealed class EfWorkflowTriggerBindingStore(
         }
     }
 
-    private async Task CommitAndClearAsync(Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction transaction, CancellationToken ct, bool noChanges = false)
-    { if (!noChanges) await context.SaveChangesAsync(ct); await transaction.CommitAsync(ct); context.ChangeTracker.Clear(); }
-
-    private async Task CommitMutationAndClearAsync(Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction transaction, CancellationToken ct, string operation)
-    {
-        if (await TryCommitMutationAndClearAsync(transaction, ct, operation) is { } conflict)
-            throw Changed(operation, conflict);
-    }
-
-    /// <summary>Commits, or rolls back and returns the lost race when another writer moved a revision the commit expected.</summary>
-    private async Task<DbUpdateConcurrencyException?> TryCommitMutationAndClearAsync(Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction transaction, CancellationToken ct, string operation)
-    {
-        try
-        {
-            await CommitAndClearAsync(transaction, ct);
-            return null;
-        }
-        catch (DbUpdateConcurrencyException exception)
-        {
-            await RollbackAndClearAsync(transaction);
-            return exception;
-        }
-        catch (Exception exception) when (EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.Transient))
-        {
-            await RollbackAndClearAsync(transaction);
-            throw new InvalidOperationException($"{operation} encountered a transient write conflict; retry the operation.", exception);
-        }
-        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception))
-        {
-            await RollbackAndClearAsync(transaction);
-            throw new InvalidOperationException($"{operation} could not be committed.", exception);
-        }
-    }
-
-    private async Task RollbackAndClearAsync(Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction transaction)
-    {
-        try { await transaction.RollbackAsync(); } catch { }
-        context.ChangeTracker.Clear();
-    }
-
-    private static InvalidOperationException Changed(string operation, Exception? conflict) => new($"{operation} changed concurrently; retry the operation.", conflict);
-
-    /// <summary>
-    /// Whether the projection state of <paramref name="activationId"/> no longer stands at the revision <paramref name="read"/>
-    /// had, or no longer stands missing when it was. Read without tracking, so a tracked state cannot answer for the row.
-    /// </summary>
-    private async Task<bool> StateMovedAsync(string scope, string activationId, WorkflowTriggerBindingProjectionStateEntity? read, CancellationToken ct) =>
-        await context.WorkflowTriggerBindingProjectionStates.AsNoTracking()
-            .Where(x => x.Id == ProjectionId(scope, activationId))
-            .Select(x => (long?)x.Revision)
-            .SingleOrDefaultAsync(ct) != read?.Revision;
+    private Task<bool> StateMovedAsync(string scope, string activationId, WorkflowTriggerBindingProjectionStateEntity? read, CancellationToken ct) =>
+        EfRuntimeOperationalStoreSupport.StateMovedAsync(context.WorkflowTriggerBindingProjectionStates.Where(x => x.Id == ProjectionId(scope, activationId)), read, ct);
 
     private string RequireScope() => EfRuntimeOperationalStoreSupport.RequireScope(accessContextAccessor);
     private static string Encode(string value) => EfRuntimeOperationalStoreSupport.Encode(value);

@@ -1,4 +1,3 @@
-using System.Data.Common;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -37,11 +36,11 @@ internal static partial class WorkflowActivationCrashRepairContract
     private static readonly Dictionary<string, Func<Func<IInterceptor[], ActivationStores>, Task>> ConcurrentSwitches = new()
     {
         ["a-trigger-switch-that-read-its-state-before-another-completion-switched-converges"] = open =>
-            AHeldSwitchConvergesAsync(open, latch => new HoldBetweenStateAndRows(RuntimeTriggerBindingEfModule.ProjectionStateTableName, inTransaction: true, latch)),
+            AHeldSwitchConvergesAsync(open, latch => HoldBeforeRows(RuntimeTriggerBindingEfModule.ProjectionStateTableName, inTransaction: true, latch)),
         ["a-trigger-switch-that-wrote-after-another-completion-switched-converges"] = open =>
             AHeldSwitchConvergesAsync(open, latch => new HoldBeforeSwitchWrite<WorkflowTriggerBindingProjectionStateEntity>(latch)),
         ["a-schedule-switch-that-read-its-state-before-another-completion-switched-converges"] = open =>
-            AHeldSwitchConvergesAsync(open, latch => new HoldBetweenStateAndRows(RuntimeOperationalStateEfModule.RecurringScheduleProjectionStateTableName, inTransaction: true, latch)),
+            AHeldSwitchConvergesAsync(open, latch => HoldBeforeRows(RuntimeOperationalStateEfModule.RecurringScheduleProjectionStateTableName, inTransaction: true, latch)),
         ["a-schedule-switch-that-wrote-after-another-completion-switched-converges"] = open =>
             AHeldSwitchConvergesAsync(open, latch => new HoldBeforeSwitchWrite<RecurringTriggerScheduleProjectionStateEntity>(latch))
     };
@@ -73,7 +72,7 @@ internal static partial class WorkflowActivationCrashRepairContract
     {
         await using var race = await HoldACompletionOfAnInterruptedReplacementAsync(
             open,
-            latch => new HoldBetweenStateAndRows(RuntimeTriggerBindingEfModule.ProjectionStateTableName, inTransaction: false, latch),
+            latch => HoldBeforeRows(RuntimeTriggerBindingEfModule.ProjectionStateTableName, inTransaction: false, latch),
             CompleteSlotAsync);
         await using var other = Start(open([]));
         var completed = await CompleteSlotAsync(other);
@@ -94,7 +93,7 @@ internal static partial class WorkflowActivationCrashRepairContract
     {
         await using var race = await HoldACompletionOfAnInterruptedReplacementAsync(
             open,
-            latch => new HoldBetweenStateAndRows(RuntimeTriggerBindingEfModule.ProjectionStateTableName, inTransaction: false, latch),
+            latch => HoldBeforeRows(RuntimeTriggerBindingEfModule.ProjectionStateTableName, inTransaction: false, latch),
             async node =>
             {
                 await node.StartShellAsync();
@@ -159,22 +158,8 @@ internal static partial class WorkflowActivationCrashRepairContract
     /// from <c>stateTable</c>: the state is read and the rows are not. <c>inTransaction</c> picks the read a projection
     /// switch makes inside its transaction over the reads a completion makes outside one before it switches.
     /// </summary>
-    private sealed class HoldBetweenStateAndRows(string stateTable, bool inTransaction, Latch latch) : DbCommandInterceptor
-    {
-        private bool _stateRead;
-
-        public override async ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
-            DbCommand command,
-            CommandEventData eventData,
-            InterceptionResult<DbDataReader> result,
-            CancellationToken cancellationToken = default)
-        {
-            if (_stateRead)
-                await latch.PassAsync();
-            _stateRead = command.CommandText.Contains(stateTable, StringComparison.Ordinal) && (command.Transaction is not null) == inTransaction;
-            return result;
-        }
-    }
+    private static InterleaveProjectionRead HoldBeforeRows(string stateTable, bool inTransaction, Latch latch) =>
+        new(stateTable, inTransaction, ProjectionReadPoint.BeforeRows, _ => latch.PassAsync(), times: 1);
 
     /// <summary>Holds a process once, at <c>latch</c>, just before it saves a switch of <typeparamref name="TState"/>: it has decided and not written.</summary>
     private sealed class HoldBeforeSwitchWrite<TState>(Latch latch) : SaveChangesInterceptor where TState : class
