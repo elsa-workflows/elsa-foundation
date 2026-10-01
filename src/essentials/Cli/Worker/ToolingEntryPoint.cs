@@ -118,9 +118,9 @@ public sealed class ToolingEntryPoint
         }
 
         var requestType = persistence.GetType(RequestTypeName, throwOnError: false);
-        var capabilitySelection = requestType?.GetProperty(CapabilitySelectionField, BindingFlags.Public | BindingFlags.Instance) is not null;
-        var skewAllowance = requestType?.GetProperty(SkewAllowanceField, BindingFlags.Public | BindingFlags.Instance) is not null;
-        var sqliteLockStaleAfter = requestType?.GetProperty(SqliteMigrationLockStaleAfterField, BindingFlags.Public | BindingFlags.Instance) is not null;
+        var capabilitySelection = Declares(requestType, CapabilitySelectionField);
+        var skewAllowance = Declares(requestType, SkewAllowanceField);
+        var sqliteLockStaleAfter = Declares(requestType, SqliteMigrationLockStaleAfterField);
         var contextApi = BindContextApi(
             hostType!,
             persistence.GetType(ContextTypeName, throwOnError: false),
@@ -128,6 +128,10 @@ public sealed class ToolingEntryPoint
 
         return new(run, packageId, describe, canonical, capabilitySelection, contextApi, skewAllowance, sqliteLockStaleAfter);
     }
+
+    /// <summary>Whether a host's request type declares <paramref name="field"/>: the probe each optional request field is gated on.</summary>
+    internal static bool Declares(Type? requestType, string field) =>
+        requestType?.GetProperty(field, BindingFlags.Public | BindingFlags.Instance) is not null;
 
     /// <summary>Refuses partial or version-skewed host context APIs instead of silently choosing v1.</summary>
     internal static ToolingContextApi? BindContextApi(Type hostType, Type? contextType, Type? operationContract)

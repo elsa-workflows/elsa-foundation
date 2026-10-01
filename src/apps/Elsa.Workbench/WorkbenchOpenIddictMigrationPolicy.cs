@@ -90,7 +90,7 @@ internal sealed class WorkbenchOpenIddictMigrator : IHostedService
         var store = scope.ServiceProvider.GetRequiredService<OpenIddictIdentityDbContext>();
         // Every provider that has migrations goes through the lock policy, which hands all but SQLite straight to MigrateAsync. The
         // in-memory demo store has none, and the vendor initializer creates it.
-        if (EfSqliteMigrationLock.IsMigratable(store))
+        if (EfDatabaseMigrator.UsesMigrations(store))
             await EfSqliteMigrationLock.MigrateAsync(store, _options, cancellationToken);
     }
 

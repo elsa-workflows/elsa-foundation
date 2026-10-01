@@ -87,6 +87,17 @@ public static class EfDatabaseMigrator
     }
 
     /// <summary>
+    /// Whether <paramref name="context"/>'s store has migrations to apply, which is whether its provider is relational: the
+    /// in-memory provider is created, not migrated. For a host that decides between migrating and creating a store without
+    /// naming an EF package, so that no relational provider is passed over.
+    /// </summary>
+    public static bool UsesMigrations(DbContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        return context.Database.IsRelational();
+    }
+
+    /// <summary>
     /// The refusal for <paramref name="pending"/> under <see cref="EfMigratePolicy.Validate"/>. It names the EF module that
     /// declares <paramref name="context"/> and the exact command that applies its migrations: the operator who reads it
     /// is at a host's log or a reload's answer, not at a DbContext type.

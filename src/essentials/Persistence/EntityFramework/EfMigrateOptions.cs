@@ -27,6 +27,9 @@ public sealed class EfMigrateOptions
     /// How long a start waits for a SQLite database's EF migration lock before it reports the lock as stale instead of waiting
     /// on (#2196); <c>Elsa:Persistence:EntityFramework:Migrate:SqliteMigrationLockStaleAfter</c>, a <see cref="TimeSpan"/> such as
     /// <c>00:30:00</c>. Raise it for a migration that legitimately holds the lock longer. No other provider has the problem.
+    /// A host's own start reads it from its configuration, and so does <c>dotnet elsa persistence apply</c>, which reads the
+    /// host's <c>appsettings.json</c> and sends the value in its request: a host whose persistence build predates that request
+    /// field gets the default bound for <c>apply</c> (the tool prints a warning when it drops a configured one).
     /// </summary>
     public TimeSpan SqliteMigrationLockStaleAfter { get; set; } = EfSqliteMigrationLock.DefaultStaleAfter;
 
@@ -50,6 +53,10 @@ public sealed class EfMigrateOptions
     /// <summary>These options with <paramref name="policy"/> in place of their own, and every other setting, the SQLite lock bound included, carried across unchanged.</summary>
     internal EfMigrateOptions WithPolicy(EfMigratePolicy policy) => new() { Policy = policy, SqliteMigrationLockStaleAfter = SqliteMigrationLockStaleAfter };
 
+    /// <summary>A positive <see cref="TimeSpan"/> in the invariant culture, the one rule every reader of <see cref="SqliteMigrationLockStaleAfter"/> in this assembly holds a value to.</summary>
+    internal static bool TryParsePositiveTimeSpan(string? value, out TimeSpan result) =>
+        TimeSpan.TryParse(value, CultureInfo.InvariantCulture, out result) && result > TimeSpan.Zero;
+
     /// <summary>
     /// <see cref="TryResolve"/> for <see cref="SqliteMigrationLockStaleAfter"/>: false when <paramref name="configuration"/> leaves it unset.
     /// A value that is not a positive time span is refused rather than defaulted: zero would report every lock another
@@ -62,7 +69,7 @@ public sealed class EfMigrateOptions
         if (string.IsNullOrWhiteSpace(configured))
             return false;
 
-        if (!TimeSpan.TryParse(configured, CultureInfo.InvariantCulture, out staleAfter) || staleAfter <= TimeSpan.Zero)
+        if (!TryParsePositiveTimeSpan(configured, out staleAfter))
         {
             throw new InvalidOperationException(
                 $"Configuration '{SectionName}:{nameof(SqliteMigrationLockStaleAfter)}' is '{configured}'. Use a positive time span such as '00:30:00'.");

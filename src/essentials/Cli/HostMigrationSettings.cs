@@ -1,5 +1,4 @@
 using System.Globalization;
-using Microsoft.Extensions.Configuration;
 
 namespace Elsa.Cli;
 
@@ -24,21 +23,7 @@ internal static class HostMigrationSettings
     /// <summary>The host's configured bound for <paramref name="environment"/>, or <see langword="null"/> when it configures none.</summary>
     public static TimeSpan? SqliteMigrationLockStaleAfter(string hostDirectory, string environment)
     {
-        string? value;
-        try
-        {
-            value = new ConfigurationBuilder()
-                .AddJsonFile(Path.Join(hostDirectory, "appsettings.json"), optional: true, reloadOnChange: false)
-                .AddJsonFile(Path.Join(hostDirectory, $"appsettings.{environment}.json"), optional: true, reloadOnChange: false)
-                .Build()[SqliteMigrationLockStaleAfterKey];
-        }
-        catch (Exception failure) when (failure is FormatException or InvalidDataException or IOException)
-        {
-            throw CliRefusal.Resolution(
-                "host-configuration-unreadable",
-                $"The host's appsettings beside '{hostDirectory}' could not be read for '{SqliteMigrationLockStaleAfterKey}': {failure.Message}");
-        }
-
+        var value = HostAppSettingsValue.Read(hostDirectory, environment, SqliteMigrationLockStaleAfterKey);
         return value is null ? null : Parse(value);
     }
 

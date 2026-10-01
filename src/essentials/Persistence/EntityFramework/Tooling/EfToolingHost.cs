@@ -1117,7 +1117,6 @@ public static class EfToolingHost
         }
     }
 
-    /// <summary>The skew allowance a <c>status</c> request names, refused when it is not a non-negative <c>TimeSpan</c>.</summary>
     /// <summary>The migrate options a version-1 <c>apply</c> runs with: the defaults, and the lock bound the request carries (#2196).</summary>
     private static EfMigrateOptions MigrateOptions(EfToolingRequest request)
     {
@@ -1125,12 +1124,13 @@ public static class EfToolingHost
         if (request.SqliteMigrationLockStaleAfter is null)
             return options;
 
-        options.SqliteMigrationLockStaleAfter = TimeSpan.TryParse(request.SqliteMigrationLockStaleAfter, System.Globalization.CultureInfo.InvariantCulture, out var staleAfter) && staleAfter > TimeSpan.Zero
+        options.SqliteMigrationLockStaleAfter = EfMigrateOptions.TryParsePositiveTimeSpan(request.SqliteMigrationLockStaleAfter, out var staleAfter)
             ? staleAfter
             : throw EfToolingRefusal.Usage("invalid-request", "The 'apply' request is not valid.", [$"'sqliteMigrationLockStaleAfter' must be a positive time span such as 00:10:00, not '{request.SqliteMigrationLockStaleAfter}'."]);
         return options;
     }
 
+    /// <summary>The skew allowance a <c>status</c> request names, refused when it is not a non-negative <c>TimeSpan</c>.</summary>
     private static TimeSpan? SkewAllowance(EfToolingRequest request)
     {
         if (request.SkewAllowance is null)

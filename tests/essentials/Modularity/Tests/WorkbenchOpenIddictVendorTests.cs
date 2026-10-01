@@ -102,10 +102,6 @@ public sealed class WorkbenchOpenIddictVendorTests
     }
 
     /// <summary>
-    /// Elsa's migration policy sits beside the vendor store, not in it: with it the durable store still migrates and reopens, and a
-    /// store that turns <c>AutoMigrate</c> off is still left alone.
-    /// </summary>
-    /// <summary>
     /// The store's <c>AutoMigrate</c> is the options pipeline's one answer: a setting made in code after the section is bound turns
     /// the policy's migration off exactly as it turns the vendor's off, though the policy turns the vendor's off itself.
     /// </summary>
@@ -133,6 +129,10 @@ public sealed class WorkbenchOpenIddictVendorTests
         }
     }
 
+    /// <summary>
+    /// Elsa's migration policy sits beside the vendor store, not in it: with it the durable store still migrates and reopens, and a
+    /// store that turns <c>AutoMigrate</c> off is still left alone.
+    /// </summary>
     [Theory]
     [InlineData(true, 1, 0)]
     [InlineData(false, 0, 1)]

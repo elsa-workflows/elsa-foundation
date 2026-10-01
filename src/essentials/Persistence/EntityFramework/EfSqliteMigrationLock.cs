@@ -63,17 +63,6 @@ public static class EfSqliteMigrationLock
     }
 
     /// <summary>
-    /// Whether <paramref name="context"/> has migrations to apply, which is whether its provider is relational: the in-memory
-    /// provider is created, not migrated. For a host that decides between <see cref="MigrateAsync"/> and creating the store
-    /// without naming an EF package, so that no relational provider is passed over.
-    /// </summary>
-    public static bool IsMigratable(DbContext context)
-    {
-        ArgumentNullException.ThrowIfNull(context);
-        return context.Database.IsRelational();
-    }
-
-    /// <summary>
     /// Returns once <paramref name="context"/>'s SQLite database holds no migration lock, which is immediately on any other provider.
     /// A lock taken after this returns is waited for by EF itself.
     /// </summary>
