@@ -183,6 +183,21 @@ public sealed class InMemoryWorkflowTriggerBindingStore : IWorkflowTriggerBindin
         }
     }
 
+    public ValueTask<IReadOnlyCollection<string>> ListActiveStimulusHashesAsync(
+        string stimulusType,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(stimulusType);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (_syncRoot)
+        {
+            return ValueTask.FromResult(StimulusHashes.DistinctOrdinal(_bindings.Values
+                .Where(binding => binding.IsActive && StringComparer.Ordinal.Equals(binding.StimulusType, stimulusType))
+                .Select(binding => binding.StimulusHash)));
+        }
+    }
+
     private static void ValidateActivationBindings(
         string activationId,
         IReadOnlyCollection<WorkflowTriggerBinding> bindings)

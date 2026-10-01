@@ -379,8 +379,9 @@ bash tools/demo/publish.sh 2 --host solo
 ```
 
 Start the host again in tab S (the command of S5). It comes up but refuses the shell: `curl -s -o /dev/null -w '%{http_code}\n' localhost:5101/demo/notes` prints `500`, and
-the host log says `EF module 'Samples.Notes' has pending migrations`. Then run 1.5. **The next real request activates the shell**:
-`notes 5101` answers, and `withtags 5101` is `HTTP 200` (after a moment of 409, as in 1.6). `/health/ready` stays `503` until that first request; it does not activate a refused shell by itself.
+the host log says `EF module 'Samples.Notes' has pending migrations`. `/health/ready` is `503` with `"reason": {"code": "activation-refused", ...}`. Then run 1.5. **The host activates the shell by itself**: it checks a refused
+shell again every minute or a little less (`Elsa:Boot:EagerShellActivation:Retry:MaxDelay`), so within about a minute of the apply `/health/ready` is `200` with no request sent
+(the rehearsal waits up to 75 s for it). Then `notes 5101` answers, and `withtags 5101` is `HTTP 200` (after a moment of 409, as in 1.6). If you do not want to wait, a real request (`notes 5101`) activates the shell at once.
 If the package is not staged and there is no time: `bash tools/demo/pack.sh 2 --no-host --host solo` builds it live (15 to 86 s).
 
 `bash tools/demo/rehearse.sh --act 1 --fallback` rehearses exactly this route.
@@ -660,7 +661,7 @@ success or failure. Its host logs are kept in `artifacts/demo-rehearsal/`. It us
 | Symptom | Cause | What to do |
 |---|---|---|
 | A host built before #2162 logs a **duplicate key** error at start, on the cluster's identity row | Two hosts started in the same instant both tried to create it; the loser logged the error and carried on. A current build logs nothing for it | Harmless if the host goes on to `Now listening`. Avoid it: start A, wait for `/health/ready` 200, then start B. If a host did not come up, Ctrl-C it and start it again |
-| `/health/ready` says **503** after `apply`, and requests answer **500** | A host that was started already refused (the fallback route): the readiness probe does not activate a shell | Send a real request: `notes 5101`. It activates the shell; `/health/ready` follows |
+| `/health/ready` says **503** after `apply`, and requests answer **500** | A host that was started already refused (the fallback route): the readiness probe does not activate a shell, and the host checks a refused one again only every minute or a little less | Wait up to a minute: the host activates the shell itself and `/health/ready` follows. Or send a real request, `notes 5101`, which activates it at once |
 | `reload` says **200** with `"features": 3` instead of 409 | The host has not installed 1.1.0 yet | Wait five seconds, repeat |
 | `reload` answers **401**, **403** or **404** | Module management is off, or the key differs | The host must be started with `--management-key-env DEMO_KEY`; `echo $DEMO_KEY` in the tab must match the one in the host's tab |
 | A host was **killed or crashed** (or the laptop slept: see the next row) and is restarted | Its membership row lingers until it expires: about 12 s with `--fast-membership` (up to 35 s with the defaults); `status` still shows it `live` meanwhile, and a version waits for it | Wait about 15 s, then start it. A host stopped with Ctrl-C leaves at once and needs no wait |

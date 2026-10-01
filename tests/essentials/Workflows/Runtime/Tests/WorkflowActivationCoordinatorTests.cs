@@ -937,7 +937,7 @@ public sealed class WorkflowActivationCoordinatorTests
             return await inner.TryRetireAsync(expectedLiveReference, retiredReference, cancellationToken);
         }
 
-        public ValueTask<bool> DeleteAsync(string sourceReferenceId, CancellationToken cancellationToken = default) => inner.DeleteAsync(sourceReferenceId, cancellationToken);
+        public ValueTask<bool> TryDeleteDoomedAsync(WorkflowExecutableSourceReference expectedDoomedReference, DateTimeOffset now, CancellationToken cancellationToken = default) => inner.TryDeleteDoomedAsync(expectedDoomedReference, now, cancellationToken);
         public ValueTask<IReadOnlyCollection<string>> DeleteExpiredOrRetiredAsync(WorkflowExecutableSourceReferenceCleanupBatch batch, DateTimeOffset now, CancellationToken cancellationToken = default) => inner.DeleteExpiredOrRetiredAsync(batch, now, cancellationToken);
     }
 
@@ -985,5 +985,6 @@ public sealed class WorkflowActivationCoordinatorTests
         public ValueTask<WorkflowTriggerBindingPage> ListByStimulusAsync(WorkflowTriggerBindingPageQuery query, CancellationToken cancellationToken = default) => inner.ListByStimulusAsync(query, cancellationToken);
         public ValueTask<WorkflowTriggerBindingPage> ListByArtifactAsync(WorkflowTriggerBindingArtifactPageQuery query, CancellationToken cancellationToken = default) => inner.ListByArtifactAsync(query, cancellationToken);
         public ValueTask<WorkflowTriggerBindingPage> ListByStimulusTypeAsync(WorkflowTriggerBindingTypePageQuery query, CancellationToken cancellationToken = default) => inner.ListByStimulusTypeAsync(query, cancellationToken);
+        public ValueTask<IReadOnlyCollection<string>> ListActiveStimulusHashesAsync(string stimulusType, CancellationToken cancellationToken = default) => inner.ListActiveStimulusHashesAsync(stimulusType, cancellationToken);
     }
 }

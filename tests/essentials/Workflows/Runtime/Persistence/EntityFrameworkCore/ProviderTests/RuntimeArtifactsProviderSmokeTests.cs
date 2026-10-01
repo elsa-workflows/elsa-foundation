@@ -7,6 +7,7 @@ using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Workflows.Runtime.Services.Recovery;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Options;
 using Xunit;
 using Xunit.Sdk;
@@ -21,6 +22,11 @@ public sealed class RuntimeArtifactsPostgreSqlSmokeTests(RuntimeBookmarksPostgre
         RuntimeArtifactsProviderSmoke.RunAsync(fixture, "PostgreSql", connection => new RuntimePostgreSqlDbContext(
             new DbContextOptionsBuilder<RuntimePostgreSqlDbContext>().UseNpgsql(connection).Options),
             RuntimePostgreSqlDbContext.ExpectedProviderName);
+
+    [SkippableFact]
+    public Task PostgreSql_doomed_reference_delete_loses_to_a_restore_between_its_read_and_its_delete() =>
+        RuntimeArtifactsProviderSmoke.RunDoomedDeleteRaceAsync(fixture, "PostgreSql", (connection, interceptors) => new RuntimePostgreSqlDbContext(
+            new DbContextOptionsBuilder<RuntimePostgreSqlDbContext>().UseNpgsql(connection).AddInterceptors(interceptors).Options));
 }
 
 [Collection(RuntimeBookmarksSqlServerFixture.CollectionName)]
@@ -146,6 +152,57 @@ internal static class RuntimeArtifactsProviderSmoke
                 Capture(new EfWorkflowExecutableSourceReferenceStore(rightContext, new FixedAccessor(scope), codec).SaveAsync(concurrentReference)));
             Assert.Single(outcomes, outcome => outcome is null);
             Assert.IsType<InvalidOperationException>(Assert.Single(outcomes, outcome => outcome is not null));
+        }
+    }
+
+    /// <summary>
+    /// A restore commits through a second connection after the collector re-read the doomed reference and before its
+    /// delete is saved. The delete must lose to the revision and incarnation fence and report that it did.
+    /// </summary>
+    public static async Task RunDoomedDeleteRaceAsync(
+        RuntimeBookmarksProviderFixture fixture,
+        string providerName,
+        Func<string, IInterceptor[], RuntimeDbContext> createContext)
+    {
+        Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? $"Docker/{providerName} is unavailable.");
+        var scope = $"provider-doomed-race-{Guid.NewGuid():N}";
+        var codec = new HmacRuntimeRecoveryContinuationCodec(Options.Create(new RuntimeRecoveryContinuationOptions
+        {
+            SigningKey = SigningKey,
+            AllowEphemeralDevelopmentKey = false
+        }));
+        var retired = Reference("doomed-race", "doomed-race-artifact", "doomed-race-version").Retire(CreatedAt, "replaced");
+        var restored = retired with { DeletedAt = null, DeletedReason = null };
+
+        await using var seedContext = createContext(fixture.ConnectionString, []);
+        await seedContext.Database.EnsureCreatedAsync();
+        await new EfWorkflowExecutableSourceReferenceStore(seedContext, new FixedAccessor(scope), codec).SaveAsync(retired);
+
+        await using var activationContext = createContext(fixture.ConnectionString, []);
+        var activation = new EfWorkflowExecutableSourceReferenceStore(activationContext, new FixedAccessor(scope), codec);
+        await using var collectorContext = createContext(
+            fixture.ConnectionString,
+            [new RestoreBeforeSaveInterceptor(async () => Assert.True(await activation.TryRestoreAsync(retired, restored)))]);
+        var collector = new EfWorkflowExecutableSourceReferenceStore(collectorContext, new FixedAccessor(scope), codec);
+        var snapshot = await collector.FindAsync(retired.SourceReferenceId);
+
+        Assert.False(await collector.TryDeleteDoomedAsync(snapshot!, DateTimeOffset.UtcNow));
+
+        Assert.Null((await activation.FindAsync(retired.SourceReferenceId))!.DeletedAt);
+    }
+
+    private sealed class RestoreBeforeSaveInterceptor(Func<Task> restore) : SaveChangesInterceptor
+    {
+        private int invoked;
+
+        public override async ValueTask<InterceptionResult<int>> SavingChangesAsync(
+            DbContextEventData eventData,
+            InterceptionResult<int> result,
+            CancellationToken cancellationToken = default)
+        {
+            if (Interlocked.Exchange(ref invoked, 1) == 0)
+                await restore();
+            return result;
         }
     }
 

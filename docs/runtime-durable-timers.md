@@ -62,7 +62,7 @@ resume is **durably enqueued before the dispatcher returns**:
 (durable when EF Core-backed) **before** the drain and before the agent returns `Accepted`. So if the
 process crashes after the timer delete but before the resume commits, W2's resumption sweep
 (`IRuntimeResumptionService.SweepAsync`) discovers the durable backlog
-(`ListPendingWorkflowExecutionIdsAsync`) and re-drives the workflow to completion. The timer being gone
+(`ListClaimableWorkflowExecutionIdsAsync`) and re-drives the workflow to completion. The timer being gone
 is harmless — it already did its one job.
 *Covered by `DurableTimerRestartCrashTests.DeleteOnDispatched_IsSafe_ResumeSurvivesCrashBeforeDrain_AndConverges`.*
 

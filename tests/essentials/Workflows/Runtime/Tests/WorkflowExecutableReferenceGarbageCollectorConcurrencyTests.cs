@@ -49,6 +49,38 @@ public sealed class WorkflowExecutableReferenceGarbageCollectorConcurrencyTests
     }
 
     [Fact]
+    public async Task Sweep_DoesNotDeleteARetiredReferenceRestoredAfterItsSnapshot()
+    {
+        var executableStore = new InMemoryWorkflowExecutableStore();
+        var sourceReferenceStore = new HookedSourceReferenceStore();
+        var retired = Reference("ref-restored", "artifact-restored").Retire(_now.AddMinutes(-1), "replaced");
+        await executableStore.SaveAsync(Executable("artifact-restored", _now.AddDays(-30)));
+        await sourceReferenceStore.SaveAsync(retired);
+        // The activation compensation path: the predecessor is restored after the sweep listed it as retired.
+        sourceReferenceStore.AfterSnapshot = async () =>
+            Assert.True(await sourceReferenceStore.TryRestoreAsync(retired, retired with { DeletedAt = null, DeletedReason = null }));
+
+        var result = await NewCollector(executableStore, sourceReferenceStore).SweepAsync();
+
+        Assert.Equal(0, result.DeletedReferenceCount);
+        Assert.Null((await sourceReferenceStore.FindAsync("ref-restored"))!.DeletedAt);
+        Assert.NotNull(await executableStore.FindAsync("artifact-restored"));
+    }
+
+    [Fact]
+    public async Task Sweep_DeletesAReferenceThatIsStillRetiredAtDeleteTime()
+    {
+        var executableStore = new InMemoryWorkflowExecutableStore();
+        var sourceReferenceStore = new HookedSourceReferenceStore();
+        await sourceReferenceStore.SaveAsync(Reference("ref-retired", "artifact-retired").Retire(_now.AddMinutes(-1), "replaced"));
+
+        var result = await NewCollector(executableStore, sourceReferenceStore).SweepAsync();
+
+        Assert.Equal(1, result.DeletedReferenceCount);
+        Assert.Null(await sourceReferenceStore.FindAsync("ref-retired"));
+    }
+
+    [Fact]
     public async Task Sweep_FinalRecheckProtectsAChildWhenAConcurrentParentRootAppears()
     {
         var executableStore = new InMemoryWorkflowExecutableStore();
@@ -310,6 +342,9 @@ public sealed class WorkflowExecutableReferenceGarbageCollectorConcurrencyTests
 
         public Func<int, ValueTask>? AfterQuery { get; set; }
 
+        /// <summary>Runs once, after the final page of the sweep's all-references (not live-only) listing was returned and before it deletes.</summary>
+        public Func<ValueTask>? AfterSnapshot { get; set; }
+
         public ValueTask SaveAsync(WorkflowExecutableSourceReference reference, CancellationToken cancellationToken = default) =>
             _inner.SaveAsync(reference, cancellationToken);
 
@@ -321,10 +356,31 @@ public sealed class WorkflowExecutableReferenceGarbageCollectorConcurrencyTests
             CancellationToken cancellationToken = default) =>
             _inner.ListByArtifactPageAsync(query, cancellationToken);
 
-        public ValueTask<RuntimeStorePage<WorkflowExecutableSourceReference>> ListPageAsync(
+        public async ValueTask<RuntimeStorePage<WorkflowExecutableSourceReference>> ListPageAsync(
             WorkflowExecutableSourceReferencePageQuery query,
+            CancellationToken cancellationToken = default)
+        {
+            var page = await _inner.ListPageAsync(query, cancellationToken);
+            if (!query.LiveOnly && page.NextContinuationToken is null && AfterSnapshot is { } afterSnapshot)
+            {
+                AfterSnapshot = null;
+                await afterSnapshot();
+            }
+
+            return page;
+        }
+
+        public ValueTask<bool> TryRestoreAsync(
+            WorkflowExecutableSourceReference expectedRetiredReference,
+            WorkflowExecutableSourceReference restoredReference,
             CancellationToken cancellationToken = default) =>
-            _inner.ListPageAsync(query, cancellationToken);
+            _inner.TryRestoreAsync(expectedRetiredReference, restoredReference, cancellationToken);
+
+        public ValueTask<bool> TryDeleteDoomedAsync(
+            WorkflowExecutableSourceReference expectedDoomedReference,
+            DateTimeOffset now,
+            CancellationToken cancellationToken = default) =>
+            _inner.TryDeleteDoomedAsync(expectedDoomedReference, now, cancellationToken);
 
         public ValueTask<bool> RetireAsync(
             string sourceReferenceId,

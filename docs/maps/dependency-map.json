@@ -8383,6 +8383,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Tasks.Schedules",
+          "path": "src/essentials/Tasks/Schedules/Elsa.Tasks.Schedules.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Workflows.Runtime.Core",
           "path": "src/essentials/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj"
         },
@@ -8395,6 +8400,11 @@
           "type": "external",
           "id": "Elsa.Specifications.PackageManifest.Generator",
           "version": "0.0.1-preview.8"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Cronos",
+          "version": "0.13.0"
         }
       ]
     },
@@ -17283,6 +17293,11 @@
           "path": "src/essentials/Workflows/Design/Persistence/EntityFrameworkCore/Elsa.Workflows.Design.Persistence.EntityFrameworkCore.csproj"
         },
         {
+          "type": "internal",
+          "id": "Elsa.Workflows.Design.Reconciliation",
+          "path": "src/essentials/Workflows/Design/Reconciliation/Elsa.Workflows.Design.Reconciliation.csproj"
+        },
+        {
           "type": "external",
           "id": "Microsoft.EntityFrameworkCore.SqlServer",
           "version": "10.0.10"
@@ -17554,6 +17569,11 @@
           "type": "external",
           "id": "Microsoft.Extensions.DependencyInjection",
           "version": "10.0.10"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.Extensions.TimeProvider.Testing",
+          "version": "10.8.0"
         },
         {
           "type": "external",
@@ -18378,6 +18398,16 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Http",
+          "path": "src/essentials/Http/Elsa.Http.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Tasks",
+          "path": "src/essentials/Tasks/Elsa.Tasks.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Workflows.Runtime.Core",
           "path": "src/essentials/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj"
         },
@@ -18393,6 +18423,11 @@
         },
         {
           "type": "external",
+          "id": "CShells",
+          "version": "0.0.30-preview.159"
+        },
+        {
+          "type": "external",
           "id": "Microsoft.AspNetCore.Authorization",
           "version": "10.0.10"
         },
@@ -18400,6 +18435,11 @@
           "type": "external",
           "id": "Microsoft.AspNetCore.Http",
           "version": "2.3.10"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.Extensions.Caching.Memory",
+          "version": "10.0.10"
         },
         {
           "type": "external",

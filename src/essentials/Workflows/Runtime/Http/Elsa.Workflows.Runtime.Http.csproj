@@ -14,6 +14,7 @@
     <ProjectReference Include="..\..\..\Http\Core\Elsa.Http.Core.csproj" />
     <ProjectReference Include="..\..\..\Primitives\Primitives\Elsa.Primitives.csproj" />
     <ProjectReference Include="..\..\..\Tasks\Core\Elsa.Tasks.Core.csproj" />
+    <ProjectReference Include="..\..\..\Tasks\Schedules\Elsa.Tasks.Schedules.csproj" />
     <ProjectReference Include="..\Core\Elsa.Workflows.Runtime.Core.csproj" />
   </ItemGroup>
 
