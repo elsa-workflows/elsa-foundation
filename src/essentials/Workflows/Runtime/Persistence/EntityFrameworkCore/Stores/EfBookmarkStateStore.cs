@@ -218,9 +218,16 @@ public sealed class EfBookmarkStateStore(
     }
 
     /// <summary>
-    /// The waiting bookmarks of one type, projected to their stimulus identities in the database. The lookup key rides
-    /// along in the DISTINCT: it is a hex hash of the exact identity, so two hashes a case-insensitive provider collation
-    /// would fold together still come back as two rows.
+    /// The waiting bookmarks of one type, projected to their stimulus identities in the database for the HTTP route-table
+    /// convergence check every node runs on an interval (#2190). Two rules keep it cheap and exact, and
+    /// <see cref="EfWorkflowTriggerBindingStore.ListActiveStimulusHashesAsync"/> follows both:
+    /// <list type="bullet">
+    /// <item>It reads only columns of the route-convergence index (<see cref="BookmarkStateEfModule.RouteConvergenceIndexName"/>),
+    /// so the database answers from the index alone: scope and type are matched through their hash projections rather
+    /// than the encoded scope or the type text, which the index does not hold.</item>
+    /// <item>The lookup key rides along in the DISTINCT. It is a hex hash of the exact identity, so two hashes a
+    /// case-insensitive provider collation would fold together still come back as two rows.</item>
+    /// </list>
     /// </summary>
     public async ValueTask<IReadOnlyCollection<string>> ListWaitingStimulusHashesByTypeAsync(
         string stimulusType,
@@ -229,21 +236,18 @@ public sealed class EfBookmarkStateStore(
     {
         ValidateBound(stimulusType, BookmarkStateEfModule.StimulusTypeMaximumLength, nameof(stimulusType));
         cancellationToken.ThrowIfCancellationRequested();
-        var scope = RequireScope();
-        var scopeHash = Hash(scope);
-        var scopeKey = EfRelationalIdentity.Encode(scope);
+        var scopeHash = Hash(RequireScope());
         var lookup = StimulusTypeLookupKey(stimulusType);
         var evaluatedAtUtcTicks = evaluatedAt.UtcTicks;
         try
         {
             var identities = await context.Bookmarks.AsNoTracking()
-                .Where(row => row.ScopeKeyHash == scopeHash && row.ScopeKey == scopeKey &&
-                              row.StimulusTypeLookupKey == lookup && row.StimulusType == stimulusType &&
+                .Where(row => row.ScopeKeyHash == scopeHash && row.StimulusTypeLookupKey == lookup &&
                               (row.ExpiresAtUtcTicks == null || row.ExpiresAtUtcTicks > evaluatedAtUtcTicks))
                 .Select(row => new { row.StimulusLookupKey, row.StimulusHash })
                 .Distinct()
                 .ToArrayAsync(cancellationToken);
-            return identities.Select(identity => identity.StimulusHash).Distinct(StringComparer.Ordinal).ToArray();
+            return StimulusHashes.DistinctOrdinal(identities.Select(identity => identity.StimulusHash));
         }
         catch (OperationCanceledException)
         {

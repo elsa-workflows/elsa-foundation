@@ -8,6 +8,25 @@
         "resolved": "6.0.2",
         "contentHash": "bJShQ6uWRTQ100ZeyiMqcFlhP7WJ+bCuabUs885dJiBEzMsJMSFr7BOyeCw4rgvQokteGi5rKQTlkhfQPUXg2A=="
       },
+      "CShells": {
+        "type": "Direct",
+        "requested": "[0.0.30-preview.159, )",
+        "resolved": "0.0.30-preview.159",
+        "contentHash": "x6qrRjUbjj9FbgeeqgUWrDoSxbW48zna/cvXhZYJGsKBmnS0cErPY/+QiFSmuAzXrcwuf9nDBod5DK7BbpIReA==",
+        "dependencies": {
+          "CShells.Abstractions": "0.0.30-preview.159",
+          "JetBrains.Annotations": "2025.2.4",
+          "Microsoft.Extensions.Configuration": "10.0.0",
+          "Microsoft.Extensions.Configuration.Abstractions": "10.0.0",
+          "Microsoft.Extensions.Configuration.Binder": "10.0.0",
+          "Microsoft.Extensions.DependencyInjection": "10.0.0",
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.0",
+          "Microsoft.Extensions.DependencyModel": "10.0.1",
+          "Microsoft.Extensions.Hosting.Abstractions": "10.0.0",
+          "Microsoft.Extensions.Logging": "10.0.0",
+          "Microsoft.Extensions.Logging.Abstractions": "10.0.0"
+        }
+      },
       "Microsoft.AspNetCore.Authorization": {
         "type": "Direct",
         "requested": "[10.0.10, )",
@@ -31,6 +50,19 @@
           "Microsoft.Extensions.ObjectPool": "8.0.11",
           "Microsoft.Extensions.Options": "8.0.2",
           "Microsoft.Net.Http.Headers": "2.3.9"
+        }
+      },
+      "Microsoft.Extensions.Caching.Memory": {
+        "type": "Direct",
+        "requested": "[10.0.10, )",
+        "resolved": "10.0.10",
+        "contentHash": "N1w5H7uK6gCTnCBZAWzE0/EQYSPysij/uYwDqntqBVvBa6bjMmBKitsnEFd6yh/SX3wLm67nO6+OnZ84K+gZWg==",
+        "dependencies": {
+          "Microsoft.Extensions.Caching.Abstractions": "10.0.10",
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.10",
+          "Microsoft.Extensions.Logging.Abstractions": "10.0.10",
+          "Microsoft.Extensions.Options": "10.0.10",
+          "Microsoft.Extensions.Primitives": "10.0.10"
         }
       },
       "Microsoft.Extensions.DependencyInjection": {
@@ -130,6 +162,11 @@
           "Microsoft.Extensions.Configuration.Abstractions": "10.0.10"
         }
       },
+      "Microsoft.Extensions.DependencyModel": {
+        "type": "Transitive",
+        "resolved": "10.0.1",
+        "contentHash": "IiWPd4j8JLNjSkyXl5hvJwX2ZENDVQVPDHYgZmYdw8+YkY2xp9iQt0vjdnAQZLpo/ipeW1xgOqfSBEnivKWPYQ=="
+      },
       "Microsoft.Extensions.Diagnostics": {
         "type": "Transitive",
         "resolved": "10.0.10",
@@ -147,6 +184,14 @@
         "dependencies": {
           "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.10",
           "Microsoft.Extensions.Options": "10.0.10"
+        }
+      },
+      "Microsoft.Extensions.FileProviders.Abstractions": {
+        "type": "Transitive",
+        "resolved": "10.0.10",
+        "contentHash": "c5zqFCY9DiIpMovLd7/d/CTiEtrMOuQ639dhv3PABtKQIKNQikSHwQt8+N679uii9q+B55lgK28Uv64FOwEu8w==",
+        "dependencies": {
+          "Microsoft.Extensions.Primitives": "10.0.10"
         }
       },
       "Microsoft.Extensions.ObjectPool": {
@@ -236,8 +281,22 @@
           "Elsa.Primitives": "[4.0.0-dev, )"
         }
       },
+      "elsa.api.aspnetcore": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Primitives": "[4.0.0-dev, )",
+          "NativeEndpoints": "[1.0.0-preview.6, )"
+        }
+      },
       "elsa.attention.core": {
         "type": "Project"
+      },
+      "elsa.caching.core": {
+        "type": "Project",
+        "dependencies": {
+          "Microsoft.Extensions.Caching.Abstractions": "[10.0.10, )",
+          "Microsoft.Extensions.Primitives": "[10.0.10, )"
+        }
       },
       "elsa.events.core": {
         "type": "Project",
@@ -252,7 +311,21 @@
           "Elsa.Primitives": "[4.0.0-dev, )"
         }
       },
+      "elsa.http": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.30-preview.159, )",
+          "Elsa.Api.AspNetCore": "[4.0.0-dev, )",
+          "Elsa.Caching.Core": "[4.0.0-dev, )",
+          "Elsa.Http.Core": "[4.0.0-dev, )",
+          "Elsa.Primitives": "[4.0.0-dev, )",
+          "Elsa.Serialization.Core": "[4.0.0-dev, )"
+        }
+      },
       "elsa.http.core": {
+        "type": "Project"
+      },
+      "elsa.locking.core": {
         "type": "Project"
       },
       "elsa.pipelines.core": {
@@ -269,6 +342,17 @@
         "dependencies": {
           "Elsa.Events.Core": "[4.0.0-dev, )",
           "Elsa.Primitives": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.tasks": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.30-preview.159, )",
+          "Elsa.Locking.Core": "[4.0.0-dev, )",
+          "Elsa.Primitives": "[4.0.0-dev, )",
+          "Elsa.Tasks.Core": "[4.0.0-dev, )",
+          "Microsoft.Extensions.Logging.Abstractions": "[10.0.10, )",
+          "Microsoft.Extensions.Options": "[10.0.10, )"
         }
       },
       "elsa.tasks.core": {
@@ -350,6 +434,15 @@
           "Microsoft.AspNetCore.Http.Features": "2.3.9"
         }
       },
+      "Microsoft.Extensions.Caching.Abstractions": {
+        "type": "CentralTransitive",
+        "requested": "[10.0.10, )",
+        "resolved": "10.0.10",
+        "contentHash": "4ZFBNE+jzR+CrWWlhOesnmywCW7pYKT0dxyAQRdL11yJwxe4jvcAu31eorFtEkoFeCDcUTeNssgPv2yaRRptaQ==",
+        "dependencies": {
+          "Microsoft.Extensions.Primitives": "10.0.10"
+        }
+      },
       "Microsoft.Extensions.Configuration": {
         "type": "CentralTransitive",
         "requested": "[10.0.10, )",
@@ -375,6 +468,19 @@
         "resolved": "10.0.10",
         "contentHash": "z/2xXlFw2aLGjHyEm6E0tQ+In6VfzQzTrtArbQ2c0TQE16ZbyDCMGPvaUT9I0s8rgy9sRWlU2P9waW37qV04qA=="
       },
+      "Microsoft.Extensions.Hosting.Abstractions": {
+        "type": "CentralTransitive",
+        "requested": "[10.0.10, )",
+        "resolved": "10.0.10",
+        "contentHash": "5LugpYGHk+mkn0a8IZgcyfBca8PCTAU9RQFoMrTdtOOidq88M2SI5f3px6ugnzgxC+eTkvYYJi8pzlUnG5xdAQ==",
+        "dependencies": {
+          "Microsoft.Extensions.Configuration.Abstractions": "10.0.10",
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.10",
+          "Microsoft.Extensions.Diagnostics.Abstractions": "10.0.10",
+          "Microsoft.Extensions.FileProviders.Abstractions": "10.0.10",
+          "Microsoft.Extensions.Logging.Abstractions": "10.0.10"
+        }
+      },
       "Microsoft.Extensions.Logging.Abstractions": {
         "type": "CentralTransitive",
         "requested": "[10.0.10, )",
@@ -389,6 +495,12 @@
         "requested": "[10.0.10, )",
         "resolved": "10.0.10",
         "contentHash": "5wu/GrYVd8mG2DVUw3vFJzF+O336TyTGg/Kmcgw9bfwYhCoFiV5lR5QeEmKecJyrW4W54nMfD3p3589E8a7czQ=="
+      },
+      "NativeEndpoints": {
+        "type": "CentralTransitive",
+        "requested": "[1.0.0-preview.6, )",
+        "resolved": "1.0.0-preview.6",
+        "contentHash": "3TeUmdG8kjVZYj2NJeYc53kmP0M9Qj6sTBfhJjQMqrLGXgIBGdme9ivE7vlshRAqM79mRLmjICQJPAIBcdEQQw=="
       },
       "Newtonsoft.Json": {
         "type": "CentralTransitive",

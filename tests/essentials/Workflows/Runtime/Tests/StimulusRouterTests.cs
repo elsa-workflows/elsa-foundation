@@ -321,6 +321,9 @@ public sealed class StimulusRouterTests
         public ValueTask<WorkflowTriggerBindingPage> ListByStimulusTypeAsync(
             WorkflowTriggerBindingTypePageQuery query,
             CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<IReadOnlyCollection<string>> ListActiveStimulusHashesAsync(
+            string stimulusType,
+            CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 
     private StimulusRouter Router(

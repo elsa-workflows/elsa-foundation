@@ -2,6 +2,7 @@ using Elsa.Http.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Http.Contracts;
+using Elsa.Workflows.Runtime.Http.Models;
 using Elsa.Workflows.Runtime.Http.Services;
 using Elsa.Workflows.Runtime.Services.Bookmarks;
 using Elsa.Workflows.Runtime.Services.Triggers;
@@ -154,23 +155,11 @@ public sealed class HttpEndpointRouteTableConvergenceTests
     }
 
     [Fact]
-    public async Task Check_AlwaysRefreshes_WhenTheResolverReportsNoFingerprint()
-    {
-        // A custom resolver that implements only ResolveRoutesAsync cannot be checked cheaply; refreshing on every check
-        // costs more but never leaves the table behind.
-        var synchronizer = Build(new RoutesOnlyResolver());
-
-        Assert.True(await synchronizer.ConvergeAsync());
-        Assert.True(await synchronizer.ConvergeAsync());
-        Assert.Equal(2, _routeTable.RefreshCount);
-    }
-
-    [Fact]
     public async Task Check_HoldsTheRefreshLock_WhileItReadsTheFingerprint()
     {
         var fingerprintEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var releaseFingerprint = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var synchronizer = Build(new RoutesOnlyResolver(async () =>
+        var synchronizer = Build(new GatedFingerprintResolver(async () =>
         {
             fingerprintEntered.SetResult();
             await releaseFingerprint.Task;
@@ -194,17 +183,21 @@ public sealed class HttpEndpointRouteTableConvergenceTests
         return new HttpEndpointRouteTableSynchronizer(services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>());
     }
 
-    /// <summary>A resolver on the contract's defaults: routes only, no fingerprint.</summary>
-    private sealed class RoutesOnlyResolver(Func<Task>? onFingerprint = null) : IHttpEndpointRoutesResolver
+    /// <summary>A resolver whose fingerprint read waits on the test before it answers.</summary>
+    private sealed class GatedFingerprintResolver(Func<Task> onFingerprint) : IHttpEndpointRoutesResolver
     {
+        private const string Fingerprint = "orders";
+
         public ValueTask<IReadOnlyCollection<HttpRouteData>> ResolveRoutesAsync(CancellationToken cancellationToken = default) =>
             ValueTask.FromResult<IReadOnlyCollection<HttpRouteData>>([new("orders")]);
 
-        public async ValueTask<string?> ResolveRouteFingerprintAsync(CancellationToken cancellationToken = default)
+        public async ValueTask<HttpEndpointRouteSet> ResolveRouteSetAsync(CancellationToken cancellationToken = default) =>
+            new(await ResolveRoutesAsync(cancellationToken), Fingerprint);
+
+        public async ValueTask<string> ResolveRouteFingerprintAsync(CancellationToken cancellationToken = default)
         {
-            if (onFingerprint is not null)
-                await onFingerprint();
-            return null;
+            await onFingerprint();
+            return Fingerprint;
         }
     }
 

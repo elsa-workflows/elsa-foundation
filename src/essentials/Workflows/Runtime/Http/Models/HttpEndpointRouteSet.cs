@@ -7,8 +7,5 @@ namespace Elsa.Workflows.Runtime.Http.Models;
 /// they were projected from.
 /// </summary>
 /// <param name="Routes">The routes to load.</param>
-/// <param name="Fingerprint">
-/// The fingerprint of the stimulus identities read to build <paramref name="Routes"/>, computed from the same rows, or
-/// <c>null</c> when the resolver cannot tell. A route table refreshed without one is rebuilt on every convergence check.
-/// </param>
-public sealed record HttpEndpointRouteSet(IReadOnlyCollection<HttpRouteData> Routes, string? Fingerprint);
+/// <param name="Fingerprint">The fingerprint of the stimulus identities read to build <paramref name="Routes"/>, computed from the same rows.</param>
+public sealed record HttpEndpointRouteSet(IReadOnlyCollection<HttpRouteData> Routes, string Fingerprint);

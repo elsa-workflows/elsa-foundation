@@ -1283,6 +1283,7 @@ public sealed class EfBookmarkStateStoreTests
     {
         public ValueTask<RuntimeStorePage<BookmarkState>> ListByStimulusPageAsync(BookmarkStimulusPageQuery query, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public ValueTask<RuntimeStorePage<BookmarkState>> ListByStimulusTypePageAsync(BookmarkStimulusTypePageQuery query, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<IReadOnlyCollection<string>> ListWaitingStimulusHashesByTypeAsync(string stimulusType, DateTimeOffset evaluatedAt, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 
     private sealed class CustomRegistration

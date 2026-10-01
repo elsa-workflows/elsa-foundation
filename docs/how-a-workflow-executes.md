@@ -55,7 +55,11 @@ dispatchers the API path uses, so the rest of this document applies to it too.
 Each node keeps its own `IRouteTable`, built from the durable trigger bindings and waiting HTTP bookmarks. The node
 that publishes an endpoint, or suspends on one, refreshes its table at once; every other node picks the change up
 within the `WorkflowsRuntimeHttp` feature's convergence interval (5 seconds by default), until which that endpoint
-returns 404 there. See "Multi-node guarantee" in `src/essentials/Workflows/Runtime/Http/EXTENSION_POINTS.md`.
+returns 404 there. One thing lags longer: a republish that changes only an endpoint's authorization options
+(`Authorize`, `Policy`) leaves its template and method as they were, so other nodes' route inventory metadata keeps the
+old security disposition until the next change to the set of routes. Enforcement is not affected, because the middleware
+reads the authorization options from the durable trigger bindings and bookmarks on every request. See "Multi-node
+guarantee" in `src/essentials/Workflows/Runtime/Http/EXTENSION_POINTS.md`.
 
 ### 2. Resolving the executable
 

@@ -17,8 +17,8 @@ namespace Elsa.Workflows.Runtime.Http.Contracts;
 /// <para>
 /// <b>Convergence across nodes (#2190).</b> Every node keeps its own route table, so a change made on another node is
 /// picked up by comparing <see cref="ResolveRouteFingerprintAsync"/> with the fingerprint the last
-/// <see cref="ResolveRouteSetAsync"/> returned. A resolver must implement the two together, over the same sources: the
-/// defaults report no fingerprint, and a route table built without one is rebuilt on every convergence check.
+/// <see cref="ResolveRouteSetAsync"/> returned. The two must read the same sources and agree exactly when the table
+/// holds what those sources give now.
 /// </para>
 /// </remarks>
 public interface IHttpEndpointRoutesResolver
@@ -33,16 +33,13 @@ public interface IHttpEndpointRoutesResolver
     /// <summary>
     /// Resolves the same routes as <see cref="ResolveRoutesAsync"/> together with the fingerprint of the stimulus
     /// identities they were projected from, computed from the rows that were read rather than from a second read, so
-    /// it describes exactly what the route table will hold. The default reports no fingerprint.
+    /// it describes exactly what the route table will hold.
     /// </summary>
-    async ValueTask<HttpEndpointRouteSet> ResolveRouteSetAsync(CancellationToken cancellationToken = default) =>
-        new(await ResolveRoutesAsync(cancellationToken), Fingerprint: null);
+    ValueTask<HttpEndpointRouteSet> ResolveRouteSetAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Reads the fingerprint <see cref="ResolveRouteSetAsync"/> would report now, without projecting any route: the
-    /// cheap check a node runs on every convergence interval. Returns <c>null</c> when the resolver cannot tell, which
-    /// makes every check a full refresh. The default returns <c>null</c>.
+    /// cheap check a node runs on every convergence interval.
     /// </summary>
-    ValueTask<string?> ResolveRouteFingerprintAsync(CancellationToken cancellationToken = default) =>
-        ValueTask.FromResult<string?>(null);
+    ValueTask<string> ResolveRouteFingerprintAsync(CancellationToken cancellationToken = default);
 }

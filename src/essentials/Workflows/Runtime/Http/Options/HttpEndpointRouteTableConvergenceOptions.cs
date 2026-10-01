@@ -2,7 +2,8 @@ namespace Elsa.Workflows.Runtime.Http.Options;
 
 /// <summary>
 /// Tuning for the check that brings each node's HTTP route table in line with endpoints published, and HTTP bookmarks
-/// created or consumed, on other nodes (#2190).
+/// created or consumed, on other nodes (#2190). <c>WorkflowsRuntimeHttpFeature</c> validates its settings once, when
+/// it composes these options; a host configuring them directly owns their validity.
 /// </summary>
 public sealed class HttpEndpointRouteTableConvergenceOptions
 {
@@ -15,13 +16,4 @@ public sealed class HttpEndpointRouteTableConvergenceOptions
 
     /// <summary>Upper bound the interval widens to while checks keep failing, for example while the database is down.</summary>
     public TimeSpan MaxBackoffInterval { get; set; } = TimeSpan.FromMinutes(1);
-
-    /// <summary>Refuses a non-positive interval, which would make the check spin or never run.</summary>
-    public void Validate()
-    {
-        if (Interval <= TimeSpan.Zero)
-            throw new ArgumentOutOfRangeException(nameof(Interval), Interval, "The HTTP route-table convergence interval must be positive.");
-        if (MaxBackoffInterval <= TimeSpan.Zero)
-            throw new ArgumentOutOfRangeException(nameof(MaxBackoffInterval), MaxBackoffInterval, "The HTTP route-table convergence backoff ceiling must be positive.");
-    }
 }

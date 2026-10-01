@@ -30,12 +30,8 @@ public interface IHttpEndpointRouteTableSynchronizer
     /// Brings the route table in line with the durable sources when they no longer match what it was last built from,
     /// whichever node changed them. Under the same lock as <see cref="RefreshAsync"/>, reads the resolver's cheap
     /// <see cref="IHttpEndpointRoutesResolver.ResolveRouteFingerprintAsync"/> and refreshes only when it differs from the
-    /// fingerprint of the last successful refresh, or when either is unknown. Returns whether it refreshed. Exceptions
-    /// propagate unchanged. The default refreshes unconditionally.
+    /// fingerprint of the last successful refresh, or when there is none. Returns whether it refreshed. Exceptions
+    /// propagate unchanged.
     /// </summary>
-    async ValueTask<bool> ConvergeAsync(CancellationToken cancellationToken = default)
-    {
-        await RefreshAsync(cancellationToken);
-        return true;
-    }
+    ValueTask<bool> ConvergeAsync(CancellationToken cancellationToken = default);
 }

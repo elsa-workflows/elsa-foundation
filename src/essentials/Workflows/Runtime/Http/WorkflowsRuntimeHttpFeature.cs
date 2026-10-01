@@ -86,10 +86,12 @@ public class WorkflowsRuntimeHttpFeature : IShellFeature
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowTriggerIndexValidator, HttpEndpointRoutingUniquenessValidator>());
     }
 
+    // The one validation of the convergence settings: positive, finite and representable as a TimeSpan. NaN and the
+    // infinities fail both comparisons.
     private static TimeSpan PositiveSeconds(double seconds, string setting) =>
-        double.IsFinite(seconds) && seconds > 0
+        seconds > 0 && seconds < TimeSpan.MaxValue.TotalSeconds
             ? TimeSpan.FromSeconds(seconds)
-            : throw new ArgumentOutOfRangeException(setting, seconds, $"{setting} must be a positive number of seconds.");
+            : throw new ArgumentOutOfRangeException(setting, seconds, $"{setting} must be a positive, finite number of seconds.");
 
     private void RegisterFaultHandler(IServiceCollection services)
     {

@@ -44,8 +44,8 @@ public sealed class HttpEndpointRouteTableSynchronizer(IServiceScopeFactory scop
 {
     private readonly SemaphoreSlim _gate = new(1, 1);
 
-    // The fingerprint of the identities the current table was built from; null until a refresh succeeds with a resolver
-    // that reports one, and after any refresh fails. Read and written only under _gate.
+    // The fingerprint of the identities the current table was built from; null until a refresh succeeds, and after any
+    // refresh fails. Read and written only under _gate.
     private string? _refreshedFingerprint;
 
     public ValueTask RefreshAsync(CancellationToken cancellationToken = default) =>
@@ -71,7 +71,7 @@ public sealed class HttpEndpointRouteTableSynchronizer(IServiceScopeFactory scop
             await using var scope = scopeFactory.CreateAsyncScope();
             var resolver = scope.ServiceProvider.GetRequiredService<IHttpEndpointRoutesResolver>();
             var fingerprint = await resolver.ResolveRouteFingerprintAsync(cancellationToken);
-            if (fingerprint is not null && StringComparer.Ordinal.Equals(fingerprint, _refreshedFingerprint))
+            if (StringComparer.Ordinal.Equals(fingerprint, _refreshedFingerprint))
                 return false;
 
             await ObserveRefreshAsync(() => RefreshUnderGateAsync(scope.ServiceProvider, cancellationToken));

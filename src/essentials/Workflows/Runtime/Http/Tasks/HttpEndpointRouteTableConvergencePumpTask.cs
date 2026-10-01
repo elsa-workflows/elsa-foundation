@@ -24,9 +24,9 @@ public sealed class HttpEndpointRouteTableConvergencePumpTask(
     IOptions<HttpEndpointRouteTableConvergenceOptions> options,
     ILogger<HttpEndpointRouteTableConvergencePumpTask> logger) : BackoffSweepPumpTask(logger)
 {
-    protected override TimeSpan SweepInterval => ValidatedOptions.Interval;
+    protected override TimeSpan SweepInterval => options.Value.Interval;
 
-    protected override TimeSpan MaxBackoffInterval => ValidatedOptions.MaxBackoffInterval;
+    protected override TimeSpan MaxBackoffInterval => options.Value.MaxBackoffInterval;
 
     protected override async Task SweepAsync(CancellationToken cancellationToken)
     {
@@ -46,14 +46,4 @@ public sealed class HttpEndpointRouteTableConvergencePumpTask(
 
     protected override bool ShouldRethrowCancellation(OperationCanceledException exception, CancellationToken cancellationToken) =>
         cancellationToken.IsCancellationRequested;
-
-    private HttpEndpointRouteTableConvergenceOptions ValidatedOptions
-    {
-        get
-        {
-            var value = options.Value;
-            value.Validate();
-            return value;
-        }
-    }
 }

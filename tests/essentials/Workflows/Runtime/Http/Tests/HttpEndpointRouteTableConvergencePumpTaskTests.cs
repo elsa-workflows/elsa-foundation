@@ -87,14 +87,6 @@ public sealed class HttpEndpointRouteTableConvergencePumpTaskTests
         Assert.Equal(Interval * 2, pump.CurrentSweepInterval);
     }
 
-    [Fact]
-    public void ANonPositiveInterval_IsRefused()
-    {
-        _options.Interval = TimeSpan.Zero;
-
-        Assert.Throws<ArgumentOutOfRangeException>(() => Pump().CurrentSweepInterval);
-    }
-
     private sealed class ScriptedSynchronizer : IHttpEndpointRouteTableSynchronizer
     {
         public int Checks { get; private set; }

@@ -985,5 +985,6 @@ public sealed class WorkflowActivationCoordinatorTests
         public ValueTask<WorkflowTriggerBindingPage> ListByStimulusAsync(WorkflowTriggerBindingPageQuery query, CancellationToken cancellationToken = default) => inner.ListByStimulusAsync(query, cancellationToken);
         public ValueTask<WorkflowTriggerBindingPage> ListByArtifactAsync(WorkflowTriggerBindingArtifactPageQuery query, CancellationToken cancellationToken = default) => inner.ListByArtifactAsync(query, cancellationToken);
         public ValueTask<WorkflowTriggerBindingPage> ListByStimulusTypeAsync(WorkflowTriggerBindingTypePageQuery query, CancellationToken cancellationToken = default) => inner.ListByStimulusTypeAsync(query, cancellationToken);
+        public ValueTask<IReadOnlyCollection<string>> ListActiveStimulusHashesAsync(string stimulusType, CancellationToken cancellationToken = default) => inner.ListActiveStimulusHashesAsync(stimulusType, cancellationToken);
     }
 }

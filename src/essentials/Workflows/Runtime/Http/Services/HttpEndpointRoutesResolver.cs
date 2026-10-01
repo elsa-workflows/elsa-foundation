@@ -116,7 +116,7 @@ public sealed class HttpEndpointRoutesResolver(
             Fingerprint(bindings.Select(binding => binding.StimulusHash).Concat(waiting.Matches.Select(bookmark => bookmark.StimulusHash))));
     }
 
-    public async ValueTask<string?> ResolveRouteFingerprintAsync(CancellationToken cancellationToken = default)
+    public async ValueTask<string> ResolveRouteFingerprintAsync(CancellationToken cancellationToken = default)
     {
         var bindingHashes = await bindingStore.ListActiveStimulusHashesAsync(HttpEndpointRouting.StimulusType, cancellationToken);
         var bookmarkHashes = await bookmarkStimulusLookup.FindWaitingStimulusHashesByTypeAsync(
@@ -130,7 +130,7 @@ public sealed class HttpEndpointRoutesResolver(
     private static string Fingerprint(IEnumerable<string> stimulusHashes)
     {
         var framed = new StringBuilder();
-        foreach (var stimulusHash in stimulusHashes.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal))
+        foreach (var stimulusHash in StimulusHashes.DistinctOrdinal(stimulusHashes).Order(StringComparer.Ordinal))
             framed.Append(stimulusHash.Length).Append(':').Append(stimulusHash);
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(framed.ToString())));
     }

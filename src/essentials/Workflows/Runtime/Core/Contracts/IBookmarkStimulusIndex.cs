@@ -31,25 +31,15 @@ public interface IBookmarkStimulusIndex
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Returns the distinct stimulus hashes of the bookmarks of one stimulus type that are still waiting at
-    /// <paramref name="evaluatedAt"/>: those with no <see cref="BookmarkState.ExpiresAt"/>, or one after it. Unlike the
-    /// page scans this read applies the expiry rule of <see cref="IGlobalBookmarkStimulusLookup"/> itself, because it
-    /// returns hashes rather than rows and so leaves the lookup nothing to filter. The default traverses
-    /// <see cref="ListByStimulusTypePageAsync"/>; a store that can project the hashes alone should override it.
+    /// Returns the distinct stimulus hashes (<see cref="StimulusHashes.DistinctOrdinal"/>) of the bookmarks of one
+    /// stimulus type that are still waiting at <paramref name="evaluatedAt"/>: those with no
+    /// <see cref="BookmarkState.ExpiresAt"/>, or one after it. Unlike the page scans this read applies the expiry rule of
+    /// <see cref="IGlobalBookmarkStimulusLookup"/> itself, because it returns hashes rather than rows and so leaves the
+    /// lookup nothing to filter. A per-node projection (the HTTP route table) compares the result between reads, so a
+    /// store should answer it without materializing bookmarks.
     /// </summary>
-    async ValueTask<IReadOnlyCollection<string>> ListWaitingStimulusHashesByTypeAsync(
+    ValueTask<IReadOnlyCollection<string>> ListWaitingStimulusHashesByTypeAsync(
         string stimulusType,
         DateTimeOffset evaluatedAt,
-        CancellationToken cancellationToken = default)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(stimulusType);
-        var bookmarks = await this.ListAllByStimulusTypeAsync(stimulusType, cancellationToken);
-        return bookmarks
-            .Where(bookmark =>
-                StringComparer.Ordinal.Equals(bookmark.StimulusType, stimulusType) &&
-                (bookmark.ExpiresAt is null || bookmark.ExpiresAt > evaluatedAt))
-            .Select(bookmark => bookmark.StimulusHash)
-            .Distinct(StringComparer.Ordinal)
-            .ToArray();
-    }
+        CancellationToken cancellationToken = default);
 }
