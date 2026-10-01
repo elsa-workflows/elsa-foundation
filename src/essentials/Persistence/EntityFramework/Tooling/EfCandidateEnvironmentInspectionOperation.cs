@@ -96,32 +96,25 @@ public sealed class EfCandidateEnvironmentInspectionOperation
                     null, null, null, null, cancellationToken);
                 return EfToolingExitCode.Refusal;
             }
+            catch (Exception failure) when (failure is JsonException or InvalidOperationException or ArgumentException or FormatException)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                await WriteErrorAsync(response, correlation, "candidate-request-invalid", EfToolingExitCode.Refusal,
+                    null, null, null, null, cancellationToken);
+                return EfToolingExitCode.Refusal;
+            }
 
             using (candidate)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                Assembly[] closure;
-                try
-                {
-                    closure = DiscoverAssemblies(cancellationToken);
-                }
-                catch (EfToolingRefusal refusal)
-                {
-                    await WriteErrorAsync(response, candidate.Correlation, refusal.Code, refusal.ExitCode,
-                        null, null, null, null, cancellationToken);
-                    return refusal.ExitCode;
-                }
+                var closure = DiscoverAssemblies(cancellationToken);
                 var hostAssembly = closure.Where(assembly =>
                         string.Equals(assembly.GetName().Name, candidate.HostName, StringComparison.Ordinal) &&
                         EfToolingConfigurationContext.SameHostAssemblyPath(
                             assembly.Location, candidate.HostDirectory, candidate.HostName))
                     .ToArray();
                 if (hostAssembly.Length != 1)
-                {
-                    await WriteErrorAsync(response, candidate.Correlation, "candidate-host-unavailable",
-                        EfToolingExitCode.ResolutionFailure, null, null, null, null, cancellationToken);
-                    return EfToolingExitCode.ResolutionFailure;
-                }
+                    throw EfCandidateInspectionOperation.HostUnavailable();
 
                 try
                 {
@@ -153,17 +146,7 @@ public sealed class EfCandidateEnvironmentInspectionOperation
                 using (configuration)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    InspectionResult inspection;
-                    try
-                    {
-                        inspection = Inspect(candidate, hostAssembly[0], closure, configuration, cancellationToken);
-                    }
-                    catch (EfToolingRefusal refusal)
-                    {
-                        await WriteErrorAsync(response, candidate.Correlation, refusal.Code, refusal.ExitCode,
-                            null, null, null, null, cancellationToken);
-                        return refusal.ExitCode;
-                    }
+                    var inspection = Inspect(candidate, hostAssembly[0], closure, configuration, cancellationToken);
                     cancellationToken.ThrowIfCancellationRequested();
 
                     if (inspection.Conflict is { } conflict)
@@ -181,7 +164,12 @@ public sealed class EfCandidateEnvironmentInspectionOperation
                         return EfToolingExitCode.Refusal;
                     }
 
-                    var payload = WriteResolution(candidate.Correlation, inspection.Resolution!);
+                    var payload = EfCandidateInspectionOperation.WriteResolution(
+                        candidate.Correlation.InvocationId,
+                        candidate.Correlation.CaptureId,
+                        inspection.Resolution!,
+                        Source,
+                        "supplied-intended");
                     if (payload.Length > MaximumResponseBytes)
                         throw EfCandidateInspectionOperation.HostUnavailable();
                     await response.WriteAsync(payload, cancellationToken);
@@ -307,14 +295,34 @@ public sealed class EfCandidateEnvironmentInspectionOperation
             var version = contractType?.GetField("Version", BindingFlags.Public | BindingFlags.Static);
             var method = hostType?.GetMethod("RunCandidateEnvironmentInspectionAsync",
                 BindingFlags.Public | BindingFlags.Static, [typeof(Stream), typeof(Stream), typeof(CancellationToken)]);
-            if (contractType is null || contractType.Assembly != persistenceAssembly || version?.IsLiteral != true ||
-                version.FieldType != typeof(int) || version.GetRawConstantValue() is not 1 ||
-                method is not { IsStatic: true, ReturnType: not null } || method.ReturnType != typeof(Task<int>))
-                throw HostAdmissionRefusal.Capability();
+            if (contractType is null || contractType.Assembly != persistenceAssembly ||
+                version?.DeclaringType != contractType || version?.IsLiteral != true ||
+                version?.FieldType != typeof(int) || version?.GetRawConstantValue() is not 1 ||
+                method is not { IsPublic: true, IsStatic: true, IsGenericMethod: false, ContainsGenericParameters: false } ||
+                method.DeclaringType != hostType || method.ReturnType != typeof(Task<int>) ||
+                method.GetParameters() is not { Length: 3 } parameters ||
+                parameters[0].ParameterType != typeof(Stream) ||
+                parameters[1].ParameterType != typeof(Stream) ||
+                parameters[2].ParameterType != typeof(CancellationToken))
+                throw EfToolingRefusal.Resolution(CapabilityUnavailable,
+                    "The selected host has no complete candidate inspection capability.");
+        }
+        catch (EfToolingRefusal)
+        {
+            throw;
+        }
+        catch (Exception failure) when (EfToolingHost.IsNonFatal(failure))
+        {
+            throw EfToolingRefusal.Resolution(CapabilityUnavailable,
+                "The selected host has no complete candidate inspection capability.");
+        }
 
+        try
+        {
+            var persistenceAssembly = typeof(EfCandidateEnvironmentInspectionOperation).Assembly;
             var attributeType = persistenceAssembly.GetType(EnvironmentInputsAttributeName, throwOnError: false);
             if (attributeType is null || attributeType.Assembly != persistenceAssembly ||
-                !typeof(Attribute).IsAssignableFrom(attributeType))
+                !typeof(Attribute).IsAssignableFrom(attributeType) || !HasEnvironmentAttributeShape(attributeType))
                 throw HostAdmissionRefusal.Enrollment();
 
             var declarations = hostAssembly.GetCustomAttributesData()
@@ -333,10 +341,55 @@ public sealed class EfCandidateEnvironmentInspectionOperation
         }
     }
 
+    private static bool HasEnvironmentAttributeShape(Type attributeType)
+    {
+        if (!attributeType.IsPublic || !attributeType.IsClass || !attributeType.IsSealed)
+            return false;
+
+        var constructor = attributeType.GetConstructor(BindingFlags.Public | BindingFlags.Instance, null,
+            [typeof(int), typeof(string)], null);
+        var version = attributeType.GetProperty("Version", BindingFlags.Public | BindingFlags.Instance);
+        var policy = attributeType.GetProperty("Policy", BindingFlags.Public | BindingFlags.Instance);
+        if (constructor is null || constructor.DeclaringType != attributeType ||
+            version?.DeclaringType != attributeType || version?.PropertyType != typeof(int) ||
+            version?.GetMethod is not { IsPublic: true, IsStatic: false, IsGenericMethod: false } || version.SetMethod is not null ||
+            policy?.DeclaringType != attributeType || policy?.PropertyType != typeof(string) ||
+            policy?.GetMethod is not { IsPublic: true, IsStatic: false, IsGenericMethod: false } || policy.SetMethod is not null)
+            return false;
+        if (version.GetMethod!.DeclaringType != attributeType || policy.GetMethod!.DeclaringType != attributeType)
+            return false;
+
+        var usages = attributeType.GetCustomAttributesData()
+            .Where(attribute => attribute.AttributeType == typeof(AttributeUsageAttribute))
+            .ToArray();
+        if (usages.Length != 1)
+            return false;
+
+        var usage = usages[0];
+        if (usage.ConstructorArguments.Count != 1 ||
+            usage.ConstructorArguments[0].ArgumentType != typeof(AttributeTargets) ||
+            !EnumValueIs(usage.ConstructorArguments[0], AttributeTargets.Assembly))
+            return false;
+
+        var named = usage.NamedArguments.ToDictionary(argument => argument.MemberName, StringComparer.Ordinal);
+        return named.Count == 2 &&
+            named.TryGetValue(nameof(AttributeUsageAttribute.AllowMultiple), out var allowMultiple) &&
+            allowMultiple.TypedValue.ArgumentType == typeof(bool) && allowMultiple.TypedValue.Value is true &&
+            named.TryGetValue(nameof(AttributeUsageAttribute.Inherited), out var inherited) &&
+            inherited.TypedValue.ArgumentType == typeof(bool) && inherited.TypedValue.Value is false;
+    }
+
+    private static bool EnumValueIs(CustomAttributeTypedArgument argument, AttributeTargets expected) =>
+        argument.Value is AttributeTargets value && value == expected ||
+        argument.Value is int numeric && numeric == (int)expected;
+
     private static bool IsEnrollmentDeclaration(CustomAttributeData declaration, Type attributeType)
     {
-        if (declaration.AttributeType != attributeType || declaration.ConstructorArguments.Count != 2 ||
-            declaration.NamedArguments.Count != 0)
+        var constructor = declaration.Constructor;
+        if (declaration.AttributeType != attributeType || constructor.DeclaringType != attributeType ||
+            !constructor.IsPublic || constructor.GetParameters() is not { Length: 2 } parameters ||
+            parameters[0].ParameterType != typeof(int) || parameters[1].ParameterType != typeof(string) ||
+            declaration.ConstructorArguments.Count != 2 || declaration.NamedArguments.Count != 0)
             return false;
         var version = declaration.ConstructorArguments[0];
         var policy = declaration.ConstructorArguments[1];
@@ -461,12 +514,16 @@ public sealed class EfCandidateEnvironmentInspectionOperation
             throw CandidateInputRefusal.RequestInvalid();
         }
 
-        if (!TryBase64Length(environmentContent, MaximumEnvironmentBytes, out _))
+        if (!TryBase64DecodedLength(environmentContent, out var estimatedEnvironmentLength))
         {
             Clear(decodedFiles.Values);
-            throw environmentContent.Length > ((MaximumEnvironmentBytes + 2) / 3) * 4
-                ? CandidateInputRefusal.EnvironmentTooLarge()
-                : CandidateInputRefusal.EnvironmentInvalid();
+            throw CandidateInputRefusal.EnvironmentInvalid();
+        }
+        if (environmentContent.Length > EncodedLengthFor(MaximumEnvironmentBytes) ||
+            estimatedEnvironmentLength > MaximumEnvironmentBytes)
+        {
+            Clear(decodedFiles.Values);
+            throw CandidateInputRefusal.EnvironmentTooLarge();
         }
 
         byte[] environmentBytes;
@@ -546,7 +603,9 @@ public sealed class EfCandidateEnvironmentInspectionOperation
             throw CandidateInputRefusal.EnvironmentInvalid();
 
         var entries = Property(root, "entries");
-        if (entries.ValueKind != JsonValueKind.Array || entries.GetArrayLength() > 1024)
+        if (entries.ValueKind != JsonValueKind.Array)
+            throw CandidateInputRefusal.EnvironmentInvalid();
+        if (entries.GetArrayLength() > 1024)
             throw CandidateInputRefusal.EnvironmentTooLarge();
 
         var values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -660,70 +719,33 @@ public sealed class EfCandidateEnvironmentInspectionOperation
 
     private static bool TryBase64Length(string content, int maximumBytes, out int decodedLength)
     {
-        decodedLength = 0;
-        if (content.Length == 0 || content.Length % 4 != 0 || content.Length > ((maximumBytes + 2) / 3) * 4)
+        if (!TryBase64DecodedLength(content, out decodedLength) ||
+            content.Length > EncodedLengthFor(maximumBytes) || decodedLength > maximumBytes)
             return false;
-        var padding = content.EndsWith("==", StringComparison.Ordinal) ? 2 : content.EndsWith('=') ? 1 : 0;
-        decodedLength = content.Length / 4 * 3 - padding;
-        return decodedLength >= 0 && decodedLength <= maximumBytes;
+        return true;
     }
 
-    private static byte[] WriteResolution(Correlation correlation, EfCandidateInspectionOperation.CandidateResolution resolution)
+    private static int EncodedLengthFor(int maximumBytes) => (maximumBytes + 2) / 3 * 4;
+
+    private static bool TryBase64DecodedLength(string content, out int decodedLength)
     {
-        using var output = new MemoryStream();
-        using (var writer = new Utf8JsonWriter(output))
+        decodedLength = 0;
+        if (content.Length == 0 || content.Length % 4 != 0)
+            return false;
+
+        var padding = content.EndsWith("==", StringComparison.Ordinal) ? 2 : content.EndsWith('=') ? 1 : 0;
+        var dataLength = content.Length - padding;
+        if (content.IndexOf('=') >= 0 && content.IndexOf('=') < dataLength)
+            return false;
+        for (var index = 0; index < dataLength; index++)
         {
-            writer.WriteStartObject();
-            writer.WriteNumber("version", EfCandidateEnvironmentInspectionContract.Version);
-            writer.WriteString("invocationId", correlation.InvocationId);
-            writer.WriteString("captureId", correlation.CaptureId);
-            writer.WriteString("status", "ok");
-            writer.WriteNumber("exitCode", EfToolingExitCode.Success);
-            writer.WritePropertyName("configurationResolution");
-            writer.WriteStartObject();
-            writer.WriteString("source", Source);
-            writer.WriteString("shell", resolution.Shell);
-            writer.WriteString("environment", resolution.Environment);
-            writer.WriteString("resolution", resolution.Resolution);
-            writer.WritePropertyName("selection");
-            writer.WriteStartObject();
-            EfCandidateInspectionOperation.WriteIds(writer, "acceptedFeatureIds", resolution.Accepted);
-            EfCandidateInspectionOperation.WriteIds(writer, "requestedFeatureIds", resolution.Requested);
-            EfCandidateInspectionOperation.WriteIds(writer, "effectiveFeatureIds", resolution.Effective);
-            EfCandidateInspectionOperation.WriteIds(writer, "disabledFeatureIds", resolution.Disabled);
-            EfCandidateInspectionOperation.WriteIds(writer, "implicitFeatureIds", resolution.Implicit);
-            writer.WriteEndObject();
-            writer.WriteString("configuredValueAffinity", resolution.ConfiguredValueAffinity);
-            writer.WriteString("targetVerification", "not-performed");
-            writer.WriteString("runtimeParity", "unobserved");
-            writer.WriteString("packageReachability", "unverified");
-            writer.WriteString("connectivity", "unverified");
-            writer.WriteString("schemaReadiness", "unverified");
-            writer.WriteString("migrationReadiness", "unverified");
-            writer.WriteString("activation", "unobserved");
-            writer.WriteString("externalInputs", "supplied-intended");
-            writer.WritePropertyName("participants");
-            writer.WriteStartArray();
-            foreach (var row in resolution.Participants)
-            {
-                writer.WriteStartObject();
-                writer.WriteString("feature", row.Feature);
-                writer.WriteString("module", row.Module);
-                writer.WriteString("selection", row.Selection);
-                if (row.Resource is null) writer.WriteNull("resource"); else writer.WriteString("resource", row.Resource);
-                if (row.Provider is null) writer.WriteNull("provider"); else writer.WriteString("provider", row.Provider);
-                if (row.ConnectionReference is null) writer.WriteNull("connectionReference"); else writer.WriteString("connectionReference", row.ConnectionReference);
-                if (row.SelectorScope is null) writer.WriteNull("selectorScope"); else writer.WriteString("selectorScope", row.SelectorScope);
-                if (row.ResourceScope is null) writer.WriteNull("resourceScope"); else writer.WriteString("resourceScope", row.ResourceScope);
-                writer.WriteString("exactFileProvenance", row.ExactFileProvenance);
-                writer.WriteEndObject();
-            }
-            writer.WriteEndArray();
-            EfCandidateInspectionOperation.WriteIds(writer, "unresolved", resolution.Unresolved);
-            writer.WriteEndObject();
-            writer.WriteEndObject();
+            var character = content[index];
+            if (!char.IsAsciiLetterOrDigit(character) && character is not '+' and not '/')
+                return false;
         }
-        return output.ToArray();
+
+        decodedLength = content.Length / 4 * 3 - padding;
+        return decodedLength >= 0;
     }
 
     private static async Task WriteErrorAsync(
@@ -781,23 +803,31 @@ public sealed class EfCandidateEnvironmentInspectionOperation
     private static JsonDocument? TryParseDocument(ReadOnlyMemory<byte> bytes)
     {
         try { return JsonDocument.Parse(bytes, DocumentOptions); }
-        catch (JsonException) { return null; }
+        catch (Exception failure) when (failure is JsonException or InvalidOperationException or ArgumentException or FormatException)
+        { return null; }
     }
 
     private static bool TryReadCorrelation(JsonElement root, out Correlation correlation)
     {
         correlation = default!;
-        if (root.ValueKind != JsonValueKind.Object || !TryGetUniqueProperty(root, "candidate", out var candidate) ||
-            candidate.ValueKind != JsonValueKind.Object ||
-            !TryGetUniqueProperty(candidate, "invocationId", out var invocation) || invocation.ValueKind != JsonValueKind.String ||
-            !TryGetUniqueProperty(candidate, "captureId", out var capture) || capture.ValueKind != JsonValueKind.String)
+        try
+        {
+            if (root.ValueKind != JsonValueKind.Object || !TryGetUniqueProperty(root, "candidate", out var candidate) ||
+                candidate.ValueKind != JsonValueKind.Object ||
+                !TryGetUniqueProperty(candidate, "invocationId", out var invocation) || invocation.ValueKind != JsonValueKind.String ||
+                !TryGetUniqueProperty(candidate, "captureId", out var capture) || capture.ValueKind != JsonValueKind.String)
+                return false;
+            var invocationId = invocation.GetString();
+            var captureId = capture.GetString();
+            if (invocationId is null || captureId is null || !IsToken(invocationId) || !IsToken(captureId) || invocationId == captureId)
+                return false;
+            correlation = new Correlation(invocationId, captureId);
+            return true;
+        }
+        catch (Exception failure) when (failure is JsonException or InvalidOperationException or ArgumentException or FormatException)
+        {
             return false;
-        var invocationId = invocation.GetString()!;
-        var captureId = capture.GetString()!;
-        if (!IsToken(invocationId) || !IsToken(captureId) || invocationId == captureId)
-            return false;
-        correlation = new Correlation(invocationId, captureId);
-        return true;
+        }
     }
 
     private static bool TryGetUniqueProperty(JsonElement parent, string name, out JsonElement value)
@@ -970,29 +1000,24 @@ public sealed class EfCandidateEnvironmentInspectionOperation
     {
         public string Code { get; } = code;
         public int ExitCode { get; } = exitCode;
-        public static HostAdmissionRefusal Capability() => new(CapabilityUnavailable, EfToolingExitCode.ResolutionFailure);
         public static HostAdmissionRefusal Enrollment() => new(EnvironmentHostUnenrolled, EfToolingExitCode.ResolutionFailure);
     }
 
     private sealed class PublicIdentityAllowlist(
         IEnumerable<string> accepted,
         IEnumerable<string> source,
-        IEnumerable<string> actual,
-        IEnumerable<string> resources)
+        IEnumerable<string> actual)
     {
         private readonly HashSet<string> features = new(accepted.Concat(source).Concat(actual), StringComparer.Ordinal);
-        private readonly HashSet<string> resourceIdentities = new(resources, StringComparer.Ordinal);
 
         public string? FeatureOrNull(string? value) =>
             value is not null && EfCandidateInspectionOperation.IsSafeIdentity(value) && features.Contains(value) ? value : null;
 
         public static PublicIdentityAllowlist FromCandidate(CandidateEnvironmentRequest candidate, IEnumerable<string> source) =>
-            new(candidate.AcceptedFeatureIds, source, [], []);
+            new(candidate.AcceptedFeatureIds.Concat(candidate.RemovedFeatureIds), source, []);
 
         public PublicIdentityAllowlist WithActual(EfPersistencePreparationResult prepared) =>
-            new([], features,
-                prepared.ActiveFeatureIds.Concat(prepared.ResolvedParticipants.Select(item => item.Participant.FeatureId)),
-                resourceIdentities.Concat(prepared.ResourceDefinitions.Keys).Concat(
-                    prepared.ResolvedParticipants.Where(item => item.ResourceName is not null).Select(item => item.ResourceName!)));
+            new([], features, prepared.ActiveFeatureIds.Concat(
+                prepared.ResolvedParticipants.Select(item => item.Participant.FeatureId)));
     }
 }

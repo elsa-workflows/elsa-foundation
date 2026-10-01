@@ -6,6 +6,7 @@ using System.Text.Json.Nodes;
 using CShells;
 using CShells.Features;
 using CShells.Lifecycle;
+using Elsa.Cli.Worker;
 using Elsa.Modularity.EntityFramework;
 using Elsa.Modularity.Planning.Bridge;
 using Elsa.Modularity.Planning.Catalog;
@@ -183,6 +184,73 @@ public sealed class EfCandidateInspectionTests : IDisposable
         Assert.Equal("candidate-environment-input-invalid", document.RootElement.GetProperty("error").GetProperty("code").GetString());
         Assert.Equal(0, discoveryCalls);
         AssertNoPrivateCandidateValues(responseJson);
+    }
+
+    [Fact]
+    public async Task Explicit_environment_host_classifies_an_entries_count_overflow_as_too_large()
+    {
+        var entries = Enumerable.Range(0, 1025)
+            .ToDictionary(index => $"CandidateKey{index}", index => "value", StringComparer.Ordinal);
+        var candidate = CreateEnvironmentCandidate(entries);
+        var discoveryCalls = 0;
+        var operation = new EfCandidateEnvironmentInspectionOperation(() =>
+        {
+            discoveryCalls++;
+            return EfConfigurationProbeTests.HostAssemblies;
+        });
+        using var response = new MemoryStream();
+
+        var exitCode = await RunEnvironmentOperationAsync(operation, candidate.Request, response, CancellationToken.None);
+        using var document = JsonDocument.Parse(response.ToArray());
+
+        Assert.Equal(EfToolingExitCode.Refusal, exitCode);
+        Assert.Equal("candidate-environment-input-too-large", document.RootElement.GetProperty("error").GetProperty("code").GetString());
+        Assert.Equal(0, discoveryCalls);
+    }
+
+    [Fact]
+    public async Task Explicit_environment_host_classifies_a_canonical_encoded_document_overflow_as_too_large()
+    {
+        var candidate = CreateEnvironmentCandidate(new Dictionary<string, string>());
+        candidate.Request["environmentInput"]!["content"] =
+            Convert.ToBase64String(new byte[MaximumCandidateFileBytes + 1]);
+        var discoveryCalls = 0;
+        var operation = new EfCandidateEnvironmentInspectionOperation(() =>
+        {
+            discoveryCalls++;
+            return EfConfigurationProbeTests.HostAssemblies;
+        });
+        using var response = new MemoryStream();
+
+        var exitCode = await RunEnvironmentOperationAsync(operation, candidate.Request, response, CancellationToken.None);
+        using var document = JsonDocument.Parse(response.ToArray());
+
+        Assert.Equal(EfToolingExitCode.Refusal, exitCode);
+        Assert.Equal("candidate-environment-input-too-large", document.RootElement.GetProperty("error").GetProperty("code").GetString());
+        Assert.Equal(0, discoveryCalls);
+    }
+
+    [Fact]
+    public async Task Explicit_environment_host_emits_the_only_correlated_exit_three_and_worker_accepts_it()
+    {
+        var candidate = CreateEnvironmentCandidate(new Dictionary<string, string>());
+        var persistenceAssembly = typeof(EfToolingHost).Assembly;
+        candidate.Request["host"]!["name"] = persistenceAssembly.GetName().Name;
+        candidate.Request["host"]!["directory"] = Path.GetDirectoryName(persistenceAssembly.Location);
+        var operation = new EfCandidateEnvironmentInspectionOperation(() => [persistenceAssembly]);
+        using var response = new MemoryStream();
+
+        var exitCode = await RunEnvironmentOperationAsync(operation, candidate.Request, response, CancellationToken.None);
+        var responseJson = Encoding.UTF8.GetString(response.ToArray());
+        using var document = JsonDocument.Parse(responseJson);
+        var root = document.RootElement;
+        var payload = JsonSerializer.Deserialize<WorkerCandidatePayload>(
+            candidate.Request["candidate"]!.ToJsonString(), WorkerContract.Json)!;
+
+        Assert.Equal(EfToolingExitCode.ResolutionFailure, exitCode);
+        Assert.Equal(EfToolingExitCode.ResolutionFailure, root.GetProperty("exitCode").GetInt32());
+        Assert.Equal("candidate-environment-host-unenrolled", root.GetProperty("error").GetProperty("code").GetString());
+        WorkerContract.ValidateCandidateEnvironmentHostResponse(root, payload, exitCode);
     }
 
     [Fact]

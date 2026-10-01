@@ -438,12 +438,6 @@ public sealed class EfCandidateInspectionOperation
         }
     }
 
-    private static CandidateResolution BuildResolution(
-        CandidateRequest candidate,
-        ShellSettings settings,
-        EfPersistencePreparationResult prepared)
-        => BuildResolution(candidate.Shell, candidate.Environment, candidate.AcceptedFeatureIds, settings, prepared);
-
     internal static CandidateResolution BuildResolution(
         string shell,
         string environment,
@@ -523,20 +517,28 @@ public sealed class EfCandidateInspectionOperation
             orderedUnresolved);
     }
 
-    private static byte[] WriteResolution(Correlation correlation, CandidateResolution resolution)
+    private static byte[] WriteResolution(Correlation correlation, CandidateResolution resolution) =>
+        WriteResolution(correlation.InvocationId, correlation.CaptureId, resolution, Source, "unverified");
+
+    internal static byte[] WriteResolution(
+        string invocationId,
+        string captureId,
+        CandidateResolution resolution,
+        string source,
+        string externalInputs)
     {
         using var output = new MemoryStream();
         using (var writer = new Utf8JsonWriter(output))
         {
             writer.WriteStartObject();
             writer.WriteNumber("version", EfCandidateInspectionContract.Version);
-            writer.WriteString("invocationId", correlation.InvocationId);
-            writer.WriteString("captureId", correlation.CaptureId);
+            writer.WriteString("invocationId", invocationId);
+            writer.WriteString("captureId", captureId);
             writer.WriteString("status", "ok");
             writer.WriteNumber("exitCode", EfToolingExitCode.Success);
             writer.WritePropertyName("configurationResolution");
             writer.WriteStartObject();
-            writer.WriteString("source", Source);
+            writer.WriteString("source", source);
             writer.WriteString("shell", resolution.Shell);
             writer.WriteString("environment", resolution.Environment);
             writer.WriteString("resolution", resolution.Resolution);
@@ -556,7 +558,7 @@ public sealed class EfCandidateInspectionOperation
             writer.WriteString("schemaReadiness", "unverified");
             writer.WriteString("migrationReadiness", "unverified");
             writer.WriteString("activation", "unobserved");
-            writer.WriteString("externalInputs", "unverified");
+            writer.WriteString("externalInputs", externalInputs);
             writer.WritePropertyName("participants");
             writer.WriteStartArray();
             foreach (var row in resolution.Participants)
