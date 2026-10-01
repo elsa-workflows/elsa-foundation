@@ -9,16 +9,23 @@ namespace Elsa.Cli;
 
 /// <summary>Owns one frozen source/input context and the candidate built from those exact inputs.</summary>
 /// <remarks>No entry point accepts an independently built candidate or caller-supplied capture identity.</remarks>
-public sealed class CompositionInspectionCapture
+public sealed class CompositionInspectionCapture : IDisposable
 {
     private readonly CompositionFileSource _source;
     private readonly CompositionInputSnapshot _inputs;
+    private readonly HostLayout? _host;
+    private readonly string? _environmentInputPath;
+    private readonly object _lifecycleGate = new();
+    private bool _environmentInspectionBegun;
+    private bool _disposed;
 
     private CompositionInspectionCapture(CompositionFileSource source, CompositionInputSnapshot inputs,
-        SelectionPlan plan, WorkerCandidatePayload payload)
+        SelectionPlan plan, WorkerCandidatePayload payload, HostLayout? host, string? environmentInputPath)
     {
         _source = source;
         _inputs = inputs;
+        _host = host;
+        _environmentInputPath = environmentInputPath;
         Plan = plan;
         Payload = payload;
     }
@@ -34,9 +41,36 @@ public sealed class CompositionInspectionCapture
         string compositionPath, string? catalogPath = null, string? reviewPath = null,
         IReadOnlyList<string>? workspaceProfilePaths = null, CompositionFileReader? reader = null)
     {
-        var profilePaths = workspaceProfilePaths ?? [];
-        if (profilePaths.Count > CompositionFileReader.MaximumFiles)
+        return OpenCore(hostDirectory, shell, environment, compositionPath, catalogPath, reviewPath,
+            workspaceProfilePaths, reader, host: null, environmentInputPath: null);
+    }
+
+    /// <summary>
+    /// Captures one explicit private environment document alongside the file-only candidate. The supplied
+    /// <paramref name="host"/> is the installed host closure; <paramref name="hostDirectory"/> remains the
+    /// separately supplied Workbench source directory.
+    /// </summary>
+    public static CompositionInspectionCapture OpenWithEnvironmentInput(HostLayout host, string hostDirectory,
+        string shell, string environment, string compositionPath, string environmentInputPath,
+        string? catalogPath = null, string? reviewPath = null,
+        IReadOnlyList<string>? workspaceProfilePaths = null, CompositionFileReader? reader = null)
+    {
+        ArgumentNullException.ThrowIfNull(host);
+        return OpenCore(hostDirectory, shell, environment, compositionPath, catalogPath, reviewPath,
+            workspaceProfilePaths, reader, host, environmentInputPath);
+    }
+
+    private static CompositionInspectionCapture OpenCore(string hostDirectory, string shell, string environment,
+        string compositionPath, string? catalogPath, string? reviewPath,
+        IReadOnlyList<string>? workspaceProfilePaths, CompositionFileReader? reader, HostLayout? host,
+        string? environmentInputPath)
+    {
+        var profilePaths = workspaceProfilePaths is null ? Array.Empty<string>() : workspaceProfilePaths.ToArray();
+        if (profilePaths.Length > CompositionFileReader.MaximumFiles)
             throw CompositionFileReader.LimitExceeded();
+        var capturedEnvironmentPath = environmentInputPath is null
+            ? null
+            : CompositionInputSnapshot.NormalizePath(environmentInputPath);
         var source = CompositionFileSource.OpenForCandidate(hostDirectory, shell, environment, reader);
         var paths = new List<string> { compositionPath };
         if (catalogPath is not null)
@@ -44,10 +78,28 @@ public sealed class CompositionInspectionCapture
         if (reviewPath is not null)
             paths.Add(reviewPath);
         paths.AddRange(profilePaths);
-        var inputs = CompositionInputSnapshot.OpenForCandidate(paths, reader);
+        if (capturedEnvironmentPath is not null)
+            paths.Add(capturedEnvironmentPath);
+        var inputs = capturedEnvironmentPath is null
+            ? CompositionInputSnapshot.OpenForCandidate(paths, reader)
+            : CompositionInputSnapshot.OpenForCandidateWithEnvironmentInput(paths, capturedEnvironmentPath, reader);
+        var ownsInputs = true;
 
         try
         {
+            if (capturedEnvironmentPath is not null)
+            {
+                var raw = inputs.ReadBytes(capturedEnvironmentPath);
+                try
+                {
+                    _ = ExplicitEnvironmentInput.Parse(raw);
+                }
+                finally
+                {
+                    Array.Clear(raw);
+                }
+            }
+
             var authored = SelectionJsonReader.ParseComposition(inputs.ReadText(compositionPath));
             if (!WorkerContract.IsValidCandidateSelection(authored.Accepted.FeatureIds, authored.Remove))
                 throw CliRefusal.Usage("candidate-capture-invalid", "The candidate selection is not valid for inspection.");
@@ -83,7 +135,9 @@ public sealed class CompositionInspectionCapture
                 RemovedFeatureIds = authored.Remove.Order(StringComparer.Ordinal).ToImmutableArray(),
                 Files = files.MoveToImmutable()
             };
-            return new CompositionInspectionCapture(source, inputs, candidate.Plan, payload);
+            var capture = new CompositionInspectionCapture(source, inputs, candidate.Plan, payload, host, capturedEnvironmentPath);
+            ownsInputs = false;
+            return capture;
         }
         catch (SelectionDocumentException exception)
         {
@@ -93,12 +147,132 @@ public sealed class CompositionInspectionCapture
         {
             throw CliRefusal.Usage(exception.Code, "The accepted candidate could not be built from the captured inputs.");
         }
+        finally
+        {
+            if (ownsInputs)
+                inputs.Dispose();
+        }
+    }
+
+    /// <summary>Whether this capture owns one admitted explicit environment document.</summary>
+    public bool HasEnvironmentInput
+    {
+        get
+        {
+            lock (_lifecycleGate)
+                return !_disposed && _environmentInputPath is not null;
+        }
+    }
+
+    /// <summary>
+    /// Creates the single-use additive worker request from this capture's frozen host, candidate and raw
+    /// environment bytes. Package roots are copied before the request is returned.
+    /// </summary>
+    public CandidateEnvironmentWorkerRequestV2 BeginEnvironmentInspection(IReadOnlyList<string> packageRoots)
+    {
+        lock (_lifecycleGate)
+        {
+            ThrowIfDisposed();
+            if (_host is null || _environmentInputPath is null || _environmentInspectionBegun)
+                throw CaptureInvalid();
+            ArgumentNullException.ThrowIfNull(packageRoots);
+
+            var roots = packageRoots.ToArray();
+            if (roots.Any(root => root is null))
+                throw CaptureInvalid();
+
+            // Reserve the operation while holding the lifecycle gate. A failed recheck releases the
+            // reservation, but no concurrent caller can create a second request.
+            _environmentInspectionBegun = true;
+            try
+            {
+                VerifyUnchangedCore();
+                var raw = _inputs.ReadBytes(_environmentInputPath);
+                try
+                {
+                    var content = Convert.ToBase64String(raw);
+                    return new CandidateEnvironmentWorkerRequestV2
+                    {
+                        Version = WorkerContract.Version,
+                        Command = WorkerCommands.InspectCandidateEnvironment,
+                        HostDirectory = _host.Directory,
+                        HostName = _host.Name,
+                        DepsFile = _host.DepsFile,
+                        PackageRoots = Array.AsReadOnly(roots),
+                        Candidate = ClonePayload(Payload),
+                        EnvironmentInput = new WorkerEnvironmentInput
+                        {
+                            Version = 1,
+                            CaptureId = Payload.CaptureId,
+                            Content = content
+                        }
+                    };
+                }
+                finally
+                {
+                    Array.Clear(raw);
+                }
+            }
+            catch
+            {
+                _environmentInspectionBegun = false;
+                throw;
+            }
+        }
     }
 
     /// <summary>Rechecks all owned source and intent files before launch or output.</summary>
     public void VerifyUnchanged()
     {
+        lock (_lifecycleGate)
+        {
+            ThrowIfDisposed();
+            VerifyUnchangedCore();
+        }
+    }
+
+    public void Dispose()
+    {
+        lock (_lifecycleGate)
+        {
+            if (_disposed)
+                return;
+
+            _disposed = true;
+            _inputs.Dispose();
+        }
+    }
+
+    private void VerifyUnchangedCore()
+    {
         _source.VerifyUnchanged();
         _inputs.VerifyUnchanged();
     }
+
+    private static WorkerCandidatePayload ClonePayload(WorkerCandidatePayload payload) => new()
+    {
+        Version = payload.Version,
+        Source = payload.Source,
+        InvocationId = payload.InvocationId,
+        CaptureId = payload.CaptureId,
+        Shell = payload.Shell,
+        Environment = payload.Environment,
+        AcceptedFeatureIds = payload.AcceptedFeatureIds?.ToImmutableArray(),
+        RemovedFeatureIds = payload.RemovedFeatureIds?.ToImmutableArray(),
+        Files = payload.Files?.Select(file => new WorkerCandidateFile
+        {
+            Name = file.Name,
+            CaptureId = file.CaptureId,
+            Content = file.Content
+        }).ToImmutableArray()
+    };
+
+    private void ThrowIfDisposed()
+    {
+        if (_disposed)
+            throw CaptureInvalid();
+    }
+
+    private static CliRefusal CaptureInvalid() =>
+        CliRefusal.Usage("candidate-capture-invalid", "The captured candidate is no longer available.");
 }

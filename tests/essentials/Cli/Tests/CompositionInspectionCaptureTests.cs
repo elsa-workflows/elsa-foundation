@@ -3,6 +3,8 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Reflection;
 using System.Runtime.ExceptionServices;
+using System.Threading;
+using System.Threading.Tasks;
 using Elsa.Cli.Worker;
 using Elsa.Modularity.Planning.Catalog;
 using Xunit;
@@ -439,10 +441,224 @@ public sealed class CompositionInspectionCaptureTests
         Assert.Equal("candidate-capture-invalid", Assert.Throws<CliRefusal>(() => Open(fixture, [])).Code);
     }
 
+    [Fact]
+    public void Environment_capture_reads_the_raw_document_once_and_preserves_one_leading_bom()
+    {
+        using var fixture = new CompositionBridgeFixture();
+        fixture.WriteAcceptedComposition();
+        var environmentPath = EnvironmentPath(fixture, "environment.json");
+        var document = CandidateInspectionFixture.EnvironmentDocument(("Private", CandidateInspectionFixture.PrivateEnvironmentCanary));
+        var withBom = new byte[document.Length + 3];
+        "\uFEFF"u8.CopyTo(withBom);
+        document.CopyTo(withBom, 3);
+        File.WriteAllBytes(environmentPath, withBom);
+
+        var reads = new Dictionary<string, int>(StringComparer.Ordinal);
+        var reader = new CompositionFileReader(_ => { }, path =>
+        {
+            reads[path] = reads.GetValueOrDefault(path) + 1;
+            return new MemoryStream(File.ReadAllBytes(path));
+        });
+        using var capture = OpenWithEnvironment(fixture, environmentPath, reader);
+
+        Assert.True(capture.HasEnvironmentInput);
+        Assert.Equal(1, reads[environmentPath]);
+        capture.VerifyUnchanged();
+        Assert.Equal(2, reads[environmentPath]);
+    }
+
+    [Fact]
+    public void Environment_request_uses_installed_host_metadata_and_defensively_copies_roots()
+    {
+        using var fixture = new CompositionBridgeFixture();
+        fixture.WriteAcceptedComposition();
+        var environmentPath = EnvironmentPath(fixture, "private-environment-input.json");
+        var raw = CandidateInspectionFixture.EnvironmentDocument(("Private", CandidateInspectionFixture.PrivateEnvironmentCanary));
+        File.WriteAllBytes(environmentPath, raw);
+        var host = HostLayout.Resolve(DotnetElsa.Host("ResourceAwareLiveHost"));
+        using var capture = OpenWithEnvironment(fixture, environmentPath);
+        var packageRoot = Path.Join(fixture.CandidateDirectory, "packages");
+        var packageRoots = new List<string> { packageRoot };
+
+        var request = capture.BeginEnvironmentInspection(packageRoots);
+        packageRoots[0] = "mutated-after-capture";
+        var serialized = JsonSerializer.Serialize(request, WorkerContract.Json);
+
+        Assert.Equal(WorkerContract.Version, request.Version);
+        Assert.Equal(WorkerCommands.InspectCandidateEnvironment, request.Command);
+        Assert.Equal(host.Directory, request.HostDirectory);
+        Assert.NotEqual(fixture.HostDirectory, request.HostDirectory);
+        Assert.Equal(host.Name, request.HostName);
+        Assert.Equal(host.DepsFile, request.DepsFile);
+        Assert.Equal(packageRoot, request.PackageRoots![0]);
+        Assert.Equal(request.Candidate!.CaptureId, request.EnvironmentInput!.CaptureId);
+        Assert.Equal(raw, Convert.FromBase64String(request.EnvironmentInput.Content!));
+        Assert.Contains(request.EnvironmentInput.Content!, serialized, StringComparison.Ordinal);
+        Assert.DoesNotContain(environmentPath, serialized, StringComparison.Ordinal);
+        Assert.DoesNotContain(CandidateInspectionFixture.PrivateEnvironmentCanary, serialized, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Environment_capture_rechecks_private_source_and_unused_intent_inputs()
+    {
+        using var fixture = new CompositionBridgeFixture();
+        fixture.WriteAcceptedComposition();
+        var environmentPath = EnvironmentPath(fixture, "environment.json");
+        File.WriteAllBytes(environmentPath, CandidateInspectionFixture.EnvironmentDocument(("Key", "value")));
+        var unused = fixture.WriteWorkspaceProfile("unused.json", "unused", "1", ["TenantOnly"]);
+
+        using (var capture = OpenWithEnvironment(fixture, environmentPath, profiles: [unused.Path]))
+        {
+            File.AppendAllText(environmentPath, " ");
+            Assert.Equal("composition-input-changed", Assert.Throws<CliRefusal>(() => capture.VerifyUnchanged()).Code);
+        }
+
+        using (var capture = OpenWithEnvironment(fixture, environmentPath, profiles: [unused.Path]))
+        {
+            File.AppendAllText(Path.Join(fixture.HostDirectory, "shells.Production.json"), " ");
+            Assert.Equal("bridge-source-changed", Assert.Throws<CliRefusal>(() => capture.VerifyUnchanged()).Code);
+        }
+
+        using (var capture = OpenWithEnvironment(fixture, environmentPath, profiles: [unused.Path]))
+        {
+            File.AppendAllText(unused.Path, " ");
+            Assert.Equal("composition-input-changed", Assert.Throws<CliRefusal>(() => capture.VerifyUnchanged()).Code);
+        }
+    }
+
+    [Fact]
+    public void Environment_capture_refuses_invalid_private_files_without_echoing_path_or_value()
+    {
+        using var fixture = new CompositionBridgeFixture();
+        fixture.WriteAcceptedComposition();
+        var environmentPath = EnvironmentPath(fixture, "private-environment-input.json");
+        File.WriteAllBytes(environmentPath, CandidateInspectionFixture.EnvironmentDocument(("SQLCONNSTR_Name", CandidateInspectionFixture.PrivateEnvironmentCanary)));
+
+        var refusal = Assert.Throws<CliRefusal>(() => OpenWithEnvironment(fixture, environmentPath));
+
+        Assert.Equal("candidate-environment-prefix-unsupported", refusal.Code);
+        Assert.Empty(refusal.Details);
+        Assert.DoesNotContain(environmentPath, refusal.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain(CandidateInspectionFixture.PrivateEnvironmentCanary, refusal.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Environment_capture_refuses_oversized_and_nonregular_private_files_without_echoing_path()
+    {
+        using var fixture = new CompositionBridgeFixture();
+        fixture.WriteAcceptedComposition();
+        var oversizedPath = EnvironmentPath(fixture, "oversized-private-environment.json");
+        File.WriteAllBytes(oversizedPath, CandidateInspectionFixture.EnvironmentDocumentOfSize(CompositionFileReader.MaximumFileBytes + 1));
+
+        var oversized = Assert.Throws<CliRefusal>(() => OpenWithEnvironment(fixture, oversizedPath));
+        Assert.Equal("candidate-environment-input-too-large", oversized.Code);
+        Assert.DoesNotContain(oversizedPath, oversized.ToString(), StringComparison.Ordinal);
+
+        var directoryPath = EnvironmentPath(fixture, "private-environment-directory");
+        Directory.CreateDirectory(directoryPath);
+        var unreadable = Assert.Throws<CliRefusal>(() => OpenWithEnvironment(fixture, directoryPath));
+        Assert.Equal("composition-input-unreadable", unreadable.Code);
+        Assert.DoesNotContain(directoryPath, unreadable.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Environment_capture_begin_is_single_use_and_disposal_is_safe()
+    {
+        using var fixture = new CompositionBridgeFixture();
+        fixture.WriteAcceptedComposition();
+        var environmentPath = EnvironmentPath(fixture, "environment.json");
+        File.WriteAllBytes(environmentPath, CandidateInspectionFixture.EnvironmentDocument(("Key", "value")));
+        var capture = OpenWithEnvironment(fixture, environmentPath);
+
+        _ = capture.BeginEnvironmentInspection([]);
+        Assert.Equal("candidate-capture-invalid", Assert.Throws<CliRefusal>(() => capture.BeginEnvironmentInspection([])).Code);
+        capture.VerifyUnchanged();
+        capture.Dispose();
+        capture.Dispose();
+
+        Assert.False(capture.HasEnvironmentInput);
+        Assert.Equal("candidate-capture-invalid", Assert.Throws<CliRefusal>(() => capture.BeginEnvironmentInspection([])).Code);
+        Assert.Equal("candidate-capture-invalid", Assert.Throws<CliRefusal>(() => capture.VerifyUnchanged()).Code);
+    }
+
+    [Fact]
+    public void Environment_capture_failed_begin_releases_its_single_use_reservation()
+    {
+        using var fixture = new CompositionBridgeFixture();
+        fixture.WriteAcceptedComposition();
+        var environmentPath = EnvironmentPath(fixture, "environment.json");
+        var raw = CandidateInspectionFixture.EnvironmentDocument(("Key", "value"));
+        File.WriteAllBytes(environmentPath, raw);
+        using var capture = OpenWithEnvironment(fixture, environmentPath);
+
+        File.AppendAllText(environmentPath, " ");
+        Assert.Equal("composition-input-changed", Assert.Throws<CliRefusal>(() => capture.BeginEnvironmentInspection([])).Code);
+        File.WriteAllBytes(environmentPath, raw);
+
+        var request = capture.BeginEnvironmentInspection([]);
+        Assert.Equal(request.Candidate!.CaptureId, request.EnvironmentInput!.CaptureId);
+    }
+
+    [Fact]
+    public void Environment_capture_begin_allows_exactly_one_concurrent_request()
+    {
+        using var fixture = new CompositionBridgeFixture();
+        fixture.WriteAcceptedComposition();
+        var environmentPath = EnvironmentPath(fixture, "environment.json");
+        File.WriteAllBytes(environmentPath, CandidateInspectionFixture.EnvironmentDocument(("Key", "value")));
+        using var capture = OpenWithEnvironment(fixture, environmentPath);
+        using var start = new Barrier(3);
+        var successfulRequests = 0;
+        var refusedRequests = 0;
+
+        var callers = Enumerable.Range(0, 2).Select(_ => Task.Run(() =>
+        {
+            start.SignalAndWait();
+            try
+            {
+                _ = capture.BeginEnvironmentInspection([]);
+                Interlocked.Increment(ref successfulRequests);
+            }
+            catch (CliRefusal refusal) when (refusal.Code == "candidate-capture-invalid")
+            {
+                Interlocked.Increment(ref refusedRequests);
+            }
+        })).ToArray();
+        start.SignalAndWait();
+        Task.WaitAll(callers);
+
+        Assert.Equal(1, successfulRequests);
+        Assert.Equal(1, refusedRequests);
+    }
+
+    [Fact]
+    public void File_only_capture_cannot_begin_explicit_environment_inspection()
+    {
+        using var fixture = new CompositionBridgeFixture();
+        fixture.WriteAcceptedComposition();
+        using var capture = CompositionInspectionCapture.Open(fixture.HostDirectory, "default", "Production",
+            fixture.OutputPath, fixture.CatalogPath, fixture.ReviewPath);
+
+        Assert.False(capture.HasEnvironmentInput);
+        Assert.Equal("candidate-capture-invalid", Assert.Throws<CliRefusal>(() => capture.BeginEnvironmentInspection([])).Code);
+    }
+
     private static CompositionInspectionCapture Open(CompositionBridgeFixture fixture, IReadOnlyList<string> profiles,
         CompositionFileReader? reader = null, string? catalog = "fixture", string? review = "fixture") =>
         CompositionInspectionCapture.Open(fixture.HostDirectory, "default", "Production", fixture.OutputPath,
             catalog is null ? null : fixture.CatalogPath, review is null ? null : fixture.ReviewPath, profiles, reader);
+
+    private static CompositionInspectionCapture OpenWithEnvironment(CompositionBridgeFixture fixture, string environmentPath,
+        CompositionFileReader? reader = null, IReadOnlyList<string>? profiles = null) =>
+        CompositionInspectionCapture.OpenWithEnvironmentInput(HostLayout.Resolve(DotnetElsa.Host("ResourceAwareLiveHost")),
+            fixture.HostDirectory, "default", "Production", fixture.OutputPath, environmentPath,
+            fixture.CatalogPath, fixture.ReviewPath, profiles, reader);
+
+    private static string EnvironmentPath(CompositionBridgeFixture fixture, string name)
+    {
+        Directory.CreateDirectory(fixture.CandidateDirectory);
+        return Path.Join(fixture.CandidateDirectory, name);
+    }
 
     private static IReadOnlyDictionary<string, string> ParseEnvironment(ReadOnlyMemory<byte> document)
     {
