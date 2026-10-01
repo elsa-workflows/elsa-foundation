@@ -211,6 +211,17 @@ public sealed class EfModuleMigrator<TContext>(
 }
 
 /// <summary>
+/// Stops the shell's <see cref="EfModuleMigrator{TContext}"/> loops during the drain, while the shell's services are still
+/// usable. The migrator is the shell's singleton, so this stops the instance the shell initializer started; the disposal that
+/// follows finds it stopped.
+/// </summary>
+internal sealed class StopEfModuleMigratorTerminator<TContext>(EfModuleMigrator<TContext> migrator) : IShellTerminator
+    where TContext : DbContext
+{
+    public Task TerminateAsync(CancellationToken cancellationToken = default) => migrator.StopAsync(cancellationToken);
+}
+
+/// <summary>
 /// The provider a module context must be bound to before its migrations run, and what its
 /// <c>[EfModule]</c> declares for after they have (ADR 0076 D8). Resolved once, at registration, so a
 /// declaration this build cannot honour is refused while a host is still wiring itself up rather than
@@ -303,6 +314,11 @@ public static class EfModuleMigrationServiceCollectionExtensions
                     "registration, so the migrator's exposure cannot be kept out of CShells' initializer scope. Revisit this registration.");
             if (exposures[^1].Lifetime != ServiceLifetime.Singleton)
                 services[services.IndexOf(exposures[^1])] = ServiceDescriptor.Singleton<IShellInitializer>(provider => provider.GetRequiredService<EfModuleMigrator<TContext>>());
+            // A shell has no IHostedService stop, and the container's disposal marks the provider disposed before it reaches
+            // the migrator, so a round still running then fails on a dead provider (#2236). The drain stops the loops
+            // first, while the shell's services are usable; Start, like the Tasks feature's terminator, is the first
+            // teardown phase, ahead of anything that flushes or closes what a round reads.
+            services.AddShellTerminator<StopEfModuleMigratorTerminator<TContext>>(LifecyclePhase.Start, 0);
         }
         // AddShellInitializer registers the initializer transiently; this last-wins registration makes the
         // shell and the hosted-service paths resolve one instance, exactly as AddEfProviderBindingValidation

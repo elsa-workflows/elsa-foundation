@@ -799,6 +799,74 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// A shell whose container is disposed under a running round is stopping, not failing (#2236): the round's failure on the
+    /// provider that refuses its scope is not a warning, and the round does not try to release its claim through that same
+    /// provider, since the claim expires on its own.
+    /// </summary>
+    [Fact]
+    public async Task A_round_that_finds_its_provider_disposed_is_not_a_warning_and_does_not_try_to_release()
+    {
+        await SeedFamilyAsync();
+        var logger = new WarningLogger();
+        var host = await HostAsync("host-a", logger: logger);
+        await host.DisposeAsync();
+
+        await Assert.ThrowsAsync<ObjectDisposedException>(() => host.RunOnceAsync());
+
+        Assert.Empty(logger.Warnings);
+    }
+
+    /// <summary>The loop that runs the rounds treats the same failure the same way, and goes on until it is stopped.</summary>
+    [Fact]
+    public async Task The_loop_does_not_warn_when_its_provider_is_disposed_and_goes_on_until_it_is_stopped()
+    {
+        await SeedFamilyAsync();
+        var logger = new WarningLogger();
+        var host = await HostAsync("host-a", logger: logger);
+        await host.DisposeAsync();
+        using var stopping = new CancellationTokenSource();
+        var attempts = 0;
+        var secondRound = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var loop = host.Backfill.RunAsync((action, token) =>
+        {
+            if (Interlocked.Increment(ref attempts) == 2)
+                secondRound.TrySetResult();
+            return host.WithScopeAsync(action, token);
+        }, stopping.Token);
+        // The second round starts after the first one's failure was handled, so nothing it logged is still to come.
+        while (!secondRound.Task.IsCompleted)
+        {
+            clock.Advance(TimeSpan.FromSeconds(15));
+            await Task.Delay(10);
+        }
+
+        await stopping.CancelAsync();
+        await loop.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.Empty(logger.Warnings);
+    }
+
+    /// <summary>The same provider disposal under a release that follows a genuinely failed round is not a second warning.</summary>
+    [Fact]
+    public async Task A_release_that_finds_its_provider_disposed_after_a_failed_round_is_not_a_warning()
+    {
+        await SeedFamilyAsync();
+        var logger = new WarningLogger();
+        var host = await HostAsync("host-a", logger: logger);
+        var failing = false;
+        host.Probe.BeforeWrite = _ =>
+        {
+            failing = true;
+            throw new InvalidOperationException("The database went away.");
+        };
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => host.Backfill.RunOnceAsync((action, token) =>
+            failing ? throw new ObjectDisposedException(nameof(IServiceProvider)) : host.WithScopeAsync(action, token)));
+
+        Assert.DoesNotContain(logger.Warnings, warning => warning.Message.Contains("could not release its claim", StringComparison.Ordinal));
+    }
+
+    /// <summary>
     /// FR-008, the early ways out of a round: a worker that kept its claim while its run settled, and whose host then comes
     /// to refuse every write to the family, since a version it cannot read was finalized elsewhere, lets go of the claim on
     /// that round rather than keep the family from the hosts that can still work on it.
