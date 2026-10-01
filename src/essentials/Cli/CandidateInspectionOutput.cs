@@ -26,7 +26,14 @@ public sealed class CandidateInspectionOutput
         ArgumentNullException.ThrowIfNull(capture);
         if (format is not ("text" or "json"))
             throw CliRefusal.Usage("composition-format-invalid", "The output format must be text or json.");
-        try { WorkerContract.ValidateCandidateHostResponse(hostResponse, capture.Payload, processExitCode); }
+        var environmentLane = capture.HasEnvironmentInput;
+        try
+        {
+            if (environmentLane)
+                WorkerContract.ValidateCandidateEnvironmentHostResponse(hostResponse, capture.Payload, processExitCode);
+            else
+                WorkerContract.ValidateCandidateHostResponse(hostResponse, capture.Payload, processExitCode);
+        }
         catch (WorkerRefusal refusal) { throw new CliRefusal(refusal.ExitCode, refusal.Code, refusal.Message); }
         if (hostResponse.GetProperty("status").GetString() == "refused")
         {
@@ -35,7 +42,7 @@ public sealed class CandidateInspectionOutput
             var details = new List<string>();
             if (error.TryGetProperty("feature", out var feature)) details.Add($"Feature: {feature.GetString()}");
             if (error.TryGetProperty("resource", out var resource)) details.Add($"Resource: {resource.GetString()}");
-            throw CliRefusal.Usage(code, HostRefusalMessage(code, error), details);
+            throw new CliRefusal(processExitCode, code, HostRefusalMessage(code, error), details);
         }
         var projection = CompositionPlanCommand.Project(capture.Plan, null);
         var source = hostResponse.GetProperty("configurationResolution");
@@ -61,6 +68,11 @@ public sealed class CandidateInspectionOutput
         "candidate-request-invalid" => "The candidate inspection request is invalid.",
         "candidate-request-too-large" => "The candidate inspection request exceeds the supported size limit.",
         "candidate-capture-invalid" => "The captured configuration files are invalid.",
+        "candidate-environment-input-invalid" => "The explicit environment input is invalid.",
+        "candidate-environment-input-too-large" => "The explicit environment input exceeds the supported size limit.",
+        "candidate-environment-key-collision" => "The explicit environment input contains colliding keys.",
+        "candidate-environment-prefix-unsupported" => "The explicit environment input contains an unsupported service prefix.",
+        "candidate-environment-host-unenrolled" => "The selected host is not enrolled for explicit environment inspection.",
         "candidate-selection-conflict" when error.TryGetProperty("reason", out var reason) => reason.GetString() switch
         {
             "unknown" => "The accepted selection contains a feature unknown to the selected host.",

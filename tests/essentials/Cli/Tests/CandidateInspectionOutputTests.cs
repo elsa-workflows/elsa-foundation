@@ -126,6 +126,56 @@ public sealed class CandidateInspectionOutputTests
         Assert.Equal(2, refusal.ExitCode);
     }
 
+    [Fact]
+    public void Explicit_environment_output_requires_its_lane_source_and_intent_projection()
+    {
+        using var fixture = new EnvironmentOutputFixture();
+        var host = CandidateHostResponseFixtures.Success(fixture.Capture.Payload);
+        var resolution = host["configurationResolution"]!.AsObject();
+        resolution["source"] = "captured-workbench-json-explicit-environment-v1";
+        resolution["externalInputs"] = "supplied-intended";
+
+        using var document = JsonDocument.Parse(new CandidateInspectionOutput().Render(fixture.Capture,
+            JsonSerializer.SerializeToElement(host), 0, "json"));
+
+        Assert.Equal("captured-workbench-json-explicit-environment-v1",
+            document.RootElement.GetProperty("configurationResolution").GetProperty("source").GetString());
+        Assert.Equal("supplied-intended",
+            document.RootElement.GetProperty("configurationResolution").GetProperty("externalInputs").GetString());
+    }
+
+    [Fact]
+    public void Explicit_environment_output_rejects_a_file_only_source()
+    {
+        using var fixture = new EnvironmentOutputFixture();
+        var refusal = Assert.Throws<CliRefusal>(() => new CandidateInspectionOutput().Render(fixture.Capture,
+            JsonSerializer.SerializeToElement(CandidateHostResponseFixtures.Success(fixture.Capture.Payload)), 0, "json"));
+
+        Assert.Equal("candidate-response-invalid", refusal.Code);
+        Assert.DoesNotContain(CandidateInspectionFixture.PrivateEnvironmentCanary, refusal.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Explicit_environment_host_unenrollment_preserves_resolution_failure_exit()
+    {
+        using var fixture = new EnvironmentOutputFixture();
+        var refusal = new JsonObject
+        {
+            ["version"] = 1,
+            ["invocationId"] = fixture.Capture.Payload.InvocationId,
+            ["captureId"] = fixture.Capture.Payload.CaptureId,
+            ["status"] = "refused",
+            ["exitCode"] = 3,
+            ["error"] = new JsonObject { ["code"] = "candidate-environment-host-unenrolled" }
+        };
+
+        var error = Assert.Throws<CliRefusal>(() => new CandidateInspectionOutput().Render(fixture.Capture,
+            JsonSerializer.SerializeToElement(refusal), 3, "json"));
+
+        Assert.Equal("candidate-environment-host-unenrolled", error.Code);
+        Assert.Equal(3, error.ExitCode);
+    }
+
     [Theory]
     [InlineData("candidate-request-invalid", "request is invalid")]
     [InlineData("candidate-request-too-large", "size limit")]
@@ -170,6 +220,31 @@ public sealed class CandidateInspectionOutputTests
                 source.CatalogPath, source.ReviewPath, [profile.Path]);
         }
         public void Dispose() => source.Dispose();
+    }
+
+    private sealed class EnvironmentOutputFixture : IDisposable
+    {
+        private readonly CompositionBridgeFixture source = new();
+        public CompositionInspectionCapture Capture { get; }
+
+        public EnvironmentOutputFixture()
+        {
+            source.WriteAcceptedComposition();
+            Directory.CreateDirectory(source.CandidateDirectory);
+            var environmentPath = Path.Join(source.CandidateDirectory, "environment.json");
+            File.WriteAllBytes(environmentPath, CandidateInspectionFixture.EnvironmentDocument(("Key", "value")));
+            var host = new HostLayout(source.HostDirectory, "Example.Host",
+                Path.Join(source.HostDirectory, "Example.Host.runtimeconfig.json"),
+                Path.Join(source.HostDirectory, "Example.Host.deps.json"));
+            Capture = CompositionInspectionCapture.OpenWithEnvironmentInput(host, source.HostDirectory,
+                "default", "Production", source.OutputPath, environmentPath, source.CatalogPath, source.ReviewPath);
+        }
+
+        public void Dispose()
+        {
+            Capture.Dispose();
+            source.Dispose();
+        }
     }
 
     private static JsonObject Refusal(WorkerCandidatePayload candidate, string code, string? reason = null)

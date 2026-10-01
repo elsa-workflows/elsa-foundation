@@ -18,10 +18,14 @@ internal static class CompositionInspectCommand
         var review = new Option<string>("--setting-review") { Description = "Optional reviewed setting changes JSON." };
         var packages = new Option<string[]>("--packages") { Description = "Already installed package root. Repeatable." };
         var trust = new Option<bool>("--trust-host-code") { Description = "Permit the selected host's declared composer to execute in the inspection child." };
+        var environmentInput = new Option<string>("--environment-input")
+        {
+            Description = "One private JSON environment document for the explicit environment inspection lane."
+        };
         var timeout = new Option<int?>("--timeout-seconds") { Description = "Inspection timeout, 1 to 300 seconds. Defaults to 60." };
         var format = new Option<string>("--format") { Description = "Output format: text or json. Defaults to text." };
         var command = new Command("inspect", "Preview effective persistence for an accepted candidate without publishing it.")
-        { host, source, shell, environment, composition, catalog, profiles, review, packages, trust, timeout, format };
+        { host, source, shell, environment, composition, catalog, profiles, review, packages, trust, environmentInput, timeout, format };
 
         command.SetAction((result, cancellationToken) => Guarded(async () =>
         {
@@ -48,24 +52,31 @@ internal static class CompositionInspectCommand
                 throw CliRefusal.Resolution("candidate-host-unavailable", "The selected installed host layout could not be inspected.");
             }
 
-            var capture = CompositionInspectionCapture.Open(result.GetRequiredValue(source),
-                result.GetRequiredValue(shell), result.GetRequiredValue(environment), result.GetRequiredValue(composition),
-                result.GetValue(catalog), result.GetValue(review), result.GetValue(profiles));
-            var request = new WorkerRequest
-            {
-                Command = WorkerCommands.InspectCandidate,
-                HostDirectory = layout.Directory,
-                HostName = layout.Name,
-                DepsFile = layout.DepsFile,
-                PackageRoots = roots,
-                Candidate = capture.Payload
-            };
+            var privateEnvironmentPath = result.GetValue(environmentInput);
+            using var capture = privateEnvironmentPath is null
+                ? CompositionInspectionCapture.Open(result.GetRequiredValue(source),
+                    result.GetRequiredValue(shell), result.GetRequiredValue(environment), result.GetRequiredValue(composition),
+                    result.GetValue(catalog), result.GetValue(review), result.GetValue(profiles))
+                : CompositionInspectionCapture.OpenWithEnvironmentInput(layout, result.GetRequiredValue(source),
+                    result.GetRequiredValue(shell), result.GetRequiredValue(environment), result.GetRequiredValue(composition),
+                    privateEnvironmentPath, result.GetValue(catalog), result.GetValue(review), result.GetValue(profiles));
+            var environmentLane = capture.HasEnvironmentInput;
             cancellationToken.ThrowIfCancellationRequested();
             capture.VerifyUnchanged();
             string rendered;
             try
             {
-                var response = await new CandidateWorkerProcess().RunAsync(layout, request, seconds, cancellationToken);
+                var response = environmentLane
+                    ? await new CandidateWorkerProcess().RunEnvironmentAsync(capture, roots, seconds, cancellationToken)
+                    : await new CandidateWorkerProcess().RunAsync(layout, new WorkerRequest
+                    {
+                        Command = WorkerCommands.InspectCandidate,
+                        HostDirectory = layout.Directory,
+                        HostName = layout.Name,
+                        DepsFile = layout.DepsFile,
+                        PackageRoots = roots,
+                        Candidate = capture.Payload
+                    }, seconds, cancellationToken);
                 if (response.Error is { } error)
                     throw new CliRefusal(response.ExitCode, error.Code, error.Message);
                 rendered = new CandidateInspectionOutput().Render(capture, response.Tooling!.Value, response.ExitCode, outputFormat);
@@ -74,7 +85,8 @@ internal static class CompositionInspectCommand
             {
                 // Owned-process cleanup has already completed or refused. Recheck before reporting any
                 // bounded outcome, so a refusal about stale candidate inputs cannot escape as current.
-                capture.VerifyUnchanged();
+                if (!environmentLane || capture.HasEnvironmentInput)
+                    capture.VerifyUnchanged();
                 throw;
             }
             capture.VerifyUnchanged();
