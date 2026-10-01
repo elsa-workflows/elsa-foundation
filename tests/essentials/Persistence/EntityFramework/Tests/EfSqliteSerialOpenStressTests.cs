@@ -71,6 +71,7 @@ public sealed class EfSqliteSerialOpenStressTests : IAsyncDisposable
                         OpenAndRead(context, synchronous: index % 2 == 0);
                         handles[index] = ((SqliteConnection)context.Database.GetDbConnection()).Handle!.DangerousGetHandle();
                     }
+                    // Any exception counts: the race surfaces as several types (SqliteException, InvalidOperationException, ObjectDisposedException…).
                     catch (Exception exception)
                     {
                         failures.Enqueue($"{exception.GetType().Name}: {exception.Message}");
@@ -83,6 +84,7 @@ public sealed class EfSqliteSerialOpenStressTests : IAsyncDisposable
                     {
                         context?.Dispose();
                     }
+                    // Same as above: any exception counts.
                     catch (Exception exception)
                     {
                         failures.Enqueue($"{exception.GetType().Name} on close: {exception.Message}");
@@ -166,6 +168,7 @@ public sealed class EfSqliteSerialOpenStressTests : IAsyncDisposable
         if (synchronous)
         {
             context.Database.OpenConnection();
+            // Enumerate every row so the reader's statement stays active while the open races.
             foreach (var _ in context.Rows.AsNoTracking())
             {
             }
