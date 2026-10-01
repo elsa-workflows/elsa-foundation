@@ -57,7 +57,7 @@ public sealed class EfDesignAtomicWriter(
         return TransientWrites.RunUntilSettledAsync(
             db,
             () => ExecuteAttemptAsync(key, operationKind, request, stage, beforeAttempt, cancellationToken, resultCodec),
-            conflict => throw ProviderFailure(operationKind, conflict!),
+            conflict => throw EfDesignSupport.ProviderFailure(operationKind, conflict!),
             cancellationToken).AsTask();
     }
 
@@ -75,8 +75,7 @@ public sealed class EfDesignAtomicWriter(
         EfDesignSupport.ValidateOperationIdentity(key, operationKind);
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(stage);
-        var tenantId = access.Current.Scope?.Value
-                       ?? throw new InvalidOperationException("Workflow design mutations require an explicit persistence scope.");
+        var tenantId = EfDesignSupport.OperationTenant(access);
         string requestFingerprint;
         string legacyRequestFingerprint;
         try
@@ -89,13 +88,8 @@ public sealed class EfDesignAtomicWriter(
         {
             throw SerializationFailure(operationKind, exception);
         }
-        var scopeKey = EfDesignSupport.ScopeKey(tenantId);
-        var existing = await EfDesignSupport.ReadAsync("reading design operation marker", () => db.Operations.AsNoTracking().SingleOrDefaultAsync(
-            x => EF.Property<string>(x, EfDesignSupport.ScopeKeyProperty) == scopeKey &&
-                 x.TenantId == tenantId &&
-                 x.OperationKindLookupHash == EfDesignSupport.LookupHash(operationKind) &&
-                 x.OperationKeyLookupHash == EfDesignSupport.LookupHash(key.Value),
-            cancellationToken));
+        var existing = await EfDesignSupport.ReadAsync("reading design operation marker", () =>
+            EfDesignSupport.FindOperationAsync(db, tenantId, operationKind, key.Value, cancellationToken));
         if (existing is not null)
         {
             ValidateMarkerIdentity(existing, operationKind, key.Value);
@@ -209,7 +203,7 @@ public sealed class EfDesignAtomicWriter(
             db.ChangeTracker.Clear();
             // Rolling back an enlisted operation leaves the caller's shared transaction open, so this refuses the retry.
             if (!TransientWrites.ShouldRetry(db, exception))
-                throw ProviderFailure(operationKind, exception);
+                throw EfDesignSupport.ProviderFailure(operationKind, exception);
             return EfWriteAttempt<DesignAtomicWriteResult<T>>.Retry(exception);
         }
         catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception))
@@ -217,12 +211,8 @@ public sealed class EfDesignAtomicWriter(
             transactionDisposed = true;
             await CleanupAsync(transaction, exception, operationKind, rollback: true);
             db.ChangeTracker.Clear();
-            var winner = await EfDesignSupport.ReadAsync("reading design operation winner", () => db.Operations.AsNoTracking().SingleOrDefaultAsync(
-                x => EF.Property<string>(x, EfDesignSupport.ScopeKeyProperty) == scopeKey &&
-                     x.TenantId == tenantId &&
-                     x.OperationKindLookupHash == EfDesignSupport.LookupHash(operationKind) &&
-                     x.OperationKeyLookupHash == EfDesignSupport.LookupHash(key.Value),
-                cancellationToken));
+            var winner = await EfDesignSupport.ReadAsync("reading design operation winner", () =>
+                EfDesignSupport.FindOperationAsync(db, tenantId, operationKind, key.Value, cancellationToken));
             if (winner is not null)
             {
                 ValidateMarkerIdentity(winner, operationKind, key.Value);
@@ -230,7 +220,7 @@ public sealed class EfDesignAtomicWriter(
                 // classify this caller as a replay so it cannot emit duplicate post-commit events.
                 return ResolveExisting(winner, operationKind, requestFingerprint, legacyRequestFingerprint, DesignAtomicWriteStatus.Replayed, resultCodec);
             }
-            throw ProviderFailure(operationKind, exception);
+            throw EfDesignSupport.ProviderFailure(operationKind, exception);
         }
         catch (Exception exception)
         {
@@ -311,19 +301,14 @@ public sealed class EfDesignAtomicWriter(
         Exception commitException,
         IDesignAtomicWriteResultCodec<T> resultCodec)
     {
-        var scopeKey = EfDesignSupport.ScopeKey(tenantId);
         using var timeoutSource = new CancellationTokenSource(timeout);
         while (true)
         {
             db.ChangeTracker.Clear();
             try
             {
-                var winner = await EfDesignSupport.ReadAsync("reconciling design operation marker", () => db.Operations.AsNoTracking().SingleOrDefaultAsync(
-                    x => EF.Property<string>(x, EfDesignSupport.ScopeKeyProperty) == scopeKey &&
-                         x.TenantId == tenantId &&
-                         x.OperationKindLookupHash == EfDesignSupport.LookupHash(operationKind) &&
-                         x.OperationKeyLookupHash == EfDesignSupport.LookupHash(operationKey),
-                    timeoutSource.Token));
+                var winner = await EfDesignSupport.ReadAsync("reconciling design operation marker", () =>
+                    EfDesignSupport.FindOperationAsync(db, tenantId, operationKind, operationKey, timeoutSource.Token));
                 if (winner is not null)
                 {
                     ValidateMarkerIdentity(winner, operationKind, operationKey);
@@ -434,9 +419,6 @@ public sealed class EfDesignAtomicWriter(
 
     private static bool IsSerializationFailure(Exception exception) =>
         exception is not (OperationCanceledException or OutOfMemoryException or StackOverflowException or AccessViolationException);
-
-    private static DesignPersistenceException ProviderFailure(string operation, Exception exception) =>
-        new(DesignPersistenceDomain.Workflow, DesignPersistenceFailureKind.Provider, operation, null, exception.InnerException ?? exception);
 
     private static DesignPersistenceException SerializationFailure(string operation, Exception exception) =>
         new(DesignPersistenceDomain.Workflow, DesignPersistenceFailureKind.Serialization, operation, "design operation", exception);

@@ -4,6 +4,7 @@ using Elsa.Foundation.Identity.Core.Ownership;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Models;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Options;
+using System.Diagnostics.CodeAnalysis;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -19,9 +20,13 @@ public sealed class IdentitySeedCoordinator(
     IUserStore userStore,
     IRoleStore roleStore,
     ITenantMembershipStore membershipStore,
-    IPermissionCatalog permissionCatalog)
+    IPermissionCatalog permissionCatalog,
+    TimeProvider? timeProvider = null)
 {
     private const int MaxSeedConvergenceAttempts = 8;
+
+    /// <summary>The pause before a re-read grows by this much per failed attempt, plus up to this much random jitter, so nodes that lost a race together drift apart.</summary>
+    private static readonly TimeSpan ConvergenceBackoffStep = TimeSpan.FromMilliseconds(25);
 
     /// <summary>
     /// The all-access permission ("*") that Elsa endpoints secured with permission policies require.
@@ -80,7 +85,7 @@ public sealed class IdentitySeedCoordinator(
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         expectedPermissions.Add(AllAccessPermission);
 
-        for (var attempt = 0; attempt < MaxSeedConvergenceAttempts; attempt++)
+        return await ConvergeAsync("the administrator role", async () =>
         {
             var existing = (await roleStore.ListAsync(tenantId, cancellationToken))
                 .FirstOrDefault(x => string.Equals(x.Name, seed.RoleName, StringComparison.OrdinalIgnoreCase));
@@ -95,65 +100,102 @@ public sealed class IdentitySeedCoordinator(
                     expectedPermissions,
                     System: true);
                 var result = await RevisionRoleStore.SaveWithRevisionAsync(role, expectedRevision: null, cancellationToken);
-                if (result.Status is IamRevisionSaveStatus.Saved)
-                    return role;
-
-                continue;
+                return result.Status is IamRevisionSaveStatus.Saved ? Attempt<RoleRecord>.Done(role) : Attempt<RoleRecord>.Retry;
             }
 
             var revisioned = await RevisionRoleStore.FindWithRevisionAsync(tenantId, existing.Id, cancellationToken);
             if (revisioned is null)
-                continue;
+                return Attempt<RoleRecord>.Retry;
 
             existing = revisioned.Record;
             if (expectedPermissions.All(existing.Permissions.Contains) && existing.System)
-                return existing;
+                return Attempt<RoleRecord>.Done(existing);
 
             var mergedPermissions = existing.Permissions
                 .Concat(expectedPermissions)
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
             var converged = existing with { Permissions = mergedPermissions, System = true };
             var save = await RevisionRoleStore.SaveWithRevisionAsync(converged, revisioned.Revision, cancellationToken);
-            if (save.Status is IamRevisionSaveStatus.Saved)
-                return converged;
-        }
-
-        throw new InvalidOperationException("Identity seeding could not converge the administrator role after repeated conditional-write conflicts.");
+            return save.Status is IamRevisionSaveStatus.Saved ? Attempt<RoleRecord>.Done(converged) : Attempt<RoleRecord>.Retry;
+        }, cancellationToken);
     }
 
-    private async Task<SeedResult> EnsureAdminUserAsync(
+    /// <summary>
+    /// Materializes the framework <c>UserRole</c> relationship for an already-seeded user so
+    /// <see cref="UserManager{TUser}"/> role queries observe the converged membership. Two nodes seeding the
+    /// same database race on this write, so a lost race (an <see cref="IdentityRevisionConflictException"/> or a
+    /// <c>ConcurrencyFailure</c> result) re-reads the user and tries again, and a membership that is already present
+    /// (including <c>UserAlreadyInRole</c>) counts as converged. Any other failure propagates unchanged.
+    /// </summary>
+    public async Task EnsureFrameworkRoleMembershipAsync(string userName, string roleName, CancellationToken cancellationToken = default)
+    {
+        await ConvergeAsync("the administrator framework role membership", async () =>
+        {
+            var user = await userManager.FindByNameAsync(userName)
+                       ?? throw new InvalidOperationException("The EF Identity administrator was not available after seeding.");
+            if (await userManager.IsInRoleAsync(user, roleName))
+                return Settled;
+
+            var result = await userManager.AddToRoleAsync(user, roleName);
+            if (result.Succeeded || result.Errors.Any(x => x.Code == nameof(IdentityErrorDescriber.UserAlreadyInRole)))
+                return Settled;
+            if (result.Errors.Any(x => x.Code == nameof(IdentityErrorDescriber.ConcurrencyFailure)))
+                throw new IdentityRevisionConflictException("Adding the administrator to its role returned ConcurrencyFailure.");
+
+            throw new InvalidOperationException("Failed to materialize the EF Identity administrator role membership: " + string.Join("; ", result.Errors.Select(x => x.Code)));
+        }, cancellationToken);
+    }
+
+    private Task<SeedResult> EnsureAdminUserAsync(
         IdentitySeedOptions seed,
         string tenantId,
         string roleId,
         CancellationToken cancellationToken)
     {
-        var existing = await userManager.FindByNameAsync(seed.UserName);
-        if (existing is not null)
+        IdentityRevisionConflictException? lostCreateRace = null;
+        return ConvergeAsync("the administrator account", async () =>
         {
-            await EnsureUserRoleAsync(tenantId, existing.Id, roleId, cancellationToken);
-            await EnsureMembershipAsync(tenantId, existing.Id, roleId, cancellationToken);
-            return new AlreadyConverged();
-        }
-
-        var user = CreateAdminUser(seed, tenantId);
-
-        var result = await userManager.CreateAsync(user, seed.Password);
-        if (!result.Succeeded)
-        {
-            var raced = await userManager.FindByNameAsync(seed.UserName);
-            if (raced is not null)
+            var existing = await userManager.FindByNameAsync(seed.UserName);
+            SeedResult outcome = lostCreateRace is null ? new AlreadyConverged() : new ConvergedAfterRace();
+            if (existing is null)
             {
-                await EnsureUserRoleAsync(tenantId, raced.Id, roleId, cancellationToken);
-                await EnsureMembershipAsync(tenantId, raced.Id, roleId, cancellationToken);
-                return new ConvergedAfterRace();
+                // A peer won the create but left no row this re-read can see: there is nothing to converge on.
+                if (lostCreateRace is not null)
+                    throw new InvalidOperationException("The administrator create lost a race, but no administrator was visible on the re-read.", lostCreateRace);
+
+                var user = CreateAdminUser(seed, tenantId);
+                try
+                {
+                    var result = await userManager.CreateAsync(user, seed.Password);
+                    if (result.Succeeded)
+                    {
+                        existing = user;
+                        outcome = new Created();
+                    }
+                    else
+                    {
+                        // A duplicate name that shows up on the re-read is a peer's create; otherwise the create was refused.
+                        existing = await userManager.FindByNameAsync(seed.UserName);
+                        if (existing is null)
+                            return Attempt<SeedResult>.Done(new PasswordPolicyRejected(result.Errors.Select(x => x.Code).ToArray()));
+
+                        outcome = new ConvergedAfterRace();
+                    }
+                }
+                catch (IdentityRevisionConflictException exception)
+                {
+                    // A peer that created the administrator after UserManager's existence check makes the store throw
+                    // (its lockout write finds a row this user object has no revision for) instead of returning a
+                    // failure. Re-read on the next attempt and converge on the peer's row.
+                    lostCreateRace = exception;
+                    return Attempt<SeedResult>.Retry;
+                }
             }
 
-            return new PasswordPolicyRejected(result.Errors.Select(x => x.Code).ToArray());
-        }
-
-        await EnsureUserRoleAsync(tenantId, user.Id, roleId, cancellationToken);
-        await EnsureMembershipAsync(tenantId, user.Id, roleId, cancellationToken);
-        return new Created();
+            await EnsureUserRoleAsync(tenantId, existing.Id, roleId, cancellationToken);
+            await EnsureMembershipAsync(tenantId, existing.Id, roleId, cancellationToken);
+            return Attempt<SeedResult>.Done(outcome);
+        }, cancellationToken);
     }
 
     private async Task EnsureUserRoleAsync(
@@ -162,15 +204,15 @@ public sealed class IdentitySeedCoordinator(
         string roleId,
         CancellationToken cancellationToken)
     {
-        for (var attempt = 0; attempt < MaxSeedConvergenceAttempts; attempt++)
+        await ConvergeAsync("the administrator user role", async () =>
         {
             var revisioned = await RevisionUserStore.FindWithRevisionAsync(tenantId, userId, cancellationToken);
             if (revisioned is null)
-                return;
+                return Settled;
 
             var record = revisioned.Record;
             if (record.RoleIds.Contains(roleId))
-                return;
+                return Settled;
 
             var roleIds = record.RoleIds.ToHashSet(StringComparer.OrdinalIgnoreCase);
             roleIds.Add(roleId);
@@ -182,11 +224,8 @@ public sealed class IdentitySeedCoordinator(
                 DirectPermissions = directPermissions
             };
             var result = await RevisionUserStore.SaveWithRevisionAsync(converged, revisioned.Revision, cancellationToken);
-            if (result.Status is IamRevisionSaveStatus.Saved)
-                return;
-        }
-
-        throw new InvalidOperationException("Identity seeding could not converge the administrator user role after repeated conditional-write conflicts.");
+            return result.Status is IamRevisionSaveStatus.Saved ? Settled : Attempt<bool>.Retry;
+        }, cancellationToken);
     }
 
     private async Task EnsureMembershipAsync(
@@ -195,7 +234,7 @@ public sealed class IdentitySeedCoordinator(
         string roleId,
         CancellationToken cancellationToken)
     {
-        for (var attempt = 0; attempt < MaxSeedConvergenceAttempts; attempt++)
+        await ConvergeAsync("the administrator tenant membership", async () =>
         {
             var revisioned = await RevisionMembershipStore.FindWithRevisionAsync(tenantId, userId, cancellationToken);
             if (revisioned is null)
@@ -207,15 +246,12 @@ public sealed class IdentitySeedCoordinator(
                     new HashSet<string>(StringComparer.OrdinalIgnoreCase) { roleId },
                     new HashSet<string>(StringComparer.OrdinalIgnoreCase));
                 var create = await RevisionMembershipStore.SaveWithRevisionAsync(membership, expectedRevision: null, cancellationToken);
-                if (create.Status is IamRevisionSaveStatus.Saved)
-                    return;
-
-                continue;
+                return create.Status is IamRevisionSaveStatus.Saved ? Settled : Attempt<bool>.Retry;
             }
 
             var existing = revisioned.Record;
             if (existing.Status == TenantMembershipStatus.Active && existing.RoleIds.Contains(roleId))
-                return;
+                return Settled;
 
             var roleIds = existing.RoleIds.ToHashSet(StringComparer.OrdinalIgnoreCase);
             roleIds.Add(roleId);
@@ -226,11 +262,64 @@ public sealed class IdentitySeedCoordinator(
                 RoleIds = roleIds,
                 DirectPermissions = directPermissions
             }, revisioned.Revision, cancellationToken);
-            if (result.Status is IamRevisionSaveStatus.Saved)
-                return;
+            return result.Status is IamRevisionSaveStatus.Saved ? Settled : Attempt<bool>.Retry;
+        }, cancellationToken);
+    }
+
+    /// <summary>The outcome of one convergence attempt: <see cref="Done"/> with the converged value, or <see cref="Retry"/> after a conditional-write conflict.</summary>
+    private readonly record struct Attempt<T>
+    {
+        private readonly bool converged;
+        private readonly T? value;
+
+        private Attempt(T value)
+        {
+            converged = true;
+            this.value = value;
         }
 
-        throw new InvalidOperationException("Identity seeding could not converge the administrator tenant membership after repeated conditional-write conflicts.");
+        public static Attempt<T> Retry => default;
+
+        public static Attempt<T> Done(T value) => new(value);
+
+        public bool TryGetDone([MaybeNullWhen(false)] out T result)
+        {
+            result = value;
+            return converged;
+        }
+    }
+
+    private static Attempt<bool> Settled => Attempt<bool>.Done(true);
+
+    /// <summary>
+    /// The one bounded convergence loop every seeding step uses. <paramref name="attemptConvergence"/> returns
+    /// <see cref="Attempt{T}.Done"/> once the state has converged and <see cref="Attempt{T}.Retry"/> after a
+    /// conditional-write conflict; an <see cref="IdentityRevisionConflictException"/> counts as a conflict too. A pause that
+    /// grows with the attempt number, plus up to one step of random jitter, precedes each re-read so concurrent nodes that
+    /// lost a race together do not retry in lockstep. Running out of attempts reports the last such exception, when there
+    /// was one, as the cause.
+    /// </summary>
+    private async Task<T> ConvergeAsync<T>(string subject, Func<Task<Attempt<T>>> attemptConvergence, CancellationToken cancellationToken)
+    {
+        IdentityRevisionConflictException? lastConflict = null;
+        for (var attempt = 0; attempt < MaxSeedConvergenceAttempts; attempt++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (attempt > 0)
+                await Task.Delay(ConvergenceBackoffStep * (attempt + Random.Shared.NextDouble()), timeProvider ?? TimeProvider.System, cancellationToken);
+
+            try
+            {
+                if ((await attemptConvergence()).TryGetDone(out var converged))
+                    return converged;
+            }
+            catch (IdentityRevisionConflictException exception)
+            {
+                lastConflict = exception;
+            }
+        }
+
+        throw new InvalidOperationException($"Identity seeding could not converge {subject} after repeated conditional-write conflicts.", lastConflict);
     }
 
     private static string SeedDocumentId(string kind, string tenantId, string logicalName)
