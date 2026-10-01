@@ -17,8 +17,10 @@ namespace Elsa.Workflows.Runtime.Api.Requests;
 /// <param name="CorrelationId">Optional passive correlation value that scopes the resume fan-in (Condition B).</param>
 /// <param name="Mode">Whether to start, resume, or both. Defaults to both.</param>
 /// <param name="IdempotencyKey">
-/// Optional at-least-once dedup key for the START path (Condition A). When present, a duplicate delivery does
-/// not double-start; when absent, the start path is at-least-once and a duplicate MAY double-start.
+/// Optional dedup key for the START path (#2195). When present, each matching workflow is started under an execution id
+/// derived from the key and its artifact, so a repeated delivery never starts it again: a reused key for the same
+/// artifact is answered <c>SkippedDuplicate</c> permanently, on every node and after restarts. When absent, the start path
+/// is at-least-once and a duplicate MAY double-start.
 /// </param>
 public sealed record DispatchStimulus(
     string StimulusType,

@@ -116,21 +116,64 @@ public sealed class StimulusRouterTests
     }
 
     [Fact]
-    public async Task Route_WithIdempotencyKey_DoesNotDoubleStartOnRedelivery()
+    public async Task Route_WithIdempotencyKey_RedeliveryResolvesToTheSameExecution_AndReportsTheDuplicate()
     {
         var bindingStore = new InMemoryWorkflowTriggerBindingStore();
         await bindingStore.SaveAsync(Binding("artifact-1", "node-a"));
+        await bindingStore.SaveAsync(Binding("artifact-2", "node-a"));
         var startDispatcher = new RecordingStartDispatcher();
-        var deduplicator = new InMemoryStimulusStartDeduplicator();
-        var router = Router(bindingStore, new InMemoryBookmarkStateStore(), startDispatcher, new RecordingResumeDispatcher(), deduplicator);
+        var router = Router(bindingStore, new InMemoryBookmarkStateStore(), startDispatcher, new RecordingResumeDispatcher());
 
         var first = await router.RouteAsync(Request(mode: StimulusRoutingMode.StartOnly, idempotencyKey: "delivery-1"));
         var second = await router.RouteAsync(Request(mode: StimulusRoutingMode.StartOnly, idempotencyKey: "delivery-1"));
 
-        Assert.Equal(1, first.StartedCount);
+        // Durable, not process-local (#2195): every delivery names the same keyed execution per matched artifact, so the
+        // dispatcher, which reads durable execution state, recognizes the redelivery on any node and after any restart.
+        Assert.Equal(2, first.StartedCount);
         Assert.Equal(0, second.StartedCount);
-        Assert.Equal(1, second.SkippedStartCount);
-        Assert.Single(startDispatcher.Requests);
+        Assert.Equal(2, second.SkippedStartCount);
+        var expected = new[]
+        {
+            KeyedWorkflowStartIdentity.For("delivery-1", "artifact-1"),
+            KeyedWorkflowStartIdentity.For("delivery-1", "artifact-2")
+        };
+        Assert.Equal(
+            expected.Concat(expected).Select(identity => (identity.WorkflowExecutionId, identity.StartKey)),
+            startDispatcher.Requests.Select(request => (request.WorkflowExecutionId!, request.IdempotencyKey!)));
+        Assert.Equal(expected.Select(identity => identity.WorkflowExecutionId), first.Starts.Select(start => start.WorkflowExecutionId!));
+    }
+
+    [Fact]
+    public async Task Route_WithIdempotencyKey_RetriesAStartWhoseFirstDeliveryFailed()
+    {
+        // The direction that looks like success: a process-local "already begun" record taken before the dispatch made the
+        // retry of a failed keyed start report a skipped duplicate, so the delivery was acknowledged and nothing started.
+        var bindingStore = new InMemoryWorkflowTriggerBindingStore();
+        await bindingStore.SaveAsync(Binding("artifact-1", "node-a"));
+        var startDispatcher = new RecordingStartDispatcher { FailNext = new InvalidOperationException("transient") };
+        var router = Router(bindingStore, new InMemoryBookmarkStateStore(), startDispatcher, new RecordingResumeDispatcher());
+
+        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await router.RouteAsync(Request(mode: StimulusRoutingMode.StartOnly, idempotencyKey: "delivery-1")));
+        var retry = await router.RouteAsync(Request(mode: StimulusRoutingMode.StartOnly, idempotencyKey: "delivery-1"));
+
+        Assert.Equal(1, retry.StartedCount);
+        Assert.Equal(0, retry.SkippedStartCount);
+    }
+
+    [Fact]
+    public async Task Route_WithoutIdempotencyKey_StartsUnkeyedExecutions()
+    {
+        var bindingStore = new InMemoryWorkflowTriggerBindingStore();
+        await bindingStore.SaveAsync(Binding("artifact-1", "node-a"));
+        var startDispatcher = new RecordingStartDispatcher();
+        var router = Router(bindingStore, new InMemoryBookmarkStateStore(), startDispatcher, new RecordingResumeDispatcher());
+
+        await router.RouteAsync(Request(mode: StimulusRoutingMode.StartOnly));
+
+        var request = Assert.Single(startDispatcher.Requests);
+        Assert.Null(request.WorkflowExecutionId);
+        Assert.Null(request.IdempotencyKey);
     }
 
     [Fact]
@@ -330,14 +373,12 @@ public sealed class StimulusRouterTests
         IWorkflowTriggerBindingStore bindingStore,
         InMemoryBookmarkStateStore bookmarkStore,
         RecordingStartDispatcher startDispatcher,
-        RecordingResumeDispatcher resumeDispatcher,
-        IStimulusStartDeduplicator? deduplicator = null) =>
+        RecordingResumeDispatcher resumeDispatcher) =>
         new(
             bindingStore,
             new GlobalBookmarkStimulusLookup(bookmarkStore),
             startDispatcher,
             resumeDispatcher,
-            deduplicator ?? new InMemoryStimulusStartDeduplicator(),
             new FakeTimeProvider(_now));
 
     private static StimulusDispatchRequest Request(
@@ -389,29 +430,42 @@ public sealed class StimulusRouterTests
             ExpiresAt: null);
     }
 
+    /// <summary>Starts every request, answering a caller-named execution it already started as a duplicate, as the real dispatcher does.</summary>
     private sealed class RecordingStartDispatcher(Action<string>? onStart = null) : IWorkflowStartDispatcher
     {
+        private readonly HashSet<string> _started = new(StringComparer.Ordinal);
         private int _counter;
         public List<WorkflowExecutionStartDispatchRequest> Requests { get; } = [];
         public List<WorkflowExecutionCommandDispatchOptions?> DispatchOptions { get; } = [];
+        public Exception? FailNext { get; set; }
 
         public ValueTask<WorkflowExecutionStartDispatchResult> DispatchAsync(WorkflowExecutionStartDispatchRequest request, WorkflowExecutableReferenceScope requiredScope = WorkflowExecutableReferenceScope.Published, WorkflowExecutionCommandDispatchOptions? dispatchOptions = null, CancellationToken cancellationToken = default)
         {
             Requests.Add(request);
             DispatchOptions.Add(dispatchOptions);
-            var executionId = $"wfexec-new-{++_counter}";
-            onStart?.Invoke(executionId);
-            return new ValueTask<WorkflowExecutionStartDispatchResult>(Result(request.ArtifactId, executionId));
+            if (FailNext is { } failure)
+            {
+                FailNext = null;
+                throw failure;
+            }
+
+            var executionId = request.WorkflowExecutionId ?? $"wfexec-new-{++_counter}";
+            var status = _started.Add(executionId)
+                ? WorkflowExecutionCommandDispatchStatus.Accepted
+                : WorkflowExecutionCommandDispatchStatus.Duplicate;
+            if (status == WorkflowExecutionCommandDispatchStatus.Accepted)
+                onStart?.Invoke(executionId);
+            return new ValueTask<WorkflowExecutionStartDispatchResult>(Result(request.ArtifactId, executionId, status));
         }
 
-        private static WorkflowExecutionStartDispatchResult Result(string artifactId, string executionId) =>
+        private static WorkflowExecutionStartDispatchResult Result(string artifactId, string executionId, WorkflowExecutionCommandDispatchStatus status) =>
             new(
                 executionId,
                 new WorkflowExecutableIdentity(artifactId, "definition-1", "version-1", "1.0.0", "sha256:artifact"),
                 new WorkflowExecutionCommandDispatchResult(
                     envelopeId: $"envelope-{executionId}",
                     workflowExecutionId: executionId,
-                    status: WorkflowExecutionCommandDispatchStatus.Accepted,
+                    status: status,
                     recordedAt: DateTimeOffset.UnixEpoch),
                 new WorkflowExecutionActorDescriptor(
                     workflowExecutionId: executionId,

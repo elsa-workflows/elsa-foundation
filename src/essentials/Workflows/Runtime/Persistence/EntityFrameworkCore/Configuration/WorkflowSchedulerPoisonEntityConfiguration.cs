@@ -13,7 +13,7 @@ public sealed class WorkflowSchedulerPoisonEntityConfiguration : IEntityTypeConf
         b.Property(x => x.Id).HasMaxLength(64).IsRequired();
         b.Property(x => x.ScopeKey).HasMaxLength(RuntimeSchedulerPoisonEfModule.ScopeProjectionMaximumLength).IsRequired();
         b.Property(x => x.ScopeKeyHash).HasMaxLength(64).IsRequired();
-        b.Property(x => x.WorkflowExecutionId).HasMaxLength(RuntimeSchedulerPoisonEfModule.IdentityMaximumLength).IsRequired();
+        b.Property(x => x.WorkflowExecutionId).HasMaxLength(RuntimeSchedulerPoisonEfModule.IdentityProjectionMaximumLength).IsRequired();
         b.Property(x => x.WorkflowExecutionIdHash).HasMaxLength(64).IsRequired();
         b.Property(x => x.WorkflowExecutionIdOrderKey).HasMaxLength(RuntimeSchedulerPoisonEfModule.OrderKeyMaximumLength).IsRequired();
         b.Property(x => x.WorkItemId).HasMaxLength(RuntimeSchedulerPoisonEfModule.WorkItemIdentityProjectionMaximumLength).IsRequired();

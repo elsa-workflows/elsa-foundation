@@ -133,6 +133,7 @@
       "src/extensions/Elsa3/src/Models/Elsa3.Models.csproj",
       "src/extensions/Elsa3/tests/Activities/Design/Import/Persistence/EntityFrameworkCore/ProviderTests/Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.ProviderTests.csproj",
       "tests/essentials/Activities/Design/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Activities.Design.Persistence.EntityFrameworkCore.ProviderTests.csproj",
+      "tests/essentials/Activities/Testing/Elsa.Activities.Testing.csproj",
       "tests/essentials/Cli/Fixtures/Host/Elsa.Cli.Fixtures.Host.csproj",
       "tests/essentials/Cli/Fixtures/Widgets/Acme.Widgets.csproj",
       "tests/essentials/Cluster/EntityFrameworkCore/ProviderTests/Elsa.Cluster.EntityFrameworkCore.ProviderTests.csproj",

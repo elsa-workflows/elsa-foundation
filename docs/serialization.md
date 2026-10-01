@@ -181,13 +181,29 @@ serializer and versioning as every other runtime kind.
 ### Stimulus START idempotency is at-least-once
 
 Stimulus delivery is an at-least-once world (a stimulus can be delivered more than once). The router's START
-path dedups **only when an `idempotencyKey` is supplied**: `IStimulusStartDeduplicator` records the key and a
-repeated delivery with the same key does not start a second instance. When **no** `idempotencyKey` is
-supplied the router makes **no** dedup guarantee — a duplicate delivery **may double-start**. Callers that
-require exactly-once start semantics must supply a stable `idempotencyKey`. The default deduplicator is an
-in-process, best-effort store (not a durable cross-node dedup ledger); its guarantee is scoped to the
-process that owns it. This is documented on `IStimulusRouter`/`IStimulusStartDeduplicator` and is intentional
-scope for this wave — a heavy durable dedup store was explicitly out of scope.
+path dedups **only when an `idempotencyKey` is supplied**. Each matching start is then a keyed start
+(`KeyedWorkflowStartIdentity`, #2195): the workflow execution id, and the start command and envelope ids, derive
+from the key and the matched artifact, so a repeated delivery names the same execution and the start dispatcher,
+which reads durable execution state, answers it as a duplicate. The guarantee is durable and cross-node: it holds
+when a peer redelivers a PublishStimulus intent whose claim lapsed, and after a restart. When **no**
+`idempotencyKey` is supplied the router makes **no** dedup guarantee — a duplicate delivery **may double-start**.
+Callers that require start-once semantics must supply a stable `idempotencyKey`.
+
+This replaced the earlier in-process `IStimulusStartDeduplicator`. Besides being scoped to one process, it
+recorded a key before the start was dispatched, so the retry of a start whose first attempt failed was skipped as
+a duplicate and acknowledged although nothing had started.
+
+Two consequences follow from the dedupe being durable. A reused idempotency key on the stimulus API, for the same
+artifact, is answered `SkippedDuplicate` permanently, on every node and after any restart; a caller wanting a second
+start sends a new key. And a recurring-trigger occurrence, routed with the key
+`recurring:{scheduleId}:{occurrenceTicks}`, starts its workflow at most once however often that occurrence fires.
+
+The keyed start identity is a frozen, persisted format. Its ids are `wfexec:start:v1:{digest}`,
+`command:start:v1:{digest}` and `envelope:start:v1:{digest}`; the digest is the lowercase hex SHA-256 of the
+values `"elsa.workflow-start"`, `"v1"` and the start key (each value's UTF-8 bytes prefixed by its 4-byte big-endian length), which the router builds as
+`{idempotencyKey}:start:{artifactId}`. A redelivery is recognized only by deriving the same id again, so any change to
+the derivation silently starts every redelivered occurrence a second time. Change it by adding a new version beside
+`v1`, never by editing `v1`; `KeyedWorkflowStartIdentityTests` pins the `v1` literals.
 
 ### Published executables are durable (DS-2, W17)
 
