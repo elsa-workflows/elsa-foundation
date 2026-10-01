@@ -8,25 +8,32 @@ using Microsoft.Win32.SafeHandles;
 namespace Elsa.Cli;
 
 /// <summary>Keeps a candidate supervisor and its OS termination scope until frontend cleanup.</summary>
-internal sealed class CandidateProcessHandle : ICandidateProcessHandle
+public sealed class CandidateProcessHandle : ICandidateProcessHandle
 {
-    private readonly Process process;
-    private readonly NamedPipeServerStream control;
+    private readonly ICandidateProcess process;
+    private readonly ICandidateProcessControl control;
     private readonly CancellationTokenSource lifetime = new();
-    private readonly WindowsJob? job;
+    private readonly ICandidateProcessScope? scope;
+    private readonly ICandidateProcessGroup group;
     private readonly Task authorize;
     private readonly Task<int> operationExit;
     private readonly object ownershipSync = new();
     private int groupReady;
-    private bool jobAssigned;
+    private bool scopeAssigned;
     private bool terminating;
     private bool terminationRequested;
+    private int disposed;
 
-    private CandidateProcessHandle(Process process, NamedPipeServerStream control, WindowsJob? job, Guid correlation)
+    /// <summary>
+    /// Creates a candidate handle over explicit process, control-channel, and ownership seams.
+    /// </summary>
+    public CandidateProcessHandle(ICandidateProcess process, ICandidateProcessControl control, Guid correlation,
+        ICandidateProcessScope? scope = null, ICandidateProcessGroup? group = null)
     {
-        this.process = process;
-        this.control = control;
-        this.job = job;
+        this.process = process ?? throw new ArgumentNullException(nameof(process));
+        this.control = control ?? throw new ArgumentNullException(nameof(control));
+        this.scope = scope;
+        this.group = group ?? new CandidateNativeProcessGroup();
         authorize = AuthorizeAsync(correlation);
         operationExit = ReadOperationExitAsync();
         // Observe both tasks even if startup or a stream getter fails before exchange takes ownership.
@@ -44,11 +51,11 @@ internal sealed class CandidateProcessHandle : ICandidateProcessHandle
         var pipeName = "ec" + correlation.ToString("N");
         var control = new NamedPipeServerStream(pipeName, PipeDirection.InOut, 1, PipeTransmissionMode.Byte,
             PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
-        WindowsJob? job = null;
+        WindowsJob? scope = null;
         Process? process = null;
         try
         {
-            job = OperatingSystem.IsWindows() ? WindowsJob.Create() : null;
+            scope = OperatingSystem.IsWindows() ? WindowsJob.Create() : null;
             var payloadAssembly = startInfo.ArgumentList[5];
             startInfo.ArgumentList[5] = Path.Join(AppContext.BaseDirectory, WorkerProcess.WorkerAssemblyFileName);
             // Only transport identity and the already-required loader paths are added to arguments.
@@ -59,7 +66,7 @@ internal sealed class CandidateProcessHandle : ICandidateProcessHandle
             startInfo.ArgumentList.Add(startInfo.ArgumentList[4]);
             startInfo.ArgumentList.Add(payloadAssembly);
             process = Process.Start(startInfo) ?? throw new InvalidOperationException();
-            return new CandidateProcessHandle(process, control, job, correlation);
+            return new CandidateProcessHandle(new ProcessAdapter(process), new NamedPipeControl(control), correlation, scope);
         }
         catch
         {
@@ -68,16 +75,16 @@ internal sealed class CandidateProcessHandle : ICandidateProcessHandle
             finally
             {
                 process?.Dispose();
-                job?.Dispose();
+                scope?.Dispose();
                 control.Dispose();
             }
             throw;
         }
     }
 
-    public Stream StandardInput => new AuthorizedInput(process.StandardInput.BaseStream, authorize);
-    public Stream StandardOutput => process.StandardOutput.BaseStream;
-    public Stream StandardError => process.StandardError.BaseStream;
+    public Stream StandardInput => new AuthorizedInput(process.StandardInput, authorize);
+    public Stream StandardOutput => process.StandardOutput;
+    public Stream StandardError => process.StandardError;
     public bool HasExited => process.HasExited;
     public int ExitCode => operationExit.GetAwaiter().GetResult();
     public Task WaitForOperationExitAsync(CancellationToken cancellationToken) => operationExit.WaitAsync(cancellationToken);
@@ -87,10 +94,10 @@ internal sealed class CandidateProcessHandle : ICandidateProcessHandle
         await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
         // OS termination requests are asynchronous. Supervisor exit does not establish payload/descendant
         // completion: verify the existing job/group under the caller's same bounded cleanup deadline.
-        while (job is not null && job.ActiveProcesses != 0)
+        while (scope is not null && scope.ActiveProcesses != 0)
             await Task.Delay(10, cancellationToken).ConfigureAwait(false);
         if (groupReady != 0)
-            await new CandidateUnixProcessGroup().WaitForExitAsync(process.Id, cancellationToken).ConfigureAwait(false);
+            await group.WaitForExitAsync(process.Id, cancellationToken).ConfigureAwait(false);
     }
 
     public void KillTree()
@@ -101,16 +108,15 @@ internal sealed class CandidateProcessHandle : ICandidateProcessHandle
             terminating = true;
             if (terminationRequested)
                 return;
-            if (job is not null && jobAssigned)
-                job.Terminate();
+            if (scope is not null && scopeAssigned)
+                scope.Terminate();
             else if (groupReady != 0)
             {
                 // Unexpected anchor loss is not successful cleanup; never target a possibly reused PGID.
                 if (process.HasExited)
                     throw new InvalidOperationException();
                 // The retained live supervisor anchors this PGID. No exited-PID tree scan is used.
-                if (Kill(-process.Id, 9) != 0)
-                    throw new InvalidOperationException();
+                group.Terminate(process.Id);
             }
             else if (!process.HasExited)
                 process.Kill(); // Before READY/GO there is no payload or descendant.
@@ -120,11 +126,13 @@ internal sealed class CandidateProcessHandle : ICandidateProcessHandle
 
     public void Dispose()
     {
+        if (Interlocked.Exchange(ref disposed, 1) != 0)
+            return;
         lifetime.Cancel();
         try { control.Dispose(); }
         finally
         {
-            try { job?.Dispose(); }
+            try { scope?.Dispose(); }
             finally { process.Dispose(); lifetime.Dispose(); }
         }
     }
@@ -137,19 +145,23 @@ internal sealed class CandidateProcessHandle : ICandidateProcessHandle
         if (ready[0] != CandidateProcessOwner.Ready || new Guid(ready.AsSpan(1)) != correlation)
             throw new InvalidOperationException();
 
+        Task goWrite;
         lock (ownershipSync)
         {
             if (terminating)
                 throw new OperationCanceledException();
-            if (job is not null)
+            if (scope is not null)
             {
-                job.Assign(process);
-                jobAssigned = true;
+                scope.Assign(process);
+                scopeAssigned = true;
             }
             else
                 groupReady = 1;
+            // Linearize GO with cleanup by starting the write while the ownership state is locked.
+            // Await outside the lock so a stalled pipe cannot hold up the bounded cleanup path.
+            goWrite = control.WriteAsync(new byte[] { CandidateProcessOwner.Go }, lifetime.Token).AsTask();
         }
-        await control.WriteAsync(new byte[] { CandidateProcessOwner.Go }, lifetime.Token).ConfigureAwait(false);
+        await goWrite.ConfigureAwait(false);
         await control.FlushAsync(lifetime.Token).ConfigureAwait(false);
     }
 
@@ -170,9 +182,6 @@ internal sealed class CandidateProcessHandle : ICandidateProcessHandle
     private static void Observe(Task task) => _ = task.ContinueWith(fault => _ = fault.Exception,
         CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
         TaskScheduler.Default);
-
-    [DllImport("libc", EntryPoint = "kill", SetLastError = true)]
-    private static extern int Kill(int processId, int signal);
 
     private sealed class AuthorizedInput(Stream inner, Task authorize) : Stream
     {
@@ -196,7 +205,7 @@ internal sealed class CandidateProcessHandle : ICandidateProcessHandle
         public override void SetLength(long value) => throw new NotSupportedException();
     }
 
-    private sealed class WindowsJob : SafeHandleZeroOrMinusOneIsInvalid
+    private sealed class WindowsJob : SafeHandleZeroOrMinusOneIsInvalid, ICandidateProcessScope
     {
         public WindowsJob() : base(true) { }
 
@@ -210,9 +219,10 @@ internal sealed class CandidateProcessHandle : ICandidateProcessHandle
             return job;
         }
 
-        public void Assign(Process process)
+        public void Assign(ICandidateProcess process)
         {
-            if (!AssignProcessToJobObject(this, process.SafeHandle)) throw new InvalidOperationException();
+            if (process is not ProcessAdapter adapter || !AssignProcessToJobObject(this, adapter.Process.SafeHandle))
+                throw new InvalidOperationException();
         }
 
         public void Terminate()
@@ -220,13 +230,13 @@ internal sealed class CandidateProcessHandle : ICandidateProcessHandle
             if (!TerminateJobObject(this, 1)) throw new InvalidOperationException();
         }
 
-        public uint ActiveProcesses
+        public int ActiveProcesses
         {
             get
             {
                 if (!QueryInformationJobObject(this, 1, out Accounting info, (uint)Marshal.SizeOf<Accounting>(), IntPtr.Zero))
                     throw new InvalidOperationException();
-                return info.ActiveProcesses;
+                return checked((int)info.ActiveProcesses);
             }
         }
 
@@ -276,4 +286,88 @@ internal sealed class CandidateProcessHandle : ICandidateProcessHandle
         [return: MarshalAs(UnmanagedType.Bool)]
         private static extern bool CloseHandle(IntPtr handle);
     }
+
+    private sealed class ProcessAdapter(Process process) : ICandidateProcess
+    {
+        public Process Process { get; } = process;
+        public Stream StandardInput => Process.StandardInput.BaseStream;
+        public Stream StandardOutput => Process.StandardOutput.BaseStream;
+        public Stream StandardError => Process.StandardError.BaseStream;
+        public int Id => Process.Id;
+        public bool HasExited => Process.HasExited;
+        public Task WaitForExitAsync(CancellationToken cancellationToken) => Process.WaitForExitAsync(cancellationToken);
+        public void Kill() => Process.Kill();
+        public void Dispose() => Process.Dispose();
+    }
+
+    private sealed class NamedPipeControl(NamedPipeServerStream pipe) : ICandidateProcessControl
+    {
+        public Task WaitForConnectionAsync(CancellationToken cancellationToken) => pipe.WaitForConnectionAsync(cancellationToken);
+        public Task ReadExactlyAsync(Memory<byte> buffer, CancellationToken cancellationToken) => pipe.ReadExactlyAsync(buffer, cancellationToken).AsTask();
+        public ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken) => pipe.WriteAsync(buffer, cancellationToken);
+        public Task FlushAsync(CancellationToken cancellationToken) => pipe.FlushAsync(cancellationToken);
+        public void Dispose() => pipe.Dispose();
+    }
+}
+
+/// <summary>Forwards Unix process-group termination and observation to the native/runtime adapters.</summary>
+public sealed class CandidateNativeProcessGroup : ICandidateProcessGroup
+{
+    private readonly Func<int, int, int> kill;
+    private readonly CandidateUnixProcessGroup observer;
+
+    /// <summary>Creates the native group adapter; delegates are injectable for deterministic failure tests.</summary>
+    public CandidateNativeProcessGroup(Func<int, int, int>? kill = null, CandidateUnixProcessGroup? observer = null)
+    {
+        this.kill = kill ?? Kill;
+        this.observer = observer ?? new CandidateUnixProcessGroup();
+    }
+
+    public void Terminate(int processId)
+    {
+        if (kill(-processId, 9) != 0)
+            throw new InvalidOperationException();
+    }
+
+    public Task WaitForExitAsync(int processGroupId, CancellationToken cancellationToken) =>
+        observer.WaitForExitAsync(processGroupId, cancellationToken);
+
+    [DllImport("libc", EntryPoint = "kill", SetLastError = true)]
+    private static extern int Kill(int processId, int signal);
+}
+
+/// <summary>The process operations owned by a candidate process handle.</summary>
+public interface ICandidateProcess : IDisposable
+{
+    Stream StandardInput { get; }
+    Stream StandardOutput { get; }
+    Stream StandardError { get; }
+    int Id { get; }
+    bool HasExited { get; }
+    Task WaitForExitAsync(CancellationToken cancellationToken);
+    void Kill();
+}
+
+/// <summary>The private control channel used to authorize a candidate supervisor.</summary>
+public interface ICandidateProcessControl : IDisposable
+{
+    Task WaitForConnectionAsync(CancellationToken cancellationToken);
+    Task ReadExactlyAsync(Memory<byte> buffer, CancellationToken cancellationToken);
+    ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken);
+    Task FlushAsync(CancellationToken cancellationToken);
+}
+
+/// <summary>The platform process scope that owns a candidate supervisor and its descendants.</summary>
+public interface ICandidateProcessScope : IDisposable
+{
+    void Assign(ICandidateProcess process);
+    void Terminate();
+    int ActiveProcesses { get; }
+}
+
+/// <summary>The Unix process-group operations used after supervisor authorization.</summary>
+public interface ICandidateProcessGroup
+{
+    void Terminate(int processId);
+    Task WaitForExitAsync(int processGroupId, CancellationToken cancellationToken);
 }

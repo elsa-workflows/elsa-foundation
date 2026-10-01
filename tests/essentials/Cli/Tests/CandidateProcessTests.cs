@@ -321,6 +321,247 @@ public sealed class CandidateProcessTests
         Assert.False(fixture.Handle.Output.CanRead);
     }
 
+    [Fact]
+    public async Task Handle_assigns_scope_before_go_and_terminates_it_after_status()
+    {
+        var correlation = Guid.NewGuid();
+        using var process = new HandleProcess(321);
+        using var control = HandleControl.ReadyThenStatus(correlation, 17);
+        using var scope = new HandleScope();
+        using var handle = new CandidateProcessHandle(process, control, correlation, scope);
+
+        await handle.WaitForOperationExitAsync(CancellationToken.None);
+        var exitCode = handle.ExitCode;
+        await handle.WaitForExitAsync(CancellationToken.None);
+        handle.KillTree();
+
+        Assert.Equal(17, exitCode);
+        Assert.Equal(1, scope.AssignCount);
+        Assert.Equal(1, scope.TerminateCount);
+        Assert.Equal(2, scope.ActiveReadCount);
+        Assert.Equal(1, control.GoCount);
+    }
+
+    [Fact]
+    public async Task Handle_does_not_block_cleanup_on_a_stalled_go_write()
+    {
+        var correlation = Guid.NewGuid();
+        using var process = new HandleProcess(322);
+        using var control = HandleControl.ReadyThenStatus(correlation, 0, blockGo: true);
+        using var scope = new HandleScope();
+        using var handle = new CandidateProcessHandle(process, control, correlation, scope);
+
+        var operation = handle.WaitForOperationExitAsync(CancellationToken.None);
+        await control.GoWriteStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        var cleanup = Task.Run(handle.KillTree);
+        await cleanup.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal(1, scope.TerminateCount);
+
+        handle.Dispose();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => operation);
+        Assert.Equal(1, scope.TerminateCount);
+    }
+
+    [Fact]
+    public async Task Handle_rejects_ready_after_cleanup_without_sending_go()
+    {
+        var correlation = Guid.NewGuid();
+        using var process = new HandleProcess(323);
+        using var control = HandleControl.ReadyThenStatus(correlation, 0, blockReady: true);
+        using var handle = new CandidateProcessHandle(process, control, correlation, group: new HandleGroup());
+
+        await control.ReadyReadStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        handle.KillTree();
+        control.ReleaseReadyRead();
+        await Assert.ThrowsAsync<OperationCanceledException>(() =>
+            handle.WaitForOperationExitAsync(CancellationToken.None));
+
+        Assert.Equal(1, process.KillCount);
+        Assert.Equal(0, control.GoCount);
+    }
+
+    [Fact]
+    public async Task Handle_assign_failure_is_observed_without_authorizing_worker()
+    {
+        var correlation = Guid.NewGuid();
+        using var process = new HandleProcess(324);
+        using var control = HandleControl.ReadyThenStatus(correlation, 0);
+        using var scope = new HandleScope { AssignFailure = new InvalidOperationException("assign") };
+        using var handle = new CandidateProcessHandle(process, control, correlation, scope);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            handle.WaitForOperationExitAsync(CancellationToken.None));
+
+        Assert.Equal(1, scope.AssignCount);
+        Assert.Equal(0, control.GoCount);
+    }
+
+    [Fact]
+    public async Task Handle_uses_group_termination_and_wait_after_unix_authorization()
+    {
+        var correlation = Guid.NewGuid();
+        using var process = new HandleProcess(325);
+        using var control = HandleControl.ReadyThenStatus(correlation, 3);
+        using var group = new HandleGroup();
+        using var handle = new CandidateProcessHandle(process, control, correlation, group: group);
+
+        await handle.WaitForOperationExitAsync(CancellationToken.None);
+        Assert.Equal(3, handle.ExitCode);
+        await handle.WaitForExitAsync(CancellationToken.None);
+
+        Assert.Equal([325], group.TerminatedProcessIds);
+        Assert.Equal([325], group.WaitedProcessGroupIds);
+        Assert.Equal(1, control.GoCount);
+    }
+
+    [Fact]
+    public async Task Handle_refuses_group_termination_after_anchor_exit()
+    {
+        var correlation = Guid.NewGuid();
+        using var process = new HandleProcess(326);
+        using var control = HandleControl.ReadyThenStatus(correlation, 0, blockStatus: true);
+        using var group = new HandleGroup();
+        using var handle = new CandidateProcessHandle(process, control, correlation, group: group);
+
+        await handle.StandardInput.WriteAsync(ReadOnlyMemory<byte>.Empty);
+        await control.StatusReadStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        process.Exited = true;
+        Assert.Throws<InvalidOperationException>(() => handle.KillTree());
+        Assert.Empty(group.TerminatedProcessIds);
+    }
+
+    [Theory]
+    [InlineData(0, false)]
+    [InlineData(1, true)]
+    public void Native_group_adapter_preserves_kill_failure(int nativeResult, bool fails)
+    {
+        var calls = new List<(int ProcessId, int Signal)>();
+        var group = new CandidateNativeProcessGroup((processId, signal) =>
+        {
+            calls.Add((processId, signal));
+            return nativeResult;
+        });
+
+        if (fails)
+            Assert.Throws<InvalidOperationException>(() => group.Terminate(327));
+        else
+            group.Terminate(327);
+
+        Assert.Equal([(-327, 9)], calls);
+    }
+
+    private sealed class HandleProcess(int id) : ICandidateProcess
+    {
+        public MemoryStream Input { get; } = new();
+        public MemoryStream Output { get; } = new();
+        public MemoryStream Error { get; } = new();
+        public int Id { get; } = id;
+        public bool Exited { get; set; }
+        public int KillCount { get; private set; }
+        public Stream StandardInput => Input;
+        public Stream StandardOutput => Output;
+        public Stream StandardError => Error;
+        public bool HasExited => Exited;
+        public Task WaitForExitAsync(CancellationToken cancellationToken) { Exited = true; return Task.CompletedTask; }
+        public void Kill() { KillCount++; Exited = true; }
+        public void Dispose() { Input.Dispose(); Output.Dispose(); Error.Dispose(); }
+    }
+
+    private sealed class HandleControl : ICandidateProcessControl
+    {
+        private readonly byte[] ready;
+        private readonly byte[] status;
+        private readonly bool blockReady;
+        private readonly bool blockStatus;
+        private readonly bool blockGo;
+        private readonly TaskCompletionSource readyRelease = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource statusRelease = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource goRelease = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource ReadyReadStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource StatusReadStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource GoWriteStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public int GoCount { get; private set; }
+
+        private HandleControl(byte[] ready, byte[] status, bool blockReady, bool blockStatus, bool blockGo)
+        {
+            this.ready = ready;
+            this.status = status;
+            this.blockReady = blockReady;
+            this.blockStatus = blockStatus;
+            this.blockGo = blockGo;
+        }
+
+        public static HandleControl ReadyThenStatus(Guid correlation, int exitCode, bool blockReady = false,
+            bool blockStatus = false, bool blockGo = false)
+        {
+            var ready = new byte[CandidateProcessOwner.ReadyFrameLength];
+            ready[0] = CandidateProcessOwner.Ready;
+            correlation.TryWriteBytes(ready.AsSpan(1));
+            var status = new byte[CandidateProcessOwner.StatusFrameLength];
+            status[0] = CandidateProcessOwner.Status;
+            BitConverter.TryWriteBytes(status.AsSpan(1), exitCode);
+            return new HandleControl(ready, status, blockReady, blockStatus, blockGo);
+        }
+
+        public Task WaitForConnectionAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+        public async Task ReadExactlyAsync(Memory<byte> buffer, CancellationToken cancellationToken)
+        {
+            var frame = buffer.Length == ready.Length ? ready : status;
+            if (ReferenceEquals(frame, ready) && blockReady)
+            {
+                ReadyReadStarted.TrySetResult();
+                await readyRelease.Task.WaitAsync(cancellationToken);
+            }
+            else if (ReferenceEquals(frame, status) && blockStatus)
+            {
+                StatusReadStarted.TrySetResult();
+                await statusRelease.Task.WaitAsync(cancellationToken);
+            }
+            frame.AsMemory().CopyTo(buffer);
+        }
+        public async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken)
+        {
+            Assert.Equal([CandidateProcessOwner.Go], buffer.ToArray());
+            GoCount++;
+            GoWriteStarted.TrySetResult();
+            if (blockGo)
+                await goRelease.Task.WaitAsync(cancellationToken);
+        }
+        public Task FlushAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+        public void ReleaseReadyRead() => readyRelease.TrySetResult();
+        public void ReleaseGoWrite() => goRelease.TrySetResult();
+        public void Dispose() { }
+    }
+
+    private sealed class HandleScope : ICandidateProcessScope
+    {
+        public Exception? AssignFailure { get; init; }
+        public int AssignCount { get; private set; }
+        public int TerminateCount { get; private set; }
+        public int ActiveReadCount { get; private set; }
+        public int ActiveProcesses => ActiveReadCount++ == 0 ? 1 : 0;
+        public void Assign(ICandidateProcess process)
+        {
+            AssignCount++;
+            if (AssignFailure is not null) throw AssignFailure;
+        }
+        public void Terminate() => TerminateCount++;
+        public void Dispose() { }
+    }
+
+    private sealed class HandleGroup : ICandidateProcessGroup, IDisposable
+    {
+        public List<int> TerminatedProcessIds { get; } = [];
+        public List<int> WaitedProcessGroupIds { get; } = [];
+        public void Terminate(int processId) => TerminatedProcessIds.Add(processId);
+        public Task WaitForExitAsync(int processGroupId, CancellationToken cancellationToken)
+        {
+            WaitedProcessGroupIds.Add(processGroupId);
+            return Task.CompletedTask;
+        }
+        public void Dispose() { }
+    }
+
     private sealed class ProcessFixture : IDisposable
     {
         public WorkerRequest Request { get; } = CandidateWorkerRequestFixture.Create();
