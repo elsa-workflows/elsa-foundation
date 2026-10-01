@@ -30,8 +30,16 @@ public sealed class OpenIddictPersistenceArchitectureTests
         new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["OpenIddictEntityFrameworkCoreDefaults.cs"] = "4e844102195aa3eab13220c513a423345b7100e53365a768e48dfa9f6469d3f2",
-            ["OpenIddictIdentityDbContext.cs"] = "105b7bfb61bb87332c8bd5a5a83cff5f8f3f2ee0a40fc6733834afc84b11986f",
+            ["OpenIddictIdentityDbContext.cs"] = "dbc4b8677f673a3bf4c09ce4ce2541e21e7cb6149c8a46460fe03b8e2f5e4955",
+            ["OpenIddictIdentityProviderDbContextFactories.cs"] = "d4c1ebc49956d4e7a242f97f42c09a5ddfcea34d9f8d8c95422d16a5452ef018",
+            ["OpenIddictIdentityProviderDbContexts.cs"] = "8cc05b66ed024dc6bcf917b8c7faf571525753c7d9617385bdbe450a1ada343d",
             ["OpenIddictIdentityStoreInitializer.cs"] = "e0e4fd06238ee0d890ce278823be670d11cd7e4ce1952a05567895c0403f3a6b",
+            ["PostgreSql/Migrations/20261001054059_Initial.Designer.cs"] = "6b93634c66b2da424b88a168b34dd07b167e3b66ae835046a37ef21ae787735a",
+            ["PostgreSql/Migrations/20261001054059_Initial.cs"] = "aa9c7dc31aa45c69ff57ea636831f8d3e63f6e4ade5bf85e8cf65738a9e4cd16",
+            ["PostgreSql/Migrations/OpenIddictIdentityPostgreSqlDbContextModelSnapshot.cs"] = "516ca40f36331dfb6f494784d4fa00dfbc9fedf323722aa6b941b2902f2b7184",
+            ["SqlServer/Migrations/20261001054055_Initial.Designer.cs"] = "5064aa0bfedb49c2d97881cb7b60f9c8725b3eacc617059e9d4a449519e4aca4",
+            ["SqlServer/Migrations/20261001054055_Initial.cs"] = "f348f474a770615627059404707eaea256ea609eb473fa9fc5c7fca859783f42",
+            ["SqlServer/Migrations/OpenIddictIdentitySqlServerDbContextModelSnapshot.cs"] = "c19b0a6fbeeda3773ceb2b33b3a3e914b11d5265b69ccca4608cea781454b617",
             ["Sqlite/Migrations/20260704221407_Initial.Designer.cs"] = "e49cc98bb32378c17bbad75fd3bbb071f3d70e7dbf654cc00019282d38e67e79",
             ["Sqlite/Migrations/20260704221407_Initial.cs"] = "d73cc67a51181faa7b1d454fd45bb897f458ecb46156e45dba7aa8cc15229b28",
             ["Sqlite/Migrations/OpenIddictIdentityDbContextModelSnapshot.cs"] = "88338ae62df8596eab3f87d007b121252f373c8670ac1d131d098692b48e27b6",
@@ -155,6 +163,35 @@ public sealed class OpenIddictPersistenceArchitectureTests
         Assert.DoesNotContain("UseInMemoryDatabase", source, StringComparison.Ordinal);
         Assert.DoesNotContain("UseSqlite", source, StringComparison.Ordinal);
         Assert.DoesNotContain("OpenIddictIdentityStoreInitializer", source, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Elsa's engine selection, migration policy and prune sit beside the vendor store in Workbench files of their own, which name
+    /// no EF package namespace, so the vendor exception holds nothing of Elsa's. The host's entry point composes them in the order
+    /// they depend on: the engine over the vendor's context, the migration before the prune (#2201).
+    /// </summary>
+    [Fact]
+    public void Workbench_composes_the_elsa_openiddict_policies_beside_the_vendor_registration_in_order()
+    {
+        var workbench = Path.Combine(RepoRoot, "src", "apps", "Elsa.Workbench");
+        var program = File.ReadAllText(Path.Combine(workbench, "Program.cs"));
+        var calls = new[]
+        {
+            "AddWorkbenchOpenIddictVendor(",
+            "AddWorkbenchOpenIddictStoreProvider(",
+            "AddWorkbenchOpenIddictMigrationPolicy(",
+            "AddWorkbenchOpenIddictPruning("
+        };
+
+        var positions = calls.Select(call => program.IndexOf(call, StringComparison.Ordinal)).ToArray();
+
+        Assert.All(positions, position => Assert.True(position >= 0, "Program.cs no longer composes one of the Workbench OpenIddict registrations."));
+        Assert.Equal(positions.Order(), positions);
+        foreach (var policy in new[] { "WorkbenchOpenIddictStoreProvider.cs", "WorkbenchOpenIddictMigrationPolicy.cs", "WorkbenchOpenIddictPruning.cs" })
+        {
+            Assert.False(IsWorkbenchVendorEfSource($"src/apps/Elsa.Workbench/{policy}"), $"{policy} is Elsa's policy, and must not share the vendor exception.");
+            Assert.DoesNotContain("EntityFrameworkCore", File.ReadAllText(Path.Combine(workbench, policy)), StringComparison.Ordinal);
+        }
     }
 
     [Fact]

@@ -187,6 +187,13 @@
 			(ArchitectureGuardTests.InternalsVisibleTo_occurrences_are_limited_to_documented_exceptions).
 		-->
 		<InternalsVisibleTo Include="Elsa.Modularity.Tests" />
+		<!--
+			The same exception for the OpenIddict token store's native-engine tests (#2201). The host composes the store through
+			internal registrations (the vendor store, the engine selection, the migration policy and the prune), and a provider test
+			must compose them as the host does, on a real SQL Server or PostgreSQL database. It is a second test assembly because
+			the container-free Modularity tests stay in the fast PR gate, which a project that reaches Testcontainers leaves.
+		-->
+		<InternalsVisibleTo Include="Elsa.Modularity.ProviderTests" />
 	</ItemGroup>
 
 </Project>
