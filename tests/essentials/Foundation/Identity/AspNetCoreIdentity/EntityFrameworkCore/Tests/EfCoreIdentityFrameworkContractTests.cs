@@ -821,13 +821,21 @@ public sealed class EfCoreIdentityFrameworkContractTests
     }
 
     [Fact]
-    public async Task Two_ef_seeders_both_succeed_when_both_pass_the_role_membership_check_on_sqlite()
+    public Task Two_ef_seeders_both_succeed_when_both_pass_the_role_membership_check_on_sqlite() =>
+        RunSeederRaceOnSqliteAsync(SeederRaceStep.RoleMembership);
+
+    [Fact]
+    public Task Two_ef_seeders_both_succeed_when_one_loses_the_administrator_create_race_on_sqlite() =>
+        RunSeederRaceOnSqliteAsync(SeederRaceStep.AdminCreation);
+
+    private static async Task RunSeederRaceOnSqliteAsync(SeederRaceStep step)
     {
         await using var database = new TemporarySqliteDatabase("identity-seeder-interleave");
 
         await EfCoreIdentitySeederRace.RunAsync(
             new IdentityIamEntityFrameworkCoreOptions { Provider = "Sqlite", ConnectionString = database.ConnectionString },
             context => context.Database.EnsureCreatedAsync(),
+            step,
             iterations: 10);
     }
 

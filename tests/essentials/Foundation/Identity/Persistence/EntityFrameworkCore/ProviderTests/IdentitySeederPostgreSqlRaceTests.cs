@@ -10,7 +10,14 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.ProviderTests
 public sealed class IdentitySeederPostgreSqlRaceTests(IdentityProviderPostgreSqlFixture fixture)
 {
     [SkippableFact]
-    public async Task Two_ef_seeders_both_succeed_when_both_pass_the_role_membership_check_on_postgresql()
+    public Task Two_ef_seeders_both_succeed_when_both_pass_the_role_membership_check_on_postgresql() =>
+        RunAsync(SeederRaceStep.RoleMembership);
+
+    [SkippableFact]
+    public Task Two_ef_seeders_both_succeed_when_one_loses_the_administrator_create_race_on_postgresql() =>
+        RunAsync(SeederRaceStep.AdminCreation);
+
+    private async Task RunAsync(SeederRaceStep step)
     {
         Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? "PostgreSql is unavailable.");
 
@@ -23,6 +30,7 @@ public sealed class IdentitySeederPostgreSqlRaceTests(IdentityProviderPostgreSql
             await EfCoreIdentitySeederRace.RunAsync(
                 new IdentityIamEntityFrameworkCoreOptions { Provider = "PostgreSql", ConnectionString = connectionString },
                 context => context.Database.EnsureCreatedAsync(),
+                step,
                 iterations: 10);
         }
         finally

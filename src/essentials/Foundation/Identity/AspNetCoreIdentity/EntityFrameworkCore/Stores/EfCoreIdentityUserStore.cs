@@ -654,7 +654,11 @@ public sealed class EfCoreIdentityUserStore(
             // malformed revision on an existing row.
             if (await FindEntityAsync(user.TenantId, user.Id, forWrite: false, cancellationToken) is null)
                 return mutate(user);
-            throw new InvalidOperationException("The requested user has no valid EF revision stamp for a lockout mutation.");
+            // A user the store never stamped still carries the framework's default GUID stamp: the row that now
+            // exists was created by a concurrent writer. Any other stamp is a malformed revision, not a lost race.
+            throw Guid.TryParse(user.ConcurrencyStamp, out _)
+                ? new IdentityRevisionConflictException("The requested user was created concurrently, so it has no EF revision stamp for a lockout mutation.")
+                : new InvalidOperationException("The requested user has no valid EF revision stamp for a lockout mutation.");
         }
         // The first attempt works on a copy of the caller's user; after a lost revision race the next one reloads it.
         var reload = false;
@@ -829,8 +833,13 @@ public sealed class EfCoreIdentityUserStore(
 
     private static void EnsureRelationshipSucceeded(EfIdentityWriteResult result, string operation)
     {
-        if (!result.Succeeded)
-            throw new InvalidOperationException($"The EF Identity {operation} returned {result.Status}: {result.Message}");
+        if (result.Succeeded)
+            return;
+
+        var message = $"The EF Identity {operation} returned {result.Status}: {result.Message}";
+        throw result.Status == EfIdentityWriteStatus.Conflict
+            ? new IdentityRevisionConflictException(message)
+            : new InvalidOperationException(message);
     }
 
     private static void EnsureRelationshipMaterializationLimit(int count, string subject)
