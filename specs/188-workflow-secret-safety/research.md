@@ -856,7 +856,12 @@ is recreated. The committed contract-surface baseline
 (`tests/essentials/Activities/Design/Tests/Contracts/activity-contract-surface.baseline.json`) is regenerated in the
 same PR, and published executables pinned to the old contract keep it.
 
-**Proof**: T105 (unit: header applied, precedence, empty value, result and catalog flags), T106 (logs), T108 (end to
+**Redirects**: the named client's primary handler is an `HttpClientHandler` built from `HttpActivityOptions`
+(`AllowAutoRedirect`, default true, and `MaxAutomaticRedirections`). The spec assumes that .NET removes the
+`Authorization` header on an automatic redirect, same-origin or cross-origin. T115 proves it through that handler
+configuration instead of assuming it.
+
+**Proof**: T105 (unit: header applied, precedence, empty value, result and catalog flags), T106 (logs), T115 (redirects), T108 (end to
 end through the canary host: the local endpoint received the header, rotation took effect, and the encoded scanner
 finds the value in no persisted or emitted surface). A23 lists the bite-proofs.
 

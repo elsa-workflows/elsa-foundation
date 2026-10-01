@@ -68,10 +68,15 @@ All unknowns are resolved in [research.md](research.md); none remain marked NEED
 
 Framework constitution v4.0.0:
 
-- **§2.1 three-layer separation**: the only new contracts sit in `.Core` projects (`IRuntimeSecretResolver`,
+- **§2.1 three-layer separation**: the new contracts sit in `.Core` projects (`IRuntimeSecretResolver`,
   `IRuntimeFaultClassification`, `IRuntimeSecretMask` and models in
   `Elsa.Workflows.Runtime.Core`; `ICredentialLiteralValidator` in `Elsa.Workflows.Design.Validations.Core`; the
-  acceptance predicate in `Elsa.Workflows.Design.Core`). The bridge is Layer 3 and references only
+  acceptance predicate in `Elsa.Workflows.Design.Core`). Two new implementations also sit in Layer 1 projects, under §2.1's
+  thin-utility allowance: `WorkflowDraftStateHash` (a BCL-only SHA-256 helper in
+  `Elsa.Workflows.Design.Persistence.Core`) and `WorkflowStateAdmission` (in `Elsa.Workflows.Design.Validations.Core`).
+  `WorkflowStateAdmission` stays mechanical: it wraps `ICredentialLiteralValidator`, throwing from `AdmitAsync` and
+  returning the findings from `FindRefusalsAsync`, with no rule logic of its own (the rule lives in the predicate and
+  the validator). The bridge is Layer 3 and references only
   `Elsa.Secrets.Core` and `Elsa.Workflows.Runtime.Core`. Every new `ProjectReference` from a production library
   targets a `.Core` project. Two kinds of reference are the allowed exceptions: the Workbench app host's reference to
   the bridge (`Elsa.Secrets.Workflows`, host composition), and test-project references, which target implementation
@@ -93,9 +98,10 @@ Framework constitution v4.0.0:
 - **§2.6.4 design/runtime split**: the design-time rule (credential literal) and the runtime contract (secret
   resolution) are separate contracts with no shared runtime concern.
 - **§2.7 adapter**: the bridge adapts Secrets to the runtime contract. No sync-contributor exception (§2.6.5) is used.
-- **§2.10 CQS**: no rule enters persistence. One persistence contract changes: `IPromoteDraftToVersionCommand` keeps
-  one `Execute` method, which requires an expected-state hash, which `EfPromoteDraftToVersionCommand` compares in-lock and refuses with a
-  conflict, a storage-integrity compare-and-set so that promote writes only what its endpoint admitted (research R7).
+- **§2.10 CQS**: no rule enters persistence. One persistence contract changes: `IPromoteDraftToVersionCommand` today declares two
+  `Execute` overloads; the plan removes both and reduces the contract to one method with a new required
+  `expectedStateHash` parameter (a breaking change, acceptable because Elsa 4 is unreleased), which
+  `EfPromoteDraftToVersionCommand` compares in-lock and refuses with a conflict, a storage-integrity compare-and-set so that promote writes only what its endpoint admitted (research R7).
   The other design commands are untouched.
 - **§2.11 DependsOn**: `SecretsWorkflows` depends on `Secrets` and the activation feature; `WorkflowsDesignApi`,
   `JsonWorkflowReconciliation` and `WorkflowsDesignGitReconciliation` (the application-layer features that admit
@@ -224,7 +230,8 @@ Existing projects changed (paths verified at `057adc44f`):
   `IsBound`).
 - `src/essentials/Workflows/Design/Api/`: the six admission callers under `Endpoints/` (Definitions/Add,
   Drafts/Replace, Definitions/Update handler, Versions/Add, Definitions/Submit, Drafts/Promote),
-  `Endpoints/WorkflowDesignExceptionTranslator.cs` (400 mapping), `WorkflowsDesignApiFeature.cs` (`DependsOn`).
+  `Endpoints/WorkflowDesignExceptionTranslator.cs` (400 mapping for the credential-literal refusal, 409 mapping for
+  `WorkflowDraftChangedException`), `WorkflowsDesignApiFeature.cs` (`DependsOn`).
 - `src/essentials/Workflows/Design/Reconciliation/Services/WorkflowsVersionReconciler.cs` (per-item admission),
   `Reconciliation/Json/JsonWorkflowReconciliationFeature.cs` and
   `Reconciliation/Git/WorkflowsDesignGitReconciliationFeature.cs` (`DependsOn`),

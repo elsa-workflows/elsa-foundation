@@ -10,8 +10,9 @@ introduces the code they exercise ([delivery slices](tasks.md#delivery-slices));
   input is the built-in example: bind it to a secret holding the whole header value, such as `Bearer <token>`; it
   replaces any `Authorization` entry in `RequestHeaders`.
 - A secret cannot be put into a workflow variable, or reused through one, in phase 0. Set Variable and a variable's
-  initial value refuse a secret reference at publish (`VF-ACT-012`), and no activity hands a resolved secret on
-  through its result. When two activities need the same secret, bind the secret reference on each input; each binding
+  initial value refuse a secret reference at publish (`VF-ACT-012`), and the annotated built-in activities cannot hand a resolved secret on
+  through their result. A third-party or future activity that echoes a string input is not refused in phase 0 unless
+  its author marks that input as refusing secret references. When two activities need the same secret, bind the secret reference on each input; each binding
   resolves on its own when its activity runs.
 - A secret reference fits only a single text or any-typed input. Publish refuses it on a number, date, list,
   `Object`, `JsonElement` or `JsonObject` input (`VF-COER-001`), and on inputs an activity echoes or persists, such as `Inline`'s expression or
