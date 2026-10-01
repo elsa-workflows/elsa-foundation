@@ -45,6 +45,7 @@ public sealed class CandidateUnixProcessGroup
             var executing = false;
             foreach (var member in members)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 if (member.GroupId != processGroupId)
                     continue;
                 if (member.IsExecuting)
@@ -54,6 +55,7 @@ public sealed class CandidateUnixProcessGroup
                 }
             }
 
+            cancellationToken.ThrowIfCancellationRequested();
             if (!executing)
                 return;
 
@@ -84,10 +86,10 @@ public sealed class CandidateUnixProcessGroup
             if (!int.TryParse(name, NumberStyles.None, CultureInfo.InvariantCulture, out var processId) || processId <= 0)
                 continue;
 
-            LinuxProcessSnapshot snapshot;
+            CandidateUnixProcessGroupMember snapshot;
             try
             {
-                snapshot = ReadLinuxStat(processId, File.ReadAllText(Path.Combine(directory, "stat"), Encoding.ASCII));
+                snapshot = ParseLinuxMember(processId, File.ReadAllText(Path.Combine(directory, "stat"), Encoding.ASCII));
             }
             catch (FileNotFoundException)
             {
@@ -101,13 +103,14 @@ public sealed class CandidateUnixProcessGroup
             }
 
             if (snapshot.GroupId == processGroupId)
-                members.Add(new CandidateUnixProcessGroupMember(snapshot.ProcessId, snapshot.GroupId, snapshot.IsExecuting));
+                members.Add(snapshot);
         }
 
         return members;
     }
 
-    private static LinuxProcessSnapshot ReadLinuxStat(int expectedProcessId, string stat)
+    /// <summary>Validates a kernel Linux stat record and projects only its group and execution state.</summary>
+    public static CandidateUnixProcessGroupMember ParseLinuxMember(int expectedProcessId, string stat)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(expectedProcessId);
         ArgumentException.ThrowIfNullOrEmpty(stat);
@@ -118,19 +121,20 @@ public sealed class CandidateUnixProcessGroup
             stat[closeParenthesis + 1] != ' ')
             throw new InvalidDataException("The process stat record has an invalid command field.");
 
-        if (!int.TryParse(stat.AsSpan(0, openParenthesis).TrimEnd(), NumberStyles.None,
+        var pidToken = stat.AsSpan(0, openParenthesis);
+        if (pidToken[^1] != ' ' || !int.TryParse(pidToken[..^1], NumberStyles.None,
                 CultureInfo.InvariantCulture, out var actualProcessId) || actualProcessId != expectedProcessId)
             throw new InvalidDataException("The process stat record PID does not match the requested process.");
 
         var fields = stat[(closeParenthesis + 2)..].Split(' ', StringSplitOptions.RemoveEmptyEntries);
         if (fields.Length <= 19 || fields[0].Length != 1 || !LinuxProcessStates.Contains(fields[0][0]) ||
-            !int.TryParse(fields[2], NumberStyles.None, CultureInfo.InvariantCulture, out var groupId) || groupId <= 0 ||
-            !int.TryParse(fields[3], NumberStyles.None, CultureInfo.InvariantCulture, out var sessionId) || sessionId <= 0 ||
-            !long.TryParse(fields[19], NumberStyles.None, CultureInfo.InvariantCulture, out var startToken) || startToken <= 0)
+            !int.TryParse(fields[2], NumberStyles.None, CultureInfo.InvariantCulture, out var groupId) ||
+            !int.TryParse(fields[3], NumberStyles.None, CultureInfo.InvariantCulture, out _) ||
+            !long.TryParse(fields[19], NumberStyles.None, CultureInfo.InvariantCulture, out _))
             throw new InvalidDataException("The process stat record has an invalid state, group, session, or start-time field.");
 
-        return new LinuxProcessSnapshot(actualProcessId, groupId, sessionId, startToken,
-            fields[0][0] is not ('Z' or 'X' or 'x'));
+        // Kernel threads outside the owned group can legitimately have group/session/start values of zero.
+        return new CandidateUnixProcessGroupMember(actualProcessId, groupId, fields[0][0] is not ('Z' or 'X' or 'x'));
     }
 
     private static IEnumerable<CandidateUnixProcessGroupMember> ReadMacMembers(
@@ -146,7 +150,8 @@ public sealed class CandidateUnixProcessGroup
                 cancellationToken.ThrowIfCancellationRequested();
                 buffer = Marshal.AllocHGlobal(checked(capacity * sizeof(int)));
                 var result = MacNative.ProcListProcessGroupIds(processGroupId, buffer, capacity * sizeof(int));
-                if (result < 0)
+                var error = Marshal.GetLastPInvokeError();
+                if (result < 0 || result == 0 && error is not (0 or 3))
                     throw new IOException("The native process-group enumeration failed.");
                 if (result > capacity)
                     throw new InvalidDataException("The native process-group enumeration returned an invalid count.");
@@ -175,6 +180,8 @@ public sealed class CandidateUnixProcessGroup
                 try
                 {
                     var bytes = MacNative.ProcProcessInfo(processId, MacShortBsdInfoFlavor, 0, info, MacShortBsdInfoSize);
+                    if (bytes == 0 && Marshal.GetLastPInvokeError() == 3)
+                        continue; // ESRCH: a member disappeared after the group snapshot.
                     if (bytes != MacShortBsdInfoSize)
                         throw new IOException("The native process information query failed.");
 
@@ -203,15 +210,12 @@ public sealed class CandidateUnixProcessGroup
         }
     }
 
-    private readonly record struct LinuxProcessSnapshot(
-        int ProcessId, int GroupId, int SessionId, long StartToken, bool IsExecuting);
-
     private static class MacNative
     {
-        [DllImport("libproc.dylib", EntryPoint = "proc_listpgrppids", SetLastError = true)]
+        [DllImport("/usr/lib/libproc.dylib", EntryPoint = "proc_listpgrppids", SetLastError = true)]
         internal static extern int ProcListProcessGroupIds(int processGroupId, IntPtr buffer, int bufferSize);
 
-        [DllImport("libproc.dylib", EntryPoint = "proc_pidinfo", SetLastError = true)]
+        [DllImport("/usr/lib/libproc.dylib", EntryPoint = "proc_pidinfo", SetLastError = true)]
         internal static extern int ProcProcessInfo(int processId, int flavor, ulong argument, IntPtr buffer, int bufferSize);
     }
 }
