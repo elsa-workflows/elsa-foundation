@@ -33,20 +33,21 @@ internal static class ConcurrencyTokenScenarios
         var access = new FixedAccess(PersistenceAccessContext.Scoped(new PersistenceScope(tenant)));
         await using var scopes = await TestScopes.CreateAsync(createContext, sameScope);
 
-        await scopes.RunAsync(context => new EfMaterializeWorkflowDefinitionCommand(context, access, new EfDesignAtomicWriter(context, access)).Execute(
+        await scopes.RunAsync(context => new EfMaterializeWorkflowDefinitionCommand(context, access, Writer(context)).Execute(
             WorkflowReconciliationOperationKeys.Definition(definitionId),
             new WorkflowDefinition { Id = definitionId, Name = "Materialized", IsSourceOwned = true }));
-        await scopes.RunAsync(context => new EfSaveWorkflowDefinitionCommand(context, access, new EfDesignAtomicWriter(context, access)).Execute(
-            WorkflowReconciliationOperationKeys.DefinitionMetadataWrite(definitionId),
-            new WorkflowDefinition { Id = definitionId, Name = "Renamed", IsSourceOwned = true }));
-        await scopes.RunAsync(context => new EfSaveWorkflowDefinitionCommand(context, access, new EfDesignAtomicWriter(context, access)).Execute(
-            WorkflowReconciliationOperationKeys.DefinitionMetadataWrite(definitionId),
-            new WorkflowDefinition { Id = definitionId, Name = "Renamed", DeletedAt = DateTimeOffset.UtcNow, IsSourceOwned = true }));
-        await scopes.RunAsync(context => new EfDeleteWorkflowDefinitionPermanentlyCommand(context, access, new EfDesignAtomicWriter(context, access), [new NeverPublishedGuard()])
+        await Save(new WorkflowDefinition { Id = definitionId, Name = "Renamed", IsSourceOwned = true });
+        await Save(new WorkflowDefinition { Id = definitionId, Name = "Renamed", DeletedAt = DateTimeOffset.UtcNow, IsSourceOwned = true });
+        await scopes.RunAsync(context => new EfDeleteWorkflowDefinitionPermanentlyCommand(context, access, Writer(context), [new NeverPublishedGuard()])
             .Execute(new DesignOperationKey($"token-permanent-delete-{Guid.NewGuid():N}"), definitionId));
 
         await using var reopened = createContext();
         Assert.Null(await new EfWorkflowDefinitionStore(reopened, access).FindByIdAsync(definitionId));
+
+        EfDesignAtomicWriter Writer(WorkflowsDesignDbContext context) => new(context, access);
+
+        Task Save(WorkflowDefinition definition) => scopes.RunAsync(context => new EfSaveWorkflowDefinitionCommand(context, access, Writer(context)).Execute(
+            WorkflowReconciliationOperationKeys.DefinitionMetadataWrite(definitionId), definition));
     }
 
     /// <summary>Updates and then deletes one row of every entity that carries the token, with the ticks of <see cref="Precise"/>.</summary>

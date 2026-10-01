@@ -279,10 +279,4 @@ public sealed class WorkflowsVersionReconcilerConvergenceTests : IAsyncLifetime
             }
         }
     }
-
-    /// <summary>Stands in for the Publishing module's guard: these definitions were never published.</summary>
-    private sealed class NeverPublishedGuard : IWorkflowDefinitionPublicationDeletionGuard
-    {
-        public Task EnsureCanDeleteAsync(string definitionId, CancellationToken cancellationToken = default) => Task.CompletedTask;
-    }
 }

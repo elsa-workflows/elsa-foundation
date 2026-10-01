@@ -42,7 +42,9 @@ public sealed class WorkflowsDesignMySqlDbContext(DbContextOptions<WorkflowsDesi
     /// seconds, so a LastModifiedAt concurrency token read back no longer matches the stored value and every update or
     /// delete of the row fails the check (#2204). Its DateTime reader keeps them. The converter stores the UTC
     /// instant truncated to the column's microseconds, so the original value the check sends is the stored one even
-    /// for a row this scope wrote with 100 ns ticks.
+    /// for a row this scope wrote with 100 ns ticks. Rows written before the converter need no migration: the provider's
+    /// own writer already stored the UTC instant, truncated to microseconds, whatever the machine's time zone, which is
+    /// the form the converter reads and writes (MySql_row_written_by_the_providers_own_DateTimeOffset_writer_reads_back_and_updates).
     /// </summary>
     private static void ConvertDateTimeOffsetsToUtcDateTime(ModelBuilder modelBuilder)
     {

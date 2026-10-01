@@ -113,8 +113,59 @@ public sealed class WorkflowsDesignMySqlSmokeTests(WorkflowsDesignMySqlFixture f
     public Task MySql_updates_and_deletes_every_row_with_a_LastModifiedAt_token(bool sameScope) =>
         WorkflowsDesignNativeProviderSmoke.RunConcurrencyTokenScenarioAsync(fixture, CreateContext, ConcurrencyTokenScenarios.UpdateAndDeleteTokenEntitiesAsync, sameScope);
 
+    /// <summary>
+    /// A database written before #2204 holds the instants the provider's own DateTimeOffset writer stored. The context
+    /// now reads every datetime(6) value as UTC, so they must come back as the instants written, whatever the machine's
+    /// time zone (run the suite under a non-UTC TZ too), and updating such a row must pass its concurrency check.
+    /// </summary>
+    [SkippableFact]
+    public async Task MySql_row_written_by_the_providers_own_DateTimeOffset_writer_reads_back_and_updates()
+    {
+        Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? "Docker/native provider is unavailable.");
+        var tenant = $"provider-tenant-{Guid.NewGuid():N}";
+        var definitionId = $"provider-legacy-{Guid.NewGuid():N}";
+        var instant = new DateTimeOffset(2026, 9, 14, 10, 0, 0, TimeSpan.Zero).AddTicks(1_234_560);
+        var access = new FixedAccess(PersistenceAccessContext.Scoped(new PersistenceScope(tenant)));
+        await using (var context = CreateContext(fixture.ConnectionString))
+            await context.Database.EnsureCreatedAsync();
+
+        await using (var legacy = new BeforeUtcConverterMySqlDbContext(new DbContextOptionsBuilder<BeforeUtcConverterMySqlDbContext>().UseMySQL(fixture.ConnectionString).Options))
+        {
+            legacy.Definitions.Add(new WorkflowDefinition { Id = definitionId, TenantId = tenant, Name = "Legacy", CreatedAt = instant, LastModifiedAt = instant });
+            await legacy.SaveChangesAsync();
+        }
+
+        await using (var context = CreateContext(fixture.ConnectionString))
+        {
+            var row = await context.Definitions.AsNoTracking().SingleAsync(x => x.TenantId == tenant && x.Id == definitionId);
+            Assert.Equal(instant.UtcTicks, row.LastModifiedAt.UtcTicks);
+            Assert.Equal(instant.UtcTicks, row.CreatedAt.UtcTicks);
+        }
+        await using (var context = CreateContext(fixture.ConnectionString))
+            await new EfSaveWorkflowDefinitionCommand(context, access, new EfDesignAtomicWriter(context, access)).Execute(
+                new DesignOperationKey($"provider-legacy-save-{Guid.NewGuid():N}"),
+                new WorkflowDefinition { Id = definitionId, Name = "Renamed" });
+        await using (var context = CreateContext(fixture.ConnectionString))
+        {
+            var row = await context.Definitions.AsNoTracking().SingleAsync(x => x.TenantId == tenant && x.Id == definitionId);
+            Assert.Equal("Renamed", row.Name);
+            Assert.True(row.LastModifiedAt > instant);
+        }
+    }
+
     private static WorkflowsDesignDbContext CreateContext(string connection) =>
         new WorkflowsDesignMySqlDbContext(new DbContextOptionsBuilder<WorkflowsDesignMySqlDbContext>().UseMySQL(connection).Options);
+
+    /// <summary>The MySQL context as it was before #2204: DateTimeOffset properties go through the provider's own writer and reader.</summary>
+    private sealed class BeforeUtcConverterMySqlDbContext(DbContextOptions<BeforeUtcConverterMySqlDbContext> options) : WorkflowsDesignDbContext(options)
+    {
+        protected override void ConfigureProvider(ModelBuilder modelBuilder)
+        {
+            ConfigureDateTime(modelBuilder, "datetime(6)");
+            ConfigureText(modelBuilder, "longtext");
+            ApplyOrdinalCollation(modelBuilder, WorkflowsDesignMySqlDbContext.ExpectedProviderName);
+        }
+    }
 }
 
 internal static class WorkflowsDesignNativeProviderSmoke
