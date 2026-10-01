@@ -439,10 +439,21 @@ public sealed class ToolingEntryPoint
         }
     }
 
-    private sealed class CandidateBoundedMemoryStream(int maximumBytes) : Stream
+    private sealed class CandidateBoundedMemoryStream : Stream
     {
-        private readonly MemoryStream buffer = new();
+        private readonly int maximumBytes;
+        private readonly byte[] storage;
+        private readonly MemoryStream buffer;
         private bool writesCompleted;
+
+        public CandidateBoundedMemoryStream(int maximumBytes)
+        {
+            if (maximumBytes < 0)
+                throw new ArgumentOutOfRangeException(nameof(maximumBytes));
+            this.maximumBytes = maximumBytes;
+            storage = new byte[maximumBytes];
+            buffer = new MemoryStream(storage, 0, 0, writable: true, publiclyVisible: true);
+        }
 
         public bool LimitExceeded { get; private set; }
 
@@ -549,8 +560,7 @@ public sealed class ToolingEntryPoint
         {
             if (disposing)
             {
-                if (buffer.TryGetBuffer(out var segment))
-                    Array.Clear(segment.Array!, segment.Offset, segment.Count);
+                Array.Clear(storage);
                 buffer.Dispose();
             }
             base.Dispose(disposing);
