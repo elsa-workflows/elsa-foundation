@@ -134,6 +134,10 @@ internal sealed class CandidateInspectionFixture : IDisposable
         };
         File.WriteAllText(Path.Join(SourceDirectory, "shells.json"), shells.ToJsonString());
 
+        var productionShells = JsonNode.Parse(File.ReadAllText(Path.Join(SourceDirectory, "shells.Production.json")))!.AsObject();
+        productionShells["CShells"]!["Shells"]![ShellId]!["Features"] = new JsonObject();
+        File.WriteAllText(Path.Join(SourceDirectory, "shells.Production.json"), productionShells.ToJsonString());
+
         var appsettings = JsonNode.Parse(File.ReadAllText(Path.Join(SourceDirectory, "appsettings.json")))!.AsObject();
         appsettings["ConnectionStrings"]!["DeclaredConnection"] =
             $"Data Source={DatabasePath};Password={PrivateEnvironmentCanary}";
@@ -269,9 +273,12 @@ internal sealed class CandidateInspectionFixture : IDisposable
         _initialInputBytes[Path.GetFullPath(path)] = File.ReadAllBytes(path);
     }
 
-    public string WriteEnvironmentInput(params (string Key, string Value)[] entries)
+    public string WriteEnvironmentInput(params (string Key, string Value)[] entries) =>
+        WriteEnvironmentInput("environment-input.json", entries);
+
+    public string WriteEnvironmentInput(string name, params (string Key, string Value)[] entries)
     {
-        var path = InputPath("environment-input.json");
+        var path = InputPath(name);
         File.WriteAllBytes(path, EnvironmentDocument(entries));
         _initialInputBytes[Path.GetFullPath(path)] = File.ReadAllBytes(path);
         return path;
