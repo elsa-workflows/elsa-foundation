@@ -111,7 +111,8 @@ Journey: push one definition with a literal on a credential input through every 
 included (400 from admission, 409 when the draft changed after admission), through file reconciliation and git export
 (that item refused, the pass completes), and through publish, also for an activity the catalog does not hold yet;
 confirm `git diff` for the slice touches under `src/essentials/Workflows/Design/Persistence/` only the promote
-precondition (`IPromoteDraftToVersionCommand.cs`, `WorkflowDraftChangedException.cs`, `EfWorkflowDesignCommands.cs`)
+precondition (`IPromoteDraftToVersionCommand.cs`, `WorkflowDraftChangedException.cs`, `WorkflowDraftStateHash.cs`,
+`EfWorkflowDesignCommands.cs`)
 and adds no rule there.
 
 ```bash

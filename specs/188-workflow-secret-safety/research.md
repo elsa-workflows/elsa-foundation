@@ -248,7 +248,10 @@ canonical any-typed) inputs can take a `Secret` binding, so each `String` input 
 - Resolution failures fault the activity through a typed `RuntimeSecretResolutionException(referenceName,
   failureCode, isRetryable)` with the fixed message `Secret '<name>' could not be resolved (<code>).` The bridge
   maps `StoreUnavailable` to retryable and every other code to permanent, and discards `ResolvedSecret.Error`.
-- A conversion failure at activation (`RuntimeValueConversionException`) is reported with code `TypeMismatch`.
+- A conversion failure at activation (`RuntimeValueConversionException`) is reported with its own code,
+  `ConversionFailed`, permanent. `TypeMismatch` keeps one meaning: the stored secret's type differs from the
+  reference's type (round 4). The case is a backstop: publish compiles no plan from text that can fail on a string
+  (R11).
 - `ActivityFaultIncidentRecorder` hard-codes `isRetryable: false` for exception faults (verified). It reads the
   classification through a new runtime-owned contract, `IRuntimeFaultClassification` (`IsRetryable`,
   `FailureCode`), instead of through a concrete exception type. `RuntimeSecretResolutionException` implements it, and
@@ -390,14 +393,28 @@ not trip it.
      token to compare (verified: the `elsa_workflow_definition_drafts` mapping declares no `IsConcurrencyToken`
      property, and `LastModifiedAt` is a timestamp that two writes in one clock tick, or a frozen test clock, leave
      unchanged). So the endpoint computes the SHA-256 of the admitted draft's stored `StateSource` (empty when null)
-     and passes it to the command as an expected-state precondition. `IPromoteDraftToVersionCommand` gains an
-     optional `expectedStateHash` on its full `Execute` overload (null means no precondition; the endpoint always
-     passes one), the hash joins `PromoteDraftRequestMaterial` so a replayed operation key with a different hash is a
-     changed request, and `EfPromoteDraftToVersionCommand` hashes the `StateSource` of the row it reads in-lock and
-     throws a new `WorkflowDraftChangedException` (`Elsa.Workflows.Design.Persistence.Core`, mapped to 409) before it
-     writes anything when the two differ. That comparison is storage integrity, a compare-and-set on the row's
-     content; it knows nothing about credentials, and the rule stays in the endpoint. Where the publisher is composed,
-     the in-lock gate also re-runs the validators. T113 proves the conflict.
+     and passes it to the command as an expected-state precondition. The hash is required (round 4).
+     `IPromoteDraftToVersionCommand` keeps a single `Execute` method, `Execute(key, draftId, requestedVersion,
+     expectedStateHash, ct)`, whose `expectedStateHash` is a non-nullable `string`; the two current overloads
+     without it are removed, because their only `src/` caller is the Drafts/Promote endpoint (verified), which uses
+     the `requestedVersion` overload, and Elsa 4 is unreleased, so no compatibility overload is kept. The command
+     throws `ArgumentException` for a null or blank hash before it reads or writes anything, so no caller can
+     promote without a precondition. One helper in `Elsa.Workflows.Design.Persistence.Core`,
+     `WorkflowDraftStateHash.Compute(stateSource)`, computes the hash for the endpoint, the command and the test
+     callers. `EfPromoteDraftToVersionCommand` hashes the `StateSource` of the row it reads in-lock and throws a new
+     `WorkflowDraftChangedException` (`Elsa.Workflows.Design.Persistence.Core`, mapped to 409) before it writes
+     anything when the two differ. That comparison is storage integrity, a compare-and-set on the row's content; it
+     knows nothing about credentials, and the rule stays in the endpoint. Where the publisher is composed, the
+     in-lock gate also re-runs the validators. T113 proves the conflict.
+
+     The hash is not part of `PromoteDraftRequestMaterial` (round 4). The atomic writer resolves an existing
+     operation marker before `beforeAttempt` takes the locks and before the delegate runs (verified in
+     `EfDesignAtomicWriter`), so a replay of an already-succeeded promote with the same operation key returns the
+     original version id and writes nothing, even when the draft changed afterwards and the replay therefore carries
+     a different hash. Leaving the hash out loses no safety: a replay writes no row, and the in-lock comparison
+     guards every first execution. Through the endpoint, a replay is still admitted first, so a replay after an
+     edit that put a credential literal into the draft is refused with 400 before the command runs; a replay after
+     an admissible edit returns the original version id.
   2. **`WorkflowsVersionReconciler.ReconcileVersion`**, per item, before any catalog mutation for that item (see
      the per-item contract in [the rule contract](contracts/credential-literal-rule.md)). This covers file
      reconciliation and git import, which both contribute through `WorkflowVersionsReconciling` sources (verified:
@@ -412,6 +429,8 @@ not trip it.
   state-writing ones: every non-persistence `src/` type whose constructor takes one also takes
   `WorkflowStateAdmission`. Promote is state-writing (it writes a version from a stored draft) and is not exempt. A
   new state-writing command, or a new caller of an existing one, fails the guard until it is classified or admitted.
+  The guard also asserts, by reflection, that every `Execute` method of `IPromoteDraftToVersionCommand` takes a
+  non-nullable `expectedStateHash`, so a promote overload without the admitted hash cannot be added back.
 
 **Caller inventory (verified at `057adc44f`, re-run in round 2)**: outside the persistence projects, the only `src/`
 callers of state-writing design commands are the six Design.Api callers above and `WorkflowsVersionReconciler`
@@ -646,7 +665,7 @@ the default mode `Auto`:
 So an `rsa-key` bound to an integer input is refused at publish, as the spec's edge case asks, and so is a `text`
 secret bound to an integer, `TimeSpan`, `Object` or `JsonElement` input. At run time, `TypeMismatch` is the Secrets
 resolver's code for a stored secret whose type differs from the reference's `typeName` (US2.3). A conversion failure
-at activation is also reported as `TypeMismatch` (R4), as a backstop: none of the three plans above fails on a string
+at activation is reported with its own code, `ConversionFailed` (R4), as a backstop: none of the three plans above fails on a string
 value, so it is reachable only through an artifact that skipped publish (R13).
 
 A credential input accepts only a `Secret` binding, so a credential whose type has no plan from text could never be
@@ -726,7 +745,9 @@ publishing) carry already-compiled bindings and are not among FR-008's seven ent
 publish rules of R8 (`VF-ACT-011`) and R12 (`VF-ACT-012`). An imported artifact with a literal on an
 encryption-required input reaches the runtime with that policy. R8's producer withholding then withholds it at
 materialization, and activation refuses it with `VF-ACT-010`, which is loud. The literal still sits in the imported
-file. Recommendation: a follow-up issue for an import-time check. Not planned here. The canary uses this path on
+file, and an artifact whose own policy does not require encryption on that input is not caught at all. The spec
+records runtime artifact import as out of scope for phase 0 (Assumptions). Recommendation: a follow-up issue for an
+import-time check (T090). Not planned here. The canary uses this path on
 purpose, to reach the producer-withholding protection with an injected value (A15).
 
 ## R14: Studio (separate repository)

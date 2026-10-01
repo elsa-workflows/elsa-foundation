@@ -13,7 +13,7 @@ These override anything below that reads differently.
 
 | # | Decision |
 |---|---|
-| D1 | **Phase 0 ships first, standalone:** wire `Secret` expression evaluation, add the sensitive-input guard. |
+| D1 | **Phase 0 ships first, standalone:** wire `Secret` expression evaluation, add the sensitive-input guard. **Amended 2026-10-01 (owner decision).** Phase 0 also gives `SendHttpRequest` an interim credential input `Authorization`, sent as the request's `Authorization` header, so one built-in consumes a secret end to end. Phase 1's `http` connection replaces that input and removes it; Elsa 4 is unreleased, so no compatibility path is kept. |
 | D2 | **OAuth callback lives on the backend** (`/_elsa/connections/oauth/callback`) with a host-configurable `PublicBaseUrl`. OAuth stays in the plan as phase 2. |
 | D3 | **OAuth is one authentication scheme, not the model.** Schemes are an open plug-in contract (section 2.1a). The OAuth client id and secret are ordinary fields of the OAuth scheme. A host-level default app is a phase 2 convenience. |
 | D4 | **Revised 2026-09-30.** **The database is the only runtime source** of connection definitions, but the model splits **definition** (name, type, scheme, settings, secret-field references) from **state** (grant, status, last tested, last used). State is always written at runtime, so it always lives in the DB. Every connection carries a reserved `ManagedBy` field, where only `studio` is valid in v1. The config-to-DB reconciler (`ManagedBy = config`, read-only in Studio, overwritten on each start, pattern of the existing startup reconcilers) is deferred until needed. Only secret *payloads* are pluggable. Rejected: a live multi-source catalog (two lookup paths, collision rules). Earlier draft said config connections could not support OAuth; that only held when a connection was one blob, and the split removes the objection. |
@@ -195,7 +195,7 @@ Design points:
    - *Escape hatch:* `conn.GetSensitiveAsync("apiKey")` returning a `SensitiveValue`.
    - *Introspection:* `conn.Settings` (non-secret) and `conn.Name`.
 4. **`SensitiveValue`** is a struct with `ToString()` returning `[redacted]`, no implicit string conversion, and JSON converter that throws. Redaction by construction for values that flow through activity code. The heuristic redactors remain as a second net.
-5. **Existing activities migrate.** `SendHttpRequest` gains an `[ActivityConnection(ConnectionType="http", Optional=true)]`; the `http` type supports `api-key` (header or query placement), `basic`, `bearer`, `oauth2-client-credentials`. The Anthropic and Copilot agent options become an `anthropic` and a `github-copilot` connection type. These are the natural first consumers.
+5. **Existing activities migrate.** `SendHttpRequest` gains an `[ActivityConnection(ConnectionType="http", Optional=true)]`, which replaces and removes its phase 0 `Authorization` credential input (D1); the `http` type supports `api-key` (header or query placement), `basic`, `bearer`, `oauth2-client-credentials`. The Anthropic and Copilot agent options become an `anthropic` and a `github-copilot` connection type. These are the natural first consumers.
 6. **Host pinning.** A Connection has an allowed-hosts policy (fixed for `google-drive`, user-declared base URL for `http`). The authenticator refuses to attach material to a request whose host is not allowed. This closes the confused-deputy hole where someone who can *edit a workflow* points `SendHttpRequest` at their own server and harvests the API key.
 
 ### 2.5 Secret storage providers
@@ -323,8 +323,8 @@ The original eleven questions are resolved as D1-D10 above, with one exception (
 
 | Phase | Unit | Notes |
 |---|---|---|
-| 0 | Wire `Secret` expression evaluation; add `Sensitive` flag to `[ActivityInput]` and definition guard; add `isSensitive` to Studio SDK descriptor; canary test v1 | No new concepts. Closes today's real leak risk. |
-| 1 | Connections core: types, repository, manager, resolver, `SensitiveValue`, `[ActivityConnection]`, publish gate, permissions; `http` type (api-key, basic, bearer); migrate `SendHttpRequest` | Studio: Connections page, picker, workflow Connections panel. |
+| 0 | Wire `Secret` expression evaluation; add `Sensitive` flag to `[ActivityInput]` and definition guard; add `isSensitive` to Studio SDK descriptor; canary test v1; interim credential input `Authorization` on `SendHttpRequest` (D1, amended 2026-10-01) | No new concepts. Closes today's real leak risk. |
+| 1 | Connections core: types, repository, manager, resolver, `SensitiveValue`, `[ActivityConnection]`, publish gate, permissions; `http` type (api-key, basic, bearer); migrate `SendHttpRequest`, replacing and removing its phase 0 `Authorization` input | Studio: Connections page, picker, workflow Connections panel. |
 | 2 | OAuth: authorization-code with PKCE, client credentials, Grant secret type, single-flight refresh, revocation, Attention integration, `FakeOAuthProvider` | Needs answers to questions 2 and 3. |
 | 3 | External stores: KeyVault first, then AWS SM, Vault; store contract suite | Independent of phase 2. |
 | 4 | First real connectors (Google Drive, OneDrive), migrate Anthropic and Copilot options to connection types | Proves the SDK ergonomics on real providers. |

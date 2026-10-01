@@ -43,7 +43,7 @@ guarded-writer and decorator options were rejected.
 | # | Entry point | Where the rule runs (integration point) | Refusal | HTTP (where an endpoint exists) |
 |---|---|---|---|---|
 | 1 | Draft save: Definitions/Add, Drafts/Replace, Definitions/Update | Design API admission: the endpoint or handler calls `WorkflowStateAdmission.AdmitAsync` on the incoming state before `IAddWorkflowDefinitionCommand` or `IUpdateDraftCommand` | `CredentialLiteralRefusedException`; the command never runs, nothing is stored | 400, errors keyed by path |
-| 2 | Promote (Drafts/Promote) | Design API admission: the endpoint reads the stored draft through `IWorkflowDefinitionDraftStore`, calls `WorkflowStateAdmission.AdmitAsync` on its state, and passes the SHA-256 of the admitted draft's `StateSource` to `IPromoteDraftToVersionCommand` as the expected-state hash. The command compares it with the draft it reads in-lock and promotes only that content. It does not depend on the command's optional in-lock gate, which runs only when `IInlineEventPublisher` is composed | `CredentialLiteralRefusedException`; the command never runs, no version row written. A draft changed after admission: `WorkflowDraftChangedException`, no version row written | 400, errors keyed by path; 409 when the draft changed after admission |
+| 2 | Promote (Drafts/Promote) | Design API admission: the endpoint reads the stored draft through `IWorkflowDefinitionDraftStore`, calls `WorkflowStateAdmission.AdmitAsync` on its state, and passes the SHA-256 of the admitted draft's `StateSource` to `IPromoteDraftToVersionCommand` as the required expected-state hash. The command compares it with the draft it reads in-lock and promotes only that content. It does not depend on the command's optional in-lock gate, which runs only when `IInlineEventPublisher` is composed | `CredentialLiteralRefusedException`; the command never runs, no version row written. A draft changed after admission: `WorkflowDraftChangedException`, no version row written | 400, errors keyed by path; 409 when the draft changed after admission |
 | 3 | Publish (including publish-on-reconcile and draft test runs) | `RuntimeInputBindingCompiler.CompileAll`, per input | `CredentialLiteralRefusedException`, surfaced through publication's existing compile-error translation | 400 |
 | 4 | Add version (Versions/Add) | Design API admission before `IAddWorkflowDefinitionVersionCommand` | same as row 1 | 400 |
 | 5 | Submit (Definitions/Submit) | Design API admission before `ISubmitWorkflowDefinitionCommand` | same as row 1 | 400 |
@@ -89,11 +89,22 @@ the reconciler materializes the definition record before the version (verified i
 ## Promote's content precondition
 
 The draft row has no revision or concurrency token, so the precondition is a content hash: the SHA-256 of the
-draft's stored `StateSource` (empty when null), computed by the endpoint from the draft it admitted.
-`IPromoteDraftToVersionCommand`'s full `Execute` overload takes it as an optional `expectedStateHash`; null means no
-precondition and is used only by callers that admit nothing (tests). The hash is part of the promote request material
-of the atomic write, so a replayed operation key with a different hash is a changed request. The comparison happens
-in the atomic-write delegate after the draft and definition locks are held and before any row is added.
+draft's stored `StateSource` (empty when null), computed by the endpoint from the draft it admitted, through
+`WorkflowDraftStateHash.Compute` (`Elsa.Workflows.Design.Persistence.Core`), which the command uses for its in-lock
+read as well.
+
+- **Required.** `IPromoteDraftToVersionCommand` has one method, `Execute(key, draftId, requestedVersion,
+  expectedStateHash, ct)`, with a non-nullable `expectedStateHash`. The overloads without it are removed (their only
+  `src/` caller, the Drafts/Promote endpoint, passes the hash; Elsa 4 is unreleased, so no compatibility overload).
+  The command throws `ArgumentException` for a null or blank hash before it reads or writes anything.
+- **Compared in-lock.** The comparison happens in the atomic-write delegate after the draft and definition locks are
+  held and before any row is added; a difference throws `WorkflowDraftChangedException` (409).
+- **Not part of the idempotency material.** `PromoteDraftRequestMaterial` stays draft id and version request only. A
+  replay of an already-succeeded promote with the same operation key returns the original version id and writes
+  nothing, even when the draft changed afterwards and the replay carries a different hash: the atomic writer resolves
+  the operation marker before it takes the locks or runs the delegate. This loses no safety, because a replay writes
+  nothing. Through the endpoint a replay is admitted first, so a replay after an edit that put a credential literal
+  into the draft is refused with 400 before the command runs.
 
 ## Composition
 
@@ -122,9 +133,13 @@ An architecture test (T055) keeps the seam from being bypassed:
    so it cannot pass by scanning nothing.
 3. **Git export.** The exporter calls no design command, so it is listed by name: every `IGitWorkflowExporter`
    implementation takes `WorkflowStateAdmission`.
+4. **Promote carries the admitted hash.** Every `Execute` method of `IPromoteDraftToVersionCommand` takes a
+   non-nullable `string expectedStateHash` (reflection with `NullabilityInfoContext`), so a promote overload
+   without it cannot come back.
 
 Mutations that must turn it red: remove `WorkflowStateAdmission` from one Design API caller (the promote endpoint
-among them); add a new admitted-command caller without it; add a new `*Command` contract without classifying it.
+among them); add a new admitted-command caller without it; add a new `*Command` contract without classifying it;
+add an `Execute` overload to `IPromoteDraftToVersionCommand` without `expectedStateHash`.
 Whether a caller actually calls the helper before the command is proved per entry point by T051 to T054, whose
 bite-proofs remove the call.
 
@@ -138,6 +153,8 @@ bite-proofs remove the call.
   version the catalog does not hold and, once the activity is installed, applies the rule. The existing
   `UnknownActivityVersionValidator` blocks promote of such a draft only where the in-lock gate runs. Proved by T112
   (A22).
-- **Runtime artifact import** carries compiled bindings and is not one of the seven entry points (research R13).
-  R8's producer withholding and the `VF-ACT-010` activation refusal keep such a value out of persisted runtime
-  state.
+- **Runtime artifact import** carries compiled bindings and is not one of the seven entry points (research R13); the
+  spec states it as out of scope for phase 0, with a follow-up (T090). Where the imported artifact's own policy marks
+  an input as requiring encryption, R8's producer withholding, the `VF-ACT-010` activation refusal and the commit
+  backstop keep such a value out of persisted runtime state; an artifact that does not mark it is not caught, and the
+  literal stays in the imported file.

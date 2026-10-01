@@ -72,8 +72,10 @@ Framework constitution v4.0.0:
   `IRuntimeFaultClassification`, `IRuntimeSecretMask` and models in
   `Elsa.Workflows.Runtime.Core`; `ICredentialLiteralValidator` in `Elsa.Workflows.Design.Validations.Core`; the
   acceptance predicate in `Elsa.Workflows.Design.Core`). The bridge is Layer 3 and references only
-  `Elsa.Secrets.Core` and `Elsa.Workflows.Runtime.Core`. Every new `ProjectReference` targets a `.Core` project; the
-  full list is in [Project reference changes](#project-reference-changes), so the claim "no
+  `Elsa.Secrets.Core` and `Elsa.Workflows.Runtime.Core`. Every new `ProjectReference` from a production library
+  targets a `.Core` project. Two kinds of reference are the allowed exceptions: the Workbench app host's reference to
+  the bridge (`Elsa.Secrets.Workflows`, host composition), and test-project references, which target implementation
+  projects as the tests need. The full list is in [Project reference changes](#project-reference-changes), so the claim "no
   implementation-to-implementation reference across unrelated domains" can be checked line by line. No `.Core`
   gains a heavy package.
 - **§2.2 naming**: `Elsa.Secrets.Workflows` follows the secondary-domain sub-rule (the model-owning domain, Secrets,
@@ -91,8 +93,8 @@ Framework constitution v4.0.0:
 - **§2.6.4 design/runtime split**: the design-time rule (credential literal) and the runtime contract (secret
   resolution) are separate contracts with no shared runtime concern.
 - **§2.7 adapter**: the bridge adapts Secrets to the runtime contract. No sync-contributor exception (§2.6.5) is used.
-- **§2.10 CQS**: no rule enters persistence. One persistence contract changes: `IPromoteDraftToVersionCommand` gains
-  an optional expected-state hash, which `EfPromoteDraftToVersionCommand` compares in-lock and refuses with a
+- **§2.10 CQS**: no rule enters persistence. One persistence contract changes: `IPromoteDraftToVersionCommand` keeps
+  one `Execute` method, which requires an expected-state hash, which `EfPromoteDraftToVersionCommand` compares in-lock and refuses with a
   conflict, a storage-integrity compare-and-set so that promote writes only what its endpoint admitted (research R7).
   The other design commands are untouched.
 - **§2.11 DependsOn**: `SecretsWorkflows` depends on `Secrets` and the activation feature; `WorkflowsDesignApi`,
@@ -228,8 +230,8 @@ Existing projects changed (paths verified at `057adc44f`):
   `Reconciliation/Git/WorkflowsDesignGitReconciliationFeature.cs` (`DependsOn`),
   `Reconciliation/Git/Services/GitWorkflowExporter.cs` (per-version admission).
 - Under `src/essentials/Workflows/Design/Persistence/` only promote's content precondition changes:
-  `Core/Contracts/IPromoteDraftToVersionCommand.cs` (optional expected-state hash), a new
-  `Core/Exceptions/WorkflowDraftChangedException.cs`, and `EfPromoteDraftToVersionCommand` in
+  `Core/Contracts/IPromoteDraftToVersionCommand.cs` (one `Execute` method with a required expected-state hash), a new
+  `Core/Exceptions/WorkflowDraftChangedException.cs`, a new `Core/Models/WorkflowDraftStateHash.cs`, and `EfPromoteDraftToVersionCommand` in
   `EntityFrameworkCore/Commands/EfWorkflowDesignCommands.cs` (in-lock comparison). No rule and no reference
   (research R7).
 - `src/essentials/Workflows/Runtime/Api/Services/WorkflowExecutableInspector.cs`, the run-inspector views under

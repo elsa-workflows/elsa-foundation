@@ -49,7 +49,7 @@ Rules:
   withheld secret envelope is present.
 - `RuntimeSecretResolution.Value` and any resolved value never reach a log, exception message, metric, span
   attribute or persisted state. The fault message carries the reference name and the code only.
-- `FailureCode` is one of the codes below, `TypeMismatch` from conversion (a backstop, research R11), or
+- `FailureCode` is one of the codes below, `ConversionFailed` from conversion (a backstop, research R11), or
   `TenantMismatch` from the tenant check. It is a code name, not the resolver's error text.
 
 ## Bridge mapping (`Elsa.Secrets.Workflows`, `SecretValueRuntimeResolver`)
@@ -72,7 +72,7 @@ member added later fails the test until someone classifies it.
 | Instance `TenantId` set and different from the partition | Throw `RuntimeSecretResolutionException(name, "TenantMismatch", false)`; resolver never called. |
 | Resolver composed, resolution succeeds | Convert with the envelope's plan; hydrate; register value with `IRuntimeSecretMask`; nothing written back. |
 | Resolution fails | Throw `RuntimeSecretResolutionException`; the handler's existing fault boundary records a fault whose `IsRetryable` and code come from `IRuntimeFaultClassification`, also when the exception is masked (the masking wrapper copies both). |
-| Conversion fails | Throw `RuntimeSecretResolutionException(name, "TypeMismatch", false)`. A backstop: publish compiles only plans from text that cannot fail on a string (research R11), so this is reached only by an artifact that skipped publish. |
+| Conversion fails | Throw `RuntimeSecretResolutionException(name, "ConversionFailed", false)`. `TypeMismatch` is never used for this case; it means only that the stored secret's type differs from the reference's. A backstop: publish compiles only plans from text that cannot fail on a string (research R11), so this is reached only by an artifact that skipped publish. |
 | No `IRuntimeSecretResolver` composed | Throw the activation failure classified by `ActivityActivationFailureHandler` (new kind, recovery "compose `SecretsWorkflows`"); the activity waits with an incident and is not faulted (§E2.6.1). |
 | Withheld envelope of kind `PolicyRequiresEncryption` | Throw `VF-ACT-010`: the value was withheld and cannot be recovered. Never hydrate null. A backstop only: publish refuses literal and expression bindings on encryption-required inputs (`VF-ACT-011`). |
 
