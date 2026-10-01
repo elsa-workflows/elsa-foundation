@@ -304,7 +304,7 @@ public sealed class EfCandidateInspectionTests : IDisposable
         var validJson = Encoding.UTF8.GetBytes("{\"version\":1,\"entries\":[]}");
         var invalidUtf8 = Encoding.UTF8.GetBytes("{\"version\":1,\"entries\":[{\"key\":\"");
         invalidUtf8 = [.. invalidUtf8, 0xFF, .. Encoding.UTF8.GetBytes("\",\"value\":\"v\"}]}")];
-        var duplicateBom = [.. Encoding.UTF8.GetPreamble(), .. Encoding.UTF8.GetPreamble(), .. validJson];
+        byte[] duplicateBom = [.. Encoding.UTF8.GetPreamble(), .. Encoding.UTF8.GetPreamble(), .. validJson];
 
         foreach (var bytes in new[] { invalidUtf8, duplicateBom })
         {
