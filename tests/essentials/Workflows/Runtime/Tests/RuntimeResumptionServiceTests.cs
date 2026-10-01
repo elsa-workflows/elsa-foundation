@@ -496,6 +496,133 @@ public sealed class RuntimeResumptionServiceTests
     }
 
     /// <summary>
+    /// #2188 review: a recovery candidate whose pause check failed was never looked at, so the scan cursor keeps its
+    /// place, as it does for a failed dispatch, and the scanner offers the candidate again on the next sweep. The head is
+    /// under a live claim, so only the scanner offers it.
+    /// </summary>
+    [Fact]
+    public async Task SweepAsync_OffersAScannerCandidateAgainAfterItsPauseCheckFailed()
+    {
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        await queue.EnqueueAsync(NewWorkItem("wfexec-scanned", WorkflowExecutionCommandKind.StartActivity));
+        Assert.NotNull(await queue.ClaimAsync(new RuntimeSchedulerWorkClaimRequest("wfexec-scanned", "owner-crashed", Now, TimeSpan.FromHours(1))));
+        var gate = new FailingPauseGate();
+        var harness = new Harness(workQueue: queue, pauseGate: gate);
+        harness.RecoveryScanner.Pages.Enqueue(new RecoveryPage([NewCandidate("wfexec-scanned")], "recovery-next"));
+        harness.RecoveryScanner.Pages.Enqueue(new RecoveryPage([NewCandidate("wfexec-scanned")], null));
+
+        var whileFailing = await harness.Service.SweepAsync(new RuntimeResumptionSweepRequest());
+        gate.Fails = false;
+        var afterRecovery = await harness.Service.SweepAsync(new RuntimeResumptionSweepRequest());
+
+        Assert.Empty(whileFailing.Dispatches);
+        Assert.Null(harness.RecoveryScanner.Requests[1].ContinuationToken);
+        Assert.Equal("wfexec-scanned", Assert.Single(afterRecovery.Dispatches).WorkflowExecutionId);
+    }
+
+    /// <summary>
+    /// #2188 review: when the batched next-item read fails, the page is read one execution at a time, so one unreadable
+    /// row costs only its own execution its check: that one is not re-driven, and the others are checked and re-driven.
+    /// </summary>
+    [Fact]
+    public async Task SweepAsync_ReadsNextItemsOneByOneWhenTheBatchedReadFails()
+    {
+        var queue = new CountingWorkQueue { FailNextItemReadWhen = ids => ids.Count > 1 || ids.Contains("wfexec-b") };
+        foreach (var workflowExecutionId in new[] { "wfexec-a", "wfexec-b", "wfexec-c" })
+            await queue.EnqueueAsync(NewWorkItem(workflowExecutionId, WorkflowExecutionCommandKind.StartActivity));
+        var harness = new Harness(workQueue: queue);
+
+        var result = await harness.Service.SweepAsync(new RuntimeResumptionSweepRequest());
+
+        Assert.Equal(["wfexec-a", "wfexec-c"], result.Dispatches.Select(dispatch => dispatch.WorkflowExecutionId));
+        Assert.Equal(4, queue.NextItemReads);
+        var warning = Assert.Single(harness.Logger.Entries);
+        Assert.Equal("RuntimeResumptionPauseCheckFailed", warning.EventId.Name);
+        Assert.Contains("for 1 execution(s)", warning.Message);
+        Assert.Contains("wfexec-b", warning.Message);
+    }
+
+    /// <summary>
+    /// #2188 review: a held execution that reached a terminal status was never purged, so it kept its residual work and
+    /// every pass through the backlog spent a visit on it. It is now purged and reaped like any terminal execution,
+    /// without a re-drive, and the backlog no longer lists it.
+    /// </summary>
+    [Fact]
+    public async Task SweepAsync_PurgesAHeldTerminalExecution()
+    {
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        await queue.EnqueueAsync(NewWorkItem("wfexec-done", WorkflowExecutionCommandKind.StartActivity));
+        var harness = new Harness(workQueue: queue);
+        await harness.Holds.SaveAsync(HoldOn("wfexec-done"));
+        await harness.StateStore.SaveAsync(NewState("wfexec-done", WorkflowExecutionStatus.Completed));
+
+        var first = await harness.Service.SweepAsync(new RuntimeResumptionSweepRequest());
+        var second = await harness.Service.SweepAsync(new RuntimeResumptionSweepRequest());
+
+        Assert.Empty(first.Dispatches);
+        Assert.Empty(harness.AgentProvider.Activations);
+        Assert.Equal((1, 1), (first.TerminalExecutionsPurged, first.PurgedWorkItemCount));
+        Assert.Equal("wfexec-done", Assert.Single(harness.AgentProvider.Passivations).WorkflowExecutionId);
+        Assert.Empty(await queue.ListPendingWorkflowExecutionIdsAsync(10));
+        Assert.Equal(0, second.TerminalExecutionsPurged);
+    }
+
+    /// <summary>
+    /// #2188 review: the path after a release, through one service and one discovery state, as the pump drives it. A
+    /// crashed owner left an expired lease and a lapsed claim on a held execution. Sweeps while it is held leave its
+    /// queue as it is; once the hold is lifted, the next pass through the claimable backlog re-drives it.
+    /// </summary>
+    [Fact]
+    public async Task SweepAsync_RedrivesAReleasedExecutionThroughTheBacklogWalk()
+    {
+        var leaseDuration = TimeSpan.FromMinutes(1);
+        var later = Now + leaseDuration + leaseDuration;
+        var services = new ServiceCollection();
+        services.AddWorkflowRuntime();
+        services.RemoveAll<TimeProvider>();
+        services.AddSingleton<TimeProvider>(new FakeTimeProvider(later));
+        await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        await using var scope = provider.CreateAsyncScope();
+        var runtime = scope.ServiceProvider;
+        var liveness = runtime.GetRequiredService<IExecutionLivenessStateStore>();
+        var holds = runtime.GetRequiredService<IWorkflowHoldStateStore>();
+        var inner = runtime.GetRequiredService<IWorkflowSchedulerWorkQueue>();
+        await new RuntimeExecutionOwnershipService(
+                liveness,
+                new FakeTimeProvider(Now),
+                new RuntimeExecutionOwnershipOptions { OwnerId = "owner-crashed", LeaseDuration = leaseDuration })
+            .AcquireAsync("wfexec-held");
+        await holds.SaveAsync(HoldOn("wfexec-held"));
+        await inner.EnqueueAsync(NewWorkItem("wfexec-held", WorkflowExecutionCommandKind.StartActivity));
+        Assert.NotNull(await inner.ClaimAsync(new RuntimeSchedulerWorkClaimRequest("wfexec-held", "owner-crashed", Now, leaseDuration)));
+        var queue = new CountingWorkQueue(inner);
+        var service = new RuntimeResumptionService(
+            new FakeOutboxProcessor(),
+            queue,
+            new InMemoryRuntimeRecoveryScanner(liveness),
+            runtime.GetRequiredService<IWorkflowExecutionActorProvider>(),
+            new ShortRuntimeExecutionIdGenerator(),
+            new FakeTimeProvider(later),
+            runtime.GetRequiredService<IWorkflowExecutionStateStore>(),
+            runtime.GetRequiredService<IWorkflowSchedulerPauseGate>(),
+            runtime.GetRequiredService<RuntimeResumptionDiscoveryStateStore>());
+        var request = new RuntimeResumptionSweepRequest(leaseTimeout: leaseDuration, heartbeatTimeout: leaseDuration);
+
+        for (var sweep = 0; sweep < 5; sweep++)
+            Assert.Empty((await service.SweepAsync(request)).Dispatches);
+        Assert.Single(await inner.ListAllAsync("wfexec-held"));
+        await holds.SaveAsync(new WorkflowHoldState(controlPlaneStateId: "control-wfexec-held", workflowExecutionId: "wfexec-held"));
+        queue.ListedByWalk.Clear();
+        var afterRelease = await service.SweepAsync(request);
+
+        Assert.Contains("wfexec-held", queue.ListedByWalk);
+        Assert.Equal("wfexec-held", Assert.Single(afterRelease.Dispatches).WorkflowExecutionId);
+        // The drain now passes the open gate and dispatches the held item. A bare runtime has no executable for it, so the
+        // dispatch faults (the outcome is not what this test is about), but the item no longer waits at the gate.
+        Assert.DoesNotContain(await inner.ListAllAsync("wfexec-held"), item => item.WorkItemId == "work-1");
+    }
+
+    /// <summary>
     /// #2188 review: one pass reads at most ten backlog pages while passing held executions, and reads their next items
     /// with one request per page rather than one per execution. The walk carries on from there on the next pass.
     /// </summary>
@@ -1087,13 +1214,17 @@ public sealed class RuntimeResumptionServiceTests
     }
 
     // The in-memory queue, counting the reads a sweep makes.
-    private sealed class CountingWorkQueue : IWorkflowSchedulerWorkQueue
+    private sealed class CountingWorkQueue(IWorkflowSchedulerWorkQueue? inner = null) : IWorkflowSchedulerWorkQueue
     {
-        private readonly InMemoryWorkflowSchedulerWorkQueue _inner = new();
+        private readonly IWorkflowSchedulerWorkQueue _inner = inner ?? new InMemoryWorkflowSchedulerWorkQueue();
 
         public int ClaimablePages { get; private set; }
         public int NextItemReads { get; private set; }
         public int ItemListings { get; private set; }
+        public List<string> ListedByWalk { get; } = [];
+
+        // Next-item reads for which this returns true throw, as an unreadable row would.
+        public Func<IReadOnlyCollection<string>, bool> FailNextItemReadWhen { get; init; } = _ => false;
 
         public bool SupportsClaimableBacklogDiscovery => true;
 
@@ -1112,12 +1243,14 @@ public sealed class RuntimeResumptionServiceTests
         public ValueTask<IReadOnlyCollection<string>> ListPendingWorkflowExecutionIdsAsync(int limit, CancellationToken cancellationToken = default) =>
             _inner.ListPendingWorkflowExecutionIdsAsync(limit, cancellationToken);
 
-        public ValueTask<IReadOnlyCollection<string>> ListClaimableWorkflowExecutionIdsAsync(
+        public async ValueTask<IReadOnlyCollection<string>> ListClaimableWorkflowExecutionIdsAsync(
             RuntimeSchedulerClaimableBacklogQuery query,
             CancellationToken cancellationToken = default)
         {
             ClaimablePages++;
-            return _inner.ListClaimableWorkflowExecutionIdsAsync(query, cancellationToken);
+            var listed = await _inner.ListClaimableWorkflowExecutionIdsAsync(query, cancellationToken);
+            ListedByWalk.AddRange(listed);
+            return listed;
         }
 
         public ValueTask<IReadOnlyDictionary<string, RuntimeSchedulerWorkItem>> ListNextWorkItemsAsync(
@@ -1125,6 +1258,8 @@ public sealed class RuntimeResumptionServiceTests
             CancellationToken cancellationToken = default)
         {
             NextItemReads++;
+            if (FailNextItemReadWhen(workflowExecutionIds))
+                throw new InvalidDataException("The scheduler-work row is unreadable.");
             return _inner.ListNextWorkItemsAsync(workflowExecutionIds, cancellationToken);
         }
     }

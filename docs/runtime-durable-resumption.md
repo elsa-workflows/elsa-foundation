@@ -165,8 +165,10 @@ sweep, the pump is bounded on two axes:
   settles it. That costs ownership nothing, because the next drain acquires a strictly greater fencing
   token whatever a stale lease says. A hold is lifted by saving hold state, with no event to react to,
   so a resume is noticed the same way: the next pass that reaches the execution finds the gate open and
-  re-drives it. When the gate cannot be consulted the execution is not re-driven either, since its
-  drain would consult the same gate; its work stays queued, and the sweep logs one warning
+  re-drives it. A held execution that has reached a terminal status is still purged and reaped, which
+  re-drives nothing. When the gate cannot be consulted the execution is not re-driven either, since its
+  drain would consult the same gate; its work stays queued, a recovery candidate keeps the scan cursor
+  in place so the scanner offers it again next sweep, and the sweep logs one warning
   (`RuntimeResumptionPauseCheckFailed`) with the count. The sweep reads next items in one request per
   page of executions and asks the gate only about executions it can use. A pass reads on past held
   executions, up to ten pages. The sweep walks the backlog from a position it keeps between ticks
