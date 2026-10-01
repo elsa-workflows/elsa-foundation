@@ -61,3 +61,6 @@ No task is marked [P] because most production owners share files and reviewed pr
 ## Implementation strategy
 
 Smallest useful MVP is the complete safe file-only actor journey across US1–US3, not a producer-only shim. Deliver through one issue/PR, using focused signals before final full affected gates. New acceptance tests are required explicitly by the spec/matrix; no repetitive new suite/provider matrix. Keep external providers, arbitrary portable unknown export, finished UI/human evaluation and apply/recovery in their existing owners.
+
+
+Review-correction checkpoint (2026-10-01): package-code and scalar/null removal baselines reproduce the intended failures; fixes are committed and current main is normally integrated. Combined CLI 871, Planning 118, migrations 448, architecture 622, actual Linux 228 and actual Windows 18 pass with zero skipped tests. The two new cancellation controls observe the actual pending operation-exit task through an unchanged native adapter. Final label-only Planning rerun 118 and a 12-file/28-canary passing-artifact scan are clear. Exact sources, limits, repaired test-helper/fixture issues and receipts are in `implementation-evidence.md`. T020 remains open for pushed correction replies, current-head re-review/hosted gates, merge and exact-main CI/Maps.

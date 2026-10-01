@@ -204,13 +204,26 @@ public sealed class CompositionCandidateTests
     }
 
     [Theory]
-    [InlineData("""{"CShells":{"Shells":{"default":{"Features":{"C":"RETAINED_STRING_MARKER"}}}}}""")]
-    [InlineData("""{"CShells":{"Shells":{"default":{"Features":{"C":17}}}}}""")]
-    [InlineData("""{"CShells":{"Shells":{"default":{"Features":{"C":null}}}}}""")]
-    [InlineData("""{"CShells":{"Shells":{"default":{"Features":{"C":{"Private":"RETAINED_OBJECT_MARKER"}}}}}}""")]
-    [InlineData("""{"CShells":{"Shells":{"default":{"Features":{"C":["RETAINED_ARRAY_MARKER"]}}}}}""")]
-    public void Explicit_remove_refuses_existing_non_boolean_overlay_entries_without_rewriting_source(string overlayShells)
+    [InlineData("string")]
+    [InlineData("number")]
+    [InlineData("null")]
+    [InlineData("object")]
+    [InlineData("array")]
+    public void Explicit_remove_refuses_existing_non_boolean_overlay_entries_without_rewriting_source(string overlayKind)
     {
+        var overlayValue = overlayKind switch
+        {
+            "string" => "\"RETAINED_STRING_MARKER\"",
+            "number" => "17",
+            "null" => "null",
+            "object" => """{"Private":"RETAINED_OBJECT_MARKER"}""",
+            "array" => """["RETAINED_ARRAY_MARKER"]""",
+            _ => throw new ArgumentOutOfRangeException(nameof(overlayKind), overlayKind, "Unknown overlay fixture kind.")
+        };
+        var overlayShells = string.Concat(
+            """{"CShells":{"Shells":{"default":{"Features":{"C":""",
+            overlayValue,
+            """}}}}}""");
         var (snapshot, catalog, authored) = RemovalFixture(overlayShells);
         var originalOverlay = snapshot.CopyBytes("shells.Production.json");
 
