@@ -196,7 +196,8 @@ public sealed record SchemaFinishRecord(
 
 /// <summary>
 /// A backfill worker's claim on a family's run in one database (spec 186, FR-008): the member and the worker that holds
-/// it, the version the run upgrades to, at the standing completion for an audit of it, and until when it holds it. It
+/// it, the claimant host's write version, which its run upgrades to and which is the standing completion's when the
+/// claim covers only an audit of it, and until when it holds it. It
 /// covers every pass that reads the family's rows: the survey, the upgrade pass, the settle condition, the verification
 /// passes and the audit. Another worker leaves the family alone until the claim expires, so a crashed worker delays the
 /// run by at most one claim period and never stops it.
@@ -226,6 +227,12 @@ public enum SchemaFinishTransition
 /// One entry in a record's finish history (spec 186, FR-014 and FR-018). The history is append-only: no entry is
 /// removed, reordered or has its transition, version, actor, instant or reason changed.
 /// </summary>
+/// <remarks>
+/// Adding <paramref name="Run"/> changed the primary constructor from five parameters to six. Source that calls it with
+/// five still compiles, but an assembly compiled against the five-parameter constructor fails with a missing method when
+/// it runs against this one. That is an accepted break before 1.0 (spec 186, 2026-10-01 note): nothing outside the
+/// finalization store constructs an entry, and this package has no public API tracking.
+/// </remarks>
 /// <param name="Run">
 /// On the newest entry alone, while it is a withdrawal no completion has followed: the claim on the family's backfill
 /// run (spec 186, FR-008), which a withdrawn completion leaves no finish record to hold. It is advisory, as the finish

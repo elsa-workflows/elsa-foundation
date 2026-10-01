@@ -26,8 +26,10 @@ namespace Elsa.Cluster.EntityFrameworkCore;
 /// rejoins and is never counted again once its entry expires, yet every loop of the host would go on working under its
 /// identity: claiming and renewing work, writing at write versions it no longer advances, and serving requests nobody in
 /// the fleet accounts for. Stopping is what a restart would decide anyway: the new incarnation either joins once the
-/// other has gone, or refuses to start as a live duplicate (FR-004b, FR-039). A member that only lapsed, and so rejoins
-/// as a new incarnation, keeps the host running; what it must not do meanwhile, each loop checks for itself.
+/// other has gone, or refuses to start as a live duplicate (FR-004b, FR-039). It records why in
+/// <see cref="ClusterMembershipHostStop"/> first, so the host app exits non-zero and a supervisor restarts it. A member
+/// that only lapsed, and so rejoins as a new incarnation, keeps the host running; what it must not do meanwhile, each
+/// loop checks for itself.
 /// </para>
 /// </remarks>
 internal sealed class EfClusterMembershipLifecycle(
@@ -36,6 +38,7 @@ internal sealed class EfClusterMembershipLifecycle(
     TimeSpan cleanupInterval,
     TimeProvider clock,
     IHostApplicationLifetime? lifetime,
+    ClusterMembershipHostStop hostStop,
     ILogger<EfClusterMembershipLifecycle> logger) : IHostedLifecycleService, IAsyncDisposable, IDisposable
 {
     private readonly CancellationTokenSource _stopping = new();
@@ -129,6 +132,7 @@ internal sealed class EfClusterMembershipLifecycle(
             "The host stops, so nothing goes on working under an identity the fleet no longer counts; start it again under a host id of its own, " +
             "or after the other process has stopped (spec 183, FR-007).",
             standing.Identity, lapse.Reason, standing.Identity.HostId);
+        hostStop.Record(lapse);
         if (lifetime is null)
             logger.LogCritical("Cluster member {Member} has no host lifetime to stop; its host keeps running until it is stopped.", standing.Identity);
         else

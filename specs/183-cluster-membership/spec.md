@@ -920,7 +920,11 @@ nothing acted on that: the host kept every loop working under an identity the fl
 renewing work, writing at write versions it no longer advances, and serving requests nobody in the fleet accounts for.
 The EF provider's lifecycle now stops the host, logging it as critical, once its member concludes that it was displaced
 or found a live duplicate when it tried to rejoin. That is what a restart would decide anyway: the new incarnation
-either joins once the other process has gone, or refuses to start as a live duplicate (FR-004b, FR-039). Stopping each
+either joins once the other process has gone, or refuses to start as a live duplicate (FR-004b, FR-039). So that a
+supervisor restarts it, the provider first records why in `ClusterMembershipHostStop` (`Elsa.Cluster.Core`), a
+host-wide instance, and `Elsa.Foundation.Host` and `Elsa.Workbench` read it once their host has stopped and exit with
+code 1, as Workbench already does for a fatal start. The provider never sets the process's exit code itself, so a host
+run inside another process, as the tests run theirs, leaves that process alone. Stopping each
 loop instead was not chosen: it would leave a host that serves traffic while no member speaks for it, and every loop of
 every module would have to learn the same rule. A member that only lapsed rejoins as a new incarnation and its host keeps
 running; the work that must pause meanwhile checks the member's standing itself, as the finalization gate already did

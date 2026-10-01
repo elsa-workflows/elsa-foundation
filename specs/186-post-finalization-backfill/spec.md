@@ -657,11 +657,16 @@ which took one only for an upgrade pass with rows to rewrite and none while no c
 - **The claim covers every pass, and is taken first (FR-008).** A worker claims the family before any pass reads its
   rows: the survey, the upgrade pass, the settle condition, the verification passes and the audit. A worker that finds
   the family claimed elsewhere reads none of its rows, nor the record again, until the claim expires, and defers an
-  audit that was due by an audit interval, which also ends every host auditing at once after a start. The claimant
-  renews the claim between batches, before the settle condition and before each verification pass, so a settling
-  family's record is written about once every third of the claim period, which the 2026-09-29 note avoided. An audit's
-  claim names the standing completion as its target, so a claim's target is now at or after the completion, never
-  before it; the finalized and completion versions keep their forward-only rules unchanged.
+  audit that was due by an audit interval, which also ends every host auditing at once after a start. The claim names
+  the claimant host's write target, whatever it covers, so an audit taken while the completion stands at that target
+  names the completion's version: a claim's target is now at or after the completion, never before it. The finalized
+  and completion versions keep their forward-only rules unchanged.
+- **The claim is held for the work, and only for it.** The claimant renews it, or stops, between two batches, before
+  each table a selection counts, the audit's and the straggler scans' included, and before the settle condition and each
+  verification pass, so a settling family's record is written about once every third of the claim period, which the
+  2026-09-29 note avoided. It keeps the claim only while its run goes on next round, settling or verifying again, and
+  releases it on every other way out: an audit that found nothing, a run that recorded completion, was blocked, or found
+  nothing left to do. An audit that finds nothing therefore writes its claim and its release, and nothing else.
 - **The claim can be held while no completion stands.** A withdrawn completion leaves no finish record, so the claim is
   then held on the withdrawal that ended it: an optional `run` member of that newest finish history entry, beside the
   same member of the finish record. No entry is added, removed or reordered, and no transition, version, actor, instant
@@ -670,15 +675,24 @@ which took one only for an upgrade pass with rows to rewrite and none while no c
   the family alone: after a withdrawal one worker upgrades instead of every one. Like the finish record's claim it is
   advisory, so a build that does not know it reads the history unchanged and drops it when it next rewrites the record.
   A column or table of its own was not chosen: every module's finalization tables would need a migration on all four
-  engines for an optimisation that nothing correct depends on.
-- **The claim only ever narrows who works.** Every claim, renewal, completion and withdrawal stays a compare-and-set on
-  the record's revision. A worker whose claim lapsed and was taken over stops at its next renewal, and while another
-  worker's claim holds it records no completion, even from a pass that found nothing, so it never finishes a run it no
-  longer owns. Nothing correct depends on the claim: with `ClaimDuration` zero, or a claim that loses its
-  compare-and-set again and again, workers run unclaimed as before.
+  engines for an optimisation that nothing correct depends on. The entry's type gained a constructor parameter for it,
+  so an assembly compiled against the five-parameter constructor fails with a missing method against this one; that is
+  an accepted break before 1.0, since nothing outside the finalization store constructs an entry and the package has no
+  public API tracking.
+- **The claim only ever narrows who works.** Every claim, renewal, release, completion and withdrawal stays a
+  compare-and-set on the record's revision. A worker rewrites a row only after the read it takes before that row shows
+  no other worker's live claim; it withdraws a completion only while no other worker's live claim stands, judged on the
+  record its compare-and-set compares against, so it never moves another's claim onto its withdrawal; and it records a
+  completion only on the same terms, even from a pass that found nothing. A worker refused on those grounds lets its gate
+  read the record again and gives up, leaving the family to the claimant. Nothing correct depends on the claim: with
+  `ClaimDuration` zero, or a claim that loses its compare-and-set again and again, workers run unclaimed as before. A
+  record with nowhere to hold a claim, which nothing the store writes leaves, is logged as an error and the family
+  skipped, not run unclaimed.
 - **A member that lapses stops (spec 183, FR-007).** A worker whose member has concluded that it lapsed claims nothing,
-  stops its run at the next renewal, releases the claim it holds so another member takes the family over at once, and
-  does nothing more until it rejoins. A member that was displaced never rejoins; its host stops (spec 183, 2026-10-01
-  note).
+  checked before and during every claim attempt and on every read before a row, stops its run there, releases the claim
+  it holds so another member takes the family over at once, and does nothing more until it rejoins as a new incarnation,
+  when it claims and goes on. A release that loses its compare-and-set on every attempt fails the round and is made again
+  the next one. A member that was displaced never rejoins; its host stops (spec 183, 2026-10-01 note).
 - **US4's third acceptance scenario** reads "the record is unchanged" of the proof: an audit that finds nothing leaves
-  the finalized version, the completion and both histories as they were, and writes only the claim it ran under.
+  the finalized version, the completion and both histories as they were, and writes only the claim it ran under and the
+  release of it.
