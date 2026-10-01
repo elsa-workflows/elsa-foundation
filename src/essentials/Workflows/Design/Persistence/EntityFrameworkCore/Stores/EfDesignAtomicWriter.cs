@@ -57,7 +57,7 @@ public sealed class EfDesignAtomicWriter(
         return TransientWrites.RunUntilSettledAsync(
             db,
             () => ExecuteAttemptAsync(key, operationKind, request, stage, beforeAttempt, cancellationToken, resultCodec),
-            conflict => throw ProviderFailure(operationKind, conflict!),
+            conflict => throw EfDesignSupport.ProviderFailure(operationKind, conflict!),
             cancellationToken).AsTask();
     }
 
@@ -203,7 +203,7 @@ public sealed class EfDesignAtomicWriter(
             db.ChangeTracker.Clear();
             // Rolling back an enlisted operation leaves the caller's shared transaction open, so this refuses the retry.
             if (!TransientWrites.ShouldRetry(db, exception))
-                throw ProviderFailure(operationKind, exception);
+                throw EfDesignSupport.ProviderFailure(operationKind, exception);
             return EfWriteAttempt<DesignAtomicWriteResult<T>>.Retry(exception);
         }
         catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception))
@@ -220,7 +220,7 @@ public sealed class EfDesignAtomicWriter(
                 // classify this caller as a replay so it cannot emit duplicate post-commit events.
                 return ResolveExisting(winner, operationKind, requestFingerprint, legacyRequestFingerprint, DesignAtomicWriteStatus.Replayed, resultCodec);
             }
-            throw ProviderFailure(operationKind, exception);
+            throw EfDesignSupport.ProviderFailure(operationKind, exception);
         }
         catch (Exception exception)
         {
@@ -419,9 +419,6 @@ public sealed class EfDesignAtomicWriter(
 
     private static bool IsSerializationFailure(Exception exception) =>
         exception is not (OperationCanceledException or OutOfMemoryException or StackOverflowException or AccessViolationException);
-
-    private static DesignPersistenceException ProviderFailure(string operation, Exception exception) =>
-        new(DesignPersistenceDomain.Workflow, DesignPersistenceFailureKind.Provider, operation, null, exception.InnerException ?? exception);
 
     private static DesignPersistenceException SerializationFailure(string operation, Exception exception) =>
         new(DesignPersistenceDomain.Workflow, DesignPersistenceFailureKind.Serialization, operation, "design operation", exception);

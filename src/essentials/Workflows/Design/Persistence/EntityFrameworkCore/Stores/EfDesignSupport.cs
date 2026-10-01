@@ -144,8 +144,20 @@ internal static class EfDesignSupport
             throw new InvalidOperationException($"The {operation} returned a row with an invalid physical persistence scope.");
     }
 
-    private static DesignPersistenceException ProviderFailure(string operation, Exception exception) =>
-        new(DesignPersistenceDomain.Workflow, DesignPersistenceFailureKind.Provider, operation, null, exception.InnerException ?? exception);
+    /// <summary>
+    /// Translates a provider exception at the design persistence boundary. A save that lost an optimistic-concurrency
+    /// race becomes a <see cref="DesignPersistenceFailureKind.Concurrency"/> failure, which a caller may answer by
+    /// reading again; every other provider exception becomes a <see cref="DesignPersistenceFailureKind.Provider"/> failure.
+    /// </summary>
+    public static DesignPersistenceException ProviderFailure(string operation, Exception exception) =>
+        new(
+            DesignPersistenceDomain.Workflow,
+            EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.Concurrency)
+                ? DesignPersistenceFailureKind.Concurrency
+                : DesignPersistenceFailureKind.Provider,
+            operation,
+            null,
+            exception.InnerException ?? exception);
 
     public static IQueryable<T> InScope<T>(IQueryable<T> query, IPersistenceAccessContextAccessor access, Func<T, string?> tenant) where T : class
     {

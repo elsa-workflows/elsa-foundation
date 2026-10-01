@@ -12,6 +12,7 @@ using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Exceptions;
 using Elsa.Workflows.Design.Persistence.Core.Filters;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
+using Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Commands;
 using Elsa.Workflows.Design.Core.Reconciliation;
 using Elsa.Workflows.Design.Reconciliation.Options;
 using Elsa.Workflows.Design.Reconciliation.Services;
@@ -465,25 +466,28 @@ public sealed class WorkflowsVersionReconcilerTests
         Assert.Empty(sender.Published.OfType<WorkflowVersionsReconciled>());
     }
 
-    [Fact]
-    public async Task Metadata_write_that_keeps_losing_races_gives_up_after_a_bounded_number_of_attempts()
+    [Theory]
+    [InlineData(DesignPersistenceFailureKind.Concurrency, WorkflowsVersionReconciler.MaxMetadataConvergenceAttempts)]
+    [InlineData(DesignPersistenceFailureKind.Provider, 1)]
+    [InlineData(DesignPersistenceFailureKind.Serialization, 1)]
+    public async Task Metadata_write_failure_is_retried_only_while_it_is_a_lost_race_and_then_rethrown_unchanged(
+        DesignPersistenceFailureKind failureKind, int expectedAttempts)
     {
-        // Every re-read still finds the old name, so each attempt writes again under a new key until the
-        // attempts run out, and the pass then fails rather than looping or reporting success.
+        // Every re-read still finds the old name, so a lost race is written again under a new key until the
+        // attempts run out. No other failure is retried. Either way the pass fails with the write's own exception.
         var incoming = BuildIncomingVersion(definitionId: "wf-contended", version: "1.0.0", name: "New Name");
         var defs = new StubDefinitionStore().With(new WorkflowDefinition { Id = "wf-contended", Name = "Old Name" });
         var versions = new StubVersionStore().With(new WorkflowDefinitionVersion("wf-contended", "1.0.0"));
-        var saveDef = new AlwaysLosingSaveDefinitionCommand();
+        var saveDef = new FailingSaveDefinitionCommand(failureKind);
 
         var reconciler = NewReconciler(
             new CapturingSender { ToContribute = [incoming] },
             defs, versions, new SpyMaterializeDefinitionCommand(), new SpyMaterializeVersionCommand(),
             DuplicateHandling.Skip, saveDef);
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => reconciler.Reconcile(CancellationToken.None));
-        Assert.IsType<DesignPersistenceException>(exception.InnerException);
-        Assert.Equal(8, saveDef.Keys.Distinct().Count());
-        Assert.Equal(8, saveDef.Keys.Count);
+        var exception = await Assert.ThrowsAsync<DesignPersistenceException>(() => reconciler.Reconcile(CancellationToken.None));
+        Assert.Same(saveDef.LastFailure, exception);
+        Assert.Equal(expectedAttempts, saveDef.Keys.Distinct().Count());
     }
 
     private static WorkflowVersionSourceClaim NewClaim(string definitionId, string version, string sourceId = "src-1") =>
@@ -669,19 +673,22 @@ public sealed class WorkflowsVersionReconcilerTests
         }
     }
 
-    /// <summary>Fails every write as a lost race does: a provider failure, with nothing committed.</summary>
-    private sealed class AlwaysLosingSaveDefinitionCommand : ISaveWorkflowDefinitionCommand
+    /// <summary>Fails every write with the given kind of failure, committing nothing.</summary>
+    private sealed class FailingSaveDefinitionCommand(DesignPersistenceFailureKind failureKind) : ISaveWorkflowDefinitionCommand
     {
         public List<DesignOperationKey> Keys { get; } = new();
+        public DesignPersistenceException? LastFailure { get; private set; }
+
         public Task Execute(
             DesignOperationKey operationKey,
             WorkflowDefinition definition,
             CancellationToken cancellationToken = default)
         {
             Keys.Add(operationKey);
-            throw new DesignPersistenceException(
-                DesignPersistenceDomain.Workflow, DesignPersistenceFailureKind.Provider, "workflow.definition.save.v1", null,
-                new InvalidOperationException("The row changed since it was read."));
+            LastFailure = new DesignPersistenceException(
+                DesignPersistenceDomain.Workflow, failureKind, EfSaveWorkflowDefinitionCommand.OperationKind, null,
+                new InvalidOperationException("The write failed."));
+            throw LastFailure;
         }
     }
 

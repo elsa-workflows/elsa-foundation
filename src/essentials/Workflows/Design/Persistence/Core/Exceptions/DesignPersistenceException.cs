@@ -11,7 +11,13 @@ public enum DesignPersistenceDomain
 public enum DesignPersistenceFailureKind
 {
     Provider,
-    Serialization
+    Serialization,
+
+    /// <summary>
+    /// A write lost an optimistic-concurrency race: the row changed after it was read, and nothing was committed.
+    /// Reading again and writing afresh can succeed, unlike any other provider failure.
+    /// </summary>
+    Concurrency
 }
 
 /// <summary>

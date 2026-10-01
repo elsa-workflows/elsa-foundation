@@ -31,6 +31,10 @@ The atomic writer persists the operation marker in the same transaction as stage
 version, draft, and layout changes. Replays and marker-race losers do not publish duplicate
 post-commit lifecycle events.
 
+A save that loses an optimistic-concurrency race, because a row changed after it was read, surfaces
+as a `DesignPersistenceException` with `FailureKind` `Concurrency`. Nothing was committed, so reading
+again and writing afresh can succeed. Every other provider failure has `FailureKind` `Provider`.
+
 Markers are permanent, with one exception. A permanent delete removes, in its own transaction, every
 marker the workflow reconciler wrote for the definition (`WorkflowReconciliationOperationKeys`): the
 materialization of the definition and its versions, and its metadata writes, including those written

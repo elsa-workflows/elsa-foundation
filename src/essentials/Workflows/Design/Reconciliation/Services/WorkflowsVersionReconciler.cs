@@ -37,7 +37,11 @@ public sealed class WorkflowsVersionReconciler(
 )
     : IWorkflowVersionReconciler
 {
-    private const int MaxMetadataConvergenceAttempts = 8;
+    /// <summary>
+    /// Writes of one definition's metadata, the first included, before a pass gives up on lost races and fails with
+    /// the last one.
+    /// </summary>
+    public const int MaxMetadataConvergenceAttempts = 8;
 
     public async Task Reconcile(CancellationToken cancellationToken)
     {
@@ -136,7 +140,8 @@ public sealed class WorkflowsVersionReconciler(
     /// ADR 0034 (D5). Idempotent per desired state: it writes only when a value actually changed, and each write
     /// gets a key no earlier write used (<see cref="WorkflowReconciliationOperationKeys.DefinitionMetadataWrite"/>),
     /// so any sequence of changes at one version, a change back included, converges (#2187). A write that loses a
-    /// race to another writer reads the definition again and compares afresh, a bounded number of times.
+    /// race to another writer reads the definition again and compares afresh, up to
+    /// <see cref="MaxMetadataConvergenceAttempts"/> attempts with a short backoff.
     /// Latest-wins soft-delete is scoped to <see cref="WorkflowDefinition.IsSourceOwned"/> definitions:
     /// a source can never flip <c>DeletedAt</c> on a catalog-authored (Studio) definition.
     /// Runs for every <see cref="Contracts.IWorkflowReconciliationSource"/>, not only git, and only for the
@@ -163,23 +168,21 @@ public sealed class WorkflowsVersionReconciler(
                 LogMetadataUpdated(definitionId);
                 return;
             }
-            catch (DesignPersistenceException exception) when (exception.FailureKind == DesignPersistenceFailureKind.Provider)
+            catch (DesignPersistenceException exception) when (
+                exception.FailureKind == DesignPersistenceFailureKind.Concurrency && attempt < MaxMetadataConvergenceAttempts)
             {
-                // Typically another node applied the same change between this pass's read and its write, so the
-                // write failed the row's LastModifiedAt check. Its key is its own, so no marker exists to replay.
-                // Read the row again and compare afresh: write nothing when it already matches, and write again
-                // under a new key when it does not. The atomic writer clears the change tracker when a write
-                // fails, so the read returns the committed row. A failure that is not a lost race surfaces when
-                // the attempts run out.
-                if (attempt == MaxMetadataConvergenceAttempts)
-                    throw new InvalidOperationException(
-                        $"The metadata of workflow definition '{definitionId}' did not converge after {MaxMetadataConvergenceAttempts} attempts.",
-                        exception);
+                // A lost race: typically another node applied the same change between this pass's read and its
+                // write, so the write failed the row's LastModifiedAt check. Its key is its own, so no marker
+                // exists to replay. Read the row again and compare afresh: write nothing when it already matches,
+                // and write again under a new key when it does not. The atomic writer clears the change tracker
+                // when a write fails, so the read returns the committed row. Any other failure, and the last lost
+                // race, propagate unchanged.
+                await Task.Delay(TimeSpan.FromMilliseconds(25 * attempt), cancellationToken);
+                var current = await FindDefinition(definitionId, cancellationToken);
+                if (current is null)
+                    throw; // The race was lost to a delete, which leaves nothing to compare against.
 
-                persisted = await FindDefinition(definitionId, cancellationToken)
-                            ?? throw new InvalidOperationException(
-                                $"Workflow definition '{definitionId}' was deleted while its metadata was being reconciled.",
-                                exception);
+                persisted = current;
             }
         }
     }

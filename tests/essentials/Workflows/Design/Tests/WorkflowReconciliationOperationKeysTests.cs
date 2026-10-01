@@ -1,5 +1,6 @@
 using Elsa.Workflows.Design.Persistence.Core.Constants;
 using Elsa.Workflows.Design.Persistence.Core.Models;
+using Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Commands;
 using Xunit;
 
 namespace Elsa.Workflows.Design.Tests;
@@ -31,6 +32,6 @@ public sealed class WorkflowReconciliationOperationKeysTests
     {
         var key = WorkflowReconciliationOperationKeys.DefinitionMetadataWrite(new string('x', WorkflowDefinitionLimits.IdentityMaximumLength));
 
-        DesignOperationKey.Validate(key, "workflow.definition.save.v1");
+        DesignOperationKey.Validate(key, EfSaveWorkflowDefinitionCommand.OperationKind);
     }
 }
