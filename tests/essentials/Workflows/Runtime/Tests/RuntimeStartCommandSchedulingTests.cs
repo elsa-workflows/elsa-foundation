@@ -121,7 +121,9 @@ public sealed class RuntimeStartCommandSchedulingTests
             queue,
             new IncrementingRuntimeExecutionIdGenerator(),
             new FakeTimeProvider(_now),
-            workflowStore,
+            // Empty on purpose: the seeded Pending state belongs to the commit store, and a state in the handler's store would
+            // make this a duplicate start.
+            new InMemoryWorkflowExecutionStateStore(),
             incidentStrategyCatalog: provider.GetRequiredService<IIncidentStrategyCatalog>(),
             checkpointCommitter: committer);
 
