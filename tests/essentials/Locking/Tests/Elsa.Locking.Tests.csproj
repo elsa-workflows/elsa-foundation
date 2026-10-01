@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The locking features without a database: the refused cluster composition, on a real CShells host, and the database
+       feature's own settings (#2192). Locks taken against PostgreSQL, SQL Server and MySQL are in Database/ProviderTests. -->
+  <PropertyGroup>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CShells" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="coverlet.collector" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\src\essentials\Locking\FileSystem\Elsa.Locking.FileSystem.csproj" />
+    <ProjectReference Include="..\..\..\..\src\essentials\Locking\Database\Elsa.Locking.Database.csproj" />
+    <ProjectReference Include="..\..\..\..\src\essentials\Cluster\Core\Elsa.Cluster.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\src\essentials\Cluster\InProcess\Elsa.Cluster.InProcess.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+</Project>

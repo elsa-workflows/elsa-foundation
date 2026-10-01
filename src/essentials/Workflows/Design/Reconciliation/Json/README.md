@@ -12,7 +12,7 @@ of definition files, enable the feature in `shells.json`, start the server — z
 - `JsonWorkflowCatalogReader` — reads one file into `WorkflowVersionReconciliationModel[]`; every IO/parse
   fault becomes an actionable `InvalidWorkflowCatalogJsonException` naming the path.
 - Because the feature extends the abstract `WorkflowsDesignReconciliationFeature`, enabling it also arms
-  the reconcile lifecycle: the reconciler, the `[SingleNodeTask]`/`[Order(2)]` startup task, and the
+  the reconcile lifecycle: the reconciler, the `[Order(2)]` startup task (on every node, no lock; #2192), and the
   universal contribution handler.
 
 ## Options

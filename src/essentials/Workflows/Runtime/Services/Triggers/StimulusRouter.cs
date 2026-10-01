@@ -20,7 +20,10 @@ namespace Elsa.Workflows.Runtime.Services.Triggers;
 /// Start-path idempotency (#2195): when the request carries an idempotency key, each matching start is a keyed start
 /// (<see cref="KeyedWorkflowStartIdentity"/>) named by the key and the matched artifact. A redelivery, on this node or any
 /// other and before or after a restart, resolves to the same workflow execution, and the start dispatcher answers a start
-/// that already ran as a duplicate, so a duplicate delivery never starts a second instance. The key is also threaded into
+/// that already ran as a duplicate, so a duplicate delivery never starts a second instance. A recurring-trigger occurrence
+/// (<see cref="StimulusStartKeyScope.Occurrence"/>, #2198) is keyed without the artifact
+/// (<see cref="KeyedWorkflowStartIdentity.ForOccurrence"/>), so a republish that replaces the artifact while the occurrence
+/// is in flight still starts it once. The key is also threaded into
 /// the resume dispatch envelopes so the agent mailbox dedups redeliveries. When no key is supplied the start path is
 /// at-least-once and a duplicate delivery MAY double-start — a deliberately stated limit (see
 /// <c>docs/serialization.md</c>).
@@ -123,6 +126,14 @@ public sealed class StimulusRouter : IStimulusRouter
                 request.StimulusHash,
                 cancellationToken);
 
+        // An occurrence key names exactly one start, so it may start through at most one binding: a second one would
+        // collapse onto the first one's execution and silently never start. Refuse it loudly instead.
+        if (request.StartKeyScope == StimulusStartKeyScope.Occurrence && bindings.Count > 1)
+        {
+            throw new InvalidOperationException(
+                $"Occurrence-keyed start '{request.IdempotencyKey}' matched {bindings.Count} trigger bindings; it names exactly one start.");
+        }
+
         // Deterministic order so fan-out of starts is stable across providers.
         var ordered = bindings
             .OrderBy(binding => binding.ArtifactId, StringComparer.Ordinal)
@@ -139,7 +150,9 @@ public sealed class StimulusRouter : IStimulusRouter
             // dispatch would turn the retry of a failed start into a silent skip.
             var keyed = request.IdempotencyKey is null
                 ? null
-                : KeyedWorkflowStartIdentity.For(request.IdempotencyKey, binding.ArtifactId);
+                : request.StartKeyScope == StimulusStartKeyScope.Occurrence
+                    ? KeyedWorkflowStartIdentity.ForOccurrence(request.IdempotencyKey)
+                    : KeyedWorkflowStartIdentity.For(request.IdempotencyKey, binding.ArtifactId);
 
             // Spec 089 FR-001: the stimulus payload reaches started instances through the dedicated
             // stimulus-input channel — the start-side counterpart of the resume path's

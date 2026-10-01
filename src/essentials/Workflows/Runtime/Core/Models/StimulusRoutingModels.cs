@@ -20,6 +20,23 @@ public enum StimulusRoutingMode
     ResumeOnly
 }
 
+/// <summary>How a keyed start request's idempotency key names each start it makes (#2195, #2198).</summary>
+public enum StimulusStartKeyScope
+{
+    /// <summary>
+    /// The key names one start per matched artifact (<see cref="KeyedWorkflowStartIdentity.For"/>), so one keyed stimulus
+    /// that matches two workflows starts each of them once.
+    /// </summary>
+    Artifact,
+
+    /// <summary>
+    /// The key names exactly one start whichever artifact serves it (<see cref="KeyedWorkflowStartIdentity.ForOccurrence"/>):
+    /// a recurring-trigger occurrence whose key already identifies its trigger across publications. Such a request is
+    /// start-only and pre-matches the one binding it starts through.
+    /// </summary>
+    Occurrence
+}
+
 /// <summary>
 /// A request to route an external stimulus to workflows. The stimulus identity is the
 /// opaque <c>(StimulusType, StimulusHash)</c> pair that is already the engine's routing key on bookmarks
@@ -40,7 +57,8 @@ public sealed class StimulusDispatchRequest
         WorkflowExecutionCommandDispatchOptions? dispatchOptions = null,
         ValueTypeDescriptor? payloadType = null,
         string? providerId = null,
-        string? targetWorkflowExecutionId = null)
+        string? targetWorkflowExecutionId = null,
+        StimulusStartKeyScope startKeyScope = StimulusStartKeyScope.Artifact)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(stimulusType);
         ArgumentException.ThrowIfNullOrWhiteSpace(stimulusHash);
@@ -62,6 +80,13 @@ public sealed class StimulusDispatchRequest
                 $"Targeting workflow execution '{targetWorkflowExecutionId}' requires {nameof(StimulusRoutingMode.ResumeOnly)} routing: a start would create a different execution than the target.",
                 nameof(targetWorkflowExecutionId));
 
+        if (!Enum.IsDefined(startKeyScope))
+            throw new ArgumentOutOfRangeException(nameof(startKeyScope));
+        if (startKeyScope == StimulusStartKeyScope.Occurrence && (idempotencyKey is null || mode != StimulusRoutingMode.StartOnly || matchedTriggerBindings is null))
+            throw new ArgumentException(
+                $"An occurrence-scoped start key requires an idempotency key, {nameof(StimulusRoutingMode.StartOnly)} routing and the pre-matched binding it starts through.",
+                nameof(startKeyScope));
+
         StimulusType = stimulusType;
         StimulusHash = stimulusHash;
         Input = input?.Clone();
@@ -75,6 +100,7 @@ public sealed class StimulusDispatchRequest
         PayloadType = payloadType;
         ProviderId = providerId;
         TargetWorkflowExecutionId = targetWorkflowExecutionId;
+        StartKeyScope = startKeyScope;
     }
 
     public string StimulusType { get; }
@@ -148,6 +174,12 @@ public sealed class StimulusDispatchRequest
     /// </para>
     /// </summary>
     public string? TargetWorkflowExecutionId { get; }
+
+    /// <summary>
+    /// How <see cref="IdempotencyKey"/> names each start: once per matched artifact (the default), or, for a
+    /// recurring-trigger occurrence, once whichever artifact serves it (#2198).
+    /// </summary>
+    public StimulusStartKeyScope StartKeyScope { get; }
 
     public IReadOnlyDictionary<string, string> BuildDispatchMetadata()
     {

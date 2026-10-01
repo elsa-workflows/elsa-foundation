@@ -49,6 +49,20 @@ internal static class EfRuntimeOperationalStoreSupport
         return EfRelationalIdentity.HashLengthFramed([scope, .. values]);
     }
 
+    /// <summary>The offset of <paramref name="value"/> in whole minutes, as the <c>*OffsetMinutes</c> columns store it.</summary>
+    public static int OffsetMinutes(DateTimeOffset value) => checked((int)value.Offset.TotalMinutes);
+
+    /// <summary>Rebuilds an instant from its <c>*UtcTicks</c> and <c>*OffsetMinutes</c> columns.</summary>
+    public static DateTimeOffset FromUtcTicks(long utcTicks, int offsetMinutes) =>
+        new DateTimeOffset(new DateTime(utcTicks, DateTimeKind.Utc)).ToOffset(TimeSpan.FromMinutes(offsetMinutes));
+
+    /// <summary>
+    /// An optional instant as its <c>*UtcTicks</c> and <c>*OffsetMinutes</c> column pair, both null when it is absent, so a
+    /// claim column pair is always written together: <c>(row.VisibleAfterUtcTicks, row.VisibleAfterOffsetMinutes) = TimestampColumns(value)</c>.
+    /// </summary>
+    public static (long? UtcTicks, int? OffsetMinutes) TimestampColumns(DateTimeOffset? value) =>
+        value is { } instant ? (instant.UtcTicks, OffsetMinutes(instant)) : (null, null);
+
     public static void EnsureScope(string actual, string expected) {
         if (!StringComparer.Ordinal.Equals(actual, expected))
             throw new InvalidDataException("The persisted runtime row belongs to another persistence scope.");

@@ -20,7 +20,8 @@ namespace Elsa.Workflows.Runtime.Scheduling;
 /// feature self-contained: it composes over the existing indexer service without modifying the publish handler
 /// or the trigger core. All schedule calculation finishes before the inner indexer runs, so invalid or exhausted
 /// recurring starts fail before bindings or schedules mutate. After preflight, schedule population mirrors the
-/// indexer's delete-by-artifact-then-write replacement semantics.
+/// indexer's delete-by-artifact-then-write replacement semantics, except that a re-index carries over a schedule's cursor
+/// when it names an occurrence that is already due, so republishing never skips an occurrence that has not fired yet.
 /// </para>
 /// <para>
 /// Only nodes the compiler marked as start-triggers are considered, exactly as the trigger extractor does, so a
@@ -72,11 +73,32 @@ public sealed class RecurringTriggerScheduleIndexer : IWorkflowTriggerIndexer
         var schedules = MaterializeSchedules(executable, now, activationId: null, slotId: null);
 
         var bindings = await _inner.IndexAsync(executable, cancellationToken);
+        var replacements = await CarryDueOccurrencesAsync(schedules, now, cancellationToken);
         await _store.DeleteByArtifactAsync(artifactId, cancellationToken);
-        foreach (var schedule in schedules)
+        foreach (var schedule in replacements)
             await _store.SaveAsync(schedule, cancellationToken);
 
         return bindings;
+    }
+
+    // A re-index must not skip an occurrence that is already due but not yet settled (#2198): recomputing the cursor from
+    // now would replace it with the next one. The replacement keeps the due cursor instead, so the pump fires that
+    // occurrence under its original key, which converges on the start a fire already in flight may have made.
+    private async ValueTask<IReadOnlyCollection<RecurringTriggerSchedule>> CarryDueOccurrencesAsync(
+        IReadOnlyCollection<RecurringTriggerSchedule> schedules,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        var replacements = new List<RecurringTriggerSchedule>(schedules.Count);
+        foreach (var schedule in schedules)
+        {
+            var existing = await _store.FindAsync(schedule.ScheduleId, cancellationToken);
+            replacements.Add(existing is { IsActive: true } && existing.NextOccurrence <= now
+                ? schedule with { NextOccurrence = existing.NextOccurrence }
+                : schedule);
+        }
+
+        return replacements;
     }
 
     public async ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> PrepareActivationAsync(

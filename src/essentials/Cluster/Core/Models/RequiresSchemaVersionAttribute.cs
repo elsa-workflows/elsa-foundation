@@ -18,6 +18,10 @@ namespace Elsa.Cluster.Core.Models;
 /// mapped exactly as without it. What reads it is the feature catalog, Attention and the operations themselves, each
 /// through the one shared dormancy check.
 /// </para>
+/// <para>
+/// A task class may carry it too (#2192): the task executor asks the shared check before it runs the task, and before it
+/// takes the task's single-node lock, and skips the task while this node is dormant for it.
+/// </para>
 /// </remarks>
 [AttributeUsage(AttributeTargets.Class, AllowMultiple = true, Inherited = false)]
 public sealed class RequiresSchemaVersionAttribute(string family, string version) : Attribute

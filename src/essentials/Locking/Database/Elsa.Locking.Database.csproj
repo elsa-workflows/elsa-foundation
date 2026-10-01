@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Distributed locks held in a shared PostgreSQL, SQL Server or MySQL database, through Medallion's providers (#2192):
+    the provider a cluster composes so every node excludes every other. SQLite has no Medallion provider, so a SQLite
+    composition keeps Elsa.Locking.FileSystem and is single-node by definition.
+  -->
+  <ItemGroup>
+    <PackageReference Include="CShells.Abstractions" />
+    <PackageReference Include="DistributedLock.MySql" />
+    <PackageReference Include="DistributedLock.Postgres" />
+    <PackageReference Include="DistributedLock.SqlServer" />
+    <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Core\Elsa.Locking.Core.csproj" />
+  </ItemGroup>
+
+</Project>

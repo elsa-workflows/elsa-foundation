@@ -1,33 +1,20 @@
-using Elsa.Locking.Core;
 using Elsa.Tasks.Core;
 using Elsa.Tasks.Core.Attributes;
 using Elsa.Workflows.Design.Core.Reconciliation;
-using Elsa.Workflows.Design.Reconciliation.Options;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 
 namespace Elsa.Workflows.Design.Reconciliation.Services;
 
-[SingleNodeTask]
+/// <summary>
+/// Runs one workflow version reconciliation pass at shell start, on every node.
+/// </summary>
+/// <remarks>
+/// It takes no lock and is not a <c>[SingleNodeTask]</c> (#2192). Its sources are node-local, such as a JSON mount or a
+/// local clone, so a node that skipped the pass because another node held a lock would never reconcile its own. Two nodes
+/// running it at once converge instead (#2187, #2189): version ids are derived from the source, so the second node's writes
+/// replay the first one's.
+/// </remarks>
 [Order(2)]
-public sealed class WorkflowsVersionReconcilerStartupTask(
-    ILogger<WorkflowsVersionReconcilerStartupTask> logger,
-    IWorkflowVersionReconciler reconciler,
-    IDistributedLockProvider distributedLockProvider,
-    IOptions<WorkflowVersionReconcilerStartupTaskOptions> options)
-    : IStartupTask
+public sealed class WorkflowsVersionReconcilerStartupTask(IWorkflowVersionReconciler reconciler) : IStartupTask
 {
-    public async Task ExecuteAsync(CancellationToken cancellationToken)
-    {
-        var lockKey = nameof(WorkflowsVersionReconcilerStartupTask);
-        var timeout = TimeSpan.FromMilliseconds(options.Value.LockTimeoutMs);
-        var acquired = await distributedLockProvider.TryRunUnderDistributedLock(
-            lockKey, timeout, reconciler.Reconcile, cancellationToken);
-
-        if (!acquired)
-        {
-            if (logger.IsEnabled(LogLevel.Information))
-                logger.LogInformation("Could not retrieve lock '{key}'; because it was claimed by another instance", lockKey);
-        }
-    }
+    public Task ExecuteAsync(CancellationToken cancellationToken) => reconciler.Reconcile(cancellationToken);
 }
