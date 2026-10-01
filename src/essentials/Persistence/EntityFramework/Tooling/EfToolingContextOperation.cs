@@ -211,7 +211,7 @@ internal static class EfToolingContextOperation
                     foreach (var name in selectedParticipants.Select(participant => participant.ConnectionName)
                                  .Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.Ordinal))
                         context.VerifyExpectedConnection(name!, request.Connection);
-                }, cancellationToken);
+                }, EfMigrateOptions.FromConfiguration(context.Configuration), cancellationToken);
         }
         catch (EfToolingRefusal refusal) when (refusal.Code == "provider-engine-unavailable")
         {

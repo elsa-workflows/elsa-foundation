@@ -6,7 +6,7 @@ Artifact lifetime is derived from durable roots, not from publication state alon
 
 The sweep is deliberately conservative:
 
-1. prune expired or retired source-reference records;
+1. prune expired or retired source-reference records, each through a delete fenced on the listed snapshot and on the row still being retired or expired (a reference restored in between survives);
 2. obtain distinct pinned artifact IDs through the execution-state store's provider-efficient query;
 3. exclude artifacts inside creation/staging grace;
 4. select artifacts with no root;
