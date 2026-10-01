@@ -48,6 +48,14 @@ public sealed class SchedulerWorkQueueClaimableDiscoveryContractTests
         await PagesInOrdinalOrderAfterTheBoundAsync(backend.Queue);
     }
 
+    [Theory]
+    [MemberData(nameof(Stores))]
+    public async Task Next_items_are_read_as_a_claim_would_take_them(string store)
+    {
+        await using var backend = await QueueBackend.CreateAsync(store);
+        await ReadsTheNextItemAClaimWouldTakeAsync(backend.Queue);
+    }
+
     /// <summary>
     /// The #2188 scenario at the pump's default bounds: more than a page of older executions whose queued work is hidden
     /// by a live claim or a backoff, and one newer execution whose work is claimable. Before the fix the older ones
@@ -125,7 +133,8 @@ public sealed class SchedulerWorkQueueClaimableDiscoveryContractTests
             new ShortRuntimeExecutionIdGenerator(),
             new FixedTimeProvider(Now),
             new InMemoryWorkflowExecutionStateStore(),
-            pauseGate: new WorkflowSchedulerPauseGate(new RuntimePauseDecisionProvider(_holds), new FixedTimeProvider(Now)));
+            new WorkflowSchedulerPauseGate(new RuntimePauseDecisionProvider(_holds), new FixedTimeProvider(Now)),
+            new RuntimeResumptionDiscoveryStateStore());
 
         var result = await service.SweepAsync(new RuntimeResumptionSweepRequest(
             outboxBatchSize: _defaults.OutboxBatchSize,

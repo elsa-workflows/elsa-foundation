@@ -64,6 +64,11 @@ public sealed class CoalescingWorkflowSchedulerWorkQueue(
         CancellationToken cancellationToken = default) =>
         _inner.ListClaimableWorkflowExecutionIdsAsync(query, cancellationToken);
 
+    public ValueTask<IReadOnlyDictionary<string, RuntimeSchedulerWorkItem>> ListNextWorkItemsAsync(
+        IReadOnlyCollection<string> workflowExecutionIds,
+        CancellationToken cancellationToken = default) =>
+        _inner.ListNextWorkItemsAsync(workflowExecutionIds, cancellationToken);
+
     // Targeted deletion always addresses the durable inner queue. Its only caller is the out-of-drain terminal-residue
     // purge in the resumption sweep (spec 113), which never runs inside a coalescing session — so, like
     // ListPendingWorkflowExecutionIdsAsync, there is no overlay to consult and delegating to the inner queue is the

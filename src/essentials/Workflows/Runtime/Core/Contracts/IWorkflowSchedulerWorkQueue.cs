@@ -69,6 +69,31 @@ public interface IWorkflowSchedulerWorkQueue
         throw new NotSupportedException("This scheduler work queue does not support claimable backlog discovery.");
 
     /// <summary>
+    /// Returns, for each given workflow execution with queued work, the item <see cref="ClaimAsync"/> would take next:
+    /// its FIFO head, whatever its visibility. Executions without queued work are absent from the result. Resumption
+    /// sweeps read a page of executions this way in one request instead of one request per execution.
+    /// </summary>
+    /// <remarks>
+    /// The default implementation reads each execution's first <see cref="ListAsync"/> item, which is correct for any
+    /// provider whose listing order is its claim order but costs one request per execution.
+    /// </remarks>
+    async ValueTask<IReadOnlyDictionary<string, RuntimeSchedulerWorkItem>> ListNextWorkItemsAsync(
+        IReadOnlyCollection<string> workflowExecutionIds,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(workflowExecutionIds);
+        var heads = new Dictionary<string, RuntimeSchedulerWorkItem>(StringComparer.Ordinal);
+        foreach (var workflowExecutionId in workflowExecutionIds.Distinct(StringComparer.Ordinal))
+        {
+            var page = await ListAsync(new RuntimeSchedulerWorkQuery(workflowExecutionId, limit: 1), cancellationToken);
+            if (page.Items.FirstOrDefault() is { } head)
+                heads[workflowExecutionId] = head;
+        }
+
+        return heads;
+    }
+
+    /// <summary>
     /// Atomically claims the FIFO head when it is visible. An unexpired claim keeps the head hidden and
     /// prevents later work in the same workflow execution from overtaking it.
     /// </summary>

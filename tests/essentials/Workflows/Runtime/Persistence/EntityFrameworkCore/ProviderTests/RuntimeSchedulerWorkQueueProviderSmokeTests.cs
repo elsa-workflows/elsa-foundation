@@ -130,7 +130,8 @@ internal static class RuntimeSchedulerWorkQueueProviderSmoke
         Func<IWorkflowSchedulerWorkQueue, Task>[] scenarios =
         [
             SchedulerWorkQueueClaimableDiscoveryContract.ListsExactlyTheExecutionsAClaimWouldServeAsync,
-            SchedulerWorkQueueClaimableDiscoveryContract.PagesInOrdinalOrderAfterTheBoundAsync
+            SchedulerWorkQueueClaimableDiscoveryContract.PagesInOrdinalOrderAfterTheBoundAsync,
+            SchedulerWorkQueueClaimableDiscoveryContract.ReadsTheNextItemAClaimWouldTakeAsync
         ];
         foreach (var scenario in scenarios)
         {

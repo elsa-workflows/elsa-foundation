@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Linq.Expressions;
 using System.Security.Cryptography;
 using System.Text;
 using Elsa.Persistence.EntityFramework;
@@ -23,6 +24,13 @@ public sealed class EfSchedulerWorkQueueStore(
 {
     private const string CursorPurpose = "ef-runtime-scheduler-work-v1";
     private static readonly EfWriteRetry Transitions = new(EfWriteRetry.DefaultMaxAttempts, EfWriteConflict.Concurrency);
+
+    // A claim may take a row at an instant only while the row is visible then: never claimed, released, or under a
+    // lapsed claim. Stated once: discovery filters with it in the query and ClaimAsync checks the head with the compiled
+    // form, so the two cannot drift.
+    private static readonly Expression<Func<SchedulerWorkItemEntity, long, bool>> VisibleAtTicks =
+        (row, nowUtcTicks) => row.VisibleAfterUtcTicks == null || row.VisibleAfterUtcTicks <= nowUtcTicks;
+    private static readonly Func<SchedulerWorkItemEntity, long, bool> IsVisibleAt = VisibleAtTicks.Compile();
 
     public bool SupportsClaimTransitions => true;
 
@@ -74,32 +82,27 @@ public sealed class EfSchedulerWorkQueueStore(
         ArgumentNullException.ThrowIfNull(query);
         ValidateWorkflowExecutionId(query.WorkflowExecutionId);
         cancellationToken.ThrowIfCancellationRequested();
-        var scope = EfRuntimeOperationalStoreSupport.RequireScope(accessContextAccessor);
-        var scopeKey = EfRuntimeOperationalStoreSupport.Encode(scope);
-        var scopeHash = EfRuntimeOperationalStoreSupport.Hash(scope);
-        var workflowKey = EfRuntimeOperationalStoreSupport.Encode(query.WorkflowExecutionId);
+        var scope = CurrentScope();
         var workflowHash = EfRuntimeOperationalStoreSupport.Hash(query.WorkflowExecutionId);
         string? after = null;
         if (query.ContinuationToken is not null)
         {
             var cursor = DecodeCursor(query.ContinuationToken);
-            if (cursor.Version != 1 || cursor.ScopeHash != scopeHash || cursor.WorkflowHash != workflowHash || string.IsNullOrWhiteSpace(cursor.OrderKey))
+            if (cursor.Version != 1 || cursor.ScopeHash != scope.Hash || cursor.WorkflowHash != workflowHash || string.IsNullOrWhiteSpace(cursor.OrderKey))
                 throw new ArgumentException("The scheduler-work continuation belongs to another query or is invalid.", nameof(query));
             after = cursor.OrderKey;
         }
 
-        var source = context.SchedulerWorkItems.AsNoTracking().Where(row =>
-            row.ScopeKey == scopeKey && row.ScopeKeyHash == scopeHash &&
-            row.WorkflowExecutionId == workflowKey && row.WorkflowExecutionIdHash == workflowHash);
+        var source = scope.RowsOf(query.WorkflowExecutionId);
         if (after is not null)
             source = source.Where(row => row.WorkOrderKey.CompareTo(after) > 0);
         var rows = await source.OrderBy(row => row.WorkOrderKey).Take(checked(query.Limit + 1)).ToArrayAsync(cancellationToken);
         var hasNext = rows.Length > query.Limit;
         if (hasNext)
             rows = rows[..query.Limit];
-        var items = rows.Select(row => ReadChecked(row, scope, query.WorkflowExecutionId)).ToArray();
+        var items = rows.Select(row => ReadChecked(row, scope.Value, query.WorkflowExecutionId)).ToArray();
         var next = hasNext
-            ? EncodeCursor(scopeHash, workflowHash, rows[^1].WorkOrderKey)
+            ? EncodeCursor(scope.Hash, workflowHash, rows[^1].WorkOrderKey)
             : null;
         return new RuntimeStorePage<RuntimeSchedulerWorkItem>(query, items, next);
     }
@@ -110,21 +113,14 @@ public sealed class EfSchedulerWorkQueueStore(
     {
         ValidateWorkflowExecutionId(workflowExecutionId);
         cancellationToken.ThrowIfCancellationRequested();
-        var scope = EfRuntimeOperationalStoreSupport.RequireScope(accessContextAccessor);
-        var scopeKey = EfRuntimeOperationalStoreSupport.Encode(scope);
-        var scopeHash = EfRuntimeOperationalStoreSupport.Hash(scope);
-        var workflowKey = EfRuntimeOperationalStoreSupport.Encode(workflowExecutionId);
-        var workflowHash = EfRuntimeOperationalStoreSupport.Hash(workflowExecutionId);
+        var scope = CurrentScope();
+        var rows = scope.RowsOf(workflowExecutionId);
         return await Transitions.RunAsync<RuntimeSchedulerWorkItem?>(context, async () =>
         {
-            var row = await context.SchedulerWorkItems.AsNoTracking()
-                .Where(candidate => candidate.ScopeKey == scopeKey && candidate.ScopeKeyHash == scopeHash &&
-                                    candidate.WorkflowExecutionId == workflowKey && candidate.WorkflowExecutionIdHash == workflowHash)
-                .OrderBy(candidate => candidate.WorkOrderKey)
-                .FirstOrDefaultAsync(cancellationToken);
+            var row = await rows.OrderBy(candidate => candidate.WorkOrderKey).FirstOrDefaultAsync(cancellationToken);
             if (row is null)
                 return null;
-            var item = ReadChecked(row, scope, workflowExecutionId);
+            var item = ReadChecked(row, scope.Value, workflowExecutionId);
             AttachForDelete(row);
             try
             {
@@ -174,11 +170,7 @@ public sealed class EfSchedulerWorkQueueStore(
     {
         RuntimeStorePageRequest.ValidateLimit(limit, nameof(limit));
         cancellationToken.ThrowIfCancellationRequested();
-        var scope = EfRuntimeOperationalStoreSupport.RequireScope(accessContextAccessor);
-        var scopeKey = EfRuntimeOperationalStoreSupport.Encode(scope);
-        var scopeHash = EfRuntimeOperationalStoreSupport.Hash(scope);
-        return await context.SchedulerWorkItems.AsNoTracking()
-            .Where(row => row.ScopeKey == scopeKey && row.ScopeKeyHash == scopeHash)
+        return await CurrentScope().Rows
             .Select(row => new { row.WorkflowExecutionId, row.WorkflowExecutionIdOrderKey })
             .Distinct()
             .OrderBy(row => row.WorkflowExecutionIdOrderKey)
@@ -196,33 +188,47 @@ public sealed class EfSchedulerWorkQueueStore(
         if (query.AfterWorkflowExecutionId is { } after)
             ValidateWorkflowExecutionId(after);
         cancellationToken.ThrowIfCancellationRequested();
-        var scope = EfRuntimeOperationalStoreSupport.RequireScope(accessContextAccessor);
-        var scopeKey = EfRuntimeOperationalStoreSupport.Encode(scope);
-        var scopeHash = EfRuntimeOperationalStoreSupport.Hash(scope);
-        var now = query.Now.UtcTicks;
-        var rows = context.SchedulerWorkItems.AsNoTracking()
-            .Where(row => row.ScopeKey == scopeKey && row.ScopeKeyHash == scopeHash);
 
-        // One row per execution qualifies: its FIFO head (lowest WorkOrderKey, the row ClaimAsync takes), and only
-        // when that head is visible at Now under the same predicate ClaimAsync applies. Each execution's order key is
-        // unique and ordinal-preserving, so it alone is a total keyset order.
-        var heads = rows.Where(row =>
-            (row.VisibleAfterUtcTicks == null || row.VisibleAfterUtcTicks <= now) &&
-            !rows.Any(earlier =>
-                earlier.WorkflowExecutionIdHash == row.WorkflowExecutionIdHash &&
-                earlier.WorkflowExecutionId == row.WorkflowExecutionId &&
-                earlier.WorkOrderKey.CompareTo(row.WorkOrderKey) < 0));
+        // One row per execution qualifies: its head, and only while a claim at Now could take it. Each execution's
+        // order key is unique and ordinal-preserving, so it alone is a total keyset order.
+        var claimable = Heads(CurrentScope().Rows).Where(VisibleAt(query.Now));
         if (query.AfterWorkflowExecutionId is not null)
         {
             var afterOrderKey = EfRuntimeOperationalStoreSupport.Order(query.AfterWorkflowExecutionId);
-            heads = heads.Where(row => row.WorkflowExecutionIdOrderKey.CompareTo(afterOrderKey) > 0);
+            claimable = claimable.Where(row => row.WorkflowExecutionIdOrderKey.CompareTo(afterOrderKey) > 0);
         }
 
-        return await heads
+        return await claimable
             .OrderBy(row => row.WorkflowExecutionIdOrderKey)
             .Take(query.Limit)
             .Select(row => EfRuntimeOperationalStoreSupport.Decode(row.WorkflowExecutionId))
             .ToArrayAsync(cancellationToken);
+    }
+
+    public async ValueTask<IReadOnlyDictionary<string, RuntimeSchedulerWorkItem>> ListNextWorkItemsAsync(
+        IReadOnlyCollection<string> workflowExecutionIds,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(workflowExecutionIds);
+        foreach (var workflowExecutionId in workflowExecutionIds)
+            ValidateWorkflowExecutionId(workflowExecutionId);
+        cancellationToken.ThrowIfCancellationRequested();
+        var scope = CurrentScope();
+        var heads = Heads(scope.Rows);
+        var rows = await EfRuntimeCheckpointParticipantRows.LoadAsync(
+            workflowExecutionIds,
+            batch =>
+            {
+                var hashes = batch.Select(EfRuntimeOperationalStoreSupport.Hash).ToArray();
+                var keys = batch.Select(EfRuntimeOperationalStoreSupport.Encode).ToArray();
+                return heads.Where(row => hashes.Contains(row.WorkflowExecutionIdHash) && keys.Contains(row.WorkflowExecutionId));
+            },
+            row => EfRuntimeOperationalStoreSupport.Decode(row.WorkflowExecutionId),
+            cancellationToken);
+        return rows.ToDictionary(
+            entry => entry.Key,
+            entry => ReadChecked(entry.Value, scope.Value, entry.Key),
+            StringComparer.Ordinal);
     }
 
     public async ValueTask<RuntimeSchedulerWorkClaim?> ClaimAsync(
@@ -232,22 +238,15 @@ public sealed class EfSchedulerWorkQueueStore(
         ArgumentNullException.ThrowIfNull(request);
         ValidateWorkflowExecutionId(request.WorkflowExecutionId);
         cancellationToken.ThrowIfCancellationRequested();
-        var scope = EfRuntimeOperationalStoreSupport.RequireScope(accessContextAccessor);
-        var scopeKey = EfRuntimeOperationalStoreSupport.Encode(scope);
-        var scopeHash = EfRuntimeOperationalStoreSupport.Hash(scope);
-        var workflowKey = EfRuntimeOperationalStoreSupport.Encode(request.WorkflowExecutionId);
-        var workflowHash = EfRuntimeOperationalStoreSupport.Hash(request.WorkflowExecutionId);
+        var scope = CurrentScope();
+        var rows = scope.RowsOf(request.WorkflowExecutionId);
         return await Transitions.RunAsync<RuntimeSchedulerWorkClaim?>(context, async () =>
         {
-            var row = await context.SchedulerWorkItems.AsNoTracking()
-                .Where(candidate => candidate.ScopeKey == scopeKey && candidate.ScopeKeyHash == scopeHash &&
-                                    candidate.WorkflowExecutionId == workflowKey && candidate.WorkflowExecutionIdHash == workflowHash)
-                .OrderBy(candidate => candidate.WorkOrderKey)
-                .FirstOrDefaultAsync(cancellationToken);
+            var row = await rows.OrderBy(candidate => candidate.WorkOrderKey).FirstOrDefaultAsync(cancellationToken);
             if (row is null)
                 return null;
-            var item = ReadChecked(row, scope, request.WorkflowExecutionId);
-            if (row.VisibleAfterUtcTicks is { } visibleAfter && visibleAfter > request.Now.UtcTicks)
+            var item = ReadChecked(row, scope.Value, request.WorkflowExecutionId);
+            if (!IsVisibleAt(row, request.Now.UtcTicks))
                 return null;
 
             var originalRevision = row.Revision;
@@ -432,20 +431,15 @@ public sealed class EfSchedulerWorkQueueStore(
     {
         ValidateWorkflowExecutionId(workflowExecutionId);
         cancellationToken.ThrowIfCancellationRequested();
-        var scope = EfRuntimeOperationalStoreSupport.RequireScope(accessContextAccessor);
-        var scopeKey = EfRuntimeOperationalStoreSupport.Encode(scope);
-        var scopeHash = EfRuntimeOperationalStoreSupport.Hash(scope);
-        var workflowKey = EfRuntimeOperationalStoreSupport.Encode(workflowExecutionId);
-        var workflowHash = EfRuntimeOperationalStoreSupport.Hash(workflowExecutionId);
+        var scope = CurrentScope();
+        var workflowRows = scope.RowsOf(workflowExecutionId);
         var claims = new List<RuntimeSchedulerWorkClaim>();
         string? after = null;
         do
         {
-            var source = context.SchedulerWorkItems.AsNoTracking()
-                .Where(row => row.ScopeKey == scopeKey && row.ScopeKeyHash == scopeHash &&
-                              row.WorkflowExecutionId == workflowKey && row.WorkflowExecutionIdHash == workflowHash &&
-                              row.ClaimOwnerId != null && row.ClaimedAtUtcTicks != null &&
-                              row.VisibleAfterUtcTicks != null && row.VisibleAfterUtcTicks > now.UtcTicks);
+            var source = workflowRows.Where(row =>
+                row.ClaimOwnerId != null && row.ClaimedAtUtcTicks != null &&
+                row.VisibleAfterUtcTicks != null && row.VisibleAfterUtcTicks > now.UtcTicks);
             if (after is not null)
                 source = source.Where(row => row.WorkOrderKey.CompareTo(after) > 0);
 
@@ -457,7 +451,7 @@ public sealed class EfSchedulerWorkQueueStore(
             var selected = hasNext ? rows[..RuntimeStorePageRequest.MaximumLimit] : rows;
             foreach (var row in selected)
             {
-                var item = ReadChecked(row, scope, workflowExecutionId);
+                var item = ReadChecked(row, scope.Value, workflowExecutionId);
                 claims.Add(ToClaim(row, item));
             }
 
@@ -465,6 +459,52 @@ public sealed class EfSchedulerWorkQueueStore(
         } while (after is not null);
 
         return claims;
+    }
+
+    // The scope every query is confined to, resolved once per call: the raw scope for checked reads, its hash for
+    // continuations, and its rows.
+    private StoreScope CurrentScope()
+    {
+        var scope = EfRuntimeOperationalStoreSupport.RequireScope(accessContextAccessor);
+        var key = EfRuntimeOperationalStoreSupport.Encode(scope);
+        var hash = EfRuntimeOperationalStoreSupport.Hash(scope);
+        return new StoreScope(scope, hash, context.SchedulerWorkItems.AsNoTracking().Where(row => row.ScopeKey == key && row.ScopeKeyHash == hash));
+    }
+
+    private sealed record StoreScope(string Value, string Hash, IQueryable<SchedulerWorkItemEntity> Rows)
+    {
+        public IQueryable<SchedulerWorkItemEntity> RowsOf(string workflowExecutionId)
+        {
+            var key = EfRuntimeOperationalStoreSupport.Encode(workflowExecutionId);
+            var hash = EfRuntimeOperationalStoreSupport.Hash(workflowExecutionId);
+            return Rows.Where(row => row.WorkflowExecutionId == key && row.WorkflowExecutionIdHash == hash);
+        }
+    }
+
+    // Each execution's head: the row ClaimAsync takes, the one with the lowest WorkOrderKey.
+    private static IQueryable<SchedulerWorkItemEntity> Heads(IQueryable<SchedulerWorkItemEntity> rows) =>
+        rows.Where(row => !rows.Any(earlier =>
+            earlier.WorkflowExecutionIdHash == row.WorkflowExecutionIdHash &&
+            earlier.WorkflowExecutionId == row.WorkflowExecutionId &&
+            earlier.WorkOrderKey.CompareTo(row.WorkOrderKey) < 0));
+
+    // VisibleAtTicks with the instant bound as a captured field, the way a closure binds it, so EF sends it as a
+    // parameter rather than a literal and keeps a single cached query.
+    private static Expression<Func<SchedulerWorkItemEntity, bool>> VisibleAt(DateTimeOffset now)
+    {
+        var instant = Expression.Field(Expression.Constant(new Instant(now.UtcTicks)), nameof(Instant.UtcTicks));
+        var body = new ParameterReplacer(VisibleAtTicks.Parameters[1], instant).Visit(VisibleAtTicks.Body);
+        return Expression.Lambda<Func<SchedulerWorkItemEntity, bool>>(body, VisibleAtTicks.Parameters[0]);
+    }
+
+    private sealed class Instant(long utcTicks)
+    {
+        public readonly long UtcTicks = utcTicks;
+    }
+
+    private sealed class ParameterReplacer(ParameterExpression parameter, Expression replacement) : ExpressionVisitor
+    {
+        protected override Expression VisitParameter(ParameterExpression node) => node == parameter ? replacement : node;
     }
 
     private async Task<SchedulerWorkItemEntity?> LoadClaimAsync(

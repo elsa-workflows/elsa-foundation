@@ -157,18 +157,26 @@ sweep, the pump is bounded on two axes:
   most its batch size) and the backlog the rest, so neither can stop the other running; either side
   may use the slots the other leaves, and a cap of one alternates between them (#2188).
 - **Across ticks:** backlog discovery lists only executions whose work is claimable now, so work held
-  by a live claim or a backoff cannot fill the page. It also skips executions whose head the drainer's
-  own pause gate would hold: a paused head stays claimable (the drainer releases it at the closed gate),
-  and re-driving it only left one more `RunSchedulerWork` row queued behind it on every pass. A hold is
-  lifted by saving hold state, with no event to react to, so a resume is noticed the same way: the
-  next pass that reaches the execution finds the gate open and re-drives it. A pass reads on past
-  skipped executions, up to ten pages. The sweep walks the backlog from a position it keeps between
-  ticks (`RuntimeResumptionDiscoveryStateStore`), resuming after the last execution it visited and
-  starting over after a short page, so a fixed set of executions that stay claimable without draining
-  cannot hold the window either. The position moves on past a failed re-drive; the failed execution
-  keeps its work and its per-execution backoff, and the next walk reaches it again. A queue that does
-  not implement claimable discovery keeps the earlier first-page listing, and the sweep logs a warning
-  (`RuntimeResumptionFirstPageBacklogDiscovery`) once per queue type.
+  by a live claim or a backoff cannot fill the page. Every candidate, from the backlog, the recovery
+  scanner or a candidate source, is re-driven only when the drainer's own pause gate would let its next
+  queued item advance: a paused head stays claimable (the drainer releases it at the closed gate), and
+  re-driving it only left one more `RunSchedulerWork` row queued behind it on every pass. A held
+  recovery or source candidate still counts as dealt with: the scanner's cursor moves on and the source
+  settles it. That costs ownership nothing, because the next drain acquires a strictly greater fencing
+  token whatever a stale lease says. A hold is lifted by saving hold state, with no event to react to,
+  so a resume is noticed the same way: the next pass that reaches the execution finds the gate open and
+  re-drives it. When the gate cannot be consulted the execution is not re-driven either, since its
+  drain would consult the same gate; its work stays queued, and the sweep logs one warning
+  (`RuntimeResumptionPauseCheckFailed`) with the count. The sweep reads next items in one request per
+  page of executions and asks the gate only about executions it can use. A pass reads on past held
+  executions, up to ten pages. The sweep walks the backlog from a position it keeps between ticks
+  (`RuntimeResumptionDiscoveryStateStore`, least recently used scopes evicted first), resuming after
+  the last execution it visited and starting over after a short page, so a fixed set of executions that
+  stay claimable without draining cannot hold the window either. The position moves on past a failed
+  re-drive; the failed execution keeps its work and its per-execution backoff, and the next walk
+  reaches it again. A queue that does not implement claimable discovery keeps the earlier first-page
+  listing, and the sweep logs a warning (`RuntimeResumptionFirstPageBacklogDiscovery`) once per queue
+  type per host.
 - **Per execution:** the pump applies a geometric backoff to individual executions whose re-drive
   fails, passing them as `ExcludedWorkflowExecutionIds` so they are skipped until their backoff
   elapses. A separate whole-sweep geometric backoff (bounded by `MaxBackoffInterval`, default 5m)

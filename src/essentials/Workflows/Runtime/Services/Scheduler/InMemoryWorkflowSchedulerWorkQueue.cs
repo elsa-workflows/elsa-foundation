@@ -166,6 +166,26 @@ public sealed class InMemoryWorkflowSchedulerWorkQueue : IWorkflowSchedulerWorkQ
         }
     }
 
+    public ValueTask<IReadOnlyDictionary<string, RuntimeSchedulerWorkItem>> ListNextWorkItemsAsync(
+        IReadOnlyCollection<string> workflowExecutionIds,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(workflowExecutionIds);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (_syncRoot)
+        {
+            var heads = new Dictionary<string, RuntimeSchedulerWorkItem>(StringComparer.Ordinal);
+            foreach (var workflowExecutionId in workflowExecutionIds)
+            {
+                if (_queuesByWorkflowExecutionId.TryGetValue(workflowExecutionId, out var queue) && queue.TryPeek(out var head))
+                    heads[workflowExecutionId] = head;
+            }
+
+            return new ValueTask<IReadOnlyDictionary<string, RuntimeSchedulerWorkItem>>(heads);
+        }
+    }
+
     public ValueTask<IReadOnlyCollection<RuntimeSchedulerWorkClaim>> ListActiveClaimsAsync(
         string workflowExecutionId,
         DateTimeOffset now,

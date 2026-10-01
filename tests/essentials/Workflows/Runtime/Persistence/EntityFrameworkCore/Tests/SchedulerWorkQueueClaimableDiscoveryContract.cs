@@ -56,6 +56,25 @@ internal static class SchedulerWorkQueueClaimableDiscoveryContract
         Assert.Equal(["wf-B", "wf-a", "wf-a-1", "wf-c"], await ListAsync(queue, 10, after: null));
     }
 
+    /// <summary>
+    /// Reads, in one request, the item a claim would take next for each execution: its FIFO head whatever the head's
+    /// visibility, and nothing for an execution without queued work.
+    /// </summary>
+    public static async Task ReadsTheNextItemAClaimWouldTakeAsync(IWorkflowSchedulerWorkQueue queue)
+    {
+        await queue.EnqueueAsync(Work("wf-two", "work-1", 1));
+        await queue.EnqueueAsync(Work("wf-two", "work-2", 2));
+        await EnqueueClaimedAsync(queue, "wf-claimed", Now);
+        await queue.EnqueueAsync(Work("wf-claimed", "work-2", 2));
+
+        var next = await queue.ListNextWorkItemsAsync(["wf-two", "wf-claimed", "wf-empty"]);
+
+        Assert.Equal(["wf-claimed", "wf-two"], next.Keys.Order(StringComparer.Ordinal));
+        Assert.Equal("work-1", next["wf-claimed"].WorkItemId);
+        var claim = await queue.ClaimAsync(new RuntimeSchedulerWorkClaimRequest("wf-two", "owner-probe", Now, Lease));
+        Assert.Equal(next["wf-two"].WorkItemId, claim?.Item.WorkItemId);
+    }
+
     /// <summary>Queues one item for the execution and claims it at <paramref name="claimedAt"/> for one lease.</summary>
     public static async Task<RuntimeSchedulerWorkClaim> EnqueueClaimedAsync(IWorkflowSchedulerWorkQueue queue, string workflowExecutionId, DateTimeOffset claimedAt)
     {
