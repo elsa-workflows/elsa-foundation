@@ -15,6 +15,8 @@ namespace Elsa.Persistence.EntityFramework.Tooling;
 /// reference of its own and cannot skew from the host's EF version.
 /// </summary>
 /// <remarks>
+/// Candidate inspection has separate capabilities and envelopes. The selected host owns configuration,
+/// selection reconciliation and EF preparation; the CLI owns capture and the worker owns its transport.
 /// <para>
 /// Deliberately built from EF Core and Relational alone — <see cref="IMigrator"/>,
 /// <see cref="IMigrationsAssembly"/> — because this package must keep its admitted EF package set

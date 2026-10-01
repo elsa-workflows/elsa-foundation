@@ -47,7 +47,7 @@
 - [x] Planning selects the capability/version, envelope, raw-key grammar, collision policy, and bounds from the existing budgets and test matrix
 - [x] Planning supplies the end-to-end same-capture proof matrix and evidence cases
 - [x] Planning establishes source-backed edit-and-accept recovery and assigns executable cases; runtime recovery remains unverified
-- [ ] Implementation and validation gates are intentionally not claimed at specify stage
+Implementation and validation gates were intentionally not claimed at the specify stage; they remain execution obligations tracked in `tasks.md` and #2292.
 
 ## Notes
 
@@ -66,3 +66,5 @@
 
 - Generated maps refreshed deliberately after task/status completion; findings reviewed. Only the new spec index/count changed (spec status map, manifest and v1 findings). The freshness check passed; any further status cleanup is regenerated before delivery.
 - Hosted Copilot round 1 identified three authoring gaps: the future exact EF source allowlist update, the owning extension-point catalog update, and premature Approved status. T039/T040 now require those implementation maintenance steps; Draft status and its generated map remain aligned while delivery gates are pending.
+
+- Implementation authorized under #2292 after #2277 delivery. The inherited public logical-label/private-value boundary and omission of unknown overlay-only error identities are clarified in the contract and proof assignments; candidate-v1 behavior is unchanged.

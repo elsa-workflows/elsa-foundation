@@ -15,6 +15,12 @@ public sealed class WorkerProtocolTests
     private const string CandidateRequestJson = """
         {"version":2,"command":"inspect-candidate","hostDirectory":"/compiled-host","hostName":"FixtureHost","depsFile":"/compiled-host/FixtureHost.deps.json","packageRoots":[],"restore":false,"candidate":{"version":1,"source":"captured-workbench-json-v1","invocationId":"11111111111111111111111111111111","captureId":"22222222222222222222222222222222","shell":"default","environment":"Production","acceptedFeatureIds":["ResourceProbe"],"removedFeatureIds":[],"files":[{"name":"appsettings.json","captureId":"22222222222222222222222222222222","content":"e30="},{"name":"shells.json","captureId":"22222222222222222222222222222222","content":"e30="},{"name":"shells.Production.json","captureId":"22222222222222222222222222222222","content":"e30="},{"name":"appsettings.Production.json","captureId":"22222222222222222222222222222222","content":"e30="}]}}
         """;
+    private static IEnumerable<JsonNode?> EnvironmentInputVariants =>
+    [
+        null,
+        JsonNode.Parse(CandidateInspectionFixture.EnvironmentDocument(
+            ("Unknown", CandidateInspectionFixture.SafePrivateEnvironmentCanary)))
+    ];
     private static string CandidateHostSuccessJson => CandidateHostResponseFixtures.SuccessJson(CandidateInvocationId, CandidateCaptureId);
     private const string CandidateHostRefusalJson = """
         {"version":1,"invocationId":"11111111111111111111111111111111","captureId":"22222222222222222222222222222222","status":"refused","exitCode":2,"error":{"code":"candidate-selection-conflict","reason":"required-disabled","feature":"ResourceProbe","resource":"primary"}}
@@ -60,6 +66,56 @@ public sealed class WorkerProtocolTests
         using var input = new MemoryStream(Encoding.UTF8.GetBytes("{\"version\":2,\"command\":\"list\",\"candidate\":null}"));
 
         await Assert.ThrowsAsync<JsonException>(() => WorkerContract.ReadRequestAsync(input, CancellationToken.None));
+    }
+
+    [Theory]
+    [InlineData("list")]
+    [InlineData("plan")]
+    [InlineData("script")]
+    [InlineData("apply")]
+    [InlineData("validate")]
+    [InlineData("post-migrate")]
+    [InlineData("hold")]
+    [InlineData("release")]
+    [InlineData("status")]
+    public async Task Old_command_reader_rejects_environment_input_even_when_null(string command)
+    {
+        var baseline = new JsonObject { ["version"] = 2, ["command"] = command };
+        using (var input = new MemoryStream(Encoding.UTF8.GetBytes(baseline.ToJsonString())))
+            Assert.NotNull(await WorkerContract.ReadRequestAsync(input, CancellationToken.None));
+
+        foreach (var value in EnvironmentInputVariants)
+        {
+            var request = (JsonObject)baseline.DeepClone();
+            request["environmentInput"] = value;
+            using var input = new MemoryStream(Encoding.UTF8.GetBytes(request.ToJsonString()));
+            var refusal = await Assert.ThrowsAsync<JsonException>(() =>
+                WorkerContract.ReadRequestAsync(input, CancellationToken.None));
+            Assert.DoesNotContain(CandidateInspectionFixture.SafePrivateEnvironmentCanary, refusal.Message);
+        }
+    }
+
+    [Theory]
+    [InlineData("outer")]
+    [InlineData("candidate")]
+    [InlineData("file")]
+    public async Task Old_candidate_reader_rejects_environment_input_at_every_object_boundary(string boundary)
+    {
+        Assert.NotNull(await ReadCandidateRequestAsync(CandidateRequestJson));
+        foreach (var value in EnvironmentInputVariants)
+        {
+            var request = JsonNode.Parse(CandidateRequestJson)!;
+            var target = boundary switch
+            {
+                "candidate" => request["candidate"]!,
+                "file" => request["candidate"]!["files"]![0]!,
+                _ => request
+            };
+            target["environmentInput"] = value;
+            var refusal = await Assert.ThrowsAsync<JsonException>(() =>
+                ReadCandidateRequestAsync(request.ToJsonString()));
+            Assert.Equal("The candidate worker request is invalid.", refusal.Message);
+        }
     }
 
     [Fact]

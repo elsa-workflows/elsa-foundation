@@ -37,7 +37,7 @@ This bucket exists so weak implementations, missing tests, TestContainers policy
 
 ## Linked Surfaces
 
-- [Executable pair observation race](../reports/executable-pair-observation-race.md), supporting [#2282](https://github.com/elsa-workflows/elsa-foundation/issues/2282); controlled real-store failures establish the between-read defect, with correction and delivery gates pending.
+- [Executable pair observation race](../reports/executable-pair-observation-race.md), supporting [#2282](https://github.com/elsa-workflows/elsa-foundation/issues/2282); controlled real-store failures established the between-read defect, and PR #2291 delivered the correction with all six workflows passed on exact main9bba155475a5bbee5984777d99c512d50f33ad32. [Delivery proof](https://github.com/elsa-workflows/elsa-foundation/issues/2282#issuecomment-5939362790) retains earlier failures, causal mutation evidence and unrelated skips; #2282 is closed.
 - [Test maturity and weak implementation report](../reports/test-maturity-and-weak-implementation-report.md)
 - [SQLite cleanup ownership probe](../reports/sqlite-test-cleanup-probe.md), supporting [#2185](https://github.com/elsa-workflows/elsa-foundation/issues/2185); native-handle cause and cleanup-policy acceptance remain open.
 - [NotImplemented classification](../reports/notimplemented-classification.md)

@@ -17,6 +17,31 @@ internal sealed class CandidateInspectionFixture : IDisposable
     public const string OpenTelemetryFeatureId = "DiagnosticsOpenTelemetry";
     public const string OpenTelemetryEfFeatureId = "DiagnosticsOpenTelemetryEntityFrameworkCore";
     public const string PrivateCanary = "candidate-local-value-canary-2177";
+    public const string EnvironmentPolicy = "workbench-json-explicit-environment-v1";
+    public const string EnvironmentInvocationId = "11111111111111111111111111111111";
+    public const string EnvironmentCaptureId = "22222222222222222222222222222222";
+    public const string PublicEnvironmentResource = "EnvironmentResource";
+    public const string PublicEnvironmentConnection = "EnvironmentConnection";
+    public const string PrivateEnvironmentCanary = "candidate-environment-private-canary-2292";
+    public const string SafePrivateEnvironmentCanary = "PrivateEnvironmentValue2292";
+
+    public static byte[] EnvironmentDocument(params (string Key, string Value)[] entries) =>
+        JsonSerializer.SerializeToUtf8Bytes(new
+        {
+            version = 1,
+            entries = entries.Select(entry => new { key = entry.Key, value = entry.Value })
+        });
+
+    /// <summary>Produces a valid empty document at an exact raw UTF-8 size, using legal trailing whitespace.</summary>
+    public static byte[] EnvironmentDocumentOfSize(int byteCount)
+    {
+        var document = EnvironmentDocument();
+        ArgumentOutOfRangeException.ThrowIfLessThan(byteCount, document.Length);
+        var bytes = new byte[byteCount];
+        document.CopyTo(bytes, 0);
+        bytes.AsSpan(document.Length).Fill((byte)' ');
+        return bytes;
+    }
 
     private static readonly JsonSerializerOptions Json = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 

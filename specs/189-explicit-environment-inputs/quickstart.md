@@ -95,7 +95,7 @@ The implementation proof must include the public `DotnetElsa.cs` process wrapper
 
 Execute the rows in [acceptance-proof-matrix.md](contracts/acceptance-proof-matrix.md), including:
 
-- every eleven service-prefix family, ordinary `ConnectionStrings__` support, aliases, duplicates, Unicode/control/`=`/surrogate/NUL/null/tombstone/blank/omitted values;
+- all eleven service-prefix families, ordinary `ConnectionStrings__` support, aliases, duplicates, Unicode/control/`=`/surrogate/NUL/null/tombstone/blank/omitted values;
 - exact and one-over raw 1 MiB, per-file 1 MiB, aggregate 4 MiB, key 1,024-byte, value 65,536-byte, entry 1,024, combined participant-plus-finding projection 1,024 (1,022+2 accepted and 1,023+2 refused), serialized request 8 MiB, response 4 MiB, selection, JSON depth, and timeout limits;
 - stable reload of a detached frozen root and caller-owned document/dictionary mutation after defensive copying; separately, stale/mixed/disposed/reused captures, source drift before launch and after response, old candidate parser with an extra field, new capability absent, and actual host unenrolled;
 - cancellation during stdin write, response read, after capture before launch, and bounded child cleanup;

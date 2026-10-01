@@ -10,6 +10,8 @@ namespace Elsa.Cli.Worker;
 /// front end did not ask for.
 /// </summary>
 /// <remarks>
+/// Candidate-v1 stays file-only. Explicit environment inspection uses a separate closed command and host
+/// capability; sharing this transport must not broaden any old command reader or response validator.
 /// Deliberately separate from the frozen <c>EfToolingContract</c> the worker speaks on the other side. That
 /// one is a contract with an assembly inside the host's closure, versioned independently of this tool; this
 /// one is private to the two halves of one package and carries what only the front end knows (where the

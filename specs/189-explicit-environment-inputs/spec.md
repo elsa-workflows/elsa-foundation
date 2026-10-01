@@ -1,10 +1,10 @@
 # Feature Specification: Explicit Private Environment Inputs
 
-**Feature Branch**: `codex/2277-explicit-environment-input-spec`
+**Feature Branch**: `codex/2292-explicit-environment-inputs`
 
 **Created**: 2026-10-01
 
-**Status**: Draft — authoring review passed; approval to implement remains gated on #2277 delivery
+**Status**: Approved — #2277 authoring and #2282 correction delivery passed; implementation is active under #2292
 
 **Input**: User description: Define a bounded first lane for explicitly supplied, private intended environment inputs during composition inspection while preserving candidate v1 and file-only compatibility.
 
@@ -81,7 +81,7 @@ As a maintainer, I want existing candidate v1 and file-only behavior to remain c
 - **FR-010**: A valid recovery path MUST use the existing authored-edit and interactive `composition accept` workflow to publish a fresh accepted file, followed by a fresh inspection capture. The feature MUST NOT claim that acceptance can silently observe or authorize an external environment change.
 - **FR-011**: After successful reconciliation, the inspection MUST use the same host-owned configuration policy for the selected context and the same captured input. It MUST NOT present a result assembled from a competing or independently reread policy.
 - **FR-012**: The inspection MUST distinguish resolved, refused, unavailable, and unverified evidence. It MUST identify the supplied environment as intended input and MUST NOT present it as deployed attestation, physical readiness, migration authorization, package reachability, connectivity, schema state, or activation evidence.
-- **FR-013**: Public results, logs, process arguments, generated/public artifacts, and diagnostics MUST exclude captured private environment values, raw configuration, unknown values, secret-bearing excerpts, private-input paths, and all fingerprints derived from secret-bearing or private inputs. Existing explicit CLI file-location and required assembly-loader paths MAY identify local inputs where needed, but MUST NOT be emitted in public results or diagnostics. Operator-owned supplied input files MUST be preserved and MUST NOT be copied into additional persisted artifacts. Public output MAY contain only safe logical identities, redacted metadata, and truthful evidence status.
+- **FR-013**: Public results, logs, process arguments, generated/public artifacts, and diagnostics MUST exclude captured private environment values, raw configuration, unknown values, secret-bearing excerpts, private-input paths, and all fingerprints derived from secret-bearing or private inputs. Existing explicit CLI file-location and required assembly-loader paths MAY identify local inputs where needed, but MUST NOT be emitted in public results or diagnostics. Operator-owned supplied input files MUST be preserved and MUST NOT be copied into additional persisted artifacts. Public output MAY contain only declared public logical identities, fixed provider/selection metadata, redacted metadata, and truthful evidence status. Modeled resource/connection references are public labels; private connection material and arbitrary/non-modeled overlay values remain excluded. Unknown overlay-only identities MUST NOT be echoed in errors merely because their spelling is syntactically safe.
 - **FR-014**: The inspection MUST refuse unsupported capability versions, malformed or over-limit supplied input, stale binding, and changed input without a legacy fallback or partial public result.
 - **FR-015**: Selected-host inspection MUST treat selected host code as explicitly trusted. The lane MUST make no general sandbox promise.
 - **FR-016**: The feature MUST not acquire packages, start the host runtime, activate services, access a database, run migrations, publish, activate, or save application state as part of inspection. Cancellation and timeout MUST clean up the inspection and private capture state and MUST not emit raw console output.
