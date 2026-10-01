@@ -234,6 +234,22 @@ public sealed class TaskExecutorSingleNodeTests
     }
 
     [Fact]
+    public async Task A_background_task_skipped_once_and_later_started_is_stopped()
+    {
+        _dormancy.Dormant = true;
+        var task = new DormancyAwareBackgroundTask();
+        var executor = (IBackgroundTaskStarter)Executor();
+
+        await executor.StartAsync(task, CancellationToken.None);
+        _dormancy.Dormant = false;
+        await executor.StartAsync(task, CancellationToken.None);
+        await executor.StopAsync(task, CancellationToken.None);
+
+        Assert.True(task.Started);
+        Assert.True(task.Stopped);
+    }
+
+    [Fact]
     public async Task A_background_task_that_started_is_stopped_even_when_the_node_has_since_gone_dormant()
     {
         var task = new DormancyAwareBackgroundTask();

@@ -48,6 +48,16 @@ public sealed class FileSystemLockingClusterCompositionTests : IAsyncDisposable
         Assert.NotNull(shell.ServiceProvider.GetRequiredService<IDistributedLockProvider>());
     }
 
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task A_cluster_member_refuses_a_blank_folder_as_not_chosen(string blank)
+    {
+        var failure = await Assert.ThrowsAnyAsync<Exception>(() => ActivateAsync(durableMembership: true, locksFolderPath: blank));
+
+        Assert.Contains("FileSystemDistributedLocking keeps its locks in", Messages(failure));
+    }
+
     [Fact]
     public async Task A_cluster_member_starts_with_a_folder_it_names()
     {

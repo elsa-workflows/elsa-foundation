@@ -56,14 +56,16 @@ public sealed class TaskExecutor(
 
     public async Task StartAsync(IBackgroundTask task, CancellationToken cancellationToken)
     {
-        if (!await ExecuteInternalAsync(task, task.StartAsync, cancellationToken))
+        if (await ExecuteInternalAsync(task, task.StartAsync, cancellationToken))
+            _skippedStarts.TryRemove(task, out _); // a start that runs supersedes an earlier skip, so the task is stopped normally
+        else
             _skippedStarts[task] = 0;
     }
 
     public async Task StopAsync(IBackgroundTask task, CancellationToken cancellationToken)
     {
-        // Dormancy is decided when the shell starts: a task that started is stopped even if this node has since gone dormant,
-        // and a task whose start was skipped has nothing to stop.
+        // For callers of IBackgroundTaskStarter: a task that started is stopped even if this node has since gone dormant,
+        // and a task whose start was skipped has nothing to stop. (TaskStateManager stops tasks directly, not through here.)
         if (_skippedStarts.TryRemove(task, out _))
             return;
 

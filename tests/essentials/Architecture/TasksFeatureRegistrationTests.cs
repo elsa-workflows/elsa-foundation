@@ -1,4 +1,6 @@
+using CShells;
 using CShells.Lifecycle;
+using Elsa.Locking.Core;
 using Elsa.Tasks;
 using Elsa.Tasks.Core;
 using Elsa.Tasks.Services;
@@ -14,6 +16,8 @@ public sealed class TasksFeatureRegistrationTests
     {
         var services = new ServiceCollection();
         services.AddLogging();
+        services.AddSingleton(new ShellSettings("t"));
+        services.AddSingleton<IDistributedLockProvider, UnusedLockProvider>(); // the locking feature supplies it in a real shell
 
         new TasksFeature().ConfigureServices(services);
 
@@ -32,5 +36,18 @@ public sealed class TasksFeatureRegistrationTests
         await using var provider = services.BuildServiceProvider();
         await using var scope = provider.CreateAsyncScope();
         Assert.NotNull(scope.ServiceProvider.GetService<ITaskManager>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<TaskExecutor>());
+    }
+
+    private sealed class UnusedLockProvider : IDistributedLockProvider
+    {
+        public IDistributedSynchronizationHandle? TryAcquireLock(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public ValueTask<IDistributedSynchronizationHandle?> TryAcquireLockAsync(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public ValueTask<IDistributedSynchronizationHandle> AcquireLockAsync(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
     }
 }

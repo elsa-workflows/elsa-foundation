@@ -26,10 +26,10 @@ public class FileSystemLockingFeature : IShellFeature
     public string LocksFolderPath
     {
         get => _locksFolderPath ?? DefaultLocksFolderPath;
-        set => _locksFolderPath = value;
+        set => _locksFolderPath = string.IsNullOrWhiteSpace(value) ? null : value;
     }
 
-    // Null until a host names a folder, so a folder that happens to equal the default still counts as chosen.
+    // Null until a host names a folder (a blank value names none), so a folder that happens to equal the default still counts as chosen.
     private string? _locksFolderPath;
 
     [ManifestSetting(DisplayName = "Lock acquisition timeout", Description = "Maximum time in minutes to wait when acquiring a distributed lock.", Category = "Locking", DefaultValue = "10")]
