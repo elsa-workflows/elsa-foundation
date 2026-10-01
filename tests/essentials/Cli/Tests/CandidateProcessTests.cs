@@ -11,7 +11,8 @@ public sealed class CandidateProcessTests
     // Handle branch inventory: READY opcode/correlation validation, STATUS validation, and each
     // control-channel stage are direct task tests; pre-READY cleanup covers both live and exited
     // supervisors; scope/group termination retry tests protect the post-success flag; wait tests
-    // cover scope/group cancellation and errors; disposal tests prove every owned close is attempted.
+    // cover scope/group cancellation and errors; constructor guards and disposal tests prove input
+    // validation and every owned close is attempted.
     private static readonly HostLayout Host = new("/compiled/host", "Example.Host",
         "/compiled/host/Example.Host.runtimeconfig.json", "/compiled/host/Example.Host.deps.json");
 
@@ -471,6 +472,19 @@ public sealed class CandidateProcessTests
         Assert.Equal([(328, cancellation.Token)], calls);
     }
 
+    [Fact]
+    public void Handle_constructor_rejects_null_process_or_control()
+    {
+        var correlation = Guid.NewGuid();
+        using var process = new HandleProcess(328);
+        using var control = HandleControl.ReadyThenStatus(correlation, 0);
+
+        Assert.Throws<ArgumentNullException>(() =>
+            new CandidateProcessHandle(null!, control, correlation));
+        Assert.Throws<ArgumentNullException>(() =>
+            new CandidateProcessHandle(process, null!, correlation));
+    }
+
     [Theory]
     [InlineData("opcode")]
     [InlineData("correlation")]
@@ -650,6 +664,28 @@ public sealed class CandidateProcessTests
         Assert.Equal(1, process.DisposeCount);
     }
 
+    [Fact]
+    public async Task Handle_disposal_attempts_all_closes_after_cancel_callback_failure_and_is_idempotent()
+    {
+        var correlation = Guid.NewGuid();
+        var process = new HandleProcess(339);
+        var control = HandleControl.ReadyThenStatus(correlation, 0, blockReady: true, throwOnCancellation: true);
+        var scope = new HandleScope();
+        var handle = new CandidateProcessHandle(process, control, correlation, scope);
+        await control.ReadyReadStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        var actual = Assert.Throws<AggregateException>(() => handle.Dispose());
+        handle.Dispose();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            handle.WaitForOperationExitAsync(CancellationToken.None));
+
+        Assert.Single(actual.InnerExceptions);
+        Assert.Equal("cancel-callback", actual.InnerExceptions[0].Message);
+        Assert.Equal(1, control.DisposeCount);
+        Assert.Equal(1, scope.DisposeCount);
+        Assert.Equal(1, process.DisposeCount);
+    }
+
     private enum ControlFailure
     {
         None,
@@ -693,6 +729,7 @@ public sealed class CandidateProcessTests
         private readonly bool blockReady;
         private readonly bool blockStatus;
         private readonly bool blockGo;
+        private readonly bool throwOnCancellation;
         private readonly ControlFailure failure;
         private readonly TaskCompletionSource readyRelease = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly TaskCompletionSource statusRelease = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -705,18 +742,20 @@ public sealed class CandidateProcessTests
         public Exception? DisposeFailure { get; set; }
 
         private HandleControl(byte[] ready, byte[] status, bool blockReady, bool blockStatus, bool blockGo,
-            ControlFailure failure)
+            bool throwOnCancellation, ControlFailure failure)
         {
             this.ready = ready;
             this.status = status;
             this.blockReady = blockReady;
             this.blockStatus = blockStatus;
             this.blockGo = blockGo;
+            this.throwOnCancellation = throwOnCancellation;
             this.failure = failure;
         }
 
         public static HandleControl ReadyThenStatus(Guid correlation, int exitCode, bool blockReady = false,
-            bool blockStatus = false, bool blockGo = false, ControlFailure failure = ControlFailure.None,
+            bool blockStatus = false, bool blockGo = false, bool throwOnCancellation = false,
+            ControlFailure failure = ControlFailure.None,
             byte readyOpcode = CandidateProcessOwner.Ready, Guid? readyCorrelation = null,
             byte statusOpcode = CandidateProcessOwner.Status)
         {
@@ -726,13 +765,17 @@ public sealed class CandidateProcessTests
             var status = new byte[CandidateProcessOwner.StatusFrameLength];
             status[0] = statusOpcode;
             BitConverter.TryWriteBytes(status.AsSpan(1), exitCode);
-            return new HandleControl(ready, status, blockReady, blockStatus, blockGo, failure);
+            return new HandleControl(ready, status, blockReady, blockStatus, blockGo, throwOnCancellation, failure);
         }
 
-        public Task WaitForConnectionAsync(CancellationToken cancellationToken) =>
-            failure == ControlFailure.Connect
+        public Task WaitForConnectionAsync(CancellationToken cancellationToken)
+        {
+            if (throwOnCancellation)
+                cancellationToken.Register(static () => throw new InvalidOperationException("cancel-callback"));
+            return failure == ControlFailure.Connect
                 ? Task.FromException(new IOException("connect"))
                 : Task.CompletedTask;
+        }
 
         public async Task ReadExactlyAsync(Memory<byte> buffer, CancellationToken cancellationToken)
         {

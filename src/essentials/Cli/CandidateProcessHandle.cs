@@ -128,15 +128,18 @@ public sealed class CandidateProcessHandle : ICandidateProcessHandle
     {
         if (Interlocked.Exchange(ref disposed, 1) != 0)
             return;
-        lifetime.Cancel();
-        try { control.Dispose(); }
+        try { lifetime.Cancel(); }
         finally
         {
-            try { scope?.Dispose(); }
+            try { control.Dispose(); }
             finally
             {
-                try { process.Dispose(); }
-                finally { lifetime.Dispose(); }
+                try { scope?.Dispose(); }
+                finally
+                {
+                    try { process.Dispose(); }
+                    finally { lifetime.Dispose(); }
+                }
             }
         }
     }
