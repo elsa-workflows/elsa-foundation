@@ -41,6 +41,8 @@ internal static class WorkerRunner
 
     public static async Task<WorkerResponse> RunAsync(WorkerRequest request, CancellationToken cancellationToken)
     {
+        if (request.Command == WorkerCommands.InspectCandidate)
+            return await RunCandidateAsync(request, cancellationToken);
         try
         {
             return await ExecuteAsync(request, cancellationToken);
@@ -65,10 +67,52 @@ internal static class WorkerRunner
         }
     }
 
+    internal static Task<WorkerResponse> RunCandidateAsync(WorkerRequest request, CancellationToken cancellationToken) =>
+        new CandidateWorkerOperation(ExecuteCandidateAsync).RunAsync(request, cancellationToken);
+
+    private static async Task<WorkerResponse> ExecuteCandidateAsync(WorkerRequest request, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var directory = Path.GetFullPath(request.HostDirectory!);
+        var name = request.HostName!;
+        if (name.Length > 128 || name.Length == 0 ||
+            !(char.IsAsciiLetter(name[0]) || name[0] == '_') ||
+            name.Any(character => !(char.IsAsciiLetterOrDigit(character) || character is '_' or '-' or '.')))
+            throw WorkerRefusal.Resolution("candidate-host-unavailable", "The compiled host layout is invalid.");
+        var depsPath = Path.Join(directory, name + ".deps.json");
+        if (!(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal)
+            .Equals(Path.GetFullPath(request.DepsFile!), depsPath))
+            throw WorkerRefusal.Resolution("candidate-host-unavailable", "The compiled host layout is invalid.");
+
+        var observation = new CandidateClosureObservation();
+        var depsBytes = File.ReadAllBytes(depsPath);
+        observation.ObserveCapturedFile(depsPath, depsBytes);
+        var deps = HostDepsFile.ReadCaptured(depsBytes);
+        observation.ObserveFile(Path.Join(directory, name + ".runtimeconfig.json"), required: true);
+        observation.ObserveFile(Path.Join(directory, name + ".dll"), required: true);
+        observation.VerifyUnchanged();
+
+        // The same loader decides its state/probe route from observed presence and captures selected
+        // install metadata before loading. No restore, feed or legacy configuration-context path runs.
+        var packages = await NuplanePackageSet.LoadAsync(request.PackageRoots, directory, cancellationToken, observation);
+        if (packages.Failures.Count != 0)
+            throw WorkerRefusal.Resolution("candidate-package-unavailable", "The selected host package closure could not be loaded.");
+        HostClosure.Preload(deps);
+        HostClosure.LoadHostAssembly(directory, name);
+        var persistence = HostClosure.LoadPersistence();
+        var operation = ToolingEntryPoint.BindCandidateInspection(
+            persistence.GetType("Elsa.Persistence.EntityFramework.Tooling.EfToolingHost", throwOnError: false),
+            persistence.GetType("Elsa.Persistence.EntityFramework.Tooling.EfCandidateInspectionContract", throwOnError: false));
+        cancellationToken.ThrowIfCancellationRequested();
+        observation.VerifyUnchanged();
+        return await ToolingEntryPoint.InvokeCandidateInspectionAsync(operation, name, directory, request.Candidate!, cancellationToken);
+    }
+
     /// <summary>
     /// True for anything worth reporting as a resolution failure; false for the handful of CLR exceptions
     /// that mean the process itself is no longer trustworthy, which must propagate rather than be swallowed
-    /// into a tidy JSON response.
+    /// into a tidy JSON response. Candidate mode separately treats BadImageFormatException as an
+    /// invalid selected host closure; it does not relax classification of process-trust failures.
     /// </summary>
     internal static bool IsNonFatal(Exception failure) => failure is not (
         OutOfMemoryException or

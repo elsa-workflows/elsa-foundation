@@ -42,4 +42,8 @@
     <ProjectReference Include="..\Fixtures\WorkerContextHost\Elsa.Cli.Fixtures.WorkerContextHost.csproj" Aliases="FakeWorkerHost" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Include="..\ProcessIdentity.cs" Link="ProcessIdentity.cs" />
+  </ItemGroup>
+
 </Project>

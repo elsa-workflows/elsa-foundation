@@ -66,6 +66,17 @@ public sealed class InMemoryRecurringTriggerScheduleStoreTests
         Assert.Null(await _store.FindAsync("s1"));
     }
 
+    [Fact]
+    public async Task DeleteByArtifact_RemovesTheActivationProjectionStateOfTheDeletedRows()
+    {
+        await _store.PrepareActivationAsync("act-1", [Schedule("s1", Now) with { ActivationId = "act-1", SlotId = "default" }]);
+        Assert.Equal(WorkflowActivationProjectionState.Prepared, await _store.FindActivationStateAsync("act-1"));
+
+        await _store.DeleteByArtifactAsync("artifact-1");
+
+        Assert.Equal(WorkflowActivationProjectionState.Missing, await _store.FindActivationStateAsync("act-1"));
+    }
+
     private static RecurringTriggerOccurrenceClaimRequest Claim(int limit) => new("pump", Now, TimeSpan.FromMinutes(1), limit);
 
     private static RecurringTriggerSchedule Schedule(string id, DateTimeOffset next, string artifactId = "artifact-1") => new(

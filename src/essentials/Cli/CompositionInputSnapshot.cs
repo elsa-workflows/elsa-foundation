@@ -1,18 +1,30 @@
 using System.Text;
-using System.Diagnostics;
 
 namespace Elsa.Cli;
 
 /// <summary>Captures supplied composition inputs once and detects edits before reviewed publication.</summary>
-internal sealed class CompositionInputSnapshot
+public sealed class CompositionInputSnapshot
 {
     private readonly IReadOnlyDictionary<string, byte[]> _files;
+    private readonly CompositionFileReader? _candidateReader;
 
-    private CompositionInputSnapshot(IReadOnlyDictionary<string, byte[]> files) => _files = files;
-
-    public static CompositionInputSnapshot Open(IEnumerable<string> paths)
+    private CompositionInputSnapshot(IReadOnlyDictionary<string, byte[]> files, CompositionFileReader? candidateReader)
     {
+        _files = files;
+        _candidateReader = candidateReader;
+    }
+
+    public static CompositionInputSnapshot Open(IEnumerable<string> paths) => Capture(paths, candidateReader: null);
+
+    /// <summary>Captures every supplied intent file with candidate-only byte and count limits.</summary>
+    public static CompositionInputSnapshot OpenForCandidate(IEnumerable<string> paths, CompositionFileReader? reader = null) =>
+        Capture(paths, reader ?? new CompositionFileReader());
+
+    private static CompositionInputSnapshot Capture(IEnumerable<string> paths, CompositionFileReader? candidateReader)
+    {
+        ArgumentNullException.ThrowIfNull(paths);
         var files = new Dictionary<string, byte[]>(StringComparer.Ordinal);
+        var totalBytes = 0;
         foreach (var path in paths)
         {
             var fullPath = FullPath(path);
@@ -21,9 +33,11 @@ internal sealed class CompositionInputSnapshot
 
             try
             {
-                EnsureRegularFile(fullPath);
-                var bytes = File.ReadAllBytes(fullPath);
-                EnsureRegularFile(fullPath);
+                if (candidateReader is not null && files.Count >= CompositionFileReader.MaximumFiles)
+                    throw CompositionFileReader.LimitExceeded();
+                var bytes = Read(fullPath, candidateReader, totalBytes);
+                if (candidateReader is not null)
+                    totalBytes += bytes.Length;
                 files.Add(fullPath, bytes);
             }
             catch (CliRefusal)
@@ -36,7 +50,7 @@ internal sealed class CompositionInputSnapshot
             }
         }
 
-        return new CompositionInputSnapshot(files);
+        return new CompositionInputSnapshot(files, candidateReader);
     }
 
     public string ReadText(string path)
@@ -58,14 +72,16 @@ internal sealed class CompositionInputSnapshot
 
     public void VerifyUnchanged()
     {
+        var totalBytes = 0;
         foreach (var (path, snapshot) in _files)
         {
             try
             {
-                EnsureRegularFile(path);
-                if (!snapshot.AsSpan().SequenceEqual(File.ReadAllBytes(path)))
+                var current = Read(path, _candidateReader, totalBytes);
+                if (_candidateReader is not null)
+                    totalBytes += current.Length;
+                if (!snapshot.AsSpan().SequenceEqual(current))
                     throw Changed();
-                EnsureRegularFile(path);
             }
             catch (CliRefusal)
             {
@@ -76,6 +92,17 @@ internal sealed class CompositionInputSnapshot
                 throw Changed();
             }
         }
+    }
+
+    private static byte[] Read(string path, CompositionFileReader? candidateReader, int totalBytes)
+    {
+        if (candidateReader is not null)
+            return candidateReader.Read(path, Math.Min(CompositionFileReader.MaximumFileBytes,
+                CompositionFileReader.MaximumContextBytes - totalBytes));
+        CompositionFileReader.EnsureRegularFile(path);
+        var bytes = File.ReadAllBytes(path);
+        CompositionFileReader.EnsureRegularFile(path);
+        return bytes;
     }
 
     private static string FullPath(string path)
@@ -89,87 +116,6 @@ internal sealed class CompositionInputSnapshot
             throw Unreadable();
         }
     }
-
-    private static void EnsureRegularFile(string path)
-    {
-        var info = new FileInfo(path);
-        info.Refresh();
-        if (!info.Exists || info.LinkTarget is not null ||
-            (info.Attributes & (FileAttributes.ReparsePoint | FileAttributes.Directory | FileAttributes.Device)) != 0 ||
-            !IsUnixRegularFile(path))
-            throw Unreadable();
-    }
-
-    private static bool IsUnixRegularFile(string path)
-    {
-        if (OperatingSystem.IsWindows())
-            return true;
-
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = OperatingSystem.IsMacOS() ? "/usr/bin/stat" : OperatingSystem.IsLinux() ? FindLinuxStat() : string.Empty,
-            UseShellExecute = false,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            CreateNoWindow = true
-        };
-        if (string.IsNullOrEmpty(startInfo.FileName))
-            return false;
-
-        if (OperatingSystem.IsMacOS())
-        {
-            startInfo.ArgumentList.Add("-f");
-            startInfo.ArgumentList.Add("%HT");
-        }
-        else
-        {
-            startInfo.ArgumentList.Add("-c");
-            startInfo.ArgumentList.Add("%F");
-        }
-        startInfo.ArgumentList.Add("--");
-        startInfo.ArgumentList.Add(path);
-        startInfo.Environment["LC_ALL"] = "C";
-
-        try
-        {
-            using var process = Process.Start(startInfo);
-            if (process is null)
-                return false;
-
-            var output = process.StandardOutput.ReadToEndAsync();
-            var error = process.StandardError.ReadToEndAsync();
-            var timedOut = false;
-            if (!process.WaitForExit(2_000))
-            {
-                timedOut = true;
-                try
-                {
-                    process.Kill(entireProcessTree: true);
-                }
-                catch (Exception)
-                {
-                    // Timeout always refuses; still attempt the bounded cleanup wait if termination fails.
-                }
-                if (!process.WaitForExit(1_000))
-                    return false;
-            }
-
-            var standardOutput = output.GetAwaiter().GetResult();
-            _ = error.GetAwaiter().GetResult();
-            if (standardOutput.EndsWith("\r\n", StringComparison.Ordinal))
-                standardOutput = standardOutput[..^2];
-            else if (standardOutput.EndsWith('\n') || standardOutput.EndsWith('\r'))
-                standardOutput = standardOutput[..^1];
-            return !timedOut && process.ExitCode == 0 && standardOutput == (OperatingSystem.IsMacOS() ? "Regular File" : "regular file");
-        }
-        catch (Exception)
-        {
-            return false;
-        }
-    }
-
-    private static string FindLinuxStat() => File.Exists("/usr/bin/stat") ? "/usr/bin/stat" :
-        File.Exists("/bin/stat") ? "/bin/stat" : string.Empty;
 
     private static CliRefusal Unreadable() =>
         CliRefusal.Resolution("composition-input-unreadable", "A supplied composition input could not be read as a regular local file.");

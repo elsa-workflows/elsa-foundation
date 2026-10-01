@@ -106,9 +106,10 @@ internal sealed class InjectedCrashException(string message) : Exception(message
 
 /// <summary>
 /// Refuses a save while <paramref name="refuse"/> matches what the context is about to write, so a test can cut
-/// a multi-phase operation at an exact boundary.
+/// a multi-phase operation at an exact boundary. The refusal is an <see cref="InjectedCrashException"/> unless
+/// <paramref name="refusal"/> supplies the failure, such as the lost race a provider would report.
 /// </summary>
-internal sealed class RefuseSaveInterceptor(Func<DbContext, bool> refuse) : SaveChangesInterceptor
+internal sealed class RefuseSaveInterceptor(Func<DbContext, bool> refuse, Func<Exception>? refusal = null) : SaveChangesInterceptor
 {
     public int Refused { get; private set; }
 
@@ -132,7 +133,7 @@ internal sealed class RefuseSaveInterceptor(Func<DbContext, bool> refuse) : Save
         if (context is null || !refuse(context))
             return;
         Refused++;
-        throw new InjectedCrashException("The save was refused at the storage seam.");
+        throw refusal?.Invoke() ?? new InjectedCrashException("The save was refused at the storage seam.");
     }
 }
 
@@ -155,6 +156,27 @@ internal sealed class BeforeFirstReadInterceptor(string table, Func<Task> interl
         CancellationToken cancellationToken = default)
     {
         if (source.IsMatch(command.CommandText) && Interlocked.Exchange(ref remaining, 0) == 1)
+            await interleave();
+        return result;
+    }
+}
+
+/// <summary>
+/// Runs <paramref name="interleave"/> once, before the context's first transaction begins. SQLite takes its write lock
+/// when a transaction begins, so a competing commit cannot land inside one; this is the latest point it can land before
+/// the code under test reads and writes.
+/// </summary>
+internal sealed class BeforeFirstTransactionInterceptor(Func<Task> interleave) : DbTransactionInterceptor
+{
+    private int remaining = 1;
+
+    public override async ValueTask<InterceptionResult<DbTransaction>> TransactionStartingAsync(
+        DbConnection connection,
+        TransactionStartingEventData eventData,
+        InterceptionResult<DbTransaction> result,
+        CancellationToken cancellationToken = default)
+    {
+        if (Interlocked.Exchange(ref remaining, 0) == 1)
             await interleave();
         return result;
     }
