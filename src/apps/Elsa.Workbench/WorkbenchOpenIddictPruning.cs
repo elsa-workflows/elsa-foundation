@@ -19,14 +19,15 @@ namespace Elsa.Workbench;
 /// enables the feature. A prune is idempotent, so every node runs it and none claims it: a row a sibling has already deleted is
 /// not an error to this node, and the next interval prunes whatever a failed one left.
 /// </remarks>
-internal static class WorkbenchOpenIddictPruning
+public static class WorkbenchOpenIddictPruning
 {
-    internal static IServiceCollection AddWorkbenchOpenIddictPruning(this IServiceCollection services, IConfiguration configuration)
+    public static IServiceCollection AddWorkbenchOpenIddictPruning(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddOptions<WorkbenchOpenIddictPruningOptions>()
             .Bind(configuration.GetSection(WorkbenchOpenIddictPruningOptions.SectionPath))
             .Validate(options => options.Interval > TimeSpan.Zero, "The OpenIddict prune interval must be greater than zero.")
             .Validate(options => options.MinimumAge >= TimeSpan.Zero, "The OpenIddict prune minimum age cannot be negative.")
+            .Validate(options => options.Timeout > TimeSpan.Zero, "The OpenIddict prune timeout must be greater than zero.")
             .ValidateOnStart();
         services.TryAddSingleton(TimeProvider.System);
         services.AddHostedService<WorkbenchOpenIddictPruningService>();
@@ -35,9 +36,10 @@ internal static class WorkbenchOpenIddictPruning
 }
 
 /// <summary>When the OpenIddict store is pruned, and how old an entry must be before it is.</summary>
-internal sealed class WorkbenchOpenIddictPruningOptions
+public sealed class WorkbenchOpenIddictPruningOptions
 {
-    internal const string SectionPath = "CShells:Shells:default:Features:FoundationIdentityOpenIddict:Prune";
+    /// <summary>The prune's settings, under the default shell's OpenIddict settings.</summary>
+    public const string SectionPath = "CShells:Shells:default:Features:FoundationIdentityOpenIddict:Prune";
 
     /// <summary>Whether this node prunes. On by default; every node may, because a prune is idempotent.</summary>
     public bool Enabled { get; set; } = true;
@@ -51,10 +53,17 @@ internal sealed class WorkbenchOpenIddictPruningOptions
     /// refresh-token lifetime's, so a redeemed refresh token stays long enough to be recognised if it is presented again.
     /// </summary>
     public TimeSpan MinimumAge { get; set; } = TimeSpan.FromDays(14);
+
+    /// <summary>
+    /// How long one prune call (the tokens', then the authorizations') may take before it is cancelled and left for the next
+    /// interval, so a prune that hangs cannot hold every later prune of the node. A prune deletes in batches and a cancelled one
+    /// keeps what its finished batches deleted, so the default is generous: a store that has never been pruned takes a while.
+    /// </summary>
+    public TimeSpan Timeout { get; set; } = TimeSpan.FromMinutes(10);
 }
 
 /// <summary>Prunes the OpenIddict tokens and then the authorizations on the configured interval, for as long as the host runs.</summary>
-internal sealed class WorkbenchOpenIddictPruningService(
+public sealed class WorkbenchOpenIddictPruningService(
     IServiceProvider services,
     IOptions<WorkbenchOpenIddictPruningOptions> options,
     TimeProvider time,
@@ -77,19 +86,19 @@ internal sealed class WorkbenchOpenIddictPruningService(
     }
 
     /// <summary>
-    /// Prunes once. A failure is logged and left for the next interval, never thrown: the store may not be migrated yet, or a
-    /// sibling node's prune may have deleted what this one meant to, and neither is a reason to stop the host.
+    /// Prunes once: the tokens, then the authorizations, each under <see cref="WorkbenchOpenIddictPruningOptions.Timeout"/> and
+    /// independent of the other. A failure is logged and left for the next interval, never thrown: the store may not be migrated
+    /// yet, or a sibling node's prune may have deleted what this one meant to, and neither is a reason to stop the host.
     /// </summary>
-    internal async Task PruneAsync(CancellationToken cancellationToken)
+    public async Task PruneAsync(CancellationToken cancellationToken)
     {
         try
         {
             var threshold = time.GetUtcNow() - options.Value.MinimumAge;
             await using var scope = services.CreateAsyncScope();
             // Tokens first, so an ad hoc authorization whose last token this pass prunes is pruned in the same pass.
-            var tokens = await scope.ServiceProvider.GetRequiredService<IOpenIddictTokenManager>().PruneAsync(threshold, cancellationToken);
-            var authorizations = await scope.ServiceProvider.GetRequiredService<IOpenIddictAuthorizationManager>().PruneAsync(threshold, cancellationToken);
-            logger.LogDebug("Pruned {Tokens} OpenIddict tokens and {Authorizations} authorizations created before {Threshold:u}.", tokens, authorizations, threshold);
+            await RunAsync("tokens", scope.ServiceProvider.GetRequiredService<IOpenIddictTokenManager>().PruneAsync, threshold, cancellationToken);
+            await RunAsync("authorizations", scope.ServiceProvider.GetRequiredService<IOpenIddictAuthorizationManager>().PruneAsync, threshold, cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -98,6 +107,29 @@ internal sealed class WorkbenchOpenIddictPruningService(
         catch (Exception failure)
         {
             logger.LogWarning(failure, "Pruning the OpenIddict store failed; it is tried again in {Interval}.", options.Value.Interval);
+        }
+    }
+
+    private async Task RunAsync(string kind, Func<DateTimeOffset, CancellationToken, ValueTask<long>> prune, DateTimeOffset threshold, CancellationToken stopping)
+    {
+        using var timeout = new CancellationTokenSource(options.Value.Timeout, time);
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(stopping, timeout.Token);
+        try
+        {
+            var pruned = await prune(threshold, linked.Token);
+            logger.LogDebug("Pruned {Count} OpenIddict {Kind} created before {Threshold:u}.", pruned, kind, threshold);
+        }
+        catch (OperationCanceledException) when (stopping.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (OperationCanceledException) when (timeout.IsCancellationRequested)
+        {
+            logger.LogWarning("Pruning the OpenIddict {Kind} did not finish in {Timeout}; it is cancelled and tried again in {Interval}.", kind, options.Value.Timeout, options.Value.Interval);
+        }
+        catch (Exception failure)
+        {
+            logger.LogWarning(failure, "Pruning the OpenIddict {Kind} failed; it is tried again in {Interval}.", kind, options.Value.Interval);
         }
     }
 }

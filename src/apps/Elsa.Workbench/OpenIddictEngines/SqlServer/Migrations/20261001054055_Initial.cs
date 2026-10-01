@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
-namespace Elsa.Workbench.OpenIddict.SqlServer.Migrations
+namespace Elsa.Workbench.OpenIddictEngines.SqlServer.Migrations
 {
     /// <inheritdoc />
     public partial class Initial : Migration

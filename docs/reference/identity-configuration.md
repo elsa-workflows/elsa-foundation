@@ -77,16 +77,17 @@ is never written to the log; the username xor password half-configured is a star
 
 | Setting | Meaning | Production requirement |
 |---|---|---|
-| `IsDevelopmentOrDemo` | In-memory token store + ephemeral keys. | **`false`.** |
+| `IsDevelopmentOrDemo` | In-memory token store (per node, lost when the host stops, whatever `Provider` says) + ephemeral keys. | **`false`.** |
 | `Issuer` | Logical issuer URI written into (and required from) first-party access tokens. | Set to a stable absolute URI, e.g. `https://elsa.example.com/`. |
 | `SigningKey` | Base64-encoded **PKCS#8 RSA private key** of at least 2048 bits, used to sign access tokens (RS256). Falls back to `FoundationIdentityOptions.SigningKey`. | **Required.** See generation command below. |
 | `EncryptionKey` | Key material for OpenIddict's encryption credentials. Defaults to a key derived (domain-separated) from `SigningKey`. | Recommended: set a **distinct** value from `SigningKey`. |
-| `Provider` | The database engine under the token store: `Sqlite` (the default), `SqlServer` or `PostgreSql`. `MySql` is refused, see [Where the token store lives](#where-the-token-store-lives). | **Not `Sqlite` when more than one node serves requests.** |
+| `Provider` | The database engine under the token store: `Sqlite` (the default when unset), `SqlServer` or `PostgreSql`. Any other value, `MySql` included, fails the host's start, see [Where the token store lives](#where-the-token-store-lives). **Ignored under `IsDevelopmentOrDemo`**, whose token store is in memory and per node (the host warns at start when both are set). | **Not `Sqlite` when more than one node serves requests.** |
 | `ConnectionString` | Connection string for the OpenIddict token store, in the syntax of `Provider`. Without one, `Sqlite` uses its own file (`identity.db`) and another engine uses `ConnectionStrings:Elsa`, the connection every Elsa EF module shares. | Optional for one node; set for a dedicated token DB. |
 | `AutoMigrate` | Lets Workbench's host-owned OpenIddict EF provider migrate its schema during startup. Defaults to `true`. | Safe to leave on for several nodes on `SqlServer` or `PostgreSql`, which serialise concurrent migrations; turn off if you apply migrations out-of-band. |
 | `Prune:Enabled` | Whether this node prunes the token store. Defaults to `true`. | Leave on, see [Pruning the token store](#pruning-the-token-store). |
 | `Prune:Interval` | The time between prunes, a `TimeSpan`. Defaults to `01:00:00`. The first prune runs when the host starts. | Optional. |
 | `Prune:MinimumAge` | Only entries created longer ago than this are pruned, a `TimeSpan`. Defaults to `14.00:00:00`. | Optional. |
+| `Prune:Timeout` | How long one prune call (the tokens', then the authorizations') may take before it is cancelled and left for the next interval, a `TimeSpan`. Defaults to `00:10:00`. | Optional. |
 
 `Elsa.Foundation.Identity.OpenIddict` contains only provider-neutral OpenIddict behavior. It no longer references
 EF Core, and the former `configureDbContext` parameter on `AddFoundationIdentityOpenIddict` has been removed.
@@ -98,17 +99,22 @@ choice with `OpenIddict.EntityFrameworkCore`; another host may select a differen
 Every access token and every refresh token the server issues is a row in the token store, and validating an access token reads
 its row (token-entry validation is on). A bearer token issued by one node is therefore only valid on another node if both read
 **the same store**. **A deployment of more than one node needs a shared store:** set `Provider` to `SqlServer` or `PostgreSql`
-and point every node at one database. The default, a SQLite file, is for one node, or for nodes that share one file.
+and point every node at one database. The default, a SQLite file, is for one node, or for nodes that share one file, and the demo store
+(`IsDevelopmentOrDemo`) is in memory and per node, so it is for one node too.
 
-A node also needs the **same Data Protection keys** as the others, so a token or cookie one node protects the others can read.
-That is a separate, shared key ring, not something the token store provides; it is delivered by
-[#2191](https://github.com/elsa-workflows/elsa-foundation/issues/2191), which is in progress. A multi-node deployment needs both
-the shared store and the shared keys.
+The store moves off SQLite only when `Provider` is set, so an existing store never moves silently. When the platform's persistence
+provider (`Elsa:Persistence`) is another engine and `Provider` is not set, the host warns at start that the token store is still a
+per-node SQLite file and names the setting to change.
+
+A node also needs the **same Data Protection keys** as the others, so a token or cookie one node protects the others can read. That
+is a separate, shared key ring, configured through the host's Data Protection settings (tracked in
+[#2191](https://github.com/elsa-workflows/elsa-foundation/issues/2191)); the token store does not provide it. A multi-node
+deployment needs both the shared store and the shared keys.
 
 The store follows the platform's provider conventions: the engine names are the ones every Elsa EF module takes, and without a
 `ConnectionString` another engine uses `ConnectionStrings:Elsa`. The shared persistence resource (`Elsa:Persistence`) does not
-select the token store, which is host-owned. On SQL Server and PostgreSQL the tables are in the `Identity` schema, and the
-history table is `__EFMigrationsHistory_OpenIddict`. MySQL is not supported: OpenIddict's prune deletes through a subquery with a
+select the token store, which is host-owned. On SQL Server and PostgreSQL the tables and the migrations history table
+(`__EFMigrationsHistory_OpenIddict`) are both in the `Identity` schema, so the history sits beside the tables it records. MySQL is not supported: OpenIddict's prune deletes through a subquery with a
 limit, which MySQL refuses and its provider does not rewrite, so a MySQL store could never be pruned.
 
 #### Pruning the token store
@@ -122,8 +128,10 @@ recognised if it is presented again.
 The prune runs as a hosted service on **every node**, on the `Prune:Interval`, and the first runs when the node starts. It is not
 claimed by one node, because a prune is idempotent: what one node has deleted another finds already gone, and a prune that fails
 (a store not migrated yet, a sibling's delete in the way) is logged and tried again on the next interval, never thrown into the
-host. It is a hosted service rather than a recurring task because the token store is host-owned and registered once for the
-process, while a recurring task belongs to a shell's Tasks feature and would run once per shell.
+host. It is a root hosted service and not an `IRecurringTask` because the token store is host-owned and registered once for the
+process, while a recurring task belongs to a shell's Tasks feature, would run once per shell that enables it, and would not run in a
+host that does not. Each prune call runs under `Prune:Timeout`, so a call that hangs is cancelled and cannot hold the node's later
+prunes.
 
 Generate a signing key:
 

@@ -1,9 +1,13 @@
 using Elsa.Persistence.EntityFramework;
 using Elsa.Workbench;
 using Elsa.Workbench.OpenIddict;
+using Elsa.Workbench.OpenIddictEngines;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace Elsa.Modularity.Tests;
@@ -84,29 +88,88 @@ public sealed class WorkbenchOpenIddictStoreProviderTests
         Assert.True(store.Database.IsInMemory());
     }
 
+    /// <summary>A provider the store cannot use fails the host's start, with the supported ones named, instead of the store's first use.</summary>
     [Theory]
     [InlineData("Oracle")]
     [InlineData("Cosmos")]
-    public void An_engine_the_platform_does_not_support_is_refused_with_the_supported_ones_named(string provider)
+    public void An_engine_the_platform_does_not_support_fails_the_hosts_start_with_the_supported_ones_named(string provider)
     {
         using var services = CreateProvider(provider, connectionString: null, sharedConnection: "unused");
-        using var scope = services.CreateScope();
 
-        var refusal = Assert.Throws<ArgumentException>(() => scope.ServiceProvider.GetRequiredService<OpenIddictIdentityDbContext>());
+        var refusal = Assert.Throws<OptionsValidationException>(() => services.GetRequiredService<IStartupValidator>().Validate());
 
-        Assert.Contains("Sqlite, SqlServer, PostgreSql, or MySql", refusal.Message, StringComparison.Ordinal);
+        Assert.Contains("Sqlite, SqlServer or PostgreSql", refusal.Message, StringComparison.Ordinal);
     }
 
-    /// <summary>MySQL's provider cannot run OpenIddict's prune, so a store on it would grow without bound: refused, and the reason given.</summary>
+    /// <summary>MySQL's provider cannot run OpenIddict's prune, so a store on it would grow without bound: refused at the start, and the reason given.</summary>
     [Fact]
-    public void MySql_is_refused_because_its_provider_cannot_prune_the_store()
+    public void MySql_fails_the_hosts_start_because_its_provider_cannot_prune_the_store()
     {
         using var services = CreateProvider("MySql", connectionString: "Server=db;Database=elsa_tokens;User=elsa;Password=x");
-        using var scope = services.CreateScope();
 
-        var refusal = Assert.Throws<NotSupportedException>(() => scope.ServiceProvider.GetRequiredService<OpenIddictIdentityDbContext>());
+        var refusal = Assert.Throws<OptionsValidationException>(() => services.GetRequiredService<IStartupValidator>().Validate());
 
         Assert.Contains("token prune", refusal.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("Sqlite")]
+    [InlineData("SqlServer")]
+    [InlineData("postgres")]
+    public void A_supported_or_unset_engine_passes_the_start(string? provider)
+    {
+        using var services = CreateProvider(provider, connectionString: null, sharedConnection: "unused");
+
+        services.GetRequiredService<IStartupValidator>().Validate();
+    }
+
+    /// <summary>The store moves off its per-node SQLite only when its own setting says so, so a platform on another engine is warned of.</summary>
+    [Theory]
+    [InlineData("PostgreSql")]
+    [InlineData("SqlServer")]
+    public async Task A_platform_on_another_engine_with_the_store_left_on_sqlite_is_warned_of(string platform)
+    {
+        var log = new CapturingLogger();
+        using var services = CreateProvider(provider: null, connectionString: null, log: log, platformProvider: platform);
+
+        await StartNoticesAsync(services);
+
+        var warning = Assert.Single(log.Entries, entry => entry.Level == LogLevel.Warning);
+        Assert.Contains("per-node SQLite", warning.Message, StringComparison.Ordinal);
+        Assert.Contains($"{Section}:Provider", warning.Message, StringComparison.Ordinal);
+        Assert.Contains(platform, warning.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(null, "Sqlite")]
+    [InlineData(null, null)]
+    [InlineData("PostgreSql", "PostgreSql")]
+    public async Task No_warning_when_the_store_follows_the_platform_or_the_platform_is_sqlite(string? provider, string? platform)
+    {
+        var log = new CapturingLogger();
+        using var services = CreateProvider(provider, connectionString: null, sharedConnection: "unused", log: log, platformProvider: platform);
+
+        await StartNoticesAsync(services);
+
+        Assert.DoesNotContain(log.Entries, entry => entry.Level == LogLevel.Warning);
+    }
+
+    /// <summary>The demo store is in memory whatever engine is configured, so a configured engine is warned of, and its absence is not.</summary>
+    [Theory]
+    [InlineData("PostgreSql", true)]
+    [InlineData(null, false)]
+    public async Task The_demo_store_warns_of_an_engine_it_ignores(string? provider, bool warned)
+    {
+        var log = new CapturingLogger();
+        using var services = CreateProvider(provider, connectionString: null, sharedConnection: "unused", isDevelopmentOrDemo: true, log: log);
+
+        await StartNoticesAsync(services);
+
+        var warnings = log.Entries.Where(entry => entry.Level == LogLevel.Warning).ToArray();
+        Assert.Equal(warned, warnings.Length == 1);
+        if (warned)
+            Assert.Contains("in-memory demo store", warnings[0].Message, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -133,11 +196,19 @@ public sealed class WorkbenchOpenIddictStoreProviderTests
         Assert.Equal(OpenIddictEntityFrameworkCoreDefaults.MigrationsHistoryTable, EfMigrationsHistory.TableName(WorkbenchOpenIddictStoreProvider.Module));
     }
 
+    private static async Task StartNoticesAsync(IServiceProvider services)
+    {
+        foreach (var notices in services.GetServices<IHostedService>().OfType<WorkbenchOpenIddictStoreNotices>())
+            await notices.StartAsync(CancellationToken.None);
+    }
+
     private static ServiceProvider CreateProvider(
         string? provider,
         string? connectionString,
         string? sharedConnection = null,
-        bool isDevelopmentOrDemo = false)
+        bool isDevelopmentOrDemo = false,
+        CapturingLogger? log = null,
+        string? platformProvider = null)
     {
         var settings = new Dictionary<string, string?> { [$"{Section}:IsDevelopmentOrDemo"] = isDevelopmentOrDemo.ToString() };
         if (provider is not null)
@@ -146,6 +217,15 @@ public sealed class WorkbenchOpenIddictStoreProviderTests
             settings[$"{Section}:ConnectionString"] = connectionString;
         if (sharedConnection is not null)
             settings["ConnectionStrings:Elsa"] = sharedConnection;
-        return WorkbenchOpenIddictTestHost.CreateProvider(new ConfigurationBuilder().AddInMemoryCollection(settings).Build());
+        if (platformProvider is not null)
+        {
+            settings["Elsa:Persistence:DefaultResource"] = "primary";
+            settings["Elsa:Persistence:Resources:primary:Provider"] = platformProvider;
+            settings["Elsa:Persistence:Resources:primary:ConnectionName"] = "Elsa";
+        }
+
+        return WorkbenchOpenIddictTestHost.CreateProvider(
+            new ConfigurationBuilder().AddInMemoryCollection(settings).Build(),
+            configure: log is null ? null : services => services.AddSingleton<ILoggerFactory>(log));
     }
 }

@@ -1,3 +1,4 @@
+using System.Reflection;
 using Elsa.Workbench;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Configuration;
@@ -6,6 +7,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
+using OpenIddict.Abstractions;
 using Xunit;
 
 namespace Elsa.Modularity.Tests;
@@ -118,7 +120,7 @@ public sealed class WorkbenchOpenIddictPruningTests : IAsyncLifetime
 
             await Service(provider).PruneAsync(CancellationToken.None);
 
-            Assert.Contains(_log.Entries, entry => entry.Level == LogLevel.Warning && entry.Message.Contains("Pruning the OpenIddict store failed", StringComparison.Ordinal));
+            Assert.Contains(_log.Entries, entry => entry.Level == LogLevel.Warning && entry.Message.Contains("Pruning the OpenIddict tokens failed", StringComparison.Ordinal));
         }
         finally
         {
@@ -127,9 +129,29 @@ public sealed class WorkbenchOpenIddictPruningTests : IAsyncLifetime
         }
     }
 
+    /// <summary>
+    /// A prune call that hangs is cancelled when its timeout passes, and the prune goes on to the next call, so one hung call cannot
+    /// hold every later prune of the node.
+    /// </summary>
+    [Fact]
+    public async Task A_prune_call_that_hangs_is_cancelled_after_the_timeout()
+    {
+        await using var node = CreateProvider(
+            Durable(("Timeout", "00:01:00")),
+            services => services.AddScoped(_ => DispatchProxy.Create<IOpenIddictTokenManager, HangingPrune>()));
+
+        var prune = Service(node).PruneAsync(CancellationToken.None);
+        Assert.False(prune.IsCompleted);
+        _time.Advance(TimeSpan.FromMinutes(1));
+        await prune.WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.Contains(_log.Entries, entry => entry.Level == LogLevel.Warning && entry.Message.Contains("Pruning the OpenIddict tokens did not finish in 00:01:00", StringComparison.Ordinal));
+    }
+
     [Theory]
     [InlineData("Interval", "00:00:00")]
     [InlineData("MinimumAge", "-1.00:00:00")]
+    [InlineData("Timeout", "00:00:00")]
     public void A_setting_that_cannot_work_fails_the_host_at_start(string key, string value)
     {
         using var provider = CreateProvider(Durable((key, value)));
@@ -145,6 +167,7 @@ public sealed class WorkbenchOpenIddictPruningTests : IAsyncLifetime
         Assert.True(defaults.Enabled);
         Assert.Equal(TimeSpan.FromHours(1), defaults.Interval);
         Assert.Equal(TimeSpan.FromDays(14), defaults.MinimumAge);
+        Assert.Equal(TimeSpan.FromMinutes(10), defaults.Timeout);
     }
 
     /// <summary>The durable store every node of the test shares, with the prune settings given.</summary>
@@ -155,12 +178,13 @@ public sealed class WorkbenchOpenIddictPruningTests : IAsyncLifetime
             .Build();
 
     /// <summary>A node: the store the host runs, and the prune registered beside it the way <c>Program.cs</c> registers it, on the test's clock and log.</summary>
-    private ServiceProvider CreateProvider(IConfiguration configuration) =>
+    private ServiceProvider CreateProvider(IConfiguration configuration, Action<IServiceCollection>? replace = null) =>
         WorkbenchOpenIddictTestHost.CreateProvider(configuration, withMigrationPolicy: true, services =>
         {
             services.AddSingleton<TimeProvider>(_time);
             services.AddSingleton<ILoggerFactory>(_log);
             services.AddWorkbenchOpenIddictPruning(configuration);
+            replace?.Invoke(services);
         });
 
     private WorkbenchOpenIddictPruningService Service(IServiceProvider? provider = null) =>
@@ -171,5 +195,20 @@ public sealed class WorkbenchOpenIddictPruningTests : IAsyncLifetime
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         while (!await condition())
             await Task.Delay(TimeSpan.FromMilliseconds(50), timeout.Token);
+    }
+}
+
+/// <summary>A token manager whose prune never finishes until it is cancelled, and which answers nothing else.</summary>
+public class HangingPrune : DispatchProxy
+{
+    protected override object? Invoke(MethodInfo? targetMethod, object?[]? args) =>
+        targetMethod?.Name == nameof(IOpenIddictTokenManager.PruneAsync)
+            ? new ValueTask<long>(HangAsync((CancellationToken)args![1]!))
+            : throw new NotSupportedException(targetMethod?.Name);
+
+    private static async Task<long> HangAsync(CancellationToken cancellationToken)
+    {
+        await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+        return 0;
     }
 }

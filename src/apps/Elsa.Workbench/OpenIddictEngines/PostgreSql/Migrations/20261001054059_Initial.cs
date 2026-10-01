@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
-namespace Elsa.Workbench.OpenIddict.PostgreSql.Migrations
+namespace Elsa.Workbench.OpenIddictEngines.PostgreSql.Migrations
 {
     /// <inheritdoc />
     public partial class Initial : Migration

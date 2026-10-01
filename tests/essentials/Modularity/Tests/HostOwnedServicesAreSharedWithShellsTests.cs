@@ -8,6 +8,7 @@ using Elsa.Foundation.Host.ModuleManagement;
 using Elsa.Persistence.Schema.SchemaFinalization;
 using Elsa.Workbench;
 using Elsa.Workbench.OpenIddict;
+using Elsa.Workbench.OpenIddictEngines;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Nuplane.Reconciliation;

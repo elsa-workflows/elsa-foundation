@@ -27,10 +27,6 @@ public sealed partial class ArchitectureGuardTests
         // Elsa.Workbench keeps a narrow exception for the host-only module-management registry builder
         // (ModuleManagementRegistryBuilder), exercised by ModuleManagementRegistryBuilderTests.
         ("Elsa.Workbench", "Elsa.Modularity.Tests"),
-        // The same exception for the OpenIddict token store's native-engine tests (#2201), which compose the store through
-        // the host's internal registrations on SQL Server and PostgreSQL. Container-backed, so they cannot share the fast
-        // Modularity.Tests assembly.
-        ("Elsa.Workbench", "Elsa.Modularity.ProviderTests"),
         // The shared-persistence resolver stays internal to the EF policy assembly. Focused unit
         // and migration metadata tests inspect detached plans without widening its production API.
         ("Elsa.Persistence.EntityFramework", "Elsa.Persistence.EntityFramework.Tests"),
