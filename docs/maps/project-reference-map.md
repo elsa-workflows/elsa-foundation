@@ -8,7 +8,7 @@ Records direct project references only.
 
 - Source projects: 137
 - Test projects: 130
-- Direct project references: 1244
+- Direct project references: 1245
 
 ## Projects
 
@@ -262,7 +262,7 @@ Records direct project references only.
 | [Elsa.Workflows.Dashboard.Tests](../../tests/essentials/Workflows/Dashboard/Tests/Elsa.Workflows.Dashboard.Tests.csproj) | test | Elsa.Workflows | - | false | Elsa.Testing<br>Elsa.Workflows.Dashboard |
 | [Elsa.Workflows.Design.Api.Tests](../../tests/essentials/Workflows/Design/Api/Tests/Elsa.Workflows.Design.Api.Tests.csproj) | test | Elsa.Workflows | - | false | Elsa.Api.Compatibility.Testing<br>Elsa.Mediator.Core<br>Elsa.Testing<br>Elsa.Workflows.Design.Api<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Design.Persistence.Core |
 | [Elsa.Workflows.Design.CodeGeneration.Tests](../../tests/essentials/Workflows/Design/CodeGeneration/Tests/Elsa.Workflows.Design.CodeGeneration.Tests.csproj) | test | Elsa.Workflows | - | false | Elsa.Activities.Design.Reconciliation<br>Elsa.Workflows.Design.CodeGeneration |
-| [Elsa.Workflows.Design.Persistence.EntityFrameworkCore.ProviderTests](../../tests/essentials/Workflows/Design/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Design.Persistence.EntityFrameworkCore.ProviderTests.csproj) | test | Elsa.Workflows | net10.0 | false | Elsa.Workflows.Design.Persistence.EntityFrameworkCore |
+| [Elsa.Workflows.Design.Persistence.EntityFrameworkCore.ProviderTests](../../tests/essentials/Workflows/Design/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Design.Persistence.EntityFrameworkCore.ProviderTests.csproj) | test | Elsa.Workflows | net10.0 | false | Elsa.Workflows.Design.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Design.Reconciliation |
 | [Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Tests](../../tests/essentials/Workflows/Design/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Tests.csproj) | test | Elsa.Workflows | net10.0 | false | Elsa.Modularity.EntityFramework<br>Elsa.Tasks.Core<br>Elsa.Workflows.Design.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Publishing |
 | [Elsa.Workflows.Design.Tests](../../tests/essentials/Workflows/Design/Tests/Elsa.Workflows.Design.Tests.csproj) | test | Elsa.Workflows | - | false | Elsa.Activities.ControlFlow<br>Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Reconciliation<br>Elsa.Activities.Runtime.Core<br>Elsa.Events<br>Elsa.Events.Core<br>Elsa.Expressions.JavaScript<br>Elsa.Expressions.JavaScript.Core<br>Elsa.Expressions.JavaScript.Rendering<br>Elsa.Expressions.JavaScript.Rendering.Core<br>Elsa.Locking.Core<br>Elsa.Mediator<br>Elsa.Primitives<br>Elsa.Primitives.Hosting<br>Elsa.Serialization.SystemText<br>Elsa.Testing<br>Elsa.Workflows.Dashboard<br>Elsa.Workflows.Design.Api<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Design.JavaScript<br>Elsa.Workflows.Design.Persistence.Core<br>Elsa.Workflows.Design.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Design.Reconciliation<br>Elsa.Workflows.Design.Reconciliation.Git<br>Elsa.Workflows.Design.Reconciliation.Json<br>Elsa.Workflows.Design.Validations<br>Elsa.Workflows.Design.Validations.Core |
 | [Elsa.Workflows.ExecutionEvidence.Tests](../../tests/essentials/Workflows/ExecutionEvidence/Tests/Elsa.Workflows.ExecutionEvidence.Tests.csproj) | test | Elsa.Workflows | - | false | Elsa.Testing<br>Elsa.Workflows.ExecutionEvidence |
