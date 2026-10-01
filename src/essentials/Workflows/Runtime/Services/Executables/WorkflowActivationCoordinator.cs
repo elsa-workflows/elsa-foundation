@@ -7,10 +7,12 @@ namespace Elsa.Workflows.Runtime.Services.Executables;
 
 /// <summary>
 /// Owns the runtime activation lifecycle: source-reference minting, projection preparation, slot CAS,
-/// projection activation, observer notification, predecessor retirement, best-effort compensation, and completion of
-/// an activation that an interrupted call left half-done.
+/// projection activation, observer notification, predecessor retirement, best-effort compensation, completion of
+/// an activation that an interrupted call left half-done, and same-activation deferral: a call whose activation the
+/// slot already names, because a concurrent call for the same activation moved it, completes that activation instead
+/// of compensating it (#2251; <c>WorkflowActivationCoordinator.SameActivation.cs</c>).
 /// </summary>
-public sealed class WorkflowActivationCoordinator(
+public sealed partial class WorkflowActivationCoordinator(
     IWorkflowActivationAuthority authority,
     IWorkflowExecutableSourceReferenceStore sourceReferenceStore,
     IWorkflowExecutableRootWriteLeaseManager rootWriteLeaseManager,
@@ -290,8 +292,9 @@ public sealed class WorkflowActivationCoordinator(
     /// </remarks>
     /// <returns>
     /// <see langword="null"/> when there is nothing to complete, the activation's reference is no longer live, or the
-    /// slot moved; an <see cref="WorkflowActivationOutcome.Activated"/> result when this call completed it; and a
-    /// <see cref="WorkflowActivationOutcome.Failed"/> result when it could not.
+    /// slot moved; an <see cref="WorkflowActivationOutcome.Activated"/> result when this call completed it, naming the
+    /// activation it replaced when it retired that one's reference, and otherwise the first activation whose reference it
+    /// retired; and a <see cref="WorkflowActivationOutcome.Failed"/> result when it could not.
     /// </returns>
     private async ValueTask<WorkflowActivationResult?> CompleteServingActivationAsync(
         WorkflowActivationSlot slot,
@@ -350,7 +353,14 @@ public sealed class WorkflowActivationCoordinator(
                 slot.WorkflowDefinitionId,
                 slot.SlotName,
                 retired);
-            return new(true, WorkflowActivationOutcome.Activated, slot, reference, retired.FirstOrDefault());
+
+            // Leftovers are retired first and the predecessor last, but the predecessor is the activation this one
+            // replaced: a caller that keeps its own record of it, as Publishing does, retires the record reported here,
+            // so a leftover reported in its place would leave the predecessor recorded active (#2251).
+            var replaced = predecessor is not null && retired.Contains(predecessor, StringComparer.Ordinal)
+                ? predecessor
+                : retired.FirstOrDefault();
+            return new(true, WorkflowActivationOutcome.Activated, slot, reference, replaced);
         }
         catch (Exception exception) when (NotRequestedCancellation(exception, cancellationToken))
         {
@@ -552,7 +562,8 @@ public sealed class WorkflowActivationCoordinator(
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            await CompensateUnlessSlotNamesAsync(command, reference);
+            if (await TryDeferToSlotAsync(command, Cancelled, "was cancelled") is null)
+                await CompensateAsync(command, reference, null);
             throw;
         }
         catch (Exception exception) when (NotRequestedCancellation(exception, cancellationToken))
@@ -567,7 +578,8 @@ public sealed class WorkflowActivationCoordinator(
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            await CompensateUnlessSlotNamesAsync(command, reference);
+            if (await TryDeferToSlotAsync(command, Cancelled, "was cancelled") is null)
+                await CompensateAsync(command, reference, null);
             throw;
         }
         catch (Exception exception) when (NotRequestedCancellation(exception, cancellationToken))
@@ -621,18 +633,11 @@ public sealed class WorkflowActivationCoordinator(
         if (!transition.Succeeded)
         {
             var refusal = transition.Diagnostic ?? "The activation slot transition was refused.";
-            if (await FindSlotNamingAsync(command) is { } named)
-            {
-                logger?.LogInformation(
-                    "Activation {ActivationId} of definition {DefinitionId} slot {SlotName} lost its slot transition to another call activating it; completing it rather than compensating",
-                    command.ActivationId,
-                    command.Executable.Identity.DefinitionId,
-                    command.SlotName);
-                return await DeferToSlotAsync(
+            if (await TryDeferToSlotAsync(
                     command,
-                    named,
-                    new(false, WorkflowActivationOutcome.Conflict, transition.Slot, Conflict: transition.Conflict, Diagnostic: Truncate(refusal)));
-            }
+                    _ => new(false, WorkflowActivationOutcome.Conflict, transition.Slot, Conflict: transition.Conflict, Diagnostic: Truncate(refusal)),
+                    "lost its slot transition to another call activating it") is { } deferred)
+                return deferred;
 
             var compensationFailure = await CompensateAsync(command, reference, null);
             return new(
@@ -850,20 +855,13 @@ public sealed class WorkflowActivationCoordinator(
         WorkflowExecutableSourceReference? predecessorReference = null,
         bool predecessorReferenceRetirementAttempted = false)
     {
-        if (activatedSlot is null && await FindSlotNamingAsync(command) is { } named)
-        {
-            logger?.LogWarning(
-                failure,
-                "Activation {ActivationId} of definition {DefinitionId} slot {SlotName} failed at step {FailedStep}, but the slot names it already; completing it rather than compensating",
-                command.ActivationId,
-                command.Executable.Identity.DefinitionId,
-                command.SlotName,
-                failedStep);
-            return await DeferToSlotAsync(
+        if (activatedSlot is null &&
+            await TryDeferToSlotAsync(
                 command,
-                named,
-                new(false, WorkflowActivationOutcome.Failed, named, Diagnostic: Truncate(SafeMessage(failure)), FailedStep: failedStep));
-        }
+                named => new(false, WorkflowActivationOutcome.Failed, named, Diagnostic: Truncate(SafeMessage(failure)), FailedStep: failedStep),
+                $"failed at step {failedStep}",
+                failure) is { } deferred)
+            return deferred;
 
         logger?.LogWarning(
             failure,
@@ -887,87 +885,6 @@ public sealed class WorkflowActivationCoordinator(
             Diagnostic: Truncate(Join(SafeMessage(failure), compensationFailure)),
             FailedStep: failedStep,
             CompensationDiagnostic: compensationFailure);
-    }
-
-    /// <summary>
-    /// The slot, when it names this call's activation and that activation's projections are stored in every projection
-    /// store, although this call has not moved the slot there: its source reference and projections are then the slot's,
-    /// and compensating this call would take them from it (#2251).
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// Calls that activate the same artifact through the same source, such as two nodes reconciling one mounted set, share
-    /// one activation id, and with it one source reference and one set of projections. The call that wins the slot serves
-    /// through them, and the other cannot tell them from its own: compensating it would delete the winner's projections
-    /// and retire its reference, leaving the slot naming an activation that serves nothing. A call whose own slot
-    /// transition may have committed before it threw is in the same position, and is treated the same way.
-    /// </para>
-    /// <para>
-    /// Projections stored in every store tell such a call apart from a retry of the slot's activation whose earlier
-    /// compensation removed them and whose own preparation failed: that retry has nothing to complete, so it is still
-    /// compensated rather than reported already active while nothing serves. When the projection state cannot be read,
-    /// the call does not compensate either; completion reads it again and fails loudly if it still cannot. When the slot
-    /// cannot be read, the call compensates as before.
-    /// </para>
-    /// </remarks>
-    private async ValueTask<WorkflowActivationSlot?> FindSlotNamingAsync(WorkflowActivationCommand command)
-    {
-        var slot = await CurrentSlotAsync(command.Executable.Identity.DefinitionId, command.SlotName);
-        if (!StringComparer.Ordinal.Equals(slot.ActiveActivationId, command.ActivationId))
-            return null;
-
-        try
-        {
-            var state = await ReadOccupantAsync(command.ActivationId, CancellationToken.None);
-            return state.Triggers == WorkflowActivationProjectionState.Missing || state.Schedules == WorkflowActivationProjectionState.Missing
-                ? null
-                : slot;
-        }
-        catch (Exception exception)
-        {
-            logger?.LogWarning(
-                exception,
-                "The projections of activation {ActivationId}, which definition {DefinitionId} slot {SlotName} names, could not be read; it is left to the slot rather than compensated",
-                command.ActivationId,
-                slot.WorkflowDefinitionId,
-                slot.SlotName);
-            return slot;
-        }
-    }
-
-    /// <summary>
-    /// Answers a call whose activation <paramref name="slot"/> names (<see cref="FindSlotNamingAsync"/>) by completing
-    /// the activation, and nothing is compensated. Like <see cref="CompleteAsync"/>, the call reports
-    /// <see cref="WorkflowActivationOutcome.Activated"/> with the activation it replaced when completing it switched it on
-    /// or retired that activation's reference, so a caller that keeps its own record of the replaced activation, as
-    /// Publishing does, retires it; a completion failure is reported as such. Otherwise the activation already served,
-    /// and the call reports it already active. When neither applies, because the slot moved on or the activation's
-    /// reference is no longer live, the writer that changed them owns the activation, and the call reports
-    /// <paramref name="uncompensated"/>.
-    /// </summary>
-    private async ValueTask<WorkflowActivationResult> DeferToSlotAsync(
-        WorkflowActivationCommand command,
-        WorkflowActivationSlot slot,
-        WorkflowActivationResult uncompensated)
-    {
-        const string leftToSlot = "The slot names this activation, so it was left to the slot rather than compensated.";
-        try
-        {
-            return await CompleteServingActivationAsync(slot, CancellationToken.None) ??
-                await TryResolveSameArtifactNoOpAsync(command, command.Executable.Identity.ArtifactId, CancellationToken.None) ??
-                uncompensated with { Diagnostic = Truncate(Join(uncompensated.Diagnostic!, leftToSlot)) };
-        }
-        catch (Exception exception)
-        {
-            return uncompensated with { Diagnostic = Truncate(Join(uncompensated.Diagnostic!, $"{leftToSlot} {SafeMessage(exception)}")) };
-        }
-    }
-
-    /// <summary>Compensates a cancelled call that has not attempted its slot transition, unless the slot names its activation.</summary>
-    private async ValueTask CompensateUnlessSlotNamesAsync(WorkflowActivationCommand command, WorkflowExecutableSourceReference reference)
-    {
-        if (await FindSlotNamingAsync(command) is null)
-            await CompensateAsync(command, reference, null);
     }
 
     private async ValueTask<WorkflowActivationResult> FailDeactivationAsync(
@@ -1271,8 +1188,10 @@ public sealed class WorkflowActivationCoordinator(
     private static bool NotRequestedCancellation(Exception exception, CancellationToken cancellationToken) =>
         exception is not OperationCanceledException || !cancellationToken.IsCancellationRequested;
 
-    private static string Join(string message, string? compensationFailure) =>
-        compensationFailure is null ? message : $"{message} {compensationFailure}";
+    private static string Join(string? message, string? compensationFailure) =>
+        message is null ? compensationFailure ?? string.Empty
+        : compensationFailure is null ? message
+        : $"{message} {compensationFailure}";
 
     private static string Truncate(string message) => message.Length <= MaximumDiagnosticLength ? message : message[..MaximumDiagnosticLength];
 

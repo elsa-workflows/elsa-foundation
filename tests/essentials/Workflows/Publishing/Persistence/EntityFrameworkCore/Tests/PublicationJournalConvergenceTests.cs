@@ -111,7 +111,8 @@ internal static class PublicationJournalConvergence
         ["same-version-republish-of-a-publication-that-cannot-serve-is-refused"] = SameVersionRepublishOfAPublicationThatCannotServeIsRefusedAsync,
         ["a-stop-before-the-last-journal-write-leaves-the-candidate-lagging-until-the-next-completion"] = AStopBeforeTheLastJournalWriteLeavesTheCandidateLaggingAsync,
         ["two-nodes-completing-one-slot-converge-to-one-journal-state"] = TwoNodesCompletingOneSlotConvergeAsync,
-        ["a-publish-whose-slot-transition-commits-and-then-throws-converges-the-journal"] = APublishWhoseSlotTransitionCommitsAndThenThrowsConvergesAsync
+        ["a-publish-whose-slot-transition-commits-and-then-throws-converges-the-journal"] = APublishWhoseSlotTransitionCommitsAndThenThrowsConvergesAsync,
+        ["a-publish-whose-slot-transition-commits-and-then-throws-beside-a-leaked-leftover-retires-the-replaced-record"] = APublishWhoseSlotTransitionCommitsAndThenThrowsBesideALeakedLeftoverAsync
     };
 
     public static TheoryData<string> Scenarios
@@ -316,6 +317,37 @@ internal static class PublicationJournalConvergence
         await node.AssertServingAsync(published);
     }
 
+    /// <summary>
+    /// The same publish beside a leaked leftover: the publication two back, switched off with a reference completion's
+    /// housekeeping could not retire. Completing the new publication's activation retires both references, and the
+    /// coordinator reports the publication the new one replaced, not the leftover, so the activator retires the replaced
+    /// record and leaves the leftover's as it was. Reporting the leftover would leave the replaced record active beside the
+    /// new one for good, because the record the slot names does not lag (#2251).
+    /// </summary>
+    private static async Task APublishWhoseSlotTransitionCommitsAndThenThrowsBesideALeakedLeftoverAsync(JournalDatabases databases)
+    {
+        var leftover = await PublishAsync(databases, "version-1");
+        var replaced = await PublishAsync(databases, "version-2");
+        await using var other = new PublishingNode(databases);
+        var leftoverRecord = await other.Records.FindAsync(leftover);
+        var leaked = false;
+        // Leaked only once the slot transition commits: the completions that run before it would otherwise retire it.
+        await using var node = new PublishingNode(
+            databases,
+            wrapAuthority: authority => new ThrowAfterSlotTransition(authority, afterCommit: async () =>
+            {
+                await other.LeakReferenceAsync(leftover);
+                leaked = true;
+            }));
+
+        var published = (await node.PublishAsync("version-3")).PublicationId;
+
+        Assert.True(leaked);
+        await node.AssertConvergedAsync(published, replaced, leftover);
+        Assert.Equal(leftoverRecord, await node.Records.FindAsync(leftover));
+        await node.AssertServingAsync(published);
+    }
+
     private static async Task<string> PublishAsync(JournalDatabases databases, string versionId)
     {
         await using var node = new PublishingNode(databases);
@@ -460,6 +492,17 @@ internal static class PublicationJournalConvergence
             await Bindings.ActivateAsync(activationId, null);
         }
 
+        /// <summary>
+        /// Makes a replaced publication's retired source reference live again: the leaked leftover that completion's
+        /// housekeeping leaves when it cannot retire one.
+        /// </summary>
+        public async Task LeakReferenceAsync(string publicationId)
+        {
+            var retired = await References.FindAsync(WorkflowActivationReferenceIdentity.Create(publicationId))
+                ?? throw new InvalidOperationException($"Publication '{publicationId}' has no source reference.");
+            Assert.True(await References.TryRestoreAsync(retired, retired with { DeletedAt = null, DeletedReason = null }));
+        }
+
         /// <summary>Asserts which activations serve, through the query the stimulus router uses.</summary>
         public async Task AssertServingAsync(params string[] activationIds)
         {
@@ -590,17 +633,22 @@ internal static class PublicationJournalConvergence
         public ValueTask<IReadOnlyCollection<PublicationRecord>> ListBySlotAsync(string slotId, CancellationToken cancellationToken = default) => inner.ListBySlotAsync(slotId, cancellationToken);
     }
 
-    /// <summary>Commits the first slot transition and then throws, as one whose connection drops after the commit does.</summary>
-    private sealed class ThrowAfterSlotTransition(IWorkflowActivationAuthority inner) : IWorkflowActivationAuthority
+    /// <summary>
+    /// Commits the first slot transition and then throws, as one whose connection drops after the commit does. Runs
+    /// <c>afterCommit</c>, when given, in between.
+    /// </summary>
+    private sealed class ThrowAfterSlotTransition(IWorkflowActivationAuthority inner, Func<Task>? afterCommit = null) : IWorkflowActivationAuthority
     {
         private int _thrown;
 
         public async ValueTask<WorkflowActivationTransition> TryActivateAsync(WorkflowActivationSlotRequest request, CancellationToken cancellationToken = default)
         {
             var transition = await inner.TryActivateAsync(request, cancellationToken);
-            if (transition.Succeeded && Interlocked.Exchange(ref _thrown, 1) == 0)
-                throw new InvalidOperationException("The connection was lost after the slot transition committed.");
-            return transition;
+            if (!transition.Succeeded || Interlocked.Exchange(ref _thrown, 1) != 0)
+                return transition;
+            if (afterCommit is not null)
+                await afterCommit();
+            throw new InvalidOperationException("The connection was lost after the slot transition committed.");
         }
 
         public ValueTask<WorkflowActivationSlot?> FindAsync(string workflowDefinitionId, string slotName, CancellationToken cancellationToken = default) => inner.FindAsync(workflowDefinitionId, slotName, cancellationToken);

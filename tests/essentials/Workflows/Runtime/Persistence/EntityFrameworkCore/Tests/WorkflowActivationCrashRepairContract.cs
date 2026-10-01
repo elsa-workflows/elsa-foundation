@@ -57,7 +57,12 @@ internal static class WorkflowActivationCrashRepairContract
         ["same-activation-losing-the-slot-transition-completes-a-winner-that-stopped"] = SameActivationLosingTheSlotTransitionCompletesAWinnerThatStoppedAsync,
         ["same-activation-refused-at-preparation-keeps-the-winner"] = SameActivationRefusedAtPreparationKeepsTheWinnerAsync,
         ["cancelled-same-activation-keeps-the-winner"] = CancelledSameActivationKeepsTheWinnerAsync,
-        ["retry-that-cannot-prepare-the-slots-activation-is-compensated"] = RetryThatCannotPrepareTheSlotsActivationIsCompensatedAsync
+        ["cancelled-same-activation-completes-a-winner-that-stopped"] = CancelledSameActivationCompletesAWinnerThatStoppedAsync,
+        ["retry-that-cannot-prepare-the-slots-activation-is-compensated"] = RetryThatCannotPrepareTheSlotsActivationIsCompensatedAsync,
+        ["same-activation-completing-a-winner-that-stopped-reports-its-predecessor-beside-a-leaked-leftover"] = SameActivationCompletingAWinnerThatStoppedReportsItsPredecessorBesideALeakedLeftoverAsync,
+        ["same-activation-reports-a-completion-that-fails"] = SameActivationReportsACompletionThatFailsAsync,
+        ["retry-whose-trigger-bindings-are-missing-is-compensated"] = open => RetryWithProjectionsMissingFromOneStoreIsCompensatedAsync(open, triggersMissing: true),
+        ["retry-whose-recurring-schedules-are-missing-is-compensated"] = open => RetryWithProjectionsMissingFromOneStoreIsCompensatedAsync(open, triggersMissing: false)
     };
 
     public static TheoryData<string> Scenarios
@@ -508,19 +513,14 @@ internal static class WorkflowActivationCrashRepairContract
     private static async Task SameActivationLosingTheSlotTransitionKeepsTheWinnerAsync(Func<ActivationStores> open)
     {
         await ActivateAsync(open, "activation-1", "artifact-1");
-        var latch = new Latch();
-        var loserStores = open();
-        await using var loser = Start(loserStores with { Authority = new HoldBeforeSlotTransition(loserStores.Authority, latch) });
-        var losing = await StartHeldAsync(loser, latch);
-        await using var winner = Start(open());
+        await using var race = await StartRaceAsync(open);
+        await ActivateWinnerAsync(open);
 
-        Assert.Equal(WorkflowActivationOutcome.Activated, (await winner.ActivateAsync("activation-2", "artifact-2")).Outcome);
-        latch.Release();
-        var result = await losing;
+        var result = await race.ReleaseAsync();
 
         Assert.Equal(WorkflowActivationOutcome.AlreadyActive, result.Outcome);
         Assert.Equal("activation-2", result.Slot.ActiveActivationId);
-        await winner.AssertConsistentAsync("activation-2", "activation-1");
+        await race.Loser.AssertConsistentAsync("activation-2", "activation-1");
     }
 
     /// <summary>
@@ -531,18 +531,14 @@ internal static class WorkflowActivationCrashRepairContract
     private static async Task SameActivationLosingTheSlotTransitionCompletesAWinnerThatStoppedAsync(Func<ActivationStores> open)
     {
         await ActivateAsync(open, "activation-1", "artifact-1");
-        var latch = new Latch();
-        var loserStores = open();
-        await using var loser = Start(loserStores with { Authority = new HoldBeforeSlotTransition(loserStores.Authority, latch) });
-        var losing = await StartHeldAsync(loser, latch);
-
+        await using var race = await StartRaceAsync(open);
         await StopAfterSlotTransitionAsync(open, "activation-2", "artifact-2");
-        latch.Release();
-        var result = await losing;
+
+        var result = await race.ReleaseAsync();
 
         Assert.Equal(WorkflowActivationOutcome.Activated, result.Outcome);
         Assert.Equal("activation-1", result.ReplacedActivationId);
-        await loser.AssertConsistentAsync("activation-2", "activation-1");
+        await race.Loser.AssertConsistentAsync("activation-2", "activation-1");
     }
 
     /// <summary>
@@ -553,17 +549,13 @@ internal static class WorkflowActivationCrashRepairContract
     private static async Task SameActivationRefusedAtPreparationKeepsTheWinnerAsync(Func<ActivationStores> open)
     {
         await ActivateAsync(open, "activation-1", "artifact-1");
-        var latch = new Latch();
-        await using var loser = Start(open(), beforeSequence: latch.PassAsync);
-        var losing = await StartHeldAsync(loser, latch);
-        await using var winner = Start(open());
+        await using var race = await StartRaceAsync(open, holdBeforeSequence: true);
+        await ActivateWinnerAsync(open);
 
-        Assert.Equal(WorkflowActivationOutcome.Activated, (await winner.ActivateAsync("activation-2", "artifact-2")).Outcome);
-        latch.Release();
-        var result = await losing;
+        var result = await race.ReleaseAsync();
 
         Assert.Equal(WorkflowActivationOutcome.AlreadyActive, result.Outcome);
-        await winner.AssertConsistentAsync("activation-2", "activation-1");
+        await race.Loser.AssertConsistentAsync("activation-2", "activation-1");
     }
 
     /// <summary>
@@ -573,18 +565,30 @@ internal static class WorkflowActivationCrashRepairContract
     private static async Task CancelledSameActivationKeepsTheWinnerAsync(Func<ActivationStores> open)
     {
         await ActivateAsync(open, "activation-1", "artifact-1");
-        var latch = new Latch();
         using var cancellation = new CancellationTokenSource();
-        await using var loser = Start(open(), beforeSequence: latch.PassAsync);
-        var losing = await StartHeldAsync(loser, latch, cancellation.Token);
-        await using var winner = Start(open());
-
-        Assert.Equal(WorkflowActivationOutcome.Activated, (await winner.ActivateAsync("activation-2", "artifact-2")).Outcome);
+        await using var race = await StartRaceAsync(open, holdBeforeSequence: true, cancellation.Token);
+        await ActivateWinnerAsync(open);
         await cancellation.CancelAsync();
-        latch.Release();
 
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => losing);
-        await winner.AssertConsistentAsync("activation-2", "activation-1");
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(race.ReleaseAsync);
+        await race.Loser.AssertConsistentAsync("activation-2", "activation-1");
+    }
+
+    /// <summary>
+    /// The cancelled loser again, against a winner that stopped once its slot transition committed. The loser rethrows its
+    /// cancellation rather than reporting a failure, but completes the winner's activation first, as a loser that was not
+    /// cancelled does, so the slot does not go on naming an activation that serves nothing until the next completion.
+    /// </summary>
+    private static async Task CancelledSameActivationCompletesAWinnerThatStoppedAsync(Func<ActivationStores> open)
+    {
+        await ActivateAsync(open, "activation-1", "artifact-1");
+        using var cancellation = new CancellationTokenSource();
+        await using var race = await StartRaceAsync(open, holdBeforeSequence: true, cancellation.Token);
+        await StopAfterSlotTransitionAsync(open, "activation-2", "artifact-2");
+        await cancellation.CancelAsync();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(race.ReleaseAsync);
+        await race.Loser.AssertConsistentAsync("activation-2", "activation-1");
     }
 
     /// <summary>
@@ -615,6 +619,85 @@ internal static class WorkflowActivationCrashRepairContract
         await node.AssertConsistentAsync("activation-1");
     }
 
+    /// <summary>
+    /// The race against a winner that stopped, beside a leaked leftover: an activation switched off by the one the winner
+    /// replaces, whose reference completion's housekeeping could not retire. Completing the winner's activation retires
+    /// both references, and the loser reports the activation the winner replaced, not the leftover. Publishing retires the
+    /// record of the activation reported, so reporting the leftover would leave the replaced one recorded active (#2251).
+    /// </summary>
+    private static async Task SameActivationCompletingAWinnerThatStoppedReportsItsPredecessorBesideALeakedLeftoverAsync(Func<ActivationStores> open)
+    {
+        await ActivateAsync(open, "activation-0", "artifact-0");
+        await ActivateAsync(open, "activation-1", "artifact-1");
+        await using var race = await StartRaceAsync(open);
+        await StopAfterSlotTransitionAsync(open, "activation-2", "artifact-2");
+        // Leaked only now: the completion each call runs before its sequence would otherwise have retired it.
+        await race.Loser.LeakReferenceAsync("activation-0");
+
+        var result = await race.ReleaseAsync();
+
+        Assert.Equal(WorkflowActivationOutcome.Activated, result.Outcome);
+        Assert.Equal("activation-1", result.ReplacedActivationId);
+        await race.Loser.AssertConsistentAsync("activation-2", "activation-1", "activation-0");
+    }
+
+    /// <summary>
+    /// The direction that would look like success: the loser defers to a winner that stopped, but completing it fails,
+    /// here because two other activations serve the slot and the one it replaced cannot be told apart. The loser reports
+    /// that failure rather than "already active", and compensates nothing: the winner's activation stays prepared with a
+    /// live reference, and the activations that served still serve, for an operator to clear by unpublishing.
+    /// </summary>
+    private static async Task SameActivationReportsACompletionThatFailsAsync(Func<ActivationStores> open)
+    {
+        await ActivateAsync(open, "activation-1", "artifact-1");
+        await using (var stray = Start(open()))
+        {
+            await stray.PrepareCandidateAsync("activation-stray", "artifact-stray");
+            await stray.SwitchAsync("activation-stray", null);
+        }
+
+        await using var race = await StartRaceAsync(open);
+        await StopAfterSlotTransitionAsync(open, "activation-2", "artifact-2");
+
+        var result = await race.ReleaseAsync();
+
+        Assert.Equal(WorkflowActivationOutcome.Failed, result.Outcome);
+        Assert.Equal(WorkflowActivationStep.ProjectionActivation, result.FailedStep);
+        Assert.Contains("activation-1", result.Diagnostic);
+        Assert.Contains("activation-stray", result.Diagnostic);
+        Assert.Equal("activation-2", await race.Loser.SlotActivationAsync());
+        await race.Loser.AssertServingAsync("activation-1", "activation-stray");
+        await race.Loser.AssertProjectionsAsync("activation-2", WorkflowActivationProjectionState.Prepared);
+        await race.Loser.AssertLiveAsync("activation-2");
+    }
+
+    /// <summary>
+    /// What tells a race from a retry is that the activation's projections are stored in every projection store. A retry
+    /// whose earlier compensation removed them from one store but not the other, and whose own preparation fails, has
+    /// nothing to complete, so it is compensated, which removes the rest, rather than left to a slot that cannot serve it.
+    /// </summary>
+    private static async Task RetryWithProjectionsMissingFromOneStoreIsCompensatedAsync(Func<ActivationStores> open, bool triggersMissing)
+    {
+        await StopAfterSlotTransitionAsync(open, "activation-1", "artifact-1");
+        await using var node = Start(open());
+        if (triggersMissing)
+            await node.Stores.Bindings.DeleteByActivationAsync("activation-1");
+        else
+            await node.Stores.Schedules.DeleteByActivationAsync("activation-1");
+        await node.Stores.References.RetireAsync(WorkflowActivationReferenceIdentity.Create("activation-1"), Now, WorkflowActivationCoordinator.FailedRetireReason);
+        node.FailNextPreparation(new InvalidOperationException("The trigger indexer is unavailable."));
+
+        var result = await node.ActivateAsync("activation-1", "artifact-1");
+
+        Assert.Equal(WorkflowActivationOutcome.Failed, result.Outcome);
+        Assert.Equal(WorkflowActivationStep.ProjectionPreparation, result.FailedStep);
+        Assert.DoesNotContain("left to the slot", result.Diagnostic);
+        Assert.Equal("activation-1", await node.SlotActivationAsync());
+        await node.AssertServingAsync();
+        await node.AssertProjectionsAsync("activation-1", WorkflowActivationProjectionState.Missing);
+        Assert.Equal(WorkflowActivationCoordinator.FailedRetireReason, (await node.FindReferenceAsync("activation-1")).DeletedReason);
+    }
+
     private static ActivationNode Start(
         ActivationStores stores,
         Func<Task>? beforePredecessorScan = null,
@@ -622,13 +705,28 @@ internal static class WorkflowActivationCrashRepairContract
         Func<Task>? beforeSequence = null) =>
         new(stores, beforePredecessorScan, observer, beforeSequence);
 
-    /// <summary>Starts activating the artifact both nodes race for, and waits until the call stops at <paramref name="latch"/>.</summary>
-    private static async Task<Task<WorkflowActivationResult>> StartHeldAsync(ActivationNode node, Latch latch, CancellationToken cancellationToken = default)
+    /// <summary>
+    /// Starts the call that loses the race for activation-2, and waits until it is held: once it has prepared, just before
+    /// its slot transition, or with <paramref name="holdBeforeSequence"/> before its sequence, after the checks that answer
+    /// a call without one.
+    /// </summary>
+    private static async Task<Race> StartRaceAsync(
+        Func<ActivationStores> open,
+        bool holdBeforeSequence = false,
+        CancellationToken cancellationToken = default)
     {
-        var activation = node.ActivateAsync("activation-2", "artifact-2", cancellationToken);
-        Assert.Same(latch.Reached, await Task.WhenAny(activation, latch.Reached));
-        return activation;
+        var latch = new Latch();
+        var stores = open();
+        var loser = holdBeforeSequence
+            ? Start(stores, beforeSequence: latch.PassAsync)
+            : Start(stores with { Authority = new HoldBeforeSlotTransition(stores.Authority, latch) });
+        var losing = loser.ActivateAsync("activation-2", "artifact-2", cancellationToken);
+        Assert.Same(latch.Reached, await Task.WhenAny(losing, latch.Reached));
+        return new(loser, losing, latch);
     }
+
+    /// <summary>Activates activation-2 in another process while the loser of the race is held.</summary>
+    private static Task ActivateWinnerAsync(Func<ActivationStores> open) => ActivateAsync(open, "activation-2", "artifact-2");
 
     private static async Task ActivateAsync(Func<ActivationStores> open, string activationId, string artifactId)
     {
@@ -781,6 +879,16 @@ internal static class WorkflowActivationCrashRepairContract
             Assert.Equal(WorkflowActivationCoordinator.ReplacedRetireReason, (await FindReferenceAsync(activationId)).DeletedReason);
 
         public async Task AssertLiveAsync(string activationId) => Assert.Null((await FindReferenceAsync(activationId)).DeletedAt);
+
+        /// <summary>
+        /// Makes a replaced activation's retired reference live again: the leaked leftover that completion's housekeeping
+        /// leaves when it cannot retire one.
+        /// </summary>
+        public async Task LeakReferenceAsync(string activationId)
+        {
+            var retired = await FindReferenceAsync(activationId);
+            Assert.True(await Stores.References.TryRestoreAsync(retired, retired with { DeletedAt = null, DeletedReason = null }));
+        }
 
         /// <summary>Asserts one activation's state in both projection stores.</summary>
         public async Task AssertProjectionsAsync(string activationId, WorkflowActivationProjectionState expected)
@@ -942,6 +1050,21 @@ internal static class WorkflowActivationCrashRepairContract
         public Task PassAsync() => _reached.TrySetResult() ? _released.Task : Task.CompletedTask;
 
         public void Release() => _released.TrySetResult();
+    }
+
+    /// <summary>The loser of a race, held at <c>latch</c> by <see cref="StartRaceAsync"/>, and its pending call.</summary>
+    private sealed class Race(ActivationNode loser, Task<WorkflowActivationResult> losing, Latch latch) : IAsyncDisposable
+    {
+        public ActivationNode Loser => loser;
+
+        /// <summary>Lets the held call go on, and returns its result.</summary>
+        public Task<WorkflowActivationResult> ReleaseAsync()
+        {
+            latch.Release();
+            return losing;
+        }
+
+        public ValueTask DisposeAsync() => loser.DisposeAsync();
     }
 
     /// <summary>Holds the first slot transition at <c>latch</c>, after the activation prepared its projections.</summary>
