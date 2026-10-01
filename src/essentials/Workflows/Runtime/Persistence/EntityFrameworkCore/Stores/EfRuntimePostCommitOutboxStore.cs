@@ -149,6 +149,48 @@ public sealed class EfRuntimePostCommitOutboxStore(
         return claims;
     }
 
+    public async ValueTask<RuntimePostCommitOutboxClaim?> RenewClaimAsync(
+        RuntimePostCommitOutboxClaim claim,
+        DateTimeOffset now,
+        TimeSpan visibilityTimeout,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(claim);
+        cancellationToken.ThrowIfCancellationRequested();
+        var scope = EfRuntimeOperationalStoreSupport.RequireScope(accessContextAccessor);
+        var row = await LoadAsync(scope, claim.OutboxItemId, tracking: true, cancellationToken);
+        if (row is null)
+            return null;
+        var renewed = RuntimePostCommitOutboxClaimTransitions.Renew(
+            ReadChecked(row, scope, claim.OutboxItemId),
+            claim,
+            now,
+            visibilityTimeout);
+        if (renewed is null)
+            return null;
+
+        Copy(row, renewed.Item, scope, checked(row.Revision + 1));
+        try
+        {
+            await context.SaveChangesAsync(cancellationToken);
+            return renewed;
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            // The processor claims a batch and then renews each item on the same scoped context, so the row is still
+            // tracked from the claim and the check above ran against that snapshot, not the database. A peer that
+            // re-claimed the lapsed item advanced its revision, and the loss surfaces here on the concurrency token. That
+            // is the whole point of renewing: report the claim gone and write nothing.
+            Detach(row);
+            return null;
+        }
+        catch
+        {
+            Detach(row);
+            throw;
+        }
+    }
+
     public async ValueTask<RuntimePostCommitOutboxClaimCompletionOutcome> RecordDeliveryResultAsync(
         RuntimePostCommitOutboxDeliveryResult result,
         CancellationToken cancellationToken = default)

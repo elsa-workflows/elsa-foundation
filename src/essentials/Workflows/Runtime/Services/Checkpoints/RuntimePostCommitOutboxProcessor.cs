@@ -1,8 +1,10 @@
+using System.Runtime.ExceptionServices;
 using Elsa.Workflows.Runtime.Contracts;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Services.Claims;
 using Elsa.Workflows.Runtime.Services.Incidents;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -26,6 +28,7 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
     private readonly IRuntimeLiveDrainDeliveryAccessor? _liveDrainDeliveryAccessor;
     private readonly IRuntimeCoalescingSessionAccessor? _coalescingSessionAccessor;
     private readonly ILogger<RuntimePostCommitOutboxProcessor> _logger;
+    private readonly FencedClaimLease<RuntimePostCommitOutboxClaim>? _claimLease;
     private readonly string _claimOwnerId = $"runtime-outbox-{Guid.NewGuid():N}";
     private static readonly TimeSpan ClaimVisibilityTimeout = TimeSpan.FromMinutes(1);
 
@@ -88,6 +91,17 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
         _liveDrainDeliveryAccessor = liveDrainDeliveryAccessor;
         _coalescingSessionAccessor = coalescingSessionAccessor;
         _logger = logger ?? NullLogger<RuntimePostCommitOutboxProcessor>.Instance;
+        // Renewed before each dispatch, never during it (#2195). An intent handler works on the same scoped persistence
+        // context as this store, so a renewal running beside the dispatch would collide with the handler's own queries. A
+        // dispatch that alone outlives the visibility timeout can therefore still be repeated by a peer. Each intent kind
+        // converges under that repeat by its own mechanism, PublishStimulus included since its starts are keyed; the
+        // per-kind table under `IRuntimePostCommitOutboxStore` in Runtime EXTENSION_POINTS.md records each one and its limit.
+        _claimLease = _claimStore is null
+            ? null
+            : new FencedClaimLease<RuntimePostCommitOutboxClaim>(
+                _claimStore.RenewClaimAsync,
+                ClaimVisibilityTimeout,
+                _timeProvider);
     }
 
     public RuntimePostCommitOutboxProcessor(
@@ -132,8 +146,11 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
                 workflowExecutionId: request.WorkflowExecutionId,
                 intentKind: request.IntentKind,
                 deferContinuationsToExecutionOwner: request.DeferContinuationsToExecutionOwner), cancellationToken);
+            // The whole batch shares one visibility timeout but is dispatched one item at a time, so a long batch can
+            // outlive the claims at its end. Each item is renewed immediately before its dispatch, and an item whose
+            // claim was lost is skipped rather than dispatched again or allowed to end the batch (#2195).
             foreach (var claim in claims)
-                processedItems.Add(await ProcessItemAsync(claim.Item, claim, cancellationToken));
+                processedItems.Add(await ProcessClaimedItemAsync(claim, cancellationToken));
         }
         else
         {
@@ -158,7 +175,7 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
             // migration quiescence probe uses to decide whether outbox work is still outstanding. Hiding fenced items
             // from it would break retries and would let a migration proceed while delivery is still in flight.
             foreach (var item in items.Where(item => item.DeliveryFencingToken == 0))
-                processedItems.Add(await ProcessItemAsync(item, claim: null, cancellationToken));
+                processedItems.Add(await ProcessUnclaimedItemAsync(item, cancellationToken));
         }
 
         return new RuntimePostCommitOutboxProcessResult(processedItems);
@@ -174,9 +191,8 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
         StringComparer.Ordinal.Equals(request.IntentKind, RuntimePostCommitIntentKinds.EnqueueSchedulerWork) &&
         _coalescingSessionAccessor?.Current is not { IsActive: true };
 
-    private async ValueTask<RuntimePostCommitOutboxProcessedItem> ProcessItemAsync(
+    private async ValueTask<RuntimePostCommitOutboxProcessedItem> ProcessUnclaimedItemAsync(
         RuntimePostCommitOutboxItem item,
-        RuntimePostCommitOutboxClaim? claim,
         CancellationToken cancellationToken)
     {
         try
@@ -189,59 +205,126 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
         }
         catch (WorkflowDispatchAdmissionProjectionException)
         {
-            // The child already exists. Leaving the fenced item Delivering lets claim expiry redeliver the exact
-            // deterministic start and repair Started without misclassifying a live child as DispatchFailed.
+            // See the claimed path below.
             throw;
         }
         catch (Exception exception)
         {
-            var classification = exception as RuntimePostCommitDeliveryException;
-            var requestedStatus = classification?.Kind == PostCommitFailureKind.Permanent
-                ? RuntimePostCommitOutboxStatus.FailedFinal
-                : RuntimePostCommitOutboxStatus.FailedRetryable;
-            var effectiveStatus = EffectiveFailureStatus(item, requestedStatus);
-            var failureMessage = classification?.SafeSummary ?? (item.RetryPolicy.RetryUntilAcknowledged
-                ? RetryUntilAcknowledgedFailureMessage
-                : _faultCapturePolicy.Capture(exception).ToSummaryString());
-            var recordedAt = _timeProvider.GetUtcNow();
-            var (outcome, recordingException) = await TryRecordDeliveryResultAsync(
-                item,
-                claim,
-                effectiveStatus,
-                failureMessage,
-                recordedAt,
-                exception,
-                cancellationToken);
+            return await RecordFailureAsync(item, claim: null, exception, cancellationToken);
+        }
 
-            if (recordingException is not null)
-                throw new OutboxProcessingException(item.OutboxItemId, item.Intent.IntentId, exception, recordingException);
+        return await RecordSuccessAsync(item, claim: null, cancellationToken);
+    }
 
-            // H2: this enum has no exhaustive switch anywhere and the build is warnings-only, so a new value reaches here
-            // silently. Superseded is handled FIRST and explicitly — falling through would log this item with the failure
-            // status even though the store persisted nothing, misreporting an item this processor does not own.
-            if (outcome == RuntimePostCommitOutboxClaimCompletionOutcome.SupersededByOtherOwner)
+    private async ValueTask<RuntimePostCommitOutboxProcessedItem> ProcessClaimedItemAsync(
+        RuntimePostCommitOutboxClaim claim,
+        CancellationToken cancellationToken)
+    {
+        var item = claim.Item;
+        var run = await _claimLease!.RunAsync(
+            claim,
+            async dispatchCancellationToken =>
             {
-                LogDeliverySuperseded(item);
-                return new RuntimePostCommitOutboxProcessedItem(
-                    item.OutboxItemId,
-                    item.Intent.IntentId,
-                    effectiveStatus,
-                    failureMessage,
-                    RuntimePostCommitOutboxClaimCompletionOutcome.SupersededByOtherOwner);
-            }
+                await _intentDispatcher.DispatchAsync(item.Intent, dispatchCancellationToken);
+                return true;
+            },
+            cancellationToken);
 
-            var persistedStatus = outcome == RuntimePostCommitOutboxClaimCompletionOutcome.DeliveredOnChildEvidence
-                ? RuntimePostCommitOutboxStatus.Delivered
-                : effectiveStatus;
-            LogDeliveryFailure(item, exception, classification, persistedStatus, recordedAt);
+        if (run.ClaimLost)
+        {
+            // Nothing was dispatched: the claimant that holds the item now delivers it. Delivering is reported as the
+            // requested status because nothing was requested at all, and the superseded outcome keeps the item out of
+            // the delivered and failed counts.
+            LogClaimLost(item, dispatched: false, run.Exception);
+            return new RuntimePostCommitOutboxProcessedItem(
+                item.OutboxItemId,
+                item.Intent.IntentId,
+                RuntimePostCommitOutboxStatus.Delivering,
+                FailureMessage: null,
+                RuntimePostCommitOutboxClaimCompletionOutcome.SupersededByOtherOwner);
+        }
 
+        // The child already exists. Leaving the fenced item Delivering lets claim expiry redeliver the exact
+        // deterministic start and repair Started without misclassifying a live child as DispatchFailed.
+        if (run.Exception is WorkflowDispatchAdmissionProjectionException admissionProjection)
+            ExceptionDispatchInfo.Capture(admissionProjection).Throw();
+
+        try
+        {
+            return run.Exception is { } failure
+                ? await RecordFailureAsync(item, run.Claim, failure, cancellationToken)
+                : await RecordSuccessAsync(item, run.Claim, cancellationToken);
+        }
+        catch (RuntimePostCommitOutboxStaleClaimException stale)
+        {
+            // The dispatch outran the claim and a peer re-claimed the item, so this completion is refused and writes
+            // nothing (#1812). That is one item's broken lease, not a reason to abandon the rest of the batch: the peer
+            // records the item's real outcome, and the intent it dispatched again is idempotent.
+            LogClaimLost(item, dispatched: true, stale);
+            return new RuntimePostCommitOutboxProcessedItem(
+                item.OutboxItemId,
+                item.Intent.IntentId,
+                run.Exception is { } failure ? EffectiveFailureStatus(item, failure) : RuntimePostCommitOutboxStatus.Delivered,
+                FailureMessage: null,
+                RuntimePostCommitOutboxClaimCompletionOutcome.SupersededByOtherOwner);
+        }
+    }
+
+    private async ValueTask<RuntimePostCommitOutboxProcessedItem> RecordFailureAsync(
+        RuntimePostCommitOutboxItem item,
+        RuntimePostCommitOutboxClaim? claim,
+        Exception exception,
+        CancellationToken cancellationToken)
+    {
+        var classification = exception as RuntimePostCommitDeliveryException;
+        var effectiveStatus = EffectiveFailureStatus(item, exception);
+        var failureMessage = classification?.SafeSummary ?? (item.RetryPolicy.RetryUntilAcknowledged
+            ? RetryUntilAcknowledgedFailureMessage
+            : _faultCapturePolicy.Capture(exception).ToSummaryString());
+        var recordedAt = _timeProvider.GetUtcNow();
+        var (outcome, recordingException) = await TryRecordDeliveryResultAsync(
+            item,
+            claim,
+            effectiveStatus,
+            failureMessage,
+            recordedAt,
+            exception,
+            cancellationToken);
+
+        if (recordingException is not null)
+            throw new OutboxProcessingException(item.OutboxItemId, item.Intent.IntentId, exception, recordingException);
+
+        // H2: this enum has no exhaustive switch anywhere and the build is warnings-only, so a new value reaches here
+        // silently. Superseded is handled FIRST and explicitly — falling through would log this item with the failure
+        // status even though the store persisted nothing, misreporting an item this processor does not own.
+        if (outcome == RuntimePostCommitOutboxClaimCompletionOutcome.SupersededByOtherOwner)
+        {
+            LogDeliverySuperseded(item);
             return new RuntimePostCommitOutboxProcessedItem(
                 item.OutboxItemId,
                 item.Intent.IntentId,
                 effectiveStatus,
-                failureMessage);
+                failureMessage,
+                RuntimePostCommitOutboxClaimCompletionOutcome.SupersededByOtherOwner);
         }
 
+        var persistedStatus = outcome == RuntimePostCommitOutboxClaimCompletionOutcome.DeliveredOnChildEvidence
+            ? RuntimePostCommitOutboxStatus.Delivered
+            : effectiveStatus;
+        LogDeliveryFailure(item, exception, classification, persistedStatus, recordedAt);
+
+        return new RuntimePostCommitOutboxProcessedItem(
+            item.OutboxItemId,
+            item.Intent.IntentId,
+            effectiveStatus,
+            failureMessage);
+    }
+
+    private async ValueTask<RuntimePostCommitOutboxProcessedItem> RecordSuccessAsync(
+        RuntimePostCommitOutboxItem item,
+        RuntimePostCommitOutboxClaim? claim,
+        CancellationToken cancellationToken)
+    {
         var successOutcome = await RecordDeliveryResultAsync(item, claim, RuntimePostCommitOutboxStatus.Delivered, null, recordedAt: null, deliveryFailure: null, cancellationToken);
         if (successOutcome == RuntimePostCommitOutboxClaimCompletionOutcome.SupersededByOtherOwner)
         {
@@ -281,6 +364,11 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
         }
         catch (OperationCanceledException)
         {
+            throw;
+        }
+        catch (RuntimePostCommitOutboxStaleClaimException)
+        {
+            // A lost claim is not a recording failure: the caller skips the item instead of ending the batch.
             throw;
         }
         catch (Exception exception)
@@ -391,10 +479,10 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
 
     private static RuntimePostCommitOutboxStatus EffectiveFailureStatus(
         RuntimePostCommitOutboxItem item,
-        RuntimePostCommitOutboxStatus requestedStatus)
+        Exception deliveryFailure)
     {
-        if (requestedStatus == RuntimePostCommitOutboxStatus.FailedFinal)
-            return requestedStatus;
+        if (deliveryFailure is RuntimePostCommitDeliveryException { Kind: PostCommitFailureKind.Permanent })
+            return RuntimePostCommitOutboxStatus.FailedFinal;
 
         var attemptCount = RuntimePostCommitRetryPolicy.SaturatingIncrement(item.DeliveryAttemptCount);
         return item.RetryPolicy.IsExhaustedAfterAttempt(attemptCount)
@@ -502,6 +590,25 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
         _logger.LogInformation(
             new EventId(68110, "RuntimePostCommitDeliverySuperseded"),
             "Runtime post-commit delivery was superseded by another owner; nothing was persisted by this deliverer. OutboxItemId={OutboxItemId} IntentId={IntentId} IntentKind={IntentKind} DispatchId={DispatchId}",
+            item.OutboxItemId,
+            item.Intent.IntentId,
+            item.Intent.Kind,
+            dispatchId);
+    }
+
+    /// <remarks>
+    /// Warning, not Information like <see cref="LogDeliverySuperseded"/>: a claim-less live drain losing to the sweep is
+    /// designed contention, but a claimant losing its own lease means a batch or a dispatch outran the visibility timeout.
+    /// The exception is the renewal's failure or the store's stale-claim refusal, when there is one.
+    /// </remarks>
+    private void LogClaimLost(RuntimePostCommitOutboxItem item, bool dispatched, Exception? exception)
+    {
+        item.Intent.Metadata.TryGetValue(RuntimeMetadataKeys.DispatchId, out var dispatchId);
+        _logger.LogWarning(
+            new EventId(68113, "RuntimePostCommitClaimLost"),
+            exception,
+            "Runtime post-commit delivery lost its claim on an outbox item and left the item to the claimant that holds it; nothing was recorded by this deliverer. Dispatched={Dispatched} OutboxItemId={OutboxItemId} IntentId={IntentId} IntentKind={IntentKind} DispatchId={DispatchId}",
+            dispatched,
             item.OutboxItemId,
             item.Intent.IntentId,
             item.Intent.Kind,

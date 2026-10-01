@@ -458,6 +458,22 @@ public sealed class RuntimeCoalescingSession
         return claims;
     }
 
+    /// <summary>Renews a claim this overlay owns by the same rule every durable store applies.</summary>
+    public RuntimePostCommitOutboxClaim? RenewOutboxClaim(
+        RuntimePostCommitOutboxClaim claim,
+        DateTimeOffset now,
+        TimeSpan visibilityTimeout)
+    {
+        ArgumentNullException.ThrowIfNull(claim);
+        if (!_outboxItems.TryGetValue(claim.OutboxItemId, out var existing))
+            return null;
+
+        var renewed = RuntimePostCommitOutboxClaimTransitions.Renew(existing, claim, now, visibilityTimeout);
+        if (renewed is not null)
+            _outboxItems[claim.OutboxItemId] = renewed.Item;
+        return renewed;
+    }
+
     public void RecordOutboxDelivery(RuntimePostCommitOutboxDeliveryResult result)
     {
         ArgumentNullException.ThrowIfNull(result);

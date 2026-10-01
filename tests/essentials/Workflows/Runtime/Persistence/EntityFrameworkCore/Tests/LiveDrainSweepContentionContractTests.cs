@@ -166,6 +166,13 @@ public abstract class LiveDrainSweepContentionContractTests : IAsyncDisposable
             return claims;
         }
 
+        public ValueTask<RuntimePostCommitOutboxClaim?> RenewClaimAsync(
+            RuntimePostCommitOutboxClaim claim,
+            DateTimeOffset now,
+            TimeSpan visibilityTimeout,
+            CancellationToken cancellationToken = default) =>
+            ((IRuntimePostCommitOutboxClaimStore)inner).RenewClaimAsync(claim, now, visibilityTimeout, cancellationToken);
+
         public ValueTask RecordDeliveryResultAsync(
             RuntimePostCommitOutboxClaim claim,
             RuntimePostCommitOutboxDeliveryResult result,

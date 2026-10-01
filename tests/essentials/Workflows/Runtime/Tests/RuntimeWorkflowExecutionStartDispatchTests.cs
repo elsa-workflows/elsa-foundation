@@ -16,6 +16,7 @@ public sealed class RuntimeWorkflowExecutionStartDispatchTests
     private readonly InMemoryWorkflowExecutableStore _store = new();
     private readonly InMemoryWorkflowExecutableSourceReferenceStore _references = new();
     private readonly RecordingAgentProvider _agentProvider = new();
+    private readonly KeyedWorkflowStartIdentity _keyed = KeyedWorkflowStartIdentity.For("delivery-1", "artifact-1");
     private readonly WorkflowStartDispatcher _dispatcher;
 
     public RuntimeWorkflowExecutionStartDispatchTests()
@@ -655,6 +656,95 @@ public sealed class RuntimeWorkflowExecutionStartDispatchTests
         Assert.Same(WorkflowExecutionCommandDispatchOptions.Default, options);
         Assert.Null(options!.AmbientServices);
     }
+
+    [Fact]
+    public async Task DispatchAsync_KeyedStart_NamesItsExecutionCommandAndEnvelopeAfterTheKey()
+    {
+        await ActivateAsync();
+
+        var result = await NewDispatcher(new InMemoryWorkflowExecutionStateStore()).DispatchAsync(KeyedRequest(_keyed));
+
+        var envelope = Assert.Single(_agentProvider.Agent.Envelopes);
+        Assert.Equal(WorkflowExecutionCommandDispatchStatus.Accepted, result.CommandDispatch.Status);
+        Assert.Equal(_keyed.WorkflowExecutionId, result.WorkflowExecutionId);
+        Assert.Equal(_keyed.WorkflowExecutionId, envelope.WorkflowExecutionId);
+        Assert.Equal(_keyed.EnvelopeId, envelope.EnvelopeId);
+        Assert.Equal(_keyed.CommandId, envelope.Command.CommandId);
+        Assert.Equal(_keyed.StartKey, envelope.IdempotencyKey);
+    }
+
+    [Fact]
+    public async Task DispatchAsync_KeyedStartThatAlreadyRan_IsADuplicateAndEnqueuesNothing()
+    {
+        // Deliberately not activated: the workflow has since been unpublished, and the redelivery must still converge on
+        // the execution the first delivery started rather than fail on the missing reference.
+        var states = new InMemoryWorkflowExecutionStateStore();
+        await states.SaveAsync(ExistingState(_keyed.WorkflowExecutionId, "artifact-1"));
+
+        var result = await NewDispatcher(states).DispatchAsync(KeyedRequest(_keyed));
+
+        Assert.Equal(WorkflowExecutionCommandDispatchStatus.Duplicate, result.CommandDispatch.Status);
+        Assert.Equal(_keyed.WorkflowExecutionId, result.WorkflowExecutionId);
+        Assert.Equal(_keyed.EnvelopeId, result.CommandDispatch.EnvelopeId);
+        Assert.Empty(_agentProvider.ActivationRequests);
+        Assert.Empty(_agentProvider.Agent.Envelopes);
+    }
+
+    [Fact]
+    public async Task DispatchAsync_KeyedStartWhoseExecutionPinsAnotherArtifact_IsRefused()
+    {
+        await ActivateAsync();
+        var states = new InMemoryWorkflowExecutionStateStore();
+        await states.SaveAsync(ExistingState(_keyed.WorkflowExecutionId, "artifact-other"));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await NewDispatcher(states).DispatchAsync(KeyedRequest(_keyed)));
+        Assert.Empty(_agentProvider.Agent.Envelopes);
+    }
+
+    [Fact]
+    public async Task DispatchAsync_KeyedStartWithoutExecutionState_IsRefusedRatherThanRunTwiceIntoOneExecution()
+    {
+        await ActivateAsync();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(async () => await _dispatcher.DispatchAsync(KeyedRequest(_keyed)));
+        Assert.Empty(_agentProvider.Agent.Envelopes);
+    }
+
+    private static WorkflowExecutionStartDispatchRequest KeyedRequest(KeyedWorkflowStartIdentity keyed) =>
+        new(
+            artifactId: "artifact-1",
+            requestedBy: "runtime-test",
+            workflowExecutionId: keyed.WorkflowExecutionId,
+            idempotencyKey: keyed.StartKey,
+            runKind: WorkflowRunKind.PublishedRun);
+
+    private WorkflowExecutionState ExistingState(string workflowExecutionId, string artifactId) =>
+        new(
+            workflowExecutionId,
+            new WorkflowExecutableIdentity(artifactId, "definition-1", "version-1", "1.0.0", "sha256:test"),
+            WorkflowExecutionStatus.Completed,
+            SubStatus: null,
+            CreatedAt: _now,
+            StartedAt: _now,
+            UpdatedAt: _now,
+            CompletedAt: _now,
+            CorrelationId: null,
+            ParentWorkflowExecutionId: null,
+            TenantId: null,
+            SystemMetadata: new Dictionary<string, string>());
+
+    private WorkflowStartDispatcher NewDispatcher(IWorkflowExecutionStateStore states) =>
+        new(
+            _store,
+            _references,
+            _agentProvider,
+            new IncrementingRuntimeExecutionIdGenerator(),
+            new FakeTimeProvider(_now),
+            partitionAccessor: null,
+            new AllowWorkflowExecutableStartPolicy(),
+            workflowDispatchStore: null,
+            states);
 
     private async Task ActivateAsync(
         WorkflowExecutable? executable = null,

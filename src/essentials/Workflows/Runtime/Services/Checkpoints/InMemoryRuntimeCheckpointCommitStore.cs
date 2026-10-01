@@ -455,6 +455,27 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         return unowned;
     }
 
+    public ValueTask<RuntimePostCommitOutboxClaim?> RenewClaimAsync(
+        RuntimePostCommitOutboxClaim claim,
+        DateTimeOffset now,
+        TimeSpan visibilityTimeout,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(claim);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (_state.SyncRoot)
+        {
+            if (!_state.OutboxItems.TryGetValue(claim.OutboxItemId, out var existing))
+                return new ValueTask<RuntimePostCommitOutboxClaim?>((RuntimePostCommitOutboxClaim?)null);
+
+            var renewed = RuntimePostCommitOutboxClaimTransitions.Renew(existing, claim, now, visibilityTimeout);
+            if (renewed is not null)
+                _state.OutboxItems[claim.OutboxItemId] = renewed.Item;
+            return new ValueTask<RuntimePostCommitOutboxClaim?>(renewed);
+        }
+    }
+
     public ValueTask RecordDeliveryResultAsync(
         RuntimePostCommitOutboxClaim claim,
         RuntimePostCommitOutboxDeliveryResult result,

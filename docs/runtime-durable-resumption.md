@@ -101,6 +101,37 @@ is what made the dequeue side match the enqueue side:
 With both sides at-least-once and every consumer idempotent, re-running the sweep is always safe and
 no crash window strands an activity.
 
+## Claims that outlive their lease (#2195)
+
+The outbox and the durable timer pump each claim a batch of rows under one visibility timeout (one minute by
+default) and then work through the batch one row at a time. The claims at the end of a long batch can lapse, and a
+peer re-claims them. Both deliverers therefore follow one shared rule, `FencedClaimLease`: **a claim is renewed
+immediately before its side effect, and a claim that cannot be renewed is never acted on.** The renewal is a
+compare-and-set on the claim's owner and fence, so a re-claimed row is skipped rather than delivered a second time.
+
+- **Outbox.** `RuntimePostCommitOutboxProcessor` renews each item's claim just before dispatching it. It does not
+  renew during the dispatch, because intent handlers share the sweep's persistence context; a single dispatch that
+  alone outlives the timeout can still be repeated by a peer. Each intent kind converges under that repeat by its own
+  mechanism: scheduler work by work-item id while the item is still queued, a child start by its deterministic child
+  id, a resume by consuming its bookmark once, a cancel by being idempotent, and a PublishStimulus start by its keyed
+  execution id (see [Stimulus START idempotency](serialization.md#stimulus-start-idempotency-is-at-least-once)). The
+  per-kind table under `IRuntimePostCommitOutboxStore` in the Runtime `EXTENSION_POINTS.md` records each mechanism and
+  its limit: a scheduler-work repeat that arrives after its whole chain was drained can re-run a checkpoint whose
+  replay conflicts, the same exposure redelivery after a crash already had.
+- **Durable timers.** `DurableTimerPumpTask` renews each timer's claim just before firing it and keeps it renewed
+  while the fire runs; a renewal that fails cancels the fire.
+- **One lost claim never ends a sweep.** A row whose claim was lost before its side effect, during it, or at its
+  fenced completion is logged (`RuntimePostCommitClaimLost` for the outbox) and skipped, and the sweep moves on to
+  its next row, then to backlog discovery and re-drive. The claimant that holds the row records its outcome.
+- **Test-scope cleanup is isolated from the sweep.** It runs first on every resumption tick, in an operation scope of
+  its own. A failure there, such as a cleanup race or a scope row that cannot be read, is logged
+  (`WorkflowTestScopeCleanupFailed`) and retried next tick; it no longer stops outbox delivery or re-drive.
+
+The same claim, renew and fenced-complete shape appears in other loops that were not moved onto the helper:
+scheduler work claims one item at a time and dispatches it at once, and its renewal carries drain-specific rules (a
+dispatch deadline, and a claim its own checkpoint consumes); alteration jobs and transport items are fenced inside
+the checkpoint commit itself.
+
 ## Crash windows
 
 Three recoverable windows, all covered by `DurableResumptionCrashTests`, which runs two

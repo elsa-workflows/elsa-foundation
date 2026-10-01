@@ -56,9 +56,6 @@ public sealed class WorkflowsRuntimeTriggersFeature : IShellFeature
         BookmarkStateStoreBackend.TryRegisterDefaultStimulusIndex(services);
         services.TryAddScoped<IGlobalBookmarkStimulusLookup, GlobalBookmarkStimulusLookup>();
 
-        // Narrow, best-effort start-path dedup for at-least-once delivery (Condition A). Not durable by design.
-        services.TryAddSingleton<IStimulusStartDeduplicator, InMemoryStimulusStartDeduplicator>();
-
         // The routing spine: start + fan-in resume over the two indexes and the runtime dispatchers.
         services.TryAddScoped<IStimulusRouter, StimulusRouter>();
     }
