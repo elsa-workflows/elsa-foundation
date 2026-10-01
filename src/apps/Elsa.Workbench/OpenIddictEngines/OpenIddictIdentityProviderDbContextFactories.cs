@@ -15,7 +15,7 @@ public sealed class OpenIddictIdentitySqlServerDbContextFactory : IDesignTimeDbC
         DesignTime.Create<OpenIddictIdentitySqlServerDbContext>(
             args,
             "SqlServer",
-            "Server=localhost;Database=elsa;User Id=sa;Password=design-time;TrustServerCertificate=true",
+            "Server=localhost;Database=elsa;Integrated Security=true;TrustServerCertificate=true",
             options => new OpenIddictIdentitySqlServerDbContext(options));
 }
 
@@ -25,7 +25,7 @@ public sealed class OpenIddictIdentityPostgreSqlDbContextFactory : IDesignTimeDb
         DesignTime.Create<OpenIddictIdentityPostgreSqlDbContext>(
             args,
             "PostgreSql",
-            "Host=localhost;Database=elsa;Username=postgres;Password=design-time",
+            "Host=localhost;Database=elsa",
             options => new OpenIddictIdentityPostgreSqlDbContext(options));
 }
 
