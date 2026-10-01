@@ -30,7 +30,10 @@ docker run -d --name elsa-workbench \
   -e Elsa__ModuleManagement__ApiKey=elsa-docker-demo-key \
   -e Cors__AllowedOrigins__0=http://localhost:14000 \
   -e CShells__Shells__default__Features__FoundationIdentityAspNetCoreIdentity__AllowedReturnUrlOrigins__0=http://localhost:14000 \
+  -e Elsa__DataProtection__EntityFrameworkCore__Enabled=true \
+  -e "Elsa__DataProtection__EntityFrameworkCore__ConnectionString=Data Source=/app/data/data-protection.db" \
   -v elsa-workbench-packages:/app/packages \
+  -v elsa-data:/app/data \
   elsaworkflows/elsa-workbench:latest
 
 docker run -d --name elsa-studio \
@@ -59,9 +62,10 @@ The non-obvious settings:
   the browser can call the API and the login flow can redirect back to Studio.
 - `elsa-workbench-packages:/app/packages` is the Nuplane directory feed: drop `.nupkg`
   activity/extension packages into that volume to load them.
-- Recreating `elsa-workbench` signs you out: the key ring that protects the sign-in cookie lives in the container.
-  A deployment keeps it in its database with `Elsa__DataProtection__EntityFrameworkCore__Enabled=true`; see
-  [Data Protection keys](docker.md#data-protection-keys).
+- `Elsa__DataProtection__EntityFrameworkCore__*` and `elsa-data:/app/data` keep the Data Protection key ring, which
+  protects the sign-in cookie and the antiforgery tokens, in a SQLite file on the `elsa-data` volume. The keys survive a
+  restart and a recreate of `elsa-workbench` for as long as that volume exists; the rest of its data stays in the
+  container. See [Data Protection keys](docker.md#data-protection-keys).
 
 ## Custom `shells.json`: controlling which features are enabled
 
@@ -212,5 +216,5 @@ Note this is separate from module *package* management (upload/feeds, gated by t
 ```bash
 docker rm -f elsa-workbench elsa-studio
 docker network rm elsa-demo
-docker volume rm elsa-workbench-packages
+docker volume rm elsa-workbench-packages elsa-data
 ```

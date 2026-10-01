@@ -34,9 +34,10 @@ Run the whole stack straight from these images.
 > **Persistence is ephemeral here.** The server image's baked-in default composition is **SQLite**
 > (written under `/app`), which is discarded when the `elsa-workbench` container is removed. For
 > durable, Postgres-backed persistence, use the build-from-source reference stack in sections 2–3
-> below. `docker-compose.images.yml` keeps the Data Protection key ring, which protects the sign-in
-> cookie, in that same SQLite file (`Elsa__DataProtection__EntityFrameworkCore__Enabled`), so a restart
-> keeps you signed in and removing the container signs you out along with losing the data. See
+> below. The one exception is the Data Protection key ring, which protects the sign-in cookie and the
+> antiforgery tokens: both examples below keep it in a SQLite file on the `elsa-data` volume
+> (`Elsa__DataProtection__EntityFrameworkCore__*`, mounted at `/app/data`), so the keys survive a
+> restart and a recreate of `elsa-workbench` for as long as that volume exists. See
 > [Data Protection keys](../../docs/docker.md#data-protection-keys).
 
 ### With Docker Compose
@@ -53,18 +54,24 @@ docker compose -f docker-compose.images.yml up
 Same result without Compose — start the server, then Studio pointed at it:
 
 ```bash
-# Elsa.Workbench (SQLite default composition; the volume is the Nuplane package feed).
+# Elsa.Workbench (SQLite default composition; elsa-workbench-packages is the Nuplane package feed, elsa-data
+# holds the Data Protection key ring). The migrate policy applies the migrations as the container starts, as the
+# compose file does: the image's Production settings validate instead, and its key store would then refuse to start.
 # The last three -e flags are the secrets Production requires: the recovery continuation signing key,
 # the seed admin password, and a freshly generated access-token signing key (needs openssl on your machine).
 docker run -d --name elsa-workbench \
   -p 13000:8080 \
   -e ASPNETCORE_ENVIRONMENT=Production \
+  -e Elsa__Persistence__EntityFramework__Migrate__Policy=AutoMigrate \
   -e Elsa__ModuleManagement__ApiKey=elsa-docker-demo-key \
   -e Cors__AllowedOrigins__0=http://localhost:14000 \
+  -e Elsa__DataProtection__EntityFrameworkCore__Enabled=true \
+  -e "Elsa__DataProtection__EntityFrameworkCore__ConnectionString=Data Source=/app/data/data-protection.db" \
   -e CShells__Shells__default__Features__WorkflowsRuntimeEntityFrameworkCore__RecoveryContinuationSigningKey=elsa-docker-demo-recovery-continuation-key \
   -e 'CShells__Shells__default__Features__FoundationIdentityAspNetCoreIdentityEntityFrameworkCore__SeedAdminPassword=Password123!' \
   -e "CShells__Shells__default__Features__FoundationIdentityOpenIddict__SigningKey=$(openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 | openssl pkcs8 -topk8 -nocrypt -outform DER | base64)" \
   -v elsa-workbench-packages:/app/packages \
+  -v elsa-data:/app/data \
   elsaworkflows/elsa-workbench:latest
 
 # Elsa Studio, pointed at the server backend
@@ -78,6 +85,12 @@ docker run -d --name elsa-studio \
 
 Then open **http://localhost:14000** (Studio); it calls **http://localhost:13000** (the server).
 Sign in as `admin` / `Password123!`.
+
+Without `Elsa__Persistence__EntityFramework__Migrate__Policy=AutoMigrate` the image's Production settings apply
+`Validate`: the container then exits as it starts, naming the `DataProtection.Keys` module's pending migration, until
+the migrations have been applied out of process with `dotnet elsa persistence apply --modules DataProtection.Keys`
+against the same database file, as a deployment pipeline does (see
+[`docs/docker.md`](../../docs/docker.md#data-protection-keys)).
 
 ### Pointing Studio at the server backend
 

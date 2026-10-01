@@ -58,6 +58,7 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
         "src/essentials/Persistence/EntityFramework/EfConnectionDefaults.cs",
         "src/essentials/Persistence/EntityFramework/EfDatabaseMigrator.cs",
         "src/essentials/Persistence/EntityFramework/EfHostConfigurationReader.cs",
+        "src/essentials/Persistence/EntityFramework/EfHostStoreOptions.cs",
         "src/essentials/Persistence/EntityFramework/EfMigrateOptions.cs",
         "src/essentials/Persistence/EntityFramework/EfMigratePolicy.cs",
         "src/essentials/Persistence/EntityFramework/EfMigrationsHistory.cs",

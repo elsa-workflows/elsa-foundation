@@ -32,10 +32,11 @@ services:
       # appsettings.Production.json validates instead, for deployments that apply them from CI/CD with
       # tools/ef/module-migrate.sh (or `dotnet elsa persistence`) before the host starts.
       Elsa__Persistence__EntityFramework__Migrate__Policy: AutoMigrate
-      # The Data Protection key ring that protects the sign-in cookie and the antiforgery tokens, kept with the rest of the
-      # data in the image's SQLite file (ConnectionStrings:Elsa), as docker-compose.yml keeps it in PostgreSQL. A restart keeps
-      # everyone signed in; removing the container loses the keys with the data. See docs/docker.md, "Data Protection keys".
+      # The Data Protection key ring that protects the sign-in cookie and the antiforgery tokens, kept in a SQLite file on the
+      # elsa-data volume below, as docker-compose.yml keeps it in PostgreSQL, so it survives a restart and a recreate for as
+      # long as the volume does. The rest of this stack's data stays in the container. See docs/docker.md, "Data Protection keys".
       Elsa__DataProtection__EntityFrameworkCore__Enabled: "true"
+      Elsa__DataProtection__EntityFrameworkCore__ConnectionString: "Data Source=/app/data/data-protection.db"
       # Elsa host management key accepted on the server's module-management API.
       # Server-side only. MUST match Studio's Studio__BackendModuleManagementApiKey.
       Elsa__ModuleManagement__ApiKey: elsa-docker-demo-key
@@ -83,6 +84,8 @@ services:
       # Nuplane directory feed: drop .nupkg activity/extension packages here to load them.
       # (A subfolder mount — do NOT mount a volume over /app, that would shadow the app binaries.)
       - server-packages:/app/packages
+      # The Data Protection key store's SQLite file (see above). The image creates /app/data writable by its runtime user.
+      - elsa-data:/app/data
 
   elsa-studio:
     image: elsaworkflows/elsa-studio:latest
@@ -104,3 +107,4 @@ services:
 
 volumes:
   server-packages:
+  elsa-data:

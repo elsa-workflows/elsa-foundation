@@ -1434,8 +1434,8 @@ public sealed class EfCoreDependencyGuardTests
     /// <see cref="Only_admitted_consumers_and_pilot_projects_resolve_ef_core_packages"/> keeps it that way, which is what
     /// lets a host compose it without EF (ADR 0076); <c>Elsa.Foundation.Host</c> carries EF only for its opt-in durable
     /// membership provider and its opt-in Data Protection key store (ADR 0076, amended 2026-09-29 and 2026-10-01; #2151,
-    /// #2191). Its tests read the declarations of two
-    /// first-party module assemblies, which resolve EF Core and Relational and never a provider engine.
+    /// #2191). Its tests read the declarations of two first-party module assemblies, which resolve EF Core and Relational
+    /// and never a provider engine.
     /// </summary>
     internal static class Spec183ReadabilityEf
     {
@@ -1515,8 +1515,8 @@ public sealed class EfCoreDependencyGuardTests
     /// <summary>
     /// The host's Data Protection composition and its opt-in EF key store (ADR 0076, amended 2026-10-01: Elsa.Foundation.Host
     /// may also carry it). Like cluster membership, a host composes it once on its own container and brings the engine;
-    /// provider engines stay in its focused tests, SQLite in the fast suite (beside the durable membership its startup check
-    /// warns about) and the three container engines in its provider legs.
+    /// provider engines stay in its focused tests, SQLite in the fast suite and the three container engines in its provider
+    /// legs.
     /// </summary>
     internal static class Adr0076DataProtectionKeyStoreEf
     {

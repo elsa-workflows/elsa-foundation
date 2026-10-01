@@ -146,6 +146,7 @@ server outside Docker; the compose file adds the Studio container origin.
 | `/app/shells.json` (ro) | Shell composition. The compose stack mounts `elsa-workbench.shells.json`. |
 | `/app/packages` | Nuplane directory feed — drop `.nupkg` activity/extension packages here to load them at runtime (watched). Backed by a named volume in compose. |
 | `/app/workflow-definitions` (ro) | Workflow definition JSON files deployed at startup by the `JsonWorkflowReconciliation` feature (`FolderPath` + optional `PublishOnReconcile`). Path is conventional — it is whatever the feature's `FolderPath` points at. See [Deploying workflow definitions from files](docker-hub-quickstart.md#deploying-workflow-definitions-from-files). |
+| `/app/data` | SQLite files meant to outlive the container; the image creates it writable by its runtime user. The published-images stack keeps its Data Protection key ring there, on the `elsa-data` volume. See [Data Protection keys](#data-protection-keys). |
 
 ### Data Protection keys
 
@@ -190,9 +191,22 @@ Elsa__DataProtection__Certificate__Password: "…"                     # a secre
   root, so the cookies and antiforgery tokens they issued are refused by the upgraded container: users sign in again.
   Changing the application name later does the same.
 
-The published-images stack (`docker-compose.images.yml`) keeps its data in a SQLite file inside the container, and keeps
-the key ring with it (`Elsa__DataProtection__EntityFrameworkCore__Enabled`): a restart keeps everyone signed in, and
-removing the container loses the keys together with the data.
+The published-images stack (`docker-compose.images.yml`, and the `docker run` examples of the
+[Docker Hub quickstart](docker-hub-quickstart.md) and `docker/compose/README.md`) keeps its data in SQLite files inside
+the container, which a recreate discards. Its key ring is the exception: the key store has a connection of its own to a
+SQLite file on the `elsa-data` volume, mounted at `/app/data`, which the image creates writable by its runtime user:
+
+```yaml
+Elsa__DataProtection__EntityFrameworkCore__Enabled: "true"
+Elsa__DataProtection__EntityFrameworkCore__ConnectionString: "Data Source=/app/data/data-protection.db"
+volumes:
+  - elsa-data:/app/data
+```
+
+The keys survive a restart and a recreate of the container for as long as the volume exists; `docker compose down -v`,
+or `docker volume rm elsa-data`, discards them. These stacks migrate as they start: under the image's own
+`Validate` policy the container exits as it starts, naming the `DataProtection.Keys` module's pending migration, until
+`dotnet elsa persistence apply --modules DataProtection.Keys` has created the table in that file.
 
 ---
 

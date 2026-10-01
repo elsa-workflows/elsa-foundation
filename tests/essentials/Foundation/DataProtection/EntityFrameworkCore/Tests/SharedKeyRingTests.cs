@@ -1,7 +1,10 @@
+using System.Data.Common;
 using System.Security.Cryptography;
 using System.Xml.Linq;
 using Microsoft.AspNetCore.DataProtection.KeyManagement;
 using Microsoft.AspNetCore.DataProtection.Repositories;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -45,21 +48,29 @@ public abstract class SharedKeyRingTests(IKeyRingDatabase database) : IAsyncLife
     }
 
     /// <summary>
-    /// Hosts started together on an empty store, as the replicas of a first deployment are, both migrate it and both create the
-    /// first key, each before it can read the other's: every host's first read of the store is held until every other host has
-    /// read it too, so the race the replicas may run is the race this runs every time. Each host then protects with a key the
-    /// other may not have read yet, and each still reads the other's payloads.
+    /// Hosts started together on an empty store, as the replicas of a first deployment are, race twice, and both races are run
+    /// every time here rather than left to timing. Each host's migrator sends its first command to the store, its first look
+    /// at or claim on the migration history, only once the other's is ready to go too: neither holds EF Core's migration lock
+    /// yet, so both start migrating the empty store at once, and the lock is what orders their changes from there. Each host's
+    /// first read of the key ring is held until the other has read it too, so both find it empty and both create the first
+    /// key. Each host then protects with a key the other may not have read yet, and each still reads the other's payloads.
     /// </summary>
     [SkippableFact]
     public async Task Hosts_that_start_together_on_an_empty_store_read_each_others_payloads()
     {
         var store = await StoreAsync();
-        using var firstReads = new Barrier(2);
+        using var migrations = new Rendezvous(2);
+        using var firstReads = new Rendezvous(2);
 
-        // Each host starts on a thread of its own: its first read waits for the other's, so one thread cannot start both.
+        // Each host starts on a thread of its own: each waits for the other twice, so one thread cannot start both.
         var hosts = await Task.WhenAll(Enumerable.Range(0, 2).Select(_ => Task.Run(() => HostAsync(store.Settings(), (services, _) =>
-            services.PostConfigure<KeyManagementOptions>(keys => keys.XmlRepository = new FirstReadTogether(keys.XmlRepository!, firstReads))))));
+        {
+            FirstCommandTogether.AddTo(services, migrations);
+            services.PostConfigure<KeyManagementOptions>(keys => keys.XmlRepository = new FirstReadTogether(keys.XmlRepository!, firstReads));
+        }))));
 
+        Assert.Equal(2, migrations.Arrivals);
+        Assert.Equal(2, firstReads.Arrivals);
         Assert.Equal(2, (await hosts[0].StoredKeysAsync()).Count);
         Assert.Equal("issued by the first", hosts[1].Unprotect(hosts[0].Protect("issued by the first")));
         Assert.Equal("issued by the second", hosts[0].Unprotect(hosts[1].Protect("issued by the second")));
@@ -199,23 +210,87 @@ public abstract class SharedKeyRingTests(IKeyRingDatabase database) : IAsyncLife
     private static Dictionary<string, string?> With(Dictionary<string, string?> settings, Dictionary<string, string?> more) =>
         settings.Concat(more).ToDictionary();
 
-    /// <summary>
-    /// The host's key store, with its first read held until every host sharing <paramref name="barrier"/> has read the store
-    /// once, so each finds it as it was before any of them wrote a key.
-    /// </summary>
-    private sealed class FirstReadTogether(IXmlRepository store, Barrier barrier) : IXmlRepository
+    /// <summary>A point every host of a test waits at until all of them have arrived, counting who did.</summary>
+    private sealed class Rendezvous(int hosts) : IDisposable
     {
         private static readonly TimeSpan Patience = TimeSpan.FromSeconds(60);
+        private readonly Barrier _barrier = new(hosts);
+        private int _arrivals;
+
+        public int Arrivals => Volatile.Read(ref _arrivals);
+
+        public void Arrive(string what)
+        {
+            Interlocked.Increment(ref _arrivals);
+            if (!_barrier.SignalAndWait(Patience))
+                throw new TimeoutException($"The other hosts did not reach {what} within {Patience}.");
+        }
+
+        public void Dispose() => _barrier.Dispose();
+    }
+
+    /// <summary>
+    /// The host's key store, with its first read held until every host has read the store once, so each finds it as it was
+    /// before any of them wrote a key.
+    /// </summary>
+    private sealed class FirstReadTogether(IXmlRepository store, Rendezvous rendezvous) : IXmlRepository
+    {
         private int _reads;
 
         public IReadOnlyCollection<XElement> GetAllElements()
         {
             var elements = store.GetAllElements();
-            if (Interlocked.Increment(ref _reads) == 1 && !barrier.SignalAndWait(Patience))
-                throw new TimeoutException($"The other hosts did not read the key store within {Patience}.");
+            if (Interlocked.Increment(ref _reads) == 1)
+                rendezvous.Arrive("their first read of the key store");
             return elements;
         }
 
         public void StoreElement(XElement element, string friendlyName) => store.StoreElement(element, friendlyName);
+    }
+
+    /// <summary>
+    /// Holds the first command a host's key store context sends until every host's is ready to go too. The migrator is the
+    /// first to use the context, so this is each host's migration first reaching the store: on SQLite its claim on EF Core's
+    /// migration lock, on the other engines its look at, or creation of, the history table. Held before it runs, it leaves no
+    /// host holding the lock or having created anything, so from here the hosts migrate the store at once.
+    /// </summary>
+    private sealed class FirstCommandTogether(Rendezvous rendezvous) : DbCommandInterceptor
+    {
+        private int _commands;
+
+        /// <summary>Adds a fresh interceptor of this host to its key store context, whichever engine the context binds.</summary>
+        public static void AddTo(IServiceCollection services, Rendezvous rendezvous)
+        {
+            var interceptor = new FirstCommandTogether(rendezvous);
+            services.ConfigureDbContext<DataProtectionKeysSqliteDbContext>(options => options.AddInterceptors(interceptor));
+            services.ConfigureDbContext<DataProtectionKeysSqlServerDbContext>(options => options.AddInterceptors(interceptor));
+            services.ConfigureDbContext<DataProtectionKeysPostgreSqlDbContext>(options => options.AddInterceptors(interceptor));
+            services.ConfigureDbContext<DataProtectionKeysMySqlDbContext>(options => options.AddInterceptors(interceptor));
+        }
+
+        public override InterceptionResult<DbDataReader> ReaderExecuting(DbCommand command, CommandEventData eventData, InterceptionResult<DbDataReader> result) =>
+            Hold(result);
+
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command, CommandEventData eventData, InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(Hold(result));
+
+        public override InterceptionResult<object> ScalarExecuting(DbCommand command, CommandEventData eventData, InterceptionResult<object> result) =>
+            Hold(result);
+
+        public override ValueTask<InterceptionResult<object>> ScalarExecutingAsync(DbCommand command, CommandEventData eventData, InterceptionResult<object> result, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(Hold(result));
+
+        public override InterceptionResult<int> NonQueryExecuting(DbCommand command, CommandEventData eventData, InterceptionResult<int> result) =>
+            Hold(result);
+
+        public override ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(DbCommand command, CommandEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(Hold(result));
+
+        private T Hold<T>(T result)
+        {
+            if (Interlocked.Increment(ref _commands) == 1)
+                rendezvous.Arrive("their migration's first command to the key store");
+            return result;
+        }
     }
 }

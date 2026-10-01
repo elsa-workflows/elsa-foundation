@@ -170,12 +170,14 @@ COPY --from=build /app/publish ./
 #   /app/.nuplane            Nuplane reconciliation state
 #   /app/packages            Nuplane directory feed (watched; optionally a volume mount)
 #   /app/.elsa               GitHubCopilotAgent working directory
+#   /app/data                SQLite files meant to outlive the container (mount a named volume here)
 #   *.db / *.sqlite*.db      SQLite fallback stores (only when a SQLite lane is composed)
-# so the non-root runtime user needs write access to the app directory. The Data Protection key ring is not among
-# them: unless Elsa:DataProtection:EntityFrameworkCore:Enabled keeps it in the platform database, ASP.NET Core keeps it
-# in the runtime user's home directory, which no volume covers, so a recreated container signs everyone out
-# (docs/docker.md, "Data Protection keys").
-RUN mkdir -p /app/packages /app/.nuplane /app/.elsa && chown -R $APP_UID:$APP_UID /app
+# so the non-root runtime user needs write access to the app directory. /app/data exists in the image, owned by that
+# user, so a named volume mounted there starts out writable by it. The Data Protection key ring is not among them
+# unless Elsa:DataProtection:EntityFrameworkCore:Enabled keeps it in a database, such as a SQLite file under /app/data:
+# otherwise ASP.NET Core keeps it in the runtime user's home directory, which no volume covers, so a recreated
+# container signs everyone out (docs/docker.md, "Data Protection keys").
+RUN mkdir -p /app/packages /app/.nuplane /app/.elsa /app/data && chown -R $APP_UID:$APP_UID /app
 
 # The root endpoint returns a small Healthy JSON payload (see Program.cs).
 HEALTHCHECK --interval=15s --timeout=3s --start-period=40s --retries=10 \
