@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "e3886aa3b5a19e0c23bd4d1373d8bf533cf0da82",
+  "last_publish_commit": "398df25512c4ff677817ad8b8dc180a380256421",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -399,8 +399,8 @@
     },
     {
       "package_id": "Elsa.Persistence.EntityFramework",
-      "version": "4.0.17-preview",
-      "commit": "e3886aa3b5a19e0c23bd4d1373d8bf533cf0da82"
+      "version": "4.0.18-preview",
+      "commit": "398df25512c4ff677817ad8b8dc180a380256421"
     },
     {
       "package_id": "Elsa.Persistence.Schema",
