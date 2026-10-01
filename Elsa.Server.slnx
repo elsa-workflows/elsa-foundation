@@ -478,6 +478,7 @@
     <Project Path="tests/essentials/Foundation/Identity/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.ProviderTests.csproj" />
   </Folder>
   <Folder Name="/tests/essentials/Modularity/">
+    <Project Path="tests/essentials/Modularity/ProviderTests/Elsa.Modularity.ProviderTests.csproj" />
     <Project Path="tests/essentials/Modularity/Tests/Elsa.Modularity.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/essentials/Modularity/EntityFramework/">

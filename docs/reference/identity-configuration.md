@@ -77,17 +77,64 @@ is never written to the log; the username xor password half-configured is a star
 
 | Setting | Meaning | Production requirement |
 |---|---|---|
-| `IsDevelopmentOrDemo` | In-memory token store + ephemeral keys. | **`false`.** |
+| `IsDevelopmentOrDemo` | In-memory token store (per node, lost when the host stops, whatever `Provider` says) + ephemeral keys. | **`false`.** |
 | `Issuer` | Logical issuer URI written into (and required from) first-party access tokens. | Set to a stable absolute URI, e.g. `https://elsa.example.com/`. |
 | `SigningKey` | Base64-encoded **PKCS#8 RSA private key** of at least 2048 bits, used to sign access tokens (RS256). Falls back to `FoundationIdentityOptions.SigningKey`. | **Required.** See generation command below. |
 | `EncryptionKey` | Key material for OpenIddict's encryption credentials. Defaults to a key derived (domain-separated) from `SigningKey`. | Recommended: set a **distinct** value from `SigningKey`. |
-| `ConnectionString` | Sqlite connection string for the OpenIddict token store. | Optional; set for a dedicated token DB. |
-| `AutoMigrate` | Lets Workbench's host-owned OpenIddict EF provider migrate its schema during startup. Defaults to `true`. | Turn off for multi-instance deployments that apply migrations out-of-band. |
+| `Provider` | The database engine under the token store: `Sqlite` (the default when unset), `SqlServer` or `PostgreSql`. Any other value, `MySql` included, fails the host's start, see [Where the token store lives](#where-the-token-store-lives). **Ignored under `IsDevelopmentOrDemo`**, whose token store is in memory and per node (the host warns at start when both are set). | **Not `Sqlite` when more than one node serves requests.** |
+| `ConnectionString` | Connection string for the OpenIddict token store, in the syntax of `Provider`. Without one, `Sqlite` uses its own file (`identity.db`) and another engine uses `ConnectionStrings:Elsa`, the connection every Elsa EF module shares. | Optional for one node; set for a dedicated token DB. |
+| `AutoMigrate` | Lets Workbench's host-owned OpenIddict EF provider migrate its schema during startup. Defaults to `true`. | Safe to leave on for several nodes on `SqlServer` or `PostgreSql`, which serialise concurrent migrations; turn off if you apply migrations out-of-band. |
+| `Prune:Enabled` | Whether this node prunes the token store. Defaults to `true`. | Leave on, see [Pruning the token store](#pruning-the-token-store). |
+| `Prune:Interval` | The time between prunes, a `TimeSpan`. Defaults to `01:00:00`. The first prune runs when the host starts. | Optional. |
+| `Prune:MinimumAge` | Only entries created longer ago than this are pruned, a `TimeSpan`. Defaults to `14.00:00:00`. | Optional. |
+| `Prune:Timeout` | How long one prune call (the tokens', then the authorizations') may take before it is cancelled and left for the next interval, a `TimeSpan`. Defaults to `00:10:00`. | Optional. |
 
 `Elsa.Foundation.Identity.OpenIddict` contains only provider-neutral OpenIddict behavior. It no longer references
 EF Core, and the former `configureDbContext` parameter on `AddFoundationIdentityOpenIddict` has been removed.
 Hosts must register an OpenIddict vendor store explicitly before composing the feature. Workbench makes that host
 choice with `OpenIddict.EntityFrameworkCore`; another host may select a different vendor provider.
+
+#### Where the token store lives
+
+Every access token and every refresh token the server issues is a row in the token store, and validating an access token reads
+its row (token-entry validation is on). A bearer token issued by one node is therefore only valid on another node if both read
+**the same store**. **A deployment of more than one node needs a shared store:** set `Provider` to `SqlServer` or `PostgreSql`
+and point every node at one database. The default, a SQLite file, is for one node, or for nodes that share one file, and the demo store
+(`IsDevelopmentOrDemo`) is in memory and per node, so it is for one node too.
+
+The store moves off SQLite only when `Provider` is set, so an existing store never moves silently. When `Provider` is not set and
+the default shell's EF consumers are on another engine, the host warns once it has started that the token store is still a
+per-node SQLite file, and names the setting to change (or, when that engine is MySQL, says the store needs a SQL Server or
+PostgreSQL database to be shared). The engine is the one the platform resolves for those consumers: the root
+`Elsa:Persistence:DefaultResource`, the shell's own default resource, a feature's `Bindings` entry, or a feature's own `Provider`
+setting. The warning reads the default shell's consumers at the host's start only; a consumer a shell enables later, or a setting
+changed after the start, is not seen.
+
+A node also needs the **same Data Protection keys** as the others, so a token or cookie one node protects the others can read. That
+is a separate, shared key ring that the token store does not provide: see [Data Protection key ring](#data-protection-key-ring). A multi-node
+deployment needs both the shared store and the shared keys.
+
+The store follows the platform's provider conventions: the engine names are the ones every Elsa EF module takes, and without a
+`ConnectionString` another engine uses `ConnectionStrings:Elsa`. The shared persistence resource (`Elsa:Persistence`) does not
+select the token store, which is host-owned. On SQL Server and PostgreSQL the tables and the migrations history table
+(`__EFMigrationsHistory_OpenIddict`) are both in the `Identity` schema, so the history sits beside the tables it records. MySQL is not supported: OpenIddict's prune deletes through a subquery with a
+limit, which MySQL refuses and its provider does not rewrite, so a MySQL store could never be pruned.
+
+#### Pruning the token store
+
+Nothing else deletes a token or an authorization, so Workbench prunes the store, calling OpenIddict's own `PruneAsync` on the token
+manager and then the authorization manager. It removes tokens that are expired, redeemed or revoked, or whose authorization is no
+longer valid, and authorizations that are not valid or are ad hoc with no token left; a token that is still valid is never
+removed. An entry is only pruned once it is older than `Prune:MinimumAge`, so a redeemed refresh token stays long enough to be
+recognised if it is presented again.
+
+The prune runs as a hosted service on **every node**, on the `Prune:Interval`, and the first runs when the node starts. It is not
+claimed by one node, because a prune is idempotent: what one node has deleted another finds already gone, and a prune that fails
+(a store not migrated yet, a sibling's delete in the way) is logged and tried again on the next interval, never thrown into the
+host. It is a root hosted service and not an `IRecurringTask` because the token store is host-owned and registered once for the
+process, while a recurring task belongs to a shell's Tasks feature, would run once per shell that enables it, and would not run in a
+host that does not. Each prune call runs under `Prune:Timeout`, so a call that hangs is cancelled and cannot hold the node's later
+prunes.
 
 Generate a signing key:
 
@@ -202,14 +249,19 @@ same-origin as the server for the session cookie to flow. Cross-origin setups re
 8. Remove any leftover `ApiSecurity` entry from shell feature lists: the feature no longer exists, and CShells
    logs a warning listing the unknown feature names.
 9. Host the Studio SPA same-origin, and set `Studio:Auth:Enabled=true`.
-10. **Apply the OpenIddict token-store migrations.** Workbench migrates its host-owned vendor EF schema at
-    startup while `AutoMigrate=true`. For multi-instance deployments, set `AutoMigrate=false` and apply the
-    migrations once as a deploy step against Workbench's `OpenIddictIdentityDbContext` before starting nodes:
+10. **Choose the token store, and apply its migrations.** For more than one node, select a shared engine
+    (`Provider`: `SqlServer` or `PostgreSql`) and the one database every node reads (see
+    [Where the token store lives](#where-the-token-store-lives)). Workbench migrates its host-owned vendor EF schema at
+    startup while `AutoMigrate=true`; the engines that have one serialise concurrent migrations with their own lock. To apply
+    the migrations out-of-band instead, set `AutoMigrate=false` and apply them once as a deploy step against the context of
+    your engine (`OpenIddictIdentityDbContext` for SQLite, `OpenIddictIdentitySqlServerDbContext`,
+    `OpenIddictIdentityPostgreSqlDbContext`) before starting nodes:
 
     ```bash
     dotnet ef database update \
-      --context OpenIddictIdentityDbContext \
-      --project src/apps/Elsa.Workbench
+      --context OpenIddictIdentityPostgreSqlDbContext \
+      --project src/apps/Elsa.Workbench \
+      -- --connectionString "<connection string>"
     ```
 
     The Elsa IAM schema is owned by `IdentityIamEntityFrameworkCore` and migrates separately from the

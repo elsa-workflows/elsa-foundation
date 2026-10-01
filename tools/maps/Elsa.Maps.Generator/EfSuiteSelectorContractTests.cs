@@ -90,9 +90,12 @@ public static class EfSuiteSelectorContractTests
 
         var repo = RepoContext.Discover();
         var full = EfSuiteSelector.Select(repo, "workflow_dispatch", null, null);
-        if (full.Mode != "full" || full.Suites.Count != 20)
-            throw new InvalidOperationException("Manual dispatch must select all 20 current EF suites.");
-        if (EfSuiteSelector.Select(repo, "push", null, null).Suites.Count != 20 ||
+        // The manifest is the inventory: a suite added to it is selected, with no count to keep in step here.
+        var manifestSuites = System.Text.Json.JsonDocument.Parse(File.ReadAllText(repo.Absolute("tools/ci/ef-suites.json")))
+            .RootElement.GetProperty("suites").GetArrayLength();
+        if (full.Mode != "full" || full.Suites.Count != manifestSuites)
+            throw new InvalidOperationException($"Manual dispatch must select all {manifestSuites} EF suites of the manifest.");
+        if (EfSuiteSelector.Select(repo, "push", null, null).Suites.Count != manifestSuites ||
             EfSuiteSelector.Select(repo, "pull_request", "missing", "missing").Mode != "full")
             throw new InvalidOperationException("Main and an unavailable PR diff must fail closed to the full matrix.");
 

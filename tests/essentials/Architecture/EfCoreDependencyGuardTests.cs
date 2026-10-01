@@ -857,7 +857,8 @@ public sealed class EfCoreDependencyGuardTests
                Spec183ReadabilityEf.IsSurfacePath(relativePath) ||
                Adr0078ClusterMembershipEf.IsSurfacePath(relativePath) ||
                Adr0076DataProtectionKeyStoreEf.IsSurfacePath(relativePath) ||
-               OpenIddictPersistenceArchitectureTests.IsWorkbenchVendorEfSource(relativePath);
+               OpenIddictPersistenceArchitectureTests.IsWorkbenchVendorEfSource(relativePath) ||
+               OpenIddictPersistenceArchitectureTests.IsWorkbenchEngineEfSource(relativePath);
     }
 
     private static bool IsMsBuildFile(string path) =>
