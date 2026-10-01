@@ -18106,6 +18106,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Workflows.Design.Reconciliation",
+          "path": "src/essentials/Workflows/Design/Reconciliation/Elsa.Workflows.Design.Reconciliation.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Workflows.Design.Validations",
           "path": "src/essentials/Workflows/Design/Validations/Elsa.Workflows.Design.Validations.csproj"
         },

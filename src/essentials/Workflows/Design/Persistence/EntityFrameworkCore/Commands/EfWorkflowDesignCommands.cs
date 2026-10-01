@@ -99,7 +99,7 @@ public sealed class EfMaterializeWorkflowDefinitionCommand(WorkflowsDesignDbCont
 {
     public const string OperationKind = "workflow.definition.materialize.v1";
 
-    public async Task<string> Execute(DesignOperationKey key, WorkflowDefinition definition, CancellationToken ct = default) { ArgumentNullException.ThrowIfNull(definition); definition.TenantId = WriteTenant(definition.TenantId); EfDesignSupport.Stamp(definition, Now); return await Atomic.ExecuteAsync(key, OperationKind, new MaterializeWorkflowDefinitionRequestMaterial(definition.Id, definition.Name, definition.Description, definition.DeletedAt, definition.DeletedReason, definition.IsSourceOwned), [DesignPersistenceUnitNames.Definitions], async token => { EfDesignSupport.SetDefinitionSearchKeys(Db, definition); Db.Definitions.Add(definition); await Task.CompletedTask; return definition.Id; }, ct); }
+    public async Task<string> Execute(DesignOperationKey key, WorkflowDefinition definition, CancellationToken ct = default) { ArgumentNullException.ThrowIfNull(definition); definition.TenantId = WriteTenant(definition.TenantId); EfDesignSupport.Stamp(definition, Now); return await Atomic.ExecuteAsync(key, OperationKind, new MaterializeWorkflowDefinitionRequestMaterial(definition.Id, definition.Name, definition.Description, definition.DeletedAt is not null, definition.DeletedReason, definition.IsSourceOwned), [DesignPersistenceUnitNames.Definitions], async token => { EfDesignSupport.SetDefinitionSearchKeys(Db, definition); Db.Definitions.Add(definition); await Task.CompletedTask; return definition.Id; }, ct); }
 }
 
 public sealed class EfSaveWorkflowDefinitionCommand(WorkflowsDesignDbContext db, IPersistenceAccessContextAccessor access, IDesignAtomicWriter atomic) : EfDesignCommand(db, access, atomic), ISaveWorkflowDefinitionCommand
@@ -602,11 +602,20 @@ internal sealed record CreateWorkflowDefinitionRequestMaterial(
     IReadOnlyCollection<DesignLayoutMaterial> Layout,
     IReadOnlyCollection<DesignActivityPresentationMaterial> ActivityPresentation);
 
+/// <summary>
+/// What a definition materialization asks for, and so what its fingerprint covers. Whether the definition is deleted
+/// is part of it, but not when: a source marks a definition deleted without a time, so each node stamps its own clock,
+/// and the time would make two nodes' requests for one definition conflict (#2189). A replay keeps the deletion time
+/// of the request that committed. Markers written before this change fingerprint the time instead. No new request is
+/// compared with one of those once it is stored, because the reconciler materializes only a definition it found missing,
+/// and the permanent delete, the one thing that removes a definition, retires its materialization marker with it. Only a
+/// node on the previous release racing a new node for the same definition can still conflict, once.
+/// </summary>
 internal sealed record MaterializeWorkflowDefinitionRequestMaterial(
     string DefinitionId,
     string Name,
     string? Description,
-    DateTimeOffset? DeletedAt,
+    bool Deleted,
     string? DeletedReason,
     bool IsSourceOwned);
 
