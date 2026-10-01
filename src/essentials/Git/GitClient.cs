@@ -6,7 +6,8 @@ namespace Elsa.Git;
 /// <summary>
 /// Canonical Git process invocation for the foundation. This is the single Git stack:
 /// <list type="bullet">
-/// <item><see cref="RunAsync"/> awaits a mutating Git command and throws on a non-zero exit.</item>
+/// <item><see cref="RunAsync"/> awaits a Git command, returns its trimmed standard output, and throws on a
+/// non-zero exit.</item>
 /// <item><see cref="RunOrDefault"/> runs a read-only Git command synchronously and returns an empty
 /// string on any failure.</item>
 /// <item><see cref="IsGitRepository"/> reports whether a path is inside a Git work tree.</item>
@@ -16,7 +17,7 @@ namespace Elsa.Git;
 /// </summary>
 public sealed class GitClient(string gitExecutable, ILogger logger) : IGitClient
 {
-    public async Task RunAsync(string workingDirectory, CancellationToken cancellationToken, params string[] arguments)
+    public async Task<string> RunAsync(string workingDirectory, CancellationToken cancellationToken, params string[] arguments)
     {
         Process process;
         try
@@ -46,6 +47,8 @@ public sealed class GitClient(string gitExecutable, ILogger logger) : IGitClient
             var error = await errorTask;
             if (process.ExitCode != 0)
                 throw new InvalidOperationException($"Git command failed: {string.Join(' ', arguments)}{Environment.NewLine}{error}".TrimEnd());
+
+            return output.Trim();
         }
     }
 

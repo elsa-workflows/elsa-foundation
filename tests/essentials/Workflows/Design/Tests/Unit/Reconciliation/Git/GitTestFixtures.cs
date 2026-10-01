@@ -6,7 +6,9 @@ using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Filters;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
+using Elsa.Testing;
 using Elsa.Workflows.Design.Reconciliation.Git.Options;
+using Elsa.Workflows.Design.Reconciliation.Git.Services;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
@@ -89,6 +91,110 @@ public abstract class GitIntegrationTest : IDisposable
     }
 }
 
+/// <summary>
+/// Base for the export tests: one bare remote and one catalog, shared the way the nodes of one authoring deployment share
+/// them, and a factory for Writer nodes, each with a clone of its own.
+/// </summary>
+public abstract class GitExportTest : GitIntegrationTest
+{
+    protected readonly string _remote;
+    protected readonly InMemoryDefinitionStore _definitions = new();
+    protected readonly InMemoryVersionStore _versions = new();
+
+    protected GitExportTest() => _remote = GitTestSupport.CreateRemoteWithMain(_git, _tempPaths);
+
+    /// <summary>Adds a definition and its versions to the shared catalog.</summary>
+    protected void Publish(string definitionId, string name, params string[] versions)
+    {
+        _definitions.With(new WorkflowDefinition { Id = definitionId, Name = name });
+        foreach (var version in versions)
+            _versions.With(new WorkflowDefinitionVersion(definitionId, version) { State = WorkflowDefinitionState.Empty });
+    }
+
+    /// <summary>A Writer node of the shared catalog and remote, with a clone of its own.</summary>
+    protected GitWriterNode Writer(GitPushMode pushMode = GitPushMode.Manual)
+    {
+        var cachePath = GitTestSupport.NewCachePath();
+        _tempPaths.Add(cachePath);
+        var options = GitTestSupport.Options(new GitReconciliationOptions
+        {
+            RemoteUrl = _remote, Branch = "main", WorkflowsPath = "workflows",
+            LocalCachePath = cachePath, Role = GitReconciliationRole.Writer,
+            Export = new GitExportOptions { PushMode = pushMode, Tag = true },
+        });
+        var git = new InterceptingGitClient(_git);
+        var workspaceLog = new RecordingLogger<GitWorkspace>();
+        var workspace = new GitWorkspace(git, options, workspaceLog);
+        var exportLog = new RecordingLogger<GitWorkflowExporter>();
+        var serializer = new FakePayloadSerializer();
+        return new GitWriterNode(
+            cachePath,
+            git,
+            new GitWorkflowExporter(workspace, git, serializer, _definitions, _versions, options, exportLog),
+            new GitWorkflowReconciliationSource(workspace, git, serializer, options, NullLogger<GitWorkflowReconciliationSource>.Instance),
+            workspaceLog,
+            exportLog);
+    }
+
+    protected IReadOnlyList<string> Subjects(string repository, string revision = "HEAD") =>
+        _git.RunOrDefault(repository, "log", "--format=%s", revision).Split('\n', StringSplitOptions.RemoveEmptyEntries);
+
+    protected IReadOnlyList<string> RemoteSubjects() => Subjects(_remote, "main");
+
+    protected string Head(string repository, string revision = "HEAD") => _git.RunOrDefault(repository, "rev-parse", revision);
+
+    protected bool IsCommitted(string repository, string path) =>
+        _git.RunOrDefault(repository, "ls-tree", "--name-only", "HEAD", "--", path) == path;
+}
+
+/// <summary>One Writer node: its clone, the git client it runs (which a test can intercept), its export and its import.</summary>
+public sealed record GitWriterNode(
+    string CachePath,
+    InterceptingGitClient Git,
+    GitWorkflowExporter Exporter,
+    GitWorkflowReconciliationSource Source,
+    RecordingLogger<GitWorkspace> WorkspaceLog,
+    RecordingLogger<GitWorkflowExporter> ExportLog);
+
+/// <summary>
+/// Runs every git command through the real client, except that a test can act just before a chosen run of a command: fail
+/// it, as a process that stops between two steps would, or let another node act in that moment. Commands are counted by
+/// name, skipping the leading <c>-c key=value</c> pairs.
+/// </summary>
+public sealed class InterceptingGitClient(IGitClient inner) : IGitClient
+{
+    private readonly List<(string Command, int Occurrence, Func<Task> Action)> _interceptions = [];
+    private readonly Dictionary<string, int> _runs = new(StringComparer.Ordinal);
+
+    /// <summary>Fails the given run of <paramref name="command"/> before it starts, the way a failed git command fails.</summary>
+    public void FailAt(string command, int occurrence = 1) =>
+        Before(command, occurrence, () => throw new InvalidOperationException($"Simulated stop before git {command} (run {occurrence})."));
+
+    public void Before(string command, int occurrence, Func<Task> action) => _interceptions.Add((command, occurrence, action));
+
+    public async Task<string> RunAsync(string workingDirectory, CancellationToken cancellationToken, params string[] arguments)
+    {
+        var command = CommandOf(arguments);
+        var run = _runs[command] = _runs.GetValueOrDefault(command) + 1;
+        foreach (var interception in _interceptions.Where(i => i.Command == command && i.Occurrence == run))
+            await interception.Action();
+
+        return await inner.RunAsync(workingDirectory, cancellationToken, arguments);
+    }
+
+    public string RunOrDefault(string workingDirectory, params string[] arguments) => inner.RunOrDefault(workingDirectory, arguments);
+
+    public bool IsGitRepository(string repositoryPath) => inner.IsGitRepository(repositoryPath);
+
+    private static string CommandOf(string[] arguments)
+    {
+        var index = 0;
+        while (index < arguments.Length && arguments[index] == "-c")
+            index += 2;
+        return index < arguments.Length ? arguments[index] : "";
+    }
+}
+
 internal static class GitTestSupport
 {
     /// <summary>
@@ -138,7 +244,7 @@ internal static class GitTestSupport
 }
 
 /// <summary>In-memory <see cref="IWorkflowDefinitionStore"/> for exporter tests.</summary>
-internal sealed class InMemoryDefinitionStore : IWorkflowDefinitionStore
+public sealed class InMemoryDefinitionStore : IWorkflowDefinitionStore
 {
     private readonly List<WorkflowDefinition> _items = new();
     public InMemoryDefinitionStore With(WorkflowDefinition item) { _items.Add(item); return this; }
@@ -151,7 +257,7 @@ internal sealed class InMemoryDefinitionStore : IWorkflowDefinitionStore
 }
 
 /// <summary>In-memory <see cref="IWorkflowDefinitionVersionStore"/> for exporter tests (State pre-hydrated).</summary>
-internal sealed class InMemoryVersionStore : IWorkflowDefinitionVersionStore
+public sealed class InMemoryVersionStore : IWorkflowDefinitionVersionStore
 {
     private readonly List<WorkflowDefinitionVersion> _items = new();
     public InMemoryVersionStore With(WorkflowDefinitionVersion item) { _items.Add(item); return this; }

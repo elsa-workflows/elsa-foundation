@@ -8,7 +8,10 @@ public enum GitReconciliationRole
     /// <summary>Imports git→catalog, read-only; never exports. Disposable <c>reset --hard</c> mirror.</summary>
     Consumer,
 
-    /// <summary>Authors in Studio and exports catalog→git; imports at bootstrap. Persistent ff-only working copy.</summary>
+    /// <summary>
+    /// Authors in Studio and exports catalog→git; imports at bootstrap. Persistent working copy that keeps its unpushed
+    /// export commits until the remote moves (#2197). Every replica of a catalog may be a Writer: the push fences them.
+    /// </summary>
     Writer,
 }
 

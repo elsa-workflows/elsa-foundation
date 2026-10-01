@@ -1,7 +1,9 @@
 # Workflow Definitions Reconcile From And Export To Git
 
 Status: proposed (2026-07-07; free-flow design. Sharpened through a grilling pass — the decisions
-below (D1–D11) supersede the first draft's bidirectional/multi-environment framing.)
+below (D1–D11) supersede the first draft's bidirectional/multi-environment framing.) Amended
+2026-10-01 ([#2197](https://github.com/elsa-workflows/elsa-foundation/issues/2197)): D7 and D11, for a
+catalog served by several Writer nodes.
 
 Program goal: `none/free-flow`. GitOps for workflow definitions is not owned by an existing bucket
 (see [Groundwork Persistence Readiness](../program-goals/groundwork-persistence-readiness.md),
@@ -162,6 +164,43 @@ A single-writer violation can therefore only surface as a **rejected push** or a
 throw** — never silent divergence. An optional repo **claim file** (`writer.json` naming the
 authoritative writer) is operator-friendly hardening, not load-bearing.
 
+*Amended 2026-10-01 ([#2197](https://github.com/elsa-workflows/elsa-foundation/issues/2197)).* D7 took
+a writer to be one node. A catalog served by several nodes is not: replicas that share a configuration
+are all Writers, each exporting from a clone of its own, so the first push left every other clone
+diverged, and D11's "stop" on divergence failed each of those nodes' starts until someone repaired the
+clone by hand. One writer per repository branch is now kept by the remote, with no election:
+
+- **The push is the fence.** Every Writer node runs the export at shell start, without a lock;
+  `GitWorkflowExportStartupTask` is no longer a `[SingleNodeTask]`. Git refuses a push that is not a
+  fast-forward, so the branch only ever advances by one writer's commits on top of what every other
+  writer has to build on. A writer whose push is refused because the remote moved resets onto the
+  remote and sweeps again, at most three times in a pass; exporting the same catalog, it normally finds
+  nothing left to commit, so only the winner's commits reach the branch. A push refused for any other
+  reason (credentials, a hook, a protected branch) throws as before. With an `Export.Branch` other than
+  the tracked branch, the writer does not rebuild onto it: a push refused because that branch moved is
+  logged as an error and does not fail the start.
+- **Every decision comes from git state, never from files on disk.** A version is written and committed
+  when its file is absent from the HEAD tree; `definition.json` is committed when HEAD's copy differs
+  from the catalog; a version is tagged when its tag is missing from HEAD's history, at the commit that
+  added its file; and under `PushMode = Immediate` the branch is pushed whenever HEAD is ahead of the
+  remote, whether or not that pass committed anything. A pass that stops at any point (after a write,
+  after a commit, at a failed push) is completed by the next one.
+- **Why not an election.** #2197 weighed three. A claim row with expiry in the backfill-claim style
+  cannot reuse `FencedClaimLease`, which lives in `Elsa.Workflows.Runtime` where the Design layer may not
+  reach (spec 085 FR-015), and following its pattern would add a table and four provider migrations for a
+  startup-only task; above all, a claim cannot keep node-local clones in line, since the node that
+  claims after another has no copy of that node's unpushed commits, so the rebuild from git state is
+  needed either way, and once it exists a claim would only save duplicate work — nothing correct would
+  depend on it. A designated writer node needs a per-node identity in a configuration replicas share,
+  leaves the default (every replica a Writer) as broken as before unless it is made mandatory, and still
+  has to survive a person pushing to the branch. Moving the export to an operator or CI command would
+  change D4 and D11's contract far beyond the defect.
+- **What the tripwire still catches.** Two *catalogs* exporting to one branch remain a D2 violation. Their
+  writers now rebuild onto each other's commits instead of failing to start, so a version both minted
+  with different content surfaces as the import's content-mismatch warning (Model X, FR-006), and two
+  catalogs that mint disjoint definitions end up side by side in the branch. Nothing new detects that
+  topology; as before, D2 forbids it.
+
 ### D8 — Make the shared payload serializer deterministic
 
 Rather than a git-only renderer kept eternally in sync, make the **shared** serializer deterministic
@@ -218,6 +257,15 @@ Each role gets its own clone mode:
   integrate (a non-ff divergence *is* the D7 violation signal → stop, never merge); holds local
   export commits until pushed (per `PushMode`); never `reset --hard`.
 - **Consumer clone** — a **disposable mirror**: `fetch` + `reset --hard origin/{branch}`; read-only.
+
+*Amended 2026-10-01 ([#2197](https://github.com/elsa-workflows/elsa-foundation/issues/2197); see D7).* A
+Writer clone still holds its export commits until they are pushed, for as long as the remote has not
+moved. When the remote has moved it never stops: only behind, it fast-forwards; diverged, it resets to
+the remote when every commit the remote lacks was made by the export identity (they are output the
+export regenerates from the catalog), and otherwise it stays as it is and logs an error, so a commit
+the export did not make is never discarded. Uncommitted changes under the workflows path are residue of
+an export that stopped before its commit, and are discarded at every pass, so the import and the export
+both read only what is committed; uncommitted changes elsewhere in the clone are kept.
 
 ## How the pieces map to existing seams
 

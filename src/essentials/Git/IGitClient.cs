@@ -8,9 +8,10 @@ namespace Elsa.Git;
 public interface IGitClient
 {
     /// <summary>
-    /// Awaits a mutating Git command and throws <see cref="System.InvalidOperationException"/> on a non-zero exit.
+    /// Awaits a Git command and returns its trimmed standard output. Throws <see cref="System.InvalidOperationException"/>
+    /// on a non-zero exit, so a caller that decides from the output never mistakes a failed command for an empty answer.
     /// </summary>
-    Task RunAsync(string workingDirectory, CancellationToken cancellationToken, params string[] arguments);
+    Task<string> RunAsync(string workingDirectory, CancellationToken cancellationToken, params string[] arguments);
 
     /// <summary>
     /// Runs a read-only Git command synchronously and returns its trimmed standard output, or an empty

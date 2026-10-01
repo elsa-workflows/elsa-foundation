@@ -23,7 +23,7 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Design.
 - **Consumed by:** `WorkflowVersionsReconcilingHandler : IEventHandler<WorkflowVersionsReconciling>` (this feature), which injects all sources, reads each, and reconciles against the workflow catalog.
 
 **Known implementations (shipped):**
-- `GitWorkflowReconciliationSource` (`Elsa.Workflows.Design.Reconciliation.Git`, `SourceKind = "git"`) — reads immutable version files from a git repository (spec 085 / ADR 0034). Feature: `WorkflowsDesignGitReconciliation`.
+- `GitWorkflowReconciliationSource` (`Elsa.Workflows.Design.Reconciliation.Git`, `SourceKind = "git"`) — reads immutable version files from a git repository (spec 085 / ADR 0034). Feature: `WorkflowsDesignGitReconciliation`. On a Writer node whose clone diverged from the remote, `Read` does not throw (#2197): the clone resets to the remote when its unpushed commits are all export commits, and is otherwise left as it is with an error logged; see the [Git reconciliation README](Git/README.md#several-writer-nodes-of-one-catalog).
 - `JsonWorkflowReconciliationSource` (`Elsa.Workflows.Design.Reconciliation.Json`, `SourceKind = "Json"`) — reads workflow-definition versions from JSON files (exactly one of a single `FilePath`, an ordered `Files` list, or a scanned `FolderPath`; required `SourceId`; optional `PublishOnReconcile` → `RequestsPublication`), mirroring the Activities-side `JsonActivityReconciliation` source. Feature: `JsonWorkflowReconciliation` (opt-in; not enabled in any default shell).
 - Add a further source to integrate other providers (e.g. a code-first attribute-decorated C# provider, or a CRM pull).
 
