@@ -22,6 +22,7 @@
     <Compile Include="..\Tests\ModuleContextCatalog.cs" Link="ModuleContextCatalog.cs" />
     <Compile Include="..\Tests\ModuleSchemaFinalizationScenario.cs" Link="ModuleSchemaFinalizationScenario.cs" />
     <Compile Include="..\..\..\EntityFramework\Tests\BackfillScenario.cs" Link="BackfillScenario.cs" />
+    <Compile Include="..\..\..\EntityFramework\Tests\BackfillWithdrawalRace.cs" Link="BackfillWithdrawalRace.cs" />
     <Compile Include="..\..\..\EntityFramework\Tests\FakeFleet.cs" Link="FakeFleet.cs" />
     <Compile Include="..\..\..\EntityFramework\Tests\EfSchemaFinalizationTestSupport.cs" Link="EfSchemaFinalizationTestSupport.cs" />
     <Compile Include="..\..\..\EntityFramework\Tests\FinalizationInsert.cs" Link="FinalizationInsert.cs" />

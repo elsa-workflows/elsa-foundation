@@ -220,6 +220,7 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
         "src/essentials/Secrets/Persistence/EntityFrameworkCore/Stores/SecretsUnicodeOrdinalIgnoreCaseV1.cs",
         "tests/essentials/Persistence/EntityFramework/BindingDriftTests/EfRelationalProviderBindingDriftTests.cs",
         "tests/essentials/Persistence/EntityFramework/Tests/BackfillScenario.cs",
+        "tests/essentials/Persistence/EntityFramework/Tests/BackfillWithdrawalRace.cs",
         "tests/essentials/Persistence/EntityFramework/Tests/CommittedCompositionConnectionTests.cs",
         "tests/essentials/Persistence/EntityFramework/Tests/ConfigurationServices.cs",
         "tests/essentials/Persistence/EntityFramework/Tests/ContractingModule.cs",

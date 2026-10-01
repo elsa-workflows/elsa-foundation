@@ -1,6 +1,7 @@
 using CShells.AspNetCore.Configuration;
 using CShells.AspNetCore.Extensions;
 using CShells.DependencyInjection;
+using Elsa.Attention.Core;
 using Elsa.Cluster.Hosting;
 using Elsa.Cluster.Readability;
 using Elsa.Foundation.Host.Feed;
@@ -102,7 +103,14 @@ builder.Services.AddCShellsAspNetCore(shells => shells
 
 // Optional — eager activation: activate the configured shell(s) at boot so shell-lifetime work (most notably
 // the feed's Tasks feature: startup/background/recurring tasks) starts without waiting for the first request.
-// Gated by Elsa:Boot:EagerShellActivation:Enabled (default off). Uses only CShells; no Elsa dependency.
+// Gated by Elsa:Boot:EagerShellActivation:Enabled (default on). A shell that fails to activate is retried with a capped
+// backoff (Elsa:Boot:EagerShellActivation:Retry), and what the failed attempts left is read by /health/ready and by the
+// Attention item below. The tracker is an instance, which CShells hands to every shell as it is rather than building a second
+// one, and the contributor is registered as an instance for the same reason: every active shell's Attention endpoint then
+// lists the shells that are not. Registered whether or not eager activation is on, because the probe reads the tracker either way.
+var shellActivation = new ShellActivationTracker();
+builder.Services.AddSingleton(shellActivation);
+builder.Services.AddSingleton<IAttentionContributor>(new ShellActivationAttentionContributor(shellActivation));
 if (EagerShellActivationHostedService.IsEnabled(configuration))
     builder.Services.AddHostedService<EagerShellActivationHostedService>();
 
@@ -132,4 +140,6 @@ if (moduleManagement.Enabled)
 // endpoints are composed by CShells on activation and re-composed per generation on reload.
 app.MapShells();
 
-app.Run();
+// A host its cluster member stopped, because another process holds its host id, ends with exit code 1, so a supervisor
+// that restarts failed processes restarts it (spec 183, 2026-10-01 note).
+app.RunWithMembershipExitCode();
