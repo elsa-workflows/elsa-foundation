@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Text.Json;
 using CShells.Lifecycle;
 using Elsa.Activities.Testing;
@@ -6,10 +7,12 @@ using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
+using Elsa.Workflows.Runtime.Services.Checkpoints;
 using Elsa.Workflows.Runtime.Services.Recovery;
 using Elsa.Workflows.Runtime.Tests;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
@@ -23,9 +26,10 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 /// once its drain has run that continuation. When another deliverer, the resumption sweep in production, took the
 /// continuation first, the drain saw nothing to deliver, reported quiescence, and the caller got Accepted with no
 /// bookmark: the failure the fixture-host evidence tests hit in CI. Each scenario lets another deliverer act at the
-/// drain's read of that continuation, in its own scope and execution context as the sweep's timer would. Written once,
-/// as a table of scenarios each store runs through <see cref="RunAsync"/>, so the in-memory stores, SQLite and
-/// PostgreSQL are held to the same outcome and a new scenario is added in one place.
+/// drain's read of that continuation, in its own scope and execution context as the sweep's timer would. The retry
+/// scenarios fail that continuation's delivery transiently instead, on the drain or on the sweep, under the retry policy
+/// production registers for it. Written once, as a table of scenarios each store runs through <see cref="RunAsync"/>, so
+/// the in-memory stores, SQLite and PostgreSQL are held to the same outcome and a new scenario is added in one place.
 /// </remarks>
 internal static class LiveDrainSweepContentionContract
 {
@@ -43,7 +47,11 @@ internal static class LiveDrainSweepContentionContract
             ARealSweepAtTheDrainsReadLeavesTheStartWithItsBookmarkAsync(store, SweepTiming.BetweenTheDrainsReadAndRecord),
         ["drain-waits-for-another-deliverer-that-holds-its-continuation"] = ADrainWaitsForAnotherDelivererThatHoldsItsContinuationAsync,
         ["drain-delivers-a-continuation-whose-other-claim-lapsed"] = ADrainDeliversAContinuationWhoseOtherClaimLapsedAsync,
-        ["drain-whose-continuation-stays-taken-does-not-report-quiescence"] = ADrainWhoseContinuationStaysTakenDoesNotReportQuiescenceAsync
+        ["drain-whose-continuation-stays-taken-does-not-report-quiescence"] = ADrainWhoseContinuationStaysTakenDoesNotReportQuiescenceAsync,
+        ["a-transient-continuation-failure-is-retried-and-delivered"] = ATransientContinuationFailureIsRetriedAndDeliveredAsync,
+        ["drain-whose-continuation-another-deliverer-failed-transiently-reports-a-failed-delivery"] =
+            ADrainWhoseContinuationAnotherDelivererFailedTransientlyReportsAFailedDeliveryAsync,
+        ["a-continuation-whose-retries-are-exhausted-fails-for-good"] = AContinuationWhoseRetriesAreExhaustedFailsForGoodAsync
     };
 
     /// <summary>Where a resumption sweep lands relative to a live drain's read of its own continuation.</summary>
@@ -152,22 +160,104 @@ internal static class LiveDrainSweepContentionContract
         var stuck = new ClaimAtDrainRead("stuck-deliverer", TimeSpan.FromMinutes(10), deliverOnceTheDrainWaits: false);
         await using var harness = await StartAsync(configureStore, stuck, waitLimit: TimeSpan.FromMilliseconds(300));
 
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            harness.RunAsync(RuntimeEventExecutableTestFixture.Create("contention")));
+        await AssertStartAcceptedButFaultedAsync(harness);
 
-        Assert.Contains(nameof(WorkflowExecutionCommandDispatchStatus.AcceptedButFaulted), error.Message);
         var item = await FindContinuationAsync(harness, stuck.ClaimedOutboxItemId);
         Assert.Equal(RuntimePostCommitOutboxStatus.Delivering, item.Status);
         Assert.Equal("stuck-deliverer", item.DeliveringOwnerId);
-        await using var scope = harness.Services.CreateAsyncScope();
-        Assert.Empty(await scope.ServiceProvider.GetRequiredService<IBookmarkStateStore>()
-            .ListAllBookmarkStatesAsync(harness.ExecutionId));
+        await AssertNoBookmarkAsync(harness);
     }
+
+    /// <summary>
+    /// The drain's own delivery of its continuation fails once, as an enqueue the queue's store refused would, so nothing
+    /// was queued. The start answers AcceptedButFaulted, and the continuation stays FailedRetryable instead of being lost:
+    /// once its retry delay has passed, the sweep delivers it and re-drives the execution, which reaches its bookmark.
+    /// </summary>
+    private static async Task ATransientContinuationFailureIsRetriedAndDeliveredAsync(Action<IServiceCollection> configureStore)
+    {
+        var flaky = new FlakyContinuation(failures: 1);
+        var drain = new ObserveDrainRead();
+        await using var harness = await StartAsync(configureStore, drain, flaky: flaky);
+        var beforeTheFailure = flaky.Clock.GetUtcNow();
+
+        await AssertStartAcceptedButFaultedAsync(harness);
+
+        var failed = await FindContinuationAsync(harness, drain.ContinuationOutboxItemId);
+        Assert.Equal(RuntimePostCommitOutboxStatus.FailedRetryable, failed.Status);
+        Assert.Equal(1, failed.DeliveryAttemptCount);
+        Assert.True(failed.AvailableAt >= beforeTheFailure + RetryPolicy.Delay, "The retry is not held back by its delay.");
+
+        var retry = await flaky.RetryAsync(harness);
+
+        Assert.Equal(1, retry.OutboxDeliveredCount);
+        var delivered = await FindContinuationAsync(harness, drain.ContinuationOutboxItemId);
+        Assert.Equal(RuntimePostCommitOutboxStatus.Delivered, delivered.Status);
+        Assert.Equal(2, delivered.DeliveryAttemptCount);
+        await AssertSuspendedWithBookmarkAsync(harness);
+    }
+
+    /// <summary>
+    /// The direction that looked like success: the sweep takes the drain's continuation at the drain's read and its attempt
+    /// fails transiently, before the drain reads anything. Nothing is claimed, deliverable or queued, so a drain that missed
+    /// the failure would report quiescence and answer Accepted with no bookmark. The failed item is listed, and the drain
+    /// does not wait for its retry: it answers AcceptedButFaulted at once. The retry stays with the sweep, which delivers it
+    /// after its delay, and the execution reaches its bookmark.
+    /// </summary>
+    private static async Task ADrainWhoseContinuationAnotherDelivererFailedTransientlyReportsAFailedDeliveryAsync(
+        Action<IServiceCollection> configureStore)
+    {
+        var flaky = new FlakyContinuation(failures: 1);
+        var sweep = new SweepAtDrainRead(SweepTiming.BeforeTheDrainReads);
+        await using var harness = await StartAsync(configureStore, sweep, flaky: flaky);
+
+        await AssertStartAcceptedButFaultedAsync(harness);
+
+        Assert.Equal(1, Assert.Single(sweep.Results).OutboxFailedCount);
+        Assert.Contains(sweep.Claimed, IsCreateBookmark);
+        var failed = await FindContinuationAsync(harness, sweep.ContinuationOutboxItemId);
+        Assert.Equal(RuntimePostCommitOutboxStatus.FailedRetryable, failed.Status);
+        await AssertNoBookmarkAsync(harness);
+
+        Assert.Equal(1, (await flaky.RetryAsync(harness)).OutboxDeliveredCount);
+        Assert.Equal(
+            RuntimePostCommitOutboxStatus.Delivered,
+            (await FindContinuationAsync(harness, sweep.ContinuationOutboxItemId)).Status);
+        await AssertSuspendedWithBookmarkAsync(harness);
+    }
+
+    /// <summary>
+    /// Every attempt fails: the drain's own, then one per sweep once each retry delay has passed. The last attempt the policy
+    /// allows makes the continuation FailedFinal, logged as such, and nothing claims it again. Until then each attempt is
+    /// logged as a scheduled retry, never as final.
+    /// </summary>
+    private static async Task AContinuationWhoseRetriesAreExhaustedFailsForGoodAsync(Action<IServiceCollection> configureStore)
+    {
+        var flaky = new FlakyContinuation(failures: RetryPolicy.MaxAttempts);
+        var drain = new ObserveDrainRead();
+        await using var harness = await StartAsync(configureStore, drain, flaky: flaky);
+
+        await AssertStartAcceptedButFaultedAsync(harness);
+        for (var attempt = 2; attempt <= RetryPolicy.MaxAttempts; attempt++)
+            Assert.Equal(1, (await flaky.RetryAsync(harness)).OutboxFailedCount);
+
+        var item = await FindContinuationAsync(harness, drain.ContinuationOutboxItemId);
+        Assert.Equal(RuntimePostCommitOutboxStatus.FailedFinal, item.Status);
+        Assert.Equal(RetryPolicy.MaxAttempts, item.DeliveryAttemptCount);
+        Assert.False(string.IsNullOrWhiteSpace(item.LastFailureMessage));
+        Assert.Equal(RetryPolicy.MaxAttempts, flaky.Log.Count(68101));
+        Assert.Equal(RetryPolicy.MaxAttempts - 1, flaky.Log.Count(68102));
+        Assert.Equal(1, flaky.Log.Count(68103));
+        Assert.Equal(0, (await flaky.RetryAsync(harness)).OutboxAttemptedCount);
+        await AssertNoBookmarkAsync(harness);
+    }
+
+    private static RuntimePostCommitRetryPolicy RetryPolicy => RuntimeSchedulerPostCommitIntentDispatcher.RetryPolicy;
 
     private static async Task<WorkflowExecutionHarness> StartAsync(
         Action<IServiceCollection> configureStore,
         DrainReadInterceptor interceptor,
-        TimeSpan? waitLimit = null)
+        TimeSpan? waitLimit = null,
+        FlakyContinuation? flaky = null)
     {
         var harness = WorkflowExecutionHarness.Create()
             .ConfigureServices(services =>
@@ -178,6 +268,7 @@ internal static class LiveDrainSweepContentionContract
                 if (waitLimit is { } limit)
                     services.Replace(ServiceDescriptor.Singleton(new WorkflowDrainOrchestratorOptions(continuationClaimWaitLimit: limit)));
                 OutboxStoreRegistration.DecorateWithClaimsAndLookup(services, inner => new InterceptingOutboxStore(inner, interceptor));
+                flaky?.Register(services);
             })
             .Build(ActivityExecutionId);
         foreach (var initializer in harness.Services.GetServices<IShellInitializer>())
@@ -185,6 +276,21 @@ internal static class LiveDrainSweepContentionContract
         harness.InitializeActivityTypes();
         interceptor.Services = harness.Services;
         return harness;
+    }
+
+    // The harness throws when the start is not answered Accepted, and names the status it got.
+    private static async Task AssertStartAcceptedButFaultedAsync(WorkflowExecutionHarness harness)
+    {
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            harness.RunAsync(RuntimeEventExecutableTestFixture.Create("contention")));
+        Assert.Contains(nameof(WorkflowExecutionCommandDispatchStatus.AcceptedButFaulted), error.Message);
+    }
+
+    private static async Task AssertNoBookmarkAsync(WorkflowExecutionHarness harness)
+    {
+        await using var scope = harness.Services.CreateAsyncScope();
+        Assert.Empty(await scope.ServiceProvider.GetRequiredService<IBookmarkStateStore>()
+            .ListAllBookmarkStatesAsync(harness.ExecutionId));
     }
 
     private static async Task AssertSuspendedWithBookmarkAsync(WorkflowExecutionHarness harness)
@@ -207,10 +313,12 @@ internal static class LiveDrainSweepContentionContract
             .FindAsync(outboxItemId));
     }
 
-    private static bool IsCreateBookmark(RuntimePostCommitOutboxItem item) =>
-        item.Intent.WorkflowExecutionId == WorkflowExecutionId &&
-        item.Intent.Kind == RuntimePostCommitIntentKinds.EnqueueSchedulerWork &&
-        item.Intent.Payload?.Deserialize<RuntimeSchedulerWorkItem>()?.CommandKind == WorkflowExecutionCommandKind.CreateBookmark;
+    private static bool IsCreateBookmark(RuntimePostCommitOutboxItem item) => IsCreateBookmark(item.Intent);
+
+    private static bool IsCreateBookmark(RuntimePostCommitIntent intent) =>
+        intent.WorkflowExecutionId == WorkflowExecutionId &&
+        intent.Kind == RuntimePostCommitIntentKinds.EnqueueSchedulerWork &&
+        intent.Payload?.Deserialize<RuntimeSchedulerWorkItem>()?.CommandKind == WorkflowExecutionCommandKind.CreateBookmark;
 
     /// <summary>
     /// Runs another deliverer's step where the pump's timer would run it: in its own scope, and with none of the drain's
@@ -235,8 +343,13 @@ internal static class LiveDrainSweepContentionContract
     private abstract class DrainReadInterceptor
     {
         private int _fired;
+        private string? _continuationOutboxItemId;
 
         public IServiceProvider Services { get; set; } = null!;
+
+        /// <summary>The outbox item of the CreateBookmark continuation the drain read.</summary>
+        public string ContinuationOutboxItemId =>
+            _continuationOutboxItemId ?? throw new InvalidOperationException("The drain never read its continuation.");
 
         public async ValueTask<IReadOnlyCollection<RuntimePostCommitOutboxItem>> ReadAsync(
             RuntimePostCommitOutboxQuery query,
@@ -247,7 +360,9 @@ internal static class LiveDrainSweepContentionContract
                 Interlocked.Exchange(ref _fired, 1) == 1)
                 return items;
 
-            return await OnDrainReadAsync(items.First(IsCreateBookmark), items, read);
+            var continuation = items.First(IsCreateBookmark);
+            _continuationOutboxItemId = continuation.OutboxItemId;
+            return await OnDrainReadAsync(continuation, items, read);
         }
 
         protected abstract ValueTask<IReadOnlyCollection<RuntimePostCommitOutboxItem>> OnDrainReadAsync(
@@ -262,6 +377,73 @@ internal static class LiveDrainSweepContentionContract
         public virtual void ObserveClaimed(IReadOnlyCollection<RuntimePostCommitOutboxItem> claimed)
         {
         }
+    }
+
+    /// <summary>Only notes the drain's continuation: no other deliverer acts at the drain's read.</summary>
+    private sealed class ObserveDrainRead : DrainReadInterceptor
+    {
+        protected override ValueTask<IReadOnlyCollection<RuntimePostCommitOutboxItem>> OnDrainReadAsync(
+            RuntimePostCommitOutboxItem continuation,
+            IReadOnlyCollection<RuntimePostCommitOutboxItem> items,
+            Func<ValueTask<IReadOnlyCollection<RuntimePostCommitOutboxItem>>> read) => new(items);
+    }
+
+    /// <summary>
+    /// Makes the next dispatches of the drain's CreateBookmark continuation, by any deliverer, fail the way a transient
+    /// enqueue failure does: before anything is queued. Also the node's clock, so a case can move past a retry delay
+    /// without waiting it out, and the outbox processor's log.
+    /// </summary>
+    private sealed class FlakyContinuation(int failures)
+    {
+        private int _failuresLeft = failures;
+
+        public OffsetClock Clock { get; } = new();
+        public EventLog Log { get; } = new();
+
+        public void Register(IServiceCollection services)
+        {
+            services.AddSingleton<TimeProvider>(Clock);
+            services.AddSingleton<ILogger<RuntimePostCommitOutboxProcessor>>(Log);
+            services.Replace(ServiceDescriptor.Scoped<IRuntimePostCommitIntentDispatcher>(provider =>
+                new FailingDispatcher(ActivatorUtilities.CreateInstance<RuntimePostCommitIntentDispatcher>(provider), this)));
+        }
+
+        /// <summary>Moves the clock past the continuation's retry delay and runs one sweep, as the next pump tick would.</summary>
+        public Task<RuntimeResumptionSweepResult> RetryAsync(WorkflowExecutionHarness harness)
+        {
+            Clock.Advance(RetryPolicy.Delay!.Value);
+            return harness.SweepAsync();
+        }
+
+        private bool TakeFailure() => Interlocked.Decrement(ref _failuresLeft) >= 0;
+
+        private sealed class FailingDispatcher(IRuntimePostCommitIntentDispatcher inner, FlakyContinuation flaky)
+            : IRuntimePostCommitIntentDispatcher
+        {
+            public ValueTask DispatchAsync(RuntimePostCommitIntent intent, CancellationToken cancellationToken = default) =>
+                IsCreateBookmark(intent) && flaky.TakeFailure()
+                    ? throw new TimeoutException("The scheduler work queue did not answer the continuation's enqueue.")
+                    : inner.DispatchAsync(intent, cancellationToken);
+        }
+    }
+
+    /// <summary>The event ids a logger was called with.</summary>
+    private sealed class EventLog : ILogger<RuntimePostCommitOutboxProcessor>
+    {
+        private readonly ConcurrentQueue<int> _eventIds = new();
+
+        public int Count(int eventId) => _eventIds.Count(logged => logged == eventId);
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter) => _eventIds.Enqueue(eventId.Id);
     }
 
     /// <summary>Runs one real resumption sweep at the drain's read.</summary>

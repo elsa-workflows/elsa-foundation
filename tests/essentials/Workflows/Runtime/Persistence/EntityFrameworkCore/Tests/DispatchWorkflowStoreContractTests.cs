@@ -635,17 +635,6 @@ public abstract class DispatchWorkflowStoreContractTests : IAsyncLifetime
         }
     }
 
-    /// <summary>Wall time plus a test-controlled offset, so a case can jump past a visibility timeout without freezing time.</summary>
-    private sealed class OffsetClock : TimeProvider
-    {
-        private long _offsetTicks;
-
-        public void Advance(TimeSpan amount) => Interlocked.Add(ref _offsetTicks, amount.Ticks);
-
-        public override DateTimeOffset GetUtcNow() =>
-            System.GetUtcNow().AddTicks(Interlocked.Read(ref _offsetTicks));
-    }
-
     /// <summary>The default policy, which never retries, until a case asks for a faulted work item to be retried at once.</summary>
     private sealed class SwitchableRetryPolicy : IRuntimeDomainRetryPolicy
     {

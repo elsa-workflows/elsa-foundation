@@ -472,8 +472,9 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         var held = await ListHeldContinuationsAsync(workflowExecutionId, cancellationToken);
         while (held.Count > 0)
         {
-            // A failed attempt queued nothing, and its retry is the sweep's to make, so it ends the drain exactly as a failed
-            // delivery of the drain's own would. This also covers an attempt that failed before this drain's first read.
+            // A failed attempt is not known to have queued anything, and its retry, after the policy's delay, is the sweep's
+            // to make, so it ends the drain exactly as a failed delivery of the drain's own would. This also covers an attempt
+            // that failed before this drain's first read.
             if (held.Any(item => item.Status == RuntimePostCommitOutboxStatus.FailedRetryable))
                 return ContinuationSettlement.Undelivered;
 
@@ -511,9 +512,11 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
     }
 
     // The execution's continuations another deliverer has taken on and not settled: claimed, or failed and awaiting a retry.
-    // A FailedFinal item is terminal and stays in the outbox, so it is not listed: every later drain of the execution would
-    // report a failed delivery, and skip incident resolution, for good. The cost is that a continuation another deliverer
-    // failed for good before this drain's first read goes unseen (#2225, docs/runtime-durable-resumption.md).
+    // A continuation's every failed attempt but its last is FailedRetryable (RuntimeSchedulerPostCommitIntentDispatcher
+    // .RetryPolicy), so a transient failure on another deliverer is listed whenever it happened. A FailedFinal item is
+    // terminal and stays in the outbox, so it is not listed: every later drain of the execution would report a failed
+    // delivery, and skip incident resolution, for good. The cost is that a continuation whose attempts were all made and
+    // failed by other deliverers before this drain's first read goes unseen (#2225, docs/runtime-durable-resumption.md).
     private ValueTask<IReadOnlyCollection<RuntimePostCommitOutboxItem>> ListHeldContinuationsAsync(
         string workflowExecutionId,
         CancellationToken cancellationToken) =>

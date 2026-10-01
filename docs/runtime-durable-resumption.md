@@ -154,9 +154,9 @@ queued is left undrained:
 - **The other deliverer failed it.** The listing also returns the execution's `FailedRetryable`
   continuations, so an attempt that failed and awaits a retry is seen even when it failed before the drain's
   first read. An awaited item that ended failed is found by looking it up once it leaves the listing. A failed
-  attempt queued nothing, so the drain stops with `OutboxDeliveryFailed`, the status a failed delivery of its
-  own produces, and the command answers `AcceptedButFaulted` rather than `Accepted`. The item's retry stays
-  with the sweep.
+  attempt is not known to have queued anything, so the drain stops with `OutboxDeliveryFailed`, the status a
+  failed delivery of its own produces, and the command answers `AcceptedButFaulted` rather than `Accepted`. It
+  does not wait for the retry, which stays with the sweep (see *Retried continuations* below).
 - **Bounded.** `WorkflowDrainOrchestratorOptions.ContinuationClaimWaitLimit` bounds all of a drain request's
   waiting: one deadline, set at the first wait and shared by every later one, so the drain's 64 cycles cannot
   multiply it. It defaults to the claim visibility timeout plus `ContinuationClaimWaitMargin`, 90 seconds.
@@ -172,14 +172,39 @@ its execution's mailbox, so in claim order a batch holding such an item ahead of
 on the drain while the drain waited on it, until the claim lapsed. Each item is still renewed immediately
 before its own dispatch (#2195).
 
-**One case stays open.** `EnqueueSchedulerWork` carries no retry policy, so every failed attempt is recorded
-`FailedFinal` at once, and `FailedFinal` items are not listed. A continuation another deliverer failed for
-good before the drain's first read is therefore not seen, and the drain still reports `Quiesced`. Listing terminal
-failures is not the fix: they stay in the outbox, so every later drain of the execution would report
-`OutboxDeliveryFailed`, and skip incident strategy resolution, for good. Telling this drain's failure from an
-older one needs either a clock comparison (a continuation's recorded time is not always the drain's: a retry
-boundary records its source work item's time) or a read of the execution's failed continuations at the start
-of every drain.
+**Retried continuations.** `EnqueueSchedulerWork` carries a bounded retry policy,
+`RuntimeSchedulerPostCommitIntentDispatcher.RetryPolicy`: four attempts one second apart, the shape and numbers
+of a `PublishStimulus` send and of a DispatchWorkflow child start at its defaults. It used to carry none, so one
+transient enqueue failure, a database blip, made the continuation `FailedFinal` and left the workflow stuck.
+
+- **A failed attempt waits for its retry.** Every failed attempt but the last is recorded `FailedRetryable`,
+  available again once the delay has passed. The drain that failed its own delivery stops with
+  `OutboxDeliveryFailed`, as before. A sweep claims the item once it is due, delivers it, and re-drives the
+  execution in the same pass, so the workflow goes on at the first sweep after the error clears, provided an
+  attempt is left by then. One sweeper re-attempts the item at most once per pass, so on a single node at the
+  default ten-second interval the error has to clear within about three passes.
+- **The drain sees a failure on another deliverer.** Because the failure is `FailedRetryable`, the drain's
+  listing returns it whenever it happened, before the drain's first read included, and the command answers
+  `AcceptedButFaulted` rather than a false `Accepted`.
+- **Retries converge.** The enqueue is one create-only write keyed by the work item's id. An attempt that
+  failed before that write committed queued nothing, so its retry cannot repeat drained work and stays clear
+  of the late-repeat window tracked in elsa-workflows/elsa-foundation#2232. A write that committed but whose
+  acknowledgement was lost did queue it; its retry dedupes while the item is queued and falls in that window
+  once it was drained, as redelivery after a crash between dispatch and completion already could.
+- **Exhausted.** The last attempt the policy allows makes the item `FailedFinal`, logged as
+  `RuntimePostCommitDeliveryFailedFinal` (68103) and counted in the sweep's failed outbox deliveries. Nothing
+  claims it again. This kind projects no incident and no poison record on a final failure, before this change
+  or after it.
+
+**One case stays open.** `FailedFinal` items are not listed. A continuation whose attempts were all made, and
+all failed, by other deliverers before the drain's first read is therefore not seen, and the drain still
+reports `Quiesced`. The attempts are at least the retry delay apart, so that needs a drain whose first read
+comes more than three retry delays (three seconds) after the commit that recorded the continuation, with
+another deliverer re-attempting the item as each delay passes. Listing terminal failures is not the fix: they
+stay in the outbox, so every later drain of the execution would report `OutboxDeliveryFailed`, and skip
+incident strategy resolution, for good. Telling this drain's failure from an older one needs either a clock
+comparison (a continuation's recorded time is not always the drain's: a retry boundary records its source work
+item's time) or a read of the execution's failed continuations at the start of every drain.
 
 **Synchronous HTTP endpoints.** A synchronous `HttpEndpoint` dispatch drains inline, bounded by the endpoint's
 `RequestTimeout`. Under contention the request can therefore wait for its continuation. With continuations
@@ -195,10 +220,13 @@ scheduler drain that ran items.
 
 The interleavings are pinned on the in-memory stores, SQLite and PostgreSQL by
 `LiveDrainSweepContentionContract`, which runs the real sweep at the drain's read, and a claimant that delivers
-late, dies, or stays stuck. The orchestrator-level outcomes are in `WorkflowDrainContinuationSettlementTests`:
-cancellation, failed attempts before and during the wait, the queue-read skip rules, the backoff, the lapse and
-the per-request deadline on a fake clock, and a sweep batch holding a mailbox-needing item ahead of the drain's
-continuation. `RuntimePostCommitOutboxProcessorTests` pins the batch order and its renewals.
+late, dies, or stays stuck. Its retry scenarios run under the registered retry policy: a transient failure of
+the drain's own delivery, delivered by the sweep after the delay; one on the sweep before the drain's first
+read, answered `AcceptedButFaulted` and then delivered; and every attempt failing, until `FailedFinal`. The
+orchestrator-level outcomes are in `WorkflowDrainContinuationSettlementTests`: cancellation, failed attempts
+before and during the wait, the queue-read skip rules, the backoff, the lapse and the per-request deadline on a
+fake clock, and a sweep batch holding a mailbox-needing item ahead of the drain's continuation.
+`RuntimePostCommitOutboxProcessorTests` pins the batch order and its renewals.
 
 ## Crash windows
 
