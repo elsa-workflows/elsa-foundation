@@ -2,9 +2,11 @@ using Elsa.Tasks.Core;
 using Elsa.Tasks.Schedules;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
+using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Resumption;
 using Elsa.Workflows.Runtime.Resumption.Options;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -192,6 +194,59 @@ public sealed class RuntimeResumptionPumpTaskTests
     }
 
     [Fact]
+    public async Task ExecuteAsync_FailingTestScopeCleanup_IsLoggedAndDoesNotBlockReDrive()
+    {
+        // #2195: a cleanup race, or a scope row that can never be read, used to abort every resumption sweep.
+        var cleanupFailure = new InvalidOperationException("unreadable test scope row");
+        var service = new FakeResumptionService();
+        var logger = new RecordingLogger<RuntimeResumptionPumpTask>();
+        await using var provider = ScopedProvider(service, new FakeTestScopeCleaner(_ => throw cleanupFailure));
+        var pump = CreateScopedPump(provider, logger);
+
+        await pump.ExecuteAsync(CancellationToken.None);
+
+        Assert.Single(service.Requests);
+        var entry = Assert.Single(logger.Entries);
+        Assert.Equal(LogLevel.Error, entry.Level);
+        Assert.Equal("WorkflowTestScopeCleanupFailed", entry.EventId.Name);
+        Assert.Same(cleanupFailure, entry.Exception);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_TestScopeCleanupRunsBeforeTheSweepInAnOperationScopeOfItsOwn()
+    {
+        IServiceProvider? cleanupServices = null;
+        var service = new FakeResumptionService();
+        await using var provider = ScopedProvider(service, new FakeTestScopeCleaner(services => cleanupServices = services));
+        var pump = CreateScopedPump(provider, new RecordingLogger<RuntimeResumptionPumpTask>());
+
+        await pump.ExecuteAsync(CancellationToken.None);
+
+        Assert.NotNull(cleanupServices);
+        Assert.Single(service.Requests);
+        Assert.NotSame(cleanupServices, service.Services);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_ShutdownDuringTestScopeCleanup_PropagatesInsteadOfBeingLoggedAsAFailure()
+    {
+        using var shutdown = new CancellationTokenSource();
+        var service = new FakeResumptionService();
+        var logger = new RecordingLogger<RuntimeResumptionPumpTask>();
+        await using var provider = ScopedProvider(service, new FakeTestScopeCleaner(_ =>
+        {
+            shutdown.Cancel();
+            shutdown.Token.ThrowIfCancellationRequested();
+        }));
+        var pump = CreateScopedPump(provider, logger);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pump.ExecuteAsync(shutdown.Token));
+
+        Assert.Empty(service.Requests);
+        Assert.DoesNotContain(logger.Entries, entry => entry.EventId.Name == "WorkflowTestScopeCleanupFailed");
+    }
+
+    [Fact]
     public void GetSchedule_ReturnsAdaptiveSchedule()
     {
         var pump = CreatePump(new FakeResumptionService(), new RuntimeResumptionOptions());
@@ -213,12 +268,60 @@ public sealed class RuntimeResumptionPumpTaskTests
     private static RuntimeResumptionPumpTask CreatePump(FakeResumptionService service, RuntimeResumptionOptions options, TimeProvider? timeProvider = null) =>
         new(service, Microsoft.Extensions.Options.Options.Create(options), timeProvider ?? new MutableTimeProvider(DateTimeOffset.Parse("2026-01-01T00:00:00Z")), NullLogger<RuntimeResumptionPumpTask>.Instance);
 
+    private static ServiceProvider ScopedProvider(FakeResumptionService service, FakeTestScopeCleaner cleaner)
+    {
+        var services = new ServiceCollection();
+        services.AddPersistenceCore();
+        services.AddScoped<IRuntimeResumptionService>(scoped => service.ResolvedFrom(scoped));
+        services.AddScoped<IWorkflowTestScopeCleaner>(scoped => cleaner.ResolvedFrom(scoped));
+        return services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+    }
+
+    private static RuntimeResumptionPumpTask CreateScopedPump(IServiceProvider provider, RecordingLogger<RuntimeResumptionPumpTask> logger) =>
+        new(
+            provider.GetRequiredService<IPersistenceScopeRunner>(),
+            Microsoft.Extensions.Options.Options.Create(new RuntimeResumptionOptions()),
+            new MutableTimeProvider(DateTimeOffset.Parse("2026-01-01T00:00:00Z")),
+            logger);
+
     private static RuntimeResumptionSweepResult EmptyResult() => new(0, 0, 0, []);
 
     private static RuntimeResumptionSweepResult ResultWith(params RuntimeResumptionDispatch[] dispatches) => new(0, 0, 0, dispatches);
 
+    private sealed class FakeTestScopeCleaner(Action<IServiceProvider> onSweep) : IWorkflowTestScopeCleaner
+    {
+        private IServiceProvider? _services;
+
+        public FakeTestScopeCleaner ResolvedFrom(IServiceProvider services)
+        {
+            _services = services;
+            return this;
+        }
+
+        public ValueTask<WorkflowTestScopeCleanupResult> CloseAsync(
+            string scopeId,
+            WorkflowTestScopeCloseReason reason,
+            DateTimeOffset requestedAt,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public ValueTask<int> SweepAsync(DateTimeOffset observedAt, CancellationToken cancellationToken = default)
+        {
+            onSweep(_services!);
+            return ValueTask.FromResult(0);
+        }
+    }
+
     private sealed class FakeResumptionService : IRuntimeResumptionService
     {
+        public IServiceProvider? Services { get; private set; }
+
+        public FakeResumptionService ResolvedFrom(IServiceProvider services)
+        {
+            Services = services;
+            return this;
+        }
+
         public List<RuntimeResumptionSweepRequest> Requests { get; } = [];
         public RuntimeResumptionSweepResult NextResult { get; set; } = new(0, 0, 0, []);
         public Exception? Throw { get; set; }
