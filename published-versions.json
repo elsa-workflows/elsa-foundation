@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "3decc7a458906736511f3f2b7615f43bb26c3a0f",
+  "last_publish_commit": "f02354068b8a9ed2382286685ead9faf018331dc",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -324,8 +324,8 @@
     },
     {
       "package_id": "Elsa.Foundation.Identity.OpenIddict.Behavior",
-      "version": "4.0.4-preview",
-      "commit": "12645190b855f6833f9e4decfa4150b47b04c302"
+      "version": "4.0.5-preview",
+      "commit": "f02354068b8a9ed2382286685ead9faf018331dc"
     },
     {
       "package_id": "Elsa.Foundation.Identity.Persistence.EntityFrameworkCore",
