@@ -285,6 +285,40 @@ public sealed class EfRecurringTriggerScheduleStoreTests
             schedule => Assert.False(schedule.IsActive));
     }
 
+    /// <summary>A switch whose write lost to another writer's reads the projections again and switches them (#2265).</summary>
+    [Fact]
+    public async Task Activation_that_lost_its_write_reads_again_and_switches()
+    {
+        var saves = new FailingSaveInterceptor(() => new DbUpdateConcurrencyException("Another writer moved a revision."), failures: 1);
+        await using var schedules = await SeededSchedules.CreateAsync(saves);
+
+        await schedules.Store.ActivateAsync(SeededSchedules.ActivationId, null);
+
+        Assert.Equal(2, saves.Attempts);
+        Assert.Equal(WorkflowActivationProjectionState.Active, await schedules.Store.FindActivationStateAsync(SeededSchedules.ActivationId));
+        Assert.All((await schedules.Store.ListByActivationPageAsync(new RecurringTriggerScheduleActivationPageQuery(SeededSchedules.ActivationId))).Items,
+            schedule => Assert.True(schedule.IsActive));
+    }
+
+    /// <summary>
+    /// A switch whose write keeps losing reports the projection changed concurrently once its attempts run out, and rolls
+    /// back: it neither loops nor reports a switch it did not make.
+    /// </summary>
+    [Fact]
+    public async Task Activation_that_keeps_losing_its_write_reports_the_conflict_and_rolls_back()
+    {
+        var saves = new FailingSaveInterceptor(() => new DbUpdateConcurrencyException("Another writer moved a revision."));
+        await using var schedules = await SeededSchedules.CreateAsync(saves);
+
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => schedules.Store.ActivateAsync(SeededSchedules.ActivationId, null).AsTask());
+
+        Assert.EndsWith("changed concurrently; retry the operation.", failure.Message, StringComparison.Ordinal);
+        Assert.IsType<DbUpdateConcurrencyException>(failure.InnerException);
+        Assert.Equal(EfWriteRetry.DefaultMaxAttempts, saves.Attempts);
+        Assert.Empty(schedules.Context.ChangeTracker.Entries());
+        Assert.Equal(WorkflowActivationProjectionState.Prepared, await schedules.Store.FindActivationStateAsync(SeededSchedules.ActivationId));
+    }
+
     /// <summary>
     /// The recurring-triggers feature, not the runtime root, registers the in-memory schedule store, so only this
     /// composition proves the EF registration still recognizes it as the replaceable default.

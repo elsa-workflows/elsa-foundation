@@ -305,8 +305,13 @@ public sealed class EfWorkflowTriggerBindingStoreTests
         Assert.Equal(2, (await store.ListByActivationAsync(new WorkflowTriggerBindingActivationPageQuery("split"))).Items.Count);
     }
 
+    /// <summary>
+    /// A second switch of an activation that another context has switched meanwhile, from a context that still tracks the
+    /// state and rows as they were, reads them again, finds the switch made and writes nothing. It used to fail on the
+    /// revisions it remembered, which made the second of two completions of one slot fail (#2265).
+    /// </summary>
     [Fact]
-    public async Task Competing_activate_using_stale_context_is_mapped_to_a_semantic_conflict_and_rolled_back()
+    public async Task Competing_activate_using_stale_context_finds_the_switch_made_and_writes_nothing()
     {
         const string connectionString = "Data Source=file:trigger-binding-cas;Mode=Memory;Cache=Shared";
         await using var keeper = new SqliteConnection(connectionString);
@@ -319,17 +324,79 @@ public sealed class EfWorkflowTriggerBindingStoreTests
         var storeB = new EfWorkflowTriggerBindingStore(contextB, new Accessor("tenant-a"));
         await storeA.PrepareActivationAsync("activation-cas", [binding]);
 
-        // Keep a stale state and row tracked in B. A then advances both revision tokens before B
-        // attempts the same activation, forcing EF's optimistic-concurrency predicate to fail.
+        // Keep a stale state and row tracked in B. A then advances both revision tokens before B attempts the same activation.
         _ = await contextB.WorkflowTriggerBindingProjectionStates.SingleAsync();
         _ = await contextB.WorkflowTriggerBindings.ToArrayAsync();
         await storeA.ActivateAsync("activation-cas", null);
+        var switched = await Revisions(contextA);
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => storeB.ActivateAsync("activation-cas", null).AsTask());
-        Assert.Contains("changed concurrently", exception.Message, StringComparison.Ordinal);
-        Assert.IsType<DbUpdateConcurrencyException>(exception.InnerException);
+        await storeB.ActivateAsync("activation-cas", null);
+
         Assert.Empty(contextB.ChangeTracker.Entries());
+        Assert.Equal(switched, await Revisions(contextA));
+        Assert.Equal(WorkflowActivationProjectionState.Active, await storeB.FindActivationStateAsync("activation-cas"));
         Assert.True((await storeA.ListByStimulusAsync(new WorkflowTriggerBindingPageQuery("Event", "cas-hash"))).Items.Single().IsActive);
+
+        static async Task<(long State, long Row)> Revisions(RuntimeDbContext context) => (
+            (await context.WorkflowTriggerBindingProjectionStates.AsNoTracking().SingleAsync()).Revision,
+            (await context.WorkflowTriggerBindings.AsNoTracking().SingleAsync()).Revision);
+    }
+
+    /// <summary>A switch whose write lost to another writer's reads the projections again and switches them (#2265).</summary>
+    [Fact]
+    public async Task Activation_that_lost_its_write_reads_again_and_switches()
+    {
+        var saves = new FailingSaveInterceptor(() => new DbUpdateConcurrencyException("Another writer moved a revision."), failures: 1);
+        await using var activation = await PreparedActivation.CreateAsync(saves);
+
+        await activation.Store.ActivateAsync("activation-a", null);
+
+        Assert.Equal(2, saves.Attempts);
+        Assert.Equal(WorkflowActivationProjectionState.Active, await activation.Store.FindActivationStateAsync("activation-a"));
+        Assert.Single((await activation.Store.ListByStimulusAsync(new WorkflowTriggerBindingPageQuery("Event", "hash-a"))).Items);
+    }
+
+    /// <summary>
+    /// A switch whose write keeps losing reports the projection changed concurrently once its attempts run out, and rolls
+    /// back: it neither loops nor reports a switch it did not make.
+    /// </summary>
+    [Fact]
+    public async Task Activation_that_keeps_losing_its_write_reports_the_conflict_and_rolls_back()
+    {
+        var saves = new FailingSaveInterceptor(() => new DbUpdateConcurrencyException("Another writer moved a revision."));
+        await using var activation = await PreparedActivation.CreateAsync(saves);
+
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => activation.Store.ActivateAsync("activation-a", null).AsTask());
+
+        Assert.EndsWith("changed concurrently; retry the operation.", failure.Message, StringComparison.Ordinal);
+        Assert.IsType<DbUpdateConcurrencyException>(failure.InnerException);
+        Assert.Equal(EfWriteRetry.DefaultMaxAttempts, saves.Attempts);
+        Assert.Empty(activation.Context.ChangeTracker.Entries());
+        Assert.Equal(WorkflowActivationProjectionState.Prepared, await activation.Store.FindActivationStateAsync("activation-a"));
+    }
+
+    /// <summary>
+    /// The direction a retry must not hide: rows that disagree with a projection state that stood still while they were
+    /// read are corrupt, and reading the projection's state fails as such at once, rather than being retried as a
+    /// concurrent switch until it reads as one (#2265).
+    /// </summary>
+    [Fact]
+    public async Task Activation_state_whose_rows_disagree_with_a_state_that_stood_still_is_reported_corrupt()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        await using var context = new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connection).Options);
+        await context.Database.EnsureCreatedAsync();
+        var store = new EfWorkflowTriggerBindingStore(context, new Accessor("tenant-a"));
+        await store.PrepareActivationAsync("activation-a", [Binding("a", "activation-a", "hash-a")]);
+        await store.ActivateAsync("activation-a", null);
+        var state = await context.WorkflowTriggerBindingProjectionStates.SingleAsync();
+        state.IsActive = false;
+        await context.SaveChangesAsync();
+
+        var corrupt = await Assert.ThrowsAsync<InvalidDataException>(() => store.FindActivationStateAsync("activation-a").AsTask());
+
+        Assert.Equal("Trigger-binding activation projection 'activation-a' does not match its rows.", corrupt.Message);
     }
 
     [Fact]

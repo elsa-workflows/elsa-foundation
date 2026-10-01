@@ -17,6 +17,12 @@ public sealed class EfWorkflowTriggerBindingStore(
     private const string ProjectionKind = "triggerBindings";
     private const int MaterializationBatchSize = 256;
 
+    // A projection is its state row and its binding rows, read in separate statements. Every activation-scoped write moves
+    // the state's revision (or creates or deletes the state) in the transaction that writes the rows, so rows read while the
+    // state stood still belong to it. A switch committed by another call in between is a race this retries, not a corrupt
+    // projection: two completions of one slot, as two nodes starting together run them, make the same switch (#2265).
+    private static readonly EfWriteRetry Switches = new(EfWriteRetry.DefaultMaxAttempts, EfWriteConflict.Concurrency);
+
     public async ValueTask<WorkflowTriggerBinding> SaveAsync(WorkflowTriggerBinding binding, CancellationToken cancellationToken = default)
     {
         Validate(binding);
@@ -134,23 +140,41 @@ public sealed class EfWorkflowTriggerBindingStore(
         if (replacedActivationId is not null) ArgumentException.ThrowIfNullOrWhiteSpace(replacedActivationId);
         cancellationToken.ThrowIfCancellationRequested();
         var scope = RequireScope();
+        var operation = $"Trigger-binding activation projection '{activationId}'";
+        await Switches.RunUntilSettledAsync<bool>(
+            context,
+            () => TrySwitchAsync(scope, activationId, replacedActivationId, operation, cancellationToken),
+            conflict => throw Changed(operation, conflict),
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// One attempt at <see cref="ActivateAsync"/>. It reads both projections first and decides only once neither state moved
+    /// while they were read, so a switch another call committed in between is read again, never taken for corruption or for
+    /// a replaced activation that no longer serves. A switch committed after the reads loses this attempt's write to the
+    /// revisions it read, and the next attempt finds it made (#2265).
+    /// </summary>
+    private async ValueTask<EfWriteAttempt<bool>> TrySwitchAsync(string scope, string activationId, string? replacedActivationId, string operation, CancellationToken cancellationToken)
+    {
+        context.ChangeTracker.Clear();
         await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
-        var candidate = await context.WorkflowTriggerBindingProjectionStates.SingleOrDefaultAsync(x => x.Id == ProjectionId(scope, activationId), cancellationToken)
-            ?? throw new InvalidOperationException($"Activation '{activationId}' has no prepared trigger-binding projection.");
-        var candidateRows = await RowsForActivation(scope, activationId, cancellationToken);
-        EnsureProjection(candidate, candidateRows, scope, activationId);
+        var candidate = await context.WorkflowTriggerBindingProjectionStates.SingleOrDefaultAsync(x => x.Id == ProjectionId(scope, activationId), cancellationToken);
+        var candidateRows = candidate is null ? [] : await RowsForActivation(scope, activationId, cancellationToken);
         var distinct = replacedActivationId is not null && !StringComparer.Ordinal.Equals(activationId, replacedActivationId);
-        WorkflowTriggerBindingProjectionStateEntity? replaced = null;
-        WorkflowTriggerBindingEntity[] replacedRows = [];
-        if (distinct)
+        var replaced = distinct ? await context.WorkflowTriggerBindingProjectionStates.SingleOrDefaultAsync(x => x.Id == ProjectionId(scope, replacedActivationId!), cancellationToken) : null;
+        var replacedRows = replaced is null ? [] : await RowsForActivation(scope, replacedActivationId!, cancellationToken);
+        if (await StateMovedAsync(scope, activationId, candidate, cancellationToken) ||
+            distinct && await StateMovedAsync(scope, replacedActivationId!, replaced, cancellationToken))
         {
-            replaced = await context.WorkflowTriggerBindingProjectionStates.SingleOrDefaultAsync(x => x.Id == ProjectionId(scope, replacedActivationId!), cancellationToken);
-            if (replaced is not null)
-            {
-                replacedRows = await RowsForActivation(scope, replacedActivationId!, cancellationToken);
-                EnsureProjection(replaced, replacedRows, scope, replacedActivationId!);
-            }
+            await RollbackAndClearAsync(transaction);
+            return EfWriteAttempt<bool>.Retry();
         }
+
+        if (candidate is null)
+            throw new InvalidOperationException($"Activation '{activationId}' has no prepared trigger-binding projection.");
+        EnsureProjection(candidate, candidateRows, scope, activationId);
+        if (replaced is not null)
+            EnsureProjection(replaced, replacedRows, scope, replacedActivationId!);
         // The candidate is checked first, so a switch that already happened is a no-op whoever made it: the activation's
         // own sequence and a completion of that activation (IWorkflowActivationCoordinator.CompleteAsync) may race (#2193).
         if (candidate.IsActive)
@@ -158,7 +182,7 @@ public sealed class EfWorkflowTriggerBindingStore(
             if (replaced is not { IsActive: true })
             {
                 await CommitAndClearAsync(transaction, cancellationToken, noChanges: true);
-                return;
+                return true;
             }
             throw new InvalidOperationException($"Activation '{activationId}' is active while replaced activation '{replacedActivationId}' is still active.");
         }
@@ -173,7 +197,9 @@ public sealed class EfWorkflowTriggerBindingStore(
             foreach (var row in replacedRows) SetActive(row, false);
             replaced.IsActive = false; replaced.Revision = checked(replaced.Revision + 1);
         }
-        await CommitMutationAndClearAsync(transaction, cancellationToken, $"Trigger-binding activation projection '{activationId}'");
+        return await TryCommitMutationAndClearAsync(transaction, cancellationToken, operation) is { } conflict
+            ? EfWriteAttempt<bool>.Retry(conflict)
+            : true;
     }
 
     public async ValueTask<WorkflowActivationProjectionState> FindActivationStateAsync(string activationId, CancellationToken cancellationToken = default)
@@ -181,13 +207,27 @@ public sealed class EfWorkflowTriggerBindingStore(
         ArgumentException.ThrowIfNullOrWhiteSpace(activationId);
         cancellationToken.ThrowIfCancellationRequested();
         var scope = RequireScope();
-        var state = await context.WorkflowTriggerBindingProjectionStates.AsNoTracking().SingleOrDefaultAsync(x => x.Id == ProjectionId(scope, activationId), cancellationToken);
-        if (state is null)
-            return WorkflowActivationProjectionState.Missing;
-        var rows = await RowsForActivation(scope, activationId, cancellationToken);
-        context.ChangeTracker.Clear();
-        EnsureProjection(state, rows, scope, activationId);
-        return ActivationProjectionStateLifecycle.Read(state.IsActive, state.Revision);
+        // The answer is the state's alone, so rows that match it confirm it whenever they were read. Rows that do not match
+        // it are corrupt only if the state stood still while they were read; otherwise a switch committed in between, and
+        // the state is read again (#2265).
+        return await Switches.RunUntilSettledAsync<WorkflowActivationProjectionState>(
+            context,
+            async () =>
+            {
+                context.ChangeTracker.Clear();
+                var state = await context.WorkflowTriggerBindingProjectionStates.AsNoTracking().SingleOrDefaultAsync(x => x.Id == ProjectionId(scope, activationId), cancellationToken);
+                if (state is null)
+                    return WorkflowActivationProjectionState.Missing;
+                var rows = await RowsForActivation(scope, activationId, cancellationToken);
+                context.ChangeTracker.Clear();
+                if (ProjectionMatches(state, rows, scope, activationId))
+                    return ActivationProjectionStateLifecycle.Read(state.IsActive, state.Revision);
+                return await StateMovedAsync(scope, activationId, state, cancellationToken)
+                    ? EfWriteAttempt<WorkflowActivationProjectionState>.Retry()
+                    : throw ProjectionMismatch(activationId);
+            },
+            _ => throw new InvalidOperationException($"Trigger-binding activation projection '{activationId}' kept changing while it was read; retry the operation."),
+            cancellationToken);
     }
 
     /// <summary>
@@ -333,14 +373,22 @@ public sealed class EfWorkflowTriggerBindingStore(
 
     private async Task CommitMutationAndClearAsync(Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction transaction, CancellationToken ct, string operation)
     {
+        if (await TryCommitMutationAndClearAsync(transaction, ct, operation) is { } conflict)
+            throw Changed(operation, conflict);
+    }
+
+    /// <summary>Commits, or rolls back and returns the lost race when another writer moved a revision the commit expected.</summary>
+    private async Task<DbUpdateConcurrencyException?> TryCommitMutationAndClearAsync(Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction transaction, CancellationToken ct, string operation)
+    {
         try
         {
             await CommitAndClearAsync(transaction, ct);
+            return null;
         }
         catch (DbUpdateConcurrencyException exception)
         {
             await RollbackAndClearAsync(transaction);
-            throw new InvalidOperationException($"{operation} changed concurrently; retry the operation.", exception);
+            return exception;
         }
         catch (Exception exception) when (EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.Transient))
         {
@@ -359,6 +407,18 @@ public sealed class EfWorkflowTriggerBindingStore(
         try { await transaction.RollbackAsync(); } catch { }
         context.ChangeTracker.Clear();
     }
+
+    private static InvalidOperationException Changed(string operation, Exception? conflict) => new($"{operation} changed concurrently; retry the operation.", conflict);
+
+    /// <summary>
+    /// Whether the projection state of <paramref name="activationId"/> no longer stands at the revision <paramref name="read"/>
+    /// had, or no longer stands missing when it was. Read without tracking, so a tracked state cannot answer for the row.
+    /// </summary>
+    private async Task<bool> StateMovedAsync(string scope, string activationId, WorkflowTriggerBindingProjectionStateEntity? read, CancellationToken ct) =>
+        await context.WorkflowTriggerBindingProjectionStates.AsNoTracking()
+            .Where(x => x.Id == ProjectionId(scope, activationId))
+            .Select(x => (long?)x.Revision)
+            .SingleOrDefaultAsync(ct) != read?.Revision;
 
     private string RequireScope() => EfRuntimeOperationalStoreSupport.RequireScope(accessContextAccessor);
     private static string Encode(string value) => EfRuntimeOperationalStoreSupport.Encode(value);
@@ -415,7 +475,8 @@ public sealed class EfWorkflowTriggerBindingStore(
                RuntimeTriggerBindingEfModule.Chain.Upcast<WorkflowTriggerBindingProjectionStateEntity>(state.SchemaVersion, (nameof(state.ContentJson), state.ContentJson))[nameof(state.ContentJson)] == fingerprint &&
                bindings.All(binding => binding.ActivationId == activation && binding.IsActive == state.IsActive);
     }
-    private static void EnsureProjection(WorkflowTriggerBindingProjectionStateEntity state, IEnumerable<WorkflowTriggerBindingEntity> rows, string scope, string activation) { if (!ProjectionMatches(state, rows, scope, activation)) throw new InvalidDataException($"Trigger-binding activation projection '{activation}' does not match its rows."); }
+    private static void EnsureProjection(WorkflowTriggerBindingProjectionStateEntity state, IEnumerable<WorkflowTriggerBindingEntity> rows, string scope, string activation) { if (!ProjectionMatches(state, rows, scope, activation)) throw ProjectionMismatch(activation); }
+    private static InvalidDataException ProjectionMismatch(string activation) => new($"Trigger-binding activation projection '{activation}' does not match its rows.");
     private static string Fingerprint(IEnumerable<WorkflowTriggerBinding> xs) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(RuntimeArtifactJson.Serialize(xs.Select(x => x with { IsActive = false }).OrderBy(x => x.TriggerBindingId, StringComparer.Ordinal).ToArray()))));
 
     private static string EncodeCursor(WorkflowTriggerBindingPageRequest q, string scope, string binding, string id) { var payload = Encoding.UTF8.GetBytes($"{Hash(QueryBinding(q))}\0{Hash(scope)}\0{id}"); var sum = SHA256.HashData(payload); return $"tbq1.{B64(payload)}.{B64(sum)}"; }

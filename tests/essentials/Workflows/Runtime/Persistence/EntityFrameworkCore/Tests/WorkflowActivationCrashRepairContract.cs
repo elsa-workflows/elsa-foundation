@@ -25,7 +25,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 /// the same pause, resumed later. Each scenario then works through another process over the same durable state and
 /// checks what serves, through the stimulus router's query and the slot's active recurring schedules.
 /// </remarks>
-internal static class WorkflowActivationCrashRepairContract
+internal static partial class WorkflowActivationCrashRepairContract
 {
     private const string DefinitionId = "definition-crash";
     private const string SlotName = "default";
@@ -786,7 +786,7 @@ internal static class WorkflowActivationCrashRepairContract
     /// its slot transition, or with <paramref name="holdBeforeSequence"/> before its sequence, after the checks that answer
     /// a call without one.
     /// </summary>
-    private static async Task<Race> StartRaceAsync(
+    private static async Task<Race<WorkflowActivationResult>> StartRaceAsync(
         Func<ActivationStores> open,
         bool holdBeforeSequence = false,
         CancellationToken cancellationToken = default)
@@ -1129,13 +1129,16 @@ internal static class WorkflowActivationCrashRepairContract
         public void Release() => _released.TrySetResult();
     }
 
-    /// <summary>The loser of a race, held at <c>latch</c> by <see cref="StartRaceAsync"/>, and its pending call.</summary>
-    private sealed class Race(ActivationNode loser, Task<WorkflowActivationResult> losing, Latch latch) : IAsyncDisposable
+    /// <summary>
+    /// The loser of a race, held at <c>latch</c> by <see cref="StartRaceAsync"/> or
+    /// <c>HoldACompletionOfAnInterruptedReplacementAsync</c>, and its pending call.
+    /// </summary>
+    private sealed class Race<T>(ActivationNode loser, Task<T> losing, Latch latch) : IAsyncDisposable
     {
         public ActivationNode Loser => loser;
 
         /// <summary>Lets the held call go on, and returns its result.</summary>
-        public Task<WorkflowActivationResult> ReleaseAsync()
+        public Task<T> ReleaseAsync()
         {
             latch.Release();
             return losing;

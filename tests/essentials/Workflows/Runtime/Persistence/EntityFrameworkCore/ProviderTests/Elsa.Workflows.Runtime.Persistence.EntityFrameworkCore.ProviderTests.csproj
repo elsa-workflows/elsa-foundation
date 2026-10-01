@@ -27,6 +27,7 @@
     <Compile Include="..\Tests\SchedulerWorkQueueClaimableDiscoveryContract.cs" Link="SchedulerWorkQueueClaimableDiscoveryContract.cs" />
     <Compile Include="..\Tests\RuntimeTestDoubles.cs" Link="RuntimeTestDoubles.cs" />
     <Compile Include="..\Tests\WorkflowActivationCrashRepairContract.cs" Link="WorkflowActivationCrashRepairContract.cs" />
+    <Compile Include="..\Tests\WorkflowActivationCrashRepairContract.ConcurrentCompletions.cs" Link="WorkflowActivationCrashRepairContract.ConcurrentCompletions.cs" />
     <Compile Include="..\Tests\PauseAfterSlotTransition.cs" Link="PauseAfterSlotTransition.cs" />
     <Compile Include="..\Tests\ReferencesThatCannotRetire.cs" Link="ReferencesThatCannotRetire.cs" />
     <Compile Include="..\Tests\ClaimLeaseOverrunContract.cs" Link="ClaimLeaseOverrunContract.cs" />
