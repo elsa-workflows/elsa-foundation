@@ -167,7 +167,14 @@ public sealed class PublicationActivator(
         // finally retires a leaked reference reports it too, usually once the slot's own record no longer lags, so this
         // comes before the lag check.
         var now = timeProvider.GetUtcNow();
-        if (completion.ReplacedActivationId is { } replacedId && !StringComparer.Ordinal.Equals(replacedId, publicationId))
+        //
+        // The report can be stale: a completion that was overtaken (compensation handed the slot back to the activation it
+        // reported as replaced) names a predecessor that serves again. The slot is read again, and a report naming the
+        // activation it now serves retires nothing.
+        if (completion.ReplacedActivationId is { } replacedId &&
+            !StringComparer.Ordinal.Equals(replacedId, publicationId) &&
+            !(await activationAuthority.FindAsync(slot.WorkflowDefinitionId, slot.SlotName, cancellationToken) is { } served &&
+              StringComparer.Ordinal.Equals(served.ActiveActivationId, replacedId)))
             await PublicationRecordRetirement.RetireAsync(publicationStore, await publicationStore.FindAsync(replacedId, cancellationToken), now, cancellationToken);
 
         // A publication the slot names that is already active is the common case and costs one read. One still a

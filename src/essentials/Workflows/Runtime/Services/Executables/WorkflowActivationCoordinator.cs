@@ -276,12 +276,13 @@ public sealed partial class WorkflowActivationCoordinator(
     /// </para>
     /// <para>
     /// Retiring references never fails a completion (#2251). Once the slot's activation serves, because completion
-    /// switched it on or found it switched, a reference that cannot be retired, or a slot that cannot be read again before
-    /// retiring, is logged as an error and the reference left live for a later completion or an operator to retire.
+    /// switched it on or found it switched, a reference that cannot be retired, or, after a switch, a slot that cannot be
+    /// read again before retiring, is logged as an error and the reference left live for a later completion or an operator to retire.
     /// Reporting the completion failed instead would tell a caller that keeps its own record of the activation, as
     /// Publishing does, that an activation which serves has failed, and nothing would correct that record. A completion
     /// that switched still names the activation it switched off as replaced, and its diagnostic names the references it
-    /// could not retire.
+    /// could not retire. A housekeeping-only completion, which switches nothing, still returns CompletionFailed when
+    /// its slot re-read throws; that failure is transient and heals on the next completion.
     /// </para>
     /// <para>
     /// Two windows remain, because the slot and the projections share no transaction; #2230 closes both by switching them

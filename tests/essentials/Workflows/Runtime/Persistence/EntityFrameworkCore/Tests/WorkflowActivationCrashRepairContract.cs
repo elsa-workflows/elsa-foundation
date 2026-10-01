@@ -60,11 +60,11 @@ internal static class WorkflowActivationCrashRepairContract
         ["same-activation-refused-at-preparation-keeps-the-winner"] = SameActivationRefusedAtPreparationKeepsTheWinnerAsync,
         ["cancelled-same-activation-keeps-the-winner"] = CancelledSameActivationKeepsTheWinnerAsync,
         ["cancelled-same-activation-completes-a-winner-that-stopped"] = CancelledSameActivationCompletesAWinnerThatStoppedAsync,
-        ["retry-that-cannot-prepare-the-slots-activation-is-compensated"] = RetryThatCannotPrepareTheSlotsActivationIsCompensatedAsync,
+        ["retry-that-cannot-prepare-the-slots-activation-is-compensated"] = open => RetryWithProjectionsMissingAsync(open, MissingProjections.BothStores),
         ["same-activation-completing-a-winner-that-stopped-reports-its-predecessor-beside-a-leaked-leftover"] = SameActivationCompletingAWinnerThatStoppedReportsItsPredecessorBesideALeakedLeftoverAsync,
         ["same-activation-reports-a-completion-that-fails"] = SameActivationReportsACompletionThatFailsAsync,
-        ["retry-whose-trigger-bindings-are-missing-is-compensated"] = open => RetryWithProjectionsMissingFromOneStoreIsCompensatedAsync(open, triggersMissing: true),
-        ["retry-whose-recurring-schedules-are-missing-is-compensated"] = open => RetryWithProjectionsMissingFromOneStoreIsCompensatedAsync(open, triggersMissing: false),
+        ["retry-whose-trigger-bindings-are-missing-is-compensated"] = open => RetryWithProjectionsMissingAsync(open, MissingProjections.Triggers),
+        ["retry-whose-recurring-schedules-are-missing-is-compensated"] = open => RetryWithProjectionsMissingAsync(open, MissingProjections.Schedules),
         ["completion-that-cannot-retire-the-replaced-reference-reports-the-activation-it-switched-on"] = CompletionThatCannotRetireTheReplacedReferenceReportsTheActivationAsync,
         ["completion-that-cannot-read-the-slot-after-the-switch-reports-the-activation-it-switched-on"] = CompletionThatCannotReadTheSlotAfterTheSwitchReportsTheActivationAsync
     };
@@ -596,34 +596,6 @@ internal static class WorkflowActivationCrashRepairContract
     }
 
     /// <summary>
-    /// The opposite direction: the slot names a call's own activation, but no other call won it. A first activation failed
-    /// after its slot transition, and its compensation removed its projections and retired its reference but could not
-    /// clear the slot. A retry that cannot prepare them again has nothing to complete, so it is compensated and fails
-    /// rather than reporting an activation already active that serves nothing. The next retry activates it.
-    /// </summary>
-    private static async Task RetryThatCannotPrepareTheSlotsActivationIsCompensatedAsync(Func<ActivationStores> open)
-    {
-        await StopAfterSlotTransitionAsync(open, "activation-1", "artifact-1");
-        await using var node = Start(open());
-        await node.Stores.Bindings.DeleteByActivationAsync("activation-1");
-        await node.Stores.Schedules.DeleteByActivationAsync("activation-1");
-        await node.Stores.References.RetireAsync(WorkflowActivationReferenceIdentity.Create("activation-1"), Now, WorkflowActivationCoordinator.FailedRetireReason);
-        node.FailNextPreparation(new InvalidOperationException("The trigger indexer is unavailable."));
-
-        var result = await node.ActivateAsync("activation-1", "artifact-1");
-
-        Assert.Equal(WorkflowActivationOutcome.Failed, result.Outcome);
-        Assert.Equal(WorkflowActivationStep.ProjectionPreparation, result.FailedStep);
-        Assert.Equal("activation-1", await node.SlotActivationAsync());
-        await node.AssertServingAsync();
-        await node.AssertProjectionsAsync("activation-1", WorkflowActivationProjectionState.Missing);
-        Assert.Equal(WorkflowActivationCoordinator.FailedRetireReason, (await node.FindReferenceAsync("activation-1")).DeletedReason);
-
-        Assert.Equal(WorkflowActivationOutcome.Activated, (await node.ActivateAsync("activation-1", "artifact-1")).Outcome);
-        await node.AssertConsistentAsync("activation-1");
-    }
-
-    /// <summary>
     /// The race against a winner that stopped, beside a leaked leftover: an activation switched off by the one the winner
     /// replaces, whose reference completion's housekeeping could not retire. Completing the winner's activation retires
     /// both references, and the loser reports the activation the winner replaced, not the leftover. Publishing retires the
@@ -676,17 +648,20 @@ internal static class WorkflowActivationCrashRepairContract
     }
 
     /// <summary>
-    /// What tells a race from a retry is that the activation's projections are stored in every projection store. A retry
-    /// whose earlier compensation removed them from one store but not the other, and whose own preparation fails, has
-    /// nothing to complete, so it is compensated, which removes the rest, rather than left to a slot that cannot serve it.
+    /// The opposite direction: the slot names a call's own activation, but no other call won it. What tells a race from a
+    /// retry is that the activation's projections are stored in every projection store. A first activation failed after
+    /// its slot transition, and its compensation removed its projections from one store, or from both, and retired its
+    /// reference but could not clear the slot. A retry whose own preparation fails has nothing to complete, so it is
+    /// compensated, which removes the rest, and fails rather than reporting an activation already active that serves
+    /// nothing, or leaving it to a slot that cannot serve it. When both stores lost them, the next retry activates it.
     /// </summary>
-    private static async Task RetryWithProjectionsMissingFromOneStoreIsCompensatedAsync(Func<ActivationStores> open, bool triggersMissing)
+    private static async Task RetryWithProjectionsMissingAsync(Func<ActivationStores> open, MissingProjections missing)
     {
         await StopAfterSlotTransitionAsync(open, "activation-1", "artifact-1");
         await using var node = Start(open());
-        if (triggersMissing)
+        if (missing is MissingProjections.Triggers or MissingProjections.BothStores)
             await node.Stores.Bindings.DeleteByActivationAsync("activation-1");
-        else
+        if (missing is MissingProjections.Schedules or MissingProjections.BothStores)
             await node.Stores.Schedules.DeleteByActivationAsync("activation-1");
         await node.Stores.References.RetireAsync(WorkflowActivationReferenceIdentity.Create("activation-1"), Now, WorkflowActivationCoordinator.FailedRetireReason);
         node.FailNextPreparation(new InvalidOperationException("The trigger indexer is unavailable."));
@@ -700,6 +675,19 @@ internal static class WorkflowActivationCrashRepairContract
         await node.AssertServingAsync();
         await node.AssertProjectionsAsync("activation-1", WorkflowActivationProjectionState.Missing);
         Assert.Equal(WorkflowActivationCoordinator.FailedRetireReason, (await node.FindReferenceAsync("activation-1")).DeletedReason);
+
+        if (missing != MissingProjections.BothStores)
+            return;
+
+        Assert.Equal(WorkflowActivationOutcome.Activated, (await node.ActivateAsync("activation-1", "artifact-1")).Outcome);
+        await node.AssertConsistentAsync("activation-1");
+    }
+
+    private enum MissingProjections
+    {
+        Triggers,
+        Schedules,
+        BothStores
     }
 
     /// <summary>
