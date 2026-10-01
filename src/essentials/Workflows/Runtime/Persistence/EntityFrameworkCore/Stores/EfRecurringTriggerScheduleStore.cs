@@ -298,26 +298,134 @@ public sealed class EfRecurringTriggerScheduleStore(
         if (row is null) return false;
         var current = Read(row, scope, scheduleId);
         if (!current.IsActive || current.NextOccurrence != expectedNextOccurrence) return false;
-        var updated = current with { NextOccurrence = newNextOccurrence };
-        Copy(row, updated, scope, checked(row.Revision + 1));
+        var originalRevision = row.Revision;
+        Copy(row, current with { NextOccurrence = newNextOccurrence }, scope, checked(row.Revision + 1));
+        return await TryWriteAsync(row, originalRevision, cancellationToken);
+    }
+
+    public async ValueTask<IReadOnlyCollection<RecurringTriggerOccurrenceClaim>> ClaimDueAsync(RecurringTriggerOccurrenceClaimRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ValidateIdentity(request.OwnerId, nameof(request.OwnerId));
+        cancellationToken.ThrowIfCancellationRequested();
+        var scope = RequireScope();
+        var scopeHash = Hash(scope);
+        var scopeKey = Encode(scope);
+        var now = request.Now.UtcTicks;
+        context.ChangeTracker.Clear();
+        var rows = await context.RecurringTriggerSchedules.AsNoTracking()
+            .Where(x => x.ScopeKeyHash == scopeHash && x.ScopeKey == scopeKey && x.IsActive && x.NextOccurrenceUtcTicks <= now &&
+                        (x.VisibleAfterUtcTicks == null || x.VisibleAfterUtcTicks <= now))
+            .OrderBy(x => x.NextOccurrenceUtcTicks)
+            .ThenBy(x => x.ScheduleIdOrderKey)
+            .Take(request.Limit)
+            .ToArrayAsync(cancellationToken);
+
+        var claims = new List<RecurringTriggerOccurrenceClaim>(rows.Length);
+        foreach (var row in rows)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var schedule = Read(row, scope);
+            if (!schedule.IsActive || schedule.NextOccurrence > request.Now || row.VisibleAfterUtcTicks is { } visible && visible > now)
+                throw new InvalidDataException("Recurring-trigger claim query returned a row outside its active, due and visible predicate.");
+            var originalRevision = row.Revision;
+            row.ClaimOwnerId = Encode(request.OwnerId);
+            row.ClaimToken = checked(row.ClaimToken + 1);
+            SetClaimedAt(row, request.Now);
+            SetVisibleAfter(row, request.Now.Add(request.VisibilityTimeout));
+            row.Revision = checked(row.Revision + 1);
+            if (await TryWriteAsync(row, originalRevision, cancellationToken))
+                claims.Add(ToClaim(row, schedule));
+        }
+
+        return claims;
+    }
+
+    public async ValueTask<RecurringTriggerOccurrenceClaim?> RenewClaimAsync(RecurringTriggerOccurrenceClaim claim, DateTimeOffset now, TimeSpan visibilityTimeout, CancellationToken cancellationToken = default)
+    {
+        if (visibilityTimeout <= TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(nameof(visibilityTimeout), "A recurring-trigger claim visibility timeout must be greater than zero.");
+        if (await LoadHeldAsync(claim, cancellationToken) is not { } held)
+            return null;
+        var row = held.Row;
+        var originalRevision = row.Revision;
+        SetVisibleAfter(row, now.Add(visibilityTimeout));
+        row.Revision = checked(row.Revision + 1);
+        return await TryWriteAsync(row, originalRevision, cancellationToken) ? ToClaim(row, held.Schedule) : null;
+    }
+
+    public async ValueTask<bool> SettleClaimAsync(RecurringTriggerOccurrenceClaim claim, DateTimeOffset nextOccurrence, CancellationToken cancellationToken = default)
+    {
+        if (await LoadHeldAsync(claim, cancellationToken) is not { } held)
+            return false;
+        var row = held.Row;
+        var originalRevision = row.Revision;
+        Copy(row, held.Schedule with { NextOccurrence = nextOccurrence }, held.Scope, checked(row.Revision + 1));
+        row.ClaimOwnerId = null;
+        SetClaimedAt(row, null);
+        SetVisibleAfter(row, null);
+        row.FailureCount = 0;
+        return await TryWriteAsync(row, originalRevision, cancellationToken);
+    }
+
+    public async ValueTask<bool> ReleaseClaimAsync(RecurringTriggerOccurrenceClaim claim, DateTimeOffset visibleAt, CancellationToken cancellationToken = default)
+    {
+        if (await LoadHeldAsync(claim, cancellationToken) is not { } held)
+            return false;
+        var row = held.Row;
+        var originalRevision = row.Revision;
+        row.ClaimOwnerId = null;
+        SetClaimedAt(row, null);
+        SetVisibleAfter(row, visibleAt);
+        row.FailureCount = checked(row.FailureCount + 1);
+        row.Revision = checked(row.Revision + 1);
+        return await TryWriteAsync(row, originalRevision, cancellationToken);
+    }
+
+    // The schedule row a claim transition may act on: present, intact, and still held by exactly this claim — its owner,
+    // fencing token and revision. Anything else (a peer's re-claim, a deactivation, a republish, a delete) is stale.
+    private async Task<HeldClaim?> LoadHeldAsync(RecurringTriggerOccurrenceClaim claim, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(claim);
+        ValidateScheduleId(claim.Schedule.ScheduleId, nameof(claim));
+        ValidateIdentity(claim.OwnerId, nameof(claim));
+        cancellationToken.ThrowIfCancellationRequested();
+        var scope = RequireScope();
+        context.ChangeTracker.Clear();
+        var row = await context.RecurringTriggerSchedules.AsNoTracking().SingleOrDefaultAsync(x => x.Id == Id(scope, claim.Schedule.ScheduleId), cancellationToken);
+        if (row is null)
+            return null;
+        var schedule = Read(row, scope, claim.Schedule.ScheduleId);
+        return row.Revision == claim.Revision && row.ClaimToken == claim.FencingToken && row.ClaimOwnerId == Encode(claim.OwnerId)
+            ? new HeldClaim(row, schedule, scope)
+            : null;
+    }
+
+    private sealed record HeldClaim(RecurringTriggerScheduleEntity Row, RecurringTriggerSchedule Schedule, string Scope);
+
+    // Writes a detached row under its revision as the concurrency token. A concurrent writer or a transient conflict the
+    // provider reports loses the write rather than failing it.
+    private async Task<bool> TryWriteAsync(RecurringTriggerScheduleEntity row, long originalRevision, CancellationToken cancellationToken)
+    {
         context.RecurringTriggerSchedules.Attach(row);
-        context.Entry(row).Property(x => x.Revision).OriginalValue = checked(row.Revision - 1);
+        context.Entry(row).Property(x => x.Revision).OriginalValue = originalRevision;
         context.Entry(row).State = EntityState.Modified;
         try
         {
             await context.SaveChangesAsync(cancellationToken);
-            context.ChangeTracker.Clear();
             return true;
         }
         catch (DbUpdateConcurrencyException)
         {
-            context.ChangeTracker.Clear();
             return false;
         }
         catch (Exception exception) when (EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.Transient))
         {
-            context.ChangeTracker.Clear();
             return false;
+        }
+        finally
+        {
+            context.ChangeTracker.Clear();
         }
     }
 
@@ -505,8 +613,47 @@ public sealed class EfRecurringTriggerScheduleStore(
         Validate(schedule);
         if (schedule.ScheduleId != Decode(row.ScheduleId) || schedule.ArtifactId != Decode(row.ArtifactId) || schedule.ExecutableNodeId != Decode(row.ExecutableNodeId) || schedule.StimulusType != Decode(row.StimulusType) || schedule.StimulusHash != Decode(row.StimulusHash) || schedule.Kind != (RecurringScheduleKind)row.Kind || schedule.Expression != row.Expression || schedule.NextOccurrence.UtcTicks != row.NextOccurrenceUtcTicks || (int)schedule.NextOccurrence.Offset.TotalMinutes != row.NextOccurrenceOffsetMinutes || schedule.CreatedAt.UtcTicks != row.CreatedAtUtcTicks || (int)schedule.CreatedAt.Offset.TotalMinutes != row.CreatedAtOffsetMinutes || schedule.ActivationId != Optional(row.ActivationId) || schedule.SlotId != Optional(row.SlotId) || schedule.IsActive != row.IsActive || row.ScheduleIdHash != Hash(schedule.ScheduleId) || row.ScheduleIdOrderKey != ScheduleOrder(schedule.ScheduleId) || row.ArtifactIdHash != Hash(schedule.ArtifactId) || row.ArtifactIdOrderKey != Order(schedule.ArtifactId) || schedule.ActivationId is not null && (row.ActivationIdHash != Hash(schedule.ActivationId) || row.ActivationIdOrderKey != Order(schedule.ActivationId)) || schedule.ActivationId is null && (row.ActivationIdHash is not null || row.ActivationIdOrderKey is not null))
             throw new InvalidDataException("The persisted EF recurring-trigger schedule content does not match its authoritative projections.");
+        ValidateClaimProjection(row);
         return schedule;
     }
+
+    // Never claimed (token 0, nothing set); claimed (owner, claim time and a later visibility deadline); released after a
+    // failure (no owner, a visibility deadline and at least one failure); or settled (no owner, no deadline, no failures).
+    private static void ValidateClaimProjection(RecurringTriggerScheduleEntity row)
+    {
+        var claimedAtPaired = (row.ClaimedAtUtcTicks is null) == (row.ClaimedAtOffsetMinutes is null);
+        var visibleAfterPaired = (row.VisibleAfterUtcTicks is null) == (row.VisibleAfterOffsetMinutes is null);
+        var consistent = row.ClaimToken >= 0 && row.FailureCount >= 0 && claimedAtPaired && visibleAfterPaired && (row.ClaimToken, row.ClaimOwnerId) switch
+        {
+            (0, _) => row.ClaimOwnerId is null && row.ClaimedAtUtcTicks is null && row.VisibleAfterUtcTicks is null && row.FailureCount == 0,
+            (_, not null) => row.ClaimedAtUtcTicks is { } claimed && row.VisibleAfterUtcTicks is { } visible && visible > claimed,
+            _ => row.ClaimedAtUtcTicks is null && (row.VisibleAfterUtcTicks is null ? row.FailureCount == 0 : row.FailureCount > 0)
+        };
+        if (!consistent)
+            throw new InvalidDataException("The persisted EF recurring-trigger schedule claim projection is inconsistent.");
+    }
+
+    private static void SetClaimedAt(RecurringTriggerScheduleEntity row, DateTimeOffset? value)
+    {
+        row.ClaimedAtUtcTicks = value?.UtcTicks;
+        row.ClaimedAtOffsetMinutes = value is { } claimedAt ? OffsetMinutes(claimedAt) : null;
+    }
+
+    private static void SetVisibleAfter(RecurringTriggerScheduleEntity row, DateTimeOffset? value)
+    {
+        row.VisibleAfterUtcTicks = value?.UtcTicks;
+        row.VisibleAfterOffsetMinutes = value is { } visibleAfter ? OffsetMinutes(visibleAfter) : null;
+    }
+
+    private static RecurringTriggerOccurrenceClaim ToClaim(RecurringTriggerScheduleEntity row, RecurringTriggerSchedule schedule) =>
+        row is { ClaimOwnerId: { } owner, ClaimedAtUtcTicks: { } claimedAt, ClaimedAtOffsetMinutes: { } claimedAtOffset, VisibleAfterUtcTicks: { } visibleAfter, VisibleAfterOffsetMinutes: { } visibleAfterOffset }
+            ? new(schedule, Decode(owner), row.ClaimToken, row.Revision, FromUtcTicks(claimedAt, claimedAtOffset), FromUtcTicks(visibleAfter, visibleAfterOffset), row.FailureCount)
+            : throw new InvalidDataException("The recurring-trigger claim projection is incomplete.");
+
+    private static int OffsetMinutes(DateTimeOffset value) => checked((int)value.Offset.TotalMinutes);
+
+    private static DateTimeOffset FromUtcTicks(long utcTicks, int offsetMinutes) =>
+        new DateTimeOffset(new DateTime(utcTicks, DateTimeKind.Utc)).ToOffset(TimeSpan.FromMinutes(offsetMinutes));
 
     private static string? Optional(string? value) => value is null ? null : Decode(value);
 

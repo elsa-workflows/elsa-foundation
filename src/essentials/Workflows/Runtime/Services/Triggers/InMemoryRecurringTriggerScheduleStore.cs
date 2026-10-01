@@ -16,6 +16,13 @@ public sealed class InMemoryRecurringTriggerScheduleStore : IRecurringTriggerSch
     private readonly Dictionary<string, RecurringTriggerSchedule> _schedules = new(StringComparer.Ordinal);
     private readonly HashSet<string> _preparedActivations = new(StringComparer.Ordinal);
 
+    // Occurrence claims (#2198), kept beside the schedules the way the EF store keeps them in their own columns. A claim
+    // is current only while its schedule is still the record it was granted on, so any other change to the schedule
+    // fences it out, as a revision bump does in EF.
+    private readonly Dictionary<string, ClaimState> _claims = new(StringComparer.Ordinal);
+    private long _lastFencingToken;
+    private long _lastRevision;
+
     public ValueTask<RecurringTriggerSchedule> SaveAsync(RecurringTriggerSchedule schedule, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(schedule);
@@ -25,6 +32,9 @@ public sealed class InMemoryRecurringTriggerScheduleStore : IRecurringTriggerSch
         {
             // Upsert: republish rewrites the schedule (including a re-anchored NextOccurrence), unlike the
             // durable-timer store's existing-wins rule — a recurring schedule has no one-shot deadline to protect.
+            // An overwrite with a different schedule resets its claim, as the EF store's rewrite does.
+            if (!_schedules.TryGetValue(schedule.ScheduleId, out var existing) || existing != schedule)
+                _claims.Remove(schedule.ScheduleId);
             _schedules[schedule.ScheduleId] = schedule;
             return new ValueTask<RecurringTriggerSchedule>(schedule);
         }
@@ -178,6 +188,101 @@ public sealed class InMemoryRecurringTriggerScheduleStore : IRecurringTriggerSch
         }
     }
 
+    public ValueTask<IReadOnlyCollection<RecurringTriggerOccurrenceClaim>> ClaimDueAsync(
+        RecurringTriggerOccurrenceClaimRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (_syncRoot)
+        {
+            var claimable = _schedules.Values
+                .Where(schedule => schedule.IsActive && schedule.NextOccurrence <= request.Now && IsVisible(schedule.ScheduleId, request.Now))
+                .OrderBy(schedule => schedule.NextOccurrence)
+                .ThenBy(schedule => schedule.ScheduleId, StringComparer.Ordinal)
+                .Take(request.Limit)
+                .ToArray();
+            var claims = new List<RecurringTriggerOccurrenceClaim>(claimable.Length);
+            foreach (var schedule in claimable)
+            {
+                var failureCount = _claims.TryGetValue(schedule.ScheduleId, out var previous) ? previous.FailureCount : 0;
+                var state = new ClaimState(
+                    request.OwnerId, ++_lastFencingToken, ++_lastRevision, request.Now, request.Now.Add(request.VisibilityTimeout), failureCount);
+                _claims[schedule.ScheduleId] = state;
+                claims.Add(ToClaim(schedule, state));
+            }
+
+            return new ValueTask<IReadOnlyCollection<RecurringTriggerOccurrenceClaim>>(claims);
+        }
+    }
+
+    public ValueTask<RecurringTriggerOccurrenceClaim?> RenewClaimAsync(
+        RecurringTriggerOccurrenceClaim claim,
+        DateTimeOffset now,
+        TimeSpan visibilityTimeout,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(claim);
+        if (visibilityTimeout <= TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(nameof(visibilityTimeout), "A recurring-trigger claim visibility timeout must be greater than zero.");
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (_syncRoot)
+        {
+            if (!TryGetCurrent(claim, out var state))
+                return new ValueTask<RecurringTriggerOccurrenceClaim?>((RecurringTriggerOccurrenceClaim?)null);
+
+            var renewed = state with { Revision = ++_lastRevision, VisibleAfter = now.Add(visibilityTimeout) };
+            _claims[claim.Schedule.ScheduleId] = renewed;
+            return new ValueTask<RecurringTriggerOccurrenceClaim?>(ToClaim(claim.Schedule, renewed));
+        }
+    }
+
+    public ValueTask<bool> SettleClaimAsync(
+        RecurringTriggerOccurrenceClaim claim,
+        DateTimeOffset nextOccurrence,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(claim);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (_syncRoot)
+        {
+            if (!TryGetCurrent(claim, out _))
+                return new ValueTask<bool>(false);
+
+            _schedules[claim.Schedule.ScheduleId] = claim.Schedule with { NextOccurrence = nextOccurrence };
+            _claims.Remove(claim.Schedule.ScheduleId);
+            return new ValueTask<bool>(true);
+        }
+    }
+
+    public ValueTask<bool> ReleaseClaimAsync(
+        RecurringTriggerOccurrenceClaim claim,
+        DateTimeOffset visibleAt,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(claim);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (_syncRoot)
+        {
+            if (!TryGetCurrent(claim, out var state))
+                return new ValueTask<bool>(false);
+
+            _claims[claim.Schedule.ScheduleId] = state with
+            {
+                OwnerId = null,
+                Revision = ++_lastRevision,
+                ClaimedAt = null,
+                VisibleAfter = visibleAt,
+                FailureCount = checked(state.FailureCount + 1)
+            };
+            return new ValueTask<bool>(true);
+        }
+    }
+
     public ValueTask DeleteByArtifactAsync(string artifactId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(artifactId);
@@ -191,7 +296,7 @@ public sealed class InMemoryRecurringTriggerScheduleStore : IRecurringTriggerSch
                 .ToArray();
 
             foreach (var scheduleId in doomed)
-                _schedules.Remove(scheduleId);
+                Remove(scheduleId);
         }
 
         return ValueTask.CompletedTask;
@@ -204,7 +309,7 @@ public sealed class InMemoryRecurringTriggerScheduleStore : IRecurringTriggerSch
 
         lock (_syncRoot)
         {
-            _schedules.Remove(scheduleId);
+            Remove(scheduleId);
         }
 
         return ValueTask.CompletedTask;
@@ -237,8 +342,36 @@ public sealed class InMemoryRecurringTriggerScheduleStore : IRecurringTriggerSch
                      .Where(schedule => StringComparer.Ordinal.Equals(schedule.ActivationId, activationId))
                      .Select(schedule => schedule.ScheduleId)
                      .ToArray())
-            _schedules.Remove(scheduleId);
+            Remove(scheduleId);
     }
+
+    private void Remove(string scheduleId)
+    {
+        _schedules.Remove(scheduleId);
+        _claims.Remove(scheduleId);
+    }
+
+    private bool IsVisible(string scheduleId, DateTimeOffset now) =>
+        !_claims.TryGetValue(scheduleId, out var state) || state.VisibleAfter is not { } visibleAfter || visibleAfter <= now;
+
+    private bool TryGetCurrent(RecurringTriggerOccurrenceClaim claim, out ClaimState state) =>
+        _claims.TryGetValue(claim.Schedule.ScheduleId, out state!) &&
+        StringComparer.Ordinal.Equals(state.OwnerId, claim.OwnerId) &&
+        state.FencingToken == claim.FencingToken &&
+        state.Revision == claim.Revision &&
+        _schedules.TryGetValue(claim.Schedule.ScheduleId, out var current) &&
+        current == claim.Schedule;
+
+    private static RecurringTriggerOccurrenceClaim ToClaim(RecurringTriggerSchedule schedule, ClaimState state) =>
+        new(schedule, state.OwnerId!, state.FencingToken, state.Revision, state.ClaimedAt!.Value, state.VisibleAfter!.Value, state.FailureCount);
+
+    private sealed record ClaimState(
+        string? OwnerId,
+        long FencingToken,
+        long Revision,
+        DateTimeOffset? ClaimedAt,
+        DateTimeOffset? VisibleAfter,
+        int FailureCount);
 
     private static RuntimeStorePage<RecurringTriggerSchedule> CreatePage(
         RuntimeStorePageRequest query,

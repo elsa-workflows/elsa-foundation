@@ -197,6 +197,8 @@ Two consequences follow from the dedupe being durable. A reused idempotency key 
 artifact, is answered `SkippedDuplicate` permanently, on every node and after any restart; a caller wanting a second
 start sends a new key. And a recurring-trigger occurrence, routed with the key
 `recurring:{scheduleId}:{occurrenceTicks}`, starts its workflow at most once however often that occurrence fires.
+The recurring-trigger pump relies on that: it fires each occurrence at least once, again after a crash or a failed
+start (#2198), and the repeats converge on the first start.
 
 The keyed start identity is a frozen, persisted format. Its ids are `wfexec:start:v1:{digest}`,
 `command:start:v1:{digest}` and `envelope:start:v1:{digest}`; the digest is the lowercase hex SHA-256 of the

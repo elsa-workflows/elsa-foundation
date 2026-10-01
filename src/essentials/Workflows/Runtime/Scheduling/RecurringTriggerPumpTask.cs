@@ -2,6 +2,7 @@ using Elsa.Tasks.Schedules;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Scheduling.Options;
+using Elsa.Workflows.Runtime.Services.Claims;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -10,7 +11,7 @@ namespace Elsa.Workflows.Runtime.Scheduling;
 
 /// <summary>
 /// Recurring background pump that fires due <see cref="RecurringTriggerSchedule"/>s. Each tick runs one
-/// bounded sweep: it loads at most <see cref="RecurringTriggerPumpOptions.MaxSchedulesPerTick"/> due schedules
+/// bounded sweep: it claims at most <see cref="RecurringTriggerPumpOptions.MaxSchedulesPerTick"/> due occurrences
 /// and, for each, dispatches the schedule's start stimulus through <see cref="IStimulusRouter"/> in
 /// <see cref="StimulusRoutingMode.StartOnly"/> mode — starting a new workflow instance with no execution id,
 /// the piece the resume-oriented durable-timer pump cannot do.
@@ -24,22 +25,31 @@ namespace Elsa.Workflows.Runtime.Scheduling;
 /// same-literal workflow on EVERY schedule's cadence (double-starts per cycle). The pump therefore resolves the
 /// binding the schedule owns — matching artifact, trigger node, and activation scope — and dispatches with that
 /// binding pre-matched (<see cref="StimulusDispatchRequest.MatchedTriggerBindings"/>), so a fire starts only the
-/// workflow whose publish wrote the schedule. A fire whose owning binding no longer exists (index drift between
-/// republish steps) is dropped with a warning rather than broadcast.
+/// workflow whose publish wrote the schedule.
 /// </para>
 /// <para>
-/// <b>Missed-occurrence policy — fire at most once, then advance.</b> A schedule is due when its
-/// <see cref="RecurringTriggerSchedule.NextOccurrence"/> is at or before the wake instant. The pump does NOT
-/// replay the backlog of occurrences that elapsed while it was down: it advances the cursor to the first
-/// occurrence strictly after <i>now</i> (via <see cref="IRecurringScheduleCalculator"/>) and fires exactly once.
+/// <b>At least once per occurrence (#2198).</b> The occurrence is recorded as in flight before it is routed: the pump
+/// claims it (<see cref="IRecurringTriggerScheduleStore.ClaimDueAsync"/>) under a fenced lease of
+/// <see cref="RecurringTriggerPumpOptions.ClaimVisibilityTimeout"/>, which leaves the cursor on the occurrence, and moves
+/// the cursor past it only by settling the claim after the route returned. Nothing else drops it. A node that dies after
+/// claiming, before or after routing, leaves the claim to lapse, and a peer then fires the occurrence again. A route that
+/// throws, or that finds no binding owned by the schedule (index drift mid-republish), releases the claim with a
+/// geometric backoff capped at <see cref="RecurringTriggerPumpOptions.MaxBackoffInterval"/>, so the occurrence is retried
+/// rather than skipped. Each claim is renewed immediately before its route (<see cref="FencedClaimLease{TClaim}"/>), and a
+/// claim lost before the route, or found stale when settling or releasing, is logged and skipped without ending the sweep.
 /// </para>
 /// <para>
-/// <b>Claim-first (single fire).</b> The cursor is advanced through the store's compare-and-swap
-/// (<see cref="IRecurringTriggerScheduleStore.TryAdvanceAsync"/>) <i>before</i> the start is dispatched, so at
-/// most one worker fires a given occurrence even if several sweep concurrently — the single-node realization of
-/// the cluster-safe claim a future distributed store keeps. A crash between the claim and the dispatch
-/// loses that one fire, which is the accepted at-most-once trade: the next occurrence still fires, and the
-/// backlog is never replayed.
+/// <b>Start once per occurrence.</b> Every fire of one occurrence carries the same idempotency key,
+/// <c>recurring:{ScheduleId}:{occurrenceTicks}</c>, so the router starts it as a keyed start
+/// (<see cref="KeyedWorkflowStartIdentity"/>, #2195): a repeated fire, on any node and after any restart, converges on
+/// the execution the first fire started instead of starting another.
+/// </para>
+/// <para>
+/// <b>Missed-occurrence policy — no catch-up.</b> A schedule is due when its
+/// <see cref="RecurringTriggerSchedule.NextOccurrence"/> is at or before the wake instant. Settling moves the cursor to
+/// the first occurrence strictly after <i>now</i> (via <see cref="IRecurringScheduleCalculator"/>), so the occurrence in
+/// the cursor fires, and the occurrences that elapsed while the pump was down, or while a failing occurrence was being
+/// retried, are not replayed.
 /// </para>
 /// <para>
 /// <b>Whole-sweep backoff.</b> Comes from <see cref="BackoffSweepPumpTask"/>: a sweep that throws is caught,
@@ -58,6 +68,7 @@ public sealed class RecurringTriggerPumpTask : BackoffSweepPumpTask
     private readonly IRecurringScheduleCalculator? _calculator;
     private readonly IOptions<RecurringTriggerPumpOptions> _options;
     private readonly TimeProvider _timeProvider;
+    private readonly string _claimOwnerId = $"recurring-trigger-pump:{Guid.NewGuid():N}";
 
     [ActivatorUtilitiesConstructor]
     public RecurringTriggerPumpTask(
@@ -104,6 +115,8 @@ public sealed class RecurringTriggerPumpTask : BackoffSweepPumpTask
 
         _options = options;
         _timeProvider = timeProvider;
+        if (_options.Value.ClaimVisibilityTimeout <= TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(nameof(options), "Recurring-trigger claim visibility timeout must be greater than zero.");
     }
 
     protected override TimeSpan SweepInterval => _options.Value.SweepInterval;
@@ -151,31 +164,40 @@ public sealed class RecurringTriggerPumpTask : BackoffSweepPumpTask
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {
-        var due = await store.ListDueAsync(now, options.MaxSchedulesPerTick, cancellationToken);
+        var claims = await store.ClaimDueAsync(
+            new RecurringTriggerOccurrenceClaimRequest(_claimOwnerId, now, options.ClaimVisibilityTimeout, options.MaxSchedulesPerTick),
+            cancellationToken);
+        // Renewed before each route only, never during it: the router's start dispatch shares this scope's unit of work, so
+        // a renewal running beside it would collide with it. A route that outlives the lease is repeated by a peer, and the
+        // repeat converges on the keyed start.
+        var lease = new FencedClaimLease<RecurringTriggerOccurrenceClaim>(store.RenewClaimAsync, options.ClaimVisibilityTimeout, _timeProvider);
         var fired = 0;
 
-        foreach (var schedule in due)
+        foreach (var claim in claims)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (await FireAsync(store, bindingStore, router, calculator, schedule, now, cancellationToken))
+            if (await FireAsync(store, bindingStore, router, calculator, lease, claim, options, now, cancellationToken))
                 fired++;
         }
 
         if (fired > 0 && Logger.IsEnabled(LogLevel.Debug))
-            Logger.LogDebug("Recurring-trigger sweep fired {Fired}/{DueCount} due schedule(s)", fired, due.Count);
+            Logger.LogDebug("Recurring-trigger sweep fired {Fired}/{DueCount} claimed occurrence(s)", fired, claims.Count);
     }
 
-    // Returns true when the schedule's occurrence was claimed and a start dispatched. A per-schedule failure
-    // never escapes the sweep.
+    // Returns true when the claimed occurrence was routed. A per-occurrence failure never escapes the sweep; it leaves the
+    // occurrence in the cursor to be fired again.
     private async Task<bool> FireAsync(
         IRecurringTriggerScheduleStore store,
         IWorkflowTriggerBindingStore bindingStore,
         IStimulusRouter router,
         IRecurringScheduleCalculator calculator,
-        RecurringTriggerSchedule schedule,
+        FencedClaimLease<RecurringTriggerOccurrenceClaim> lease,
+        RecurringTriggerOccurrenceClaim claim,
+        RecurringTriggerPumpOptions options,
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {
+        var schedule = claim.Schedule;
         DateTimeOffset? next;
         try
         {
@@ -196,52 +218,92 @@ public sealed class RecurringTriggerPumpTask : BackoffSweepPumpTask
             return false;
         }
 
-        // Claim-first: advance the cursor via CAS before dispatching, so a concurrent sweep cannot double-fire
-        // this occurrence.
-        var claimed = await store.TryAdvanceAsync(schedule.ScheduleId, schedule.NextOccurrence, next.Value, cancellationToken);
-        if (!claimed)
-            return false;
+        var run = await lease.RunAsync(
+            claim,
+            routeCancellationToken => RouteAsync(bindingStore, router, schedule, routeCancellationToken),
+            cancellationToken);
 
-        try
+        switch (run.Status)
         {
-            // Owner scoping: the stimulus hash is shared by every workflow that authored the same literal, so the
-            // fire must carry the schedule's OWN binding rather than let the router hash-broadcast the start.
-            var ownedBindings = await ResolveOwnedBindingsAsync(bindingStore, schedule, cancellationToken);
-            if (ownedBindings.Count == 0)
-            {
-                // Index drift (e.g. mid-republish): the occurrence stays claimed by the at-most-once contract, and
-                // the next occurrence fires against the refreshed index.
-                Logger.LogWarning(
-                    "Recurring schedule '{ScheduleId}' fired but no trigger binding is owned by artifact '{ArtifactId}' node '{ExecutableNodeId}'; occurrence dropped",
-                    schedule.ScheduleId,
-                    schedule.ArtifactId,
-                    schedule.ExecutableNodeId);
+            case FencedClaimRunStatus.LostBeforeSideEffect:
+            case FencedClaimRunStatus.LostDuringSideEffect:
+                LogClaimLost(claim, "renew before routing", run.Exception);
                 return false;
-            }
 
-            var request = new StimulusDispatchRequest(
-                stimulusType: schedule.StimulusType,
-                stimulusHash: schedule.StimulusHash,
-                mode: StimulusRoutingMode.StartOnly,
-                idempotencyKey: $"recurring:{schedule.ScheduleId}:{schedule.NextOccurrence.UtcTicks}",
-                requestedBy: PumpRequestedBy,
-                matchedTriggerBindings: ownedBindings);
+            case FencedClaimRunStatus.Faulted:
+                Logger.LogError(
+                    run.Exception,
+                    "Recurring schedule '{ScheduleId}' start dispatch for occurrence {Occurrence} threw; the occurrence is kept and retried after backoff",
+                    schedule.ScheduleId,
+                    schedule.NextOccurrence);
+                await ReleaseAsync(store, run.Claim, options, now, cancellationToken);
+                return false;
+        }
 
-            await router.RouteAsync(request, cancellationToken);
-            return true;
-        }
-        catch (OperationCanceledException)
+        if (!run.Result)
         {
-            throw;
-        }
-        catch (Exception exception)
-        {
-            // The occurrence was already claimed (cursor advanced), so this fire is lost by the at-most-once
-            // contract; the next occurrence will still fire. Log and move on rather than replay.
-            Logger.LogError(exception, "Recurring schedule '{ScheduleId}' start dispatch threw after claim; occurrence dropped", schedule.ScheduleId);
+            // Index drift (e.g. mid-republish): the occurrence is kept rather than hash-broadcast to whatever other
+            // artifacts share the stimulus hash, and is retried against the refreshed index after backoff.
+            Logger.LogWarning(
+                "Recurring schedule '{ScheduleId}' is due but no trigger binding is owned by artifact '{ArtifactId}' node '{ExecutableNodeId}'; the occurrence is kept and retried after backoff",
+                schedule.ScheduleId,
+                schedule.ArtifactId,
+                schedule.ExecutableNodeId);
+            await ReleaseAsync(store, run.Claim, options, now, cancellationToken);
             return false;
         }
+
+        if (!await store.SettleClaimAsync(run.Claim, next.Value, cancellationToken))
+            LogClaimLost(claim, "settle", exception: null);
+        return true;
     }
+
+    // Routes the occurrence through the schedule's own binding. Returns false when no binding is owned by the schedule.
+    private static async ValueTask<bool> RouteAsync(
+        IWorkflowTriggerBindingStore bindingStore,
+        IStimulusRouter router,
+        RecurringTriggerSchedule schedule,
+        CancellationToken cancellationToken)
+    {
+        // Owner scoping: the stimulus hash is shared by every workflow that authored the same literal, so the fire must
+        // carry the schedule's OWN binding rather than let the router hash-broadcast the start.
+        var ownedBindings = await ResolveOwnedBindingsAsync(bindingStore, schedule, cancellationToken);
+        if (ownedBindings.Count == 0)
+            return false;
+
+        var request = new StimulusDispatchRequest(
+            stimulusType: schedule.StimulusType,
+            stimulusHash: schedule.StimulusHash,
+            mode: StimulusRoutingMode.StartOnly,
+            idempotencyKey: $"recurring:{schedule.ScheduleId}:{schedule.NextOccurrence.UtcTicks}",
+            requestedBy: PumpRequestedBy,
+            matchedTriggerBindings: ownedBindings);
+
+        await router.RouteAsync(request, cancellationToken);
+        return true;
+    }
+
+    private async Task ReleaseAsync(
+        IRecurringTriggerScheduleStore store,
+        RecurringTriggerOccurrenceClaim claim,
+        RecurringTriggerPumpOptions options,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        var delay = ComputeBackoff(options.SweepInterval, options.MaxBackoffInterval, checked(claim.FailureCount + 1));
+        if (!await store.ReleaseClaimAsync(claim, now.Add(delay), cancellationToken))
+            LogClaimLost(claim, "release", exception: null);
+    }
+
+    // Warning, not Error: another claimant holds the occurrence and fires it, so nothing is lost. It is still worth seeing,
+    // because it means a fire outlasted the claim visibility timeout or the schedule changed while it was in flight.
+    private void LogClaimLost(RecurringTriggerOccurrenceClaim claim, string transition, Exception? exception) =>
+        Logger.LogWarning(
+            exception,
+            "Recurring schedule '{ScheduleId}' lost its claim on occurrence {Occurrence} during '{Transition}'; skipping it and leaving successor-owned state untouched",
+            claim.Schedule.ScheduleId,
+            claim.Schedule.NextOccurrence,
+            transition);
 
     // The binding the schedule owns: same artifact, same trigger node, and same activation scope (named slots may
     // share one artifact, so an activation-scoped schedule must not start through another slot's binding). The

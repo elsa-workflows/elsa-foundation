@@ -15,16 +15,17 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 /// named slots may share an artifact without collapsing their independent schedule lifecycles.
 /// </para>
 /// <para>
-/// <b>Missed-occurrence policy.</b> <see cref="NextOccurrence"/> is the single mutable cursor. On each fire the
-/// pump advances it to the first occurrence strictly after the wake instant — <i>not</i> to
-/// <c>previous + interval</c> — so a pump that wakes after downtime fires <b>at most once</b> per schedule and
-/// never replays the backlog of occurrences that elapsed while it was down.
+/// <b>Missed-occurrence policy.</b> <see cref="NextOccurrence"/> is the single mutable cursor. Once the occurrence in
+/// it has been fired, the pump advances it to the first occurrence strictly after the wake instant — <i>not</i> to
+/// <c>previous + interval</c> — so a pump that wakes after downtime fires the due occurrence once and never replays
+/// the backlog of occurrences that elapsed while it was down.
 /// </para>
 /// <para>
-/// <b>Cluster-safety hook.</b> The cursor is advanced through a compare-and-swap on
-/// <see cref="NextOccurrence"/> (see <c>IRecurringTriggerScheduleStore.TryAdvanceAsync</c>), so exactly one
-/// worker can claim a given occurrence. Single-node hosts get this for free; a future clustered store keeps the
-/// same CAS contract to make the pump cluster-safe without changing the pump.
+/// <b>At least once per occurrence (#2198).</b> The occurrence in the cursor is claimed as in flight under a fenced
+/// lease before it is fired (see <c>IRecurringTriggerScheduleStore.ClaimDueAsync</c>), and the cursor moves past it
+/// only when that claim is settled. A worker that dies before settling leaves the occurrence to a peer once the lease
+/// lapses; every fire of one occurrence carries the key <c>recurring:{ScheduleId}:{occurrenceTicks}</c>, so the
+/// repeat converges on the workflow execution the first fire started.
 /// </para>
 /// </remarks>
 /// <param name="ScheduleId">Deterministic id built from (artifactId, executableNodeId).</param>
@@ -37,7 +38,7 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 /// <param name="StimulusHash">The start stimulus hash — matches the trigger binding the router indexed for the same node.</param>
 /// <param name="Kind">Whether <see cref="Expression"/> is an interval or a cron expression.</param>
 /// <param name="Expression">The recurrence spec: an ISO-8601 duration (Interval) or a cron string (Cron).</param>
-/// <param name="NextOccurrence">The next wall-clock instant the schedule is due to fire (the CAS cursor).</param>
+/// <param name="NextOccurrence">The next wall-clock instant the schedule is due to fire: the occurrence in flight while it is claimed.</param>
 /// <param name="CreatedAt">When the schedule was first written.</param>
 public sealed record RecurringTriggerSchedule(
     string ScheduleId,

@@ -87,11 +87,48 @@ retried. So a duplicate fire can never double-resume.
 `Delay` is restart-durable **only** in a shell with a durable timer store (EF Core). With the
 in-memory default store it still suspends and resumes within the process but does not survive a restart.
 
+## Timer and Cron start triggers: at least once per occurrence
+
+A `Timer` or `Cron` *start* trigger starts a new workflow run on a schedule. It does not use the durable
+timer store: publishing records a recurring schedule (`IRecurringTriggerScheduleStore`) whose cursor holds
+the next occurrence, and the recurring-trigger pump (`RecurringTriggerPumpTask`, feature
+`WorkflowsRuntimeRecurringTriggers`) fires due occurrences through the stimulus router.
+
+**The guarantee: each occurrence of an active schedule is fired at least once and starts one run (#2198).**
+
+- **In flight before it is fired.** The pump claims a due occurrence under a fenced lease before it routes
+  it, and moves the schedule past the occurrence only after the route returned. If the node crashes after
+  claiming, before or after routing, a peer (or the same node after a restart) fires the occurrence again
+  once the lease lapses. The lease is the feature setting *Occurrence claim visibility*, 60 seconds by
+  default, so it bounds how late a crashed occurrence fires.
+- **A failed fire is retried, not skipped.** If starting the run throws, or no trigger binding is found for
+  the schedule (for example while a republish is replacing the index), the occurrence is released with a
+  backoff that doubles from the sweep interval up to the maximum backoff, and then fired again. Each retry
+  is logged, so a persistently failing schedule shows up in the log rather than going quiet.
+- **Repeats start nothing new.** Every fire of one occurrence carries the idempotency key
+  `recurring:{scheduleId}:{occurrenceTicks}`, so the router starts it as a keyed start: a repeat finds the
+  run the first fire started and reports it as a duplicate (see *Stimulus START idempotency is
+  at-least-once* in [serialization](serialization.md)). Two nodes that sweep at the same moment cannot
+  both claim one occurrence.
+- **Republishing keeps a due occurrence.** Re-indexing a published workflow keeps an occurrence that is
+  due but has not fired yet, instead of recomputing the schedule from the current time.
+
+**What it does not do.**
+
+- **No catch-up.** After downtime, or while a failing occurrence is being retried, the occurrence in the
+  cursor fires once and the schedule then moves to the first occurrence after the current time.
+  Occurrences that elapsed in between are not replayed.
+- **A replaced publication does not hand over its due occurrence.** Activating a new publication of a
+  workflow replaces its schedules. An occurrence that was due on the replaced publication but had not fired
+  yet is not fired on its behalf; the new publication's schedule counts from when it was prepared.
+- **The in-memory store is not durable.** Without the EF Core runtime persistence, schedules and their
+  claims live in memory and are lost on restart.
+
 ## Follow-ups (not in this wave)
 
-- **Timer/Cron start triggers** (schedules that *start* a workflow) depend on W7's trigger/stimulus
-  index. The `durableTimer` kind is shaped so a `start-trigger` variant plugs in later without a schema
-  change.
+- **Timer/Cron start triggers** (schedules that *start* a workflow) shipped through their own recurring
+  schedule store and pump rather than a `start-trigger` variant of the `durableTimer` kind; see
+  [Timer and Cron start triggers](#timer-and-cron-start-triggers-at-least-once-per-occurrence).
 - **Native due-time range index.** Without a range index on `DueTime`, `ListDueAsync` loads the whole
   timer partition each tick and filters `DueTime` in memory. `MaxTimersPerTick` bounds the dispatch
   burst, not the load. A native range index is the scale follow-up.

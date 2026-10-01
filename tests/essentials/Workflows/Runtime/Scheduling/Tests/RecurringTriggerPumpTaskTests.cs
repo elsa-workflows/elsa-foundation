@@ -10,16 +10,19 @@ namespace Elsa.Workflows.Runtime.Scheduling.Tests;
 public sealed class RecurringTriggerPumpTaskTests
 {
     private static readonly DateTimeOffset Now = new(2026, 7, 1, 12, 0, 0, TimeSpan.Zero);
+    private static readonly TimeSpan Lease = TimeSpan.FromMinutes(1);
+    // The first failure's backoff: SweepInterval * 2^0.
+    private static readonly TimeSpan FirstBackoff = TimeSpan.FromSeconds(10);
 
     private readonly InMemoryWorkflowTriggerBindingStore _bindingStore = new();
+    private readonly InMemoryRecurringTriggerScheduleStore _store = new();
 
     [Fact]
     public async Task Sweep_FiresDueSchedule_StartOnly_WithExpectedRequestShape()
     {
-        var store = new InMemoryRecurringTriggerScheduleStore();
-        await SeedAsync(store, Schedule("s1", Now.AddMinutes(-1)));
+        await SeedAsync(Schedule("s1", Now.AddMinutes(-1)));
         var router = new FakeRouter();
-        var (pump, _) = CreatePump(store, router);
+        var (pump, _) = CreatePump(_store, router);
 
         await pump.ExecuteAsync(CancellationToken.None);
 
@@ -28,43 +31,49 @@ public sealed class RecurringTriggerPumpTaskTests
         Assert.Equal("hash-s1", request.StimulusHash);
         Assert.Equal(StimulusRoutingMode.StartOnly, request.Mode);
         Assert.Equal("runtime.recurring-trigger", request.RequestedBy);
-        // Idempotency key is scoped to the claimed occurrence so a duplicate delivery cannot double-start it.
-        Assert.Equal($"recurring:s1:{Now.AddMinutes(-1).UtcTicks}", request.IdempotencyKey);
+        // Idempotency key is scoped to the occurrence so a repeated fire of it cannot double-start it.
+        Assert.Equal(Key("s1", Now.AddMinutes(-1)), request.IdempotencyKey);
         // Owner scoping: the fire pre-matches the schedule's own binding so the router never hash-broadcasts it.
         Assert.Equal("node-s1", Assert.Single(request.MatchedTriggerBindings!).ExecutableNodeId);
     }
 
     [Fact]
-    public async Task Sweep_DropsOccurrence_WhenOwningBindingIsMissing()
+    public async Task Sweep_KeepsOccurrence_WhenOwningBindingIsMissing_AndFiresItOnceTheBindingIsBack()
     {
-        // Index drift (e.g. mid-republish): the claimed occurrence is dropped rather than hash-broadcast to
-        // whatever other artifacts share the stimulus hash; the cursor stays advanced (at-most-once).
-        var store = new InMemoryRecurringTriggerScheduleStore();
-        await store.SaveAsync(Schedule("s1", Now.AddMinutes(-1), expression: "PT1M"));
+        // Index drift (e.g. mid-republish): the occurrence is neither hash-broadcast to whatever other artifacts share the
+        // stimulus hash nor dropped; it stays in the cursor and fires against the refreshed index (#2198).
+        var due = Now.AddMinutes(-1);
+        await _store.SaveAsync(Schedule("s1", due, expression: "PT1M"));
         var router = new FakeRouter();
-        var (pump, _) = CreatePump(store, router);
+        var (pump, clock) = CreatePump(_store, router);
 
         await pump.ExecuteAsync(CancellationToken.None);
 
         Assert.Empty(router.Requests);
-        Assert.Equal(Now.AddMinutes(1), (await store.FindAsync("s1"))!.NextOccurrence);
+        Assert.Equal(due, (await _store.FindAsync("s1"))!.NextOccurrence);
+
+        await SaveBindingAsync(Schedule("s1", due));
+        clock.Advance(FirstBackoff);
+        await pump.ExecuteAsync(CancellationToken.None);
+
+        Assert.Equal(Key("s1", due), Assert.Single(router.Requests).IdempotencyKey);
+        Assert.Equal(clock.GetUtcNow().AddMinutes(1), (await _store.FindAsync("s1"))!.NextOccurrence);
     }
 
     [Fact]
-    public async Task Sweep_AdvancesCursorPastNow_FiringAtMostOnce_NoBacklogReplay()
+    public async Task Sweep_FiresTheDueOccurrenceOnce_AndAdvancesPastNow_NoBacklogReplay()
     {
-        var store = new InMemoryRecurringTriggerScheduleStore();
         // Due 10 minutes ago on a 1-minute interval: a naive previous+interval walk would fire ~10 times.
-        await SeedAsync(store, Schedule("s1", Now.AddMinutes(-10), expression: "PT1M"));
+        await SeedAsync(Schedule("s1", Now.AddMinutes(-10), expression: "PT1M"));
         var router = new FakeRouter();
-        var (pump, _) = CreatePump(store, router);
+        var (pump, _) = CreatePump(_store, router);
 
         await pump.ExecuteAsync(CancellationToken.None);
 
         // Exactly one fire, and the cursor is advanced to the first occurrence strictly after now (not +1m from
         // the stale cursor), so the next sweep at the same instant finds nothing due.
         Assert.Single(router.Requests);
-        var advanced = await store.FindAsync("s1");
+        var advanced = await _store.FindAsync("s1");
         Assert.Equal(Now.AddMinutes(1), advanced!.NextOccurrence);
 
         await pump.ExecuteAsync(CancellationToken.None);
@@ -74,10 +83,9 @@ public sealed class RecurringTriggerPumpTaskTests
     [Fact]
     public async Task Sweep_DoesNotFire_ScheduleNotYetDue()
     {
-        var store = new InMemoryRecurringTriggerScheduleStore();
-        await store.SaveAsync(Schedule("future", Now.AddMinutes(10)));
+        await _store.SaveAsync(Schedule("future", Now.AddMinutes(10)));
         var router = new FakeRouter();
-        var (pump, _) = CreatePump(store, router);
+        var (pump, _) = CreatePump(_store, router);
 
         await pump.ExecuteAsync(CancellationToken.None);
 
@@ -87,46 +95,109 @@ public sealed class RecurringTriggerPumpTaskTests
     [Fact]
     public async Task Sweep_DeletesSchedule_WhenCronExhausted()
     {
-        var store = new InMemoryRecurringTriggerScheduleStore();
         // Feb 30 never occurs: ComputeNext returns null, so the schedule is removed rather than left due.
-        await store.SaveAsync(Schedule("dead", Now.AddMinutes(-1), kind: RecurringScheduleKind.Cron, expression: "0 0 30 2 *"));
+        await _store.SaveAsync(Schedule("dead", Now.AddMinutes(-1), kind: RecurringScheduleKind.Cron, expression: "0 0 30 2 *"));
         var router = new FakeRouter();
-        var (pump, _) = CreatePump(store, router);
+        var (pump, _) = CreatePump(_store, router);
 
         await pump.ExecuteAsync(CancellationToken.None);
 
         Assert.Empty(router.Requests);
-        Assert.Null(await store.FindAsync("dead"));
+        Assert.Null(await _store.FindAsync("dead"));
     }
 
     [Fact]
     public async Task Sweep_DeletesSchedule_WhenExpressionInvalid()
     {
-        var store = new InMemoryRecurringTriggerScheduleStore();
-        await store.SaveAsync(Schedule("bad", Now.AddMinutes(-1), expression: "not-a-duration"));
+        await _store.SaveAsync(Schedule("bad", Now.AddMinutes(-1), expression: "not-a-duration"));
         var router = new FakeRouter();
-        var (pump, _) = CreatePump(store, router);
+        var (pump, _) = CreatePump(_store, router);
 
         await pump.ExecuteAsync(CancellationToken.None);
 
         Assert.Empty(router.Requests);
-        Assert.Null(await store.FindAsync("bad"));
+        Assert.Null(await _store.FindAsync("bad"));
     }
 
     [Fact]
-    public async Task Sweep_NeverThrows_WhenRouterThrows_ButCursorAlreadyAdvanced()
+    public async Task Sweep_KeepsOccurrence_WhenRouterThrows_AndRetriesItAfterBackoff()
     {
-        var store = new InMemoryRecurringTriggerScheduleStore();
-        await SeedAsync(store, Schedule("s1", Now.AddMinutes(-1), expression: "PT1M"));
+        var due = Now.AddMinutes(-1);
+        await SeedAsync(Schedule("s1", due, expression: "PT1M"));
         var router = new FakeRouter { Throw = new InvalidOperationException("boom") };
-        var (pump, _) = CreatePump(store, router);
+        var (pump, clock) = CreatePump(_store, router);
+
+        // A failed start never escapes the sweep, and it does not drop the occurrence (#2198).
+        await pump.ExecuteAsync(CancellationToken.None);
+        Assert.Equal(due, (await _store.FindAsync("s1"))!.NextOccurrence);
+
+        // Released with backoff: the next sweep at the same instant leaves it alone.
+        await pump.ExecuteAsync(CancellationToken.None);
+        Assert.Single(router.Requests);
+
+        router.Throw = null;
+        clock.Advance(FirstBackoff);
+        await pump.ExecuteAsync(CancellationToken.None);
+
+        Assert.Equal([Key("s1", due), Key("s1", due)], router.Requests.Select(request => request.IdempotencyKey));
+        Assert.Equal(clock.GetUtcNow().AddMinutes(1), (await _store.FindAsync("s1"))!.NextOccurrence);
+    }
+
+    [Fact]
+    public async Task Sweep_ThatDiesBeforeRouting_LeavesTheOccurrenceToAPeerOnceTheLeaseLapses()
+    {
+        var due = Now.AddMinutes(-1);
+        await SeedAsync(Schedule("s1", due, expression: "PT1M"));
+        var (dying, _) = CreatePump(_store, new FakeRouter { DieBeforeRouting = true });
+        var peerRouter = new FakeRouter();
+        var (peer, peerClock) = CreatePump(_store, peerRouter);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => dying.ExecuteAsync(CancellationToken.None));
+        Assert.Equal(due, (await _store.FindAsync("s1"))!.NextOccurrence);
+
+        // The dead node's claim still holds the occurrence until its lease lapses.
+        await peer.ExecuteAsync(CancellationToken.None);
+        Assert.Empty(peerRouter.Requests);
+
+        peerClock.Advance(Lease + TimeSpan.FromSeconds(1));
+        await peer.ExecuteAsync(CancellationToken.None);
+
+        Assert.Equal(Key("s1", due), Assert.Single(peerRouter.Requests).IdempotencyKey);
+        Assert.Equal(peerClock.GetUtcNow().AddMinutes(1), (await _store.FindAsync("s1"))!.NextOccurrence);
+    }
+
+    [Fact]
+    public async Task Sweep_ThatDiesAfterRouting_IsRepeatedByAPeerWithTheSameKey()
+    {
+        var due = Now.AddMinutes(-1);
+        await SeedAsync(Schedule("s1", due, expression: "PT1M"));
+        var dyingRouter = new FakeRouter { Throw = new OperationCanceledException("host stopping") };
+        var (dying, _) = CreatePump(_store, dyingRouter);
+        var peerRouter = new FakeRouter();
+        var (peer, peerClock) = CreatePump(_store, peerRouter);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => dying.ExecuteAsync(CancellationToken.None));
+        peerClock.Advance(Lease + TimeSpan.FromSeconds(1));
+        await peer.ExecuteAsync(CancellationToken.None);
+
+        // The repeat carries the first fire's key, which is what lets the keyed start converge on its execution.
+        Assert.Equal(Key("s1", due), Assert.Single(dyingRouter.Requests).IdempotencyKey);
+        Assert.Equal(Key("s1", due), Assert.Single(peerRouter.Requests).IdempotencyKey);
+    }
+
+    [Fact]
+    public async Task TwoPumps_OnOneOccurrence_RouteItOnce()
+    {
+        await SeedAsync(Schedule("s1", Now.AddMinutes(-1)));
+        var peerRouter = new FakeRouter();
+        var (peer, _) = CreatePump(_store, peerRouter);
+        var router = new FakeRouter { WhileRouting = () => peer.ExecuteAsync(CancellationToken.None) };
+        var (pump, _) = CreatePump(_store, router);
 
         await pump.ExecuteAsync(CancellationToken.None);
 
-        // At-most-once: the occurrence was claimed (cursor advanced) before the throwing dispatch, so it is not
-        // replayed; the next occurrence still stands.
-        var advanced = await store.FindAsync("s1");
-        Assert.Equal(Now.AddMinutes(1), advanced!.NextOccurrence);
+        Assert.Single(router.Requests);
+        Assert.Empty(peerRouter.Requests);
     }
 
     [Fact]
@@ -148,11 +219,10 @@ public sealed class RecurringTriggerPumpTaskTests
     [Fact]
     public async Task Sweep_BoundsFires_ByMaxSchedulesPerTick()
     {
-        var store = new InMemoryRecurringTriggerScheduleStore();
         for (var i = 0; i < 5; i++)
-            await SeedAsync(store, Schedule($"s{i}", Now.AddMinutes(-1)));
+            await SeedAsync(Schedule($"s{i}", Now.AddMinutes(-1)));
         var router = new FakeRouter();
-        var (pump, _) = CreatePump(store, router, maxSchedulesPerTick: 2);
+        var (pump, _) = CreatePump(_store, router, maxSchedulesPerTick: 2);
 
         await pump.ExecuteAsync(CancellationToken.None);
 
@@ -162,23 +232,22 @@ public sealed class RecurringTriggerPumpTaskTests
     [Fact]
     public async Task DueSchedules_SwitchOnlyWhenPublicationAuthorityChanges()
     {
-        var store = new InMemoryRecurringTriggerScheduleStore();
         var oldSchedule = PublicationSchedule("old", "publication-old");
         var candidateSchedule = PublicationSchedule("new", "publication-new");
 
-        await store.PrepareActivationAsync("publication-old", [oldSchedule]);
-        await store.PrepareActivationAsync("publication-new", [candidateSchedule]);
-        Assert.Empty(await store.ListDueAsync(Now, 10));
+        await _store.PrepareActivationAsync("publication-old", [oldSchedule]);
+        await _store.PrepareActivationAsync("publication-new", [candidateSchedule]);
+        Assert.Empty(await _store.ListDueAsync(Now, 10));
 
-        await store.ActivateAsync("publication-old", replacedActivationId: null);
-        Assert.Equal("publication-old", Assert.Single(await store.ListDueAsync(Now, 10)).ActivationId);
+        await _store.ActivateAsync("publication-old", replacedActivationId: null);
+        Assert.Equal("publication-old", Assert.Single(await _store.ListDueAsync(Now, 10)).ActivationId);
 
-        await store.ActivateAsync("publication-new", "publication-old");
-        Assert.Equal("publication-new", Assert.Single(await store.ListDueAsync(Now, 10)).ActivationId);
+        await _store.ActivateAsync("publication-new", "publication-old");
+        Assert.Equal("publication-new", Assert.Single(await _store.ListDueAsync(Now, 10)).ActivationId);
 
         // Compensation restores the retired projection and makes the failed candidate invisible again.
-        await store.ActivateAsync("publication-old", "publication-new");
-        Assert.Equal("publication-old", Assert.Single(await store.ListDueAsync(Now, 10)).ActivationId);
+        await _store.ActivateAsync("publication-old", "publication-new");
+        Assert.Equal("publication-old", Assert.Single(await _store.ListDueAsync(Now, 10)).ActivationId);
     }
 
     private (RecurringTriggerPumpTask Pump, MutableTimeProvider Clock) CreatePump(
@@ -191,7 +260,8 @@ public sealed class RecurringTriggerPumpTaskTests
         {
             SweepInterval = TimeSpan.FromSeconds(10),
             MaxBackoffInterval = TimeSpan.FromMinutes(5),
-            MaxSchedulesPerTick = maxSchedulesPerTick
+            MaxSchedulesPerTick = maxSchedulesPerTick,
+            ClaimVisibilityTimeout = Lease
         });
         var pump = new RecurringTriggerPumpTask(
             store, _bindingStore, router, new RecurringScheduleCalculator(), options, clock, NullLogger<RecurringTriggerPumpTask>.Instance);
@@ -200,9 +270,13 @@ public sealed class RecurringTriggerPumpTaskTests
 
     // Saves the schedule together with the trigger binding it owns — a fire only dispatches when its owning
     // binding exists in the index.
-    private async Task SeedAsync(IRecurringTriggerScheduleStore store, RecurringTriggerSchedule schedule)
+    private async Task SeedAsync(RecurringTriggerSchedule schedule)
     {
-        await store.SaveAsync(schedule);
+        await _store.SaveAsync(schedule);
+        await SaveBindingAsync(schedule);
+    }
+
+    private async Task SaveBindingAsync(RecurringTriggerSchedule schedule) =>
         await _bindingStore.SaveAsync(new WorkflowTriggerBinding(
             TriggerBindingId: WorkflowTriggerBinding.BuildId(schedule.ArtifactId, schedule.ExecutableNodeId, schedule.StimulusHash),
             ArtifactId: schedule.ArtifactId,
@@ -217,7 +291,8 @@ public sealed class RecurringTriggerPumpTaskTests
             CreatedAt: Now,
             ActivationId: schedule.ActivationId,
             SlotId: schedule.SlotId));
-    }
+
+    private static string Key(string scheduleId, DateTimeOffset occurrence) => $"recurring:{scheduleId}:{occurrence.UtcTicks}";
 
     private static RecurringTriggerSchedule Schedule(
         string id,
@@ -243,17 +318,27 @@ public sealed class RecurringTriggerPumpTaskTests
             IsActive = false
         };
 
+    /// <summary>
+    /// Records each route. <see cref="DieBeforeRouting"/> and an <see cref="OperationCanceledException"/> in
+    /// <see cref="Throw"/> stand in for a node that stops before or after its route, so nothing after it runs.
+    /// </summary>
     private sealed class FakeRouter : IStimulusRouter
     {
         public List<StimulusDispatchRequest> Requests { get; } = new();
         public Exception? Throw { get; set; }
+        public bool DieBeforeRouting { get; init; }
+        public Func<Task>? WhileRouting { get; init; }
 
-        public ValueTask<StimulusRoutingResult> RouteAsync(StimulusDispatchRequest request, CancellationToken cancellationToken = default)
+        public async ValueTask<StimulusRoutingResult> RouteAsync(StimulusDispatchRequest request, CancellationToken cancellationToken = default)
         {
+            if (DieBeforeRouting)
+                throw new OperationCanceledException("host stopping");
             Requests.Add(request);
+            if (WhileRouting is { } whileRouting)
+                await whileRouting();
             if (Throw is not null)
                 throw Throw;
-            return new ValueTask<StimulusRoutingResult>(new StimulusRoutingResult([], []));
+            return new StimulusRoutingResult([], []);
         }
     }
 
@@ -265,8 +350,11 @@ public sealed class RecurringTriggerPumpTaskTests
             new(schedule);
 
         public ValueTask<IReadOnlyCollection<RecurringTriggerSchedule>> ListDueAsync(DateTimeOffset asOf, int limit, CancellationToken cancellationToken = default) =>
+            new(Array.Empty<RecurringTriggerSchedule>());
+
+        public ValueTask<IReadOnlyCollection<RecurringTriggerOccurrenceClaim>> ClaimDueAsync(RecurringTriggerOccurrenceClaimRequest request, CancellationToken cancellationToken = default) =>
             Healthy
-                ? new ValueTask<IReadOnlyCollection<RecurringTriggerSchedule>>(Array.Empty<RecurringTriggerSchedule>())
+                ? new ValueTask<IReadOnlyCollection<RecurringTriggerOccurrenceClaim>>(Array.Empty<RecurringTriggerOccurrenceClaim>())
                 : throw new InvalidOperationException("store down");
 
         public ValueTask<RecurringTriggerSchedule?> FindAsync(string scheduleId, CancellationToken cancellationToken = default) =>

@@ -117,6 +117,15 @@ internal static class RuntimeRecurringTriggerScheduleProviderSmoke
             Assert.False(await store.TryAdvanceAsync(RecurringTriggerSchedule.BuildId("artifact-order", "a"), expected, now));
             Assert.Equal(now, (await store.FindAsync(RecurringTriggerSchedule.BuildId("artifact-order", "a")))!.NextOccurrence);
 
+            // The occurrence claim columns (#2198) round-trip: claim, release after a failure, re-claim, settle.
+            var failed = Assert.Single(await store.ClaimDueAsync(new RecurringTriggerOccurrenceClaimRequest("native-pump", now, TimeSpan.FromMinutes(1), 1)));
+            Assert.Equal(RecurringTriggerSchedule.BuildId("artifact-order", "c"), failed.Schedule.ScheduleId);
+            Assert.True(await store.ReleaseClaimAsync(failed, now.AddSeconds(10)));
+            var retried = Assert.Single(await store.ClaimDueAsync(new RecurringTriggerOccurrenceClaimRequest("native-pump", now.AddSeconds(10), TimeSpan.FromMinutes(1), 1)));
+            Assert.Equal((failed.Schedule.ScheduleId, 1), (retried.Schedule.ScheduleId, retried.FailureCount));
+            Assert.True(await store.SettleClaimAsync(retried, now.AddMinutes(5)));
+            Assert.Equal(now.AddMinutes(5), (await store.FindAsync(failed.Schedule.ScheduleId))!.NextOccurrence);
+
             var activationSchedule = Schedule("artifact-activation", "node", now, "activation", "slot");
             await store.PrepareActivationAsync("activation", [activationSchedule]);
             Assert.DoesNotContain(RecurringTriggerSchedule.BuildId("activation", "artifact-activation", "node"),

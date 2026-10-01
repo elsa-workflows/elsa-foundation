@@ -111,6 +111,33 @@ public sealed class RecurringTriggerScheduleIndexerTests
     }
 
     [Fact]
+    public async Task Index_Republish_KeepsAnOccurrenceThatIsDueButHasNotFired()
+    {
+        // #2198: a re-index recomputed the cursor from now, so an occurrence that fell due shortly before the republish and
+        // had not fired yet was replaced by the next one and silently skipped.
+        var store = new InMemoryRecurringTriggerScheduleStore();
+        var due = Now.AddSeconds(-5);
+        await store.SaveAsync(TimerSchedule(due));
+        var indexer = CreateIndexer(new FakeInner(), store, new FakeScheduleProvider("Elsa.Timer", "Timer", "hash-1", "PT5M"));
+
+        await indexer.IndexAsync(Executable("artifact-1", TriggerNode("node-1", "Elsa.Timer")));
+
+        Assert.Equal(due, (await store.FindAsync(RecurringTriggerSchedule.BuildId("artifact-1", "node-1")))!.NextOccurrence);
+    }
+
+    [Fact]
+    public async Task Index_Republish_ReanchorsAnOccurrenceThatIsNotDueYet()
+    {
+        var store = new InMemoryRecurringTriggerScheduleStore();
+        await store.SaveAsync(TimerSchedule(Now.AddMinutes(2)));
+        var indexer = CreateIndexer(new FakeInner(), store, new FakeScheduleProvider("Elsa.Timer", "Timer", "hash-1", "PT5M"));
+
+        await indexer.IndexAsync(Executable("artifact-1", TriggerNode("node-1", "Elsa.Timer")));
+
+        Assert.Equal(Now.AddMinutes(5), (await store.FindAsync(RecurringTriggerSchedule.BuildId("artifact-1", "node-1")))!.NextOccurrence);
+    }
+
+    [Fact]
     public async Task Index_ExhaustedCron_FailsBeforeInnerAndPreservesSeededBindingsAndSchedules()
     {
         var bindingStore = new InMemoryWorkflowTriggerBindingStore();
@@ -328,6 +355,10 @@ public sealed class RecurringTriggerScheduleIndexerTests
     private static RecurringTriggerSchedule Schedule(string artifactId, string nodeId, string stimulusHash) =>
         new(RecurringTriggerSchedule.BuildId(artifactId, nodeId), artifactId, nodeId, "Cron", stimulusHash,
             RecurringScheduleKind.Cron, "0 * * * *", Now.AddHours(1), Now);
+
+    private static RecurringTriggerSchedule TimerSchedule(DateTimeOffset next) =>
+        new(RecurringTriggerSchedule.BuildId("artifact-1", "node-1"), "artifact-1", "node-1", "Timer", "hash-1",
+            RecurringScheduleKind.Interval, "PT5M", next, Now.AddHours(-1));
 
     private static WorkflowExecutable Executable(string artifactId, ExecutableNode root) =>
         new(

@@ -19,10 +19,16 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 /// at or before the supplied instant, ordered by (NextOccurrence, ScheduleId) and capped by <paramref name="limit"/>.
 /// </para>
 /// <para>
-/// <see cref="TryAdvanceAsync"/> is the compare-and-swap that claims an occurrence: it advances the cursor only
-/// if the stored <see cref="RecurringTriggerSchedule.NextOccurrence"/> still equals the caller's expected value,
-/// so at most one worker fires a given occurrence. This is the seam a future clustered store keeps to make the
-/// pump cluster-safe without changing the pump.
+/// <b>At-least-once occurrences (#2198).</b> The pump fires through the claim transitions: <see cref="ClaimDueAsync"/>
+/// records each due occurrence as in flight under a fenced, time-limited claim <i>before</i> it is routed, and the cursor
+/// moves past the occurrence only through <see cref="SettleClaimAsync"/>. A claimant that dies, or whose fire fails, leaves
+/// the occurrence in the cursor, so it is fired again: by a peer once the claim's visibility lapses, or after the backoff a
+/// <see cref="ReleaseClaimAsync"/> set. Every claim transition is a compare-and-set on the claim's owner, fencing token and
+/// the row's revision. A replacement store must implement them: the pump has no at-most-once fallback.
+/// </para>
+/// <para>
+/// <see cref="TryAdvanceAsync"/> is a plain compare-and-swap of the cursor. The pump no longer uses it to claim an
+/// occurrence, because advancing before the fire is what made a crash between the two lose the occurrence.
 /// </para>
 /// </remarks>
 public interface IRecurringTriggerScheduleStore
@@ -77,10 +83,54 @@ public interface IRecurringTriggerScheduleStore
     /// <summary>
     /// Compare-and-swap advance of the fire cursor: sets <see cref="RecurringTriggerSchedule.NextOccurrence"/> to
     /// <paramref name="newNextOccurrence"/> only if the stored value still equals <paramref name="expectedNextOccurrence"/>.
-    /// Returns <c>true</c> when this caller won the claim, <c>false</c> when the schedule is gone or another
-    /// worker already advanced it.
+    /// Returns <c>true</c> when this caller moved the cursor, <c>false</c> when the schedule is gone or another
+    /// worker already moved it.
     /// </summary>
     ValueTask<bool> TryAdvanceAsync(string scheduleId, DateTimeOffset expectedNextOccurrence, DateTimeOffset newNextOccurrence, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Atomically claims at most <see cref="RecurringTriggerOccurrenceClaimRequest.Limit"/> active schedules whose
+    /// occurrence is due and whose earlier claim, if any, is no longer visible, ordered by next occurrence then id. The
+    /// claim is the occurrence's durable in-flight marker; the cursor is left on the occurrence. Competing claimants
+    /// cannot receive the same current fencing token.
+    /// </summary>
+    ValueTask<IReadOnlyCollection<RecurringTriggerOccurrenceClaim>> ClaimDueAsync(
+        RecurringTriggerOccurrenceClaimRequest request,
+        CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("This recurring-schedule store does not support occurrence claims.");
+
+    /// <summary>
+    /// Extends a claim's visibility to <paramref name="now"/> plus <paramref name="visibilityTimeout"/> while its owner,
+    /// fencing token and revision are current. Returns the renewed claim, or <see langword="null"/> when the claim no
+    /// longer holds the schedule.
+    /// </summary>
+    ValueTask<RecurringTriggerOccurrenceClaim?> RenewClaimAsync(
+        RecurringTriggerOccurrenceClaim claim,
+        DateTimeOffset now,
+        TimeSpan visibilityTimeout,
+        CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("This recurring-schedule store does not support occurrence claims.");
+
+    /// <summary>
+    /// Settles the claimed occurrence: moves the cursor to <paramref name="nextOccurrence"/> and clears the claim, only
+    /// while the claim is current. This is the only transition that lets the pump drop an occurrence. Returns
+    /// <c>false</c> when the claim is stale, in which case nothing changed.
+    /// </summary>
+    ValueTask<bool> SettleClaimAsync(
+        RecurringTriggerOccurrenceClaim claim,
+        DateTimeOffset nextOccurrence,
+        CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("This recurring-schedule store does not support occurrence claims.");
+
+    /// <summary>
+    /// Releases a current claim after a failed fire without moving the cursor, counting the failure. The occurrence stays
+    /// due and becomes claimable again at <paramref name="visibleAt"/>. Returns <c>false</c> when the claim is stale.
+    /// </summary>
+    ValueTask<bool> ReleaseClaimAsync(
+        RecurringTriggerOccurrenceClaim claim,
+        DateTimeOffset visibleAt,
+        CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("This recurring-schedule store does not support occurrence claims.");
 
     /// <summary>Deletes every schedule owned by an artifact. Deleting for an unknown artifact is a no-op.</summary>
     ValueTask DeleteByArtifactAsync(string artifactId, CancellationToken cancellationToken = default);
