@@ -109,6 +109,72 @@ public sealed class EfSchemaReadabilitySourceTests : IDisposable
         Assert.Equal((null, "1.0.0"), (Entry().DatabaseIdentity, Entry().ObservedFinalizedVersion));
     }
 
+    /// <summary>
+    /// Spec 183's FR-019, amended 2026-09-30: an entry says whether the family's module is active in this host, so the
+    /// backfill's settle condition can leave out a host that only loads the declaration (spec 186, FR-012). Loading it
+    /// keeps it in the report, and so in every readability count (FR-022).
+    /// </summary>
+    [Fact]
+    public void An_entry_says_its_module_is_active_only_while_a_gate_of_the_host_has_it_admitted()
+    {
+        var observations = new EfSchemaFinalizationObservations();
+        var family = RuntimeArtifactEfModule.SchemaFamily;
+        var gate = new StubGate();
+        ReadabilityEntry Entry() => EfSchemaReadabilitySource.Read(EfSchemaFamilyCatalog.Discover([RuntimeModule]), observations: observations)
+            .Entries.Single(entry => entry.Family == family);
+
+        Assert.False(Entry().ModuleActive);
+
+        observations.Observe(family, "database-a", "1.0.0");
+        Assert.False(Entry().ModuleActive);
+
+        observations.Activate(gate, "database-a", [family]);
+        Assert.True(Entry().ModuleActive);
+
+        observations.Deactivate(gate, [family]);
+        Assert.False(Entry().ModuleActive);
+        Assert.Equal([RuntimeArtifactEfModule.SchemaVersion], Entry().ReadableVersions);
+    }
+
+    /// <summary>
+    /// A source with no observations to ask cannot tell which modules are active, so it leaves them all active: the
+    /// direction that counts the member in the backfill's settle condition, where saying inactive could let it pass early.
+    /// </summary>
+    [Fact]
+    public void A_source_with_no_observations_reports_every_entry_active()
+    {
+        var entries = EfSchemaReadabilitySource.Read(EfSchemaFamilyCatalog.Discover([RuntimeModule])).Entries;
+
+        Assert.NotEmpty(entries);
+        Assert.All(entries, entry => Assert.True(entry.ModuleActive));
+    }
+
+    /// <summary>
+    /// Two tenants of one host in two databases, one stopped: the entry names the database of the one still running and is
+    /// active, so it does not apply to the stopped tenant's database, where this host writes nothing, and does not hold
+    /// that database's settle condition back.
+    /// </summary>
+    [Fact]
+    public void An_entry_that_names_a_running_tenants_database_does_not_apply_to_the_database_of_a_tenant_that_stopped()
+    {
+        var observations = new EfSchemaFinalizationObservations();
+        var family = RuntimeArtifactEfModule.SchemaFamily;
+        var (running, stopped) = (new StubGate(), new StubGate());
+        foreach (var (gate, database) in new[] { (running, "database-x"), (stopped, "database-y") })
+        {
+            observations.Observe(family, database, "1.0.0");
+            observations.Activate(gate, database, [family]);
+        }
+
+        observations.Deactivate(stopped, [family]);
+        var entry = EfSchemaReadabilitySource.Read(EfSchemaFamilyCatalog.Discover([RuntimeModule]), observations: observations)
+            .Entries.Single(entry => entry.Family == family);
+
+        Assert.Equal(("database-x", true), (entry.DatabaseIdentity, entry.ModuleActive));
+        Assert.True(entry.AppliesTo("database-x"));
+        Assert.False(entry.AppliesTo("database-y"));
+    }
+
     [Fact]
     public void Every_loaded_declaration_of_a_family_narrows_what_the_host_reports_it_can_read()
     {
@@ -242,5 +308,19 @@ public sealed class EfSchemaReadabilitySourceTests : IDisposable
         var package = new PackageLoadContext();
         _packages.Add(package);
         return package.Load(SyntheticSchemaFamilies.Image(module, [module], family));
+    }
+
+    private sealed class StubGate : IEfSchemaModuleGate
+    {
+        public string Module => Runtime;
+
+        public EfSchemaFamilyStatus? Observe(string family) => null;
+
+        public IReadOnlyList<EfSchemaFamilyStatus> Observe() => [];
+
+        public Task<bool> RefreshIfOlderThanAsync(TimeSpan maxAge, CancellationToken cancellationToken = default) => Task.FromResult(false);
+
+        public Task<IReadOnlyList<EfSchemaFamilyStatus>> ReadStatusAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<EfSchemaFamilyStatus>>([]);
     }
 }

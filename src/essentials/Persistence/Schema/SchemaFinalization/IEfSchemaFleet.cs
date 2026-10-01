@@ -46,7 +46,7 @@ public interface IEfSchemaFleet
     /// <summary>
     /// How long a write a member began before it observed a newer finalized version can still be in flight once the
     /// member reports observing it: the membership expiry period plus the skew allowance (spec 186, FR-012; spec 183,
-    /// FR-006). The backfill's default settle margin.
+    /// FR-006). The floor for the backfill's settle margin: a configured margin may lengthen it and never shortens it.
     /// </summary>
     TimeSpan SettleMargin { get; }
 

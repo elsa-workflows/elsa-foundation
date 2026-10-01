@@ -170,6 +170,38 @@ public sealed class MemberQueryTests
         Assert.True(Evaluate(MemberQuery.Counting(settled), atTarget, later, unrelated, elsewhere, expired).EveryConsideredMemberMatches);
     }
 
+    /// <summary>A member that loads the family's declaration without activating its module writes none of its rows (spec 186, FR-012).</summary>
+    [Fact]
+    public void The_settle_condition_leaves_out_a_member_whose_module_is_not_active_and_still_waits_for_one_that_is()
+    {
+        var settled = new ObservesFinalizedSchemaVersion(Family, ["2"], "db-a");
+        var loadedOnly = Member("loaded-only", report: Reports(Observing(Family, null, "db-a", moduleActive: false)));
+        var behindButInactive = Member("behind-but-inactive", report: Reports(Observing(Family, "1", "db-a", moduleActive: false)));
+        var activeAndBehind = Member("active-and-behind", report: Reports(Observing(Family, null, "db-a")));
+        var activeAndSettled = Member("active-and-settled", report: Reports(Observing(Family, "2", "db-a")));
+        var oneActiveOneNot = Member("one-active-one-not", report: Reports(
+            Observing(Family, "2", "db-a"),
+            Observing(Family, null, null, moduleActive: false)));
+
+        var answer = Evaluate(MemberQuery.Counting(settled), loadedOnly, behindButInactive, activeAndBehind, activeAndSettled, oneActiveOneNot);
+
+        Assert.Equal(new[] { loadedOnly, behindButInactive, activeAndSettled, oneActiveOneNot }, answer.Matches);
+        Assert.Same(activeAndBehind, Assert.Single(answer.Failures).Member);
+    }
+
+    /// <summary>What "loaded" means for readability is unchanged: an inactive module's declaration still counts (spec 183, FR-022).</summary>
+    [Fact]
+    public void An_inactive_module_still_counts_for_what_the_member_can_read_and_for_placement()
+    {
+        var reads = new ReadsSchemaVersion(Family, "3");
+        var inactive = Member("inactive", report: Reports(Observing(Family, null, null, moduleActive: false)));
+        var inactiveBehind = Member("inactive-behind", report: Reports(Observing(Family, "1", null, moduleActive: false)));
+
+        Assert.Empty(Evaluate(MemberQuery.Counting(reads), inactive).Failures);
+        Assert.Single(Evaluate(MemberQuery.Counting(new ReadsSchemaVersion(Family, "4")), inactive).Failures);
+        Assert.Same(inactiveBehind, Assert.Single(Evaluate(MemberQuery.Placement(new ObservesFinalizedSchemaVersion(Family, ["2"])), inactiveBehind).Failures).Member);
+    }
+
     [Fact]
     public void A_settle_condition_names_at_least_one_version_and_compares_by_value()
     {
@@ -219,8 +251,8 @@ public sealed class MemberQueryTests
     private static ReadabilityEntry Entry(string family, string[] versions, string? databaseIdentity = null) =>
         new(family, "OrdersModule", versions, databaseIdentity);
 
-    private static ReadabilityEntry Observing(string family, string observed, string? databaseIdentity) =>
-        new(family, "OrdersModule", ["1", "2", "3"], databaseIdentity, observed);
+    private static ReadabilityEntry Observing(string family, string? observed, string? databaseIdentity, bool moduleActive = true) =>
+        new(family, "OrdersModule", ["1", "2", "3"], databaseIdentity, observed, moduleActive);
 
     private static MemberReport Reports(params ReadabilityEntry[] entries) => new(new ReadabilitySection(entries));
 }

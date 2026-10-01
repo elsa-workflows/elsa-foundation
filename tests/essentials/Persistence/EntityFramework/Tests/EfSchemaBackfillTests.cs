@@ -153,6 +153,33 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// FR-012: the configured settle margin may lengthen the fleet's, for a shell drain longer than the default, and never
+    /// shortens it: a member's deactivation reaches the report one heartbeat later and its shell's last writes can outlast
+    /// the drain, so a shorter value is raised to what the fleet needs to see a member stop writing.
+    /// </summary>
+    [Theory]
+    [InlineData(1, 35)]
+    [InlineData(0, 35)]
+    [InlineData(35, 35)]
+    [InlineData(60, 60)]
+    public async Task A_configured_settle_margin_never_shortens_the_fleets_and_may_lengthen_it(int configuredSeconds, int expectedSeconds)
+    {
+        await SeedFamilyAsync();
+        var host = await HostAsync("host-a", margin: TimeSpan.FromSeconds(35), configuredMargin: TimeSpan.FromSeconds(configuredSeconds));
+
+        await host.RunOnceAsync();
+        clock.Advance(TimeSpan.FromSeconds(expectedSeconds - 1));
+        await host.RunOnceAsync();
+
+        Assert.Equal("1", (await database.RecordAsync()).Finish!.CompletionVersion);
+
+        clock.Advance(TimeSpan.FromSeconds(1));
+        await host.RunOnceAsync();
+
+        Assert.Equal("2", (await database.RecordAsync()).Finish!.CompletionVersion);
+    }
+
+    /// <summary>
     /// FR-013 and FR-024, both ways: a row written below the target behind the upgrade pass is found by verification, which
     /// records nothing and starts again; the pass after it, finding nothing, records completion.
     /// </summary>
@@ -992,7 +1019,8 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
         TimeSpan? margin = null,
         TimeSpan? claim = null,
         int verificationPasses = 3,
-        string current = "2")
+        string current = "2",
+        TimeSpan? configuredMargin = null)
     {
         families ??= BackfillFamily.Families(current);
         var member = members[hostId] = fleet.Add(new FakeMember(hostId).Reading(BackfillFamily.Family, [.. families.Chains.Single().ReadableVersions]));
@@ -1000,7 +1028,7 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
         var host = new BackfillHost(
             database,
             new FakeFleet(fleet, member) { SettleMargin = margin ?? TimeSpan.Zero },
-            Options(claim, verificationPasses),
+            Options(claim, verificationPasses, configuredMargin),
             clock,
             families,
             member.Observations);
@@ -1009,8 +1037,9 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
         return host;
     }
 
-    private static EfSchemaBackfillOptions Options(TimeSpan? claim = null, int verificationPasses = 3) => new()
+    private static EfSchemaBackfillOptions Options(TimeSpan? claim = null, int verificationPasses = 3, TimeSpan? settleMargin = null) => new()
     {
+        SettleMargin = settleMargin,
         BatchSize = 2,
         BatchPause = TimeSpan.Zero,
         ClaimDuration = claim ?? TimeSpan.FromMinutes(1),

@@ -181,7 +181,7 @@ public sealed class EfClusterMembershipToolingSourceTests : IAsyncDisposable
     {
         var entries = reads is null
             ? ""
-            : $$"""{"family":"{{Family}}","efModule":"Notes.Module","readableVersions":[{{string.Join(",", reads.Select(version => $"\"{version}\""))}}],"databaseIdentity":{{(database is null ? "null" : $"\"{database}\"")}},"observedFinalizedVersion":null}""";
+            : $$"""{"family":"{{Family}}","efModule":"Notes.Module","readableVersions":[{{string.Join(",", reads.Select(version => $"\"{version}\""))}}],"databaseIdentity":{{(database is null ? "null" : $"\"{database}\"")}},"observedFinalizedVersion":null,"moduleActive":true}""";
         var row = _fixture.NewRow(hostId) with
         {
             HeartbeatAtUtcTicks = (_fixture.Clock.GetUtcNow() - silent).UtcTicks,

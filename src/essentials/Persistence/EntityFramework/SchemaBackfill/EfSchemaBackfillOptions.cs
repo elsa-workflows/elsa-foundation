@@ -39,7 +39,9 @@ public sealed class EfSchemaBackfillOptions
 
     /// <summary>
     /// How long the settle condition must have held before the verification pass starts (FR-012), or null for the
-    /// membership expiry period plus the skew allowance, which the fleet reports.
+    /// membership expiry period plus the skew allowance, which the fleet reports. It may lengthen that margin and never
+    /// shortens it: that floor bounds writes begun before the writer observed the finalized version (spec 186, FR-012,
+    /// "The settle margin has a floor"), so a smaller value is raised to the fleet's, with a warning.
     /// </summary>
     public TimeSpan? SettleMargin { get; set; }
 

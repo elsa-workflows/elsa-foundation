@@ -136,7 +136,7 @@ internal sealed class FakeFleet(FakeFleetState state, FakeMember self) : IEfSche
     public async ValueTask PublishAsync(CancellationToken cancellationToken = default)
     {
         if (BeforePublish is { } before)
-            await before();
+            await before().WaitAsync(cancellationToken);
         if (FailPublish)
             throw new InvalidOperationException($"{Self} has not joined.");
         Publishes++;
@@ -147,7 +147,7 @@ internal sealed class FakeFleet(FakeFleetState state, FakeMember self) : IEfSche
     {
         var count = ++Counts;
         if (BeforeCount is { } before)
-            await before(count);
+            await before(count).WaitAsync(cancellationToken);
         var answer = state.Count(family, version, databaseIdentity);
         if (AfterCount is { } after)
             await after();

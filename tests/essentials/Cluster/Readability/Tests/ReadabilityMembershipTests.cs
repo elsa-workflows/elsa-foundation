@@ -37,7 +37,7 @@ public sealed class ReadabilityMembershipTests : IAsyncDisposable
         var self = Assert.Single((await _membership.ReadFleetAsync(FleetReadMode.Fresh)).Members);
 
         Assert.Equal(ClusterProviderKind.InProcess, _membership.ProviderKind);
-        Assert.Equal(new ReadabilityEntry(Family, "Workflows.Runtime", [CurrentVersion]), Entry(self));
+        Assert.Equal(new ReadabilityEntry(Family, "Workflows.Runtime", [CurrentVersion], moduleActive: false), Entry(self));
     }
 
     [Fact]
