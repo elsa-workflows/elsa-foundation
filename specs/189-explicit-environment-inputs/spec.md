@@ -2,10 +2,10 @@
 
 **Feature Branch**: `codex/2277-explicit-environment-input-spec`  
 **Created**: 2026-10-01  
-**Status**: Draft  
+**Status**: Approved — authoring review passed; implementation remains gated on #2277 delivery
 **Input**: User description: Define a bounded first lane for explicitly supplied, private intended environment inputs during composition inspection while preserving candidate v1 and file-only compatibility.
 
-This specification defines the actor-visible behavior and proof obligations for an explicit environment-input lane. Exact input grammar and numeric limits remain planning decisions; source and integration constraints are linked in the planning handoff notes below.
+This specification defines the actor-visible behavior and proof obligations for an explicit environment-input lane. Exact input grammar, numerical limits and protocol choices are recorded in the [reviewed plan](plan.md) and its contracts; source and integration constraints are linked in the planning handoff notes below.
 
 ## User Scenarios & Testing
 
@@ -55,7 +55,7 @@ As a maintainer, I want existing candidate v1 and file-only behavior to remain c
 
 - A JSON `null`, tombstone, or removal operation is refused; an empty string is valid; omission contributes no external entry. The first lane must not invent a delete operation whose precedence is unclear. Valid authored feature removals remain supported and must survive reconciliation.
 - Raw keys that differ only by case, by `__` versus `:`, or by another provider alias must be admitted and normalized deterministically, or refused before lossy normalization. The ordinary normalized `ConnectionStrings__<name>` form is supported as a normal key. Standard service-connection prefix expansions are explicitly refused in this lane; support is deferred follow-up work and cannot be added silently during planning.
-- A duplicate raw key, normalized collision, unsupported control character, over-limit key/value, malformed capture, or unsupported source shape is refused before any private value reaches a public projection. Exact grammar and bounds remain planning choices.
+- A duplicate raw key, normalized collision, unsupported control character, over-limit key/value, malformed capture, or unsupported source shape is refused before any private value reaches a public projection. Exact grammar and bounds are defined in the planning contract.
 - A changed source file, mixed capture, stale binding identity, cancellation, or timeout refuses the inspection without a partial result or later reuse of a stale private capture.
 - An external feature-selection change that diverges from accepted IDs follows the existing edit-and-accept recovery path. Inspection does not assume that `composition accept` can observe external environment changes automatically.
 - Selected-host inspection executes trusted selected host code. The lane provides no general sandbox; trust of selected host code is explicit and does not authorize runtime activation.
@@ -71,7 +71,7 @@ As a maintainer, I want existing candidate v1 and file-only behavior to remain c
 - **FR-003**: The inspection MUST privately capture one complete explicitly supplied overlay document for the invocation, associate it with the accepted composition and selected context, and use that captured input consistently throughout inspection. It MUST NOT reread or mix a different generation of supplied input.
 - **FR-004**: The enrolled Workbench host policy MUST preserve its reviewed source ordering and precedence. The first lane MUST NOT imply enrollment for another host whose source policy has not been proven.
 - **FR-005**: Candidate v1 and file-only requests MUST remain compatible. The explicit-input lane MUST be negotiated as a separate capability and MUST refuse unsupported versions, shapes, or hosts rather than silently falling back to ambient inputs or changing candidate v1 semantics.
-- **FR-006**: Raw-key admission and normalization MUST be deterministic and MUST detect duplicate or normalized-colliding entries before any lossy normalization. Exact supported character grammar and bounds remain planning decisions; this specification does not settle a strict ASCII policy.
+- **FR-006**: Raw-key admission and normalization MUST be deterministic and MUST detect duplicate or normalized-colliding entries before any lossy normalization. The planning contract defines exact supported character grammar and bounds without imposing strict ASCII.
 - **FR-007**: Empty-string values MUST remain intentional values. JSON `null`, tombstone, and removal forms MUST be refused in the first lane. An omitted key MUST contribute no external entry and MUST NOT delete or mask a lower declared source.
 - **FR-008**: Ordinary normalized `ConnectionStrings__<name>` keys MUST follow the same supported-key rules as other normalized keys. Standard service-connection prefix expansions MUST be refused in the first lane. Supporting those expansions is deferred follow-up work and MUST NOT be added silently during planning.
 - **FR-009**: The host MUST reconcile accepted, requested, effective, and disabled feature selections before persistence preparation. Valid authored feature removals MUST be preserved. Divergence between the sets, a removed feature remaining active contrary to accepted intent, a required-edge conflict, or a stale accepted identity MUST refuse before preparation and MUST NOT silently rewrite accepted intent.
@@ -110,18 +110,18 @@ As a maintainer, I want existing candidate v1 and file-only behavior to remain c
 - The first enrolled host is the reviewed Workbench policy. Its source ordering is preserved from the existing host composition; another host requires an independently proven policy before enrollment.
 - Existing candidate v1 and file-only contracts remain closed and compatible. The new lane uses capability/version negotiation rather than changing those contracts.
 - Existing composition capture and host configuration policy provide the proof basis. Detailed source and integration constraints are recorded in the planning handoff notes.
-- Exact numeric limits, envelope shape, capability name/version, and raw-key allowlist are intentionally left to planning.
+- The actor requirements delegate exact numerical limits, envelope shape, capability name/version and raw-key grammar to the reviewed planning contract.
 - The intended overlay is supplied by the caller as an explicit input and is not evidence of what is deployed or physically available. Privacy is enforced through private capture, scope, and output boundaries; no memory-erasure guarantee is implied.
 - The existing `composition accept` workflow is the recovery mechanism for accepted-selection divergence. No new acceptance command or silent acceptance behavior is assumed.
 - Ordinary normalized `ConnectionStrings__<name>` keys are in scope. Standard service-connection prefix expansion is explicitly refused in the first lane and deferred to separately scoped follow-up work.
 - Configuration taxonomy and broader host enrollment remain deferred where the constitutions mark them provisional or deferred. This specification does not ratify a general configuration model.
 
-### Planning Decisions Still Open
+### Planning Resolution
 
-- Choose and document the negotiated capability/version and transport envelope without changing candidate v1.
-- Choose the exact raw-key grammar, duplicate admission rule, normalized-key collision behavior, and bounds from the existing budgets and test matrix; do not impose strict ASCII without evidence.
-- Choose the safe source-family/provenance vocabulary and the complete proof matrix for the supported inspection flow, selection reconciliation, and same-capture preparation.
-- Treat any future service-prefix expansion as separately scoped follow-up work; first-lane planning cannot add it.
+- [Research](research.md) and the [environment-input contract](contracts/environment-input-v1.md) settle additive capability negotiation, private transport, supported key/value grammar, collision policy, ownership and bounds while preserving candidate v1.
+- The [CLI contract](contracts/cli-inspect-environment-v1.md) defines opt-in inspection, truthful source-family evidence, refusal classes and existing edit-and-accept recovery.
+- The [proof matrix](contracts/acceptance-proof-matrix.md) assigns all requirements and outcomes to actual public-wrapper/Workbench, same-capture preparation, compatibility, lifecycle and privacy cases. Every case remains planned until implementation.
+- Service-prefix expansion remains separately scoped follow-up work; first-lane planning does not add it.
 
 ### Planning Handoff Notes
 

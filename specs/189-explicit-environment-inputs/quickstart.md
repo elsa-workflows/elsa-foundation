@@ -78,13 +78,16 @@ This journey proves an achievable external-toggle recovery. It must not assume t
 Run the existing affected projects after implementation, using the repository's normal build-slot wrapper and recording discovered/selected cases:
 
 ```text
-dotnet test tests/essentials/Cli/Tests/Elsa.Cli.Tests.csproj
-dotnet test tests/essentials/Modularity/Planning/Tests/Elsa.Modularity.Planning.Tests.csproj
-dotnet test tests/essentials/Persistence/EntityFrameworkCore/Migrations/Tests/Elsa.Persistence.EntityFrameworkCore.Migrations.Tests.csproj
-dotnet test tests/essentials/Architecture/Elsa.Architecture.Tests.csproj
-dotnet test tests/essentials/Persistence/EntityFrameworkCore/CliAcceptance/ProviderTests/Elsa.Persistence.EntityFrameworkCore.CliAcceptance.ProviderTests.csproj
+bash tools/architecture/restore-ci-project-graph.sh --locked-mode -p:WarningsNotAsErrors=NU1603
+dotnet test tests/essentials/Cli/Tests/Elsa.Cli.Tests.csproj -c Release --no-restore
+dotnet test tests/essentials/Modularity/Planning/Tests/Elsa.Modularity.Planning.Tests.csproj -c Release --no-restore
+dotnet test tests/essentials/Persistence/EntityFrameworkCore/Migrations/Tests/Elsa.Persistence.EntityFrameworkCore.Migrations.Tests.csproj -c Release --no-restore
+dotnet test tests/essentials/Architecture/Elsa.Architecture.Tests.csproj -c Release --no-restore
+dotnet test tests/essentials/Persistence/EntityFrameworkCore/CliAcceptance/ProviderTests/Elsa.Persistence.EntityFrameworkCore.CliAcceptance.ProviderTests.csproj -c Release --no-restore
 dotnet run --project tools/maps/Elsa.Maps.Generator -- check
 ```
+
+The architecture guard compares evaluated Release and isolated Debug restore graphs. The existing restore script supplies both; a fresh worktree without those graphs cannot run the full guard. Use the normal build-slot wrapper and preserve the two graph locations rather than bypassing the guard.
 
 The implementation proof must include the public `DotnetElsa.cs` process wrapper against the built Workbench output, not only in-process fixture calls. Existing fixture hosts cover controlled protocol and refusal cases. The real database/provider acceptance project remains separate and must not be used to claim that the inspection operation accessed a database.
 

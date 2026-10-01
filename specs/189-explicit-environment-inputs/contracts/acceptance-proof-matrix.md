@@ -46,7 +46,7 @@ No new project, provider, permanent test cadence, or standalone ambient-environm
 
 ## Numeric boundary cases
 
-The implementation proof must include both the exact admitted value and the first refused value for every bound:
+The implementation proof must include the exact admitted value and the first refused value where each is reachable under the closed shape; compound and redundant bounds are identified below:
 
 - raw document: exactly 1 MiB and one byte over;
 - each selected candidate file: exactly 1 MiB decoded and one byte over;
@@ -60,6 +60,8 @@ The implementation proof must include both the exact admitted value and the firs
 - host response: exactly 4 MiB and one byte over;
 - JSON depth: existing depth 64 and one over;
 - timeout option: existing 1 and 300 second endpoints plus invalid adjacent values.
+
+With at most four selected files and a 1 MiB cap per file, the 4 MiB aggregate cap is redundant: a one-over aggregate specimen also violates a per-file or file-count guard. Record that compound refusal without claiming an independently valid aggregate-only input or a mutation proof of that redundant guard. Likewise, use existing valid selected-JSON cases for the depth-64 boundary; the explicit document and envelopes have shallow closed shapes, so nested invalid objects cannot be called valid exact-depth overlays.
 
 The test must calculate encoded bytes before allocation and retain the final serialized request/response ceilings as authoritative. A per-part pass is not evidence that a combined maximum fits.
 
