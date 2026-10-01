@@ -171,6 +171,9 @@ internal static class ProjectionSwitchContract
             ASwitchAcrossAProjectionPreparedAgainAsync(harness, ProjectionReadPoint.BeforeStateAgain)
     };
 
+    private static readonly Dictionary<string, Func<ProjectionStoreHarness, Task>> AllScenarios =
+        Switches.Concat(StateReads).Concat(InterleavedSwitches).ToDictionary(scenario => scenario.Key, scenario => scenario.Value);
+
     public static TheoryData<string, string> Scenarios => Cases((BothStores, Switches.Keys), ([TriggerBindings], StateReads.Keys));
 
     public static TheoryData<string, string> InterleavedSwitchScenarios => Cases((BothStores, InterleavedSwitches.Keys));
@@ -183,7 +186,7 @@ internal static class ProjectionSwitchContract
             await context.Database.EnsureCreatedAsync();
         await harness.PrepareAsync(Candidate);
 
-        await (Switches.GetValueOrDefault(scenario) ?? StateReads.GetValueOrDefault(scenario) ?? InterleavedSwitches[scenario])(harness);
+        await AllScenarios[scenario](harness);
     }
 
     private static TheoryData<string, string> Cases(params (string[] Stores, IEnumerable<string> Scenarios)[] sets)

@@ -25,6 +25,9 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 /// immutable fingerprints leave out, the claim columns, and a row's presence, which an active projection does not require,
 /// while a prepared one refuses the delete), and the row's own revision moves, so a switch that read the row loses its
 /// write and reads again. <see cref="SaveAsync"/> refuses to change a schedule a projection manages.
+/// One residual remains: a replaced, active projection that is deleted, prepared again with identical content and activated
+/// again within one switch attempt, while a claim returns a row to the revision that attempt read, is indistinguishable by
+/// generation. Closing that would need a per-generation column.
 /// </para>
 /// </remarks>
 public sealed class EfRecurringTriggerScheduleStore(
