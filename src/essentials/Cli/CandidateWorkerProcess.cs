@@ -97,7 +97,11 @@ public sealed class CandidateWorkerProcess
         }
     }
 
-    /// <summary>Runs one capture-owned explicit-environment request without accepting an independent request.</summary>
+    /// <summary>
+    /// Runs one capture-owned explicit-environment request without accepting an independent request.
+    /// The caller retains ownership of <paramref name="capture"/> through output rendering and must dispose it;
+    /// a prelaunch cancellation invalidates the private capture so it cannot be reused.
+    /// </summary>
     public async Task<WorkerResponse> RunEnvironmentAsync(CompositionInspectionCapture capture,
         IReadOnlyList<string> packageRoots, int timeoutSeconds = 60, CancellationToken cancellationToken = default)
     {
@@ -284,6 +288,12 @@ public sealed class CandidateWorkerProcess
         using var exchange = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadlineToken);
         var writeTask = WriteRequestAndCloseAsync(input, requestBytes, exchange.Token);
         var outputTask = ReadResponseAsync(output, exchange.Token);
+        var responseBuffer = new ResponseBufferOwner();
+        _ = outputTask.ContinueWith(completed =>
+        {
+            if (completed.Status == TaskStatus.RanToCompletion)
+                responseBuffer.Capture(completed.Result);
+        }, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
         var errorTask = DrainErrorAsync(error, exchange.Token);
         var pumps = new List<Task> { writeTask, outputTask, errorTask };
         foreach (var pump in pumps)
@@ -297,6 +307,7 @@ public sealed class CandidateWorkerProcess
         }
         catch
         {
+            responseBuffer.Finish();
             exchange.Cancel();
             ObserveFaults(pumps);
             throw;
@@ -345,17 +356,13 @@ public sealed class CandidateWorkerProcess
             try
             {
                 var responseBytes = await outputTask.ConfigureAwait(false);
-                try
-                {
-                    var processExitCode = handle.ExitCode;
-                    return environmentInput
-                        ? WorkerContract.ParseCandidateEnvironmentWorkerResponse(responseBytes, expectedCandidate, processExitCode)
-                        : WorkerContract.ParseCandidateWorkerResponse(responseBytes, expectedCandidate, processExitCode);
-                }
-                finally
-                {
-                    Array.Clear(responseBytes);
-                }
+                var processExitCode = handle.ExitCode;
+                var response = environmentInput
+                    ? WorkerContract.ParseCandidateEnvironmentWorkerResponse(responseBytes, expectedCandidate, processExitCode)
+                    : WorkerContract.ParseCandidateWorkerResponse(responseBytes, expectedCandidate, processExitCode);
+                cancellationToken.ThrowIfCancellationRequested();
+                ThrowIfTimedOut(deadlineToken, operationStarted, timeoutSeconds);
+                return response;
             }
             catch (WorkerRefusal refusal)
             {
@@ -370,6 +377,10 @@ public sealed class CandidateWorkerProcess
         {
             exchange.Cancel();
             throw;
+        }
+        finally
+        {
+            responseBuffer.Finish();
         }
     }
 
@@ -719,6 +730,42 @@ public sealed class CandidateWorkerProcess
 
     private sealed class CandidateTimedOutException : Exception { }
 
+    private sealed class ResponseBufferOwner
+    {
+        private readonly object gate = new();
+        private byte[]? bytes;
+        private bool finished;
+
+        public void Capture(byte[] completed)
+        {
+            ArgumentNullException.ThrowIfNull(completed);
+            lock (gate)
+            {
+                if (finished)
+                {
+                    Array.Clear(completed);
+                    return;
+                }
+
+                bytes = completed;
+            }
+        }
+
+        public void Finish()
+        {
+            byte[]? completed;
+            lock (gate)
+            {
+                finished = true;
+                completed = bytes;
+                bytes = null;
+            }
+
+            if (completed is not null)
+                Array.Clear(completed);
+        }
+    }
+
     private readonly record struct CleanupResult(bool Failed, ExceptionDispatchInfo? FatalFailure);
 
     private sealed class CandidateRequestBuffer(int maximumBytes) : MemoryStream(maximumBytes)
@@ -777,8 +824,8 @@ public sealed class CandidateWorkerProcess
         {
             try
             {
-                if (TryGetBuffer(out var buffer))
-                    buffer.AsSpan().Clear();
+                if (TryGetBuffer(out var buffer) && buffer.Array is { } array)
+                    array.AsSpan().Clear();
             }
             finally
             {

@@ -40,70 +40,51 @@ public sealed class CandidateProcessTests
     [Fact]
     public async Task Explicit_environment_exchange_uses_the_capture_request_and_keeps_private_input_off_arguments()
     {
-        using var source = new CompositionBridgeFixture();
-        source.WriteAcceptedComposition();
-        Directory.CreateDirectory(source.CandidateDirectory);
-        var environmentPath = Path.Join(source.CandidateDirectory, "environment.json");
-        var rawEnvironment = CandidateInspectionFixture.EnvironmentDocument(("Private", "private-environment-value"));
-        File.WriteAllBytes(environmentPath, rawEnvironment);
-        using var capture = CompositionInspectionCapture.OpenWithEnvironmentInput(Host, source.HostDirectory,
-            "default", "Production", source.OutputPath, environmentPath, source.CatalogPath, source.ReviewPath);
+        using var environment = new EnvironmentCaptureFixture();
         using var fixture = new ProcessFixture();
-        var hostResponse = CandidateHostResponseFixtures.Success(capture.Payload);
+        var hostResponse = CandidateHostResponseFixtures.Success(environment.Capture.Payload);
         hostResponse["configurationResolution"]!["source"] = "captured-workbench-json-explicit-environment-v1";
         hostResponse["configurationResolution"]!["externalInputs"] = "supplied-intended";
         fixture.SetOutput(hostResponse);
 
-        var result = await fixture.Runner.RunEnvironmentAsync(capture, []);
+        var result = await fixture.Runner.RunEnvironmentAsync(environment.Capture, []);
 
         Assert.Equal(0, result.ExitCode);
         Assert.Equal(CandidateWorkerProcess.Arguments(Host, fixture.WorkerAssembly), fixture.StartInfo!.ArgumentList);
-        Assert.DoesNotContain(environmentPath, fixture.StartInfo.ArgumentList);
+        Assert.DoesNotContain(environment.EnvironmentPath, fixture.StartInfo.ArgumentList);
         using var sent = JsonDocument.Parse(fixture.Handle.Input.ToArray());
         Assert.Equal(WorkerCommands.InspectCandidateEnvironment,
             sent.RootElement.GetProperty("command").GetString());
-        Assert.Equal(Convert.ToBase64String(rawEnvironment),
+        Assert.Equal(Convert.ToBase64String(environment.RawEnvironment),
             sent.RootElement.GetProperty("environmentInput").GetProperty("content").GetString());
-        Assert.DoesNotContain(environmentPath, sent.RootElement.GetRawText(), StringComparison.Ordinal);
+        Assert.DoesNotContain(environment.EnvironmentPath, sent.RootElement.GetRawText(), StringComparison.Ordinal);
         fixture.AssertClosed();
     }
 
     [Fact]
     public async Task Precancelled_environment_request_disposes_the_capture_without_launching()
     {
-        using var source = new CompositionBridgeFixture();
-        source.WriteAcceptedComposition();
-        Directory.CreateDirectory(source.CandidateDirectory);
-        var environmentPath = Path.Join(source.CandidateDirectory, "environment.json");
-        File.WriteAllBytes(environmentPath, CandidateInspectionFixture.EnvironmentDocument(("Key", "value")));
-        using var capture = CompositionInspectionCapture.OpenWithEnvironmentInput(Host, source.HostDirectory,
-            "default", "Production", source.OutputPath, environmentPath, source.CatalogPath, source.ReviewPath);
+        using var environment = new EnvironmentCaptureFixture();
         using var fixture = new ProcessFixture();
         using var cancellation = new CancellationTokenSource();
         cancellation.Cancel();
 
         var refusal = await Assert.ThrowsAsync<CliRefusal>(() =>
-            fixture.Runner.RunEnvironmentAsync(capture, [], cancellationToken: cancellation.Token));
+            fixture.Runner.RunEnvironmentAsync(environment.Capture, [], cancellationToken: cancellation.Token));
 
         Assert.Equal("candidate-inspection-cancelled", refusal.Code);
         Assert.Equal(0, fixture.StartCount);
-        Assert.False(capture.HasEnvironmentInput);
+        Assert.False(environment.Capture.HasEnvironmentInput);
     }
 
     [Fact]
     public async Task Oversized_environment_request_refuses_before_launch()
     {
-        using var source = new CompositionBridgeFixture();
-        source.WriteAcceptedComposition();
-        Directory.CreateDirectory(source.CandidateDirectory);
-        var environmentPath = Path.Join(source.CandidateDirectory, "environment.json");
-        File.WriteAllBytes(environmentPath, CandidateInspectionFixture.EnvironmentDocument(("Key", "value")));
-        using var capture = CompositionInspectionCapture.OpenWithEnvironmentInput(Host, source.HostDirectory,
-            "default", "Production", source.OutputPath, environmentPath, source.CatalogPath, source.ReviewPath);
+        using var environment = new EnvironmentCaptureFixture();
         using var fixture = new ProcessFixture();
 
         var refusal = await Assert.ThrowsAsync<CliRefusal>(() =>
-            fixture.Runner.RunEnvironmentAsync(capture, [new string('p', 8 * 1024 * 1024)]));
+            fixture.Runner.RunEnvironmentAsync(environment.Capture, [new string('p', 8 * 1024 * 1024)]));
 
         Assert.Equal("candidate-request-too-large", refusal.Code);
         Assert.Equal(0, fixture.StartCount);
@@ -183,6 +164,24 @@ public sealed class CandidateProcessTests
         Assert.Equal("candidate-inspection-cancelled", refusal.Code);
         Assert.Equal(2, refusal.ExitCode);
         Assert.Equal(0, fixture.StartCount);
+    }
+
+    [Fact]
+    public async Task Cancellation_observed_after_response_validation_still_refuses_and_cleans_up()
+    {
+        using var fixture = new ProcessFixture();
+        using var cancellation = new CancellationTokenSource();
+        fixture.Handle.ObserveExitCode = () =>
+        {
+            cancellation.Cancel();
+            return 0;
+        };
+
+        var refusal = await Assert.ThrowsAsync<CliRefusal>(() =>
+            fixture.Runner.RunAsync(Host, fixture.Request, cancellationToken: cancellation.Token));
+
+        Assert.Equal("candidate-inspection-cancelled", refusal.Code);
+        fixture.AssertClosed();
     }
 
     [Theory]
@@ -945,6 +944,32 @@ public sealed class CandidateProcessTests
             return Task.CompletedTask;
         }
         public void Dispose() { }
+    }
+
+    private sealed class EnvironmentCaptureFixture : IDisposable
+    {
+        private readonly CompositionBridgeFixture source = new();
+
+        public EnvironmentCaptureFixture()
+        {
+            source.WriteAcceptedComposition();
+            Directory.CreateDirectory(source.CandidateDirectory);
+            EnvironmentPath = Path.Join(source.CandidateDirectory, "environment.json");
+            RawEnvironment = CandidateInspectionFixture.EnvironmentDocument(("Private", "private-environment-value"));
+            File.WriteAllBytes(EnvironmentPath, RawEnvironment);
+            Capture = CompositionInspectionCapture.OpenWithEnvironmentInput(Host, source.HostDirectory,
+                "default", "Production", source.OutputPath, EnvironmentPath, source.CatalogPath, source.ReviewPath);
+        }
+
+        public string EnvironmentPath { get; }
+        public byte[] RawEnvironment { get; }
+        public CompositionInspectionCapture Capture { get; }
+
+        public void Dispose()
+        {
+            Capture.Dispose();
+            source.Dispose();
+        }
     }
 
     private sealed class ProcessFixture : IDisposable
