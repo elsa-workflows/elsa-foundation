@@ -142,19 +142,27 @@ public sealed class EfWorkflowTriggerBindingStore(
         if (distinct)
         {
             replaced = await context.WorkflowTriggerBindingProjectionStates.SingleOrDefaultAsync(x => x.Id == ProjectionId(scope, replacedActivationId!), cancellationToken);
-            if (replaced is null || !replaced.IsActive) throw new InvalidOperationException($"Activation '{activationId}' cannot replace a projection that is missing or no longer active.");
-            replacedRows = await RowsForActivation(scope, replacedActivationId!, cancellationToken);
-            EnsureProjection(replaced, replacedRows, scope, replacedActivationId!);
+            if (replaced is not null)
+            {
+                replacedRows = await RowsForActivation(scope, replacedActivationId!, cancellationToken);
+                EnsureProjection(replaced, replacedRows, scope, replacedActivationId!);
+            }
         }
+        // The candidate is checked first, so a switch that already happened is a no-op whoever made it: the activation's
+        // own sequence and a completion of that activation (IWorkflowActivationCoordinator.CompleteAsync) may race (#2193).
         if (candidate.IsActive)
         {
-            if (!distinct || replaced is null || !replaced.IsActive)
+            if (replaced is not { IsActive: true })
             {
                 await CommitAndClearAsync(transaction, cancellationToken, noChanges: true);
                 return;
             }
             throw new InvalidOperationException($"Activation '{activationId}' is active while replaced activation '{replacedActivationId}' is still active.");
         }
+        // Switching a candidate on is refused once its replaced activation no longer serves: that fences a late
+        // completion against a writer that has since completed the candidate and replaced it in turn.
+        if (distinct && replaced is not { IsActive: true })
+            throw new InvalidOperationException($"Activation '{activationId}' cannot replace a projection that is missing or no longer active.");
         foreach (var row in candidateRows) SetActive(row, true);
         candidate.IsActive = true; candidate.Revision = checked(candidate.Revision + 1);
         if (replaced is not null)
@@ -176,7 +184,11 @@ public sealed class EfWorkflowTriggerBindingStore(
         var rows = await RowsForActivation(scope, activationId, cancellationToken);
         context.ChangeTracker.Clear();
         EnsureProjection(state, rows, scope, activationId);
-        return state.IsActive ? WorkflowActivationProjectionState.Active : WorkflowActivationProjectionState.Inactive;
+        // A state is created at revision 1 and only ActivateAsync advances it, switching it on or, when its activation
+        // is replaced, off. Switching off requires it to serve, so an inactive state past revision 1 has served.
+        return state.IsActive ? WorkflowActivationProjectionState.Active
+            : state.Revision > 1 ? WorkflowActivationProjectionState.Replaced
+            : WorkflowActivationProjectionState.Prepared;
     }
 
     public async ValueTask DeleteByActivationAsync(string activationId, CancellationToken cancellationToken = default)

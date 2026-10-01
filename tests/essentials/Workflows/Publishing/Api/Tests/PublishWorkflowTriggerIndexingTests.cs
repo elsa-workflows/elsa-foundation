@@ -22,6 +22,7 @@ using Elsa.Workflows.Publishing.Core.Requests;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 using Elsa.Workflows.Runtime.Scheduling;
 using Elsa.Workflows.Runtime.Services.Executables;
 using Elsa.Workflows.Runtime.Services.Triggers;
@@ -86,7 +87,7 @@ public sealed class PublishWorkflowTriggerIndexingTests
         // The replacing publish stops for good once its slot transition commits, before its binding is switched on and
         // the old one off (#2193): the slot names it, but the old publication keeps serving.
         var extractor = new WorkflowTriggerBindingExtractor([new StubTriggerProvider("Event", "hash-interrupted")]);
-        var stopping = new StopAfterSlotTransition(_activationAuthority);
+        var stopping = new PauseAfterSlotTransition(_activationAuthority);
         var interrupted = Handler(
                 WorkflowVersion(TriggerNode("trigger-node", [Input("EventName", "interrupted")])),
                 TriggerActivityVersion(),
@@ -94,7 +95,7 @@ public sealed class PublishWorkflowTriggerIndexingTests
                 new WorkflowTriggerIndexer(extractor, _bindingStore),
                 coordinatorAuthority: stopping)
             .Handle(new PublishWorkflow("version-1"), CancellationToken.None);
-        Assert.Same(stopping.Stopped, await Task.WhenAny(interrupted, stopping.Stopped));
+        Assert.Same(stopping.Paused, await Task.WhenAny(interrupted, stopping.Paused));
         Assert.Single(await ServingAsync("hash-old"));
         Assert.Empty(await ServingAsync("hash-interrupted"));
 
@@ -494,43 +495,6 @@ public sealed class PublishWorkflowTriggerIndexingTests
             node.ActivityType == TriggerActivityTypeKey
                 ? ActivityTriggerStimulusResult.Recognized([new TriggerStimulusDescriptor(stimulusType, stimulusHash)])
                 : ActivityTriggerStimulusResult.NotRecognized;
-    }
-
-    /// <summary>
-    /// The crash: once a slot transition commits, the call never returns, so the coordinator neither switches the
-    /// projections nor compensates.
-    /// </summary>
-    private sealed class StopAfterSlotTransition(IWorkflowActivationAuthority inner) : IWorkflowActivationAuthority
-    {
-        private readonly TaskCompletionSource _stopped = new(TaskCreationOptions.RunContinuationsAsynchronously);
-
-        public Task Stopped => _stopped.Task;
-
-        public ValueTask<WorkflowActivationSlot?> FindAsync(string workflowDefinitionId, string slotName, CancellationToken cancellationToken = default) =>
-            inner.FindAsync(workflowDefinitionId, slotName, cancellationToken);
-
-        public ValueTask<IReadOnlyCollection<WorkflowActivationSlot>> ListByDefinitionAsync(string workflowDefinitionId, CancellationToken cancellationToken = default) =>
-            inner.ListByDefinitionAsync(workflowDefinitionId, cancellationToken);
-
-        public async ValueTask<WorkflowActivationTransition> TryActivateAsync(WorkflowActivationSlotRequest request, CancellationToken cancellationToken = default)
-        {
-            var transition = await inner.TryActivateAsync(request, cancellationToken);
-            if (!transition.Succeeded)
-                return transition;
-
-            _stopped.TrySetResult();
-            await new TaskCompletionSource().Task;
-            throw new System.Diagnostics.UnreachableException();
-        }
-
-        public ValueTask<WorkflowActivationTransition> TryDeactivateAsync(
-            string workflowDefinitionId,
-            string slotName,
-            WorkflowActivationSource source,
-            long expectedRevision,
-            DateTimeOffset updatedAt,
-            CancellationToken cancellationToken = default) =>
-            inner.TryDeactivateAsync(workflowDefinitionId, slotName, source, expectedRevision, updatedAt, cancellationToken);
     }
 
     public sealed record FirstPartyScenario(

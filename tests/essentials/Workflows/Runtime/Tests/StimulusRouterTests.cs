@@ -324,6 +324,9 @@ public sealed class StimulusRouterTests
         public ValueTask<IReadOnlyCollection<string>> ListActiveStimulusHashesAsync(
             string stimulusType,
             CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<WorkflowActivationProjectionState> FindActivationStateAsync(
+            string activationId,
+            CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 
     private StimulusRouter Router(

@@ -65,15 +65,12 @@ public interface IRecurringTriggerScheduleStore
         ValueTask.FromException(new NotSupportedException("This recurring-schedule store does not support activation-scoped activation."));
 
     /// <summary>
-    /// Reports whether one activation's schedule projection is missing, prepared but not serving, or serving. Like
-    /// <see cref="IWorkflowTriggerBindingStore.FindActivationStateAsync"/>, it lets the activation coordinator find an
-    /// activation whose slot transition committed but whose schedules were never switched on.
+    /// Reports where one activation's schedule projection stands, with the same meaning as
+    /// <see cref="IWorkflowTriggerBindingStore.FindActivationStateAsync"/>, for an activation with or without schedules.
     /// </summary>
     ValueTask<WorkflowActivationProjectionState> FindActivationStateAsync(
         string activationId,
-        CancellationToken cancellationToken = default) =>
-        ValueTask.FromException<WorkflowActivationProjectionState>(
-            new NotSupportedException("This recurring-schedule store does not support activation-scoped state reads."));
+        CancellationToken cancellationToken = default);
 
     /// <summary>Deletes schedules owned by one activation without affecting another activation of the artifact.</summary>
     ValueTask DeleteByActivationAsync(string activationId, CancellationToken cancellationToken = default) =>

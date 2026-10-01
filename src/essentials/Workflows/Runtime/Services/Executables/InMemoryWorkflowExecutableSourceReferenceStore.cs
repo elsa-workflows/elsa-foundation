@@ -63,9 +63,10 @@ public sealed class InMemoryWorkflowExecutableSourceReferenceStore : IWorkflowEx
         lock (_gate)
             return ValueTask.FromResult(Page(
                 query,
-                $"source-reference:scope:{query.Scope?.ToString() ?? "*"}:live:{query.LiveOnly}:asof:{query.Now?.ToUniversalTime():O}",
+                $"source-reference:scope:{query.Scope?.ToString() ?? "*"}:live:{query.LiveOnly}:asof:{query.Now?.ToUniversalTime():O}:definition:{query.DefinitionId?.Length}:{query.DefinitionId}",
                 _references.Values
                     .Where(reference => query.Scope is null || reference.Scope == query.Scope)
+                    .Where(reference => query.DefinitionId is null || string.Equals(reference.DefinitionId, query.DefinitionId, StringComparison.Ordinal))
                     .Where(reference => !query.LiveOnly || reference.IsLive(query.Now!.Value))));
     }
 

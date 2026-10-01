@@ -280,6 +280,9 @@ public sealed class RecurringTriggerPumpTaskTests
 
         public ValueTask DeleteAsync(string scheduleId, CancellationToken cancellationToken = default) =>
             ValueTask.CompletedTask;
+
+        public ValueTask<WorkflowActivationProjectionState> FindActivationStateAsync(string activationId, CancellationToken cancellationToken = default) =>
+            new(WorkflowActivationProjectionState.Missing);
     }
 
     private sealed class MutableTimeProvider(DateTimeOffset now) : TimeProvider

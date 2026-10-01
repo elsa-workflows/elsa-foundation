@@ -1,4 +1,5 @@
 using Elsa.Tasks.Core;
+using Elsa.Tasks.Core.Attributes;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.Logging;
@@ -6,8 +7,9 @@ using Microsoft.Extensions.Logging;
 namespace Elsa.Workflows.Runtime.Services.Executables;
 
 /// <summary>
-/// At shell start, completes every activation that an interrupted call left half-done (#2193): the slot names it, but
-/// the process died before its trigger bindings and recurring schedules were switched on.
+/// At shell start, completes every activation that an interrupted call left half done (#2193): the slot names it, but
+/// the process died before its trigger bindings and recurring schedules were switched on, or before the reference of
+/// the activation it replaced was retired.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -18,10 +20,24 @@ namespace Elsa.Workflows.Runtime.Services.Executables;
 /// </para>
 /// <para>
 /// A half-done activation always has a live Published source reference, minted before its slot transition, so the
-/// pass visits the slots of every definition that has one. Completion is idempotent and runs on every node.
-/// Failures are logged and never stop the shell from starting.
+/// pass visits the slots of every definition that has one. Failures are logged and never stop the shell from starting.
+/// </para>
+/// <para>
+/// <b>Ordered after the startup reconcilers</b> (<c>[Order(4)]</c>): the artifact reconciler
+/// (<c>WorkflowArtifactReconcilerStartupTask</c>, unordered) and the design-side reconcilers and export (orders 1 to 3).
+/// Their activations complete their own slots first, so this pass finds only what nothing else touched. A task
+/// dependency cannot express the order, because the artifact reconciler lives in an assembly that references this one.
+/// </para>
+/// <para>
+/// <b>Every node runs it; it is deliberately not <c>[SingleNodeTask]</c>.</b> That attribute takes a node-local lock
+/// and skips when the lock is taken, so a node could skip work no other node does. Completion is idempotent and its
+/// races are benign: two completions, or a completion and the activation's own sequence, make the same switch, which
+/// the projection stores accept as a no-op whichever comes second, and a sequence that then fails restores the
+/// reference a completion retired. The one remaining window, a first activation completed after another writer has
+/// already replaced it, is described on the coordinator.
 /// </para>
 /// </remarks>
+[Order(4)]
 public sealed class CompleteInterruptedActivationsStartupTask(
     IWorkflowExecutableSourceReferenceStore sourceReferenceStore,
     IWorkflowActivationAuthority authority,

@@ -51,6 +51,12 @@ public interface IPublicationActivator
         CancellationToken cancellationToken = default);
 }
 
+/// <summary>Durable, idempotent prepare/activate/remove intents for one publication's serving projections.</summary>
+/// <remarks>
+/// Nothing writes intents any more. Their only writer, <c>PublicationProjectionReconciler</c>, had not been registered
+/// since activation moved to the runtime <c>IWorkflowActivationCoordinator</c>, and was removed (#2193). The contract
+/// and its EF table stay so existing rows remain readable; removing them is a pending schema decision.
+/// </remarks>
 public interface IPublicationProjectionIntentStore
 {
     ValueTask SaveAsync(PublicationProjectionIntent intent, CancellationToken cancellationToken = default);

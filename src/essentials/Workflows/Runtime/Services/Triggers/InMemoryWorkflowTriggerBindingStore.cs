@@ -14,8 +14,7 @@ public sealed class InMemoryWorkflowTriggerBindingStore : IWorkflowTriggerBindin
 {
     private readonly object _syncRoot = new();
     private readonly Dictionary<string, WorkflowTriggerBinding> _bindings = new(StringComparer.Ordinal);
-    private readonly HashSet<string> _preparedActivations = new(StringComparer.Ordinal);
-    private readonly HashSet<string> _activeActivations = new(StringComparer.Ordinal);
+    private readonly InMemoryActivationProjectionStates _activations = new();
 
     public ValueTask<WorkflowTriggerBinding> SaveAsync(WorkflowTriggerBinding binding, CancellationToken cancellationToken = default)
     {
@@ -48,8 +47,7 @@ public sealed class InMemoryWorkflowTriggerBindingStore : IWorkflowTriggerBindin
                 var prepared = binding with { IsActive = false };
                 _bindings[prepared.TriggerBindingId] = prepared;
             }
-            _preparedActivations.Add(activationId);
-            _activeActivations.Remove(activationId);
+            _activations.Prepare(activationId);
         }
 
         return ValueTask.CompletedTask;
@@ -84,7 +82,7 @@ public sealed class InMemoryWorkflowTriggerBindingStore : IWorkflowTriggerBindin
 
         lock (_syncRoot)
         {
-            if (!_preparedActivations.Contains(activationId))
+            if (!_activations.IsPrepared(activationId))
                 throw new InvalidOperationException($"Activation '{activationId}' has no prepared trigger-binding projection.");
 
             SetActivationActive(activationId, true);
@@ -104,10 +102,7 @@ public sealed class InMemoryWorkflowTriggerBindingStore : IWorkflowTriggerBindin
 
         lock (_syncRoot)
         {
-            return ValueTask.FromResult(
-                !_preparedActivations.Contains(activationId) ? WorkflowActivationProjectionState.Missing
-                : _activeActivations.Contains(activationId) ? WorkflowActivationProjectionState.Active
-                : WorkflowActivationProjectionState.Inactive);
+            return ValueTask.FromResult(_activations.Find(activationId));
         }
     }
 
@@ -119,8 +114,7 @@ public sealed class InMemoryWorkflowTriggerBindingStore : IWorkflowTriggerBindin
         lock (_syncRoot)
         {
             RemoveByActivation(activationId);
-            _preparedActivations.Remove(activationId);
-            _activeActivations.Remove(activationId);
+            _activations.Remove(activationId);
         }
 
         return ValueTask.CompletedTask;
@@ -250,10 +244,7 @@ public sealed class InMemoryWorkflowTriggerBindingStore : IWorkflowTriggerBindin
 
     private void SetActivationActive(string activationId, bool isActive)
     {
-        if (isActive)
-            _activeActivations.Add(activationId);
-        else
-            _activeActivations.Remove(activationId);
+        _activations.Switch(activationId, isActive);
         foreach (var binding in _bindings.Values
                      .Where(binding => StringComparer.Ordinal.Equals(binding.ActivationId, activationId))
                      .ToArray())

@@ -240,5 +240,8 @@ public sealed class HttpEndpointRouteTableConvergenceTests
 
         public ValueTask<WorkflowTriggerBindingPage> ListByStimulusTypeAsync(WorkflowTriggerBindingTypePageQuery query, CancellationToken cancellationToken = default) =>
             inner.ListByStimulusTypeAsync(query, cancellationToken);
+
+        public ValueTask<WorkflowActivationProjectionState> FindActivationStateAsync(string activationId, CancellationToken cancellationToken = default) =>
+            inner.FindActivationStateAsync(activationId, cancellationToken);
     }
 }

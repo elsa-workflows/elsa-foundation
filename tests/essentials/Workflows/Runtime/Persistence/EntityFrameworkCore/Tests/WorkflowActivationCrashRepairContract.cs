@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -18,10 +17,10 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 /// (<c>WorkflowActivationCrashRepairContractTests</c>) and on PostgreSQL (the provider tests).
 /// </summary>
 /// <remarks>
-/// A crash is a process that stops for good once its slot transition commits: the authority hands the transition back
-/// to a coordinator that never resumes, so neither the projection switch nor any compensation runs. Each scenario then
-/// starts a new process over the same durable state and checks what serves, through the queries the stimulus router
-/// and the recurring pump use.
+/// A crash is a process that stops for good once its slot transition commits (<see cref="PauseAfterSlotTransition"/>
+/// with nothing to resume it), so neither the projection switch nor any compensation runs. An in-flight activation is
+/// the same pause, resumed later. Each scenario then works through another process over the same durable state and
+/// checks what serves, through the queries the stimulus router and the recurring pump use.
 /// </remarks>
 internal static class WorkflowActivationCrashRepairContract
 {
@@ -44,7 +43,11 @@ internal static class WorkflowActivationCrashRepairContract
         ["completion-leaves-a-prepared-candidate-alone"] = CompletionLeavesAPreparedCandidateAloneAsync,
         ["completion-writes-nothing-once-another-node-moved-the-slot"] = CompletionWritesNothingOnceAnotherNodeMovedTheSlotAsync,
         ["completion-refuses-two-serving-candidates"] = CompletionRefusesTwoServingCandidatesAsync,
-        ["cancelled-completion-is-rethrown-and-resumed-later"] = CancelledCompletionIsRethrownAndResumedLaterAsync
+        ["cancelled-completion-is-rethrown-and-resumed-later"] = CancelledCompletionIsRethrownAndResumedLaterAsync,
+        ["projection-switch-is-a-no-op-once-made"] = ProjectionSwitchIsANoOpOnceMadeAsync,
+        ["in-flight-activation-and-a-concurrent-completion-agree"] = InFlightActivationAndAConcurrentCompletionAgreeAsync,
+        ["in-flight-activation-failing-after-a-completion-restores-the-predecessor"] = InFlightActivationFailingAfterACompletionRestoresThePredecessorAsync,
+        ["completion-retires-a-replaced-reference-left-live"] = CompletionRetiresAReplacedReferenceLeftLiveAsync
     };
 
     public static TheoryData<string> Scenarios
@@ -117,7 +120,10 @@ internal static class WorkflowActivationCrashRepairContract
         await node.AssertRetiredAsync("activation-2");
     }
 
-    /// <summary>Deactivating an interrupted activation must not leave the activation it replaced serving.</summary>
+    /// <summary>
+    /// Deactivating an interrupted activation completes nothing first. It turns off the activation the slot names and
+    /// the one it replaced, which still serves, and retires that one's reference.
+    /// </summary>
     private static async Task DeactivatingAnInterruptedReplacementServesNothingAsync(Func<ActivationStores> open)
     {
         await ActivateAsync(open, "activation-1", "artifact-1");
@@ -129,6 +135,8 @@ internal static class WorkflowActivationCrashRepairContract
         Assert.Equal(WorkflowActivationOutcome.Deactivated, result.Outcome);
         Assert.Null(await node.SlotActivationAsync());
         await node.AssertServingAsync();
+        await node.AssertProjectionsAsync("activation-1", WorkflowActivationProjectionState.Missing);
+        await node.AssertProjectionsAsync("activation-2", WorkflowActivationProjectionState.Missing);
         await node.AssertRetiredAsync("activation-1");
     }
 
@@ -185,8 +193,7 @@ internal static class WorkflowActivationCrashRepairContract
 
         Assert.Equal("activation-1", result.ReplacedActivationId);
         await node.AssertServingAsync("activation-2");
-        Assert.Equal(WorkflowActivationProjectionState.Inactive, await node.Stores.Bindings.FindActivationStateAsync("activation-3"));
-        Assert.Equal(WorkflowActivationProjectionState.Inactive, await node.Stores.Schedules.FindActivationStateAsync("activation-3"));
+        await node.AssertProjectionsAsync("activation-3", WorkflowActivationProjectionState.Prepared);
         await node.AssertLiveAsync("activation-3");
     }
 
@@ -214,7 +221,8 @@ internal static class WorkflowActivationCrashRepairContract
     /// <summary>
     /// When two activations besides the slot's own still serve its slot, the replaced one cannot be told apart.
     /// Completion fails loudly and switches nothing rather than guess, and a same-artifact activation reports that
-    /// failure instead of "already active".
+    /// failure instead of "already active". Unpublishing still succeeds and turns every one of them off: that is how an
+    /// operator clears the slot.
     /// </summary>
     private static async Task CompletionRefusesTwoServingCandidatesAsync(Func<ActivationStores> open)
     {
@@ -233,10 +241,16 @@ internal static class WorkflowActivationCrashRepairContract
 
         Assert.Equal(WorkflowActivationOutcome.Failed, result.Outcome);
         Assert.Equal(WorkflowActivationStep.ProjectionActivation, result.FailedStep);
+        Assert.Contains("activation-1", result.Diagnostic);
         Assert.Contains("activation-stray", result.Diagnostic);
         Assert.Equal(WorkflowActivationOutcome.Failed, (await node.ActivateAsync("activation-2", "artifact-2")).Outcome);
         await node.AssertServingAsync("activation-1", "activation-stray");
-        Assert.Equal(WorkflowActivationProjectionState.Inactive, await node.Stores.Bindings.FindActivationStateAsync("activation-2"));
+        await node.AssertProjectionsAsync("activation-2", WorkflowActivationProjectionState.Prepared);
+
+        Assert.Equal(WorkflowActivationOutcome.Deactivated, (await node.DeactivateAsync("artifact-2")).Outcome);
+        await node.AssertServingAsync();
+        await node.AssertRetiredAsync("activation-1");
+        await node.AssertRetiredAsync("activation-stray");
     }
 
     /// <summary>
@@ -258,8 +272,113 @@ internal static class WorkflowActivationCrashRepairContract
         await node.AssertServingAsync("activation-2");
     }
 
-    private static ActivationNode Start(ActivationStores stores, Func<Task>? beforePredecessorScan = null) =>
-        new(stores, beforePredecessorScan);
+    /// <summary>
+    /// Every projection store reports an activation's lifecycle, and switching an activation on that already serves,
+    /// with its replaced activation already off, is a no-op success. A completion and the activation's own sequence
+    /// both make that switch, in either order.
+    /// </summary>
+    private static async Task ProjectionSwitchIsANoOpOnceMadeAsync(Func<ActivationStores> open)
+    {
+        await using var node = Start(open());
+        await node.AssertProjectionsAsync("activation-1", WorkflowActivationProjectionState.Missing);
+        await node.PrepareCandidateAsync("activation-1", "artifact-1");
+        await node.AssertProjectionsAsync("activation-1", WorkflowActivationProjectionState.Prepared);
+        await node.Stores.Bindings.ActivateAsync("activation-1", null);
+        await node.Stores.Schedules.ActivateAsync("activation-1", null);
+        await node.PrepareCandidateAsync("activation-2", "artifact-2");
+
+        for (var attempt = 0; attempt < 2; attempt++)
+        {
+            await node.Stores.Bindings.ActivateAsync("activation-2", "activation-1");
+            await node.Stores.Schedules.ActivateAsync("activation-2", "activation-1");
+        }
+
+        await node.AssertProjectionsAsync("activation-2", WorkflowActivationProjectionState.Active);
+        await node.AssertProjectionsAsync("activation-1", WorkflowActivationProjectionState.Replaced);
+        await node.AssertServingAsync("activation-2");
+    }
+
+    /// <summary>
+    /// An activation still running on one node, past its slot transition, races a completion of that activation on
+    /// another. Whichever switches the projections second finds the switch made and carries on, so both succeed and the
+    /// slot, the projections and the references agree.
+    /// </summary>
+    private static async Task InFlightActivationAndAConcurrentCompletionAgreeAsync(Func<ActivationStores> open)
+    {
+        await ActivateAsync(open, "activation-1", "artifact-1");
+        var resume = new TaskCompletionSource();
+        var stores = open();
+        var authority = new PauseAfterSlotTransition(stores.Authority, resume.Task);
+        await using var inFlight = Start(stores with { Authority = authority });
+        var activation = inFlight.ActivateAsync("activation-2", "artifact-2");
+        Assert.Same(authority.Paused, await Task.WhenAny(activation, authority.Paused));
+        await using var other = Start(open());
+
+        Assert.Equal(WorkflowActivationOutcome.Activated, (await other.Coordinator.CompleteAsync(DefinitionId, SlotName)).Outcome);
+        resume.SetResult();
+        var result = await activation;
+
+        Assert.Equal(WorkflowActivationOutcome.Activated, result.Outcome);
+        await other.AssertConsistentAsync("activation-2", "activation-1");
+    }
+
+    /// <summary>
+    /// The same race, but the in-flight activation then fails after the completion has retired the predecessor's
+    /// reference. Its compensation puts the predecessor back in the slot and its projections back on, and must restore
+    /// that reference too, or the slot would serve an activation whose reference reads as retired.
+    /// </summary>
+    private static async Task InFlightActivationFailingAfterACompletionRestoresThePredecessorAsync(Func<ActivationStores> open)
+    {
+        await ActivateAsync(open, "activation-1", "artifact-1");
+        var resume = new TaskCompletionSource();
+        var stores = open();
+        var authority = new PauseAfterSlotTransition(stores.Authority, resume.Task);
+        await using var inFlight = Start(stores with { Authority = authority }, observer: new FailOnceObserver());
+        var activation = inFlight.ActivateAsync("activation-2", "artifact-2");
+        Assert.Same(authority.Paused, await Task.WhenAny(activation, authority.Paused));
+        await using var other = Start(open());
+
+        Assert.Equal(WorkflowActivationOutcome.Activated, (await other.Coordinator.CompleteAsync(DefinitionId, SlotName)).Outcome);
+        await other.AssertRetiredAsync("activation-1");
+        resume.SetResult();
+        var result = await activation;
+
+        Assert.Equal(WorkflowActivationOutcome.Failed, result.Outcome);
+        Assert.Equal(WorkflowActivationStep.TriggerObserverNotification, result.FailedStep);
+        Assert.Null(result.CompensationDiagnostic);
+        await other.AssertConsistentAsync("activation-1");
+        Assert.Equal(WorkflowActivationCoordinator.FailedRetireReason, (await other.FindReferenceAsync("activation-2")).DeletedReason);
+    }
+
+    /// <summary>
+    /// A process can also stop after the projection switch but before step 6, leaving the replaced activation serving
+    /// nothing with a live reference. The next activation of the slot retires it, and leaves a prepared concurrent
+    /// candidate alone.
+    /// </summary>
+    private static async Task CompletionRetiresAReplacedReferenceLeftLiveAsync(Func<ActivationStores> open)
+    {
+        await ActivateAsync(open, "activation-1", "artifact-1");
+        await StopAfterSlotTransitionAsync(open, "activation-2", "artifact-2");
+        await using var node = Start(open());
+        await node.Stores.Bindings.ActivateAsync("activation-2", "activation-1");
+        await node.Stores.Schedules.ActivateAsync("activation-2", "activation-1");
+        await node.PrepareCandidateAsync("activation-3", "artifact-3");
+        await node.AssertServingAsync("activation-2");
+        await node.AssertLiveAsync("activation-1");
+
+        var result = await node.ActivateAsync("activation-2", "artifact-2");
+
+        Assert.Equal(WorkflowActivationOutcome.AlreadyActive, result.Outcome);
+        await node.AssertConsistentAsync("activation-2", "activation-1");
+        await node.AssertLiveAsync("activation-3");
+        await node.AssertProjectionsAsync("activation-3", WorkflowActivationProjectionState.Prepared);
+    }
+
+    private static ActivationNode Start(
+        ActivationStores stores,
+        Func<Task>? beforePredecessorScan = null,
+        IWorkflowTriggerIndexObserver? observer = null) =>
+        new(stores, beforePredecessorScan, observer);
 
     private static async Task ActivateAsync(Func<ActivationStores> open, string activationId, string artifactId)
     {
@@ -271,12 +390,12 @@ internal static class WorkflowActivationCrashRepairContract
     private static async Task StopAfterSlotTransitionAsync(Func<ActivationStores> open, string activationId, string artifactId)
     {
         var stores = open();
-        var authority = new StopAfterSlotTransition(stores.Authority);
+        var authority = new PauseAfterSlotTransition(stores.Authority);
         await using var node = Start(stores with { Authority = authority });
 
         var activation = node.ActivateAsync(activationId, artifactId);
 
-        Assert.Same(authority.Stopped, await Task.WhenAny(activation, authority.Stopped));
+        Assert.Same(authority.Paused, await Task.WhenAny(activation, authority.Paused));
     }
 
     private static WorkflowExecutable Executable(string artifactId) => new(
@@ -314,7 +433,7 @@ internal static class WorkflowActivationCrashRepairContract
         private readonly OneTriggerIndexer _indexer;
         private readonly CompleteInterruptedActivationsStartupTask _shellStart;
 
-        public ActivationNode(ActivationStores stores, Func<Task>? beforePredecessorScan)
+        public ActivationNode(ActivationStores stores, Func<Task>? beforePredecessorScan, IWorkflowTriggerIndexObserver? observer)
         {
             Stores = stores;
             _indexer = new(stores.Bindings, stores.Schedules);
@@ -329,7 +448,8 @@ internal static class WorkflowActivationCrashRepairContract
                 _indexer,
                 stores.Bindings,
                 stores.Schedules,
-                logger: NullLogger<WorkflowActivationCoordinator>.Instance);
+                observer is null ? null : [observer],
+                NullLogger<WorkflowActivationCoordinator>.Instance);
             _shellStart = new(
                 stores.References,
                 stores.Authority,
@@ -389,9 +509,32 @@ internal static class WorkflowActivationCrashRepairContract
 
         public async Task AssertLiveAsync(string activationId) => Assert.Null((await FindReferenceAsync(activationId)).DeletedAt);
 
+        /// <summary>Asserts one activation's state in both projection stores.</summary>
+        public async Task AssertProjectionsAsync(string activationId, WorkflowActivationProjectionState expected)
+        {
+            Assert.Equal(expected, await Stores.Bindings.FindActivationStateAsync(activationId));
+            Assert.Equal(expected, await Stores.Schedules.FindActivationStateAsync(activationId));
+        }
+
+        /// <summary>
+        /// Asserts that the slot, the projections and the references agree: the slot names <paramref name="activationId"/>,
+        /// it alone serves, its reference is live, and each replaced activation is switched off and retired.
+        /// </summary>
+        public async Task AssertConsistentAsync(string activationId, params string[] replaced)
+        {
+            Assert.Equal(activationId, await SlotActivationAsync());
+            await AssertServingAsync(activationId);
+            await AssertLiveAsync(activationId);
+            foreach (var other in replaced)
+            {
+                await AssertProjectionsAsync(other, WorkflowActivationProjectionState.Replaced);
+                await AssertRetiredAsync(other);
+            }
+        }
+
         public ValueTask DisposeAsync() => Stores.Lifetime?.DisposeAsync() ?? ValueTask.CompletedTask;
 
-        private async Task<WorkflowExecutableSourceReference> FindReferenceAsync(string activationId) =>
+        public async Task<WorkflowExecutableSourceReference> FindReferenceAsync(string activationId) =>
             await Stores.References.FindAsync(WorkflowActivationReferenceIdentity.Create(activationId))
             ?? throw new InvalidOperationException($"Activation '{activationId}' has no source reference.");
 
@@ -447,41 +590,15 @@ internal static class WorkflowActivationCrashRepairContract
         }
     }
 
-    /// <summary>
-    /// The crash: once the slot transition for an activation commits, the call never returns, so the coordinator neither
-    /// switches projections nor compensates.
-    /// </summary>
-    private sealed class StopAfterSlotTransition(IWorkflowActivationAuthority inner) : IWorkflowActivationAuthority
+    /// <summary>A trigger observer whose first notification fails, failing the activation that sends it.</summary>
+    private sealed class FailOnceObserver : IWorkflowTriggerIndexObserver
     {
-        private readonly TaskCompletionSource _stopped = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int _calls;
 
-        public Task Stopped => _stopped.Task;
-
-        public ValueTask<WorkflowActivationSlot?> FindAsync(string workflowDefinitionId, string slotName, CancellationToken cancellationToken = default) =>
-            inner.FindAsync(workflowDefinitionId, slotName, cancellationToken);
-
-        public ValueTask<IReadOnlyCollection<WorkflowActivationSlot>> ListByDefinitionAsync(string workflowDefinitionId, CancellationToken cancellationToken = default) =>
-            inner.ListByDefinitionAsync(workflowDefinitionId, cancellationToken);
-
-        public async ValueTask<WorkflowActivationTransition> TryActivateAsync(WorkflowActivationSlotRequest request, CancellationToken cancellationToken = default)
-        {
-            var transition = await inner.TryActivateAsync(request, cancellationToken);
-            if (!transition.Succeeded)
-                return transition;
-
-            _stopped.TrySetResult();
-            await new TaskCompletionSource().Task;
-            throw new UnreachableException();
-        }
-
-        public ValueTask<WorkflowActivationTransition> TryDeactivateAsync(
-            string workflowDefinitionId,
-            string slotName,
-            WorkflowActivationSource source,
-            long expectedRevision,
-            DateTimeOffset updatedAt,
-            CancellationToken cancellationToken = default) =>
-            inner.TryDeactivateAsync(workflowDefinitionId, slotName, source, expectedRevision, updatedAt, cancellationToken);
+        public ValueTask OnTriggersIndexedAsync(WorkflowTriggerIndexSnapshot snapshot, CancellationToken cancellationToken = default) =>
+            Interlocked.Increment(ref _calls) == 1
+                ? ValueTask.FromException(new InvalidOperationException("Observer projection failed."))
+                : ValueTask.CompletedTask;
     }
 
     /// <summary>Runs a hook once, just before the coordinator first pages the live references to find the replaced activation.</summary>

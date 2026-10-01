@@ -194,6 +194,7 @@ public sealed class EfRecurringTriggerScheduleStore(
         var candidate = await ActivationState(scope, activationId, cancellationToken) ?? throw new InvalidOperationException($"Activation '{activationId}' has no prepared recurring-schedule projection.");
         var candidateRows = await RowsForActivation(scope, activationId, cancellationToken);
         var distinct = replacedActivationId is not null && !StringComparer.Ordinal.Equals(activationId, replacedActivationId);
+        // The candidate is checked first, so a switch that already happened is a no-op whoever made it (#2193).
         if (candidate.IsActive)
         {
             await EnsureActiveProjectionAsync(candidate, candidateRows, scope, activationId, cancellationToken);
@@ -243,9 +244,12 @@ public sealed class EfRecurringTriggerScheduleStore(
         context.ChangeTracker.Clear();
         var state = await ActivationState(scope, activationId, cancellationToken);
         context.ChangeTracker.Clear();
+        // As in the trigger-binding store, only ActivateAsync advances a state past revision 1, so an inactive state
+        // past it has served and been replaced.
         return state is null ? WorkflowActivationProjectionState.Missing
             : state.IsActive ? WorkflowActivationProjectionState.Active
-            : WorkflowActivationProjectionState.Inactive;
+            : state.Revision > 1 ? WorkflowActivationProjectionState.Replaced
+            : WorkflowActivationProjectionState.Prepared;
     }
 
     public async ValueTask DeleteByActivationAsync(string activationId, CancellationToken cancellationToken = default)

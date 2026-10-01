@@ -48,15 +48,14 @@ public interface IWorkflowTriggerBindingStore
         ValueTask.FromException(new NotSupportedException("This trigger-binding store does not support activation-scoped activation."));
 
     /// <summary>
-    /// Reports whether one activation's projection is missing, prepared but not serving, or serving. The activation
+    /// Reports where one activation's projection stands: missing, prepared but never served, serving, or switched off
+    /// by the activation that replaced it. It must answer for an activation with no bindings. The activation
     /// coordinator reads it to find an activation whose slot transition committed but whose projection was never
-    /// switched on, because the process died between the two.
+    /// switched on, and a replaced activation whose reference was never retired, because a process died in between.
     /// </summary>
     ValueTask<WorkflowActivationProjectionState> FindActivationStateAsync(
         string activationId,
-        CancellationToken cancellationToken = default) =>
-        ValueTask.FromException<WorkflowActivationProjectionState>(
-            new NotSupportedException("This trigger-binding store does not support activation-scoped state reads."));
+        CancellationToken cancellationToken = default);
 
     /// <summary>Deletes every binding owned by one activation without affecting shared artifacts or other slots.</summary>
     ValueTask DeleteByActivationAsync(string activationId, CancellationToken cancellationToken = default) =>
