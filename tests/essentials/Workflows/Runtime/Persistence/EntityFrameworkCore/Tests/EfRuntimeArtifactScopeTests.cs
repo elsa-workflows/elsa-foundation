@@ -7,10 +7,12 @@ using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Exceptions;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
+using Elsa.Workflows.Runtime.Services.Executables;
 using Elsa.Workflows.Runtime.Services.Recovery;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using System.Data.Common;
 using System.Text.Json;
@@ -248,7 +250,7 @@ public sealed class EfRuntimeArtifactScopeTests
         await using var current = database.Open("tenant-a");
         var interleaving = new RecreateAfterClaimReadInterceptor(async () =>
         {
-            Assert.True(await current.Store.DeleteAsync(expired.SourceReferenceId));
+            await DeleteAllReferencesAsync(current);
             await current.Store.SaveAsync(expired with { ExpiresAt = DateTimeOffset.UtcNow.AddHours(1) });
         }, triggerAfterReaders: 1);
         await using var stale = database.Open("tenant-a", interleaving);
@@ -481,6 +483,45 @@ public sealed class EfRuntimeArtifactScopeTests
     }
 
     [Fact]
+    public async Task Doomed_delete_loses_to_a_restore_committed_between_its_read_and_its_delete()
+    {
+        await using var database = await Database.CreateAsync();
+        await using var seed = database.Open("tenant-a");
+        var retired = Reference("doomed-race-ref", "artifact-a").Retire(DateTimeOffset.UtcNow.AddMinutes(-1), "replaced");
+        await seed.Store.SaveAsync(retired);
+        await seed.DisposeAsync();
+
+        await using var activation = database.Open("tenant-a");
+        await using var collector = database.Open("tenant-a", RestoreBeforeDelete(activation, retired));
+        var snapshot = await collector.Store.FindAsync(retired.SourceReferenceId);
+
+        Assert.False(await collector.Store.TryDeleteDoomedAsync(snapshot!, DateTimeOffset.UtcNow));
+
+        Assert.Empty(collector.Context.ChangeTracker.Entries());
+        Assert.Null((await activation.Store.FindAsync(retired.SourceReferenceId))!.DeletedAt);
+    }
+
+    [Fact]
+    public async Task Sweep_keeps_a_reference_restored_after_the_collector_read_it()
+    {
+        await using var database = await Database.CreateAsync();
+        await using var seed = database.Open("tenant-a");
+        var retired = Reference("sweep-race-ref", "artifact-a").Retire(DateTimeOffset.UtcNow.AddMinutes(-1), "replaced");
+        await seed.Store.SaveAsync(retired);
+        await seed.DisposeAsync();
+
+        await using var activation = database.Open("tenant-a");
+        await using var collector = database.Open("tenant-a", RestoreBeforeDelete(activation, retired));
+        var garbageCollector = new WorkflowExecutableReferenceGarbageCollector(
+            collector.Executable, collector.Store, TimeProvider.System, NullLogger<WorkflowExecutableReferenceGarbageCollector>.Instance);
+
+        var result = await garbageCollector.SweepAsync();
+
+        Assert.Equal(0, result.DeletedReferenceCount);
+        Assert.Null((await activation.Store.FindAsync(retired.SourceReferenceId))!.DeletedAt);
+    }
+
+    [Fact]
     public async Task Doomed_delete_removes_a_reference_that_is_still_retired_or_expired()
     {
         await using var database = await Database.CreateAsync();
@@ -514,7 +555,7 @@ public sealed class EfRuntimeArtifactScopeTests
         await using var current = database.Open("tenant-a");
         var interleaving = new RecreateBeforeSaveInterceptor(async () =>
         {
-            Assert.True(await current.Store.DeleteAsync(original.SourceReferenceId));
+            await DeleteAllReferencesAsync(current);
             await current.Store.SaveAsync(original);
         });
         await using var fixture = database.Open("tenant-a", interleaving);
@@ -539,7 +580,7 @@ public sealed class EfRuntimeArtifactScopeTests
         await using var current = database.Open("tenant-a");
         var interleaving = new RecreateBeforeSaveInterceptor(async () =>
         {
-            Assert.True(await current.Store.DeleteAsync(retired.SourceReferenceId));
+            await DeleteAllReferencesAsync(current);
             await current.Store.SaveAsync(retired with { DeletedAt = null, DeletedReason = null });
         });
         await using var fixture = database.Open("tenant-a", interleaving);
@@ -1187,6 +1228,16 @@ public sealed class EfRuntimeArtifactScopeTests
             DateTimeOffset.UtcNow));
     }
 
+    // Restores the retired reference through another context after the collector read it and before its delete
+    // transaction starts. SQLite's default transaction is BEGIN IMMEDIATE, which holds the write lock from then on,
+    // so this is the last point at which a restore can commit on SQLite.
+    private static RecreateBeforeTransactionInterceptor RestoreBeforeDelete(Fixture activation, WorkflowExecutableSourceReference retired) =>
+        new(async () => Assert.True(await activation.Store.TryRestoreAsync(retired, retired with { DeletedAt = null, DeletedReason = null })));
+
+    // The store has no unconditional hard delete; these tests need one to set up a "row recreated" interleaving.
+    private static Task DeleteAllReferencesAsync(Fixture fixture) =>
+        fixture.Context.WorkflowExecutableSourceReferences.ExecuteDeleteAsync();
+
     private static WorkflowExecutableSourceReference Reference(string id, string artifact) => new(
         id, artifact, "WorkflowDefinition", "definition", "1", "definition", "definition-version", "1",
         DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, WorkflowExecutableReferenceScope.Published);
@@ -1374,6 +1425,22 @@ public sealed class EfRuntimeArtifactScopeTests
         public override async ValueTask<InterceptionResult<int>> SavingChangesAsync(
             DbContextEventData eventData,
             InterceptionResult<int> result,
+            CancellationToken cancellationToken = default)
+        {
+            if (Interlocked.Exchange(ref invoked, 1) == 0)
+                await recreate();
+            return result;
+        }
+    }
+
+    private sealed class RecreateBeforeTransactionInterceptor(Func<Task> recreate) : DbTransactionInterceptor
+    {
+        private int invoked;
+
+        public override async ValueTask<InterceptionResult<DbTransaction>> TransactionStartingAsync(
+            DbConnection connection,
+            TransactionStartingEventData eventData,
+            InterceptionResult<DbTransaction> result,
             CancellationToken cancellationToken = default)
         {
             if (Interlocked.Exchange(ref invoked, 1) == 0)

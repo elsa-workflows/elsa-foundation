@@ -376,9 +376,6 @@ public sealed class WorkflowExecutableReferenceGarbageCollectorConcurrencyTests
             CancellationToken cancellationToken = default) =>
             _inner.TryRestoreAsync(expectedRetiredReference, restoredReference, cancellationToken);
 
-        public ValueTask<bool> DeleteAsync(string sourceReferenceId, CancellationToken cancellationToken = default) =>
-            _inner.DeleteAsync(sourceReferenceId, cancellationToken);
-
         public ValueTask<bool> TryDeleteDoomedAsync(
             WorkflowExecutableSourceReference expectedDoomedReference,
             DateTimeOffset now,

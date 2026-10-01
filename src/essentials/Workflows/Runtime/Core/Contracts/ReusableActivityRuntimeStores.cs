@@ -88,20 +88,17 @@ public interface IWorkflowExecutableSourceReferenceWriter
         WorkflowExecutableSourceReference restoredReference,
         CancellationToken cancellationToken = default) =>
         ValueTask.FromResult(false);
-    ValueTask<bool> DeleteAsync(string sourceReferenceId, CancellationToken cancellationToken = default) =>
-        ValueTask.FromResult(false);
     /// <summary>
     /// Hard-deletes a reference only when <paramref name="expectedDoomedReference"/> is still the stored snapshot and
     /// the stored row is still retired or expired at <paramref name="now"/>. A restore, recreation or other change
     /// since the snapshot was read makes the delete a no-op, so a collector working from a stale listing cannot remove
-    /// a reference that was brought back to life. Implementations that cannot provide this compare-and-delete
-    /// guarantee must fail closed.
+    /// a reference that was brought back to life. Every implementation must provide this compare-and-delete
+    /// guarantee; there is deliberately no unconditional hard delete on this contract.
     /// </summary>
     ValueTask<bool> TryDeleteDoomedAsync(
         WorkflowExecutableSourceReference expectedDoomedReference,
         DateTimeOffset now,
-        CancellationToken cancellationToken = default) =>
-        ValueTask.FromResult(false);
+        CancellationToken cancellationToken = default);
     ValueTask<IReadOnlyCollection<string>> DeleteExpiredOrRetiredAsync(
         WorkflowExecutableSourceReferenceCleanupBatch batch,
         DateTimeOffset now,
