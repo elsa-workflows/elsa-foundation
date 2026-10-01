@@ -20,12 +20,15 @@
     <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Workflows\Runtime\Scheduling\Elsa.Workflows.Runtime.Scheduling.csproj" />
     <!-- Whole runtime nodes for the PublishStimulus start scenarios. -->
     <ProjectReference Include="..\..\..\..\..\Activities\Testing\Elsa.Activities.Testing.csproj" />
+    <!-- RecordingLogger, for the crash-repair contract's leaked-reference errors (#2251). -->
+    <ProjectReference Include="..\..\..\..\..\Testing\Elsa.Testing.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="..\Tests\SchedulerWorkQueueClaimableDiscoveryContract.cs" Link="SchedulerWorkQueueClaimableDiscoveryContract.cs" />
     <Compile Include="..\Tests\RuntimeTestDoubles.cs" Link="RuntimeTestDoubles.cs" />
     <Compile Include="..\Tests\WorkflowActivationCrashRepairContract.cs" Link="WorkflowActivationCrashRepairContract.cs" />
     <Compile Include="..\Tests\PauseAfterSlotTransition.cs" Link="PauseAfterSlotTransition.cs" />
+    <Compile Include="..\Tests\ReferencesThatCannotRetire.cs" Link="ReferencesThatCannotRetire.cs" />
     <Compile Include="..\Tests\ClaimLeaseOverrunContract.cs" Link="ClaimLeaseOverrunContract.cs" />
     <Compile Include="..\..\..\Tests\OverrunningIntentDispatcher.cs" Link="OverrunningIntentDispatcher.cs" />
     <Compile Include="..\Tests\PublishStimulusStartContract.cs" Link="PublishStimulusStartContract.cs" />

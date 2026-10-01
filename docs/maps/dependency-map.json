@@ -18793,6 +18793,11 @@
           "path": "tests/essentials/Activities/Testing/Elsa.Activities.Testing.csproj"
         },
         {
+          "type": "internal",
+          "id": "Elsa.Testing",
+          "path": "tests/essentials/Testing/Elsa.Testing.csproj"
+        },
+        {
           "type": "external",
           "id": "Microsoft.EntityFrameworkCore.SqlServer",
           "version": "10.0.10"
@@ -18975,6 +18980,11 @@
           "type": "internal",
           "id": "Elsa.Activities.Testing",
           "path": "tests/essentials/Activities/Testing/Elsa.Activities.Testing.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Testing",
+          "path": "tests/essentials/Testing/Elsa.Testing.csproj"
         },
         {
           "type": "external",

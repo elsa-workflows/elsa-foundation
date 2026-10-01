@@ -24,7 +24,12 @@ retirement: a publication a failed replacement handed the slot back to is `Retir
 and completion marks that record `Active` once it serves. This is a controlled lifecycle transition, not the
 restoration the Decision section forbids: it applies only to the record the slot itself names, only while the slot
 names it, and it never revives a record the slot does not name, so Restore keeps its own authority transition. A
-completion that finds the slot moved on after the mark retires the record again. A candidate the coordinator
+completion that finds the slot moved on after the mark retires the record again. Invariant 6 holds for a losing
+candidate that shares the winner's activation id, as two nodes reconciling one mounted set do (#2251): the winner's
+projections are its own, so it keeps them rather than compensating them away, and reports `AlreadyActive`, or
+`Activated` when it completed the winner's activation. Once a completion has switched an activation on, a source
+reference it cannot retire does not fail it: it reports the activation `Activated` and names the one it replaced, and
+publishing retires the replaced record on that report, not on the reference (#2251). A candidate the coordinator
 answers `AlreadyActive` for through another publication's activation (a same-version publish that lost a race) is
 never journaled active, because no source reference was minted for it: it is recorded `Failed`, and the request is
 answered with the publication the slot names once that record is `Active` (#2252). Two races remain until the slot and the projections

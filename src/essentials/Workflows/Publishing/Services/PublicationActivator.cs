@@ -161,6 +161,22 @@ public sealed class PublicationActivator(
             await publicationStore.FindAsync(publicationId, cancellationToken) is not { } publication)
             return new(true, slot);
 
+        // The runtime names the activation its completion switched off even when it could not retire that one's source
+        // reference, which then reads as live (#2251). Its record is therefore retired on the runtime's report, as
+        // ActivateAsync retires the record its activation replaced, rather than on the reference. The completion that
+        // finally retires a leaked reference reports it too, usually once the slot's own record no longer lags, so this
+        // comes before the lag check.
+        var now = timeProvider.GetUtcNow();
+        //
+        // The report can be stale: a completion that was overtaken (compensation handed the slot back to the activation it
+        // reported as replaced) names a predecessor that serves again. The slot is read again, and a report naming the
+        // activation it now serves retires nothing.
+        if (completion.ReplacedActivationId is { } replacedId &&
+            !StringComparer.Ordinal.Equals(replacedId, publicationId) &&
+            !(await activationAuthority.FindAsync(slot.WorkflowDefinitionId, slot.SlotName, cancellationToken) is { } served &&
+              StringComparer.Ordinal.Equals(served.ActiveActivationId, replacedId)))
+            await PublicationRecordRetirement.RetireAsync(publicationStore, await publicationStore.FindAsync(replacedId, cancellationToken), now, cancellationToken);
+
         // A publication the slot names that is already active is the common case and costs one read. One still a
         // candidate, or retired while the slot names it again, lags the slot. Marking it active is the last write, so a
         // process that stops before it leaves it lagging for the next completion.
@@ -168,7 +184,6 @@ public sealed class PublicationActivator(
             !await ServesAsync(slot, publication, cancellationToken))
             return new(true, slot, publication);
 
-        var now = timeProvider.GetUtcNow();
         var retired = await PublicationRecordRetirement.RetireReplacedAsync(publicationStore, sourceReferenceStore, slot.SlotId, publicationId, now, cancellationToken);
         var lagged = publication.Status;
         publication = await MarkActiveAsync(publication, now, cancellationToken);
