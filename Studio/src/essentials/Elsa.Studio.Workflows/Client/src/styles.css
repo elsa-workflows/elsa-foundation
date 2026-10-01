@@ -1460,6 +1460,11 @@
   word-break: break-word;
 }
 
+.wf-runtime-snapshot-value {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
 .wf-runtime-snapshot-node {
   border: 1px solid var(--wf-border);
   border-radius: var(--wf-radius-sm);
@@ -1490,13 +1495,12 @@
 }
 
 .wf-runtime-snapshot-property > span:first-child {
-  overflow: hidden;
+  overflow-wrap: anywhere;
   color: var(--wf-muted-text);
   font-family: var(--studio-mono-font, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace);
   font-size: 11px;
   line-height: 1.45;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
 }
 
 .wf-runtime-snapshot-marker {

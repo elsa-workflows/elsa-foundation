@@ -972,9 +972,12 @@ export interface ActivityExecutionIncidentSummary {
 }
 
 export interface ActivityExecutionInspectionValueSnapshot {
+  /** Stable Runtime identifier used by the separately authorized value payload relation. */
+  evidenceId?: string | null;
   name: string;
   subject: string;
   captureMode: string;
+  captureState?: string | null;
   state?: string | null;
   type?: RuntimeValueTypeDescriptor | null;
   capturedAt: string;
@@ -1084,6 +1087,9 @@ export interface DiagnosticSnapshotProperty {
 }
 
 export interface RuntimeValueTypeDescriptor {
+  kind?: string | null;
+  id?: string | null;
+  schema?: unknown;
   typeName?: string | null;
   displayName?: string | null;
   alias?: string | null;

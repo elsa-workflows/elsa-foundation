@@ -128,7 +128,8 @@ export function executionOccurrenceLabel(
 export function runtimeEvidencePresentation(
   snapshot: ActivityExecutionInspectionValueSnapshot
 ): RuntimeEvidencePresentation {
-  if (snapshot.failure || normalize(snapshot.state) === "capturefailed") return "capture-failed";
+  const captureState = normalize(snapshot.captureState ?? snapshot.state);
+  if (snapshot.failure || captureState === "capturefailed") return "capture-failed";
 
   const node = snapshot.snapshot && typeof snapshot.snapshot === "object"
     ? snapshot.snapshot as { kind?: unknown }
@@ -140,7 +141,7 @@ export function runtimeEvidencePresentation(
   if (kind === "redacted" || kind === "permissionhidden" || access === "redacted" || access === "permissionhidden") {
     return "redacted";
   }
-  if (normalize(snapshot.state) === "notcaptured" || normalize(snapshot.captureMode) === "none") {
+  if (captureState === "notcaptured" || captureState === "metadataonly" || normalize(snapshot.captureMode) === "none") {
     return "not-captured";
   }
   return "captured";

@@ -82,6 +82,10 @@ describe("runtime boundary inspector snapshot model", () => {
 describe("selected runtime value evidence presentation", () => {
   it.each([
     [{ state: "captured", snapshot: { kind: "string", preview: "visible" } }, "captured"],
+    [{ captureState: "captureFailed" }, "capture-failed"],
+    [{ captureState: "notCaptured", state: "captured" }, "not-captured"],
+    [{ captureState: "metadataOnly" }, "not-captured"],
+    [{ captureState: "diagnosticSnapshotCaptured", state: "captureFailed" }, "captured"],
     [{ state: "captured", snapshot: { kind: "redacted", reason: "secret" } }, "redacted"],
     [{ state: "notCaptured", captureMode: "None" }, "not-captured"],
     [{ state: "captureFailed", failure: { code: "capture.failed", message: "Failed" } }, "capture-failed"],

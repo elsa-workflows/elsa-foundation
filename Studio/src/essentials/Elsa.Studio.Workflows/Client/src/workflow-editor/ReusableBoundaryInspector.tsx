@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type CSSProperties,
@@ -21,6 +22,8 @@ import {
   getActivityExecutionLayout
 } from "../api/runtime";
 import { observeReusableActivity } from "../reusableActivityObservability";
+import { runtimeValueTypeLabel } from "../runtimeValueFormatting";
+import { RuntimeValueEvidenceContent, RuntimeValueEvidenceResolutionProvider } from "./RuntimeValueEvidence";
 import {
   classifyBoundaryCursorProblem,
   emptyBoundaryEvidenceSnapshot,
@@ -426,6 +429,7 @@ export function ReusableBoundaryInspector({
           }} />
         ) : (
           <BoundaryEvidencePane
+            context={context}
             frame={activeFrame}
             openingActivityExecutionId={openState.activityExecutionId}
             openError={openState.error}
@@ -627,6 +631,7 @@ function HistoricalBoundaryLayout({ layout }: { layout: ActivityExecutionLayout 
 }
 
 function BoundaryEvidencePane({
+  context,
   frame,
   openingActivityExecutionId,
   openError,
@@ -636,6 +641,7 @@ function BoundaryEvidencePane({
   onLoadMore,
   onRestart
 }: {
+  context: StudioEndpointContext;
   frame: BoundaryFrame;
   openingActivityExecutionId: string | null;
   openError: string;
@@ -710,6 +716,7 @@ function BoundaryEvidencePane({
       ) : null}
       {frame.selectedActivityExecutionId ? (
         <SelectedExecutionEvidence
+          context={context}
           status={frame.selectedStatus}
           inspection={frame.selectedInspection}
           error={frame.selectedError}
@@ -862,18 +869,32 @@ function VirtualizedHierarchy({
 }
 
 function SelectedExecutionEvidence({
+  context,
   status,
   inspection,
   error,
   loadedItems,
   onSelect
 }: {
+  context: StudioEndpointContext;
   status: LoadStatus;
   inspection: ActivityExecutionInspection | null;
   error: string;
   loadedItems: ActivityExecutionHierarchyItem[];
   onSelect(activityExecutionId: string): void;
 }) {
+  const workflowExecutionId = inspection?.workflowExecutionId;
+  const activityExecutionId = inspection?.activityExecutionId;
+  const resolutionScope = useMemo(
+    () => workflowExecutionId && activityExecutionId
+      ? {
+          context,
+          workflowExecutionId,
+          activityExecutionId
+        }
+      : null,
+    [context, workflowExecutionId, activityExecutionId]);
+
   if (status === "loading") {
     return <section className="wf-boundary-selected" role="status">Loading canonical execution detail...</section>;
   }
@@ -951,17 +972,19 @@ function SelectedExecutionEvidence({
         }))}
       />
 
-      <section className="wf-boundary-value-evidence" style={boundaryStyles.sectionDivider} aria-label="Selected execution Runtime Evidence values">
-        <h6>Runtime Evidence values</h6>
-        {inspection.valueSnapshots.length === 0
-          ? <p>No value evidence was captured for this execution.</p>
-          : inspection.valueSnapshots.map((snapshot, index) => (
-            <SelectedValueEvidence
-              key={`${snapshot.subject}:${snapshot.name}:${snapshot.capturedAt}:${index}`}
-              snapshot={snapshot}
-            />
-          ))}
-      </section>
+      <RuntimeValueEvidenceResolutionProvider scope={resolutionScope}>
+        <section className="wf-boundary-value-evidence" style={boundaryStyles.sectionDivider} aria-label="Selected execution Runtime Evidence values">
+          <h6>Runtime Evidence values</h6>
+          {inspection.valueSnapshots.length === 0
+            ? <p>No value evidence was captured for this execution.</p>
+            : inspection.valueSnapshots.map((snapshot, index) => (
+              <SelectedValueEvidence
+                key={`${snapshot.subject}:${snapshot.name}:${snapshot.capturedAt}:${index}`}
+                snapshot={snapshot}
+              />
+            ))}
+        </section>
+      </RuntimeValueEvidenceResolutionProvider>
       {inspection.boundary ? (
         <p className="wf-muted">
           This occurrence is a nested reusable boundary. Its descendants remain collapsed until “Open boundary” is used on its row.
@@ -1020,56 +1043,13 @@ function SelectedValueEvidence({ snapshot }: { snapshot: ActivityExecutionInspec
       <header style={boundaryStyles.splitHeader}>
         <span style={boundaryStyles.stack}>
           <strong>{snapshot.name}</strong>
-          <small>{snapshot.subject} · {snapshot.type?.displayName ?? snapshot.type?.typeName ?? "Unknown type"}</small>
+          <small>{snapshot.subject} · {runtimeValueTypeLabel(snapshot.type) || "Unknown type"}</small>
         </span>
         <span style={boundaryStyles.badge}>{labels[presentation]}</span>
       </header>
-      <p>{selectedValueDescription(snapshot, presentation)}</p>
+      <RuntimeValueEvidenceContent snapshot={snapshot} />
     </article>
   );
-}
-
-function selectedValueDescription(
-  snapshot: ActivityExecutionInspectionValueSnapshot,
-  presentation: ReturnType<typeof runtimeEvidencePresentation>
-) {
-  if (presentation === "capture-failed") {
-    return snapshot.failure?.message || snapshot.failure?.code || snapshot.captureReason || "Runtime capture failed.";
-  }
-  if (presentation === "not-captured") {
-    return snapshot.captureReason || "The runtime capture policy did not capture this value.";
-  }
-  const node = snapshot.snapshot && typeof snapshot.snapshot === "object"
-    ? snapshot.snapshot as Record<string, unknown>
-    : null;
-  if (presentation === "redacted") {
-    return readDisplayText(node, ["reason", "requiredPermission", "displayName"]) || "The value is protected by runtime evidence permissions.";
-  }
-  if (presentation === "payload-reference") {
-    const resolution = node?.resolution && typeof node.resolution === "object"
-      ? node.resolution as Record<string, unknown>
-      : null;
-    return [
-      readDisplayText(node, ["displayName", "referenceKind"]) || "Protected runtime payload",
-      typeof node?.contentType === "string" ? node.contentType : null,
-      typeof node?.size === "number" ? `${node.size} bytes` : null,
-      readDisplayText(resolution, ["reason"]) || "Separate audited authorization is required to resolve this reference."
-    ].filter(Boolean).join(" · ");
-  }
-  return capturedValuePreview(node, snapshot);
-}
-
-function capturedValuePreview(
-  node: Record<string, unknown> | null,
-  snapshot: ActivityExecutionInspectionValueSnapshot
-) {
-  if (node) {
-    if (typeof node.preview === "string") return truncate(node.preview, 240);
-    if ("value" in node) return truncate(stringify(node.value), 240);
-    return `${formatKind(typeof node.kind === "string" ? node.kind : "Diagnostic Snapshot")} captured.`;
-  }
-  if (snapshot.payload !== undefined) return truncate(stringify(snapshot.payload), 240);
-  return snapshot.captureReason || "Diagnostic Snapshot captured.";
 }
 
 function createFrame(inspection: ActivityExecutionInspection, label?: string): BoundaryFrame {
@@ -1145,31 +1125,11 @@ function isCancelling(inspection: ActivityExecutionInspection) {
   return status.includes("cancelling") || status.includes("canceling");
 }
 
-function readDisplayText(record: Record<string, unknown> | null, keys: string[]) {
-  if (!record) return "";
-  for (const key of keys) {
-    const value = record[key];
-    if (typeof value === "string" && value.trim()) return value;
-  }
-  return "";
-}
-
-function formatKind(value: string) {
-  return value.replace(/([a-z])([A-Z])/g, "$1 $2");
-}
-
 function truncate(value: string, length: number) {
   return value.length > length ? `${value.slice(0, Math.max(0, length - 1))}…` : value;
 }
 
-function stringify(value: unknown) {
-  if (typeof value === "string") return value;
-  try {
-    return JSON.stringify(value);
-  } catch {
-    return String(value);
-  }
-}
+
 
 const boundaryStyles = {
   inspector: {

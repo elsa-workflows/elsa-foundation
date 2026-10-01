@@ -1,10 +1,11 @@
-import { Component, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
+import "./activityInspection.css";
+import { Component, lazy, Suspense, useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import { ReactFlow, Background, Controls, MiniMap, type Edge, type Node } from "@xyflow/react";
 import { Activity as ActivityIcon, AlertCircle, Boxes, ChevronLeft, ChevronRight, ListTree, Maximize2, Minimize2, RotateCcw, SlidersHorizontal, Sparkles, Workflow as WorkflowIcon } from "lucide-react";
 import type { StudioActivityInputDescriptor, StudioAiContributionApi, StudioEndpointContext, StudioExpressionEditorContribution, StudioExpressionSourceRendererContext } from "@elsa-workflows/studio-sdk";
 import { listActivities } from "../api/activityDesign";
 import { getActivityExecutionInspection, getExecutable, getExecutableInputSources, getWorkflowInstance, listWorkflowInstances, type WorkflowInstanceListPage } from "../api/runtime";
-import type { ActivityCatalogItem, ActivityExecutionInspection, ActivityExecutionInspectionValueSnapshot, ActivityExecutionStateSummary, ActivityNode, DiagnosticSnapshotArrayNode, DiagnosticSnapshotNode, DiagnosticSnapshotObjectNode, DiagnosticSnapshotPayloadReferenceNode, DiagnosticSnapshotUnknownNode, IncidentStateSummary, WorkflowDefinitionVersionDetails, WorkflowExecutableDetails, WorkflowInstanceDetails, WorkflowInstanceSummary } from "../workflowTypes";
+import type { ActivityCatalogItem, ActivityExecutionInspection, ActivityExecutionInspectionValueSnapshot, ActivityExecutionStateSummary, ActivityNode, IncidentStateSummary, WorkflowDefinitionVersionDetails, WorkflowExecutableDetails, WorkflowInstanceDetails, WorkflowInstanceSummary } from "../workflowTypes";
 import { formatActivitySummary } from "../activitySummary";
 import { resolveActivityLabel } from "../activityPresentation";
 import {
@@ -32,6 +33,17 @@ import { WorkflowStatusBadge } from "./WorkflowStatusBadge";
 import { nodeTypes, edgeTypes } from "./graph";
 import { ScopeBreadcrumb } from "./ScopeBreadcrumb";
 import { CopyValueButton } from "./executableShared";
+import {
+  formatCaptureMode,
+  formatSnapshotKind,
+  formatSnapshotPayload,
+  isKnownSnapshotNode,
+  previewSnapshotPayload,
+  runtimeValueContextId,
+  RuntimeValueEvidenceCard,
+  RuntimeValueEvidenceResolutionProvider
+} from "./RuntimeValueEvidence";
+export { formatSnapshotPayload } from "./RuntimeValueEvidence";
 import type { InstanceInspectorTab, WorkflowEditorPanelTab, WorkflowInstanceInspectionData } from "./editorTypes";
 import {
   activityNodeKey,
@@ -971,6 +983,8 @@ function trapFocusWithin(event: ReactKeyboardEvent<HTMLElement>, container: HTML
 
 type ActivityExecutionInspectionState = {
   activityExecutionId: string | null;
+  workflowExecutionId: string | null;
+  contextIdentity: number | string | null;
   status: "idle" | "loading" | "ready" | "failed";
   inspection: ActivityExecutionInspection | null;
   error: string;
@@ -991,8 +1005,11 @@ export function WorkflowActivityExecutionDetails({
 }) {
   const selectedActivityExecutionId = activity?.activityExecutionId ?? null;
   const selectedWorkflowExecutionId = activity?.workflowExecutionId ?? null;
+  const selectedContextIdentity = runtimeValueContextId(context);
   const [inspectionState, setInspectionState] = useState<ActivityExecutionInspectionState>({
     activityExecutionId: null,
+    workflowExecutionId: null,
+    contextIdentity: null,
     status: "idle",
     inspection: null,
     error: ""
@@ -1002,22 +1019,25 @@ export function WorkflowActivityExecutionDetails({
   useEffect(() => {
     setCopyStatus("");
     if (!selectedActivityExecutionId || !selectedWorkflowExecutionId) {
-      setInspectionState({ activityExecutionId: null, status: "idle", inspection: null, error: "" });
+      setInspectionState({ activityExecutionId: null, workflowExecutionId: null, contextIdentity: selectedContextIdentity, status: "idle", inspection: null, error: "" });
       return;
     }
 
     const controller = new AbortController();
     const activityExecutionId = selectedActivityExecutionId;
-    setInspectionState({ activityExecutionId, status: "loading", inspection: null, error: "" });
+    const workflowExecutionId = selectedWorkflowExecutionId;
+    setInspectionState({ activityExecutionId, workflowExecutionId, contextIdentity: selectedContextIdentity, status: "loading", inspection: null, error: "" });
 
-    getActivityExecutionInspection(context, selectedWorkflowExecutionId, activityExecutionId, controller.signal).then(
+    getActivityExecutionInspection(context, workflowExecutionId, activityExecutionId, controller.signal).then(
       inspection => {
-        if (!controller.signal.aborted) setInspectionState({ activityExecutionId, status: "ready", inspection, error: "" });
+        if (!controller.signal.aborted) setInspectionState({ activityExecutionId, workflowExecutionId, contextIdentity: selectedContextIdentity, status: "ready", inspection, error: "" });
       },
       error => {
         if (!controller.signal.aborted) {
           setInspectionState({
             activityExecutionId,
+            workflowExecutionId,
+            contextIdentity: selectedContextIdentity,
             status: "failed",
             inspection: null,
             error: error instanceof Error ? error.message : String(error)
@@ -1027,7 +1047,21 @@ export function WorkflowActivityExecutionDetails({
     );
 
     return () => controller.abort();
-  }, [context, selectedActivityExecutionId, selectedWorkflowExecutionId]);
+  }, [context, selectedActivityExecutionId, selectedContextIdentity, selectedWorkflowExecutionId]);
+
+  const currentInspectionState: ActivityExecutionInspectionState =
+    inspectionState.activityExecutionId === selectedActivityExecutionId &&
+    inspectionState.workflowExecutionId === selectedWorkflowExecutionId &&
+    inspectionState.contextIdentity === selectedContextIdentity
+      ? inspectionState
+      : selectedActivityExecutionId && selectedWorkflowExecutionId
+        ? { activityExecutionId: selectedActivityExecutionId, workflowExecutionId: selectedWorkflowExecutionId, contextIdentity: selectedContextIdentity, status: "loading", inspection: null, error: "" }
+        : { activityExecutionId: null, workflowExecutionId: null, contextIdentity: selectedContextIdentity, status: "idle", inspection: null, error: "" };
+  const resolutionScope = useMemo(
+    () => selectedActivityExecutionId && selectedWorkflowExecutionId
+      ? { context, activityExecutionId: selectedActivityExecutionId, workflowExecutionId: selectedWorkflowExecutionId }
+      : null,
+    [context, selectedActivityExecutionId, selectedWorkflowExecutionId]);
 
   if (!activity) {
     return (
@@ -1108,25 +1142,27 @@ export function WorkflowActivityExecutionDetails({
 
         {copyStatus ? <p className="wf-copy-status" role="status" aria-live="polite">{copyStatus}</p> : null}
       </section>
-      {inspectionState.status === "ready" && inspectionState.inspection?.boundary ? (
+      {currentInspectionState.status === "ready" && currentInspectionState.inspection?.boundary ? (
         <Suspense fallback={<section className="wf-instance-section" role="status">Loading reusable boundary inspector...</section>}>
-          <ReusableBoundaryInspector context={context} inspection={inspectionState.inspection} />
+          <ReusableBoundaryInspector context={context} inspection={currentInspectionState.inspection} />
         </Suspense>
       ) : null}
-      <WorkflowActivityInputEvidence
-        state={inspectionState}
-        declarations={declaredInputs}
-        executableNodeFacts={executableNodeFacts}
-        expressionEditors={expressionEditors}
-      />
-      <WorkflowActivityValueEvidence
-        state={inspectionState}
-        subject="ActivityOutput"
-        title="Outputs"
-        loadingText="Loading runtime output evidence..."
-        failureText="Runtime output evidence is unavailable."
-        emptyText="No runtime output snapshots were recorded for this execution."
-      />
+      <RuntimeValueEvidenceResolutionProvider scope={resolutionScope}>
+        <WorkflowActivityInputEvidence
+          state={currentInspectionState}
+          declarations={declaredInputs}
+          executableNodeFacts={executableNodeFacts}
+          expressionEditors={expressionEditors}
+        />
+        <WorkflowActivityValueEvidence
+          state={currentInspectionState}
+          subject="ActivityOutput"
+          title="Outputs"
+          loadingText="Loading runtime output evidence..."
+          failureText="Runtime output evidence is unavailable."
+          emptyText="No runtime output snapshots were recorded for this execution."
+        />
+      </RuntimeValueEvidenceResolutionProvider>
       <section className="wf-instance-section">
         <details className="wf-activity-execution-details">
           <summary>
@@ -1229,7 +1265,7 @@ function WorkflowActivityInputEvidence({
       ) : null}
       {rows.length === 0 && state.status === "ready" ? <p>No declared inputs, pinned bindings, or runtime input evidence are available for this execution.</p> : null}
       {rows.length > 0 ? (
-        <div className="wf-runtime-input-list" role="list">
+        <div className="wf-runtime-input-list wf-input-inspection-list" role="list">
           {rows.map(row => (
             <InputInspectionRowCard
               key={row.rowKey}
@@ -1256,44 +1292,48 @@ function InputInspectionRowCard({
   const latest = row.latestEvaluation;
   const sourceKind = row.authoredSource?.expressionType || row.compiledBinding?.source || "No source";
   const sourceProtected = isProtectedSourceAccess(sourceAccess) || isProtectedSourceAccess(row.authoredSource?.accessState ?? row.authoredSource?.access) || !!row.authoredSource?.isSensitive || !!row.compiledBinding?.isSensitive || !!latest?.isSensitive;
-  const regionId = `input-inspection-${safeDomId(row.rowKey)}`;
+  const regionId = useId();
 
   return (
-    <details className="wf-runtime-input" role="listitem">
-      <summary aria-controls={regionId}>
-        <span>
-          <strong>{row.name}</strong>
-          <small>{row.declaredType || "Unknown type"}</small>
-        </span>
-        <span>
-          <small>Evaluated at runtime</small>
-          <code>{runtimeEvidencePreview(latest)}</code>
-        </span>
-        <span>
-          <small>{sourceKind}</small>
-          <code>{sourcePreview(row, sourceProtected, sourceAccess)}</code>
-        </span>
-      </summary>
-      <div id={regionId} className="wf-runtime-input-content">
-        {row.states.length > 0 ? (
-          <p className="wf-instance-note">{row.states.map(formatInputInspectionState).join(" · ")}</p>
-        ) : null}
-        <section aria-label={`${row.name} runtime evidence`}>
-          <h5>Evaluated at runtime</h5>
-          {latest ? <RuntimeValueEvidenceCard snapshot={latest} listItem={false} /> : <p>No runtime evaluation was recorded.</p>}
-          {row.evaluations.length > 1 ? <InputEvaluationHistory evaluations={row.evaluations} /> : null}
-        </section>
-        <section aria-label={`${row.name} authored source`}>
-          <h5>Authored source</h5>
-          <AuthoredInputSource
-            row={row}
-            sourceAccess={sourceAccess}
-            protectedSource={sourceProtected}
-            expressionEditors={expressionEditors}
-          />
-        </section>
-      </div>
-    </details>
+    <div className="wf-runtime-input wf-input-inspection-row" role="listitem">
+      <details>
+        <summary className="wf-input-inspection-summary" aria-controls={regionId}>
+          <span className="wf-input-inspection-summary-grid">
+            <span className="wf-input-inspection-identity">
+              <strong className="wf-input-inspection-name">{row.name}</strong>
+              <small className="wf-input-inspection-type">{row.declaredType || "Unknown type"}</small>
+            </span>
+            <span className="wf-input-inspection-preview">
+              <small>Evaluated at runtime</small>
+              <code>{runtimeEvidencePreview(latest)}</code>
+            </span>
+            <span className="wf-input-inspection-preview">
+              <small>{sourceKind}</small>
+              <code>{sourcePreview(row, sourceProtected, sourceAccess)}</code>
+            </span>
+          </span>
+        </summary>
+        <div id={regionId} className="wf-runtime-input-content wf-input-inspection-content">
+          {row.states.length > 0 ? (
+            <p className="wf-instance-note">{row.states.map(formatInputInspectionState).join(" · ")}</p>
+          ) : null}
+          <section className="wf-input-inspection-detail" aria-label={`${row.name} runtime evidence`}>
+            <h5>Evaluated at runtime</h5>
+            {latest ? <RuntimeValueEvidenceCard snapshot={latest} listItem={false} /> : <p>No runtime evaluation was recorded.</p>}
+            {row.evaluations.length > 1 ? <InputEvaluationHistory evaluations={row.evaluations} /> : null}
+          </section>
+          <section className="wf-input-inspection-detail wf-input-inspection-source" aria-label={`${row.name} authored source`}>
+            <h5>Authored source</h5>
+            <AuthoredInputSource
+              row={row}
+              sourceAccess={sourceAccess}
+              protectedSource={sourceProtected}
+              expressionEditors={expressionEditors}
+            />
+          </section>
+        </div>
+      </details>
+    </div>
   );
 }
 
@@ -1406,7 +1446,7 @@ function GenericExpressionSource({ expressionType, value, expanded = false }: { 
   const text = formatSnapshotPayload(value);
   const bounded = text.length > 4_000 ? `${text.slice(0, 3_997)}...` : text;
   return (
-    <div>
+    <div className="wf-input-inspection-expression">
       <small>{expressionType || "Unknown expression"}</small>
       {expanded && (bounded.includes("\n") || bounded.length > 160) ? <pre>{bounded}</pre> : <code>{bounded}</code>}
     </div>
@@ -1422,6 +1462,8 @@ function runtimeEvidencePreview(snapshot: ActivityExecutionInspectionValueSnapsh
   if (!snapshot) return "Not evaluated";
   if (snapshot.failure) return snapshot.failure.code || "Evaluation failed";
   const access = snapshot.accessState ?? snapshot.access;
+  if (access?.toLowerCase() === "resolutionavailable") return "Captured value available";
+  if (access?.toLowerCase() === "resolutionpermissionrequired") return "Additional permission required";
   if (access && access.toLowerCase() !== "visible" && access.toLowerCase() !== "allowed") return formatCaptureMode(access);
   if (snapshot.isSensitive) return "Protected value";
   const node = snapshot.snapshot;
@@ -1429,7 +1471,7 @@ function runtimeEvidencePreview(snapshot: ActivityExecutionInspectionValueSnapsh
   if (node && isKnownSnapshotNode(node) && (node.kind === "scalar" || node.kind === "number")) return previewSnapshotPayload(formatSnapshotPayload(node.value));
   if (node) return formatSnapshotKind(node.kind);
   if (snapshot.captureMode === "Payload" && snapshot.payload !== undefined) return previewSnapshotPayload(formatSnapshotPayload(snapshot.payload));
-  return snapshot.captureReason || formatCaptureMode(snapshot.state || snapshot.captureMode);
+  return snapshot.captureReason || formatCaptureMode(snapshot.captureState ?? snapshot.state ?? snapshot.captureMode);
 }
 
 function sourcePreview(row: InputInspectionRow, protectedSource: boolean, sourceAccess?: string | null) {
@@ -1442,10 +1484,6 @@ function isProtectedSourceAccess(access: string | null | undefined) {
   if (!access) return false;
   const normalized = access.toLowerCase();
   return normalized !== "visible" && normalized !== "allowed";
-}
-
-function safeDomId(value: string) {
-  return value.replace(/[^a-zA-Z0-9_-]/g, "-");
 }
 
 function formatInputInspectionState(state: InputInspectionState) {
@@ -1531,213 +1569,12 @@ function WorkflowActivityValueEvidence({
         <span className="wf-runtime-capture-mode">{captureModeLabel}</span>
       </header>
       <div className="wf-runtime-input-list" role="list">
-        {snapshots.map(snapshot => (
-          <RuntimeValueEvidenceCard key={`${snapshot.name}:${snapshot.capturedAt}:${snapshot.captureMode}`} snapshot={snapshot} />
+        {snapshots.map((snapshot, index) => (
+          <RuntimeValueEvidenceCard key={snapshot.evidenceId || `${snapshot.name}:${snapshot.capturedAt}:${snapshot.captureMode}:${index}`} snapshot={snapshot} />
         ))}
       </div>
     </section>
   );
-}
-
-function RuntimeValueEvidenceCard({ snapshot, listItem = true }: { snapshot: ActivityExecutionInspectionValueSnapshot; listItem?: boolean }) {
-  const typeName = snapshot.type?.displayName || snapshot.type?.typeName || snapshot.type?.alias || "Unknown";
-  const diagnosticSnapshot = snapshot.snapshot ?? (snapshot.captureMode === "DiagnosticSnapshot" ? snapshot.payload : null);
-  const hasPayload = snapshot.captureMode === "Payload" && snapshot.payload !== undefined;
-
-  return (
-    <article className="wf-runtime-input" role={listItem ? "listitem" : undefined}>
-      <header>
-        <span>
-          <strong>{snapshot.name}</strong>
-          <small>{typeName}</small>
-        </span>
-        <small>{formatCaptureMode(snapshot.captureMode)}</small>
-      </header>
-      <div className="wf-runtime-input-content">
-        {snapshot.isSensitive && !isProtectedDiagnosticSnapshot(diagnosticSnapshot) ? (
-          <p>Runtime value is protected because this input is sensitive.</p>
-        ) : snapshot.failure ? (
-          <p>{snapshot.failure.message || snapshot.failure.code || "The input could not be evaluated."}{snapshot.failure.incidentId ? ` Incident ${snapshot.failure.incidentId}.` : ""}</p>
-        ) : isDiagnosticSnapshotNode(diagnosticSnapshot) ? (
-          <DiagnosticSnapshotTree node={diagnosticSnapshot} />
-        ) : hasPayload ? (
-          <RuntimeInputPayload payload={snapshot.payload} />
-        ) : (
-          <p>{formatEvidenceMessage(snapshot)}</p>
-        )}
-      </div>
-      {snapshot.isSensitive ? <p className="wf-instance-note">Marked sensitive by runtime evidence.</p> : null}
-    </article>
-  );
-}
-
-// `DiagnosticSnapshotUnknownNode` has `kind: string`, which defeats discriminated-union narrowing —
-// route unknown kinds out first so the switch below narrows to the concrete node interfaces.
-type KnownDiagnosticSnapshotNode = Exclude<DiagnosticSnapshotNode, DiagnosticSnapshotUnknownNode>;
-
-// Record<K, true> makes the compiler reject a missing or misspelled kind when the union grows.
-const knownSnapshotKinds: Record<KnownDiagnosticSnapshotNode["kind"], true> = {
-  null: true, scalar: true, number: true, string: true, object: true, array: true,
-  redacted: true, truncated: true, unsupported: true, error: true,
-  permissionHidden: true, payloadReference: true
-};
-
-function isKnownSnapshotNode(node: DiagnosticSnapshotNode): node is KnownDiagnosticSnapshotNode {
-  return Object.hasOwn(knownSnapshotKinds, node.kind);
-}
-
-function DiagnosticSnapshotTree({ node, depth = 0 }: { node: DiagnosticSnapshotNode; depth?: number }) {
-  if (!isKnownSnapshotNode(node)) {
-    return <DiagnosticSnapshotMarker node={{ kind: "unsupported", reason: `Unknown snapshot node: ${node.kind}` }} />;
-  }
-
-  switch (node.kind) {
-    case "null":
-      return <code className="wf-runtime-input-value">null</code>;
-    case "scalar":
-    case "number":
-      return <code className="wf-runtime-input-value">{formatSnapshotPayload(node.value)}</code>;
-    case "string":
-      return (
-        <code className="wf-runtime-input-value">
-          {node.preview ?? ""}
-          {node.truncated ? ` (${node.length ?? "unknown"} chars, truncated)` : ""}
-        </code>
-      );
-    case "object":
-      return <DiagnosticSnapshotObject node={node} depth={depth} />;
-    case "array":
-      return <DiagnosticSnapshotArray node={node} depth={depth} />;
-    case "redacted":
-    case "truncated":
-    case "unsupported":
-    case "error":
-    case "permissionHidden":
-      return <DiagnosticSnapshotMarker node={node} />;
-    case "payloadReference":
-      return <DiagnosticSnapshotReference node={node} />;
-  }
-}
-
-function DiagnosticSnapshotObject({ node, depth }: { node: DiagnosticSnapshotObjectNode; depth: number }) {
-  const properties = node.properties ?? [];
-  if (properties.length === 0) return <code className="wf-runtime-input-value">{"{}"}</code>;
-
-  return (
-    <details className="wf-runtime-snapshot-node" open={depth === 0}>
-      <summary>{node.typeName || "Object"}{node.truncated ? " (truncated)" : ""}</summary>
-      <div className="wf-runtime-snapshot-children">
-        {properties.map(property => (
-          <div className="wf-runtime-snapshot-property" key={property.name}>
-            <span>{property.name}</span>
-            <DiagnosticSnapshotTree node={property.value} depth={depth + 1} />
-          </div>
-        ))}
-      </div>
-    </details>
-  );
-}
-
-function DiagnosticSnapshotArray({ node, depth }: { node: DiagnosticSnapshotArrayNode; depth: number }) {
-  const items = node.items ?? [];
-  if (items.length === 0) return <code className="wf-runtime-input-value">[]</code>;
-
-  return (
-    <details className="wf-runtime-snapshot-node" open={depth === 0}>
-      <summary>Array ({node.itemCount ?? items.length}){node.truncated ? " (truncated)" : ""}</summary>
-      <div className="wf-runtime-snapshot-children">
-        {items.map((item, index) => (
-          <div className="wf-runtime-snapshot-property" key={index}>
-            <span>{index}</span>
-            <DiagnosticSnapshotTree node={item} depth={depth + 1} />
-          </div>
-        ))}
-      </div>
-    </details>
-  );
-}
-
-function DiagnosticSnapshotMarker({ node }: { node: Pick<DiagnosticSnapshotNode, "kind" | "displayName"> & { reason?: string | null; omittedCount?: number | null; message?: string | null; requiredPermission?: string | null } }) {
-  const reason = node.message || node.reason || node.requiredPermission || node.displayName;
-  return (
-    <span className={`wf-runtime-snapshot-marker ${node.kind}`}>
-      {formatSnapshotKind(node.kind)}
-      {reason ? `: ${reason}` : ""}
-      {node.omittedCount ? ` (${node.omittedCount} omitted)` : ""}
-    </span>
-  );
-}
-
-function DiagnosticSnapshotReference({ node }: { node: DiagnosticSnapshotPayloadReferenceNode }) {
-  const label = node.displayName || node.referenceKind || "Referenced payload";
-  const resolutionReason = node.resolution?.reason || "Reference resolution is not available.";
-  return (
-    <div className="wf-runtime-snapshot-reference">
-      <strong>{label}</strong>
-      {node.contentType ? <small>{node.contentType}</small> : null}
-      {typeof node.size === "number" ? <small>{node.size} bytes</small> : null}
-      <span>{resolutionReason}</span>
-    </div>
-  );
-}
-
-function RuntimeInputPayload({ payload }: { payload: unknown }) {
-  const text = formatSnapshotPayload(payload);
-  const compact = text.length <= 160 && !text.includes("\n");
-
-  return compact ? (
-    <code className="wf-runtime-input-value">{text}</code>
-  ) : (
-    <details className="wf-runtime-input-value-details">
-      <summary>{previewSnapshotPayload(text)}</summary>
-      <pre>{text}</pre>
-    </details>
-  );
-}
-
-function formatCaptureMode(mode: string) {
-  return mode.replace(/([a-z])([A-Z])/g, "$1 $2");
-}
-
-function formatSnapshotKind(kind: string) {
-  return kind.replace(/([a-z])([A-Z])/g, "$1 $2");
-}
-
-function formatEvidenceMessage(snapshot: ActivityExecutionInspectionValueSnapshot) {
-  const access = snapshot.accessState ?? snapshot.access;
-  if (access === "redacted") return "Runtime value evidence is redacted.";
-  if (access === "unavailable") return "Runtime value evidence is unavailable.";
-  if (access === "permissionHidden" || access === "permission-hidden") return "Runtime value evidence is hidden by permissions.";
-  if (snapshot.state === "permissionHidden") return "Runtime value evidence is hidden by permissions.";
-  if (snapshot.state === "metadataOnly") return snapshot.captureReason || "Runtime value evidence is metadata-only.";
-  if (snapshot.state === "notCaptured") return snapshot.captureReason || "Runtime value evidence was not captured.";
-  return snapshot.captureReason || "The runtime capture policy did not include this value.";
-}
-
-function isProtectedDiagnosticSnapshot(value: unknown) {
-  return isDiagnosticSnapshotNode(value) && (value.kind === "redacted" || value.kind === "permissionHidden");
-}
-
-function isDiagnosticSnapshotNode(value: unknown): value is DiagnosticSnapshotNode {
-  return typeof value === "object" && value !== null && typeof (value as { kind?: unknown }).kind === "string";
-}
-
-function previewSnapshotPayload(text: string) {
-  const firstLine = text.split("\n", 1)[0] || text;
-  return firstLine.length > 120 ? `${firstLine.slice(0, 117)}...` : firstLine;
-}
-
-export function formatSnapshotPayload(payload: unknown) {
-  if (payload === null) return "null";
-  if (payload === undefined) return "undefined";
-  if (typeof payload === "string") return payload;
-  if (typeof payload === "number" || typeof payload === "boolean" || typeof payload === "bigint") return String(payload);
-
-  try {
-    return JSON.stringify(payload, null, 2);
-  } catch {
-    return String(payload);
-  }
 }
 
 const incidentStackTraceMetadataKeys = [

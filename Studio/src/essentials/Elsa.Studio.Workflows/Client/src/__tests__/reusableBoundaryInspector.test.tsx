@@ -8,6 +8,7 @@ import {
   getActivityExecutionInspection,
   getActivityExecutionLayout
 } from "../api/runtime";
+import { getActivityExecutionValuePayload } from "../api/activityExecutionValuePayload";
 import { ReusableBoundaryInspector } from "../workflow-editor/ReusableBoundaryInspector";
 import type {
   ActivityExecutionHierarchyItem,
@@ -23,6 +24,8 @@ vi.mock("../api/runtime", async importOriginal => ({
   getActivityExecutionLayout: vi.fn()
 }));
 
+vi.mock("../api/activityExecutionValuePayload", () => ({ getActivityExecutionValuePayload: vi.fn() }));
+
 let active: { root: Root; container: HTMLElement } | null = null;
 const context = {} as StudioEndpointContext;
 
@@ -35,6 +38,7 @@ afterEach(() => {
   vi.mocked(getActivityExecutionInspection).mockReset();
   vi.mocked(getActivityExecutionDescendants).mockReset();
   vi.mocked(getActivityExecutionLayout).mockReset();
+  vi.mocked(getActivityExecutionValuePayload).mockReset();
 });
 
 describe("ReusableBoundaryInspector", () => {
@@ -223,7 +227,7 @@ describe("ReusableBoundaryInspector", () => {
         metadata: {}
       }],
       valueSnapshots: [
-        value("Captured value", { state: "captured", snapshot: { kind: "string", preview: "visible" } }),
+        value("Captured value", { state: "captured", type: { kind: "alias", id: "Int32" }, snapshot: { kind: "string", preview: "visible" } }),
         value("Redacted value", { state: "captured", snapshot: { kind: "redacted", reason: "secret" } }),
         value("Not captured value", { state: "notCaptured", captureMode: "None", captureReason: "Policy omitted it." }),
         value("Capture failed value", { state: "captureFailed", failure: { code: "capture.failed", message: "Serializer failed." } }),
@@ -246,6 +250,7 @@ describe("ReusableBoundaryInspector", () => {
     click(treeItem(container, "attempt-2"));
 
     await waitFor(() => expect(container.textContent).toContain("Canonical execution attempt-2"));
+    expect(container.textContent).toContain("ActivityInput · Int32");
     expect(container.textContent).toContain("bookmark-attempt-2");
     expect(container.textContent).toContain("incident-attempt-2");
     expect(container.textContent).toContain("The first fault remains visible.");
@@ -256,6 +261,72 @@ describe("ReusableBoundaryInspector", () => {
       .toEqual(["Captured", "Redacted", "Not captured", "Capture failed", "Payload reference"]);
     expect(container.textContent).not.toContain("Reveal");
     expect(container.textContent).not.toContain("Download");
+  });
+
+  it("resolves metadata-only captured output using the selected canonical execution IDs", async () => {
+    vi.mocked(getActivityExecutionValuePayload).mockResolvedValue({
+      evidenceId: "output-evidence", captureMode: "DiagnosticSnapshot", payload: { kind: "number", value: 200 }
+    });
+    const container = await selectCapturedExecution();
+
+    await waitFor(() => expect(container.querySelector(".wf-runtime-input-value")?.textContent).toBe("200"));
+    expect(getActivityExecutionValuePayload).toHaveBeenCalledWith(
+      context, "run", "first", "output-evidence", "DiagnosticSnapshot", expect.any(AbortSignal));
+  });
+
+  it("requires a fresh sensitive-output action after changing the selected descendant", async () => {
+    vi.mocked(getActivityExecutionValuePayload).mockResolvedValue({
+      evidenceId: "output-evidence", captureMode: "DiagnosticSnapshot", payload: { kind: "string", preview: "PRIVATE_OUTPUT" }
+    });
+    const container = await selectCapturedExecution({ isSensitive: true });
+    expect(getActivityExecutionValuePayload).not.toHaveBeenCalled();
+    click(button(container, "Show captured value"));
+    await waitFor(() => expect(container.textContent).toContain("PRIVATE_OUTPUT"));
+
+    click(treeItem(container, "second"));
+    await waitFor(() => expect(container.textContent).toContain("Canonical execution second"));
+    expect(container.textContent).not.toContain("PRIVATE_OUTPUT");
+    expect(getActivityExecutionValuePayload).toHaveBeenCalledTimes(1);
+    click(button(container, "Show captured value"));
+    await waitFor(() => expect(getActivityExecutionValuePayload).toHaveBeenCalledTimes(2));
+    expect(getActivityExecutionValuePayload).toHaveBeenLastCalledWith(
+      context, "run", "second", "output-evidence", "DiagnosticSnapshot", expect.any(AbortSignal));
+  });
+
+  it.each([
+    ["allowed", true],
+    ["resolutionPermissionRequired", false],
+    ["unavailable", false]
+  ])("hides inline values with %s access and sensitive=%s", async (accessState, isSensitive) => {
+    const container = await selectCapturedExecution({
+      accessState, isSensitive,
+      payload: "PRIVATE_INLINE_OUTPUT",
+      snapshot: { kind: "string", preview: "PRIVATE_INLINE_OUTPUT" }
+    });
+
+    expect(container.textContent).not.toContain("PRIVATE_INLINE_OUTPUT");
+    expect(getActivityExecutionValuePayload).not.toHaveBeenCalled();
+  });
+
+  it("cancels stale selected-output resolution and ignores its late result", async () => {
+    const firstPayload = deferred<Awaited<ReturnType<typeof getActivityExecutionValuePayload>>>();
+    vi.mocked(getActivityExecutionValuePayload)
+      .mockReturnValueOnce(firstPayload.promise)
+      .mockResolvedValue({
+        evidenceId: "output-evidence", captureMode: "DiagnosticSnapshot", payload: { kind: "string", preview: "CURRENT_OUTPUT" }
+      });
+    const container = await selectCapturedExecution();
+    await waitFor(() => expect(getActivityExecutionValuePayload).toHaveBeenCalledTimes(1));
+    const firstSignal = vi.mocked(getActivityExecutionValuePayload).mock.calls[0]![5]!;
+    click(treeItem(container, "second"));
+    await waitFor(() => expect(container.textContent).toContain("CURRENT_OUTPUT"));
+    expect(firstSignal.aborted).toBe(true);
+    firstPayload.resolve({
+      evidenceId: "output-evidence", captureMode: "DiagnosticSnapshot", payload: { kind: "string", preview: "STALE_OUTPUT" }
+    });
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(container.textContent).not.toContain("STALE_OUTPUT");
+    expect(container.textContent).toContain("CURRENT_OUTPUT");
   });
 
   it("supports roving tree focus and opens canonical evidence with the keyboard", async () => {
@@ -280,6 +351,25 @@ describe("ReusableBoundaryInspector", () => {
     await waitFor(() => expect(container.textContent).toContain("Canonical execution second"));
   });
 });
+
+async function selectCapturedExecution(overrides: Partial<ActivityExecutionInspection["valueSnapshots"][number]> = {}) {
+  vi.mocked(getActivityExecutionLayout).mockResolvedValue(layout("outer", []));
+  vi.mocked(getActivityExecutionDescendants).mockResolvedValue(page(2, [hierarchyItem("first", 1), hierarchyItem("second", 2)]));
+  vi.mocked(getActivityExecutionInspection).mockImplementation(async (_context, _run, id) => ({
+    ...canonicalInspection(id),
+    valueSnapshots: [value("Result", {
+      subject: "ActivityOutput", evidenceId: "output-evidence", captureMode: "DiagnosticSnapshot",
+      captureState: "diagnosticSnapshotCaptured", accessState: "resolutionAvailable",
+      ...overrides
+    })]
+  }));
+  const container = render(<ReusableBoundaryInspector context={context} inspection={boundaryInspection("outer")} />);
+  click(button(container, "Runtime Evidence"));
+  await waitFor(() => expect(treeItem(container, "first")).toBeDefined());
+  click(treeItem(container, "first"));
+  await waitFor(() => expect(container.textContent).toContain("Canonical execution first"));
+  return container;
+}
 
 function render(ui: React.ReactElement) {
   const container = document.createElement("div");

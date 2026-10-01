@@ -88,6 +88,26 @@ describe("buildInputInspectionRows", () => {
 
     expect(rows[0]?.states).toEqual(expect.arrayContaining(["orphanEvidence", "redacted", "failedEvaluation"]));
   });
+
+  it.each([
+    ["current capture state", "metadataOnly", undefined],
+    ["legacy state", undefined, "metadataOnly"],
+    ["current state over stale legacy state", "metadataOnly", "captured"]
+  ] as const)("classifies metadata-only inputs from %s", (_label, captureState, state) => {
+    const rows = buildInputInspectionRows({
+      evaluations: [evidence({ captureState, state, accessState: "unavailable", snapshot: null })]
+    });
+
+    expect(rows[0]?.states).toEqual(expect.arrayContaining(["metadataOnly", "unavailable"]));
+  });
+
+  it("uses the Runtime type descriptor ID when the host supplies only kind and id", () => {
+    const rows = buildInputInspectionRows({
+      evaluations: [evidence({ inputKey: undefined, type: { kind: "alias", id: "Int32", schema: null } })]
+    });
+
+    expect(rows[0]?.declaredType).toBe("Int32");
+  });
 });
 
 function evidence(overrides: Partial<ActivityExecutionInspectionValueSnapshot> = {}): ActivityExecutionInspectionValueSnapshot {
