@@ -20,4 +20,8 @@
     <ProjectReference Include="..\..\..\..\..\src\essentials\Diagnostics\OpenTelemetry\Persistence\EntityFrameworkCore\Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Include="..\..\ProcessIdentity.cs" Link="ProcessIdentity.cs" />
+  </ItemGroup>
+
 </Project>

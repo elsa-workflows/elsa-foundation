@@ -6,6 +6,7 @@ using CShells.Configuration;
 using CShells.Features;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Persistence.EntityFramework.Tooling;
+using Elsa.Cli.Tests;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -49,9 +50,7 @@ static int RunCandidateTestDescendant(string[] arguments)
         return 2;
 
     var holdMilliseconds = Math.Clamp(requestedHold, 0, 120_000);
-    using var process = Process.GetCurrentProcess();
-    var identity = FormattableString.Invariant($"{process.Id}|{process.StartTime.ToUniversalTime().Ticks}");
-    File.WriteAllText(arguments[1], identity, Encoding.ASCII);
+    File.WriteAllText(arguments[1], ProcessIdentityReader.Current().ToMarker(), Encoding.ASCII);
     if (holdMilliseconds > 0)
         Thread.Sleep(holdMilliseconds);
     return 0;
@@ -143,9 +142,7 @@ public sealed class ResourceProbeShellDefaults : IEfToolingShellDefaults
 
         if (probeDefaults["StartedMarker"] is { Length: > 0 } marker)
         {
-            using var process = Process.GetCurrentProcess();
-            var identity = FormattableString.Invariant($"{process.Id}|{process.StartTime.ToUniversalTime().Ticks}");
-            File.WriteAllText(marker, identity, Encoding.ASCII);
+            File.WriteAllText(marker, ProcessIdentityReader.Current().ToMarker(), Encoding.ASCII);
         }
 
         if (probeDefaults["DescendantMarker"] is { Length: > 0 } descendantMarker)
