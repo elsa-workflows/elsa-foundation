@@ -873,30 +873,43 @@ public sealed class EfCandidateInspectionTests : IDisposable
     }
 
     [Theory]
-    [InlineData(1022, EfToolingExitCode.Success)]
-    [InlineData(1023, EfToolingExitCode.ResolutionFailure)]
-    [InlineData(1024, EfToolingExitCode.ResolutionFailure)]
-    [InlineData(1025, EfToolingExitCode.ResolutionFailure)]
-    public async Task Public_operation_bounds_participant_and_finding_rows_together(int moduleCount, int expectedExitCode)
+    [InlineData(1022, EfToolingExitCode.Success, false)]
+    [InlineData(1023, EfToolingExitCode.ResolutionFailure, false)]
+    [InlineData(1024, EfToolingExitCode.ResolutionFailure, false)]
+    [InlineData(1025, EfToolingExitCode.ResolutionFailure, false)]
+    [InlineData(1022, EfToolingExitCode.Success, true)]
+    [InlineData(1023, EfToolingExitCode.ResolutionFailure, true)]
+    public async Task Public_operation_bounds_participant_and_finding_rows_together(
+        int moduleCount,
+        int expectedExitCode,
+        bool explicitEnvironment)
     {
         var featureId = $"SyntheticCandidateParticipant{moduleCount}";
         var syntheticAssembly = SyntheticEfModules.BuildParticipantFeature(
             $"Elsa.Candidate.Participants.{Guid.NewGuid():N}", featureId, moduleCount);
         var candidate = CreateCandidate([featureId], BuildFiles([featureId], includeResourceConfiguration: false));
+        if (explicitEnvironment)
+            candidate = AddEnvironmentInput(candidate, EnvironmentDocument(new Dictionary<string, string>()));
+
         var discoveryCalls = 0;
-        var operation = new EfCandidateInspectionOperation(() =>
+        Func<IEnumerable<Assembly>> discover = () =>
         {
             discoveryCalls++;
             return [.. EfConfigurationProbeTests.HostAssemblies, syntheticAssembly];
-        });
+        };
+        var oldOperation = explicitEnvironment ? null : new EfCandidateInspectionOperation(discover);
+        var environmentOperation = explicitEnvironment ? new EfCandidateEnvironmentInspectionOperation(discover) : null;
         using var response = new MemoryStream();
+        Func<Task<int>> run = explicitEnvironment
+            ? () => RunEnvironmentOperationAsync(environmentOperation!, candidate.Request, response, CancellationToken.None)
+            : () => RunOperationAsync(oldOperation!, candidate.Request, response, CancellationToken.None);
 
         if (expectedExitCode == EfToolingExitCode.ResolutionFailure)
         {
             // Host availability failures are scoped exceptions; the worker maps them to its fixed
             // outer refusal. They are not a new exit-3 host-response shape in the v1 contract.
             var refusal = await Assert.ThrowsAsync<EfToolingRefusal>(() =>
-                RunOperationAsync(operation, candidate.Request, response, CancellationToken.None));
+                run());
             Assert.Equal("candidate-host-unavailable", refusal.Code);
             Assert.Equal(expectedExitCode, refusal.ExitCode);
             Assert.Equal(1, discoveryCalls);
@@ -905,7 +918,7 @@ public sealed class EfCandidateInspectionTests : IDisposable
             return;
         }
 
-        var exitCode = await RunOperationAsync(operation, candidate.Request, response, CancellationToken.None);
+        var exitCode = await run();
 
         Assert.Equal(expectedExitCode, exitCode);
         Assert.Equal(1, discoveryCalls);
@@ -916,6 +929,13 @@ public sealed class EfCandidateInspectionTests : IDisposable
         Assert.Equal(expectedExitCode, root.GetProperty("exitCode").GetInt32());
         Assert.Equal("ok", root.GetProperty("status").GetString());
         var resolution = root.GetProperty("configurationResolution");
+        Assert.Equal(
+            explicitEnvironment
+                ? "captured-workbench-json-explicit-environment-v1"
+                : "captured-workbench-json-v1",
+            resolution.GetProperty("source").GetString());
+        Assert.Equal(explicitEnvironment ? "supplied-intended" : "unverified",
+            resolution.GetProperty("externalInputs").GetString());
         var participants = resolution.GetProperty("participants").EnumerateArray().ToArray();
         var findings = StringValues(resolution.GetProperty("unresolved"));
         Assert.Equal(moduleCount, participants.Length);
