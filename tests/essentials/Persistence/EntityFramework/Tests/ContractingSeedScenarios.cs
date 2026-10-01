@@ -1,3 +1,4 @@
+using System.Data.Common;
 using System.Text;
 using System.Text.Json;
 using Elsa.Persistence.EntityFramework.SchemaFinalization;
@@ -74,7 +75,7 @@ internal static class ContractingSeedScenarios
     /// </summary>
     public static async Task AnOlderReleaseThatCreatesTheRecordFirstKeepsTheContractionFromRunningAsync(string provider, string connection)
     {
-        await using var newer = Create(provider, connection, new BeforeFirstSave(async () =>
+        await using var newer = Create(provider, connection, new BeforeFirstFinalizationInsert(async () =>
         {
             await using var older = Create(provider, connection);
             await Gate(EarlierVersion).ActivateAsync(older);
@@ -156,29 +157,32 @@ internal static class ContractingSeedScenarios
     /// <summary>Runs <paramref name="read"/> to completion from EF's synchronous logging callback, off any synchronization context.</summary>
     public static T Wait<T>(Func<Task<T>> read) => Task.Run(read).GetAwaiter().GetResult();
 
-    /// <summary>Runs an action once, before the first save of the context it is added to.</summary>
-    internal sealed class BeforeFirstSave(Func<Task> action) : SaveChangesInterceptor
+    /// <summary>Runs an action once, before the first finalization row the context it is added to creates.</summary>
+    internal sealed class BeforeFirstFinalizationInsert(Func<Task> action) : DbCommandInterceptor
     {
         private Func<Task>? _action = action;
 
-        public override async ValueTask<InterceptionResult<int>> SavingChangesAsync(
-            DbContextEventData eventData,
+        public override async ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(
+            DbCommand command,
+            CommandEventData eventData,
             InterceptionResult<int> result,
             CancellationToken cancellationToken = default)
         {
-            if (Interlocked.Exchange(ref _action, null) is { } run)
+            if (FinalizationInsert.IntoAnyFinalizationTable(command) && Interlocked.Exchange(ref _action, null) is { } run)
                 await run();
             return result;
         }
     }
 
-    /// <summary>Ends the process, as far as the migrator can tell, the moment a save that wrote a row of <paramref name="table"/> has committed.</summary>
-    internal sealed class EndTheProcessOnceWritten(string table) : SaveChangesInterceptor
+    /// <summary>Ends the process, as far as the migrator can tell, the moment the command that creates a row of <paramref name="table"/> has run.</summary>
+    internal sealed class EndTheProcessOnceWritten(string table) : DbCommandInterceptor
     {
-        public override ValueTask<int> SavedChangesAsync(SaveChangesCompletedEventData eventData, int result, CancellationToken cancellationToken = default) =>
-            eventData.Context!.ChangeTracker.Entries().Any(entry => entry.Metadata.GetTableName() == table)
-                ? throw new ProcessEndedException()
-                : ValueTask.FromResult(result);
+        public override ValueTask<int> NonQueryExecutedAsync(
+            DbCommand command,
+            CommandExecutedEventData eventData,
+            int result,
+            CancellationToken cancellationToken = default) =>
+            FinalizationInsert.Into(command, table) ? throw new ProcessEndedException() : ValueTask.FromResult(result);
     }
 
     internal sealed class ProcessEndedException() : Exception("The process ended here.");

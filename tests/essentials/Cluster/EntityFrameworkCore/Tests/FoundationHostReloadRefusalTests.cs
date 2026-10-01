@@ -26,11 +26,7 @@ public sealed class FoundationHostReloadRefusalTests(FoundationHostFeed feed, Mi
     private const string ConnectionVariable = "ELSA_EF_CONNECTION";
     private const string ShellName = "default";
 
-    // The host's own header; named here rather than referenced, as nothing of the host is loaded into this process.
-    private const string ModuleManagementKeyHeader = "X-Elsa-Module-Management-Key";
-
     private static readonly TimeSpan Patience = TimeSpan.FromSeconds(60);
-    private static readonly IReadOnlyDictionary<string, string> Credential = new Dictionary<string, string> { [ModuleManagementKeyHeader] = ApiKey };
 
     private readonly string _file = Path.Join(Path.GetTempPath(), $"elsa-foundation-host-reload-{Guid.NewGuid():N}.db");
     private FoundationHostProcess? _host;
@@ -41,17 +37,14 @@ public sealed class FoundationHostReloadRefusalTests(FoundationHostFeed feed, Mi
 
     public Task InitializeAsync() => Task.CompletedTask;
 
-    /// <summary>Stops the host before its database is deleted, and deletes it even if stopping the host failed.</summary>
     public async Task DisposeAsync()
     {
         try
         {
-            if (_host is not null)
-                await _host.DisposeAsync();
+            await StopHostAndDeleteDatabaseAsync(_host, _file);
         }
         finally
         {
-            DeleteDatabaseFiles(_file);
             File.Delete(Snapshot);
         }
     }
@@ -171,7 +164,7 @@ public sealed class FoundationHostReloadRefusalTests(FoundationHostFeed feed, Mi
         Assert.True(int.Parse(parts[1]) > 1, $"The shell's generation did not advance: {version}");
     }
 
-    private Task<(HttpStatusCode Status, string Body)> ReloadAsync() => _host!.PostAsync("/_module-management/reload", Credential);
+    private Task<(HttpStatusCode Status, string Body)> ReloadAsync() => _host!.PostModuleManagementAsync("/_module-management/reload", ApiKey);
 
     /// <summary>The real tool, against the host's own directory, for the module the host's shell runs.</summary>
     private async Task ApplyAsync()
@@ -201,22 +194,17 @@ public sealed class FoundationHostReloadRefusalTests(FoundationHostFeed feed, Mi
 
     private async Task<FoundationHostProcess> StartAsync(EfMigratePolicy policy, int generation, bool deployed, bool awaitShells = true)
     {
-        return await FoundationHostProcess.StartAsync(
-            Shells(ConnectionString),
-            [migrating.Package(generation)],
-            new Dictionary<string, string>
-            {
-                // A second feed beside the host's own `packages` one, which resolves what the package there depends on and holds
-                // nothing the host loads on its own account: the host carries EF Core and Elsa.Persistence.EntityFramework itself.
-                ["Nuplane:Setup:Feeds:1:Name"] = "closure",
-                ["Nuplane:Setup:Feeds:1:DirectoryPath"] = feed.ClosureDirectory,
-                ["Nuplane:Capabilities:ef-provider"] = "Sqlite",
-                [$"{EfMigrateOptions.SectionName}:{nameof(EfMigrateOptions.Policy)}"] = policy.ToString(),
-                ["Elsa:ModuleManagement:Enabled"] = "true",
-                ["Elsa:ModuleManagement:ApiKey"] = ApiKey
-            },
-            deployed,
-            awaitShells);
+        var settings = new Dictionary<string, string>
+        {
+            // A second feed beside the host's own `packages` one, which resolves what the package there depends on and holds
+            // nothing the host loads on its own account: the host carries EF Core and Elsa.Persistence.EntityFramework itself.
+            ["Nuplane:Setup:Feeds:1:Name"] = "closure",
+            ["Nuplane:Setup:Feeds:1:DirectoryPath"] = feed.ClosureDirectory,
+            ["Nuplane:Capabilities:ef-provider"] = "Sqlite",
+            [$"{EfMigrateOptions.SectionName}:{nameof(EfMigrateOptions.Policy)}"] = policy.ToString()
+        };
+        FoundationHostComposition.EnableModuleManagement(settings, ApiKey);
+        return await FoundationHostProcess.StartAsync(Shells(ConnectionString), [migrating.Package(generation)], settings, deployed, awaitShells);
     }
 
     private static string Shells(string connectionString) => new JsonObject

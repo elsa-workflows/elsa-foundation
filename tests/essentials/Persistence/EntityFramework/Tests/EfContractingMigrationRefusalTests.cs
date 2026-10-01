@@ -1,3 +1,4 @@
+using System.Data.Common;
 using Elsa.Persistence.EntityFramework.SchemaFinalization;
 using Elsa.Persistence.EntityFramework.Tooling;
 using Elsa.Persistence.Schema;
@@ -132,6 +133,96 @@ public sealed class EfContractingMigrationRefusalTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// The module is active in the host's readability report while its migrator runs its gate, and stops being once the
+    /// migrator stops, as a disposed shell's does (spec 183, FR-019, amended 2026-09-30).
+    /// </summary>
+    [Fact]
+    public async Task A_migrator_that_stops_ends_its_modules_activity_in_the_hosts_report()
+    {
+        var observations = new EfSchemaFinalizationObservations();
+        var migrator = Migrator(EfMigratePolicy.AutoMigrate, observations: observations);
+
+        await migrator.InitializeAsync();
+        Assert.True(observations.Find(Family).ModuleActive);
+
+        await migrator.StopAsync(CancellationToken.None);
+        Assert.False(observations.Find(Family).ModuleActive);
+    }
+
+    /// <summary>
+    /// A stop that arrives while the gate is being admitted must still end the module's activity: the stop takes the
+    /// admission lock, so the gate that activates after it began is deactivated too, and a migrator that has stopped admits
+    /// nothing more, and the stop cancels the admission in flight. The barrier holds the admission at its first publish, so
+    /// the stop begins before the gate exists.
+    /// </summary>
+    [Fact]
+    public async Task A_migrator_stopped_while_its_gate_is_being_admitted_leaves_the_module_inactive()
+    {
+        var observations = new EfSchemaFinalizationObservations();
+        var state = new FakeFleetState();
+        var fleet = new FakeFleet(state, state.Add(new FakeMember("host-new").Reading(Family, Chain)));
+        var inAdmission = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        fleet.BeforePublish = async () =>
+        {
+            inAdmission.TrySetResult();
+            await release.Task;
+        };
+        var migrator = Migrator(EfMigratePolicy.AutoMigrate, fleet, observations: observations);
+
+        var initializing = migrator.InitializeAsync();
+        await inAdmission.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        var stopping = migrator.StopAsync(CancellationToken.None);
+        release.SetResult();
+        await stopping.WaitAsync(TimeSpan.FromSeconds(30));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => initializing.WaitAsync(TimeSpan.FromSeconds(30)));
+
+        Assert.False(observations.Find(Family).ModuleActive);
+    }
+
+    /// <summary>
+    /// A stop cancels an admission that is in flight: a store call that hangs during activation neither stalls the stop nor
+    /// leaves the module reported active. The barrier holds the activation at its first publish until the stop cancels it.
+    /// </summary>
+    [Fact]
+    public async Task A_migrator_stopped_during_a_hung_activation_cancels_it_and_leaves_the_module_inactive()
+    {
+        var observations = new EfSchemaFinalizationObservations();
+        var state = new FakeFleetState();
+        var fleet = new FakeFleet(state, state.Add(new FakeMember("host-new").Reading(Family, Chain)));
+        var inActivation = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        fleet.BeforePublish = () =>
+        {
+            inActivation.TrySetResult();
+            return Task.Delay(Timeout.Infinite);
+        };
+        var migrator = Migrator(EfMigratePolicy.AutoMigrate, fleet, observations: observations);
+
+        var initializing = migrator.InitializeAsync();
+        await inActivation.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        Assert.True(observations.Find(Family).ModuleActive);
+
+        await migrator.StopAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(30));
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => initializing.WaitAsync(TimeSpan.FromSeconds(30)));
+        Assert.False(observations.Find(Family).ModuleActive);
+        Assert.Null(migrator.Gate);
+    }
+
+    [Fact]
+    public async Task A_migrator_that_has_stopped_admits_no_module_after()
+    {
+        var observations = new EfSchemaFinalizationObservations();
+        var migrator = Migrator(EfMigratePolicy.AutoMigrate, observations: observations);
+        await migrator.StopAsync(CancellationToken.None);
+
+        await migrator.InitializeAsync();
+
+        Assert.Null(migrator.Gate);
+        Assert.False(observations.Find(Family).ModuleActive);
+    }
+
+    /// <summary>
     /// Tables that exist without a database identity were migrated, but no gate-aware host has admitted the module: nothing
     /// is pending before the contraction, so the record is created at once and the contraction runs.
     /// </summary>
@@ -201,7 +292,7 @@ public sealed class EfContractingMigrationRefusalTests : IAsyncLifetime
     [Fact]
     public async Task A_racing_gate_that_leaves_the_families_below_their_versions_keeps_every_contraction_from_running()
     {
-        var refusal = await Assert.ThrowsAsync<EfContractingMigrationRefusedException>(() => ApplyPairAsync(new BeforeFirstSave(async () =>
+        var refusal = await Assert.ThrowsAsync<EfContractingMigrationRefusedException>(() => ApplyPairAsync(new BeforeFirstFinalizationInsert(async () =>
         {
             await using var older = ContractingPairModule.Create(Connection);
             await ContractingPairModule.OlderGate().ActivateAsync(older);
@@ -611,27 +702,33 @@ public sealed class EfContractingMigrationRefusalTests : IAsyncLifetime
     }
 
     /// <summary>The family of every finalization record the context it is added to creates, in the order it creates them.</summary>
-    private sealed class RecordsCreated : SaveChangesInterceptor
+    private sealed class RecordsCreated : DbCommandInterceptor
     {
         public List<string> Families { get; } = [];
 
-        public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
-            DbContextEventData eventData,
+        public override ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(
+            DbCommand command,
+            CommandEventData eventData,
             InterceptionResult<int> result,
             CancellationToken cancellationToken = default)
         {
-            Families.AddRange(eventData.Context!.ChangeTracker.Entries<EfSchemaFinalizationRecordRow>()
-                .Where(entry => entry.State == Microsoft.EntityFrameworkCore.EntityState.Added)
-                .Select(entry => entry.Entity.Family));
+            if (FinalizationInsert.IntoAnyRecordTable(command))
+                Families.Add((string)FinalizationInsert.Value(command, nameof(EfSchemaFinalizationRecordRow.Family))!);
             return ValueTask.FromResult(result);
         }
     }
 
-    private EfModuleMigrator<ContractingDbContext> Migrator(EfMigratePolicy policy, IEfSchemaFleet? fleet = null, IInterceptor[]? interceptors = null)
+    private EfModuleMigrator<ContractingDbContext> Migrator(
+        EfMigratePolicy policy,
+        IEfSchemaFleet? fleet = null,
+        IInterceptor[]? interceptors = null,
+        EfSchemaFinalizationObservations? observations = null)
     {
         var services = new ServiceCollection();
         if (fleet is not null)
             services.AddSingleton(fleet);
+        if (observations is not null)
+            services.AddSingleton(observations);
         services.AddDbContext<ContractingDbContext>(options => Bind(options.AddInterceptors(interceptors ?? []), Provider, Connection));
         services.AddEfModuleMigrations<ContractingDbContext>(Provider);
         services.Configure<EfMigrateOptions>(options => options.Policy = policy);

@@ -17,6 +17,9 @@ internal sealed class FoundationHostProcess : IAsyncDisposable
 {
     private const string Host = "Elsa.Foundation.Host";
 
+    /// <summary>The header the host's module-management endpoints read their key from, restated: the host is never loaded into this process.</summary>
+    public const string ModuleManagementKeyHeader = "X-Elsa-Module-Management-Key";
+
     /// <summary>A ceiling for pathological hangs: the host reconciles its feed and activates its shell in seconds.</summary>
     private static readonly TimeSpan ReadyTimeout = TimeSpan.FromMinutes(5);
 
@@ -188,23 +191,28 @@ internal sealed class FoundationHostProcess : IAsyncDisposable
     /// <summary>The status a request to <paramref name="path"/> is answered with, and its body.</summary>
     public Task<(HttpStatusCode Status, string Body)> GetAsync(string path) => SendAsync(new HttpRequestMessage(HttpMethod.Get, path));
 
-    /// <summary>The status a <c>POST</c> to <paramref name="path"/> is answered with, and its body, with <paramref name="headers"/> on the request.</summary>
-    public Task<(HttpStatusCode Status, string Body)> PostAsync(string path, IReadOnlyDictionary<string, string> headers)
+    /// <summary>
+    /// The status a <c>POST</c> to <paramref name="path"/>, one of the host's module-management endpoints, is answered with, and its
+    /// body, carrying <paramref name="key"/> as the module-management key, or no key at all when it is <see langword="null"/>. A host
+    /// that has not answered within <paramref name="timeout"/> fails the call with what it logged, instead of hanging the test.
+    /// </summary>
+    public Task<(HttpStatusCode Status, string Body)> PostModuleManagementAsync(string path, string? key, TimeSpan? timeout = null)
     {
         var request = new HttpRequestMessage(HttpMethod.Post, path);
-        foreach (var (name, value) in headers)
-            request.Headers.Add(name, value);
+        if (key is not null)
+            request.Headers.Add(ModuleManagementKeyHeader, key);
 
-        return SendAsync(request);
+        return SendAsync(request, timeout);
     }
 
-    private async Task<(HttpStatusCode Status, string Body)> SendAsync(HttpRequestMessage request)
+    private async Task<(HttpStatusCode Status, string Body)> SendAsync(HttpRequestMessage request, TimeSpan? timeout = null)
     {
         using (request)
+        using (var deadline = timeout is { } limit ? new CancellationTokenSource(limit) : null)
         {
             try
             {
-                using var response = await _client.SendAsync(request);
+                using var response = await _client.SendAsync(request, deadline?.Token ?? CancellationToken.None);
                 return (response.StatusCode, await response.Content.ReadAsStringAsync());
             }
             catch (TaskCanceledException exception)

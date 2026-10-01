@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Text.Json.Nodes;
 using Elsa.Cluster.Core.Contracts;
 using Elsa.Cluster.Core.Exceptions;
 using Elsa.Cluster.Core.Models;
@@ -44,17 +45,33 @@ public sealed class EfClusterMembershipStoreTests : IAsyncDisposable
     [Fact]
     public Task A_report_with_a_field_this_build_does_not_know_is_returned_as_unknown_rather_than_read_in_part() =>
         AssertStoredReportReadsAsUnknownAsync(
-            $$$"""{"readability":{"entries":[{"family":"{{{Family}}}","efModule":"M","readableVersions":["1"],"databaseIdentity":null,"observedFinalizedVersion":null,"excludes":["1"]}]},"runnability":null}""");
+            $$$"""{"readability":{"entries":[{"family":"{{{Family}}}","efModule":"M","readableVersions":["1"],"databaseIdentity":null,"observedFinalizedVersion":null,"moduleActive":true,"excludes":["1"]}]},"runnability":null}""");
 
     /// <summary>
     /// Every writer writes every entry field, so a document without one was not written by this envelope. Reading the
     /// missing field as its default would credit the member with a claim it never made, such as having observed no
     /// finalized version, so the report reads as unknown instead.
     /// </summary>
-    [Fact]
-    public Task A_report_missing_an_entry_field_is_returned_as_unknown_rather_than_read_with_a_default() =>
-        AssertStoredReportReadsAsUnknownAsync(
-            $$$"""{"readability":{"entries":[{"family":"{{{Family}}}","efModule":"M","readableVersions":["1"],"databaseIdentity":null}]},"runnability":null}""");
+    [Theory]
+    [InlineData("databaseIdentity")]
+    [InlineData("observedFinalizedVersion")]
+    [InlineData("moduleActive")]
+    public Task A_report_missing_an_entry_field_is_returned_as_unknown_rather_than_read_with_a_default(string omitted)
+    {
+        var entry = new JsonObject
+        {
+            ["family"] = Family,
+            ["efModule"] = "M",
+            ["readableVersions"] = new JsonArray("1"),
+            ["databaseIdentity"] = null,
+            ["observedFinalizedVersion"] = null,
+            ["moduleActive"] = true
+        };
+        Assert.True(entry.Remove(omitted), $"{omitted} is not a field of the entry this test builds.");
+
+        return AssertStoredReportReadsAsUnknownAsync(
+            new JsonObject { ["readability"] = new JsonObject { ["entries"] = new JsonArray(entry) }, ["runnability"] = null }.ToJsonString());
+    }
 
     /// <summary>
     /// Runnability entries are held to the same strictness (spec 184, FR-008): a consumer with a field this build does not
@@ -242,6 +259,9 @@ public sealed class EfClusterMembershipStoreTests : IAsyncDisposable
     {
         if (type == typeof(string))
             return $"{name}-sample";
+        // The opposite of what an entry built without saying reads as, so a field left unmapped reads back differently.
+        if (type == typeof(bool))
+            return false;
         if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(IEnumerable<>))
         {
             var element = type.GenericTypeArguments[0];
@@ -274,7 +294,7 @@ public sealed class EfClusterMembershipStoreTests : IAsyncDisposable
             Assert.False(expected is null || expected is IEnumerable<object> values && !values.Any(), $"{field} is not set in the sample, so this test cannot prove it round-trips.");
             switch (expected)
             {
-                case string:
+                case string or bool:
                     Assert.Equal(expected, actual);
                     break;
                 case IEnumerable<object> sequence:

@@ -32,13 +32,27 @@ internal static class ElsaModuleManagementApi
             .WithHostCredentialEnforcement(ManagementApiKeyAuthentication.HeaderName, "Elsa.Workbench");
         group.AddEndpointFilter(RequireManagementApiKeyAsync);
 
+        // Every route that triggers, waits for, or reads the outcome of a Nuplane reconcile takes the operations from the
+        // host's root provider, never from the request's. The path-less shell resolves these requests, so the request's
+        // provider is that shell's, and CShells copies every root registration into every shell: Nuplane's trigger queue
+        // there is a second instance, read by no dispatcher, so a reconcile enqueued on it waits for ever (#2159). Only the
+        // root's queue has the dispatcher that runs it. The registry route is the one that also needs the shell's own
+        // feature catalog, which is why it goes through IModuleRegistryService; the package list it reads beside that
+        // catalog comes from the operations the composition shares with every shell (ShareWithShells in Program.cs).
+        var host = endpoints.ServiceProvider;
+        INuplaneAdminOperations HostOperations() => host.GetRequiredService<INuplaneAdminOperations>();
+        var reconcileLogger = host.GetRequiredService<ILoggerFactory>().CreateLogger("Elsa.Workbench.ModuleManagementReconcile");
+
         group.MapGet("/registry", GetRegistryAsync);
-        group.MapPost("/packages/upload", UploadPackageAsync)
+        group.MapPost("/packages/upload", (HttpRequest request, [FromServices] IWebHostEnvironment environment, CancellationToken cancellationToken) =>
+                UploadPackageAsync(request, HostOperations(), environment, reconcileLogger, cancellationToken))
             .Accepts<IFormFile>("multipart/form-data")
             .DisableAntiforgery();
-        group.MapDelete("/packages/drop-folder/{fileName}", DeleteDropFolderPackageAsync);
-        group.MapPost("/reconcile", TriggerReconcileAsync);
-        group.MapPost("/prune", PrunePackagesAsync);
+        group.MapDelete("/packages/drop-folder/{fileName}", (string fileName, [FromServices] IWebHostEnvironment environment, [FromServices] IHostApplicationLifetime applicationLifetime, [FromServices] ILoggerFactory loggerFactory, CancellationToken cancellationToken) =>
+            DeleteDropFolderPackageAsync(fileName, HostOperations(), environment, applicationLifetime, loggerFactory, cancellationToken));
+        group.MapPost("/reconcile", (CancellationToken cancellationToken) => TriggerReconcileAsync(HostOperations(), reconcileLogger, cancellationToken));
+        group.MapPost("/prune", (ModuleManagementPruneRequest request, [FromServices] IWebHostEnvironment environment, [FromServices] IOptions<CleanupPolicyOptions> cleanupOptions, CancellationToken cancellationToken) =>
+            PrunePackagesAsync(request, HostOperations(), environment, cleanupOptions, cancellationToken));
         group.MapPost("/feeds", AddFeedAsync);
         group.MapPut("/feeds/{name}", UpdateFeedAsync);
         group.MapDelete("/feeds/{name}", DeleteFeedAsync);
@@ -75,8 +89,9 @@ internal static class ElsaModuleManagementApi
 
     private static async Task<IResult> UploadPackageAsync(
         HttpRequest request,
-        [FromServices] INuplaneAdminOperations nuplaneAdmin,
-        [FromServices] IWebHostEnvironment environment,
+        INuplaneAdminOperations nuplaneAdmin,
+        IWebHostEnvironment environment,
+        ILogger logger,
         CancellationToken cancellationToken)
     {
         if (!request.HasFormContentType)
@@ -107,17 +122,17 @@ internal static class ElsaModuleManagementApi
             fileName,
             destination,
             file.Length,
-            ModuleManagementReconcileResponse.FromOutcome(reconcile),
+            ModuleManagementReconcileResponse.FromOutcome(reconcile, logger),
             RequiresReload: true,
             RequiresRestart: false));
     }
 
     private static async Task<IResult> DeleteDropFolderPackageAsync(
         string fileName,
-        [FromServices] IServiceScopeFactory scopeFactory,
-        [FromServices] IWebHostEnvironment environment,
-        [FromServices] IHostApplicationLifetime applicationLifetime,
-        [FromServices] ILoggerFactory loggerFactory,
+        INuplaneAdminOperations nuplaneAdmin,
+        IWebHostEnvironment environment,
+        IHostApplicationLifetime applicationLifetime,
+        ILoggerFactory loggerFactory,
         CancellationToken cancellationToken)
     {
         var safeFileName = Path.GetFileName(fileName);
@@ -132,7 +147,7 @@ internal static class ElsaModuleManagementApi
 
         File.Delete(path);
         QueueReconciliation(
-            scopeFactory,
+            nuplaneAdmin,
             applicationLifetime,
             loggerFactory.CreateLogger("Elsa.Workbench.ModuleManagementDelete"),
             "package deletion");
@@ -146,7 +161,7 @@ internal static class ElsaModuleManagementApi
     }
 
     private static void QueueReconciliation(
-        IServiceScopeFactory scopeFactory,
+        INuplaneAdminOperations nuplaneAdmin,
         IHostApplicationLifetime applicationLifetime,
         ILogger logger,
         string operation)
@@ -160,8 +175,6 @@ internal static class ElsaModuleManagementApi
 
             try
             {
-                using var scope = scopeFactory.CreateScope();
-                var nuplaneAdmin = scope.ServiceProvider.GetRequiredService<INuplaneAdminOperations>();
                 var outcome = await nuplaneAdmin.TriggerReconcileAsync(stoppingToken);
 
                 logger.LogInformation(
@@ -181,12 +194,12 @@ internal static class ElsaModuleManagementApi
         });
     }
 
-    private static async Task<IResult> TriggerReconcileAsync([FromServices] INuplaneAdminOperations nuplaneAdmin, CancellationToken cancellationToken)
+    private static async Task<IResult> TriggerReconcileAsync(INuplaneAdminOperations nuplaneAdmin, ILogger logger, CancellationToken cancellationToken)
     {
         var outcome = await nuplaneAdmin.TriggerReconcileAsync(cancellationToken);
         return Results.Ok(new ModuleManagementOperationResponse(
             "reconcile",
-            ModuleManagementReconcileResponse.FromOutcome(outcome),
+            ModuleManagementReconcileResponse.FromOutcome(outcome, logger),
             RequiresReload: true,
             RequiresRestart: false,
             "Reconciliation completed for the Server host."));
@@ -194,9 +207,9 @@ internal static class ElsaModuleManagementApi
 
     private static async Task<IResult> PrunePackagesAsync(
         ModuleManagementPruneRequest request,
-        [FromServices] INuplaneAdminOperations nuplaneAdmin,
-        [FromServices] IWebHostEnvironment environment,
-        [FromServices] IOptions<CleanupPolicyOptions> cleanupOptions,
+        INuplaneAdminOperations nuplaneAdmin,
+        IWebHostEnvironment environment,
+        IOptions<CleanupPolicyOptions> cleanupOptions,
         CancellationToken cancellationToken)
     {
         var packages = await nuplaneAdmin.GetPackagesAsync(cancellationToken);
@@ -909,13 +922,25 @@ internal sealed record ModuleManagementReconcileResponse(
     bool? IsDegraded,
     IReadOnlyList<string> FailedPackages)
 {
-    public static ModuleManagementReconcileResponse FromOutcome(ManualReconcileOutcome outcome) =>
-        new(
+    /// <summary>The reason code of a failure the reconcile service reported: what it said can hold paths, feed addresses or connection details, so it is logged with the correlation id and never returned.</summary>
+    private const string ServiceFailed = "reconcile-service-failed";
+
+    public static ModuleManagementReconcileResponse FromOutcome(ManualReconcileOutcome outcome, ILogger logger)
+    {
+        var reasonCode = outcome.ReasonCode;
+        if (outcome.OutcomeCode == ManualReconcileOutcomeCode.Unavailable)
+        {
+            logger.LogError("The reconcile service failed to run the cycle. CorrelationId={CorrelationId}, Reason={Reason}", outcome.CorrelationId, outcome.ReasonCode);
+            reasonCode = ServiceFailed;
+        }
+
+        return new(
             outcome.OutcomeCode.ToString(),
             outcome.CorrelationId,
-            outcome.ReasonCode,
+            reasonCode,
             outcome.RunResult?.IsDegraded,
             outcome.RunResult?.FailedPackages ?? []);
+    }
 
     public static ModuleManagementReconcileResponse Deferred(string reason) =>
         new("Deferred", "", reason, null, []);

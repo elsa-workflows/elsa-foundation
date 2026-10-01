@@ -494,7 +494,9 @@ for identical fleets.
   identity yet counts for every database, which keeps the conservative direction until the host has read the record
   (spec 181, FR-001; Decisions, Q19). Amended 2026-09-28 (Decisions): the entry also carries the member's observed
   finalized version for the family (spec 181, FR-010), when it has read one, so spec 186's settle condition can see
-  what every counted member has observed without a database round trip (spec 186, MR-001).
+  what every counted member has observed without a database round trip (spec 186, MR-001). Amended 2026-09-30
+  (Decisions): the entry also says whether the family's module is active in the host, which is the fact spec 186's
+  FR-012 counts by.
 - **FR-020**: The report MUST be derived only from the family declarations of spec 180's FR-001, read from every
   assembly loaded in the process, across every load context. No configuration can change it (MR-002). A publish
   recomputes it, so a package loaded through Nuplane is reported by the first publish after its assembly loads.
@@ -875,3 +877,39 @@ is the owner's approval.
   names from, and a reload onto a release with an unapplied migration is refused by `EfDatabaseMigrator`'s `Validate`
   check with the migration pending (ADR 0076), as a restart would be. This changes no requirement; it is recorded here
   because it is the same in-place upgrade.
+
+**2026-09-30 note (#2153).** Found in B9's review (#2116); lands with the #2153 PR, whose merge is the owner's approval.
+FR-019's entry gains one field, `moduleActive`: whether the family's module is active in this host, meaning a
+finalization gate has admitted it, in any shell, and has not stopped. A host that loads a family's declaration without
+activating its module, because no shell enables the module or none any more, reports the family with
+`moduleActive: false` and an observed finalized version that stays null, or stays at what it last read, for as long as
+it is in the fleet. Spec 186's FR-012 waits until every counted member reports an observed finalized version at the
+target, so that member would hold every backfill of the family back, and every feature that needs completeness dormant,
+for as long as it stays. Only the settle condition (`ObservesFinalizedSchemaVersion`, for the counting purpose) leaves
+such a member out: it counts an entry only while its module is active. Every readability count is unchanged, so
+FR-022 and FR-023 still count a loaded declaration as "can read V", which keeps finalization safe: a host that can
+still activate the module later must read what is finalized. The safe direction holds both ways. A module that has not
+been admitted writes none of the family's rows, and one that is admitted afterwards adopts the finalized version it
+reads, never a version below it, so leaving it out cannot let a row below the target be written unseen; and an entry
+built without saying is active, so a report that predates the field, which this envelope reads as unknown (FR-012), and
+any other writer that does not say, still hold the settle condition back. The stored envelope names the field, so a
+report without it reads as unknown, as a report missing any entry field does. The report leaves a module's
+deactivation to the next publish, and the settle margin covers writes in flight until then.
+
+**2026-09-30 compatibility note (#2153).** `moduleActive` is a required field of the stored readability entry and the
+family is not bumped for it, decided for this pre-release stage. The envelope is strict in both directions (FR-012), so
+in a fleet that mixes a build with the field and one without, each reads the other's report as unknown, exactly as it
+reads an entry written by any other version it does not know. That has these effects, and only these:
+
+- Every counted answer waits. A member with an unknown report fails every requirement (FR-016), so finalization of a
+  version (spec 181) and the backfill's settle condition (spec 186, FR-012) wait until every host is upgraded, and the
+  status names the hosts it is waiting on. Nothing finalizes or settles early.
+- Placement candidates exclude a member whose report is unknown (FR-016). Routing is unaffected, since claims are decided
+  by the local runtime check; work that only a member with an unknown report could run is reported as unplaceable until
+  the last host is upgraded. It refuses no member and stops no host from starting.
+- A host restarted under a stable host id waits out its earlier incarnation's expiry period plus the skew allowance
+  before it rejoins (User Story 4), as it always did; the upgrade adds no wait of its own.
+
+Before the first stable release the ClusterMembership family MUST be bumped, with an upcaster that reads an entry
+without `moduleActive` as active, the direction that counts the member, so that a rolling upgrade between two stable
+releases does not stall finalization while its hosts are mixed.

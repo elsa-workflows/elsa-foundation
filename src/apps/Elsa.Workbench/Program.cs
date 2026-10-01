@@ -76,6 +76,7 @@ using NativeEndpoints;
 using Nuplane;
 using Nuplane.Admin;
 using Nuplane.Loading.Hosting.Builder;
+using Nuplane.Reconciliation;
 using Nuplane.Sources.Directory.Configuration;
 using System.Diagnostics;
 
@@ -200,6 +201,14 @@ builder.Services.AddNuplane(nuplaneConfiguration, nuplane =>
     nuplane.AutoloadPackages(nuplaneConfiguration.GetSection("Loading"));
 });
 builder.Services.AddSingleton<NuplaneAssemblyProvider>();
+// Nuplane registers its trigger ingress, reconcile coordinator and admin operations by type or by factory, so every shell
+// container CShells builds from copies of these registrations would hold second instances of them, and a reconcile enqueued
+// on a shell's copy of the queue is read by no dispatcher (#2159). Shells, among them the shell-scoped package catalog
+// contributor, resolve the host's own instead.
+builder.Services
+    .ShareWithShells<IReconciliationTriggerIngress>()
+    .ShareWithShells<ManualReconcileCoordinator>()
+    .ShareWithShells<INuplaneAdminOperations>();
 // This host explicitly enrolls the shared EF resource preparers. Without a selected resource,
 // both preparers leave the legacy shell composition and feature editor behavior unchanged.
 builder.Services.AddEfPersistenceResources(configuration, typeof(WorkbenchEfToolingShellDefaults).Assembly);

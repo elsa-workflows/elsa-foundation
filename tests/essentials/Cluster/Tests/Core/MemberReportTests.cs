@@ -27,7 +27,8 @@ public sealed class MemberReportTests
         new("orders", "OrdersModule", ["1"], "db-a"),
         new("orders", "OrdersModule", ["1", "2"], "db-b"),
         new("orders", "OrdersModule", ["1", "2"]),
-        new("orders", "OrdersModule", ["1", "2"], "db-a", observedFinalizedVersion: "1")
+        new("orders", "OrdersModule", ["1", "2"], "db-a", observedFinalizedVersion: "1"),
+        new("orders", "OrdersModule", ["1", "2"], "db-a", moduleActive: false)
     ];
 
     [Theory]

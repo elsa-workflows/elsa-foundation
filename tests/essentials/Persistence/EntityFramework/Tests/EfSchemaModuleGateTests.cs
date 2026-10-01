@@ -1,6 +1,8 @@
 using Elsa.Persistence.EntityFramework.SchemaFinalization;
 using Elsa.Persistence.Schema.SchemaFinalization;
+using System.Data.Common;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Xunit;
 using static Elsa.Persistence.EntityFramework.Tests.SchemaGate;
 
@@ -322,14 +324,246 @@ public sealed class EfSchemaModuleGateTests : IAsyncLifetime
 
         await gate.ActivateAsync(Context());
         var identity = (await RecordAsync()).DatabaseIdentity;
-        Assert.Equal(new EfSchemaFamilyObservation(identity, "2"), observations.Find(Family));
+        Assert.Equal(new EfSchemaFamilyObservation(identity, "2", ModuleActive: true), observations.Find(Family));
 
         // A second database: named nowhere while it is being read, and afterwards neither, since the host now serves both.
         observations.BeginActivation([Family]);
         Assert.Null(observations.Find(Family).DatabaseIdentity);
         observations.Observe(Family, "another-database", "1");
         observations.EndActivation([Family]);
-        Assert.Equal(new EfSchemaFamilyObservation(null, null), observations.Find(Family));
+        Assert.Equal(new EfSchemaFamilyObservation(null, null, ModuleActive: true), observations.Find(Family));
+    }
+
+    /// <summary>
+    /// Spec 183's FR-019, amended 2026-09-30: the module is active in the report from admission until its gate stops, and a
+    /// gate that is refused, or has not yet admitted, never made it so. It is the fact the backfill's settle condition
+    /// counts on (spec 186, FR-012). Stopping forgets what was read, since no gate of the host writes there any more.
+    /// </summary>
+    [Fact]
+    public async Task The_family_is_active_from_the_moment_its_gate_admits_the_module_until_the_gate_stops()
+    {
+        var observations = new EfSchemaFinalizationObservations();
+        var gate = Gate(Families("2"), Fleet("host-a", "1", "2"), observations);
+        Assert.False(observations.Find(Family).ModuleActive);
+
+        await gate.ActivateAsync(Context());
+        Assert.True(observations.Find(Family).ModuleActive);
+
+        gate.Deactivate();
+        gate.Deactivate();
+        Assert.Equal(EfSchemaFamilyObservation.None, observations.Find(Family));
+    }
+
+    [Fact]
+    public async Task A_module_the_gate_refuses_is_never_active()
+    {
+        var observations = new EfSchemaFinalizationObservations();
+        await Gate(Families("3"), Fleet("host-new", "1", "2", "3")).ActivateAsync(Context());
+        var refused = Gate(Families("2"), Fleet("host-rolled-back", "1", "2"), observations);
+
+        await Assert.ThrowsAsync<EfSchemaActivationRefusedException>(() => refused.ActivateAsync(Context()));
+
+        Assert.False(observations.Find(Family).ModuleActive);
+    }
+
+    /// <summary>
+    /// An activation that throws after the module was reported active, here at its first refresh, or is cancelled, leaves no
+    /// migrator with a gate to stop, so the gate ends the activity itself: a shell that failed to start writes nothing. A
+    /// later activation is active again, so what was forgotten does not stay forgotten.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task An_activation_that_fails_or_is_cancelled_leaves_the_module_inactive_and_a_later_activation_active(bool cancelled)
+    {
+        var observations = new EfSchemaFinalizationObservations();
+        using var cancellation = new CancellationTokenSource();
+        var failing = new FailsReadsWhenArmed();
+        var first = Fleet("host-a", "1", "2");
+        // Evaluation counts the fleet once the module is admitted; from there the store fails or the caller cancels.
+        first.BeforeCount = _ =>
+        {
+            failing.Armed = !cancelled;
+            if (cancelled)
+                cancellation.Cancel();
+            return Task.CompletedTask;
+        };
+
+        var activation = Gate(Families("2"), first, observations).ActivateAsync(Context(failing), cancellation.Token);
+        if (cancelled)
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => activation);
+        else
+            await Assert.ThrowsAsync<InvalidOperationException>(() => activation);
+
+        Assert.Equal(EfSchemaFamilyObservation.None, observations.Find(Family));
+
+        failing.Armed = false;
+        await Gate(Families("2"), Fleet("host-a", "1", "2"), observations).ActivateAsync(Context());
+        Assert.True(observations.Find(Family).ModuleActive);
+    }
+
+    /// <summary>
+    /// A reload's two generations of one shell share a family and database: the entry is active from before the new gate can
+    /// write until the old gate has stopped, hands over to the new gate as owner, and ends inactive once that stops too.
+    /// </summary>
+    [Fact]
+    public async Task A_reloads_two_generations_keep_the_family_active_until_the_new_gate_stops()
+    {
+        var observations = new EfSchemaFinalizationObservations();
+        var oldGate = Gate(Families("2"), Fleet("host-a", "1", "2"), observations);
+        await oldGate.ActivateAsync(Context());
+        var newFleet = Fleet("host-a", "1", "2");
+        var activeWhenNewGateCanWrite = new List<bool>();
+        newFleet.BeforePublish = () =>
+        {
+            activeWhenNewGateCanWrite.Add(observations.Find(Family).ModuleActive);
+            return Task.CompletedTask;
+        };
+        var newGate = Gate(Families("2"), newFleet, observations);
+
+        await newGate.ActivateAsync(Context());
+        Assert.NotEmpty(activeWhenNewGateCanWrite);
+        Assert.All(activeWhenNewGateCanWrite, Assert.True);
+        Assert.True(observations.Find(Family).ModuleActive);
+
+        oldGate.Deactivate();
+        Assert.True(observations.Find(Family).ModuleActive);
+
+        newGate.Deactivate();
+        Assert.False(observations.Find(Family).ModuleActive);
+    }
+
+    /// <summary>What a gate that has stopped reads afterwards, a refresh on demand among it, does not bring back what stopping forgot.</summary>
+    [Fact]
+    public async Task A_gate_that_has_stopped_records_nothing_more_it_reads()
+    {
+        var observations = new EfSchemaFinalizationObservations();
+        var gate = Gate(Families("2"), Fleet("host-a", "1", "2"), observations);
+        await gate.ActivateAsync(Context());
+        gate.Deactivate();
+
+        await gate.RefreshAsync(Context());
+
+        Assert.Equal(EfSchemaFamilyObservation.None, observations.Find(Family));
+    }
+
+    /// <summary>A stopped gate that is admitted again by its next refresh, because its member rejoined, does not bring its activity back.</summary>
+    [Fact]
+    public async Task A_gate_that_has_stopped_is_not_made_active_again_by_a_refresh_that_admits_it_again()
+    {
+        var observations = new EfSchemaFinalizationObservations();
+        var member = Fleet("host-a", "1", "2");
+        var gate = Gate(Families("2"), member, observations);
+        await gate.ActivateAsync(Context());
+        gate.Deactivate();
+        member.Self.Incarnation = "rejoined";
+
+        await gate.RefreshAsync(Context());
+
+        Assert.Equal(EfSchemaFamilyObservation.None, observations.Find(Family));
+    }
+
+    /// <summary>
+    /// The observations' own rules, which every gate of a host shares: each gate is one owner, so a family is active until
+    /// the last owner has stopped, whichever way the owners came and went.
+    /// </summary>
+    [Fact]
+    public void A_family_is_active_until_the_last_gate_that_activated_it_has_stopped_however_many_activated_it()
+    {
+        var observations = new EfSchemaFinalizationObservations();
+        var (shellA, shellB) = (Gate(Families("2"), fleet: null), Gate(Families("2"), fleet: null));
+
+        observations.Observe(Family, "database-a", "1");
+        Assert.False(observations.Find(Family).ModuleActive);
+
+        observations.Activate(shellA, "database-a", [Family]);
+        observations.Activate(shellA, "database-a", [Family]);
+        observations.Activate(shellB, "database-a", [Family]);
+        Assert.True(observations.Find(Family).ModuleActive);
+
+        observations.Deactivate(shellA, [Family]);
+        Assert.True(observations.Find(Family).ModuleActive);
+
+        observations.Deactivate(shellB, [Family]);
+        Assert.False(observations.Find(Family).ModuleActive);
+    }
+
+    /// <summary>
+    /// Two tenants of one host in two databases: the one whose shell stopped is not held active by the one that runs, and is
+    /// forgotten with what was read there, so the entry that names the running tenant's database does not apply to the
+    /// stopped tenant's, where this host writes nothing.
+    /// </summary>
+    [Fact]
+    public void A_tenant_that_stopped_is_not_active_because_a_tenant_in_another_database_is()
+    {
+        var observations = new EfSchemaFinalizationObservations();
+        var (running, stopped) = (Gate(Families("2"), fleet: null), Gate(Families("2"), fleet: null));
+        foreach (var (gate, identity) in new[] { (running, "database-x"), (stopped, "database-y") })
+        {
+            observations.Observe(Family, identity, "2");
+            observations.Activate(gate, identity, [Family]);
+        }
+
+        // Both run: the entry speaks for every database, and is active while any gate is.
+        Assert.Equal(new EfSchemaFamilyObservation(null, "2", ModuleActive: true), observations.Find(Family));
+
+        observations.Deactivate(stopped, [Family]);
+
+        Assert.Equal(new EfSchemaFamilyObservation("database-x", "2", ModuleActive: true), observations.Find(Family));
+
+        observations.Deactivate(running, [Family]);
+
+        Assert.Equal(EfSchemaFamilyObservation.None, observations.Find(Family));
+    }
+
+    /// <summary>
+    /// An activation counts as active from the moment it publishes its report, before it reads the record, since it is about
+    /// to write and may do so before a later report says so.
+    /// </summary>
+    [Fact]
+    public async Task An_activation_is_active_in_the_report_it_publishes_before_reading_its_record()
+    {
+        var observations = new EfSchemaFinalizationObservations();
+        var publishing = Fleet("host-a", "1", "2");
+        var activeWhenPublishing = new List<bool>();
+        publishing.BeforePublish = () =>
+        {
+            activeWhenPublishing.Add(observations.Find(Family).ModuleActive);
+            return Task.CompletedTask;
+        };
+
+        await Gate(Families("2"), publishing, observations).ActivateAsync(Context());
+
+        // Every publish of the activation, the one before the record is read among them.
+        Assert.NotEmpty(activeWhenPublishing);
+        Assert.All(activeWhenPublishing, Assert.True);
+    }
+
+    [Fact]
+    public void An_activation_in_progress_is_active_until_it_ends_and_leaves_nothing_active_when_it_read_no_record()
+    {
+        var observations = new EfSchemaFinalizationObservations();
+
+        observations.BeginActivation([Family]);
+        Assert.True(observations.Find(Family).ModuleActive);
+
+        observations.EndActivation([Family]);
+        Assert.Equal(EfSchemaFamilyObservation.None, observations.Find(Family));
+    }
+
+    /// <summary>A database whose gate never got as far as being active, since its activation was refused, is not forgotten: it stays counted where it was read.</summary>
+    [Fact]
+    public void A_database_no_gate_activated_is_not_forgotten_when_another_gates_stops()
+    {
+        var observations = new EfSchemaFinalizationObservations();
+        var gate = Gate(Families("2"), fleet: null);
+        observations.Observe(Family, "database-refused", "1");
+        observations.Observe(Family, "database-x", "2");
+        observations.Activate(gate, "database-x", [Family]);
+
+        observations.Deactivate(gate, [Family]);
+
+        Assert.Equal(new EfSchemaFamilyObservation("database-refused", "1", ModuleActive: false), observations.Find(Family));
     }
 
     /// <summary>
@@ -362,11 +596,24 @@ public sealed class EfSchemaModuleGateTests : IAsyncLifetime
         return new FakeFleet(fleet, member);
     }
 
-    private GateContext Context()
+    private GateContext Context(params IInterceptor[] interceptors)
     {
-        var context = SchemaGate.Context(database.ConnectionString);
+        var context = SchemaGate.Context(database.ConnectionString, gates: null, interceptors);
         contexts.Add(context);
         return context;
+    }
+
+    /// <summary>Fails every read once armed, as a store that has gone away mid-activation does.</summary>
+    private sealed class FailsReadsWhenArmed : DbCommandInterceptor
+    {
+        public bool Armed { get; set; }
+
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
+            DbCommand command,
+            CommandEventData eventData,
+            InterceptionResult<DbDataReader> result,
+            CancellationToken cancellationToken = default) =>
+            Armed ? throw new InvalidOperationException("The store failed.") : ValueTask.FromResult(result);
     }
 
     private async Task<SchemaFinalizationRecord> RecordAsync() =>

@@ -314,7 +314,7 @@ public sealed class StatusClusterCliTests : IDisposable
     }
 
     private static string Entry(string[] reads, string? database = null) =>
-        $$"""{"family":"{{Family}}","efModule":"FeedModuleFixture","readableVersions":[{{string.Join(",", reads.Select(version => $"\"{version}\""))}}],"databaseIdentity":{{(database is null ? "null" : $"\"{database}\"")}},"observedFinalizedVersion":null}""";
+        $$"""{"family":"{{Family}}","efModule":"FeedModuleFixture","readableVersions":[{{string.Join(",", reads.Select(version => $"\"{version}\""))}}],"databaseIdentity":{{(database is null ? "null" : $"\"{database}\"")}},"observedFinalizedVersion":null,"moduleActive":true}""";
 
     private static string ReportJson(string[] entries) => $$"""{"readability":{"entries":[{{string.Join(",", entries)}}]},"runnability":null}""";
 

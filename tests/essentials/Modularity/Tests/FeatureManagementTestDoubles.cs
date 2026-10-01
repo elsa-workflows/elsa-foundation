@@ -78,6 +78,9 @@ internal sealed class FakeNuplaneAdminOperations : INuplaneAdminOperations
 
     public bool ReconcileCalled { get; private set; }
 
+    /// <summary>What a reconcile answers with: a completed cycle, unless a test says otherwise.</summary>
+    public ManualReconcileOutcome Outcome { get; set; } = new(ManualReconcileOutcomeCode.Completed, "correlation", null, null);
+
     public Task<ActivePackagesSnapshot> GetPackagesAsync(CancellationToken cancellationToken) =>
         Task.FromResult(new ActivePackagesSnapshot(DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch, Packages, "generation"));
 
@@ -87,6 +90,6 @@ internal sealed class FakeNuplaneAdminOperations : INuplaneAdminOperations
     public Task<ManualReconcileOutcome> TriggerReconcileAsync(CancellationToken cancellationToken)
     {
         ReconcileCalled = true;
-        return Task.FromResult<ManualReconcileOutcome>(default!);
+        return Task.FromResult(Outcome);
     }
 }

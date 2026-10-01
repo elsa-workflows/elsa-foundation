@@ -81,12 +81,13 @@ internal static class MemberReportJson
         string? EfModule,
         IReadOnlyList<string> ReadableVersions,
         string? DatabaseIdentity,
-        string? ObservedFinalizedVersion)
+        string? ObservedFinalizedVersion,
+        bool ModuleActive)
     {
         public static EntryDocument From(ReadabilityEntry entry) =>
-            new(entry.Family, entry.EfModule, entry.ReadableVersions, entry.DatabaseIdentity, entry.ObservedFinalizedVersion);
+            new(entry.Family, entry.EfModule, entry.ReadableVersions, entry.DatabaseIdentity, entry.ObservedFinalizedVersion, entry.ModuleActive);
 
-        public ReadabilityEntry ToEntry() => new(Family, EfModule, ReadableVersions, DatabaseIdentity, ObservedFinalizedVersion);
+        public ReadabilityEntry ToEntry() => new(Family, EfModule, ReadableVersions, DatabaseIdentity, ObservedFinalizedVersion, ModuleActive);
     }
 
     private sealed record RunnabilityDocument(IReadOnlyList<RunnabilityEntryDocument> Entries);

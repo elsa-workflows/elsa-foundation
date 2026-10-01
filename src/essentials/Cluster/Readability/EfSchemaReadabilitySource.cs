@@ -53,6 +53,11 @@ namespace Elsa.Cluster.Readability;
 /// counts for every database: the conservative direction (FR-019; Decisions, Q19). Naming the database read most
 /// recently instead would let a second database this host serves finalize a version it cannot read.
 /// </para>
+/// <para>
+/// An entry also says whether the family's module is active in this host: admitted by a gate that has not stopped
+/// (FR-019, amended 2026-09-30; see <see cref="ReadabilityEntry.ModuleActive"/>). With no observations to ask, every entry
+/// is active.
+/// </para>
 /// </remarks>
 public sealed class EfSchemaReadabilitySource(
     ILogger<EfSchemaReadabilitySource>? logger = null,
@@ -86,12 +91,18 @@ public sealed class EfSchemaReadabilitySource(
             .OrderBy(family => family.Key, StringComparer.Ordinal)
             .Select(family => Observed(Entry(family, logger ?? NullLogger.Instance), observations)));
 
-    /// <summary><paramref name="entry"/> with the database identity and observed finalized version this host read, if any.</summary>
+    /// <summary>
+    /// <paramref name="entry"/> with the database identity, observed finalized version and activity this host recorded, if
+    /// any. A source built with no <see cref="EfSchemaFinalizationObservations"/>, or given another instance than the
+    /// gates report to, cannot tell which modules are active, so it leaves every entry active, the direction that counts the
+    /// member (<see cref="ReadabilityEntry.ModuleActive"/>).
+    /// </summary>
     private static ReadabilityEntry Observed(ReadabilityEntry entry, EfSchemaFinalizationObservations? observations)
     {
-        if (observations?.Find(entry.Family) is not { } observed || observed == EfSchemaFamilyObservation.None)
+        if (observations is null)
             return entry;
-        return new ReadabilityEntry(entry.Family, entry.EfModule, entry.ReadableVersions, observed.DatabaseIdentity, observed.ObservedFinalizedVersion);
+        var observed = observations.Find(entry.Family);
+        return new ReadabilityEntry(entry.Family, entry.EfModule, entry.ReadableVersions, observed.DatabaseIdentity, observed.ObservedFinalizedVersion, observed.ModuleActive);
     }
 
     private static ReadabilityEntry Entry(IGrouping<string, EfSchemaFamilyDescriptor> declarations, ILogger logger)

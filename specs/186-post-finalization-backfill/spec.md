@@ -283,7 +283,9 @@ after one run with no membership table.
 - **A very large table.** The run takes as long as it takes, in throttled batches. Completeness-dependent features stay
   dormant meanwhile, with a reason that says records are still being upgraded.
 - **A member that stops reporting its observed version.** It is still counted until its entry expires or leaves, so the
-  settle condition waits for it (spec 181, Terms, "Counted member"). That delays completion and never hastens it.
+  settle condition waits for it (spec 181, Terms, "Counted member"). That delays completion and never hastens it. A
+  member whose module is not active is the exception, since it writes none of the family's rows (FR-012, amended
+  2026-09-30).
 - **One host serving two databases.** Each database has its own finalization and finish records, and its own run.
 - **A database restored from a backup.** The finish record is restored with the rows it describes, so the two agree.
 - **A database written only by releases before the gate.** Its rows carry the baseline version (spec 180,
@@ -342,8 +344,12 @@ after one run with no membership table.
 
 - **FR-012**: The verification pass MUST NOT start until the settle condition holds: every counted member of the
   database (spec 181, Terms) reports, in its readability entry for the family, an observed finalized version at or
-  after the target version (MR-001), and a settle margin has passed since the last of them began to report it. The
-  margin is configurable, and defaults to the membership expiry period plus the skew allowance (spec 183, FR-006). Under
+  after the target version (MR-001), and a settle margin has passed since the last of them began to report it. A
+  member is counted for this only while its module is active in it for the family, as its readability entry says
+  (spec 183, FR-019; amended 2026-09-30, Decisions): a member that loads the family's declaration without activating
+  its module writes none of the family's rows and is not waited for. The
+  margin is configurable, defaults to the membership expiry period plus the skew allowance (spec 183, FR-006), and is
+  never shorter than that (2026-09-30 note, #2153). Under
   the in-process provider the host is the only counted member.
 - **FR-013**: The verification pass MUST be a complete pass over every rewritable table of the family, starting after
   the settle condition holds, that finds no row below the target version. A row it finds is rewritten, and the
@@ -546,8 +552,9 @@ is the owner's approval of what follows, found while building.
   pass that has rows to rewrite, so a family that is settling or blocked does not rewrite its record every round.
 - **The settle margin (FR-012)** runs from when the worker first saw every counted member report the target, which is
   no earlier than when the last of them began to; a worker that restarts waits it again. A counted member whose entry
-  names no observed version - one that loads the family's declaration without activating its module, or serves the
-  family in two databases whose records disagree - holds the condition back, as FR-012 reads. Both only delay.
+  names no observed version because it serves the family in two databases whose records disagree holds the condition
+  back, as FR-012 reads, and only delays. One that loads the family's declaration without activating its module no
+  longer does (2026-09-30 note, #2153).
   A withdrawal starts the margin again on every worker, not only the one that made it, so the verification after one
   waits a full margin: a worker notes how many entries the finish history held when its margin began, and a withdrawal
   entry past that position, whoever appended it, restarts the margin and keeps a verification pass that followed it
@@ -603,3 +610,42 @@ is the owner's approval of what follows, found while building.
 - **Rewriters (FR-004).** A family names its rewriter with `[EfSchemaFamily(..., Rewriter = typeof(...))]`, and the build
   fails for a family with upcasters and none. Every first-party family still has one version, so none exists yet;
   each family writes its own before its first version bump.
+
+**2026-09-30 note (#2153).** Found in B9's review (#2116); the PR's merge is the owner's approval.
+
+- **The settle condition counts only members whose module is active (FR-012).** As first built, a counted member whose
+  entry named no observed finalized version held the condition back, and that included a host that loads a family's
+  declaration and never activates its module: it reports no observed version for as long as it stays in the fleet, so it
+  blocked completion, and with it the exit from dormancy of every feature that needs completeness, and only the status
+  named it. Spec 183's FR-019 amendment of the same date gives the readability entry an explicit "module active in this
+  host" fact, and `ObservesFinalizedSchemaVersion` counts, for the counting purpose, only the entries that carry it. The
+  readability count is not narrowed, so a loaded declaration still counts for "can read V" and finalization is as safe as
+  before. An active member that has not read the record yet still holds the condition back, and the status names it
+  from its active entries alone. Leaving a not-active member out cannot hasten a completion wrongly: it writes none of
+  the family's rows, and a module admitted afterwards adopts the finalized version it reads, which is no lower than the
+  target, so no row below it can be written by a member the condition did not wait for. The margin covers a module's
+  last writes, since the host reports its deactivation only from its next publish.
+- **When a module is active in the report.** From the report a gate publishes before it reads the family's record, since
+  an activation in progress is about to write, through the end of its admission, where it hands over to the gate's own
+  activity with no moment between and before the gate makes a write version visible, so the report never says a module is
+  not active while it can write a row of the family; a refused admission stops counting once it is refused. Until its
+  gate stops, and the gate stops when its loops have ended, so a round that could still write is never reported as over;
+  or until its activation fails or is cancelled, which ends it at once, since a shell that failed to start has no
+  migrator to stop and would otherwise be reported active for good, holding every backfill of the family back. A
+  migrator that stops while its gate is being admitted cancels the admission, so a store call that hangs cannot stall
+  the stop or leave the activation active without bound, waits for it to end and deactivates the gate that comes of it,
+  and one that has stopped admits nothing more. Each gate is one owner: several shells activating one family, or the two
+  generations of a reload, keep it active until the last owner stops. Activity is kept per database: a tenant whose shell stopped is not
+  held active by another tenant's, in another database, and stopping the last gate of a database forgets what the host
+  read there. Not done: an entry that names no database, because the host serves the family in several whose records
+  are read, is active while any of them has a gate, so one tenant still running can hold the others' settle back; one
+  entry per database would settle that. A report built with no observations to ask, a hand-built source or a shell with
+  its own, says every module is active, since saying otherwise could let a settle pass early.
+- **The settle margin has a floor.** The configured `SettleMargin` may lengthen the fleet's margin, the membership expiry
+  period plus the skew allowance, and never shortens it: a shorter value is raised to the fleet's, with a warning once
+  per worker, rather than refused, so a timing does not stop a host from starting. The floor is FR-012's bound on writes
+  begun before the writer observed the finalized version, which can still be in flight when the member reports observing
+  it. It is not about shell drains: a shell's migrator is disposed, and its module deactivated, only after the CShells
+  drain (30 seconds plus 3 seconds grace) has ended, the margin starts only once the report already shows the member
+  inactive, and after deactivation the write check throws on the disposed provider, so no authorised write follows.
+  Operators need not lengthen `SettleMargin` when they lengthen the drain.

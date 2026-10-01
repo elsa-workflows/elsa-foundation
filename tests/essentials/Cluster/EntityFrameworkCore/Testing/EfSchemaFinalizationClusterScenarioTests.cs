@@ -134,6 +134,31 @@ public abstract class EfSchemaFinalizationClusterScenarioTests(EfClusterMembersh
         Assert.True((await fleet.CountObservingAsync(_family, ["2"], "this-database")).EveryCountedMemberReads);
     }
 
+    /// <summary>
+    /// Spec 186, FR-012, amended 2026-09-30 (#2153): the settle condition counts only members whose module is active for the
+    /// family. A member that loaded the family's declaration without activating its module reports no observed version
+    /// for as long as it stays, and would hold every completion back; an active member that has not observed the target
+    /// still does. Readability keeps counting the loaded member, since its declaration says what it can read (spec 183, FR-022).
+    /// </summary>
+    [SkippableFact]
+    public async Task The_backfill_settle_condition_does_not_wait_for_a_member_that_loaded_the_family_without_activating_its_module()
+    {
+        var backfilling = await StartAsync("backfilling", Observing("2"));
+        var lagging = await StartAsync("lagging", Observing("1"));
+        await StartAsync("loaded-only", new ReadabilityEntry(_family, Module, ["1"], moduleActive: false));
+        var fleet = new ClusterSchemaFleet(backfilling.Membership);
+
+        var waiting = await fleet.CountObservingAsync(_family, ["2"], "this-database");
+
+        Assert.Contains("has observed [1]", Assert.Single(waiting.Blockers));
+        Assert.Contains("loaded-only", Assert.Single((await fleet.CountAsync(_family, "2", "this-database")).Blockers));
+
+        lagging.SetReadability(Observing("2"));
+        await lagging.Membership.PublishReportAsync();
+
+        Assert.True((await fleet.CountObservingAsync(_family, ["2"], "this-database")).EveryCountedMemberReads);
+    }
+
     private ReadabilityEntry Observing(string observed) => new(_family, Module, ["1", "2"], observedFinalizedVersion: observed);
 
     private EfSchemaModuleGate Gate(string current, IConformanceMember member) =>
