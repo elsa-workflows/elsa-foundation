@@ -85,7 +85,8 @@ internal static class ActivityExecutionInspection
                     capturedAt,
                     payload,
                     isSensitive,
-                    decision.Metadata);
+                    decision.Metadata,
+                    inputKey: item.Key);
             })
             .ToArray();
 
