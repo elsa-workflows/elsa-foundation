@@ -630,22 +630,28 @@ a readiness-gated load balancer never sends one: the node would stay live, not r
 
 - **Backoff.** The delay starts at `Elsa:Boot:EagerShellActivation:Retry:InitialDelay` (default `00:00:01`), doubles after each
   failed attempt and stops at `Retry:MaxDelay` (default `00:01:00`), where it stays for as long as the shell is down: there is
-  no attempt count after which the host gives up. Both are `TimeSpan`s; a value that is absent, unparseable or not positive
-  is the default.
+  no attempt count after which the host gives up, because the cap is the bound. Each wait is shortened by up to 20% at
+  random, so replicas that failed together against a shared database do not retry together; the cap still holds. Both
+  settings are `TimeSpan`s; a value that is absent, unparseable or not positive is the default.
 - **A fault and a refusal differ.** A fault (a database that is not up yet, a seeder that raced a peer, a feed hiccup) is
   retried on the doubling delay. An EF module's refusal (a pending migration under `Migrate:Policy=Validate`, a contracting
   migration that may not be applied yet, the finalization gate) waits for an operator, and retrying sooner cannot change
   it, so the host checks again only at `MaxDelay`. The node then comes up by itself within that interval of the operator
   running `dotnet elsa persistence apply`, without a request and without a restart.
 - **Each failure is reported.** The host log has one warning per failed attempt, with the attempt number and the delay to the
-  next. `/health/ready` keeps answering 503 and gives every shell that is not active a `reason`: `activation-failed` (the
-  exception *type*, the attempts so far and `nextAttemptAt`), `activation-refused` (the module, the refusal's code and its
-  pending migrations), `shell-not-serving` or `not-activated` (no attempt has failed yet). Messages never appear there, because
-  the probe is public and a driver's message can echo a connection string; the host log has them, and the persistence command
-  is in the log and in the reload endpoint's 409.
-- **Attention.** While a shell is not active, the `shell-activation` Attention contributor lists it: a warning for a fault,
-  critical for a refusal. The item is served by whichever shell is active, so it helps in a host with more than one shell; a
-  host whose only shell is down has the probe and the log.
+  next, with the exception. `/health/ready` keeps answering 503 and gives every shell that is not active a `reason`, which is
+  a stable code and, for a failed activation, the `attempts` so far and `nextAttemptAt`: `activation-failed` (a fault, and the
+  host retries), `activation-refused` (an EF module refused; an operator resolves it), `shell-not-serving` (between states)
+  or `not-activated` (no attempt has failed yet). The codes are `ShellNotActiveReasonCodes`. That is all the probe says,
+  because it is public and unauthenticated: it never names the exception, the EF module or its migrations.
+- **Attention carries the detail.** While a shell is not active, the `shell-activation` Attention contributor lists it: a
+  warning for a fault (with the exception *type*), critical for a refusal (with the EF module, its code and the pending
+  migrations). It needs the `module-management.read` permission, the one the Modularity contributor asks for. It goes when
+  the shell is active by any path: the retry, a request or a reload. Messages are in the host log only, because a driver's
+  message can echo a connection string, and the persistence command is in the log and in the reload endpoint's 409.
+- **When the only shell is down, nothing serves the Attention item.** It is served by whichever shell is active, so it helps
+  a host with more than one shell; a host whose only shell is the one that failed has `/health/ready` and the host log, and
+  that is where its operators look.
 
 The probe itself still activates nothing. Workbench has its own `EagerShellActivationHostedService` and is unchanged.
 

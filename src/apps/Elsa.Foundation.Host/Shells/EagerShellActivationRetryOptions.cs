@@ -3,7 +3,8 @@ namespace Elsa.Foundation.Host.Shells;
 /// <summary>
 /// How long <see cref="EagerShellActivationHostedService"/> waits between attempts to activate a shell that failed: the delay
 /// doubles from <see cref="InitialDelay"/> after each failed attempt and stops growing at <see cref="MaxDelay"/>, which is the
-/// interval the host keeps trying at for as long as the shell stays down.
+/// interval the host keeps trying at for as long as the shell stays down. Each wait is shortened by up to 20% at random
+/// (<see cref="NextDelay"/>), so replicas sharing a database do not retry in step.
 /// </summary>
 /// <remarks>
 /// <c>Elsa:Boot:EagerShellActivation:Retry:InitialDelay</c> and <c>MaxDelay</c>, as <c>TimeSpan</c>s. A value that is absent,
@@ -41,6 +42,18 @@ public sealed record EagerShellActivationRetryOptions
         var delay = InitialDelay.TotalMilliseconds * (1L << doublings);
         return delay >= MaxDelay.TotalMilliseconds ? MaxDelay : TimeSpan.FromMilliseconds(delay);
     }
+
+    /// <summary>The share of a step that jitter may take off it.</summary>
+    public const double JitterFraction = 0.2;
+
+    /// <summary>
+    /// <see cref="DelayAfter"/> shortened by up to <see cref="JitterFraction"/> of itself, at random, so replicas that failed
+    /// together against a shared database do not retry together. The jitter only subtracts, so <see cref="MaxDelay"/> stays a cap.
+    /// </summary>
+    public TimeSpan NextDelay(int failedAttempts, bool refused) => Jitter(DelayAfter(failedAttempts, refused), Random.Shared.NextDouble());
+
+    /// <summary><paramref name="step"/> less <paramref name="sample"/>, a value in [0, 1), of <see cref="JitterFraction"/> of it.</summary>
+    public static TimeSpan Jitter(TimeSpan step, double sample) => step * (1 - JitterFraction * sample);
 
     private static TimeSpan? Positive(string? value) =>
         TimeSpan.TryParse(value, System.Globalization.CultureInfo.InvariantCulture, out var parsed) && parsed > TimeSpan.Zero ? parsed : null;

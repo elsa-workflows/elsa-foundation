@@ -352,8 +352,10 @@ if [[ " $acts " == *" 1 "* ]]; then
     apply_solo
     expect_match "the module's row" "$out" '^01 +Samples\.Notes +NotesSqliteDbContext +__EFMigrationsHistory_ElsaSamplesNotes +1 *$'
 
-    # The host checks a refused shell again every minute on its own, so readiness may already be 200 here: no assertion on it.
-    step "Act 1.6 (fallback) the next request activates the shell"
+    # No request is sent: the host checks a refused shell again on its own, at Elsa:Boot:EagerShellActivation:Retry:MaxDelay
+    # (a minute, less up to a fifth of it), so readiness reaches 200 within that cap after the apply.
+    step "Act 1.6 (fallback) the host activates the shell by itself"
+    wait_until "host solo ready on its own after the apply" 75 ready solo "$port_solo"
     stage notes "$port_solo"
     expect_eq "the shell is active and lists the notes" 2 "$(line_count "$out")"
     reloaded_at="$(now)"

@@ -35,8 +35,7 @@ public sealed class EagerShellActivationHostedService(
     IShellRegistry registry,
     IConfiguration configuration,
     ShellActivationTracker tracker,
-    ILogger<EagerShellActivationHostedService> logger,
-    TimeProvider? timeProvider = null) : IHostedService
+    ILogger<EagerShellActivationHostedService> logger) : IHostedService, IDisposable
 {
     public const string EnabledKey = "Elsa:Boot:EagerShellActivation:Enabled";
 
@@ -51,7 +50,6 @@ public sealed class EagerShellActivationHostedService(
     public static bool IsEnabled(IConfiguration configuration) =>
         !bool.TryParse(configuration[EnabledKey], out var enabled) || enabled;
 
-    private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
     private readonly CancellationTokenSource _stopping = new();
     private Task[] _retries = [];
 
@@ -72,6 +70,8 @@ public sealed class EagerShellActivationHostedService(
             return;
         }
 
+        // Before the first attempt, so a shell that is activated by a request or a reload while it is failing is forgotten.
+        tracker.Observe(registry);
         var retry = EagerShellActivationRetryOptions.Read(configuration);
         var failed = new List<(string Name, TimeSpan Delay)>();
         foreach (var name in shellNames)
@@ -85,11 +85,17 @@ public sealed class EagerShellActivationHostedService(
         _retries = [.. failed.Select(shell => RetryAsync(shell.Name, shell.Delay, retry, _stopping.Token))];
     }
 
+    /// <summary>
+    /// Ends the retries. The wait for one that is mid-activation is bounded by <paramref name="cancellationToken"/>, the host's
+    /// shutdown token, so an activation that ignores its cancellation cannot hold the shutdown beyond it.
+    /// </summary>
     public async Task StopAsync(CancellationToken cancellationToken)
     {
         await _stopping.CancelAsync();
         await Task.WhenAll(_retries).WaitAsync(cancellationToken);
     }
+
+    public void Dispose() => _stopping.Dispose();
 
     private async Task RetryAsync(string name, TimeSpan delay, EagerShellActivationRetryOptions retry, CancellationToken stopping)
     {
@@ -97,7 +103,7 @@ public sealed class EagerShellActivationHostedService(
         {
             while (true)
             {
-                await Task.Delay(delay, _timeProvider, stopping);
+                await Task.Delay(delay, tracker.TimeProvider, stopping);
                 if (await TryActivateAsync(name, retry, stopping) is not { } next)
                     return;
 
@@ -132,15 +138,13 @@ public sealed class EagerShellActivationHostedService(
         catch (Exception exception) when (exception is not (OutOfMemoryException or StackOverflowException or AccessViolationException or AppDomainUnloadedException or BadImageFormatException))
         {
             var failure = ShellReloadFailure.Describe(name, exception, ShellReloadFailure.HostDirectory);
-            var refusal = failure.Refusal is { } reading ? new ShellActivationRefusal(reading.Module, reading.Code, reading.PendingMigrations) : null;
-            var recorded = tracker.Failed(name, exception.GetType().Name, refusal, attempts => retry.DelayAfter(attempts, refused: refusal is not null));
-            var delay = recorded.NextAttemptAt - recorded.LastFailedAt;
-            if (refusal is null)
-                logger.LogWarning(exception, "Eager activation of shell '{Shell}' failed (attempt {Attempt}); trying again in {Delay}.", name, recorded.Attempts, delay);
+            var recorded = tracker.Failed(name, exception.GetType().Name, failure.Refusal, retry);
+            if (failure.Refusal is null)
+                logger.LogWarning(exception, "Eager activation of shell '{Shell}' failed (attempt {Attempt}); trying again in {Delay}.", name, recorded.Attempts, recorded.RetryDelay);
             else
-                logger.LogWarning("Eager activation of shell '{Shell}' was refused (attempt {Attempt}) and waits for an operator; checking again in {Delay}. {Error}", name, recorded.Attempts, delay, failure.Error);
+                logger.LogWarning("Eager activation of shell '{Shell}' was refused (attempt {Attempt}) and waits for an operator; checking again in {Delay}. {Error}", name, recorded.Attempts, recorded.RetryDelay, failure.Error);
 
-            return delay;
+            return recorded.RetryDelay;
         }
     }
 }

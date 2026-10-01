@@ -44,8 +44,9 @@ public sealed class FoundationHostEagerActivationRetryTests(FoundationHostFeed f
         // The failure is reported, with its type and not its message, and the probe says the shell is retrying.
         JsonNode? reason = null;
         await WaitUntilAsync(async () => (reason = await ReasonAsync())?["code"]?.GetValue<string>() == "activation-failed" && reason["attempts"]!.GetValue<int>() >= 2);
-        Assert.NotNull(reason!["failureType"]?.GetValue<string>());
-        Assert.NotNull(reason["nextAttemptAt"]);
+        Assert.NotNull(reason!["nextAttemptAt"]);
+        // The probe is public: a code, the attempts and the next attempt, and nothing that names the failure.
+        Assert.Equal(["attempts", "code", "nextAttemptAt"], reason.AsObject().Select(property => property.Key).Order(StringComparer.Ordinal));
         Assert.Contains("Eager activation of shell 'default' failed (attempt 1)", _host.Output, StringComparison.Ordinal);
         Assert.Equal(HttpStatusCode.ServiceUnavailable, (await _host.GetAsync("/health/ready")).Status);
 
@@ -53,6 +54,8 @@ public sealed class FoundationHostEagerActivationRetryTests(FoundationHostFeed f
         await SeedAsync(ConnectionString);
 
         await WaitUntilAsync(async () => (await _host.GetAsync("/health/ready")).Status == HttpStatusCode.OK);
+        // Ready, so there is no reason left to give.
+        Assert.Null(await ReasonAsync());
         await WaitUntilAsync(async () => (await OrdersAsync(_host)).Status == HttpStatusCode.OK);
         Assert.True(_host.IsRunning, "The host must become ready in the process it started, not be restarted.");
     }
