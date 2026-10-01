@@ -186,7 +186,9 @@ public sealed class EfContractingMigrationRefusalTests : IAsyncLifetime
     /// so under load that token can be cancelled too late for the activation to see; here it always is. The admission
     /// must still end cancelled, leaving no gate and nothing active, rather than report success for a migrator that is
     /// stopping. The database is staged as an earlier release left it, finalized at the earlier version, so the activation
-    /// finalizes the current one itself and the refresh that ends it publishes that.
+    /// finalizes the current one itself and the refresh that ends it publishes that. The test relies on the activation
+    /// never seeing the stop's token after that publish; should it start to, the admission would end cancelled through the
+    /// old path and this test would stop guarding the migrator's own check, and nothing here would say so.
     /// </summary>
     [Fact]
     public async Task A_migrator_stopped_after_its_activation_last_checks_for_cancellation_still_cancels_the_admission()
@@ -208,14 +210,21 @@ public sealed class EfContractingMigrationRefusalTests : IAsyncLifetime
             return Task.CompletedTask;
         };
 
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => migrator.InitializeAsync());
-        Assert.NotNull(stopping);
-        await stopping.WaitAsync(TimeSpan.FromSeconds(30));
+        try
+        {
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => migrator.InitializeAsync());
+            Assert.NotNull(stopping);
 
-        // The activation ran to its end: the publish that requested the stop was not cancelled.
-        Assert.Equal(publishesBeforeStop + 1, fleet.Publishes);
-        Assert.False(observations.Find(Family).ModuleActive);
-        Assert.Null(migrator.Gate);
+            // The publish that requested the stop completed; the activation ended there.
+            Assert.Equal(publishesBeforeStop + 1, fleet.Publishes);
+            Assert.False(observations.Find(Family).ModuleActive);
+            Assert.Null(migrator.Gate);
+        }
+        finally
+        {
+            if (stopping is not null)
+                await stopping.WaitAsync(TimeSpan.FromSeconds(30));
+        }
     }
 
     /// <summary>
@@ -773,7 +782,8 @@ public sealed class EfContractingMigrationRefusalTests : IAsyncLifetime
         return host.GetRequiredService<EfModuleMigrator<ContractingDbContext>>();
     }
 
-    /// <summary>A migrator whose host, host-new, reads the whole chain and is the fleet's only member, reporting into <paramref name="observations"/>.</summary>
+    /// <summary>A migrator whose host, host-new, reads the whole chain and is the fleet's only member, reporting into
+    /// <paramref name="observations"/>.</summary>
     private (EfModuleMigrator<ContractingDbContext> Migrator, FakeFleet Fleet) SoleMemberMigrator(EfSchemaFinalizationObservations observations)
     {
         var state = new FakeFleetState();

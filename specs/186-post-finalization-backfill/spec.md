@@ -633,11 +633,11 @@ is the owner's approval of what follows, found while building.
   or until its activation fails or is cancelled, which ends it at once, since a shell that failed to start has no
   migrator to stop and would otherwise be reported active for good, holding every backfill of the family back. A
   migrator that stops while its gate is being admitted cancels the admission, so a store call that hangs cannot stall
-  the stop or leave the activation active without bound, and waits for it to end. The admission ends cancelled, and its
-  gate deactivated, even when the activation ran to its end before the cancellation reached it, since the migrator
-  checks for the stop itself before it keeps the gate (#2221). A migrator that has stopped admits nothing more. Each
-  gate is one owner: several shells activating one family, or the two
-  generations of a reload, keep it active until the last owner stops. Activity is kept per database: a tenant whose shell stopped is not
+  the stop or leave the activation active without bound, and waits for it to end. An admission in flight when the stop
+  begins ends cancelled with its gate deactivated, whether the stop's cancellation reached the activation or the
+  activation ran to its end first, since the migrator checks for the stop itself before it keeps the gate (#2221). A
+  migrator that has stopped admits nothing more. Each gate is one owner: several shells activating one family, or the
+  two generations of a reload, keep it active until the last owner stops. Activity is kept per database: a tenant whose shell stopped is not
   held active by another tenant's, in another database, and stopping the last gate of a database forgets what the host
   read there. Not done: an entry that names no database, because the host serves the family in several whose records
   are read, is active while any of them has a gate, so one tenant still running can hold the others' settle back; one
