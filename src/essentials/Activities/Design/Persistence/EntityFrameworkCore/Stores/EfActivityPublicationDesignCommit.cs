@@ -1,6 +1,7 @@
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Contracts;
 using Elsa.Activities.Design.Persistence.Core.Entities;
+using Elsa.Activities.Design.Persistence.Core.Exceptions;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Primitives.Versioning;
@@ -19,7 +20,8 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Stores;
 /// This transaction is the linearization point of the ordered publication (ADR 0066): the publication is done
 /// exactly when it commits. The draft, the authoring state and both derived projections move under their own
 /// optimistic concurrency tokens, so a concurrent publication loses here as it would in one transaction.
-/// Every refusal is an <see cref="InvalidOperationException"/>; nothing is left tracked afterwards.
+/// Every refusal is an <see cref="InvalidOperationException"/>; nothing is left tracked afterwards. Finding the version
+/// already published, or losing a uniqueness race, is the narrower <see cref="ActivityVersionAlreadyPublishedException"/>.
 /// </remarks>
 public sealed class EfActivityPublicationDesignCommit
 {
@@ -123,7 +125,7 @@ public sealed class EfActivityPublicationDesignCommit
                 [new EfActivityManagementDefinitionChange(state.Definition, state.Authoring)],
                 [state.Draft],
                 [publication]), cancellationToken);
-        }, $"activity version publication '{publication.DefinitionVersionId}'", cancellationToken);
+        }, $"activity version publication '{publication.DefinitionVersionId}'", publication.DefinitionVersionId, cancellationToken);
     }
 
     /// <summary>Refuses a source-owned publication that could not commit, without writing anything.</summary>
@@ -182,10 +184,10 @@ public sealed class EfActivityPublicationDesignCommit
                 [new EfActivityManagementDefinitionChange(definition, authoring)],
                 [],
                 [commit.Publication]), cancellationToken);
-        }, $"source-owned activity version publication '{commit.Publication.DefinitionVersionId}'", cancellationToken);
+        }, $"source-owned activity version publication '{commit.Publication.DefinitionVersionId}'", commit.Publication.DefinitionVersionId, cancellationToken);
     }
 
-    private async Task CommitAsync(Func<Task> stage, string subject, CancellationToken cancellationToken)
+    private async Task CommitAsync(Func<Task> stage, string subject, string definitionVersionId, CancellationToken cancellationToken)
     {
         db.ChangeTracker.Clear();
         IDbContextTransaction? transaction = null;
@@ -205,7 +207,7 @@ public sealed class EfActivityPublicationDesignCommit
             EfRelationalExceptionClassifier.IsUniqueConstraintViolation(providerFailure))
         {
             await RollbackAsync(transaction);
-            throw new InvalidOperationException($"The {subject} lost a uniqueness race and was rolled back.", exception);
+            throw new ActivityVersionAlreadyPublishedException(definitionVersionId, $"The {subject} lost a uniqueness race and was rolled back.", exception);
         }
         catch
         {
@@ -341,13 +343,14 @@ public sealed class EfActivityPublicationDesignCommit
 
     private async Task EnsurePublicationAbsentAsync(ActivityDefinitionVersionPublication publication, CancellationToken cancellationToken)
     {
-        await EnsureAbsentAsync(db.ActivityDefinitionVersionPublications, publication.Id, publication.TenantId, $"Activity version publication '{publication.Id}'", cancellationToken);
+        if (await InScope(EfActivityDesignStores.ById(db.ActivityDefinitionVersionPublications.AsNoTracking(), publication.Id), publication.TenantId).AnyAsync(cancellationToken))
+            throw new ActivityVersionAlreadyPublishedException(publication.DefinitionVersionId, $"Activity version publication '{publication.Id}' already exists.");
         if (await InScope(EfActivityDesignStores.ByReference(
                     db.ActivityDefinitionVersionPublications.AsNoTracking(),
                     nameof(ActivityDefinitionVersionPublication.DefinitionVersionId),
                     publication.DefinitionVersionId), publication.TenantId)
                 .AnyAsync(cancellationToken))
-            throw Conflict($"Activity version '{publication.DefinitionVersionId}' is already published.");
+            throw new ActivityVersionAlreadyPublishedException(publication.DefinitionVersionId, $"Activity version '{publication.DefinitionVersionId}' is already published.");
     }
 
     private static async Task EnsureAbsentAsync<T>(DbSet<T> set, string id, string? tenantId, string subject, CancellationToken cancellationToken)

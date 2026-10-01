@@ -214,6 +214,29 @@ public sealed class WorkflowsVersionReconcilerConvergenceTests : IAsyncLifetime
         Assert.Equal(markers, await ListMarkersAsync());
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_definition_materialized_under_the_earlier_fingerprint_is_never_compared_with_a_new_request(bool deleted)
+    {
+        // What a database written before #2189 holds: the definition, and its materialization marker fingerprinting the
+        // DeletedAt time instead of whether it is deleted.
+        await ReconcileAsync(deleted: deleted);
+        var stored = (await GetDefinitionAsync())!;
+        await ReplaceDefinitionMarkerAsync(new EarlierDefinitionMaterialization(
+            stored.Id, stored.Name, stored.Description, stored.DeletedAt, stored.DeletedReason, stored.IsSourceOwned));
+        // The marker does differ from what a materialization sends now: sending that request again conflicts.
+        var conflict = await Assert.ThrowsAsync<InvalidOperationException>(() => MaterializeDefinitionAgainAsync(stored));
+        Assert.Contains("conflicts with an earlier request", conflict.Message);
+        var markers = await ListMarkersAsync();
+
+        // The reconciler finds the definition, so it never sends one.
+        await ReconcileAsync(deleted: deleted);
+
+        Assert.Equal(markers, await ListMarkersAsync());
+        Assert.Equal(stored.LastModifiedAt, (await GetDefinitionAsync())!.LastModifiedAt);
+    }
+
     [Fact]
     public async Task Two_passes_that_bring_different_content_for_one_new_version_still_conflict()
     {
@@ -270,6 +293,38 @@ public sealed class WorkflowsVersionReconcilerConvergenceTests : IAsyncLifetime
             services.GetRequiredService<IWorkflowDefinitionFactory>(),
             services.GetRequiredService<IWorkflowDefinitionVersionFactory>(),
             [new StaticWorkflowSource(new WorkflowVersionReconciliationModel(DefinitionId, "Original", null, Version, EmptyState))]));
+
+    /// <summary>
+    /// Swaps the definition's materialization marker for one written from <paramref name="earlierRequest"/>, through the real
+    /// atomic writer, so its fingerprint is exactly what that request shape produced.
+    /// </summary>
+    private Task ReplaceDefinitionMarkerAsync(object earlierRequest) => InScopeAsync(async services =>
+    {
+        var key = WorkflowReconciliationOperationKeys.Definition(DefinitionId);
+        var db = services.GetRequiredService<WorkflowsDesignDbContext>();
+        db.Operations.Remove(await db.Operations.SingleAsync(marker =>
+            marker.OperationKind == EfMaterializeWorkflowDefinitionCommand.OperationKind && marker.OperationKey == key.Value));
+        await db.SaveChangesAsync();
+        await services.GetRequiredService<IDesignAtomicWriter>().ExecuteAsync(
+            key,
+            EfMaterializeWorkflowDefinitionCommand.OperationKind,
+            earlierRequest,
+            [DesignPersistenceUnitNames.Definitions],
+            _ => Task.FromResult(DefinitionId));
+    });
+
+    private Task MaterializeDefinitionAgainAsync(WorkflowDefinition stored) => InScopeAsync(services =>
+        services.GetRequiredService<IMaterializeWorkflowDefinitionCommand>().Execute(
+            WorkflowReconciliationOperationKeys.Definition(DefinitionId),
+            new WorkflowDefinition
+            {
+                Id = stored.Id,
+                Name = stored.Name,
+                Description = stored.Description,
+                DeletedAt = stored.DeletedAt,
+                DeletedReason = stored.DeletedReason,
+                IsSourceOwned = stored.IsSourceOwned
+            }));
 
     private static async Task<Exception?> FailureOf(Task pass)
     {
@@ -352,4 +407,16 @@ public sealed class WorkflowsVersionReconcilerConvergenceTests : IAsyncLifetime
             }
         }
     }
+
+    /// <summary>
+    /// The request a definition materialization sent before #2189. A fingerprint covers the request's JSON, so these member
+    /// names and their order are what existing markers were written from.
+    /// </summary>
+    private sealed record EarlierDefinitionMaterialization(
+        string DefinitionId,
+        string Name,
+        string? Description,
+        DateTimeOffset? DeletedAt,
+        string? DeletedReason,
+        bool IsSourceOwned);
 }

@@ -1,6 +1,7 @@
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Contracts;
 using Elsa.Activities.Design.Persistence.Core.Entities;
+using Elsa.Activities.Design.Persistence.Core.Exceptions;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Activities.Design.Persistence.EntityFrameworkCore;
 using Elsa.Activities.Design.Persistence.EntityFrameworkCore.Stores;
@@ -368,7 +369,7 @@ public sealed class EfActivityPublicationCommandTests : IAsyncLifetime
         Assert.Equal(ActivityContentAuthorityKind.ProviderSource, authoring!.ContentAuthority.Kind);
         Assert.Equal("source-version-1", authoring.HeadVersionId);
         Assert.Equal(Published, (await verify.SourceReferences.FindAsync(first.SourceReference.SourceReferenceId))!.CreatedAt);
-        await Assert.ThrowsAsync<InvalidOperationException>(() => verify.SourceCommand.ExecuteAsync(retry));
+        await Assert.ThrowsAsync<ActivityVersionAlreadyPublishedException>(() => verify.SourceCommand.ExecuteAsync(retry));
     }
 
     private async Task SeedAsync(string definitionId, string draftId, string? tenantId = null)
