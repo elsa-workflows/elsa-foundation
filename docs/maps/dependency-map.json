@@ -14421,6 +14421,11 @@
       "edges": [
         {
           "type": "internal",
+          "id": "Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore",
+          "path": "src/essentials/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Foundation.Identity.Persistence.EntityFrameworkCore",
           "path": "src/essentials/Foundation/Identity/Persistence/EntityFrameworkCore/Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.csproj"
         },
@@ -17229,6 +17234,11 @@
           "path": "src/essentials/Workflows/Design/Persistence/EntityFrameworkCore/Elsa.Workflows.Design.Persistence.EntityFrameworkCore.csproj"
         },
         {
+          "type": "internal",
+          "id": "Elsa.Workflows.Design.Reconciliation",
+          "path": "src/essentials/Workflows/Design/Reconciliation/Elsa.Workflows.Design.Reconciliation.csproj"
+        },
+        {
           "type": "external",
           "id": "Microsoft.EntityFrameworkCore.SqlServer",
           "version": "10.0.10"
@@ -17500,6 +17510,11 @@
           "type": "external",
           "id": "Microsoft.Extensions.DependencyInjection",
           "version": "10.0.10"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.Extensions.TimeProvider.Testing",
+          "version": "10.8.0"
         },
         {
           "type": "external",

@@ -9,6 +9,69 @@ namespace Elsa.Cli.Tests;
 /// <summary>Lifecycle evidence that requires the actual CLI child rather than a direct capture or parser call.</summary>
 public sealed class CandidateInspectionLifecycleTests
 {
+    [Theory]
+    [InlineData("host-refusal", true)]
+    [InlineData("host-refusal", false)]
+    [InlineData("process-flood", true)]
+    [InlineData("process-flood", false)]
+    [InlineData("process-timeout", true)]
+    [InlineData("process-timeout", false)]
+    public async Task Post_dispatch_refusals_recheck_inputs_and_preserve_unchanged_outcomes(string outcome, bool changeInput)
+    {
+        if (OperatingSystem.IsWindows())
+            return;
+        using var fixture = new CandidateInspectionFixture();
+        var selectedProfile = await CandidateInspectionTests.PrepareAcceptedEditAsync(fixture, workspace: true);
+        Assert.NotNull(selectedProfile);
+        var unusedProfile = fixture.WriteWorkspaceProfile("unused-refusal.json", "unused-refusal", "1",
+            [CandidateInspectionFixture.StructuredLogsFeatureId]).Path;
+        var startedMarker = fixture.InputPath("refusal-composer-started.txt");
+        ConfigureProbe(fixture, probe =>
+        {
+            probe["StartedMarker"] = startedMarker;
+            probe["HoldMilliseconds"] = outcome == "process-timeout" ? 30_000 : 4_000;
+            if (outcome == "process-flood")
+                probe["StandardOutputBytes"] = 8 * 1024 * 1024;
+        });
+        if (outcome == "host-refusal")
+        {
+            var path = Path.Join(fixture.SourceDirectory, "appsettings.json");
+            var root = JsonNode.Parse(File.ReadAllText(path))!;
+            root["Elsa"]!["Persistence"]!["Resources"]!["primary"]!["Provider"] = "Unsupported";
+            File.WriteAllText(path, root.ToJsonString());
+        }
+
+        var pending = Task.Run(() => DotnetElsa.Run(fixture.SentinelEnvironment, fixture.InspectionArguments(
+            "json", [selectedProfile!, unusedProfile], timeoutSeconds: outcome == "process-timeout" ? 15 : 60)));
+        try
+        {
+            await WaitForMarkerAsync(startedMarker, pending, TimeSpan.FromSeconds(15));
+            if (changeInput)
+                File.AppendAllText(unusedProfile, " ");
+            var refusal = await pending.WaitAsync(TimeSpan.FromSeconds(75));
+            var expectedCode = changeInput ? "composition-input-changed" : outcome switch
+            {
+                "host-refusal" => "resource-context-conflict",
+                "process-flood" => "candidate-response-too-large",
+                _ => "candidate-inspection-timeout"
+            };
+
+            Assert.Equal(!changeInput && outcome == "host-refusal" ? ToolExitCode.Refusal : ToolExitCode.ResolutionFailure,
+                refusal.ExitCode);
+            Assert.Empty(refusal.Output);
+            Assert.Contains(expectedCode, refusal.Error, StringComparison.Ordinal);
+            Assert.DoesNotContain(CandidateInspectionFixture.PrivateCanary, refusal.Text, StringComparison.Ordinal);
+            Assert.DoesNotContain(fixture.SourceDirectory, refusal.Text, StringComparison.Ordinal);
+            Assert.False(Directory.Exists(Path.Join(fixture.SourceDirectory, "candidate")));
+            AssertNoLiveArtifacts(fixture);
+        }
+        finally
+        {
+            if (!pending.IsCompleted)
+                _ = await pending.WaitAsync(TimeSpan.FromSeconds(75));
+        }
+    }
+
     [Fact]
     public async Task Changed_unused_profile_after_host_dispatch_refuses_before_final_stdout()
     {

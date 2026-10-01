@@ -3,7 +3,6 @@ using Elsa.Foundation.Identity.AspNetCoreIdentity.Models;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Seeding;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -46,16 +45,7 @@ public sealed class EfCoreIdentitySeeder(
         // The provider-neutral convergence records the desired role on the user aggregate. The
         // ASP.NET Core adapter additionally materializes the framework UserRole relationship so
         // UserManager role queries and authorization observe the same converged membership.
-        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<AspNetCoreIdentityUser>>();
-        var user = await userManager.FindByNameAsync(seed.UserName);
-        if (user is null)
-            throw new InvalidOperationException("The EF Identity administrator was not available after seeding.");
-        if (!await userManager.IsInRoleAsync(user, seed.RoleName))
-        {
-            var membershipResult = await userManager.AddToRoleAsync(user, seed.RoleName);
-            if (!membershipResult.Succeeded)
-                throw new InvalidOperationException("Failed to materialize the EF Identity administrator role membership: " + string.Join("; ", membershipResult.Errors.Select(x => x.Code)));
-        }
+        await coordinator.EnsureFrameworkRoleMembershipAsync(seed.UserName, seed.RoleName, cancellationToken);
 
         if (seed.IsDevelopmentSeed)
             logger.LogInformation("Seeded EF Core ASP.NET Core Identity administrator account. Sign in at /{LoginRoute} with username '{Username}' (development/demo only).", AspNetCoreIdentityDefaults.LoginRoute, seed.UserName);

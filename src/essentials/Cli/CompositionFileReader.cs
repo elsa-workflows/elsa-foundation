@@ -12,8 +12,10 @@ public sealed class CompositionFileReader
 
     private readonly Action<string> _ensureRegularFile;
     private readonly Func<string, Stream> _openRead;
+    private static readonly Func<string, Stream> NativeOpenRead = RegularFileOpener.OpenRead;
+    private readonly bool _usesNativeOpenRead;
 
-    public CompositionFileReader() : this(EnsureRegularFile, RegularFileOpener.OpenRead) { }
+    public CompositionFileReader() : this(EnsureRegularFile, NativeOpenRead) { }
 
     public CompositionFileReader(Action<string> ensureRegularFile, Func<string, Stream> openRead)
     {
@@ -21,6 +23,7 @@ public sealed class CompositionFileReader
         ArgumentNullException.ThrowIfNull(openRead);
         _ensureRegularFile = ensureRegularFile;
         _openRead = openRead;
+        _usesNativeOpenRead = openRead == NativeOpenRead;
     }
 
     /// <summary>Returns captured bytes or a fixed, value-free refusal for unreadable or excessive input.</summary>
@@ -31,8 +34,9 @@ public sealed class CompositionFileReader
             throw LimitExceeded();
         try
         {
+            using var anchor = _usesNativeOpenRead ? RegularFileOpener.Capture(path) : null;
             _ensureRegularFile(path);
-            using var input = _openRead(path) ?? throw Unreadable();
+            using var input = anchor?.OpenRead() ?? _openRead(path) ?? throw Unreadable();
             using var captured = new MemoryStream();
             var buffer = new byte[Math.Min(81920, maximumBytes + 1)];
             while (true)

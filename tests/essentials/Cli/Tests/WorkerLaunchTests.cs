@@ -67,7 +67,7 @@ public sealed class WorkerLaunchTests
         Assert.Equal(
             [
                 "Candidate", "Command", "Connection", "ConnectionEnv", "ContextSource", "ContextVersion", "DepsFile", "Environment", "Finalization", "HostDirectory",
-                "HostName", "Output", "PackageRoots", "Provider", "Resource", "Restore", "Schema", "Selection", "Shell", "Shells", "SkewAllowance", "Version"
+                "HostName", "Output", "PackageRoots", "Provider", "Resource", "Restore", "Schema", "Selection", "Shell", "Shells", "SkewAllowance", "SqliteMigrationLockStaleAfter", "Version"
             ],
             fields);
         // SkewAllowance is `status`'s one further input: a TimeSpan the host's configured membership skew or the operator's
@@ -79,5 +79,7 @@ public sealed class WorkerLaunchTests
             typeof(WorkerFinalization).GetProperties().Select(property => property.Name).Order(StringComparer.Ordinal));
         Assert.Equal(typeof(bool), typeof(WorkerRequest).GetProperty(nameof(WorkerRequest.Restore))!.PropertyType);
         Assert.Equal(typeof(TimeSpan?), typeof(WorkerRequest).GetProperty(nameof(WorkerRequest.SkewAllowance))!.PropertyType);
+        // SqliteMigrationLockStaleAfter is `apply`'s one further input, a TimeSpan parsed by this tool from the host's appsettings.
+        Assert.Equal(typeof(TimeSpan?), typeof(WorkerRequest).GetProperty(nameof(WorkerRequest.SqliteMigrationLockStaleAfter))!.PropertyType);
     }
 }

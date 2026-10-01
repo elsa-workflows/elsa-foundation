@@ -662,7 +662,8 @@ public static class WorkerContract
             request.Output is not null || request.Environment is not null || request.Shell is not null ||
             request.ContextSource is not null || request.ContextVersion is not null || request.Resource is not null ||
             request.Shells is not null || request.ConnectionEnv is not null || request.Connection is not null ||
-            request.Finalization is not null || request.SkewAllowance is not null)
+            request.Finalization is not null || request.SkewAllowance is not null ||
+            request.SqliteMigrationLockStaleAfter is not null)
             throw InvalidCandidateRequest();
 
         ValidateCandidatePayload(candidate);
@@ -898,6 +899,13 @@ public sealed record WorkerRequest
     /// for the membership provider's own default. Never sent to a host whose tooling predates it, which judges nothing.
     /// </summary>
     public TimeSpan? SkewAllowance { get; init; }
+
+    /// <summary>
+    /// How long <c>apply</c> waits for a SQLite database's EF migration lock before it reports it as stale, as a <c>TimeSpan</c>:
+    /// the host's <c>Elsa:Persistence:EntityFramework:Migrate:SqliteMigrationLockStaleAfter</c> from its appsettings, else absent
+    /// for the persistence build's own default. Never sent to a host whose tooling predates it, which waits the default.
+    /// </summary>
+    public TimeSpan? SqliteMigrationLockStaleAfter { get; init; }
 
     /// <summary>
     /// The connection string itself, read by this front end from its own stdin when <c>--connection-stdin</c>
