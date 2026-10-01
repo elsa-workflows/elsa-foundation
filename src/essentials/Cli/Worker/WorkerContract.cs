@@ -220,7 +220,7 @@ public static class WorkerContract
                 },
                 cancellationToken);
         }
-        catch (JsonException)
+        catch (Exception failure) when (failure is JsonException or InvalidOperationException or ArgumentException or FormatException)
         {
             throw InvalidCandidateRequest();
         }

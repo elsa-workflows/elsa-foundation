@@ -452,7 +452,8 @@ public sealed class ToolingEntryPoint
                 throw new ArgumentOutOfRangeException(nameof(maximumBytes));
             this.maximumBytes = maximumBytes;
             storage = new byte[maximumBytes];
-            buffer = new MemoryStream(storage, 0, 0, writable: true, publiclyVisible: true);
+            buffer = new MemoryStream(storage, writable: true);
+            buffer.SetLength(0);
         }
 
         public bool LimitExceeded { get; private set; }
