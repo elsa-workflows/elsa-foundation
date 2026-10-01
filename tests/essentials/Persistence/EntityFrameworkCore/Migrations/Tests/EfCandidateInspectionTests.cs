@@ -876,9 +876,15 @@ public sealed class EfCandidateInspectionTests : IDisposable
     public async Task Public_operation_reaches_the_exact_response_limit_and_refuses_one_byte_over()
     {
         const int maximumResponseBytes = 4 * 1024 * 1024;
+        const int maximumRequestBytes = 8 * 1024 * 1024;
         const int enabledFeatureCount = 1862;
         const int plusCount = 124;
         const string largeShell = Shell + "-limit";
+
+        // '+' is six bytes as the default JSON encoder's "\\u002B" escape and each selected ID is
+        // repeated in three arrays. The first three IDs trim one plus; replacing the final plus for
+        // indexes 3..<152 removes 149 * 5 bytes to calibrate the 1,862-ID response to exactly 4 MiB.
+        // The disabled ID appears once, so appending one ASCII byte makes the second response one byte over.
         var enabledFeatureIds = Enumerable.Range(0, enabledFeatureCount)
             .Select(index => LargeSelectionFeatureId(
                 'A',
@@ -894,11 +900,14 @@ public sealed class EfCandidateInspectionTests : IDisposable
             $"Elsa.Candidate.ResponseLimit.{Guid.NewGuid():N}",
             [.. enabledFeatureIds, exactDisabledFeatureId, oneByteOverDisabledFeatureId]);
 
+        var exactFiles = BuildLargeSelectionFiles(enabledFeatureIds, exactDisabledFeatureId, largeShell);
+        Assert.All(exactFiles.Values, bytes => Assert.InRange(bytes.Length, 0, MaximumCandidateFileBytes));
         var exactCandidate = AddEnvironmentInput(
-            CreateCandidate(enabledFeatureIds,
-                BuildLargeSelectionFiles(enabledFeatureIds, exactDisabledFeatureId, largeShell)),
+            CreateCandidate(enabledFeatureIds, exactFiles),
             EnvironmentDocument(new Dictionary<string, string>()));
         exactCandidate.Request["candidate"]!["shell"] = largeShell;
+        var exactRequestBytes = Encoding.UTF8.GetBytes(exactCandidate.Request.ToJsonString());
+        Assert.InRange(exactRequestBytes.Length, 1, maximumRequestBytes);
         using var exactResponse = new MemoryStream();
         var exactExitCode = await RunEnvironmentOperationAsync(
             new EfCandidateEnvironmentInspectionOperation(() =>
@@ -914,11 +923,14 @@ public sealed class EfCandidateInspectionTests : IDisposable
                 exactDocument.RootElement.GetProperty("configurationResolution").GetProperty("source").GetString());
         }
 
+        var oneByteOverFiles = BuildLargeSelectionFiles(enabledFeatureIds, oneByteOverDisabledFeatureId, largeShell);
+        Assert.All(oneByteOverFiles.Values, bytes => Assert.InRange(bytes.Length, 0, MaximumCandidateFileBytes));
         var oneByteOverCandidate = AddEnvironmentInput(
-            CreateCandidate(enabledFeatureIds,
-                BuildLargeSelectionFiles(enabledFeatureIds, oneByteOverDisabledFeatureId, largeShell)),
+            CreateCandidate(enabledFeatureIds, oneByteOverFiles),
             EnvironmentDocument(new Dictionary<string, string>()));
         oneByteOverCandidate.Request["candidate"]!["shell"] = largeShell;
+        var oneByteOverRequestBytes = Encoding.UTF8.GetBytes(oneByteOverCandidate.Request.ToJsonString());
+        Assert.InRange(oneByteOverRequestBytes.Length, 1, maximumRequestBytes);
         using var oneByteOverResponse = new MemoryStream();
         var refusal = await Assert.ThrowsAsync<EfToolingRefusal>(() => RunEnvironmentOperationAsync(
             new EfCandidateEnvironmentInspectionOperation(() =>
@@ -928,6 +940,8 @@ public sealed class EfCandidateInspectionTests : IDisposable
         Assert.Equal("candidate-host-unavailable", refusal.Code);
         Assert.Equal(EfToolingExitCode.ResolutionFailure, refusal.ExitCode);
         Assert.Empty(oneByteOverResponse.ToArray());
+        Assert.False(File.Exists(DatabasePath));
+        Assert.Empty(Directory.EnumerateFiles(temporaryDirectory));
     }
 
     [Theory]

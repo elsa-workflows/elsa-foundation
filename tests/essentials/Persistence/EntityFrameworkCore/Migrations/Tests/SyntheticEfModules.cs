@@ -66,12 +66,7 @@ internal static class SyntheticEfModules
     {
         var builder = new PersistedAssemblyBuilder(new AssemblyName(assemblyName), typeof(object).Assembly, []);
         var module = builder.DefineDynamicModule(assemblyName);
-        var featureType = module.DefineType(
-            $"{featureName}Feature",
-            TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.Class,
-            typeof(object),
-            [typeof(IShellFeature)]);
-        featureType.DefineDefaultConstructor(MethodAttributes.Public);
+        var featureType = DefineShellFeature(module, $"{featureName}Feature");
 
         var enrollmentConstructor = typeof(EfPersistenceResourceParticipantAttribute).GetConstructor(Type.EmptyTypes)!;
         featureType.SetCustomAttribute(new CustomAttributeBuilder(enrollmentConstructor, []));
@@ -79,14 +74,6 @@ internal static class SyntheticEfModules
         for (var index = 0; index < moduleCount; index++)
             featureType.SetCustomAttribute(new CustomAttributeBuilder(moduleConstructor, [$"Synthetic.Legacy.Module{index:D4}"]));
 
-        var contractMethod = typeof(IShellFeature).GetMethod(nameof(IShellFeature.ConfigureServices))!;
-        var implementation = featureType.DefineMethod(
-            contractMethod.Name,
-            MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.Final | MethodAttributes.NewSlot,
-            contractMethod.ReturnType,
-            contractMethod.GetParameters().Select(parameter => parameter.ParameterType).ToArray());
-        implementation.GetILGenerator().Emit(OpCodes.Ret);
-        featureType.DefineMethodOverride(implementation, contractMethod);
         featureType.CreateType();
 
         using var image = new MemoryStream();
@@ -103,30 +90,36 @@ internal static class SyntheticEfModules
         var builder = new PersistedAssemblyBuilder(new AssemblyName(assemblyName), typeof(object).Assembly, []);
         var module = builder.DefineDynamicModule(assemblyName);
         var featureAttributeConstructor = typeof(ShellFeatureAttribute).GetConstructor([typeof(string)])!;
-        var contractMethod = typeof(IShellFeature).GetMethod(nameof(IShellFeature.ConfigureServices))!;
 
         for (var index = 0; index < featureNames.Count; index++)
         {
-            var featureType = module.DefineType(
-                $"SyntheticNonParticipantFeature{index:D5}",
-                TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.Class,
-                typeof(object),
-                [typeof(IShellFeature)]);
-            featureType.DefineDefaultConstructor(MethodAttributes.Public);
+            var featureType = DefineShellFeature(module, $"SyntheticNonParticipantFeature{index:D5}");
             featureType.SetCustomAttribute(new CustomAttributeBuilder(featureAttributeConstructor, [featureNames[index]]));
-
-            var implementation = featureType.DefineMethod(
-                contractMethod.Name,
-                MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.Final | MethodAttributes.NewSlot,
-                contractMethod.ReturnType,
-                contractMethod.GetParameters().Select(parameter => parameter.ParameterType).ToArray());
-            implementation.GetILGenerator().Emit(OpCodes.Ret);
-            featureType.DefineMethodOverride(implementation, contractMethod);
             featureType.CreateType();
         }
 
         using var image = new MemoryStream();
         builder.Save(image);
         return Assembly.Load(image.ToArray());
+    }
+
+    private static TypeBuilder DefineShellFeature(ModuleBuilder module, string typeName)
+    {
+        var featureType = module.DefineType(
+            typeName,
+            TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.Class,
+            typeof(object),
+            [typeof(IShellFeature)]);
+        featureType.DefineDefaultConstructor(MethodAttributes.Public);
+
+        var contractMethod = typeof(IShellFeature).GetMethod(nameof(IShellFeature.ConfigureServices))!;
+        var implementation = featureType.DefineMethod(
+            contractMethod.Name,
+            MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.Final | MethodAttributes.NewSlot,
+            contractMethod.ReturnType,
+            contractMethod.GetParameters().Select(parameter => parameter.ParameterType).ToArray());
+        implementation.GetILGenerator().Emit(OpCodes.Ret);
+        featureType.DefineMethodOverride(implementation, contractMethod);
+        return featureType;
     }
 }
