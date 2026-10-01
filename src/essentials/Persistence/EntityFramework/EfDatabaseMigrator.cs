@@ -9,7 +9,8 @@ namespace Elsa.Persistence.EntityFramework;
 /// <see cref="DatabaseFacade.MigrateAsync"/> already takes
 /// <c>IHistoryRepository.AcquireDatabaseLockAsync</c> (EF 9+). Hosts that call
 /// <c>IMigrator.Migrate</c> or apply pending migrations themselves must take that same lock;
-/// wrapping <see cref="DatabaseFacade.MigrateAsync"/> in a second lock is not required and races.
+/// wrapping <see cref="DatabaseFacade.MigrateAsync"/> in a second lock is not required and races. On SQLite, whose lock a killed
+/// process leaves behind, it goes through <see cref="EfSqliteMigrationLock"/> instead (#2196).
 /// </summary>
 /// <remarks>
 /// <para>
@@ -44,20 +45,31 @@ public static class EfDatabaseMigrator
     /// <c>migrator:&lt;host id&gt;</c>. Null where there is none, such as the persistence tool, when the machine name stands in.
     /// </param>
     /// <param name="cancellationToken">Cancels the work.</param>
-    public static async Task ApplyAsync(
+    public static Task ApplyAsync(
         DbContext context,
         string expectedProviderName,
         EfMigratePolicy policy,
         SchemaFinalizationMember? host,
+        CancellationToken cancellationToken = default) =>
+        ApplyAsync(context, expectedProviderName, new EfMigrateOptions { Policy = policy }, host, cancellationToken);
+
+    /// <summary><see cref="ApplyAsync(DbContext, string, EfMigratePolicy, SchemaFinalizationMember?, CancellationToken)"/> under all of the host's <paramref name="options"/>: the policy, and how long a SQLite migration lock is waited for.</summary>
+    /// <param name="options">The host's migrate options; <see cref="EfMigrateOptions.Policy"/> is what is applied.</param>
+    public static async Task ApplyAsync(
+        DbContext context,
+        string expectedProviderName,
+        EfMigrateOptions options,
+        SchemaFinalizationMember? host = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(options);
         EfProviderGuard.Ensure(context, expectedProviderName);
 
-        switch (policy)
+        switch (options.Policy)
         {
             case EfMigratePolicy.AutoMigrate:
-                await EfContractingMigrationCheck.MigrateAsync(context, host, cancellationToken);
+                await EfContractingMigrationCheck.MigrateAsync(context, host, options, cancellationToken);
                 return;
             case EfMigratePolicy.Validate:
                 var pending = (await context.Database.GetPendingMigrationsAsync(cancellationToken)).ToArray();
@@ -69,8 +81,20 @@ public static class EfDatabaseMigrator
                     throw withheld;
                 throw PendingMigrations(context, expectedProviderName, pending);
             default:
-                throw new ArgumentOutOfRangeException(nameof(policy), policy, "Unknown EF migrate policy.");
+                // Named for the policy argument callers of either overload passed, not for the options that carry it.
+                throw new ArgumentOutOfRangeException("policy", options.Policy, "Unknown EF migrate policy.");
         }
+    }
+
+    /// <summary>
+    /// Whether <paramref name="context"/>'s store has migrations to apply, which is whether its provider is relational: the
+    /// in-memory provider is created, not migrated. For a host that decides between migrating and creating a store without
+    /// naming an EF package, so that no relational provider is passed over.
+    /// </summary>
+    public static bool UsesMigrations(DbContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        return context.Database.IsRelational();
     }
 
     /// <summary>

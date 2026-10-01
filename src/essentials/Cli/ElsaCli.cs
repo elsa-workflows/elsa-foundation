@@ -123,7 +123,11 @@ internal static class ElsaCli
                 Provider = result.GetRequiredValue(provider),
                 Schema = Schema(result, schema),
                 ConnectionEnv = connection.Env,
-                Connection = connection.Value
+                Connection = connection.Value,
+                // Only `apply` takes the migration lock, and a request over an explicit context reads its own configuration.
+                SqliteMigrationLockStaleAfter = name == WorkerCommands.Apply && resolved.ContextSource is null
+                    ? HostMigrationSettings.SqliteMigrationLockStaleAfter(layout.Directory, resolved.Environment!)
+                    : null
             };
             return Report.Render(name, await WorkerProcess.RunAsync(layout, request, cancellationToken), Console.Out, Console.Error);
         }, cancellationToken));

@@ -316,7 +316,7 @@ public sealed class EfContractingMigrationRefusalTests : IAsyncLifetime
         await using (var context = Create(Provider, Connection))
         {
             var refusal = await Assert.ThrowsAsync<EfContractingMigrationRefusedException>(
-                () => EfContractingMigrationCheck.MigrateAsync(context, host: null, readsOnlyTheEarlierVersion, CancellationToken.None));
+                () => EfContractingMigrationCheck.MigrateAsync(context, host: null, readsOnlyTheEarlierVersion, new EfMigrateOptions(), CancellationToken.None));
 
             Assert.Equal(
                 new EfContractingMigrationRefusal(Contract, Family, CurrentVersion, null, EfContractingMigrationRefusalReason.UnknownVersion),

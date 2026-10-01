@@ -78,6 +78,50 @@ public sealed class ToolingEntryPointTests
         Assert.True(ToolingEntryPoint.Resolve(typeof(EfToolingHost).Assembly, "4.0.0-preview.1", "4.0.0-preview.1").SupportsSkewAllowance);
     }
 
+    /// <summary>The same probe for the lock bound <c>apply</c> waits for a SQLite migration lock with (#2196).</summary>
+    [Fact]
+    public void A_persistence_build_carrying_the_sqlite_migration_lock_bound_field_is_detected()
+    {
+        Assert.True(ToolingEntryPoint.Resolve(typeof(EfToolingHost).Assembly, "4.0.0-preview.1", "4.0.0-preview.1").SupportsSqliteMigrationLockStaleAfter);
+    }
+
+    /// <summary>
+    /// A persistence build that predates the lock bound is found not to declare it, and the worker then leaves the field out of
+    /// the request, with a warning, rather than send what that build's closed contract would refuse; a configured bound it can send is
+    /// sent in the invariant <c>c</c> format, and none configured sends nothing and says nothing.
+    /// </summary>
+    [Fact]
+    public void A_persistence_build_without_the_sqlite_migration_lock_bound_field_is_detected_and_the_worker_omits_it()
+    {
+        Assert.False(ToolingEntryPoint.Declares(typeof(OlderRequest), "SqliteMigrationLockStaleAfter"));
+        Assert.False(ToolingEntryPoint.Declares(null, "SqliteMigrationLockStaleAfter"));
+        Assert.True(ToolingEntryPoint.Declares(typeof(EfToolingRequest), "SqliteMigrationLockStaleAfter"));
+
+        var method = typeof(object).GetMethod(nameof(ToString))!;
+        var older = new ToolingEntryPoint(method, method, method, method, supportsCapabilitySelection: true, contextApi: null, supportsSkewAllowance: true, supportsSqliteMigrationLockStaleAfter: false);
+        var current = new ToolingEntryPoint(method, method, method, method, supportsCapabilitySelection: true, contextApi: null, supportsSkewAllowance: true, supportsSqliteMigrationLockStaleAfter: true);
+        var configured = new WorkerRequest { SqliteMigrationLockStaleAfter = TimeSpan.FromMinutes(30) };
+
+        var warnings = new StringWriter();
+        Assert.Null(WorkerRunner.SqliteMigrationLockStaleAfter(older, configured, warnings));
+        var warning = warnings.ToString().TrimEnd();
+        Assert.DoesNotContain('\n', warning);
+        Assert.StartsWith("warning:", warning, StringComparison.Ordinal);
+        Assert.Contains("00:30:00", warning, StringComparison.Ordinal);
+
+        var quiet = new StringWriter();
+        Assert.Equal("00:30:00", WorkerRunner.SqliteMigrationLockStaleAfter(current, configured, quiet));
+        Assert.Null(WorkerRunner.SqliteMigrationLockStaleAfter(older, new WorkerRequest(), quiet));
+        Assert.Null(WorkerRunner.SqliteMigrationLockStaleAfter(current, new WorkerRequest(), quiet));
+        Assert.Empty(quiet.ToString());
+    }
+
+    /// <summary>A request type of a persistence build that predates the lock bound.</summary>
+    private sealed class OlderRequest
+    {
+        public string? CapabilitySelection { get; init; }
+    }
+
     /// <summary>
     /// The version-skew probe (spec 172 FR-004). The tooling contract refuses an unmapped request property,
     /// so a build that predates the field must be found before the field is sent — and the refusal that

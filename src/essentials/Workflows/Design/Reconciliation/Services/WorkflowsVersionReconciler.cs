@@ -1,10 +1,11 @@
 using Elsa.Events.Core.Contracts;
-using Elsa.Workflows.Design.Persistence.Core.Models;
+using Elsa.Workflows.Design.Persistence.Core.Constants;
 using Elsa.Primitives.Enums;
 using Elsa.Primitives.Versioning;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
+using Elsa.Workflows.Design.Persistence.Core.Exceptions;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Core.Reconciliation;
@@ -32,10 +33,22 @@ public sealed class WorkflowsVersionReconciler(
     IMaterializeWorkflowDefinitionCommand materializeDefinitionCommand,
     IMaterializeWorkflowDefinitionVersionCommand materializeVersionCommand,
     ISaveWorkflowDefinitionCommand saveDefinitionCommand,
-    IPayloadSerializer payloadSerializer
+    IPayloadSerializer payloadSerializer,
+    TimeProvider? timeProvider = null
 )
     : IWorkflowVersionReconciler
 {
+    /// <summary>
+    /// Writes of one definition's metadata, the first included, before a pass gives up on lost races and fails with
+    /// the last one.
+    /// </summary>
+    public const int MaxMetadataConvergenceAttempts = 8;
+
+    /// <summary>The wait after a lost race, multiplied by the number of the attempt that lost it.</summary>
+    private static readonly TimeSpan MetadataRetryBackoff = TimeSpan.FromMilliseconds(25);
+
+    private readonly TimeProvider clock = timeProvider ?? TimeProvider.System;
+
     public async Task Reconcile(CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -96,7 +109,7 @@ public sealed class WorkflowsVersionReconciler(
             var sourceOwned = WorkflowDefinition.From(version.Definition);
             sourceOwned.IsSourceOwned = true;
             await materializeDefinitionCommand.Execute(
-                ReconciliationKey("definition", definitionId),
+                WorkflowReconciliationOperationKeys.Definition(definitionId),
                 sourceOwned,
                 cancellationToken);
         }
@@ -105,7 +118,6 @@ public sealed class WorkflowsVersionReconciler(
             await UpdateDefinitionMetadata(
                 definition,
                 version.Definition,
-                candidateSortKey,
                 cancellationToken);
         }
 
@@ -113,7 +125,7 @@ public sealed class WorkflowsVersionReconciler(
         if (!versionExists)
         {
             await materializeVersionCommand.Execute(
-                ReconciliationKey("version", definitionId, candidateSortKey),
+                WorkflowReconciliationOperationKeys.Version(definitionId, candidateSortKey),
                 WorkflowDefinitionVersion.From(version),
                 cancellationToken);
             return true;
@@ -129,9 +141,13 @@ public sealed class WorkflowsVersionReconciler(
 
     /// <summary>
     /// Applies the incoming source's mutable definition-level metadata (name, description, soft-delete) to
-    /// an already-persisted definition. Idempotent — writes only when a value actually changed — and never
-    /// touches any <see cref="WorkflowDefinitionVersion"/>: versions are immutable and
-    /// retention-authoritative, whereas name/description/<c>DeletedAt</c> are latest-wins per ADR 0034 (D5).
+    /// an already-persisted definition, and never touches any <see cref="WorkflowDefinitionVersion"/>: versions
+    /// are immutable and retention-authoritative, whereas name/description/<c>DeletedAt</c> are latest-wins per
+    /// ADR 0034 (D5). Idempotent per desired state: it writes only when a value actually changed, and each write
+    /// gets a key no earlier write used (<see cref="WorkflowReconciliationOperationKeys.DefinitionMetadataWrite"/>),
+    /// so any sequence of changes at one version, a change back included, converges (#2187). A write that loses a
+    /// race to another writer reads the definition again and compares afresh, up to
+    /// <see cref="MaxMetadataConvergenceAttempts"/> attempts with a short backoff.
     /// Latest-wins soft-delete is scoped to <see cref="WorkflowDefinition.IsSourceOwned"/> definitions:
     /// a source can never flip <c>DeletedAt</c> on a catalog-authored (Studio) definition.
     /// Runs for every <see cref="Contracts.IWorkflowReconciliationSource"/>, not only git, and only for the
@@ -140,8 +156,48 @@ public sealed class WorkflowsVersionReconciler(
     private async Task UpdateDefinitionMetadata(
         WorkflowDefinition persisted,
         IWorkflowDefinition incoming,
-        string sourceRevision,
         CancellationToken cancellationToken)
+    {
+        var definitionId = persisted.Id;
+        for (var attempt = 1; ; attempt++)
+        {
+            var desired = DesiredMetadata(persisted, incoming);
+            if (desired is null)
+                return;
+
+            try
+            {
+                await saveDefinitionCommand.Execute(
+                    WorkflowReconciliationOperationKeys.DefinitionMetadataWrite(definitionId),
+                    desired,
+                    cancellationToken);
+                LogMetadataUpdated(definitionId);
+                return;
+            }
+            catch (DesignPersistenceException exception) when (
+                exception.FailureKind == DesignPersistenceFailureKind.Concurrency && attempt < MaxMetadataConvergenceAttempts)
+            {
+                // A lost race: typically another node applied the same change between this pass's read and its
+                // write, so the write failed the row's LastModifiedAt check. Its key is its own, so no marker
+                // exists to replay. Read the row again and compare afresh: write nothing when it already matches,
+                // and write again under a new key when it does not. The atomic writer clears the change tracker
+                // when a write fails, so the read returns the committed row. Any other failure, and the last lost
+                // race, propagate unchanged.
+                await Task.Delay(MetadataRetryBackoff * attempt, clock, cancellationToken);
+                var current = await FindDefinition(definitionId, cancellationToken);
+                if (current is null)
+                    throw; // The race was lost to a delete, which leaves nothing to compare against.
+
+                persisted = current;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Returns the definition as the source wants it, or <c>null</c> when the stored metadata already matches. The
+    /// result is a copy, so a failed write leaves <paramref name="persisted"/> exactly as it was read.
+    /// </summary>
+    private WorkflowDefinition? DesiredMetadata(WorkflowDefinition persisted, IWorkflowDefinition incoming)
     {
         // Reconcile soft-delete as a latest-wins flag: set when the source marks it deleted and it is
         // currently live; clear (un-delete) when the source reports it live and it is currently deleted.
@@ -159,18 +215,14 @@ public sealed class WorkflowsVersionReconciler(
         }
 
         if (persisted.Name == incoming.Name && persisted.Description == incoming.Description && !deletedChanged)
-            return;
+            return null;
 
-        persisted.Name = incoming.Name;
-        persisted.Description = incoming.Description;
+        var desired = (WorkflowDefinition)persisted.ShallowClone();
+        desired.Name = incoming.Name;
+        desired.Description = incoming.Description;
         if (deletedChanged)
-            persisted.DeletedAt = incomingDeleted ? incoming.DeletedAt ?? DateTimeOffset.UtcNow : null;
-
-        await saveDefinitionCommand.Execute(
-            ReconciliationKey("definition-metadata", persisted.Id, sourceRevision),
-            persisted,
-            cancellationToken);
-        LogMetadataUpdated(persisted.Id);
+            desired.DeletedAt = incomingDeleted ? incoming.DeletedAt ?? DateTimeOffset.UtcNow : null;
+        return desired;
     }
 
     /// <summary>
@@ -248,12 +300,5 @@ public sealed class WorkflowsVersionReconciler(
     private async Task<WorkflowDefinition?> FindDefinition(string definitionId, CancellationToken cancellationToken)
     {
         return await definitionStore.FindByIdAsync(definitionId, cancellationToken);
-    }
-
-    private static DesignOperationKey ReconciliationKey(string kind, params string[] identityParts)
-    {
-        var framedIdentity = string.Concat(
-            identityParts.Select(part => $"{part.Length}:{part}"));
-        return new DesignOperationKey($"workflow-reconciliation:{kind}:{framedIdentity}");
     }
 }
