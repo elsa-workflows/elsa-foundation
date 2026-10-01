@@ -1,5 +1,4 @@
 using System.Globalization;
-using Microsoft.Extensions.Configuration;
 
 namespace Elsa.Cli;
 
@@ -25,21 +24,7 @@ internal static class HostMembershipSettings
     /// <summary>The host's configured skew allowance for <paramref name="environment"/>, or <see langword="null"/> when it configures none.</summary>
     public static TimeSpan? SkewAllowance(string hostDirectory, string environment)
     {
-        string? value;
-        try
-        {
-            value = new ConfigurationBuilder()
-                .AddJsonFile(Path.Join(hostDirectory, "appsettings.json"), optional: true, reloadOnChange: false)
-                .AddJsonFile(Path.Join(hostDirectory, $"appsettings.{environment}.json"), optional: true, reloadOnChange: false)
-                .Build()[SkewAllowanceKey];
-        }
-        catch (Exception failure) when (failure is FormatException or InvalidDataException or IOException)
-        {
-            throw CliRefusal.Resolution(
-                "host-configuration-unreadable",
-                $"The host's appsettings beside '{hostDirectory}' could not be read for '{SkewAllowanceKey}': {failure.Message} Pass --skew-allowance to judge with a value of your own.");
-        }
-
+        var value = HostAppSettingsValue.Read(hostDirectory, environment, SkewAllowanceKey, " Pass --skew-allowance to judge with a value of your own.");
         return value is null ? null : Parse(value, $"'{SkewAllowanceKey}' in the host's appsettings");
     }
 

@@ -190,6 +190,13 @@ public sealed record WorkerRequest
     public TimeSpan? SkewAllowance { get; init; }
 
     /// <summary>
+    /// How long <c>apply</c> waits for a SQLite database's EF migration lock before it reports it as stale, as a <c>TimeSpan</c>:
+    /// the host's <c>Elsa:Persistence:EntityFramework:Migrate:SqliteMigrationLockStaleAfter</c> from its appsettings, else absent
+    /// for the persistence build's own default. Never sent to a host whose tooling predates it, which waits the default.
+    /// </summary>
+    public TimeSpan? SqliteMigrationLockStaleAfter { get; init; }
+
+    /// <summary>
     /// The connection string itself, read by this front end from its own stdin when <c>--connection-stdin</c>
     /// was given (D7) — the one case where the value has nowhere to travel but this request. Never populated
     /// from <c>--connection-env</c>, and never logged, echoed, or included in a refusal.

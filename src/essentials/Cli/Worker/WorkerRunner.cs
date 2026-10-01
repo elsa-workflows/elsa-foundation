@@ -16,6 +16,9 @@ internal static class WorkerRunner
 {
     private const string SqliteProvider = "Sqlite";
 
+    /// <summary>The key <c>HostMigrationSettings</c> read the bound from, named in the warning for a build that drops it.</summary>
+    private const string HostMigrationSettingsKey = "Elsa:Persistence:EntityFramework:Migrate:SqliteMigrationLockStaleAfter";
+
     /// <summary>
     /// How a host whose modules arrive as packages gets its provider engine onto disk (spec 172 D6). Every
     /// EF module package declares the <c>ef-provider</c> capability in its <c>nuplane.json</c>, so the host
@@ -180,6 +183,7 @@ internal static class WorkerRunner
                     selection = Selection(request.Selection),
                     shells = Shells(request),
                     capabilitySelection,
+                    sqliteMigrationLockStaleAfter = SqliteMigrationLockStaleAfter(tooling, request, Console.Error),
                     connection = ResolveConnection(request)
                 },
                 cancellationToken);
@@ -211,6 +215,24 @@ internal static class WorkerRunner
             tooling,
             ScriptRequest(request, provider, ModulePackages(listed, deps, packages), engine, capabilitySelection),
             cancellationToken);
+    }
+
+    /// <summary>
+    /// The host's SQLite migration lock bound as the request field carries it, or <see langword="null"/> when the host configures none,
+    /// or when its persistence build predates the field: the closed contract would refuse it, so it is left out, and the operator is told
+    /// that <c>apply</c> waits that build's default instead.
+    /// </summary>
+    internal static string? SqliteMigrationLockStaleAfter(ToolingEntryPoint tooling, WorkerRequest request, TextWriter warnings)
+    {
+        if (request.SqliteMigrationLockStaleAfter is not { } bound)
+            return null;
+        if (tooling.SupportsSqliteMigrationLockStaleAfter)
+            return bound.ToString("c", System.Globalization.CultureInfo.InvariantCulture);
+
+        warnings.WriteLine(
+            $"warning: this host's persistence build predates the SQLite migration lock bound, so '{HostMigrationSettingsKey}' = {bound} is not " +
+            "sent and apply waits that build's default for a SQLite migration lock; upgrade the host's Elsa.Persistence.EntityFramework to honour it.");
+        return null;
     }
 
     internal static async Task<WorkerResponse> ExecuteExplicitContextAsync(
