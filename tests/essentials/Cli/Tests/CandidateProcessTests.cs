@@ -184,6 +184,18 @@ public sealed class CandidateProcessTests
         fixture.AssertClosed();
     }
 
+    [Fact]
+    public void Explicit_environment_option_rejects_repeated_occurrences_at_parse_boundary()
+    {
+        var parse = ElsaCli.Build().Parse([
+            "composition", "inspect", "--host", "host", "--host-dir", "source", "--shell", "default",
+            "--environment", "Production", "--composition", "candidate", "--trust-host-code",
+            "--environment-input", "one.json", "--environment-input", "two.json"]);
+
+        Assert.Contains(parse.Errors, error => error.Message.Contains(
+            "--environment-input option may be specified only once", StringComparison.Ordinal));
+    }
+
     [Theory]
     [InlineData("write")]
     [InlineData("flush")]

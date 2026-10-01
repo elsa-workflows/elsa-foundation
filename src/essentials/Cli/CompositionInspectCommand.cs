@@ -22,6 +22,12 @@ internal static class CompositionInspectCommand
         {
             Description = "One private JSON environment document for the explicit environment inspection lane."
         };
+        environmentInput.Arity = ArgumentArity.ExactlyOne;
+        environmentInput.Validators.Add(option =>
+        {
+            if (option.IdentifierTokenCount != 1)
+                option.AddError("The --environment-input option may be specified only once.");
+        });
         var timeout = new Option<int?>("--timeout-seconds") { Description = "Inspection timeout, 1 to 300 seconds. Defaults to 60." };
         var format = new Option<string>("--format") { Description = "Output format: text or json. Defaults to text." };
         var command = new Command("inspect", "Preview effective persistence for an accepted candidate without publishing it.")
