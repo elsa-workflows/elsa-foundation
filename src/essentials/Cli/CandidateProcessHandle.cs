@@ -133,7 +133,11 @@ public sealed class CandidateProcessHandle : ICandidateProcessHandle
         finally
         {
             try { scope?.Dispose(); }
-            finally { process.Dispose(); lifetime.Dispose(); }
+            finally
+            {
+                try { process.Dispose(); }
+                finally { lifetime.Dispose(); }
+            }
         }
     }
 
