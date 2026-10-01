@@ -4,11 +4,12 @@ using Microsoft.Win32.SafeHandles;
 namespace Elsa.Cli;
 
 /// <summary>Acquires a regular-file handle without following a link or blocking on a special file.</summary>
-internal static class RegularFileOpener
+public static class RegularFileOpener
 {
     private const int BufferSize = 81920;
 
-    internal static Stream OpenRead(string path)
+    /// <summary>Opens a regular local file and refuses unsupported or nonregular inputs before returning a stream.</summary>
+    public static Stream OpenRead(string path)
     {
         try
         {

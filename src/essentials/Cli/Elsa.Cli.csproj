@@ -14,8 +14,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <InternalsVisibleTo Include="Elsa.Cli.Tests" />
-
     <!-- The worker is its own project inside this one's directory, so the SDK's source glob would otherwise
          compile it into the front end as well as reference it. -->
     <Compile Remove="Worker\**" />

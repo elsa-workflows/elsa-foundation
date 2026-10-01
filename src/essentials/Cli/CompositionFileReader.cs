@@ -63,7 +63,8 @@ public sealed class CompositionFileReader
     internal static CliRefusal LimitExceeded() =>
         CliRefusal.Usage("candidate-capture-invalid", "A candidate input exceeds the supported capture limits.");
 
-    internal static void EnsureRegularFile(string path)
+    /// <summary>Refuses an input whose path does not currently identify a regular local file.</summary>
+    public static void EnsureRegularFile(string path)
     {
         var info = new FileInfo(path);
         info.Refresh();

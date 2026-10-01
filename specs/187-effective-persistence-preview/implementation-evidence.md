@@ -280,3 +280,61 @@ Copilot review5373464733 on head2c7186bfb identified two real acceptance gaps; p
 Exact pushed-head CI36795043801 completed with required Build & test failed: the existing `A_run_killed_mid_way_is_finished_by_another_host_with_the_table_an_uninterrupted_run_leaves` before-a-write case hit a disposed SQLite handle during recovery. The test, fixture/helper and backfill production source have no diff from main; previous PR/main runs passed. Read-only diagnosis found process-wide ClearAllPools as a possible isolation hazard, but upstream pool locking/checked-out handling and this trace do not establish causation. Root rebuilt the affected EF test project at local integrated head b6efcc520 and executed the three crash/recovery cases serially:3/3, zero skipped (`candidate-ci-backfill-control.trx`). This macOS control does not prove the hosted Linux failure fixed or clear the required gate; a fresh pushed-head run remains required. No shared SQLite helper or CI pipeline was changed.
 
 The second finding remains active: path preflight and synchronous open are not atomic, so regular-to-FIFO replacement can block before the worker deadline starts. The supporting correction is validating nonblocking native acquisition and same-handle regular-file checks, with platform ABI evidence and an owned-process race regression. It is not yet integrated or accepted; no passing file-race or current full-suite claim is made at this checkpoint. Exact-head review, fresh required CI and post-merge main proof remain open under T020.
+
+## Same-handle file acquisition correction
+
+Root reviewed and integrated worker9006ece as unsigned6d83f56f7. The default candidate reader now uses `RegularFileOpener`; injected readers and the legacy unbounded capture path remain unchanged. Unix acquisition uses nonblocking, no-follow and close-on-exec flags, checks regular-file mode with `fstat` on the acquired handle before returning a stream, and transfers ownership to `FileStream`. Windows uses `CreateFileW` with OPEN_REPARSE_POINT, checks disk type and acquired-handle attributes, and transfers or disposes that handle. Nonfatal native/loader failures become the existing fixed, value-free refusal. No new test project, provider/container matrix or CI cadence change was introduced.
+
+The native helper is necessary because path preflight plus ordinary synchronous open cannot establish the type of the acquired file without risking a FIFO block. Root corrected and verified architecture-specific Linux no-follow values and Darwin nonblocking flags before acceptance. Dynamic Linux bindings support glibc and the architecture-specific musl loader; unknown Unix architectures fail closed before native stat memory is interpreted. Loaded native modules remain process-owned. Shared nonblocking locks match [.NET 10's best-effort shared-read semantics](https://github.com/dotnet/runtime/blob/v10.0.0/src/libraries/System.Private.CoreLib/src/Microsoft/Win32/SafeHandles/SafeFileHandle.Unix.cs): only would-block is a new lock refusal.
+
+### ABI reproduction
+
+The worker compiled against actual glibc/musl headers and executed each Linux architecture probe. Darwin arm64 was compiled/executed locally; Darwin x64 was cross-compiled against the installed macOS SDK, with its undefined fstat symbol inspected. These are acquisition ABI checks, not EF provider tests. The essential standalone probe is:
+
+```c
+#include <stdio.h>
+#include <stddef.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <sys/file.h>
+#include <errno.h>
+int main(void) {
+  printf("stat=%zu mode-offset=%zu mode-size=%zu nofollow=%x nonblock=%x cloexec=%x shared=%d lock-nonblock=%d would-block=%d\n",
+    sizeof(struct stat), offsetof(struct stat, st_mode), sizeof(((struct stat *)0)->st_mode),
+    O_NOFOLLOW, O_NONBLOCK, O_CLOEXEC, LOCK_SH, LOCK_NB, EWOULDBLOCK);
+}
+```
+
+Save as `layout.c`, compile with `cc layout.c -o layout`, and execute on the matching OS/architecture. For Linux, the throwaway SDK containers install gcc and libc development headers (glibc: `apt-get install gcc libc6-dev`; musl: `apk add gcc musl-dev`). No compiler becomes a shipped dependency. On macOS use `xcrun clang -arch arm64 layout.c -o layout`; cross-check x64 with `xcrun clang -arch x86_64 -c layout.c -o layout.o` and `nm -u layout.o` after adding a call to `fstat`.
+
+| OS / ABI | stat bytes / mode offset / width | O_NOFOLLOW / O_NONBLOCK / O_CLOEXEC | fstat export |
+|---|---|---|---|
+| Linux glibc and musl x64 | 144 / 24 / 4 | 0x20000 / 0x800 / 0x80000 | fstat |
+| Linux glibc and musl arm64 | 128 / 16 / 4 | 0x8000 / 0x800 / 0x80000 | fstat |
+| Darwin x64 and arm64 | 144 / 4 / 2 | 0x100 / 0x4 / 0x1000000 | x64 fstat$INODE64; arm64 fstat |
+
+Both OS families use LOCK_SH=1, LOCK_NB=4; EWOULDBLOCK is11 on Linux and35 on Darwin. Retained raw probe source/output is under `/tmp/composition-file-reader-abi/`; the table and reproduction above retain the required facts in the repository.
+
+### Runtime and mutation evidence
+
+The existing file-source suite gained four tests: regular capture, same-handle type/ownership, deterministic regular-to-symlink replacement, and deterministic regular-to-FIFO replacement. The FIFO case owns a child test process with a30-second deadline, bounded tree termination/drain, parent-owned fixture/result cleanup, and mandatory TRX counters proving exactly one executed passing child test. Both replacement tests assert the opener never returned a readable stream; a post-read rejection cannot satisfy them.
+
+The worker's actual `File.OpenRead` mutation failed the FIFO case on its30-second deadline (`fifo-mutant-red.log`); teardown terminated the marked child. Production bytes were restored in finally before the rebuilt42/42 macOS arm64 file-source suite (`focused-macos-restored.log`). Initial compile/fixture failures are retained separately and are not behavioral mutation proof. No marked child or fixture directory remained after restoration.
+
+Root separately executed the same four compiled tests serially on actual runtimes, with read-only source/artifact inputs and isolated result directories. Each TRX reports4 executed,4 passed,0 unexecuted:
+
+| Runtime lane | Artifact | Pinned SDK image digest / runtime |
+|---|---|---|
+| Linux glibc arm64 | native-glibc-arm64.trx | sha256:35d40304542c8689331f8cab17c65926cdf48fe711e289321d71924b230a7d29 |
+| Linux glibc x64 | native-glibc-x64.trx | sha256:28e7a5db4f5d40cc805acd939a065668ba2e17d697a09153054dce98db240d0e |
+| Linux musl arm64 | native-musl-arm64.trx | sha256:3cc3bbbbf93d82104892f42aa9106b6be4d120346dea0649643a97c801525256 |
+| Linux musl x64 | native-musl-x64.trx | sha256:ea518e19d4d18c75ced1cad3ffebbb4bed5a5e4f4db97ca191e9809eca2fe1be |
+| macOS x64 under Rosetta | native-macos-x64.trx | Official SDK10.0.300, host/runtime10.0.8, osx-x64 |
+
+Linux commands use `docker run --rm --cpus=2 --platform linux/arm64` or `linux/amd64`, the platform-specific `mcr.microsoft.com/dotnet/sdk@sha256:...` above, a read-only worktree mount, and `dotnet vstest tests/essentials/Cli/Tests/bin/Debug/net10.0/Elsa.Cli.Tests.dll` with a four-method filter naming the new controls. Results are under `/tmp/runtime-composition-2177-native-linux/<lane>/`. The first glibc-x64 invocation used an arm64 digest and failed before any test; that setup failure is retained in `run.log`, with the corrected run in `run-final.log`. Only the corrected positive TRX is passing evidence.
+
+macOS x64 SDK was installed only in owned `/tmp`, with the official release-metadata SHA512 verified. Both the parent vstest process and FIFO child received process-scoped PATH/DOTNET_ROOT pointing to that x64 SDK; `dotnet --info` confirmed osx-x64 and `file` confirmed Mach-O x86_64. Its results are under `/tmp/runtime-composition-2177-native-macos-x64/`. Windows native acquisition received source/API review but no actual Windows runtime execution here; hosted Linux CI is still required and cannot replace Windows proof. Unsupported Unix architectures are deliberately refused rather than assumed compatible.
+
+Root source review and independent read-only exact-head review of6d83f56f7 found no actionable defect in the integrated producer/acquisition/test delta; the worktree was clean and the head unchanged at both review checks. The prior SQLite recovery failure is unrelated to this native-reader path, with no causal/fixed claim made. Final integrated regression, maps, public review/CI and exact-main gates remain required below.
+
+The first integrated rebuilt CLI and migrations gates passed726/726 and442/442. The architecture gate executed599 with598 passing and one real gate failure: the worker-added Elsa.Cli→Elsa.Cli.Tests friend access was not a documented exception. Root removed that IVT instead of weakening the allowlist or using reflection; RegularFileOpener/OpenRead and the existing regular-path preflight follow the public static CLI-helper convention and §2.23.3 testability rule. This visibility-only correction preserves acquisition behavior and all test subjects/objectives. The failed architecture TRX is retained as candidate-copilot-architecture-final.trx; final corrected gates will be recorded separately.
