@@ -169,7 +169,7 @@ public sealed class ToolingEntryPoint
                 version?.IsLiteral != true || version.FieldType != typeof(int) ||
                 version.GetRawConstantValue() is not 1 || !IsCandidateOperation(run))
                 throw CandidateCapabilityUnavailable();
-            return run;
+            return run!;
         }
         catch (WorkerRefusal)
         {

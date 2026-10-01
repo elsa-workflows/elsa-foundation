@@ -204,6 +204,42 @@ public sealed class CompositionInspectionCaptureTests
         Assert.Equal(length, ParseEnvironment(document)["Key"].Length);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Explicit_environment_document_counts_multibyte_utf8_at_key_and_value_bounds(bool oversized)
+    {
+        var key = new string('é', 512) + (oversized ? "x" : "");
+        var value = string.Concat(Enumerable.Repeat("😀", 16_384));
+        var keyDocument = CandidateInspectionFixture.EnvironmentDocument((key, "value"));
+        var valueDocument = CandidateInspectionFixture.EnvironmentDocument(("Key", value + (oversized ? "x" : "")));
+        if (oversized)
+        {
+            AssertTooLarge(keyDocument);
+            AssertTooLarge(valueDocument);
+        }
+        else
+        {
+            Assert.Equal("value", ParseEnvironment(keyDocument)[key]);
+            Assert.Equal(value, ParseEnvironment(valueDocument)["Key"]);
+        }
+    }
+
+    [Fact]
+    public void Explicit_environment_document_enforces_raw_key_bound_before_length_reducing_normalization()
+    {
+        var key = new string('k', 1022) + "__";
+        Assert.Equal("value", ParseEnvironment(CandidateInspectionFixture.EnvironmentDocument((key, "value")))[
+            new string('k', 1022) + ":"]);
+        AssertTooLarge(CandidateInspectionFixture.EnvironmentDocument((key + "x", "value")));
+    }
+
+    [Theory]
+    [InlineData("{\"version\":1,\"entries\":[{\"key\":\"x\",\"key\":\"x\",\"value\":\"y\"}]}")]
+    [InlineData("{\"version\":1,\"entries\":[{\"key\":\"x\",\"value\":\"y\",\"value\":\"y\"}]}")]
+    public void Explicit_environment_document_refuses_duplicate_entry_properties(string json) =>
+        AssertInvalid(Encoding.UTF8.GetBytes(json));
+
     [Fact]
     public void Capture_refuses_excessive_profile_inputs_before_any_file_read()
     {

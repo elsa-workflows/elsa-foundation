@@ -456,6 +456,8 @@ public sealed class ToolingEntryPointTests : IDisposable
 
     [Theory]
     [InlineData("missing-host")]
+    [InlineData("old-candidate-only")]
+    [InlineData("wrong-version-type")]
     [InlineData("missing-contract")]
     [InlineData("wrong-version")]
     [InlineData("mutable-version")]
@@ -468,6 +470,7 @@ public sealed class ToolingEntryPointTests : IDisposable
         var host = scenario switch
         {
             "missing-host" => null,
+            "old-candidate-only" => typeof(CompleteCandidateHost),
             "wrong-return" => typeof(WrongReturnCandidateEnvironmentHost),
             "wrong-signature" => typeof(WrongSignatureCandidateEnvironmentHost),
             "instance-method" => typeof(InstanceCandidateEnvironmentHost),
@@ -479,6 +482,7 @@ public sealed class ToolingEntryPointTests : IDisposable
             "missing-contract" => null,
             "wrong-version" => typeof(UnknownCandidateEnvironmentProtocol),
             "mutable-version" => typeof(MutableCandidateEnvironmentProtocol),
+            "wrong-version-type" => typeof(WrongTypeCandidateProtocol),
             _ => typeof(CurrentCandidateEnvironmentProtocol)
         };
 
@@ -557,6 +561,22 @@ public sealed class ToolingEntryPointTests : IDisposable
             HostClosure.LoadHostAssemblyForInspection(directory.Path, selectedName));
 
         Assert.Equal("candidate-host-unavailable", refusal.Code);
+    }
+
+    [Fact]
+    public void Inspection_host_loader_refuses_a_same_named_assembly_already_loaded_from_another_location()
+    {
+        var source = HostLayout.Resolve(DotnetElsa.Host("ResourceAwareLiveHost"));
+        var loaded = HostClosure.LoadHostAssemblyForInspection(source.Directory, source.Name);
+        using var directory = new TempDirectory("elsa-cli-inspection-location-");
+        File.Copy(loaded.Location, Path.Join(directory.Path, $"{source.Name}.dll"));
+
+        // Legacy loading still admits the matching identity. The additive lane also binds its actual location.
+        HostClosure.LoadHostAssembly(directory.Path, source.Name);
+        var refusal = Assert.Throws<WorkerRefusal>(() =>
+            HostClosure.LoadHostAssemblyForInspection(directory.Path, source.Name));
+        Assert.Equal("candidate-host-unavailable", refusal.Code);
+        Assert.Equal(3, refusal.ExitCode);
     }
 
     [Fact]
@@ -1116,7 +1136,7 @@ public sealed class ToolingEntryPointTests : IDisposable
 
     private const string CandidateEnvironmentInputsAttributeName =
         "Elsa.Persistence.EntityFramework.Tooling.EfCandidateEnvironmentInputsAttribute";
-    private const string CandidateEnvironmentInputsPolicy = "workbench-json-explicit-environment-v1";
+    private const string CandidateEnvironmentInputsPolicy = CandidateInspectionFixture.EnvironmentPolicy;
 
     private static Assembly EnrollmentAttributeAssembly(bool exactConstructor = true, bool namedProperty = false)
     {
@@ -1149,13 +1169,12 @@ public sealed class ToolingEntryPointTests : IDisposable
         constructorIl.Emit(OpCodes.Newobj, typeof(InvalidOperationException).GetConstructor([typeof(string)])!);
         constructorIl.Emit(OpCodes.Throw);
 
-        DefineReadOnlyProperty(type, "Version", typeof(int));
-        DefineReadOnlyProperty(type, "Policy", typeof(string));
+        DefineProperty(type, "Version", typeof(int));
+        DefineProperty(type, "Policy", typeof(string));
         if (namedProperty)
-            DefineReadWriteProperty(type, "Marker", typeof(string));
+            DefineProperty(type, "Marker", typeof(string), writable: true);
 
-        type.CreateType();
-        return assembly;
+        return type.CreateType()!.Assembly;
     }
 
     private static Assembly HostAssemblyWithEnrollment(
@@ -1179,31 +1198,17 @@ public sealed class ToolingEntryPointTests : IDisposable
         for (var index = 0; index < declarations; index++)
             host.SetCustomAttribute(new CustomAttributeBuilder(constructor, arguments, namedProperties, namedValues));
 
-        return host;
+        return host.DefineDynamicModule("main").DefineType("HostMarker").CreateType()!.Assembly;
     }
 
     private static Assembly EmptyMetadataAssembly()
     {
         var assembly = AssemblyBuilder.DefineDynamicAssembly(
             new AssemblyName($"CandidateEnvironmentEmptyHost.{Guid.NewGuid():N}"), AssemblyBuilderAccess.RunAndCollect);
-        assembly.DefineDynamicModule("main");
-        return assembly;
+        return assembly.DefineDynamicModule("main").DefineType("HostMarker").CreateType()!.Assembly;
     }
 
-    private static void DefineReadOnlyProperty(TypeBuilder type, string name, Type propertyType)
-    {
-        var field = type.DefineField($"_{name}", propertyType, FieldAttributes.Private);
-        var getter = type.DefineMethod($"get_{name}",
-            MethodAttributes.Public | MethodAttributes.HideBySig | MethodAttributes.SpecialName,
-            propertyType, Type.EmptyTypes);
-        var il = getter.GetILGenerator();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, field);
-        il.Emit(OpCodes.Ret);
-        type.DefineProperty(name, PropertyAttributes.None, propertyType, null).SetGetMethod(getter);
-    }
-
-    private static void DefineReadWriteProperty(TypeBuilder type, string name, Type propertyType)
+    private static void DefineProperty(TypeBuilder type, string name, Type propertyType, bool writable = false)
     {
         var field = type.DefineField($"_{name}", propertyType, FieldAttributes.Private);
         var getter = type.DefineMethod($"get_{name}",
@@ -1213,6 +1218,11 @@ public sealed class ToolingEntryPointTests : IDisposable
         getterIl.Emit(OpCodes.Ldarg_0);
         getterIl.Emit(OpCodes.Ldfld, field);
         getterIl.Emit(OpCodes.Ret);
+        var property = type.DefineProperty(name, PropertyAttributes.None, propertyType, null);
+        property.SetGetMethod(getter);
+        if (!writable)
+            return;
+
         var setter = type.DefineMethod($"set_{name}",
             MethodAttributes.Public | MethodAttributes.HideBySig | MethodAttributes.SpecialName,
             typeof(void), [propertyType]);
@@ -1221,8 +1231,6 @@ public sealed class ToolingEntryPointTests : IDisposable
         setterIl.Emit(OpCodes.Ldarg_1);
         setterIl.Emit(OpCodes.Stfld, field);
         setterIl.Emit(OpCodes.Ret);
-        var property = type.DefineProperty(name, PropertyAttributes.None, propertyType, null);
-        property.SetGetMethod(getter);
         property.SetSetMethod(setter);
     }
 
