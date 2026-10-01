@@ -259,5 +259,5 @@ New work should move toward this rule:
 <!-- SPECKIT START -->
 For additional context about technologies, project structure, shell commands, contracts, and
 validation scenarios for the active work unit, read
-`specs/188-workflow-secret-safety/plan.md`.
+`specs/189-explicit-environment-inputs/plan.md`.
 <!-- SPECKIT END -->
