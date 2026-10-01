@@ -307,10 +307,8 @@ public sealed class EfDurableTimerStore(
             return RuntimeDurableTimerClaimTransitionResult.Stale;
 
         current.ClaimOwnerId = null;
-        current.ClaimedAtUtcTicks = null;
-        current.ClaimedAtOffsetMinutes = null;
-        current.VisibleAfterUtcTicks = visibleAt.UtcTicks;
-        current.VisibleAfterOffsetMinutes = OffsetMinutes(visibleAt);
+        (current.ClaimedAtUtcTicks, current.ClaimedAtOffsetMinutes) = EfRuntimeOperationalStoreSupport.TimestampColumns(null);
+        (current.VisibleAfterUtcTicks, current.VisibleAfterOffsetMinutes) = EfRuntimeOperationalStoreSupport.TimestampColumns(visibleAt);
         current.FailureCount = checked(current.FailureCount + 1);
         current.ClaimOrderKey = ClaimOrderKey(visibleAt, claim.Timer);
         var originalRevision = current.Revision;
@@ -354,10 +352,8 @@ public sealed class EfDurableTimerStore(
         var visibleAfter = request.Now.Add(request.VisibilityTimeout);
         source.ClaimOwnerId = EfRuntimeOperationalStoreSupport.Encode(request.OwnerId);
         source.ClaimToken = checked(source.ClaimToken + 1);
-        source.ClaimedAtUtcTicks = request.Now.UtcTicks;
-        source.ClaimedAtOffsetMinutes = OffsetMinutes(request.Now);
-        source.VisibleAfterUtcTicks = visibleAfter.UtcTicks;
-        source.VisibleAfterOffsetMinutes = OffsetMinutes(visibleAfter);
+        (source.ClaimedAtUtcTicks, source.ClaimedAtOffsetMinutes) = EfRuntimeOperationalStoreSupport.TimestampColumns(request.Now);
+        (source.VisibleAfterUtcTicks, source.VisibleAfterOffsetMinutes) = EfRuntimeOperationalStoreSupport.TimestampColumns(visibleAfter);
         source.ClaimOrderKey = ClaimOrderKey(visibleAfter, timer);
         source.Revision = checked(source.Revision + 1);
         return source;
@@ -369,8 +365,7 @@ public sealed class EfDurableTimerStore(
         TimeSpan visibilityTimeout)
     {
         var visibleAfter = now.Add(visibilityTimeout);
-        source.VisibleAfterUtcTicks = visibleAfter.UtcTicks;
-        source.VisibleAfterOffsetMinutes = OffsetMinutes(visibleAfter);
+        (source.VisibleAfterUtcTicks, source.VisibleAfterOffsetMinutes) = EfRuntimeOperationalStoreSupport.TimestampColumns(visibleAfter);
         source.ClaimOrderKey = ClaimOrderKey(visibleAfter, ReadTimer(source));
         source.Revision = checked(source.Revision + 1);
         return source;
@@ -385,8 +380,8 @@ public sealed class EfDurableTimerStore(
             EfRuntimeOperationalStoreSupport.Decode(row.ClaimOwnerId),
             row.ClaimToken,
             row.Revision,
-            FromUtcTicks(row.ClaimedAtUtcTicks.Value, row.ClaimedAtOffsetMinutes!.Value),
-            FromUtcTicks(row.VisibleAfterUtcTicks.Value, row.VisibleAfterOffsetMinutes!.Value),
+            EfRuntimeOperationalStoreSupport.FromUtcTicks(row.ClaimedAtUtcTicks.Value, row.ClaimedAtOffsetMinutes!.Value),
+            EfRuntimeOperationalStoreSupport.FromUtcTicks(row.VisibleAfterUtcTicks.Value, row.VisibleAfterOffsetMinutes!.Value),
             row.FailureCount);
     }
 
@@ -422,10 +417,10 @@ public sealed class EfDurableTimerStore(
             row.StimulusType != EfRuntimeOperationalStoreSupport.Encode(timer.StimulusType) ||
             row.StimulusHash != EfRuntimeOperationalStoreSupport.Encode(timer.StimulusHash) ||
             row.DueTimeUtcTicks != timer.DueTime.UtcTicks ||
-            row.DueTimeOffsetMinutes != OffsetMinutes(timer.DueTime) ||
+            row.DueTimeOffsetMinutes != EfRuntimeOperationalStoreSupport.OffsetMinutes(timer.DueTime) ||
             row.CreatedAtUtcTicks != timer.CreatedAt.UtcTicks ||
-            row.CreatedAtOffsetMinutes != OffsetMinutes(timer.CreatedAt) ||
-            row.ClaimOrderKey != ClaimOrderKey(row.VisibleAfterUtcTicks is { } visible ? FromUtcTicks(visible, row.VisibleAfterOffsetMinutes!.Value) : timer.DueTime, timer))
+            row.CreatedAtOffsetMinutes != EfRuntimeOperationalStoreSupport.OffsetMinutes(timer.CreatedAt) ||
+            row.ClaimOrderKey != ClaimOrderKey(row.VisibleAfterUtcTicks is { } visible ? EfRuntimeOperationalStoreSupport.FromUtcTicks(visible, row.VisibleAfterOffsetMinutes!.Value) : timer.DueTime, timer))
             throw new InvalidDataException("The durable-timer row identity or projection does not match its current content.");
 
         return timer;
@@ -460,9 +455,9 @@ public sealed class EfDurableTimerStore(
             StimulusType = EfRuntimeOperationalStoreSupport.Encode(timer.StimulusType),
             StimulusHash = EfRuntimeOperationalStoreSupport.Encode(timer.StimulusHash),
             DueTimeUtcTicks = timer.DueTime.UtcTicks,
-            DueTimeOffsetMinutes = OffsetMinutes(timer.DueTime),
+            DueTimeOffsetMinutes = EfRuntimeOperationalStoreSupport.OffsetMinutes(timer.DueTime),
             CreatedAtUtcTicks = timer.CreatedAt.UtcTicks,
-            CreatedAtOffsetMinutes = OffsetMinutes(timer.CreatedAt),
+            CreatedAtOffsetMinutes = EfRuntimeOperationalStoreSupport.OffsetMinutes(timer.CreatedAt),
             ClaimOrderKey = ClaimOrderKey(timer.DueTime, timer),
             ContentJson = RuntimeArtifactJson.Serialize(timer),
             SchemaVersion = RuntimeOperationalStateEfModule.SchemaVersion,
@@ -541,11 +536,6 @@ public sealed class EfDurableTimerStore(
         if (value.Length > maximumLength)
             throw new ArgumentException($"Runtime value cannot exceed {maximumLength} UTF-16 code units.", parameterName);
     }
-
-    private static int OffsetMinutes(DateTimeOffset value) => checked((int)value.Offset.TotalMinutes);
-
-    private static DateTimeOffset FromUtcTicks(long utcTicks, int offsetMinutes) =>
-        new DateTimeOffset(new DateTime(utcTicks, DateTimeKind.Utc)).ToOffset(TimeSpan.FromMinutes(offsetMinutes));
 
     private static string ClaimOrderKey(DateTimeOffset availableAt, DurableTimer timer)
     {

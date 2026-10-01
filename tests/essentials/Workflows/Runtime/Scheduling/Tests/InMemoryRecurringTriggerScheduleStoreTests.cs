@@ -20,55 +20,26 @@ public sealed class InMemoryRecurringTriggerScheduleStoreTests
     }
 
     [Fact]
-    public async Task ListDue_ReturnsOnlyDue_OrderedByNextThenId()
+    public async Task ClaimDue_ClaimsOnlyDue_OrderedByNextThenId()
     {
         await _store.SaveAsync(Schedule("future", Now.AddMinutes(10)));
         await _store.SaveAsync(Schedule("b-due", Now.AddMinutes(-1)));
         await _store.SaveAsync(Schedule("a-due", Now.AddMinutes(-1)));
 
-        var due = await _store.ListDueAsync(Now, 10);
+        var claims = await _store.ClaimDueAsync(Claim(10));
 
-        Assert.Equal(new[] { "a-due", "b-due" }, due.Select(s => s.ScheduleId).ToArray());
+        Assert.Equal(new[] { "a-due", "b-due" }, claims.Select(claim => claim.Schedule.ScheduleId).ToArray());
     }
 
     [Fact]
-    public async Task ListDue_RespectsLimit()
+    public async Task ClaimDue_RespectsLimit()
     {
         for (var i = 0; i < 5; i++)
             await _store.SaveAsync(Schedule($"s{i}", Now.AddMinutes(-1)));
 
-        var due = await _store.ListDueAsync(Now, 2);
+        var claims = await _store.ClaimDueAsync(Claim(2));
 
-        Assert.Equal(2, due.Count);
-    }
-
-    [Fact]
-    public async Task TryAdvance_ClaimsOccurrence_WhenCursorMatches()
-    {
-        await _store.SaveAsync(Schedule("s1", Now));
-
-        var claimed = await _store.TryAdvanceAsync("s1", Now, Now.AddMinutes(5));
-
-        Assert.True(claimed);
-        Assert.Equal(Now.AddMinutes(5), (await _store.FindAsync("s1"))!.NextOccurrence);
-    }
-
-    [Fact]
-    public async Task TryAdvance_Fails_WhenCursorAlreadyMoved_SoOccurrenceFiresAtMostOnce()
-    {
-        await _store.SaveAsync(Schedule("s1", Now));
-
-        var first = await _store.TryAdvanceAsync("s1", Now, Now.AddMinutes(5));
-        var second = await _store.TryAdvanceAsync("s1", Now, Now.AddMinutes(5));
-
-        Assert.True(first);
-        Assert.False(second);
-    }
-
-    [Fact]
-    public async Task TryAdvance_Fails_WhenScheduleMissing()
-    {
-        Assert.False(await _store.TryAdvanceAsync("ghost", Now, Now.AddMinutes(5)));
+        Assert.Equal(2, claims.Count);
     }
 
     [Fact]
@@ -105,6 +76,8 @@ public sealed class InMemoryRecurringTriggerScheduleStoreTests
 
         Assert.Equal(WorkflowActivationProjectionState.Missing, await _store.FindActivationStateAsync("act-1"));
     }
+
+    private static RecurringTriggerOccurrenceClaimRequest Claim(int limit) => new("pump", Now, TimeSpan.FromMinutes(1), limit);
 
     private static RecurringTriggerSchedule Schedule(string id, DateTimeOffset next, string artifactId = "artifact-1") => new(
         ScheduleId: id,

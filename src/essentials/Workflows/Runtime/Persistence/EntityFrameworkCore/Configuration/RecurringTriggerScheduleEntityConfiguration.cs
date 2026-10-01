@@ -30,6 +30,7 @@ public sealed class RecurringTriggerScheduleEntityConfiguration : IEntityTypeCon
         b.Property(x => x.NextOccurrenceOffsetMinutes).IsRequired();
         b.Property(x => x.CreatedAtUtcTicks).IsRequired();
         b.Property(x => x.CreatedAtOffsetMinutes).IsRequired();
+        b.Property(x => x.ClaimOwnerId).HasMaxLength(RuntimeOperationalStateEfModule.IdentityProjectionMaximumLength).IsRequired(false);
         // The encoded ScheduleId is deliberately not part of an index: its legal projection is large enough to
         // exceed SQL Server/MySQL composite-index budgets. The hash is only a lookup candidate; every read rechecks
         // the encoded identity and authoritative JSON before accepting a row.

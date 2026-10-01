@@ -10,7 +10,11 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 
 internal static class RuntimeEventExecutableTestFixture
 {
-    public static WorkflowExecutable Create(string prefix)
+    /// <summary>
+    /// An executable whose root waits on an event. A later <paramref name="version"/> is another artifact of the same workflow
+    /// definition with the same node, as a republish produces.
+    /// </summary>
+    public static WorkflowExecutable Create(string prefix, int version = 1)
     {
         var nodeId = $"{prefix}-event";
         var resumeTargetId = WorkflowExecutableResumeTarget.ComposeScopedId(nodeId, Event.ResumeTargetId);
@@ -42,7 +46,9 @@ internal static class RuntimeEventExecutableTestFixture
             activityContract: contract);
 
         return new WorkflowExecutable(
-            new WorkflowExecutableIdentity($"{nodeId}-artifact", $"{prefix}-definition", $"{prefix}-version", "1.0.0", $"{prefix}-hash"),
+            version == 1
+                ? new WorkflowExecutableIdentity($"{nodeId}-artifact", $"{prefix}-definition", $"{prefix}-version", "1.0.0", $"{prefix}-hash")
+                : new WorkflowExecutableIdentity($"{nodeId}-artifact-v{version}", $"{prefix}-definition", $"{prefix}-version-{version}", $"{version}.0.0", $"{prefix}-hash-v{version}"),
             node,
             new Dictionary<string, WorkflowExecutableResumeTarget>(StringComparer.Ordinal)
             {
