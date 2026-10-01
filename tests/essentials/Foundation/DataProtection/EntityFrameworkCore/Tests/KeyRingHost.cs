@@ -77,15 +77,9 @@ internal sealed class KeyRingHost : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        try
-        {
-            await _host.StopAsync();
-        }
-        finally
-        {
-            _host.Dispose();
-            _contentRoot.Delete(recursive: true);
-        }
+        await using var host = (IAsyncDisposable)_host;
+        await _host.StopAsync();
+        _contentRoot.Delete(recursive: true);
     }
 
     private IDataProtector Protector => Services.GetRequiredService<IDataProtectionProvider>().CreateProtector(Purpose);
