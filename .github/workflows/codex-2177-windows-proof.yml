@@ -1,0 +1,39 @@
+name: Candidate native Windows proof
+on:
+  push:
+    branches: [codex/2177-windows-proof]
+permissions:
+  contents: read
+jobs:
+  native-proof:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    env:
+      DOTNET_PROCESSOR_COUNT: 3
+      DOTNET_NOLOGO: 1
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify production source matches the reviewed head
+        shell: pwsh
+        run: |
+          $changed = @(git diff --name-only 38dd5e3a791516abbd59f769658a73f922d2be0a HEAD)
+          if ($changed.Count -ne 1 -or $changed[0] -ne '.github/workflows/codex-2177-windows-proof.yml') { throw 'Validation branch contains other changes.' }
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.300'
+      - name: Exercise native Windows ownership and file handles
+        shell: pwsh
+        run: |
+          dotnet test tests/essentials/Cli/Tests/Elsa.Cli.Tests.csproj --configuration Release --filter 'FullyQualifiedName~Candidate_worker_process_|FullyQualifiedName~Default_candidate_reader_still_captures_regular_files|FullyQualifiedName~Native_opener_checks_same_handle_type_and_closes_owned_regular_handle' --logger 'trx;LogFileName=windows-native.trx' --results-directory artifacts
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          [xml]$trx = Get-Content artifacts/windows-native.trx
+          $counts = $trx.TestRun.ResultSummary.Counters
+          if ([int]$counts.total -ne 8 -or [int]$counts.executed -ne 8 -or [int]$counts.passed -ne 8 -or [int]$counts.failed -ne 0 -or [int]$counts.notExecuted -ne 0) { throw 'Required native test counters were not established.' }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: candidate-windows-native-proof
+          path: artifacts/*.trx
+          retention-days: 7
