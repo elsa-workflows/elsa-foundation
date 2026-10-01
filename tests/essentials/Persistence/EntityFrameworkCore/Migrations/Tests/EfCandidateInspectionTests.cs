@@ -979,23 +979,63 @@ public sealed class EfCandidateInspectionTests : IDisposable
     }
 
     [Fact]
-    public async Task Explicit_environment_lane_preserves_captured_targets_and_prepare_parity()
+    public async Task Explicit_environment_lane_applies_the_same_frozen_overlay_to_runtime_and_candidate()
     {
-        var environment = Encoding.UTF8.GetBytes(
-            EnvironmentDocument($"CShells__Shells__{Shell}__Features__{OpenTelemetry}", "false"));
-        var run = await RunSameCaptureAsync("feature-disabled-removed", environmentBytes: environment);
+        var rawEntries = new Dictionary<string, string>
+        {
+            ["ConnectionStrings__Telemetry"] = $"Data Source={DatabasePath};Password={ConnectionCanary}"
+        };
+        var runtimeOverlay = rawEntries.ToDictionary(
+            entry => entry.Key.Replace("__", ":", StringComparison.Ordinal),
+            entry => entry.Value,
+            StringComparer.Ordinal);
 
-        Assert.Null(run.RuntimeFailure);
-        Assert.Empty(run.RuntimeDetails.RefusalCodes);
-        Assert.Equal(EfToolingExitCode.Success, run.CandidateExitCode);
-        var resolution = run.CandidateResponse.GetProperty("configurationResolution");
+        var baseline = await RunSameCaptureAsync("unequal-diagnostic-values");
+        Assert.Equal(["resource-context-conflict"], baseline.RuntimeDetails.RefusalCodes.Order(StringComparer.Ordinal));
+        Assert.Equal(EfToolingExitCode.Refusal, baseline.CandidateExitCode);
+
+        var intended = await RunSameCaptureAsync("unequal-diagnostic-values",
+            environmentBytes: EnvironmentDocument(rawEntries), environmentOverlay: runtimeOverlay);
+        Assert.Null(intended.RuntimeFailure);
+        Assert.Empty(intended.RuntimeDetails.RefusalCodes);
+        Assert.Equal(EfToolingExitCode.Success, intended.CandidateExitCode);
+        var resolution = intended.CandidateResponse.GetProperty("configurationResolution");
         Assert.Equal("captured-workbench-json-explicit-environment-v1", resolution.GetProperty("source").GetString());
         Assert.Equal("supplied-intended", resolution.GetProperty("externalInputs").GetString());
-        AssertRuntimeAndCandidateTargetsAgree(run, resolution);
+        AssertRuntimeAndCandidateTargetsAgree(intended, resolution);
+        AssertTarget(intended, resolution, StructuredLogs, "logs", "Sqlite", "Logs", "ShellBinding", "shell-composed");
+        AssertTarget(intended, resolution, OpenTelemetry, "telemetry", "Sqlite", "Telemetry", "ShellBinding", "shell-composed");
+        AssertPrivateInputsRemainPrivate(intended);
+    }
+
+    [Fact]
+    public async Task Explicit_environment_lane_applies_a_feature_toggle_before_valid_authored_removal()
+    {
+        var rawEntries = new Dictionary<string, string>
+        {
+            [$"CShells__Shells__{Shell}__Features__{OpenTelemetry}"] = "false"
+        };
+        var runtimeOverlay = rawEntries.ToDictionary(
+            entry => entry.Key.Replace("__", ":", StringComparison.Ordinal),
+            entry => entry.Value,
+            StringComparer.Ordinal);
+
+        var baseline = await RunSameCaptureAsync("root-default-distinct-equal",
+            removedFeatureIdsOverride: [OpenTelemetry]);
+        Assert.Equal(EfToolingExitCode.Refusal, baseline.CandidateExitCode);
+        Assert.Equal("candidate-selection-conflict", baseline.CandidateResponse.GetProperty("error").GetProperty("code").GetString());
+
+        var intended = await RunSameCaptureAsync("root-default-distinct-equal",
+            environmentBytes: EnvironmentDocument(rawEntries),
+            removedFeatureIdsOverride: [OpenTelemetry], environmentOverlay: runtimeOverlay);
+        Assert.Null(intended.RuntimeFailure);
+        Assert.Empty(intended.RuntimeDetails.RefusalCodes);
+        Assert.Equal(EfToolingExitCode.Success, intended.CandidateExitCode);
+        var resolution = intended.CandidateResponse.GetProperty("configurationResolution");
         Assert.DoesNotContain(resolution.GetProperty("participants").EnumerateArray(), participant =>
             participant.GetProperty("feature").GetString() == OpenTelemetry);
         Assert.Contains(OpenTelemetry, StringValues(resolution.GetProperty("selection").GetProperty("disabledFeatureIds")));
-        AssertPrivateInputsRemainPrivate(run);
+        AssertPrivateInputsRemainPrivate(intended);
     }
 
     [Fact]
@@ -1036,20 +1076,23 @@ public sealed class EfCandidateInspectionTests : IDisposable
     }
 
     [Fact]
-    public async Task Explicit_environment_lane_allows_switching_to_a_source_declared_connection_identity()
+    public async Task Explicit_environment_lane_allows_lower_and_upper_source_declared_connection_aliases()
     {
-        var run = await RunSameCaptureAsync("root-default-distinct-equal", environmentBytes: EnvironmentDocument(
-            new Dictionary<string, string>
-            {
-                ["Elsa__Persistence__Resources__primary__ConnectionName"] = "Logs"
-            }));
+        foreach (var alias in new[] { "logs", "LOGS" })
+        {
+            var run = await RunSameCaptureAsync("root-default-distinct-equal", environmentBytes: EnvironmentDocument(
+                new Dictionary<string, string>
+                {
+                    ["Elsa__Persistence__Resources__primary__ConnectionName"] = alias
+                }));
 
-        Assert.Equal(EfToolingExitCode.Success, run.CandidateExitCode);
-        var resolution = run.CandidateResponse.GetProperty("configurationResolution");
-        Assert.Contains(resolution.GetProperty("participants").EnumerateArray(), participant =>
-            participant.GetProperty("feature").GetString() == Runtime &&
-            participant.GetProperty("connectionReference").GetString() == "Logs");
-        AssertNoPrivateCandidateValues(run.CandidateResponseJson);
+            Assert.Equal(EfToolingExitCode.Success, run.CandidateExitCode);
+            var resolution = run.CandidateResponse.GetProperty("configurationResolution");
+            Assert.Contains(resolution.GetProperty("participants").EnumerateArray(), participant =>
+                participant.GetProperty("feature").GetString() == Runtime &&
+                participant.GetProperty("connectionReference").GetString() == alias);
+            AssertNoPrivateCandidateValues(run.CandidateResponseJson);
+        }
     }
 
     [Fact]
@@ -1405,12 +1448,14 @@ public sealed class EfCandidateInspectionTests : IDisposable
     private async Task<SameCaptureRun> RunSameCaptureAsync(
         string scenario,
         Dictionary<string, byte[]>? capturedFiles = null,
-        byte[]? environmentBytes = null)
+        byte[]? environmentBytes = null,
+        IReadOnlyList<string>? removedFeatureIdsOverride = null,
+        IReadOnlyDictionary<string, string>? environmentOverlay = null)
     {
         if (scenario == "opaque-composer-configurator")
             Interlocked.Exchange(ref EfToolingHostTestDefaults.OpaqueConfiguratorExecutionCount, 0);
         var files = capturedFiles ?? BuildSameCaptureFiles(scenario);
-        using var configuration = ReadConfiguration(files);
+        using var configuration = ReadConfiguration(files, environmentOverlay);
         var runtimeContext = EfConfigurationProbeTests.ComposeRuntimeContext(configuration, Shell);
 
         ShellSettingsPreparationResult? patch = null;
@@ -1429,7 +1474,7 @@ public sealed class EfCandidateInspectionTests : IDisposable
         var details = EfPersistencePreparation.Prepare(runtimeContext, configuration,
             EfConfigurationProbeTests.HostAssemblies, verifyConnectionValues: true);
         var accepted = runtimeContext.EnabledFeatureIds.Order(StringComparer.Ordinal).ToArray();
-        string[] removed = scenario switch
+        string[] removed = removedFeatureIdsOverride?.ToArray() ?? scenario switch
         {
             "feature-disabled-removed" => [OpenTelemetry],
             "host-default-readds-removed-runtime" => [Runtime],
@@ -2029,7 +2074,9 @@ public sealed class EfCandidateInspectionTests : IDisposable
         };
     }
 
-    private static ConfigurationRoot ReadConfiguration(IReadOnlyDictionary<string, byte[]> files)
+    private static ConfigurationRoot ReadConfiguration(
+        IReadOnlyDictionary<string, byte[]> files,
+        IReadOnlyDictionary<string, string>? overlay = null)
     {
         var builder = new ConfigurationBuilder();
         var streams = new[] { "appsettings.json", "appsettings.Production.json", "shells.json", "shells.Production.json" }
@@ -2038,6 +2085,9 @@ public sealed class EfCandidateInspectionTests : IDisposable
         {
             foreach (var stream in streams)
                 builder.AddJsonStream(stream);
+            if (overlay is not null)
+                builder.AddInMemoryCollection(overlay.Select(entry =>
+                    new KeyValuePair<string, string?>(entry.Key, entry.Value)));
             return (ConfigurationRoot)builder.Build();
         }
         finally

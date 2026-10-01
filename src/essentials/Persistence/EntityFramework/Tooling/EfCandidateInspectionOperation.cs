@@ -465,11 +465,11 @@ public sealed class EfCandidateInspectionOperation
         var resources = captured.GetSection("Elsa:Persistence:Resources").GetChildren()
             .Select(section => section.Key)
             .Where(IsLogicalIdentity)
-            .ToHashSet(StringComparer.Ordinal);
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var connections = captured.GetSection("ConnectionStrings").GetChildren()
             .Select(section => section.Key)
             .Where(IsLogicalIdentity)
-            .ToHashSet(StringComparer.Ordinal);
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         foreach (var resource in resources)
         {
