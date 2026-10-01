@@ -470,4 +470,6 @@ if (consoleLogStreamingEnabled)
         .WithSecurityDisposition(EndpointSecurityDispositionMetadata.NamedPolicy("Default", "Elsa.Workbench"));
     consoleLogEndpoints.MapConsoleLogStreaming();
 }
-app.Run();
+// A host its cluster member stopped, because another process holds its host id, ends with exit code 1, so a supervisor
+// that restarts failed processes restarts it (spec 183, 2026-10-01 note).
+app.RunWithMembershipExitCode();

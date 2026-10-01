@@ -46,8 +46,9 @@ public sealed class EfSchemaBackfillOptions
     public TimeSpan? SettleMargin { get; set; }
 
     /// <summary>
-    /// How long a worker's claim on a family's run holds without renewal (FR-008): 2 minutes. Zero keeps no claim, so every
-    /// worker runs; nothing correct depends on the claim.
+    /// How long a worker's claim on a family holds without renewal (FR-008): 2 minutes. The claim covers every pass over the
+    /// family's rows, the audit included, and another worker reads none of them until it expires. Zero keeps no claim, so
+    /// every worker runs; nothing correct depends on the claim.
     /// </summary>
     public TimeSpan ClaimDuration { get; set; } = TimeSpan.FromMinutes(2);
 

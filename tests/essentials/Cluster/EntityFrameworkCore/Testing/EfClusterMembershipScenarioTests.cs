@@ -3,7 +3,9 @@ using Elsa.Cluster.Core.Contracts;
 using Elsa.Cluster.Core.Exceptions;
 using Elsa.Cluster.Core.Models;
 using Elsa.Cluster.Core.Options;
+using Elsa.Cluster.Hosting;
 using Elsa.Cluster.Testing;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -336,7 +338,109 @@ public abstract class EfClusterMembershipScenarioTests(EfClusterMembershipTestSt
         Assert.Single(sameHost, seen => !seen.IsDisplaced && seen.Identity == Identity(successor));
     }
 
+    /// <summary>
+    /// FR-007, both ways, the case a member that only stays lapsed would hide: a host whose member finds itself displaced,
+    /// as a later incarnation's join marks it, stops, saying so as critical and recording why for its app's exit code,
+    /// rather than keep working under an identity the fleet no longer counts; a host whose member only lapsed, here because
+    /// its entry went missing, keeps running, records nothing, and rejoins as a new incarnation. Neither touches this
+    /// process's own exit code.
+    /// </summary>
+    [SkippableFact]
+    public async Task FR007_a_host_whose_member_is_displaced_stops_and_one_whose_member_only_lapsed_keeps_running()
+    {
+        // The store is readied, and emptied, on first use: before the hosts join, not after.
+        await Fixture.CountStoredEntriesAsync();
+        var displacedLogs = new CapturedLogs();
+        var displaced = BuildHost(Fixture.Clock, NewHostId("displaced"), logs: displacedLogs);
+        await displaced.StartAsync();
+        var lapsed = await StartHostAsync(Fixture.Clock, NewHostId("lapsed"));
+        var displacedIdentity = displaced.Services.GetRequiredService<IClusterMembership>().GetLocalStanding().Identity;
+        var lapsedMember = lapsed.Services.GetRequiredService<IClusterMembership>();
+        var lapsedIdentity = lapsedMember.GetLocalStanding().Identity;
+
+        await Fixture.WithStoreAsync(async context =>
+        {
+            // What a later incarnation's join writes over the earlier one (FR-004a), and an entry cleanup removed.
+            await context.Members.Where(row => row.HostId == displacedIdentity.HostId).ExecuteUpdateAsync(row => row.SetProperty(entity => entity.CurrentHostId, (string?)null));
+            return await context.Members.Where(row => row.HostId == lapsedIdentity.HostId).ExecuteDeleteAsync();
+        });
+        var stopping = displaced.Services.GetRequiredService<IHostApplicationLifetime>().ApplicationStopping;
+
+        // The next heartbeat finds both: the one displaced, the other's entry missing.
+        await Fixture.AdvanceAsync(Timings.HeartbeatInterval);
+        await ConditionAsync(() => stopping.IsCancellationRequested && lapsedMember.GetLocalStanding().HasLapsed);
+
+        Assert.True(stopping.IsCancellationRequested, "A host whose member was displaced kept running.");
+        Assert.Equal(MemberLapseReason.Displaced, displaced.Services.GetRequiredService<IClusterMembership>().GetLocalStanding().Lapse?.Reason);
+        Assert.Contains(displacedLogs.At(LogLevel.Critical), message => message.Contains(displacedIdentity.HostId, StringComparison.Ordinal));
+        var hostStop = displaced.Services.GetRequiredService<ClusterMembershipHostStop>();
+        Assert.Equal((MemberLapseReason.Displaced, true), (hostStop.Lapse?.Reason, hostStop.Stopped));
+        Assert.Equal(0, Environment.ExitCode);
+        Assert.Equal(MemberLapseReason.EntryMissing, lapsedMember.GetLocalStanding().Lapse?.Reason);
+
+        // The one after rejoins the member that only lapsed, in a host that never stopped.
+        await Fixture.AdvanceAsync(Timings.HeartbeatInterval);
+        await ConditionAsync(() => !lapsedMember.GetLocalStanding().HasLapsed);
+
+        Assert.False(lapsed.Services.GetRequiredService<IHostApplicationLifetime>().ApplicationStopping.IsCancellationRequested, "A host whose member only lapsed was stopped.");
+        var rejoined = lapsedMember.GetLocalStanding();
+        Assert.False(rejoined.HasLapsed);
+        Assert.Equal(lapsedIdentity.HostId, rejoined.Identity.HostId);
+        Assert.NotEqual(lapsedIdentity, rejoined.Identity);
+        var lapsedStop = lapsed.Services.GetRequiredService<ClusterMembershipHostStop>();
+        Assert.Null(lapsedStop.Lapse);
+        Assert.False(lapsedStop.Stopped);
+    }
+
+    /// <summary>
+    /// FR-007 with FR-039, the other way a running host learns that another process holds its host id: its member lapsed,
+    /// here because its entry went missing, and meanwhile a second live process joined under the same host id and keeps
+    /// renewing. The rejoin finds that live duplicate, and the host stops, saying so as critical and recording why for its
+    /// app's exit code, while this process's own exit code is left alone and the other process is undisturbed.
+    /// </summary>
+    [SkippableFact]
+    public async Task FR007_and_FR039_a_host_whose_rejoin_finds_a_live_duplicate_stops_and_records_why()
+    {
+        // The store is readied, and emptied, on first use: before the host joins, not after.
+        await Fixture.CountStoredEntriesAsync();
+        var logs = new CapturedLogs();
+        var host = BuildHost(Fixture.Clock, NewHostId("duplicated"), logs: logs);
+        await host.StartAsync();
+        var member = host.Services.GetRequiredService<IClusterMembership>();
+        var identity = member.GetLocalStanding().Identity;
+        await Fixture.WithStoreAsync(context => context.Members.Where(row => row.HostId == identity.HostId).ExecuteDeleteAsync());
+        var duplicate = await StartAsync(identity.HostId);
+        var stopping = host.Services.GetRequiredService<IHostApplicationLifetime>().ApplicationStopping;
+
+        // One heartbeat finds the entry missing; the rejoins after it find the duplicate, watch it renew, and stop the host.
+        for (var heartbeat = 0; heartbeat < 8 && !stopping.IsCancellationRequested; heartbeat++)
+        {
+            var refusals = logs.At(LogLevel.Warning).Count(IsRefusal);
+            var lapsed = member.GetLocalStanding().HasLapsed;
+            await Fixture.AdvanceAsync(Timings.HeartbeatInterval);
+            await ConditionAsync(() => stopping.IsCancellationRequested || logs.At(LogLevel.Warning).Count(IsRefusal) > refusals || member.GetLocalStanding().HasLapsed != lapsed);
+        }
+
+        Assert.True(stopping.IsCancellationRequested, "A host that found a live duplicate of its host id kept running.");
+        Assert.Equal(MemberLapseReason.DuplicateHostId, member.GetLocalStanding().Lapse?.Reason);
+        var hostStop = host.Services.GetRequiredService<ClusterMembershipHostStop>();
+        Assert.Equal((MemberLapseReason.DuplicateHostId, true), (hostStop.Lapse?.Reason, hostStop.Stopped));
+        Assert.Equal(0, Environment.ExitCode);
+        Assert.Contains(logs.At(LogLevel.Critical), message => message.Contains(identity.HostId, StringComparison.Ordinal));
+        Assert.False(duplicate.Membership.GetLocalStanding().HasLapsed);
+    }
+
     private static string NewHostId(string name) => $"{name}-{Guid.NewGuid():N}"[..(name.Length + 9)];
+
+    /// <summary>
+    /// Waits, in real time, until <paramref name="condition"/> holds or a few seconds have passed: a host's heartbeat fires
+    /// on the fake clock, but runs on the thread pool.
+    /// </summary>
+    private static async Task ConditionAsync(Func<bool> condition)
+    {
+        for (var poll = 0; poll < 100 && !condition(); poll++)
+            await Task.Delay(TimeSpan.FromMilliseconds(50));
+    }
 
     private static ReadabilityEntry Reads(params string[] versions) => new(Family, "ScenarioModule", versions);
 

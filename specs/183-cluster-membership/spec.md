@@ -913,3 +913,19 @@ reads an entry written by any other version it does not know. That has these eff
 Before the first stable release the ClusterMembership family MUST be bumped, with an upcaster that reads an entry
 without `moduleActive` as active, the direction that counts the member, so that a rolling upgrade between two stable
 releases does not stall finalization while its hosts are mixed.
+
+**2026-10-01 note ([#2199](https://github.com/elsa-workflows/elsa-foundation/issues/2199)).** Found by the #2155 audit;
+lands with the #2199 PR, whose merge is the owner's approval. FR-007 leaves a displaced member lapsed for good, and
+nothing acted on that: the host kept every loop working under an identity the fleet no longer counts, claiming and
+renewing work, writing at write versions it no longer advances, and serving requests nobody in the fleet accounts for.
+The EF provider's lifecycle now stops the host, logging it as critical, once its member concludes that it was displaced
+or found a live duplicate when it tried to rejoin. That is what a restart would decide anyway: the new incarnation
+either joins once the other process has gone, or refuses to start as a live duplicate (FR-004b, FR-039). So that a
+supervisor restarts it, the provider first records why in `ClusterMembershipHostStop` (`Elsa.Cluster.Hosting`), a
+host-wide instance, and `Elsa.Foundation.Host` and `Elsa.Workbench` run their host with `RunWithMembershipExitCode()`,
+which reads it once the host has stopped and exits with code 1, as Workbench already does for a fatal start. The provider never sets the process's exit code itself, so a host
+run inside another process, as the tests run theirs, leaves that process alone. Stopping each
+loop instead was not chosen: it would leave a host that serves traffic while no member speaks for it, and every loop of
+every module would have to learn the same rule. A member that only lapsed rejoins as a new incarnation and its host keeps
+running; the work that must pause meanwhile checks the member's standing itself, as the finalization gate already did
+and spec 186's backfill now does.
