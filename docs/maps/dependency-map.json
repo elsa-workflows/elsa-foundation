@@ -15393,6 +15393,11 @@
         },
         {
           "type": "external",
+          "id": "Xunit.SkippableFact",
+          "version": "1.5.23"
+        },
+        {
+          "type": "external",
           "id": "YamlDotNet",
           "version": "16.3.0"
         },

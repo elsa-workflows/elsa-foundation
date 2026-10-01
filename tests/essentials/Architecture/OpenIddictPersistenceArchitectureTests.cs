@@ -50,7 +50,7 @@ public sealed class OpenIddictPersistenceArchitectureTests
     private static readonly IReadOnlyDictionary<string, string> WorkbenchOpenIddictEngineSources =
         new Dictionary<string, string>(StringComparer.Ordinal)
         {
-            ["OpenIddictIdentityProviderDbContextFactories.cs"] = "e9de6941ab8c1fdc79c3582ca593db89569fa89f5c712275059444f122e99c00",
+            ["OpenIddictIdentityProviderDbContextFactories.cs"] = "bab20a001ee89beb24d255488a74374c7bccd646d8cfe4603eb6bf5eb49036c6",
             ["OpenIddictIdentityProviderDbContexts.cs"] = "9db2f5d373233a2e0b3e8d3b407b56d8dd6a645a69899211cc98fec477734912",
             ["PostgreSql/Migrations/20261001054059_Initial.Designer.cs"] = "28d6549aaca6b2e234ed371d2b8debab24bb586dcb79cf34bd22553b0671218f",
             ["PostgreSql/Migrations/20261001054059_Initial.cs"] = "4f5b6b5da341b1ee0c00a39b8b80e8b325d424f8eb019f3c1a642edfb467f05a",
