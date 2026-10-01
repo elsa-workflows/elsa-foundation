@@ -22,10 +22,15 @@ lifecycle anchored at `Elsa.Activities.Design.Reconciliation`; it owns no catalo
   `IActivitySourceVersionPublisher` commits the source-owned catalog and immutable runtime artifacts as
   one persistence operation. Reconciliation remains usable without Publishing for isolated catalog tests.
   Nodes reconciling the same source converge (#2189). When another node publishes the version first, the
-  commit finds it already published or loses a uniqueness or concurrency race (`ActivityVersionAlreadyPublishedException`),
-  and it counts as published if the stored publication is identical. Identical means every persisted member
-  is equal apart from the clock fields, row number and lifecycle status; the code lists them once, in
-  `SourceOwnedActivityVersionPublisher.MembersNotCompared`. Any other commit failure fails the pass.
+  commit finds it already published (`ActivityVersionAlreadyPublishedException`), and it counts as published
+  if the stored publication is identical. Identical means every persisted member is equal apart from the
+  clock fields, row number and lifecycle status; the code lists them once, in
+  `SourceOwnedActivityVersionPublisher.MembersNotCompared`. A commit that loses a concurrency or uniqueness
+  race does not take that as the version being published: the activity management projection's checkpoint
+  sequence is global, so the winner may be another node publishing a different activity. The EF commit runs
+  again with fresh reads, up to three attempts, and reports the version published only if a read finds it.
+  A commit that loses every attempt fails the pass with the lost race, an `InvalidOperationException`, as
+  does any other commit failure.
 - **Catalog:** [`Elsa.Activities.Design.Reconciliation/EXTENSION_POINTS.md`](../Elsa.Activities.Design.Reconciliation/EXTENSION_POINTS.md).
 
 ---

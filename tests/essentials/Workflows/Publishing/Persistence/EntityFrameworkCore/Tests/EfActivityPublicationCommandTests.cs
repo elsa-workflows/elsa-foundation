@@ -11,6 +11,7 @@ using Elsa.Workflows.Publishing.Core.Services;
 using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Services;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Xunit;
@@ -370,6 +371,58 @@ public sealed class EfActivityPublicationCommandTests : IAsyncLifetime
         Assert.Equal("source-version-1", authoring.HeadVersionId);
         Assert.Equal(Published, (await verify.SourceReferences.FindAsync(first.SourceReference.SourceReferenceId))!.CreatedAt);
         await Assert.ThrowsAsync<ActivityVersionAlreadyPublishedException>(() => verify.SourceCommand.ExecuteAsync(retry));
+    }
+
+    [Fact]
+    public async Task A_source_owned_publication_that_loses_a_race_commits_on_a_later_attempt()
+    {
+        var (failure, attempts) = await PublishSourceLosingRacesAsync(2);
+
+        Assert.Null(failure);
+        Assert.Equal(3, attempts);
+        await using var verify = Open();
+        Assert.NotNull(await ((IActivityDefinitionVersionPublicationStore)verify.DesignStores).FindAsync("source-version-1"));
+    }
+
+    [Fact]
+    public async Task A_source_owned_publication_that_loses_every_attempt_fails_as_a_lost_race_not_as_already_published()
+    {
+        var (failure, attempts) = await PublishSourceLosingRacesAsync(int.MaxValue);
+
+        Assert.Equal(3, attempts);
+        Assert.IsType<DbUpdateConcurrencyException>(Assert.IsType<InvalidOperationException>(failure).InnerException);
+        await using var verify = Open();
+        Assert.Null(await ((IActivityDefinitionVersionPublicationStore)verify.DesignStores).FindAsync("source-version-1"));
+    }
+
+    [Fact]
+    public async Task A_draft_publication_that_loses_a_uniqueness_race_is_a_conflict_not_already_published()
+    {
+        // A unique key is not this version's alone: the checkpoint snapshot key is global, so an unrelated publication can
+        // take it first. Nothing then says this version is published.
+        var race = new RefuseSaveInterceptor(
+            context => context.ChangeTracker.Entries<ActivityDefinitionVersionPublication>().Any(entry => entry.State == EntityState.Added),
+            () => new DbUpdateException("Another checkpoint took the snapshot key first.", new SqliteException("UNIQUE constraint failed", 19, 2067)));
+        await using var scope = Open(designInterceptors: [race]);
+
+        var failure = await Record.ExceptionAsync(() => scope.Command.ExecuteAsync(Commit()));
+
+        Assert.Equal(1, race.Refused);
+        Assert.IsType<InvalidOperationException>(failure);
+    }
+
+    /// <summary>
+    /// Publishes the source-owned commit while its first <paramref name="lostRaces"/> design saves report the lost race a
+    /// competing checkpoint causes, and returns the failure, if any, and how many saves the commit attempted.
+    /// </summary>
+    private async Task<(Exception? Failure, int Attempts)> PublishSourceLosingRacesAsync(int lostRaces)
+    {
+        var attempts = 0;
+        var races = new RefuseSaveInterceptor(
+            _ => ++attempts <= lostRaces,
+            () => new DbUpdateConcurrencyException("Another checkpoint took the sequence this one read."));
+        await using var scope = Open(designInterceptors: [races]);
+        return (await Record.ExceptionAsync(() => scope.SourceCommand.ExecuteAsync(SourceCommit(Published))), attempts);
     }
 
     private async Task SeedAsync(string definitionId, string draftId, string? tenantId = null)

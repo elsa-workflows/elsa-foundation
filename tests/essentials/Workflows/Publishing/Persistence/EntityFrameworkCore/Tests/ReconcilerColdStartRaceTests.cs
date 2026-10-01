@@ -81,6 +81,25 @@ public sealed class ReconcilerColdStartRaceSqliteTests : IAsyncLifetime
     public Task Two_nodes_cold_starting_against_new_content_converge_on_one_definition_version_and_publication(bool deletedInSource) =>
         new ReconcilerColdStartRace(PublishingNativeProvider.Sqlite, Databases, deletedInSource).RunAsync();
 
+    /// <summary>
+    /// SQLite takes its write lock when a transaction begins, so the competing checkpoint lands just before the
+    /// publication's transaction, the latest point it can. That cannot make the commit lose; the PostgreSQL test pins
+    /// the lost race itself.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)] // The other node publishes another version of the same activity.
+    public Task Two_nodes_publishing_different_activity_versions_at_once_both_publish(bool sameActivity) =>
+        new SourcePublicationRace(PublishingNativeProvider.Sqlite, Databases).DifferentVersionsBothPublishAsync(
+            competing => new BeforeFirstTransactionInterceptor(competing), sameActivity);
+
+    [Theory]
+    [InlineData(LandedPublication.Identical)]
+    [InlineData(LandedPublication.DifferentContent)]
+    [InlineData(LandedPublication.AnotherVersionsLayout)]
+    public Task A_publication_landing_between_the_absence_check_and_the_layout_read_counts_only_when_identical(LandedPublication landed) =>
+        new SourcePublicationRace(PublishingNativeProvider.Sqlite, Databases).LayoutLandingAfterTheAbsenceCheckAsync(landed);
+
     [Fact]
     public async Task Two_scopes_reconciling_the_same_source_keep_their_own_version_publication_and_source_reference()
     {
@@ -176,6 +195,25 @@ public sealed class ReconcilerColdStartRacePostgreSqlTests(PublishingPostgreSqlC
         await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() => new EfActivityManagementProjectionWriter(db, access).WriteAsync(mutation));
         Assert.True(competing.Fired);
     }
+
+    /// <summary>
+    /// The competing checkpoint commits between the publication's watermark read and its save, so the publication loses a
+    /// race to a writer that published something else (#2189). An unrelated activity takes the snapshot key of the
+    /// sequence it read; another version of the same activity also takes its definition's current revision.
+    /// </summary>
+    [SkippableTheory]
+    [InlineData(false)]
+    [InlineData(true)] // The other node publishes another version of the same activity.
+    public async Task Two_nodes_publishing_different_activity_versions_at_once_both_publish(bool sameActivity) =>
+        await new SourcePublicationRace(PublishingNativeProvider.PostgreSql, await CreateDatabasesAsync()).DifferentVersionsBothPublishAsync(
+            competing => new BeforeFirstReadInterceptor("elsa_activity_management_definitions", competing), sameActivity);
+
+    [SkippableTheory]
+    [InlineData(LandedPublication.Identical)]
+    [InlineData(LandedPublication.DifferentContent)]
+    [InlineData(LandedPublication.AnotherVersionsLayout)]
+    public async Task A_publication_landing_between_the_absence_check_and_the_layout_read_counts_only_when_identical(LandedPublication landed) =>
+        await new SourcePublicationRace(PublishingNativeProvider.PostgreSql, await CreateDatabasesAsync()).LayoutLandingAfterTheAbsenceCheckAsync(landed);
 
     /// <summary>Creates this run's database for each module on the server, with its schema.</summary>
     private async Task<ReconcilerDatabases> CreateDatabasesAsync()
@@ -360,7 +398,7 @@ internal sealed class ReconcilerColdStartRace(PublishingNativeProvider provider,
         Assert.Equal(catalogVersion.Id, publication.DefinitionVersionId);
     }
 
-    private static ExecutableNodeCompiler CreateNodeCompiler()
+    internal static ExecutableNodeCompiler CreateNodeCompiler()
     {
         var types = new WellKnownTypeRegistry();
         var outputs = new RuntimeOutputCaptureCompiler(new RuntimeDurableValueStorageDriverRegistry([new JsonRuntimeDurableValueStorageDriver()]));
@@ -421,7 +459,7 @@ internal sealed class ReconcilerColdStartRace(PublishingNativeProvider provider,
     }
 
     /// <summary>Records each commit attempt: <c>null</c> when it committed, its exception when it failed.</summary>
-    private sealed class RecordingSourceCommit(
+    internal sealed class RecordingSourceCommit(
         ICommitSourceActivityPublicationCommand<ExecutableActivityTemplate, WorkflowExecutableSourceReference> inner,
         ConcurrentQueue<Exception?> attempts) : ICommitSourceActivityPublicationCommand<ExecutableActivityTemplate, WorkflowExecutableSourceReference>
     {
@@ -440,5 +478,146 @@ internal sealed class ReconcilerColdStartRace(PublishingNativeProvider provider,
                 throw;
             }
         }
+    }
+}
+
+/// <summary>What another node writes between a publication's absence check and its layout read.</summary>
+public enum LandedPublication
+{
+    /// <summary>Its publication of the same version, with the same content.</summary>
+    Identical,
+
+    /// <summary>Its publication of the same version, with different content.</summary>
+    DifferentContent,
+
+    /// <summary>A layout under this version's id that belongs to another version, with no publication of this one.</summary>
+    AnotherVersionsLayout
+}
+
+/// <summary>
+/// One node publishes a source-owned activity version through the publisher and the EF commit while another node writes
+/// at the point an interceptor on the first node's Activities Design context pins, so each run takes the interleaving
+/// the test names (#2189). Each node gets its own contexts and connections.
+/// </summary>
+internal sealed class SourcePublicationRace(PublishingNativeProvider provider, ReconcilerDatabases databases)
+{
+    private static readonly TestAccess Access = TestAccess.Scoped("default");
+    private readonly ConcurrentQueue<Exception?> commits = new();
+
+    /// <summary>
+    /// While one node publishes version 1.0.0 of activity A, another node publishes where <paramref name="between"/> pins
+    /// it: version 2.0.0 of A when <paramref name="sameActivity"/>, otherwise activity B. The management projection's
+    /// checkpoint sequence is global, so either can take the sequence the first node read. That race says nothing about
+    /// the first node's version, which must neither fail nor be reported as already published.
+    /// </summary>
+    public async Task DifferentVersionsBothPublishAsync(Func<Func<Task>, IInterceptor> between, bool sameActivity)
+    {
+        var version = Version("a");
+        var competitor = sameActivity ? Version("a", "2.0.0") : Version("b");
+        var competed = false;
+        var competing = between(async () =>
+        {
+            await PublishAsync(competitor);
+            competed = true;
+        });
+
+        await PublishAsync(version, competing);
+
+        Assert.True(competed);
+        Assert.All(commits, commit => Assert.Null(commit));
+        await using var design = provider.Design(databases.ActivitiesDesign, []);
+        var published = await design.ActivityDefinitionVersionPublications.AsNoTracking().ToListAsync();
+        Assert.Equal(new[] { version.Id, competitor.Id }.Order(StringComparer.Ordinal), published.Select(publication => publication.DefinitionVersionId).Order(StringComparer.Ordinal));
+        Assert.Equal(2, (await design.ActivityManagementProjectionWatermarks.AsNoTracking().SingleAsync()).Sequence);
+        // The head was decided from what the definition held when the publication committed, not when it first read.
+        var authoring = Assert.Single(await design.ActivityDefinitionAuthoringStates.AsNoTracking().ToListAsync(), authoring => authoring.DefinitionId == version.DefinitionId);
+        Assert.Equal(sameActivity ? competitor.Id : version.Id, authoring.HeadVersionId);
+    }
+
+    /// <summary>
+    /// Another node's write lands after this node found the version's publication absent and before it reads the layout.
+    /// Only this node's own publication, read back identical, makes that a success; anything else fails, and only a
+    /// publication that is really stored is reported as already published.
+    /// </summary>
+    public async Task LayoutLandingAfterTheAbsenceCheckAsync(LandedPublication landed)
+    {
+        var version = Version("a");
+        var landing = new BeforeFirstReadInterceptor("elsa_activity_version_layouts", landed switch
+        {
+            LandedPublication.Identical => () => PublishAsync(Version("a")),
+            LandedPublication.DifferentContent => () => PublishAsync(Version("a", typeAlias: "Acme.Other")),
+            _ => () => AddLayoutOfAnotherVersionAsync(version.Id)
+        });
+
+        var failure = await Record.ExceptionAsync(() => PublishAsync(version, landing));
+
+        Assert.True(landing.Fired);
+        await using var scope = OpenScope();
+        var publication = await ((IActivityDefinitionVersionPublicationStore)scope.DesignStores).FindAsync(version.Id);
+        switch (landed)
+        {
+            case LandedPublication.Identical:
+                // This node's commit found the version published, and the read-back found it identical.
+                Assert.Null(failure);
+                Assert.IsType<ActivityVersionAlreadyPublishedException>(commits.Last());
+                Assert.NotNull(publication);
+                break;
+            case LandedPublication.DifferentContent:
+                Assert.IsType<ActivityVersionAlreadyPublishedException>(failure);
+                Assert.Equal("Acme.Other", publication!.Provider.Payload.GetProperty("typeAlias").GetString());
+                break;
+            case LandedPublication.AnotherVersionsLayout:
+                // Nothing published this version, so the layout is a conflict, not a publication to compare with.
+                Assert.IsType<InvalidOperationException>(failure);
+                Assert.Null(publication);
+                break;
+        }
+    }
+
+    private async Task PublishAsync(ActivityDefinitionVersion version, params IInterceptor[] designInterceptors)
+    {
+        await using var scope = OpenScope(designInterceptors);
+        await new SourceOwnedActivityVersionPublisher(
+            new ReconcilerColdStartRace.RecordingSourceCommit(scope.SourceCommand, commits),
+            scope.DesignStores,
+            ReconcilerColdStartRace.CreateNodeCompiler(),
+            TimeProvider.System,
+            NullLogger<SourceOwnedActivityVersionPublisher>.Instance).PublishAsync(version.Definition!, version);
+    }
+
+    /// <summary>One node's view of the three module contexts, each on its own connection.</summary>
+    private ActivityPublicationScope OpenScope(params IInterceptor[] designInterceptors) => new(
+        provider.Publishing(databases.Publishing, []),
+        provider.Design(databases.ActivitiesDesign, designInterceptors),
+        provider.Runtime(databases.Runtime, []),
+        Access);
+
+    private async Task AddLayoutOfAnotherVersionAsync(string layoutId)
+    {
+        await using var design = provider.Design(databases.ActivitiesDesign, []);
+        design.ActivityDefinitionVersionLayouts.Add(new ActivityDefinitionVersionLayout
+        {
+            Id = layoutId, DefinitionVersionId = "version-other", Records = [], CreatedAt = DateTimeOffset.UtcNow, LastModifiedAt = DateTimeOffset.UtcNow
+        });
+        await design.SaveChangesAsync();
+    }
+
+    /// <summary>Version <paramref name="number"/> of CLR activity <paramref name="activity"/>, as a reconciliation source lists it.</summary>
+    private static ActivityDefinitionVersion Version(string activity, string number = "1.0.0", string? typeAlias = null)
+    {
+        var definition = new ActivityDefinition { Id = $"definition-{activity}", ActivityTypeKey = $"Acme.{activity}", Category = "Tests", DisplayName = activity };
+        return new ActivityDefinitionVersion(number, definition.Id)
+        {
+            Id = $"version-{activity}-{number}",
+            ProviderKey = "elsa.clr-activity",
+            ProviderSchemaVersion = "1",
+            ConsumerKey = WellKnownRuntimeActivityConsumers.ClrActivity,
+            ConsumerSchemaVersion = "1",
+            DescriptorPayload = JsonSerializer.SerializeToElement(new { typeAlias = typeAlias ?? $"Acme.{activity}" }),
+            SourceKind = "CLR",
+            SourceId = "race-assemblies",
+            Hash = $"catalog-hash-{activity}-{number}",
+            Definition = definition
+        };
     }
 }

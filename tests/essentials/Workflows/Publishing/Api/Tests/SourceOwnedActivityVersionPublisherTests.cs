@@ -145,9 +145,9 @@ public sealed class SourceOwnedActivityVersionPublisherTests
     }
 
     [Fact]
-    public async Task A_commit_that_lost_a_race_with_nothing_published_fails_with_its_own_error()
+    public async Task A_commit_that_reports_the_version_published_when_nothing_reads_back_fails_with_its_own_error()
     {
-        var failure = new ActivityVersionAlreadyPublishedException("version-1", "The publication lost a uniqueness race and was rolled back.");
+        var failure = AlreadyPublished();
         var store = new PeerPublicationStore(() => null);
 
         var thrown = await Assert.ThrowsAsync<ActivityVersionAlreadyPublishedException>(() =>

@@ -161,9 +161,10 @@ public sealed class SourceOwnedActivityVersionPublisher(
         catch (ActivityVersionAlreadyPublishedException) when (!cancellationToken.IsCancellationRequested)
         {
             // Another node reconciling the same source can commit this publication after the check above, and the
-            // commit then finds it already published or loses a uniqueness or concurrency race to it (#2189). When what is stored is
-            // the publication this call was about to write, the version is published, which is all this call promises.
-            // Otherwise this rethrows the commit's own exception with its stack. No other failure reaches this block.
+            // commit then finds it already published (#2189). A commit that loses a race reads again before it says so,
+            // so a race lost to an unrelated writer never lands here. When what is stored is the publication this call
+            // was about to write, the version is published, which is all this call promises. Otherwise this rethrows
+            // the commit's own exception with its stack. No other failure reaches this block.
             if (!await IsPublishedIdenticallyAsync(publication, cancellationToken))
                 throw;
         }
