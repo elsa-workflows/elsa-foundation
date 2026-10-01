@@ -38,6 +38,7 @@ This bucket exists so weak implementations, missing tests, TestContainers policy
 ## Linked Surfaces
 
 - [Test maturity and weak implementation report](../reports/test-maturity-and-weak-implementation-report.md)
+- [SQLite cleanup ownership probe](../reports/sqlite-test-cleanup-probe.md), supporting [#2185](https://github.com/elsa-workflows/elsa-foundation/issues/2185); native-handle cause and cleanup-policy acceptance remain open.
 - [NotImplemented classification](../reports/notimplemented-classification.md)
 - [Unfinished work](../reports/unfinished-work.md)
 - [Maps index](../maps/README.md)
