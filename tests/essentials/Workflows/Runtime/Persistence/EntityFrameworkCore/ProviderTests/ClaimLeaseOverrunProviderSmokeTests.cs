@@ -12,10 +12,10 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests;
 public sealed class ClaimLeaseOverrunPostgreSqlSmokeTests(RuntimeBookmarksPostgreSqlFixture fixture)
 {
     [SkippableFact]
-    public Task PostgreSql_outbox_dispatches_an_item_whose_claim_lapsed_mid_batch_exactly_once()
+    public Task PostgreSql_outbox_dispatches_an_item_whose_claim_lapsed_while_waiting_once_and_the_in_flight_item_may_repeat()
     {
         Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? "The native provider is unavailable.");
-        return ClaimLeaseOverrunContract.OutboxDispatchesAnItemWhoseClaimLapsedMidBatchExactlyOnceAsync(CreateContext);
+        return ClaimLeaseOverrunContract.OutboxDispatchesAnItemWhoseClaimLapsedWhileWaitingOnceAsync(CreateContext);
     }
 
     [SkippableFact]

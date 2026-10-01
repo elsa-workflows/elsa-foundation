@@ -134,8 +134,8 @@ public sealed class StimulusRouterTests
         Assert.Equal(2, second.SkippedStartCount);
         var expected = new[]
         {
-            new KeyedWorkflowStartIdentity("delivery-1:start:artifact-1"),
-            new KeyedWorkflowStartIdentity("delivery-1:start:artifact-2")
+            KeyedWorkflowStartIdentity.For("delivery-1", "artifact-1"),
+            KeyedWorkflowStartIdentity.For("delivery-1", "artifact-2")
         };
         Assert.Equal(
             expected.Concat(expected).Select(identity => (identity.WorkflowExecutionId, identity.StartKey)),

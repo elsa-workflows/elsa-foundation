@@ -701,11 +701,12 @@ public sealed class RuntimePostCommitOutboxProcessorTests
     }
 
     [Fact]
-    public async Task Processor_SkipsWhatLapsedDuringItsBatch_AndAStaleCompletionDoesNotEndTheBatch()
+    public async Task Processor_ItemWhoseClaimLapsedWhileWaiting_IsDispatchedOnce_InFlightItemMayRepeat_StaleCompletionDoesNotEndBatch()
     {
         // #2195. The first dispatch outlives the one-minute claim on the whole batch, so a peer re-claims and delivers both
-        // items meanwhile. The second item must not be dispatched again, and the refused completion of the first must not
-        // throw out of the batch.
+        // items meanwhile. The waiting item, whose claim lapsed before its turn, must not be dispatched again. The in-flight
+        // item is repeated by the peer, because the outbox renews only before a dispatch; each intent kind converges under
+        // that repeat by its own mechanism, and its refused completion must not throw out of the batch.
         var store = new InMemoryRuntimeCheckpointCommitStore();
         await store.AddPendingForTestingAsync(NewOutboxItem("outbox-a", "intent-a", "wfexec-a", availableAt: _now.AddSeconds(-2)));
         await store.AddPendingForTestingAsync(NewOutboxItem("outbox-b", "intent-b", "wfexec-b", availableAt: _now.AddSeconds(-1)));

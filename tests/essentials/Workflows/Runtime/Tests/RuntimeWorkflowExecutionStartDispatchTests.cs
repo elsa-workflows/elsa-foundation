@@ -16,7 +16,7 @@ public sealed class RuntimeWorkflowExecutionStartDispatchTests
     private readonly InMemoryWorkflowExecutableStore _store = new();
     private readonly InMemoryWorkflowExecutableSourceReferenceStore _references = new();
     private readonly RecordingAgentProvider _agentProvider = new();
-    private readonly KeyedWorkflowStartIdentity _keyed = new("delivery-1:start:artifact-1");
+    private readonly KeyedWorkflowStartIdentity _keyed = KeyedWorkflowStartIdentity.For("delivery-1", "artifact-1");
     private readonly WorkflowStartDispatcher _dispatcher;
 
     public RuntimeWorkflowExecutionStartDispatchTests()

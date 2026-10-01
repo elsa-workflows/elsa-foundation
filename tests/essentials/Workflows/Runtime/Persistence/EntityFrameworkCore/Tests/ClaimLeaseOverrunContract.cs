@@ -26,11 +26,12 @@ internal static class ClaimLeaseOverrunContract
     private static readonly TimeSpan VisibilityTimeout = TimeSpan.FromMinutes(1);
 
     /// <summary>
-    /// The outbox renews each claim just before its dispatch, never during it, so the first item's long dispatch is also
-    /// repeated by the peer. That repeat is the documented residue, safe because every intent kind is idempotent; this
-    /// deliverer's refused completion of it is what must not end the batch.
+    /// The item whose claim lapsed while it waited its turn is dispatched once. The outbox renews each claim just before its
+    /// dispatch, never during it, so the in-flight item's long dispatch may be repeated by the peer: that repeat is the
+    /// documented residue, which each intent kind converges under by its own mechanism (the per-kind table in the Runtime
+    /// EXTENSION_POINTS.md), and this deliverer's refused completion of it is what must not end the batch.
     /// </summary>
-    public static async Task OutboxDispatchesAnItemWhoseClaimLapsedMidBatchExactlyOnceAsync(Func<RuntimeDbContext> createContext)
+    public static async Task OutboxDispatchesAnItemWhoseClaimLapsedWhileWaitingOnceAsync(Func<RuntimeDbContext> createContext)
     {
         var scope = $"lease-overrun-{Guid.NewGuid():N}";
         await using (var setup = createContext())

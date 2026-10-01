@@ -152,8 +152,7 @@ public sealed class DurableTimerPumpTask : BackoffSweepPumpTask
             var lease = new FencedClaimLease<RuntimeDurableTimerClaim>(
                 RenewalOf(timerStore),
                 options.ClaimVisibilityTimeout,
-                _timeProvider,
-                renewWhileRunning: true);
+                _timeProvider);
             var claimedDispatches = 0;
             foreach (var claim in claims)
             {
@@ -211,7 +210,7 @@ public sealed class DurableTimerPumpTask : BackoffSweepPumpTask
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {
-        var run = await lease.RunAsync(
+        var run = await lease.RunRenewingAsync(
             claim,
             dispatchCancellationToken => dispatcher.DispatchAsync(
                 CreateRequest(claim.Timer),

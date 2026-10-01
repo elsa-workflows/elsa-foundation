@@ -139,7 +139,7 @@ public sealed class StimulusRouter : IStimulusRouter
             // dispatch would turn the retry of a failed start into a silent skip.
             var keyed = request.IdempotencyKey is null
                 ? null
-                : new KeyedWorkflowStartIdentity($"{request.IdempotencyKey}:start:{binding.ArtifactId}");
+                : KeyedWorkflowStartIdentity.For(request.IdempotencyKey, binding.ArtifactId);
 
             // Spec 089 FR-001: the stimulus payload reaches started instances through the dedicated
             // stimulus-input channel — the start-side counterpart of the resume path's

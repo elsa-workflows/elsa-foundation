@@ -16,16 +16,19 @@ public sealed class FencedClaimLeaseTests
     private readonly FakeTimeProvider _clock = new(new DateTimeOffset(2026, 10, 1, 12, 0, 0, TimeSpan.Zero));
     private readonly Claim _claim = new("row-1", Version: 1);
     private readonly Renewals _renewals = new();
+    private readonly FencedClaimLease<Claim> _lease;
+
+    public FencedClaimLeaseTests() => _lease = new(_renewals.RenewAsync, VisibilityTimeout, _clock);
 
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task A_claim_that_cannot_be_renewed_is_never_acted_on(bool renewWhileRunning)
+    public async Task A_claim_that_cannot_be_renewed_is_never_acted_on(bool renewing)
     {
         _renewals.LoseFrom(1);
         var sideEffectRan = false;
 
-        var run = await Lease(renewWhileRunning).RunAsync(_claim, _ =>
+        var run = await RunAsync(renewing, _ =>
         {
             sideEffectRan = true;
             return ValueTask.FromResult(true);
@@ -45,7 +48,7 @@ public sealed class FencedClaimLeaseTests
         _renewals.ThrowOn(1, outage);
         var sideEffectRan = false;
 
-        var run = await Lease(renewWhileRunning: false).RunAsync(_claim, _ =>
+        var run = await _lease.RunAsync(_claim, _ =>
         {
             sideEffectRan = true;
             return ValueTask.FromResult(true);
@@ -59,9 +62,9 @@ public sealed class FencedClaimLeaseTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task The_side_effect_runs_under_the_claim_renewed_for_it(bool renewWhileRunning)
+    public async Task The_side_effect_runs_under_the_claim_renewed_for_it(bool renewing)
     {
-        var run = await Lease(renewWhileRunning).RunAsync(_claim, _ => ValueTask.FromResult(42));
+        var run = await RunAsync(renewing, _ => ValueTask.FromResult(42));
 
         Assert.Equal(FencedClaimRunStatus.Completed, run.Status);
         Assert.Equal(42, run.Result);
@@ -75,7 +78,7 @@ public sealed class FencedClaimLeaseTests
         _renewals.LoseFrom(2);
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        var running = Lease(renewWhileRunning: true).RunAsync(_claim, async cancellationToken =>
+        var running = _lease.RunRenewingAsync(_claim, async cancellationToken =>
         {
             started.SetResult();
             await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
@@ -97,7 +100,7 @@ public sealed class FencedClaimLeaseTests
         using var shutdown = new CancellationTokenSource();
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        var running = Lease(renewWhileRunning: true).RunAsync(_claim, async cancellationToken =>
+        var running = _lease.RunRenewingAsync(_claim, async cancellationToken =>
         {
             started.SetResult();
             await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
@@ -117,7 +120,7 @@ public sealed class FencedClaimLeaseTests
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        var running = Lease(renewWhileRunning: true).RunAsync<bool>(_claim, async _ =>
+        var running = _lease.RunRenewingAsync<bool>(_claim, async _ =>
         {
             started.SetResult();
             await release.Task;
@@ -134,8 +137,8 @@ public sealed class FencedClaimLeaseTests
         Assert.Equal(3, run.Claim.Version);
     }
 
-    private FencedClaimLease<Claim> Lease(bool renewWhileRunning) =>
-        new(_renewals.RenewAsync, VisibilityTimeout, _clock, renewWhileRunning);
+    private ValueTask<FencedClaimRun<Claim, TResult>> RunAsync<TResult>(bool renewing, Func<CancellationToken, ValueTask<TResult>> sideEffect) =>
+        renewing ? _lease.RunRenewingAsync(_claim, sideEffect) : _lease.RunAsync(_claim, sideEffect);
 
     private sealed record Claim(string RowId, int Version);
 

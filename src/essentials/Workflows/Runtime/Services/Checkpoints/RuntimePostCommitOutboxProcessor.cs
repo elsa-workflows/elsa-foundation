@@ -93,15 +93,15 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
         _logger = logger ?? NullLogger<RuntimePostCommitOutboxProcessor>.Instance;
         // Renewed before each dispatch, never during it (#2195). An intent handler works on the same scoped persistence
         // context as this store, so a renewal running beside the dispatch would collide with the handler's own queries. A
-        // dispatch that alone outlives the visibility timeout can therefore still be repeated by a peer; every intent
-        // kind is idempotent under that repeat, PublishStimulus included since its starts are keyed.
+        // dispatch that alone outlives the visibility timeout can therefore still be repeated by a peer. Each intent kind
+        // converges under that repeat by its own mechanism, PublishStimulus included since its starts are keyed; the
+        // per-kind table in the Runtime EXTENSION_POINTS.md records each one and its limit.
         _claimLease = _claimStore is null
             ? null
             : new FencedClaimLease<RuntimePostCommitOutboxClaim>(
                 _claimStore.RenewClaimAsync,
                 ClaimVisibilityTimeout,
-                _timeProvider,
-                renewWhileRunning: false);
+                _timeProvider);
     }
 
     public RuntimePostCommitOutboxProcessor(

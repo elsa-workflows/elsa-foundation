@@ -193,6 +193,18 @@ This replaced the earlier in-process `IStimulusStartDeduplicator`. Besides being
 recorded a key before the start was dispatched, so the retry of a start whose first attempt failed was skipped as
 a duplicate and acknowledged although nothing had started.
 
+Two consequences follow from the dedupe being durable. A reused idempotency key on the stimulus API, for the same
+artifact, is answered `SkippedDuplicate` permanently, on every node and after any restart; a caller wanting a second
+start sends a new key. And a recurring-trigger occurrence, routed with the key
+`recurring:{scheduleId}:{occurrenceTicks}`, starts its workflow at most once however often that occurrence fires.
+
+The keyed start identity is a frozen, persisted format. Its ids are `wfexec:start:v1:{digest}`,
+`command:start:v1:{digest}` and `envelope:start:v1:{digest}`; the digest is the lowercase hex SHA-256 of the
+length-prefixed UTF-8 values `"elsa.workflow-start"`, `"v1"` and the start key, which the router builds as
+`{idempotencyKey}:start:{artifactId}`. A redelivery is recognized only by deriving the same id again, so any change to
+the derivation silently starts every redelivered occurrence a second time. Change it by adding a new version beside
+`v1`, never by editing `v1`; `KeyedWorkflowStartIdentityTests` pins the `v1` literals.
+
 ### Published executables are durable (DS-2, W17)
 
 A published workflow compiles to a `WorkflowExecutable` artifact that persists through the same Runtime

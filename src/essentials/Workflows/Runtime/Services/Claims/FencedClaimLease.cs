@@ -26,9 +26,10 @@ public delegate ValueTask<TClaim?> FencedClaimRenewal<TClaim>(
 /// renewed, and a re-claimed one never is.
 /// </para>
 /// <para>
-/// With <c>renewWhileRunning</c> the claim is also renewed every third of the visibility timeout while the side effect
-/// runs, and a renewal that fails cancels the side effect. Use it only when the side effect does not share the renewing
-/// store's unit of work: a renewal running beside a side effect on the same <c>DbContext</c> would collide with it.
+/// <see cref="RunAsync{TResult}"/> renews before the side effect only. <see cref="RunRenewingAsync{TResult}"/> also
+/// renews every third of the visibility timeout while the side effect runs, and a renewal that fails cancels the side
+/// effect. Use the renewing entry point only when the side effect does not share the renewing store's unit of work: a
+/// renewal running beside a side effect on the same <c>DbContext</c> would collide with it.
 /// </para>
 /// <para>
 /// Completing or releasing the row stays with the caller, which presents <see cref="FencedClaimRun{TClaim,TResult}.Claim"/>
@@ -47,13 +48,11 @@ public sealed class FencedClaimLease<TClaim> where TClaim : class
     private readonly TimeSpan _visibilityTimeout;
     private readonly TimeSpan _renewalCadence;
     private readonly TimeProvider _timeProvider;
-    private readonly bool _renewWhileRunning;
 
     public FencedClaimLease(
         FencedClaimRenewal<TClaim> renew,
         TimeSpan visibilityTimeout,
-        TimeProvider timeProvider,
-        bool renewWhileRunning)
+        TimeProvider timeProvider)
     {
         ArgumentNullException.ThrowIfNull(renew);
         ArgumentNullException.ThrowIfNull(timeProvider);
@@ -64,23 +63,25 @@ public sealed class FencedClaimLease<TClaim> where TClaim : class
         _visibilityTimeout = visibilityTimeout;
         _renewalCadence = TimeSpan.FromTicks(Math.Max(1, visibilityTimeout.Ticks / 3));
         _timeProvider = timeProvider;
-        _renewWhileRunning = renewWhileRunning;
     }
 
-    /// <summary>Renews <paramref name="claim"/>, then runs <paramref name="sideEffect"/> only if the renewal held.</summary>
+    /// <summary>
+    /// Renews <paramref name="claim"/>, then runs <paramref name="sideEffect"/> once if the renewal held. Nothing renews the
+    /// claim while the side effect runs.
+    /// </summary>
     public async ValueTask<FencedClaimRun<TClaim, TResult>> RunAsync<TResult>(
         TClaim claim,
         Func<CancellationToken, ValueTask<TResult>> sideEffect,
         CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(claim);
         ArgumentNullException.ThrowIfNull(sideEffect);
-        cancellationToken.ThrowIfCancellationRequested();
+        var (renewed, lost) = await RenewBeforeSideEffectAsync<TResult>(claim, cancellationToken);
+        if (lost is not null)
+            return lost;
 
-        TClaim? renewed;
         try
         {
-            renewed = await _renew(claim, _timeProvider.GetUtcNow(), _visibilityTimeout, cancellationToken);
+            return new(FencedClaimRunStatus.Completed, renewed!, await sideEffect(cancellationToken), null);
         }
         catch (OperationCanceledException)
         {
@@ -88,43 +89,26 @@ public sealed class FencedClaimLease<TClaim> where TClaim : class
         }
         catch (Exception exception)
         {
-            // An unconfirmed claim is not acted on. The row stays claimed until its visibility lapses, then returns.
-            return new(FencedClaimRunStatus.LostBeforeSideEffect, claim, default, exception);
-        }
-
-        if (renewed is null)
-            return new(FencedClaimRunStatus.LostBeforeSideEffect, claim, default, null);
-
-        return _renewWhileRunning
-            ? await RunRenewingAsync(renewed, sideEffect, cancellationToken)
-            : await RunOnceAsync(renewed, sideEffect, cancellationToken);
-    }
-
-    private static async ValueTask<FencedClaimRun<TClaim, TResult>> RunOnceAsync<TResult>(
-        TClaim claim,
-        Func<CancellationToken, ValueTask<TResult>> sideEffect,
-        CancellationToken cancellationToken)
-    {
-        try
-        {
-            return new(FencedClaimRunStatus.Completed, claim, await sideEffect(cancellationToken), null);
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception exception)
-        {
-            return new(FencedClaimRunStatus.Faulted, claim, default, exception);
+            return new(FencedClaimRunStatus.Faulted, renewed!, default, exception);
         }
     }
 
-    private async ValueTask<FencedClaimRun<TClaim, TResult>> RunRenewingAsync<TResult>(
+    /// <summary>
+    /// Renews <paramref name="claim"/>, then runs <paramref name="sideEffect"/> if the renewal held, renewing the claim
+    /// every third of the visibility timeout until the side effect finishes. A renewal that fails cancels the side effect
+    /// and the run reports <see cref="FencedClaimRunStatus.LostDuringSideEffect"/>.
+    /// </summary>
+    public async ValueTask<FencedClaimRun<TClaim, TResult>> RunRenewingAsync<TResult>(
         TClaim claim,
         Func<CancellationToken, ValueTask<TResult>> sideEffect,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken = default)
     {
-        var holding = new Holding(claim);
+        ArgumentNullException.ThrowIfNull(sideEffect);
+        var (renewed, lost) = await RenewBeforeSideEffectAsync<TResult>(claim, cancellationToken);
+        if (lost is not null)
+            return lost;
+
+        var holding = new Holding(renewed!);
         using var stopRenewing = new CancellationTokenSource();
         using var sideEffectCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var renewing = KeepRenewingAsync(holding, stopRenewing.Token, sideEffectCancellation);
@@ -157,6 +141,30 @@ public sealed class FencedClaimLease<TClaim> where TClaim : class
         return failure is null
             ? new(FencedClaimRunStatus.Completed, holding.Claim, result, null)
             : new(FencedClaimRunStatus.Faulted, holding.Claim, default, failure);
+    }
+
+    private async ValueTask<(TClaim? Renewed, FencedClaimRun<TClaim, TResult>? Lost)> RenewBeforeSideEffectAsync<TResult>(
+        TClaim claim,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(claim);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        try
+        {
+            return await _renew(claim, _timeProvider.GetUtcNow(), _visibilityTimeout, cancellationToken) is { } renewed
+                ? (renewed, null)
+                : (null, new(FencedClaimRunStatus.LostBeforeSideEffect, claim, default, null));
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            // An unconfirmed claim is not acted on. The row stays claimed until its visibility lapses, then returns.
+            return (null, new(FencedClaimRunStatus.LostBeforeSideEffect, claim, default, exception));
+        }
     }
 
     private async Task KeepRenewingAsync(
