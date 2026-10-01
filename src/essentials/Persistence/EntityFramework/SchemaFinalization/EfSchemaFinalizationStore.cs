@@ -321,10 +321,13 @@ public sealed class EfSchemaFinalizationStore
 
     /// <summary>
     /// Records that a verification pass found no row of the family below <paramref name="version"/> (spec 186, FR-014).
-    /// A standing completion only moves forward, and never past the finalized version.
+    /// A standing completion only moves forward, and never past the finalized version. It drops the backfill run's claim,
+    /// wherever it was held. <paramref name="worker"/> is the backfill worker that records it, or null for a writer that
+    /// keeps no claim, and is refused while another worker's claim holds (FR-008).
     /// </summary>
     /// <exception cref="SchemaFinalizationRefusedException">
-    /// The version is later than the finalized one, or not after the completion that stands.
+    /// The version is later than the finalized one, or not after the completion that stands, or another worker's claim
+    /// holds.
     /// </exception>
     public Task<SchemaFinalizationWrite> RecordCompletionAsync(
         string family,
@@ -334,6 +337,7 @@ public sealed class EfSchemaFinalizationStore
         DateTimeOffset verificationEndedAt,
         IReadOnlyList<string> chain,
         SchemaFinalizationMember member,
+        string? worker,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(member);
@@ -348,24 +352,30 @@ public sealed class EfSchemaFinalizationStore
                     $"completion cannot be recorded at '{version}', later than the finalized version '{record.FinalizedVersion}'.");
             if (record.Finish is { } standing)
                 EnsureForward(record.Family, chain, standing.CompletionVersion, version, "standing completion", "completion");
-            return record with
+            EnsureNotKeptOff(record, worker, at);
+            var unclaimed = record.BackfillRun is null ? record : record.WithBackfillRun(null);
+            return unclaimed with
             {
                 Finish = new SchemaFinishRecord(version, verificationStartedAt, verificationEndedAt, actor),
-                FinishHistory = [.. record.FinishHistory, new SchemaFinishHistoryEntry(SchemaFinishTransition.Completed, version, actor, at)]
+                FinishHistory = [.. unclaimed.FinishHistory, new SchemaFinishHistoryEntry(SchemaFinishTransition.Completed, version, actor, at)]
             };
         }, cancellationToken);
     }
 
     /// <summary>
     /// Withdraws the standing completion, for instance after an audit found a row below it (spec 186, FR-018). The
-    /// finalized version does not move (FR-019).
+    /// finalized version does not move (FR-019). <paramref name="worker"/> is the backfill worker that withdraws it, or null
+    /// for a writer that keeps no claim, and is refused while another worker's claim holds (FR-008), so a withdrawal only
+    /// ever moves its own worker's claim onto itself: a claim that still holds moves onto the withdrawal, so the worker that
+    /// holds it goes on rewriting what the withdrawal found and the others leave the family alone.
     /// </summary>
-    /// <exception cref="SchemaFinalizationRefusedException">No completion stands.</exception>
+    /// <exception cref="SchemaFinalizationRefusedException">No completion stands, or another worker's claim holds.</exception>
     public Task<SchemaFinalizationWrite> WithdrawCompletionAsync(
         string family,
         long expectedRevision,
         SchemaFinalizationMember member,
-        string? reason = null,
+        string? reason,
+        string? worker,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(member);
@@ -373,23 +383,31 @@ public sealed class EfSchemaFinalizationStore
         {
             var finish = record.Finish
                          ?? throw Refused(record.Family, SchemaFinalizationRefusal.NoCompletion, "no completion stands to withdraw.");
+            EnsureNotKeptOff(record, worker, at);
+            var claim = finish.Run is { } run && run.HoldsAt(at) ? run : null;
             return record with
             {
                 Finish = null,
-                FinishHistory = [.. record.FinishHistory, new SchemaFinishHistoryEntry(SchemaFinishTransition.Withdrawn, finish.CompletionVersion, SchemaFinalizationActor.Of(member), at, reason)]
+                FinishHistory =
+                [
+                    .. record.FinishHistory,
+                    new SchemaFinishHistoryEntry(SchemaFinishTransition.Withdrawn, finish.CompletionVersion, SchemaFinalizationActor.Of(member), at, reason, claim)
+                ]
             };
         }, cancellationToken);
     }
 
     /// <summary>
-    /// Claims, or renews, the backfill run that upgrades the family to <paramref name="targetVersion"/> for
-    /// <paramref name="worker"/> until <paramref name="duration"/> from now (spec 186, FR-008). The claim sits in the
-    /// finish record, so it needs a completion to stand; it adds no history entry, since it is not a transition of the
-    /// proof. Nothing correct depends on it: it only keeps a second worker from repeating the first one's reads.
+    /// Claims, or renews, the family's backfill run for <paramref name="worker"/> until <paramref name="duration"/> from
+    /// now (spec 186, FR-008): a run that upgrades the family to <paramref name="targetVersion"/>, or, at the standing
+    /// completion's version, an audit of it. The claim is held on the completion that stands, or, while none stands, on the
+    /// withdrawal that ended the last one (<see cref="SchemaFinalizationRecord.BackfillRun"/>); it adds no history entry,
+    /// since it is not a transition of the proof. Nothing correct depends on it: it only keeps a second worker from
+    /// repeating the first one's reads.
     /// </summary>
     /// <exception cref="SchemaFinalizationRefusedException">
-    /// No completion stands, another worker's claim still holds, or the target is not after the completion that stands or
-    /// is later than the finalized version.
+    /// Neither a completion nor a withdrawal of one stands, another worker's claim still holds, or the target is before the
+    /// completion that stands or later than the finalized version.
     /// </exception>
     public Task<SchemaFinalizationWrite> ClaimBackfillAsync(
         string family,
@@ -407,23 +425,46 @@ public sealed class EfSchemaFinalizationStore
             throw new ArgumentOutOfRangeException(nameof(duration), duration, "A claim holds for a positive period.");
         return ChangeAsync(family, expectedRevision, (record, at) =>
         {
-            var finish = record.Finish
-                         ?? throw Refused(record.Family, SchemaFinalizationRefusal.NoCompletion, "no completion stands, so no backfill run can be claimed in its finish record.");
-            EnsureForward(record.Family, chain, finish.CompletionVersion, targetVersion, "standing completion", "backfill target");
-            if (SchemaVersionChain.Require(record.Family, chain, targetVersion, "backfill target") >
-                SchemaVersionChain.Require(record.Family, chain, record.FinalizedVersion, "finalized"))
+            var target = SchemaVersionChain.Require(record.Family, chain, targetVersion, "backfill target");
+            if (record.Finish is { } finish)
+            {
+                // At the completion only to audit it; a run's target is after it.
+                if (target < SchemaVersionChain.Require(record.Family, chain, finish.CompletionVersion, "standing completion"))
+                    throw Refused(record.Family, SchemaFinalizationRefusal.NotForward,
+                        $"the backfill target '{targetVersion}' is before the standing completion '{finish.CompletionVersion}'. A run upgrades past it, and an audit examines it.");
+            }
+            else if (record.StandingWithdrawal is null)
+                throw Refused(record.Family, SchemaFinalizationRefusal.NoCompletion,
+                    "neither a completion nor a withdrawal of one stands, so no finish record can hold a backfill claim.");
+
+            if (target > SchemaVersionChain.Require(record.Family, chain, record.FinalizedVersion, "finalized"))
                 throw Refused(record.Family, SchemaFinalizationRefusal.CompletionBeyondFinalized,
                     $"a backfill run cannot upgrade to '{targetVersion}', later than the finalized version '{record.FinalizedVersion}'.");
-            if (finish.Run is { } held && held.HoldsAt(at) && !StringComparer.Ordinal.Equals(held.Worker, worker))
-                throw Refused(record.Family, SchemaFinalizationRefusal.BackfillClaimed,
-                    $"a backfill run to '{held.TargetVersion}' is claimed by {held.Member} until {held.ExpiresAt:u}.");
-
-            var renewed = finish.Run is { } own && StringComparer.Ordinal.Equals(own.Worker, worker) && own.HoldsAt(at);
-            return record with
-            {
-                Finish = finish with { Run = new SchemaBackfillClaim(member, worker, targetVersion, renewed ? finish.Run!.ClaimedAt : at, at + duration) }
-            };
+            EnsureNotKeptOff(record, worker, at);
+            var standing = record.BackfillRun;
+            var renewed = standing is not null && StringComparer.Ordinal.Equals(standing.Worker, worker) && standing.HoldsAt(at);
+            return record.WithBackfillRun(new SchemaBackfillClaim(member, worker, targetVersion, renewed ? standing!.ClaimedAt : at, at + duration));
         }, cancellationToken);
+    }
+
+    /// <summary>
+    /// Releases <paramref name="worker"/>'s claim on the family's backfill run (spec 186, FR-008), held or lapsed, so
+    /// another worker may take the run over at once rather than when the claim expires: what a worker whose member has
+    /// lapsed from the fleet does with what it holds.
+    /// </summary>
+    /// <exception cref="SchemaFinalizationRefusedException">The run is not claimed by <paramref name="worker"/>.</exception>
+    public Task<SchemaFinalizationWrite> ReleaseBackfillAsync(
+        string family,
+        long expectedRevision,
+        string worker,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(worker);
+        return ChangeAsync(family, expectedRevision, (record, _) =>
+            record.BackfillRun is { } held && StringComparer.Ordinal.Equals(held.Worker, worker)
+                ? record.WithBackfillRun(null)
+                : throw Refused(record.Family, SchemaFinalizationRefusal.BackfillClaimed, $"the backfill run is not claimed by worker '{worker}', so it holds nothing to release."),
+            cancellationToken);
     }
 
     /// <summary>
@@ -471,6 +512,17 @@ public sealed class EfSchemaFinalizationStore
         if (SchemaVersionChain.Require(family, chain, to, toRole) <= SchemaVersionChain.Require(family, chain, from, fromRole))
             throw Refused(family, SchemaFinalizationRefusal.NotForward,
                 $"the {toRole} version '{to}' is not after the {fromRole} version '{from}'. It only moves forward along the chain.");
+    }
+
+    /// <summary>
+    /// Refuses a claim, a completion or a withdrawal by <paramref name="worker"/> while another worker's claim holds the
+    /// family's backfill run (spec 186, FR-008), by <see cref="SchemaFinalizationRecord.ClaimKeepingOff"/>.
+    /// </summary>
+    private static void EnsureNotKeptOff(SchemaFinalizationRecord record, string? worker, DateTimeOffset at)
+    {
+        if (record.ClaimKeepingOff(worker, at) is { } held)
+            throw Refused(record.Family, SchemaFinalizationRefusal.BackfillClaimed,
+                $"a backfill run to '{held.TargetVersion}' is claimed by {held.Member} until {held.ExpiresAt:u}.");
     }
 
     private static void EnsureNotHeld(SchemaFinalizationRecord record, string version, IReadOnlyList<string> chain)

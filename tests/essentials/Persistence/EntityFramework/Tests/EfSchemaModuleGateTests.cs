@@ -169,7 +169,7 @@ public sealed class EfSchemaModuleGateTests : IAsyncLifetime
         await StoreRecordAsync("1", ["1", "2", "3"]);
         var finalized = await EfSchemaFinalizationTestSupport.FinalizeAsync(new EfSchemaFinalizationStore(Context()), Family, ["1", "2", "3"], "3", new("host-x", "i"));
         var at = DateTimeOffset.UtcNow;
-        await new EfSchemaFinalizationStore(Context()).RecordCompletionAsync(Family, finalized.Revision, "2", at, at, ["1", "2", "3"], new("host-x", "i"));
+        await new EfSchemaFinalizationStore(Context()).RecordCompletionAsync(Family, finalized.Revision, "2", at, at, ["1", "2", "3"], new("host-x", "i"), worker: null);
 
         var retired = EfSchemaModuleFamilies.FromDeclarations(Module, [Declaration(Family, "2-3") with { Entities = [typeof(GateRow)] }]);
         var gate = Gate(retired, Fleet("host-retired", "2", "3"));
@@ -586,6 +586,38 @@ public sealed class EfSchemaModuleGateTests : IAsyncLifetime
         await inRound.Task.WaitAsync(TimeSpan.FromSeconds(10));
         await stopping.CancelAsync();
 
+        await loop.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.True(loop.IsCompletedSuccessfully);
+    }
+
+    /// <summary>
+    /// The other direction, the case that looked like a clean stop: a cancellation that is not the loop's own, such as a
+    /// provider's timeout or a call the fleet's publish makes, fails one round and nothing more. The loop logs it and runs
+    /// the next round on schedule, as the backfill's does, rather than ending with nothing saying so and leaving this
+    /// host's write versions where they were for good.
+    /// </summary>
+    [Fact]
+    public async Task A_cancellation_that_is_not_the_loops_own_is_logged_and_the_next_round_runs()
+    {
+        var logger = new WarningLogger();
+        var gate = new EfSchemaModuleGate(Families("1"), Fleet("host-a", "1"), new EfSchemaFinalizationObservations(), Options(), logger: logger);
+        await gate.ActivateAsync(Context());
+        using var stopping = new CancellationTokenSource();
+        var rounds = 0;
+        var nextRound = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var loop = gate.RunAsync((_, _) =>
+        {
+            if (Interlocked.Increment(ref rounds) == 1)
+                throw new OperationCanceledException("A provider's own timeout, not the loop's stop.");
+            nextRound.TrySetResult();
+            return Task.CompletedTask;
+        }, stopping.Token);
+        await nextRound.Task.WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.False(loop.IsCompleted);
+        Assert.IsType<OperationCanceledException>(Assert.Single(logger.Warnings).Exception);
+        await stopping.CancelAsync();
         await loop.WaitAsync(TimeSpan.FromSeconds(10));
         Assert.True(loop.IsCompletedSuccessfully);
     }
