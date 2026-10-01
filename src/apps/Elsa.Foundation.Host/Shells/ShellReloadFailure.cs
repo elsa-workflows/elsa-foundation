@@ -51,7 +51,8 @@ internal sealed record ShellReloadFailure(string Shell, string Error, ShellReloa
     public static IReadOnlyList<ShellReloadFailure> From(IEnumerable<ReloadResult> results, string hostDirectory) =>
         [.. results.Where(result => result.Error is not null).Select(result => Describe(result.Name, result.Error!, hostDirectory))];
 
-    private static ShellReloadFailure Describe(string shell, Exception error, string hostDirectory)
+    /// <summary>One shell's failure, from the exception that stopped it activating, read the way <see cref="From"/> reads a reload result.</summary>
+    public static ShellReloadFailure Describe(string shell, Exception error, string hostDirectory)
     {
         var host = IEfModuleRefusal.HostPlaceholder;
         var directory = $"\"{hostDirectory}\"";
