@@ -18,7 +18,7 @@ jobs:
       - name: Verify production source matches the reviewed head
         shell: pwsh
         run: |
-          $changed = @(git diff --name-only 42ad77d8d0ac6f2196fe1cfd9ab5866f8f1935d2 HEAD)
+          $changed = @(git diff --name-only 723a8647397b9e91a2342dbfe56d78ad07b166c0 HEAD)
           if ($changed.Count -ne 1 -or $changed[0] -ne '.github/workflows/codex-2177-windows-proof.yml') { throw 'Validation branch contains other changes.' }
       - uses: actions/setup-dotnet@v4
         with:
