@@ -725,6 +725,25 @@ public sealed class EfCandidateInspectionTests : IDisposable
     }
 
     [Fact]
+    public async Task Explicit_environment_host_accepts_an_exactly_sized_request_without_overreading()
+    {
+        const int maximumRequestBytes = 8 * 1024 * 1024;
+        var candidate = CreateEnvironmentCandidate(new Dictionary<string, string>());
+        var json = Encoding.UTF8.GetBytes(candidate.Request.ToJsonString());
+        var exact = PadWithSpaces(json, maximumRequestBytes);
+        using var input = new CountingStream(exact);
+        using var response = new MemoryStream();
+
+        Assert.Equal(EfToolingExitCode.Success,
+            await RunEnvironmentStreamAsync(input, response, CancellationToken.None));
+        Assert.Equal(maximumRequestBytes, input.BytesRead);
+        var responseBytes = response.ToArray();
+        using var document = JsonDocument.Parse(responseBytes);
+        Assert.Equal("ok", document.RootElement.GetProperty("status").GetString());
+        AssertNoPrivateCandidateValues(Encoding.UTF8.GetString(responseBytes));
+    }
+
+    [Fact]
     public async Task Explicit_environment_host_bounds_reads_independently_of_array_pool_capacity()
     {
         const int maximumRequestBytes = 8 * 1024 * 1024;
