@@ -154,14 +154,21 @@ sweep, the pump is bounded on two axes:
 
 - **Per tick:** `RuntimeResumptionSweepRequest.MaxExecutionsPerSweep` (default 100) caps how many
   executions one sweep re-drives. The recovery scanner keeps half of the cap (at least one slot, at
-  most its batch size), so a full backlog cannot stop it running; either side may use the slots the
-  other leaves (#2188).
+  most its batch size) and the backlog the rest, so neither can stop the other running; either side
+  may use the slots the other leaves, and a cap of one alternates between them (#2188).
 - **Across ticks:** backlog discovery lists only executions whose work is claimable now, so work held
-  by a live claim or a backoff cannot fill the page. It walks the backlog with a bound the sweep keeps
-  between ticks, resuming after the last execution it visited and starting over after a short page, so
-  a fixed set of executions that stay claimable without draining (for example, paused ones) cannot hold
-  the window either. The bound moves on past a failed re-drive; the failed execution keeps its work and
-  its per-execution backoff, and the next walk reaches it again.
+  by a live claim or a backoff cannot fill the page. It also skips executions whose head the drainer's
+  own pause gate would hold: a paused head stays claimable (the drainer releases it at the closed gate),
+  and re-driving it only left one more `RunSchedulerWork` row queued behind it on every pass. A hold is
+  lifted by saving hold state, with no event to react to, so a resume is noticed the same way: the
+  next pass that reaches the execution finds the gate open and re-drives it. A pass reads on past
+  skipped executions, up to ten pages. The sweep walks the backlog from a position it keeps between
+  ticks (`RuntimeResumptionDiscoveryStateStore`), resuming after the last execution it visited and
+  starting over after a short page, so a fixed set of executions that stay claimable without draining
+  cannot hold the window either. The position moves on past a failed re-drive; the failed execution
+  keeps its work and its per-execution backoff, and the next walk reaches it again. A queue that does
+  not implement claimable discovery keeps the earlier first-page listing, and the sweep logs a warning
+  (`RuntimeResumptionFirstPageBacklogDiscovery`) once per queue type.
 - **Per execution:** the pump applies a geometric backoff to individual executions whose re-drive
   fails, passing them as `ExcludedWorkflowExecutionIds` so they are skipped until their backoff
   elapses. A separate whole-sweep geometric backoff (bounded by `MaxBackoffInterval`, default 5m)

@@ -54,8 +54,9 @@ public sealed class RuntimeResumptionSweepRequest
     /// Hard cap on how many workflow executions a single sweep re-drives, applied after backlog and
     /// recovery-candidate discovery. Bounds the work the pump does per tick so a large backlog cannot
     /// produce an unbounded burst of command dispatches. The recovery scanner keeps half of the cap (at
-    /// least one slot, at most its batch size), so a full backlog cannot stop it running; either side may
-    /// use what the other leaves. <c>null</c> means "no additional cap beyond the discovery batch sizes".
+    /// least one slot, at most its batch size) and the backlog the rest, so neither can starve the other;
+    /// either side may use what the other leaves, and a cap of one alternates between them. <c>null</c>
+    /// means "no additional cap beyond the discovery batch sizes".
     /// </summary>
     public int? MaxExecutionsPerSweep { get; }
 

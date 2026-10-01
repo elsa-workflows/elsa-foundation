@@ -45,7 +45,8 @@ public interface IWorkflowSchedulerWorkQueue
     /// <summary>
     /// Indicates that this provider implements <see cref="ListClaimableWorkflowExecutionIdsAsync"/>. Resumption sweeps
     /// over a provider that returns <see langword="false"/> keep the earlier discovery through
-    /// <see cref="ListPendingWorkflowExecutionIdsAsync"/>: no visibility filter and no cursor.
+    /// <see cref="ListPendingWorkflowExecutionIdsAsync"/>: no visibility filter and no walk past the first page, which
+    /// can starve executions beyond it, so the sweep logs a warning once per queue type.
     /// </summary>
     bool SupportsClaimableBacklogDiscovery => false;
 

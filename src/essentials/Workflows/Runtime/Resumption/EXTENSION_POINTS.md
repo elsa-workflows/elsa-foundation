@@ -18,7 +18,7 @@ service and a recurring pump that re-drives interrupted executions. See the work
 
 ### `RuntimeResumptionPumpTask : IRecurringTask` *(`Elsa.Workflows.Runtime.Resumption`)*
 - **Kind:** Contributor (recurring task; scheduled by the Tasks domain `TaskManager`).
-- **Behavior:** each tick runs one `IRuntimeResumptionService.SweepAsync`. A whole-sweep geometric backoff (bounded by `MaxBackoffInterval`) throttles after consecutive sweep failures; a per-execution geometric backoff parks individual re-drive failures (passed to the sweep as `ExcludedWorkflowExecutionIds`) so one poisoned execution cannot starve the sweep. `MaxExecutionsPerSweep` bounds the executions re-driven per tick, and the recovery scanner keeps half of it (#2188). Only `OperationCanceledException` propagates; other sweep exceptions are logged and counted.
+- **Behavior:** each tick runs one `IRuntimeResumptionService.SweepAsync`. A whole-sweep geometric backoff (bounded by `MaxBackoffInterval`) throttles after consecutive sweep failures; a per-execution geometric backoff parks individual re-drive failures (passed to the sweep as `ExcludedWorkflowExecutionIds`) so one poisoned execution cannot starve the sweep. `MaxExecutionsPerSweep` bounds the executions re-driven per tick, and the recovery scanner keeps half of it, alternating at a cap of one (#2188). Only `OperationCanceledException` propagates; other sweep exceptions are logged and counted.
 - **Schedule:** `AdaptiveIntervalSchedule` *(`Elsa.Tasks.Schedules`)* re-evaluates the interval each run from `RuntimeResumptionOptions.SweepInterval` and the current backoff. Shared by every adaptive pump in the runtime (resumption, durable timers, recurring triggers, reference GC, placement, alterations).
 - **Register:** provided by `WorkflowsRuntimeResumptionFeature`; not intended for standalone registration.
 
@@ -27,7 +27,7 @@ Post-commit intent kinds can contribute their own retry policy. Parent-resume de
 ## Options
 
 ### `RuntimeResumptionOptions` *(`Elsa.Workflows.Runtime.Resumption`)*
-- Sweep interval (default 10s), max backoff interval (default 5m), outbox/backlog/recovery batch sizes (default 100), `MaxExecutionsPerSweep` (default 100, of which the recovery scanner keeps half; either side may use what the other leaves), and lease/heartbeat timeouts (default 5m, consumed by the recovery scanner path).
+- Sweep interval (default 10s), max backoff interval (default 5m), outbox/backlog/recovery batch sizes (default 100), `MaxExecutionsPerSweep` (default 100, of which the recovery scanner keeps half and the backlog the rest; either side may use what the other leaves, and a cap of one alternates), and lease/heartbeat timeouts (default 5m, consumed by the recovery scanner path).
 
 ---
 

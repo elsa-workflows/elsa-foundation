@@ -127,17 +127,16 @@ internal static class RuntimeSchedulerWorkQueueProviderSmoke
         Func<string, RuntimeDbContext> createContext)
     {
         Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? "The native provider is unavailable.");
-        await using (var context = createContext(fixture.ConnectionString))
+        Func<IWorkflowSchedulerWorkQueue, Task>[] scenarios =
+        [
+            SchedulerWorkQueueClaimableDiscoveryContract.ListsExactlyTheExecutionsAClaimWouldServeAsync,
+            SchedulerWorkQueueClaimableDiscoveryContract.PagesInOrdinalOrderAfterTheBoundAsync
+        ];
+        foreach (var scenario in scenarios)
         {
+            await using var context = createContext(fixture.ConnectionString);
             await context.Database.EnsureCreatedAsync();
-            await SchedulerWorkQueueClaimableDiscoveryContract.ListsExactlyTheExecutionsAClaimWouldServeAsync(
-                Store(context, $"native-2188-{Guid.NewGuid():N}"));
-        }
-
-        await using (var context = createContext(fixture.ConnectionString))
-        {
-            await SchedulerWorkQueueClaimableDiscoveryContract.PagesInOrdinalOrderAfterTheBoundAsync(
-                Store(context, $"native-2188-{Guid.NewGuid():N}"));
+            await scenario(Store(context, $"native-2188-{Guid.NewGuid():N}"));
         }
     }
 

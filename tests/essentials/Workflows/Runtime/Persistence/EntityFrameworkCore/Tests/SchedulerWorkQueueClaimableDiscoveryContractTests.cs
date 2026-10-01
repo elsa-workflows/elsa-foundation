@@ -9,19 +9,26 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Xunit;
+using static Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.SchedulerWorkItems;
 using static Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.SchedulerWorkQueueClaimableDiscoveryContract;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 
 /// <summary>
 /// Runs <see cref="SchedulerWorkQueueClaimableDiscoveryContract"/> against the in-memory queue and the EF Core store on
-/// SQLite, and the #2188 starvation scenario through a real resumption sweep over each. The native-provider smoke tests
+/// SQLite, and the #2188 starvation scenarios through a real resumption sweep over each. The native-provider smoke tests
 /// run the same contract on PostgreSQL, SQL Server, and MySQL.
 /// </summary>
 public sealed class SchedulerWorkQueueClaimableDiscoveryContractTests
 {
     private const string InMemory = "in-memory";
     private const string EntityFramework = "entity-framework";
+    private const int OlderExecutions = 120;
+    private const string NewerExecution = "wfexec-9999";
+
+    private readonly RuntimeResumptionOptions _defaults = new();
+    private readonly InMemoryWorkflowHoldStateStore _holds = new();
+    private readonly RecordingAgentProvider _agents = new();
 
     public static TheoryData<string> Stores => new(InMemory, EntityFramework);
 
@@ -51,36 +58,38 @@ public sealed class SchedulerWorkQueueClaimableDiscoveryContractTests
     public async Task One_sweep_redrives_a_newer_claimable_execution_behind_a_page_of_hidden_older_work(string store)
     {
         await using var backend = await QueueBackend.CreateAsync(store);
-        var defaults = new RuntimeResumptionOptions();
-        for (var index = 0; index < defaults.BacklogBatchSize + 20; index++)
+        for (var index = 0; index < OlderExecutions; index++)
         {
-            var workflowExecutionId = $"wfexec-{index:D4}";
             if (index % 2 == 0)
-                await EnqueueClaimedAsync(backend.Queue, workflowExecutionId, Now);
+                await EnqueueClaimedAsync(backend.Queue, OlderExecution(index), Now);
             else
-                await EnqueueReleasedAsync(backend.Queue, workflowExecutionId, visibleAt: Now.AddMinutes(1));
+                await EnqueueReleasedAsync(backend.Queue, OlderExecution(index), visibleAt: Now.AddMinutes(1));
         }
-        await backend.Queue.EnqueueAsync(Work("wfexec-9999", 1));
-        var agents = new RecordingAgentProvider();
-        var service = new RuntimeResumptionService(
-            new NoOutboxProcessor(),
-            backend.Queue,
-            new InMemoryRuntimeRecoveryScanner(new InMemoryExecutionLivenessStateStore()),
-            agents,
-            new ShortRuntimeExecutionIdGenerator(),
-            new FixedTimeProvider(Now),
-            new InMemoryWorkflowExecutionStateStore());
 
-        var result = await service.SweepAsync(new RuntimeResumptionSweepRequest(
-            outboxBatchSize: defaults.OutboxBatchSize,
-            backlogBatchSize: defaults.BacklogBatchSize,
-            recoveryScanBatchSize: defaults.RecoveryScanBatchSize,
-            leaseTimeout: defaults.LeaseTimeout,
-            heartbeatTimeout: defaults.HeartbeatTimeout,
-            maxExecutionsPerSweep: defaults.MaxExecutionsPerSweep));
+        await AssertOneSweepRedrivesOnlyTheNewerExecutionAsync(backend.Queue);
+    }
 
-        Assert.Equal("wfexec-9999", Assert.Single(result.Dispatches).WorkflowExecutionId);
-        Assert.Equal(["wfexec-9999"], agents.Redriven);
+    /// <summary>
+    /// The issue's first step: more than a page of older executions are paused by a hold. Their heads stay claimable,
+    /// because the drainer releases a paused head at once, so only the pause gate tells them apart. One sweep must still
+    /// re-drive the newer execution, and none of the paused ones.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(Stores))]
+    public async Task One_sweep_redrives_a_newer_claimable_execution_behind_a_page_of_paused_older_work(string store)
+    {
+        await using var backend = await QueueBackend.CreateAsync(store);
+        for (var index = 0; index < OlderExecutions; index++)
+        {
+            var workflowExecutionId = OlderExecution(index);
+            await _holds.SaveAsync(new WorkflowHoldState(
+                controlPlaneStateId: $"control-{workflowExecutionId}",
+                workflowExecutionId: workflowExecutionId,
+                activeHolds: [WorkflowHold.ForWorkflowExecution($"pause-{workflowExecutionId}", workflowExecutionId, Now, "operator", "Paused for maintenance.")]));
+            await backend.Queue.EnqueueAsync(Work(workflowExecutionId, "work-1", 1, WorkflowExecutionCommandKind.StartActivity));
+        }
+
+        await AssertOneSweepRedrivesOnlyTheNewerExecutionAsync(backend.Queue);
     }
 
     [Fact]
@@ -90,8 +99,8 @@ public sealed class SchedulerWorkQueueClaimableDiscoveryContractTests
         await connection.OpenAsync();
         await using var tenantA = await QueueBackend.CreateEntityFrameworkAsync(connection, "tenant-a");
         await using var tenantB = await QueueBackend.CreateEntityFrameworkAsync(connection, "tenant-b");
-        await tenantA.Queue.EnqueueAsync(Work("wf-a", 1));
-        await tenantB.Queue.EnqueueAsync(Work("wf-b", 1));
+        await tenantA.Queue.EnqueueAsync(Work("wf-a", "work-1", 1));
+        await tenantB.Queue.EnqueueAsync(Work("wf-b", "work-1", 1));
 
         Assert.Equal(["wf-a"], await tenantA.Queue.ListClaimableWorkflowExecutionIdsAsync(new RuntimeSchedulerClaimableBacklogQuery(Now)));
         Assert.Equal(["wf-b"], await tenantB.Queue.ListClaimableWorkflowExecutionIdsAsync(new RuntimeSchedulerClaimableBacklogQuery(Now)));
@@ -104,6 +113,33 @@ public sealed class SchedulerWorkQueueClaimableDiscoveryContractTests
         Assert.Throws<ArgumentOutOfRangeException>(() => new RuntimeSchedulerClaimableBacklogQuery(Now, limit: RuntimeStorePageRequest.MaximumLimit + 1));
         Assert.Throws<ArgumentException>(() => new RuntimeSchedulerClaimableBacklogQuery(Now, afterWorkflowExecutionId: " "));
     }
+
+    private async Task AssertOneSweepRedrivesOnlyTheNewerExecutionAsync(IWorkflowSchedulerWorkQueue queue)
+    {
+        await queue.EnqueueAsync(Work(NewerExecution, "work-1", 1, WorkflowExecutionCommandKind.StartActivity));
+        var service = new RuntimeResumptionService(
+            new NoOutboxProcessor(),
+            queue,
+            new InMemoryRuntimeRecoveryScanner(new InMemoryExecutionLivenessStateStore()),
+            _agents,
+            new ShortRuntimeExecutionIdGenerator(),
+            new FixedTimeProvider(Now),
+            new InMemoryWorkflowExecutionStateStore(),
+            pauseGate: new WorkflowSchedulerPauseGate(new RuntimePauseDecisionProvider(_holds), new FixedTimeProvider(Now)));
+
+        var result = await service.SweepAsync(new RuntimeResumptionSweepRequest(
+            outboxBatchSize: _defaults.OutboxBatchSize,
+            backlogBatchSize: _defaults.BacklogBatchSize,
+            recoveryScanBatchSize: _defaults.RecoveryScanBatchSize,
+            leaseTimeout: _defaults.LeaseTimeout,
+            heartbeatTimeout: _defaults.HeartbeatTimeout,
+            maxExecutionsPerSweep: _defaults.MaxExecutionsPerSweep));
+
+        Assert.Equal(NewerExecution, Assert.Single(result.Dispatches).WorkflowExecutionId);
+        Assert.Equal([NewerExecution], _agents.Redriven);
+    }
+
+    private static string OlderExecution(int index) => $"wfexec-{index:D4}";
 
     private sealed class QueueBackend(IWorkflowSchedulerWorkQueue queue, params IAsyncDisposable[] resources) : IAsyncDisposable
     {
@@ -133,53 +169,6 @@ public sealed class SchedulerWorkQueueClaimableDiscoveryContractTests
         {
             foreach (var resource in resources)
                 await resource.DisposeAsync();
-        }
-    }
-
-    private sealed class FixedAccessor(string scope) : IPersistenceAccessContextAccessor
-    {
-        public PersistenceAccessContext Current { get; } = PersistenceAccessContext.Scoped(new PersistenceScope(scope));
-    }
-
-    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
-    }
-
-    private sealed class NoOutboxProcessor : IRuntimePostCommitOutboxProcessor
-    {
-        public ValueTask<RuntimePostCommitOutboxProcessResult> ProcessAsync(
-            RuntimePostCommitOutboxProcessRequest request,
-            CancellationToken cancellationToken = default) => new(new RuntimePostCommitOutboxProcessResult([]));
-    }
-
-    private sealed class RecordingAgentProvider : IWorkflowExecutionActorProvider, IWorkflowExecutionActor
-    {
-        public List<string> Redriven { get; } = [];
-
-        public WorkflowExecutionActorCapabilities Capabilities => WorkflowExecutionActorCapabilities.InProcessMailbox;
-
-        public WorkflowExecutionActorDescriptor Descriptor { get; } = new(
-            workflowExecutionId: "wfexec-agent",
-            agentId: "agent-1",
-            providerName: "test",
-            status: WorkflowExecutionActorStatus.Active,
-            capabilities: WorkflowExecutionActorCapabilities.InProcessMailbox,
-            activatedAt: Now);
-
-        public ValueTask<IWorkflowExecutionActor> GetAgentAsync(WorkflowExecutionActorActivationRequest request, CancellationToken cancellationToken = default) =>
-            new(this);
-
-        public ValueTask PassivateAsync(WorkflowExecutionActorPassivationRequest request, CancellationToken cancellationToken = default) => default;
-
-        public ValueTask<WorkflowExecutionCommandDispatchResult> EnqueueAsync(WorkflowExecutionCommandEnvelope envelope, CancellationToken cancellationToken = default)
-        {
-            Redriven.Add(envelope.WorkflowExecutionId);
-            return new(new WorkflowExecutionCommandDispatchResult(
-                envelope.EnvelopeId,
-                envelope.WorkflowExecutionId,
-                WorkflowExecutionCommandDispatchStatus.Accepted,
-                Now));
         }
     }
 }

@@ -28,7 +28,8 @@ public sealed class RuntimeResumptionOptions
 
     /// <summary>
     /// Hard cap on executions re-driven per sweep after discovery, bounding dispatch bursts. Half of it (at
-    /// least one slot) is kept for recovery-scanner candidates whenever the scanner has them.
+    /// least one slot) is kept for recovery-scanner candidates whenever the scanner has them, and the rest for
+    /// backlog; a cap of one alternates between the two.
     /// </summary>
     public int MaxExecutionsPerSweep { get; set; } = 100;
 

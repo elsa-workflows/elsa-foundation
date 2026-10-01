@@ -1,6 +1,7 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Xunit;
+using static Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.SchedulerWorkItems;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 
@@ -20,14 +21,14 @@ internal static class SchedulerWorkQueueClaimableDiscoveryContract
     public static async Task ListsExactlyTheExecutionsAClaimWouldServeAsync(IWorkflowSchedulerWorkQueue queue)
     {
         Assert.True(queue.SupportsClaimableBacklogDiscovery);
-        await queue.EnqueueAsync(Work("wf-fresh", 1));
+        await queue.EnqueueAsync(Work("wf-fresh", "work-1", 1));
         await EnqueueClaimedAsync(queue, "wf-claimed", Now);
         await EnqueueClaimedAsync(queue, "wf-lapsed", Now - Lease - Lease);
         await EnqueueReleasedAsync(queue, "wf-backoff", visibleAt: Now + Lease);
         await EnqueueReleasedAsync(queue, "wf-due", visibleAt: Now);
         // Strict FIFO: a visible item behind a head under a live claim is not claimable.
         await EnqueueClaimedAsync(queue, "wf-blocked", Now);
-        await queue.EnqueueAsync(Work("wf-blocked", 2));
+        await queue.EnqueueAsync(Work("wf-blocked", "work-2", 2));
 
         var listed = await queue.ListClaimableWorkflowExecutionIdsAsync(new RuntimeSchedulerClaimableBacklogQuery(Now));
 
@@ -46,7 +47,7 @@ internal static class SchedulerWorkQueueClaimableDiscoveryContract
     public static async Task PagesInOrdinalOrderAfterTheBoundAsync(IWorkflowSchedulerWorkQueue queue)
     {
         foreach (var workflowExecutionId in new[] { "wf-c", "wf-a-1", "wf-B", "wf-a" })
-            await queue.EnqueueAsync(Work(workflowExecutionId, 1));
+            await queue.EnqueueAsync(Work(workflowExecutionId, "work-1", 1));
 
         Assert.Equal(["wf-B", "wf-a"], await ListAsync(queue, 2, after: null));
         Assert.Equal(["wf-a-1", "wf-c"], await ListAsync(queue, 2, after: "wf-a"));
@@ -55,15 +56,10 @@ internal static class SchedulerWorkQueueClaimableDiscoveryContract
         Assert.Equal(["wf-B", "wf-a", "wf-a-1", "wf-c"], await ListAsync(queue, 10, after: null));
     }
 
-    public static RuntimeSchedulerWorkItem Work(string workflowExecutionId, long sequence) =>
-        new($"work-{sequence}", workflowExecutionId, $"command-{sequence}", WorkflowExecutionCommandKind.ScheduleActivity,
-            $"envelope-{workflowExecutionId}-{sequence}", $"idempotency-{workflowExecutionId}-{sequence}",
-            Now, Now, sequence);
-
     /// <summary>Queues one item for the execution and claims it at <paramref name="claimedAt"/> for one lease.</summary>
     public static async Task<RuntimeSchedulerWorkClaim> EnqueueClaimedAsync(IWorkflowSchedulerWorkQueue queue, string workflowExecutionId, DateTimeOffset claimedAt)
     {
-        await queue.EnqueueAsync(Work(workflowExecutionId, 1));
+        await queue.EnqueueAsync(Work(workflowExecutionId, "work-1", 1));
         return await queue.ClaimAsync(new RuntimeSchedulerWorkClaimRequest(workflowExecutionId, "owner-a", claimedAt, Lease))
                ?? throw new InvalidOperationException($"The fresh head of '{workflowExecutionId}' could not be claimed.");
     }

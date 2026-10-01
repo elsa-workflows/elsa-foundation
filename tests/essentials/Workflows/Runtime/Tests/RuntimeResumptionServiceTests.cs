@@ -9,6 +9,7 @@ using Elsa.Workflows.Runtime.Services.Recovery;
 using Elsa.Workflows.Runtime.Services.Scheduler;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 using Xunit;
 using Microsoft.Extensions.Time.Testing;
 
@@ -319,8 +320,8 @@ public sealed class RuntimeResumptionServiceTests
     }
 
     /// <summary>
-    /// The recovery share holds on the earlier discovery path too, down to a cap of one: the scanner runs and its
-    /// candidate takes the only slot.
+    /// The recovery share holds on the earlier discovery path too, down to a cap of one, where the scanner has the first
+    /// turn: it runs and its candidate takes the only slot.
     /// </summary>
     [Fact]
     public async Task SweepAsync_RunsTheRecoveryScannerWhenALegacyBacklogFillsTheCap()
@@ -375,6 +376,139 @@ public sealed class RuntimeResumptionServiceTests
 
         Assert.Equal(RuntimeResumptionDispatchOutcome.Faulted, first.Dispatches.Single(dispatch => dispatch.WorkflowExecutionId == "wfexec-a").Outcome);
         Assert.Equal("wfexec-c", Assert.Single(second.Dispatches).WorkflowExecutionId);
+    }
+
+    /// <summary>
+    /// A cap of one is #2188 mirrored: a scanner with a candidate on every sweep would keep the only slot and starve
+    /// the backlog. The slot alternates instead, and the scanner is not asked on the backlog's turn, so its cursor
+    /// skips nothing.
+    /// </summary>
+    [Fact]
+    public async Task SweepAsync_AlternatesASingleSlotBetweenTheRecoveryScannerAndTheBacklog()
+    {
+        var harness = new Harness();
+        harness.WorkQueue.PendingExecutionIds = ["wfexec-backlog"];
+        harness.RecoveryScanner.Candidates = [NewCandidate("wfexec-recovery")];
+        var request = new RuntimeResumptionSweepRequest(recoveryScanBatchSize: 1, maxExecutionsPerSweep: 1);
+
+        var dispatched = new List<string>();
+        for (var sweep = 0; sweep < 4; sweep++)
+            dispatched.Add(Assert.Single((await harness.Service.SweepAsync(request)).Dispatches).WorkflowExecutionId);
+
+        Assert.Equal(["wfexec-recovery", "wfexec-backlog", "wfexec-recovery", "wfexec-backlog"], dispatched);
+        Assert.Equal(2, harness.RecoveryScanner.Requests.Count);
+    }
+
+    /// <summary>
+    /// #2188 review: a paused execution's head stays claimable, because the drainer releases it at the closed gate, so
+    /// it took a backlog slot on every pass. The sweep asks the drainer's pause gate first: a held execution is skipped,
+    /// and the first pass after its hold is lifted re-drives it.
+    /// </summary>
+    [Fact]
+    public async Task SweepAsync_SkipsAHeldExecutionUntilItsHoldIsReleased()
+    {
+        var holds = new InMemoryWorkflowHoldStateStore();
+        await holds.SaveAsync(HoldOn("wfexec-held"));
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        await queue.EnqueueAsync(NewWorkItem("wfexec-held", WorkflowExecutionCommandKind.StartActivity));
+        var harness = new Harness(workQueue: queue, pauseGate: PauseGateOver(holds));
+
+        var whileHeld = await harness.Service.SweepAsync(new RuntimeResumptionSweepRequest());
+        await holds.SaveAsync(new WorkflowHoldState(controlPlaneStateId: "control-wfexec-held", workflowExecutionId: "wfexec-held"));
+        var afterRelease = await harness.Service.SweepAsync(new RuntimeResumptionSweepRequest());
+
+        Assert.Empty(whileHeld.Dispatches);
+        Assert.Equal("wfexec-held", Assert.Single(afterRelease.Dispatches).WorkflowExecutionId);
+    }
+
+    /// <summary>
+    /// The direction that would look fine: hiding work a drain would advance. A hold stops only pause-gated kinds, so a
+    /// held execution whose head is a bookmark resume still drains it and must still be re-driven.
+    /// </summary>
+    [Fact]
+    public async Task SweepAsync_StillRedrivesAHeldExecutionWhoseHeadThePauseGateDoesNotStop()
+    {
+        var holds = new InMemoryWorkflowHoldStateStore();
+        await holds.SaveAsync(HoldOn("wfexec-held"));
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        await queue.EnqueueAsync(NewWorkItem("wfexec-held", WorkflowExecutionCommandKind.ResumeBookmark));
+        var harness = new Harness(workQueue: queue, pauseGate: PauseGateOver(holds));
+
+        var result = await harness.Service.SweepAsync(new RuntimeResumptionSweepRequest());
+
+        Assert.Equal("wfexec-held", Assert.Single(result.Dispatches).WorkflowExecutionId);
+    }
+
+    /// <summary>
+    /// When the pause check itself fails, the sweep re-drives rather than hides, so the drain reports the failure and
+    /// the pump backs off instead of the execution dropping out of discovery unnoticed.
+    /// </summary>
+    [Fact]
+    public async Task SweepAsync_RedrivesAndWarnsWhenThePauseCheckFails()
+    {
+        var harness = new Harness(workQueue: await QueueWithBacklogAsync("wfexec-a"), pauseGate: new ThrowingPauseGate());
+
+        var result = await harness.Service.SweepAsync(new RuntimeResumptionSweepRequest());
+
+        Assert.Equal("wfexec-a", Assert.Single(result.Dispatches).WorkflowExecutionId);
+        var warning = Assert.Single(harness.Logger.Entries);
+        Assert.Equal(LogLevel.Warning, warning.Level);
+        Assert.Equal("RuntimeResumptionPauseCheckFailed", warning.EventId.Name);
+    }
+
+    /// <summary>
+    /// #2188 review: every re-drive of a held execution left one more <c>RunSchedulerWork</c> row behind its head,
+    /// because the drain stops at the closed gate before reaching it. Through the real runtime, the sweep without a
+    /// pause check grows the queue on its first pass; the sweep with one leaves it as it is however often it runs.
+    /// </summary>
+    [Fact]
+    public async Task SweepAsync_DoesNotGrowTheQueueOfAHeldExecutionAcrossSweeps()
+    {
+        var services = new ServiceCollection();
+        services.AddWorkflowRuntime();
+        services.RemoveAll<TimeProvider>();
+        services.AddSingleton<TimeProvider>(new FakeTimeProvider(Now));
+        await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        await using var scope = provider.CreateAsyncScope();
+        var runtime = scope.ServiceProvider;
+        var queue = runtime.GetRequiredService<IWorkflowSchedulerWorkQueue>();
+        await runtime.GetRequiredService<IWorkflowHoldStateStore>().SaveAsync(HoldOn("wfexec-held"));
+        await queue.EnqueueAsync(NewWorkItem("wfexec-held", WorkflowExecutionCommandKind.StartActivity));
+        RuntimeResumptionService Sweeper(IWorkflowSchedulerPauseGate? pauseGate) => new(
+            new FakeOutboxProcessor(),
+            queue,
+            new FakeRecoveryScanner(),
+            runtime.GetRequiredService<IWorkflowExecutionActorProvider>(),
+            new ShortRuntimeExecutionIdGenerator(),
+            new FakeTimeProvider(Now),
+            runtime.GetRequiredService<IWorkflowExecutionStateStore>(),
+            pauseGate: pauseGate);
+
+        var checkingSweeper = Sweeper(runtime.GetRequiredService<IWorkflowSchedulerPauseGate>());
+        for (var sweep = 0; sweep < 10; sweep++)
+            Assert.Empty((await checkingSweeper.SweepAsync(new RuntimeResumptionSweepRequest())).Dispatches);
+        Assert.Single(await queue.ListAllAsync("wfexec-held"));
+
+        await Sweeper(pauseGate: null).SweepAsync(new RuntimeResumptionSweepRequest());
+        Assert.Equal(2, (await queue.ListAllAsync("wfexec-held")).Count);
+    }
+
+    /// <summary>
+    /// A queue without claimable discovery keeps the earlier first-page listing, which can starve executions past that
+    /// page. That must not pass silently: the sweep warns, once for the queue type rather than on every tick.
+    /// </summary>
+    [Fact]
+    public async Task SweepAsync_WarnsOnceWhenTheQueueOnlyListsAFirstPage()
+    {
+        var harness = new Harness(workQueue: new FirstPageOnlyWorkQueue());
+
+        await harness.Service.SweepAsync(new RuntimeResumptionSweepRequest());
+        await harness.Service.SweepAsync(new RuntimeResumptionSweepRequest());
+
+        var warning = Assert.Single(harness.Logger.Entries);
+        Assert.Equal(LogLevel.Warning, warning.Level);
+        Assert.Equal("RuntimeResumptionFirstPageBacklogDiscovery", warning.EventId.Name);
+        Assert.Contains(nameof(FirstPageOnlyWorkQueue), warning.Message);
     }
 
     [Fact]
@@ -647,6 +781,27 @@ public sealed class RuntimeResumptionServiceTests
             recordedAt: Now,
             sequence: index);
 
+    private static RuntimeSchedulerWorkItem NewWorkItem(string workflowExecutionId, WorkflowExecutionCommandKind kind) =>
+        new(
+            workItemId: "work-1",
+            workflowExecutionId: workflowExecutionId,
+            commandId: "command-1",
+            commandKind: kind,
+            envelopeId: "envelope-1",
+            idempotencyKey: $"{workflowExecutionId}:command-1",
+            enqueuedAt: Now,
+            recordedAt: Now,
+            sequence: 1);
+
+    private static WorkflowHoldState HoldOn(string workflowExecutionId) =>
+        new(
+            controlPlaneStateId: $"control-{workflowExecutionId}",
+            workflowExecutionId: workflowExecutionId,
+            activeHolds: [WorkflowHold.ForWorkflowExecution($"pause-{workflowExecutionId}", workflowExecutionId, Now, "operator", "Paused for maintenance.")]);
+
+    private static WorkflowSchedulerPauseGate PauseGateOver(IWorkflowHoldStateStore holds) =>
+        new(new RuntimePauseDecisionProvider(holds), new FakeTimeProvider(Now));
+
     private static async Task<InMemoryWorkflowSchedulerWorkQueue> QueueWithBacklogAsync(params string[] workflowExecutionIds)
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
@@ -706,7 +861,10 @@ public sealed class RuntimeResumptionServiceTests
 
     private sealed class Harness
     {
-        public Harness(IRuntimeRecoveryCandidateSource? candidateSource = null, IWorkflowSchedulerWorkQueue? workQueue = null)
+        public Harness(
+            IRuntimeRecoveryCandidateSource? candidateSource = null,
+            IWorkflowSchedulerWorkQueue? workQueue = null,
+            IWorkflowSchedulerPauseGate? pauseGate = null)
         {
             Service = new RuntimeResumptionService(
                 OutboxProcessor,
@@ -716,9 +874,12 @@ public sealed class RuntimeResumptionServiceTests
                 new ShortRuntimeExecutionIdGenerator(),
                 new FakeTimeProvider(Now),
                 StateStore,
-                recoveryCandidateSources: candidateSource is null ? null : [candidateSource]);
+                recoveryCandidateSources: candidateSource is null ? null : [candidateSource],
+                pauseGate: pauseGate,
+                logger: Logger);
         }
 
+        public RecordingLogger<RuntimeResumptionService> Logger { get; } = new();
         public FakeOutboxProcessor OutboxProcessor { get; } = new();
         public FakeWorkQueue WorkQueue { get; } = new();
         public FakeRecoveryScanner RecoveryScanner { get; } = new();
@@ -759,7 +920,28 @@ public sealed class RuntimeResumptionServiceTests
         }
     }
 
-    private sealed class FakeWorkQueue : IWorkflowSchedulerWorkQueue
+    // A queue type of its own, so the once-per-queue-type warning is not consumed by another test's FakeWorkQueue.
+    private sealed class FirstPageOnlyWorkQueue : FakeWorkQueue;
+
+    private sealed class ThrowingPauseGate : IWorkflowSchedulerPauseGate
+    {
+        public ValueTask<SchedulerPauseDecision?> EvaluateAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("The hold store is unavailable.");
+    }
+
+    private sealed class RecordingLogger<T> : ILogger<T>
+    {
+        public List<(LogLevel Level, EventId EventId, string Message)> Entries { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
+            Entries.Add((logLevel, eventId, formatter(state, exception)));
+    }
+
+    private class FakeWorkQueue : IWorkflowSchedulerWorkQueue
     {
         public IReadOnlyCollection<string> PendingExecutionIds { get; set; } = [];
         public List<int> BacklogLimits { get; } = [];

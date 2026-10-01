@@ -19,5 +19,6 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="..\Tests\SchedulerWorkQueueClaimableDiscoveryContract.cs" Link="SchedulerWorkQueueClaimableDiscoveryContract.cs" />
+    <Compile Include="..\Tests\RuntimeTestDoubles.cs" Link="RuntimeTestDoubles.cs" />
   </ItemGroup>
 </Project>

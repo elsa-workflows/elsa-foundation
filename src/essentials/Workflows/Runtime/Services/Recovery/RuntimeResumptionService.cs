@@ -1,9 +1,12 @@
 using System.Buffers.Binary;
+using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Text;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Elsa.Workflows.Runtime.Services.Recovery;
 
@@ -24,12 +27,14 @@ namespace Elsa.Workflows.Runtime.Services.Recovery;
 /// </para>
 /// <para>
 /// <b>Backlog discovery and the recovery share (#2188).</b> Backlog discovery lists only executions whose scheduler
-/// work is claimable now (<see cref="IWorkflowSchedulerWorkQueue.ListClaimableWorkflowExecutionIdsAsync"/>), so work
-/// hidden by a live claim or a backoff cannot fill the page, and it walks the backlog with a bound retained between
-/// sweeps, so no fixed set of executions can hold the window. Under
-/// <see cref="RuntimeResumptionSweepRequest.MaxExecutionsPerSweep"/> the recovery scanner always runs and keeps half
-/// the cap (at least one slot, at most its batch size); either side may use what the other leaves. A queue without claimable discovery keeps the earlier first-page listing through
-/// <see cref="IWorkflowSchedulerWorkQueue.ListPendingWorkflowExecutionIdsAsync"/>.
+/// work is claimable now (<see cref="IWorkflowSchedulerWorkQueue.ListClaimableWorkflowExecutionIdsAsync"/>) and skips
+/// those whose head the pause gate would hold, so neither hidden nor paused work can fill the window. It walks the
+/// backlog from the position the previous pass reached (<see cref="RuntimeResumptionDiscoveryStateStore"/>), so no
+/// fixed set of executions can hold it either. Under <see cref="RuntimeResumptionSweepRequest.MaxExecutionsPerSweep"/>
+/// the recovery scanner keeps half the cap (at least one slot, at most its batch size) and the backlog the rest;
+/// either side may use what the other leaves, and a cap of one alternates between them. A queue without claimable
+/// discovery keeps the earlier first-page listing through
+/// <see cref="IWorkflowSchedulerWorkQueue.ListPendingWorkflowExecutionIdsAsync"/>, and the sweep logs a warning.
 /// </para>
 /// <para>
 /// <b>Terminal-execution short-circuit (spec 113).</b> Backlog discovery has no terminal-status filter, so a
@@ -56,8 +61,42 @@ public sealed class RuntimeResumptionService(
     IWorkflowExecutionPartitionAccessor? partitionAccessor = null,
     IRuntimeRecoverySweepCursorStore? recoveryCursorStore = null,
     IPersistenceAccessContextAccessor? persistenceAccessContextAccessor = null,
-    IEnumerable<IRuntimeRecoveryCandidateSource>? recoveryCandidateSources = null) : IRuntimeResumptionService
+    IEnumerable<IRuntimeRecoveryCandidateSource>? recoveryCandidateSources = null,
+    IWorkflowSchedulerPauseGate? pauseGate = null,
+    RuntimeResumptionDiscoveryStateStore? discoveryStateStore = null,
+    ILogger<RuntimeResumptionService>? logger = null) : IRuntimeResumptionService
 {
+    // Keep the pre-pause-gate signature in the binary surface for already compiled hosts.
+    public RuntimeResumptionService(
+        IRuntimePostCommitOutboxProcessor outboxProcessor,
+        IWorkflowSchedulerWorkQueue workQueue,
+        IRuntimeRecoveryScanner recoveryScanner,
+        IWorkflowExecutionActorProvider agentProvider,
+        IRuntimeExecutionIdGenerator idGenerator,
+        TimeProvider timeProvider,
+        IWorkflowExecutionStateStore workflowExecutionStateStore,
+        IWorkflowExecutionPartitionAccessor? partitionAccessor,
+        IRuntimeRecoverySweepCursorStore? recoveryCursorStore,
+        IPersistenceAccessContextAccessor? persistenceAccessContextAccessor,
+        IEnumerable<IRuntimeRecoveryCandidateSource>? recoveryCandidateSources)
+        : this(
+            outboxProcessor,
+            workQueue,
+            recoveryScanner,
+            agentProvider,
+            idGenerator,
+            timeProvider,
+            workflowExecutionStateStore,
+            partitionAccessor,
+            recoveryCursorStore,
+            persistenceAccessContextAccessor,
+            recoveryCandidateSources,
+            null,
+            null,
+            null)
+    {
+    }
+
     // Keep the pre-candidate-source signature in the binary surface for already compiled hosts.
     public RuntimeResumptionService(
         IRuntimePostCommitOutboxProcessor outboxProcessor,
@@ -133,14 +172,20 @@ public sealed class RuntimeResumptionService(
     }
 
     private const string DispatchSource = "runtime-resumption";
+    private static readonly ConcurrentDictionary<Type, byte> FirstPageDiscoveryWarnings = new();
     private readonly IRuntimeRecoverySweepCursorStore sweepCursorStore = recoveryCursorStore ?? new InMemoryRuntimeRecoverySweepCursorStore();
     private readonly IRuntimeRecoveryCandidateSource[] candidateSources = recoveryCandidateSources?.ToArray() ?? [];
-    private readonly string backlogBoundKey = $"scheduler-backlog|{workQueue.GetType().AssemblyQualifiedName ?? workQueue.GetType().FullName ?? workQueue.GetType().Name}";
+    private readonly RuntimeResumptionDiscoveryStateStore discoveryStates = discoveryStateStore ?? new RuntimeResumptionDiscoveryStateStore();
+    private readonly ILogger<RuntimeResumptionService> logger = logger ?? NullLogger<RuntimeResumptionService>.Instance;
 
     // Safety cap on residual-item purge pages per terminal execution per sweep, so a provider that never actually
     // removes an item (Delete returning false) cannot spin this loop forever. Bounded residue is expected — one
     // stranded RunSchedulerWork row per prior sweep — so a handful of BacklogBatchSize pages always suffices.
     private const int MaxPurgePagesPerExecution = 16;
+
+    // Bounds the backlog pages one pass reads while skipping held or excluded executions, so a large paused set costs a
+    // bounded amount of work per sweep; the walk carries on from where the pass stopped.
+    private const int MaxBacklogPagesPerSweep = 10;
 
     public async ValueTask<RuntimeResumptionSweepResult> SweepAsync(RuntimeResumptionSweepRequest request, CancellationToken cancellationToken = default)
     {
@@ -179,7 +224,10 @@ public sealed class RuntimeResumptionService(
         }
 
         CommitRecoveryCursor(discovery, dispatches);
-        CommitBacklogBound(discovery, request);
+        // Unlike the recovery cursor, the backlog position always moves on, failed dispatches included: it is a position
+        // in a walk, not a claim on a page. A failed execution keeps its queued work and the pump's per-execution
+        // backoff, and rewinding would let a page of failing executions hold the window again.
+        discoveryStates.Set(discovery.Scope, discovery.NextState);
         await SettleSourcedCandidatesAsync(discovery, dispatches, cancellationToken);
 
         var result = new RuntimeResumptionSweepResult(
@@ -264,39 +312,13 @@ public sealed class RuntimeResumptionService(
             sweepCursorStore.Set(discovery.Scope, discovery.Scanner, cursor);
     }
 
-    // Unlike the recovery cursor, the backlog bound always moves on, failed dispatches included: it is a position in a
-    // walk, not a claim on a page. A failed execution keeps its queued work and the pump's per-execution backoff, and
-    // rewinding would let a page of failing executions hold the window again.
-    private void CommitBacklogBound(RecoveryDiscovery discovery, RuntimeResumptionSweepRequest request)
-    {
-        if (discovery.BacklogBound is not { } bound)
-            return;
-
-        if (bound.AfterWorkflowExecutionId is null)
-        {
-            sweepCursorStore.Clear(discovery.Scope, backlogBoundKey);
-            return;
-        }
-
-        // The bound shares the sweep cursor store under its own key. Only the continuation (the last execution ID the
-        // sweep visited) is read back; the remaining fields record the sweep that wrote it.
-        sweepCursorStore.Set(
-            discovery.Scope,
-            backlogBoundKey,
-            new RuntimeRecoverySweepCursor(
-                bound.ListedAt,
-                request.LeaseTimeout,
-                request.HeartbeatTimeout,
-                bound.Limit,
-                bound.AfterWorkflowExecutionId));
-    }
-
     private async ValueTask<RecoveryDiscovery> DiscoverExecutionIdsAsync(RuntimeResumptionSweepRequest request, CancellationToken cancellationToken)
     {
         var now = timeProvider.GetUtcNow();
         var scope = persistenceAccessContextAccessor?.Current.Scope?.Value ?? PersistenceScope.DefaultValue;
+        var state = discoveryStates.Get(scope);
         var sourced = await ListSourcedCandidatesAsync(request, cancellationToken);
-        var backlog = await ListBacklogAsync(request, scope, now, cancellationToken);
+        var backlog = await ListBacklogAsync(request, state.BacklogAfterWorkflowExecutionId, now, cancellationToken);
         var scannerName = RecoveryCursorKey(recoveryScanner, request.ExcludedWorkflowExecutionIds);
         var cursor = sweepCursorStore.Get(scope, scannerName);
         var scanLimit = Math.Min(request.RecoveryScanBatchSize, RuntimeStorePageRequest.MaximumLimit);
@@ -312,7 +334,28 @@ public sealed class RuntimeResumptionService(
         }
 
         var sourcedIds = sourced.SelectMany(candidates => candidates.WorkflowExecutionIds).ToArray();
-        var recoveryLimit = RecoveryLimit(request, scanLimit, sourcedIds.Concat(backlog.ExecutionIds));
+        var backlogDemand = sourcedIds
+            .Where(id => !request.ExcludedWorkflowExecutionIds.Contains(id))
+            .Concat(backlog.Entries.Where(entry => IsRedrivable(request, entry)).Select(entry => entry.WorkflowExecutionId))
+            .Distinct(StringComparer.Ordinal)
+            .Count();
+        var recoveryLimit = RecoveryLimit(request, scanLimit, backlogDemand, state.RecoveryHasSingleSlotTurn);
+        if (recoveryLimit == 0)
+        {
+            // Only a cap of one, on the backlog's turn, leaves the scanner no slot. Keep its cursor untouched so no
+            // candidate is skipped; the turn passes back to the scanner after this sweep.
+            var backlogTurn = Select(request, [], sourcedIds, backlog, state);
+            return new(
+                backlogTurn.ExecutionIds,
+                scope,
+                scannerName,
+                cursor,
+                CursorToCommit: null,
+                ShouldUpdateCursor: false,
+                backlogTurn.NextState,
+                sourced);
+        }
+
         var scanNow = cursor?.ScanNow ?? now;
         if (recoveryScanner is not IRuntimeRecoveryPagedScanner { SupportsPaging: true })
         {
@@ -327,7 +370,7 @@ public sealed class RuntimeResumptionService(
                     heartbeatTimeout: request.HeartbeatTimeout,
                     limit: scanLimit),
                 cancellationToken);
-            var legacySelection = Select(request, legacyCandidates.Take(recoveryLimit).ToArray(), sourcedIds, backlog);
+            var legacySelection = Select(request, legacyCandidates.Take(recoveryLimit).ToArray(), sourcedIds, backlog, state);
             return new(
                 legacySelection.ExecutionIds,
                 scope,
@@ -335,7 +378,7 @@ public sealed class RuntimeResumptionService(
                 PreviousCursor: null,
                 CursorToCommit: null,
                 ShouldUpdateCursor: false,
-                legacySelection.BacklogBound,
+                legacySelection.NextState,
                 sourced);
         }
 
@@ -355,7 +398,7 @@ public sealed class RuntimeResumptionService(
                 scanLimit,
                 next)
             : null;
-        var selection = Select(request, page.Items.ToArray(), sourcedIds, backlog);
+        var selection = Select(request, page.Items.ToArray(), sourcedIds, backlog, state);
         return new(
             selection.ExecutionIds,
             scope,
@@ -363,63 +406,144 @@ public sealed class RuntimeResumptionService(
             cursor,
             cursorToCommit,
             ShouldUpdateCursor: true,
-            selection.BacklogBound,
+            selection.NextState,
             sourced);
     }
 
-    // Lists one page of durable backlog (#2188). A provider with claimable discovery lists only executions whose head a
-    // claim would serve right now, so work hidden by a live claim or a backoff cannot fill the page, and it resumes
-    // after the last execution the previous sweep visited, so no fixed set of executions holds the window: the bound
-    // walks the whole backlog and starts over once a page comes back short. The bound is deliberately not partitioned
-    // by the exclusion set, unlike the recovery cursor: exclusions change from sweep to sweep, and restarting the walk
-    // whenever they did would bring the starvation back. An excluded execution keeps its queued work, so the next walk
-    // finds it again. A provider without claimable discovery keeps its earlier first-page listing and no bound.
+    // Lists durable backlog for this pass (#2188). A provider with claimable discovery lists only executions whose head a
+    // claim would serve right now, so work hidden by a live claim or a backoff cannot fill the page, and the walk resumes
+    // after the last execution the previous pass visited, starting over once a page comes back short. Held executions
+    // take no slot, so the pass reads on (within MaxBacklogPagesPerSweep) until it has a page's worth it can re-drive.
+    // The position is deliberately not partitioned by the exclusion set, unlike the recovery cursor: exclusions change
+    // from sweep to sweep, and restarting the walk whenever they did would bring the starvation back. An excluded
+    // execution keeps its queued work, so the next walk finds it again. A provider without claimable discovery keeps its
+    // earlier first-page listing and no position.
     private async ValueTask<BacklogPage> ListBacklogAsync(
         RuntimeResumptionSweepRequest request,
-        string scope,
+        string? after,
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {
         if (!workQueue.SupportsClaimableBacklogDiscovery)
         {
+            WarnOfFirstPageDiscovery(request.BacklogBatchSize);
             var pending = await workQueue.ListPendingWorkflowExecutionIdsAsync(request.BacklogBatchSize, cancellationToken);
-            return new BacklogPage(pending.ToArray(), request.BacklogBatchSize, now, Resumable: false);
+            return new BacklogPage(await ClassifyAsync(request, pending, cancellationToken), EndReached: true, Walks: false);
         }
 
         // Reading past the per-sweep cap cannot add a dispatch, so the cap bounds the page as well.
         var limit = Math.Min(request.BacklogBatchSize, request.MaxExecutionsPerSweep ?? int.MaxValue);
-        var after = sweepCursorStore.Get(scope, backlogBoundKey)?.ContinuationToken;
-        var executionIds = await workQueue.ListClaimableWorkflowExecutionIdsAsync(
-            new RuntimeSchedulerClaimableBacklogQuery(now, limit, after),
-            cancellationToken);
-        return new BacklogPage(executionIds.ToArray(), limit, now, Resumable: true);
+        var entries = new List<BacklogEntry>();
+        for (var page = 0; page < MaxBacklogPagesPerSweep; page++)
+        {
+            var executionIds = await workQueue.ListClaimableWorkflowExecutionIdsAsync(
+                new RuntimeSchedulerClaimableBacklogQuery(now, limit, after),
+                cancellationToken);
+            entries.AddRange(await ClassifyAsync(request, executionIds, cancellationToken));
+            if (executionIds.Count < limit)
+                return new BacklogPage(entries, EndReached: true, Walks: true);
+            if (entries.Count(entry => IsRedrivable(request, entry)) >= limit)
+                break;
+            after = executionIds.Last();
+        }
+
+        return new BacklogPage(entries, EndReached: false, Walks: true);
+    }
+
+    private async ValueTask<BacklogEntry[]> ClassifyAsync(
+        RuntimeResumptionSweepRequest request,
+        IEnumerable<string> workflowExecutionIds,
+        CancellationToken cancellationToken)
+    {
+        var entries = new List<BacklogEntry>();
+        foreach (var workflowExecutionId in workflowExecutionIds)
+        {
+            var held = !request.ExcludedWorkflowExecutionIds.Contains(workflowExecutionId) &&
+                       await IsHeldAtPauseGateAsync(workflowExecutionId, cancellationToken);
+            entries.Add(new BacklogEntry(workflowExecutionId, held));
+        }
+
+        return entries.ToArray();
+    }
+
+    private static bool IsRedrivable(RuntimeResumptionSweepRequest request, BacklogEntry entry) =>
+        !entry.Held && !request.ExcludedWorkflowExecutionIds.Contains(entry.WorkflowExecutionId);
+
+    // A paused execution's head stays claimable: the drainer claims it, finds the pause gate closed, and releases it at
+    // once, and every re-drive leaves one more RunSchedulerWork row queued behind it. So the sweep asks the drainer's
+    // own pause gate about the head a claim would take, and skips a held execution as visited. Holds are lifted by
+    // saving hold state, with no event to react to, so this is also how a resume is noticed: the next pass that reaches
+    // the execution finds the gate open and re-drives it. When the check itself fails, the execution is re-driven
+    // rather than hidden, so the drain's own failure handling and the pump's backoff see the problem.
+    private async ValueTask<bool> IsHeldAtPauseGateAsync(string workflowExecutionId, CancellationToken cancellationToken)
+    {
+        if (pauseGate is null)
+            return false;
+
+        try
+        {
+            var page = await workQueue.ListAsync(new RuntimeSchedulerWorkQuery(workflowExecutionId, limit: 1), cancellationToken);
+            return page.Items.FirstOrDefault() is { } head &&
+                   await pauseGate.EvaluateAsync(head, cancellationToken) is { CanAdvance: false };
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            logger.LogWarning(
+                new EventId(68112, "RuntimeResumptionPauseCheckFailed"),
+                exception,
+                "Runtime resumption could not check the pause gate for workflow execution {WorkflowExecutionId}; " +
+                "re-driving it so the drain reports the failure",
+                workflowExecutionId);
+            return false;
+        }
+    }
+
+    private void WarnOfFirstPageDiscovery(int limit)
+    {
+        var queueType = workQueue.GetType();
+        if (!FirstPageDiscoveryWarnings.TryAdd(queueType, 0))
+            return;
+
+        logger.LogWarning(
+            new EventId(68111, "RuntimeResumptionFirstPageBacklogDiscovery"),
+            "Scheduler work queue {QueueType} does not support claimable backlog discovery, so resumption sweeps list " +
+            "only the first {Limit} executions with queued work. Executions past that page can wait indefinitely while " +
+            "the page is taken by work no claim can take or that does not drain; implement {Capability} to remove the risk",
+            queueType.FullName ?? queueType.Name,
+            limit,
+            nameof(IWorkflowSchedulerWorkQueue.SupportsClaimableBacklogDiscovery));
     }
 
     // The recovery scanner keeps a guaranteed share of every capped sweep (#2188). Before the scanner is asked, the
-    // backlog side (sourced candidates and the durable backlog) counts for at most the cap minus that share, so the
-    // scanner always runs; whatever the backlog side does not use, the scanner may take, up to its batch size.
-    private static int RecoveryLimit(RuntimeResumptionSweepRequest request, int scanLimit, IEnumerable<string> backlogIds)
+    // backlog side (sourced candidates and re-drivable backlog) counts for at most the cap minus that share, so the
+    // scanner runs; whatever the backlog side does not use, the scanner may take, up to its batch size. Half the cap
+    // leaves the backlog at least one slot too, except at a cap of one, where the single slot alternates.
+    private static int RecoveryLimit(RuntimeResumptionSweepRequest request, int scanLimit, int backlogDemand, bool recoveryHasSingleSlotTurn)
     {
         if (request.MaxExecutionsPerSweep is not { } max)
             return scanLimit;
 
-        var share = Math.Min(scanLimit, Math.Max(1, max / 2));
-        var backlog = backlogIds
-            .Where(id => !request.ExcludedWorkflowExecutionIds.Contains(id))
-            .Distinct(StringComparer.Ordinal)
-            .Count();
-        return Math.Min(scanLimit, max - Math.Min(backlog, max - share));
+        var share = max == 1
+            ? recoveryHasSingleSlotTurn ? 1 : 0
+            : Math.Min(scanLimit, Math.Max(1, max / 2));
+        return Math.Min(scanLimit, max - Math.Min(backlogDemand, max - share));
     }
 
     // Recovery candidates are selected first and all of them fit: the scanner's page was sized to the slots the backlog
     // side left, and the scanner's cursor moves past every candidate it returned. Sourced candidates and then the backlog
-    // page fill the remaining slots in listed order. The backlog bound stops at the last ID this sweep visited, so an ID
-    // that did not fit is listed again by the next sweep instead of waiting for the walk to come round.
+    // fill the remaining slots in listed order; a held backlog execution is visited without taking a slot. The walk
+    // position stops at the last ID this sweep visited, so an ID that did not fit is listed again by the next sweep
+    // instead of waiting for the walk to come round.
     private static Selection Select(
         RuntimeResumptionSweepRequest request,
         IReadOnlyCollection<RuntimeRecoveryCandidate> candidates,
         IReadOnlyCollection<string> sourcedIds,
-        BacklogPage backlog)
+        BacklogPage backlog,
+        RuntimeResumptionDiscoveryState state)
     {
         var capacity = request.MaxExecutionsPerSweep ?? int.MaxValue;
         var selected = new HashSet<string>(StringComparer.Ordinal);
@@ -437,32 +561,32 @@ public sealed class RuntimeResumptionService(
 
         foreach (var candidate in candidates)
             Visit(candidate.WorkflowExecutionId);
+        var recoveryTookSlots = selected.Count > 0;
         foreach (var workflowExecutionId in sourcedIds)
             Visit(workflowExecutionId);
 
         string? lastVisited = null;
         var visitedAll = true;
-        foreach (var workflowExecutionId in backlog.ExecutionIds)
+        foreach (var entry in backlog.Entries)
         {
-            if (!Visit(workflowExecutionId))
+            if (!entry.Held && !Visit(entry.WorkflowExecutionId))
             {
                 visitedAll = false;
                 break;
             }
 
-            lastVisited = workflowExecutionId;
+            lastVisited = entry.WorkflowExecutionId;
         }
 
-        // A short page that was visited to the end closes the walk, so the next sweep starts over; otherwise the bound
-        // resumes after the last visited ID. A sweep that visited none of the page leaves the stored bound as it was.
-        var backlogBound = !backlog.Resumable || (!visitedAll && lastVisited is null)
+        // A page that reached the end and was visited to the end closes the walk, so the next sweep starts over;
+        // otherwise the walk resumes after the last visited ID, and a sweep that visited none of it leaves it as it was.
+        var after = !backlog.Walks
             ? null
-            : new BacklogBoundUpdate(
-                visitedAll && backlog.ExecutionIds.Count < backlog.Limit ? null : lastVisited,
-                backlog.Limit,
-                backlog.ListedAt);
-
-        return new Selection(selected.Order(StringComparer.Ordinal).ToArray(), backlogBound);
+            : visitedAll && backlog.EndReached
+                ? null
+                : lastVisited ?? state.BacklogAfterWorkflowExecutionId;
+        var recoveryTurn = capacity == 1 && selected.Count > 0 ? !recoveryTookSlots : state.RecoveryHasSingleSlotTurn;
+        return new Selection(selected.Order(StringComparer.Ordinal).ToArray(), new RuntimeResumptionDiscoveryState(after, recoveryTurn));
     }
 
     // Candidates a source supplies (spec 184, FR-027) are due now, so they join the sweep beside the durable backlog
@@ -617,15 +741,16 @@ public sealed class RuntimeResumptionService(
         RuntimeRecoverySweepCursor? PreviousCursor,
         RuntimeRecoverySweepCursor? CursorToCommit,
         bool ShouldUpdateCursor,
-        BacklogBoundUpdate? BacklogBound,
+        RuntimeResumptionDiscoveryState NextState,
         IReadOnlyList<SourcedCandidates> Sourced);
 
-    private sealed record BacklogPage(IReadOnlyList<string> ExecutionIds, int Limit, DateTimeOffset ListedAt, bool Resumable);
+    // Held: the pause gate would stop a drain at this execution's head, so the pass visits it without a slot.
+    private sealed record BacklogEntry(string WorkflowExecutionId, bool Held);
 
-    // A null AfterWorkflowExecutionId closes the walk: the next sweep lists from the first execution.
-    private sealed record BacklogBoundUpdate(string? AfterWorkflowExecutionId, int Limit, DateTimeOffset ListedAt);
+    // Walks: whether the provider supports resuming after a position; EndReached: the last page read came back short.
+    private sealed record BacklogPage(IReadOnlyList<BacklogEntry> Entries, bool EndReached, bool Walks);
 
-    private sealed record Selection(IReadOnlyCollection<string> ExecutionIds, BacklogBoundUpdate? BacklogBound);
+    private sealed record Selection(IReadOnlyCollection<string> ExecutionIds, RuntimeResumptionDiscoveryState NextState);
 
     private sealed record SourcedCandidates(IRuntimeRecoveryCandidateSource Source, IReadOnlyCollection<string> WorkflowExecutionIds);
 }
