@@ -424,9 +424,11 @@ public static class RegularFileOpener
         internal static string GetFinalPath(SafeFileHandle handle)
         {
             var capacity = 512;
+            var path = new System.Text.StringBuilder(capacity);
             while (capacity <= 32768)
             {
-                var path = new System.Text.StringBuilder(capacity);
+                path.Clear();
+                path.Capacity = capacity;
                 var length = GetFinalPathNameByHandleNative(handle, path, (uint)path.Capacity, 0);
                 if (length == 0)
                     throw new IOException();
