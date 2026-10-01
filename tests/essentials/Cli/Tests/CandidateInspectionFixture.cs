@@ -213,18 +213,23 @@ internal sealed class CandidateInspectionFixture : IDisposable
         File.WriteAllText(InputPath("authored.json"), authored.ToJsonString());
     }
 
-    public void TrackAcceptedInput() => _initialInputBytes[InputPath("accepted.json")] = File.ReadAllBytes(InputPath("accepted.json"));
+    public void TrackAcceptedInput(string? path = null)
+    {
+        var acceptedPath = path ?? InputPath("accepted.json");
+        acceptedPath = Path.GetFullPath(acceptedPath);
+        _initialInputBytes[acceptedPath] = File.ReadAllBytes(acceptedPath);
+    }
 
     public string[] InspectionArguments(string? format = null, IReadOnlyList<string>? workspaceProfiles = null, bool trust = true,
         int? timeoutSeconds = null, string? settingReviewPath = null, string? hostDirectory = null,
-        IReadOnlyList<string>? packageRoots = null, string? environmentInputPath = null)
+        IReadOnlyList<string>? packageRoots = null, string? environmentInputPath = null, string? compositionPath = null)
     {
         if (timeoutSeconds is < 1 or > 300)
             throw new ArgumentOutOfRangeException(nameof(timeoutSeconds), "Inspection timeout must be between 1 and 300 seconds.");
         var arguments = new List<string>
         {
             "composition", "inspect", "--host", hostDirectory ?? HostAssemblyDirectory, "--host-dir", SourceDirectory,
-            "--shell", ShellId, "--environment", Environment, "--composition", InputPath("accepted.json"),
+            "--shell", ShellId, "--environment", Environment, "--composition", compositionPath ?? InputPath("accepted.json"),
         };
         if (format is not null)
             arguments.AddRange(["--format", format]);
