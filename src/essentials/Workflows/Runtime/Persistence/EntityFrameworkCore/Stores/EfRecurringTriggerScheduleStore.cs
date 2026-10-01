@@ -18,8 +18,10 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 public sealed class EfRecurringTriggerScheduleStore(
     RuntimeDbContext context,
     IPersistenceAccessContextAccessor accessContextAccessor,
-    IRuntimeRecoveryContinuationCodec continuationCodec) : IRecurringTriggerScheduleStore
+    IRuntimeRecoveryContinuationCodec continuationCodec,
+    TimeProvider? timeProvider = null) : IRecurringTriggerScheduleStore
 {
+    private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
     private const string ProjectionKind = "recurringSchedules";
     private const string ActivationCursorPurpose = "ef-runtime-recurring-schedule-activation-v1";
     private const string ArtifactCursorPurpose = "ef-runtime-recurring-schedule-artifact-v1";
@@ -223,8 +225,17 @@ public sealed class EfRecurringTriggerScheduleStore(
             replacedRows = await RowsForActivation(scope, replacedActivationId!, cancellationToken);
             await EnsureActiveProjectionAsync(replaced, replacedRows, scope, replacedActivationId!, cancellationToken);
         }
+        // Each activated schedule takes over a due, unsettled occurrence from the replaced schedule of its trigger (#2198),
+        // in this transaction. The replaced rows are rewritten below under a new revision, so a claim in flight on one of
+        // them is stale from the same commit on, and cannot settle the occurrence the activated schedule now holds.
+        var predecessors = replacedRows.Select(x => Read(x, scope)).ToArray();
+        var activatedAt = _timeProvider.GetUtcNow();
         foreach (var row in candidateRows)
-            Copy(row, Read(row, scope) with { IsActive = true }, scope, checked(row.Revision + 1));
+        {
+            var schedule = Read(row, scope);
+            var predecessor = predecessors.SingleOrDefault(schedule.IsSameTriggerAs);
+            Copy(row, (predecessor is null ? schedule : schedule.TakeOverFrom(predecessor, activatedAt)) with { IsActive = true }, scope, checked(row.Revision + 1));
+        }
         candidate.IsActive = true;
         candidate.Revision = checked(candidate.Revision + 1);
         UpdateStateContent(candidate, scope);
@@ -296,25 +307,6 @@ public sealed class EfRecurringTriggerScheduleStore(
         await CommitMutationAndClearAsync(transaction, cancellationToken, $"Recurring-schedule activation projection '{activationId}' deletion");
     }
 
-    public async ValueTask<IReadOnlyCollection<RecurringTriggerSchedule>> ListDueAsync(DateTimeOffset asOf, int limit, CancellationToken cancellationToken = default)
-    {
-        RuntimeStorePageRequest.ValidateLimit(limit, nameof(limit));
-        cancellationToken.ThrowIfCancellationRequested();
-        var scope = RequireScope();
-        var scopeHash = Hash(scope);
-        var scopeKey = Encode(scope);
-        var rows = await context.RecurringTriggerSchedules.AsNoTracking()
-            .Where(x => x.ScopeKeyHash == scopeHash && x.ScopeKey == scopeKey && x.IsActive && x.NextOccurrenceUtcTicks <= asOf.UtcTicks)
-            .OrderBy(x => x.NextOccurrenceUtcTicks)
-            .ThenBy(x => x.ScheduleIdOrderKey)
-            .Take(limit)
-            .ToArrayAsync(cancellationToken);
-        var schedules = rows.Select(x => Read(x, scope)).ToArray();
-        if (schedules.Any(x => !x.IsActive || x.NextOccurrence > asOf))
-            throw new InvalidDataException("Recurring-trigger due query returned a row outside its active and due predicate.");
-        return schedules;
-    }
-
     public async ValueTask<RecurringTriggerSchedule?> FindAsync(string scheduleId, CancellationToken cancellationToken = default)
     {
         ValidateScheduleId(scheduleId, nameof(scheduleId));
@@ -324,36 +316,135 @@ public sealed class EfRecurringTriggerScheduleStore(
         return row is null ? null : Read(row, scope, scheduleId);
     }
 
-    public async ValueTask<bool> TryAdvanceAsync(string scheduleId, DateTimeOffset expectedNextOccurrence, DateTimeOffset newNextOccurrence, CancellationToken cancellationToken = default)
+    public async ValueTask<IReadOnlyCollection<RecurringTriggerOccurrenceClaim>> ClaimDueAsync(RecurringTriggerOccurrenceClaimRequest request, CancellationToken cancellationToken = default)
     {
-        ValidateScheduleId(scheduleId, nameof(scheduleId));
+        ArgumentNullException.ThrowIfNull(request);
+        ValidateIdentity(request.OwnerId, nameof(request.OwnerId));
+        cancellationToken.ThrowIfCancellationRequested();
+        var scope = RequireScope();
+        var scopeHash = Hash(scope);
+        var scopeKey = Encode(scope);
+        var now = request.Now.UtcTicks;
+        context.ChangeTracker.Clear();
+        // Only the (scope, active, NextOccurrence) range is served by an index; the visibility filter and the order key's
+        // tie-break are evaluated on the rows in that range. That is acceptable because recurring schedules are few: one per
+        // Timer/Cron start trigger of an active publication.
+        var rows = await context.RecurringTriggerSchedules.AsNoTracking()
+            .Where(x => x.ScopeKeyHash == scopeHash && x.ScopeKey == scopeKey && x.IsActive && x.NextOccurrenceUtcTicks <= now &&
+                        (x.VisibleAfterUtcTicks == null || x.VisibleAfterUtcTicks <= now))
+            .OrderBy(x => x.NextOccurrenceUtcTicks)
+            .ThenBy(x => x.ScheduleIdOrderKey)
+            .Take(request.Limit)
+            .ToArrayAsync(cancellationToken);
+
+        var claims = new List<RecurringTriggerOccurrenceClaim>(rows.Length);
+        foreach (var row in rows)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var schedule = Read(row, scope);
+            if (!schedule.IsActive || schedule.NextOccurrence > request.Now || row.VisibleAfterUtcTicks is { } visible && visible > now)
+                throw new InvalidDataException("Recurring-trigger claim query returned a row outside its active, due and visible predicate.");
+            var originalRevision = row.Revision;
+            row.ClaimOwnerId = Encode(request.OwnerId);
+            row.ClaimToken = NextFencingToken(row);
+            (row.ClaimedAtUtcTicks, row.ClaimedAtOffsetMinutes) = EfRuntimeOperationalStoreSupport.TimestampColumns(request.Now);
+            (row.VisibleAfterUtcTicks, row.VisibleAfterOffsetMinutes) = EfRuntimeOperationalStoreSupport.TimestampColumns(request.Now.Add(request.VisibilityTimeout));
+            row.Revision = checked(row.Revision + 1);
+            if (await TryWriteAsync(row, originalRevision, cancellationToken))
+                claims.Add(ToClaim(row, schedule));
+        }
+
+        return claims;
+    }
+
+    public async ValueTask<RecurringTriggerOccurrenceClaim?> RenewClaimAsync(RecurringTriggerOccurrenceClaim claim, DateTimeOffset now, TimeSpan visibilityTimeout, CancellationToken cancellationToken = default)
+    {
+        if (visibilityTimeout <= TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(nameof(visibilityTimeout), "A recurring-trigger claim visibility timeout must be greater than zero.");
+        if (await LoadHeldAsync(claim, cancellationToken) is not { } held)
+            return null;
+        var row = held.Row;
+        var originalRevision = row.Revision;
+        (row.VisibleAfterUtcTicks, row.VisibleAfterOffsetMinutes) = EfRuntimeOperationalStoreSupport.TimestampColumns(now.Add(visibilityTimeout));
+        row.Revision = checked(row.Revision + 1);
+        return await TryWriteAsync(row, originalRevision, cancellationToken) ? ToClaim(row, held.Schedule) : null;
+    }
+
+    public async ValueTask<bool> SettleClaimAsync(RecurringTriggerOccurrenceClaim claim, DateTimeOffset nextOccurrence, CancellationToken cancellationToken = default)
+    {
+        if (await LoadHeldAsync(claim, cancellationToken) is not { } held)
+            return false;
+        var row = held.Row;
+        var originalRevision = row.Revision;
+        Copy(row, held.Schedule with { NextOccurrence = nextOccurrence }, held.Scope, checked(row.Revision + 1));
+        row.ClaimOwnerId = null;
+        (row.ClaimedAtUtcTicks, row.ClaimedAtOffsetMinutes) = EfRuntimeOperationalStoreSupport.TimestampColumns(null);
+        (row.VisibleAfterUtcTicks, row.VisibleAfterOffsetMinutes) = EfRuntimeOperationalStoreSupport.TimestampColumns(null);
+        row.FailureCount = 0;
+        return await TryWriteAsync(row, originalRevision, cancellationToken);
+    }
+
+    public async ValueTask<bool> ReleaseClaimAsync(RecurringTriggerOccurrenceClaim claim, DateTimeOffset visibleAt, CancellationToken cancellationToken = default)
+    {
+        if (await LoadHeldAsync(claim, cancellationToken) is not { } held)
+            return false;
+        var row = held.Row;
+        var originalRevision = row.Revision;
+        row.ClaimOwnerId = null;
+        (row.ClaimedAtUtcTicks, row.ClaimedAtOffsetMinutes) = EfRuntimeOperationalStoreSupport.TimestampColumns(null);
+        (row.VisibleAfterUtcTicks, row.VisibleAfterOffsetMinutes) = EfRuntimeOperationalStoreSupport.TimestampColumns(visibleAt);
+        row.FailureCount = checked(row.FailureCount + 1);
+        row.Revision = checked(row.Revision + 1);
+        return await TryWriteAsync(row, originalRevision, cancellationToken);
+    }
+
+    // The schedule row a claim transition may act on: present, intact, and still held by exactly this claim — its owner,
+    // fencing token and revision — on the very schedule it claimed. Anything else (a peer's re-claim, a deactivation, a
+    // republish, a delete) is stale. The schedule comparison also fences a claim out of a schedule deleted and saved again
+    // under the same id, whose revision restarts, even if its tokens happened to coincide.
+    private async Task<HeldClaim?> LoadHeldAsync(RecurringTriggerOccurrenceClaim claim, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(claim);
+        ValidateScheduleId(claim.Schedule.ScheduleId, nameof(claim));
+        ValidateIdentity(claim.OwnerId, nameof(claim));
         cancellationToken.ThrowIfCancellationRequested();
         var scope = RequireScope();
         context.ChangeTracker.Clear();
-        var row = await context.RecurringTriggerSchedules.AsNoTracking().SingleOrDefaultAsync(x => x.Id == Id(scope, scheduleId), cancellationToken);
-        if (row is null) return false;
-        var current = Read(row, scope, scheduleId);
-        if (!current.IsActive || current.NextOccurrence != expectedNextOccurrence) return false;
-        var updated = current with { NextOccurrence = newNextOccurrence };
-        Copy(row, updated, scope, checked(row.Revision + 1));
+        var row = await context.RecurringTriggerSchedules.AsNoTracking().SingleOrDefaultAsync(x => x.Id == Id(scope, claim.Schedule.ScheduleId), cancellationToken);
+        if (row is null)
+            return null;
+        var schedule = Read(row, scope, claim.Schedule.ScheduleId);
+        return row.Revision == claim.Revision && row.ClaimToken == claim.FencingToken && row.ClaimOwnerId == Encode(claim.OwnerId) &&
+               SchedulesEqual(schedule, claim.Schedule)
+            ? new HeldClaim(row, schedule, scope)
+            : null;
+    }
+
+    private sealed record HeldClaim(RecurringTriggerScheduleEntity Row, RecurringTriggerSchedule Schedule, string Scope);
+
+    // Writes a detached row under its revision as the concurrency token. A concurrent writer or a transient conflict the
+    // provider reports loses the write rather than failing it.
+    private async Task<bool> TryWriteAsync(RecurringTriggerScheduleEntity row, long originalRevision, CancellationToken cancellationToken)
+    {
         context.RecurringTriggerSchedules.Attach(row);
-        context.Entry(row).Property(x => x.Revision).OriginalValue = checked(row.Revision - 1);
+        context.Entry(row).Property(x => x.Revision).OriginalValue = originalRevision;
         context.Entry(row).State = EntityState.Modified;
         try
         {
             await context.SaveChangesAsync(cancellationToken);
-            context.ChangeTracker.Clear();
             return true;
         }
         catch (DbUpdateConcurrencyException)
         {
-            context.ChangeTracker.Clear();
             return false;
         }
         catch (Exception exception) when (EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.Transient))
         {
-            context.ChangeTracker.Clear();
             return false;
+        }
+        finally
+        {
+            context.ChangeTracker.Clear();
         }
     }
 
@@ -541,8 +632,41 @@ public sealed class EfRecurringTriggerScheduleStore(
         Validate(schedule);
         if (schedule.ScheduleId != Decode(row.ScheduleId) || schedule.ArtifactId != Decode(row.ArtifactId) || schedule.ExecutableNodeId != Decode(row.ExecutableNodeId) || schedule.StimulusType != Decode(row.StimulusType) || schedule.StimulusHash != Decode(row.StimulusHash) || schedule.Kind != (RecurringScheduleKind)row.Kind || schedule.Expression != row.Expression || schedule.NextOccurrence.UtcTicks != row.NextOccurrenceUtcTicks || (int)schedule.NextOccurrence.Offset.TotalMinutes != row.NextOccurrenceOffsetMinutes || schedule.CreatedAt.UtcTicks != row.CreatedAtUtcTicks || (int)schedule.CreatedAt.Offset.TotalMinutes != row.CreatedAtOffsetMinutes || schedule.ActivationId != Optional(row.ActivationId) || schedule.SlotId != Optional(row.SlotId) || schedule.IsActive != row.IsActive || row.ScheduleIdHash != Hash(schedule.ScheduleId) || row.ScheduleIdOrderKey != ScheduleOrder(schedule.ScheduleId) || row.ArtifactIdHash != Hash(schedule.ArtifactId) || row.ArtifactIdOrderKey != Order(schedule.ArtifactId) || schedule.ActivationId is not null && (row.ActivationIdHash != Hash(schedule.ActivationId) || row.ActivationIdOrderKey != Order(schedule.ActivationId)) || schedule.ActivationId is null && (row.ActivationIdHash is not null || row.ActivationIdOrderKey is not null))
             throw new InvalidDataException("The persisted EF recurring-trigger schedule content does not match its authoritative projections.");
+        ValidateClaimProjection(row);
         return schedule;
     }
+
+    // Never claimed (token 0, nothing set); claimed (owner, claim time and a later visibility deadline); released after a
+    // failure (no owner, a visibility deadline and at least one failure); or settled (no owner, no deadline, no failures).
+    private static void ValidateClaimProjection(RecurringTriggerScheduleEntity row)
+    {
+        var claimedAtPaired = (row.ClaimedAtUtcTicks is null) == (row.ClaimedAtOffsetMinutes is null);
+        var visibleAfterPaired = (row.VisibleAfterUtcTicks is null) == (row.VisibleAfterOffsetMinutes is null);
+        var consistent = row.ClaimToken >= 0 && row.FailureCount >= 0 && claimedAtPaired && visibleAfterPaired && (row.ClaimToken, row.ClaimOwnerId) switch
+        {
+            (0, _) => row.ClaimOwnerId is null && row.ClaimedAtUtcTicks is null && row.VisibleAfterUtcTicks is null && row.FailureCount == 0,
+            (_, not null) => row.ClaimedAtUtcTicks is { } claimed && row.VisibleAfterUtcTicks is { } visible && visible > claimed,
+            _ => row.ClaimedAtUtcTicks is null && (row.VisibleAfterUtcTicks is null ? row.FailureCount == 0 : row.FailureCount > 0)
+        };
+        if (!consistent)
+            throw new InvalidDataException("The persisted EF recurring-trigger schedule claim projection is inconsistent.");
+    }
+
+    // A fencing token is the row's previous token plus one, and never at or below the schedule's creation instant in ticks,
+    // so a schedule deleted and saved again does not count from zero again but on from its own creation instant (#2198).
+    // Successive claims of one row fall at strictly later instants (a claim needs the previous one settled, released or
+    // lapsed), so once a schedule is due after its creation its tokens never run more than one tick past its claim times,
+    // and a schedule recreated after its predecessor's last claim does not reissue any of the predecessor's tokens. The
+    // token is not the only fence: LoadHeldAsync also compares the claimed schedule, so a claim on a predecessor cannot act
+    // on a recreated schedule that differs from it, whatever the tokens.
+    private static long NextFencingToken(RecurringTriggerScheduleEntity row) => checked(Math.Max(row.ClaimToken, row.CreatedAtUtcTicks) + 1);
+
+    private static RecurringTriggerOccurrenceClaim ToClaim(RecurringTriggerScheduleEntity row, RecurringTriggerSchedule schedule) =>
+        row is { ClaimOwnerId: { } owner, ClaimedAtUtcTicks: { } claimedAt, ClaimedAtOffsetMinutes: { } claimedAtOffset, VisibleAfterUtcTicks: { } visibleAfter, VisibleAfterOffsetMinutes: { } visibleAfterOffset }
+            ? new(schedule, Decode(owner), row.ClaimToken, row.Revision,
+                EfRuntimeOperationalStoreSupport.FromUtcTicks(claimedAt, claimedAtOffset),
+                EfRuntimeOperationalStoreSupport.FromUtcTicks(visibleAfter, visibleAfterOffset), row.FailureCount)
+            : throw new InvalidDataException("The recurring-trigger claim projection is incomplete.");
 
     private static string? Optional(string? value) => value is null ? null : Decode(value);
 
@@ -638,11 +762,13 @@ public sealed class EfRecurringTriggerScheduleStore(
         return new ProjectionStateSnapshot { Entity = entity, Scope = scope, ActivationId = Decode(entity.ActivationId), ArtifactId = entity.ArtifactId, IsActive = entity.IsActive, ScheduleCount = entity.ScheduleCount, ProjectionFingerprint = entity.ProjectionFingerprint, ScheduleIds = ids, ScheduleFingerprints = fps };
     }
 
+    // The prepare-time ProjectionFingerprint is not compared: it covers each cursor, which moves for as long as the schedule
+    // lives (a settled occurrence, a take-over at activation), so it would refuse an activation that was restored or
+    // compensated after its first one. The per-schedule immutable fingerprints cover what must not change.
     private static bool ProjectionMatches(ProjectionStateSnapshot state, IEnumerable<RecurringTriggerScheduleEntity> rows, string scope, string activation)
     {
         var schedules = rows.Select(x => Read(x, scope)).ToArray();
         return state.ActivationId == activation && state.ScheduleCount == schedules.Length &&
-               state.ProjectionFingerprint == ProjectionFingerprint(schedules) &&
                state.ScheduleIds.SequenceEqual(schedules.Select(x => x.ScheduleId).OrderBy(x => x, StringComparer.Ordinal)) &&
                schedules.All(x => x.ActivationId == activation && x.ArtifactId == Optional(state.ArtifactId) &&
                                   state.ScheduleFingerprints.TryGetValue(x.ScheduleId, out var fp) && fp == ImmutableFingerprint(x));

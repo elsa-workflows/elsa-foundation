@@ -1042,6 +1042,19 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                         .HasMaxLength(516)
                         .HasColumnType("character varying(516)");
 
+                    b.Property<string>("ClaimOwnerId")
+                        .HasMaxLength(344)
+                        .HasColumnType("character varying(344)");
+
+                    b.Property<long>("ClaimToken")
+                        .HasColumnType("bigint");
+
+                    b.Property<int?>("ClaimedAtOffsetMinutes")
+                        .HasColumnType("integer");
+
+                    b.Property<long?>("ClaimedAtUtcTicks")
+                        .HasColumnType("bigint");
+
                     b.Property<string>("ContentJson")
                         .IsRequired()
                         .HasColumnType("text");
@@ -1059,6 +1072,9 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.Property<string>("Expression")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<int>("FailureCount")
+                        .HasColumnType("integer");
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
@@ -1116,6 +1132,12 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.Property<string>("StimulusType")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<int?>("VisibleAfterOffsetMinutes")
+                        .HasColumnType("integer");
+
+                    b.Property<long?>("VisibleAfterUtcTicks")
+                        .HasColumnType("bigint");
 
                     b.HasKey("Id");
 

@@ -55,15 +55,23 @@ operation:
    projections to the new publication and retire the replaced projection.
 5. The runtime `IWorkflowActivationCoordinator` runs steps 3 and 4 and the compensation. The slot and the
    projection stores share no transaction: if a process dies after the slot transition, the coordinator completes
-   that activation before the slot's next activation, and at the next shell start. Unpublish turns off every
-   activation that serves the slot, whatever its history. A failed activation compensates by restoring the
-   previous authority before the candidate is removed; observers refresh only from the final serving state.
+   that activation before the slot's next activation, and at the next shell start, and the publication records
+   follow it; a same-version republish after such a crash answers once its record is active (#2223). Unpublish
+   turns off every activation that serves the slot, whatever its history. A failed activation compensates by
+   restoring the previous authority before the candidate is removed; observers refresh only from the final serving
+   state.
 6. Retire or restore the publication source reference as provenance. Existing executions remain pinned to their
    immutable executable artifact; unpublishing does not delete that artifact.
 
 Clients should call preflight immediately before publish, display the resolved action/slot and conflicts, and
 send `ExpectedPublicationId` when protecting against a stale Studio view. A `409` means the client must refresh
 authority state and preflight again; it must not assume that a candidate became active.
+
+Publishing the version a slot already serves is answered with that publication, not created again. When a crash left
+that publication's record behind the slot (#2223), the republish first completes the slot's activation and its record. If
+the activation cannot be completed (for example because several other activations still serve the slot), the republish
+returns `409` with the completion's failure code, `projection_activation_failed`, and changes nothing; it is never
+reported as published.
 
 Both preflight responses carry `targetSlotOwner` (`{ sourceKind, sourceId }`) when the resolved slot is live under an
 activation source other than publishing, such as an imported or mounted artifact, and `null` when the slot is empty,
@@ -146,7 +154,7 @@ at every raise and map site (issue #1699).
 | `slot_revision_conflict`          | 409    | The slot's optimistic revision changed between preflight and activation (or between read and unpublish). Re-run preflight against the current slot and retry. |
 | `activation_compensation_failed`  | 409    | Activation failed and its best-effort compensation did not converge. The slot may be in a partially-switched state; check operational diagnostics before retrying. |
 | `projection_preparation_failed`   | 409    | Preparing the serving projection (trigger bindings, recurring schedules) failed before activation. Retry once the underlying failure is resolved. |
-| `projection_activation_failed`    | 409    | Activating the serving projection, or notifying its trigger observers, failed. Retry once the underlying failure is resolved. |
+| `projection_activation_failed`    | 409    | Activating the serving projection, or notifying its trigger observers, failed. This includes completing a slot's interrupted activation, which a publish or a same-version republish does first. Retry once the underlying failure is resolved. |
 | `publication_activation_failed`   | 409    | Activation failed for a reason not covered by the codes above. See the response `detail` and server logs. |
 | `trigger_conflict`                | 409    | Preflight found one or more authoritative trigger conflicts with another active publication. Resolve the conflicting triggers, or target a different slot, before retrying. |
 | `publication_snapshot_stale`      | 409    | The supplied preflight/review token is stale, expired, or no longer matches the requested action, slot, or expected publication. Re-run preflight to obtain a current token. |

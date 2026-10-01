@@ -21,7 +21,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 /// A crash is a process that stops for good once its slot transition commits (<see cref="PauseAfterSlotTransition"/>
 /// with nothing to resume it), so neither the projection switch nor any compensation runs. An in-flight activation is
 /// the same pause, resumed later. Each scenario then works through another process over the same durable state and
-/// checks what serves, through the queries the stimulus router and the recurring pump use.
+/// checks what serves, through the stimulus router's query and the slot's active recurring schedules.
 /// </remarks>
 internal static class WorkflowActivationCrashRepairContract
 {
@@ -704,10 +704,8 @@ internal static class WorkflowActivationCrashRepairContract
                 observer is null ? null : [observer],
                 NullLogger<WorkflowActivationCoordinator>.Instance);
             _shellStart = new(
-                stores.References,
-                stores.Authority,
+                new OccupiedActivationSlots(stores.References, stores.Authority, new FixedTimeProvider(Now)),
                 Coordinator,
-                new FixedTimeProvider(Now),
                 NullLogger<CompleteInterruptedActivationsStartupTask>.Instance);
         }
 
@@ -765,14 +763,17 @@ internal static class WorkflowActivationCrashRepairContract
         public async Task<string?> SlotActivationAsync() =>
             (await Stores.Authority.FindAsync(DefinitionId, SlotName))?.ActiveActivationId;
 
-        /// <summary>Asserts which activations serve, through the queries the stimulus router and the recurring pump use.</summary>
+        /// <summary>
+        /// Asserts which activations serve, through the stimulus router's query and the slot's active schedules. Every
+        /// schedule here is due at <see cref="Now"/>, so the active ones are those the recurring pump would claim; reading
+        /// them does not claim them (#2198).
+        /// </summary>
         public async Task AssertServingAsync(params string[] activationIds)
         {
             var expected = activationIds.Order(StringComparer.Ordinal).ToArray();
             var bindings = await Stores.Bindings.ListByStimulusAsync(new WorkflowTriggerBindingPageQuery(StimulusType, StimulusHash));
-            var schedules = await Stores.Schedules.ListDueAsync(Now, RuntimeStorePageRequest.MaximumLimit);
             Assert.Equal(expected, bindings.Items.Select(binding => binding.ActivationId!).Order(StringComparer.Ordinal));
-            Assert.Equal(expected, schedules.Select(schedule => schedule.ActivationId!).Order(StringComparer.Ordinal));
+            Assert.Equal(expected, await Stores.Schedules.ListServingActivationIdsAsync(SlotId));
         }
 
         public async Task AssertRetiredAsync(string activationId) =>
