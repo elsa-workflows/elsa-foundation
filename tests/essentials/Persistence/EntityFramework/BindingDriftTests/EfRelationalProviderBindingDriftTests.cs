@@ -2,6 +2,7 @@ using System.Reflection;
 using System.Xml.Linq;
 using Elsa.Persistence.EntityFramework.Tests;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Xunit;
 
@@ -61,6 +62,24 @@ public sealed class EfRelationalProviderBindingDriftTests
 
         var relational = Bind(engine, builder => EfRelationalProviderBinding.UseMigrationsFrom(builder, provider, engine.ConnectionString, HistoryTable, migrations));
         MigrationsAssemblyAssert.BoundByTheAssemblyItself(migrations, relational);
+    }
+
+    /// <summary>
+    /// #2209: the SQLite binding opens its connections one at a time per connection string, because Microsoft.Data.Sqlite's
+    /// pool can lend one connection to two opens that check out at once. The race is that library's, so no other engine's
+    /// opens wait at the gate.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(Providers))]
+    public void Only_the_SQLite_binding_gates_its_connection_opens(string provider)
+    {
+        var engine = Engines.Single(candidate => candidate.Provider == provider);
+        var builder = new DbContextOptionsBuilder();
+
+        EfRelationalProviderBinding.Use(builder, provider, engine.ConnectionString, HistoryTable);
+
+        var gates = builder.Options.FindExtension<CoreOptionsExtension>()?.Interceptors?.OfType<IDbConnectionInterceptor>().Count() ?? 0;
+        Assert.Equal(engine.ProviderName == EfProviderNames.Sqlite ? 1 : 0, gates);
     }
 
     [Theory]
