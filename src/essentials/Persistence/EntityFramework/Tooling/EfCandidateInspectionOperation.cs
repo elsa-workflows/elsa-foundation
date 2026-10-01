@@ -420,8 +420,7 @@ public sealed class EfCandidateInspectionOperation
 
     internal static ConfigurationRoot BuildConfiguration(
         IReadOnlyDictionary<string, byte[]> files,
-        string environment,
-        IReadOnlyDictionary<string, string>? explicitOverlay = null)
+        string environment)
     {
         var builder = new ConfigurationBuilder();
         var sourceNames = new[]
@@ -437,9 +436,6 @@ public sealed class EfCandidateInspectionOperation
         {
             foreach (var stream in streams)
                 builder.AddJsonStream(stream);
-            if (explicitOverlay is not null)
-                builder.AddInMemoryCollection(explicitOverlay.Select(entry =>
-                    new KeyValuePair<string, string?>(entry.Key, entry.Value)));
             return (ConfigurationRoot)builder.Build();
         }
         catch (Exception failure) when (EfToolingHost.IsNonFatal(failure))
@@ -451,6 +447,49 @@ public sealed class EfCandidateInspectionOperation
             foreach (var stream in streams)
                 stream.Dispose();
         }
+    }
+
+    internal static ConfigurationRoot BuildConfiguration(
+        IConfigurationRoot captured,
+        IReadOnlyDictionary<string, string> explicitOverlay)
+    {
+        var builder = new ConfigurationBuilder()
+            .AddConfiguration(captured)
+            .AddInMemoryCollection(explicitOverlay.Select(entry =>
+                new KeyValuePair<string, string?>(entry.Key, entry.Value)));
+        return (ConfigurationRoot)builder.Build();
+    }
+
+    internal static CapturedPublicIdentities ReadCapturedPublicIdentities(IConfigurationRoot captured)
+    {
+        var resources = captured.GetSection("Elsa:Persistence:Resources").GetChildren()
+            .Select(section => section.Key)
+            .Where(IsLogicalIdentity)
+            .ToHashSet(StringComparer.Ordinal);
+        var connections = captured.GetSection("ConnectionStrings").GetChildren()
+            .Select(section => section.Key)
+            .Where(IsLogicalIdentity)
+            .ToHashSet(StringComparer.Ordinal);
+
+        foreach (var resource in resources)
+        {
+            var connection = captured[$"Elsa:Persistence:Resources:{resource}:ConnectionName"];
+            if (IsLogicalIdentity(connection))
+                connections.Add(connection!);
+        }
+
+        return new CapturedPublicIdentities(resources, connections);
+    }
+
+    internal static bool HasOnlyCapturedPublicIdentities(
+        CandidateResolution resolution,
+        CapturedPublicIdentities publicIdentities)
+    {
+        return resolution.Participants.All(participant =>
+            participant.Resource is null ||
+            publicIdentities.Resources.Contains(participant.Resource) &&
+            participant.ConnectionReference is not null &&
+            publicIdentities.Connections.Contains(participant.ConnectionReference));
     }
 
     internal static CandidateResolution BuildResolution(
@@ -859,6 +898,11 @@ public sealed class EfCandidateInspectionOperation
         string? SelectorScope,
         string? ResourceScope,
         string ExactFileProvenance);
+
+    internal sealed record CapturedPublicIdentities(
+        IReadOnlySet<string> Resources,
+        IReadOnlySet<string> Connections);
+
     internal sealed record CandidateResolution(
         string Shell,
         string Environment,

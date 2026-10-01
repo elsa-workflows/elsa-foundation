@@ -126,11 +126,11 @@ public sealed class EfCandidateEnvironmentInspectionOperation
                 }
 
                 cancellationToken.ThrowIfCancellationRequested();
-                ConfigurationRoot configuration;
+                ConfigurationRoot capturedConfiguration;
                 try
                 {
-                    configuration = EfCandidateInspectionOperation.BuildConfiguration(
-                        candidate.Files, candidate.Environment, candidate.EnvironmentEntries);
+                    capturedConfiguration = EfCandidateInspectionOperation.BuildConfiguration(
+                        candidate.Files, candidate.Environment);
                 }
                 catch (EfCandidateInspectionOperation.CandidateInputRefusal refusal)
                 {
@@ -139,8 +139,11 @@ public sealed class EfCandidateEnvironmentInspectionOperation
                     return EfToolingExitCode.Refusal;
                 }
 
-                using (configuration)
+                using (capturedConfiguration)
                 {
+                    var publicIdentities = EfCandidateInspectionOperation.ReadCapturedPublicIdentities(capturedConfiguration);
+                    using var configuration = EfCandidateInspectionOperation.BuildConfiguration(
+                        capturedConfiguration, candidate.EnvironmentEntries);
                     cancellationToken.ThrowIfCancellationRequested();
                     var inspection = Inspect(candidate, hostAssembly[0], closure, configuration, cancellationToken);
                     cancellationToken.ThrowIfCancellationRequested();
@@ -156,6 +159,14 @@ public sealed class EfCandidateEnvironmentInspectionOperation
                     {
                         await WriteErrorAsync(response, candidate.Correlation, refusalCode, EfToolingExitCode.Refusal,
                             null, null, cancellationToken);
+                        return EfToolingExitCode.Refusal;
+                    }
+
+                    if (!EfCandidateInspectionOperation.HasOnlyCapturedPublicIdentities(
+                            inspection.Resolution!, publicIdentities))
+                    {
+                        await WriteErrorAsync(response, candidate.Correlation, "resource-definition-invalid",
+                            EfToolingExitCode.Refusal, null, null, cancellationToken);
                         return EfToolingExitCode.Refusal;
                     }
 
@@ -445,10 +456,10 @@ public sealed class EfCandidateEnvironmentInspectionOperation
                 currentBuffer = null;
             }
 
-            var candidate = new CandidateEnvironmentRequest(correlation, hostName, hostDirectory, shell, environment,
+            var capturedRequest = new CandidateEnvironmentRequest(correlation, hostName, hostDirectory, shell, environment,
                 accepted, removed, decodedFiles, environmentEntries);
             ownershipTransferred = true;
-            return candidate;
+            return capturedRequest;
         }
         catch (FormatException)
         {

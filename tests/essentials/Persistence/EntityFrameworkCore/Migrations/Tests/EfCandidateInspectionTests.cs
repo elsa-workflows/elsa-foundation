@@ -999,6 +999,60 @@ public sealed class EfCandidateInspectionTests : IDisposable
     }
 
     [Fact]
+    public async Task Explicit_environment_lane_refuses_a_new_resource_identity_without_echoing_it()
+    {
+        const string resource = "OverlayPrivateResource2292";
+        const string connection = "OverlayPrivateConnection2292";
+        var environment = EnvironmentDocument(new Dictionary<string, string>
+        {
+            ["Elsa__Persistence__DefaultResource"] = resource,
+            [$"Elsa__Persistence__Resources__{resource}__Provider"] = "Sqlite",
+            [$"Elsa__Persistence__Resources__{resource}__ConnectionName"] = connection,
+            [$"ConnectionStrings__{connection}"] = "Data Source=overlay-private-2292.db"
+        });
+        var run = await RunSameCaptureAsync("root-default-distinct-equal", environmentBytes: environment);
+
+        Assert.Equal(EfToolingExitCode.Refusal, run.CandidateExitCode);
+        Assert.Equal("resource-definition-invalid", run.CandidateResponse.GetProperty("error").GetProperty("code").GetString());
+        Assert.False(run.CandidateResponse.TryGetProperty("configurationResolution", out _));
+        AssertNoPrivateCandidateValues(run.CandidateResponseJson, resource, connection, "overlay-private-2292.db");
+    }
+
+    [Fact]
+    public async Task Explicit_environment_lane_refuses_an_overlay_only_connection_identity_without_echoing_it()
+    {
+        const string connection = "OverlayPrivateConnection2292";
+        var environment = EnvironmentDocument(new Dictionary<string, string>
+        {
+            ["Elsa__Persistence__Resources__primary__ConnectionName"] = connection,
+            [$"ConnectionStrings__{connection}"] = "Data Source=overlay-private-connection-2292.db"
+        });
+        var run = await RunSameCaptureAsync("root-default-distinct-equal", environmentBytes: environment);
+
+        Assert.Equal(EfToolingExitCode.Refusal, run.CandidateExitCode);
+        Assert.Equal("resource-definition-invalid", run.CandidateResponse.GetProperty("error").GetProperty("code").GetString());
+        Assert.False(run.CandidateResponse.TryGetProperty("configurationResolution", out _));
+        AssertNoPrivateCandidateValues(run.CandidateResponseJson, connection, "overlay-private-connection-2292.db");
+    }
+
+    [Fact]
+    public async Task Explicit_environment_lane_allows_switching_to_a_source_declared_connection_identity()
+    {
+        var run = await RunSameCaptureAsync("root-default-distinct-equal", environmentBytes: EnvironmentDocument(
+            new Dictionary<string, string>
+            {
+                ["Elsa__Persistence__Resources__primary__ConnectionName"] = "Logs"
+            }));
+
+        Assert.Equal(EfToolingExitCode.Success, run.CandidateExitCode);
+        var resolution = run.CandidateResponse.GetProperty("configurationResolution");
+        Assert.Contains(resolution.GetProperty("participants").EnumerateArray(), participant =>
+            participant.GetProperty("feature").GetString() == Runtime &&
+            participant.GetProperty("connectionReference").GetString() == "Logs");
+        AssertNoPrivateCandidateValues(run.CandidateResponseJson);
+    }
+
+    [Fact]
     public async Task All_legacy_partial_targets_remain_null_in_runtime_and_candidate_evidence()
     {
         var run = await RunSameCaptureAsync("all-legacy-partial");
@@ -1882,6 +1936,13 @@ public sealed class EfCandidateInspectionTests : IDisposable
         version = 1,
         entries = new[] { new { key, value } }
     });
+
+    private static byte[] EnvironmentDocument(IReadOnlyDictionary<string, string> entries) =>
+        Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new
+        {
+            version = 1,
+            entries = entries.Select(entry => new { key = entry.Key, value = entry.Value }).ToArray()
+        }));
 
     private async Task<EnvironmentAdmissionResult> RunEnvironmentAdmissionAsync(CandidateFixture candidate)
     {
