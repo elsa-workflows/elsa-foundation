@@ -111,7 +111,7 @@ setting. The warning reads the default shell's consumers at the host's start onl
 changed after the start, is not seen.
 
 A node also needs the **same Data Protection keys** as the others, so a token or cookie one node protects the others can read. That
-is a separate, shared key ring that the token store does not provide: see [Data Protection](#data-protection). A multi-node
+is a separate, shared key ring that the token store does not provide: see [Data Protection key ring](#data-protection-key-ring). A multi-node
 deployment needs both the shared store and the shared keys.
 
 The store follows the platform's provider conventions: the engine names are the ones every Elsa EF module takes, and without a
@@ -176,23 +176,20 @@ The backend-served login page (`GET /_elsa/identity/login`) embeds an antiforger
 cookie; the login `POST` validates it for the HTML-form flow. JSON API callers are unaffected. No configuration
 is required.
 
+### Data Protection key ring
+
+The sign-in cookie and the antiforgery tokens are protected with ASP.NET Core Data Protection. On a deployment of more than one
+node they are only readable by every node when all of them use the **same application name** and the **same key ring**; a cookie
+or token one node protects is otherwise refused by the next. The OpenIddict token store provides neither, so a shared token store
+(see [Where the token store lives](#where-the-token-store-lives)) does not make cookies and antiforgery tokens portable between
+nodes. How to configure the application name and the key ring is described in
+[elsa-workflows/elsa-foundation#2191](https://github.com/elsa-workflows/elsa-foundation/issues/2191).
+
 ### No API kill-switch
 
 The former `ApiSecurity.AllowAnonymous` setting has been removed, and no configuration disables authentication for a
 shell's API routes. Workflow-defined HTTP endpoints are anonymous unless their `HttpEndpoint` activity sets
 `Authorize`; see [Security posture](authentication-architecture.md#7-security-posture).
-
-## Data Protection
-
-ASP.NET Core Data Protection protects what a node hands out and reads back: the identity cookie, antiforgery tokens, and any
-payload a feature protects with it. Each node generates its own keys unless they are given somewhere to share, so on a deployment
-of more than one node a cookie or token one node protects is unreadable to the next, whatever store the token rows are in
-(see [Where the token store lives](#where-the-token-store-lives)).
-
-Every node must therefore configure Data Protection the same way: the **same application name**
-(`SetApplicationName`), and a **key ring in storage all the nodes share** (`PersistKeysTo...`), protected at rest
-(`ProtectKeysWith...`) wherever the storage is not itself private. Elsa does not choose that storage for the host. A single node,
-or nodes behind one shared volume, keeps working with the framework defaults.
 
 ## Same-origin hosting
 
