@@ -56,10 +56,24 @@ descriptors (`IntrinsicAuthoringDescriptorProvider`) report `false` for both.
 
 One helper on `ValuePolicyCombiner` computes the owner policy from the declaration and combines the authored
 minimum. `ExecutableNodeCompiler.CompileActivityPolicy` and `RuntimeInputBindingCompiler.Compile` both call it, so
-the two compile paths cannot disagree. The pinned-contract path
-(`RuntimeInputBindingCompiler.CompileAll(nodeId, IEnumerable<ActivityInputContract>, ...)`) reads the declaration
-from the pinned contract's policy. In phase 0, `RequiresEncryption` on an input policy is set only by a credential
-declaration or a `Secret` binding; a test pins that equivalence so a future second producer fails it.
+the two compile paths cannot disagree.
+
+## Pinned contract (`Elsa.Activities.Runtime.Core.Models.ActivityInputContract`)
+
+The pinned-contract path (`RuntimeInputBindingCompiler.CompileAll(nodeId, IEnumerable<ActivityInputContract>, ...)`,
+used by `ActivityTemplatePlacer`) has no `InputDefinition`. `ActivityInputContract` therefore gains an explicit
+`IsCredential` flag, set by `ExecutableNodeCompiler.BuildActivityContract` from `InputDefinition.IsCredential`. The
+credential rule reads that flag and nothing else. It never infers "credential" from `RequiresEncryption`, which is
+also true for non-credential inputs (any `Secret` binding, and any pinned policy that asks for encryption);
+inferring it would refuse literals the spec allows on non-credential inputs. Undeclared inputs keep their existing
+contract schema fingerprint, pinned by a golden fingerprint test.
+
+## Encryption-required inputs (FR-010)
+
+Independently of the credential rule, publish refuses a literal, object, default or expression binding on any input
+whose effective policy requires encryption, with `VF-ACT-011` (research R8). Only a `Secret` reference or no
+binding is accepted. An unbound input whose pinned contract declares a default counts as a literal. For a credential
+input the credential rule runs first, so it reports `Inputs/CredentialLiteral`.
 
 ## Not in this contract
 

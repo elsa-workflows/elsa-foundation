@@ -10,14 +10,16 @@ Proposed behavior for FR-010 to FR-012. Decisions are in [research R3, R8 and R9
   reference and the string-to-target conversion plan. Re-resolved at each activation.
 - `WithheldValueKind.PolicyRequiresEncryption`: produced by `RuntimeExternalEnvelopeStorage.RewriteAsync` for any
   other present value whose effective policy requires encryption. Not recoverable. Activation refuses it with
-  `VF-ACT-010`.
+  `VF-ACT-010`. This is a backstop: publish refuses literal and expression bindings on encryption-required inputs
+  (`VF-ACT-011`), so only paths that skip publish (runtime artifact import, research R13) or future producers reach
+  it.
 
 ## Surfaces and what they show
 
 | Surface (FR-011) | Source of truth | Shows for a secret-bound input |
 |---|---|---|
 | Persisted activity execution state (`ContentJson`) | committed `ActivityExecutionState.InputSnapshot` | the withheld envelope |
-| Persisted workflow instance state | `WorkflowExecutionState`, durable values | no secret value; `SecretRead` cannot target variables or outputs (research R12) |
+| Persisted workflow instance state | `WorkflowExecutionState`, durable values | no secret value; `SecretRead` cannot target variables, outputs or graph boundary values, because publish refuses `Secret` bindings on intrinsics, graph activities and checkpoint participants (`VF-ACT-012`, research R12) |
 | Execution evidence | `ExecutionEvidenceCheckpointEnricher` over commits | a withheld disposition with the reference name; `DescribeContent` never reads a value from a withheld envelope |
 | Run inspector: activity inputs | `ActivityExecutionInspection.BuildInputValueSnapshots` | `isSensitive: true`, value absent, a withheld marker with the reference name |
 | Run inspector: executable bindings | `WorkflowExecutableInspector` | the reference (name, type, scope) even though the binding is sensitive; references are not material |
@@ -39,6 +41,7 @@ values and inspection projections. The message names the state id and value key,
 |---|---|
 | Exception thrown from activation or activity code (invoke, resume, structural evaluation) | the handler's existing fault boundary replaces it with `SecretMaskedException` before recording, logging or tracing |
 | Fault message and incident text | `IRuntimeFaultCapturePolicy.Capture` receives the masked exception; reports the original exception type name |
+| Fault classification | not text, but it must survive masking: `SecretMaskedException` implements `IRuntimeFaultClassification` and copies `IsRetryable` and `FailureCode` from the wrapped exception, so a masked `StoreUnavailable` stays transient |
 | Activity-authored `ActivityFault.Message` | masked before `ActivityFaultProjection.ToNormalized` |
 | Runtime log lines that include the exception | receive the masked exception object |
 | Runtime spans | carry the exception type only today (`WorkflowSchedulerDrainer`); a test pins that no exception message is added |

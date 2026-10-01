@@ -89,6 +89,11 @@ dotnet test tests/essentials/Workflows/Publishing/Api/Tests/Elsa.Workflows.Publi
 
 ### Slice 6: credential-literal rule at seven entry points
 
+Journey: push one definition with a literal on a credential input through every Design API entry point (400, or the
+409 promotion-gate shape for promote), through file reconciliation and git export (that item refused, the pass
+completes), and through publish; confirm `git diff` for the slice touches nothing under
+`src/essentials/Workflows/Design/Persistence/`.
+
 ```bash
 dotnet test tests/essentials/Workflows/Design/Tests/Elsa.Workflows.Design.Tests.csproj
 dotnet test tests/essentials/Workflows/Design/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Tests.csproj
@@ -118,8 +123,9 @@ dotnet test tests/essentials/Activities/Runtime/Tests/Elsa.Activities.Runtime.Te
 dotnet test tests/essentials/Secrets/Workflows/Tests/Elsa.Secrets.Workflows.Tests.csproj --filter "FullyQualifiedName~Canary"
 ```
 
-Run once green, then once per protection with that protection disabled (A15), following the bite-proof procedure.
-Paste the table into the PR body.
+Run once green, then once per protection id in A15 (P1 to P9, M1 to M6) with that protection disabled, in the
+scenario A15 names, following the bite-proof procedure. Injection scenarios use only the canary host's test-only DI
+replacements. Paste the table into the PR body, one row per id; a green row blocks the slice.
 
 ### Slice 10: Studio (in `elsa-foundation-studio`)
 

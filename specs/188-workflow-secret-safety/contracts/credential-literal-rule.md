@@ -6,12 +6,16 @@ Proposed shapes for FR-008 and FR-009. Decisions and alternatives are in [resear
 
 - Rule identifier: `Inputs/CredentialLiteral` (the R3 validation-category form `ValidationError.Type` already uses).
 - Finding: `ValidationError(Path: "{nodeId}/inputs/{referenceKey}", Type: "Inputs/CredentialLiteral",
-  Message: "Input '{inputName}' on activity '{nodeId}' holds a credential and accepts only a secret reference.")`.
+  Message: "Inputs/CredentialLiteral: input '{inputName}' on activity '{nodeId}' holds a credential and accepts only a secret reference.")`.
+  The message starts with the rule identifier so every surface that shows only messages (including the existing
+  promotion-gate translation) still carries it.
 - The message and every refusal never echo the bound value, its expression text, or its length.
 
 ## Acceptance predicate (`Elsa.Workflows.Design.Core`)
 
-For an activity input whose `InputDefinition.IsCredential == true`, the bound `ArgumentState` is accepted only when:
+For an activity input whose `InputDefinition.IsCredential == true` (on the pinned-contract path,
+`ActivityInputContract.IsCredential == true`), the bound `ArgumentState` is accepted only when a row below says yes. The
+credential flag is always read explicitly; `RequiresEncryption` is never used to infer it ([research R5](../research.md)):
 
 | Binding | Accepted |
 |---|---|
@@ -22,40 +26,90 @@ For an activity input whose `InputDefinition.IsCredential == true`, the bound `A
 | `Variable`, `WorkflowRequest`, `ActivityResult` | no |
 | any text expression (`JavaScript`, `Liquid`, ...) | no |
 
-Inputs that are not credentials are unaffected, including sensitive ones (FR-009). The `"Secret"` literal is
+Inputs that are not credentials are unaffected by this rule, including sensitive ones (FR-009). A non-credential
+input whose effective policy requires encryption is governed by the separate publish rule `VF-ACT-011`
+([research R8](../research.md)). The `"Secret"` literal is
 duplicated from `Elsa.Secrets.Core.Models.SecretExpressionTypes.Secret` rather than referenced (framework §2.17);
 a test in the bridge test project, which references both, pins equality.
 
 ## Enforcement and refusal shape at each entry point
 
-| # | Entry point | Where the rule runs | Refusal | HTTP (where an endpoint exists) |
+The rule runs in the application layer only. No design persistence command and no persistence feature changes;
+[research R7](../research.md) records why the guarded-writer and decorator options were rejected.
+
+| # | Entry point | Where the rule runs (integration point) | Refusal | HTTP (where an endpoint exists) |
 |---|---|---|---|---|
-| 1 | Draft save: add definition, create draft, clone draft, update draft (Definitions/Add, Drafts/Replace, Definitions/Update) | guarded state writer on `EfDesignCommand`, before the atomic stage | `CredentialLiteralRefusedException`; nothing stored | 400, errors keyed by path |
-| 2 | Promote | same guard on the draft's state inside `EfPromoteDraftToVersionCommand` | same | 400 |
-| 3 | Publish (including publish-on-reconcile and draft test runs) | `RuntimeInputBindingCompiler.CompileAll`, per input | same exception, surfaced through publication's existing compile-error translation | 400 |
-| 4 | Add version (Versions/Add) | guarded writer in `EfAddWorkflowDefinitionVersionCommand` | same | 400 |
-| 5 | Submit (Definitions/Submit) | guarded writer in `EfSubmitWorkflowDefinitionCommand` | same | 400 |
-| 6 | File-based reconciliation import (and git import, which feeds it) | guarded writer in `EfMaterializeWorkflowDefinitionVersionCommand` | same; the reconciliation pass fails for that version | n/a |
-| 7 | Git export | `GitWorkflowExporter`, before writing a version file | same; the version file is not written and the export pass fails | n/a |
+| 1 | Draft save: Definitions/Add, Drafts/Replace, Definitions/Update | Design API admission: the endpoint or handler calls `EnsureNoCredentialLiteralsAsync` on the incoming state before `IAddWorkflowDefinitionCommand` or `IUpdateDraftCommand` | `CredentialLiteralRefusedException`; the command never runs, nothing is stored | 400, errors keyed by path |
+| 2 | Promote (Drafts/Promote) | the existing in-lock promotion gate: `CredentialLiteralValidator` is registered as an `IDraftValidator`, and `EfPromoteDraftToVersionCommand` already throws `DraftHasValidationErrorsException` on any gate error | existing promotion-gate refusal; no version row written | 409, the existing promotion-gate shape, errors keyed by path, messages starting with the rule id |
+| 3 | Publish (including publish-on-reconcile and draft test runs) | `RuntimeInputBindingCompiler.CompileAll`, per input | `CredentialLiteralRefusedException`, surfaced through publication's existing compile-error translation | 400 |
+| 4 | Add version (Versions/Add) | Design API admission before `IAddWorkflowDefinitionVersionCommand` | same as row 1 | 400 |
+| 5 | Submit (Definitions/Submit) | Design API admission before `ISubmitWorkflowDefinitionCommand` | same as row 1 | 400 |
+| 6 | File-based reconciliation import (and git import, which feeds it) | `WorkflowsVersionReconciler.ReconcileVersion`, per item, before any catalog mutation for that item | that item only is refused; see "Per-item behavior" below | n/a |
+| 7 | Git export | `GitWorkflowExporter`, per version, before writing its file | that version file only is skipped; see "Per-item behavior" below | n/a |
 
 Each refusal carries the rule identifier, the activity (node) id and the input name. The 400 problem body follows
 the existing design translator shape (`WorkflowDesignExceptionTranslator.Validation`): `errors` keyed by
-`{nodeId}/inputs/{referenceKey}`, each message prefixed with `Inputs/CredentialLiteral`.
+`{nodeId}/inputs/{referenceKey}`, each message starting with `Inputs/CredentialLiteral`.
 
 ## Blocking at draft save
 
 This is the one deliberate exception to "draft save records validation errors without blocking" (spec
-clarification). The exception is implemented by the guard throwing before the write, not by changing
-`DraftValidationGate`; every other validator keeps the non-blocking draft contract.
+clarification). The exception is implemented by the Design API admission throwing before the command runs, not by
+changing `DraftValidationGate`. The same validator also contributes its findings to `DraftValidating`, where they are
+recorded like any other finding (and block only at promote, as every gate error already does).
+
+## Per-item behavior during file reconciliation and git export
+
+Both run as startup tasks (`WorkflowsVersionReconcilerStartupTask`, `[Order(2)]`; `GitWorkflowExportStartupTask`,
+`[Order(3)]`). An exception thrown out of either aborts the whole pass and keeps the host from becoming ready, and
+the reconciler materializes the definition record before the version (verified in
+`WorkflowsVersionReconciler.ReconcileVersion`). So a refusal there must never throw out of the pass:
+
+- **Validate first.** The reconciler validates an item's state before it materializes anything for that item: no
+  definition record, no metadata update, no version row. The exporter validates a version before it creates the
+  version directory or writes the file.
+- **Refuse that item only.** A refused reconciliation item is treated like an outdated one: it is not materialized
+  and its provenance claim does not travel to `WorkflowVersionsReconciled`, so publish-on-reconcile never sees it. A
+  refused export version is not written, committed or tagged.
+- **Value-free diagnostic.** Each refusal logs one warning naming the rule id, the definition id, the version, the
+  node id and the input name, never the value, its length or its expression text.
+- **Continue the pass.** The pass moves on to the next item. A pass whose only problems are refusals completes
+  normally, publishes `WorkflowVersionsReconciled` for the items it did reconcile, and does not block host
+  readiness. Export pushes whatever it committed.
 
 ## Composition
 
-`ICredentialLiteralValidator` is a required constructor dependency of the eight state-writing EF commands and of
-`GitWorkflowExporter`. A host that composes design persistence without `WorkflowDesignValidations` therefore fails
-at activation instead of silently skipping the rule. `WorkflowsDesignEntityFrameworkCore` and
-`WorkflowsDesignGitReconciliation` declare `DependsOn` on `WorkflowDesignValidations`.
+`ICredentialLiteralValidator` is a required constructor dependency of the five Design API callers,
+`WorkflowsVersionReconciler` and `GitWorkflowExporter`. `WorkflowsDesignApi`, `JsonWorkflowReconciliation` and
+`WorkflowsDesignGitReconciliation` (the two concrete features deriving from `WorkflowsDesignReconciliationFeature`)
+declare `DependsOn` on `WorkflowDesignValidations`, so a host that composes them without the rule fails at
+composition instead of silently skipping it. The persistence features declare nothing new.
 
-## Known gap (not covered by this rule)
+## Coverage guard
 
-Runtime artifact import carries compiled bindings and is not one of the seven entry points (research R13). The
-FR-010 commit backstop refuses to persist such a value at run time.
+An architecture test (T055) keeps the seam from being bypassed:
+
+1. **Contract inventory.** Every public interface in `Elsa.Workflows.Design.Persistence.Core.Contracts` whose
+   methods accept `WorkflowDefinitionState`, `WorkflowDefinitionDraft`, `WorkflowDefinitionVersion` or
+   `UpdateDraftRequest` must be classified on the guard's list as either *admitted* (callers must admit) or *exempt
+   with a reason* (today: `ICloneDraftFromVersionCommand`, which copies a stored version; `IPromoteDraftToVersionCommand`,
+   covered by the promotion gate). A new state-carrying contract fails the guard until someone classifies it.
+2. **Caller coverage.** A source scan of `src/` finds every non-persistence type whose constructor takes an admitted
+   contract, and asserts that the same constructor takes `ICredentialLiteralValidator`. The scan must find at least
+   the six known callers, so it cannot pass by scanning nothing.
+3. **Other writers.** Every `IGitWorkflowExporter` implementation takes `ICredentialLiteralValidator`, and
+   `CredentialLiteralValidator` is registered as an `IDraftValidator`.
+
+Mutations that must turn it red: remove the validator from one Design API caller; add a new admitted-contract
+caller without it; add a new state-carrying contract without classifying it.
+
+## Known gaps (not covered by this rule)
+
+- **Activities not in the catalog.** The validator, like `RequiredInputOutputValidator`, skips nodes whose activity
+  version the catalog cannot resolve, so it cannot tell whether their inputs are credentials. Draft save,
+  add-version, submit, file reconciliation and git export cannot judge such nodes and accept them. Publish resolves
+  every node and refuses there; promote refuses once the activity is installed. Until then such a literal can be
+  stored.
+- **Runtime artifact import** carries compiled bindings and is not one of the seven entry points (research R13).
+  R8's producer withholding and the `VF-ACT-010` activation refusal keep such a value out of persisted runtime
+  state.

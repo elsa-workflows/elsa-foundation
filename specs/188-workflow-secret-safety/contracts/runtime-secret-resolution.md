@@ -25,8 +25,25 @@ public sealed record RuntimeSecretResolution
     public bool IsRetryable { get; init; }       // meaningful only when !Succeeded
 }
 
+/// Runtime-owned fault classification. The fault recorder reads retryability and code through it, never through a
+/// concrete exception type, so wrapping (masking) cannot change the classification.
+public interface IRuntimeFaultClassification
+{
+    bool IsRetryable { get; }
+    string? FailureCode { get; }
+}
+
 public sealed class RuntimeSecretResolutionException(string referenceName, string failureCode, bool isRetryable)
-    : Exception($"Secret '{referenceName}' could not be resolved ({failureCode}).");
+    : Exception($"Secret '{referenceName}' could not be resolved ({failureCode})."), IRuntimeFaultClassification;
+
+/// Optional replacement contract (§2.6.2). Lets publish refuse a reference whose declared secret type cannot be held
+/// by the input type (research R11). Absent in hosts without the bridge: every domain is then Unknown.
+public interface IRuntimeSecretTypeDomains
+{
+    RuntimeSecretValueDomain GetDomain(string typeName);
+}
+
+public enum RuntimeSecretValueDomain { Unknown, Text, StructuredText }
 ```
 
 Rules:
@@ -34,10 +51,15 @@ Rules:
 - `TenantId` is supplied by the runtime from `IWorkflowExecutionPartitionAccessor.Current` at activation. No
   binding, request payload, setting or default supplies it. A global or across-scope access context throws from
   `RequireScope()` before resolution.
+- Fail closed on tenant disagreement: when the executing instance's `WorkflowExecutionState.TenantId` is set and
+  differs ordinally from the partition, resolution is refused with `TenantMismatch` (permanent) before the resolver
+  is called. A null `TenantId` uses the partition (research R2). `ActivityActivationRequest` gains the workflow
+  execution id so the activator can read the instance; every caller sets it, and the read happens only when a
+  withheld secret envelope is present.
 - `RuntimeSecretResolution.Value` and any resolved value never reach a log, exception message, metric, span
   attribute or persisted state. The fault message carries the reference name and the code only.
-- `FailureCode` is one of the codes below or `TypeMismatch` from conversion. It is a code name, not the resolver's
-  error text.
+- `FailureCode` is one of the codes below, `TypeMismatch` from conversion, or `TenantMismatch` from the tenant
+  check. It is a code name, not the resolver's error text.
 
 ## Bridge mapping (`Elsa.Secrets.Workflows`, `SecretValueRuntimeResolver`)
 
@@ -51,19 +73,36 @@ Rules:
 `StoreUnavailable`, which can carry store-private detail. Every enum member must appear in the mapping test, so a new
 member added later fails the test until someone classifies it.
 
+The bridge also implements `IRuntimeSecretTypeDomains` from `SecretTypeNames`: `text` maps to `Text`; `rsa-key`
+and `x509-certificate` map to `StructuredText`; any other type name maps to `Unknown`.
+
 ## Activation behavior (`ActivityActivator`)
 
 | Situation | Outcome |
 |---|---|
-| Snapshot has no withheld secret envelopes | Unchanged path, no resolver call. |
+| Snapshot has no withheld secret envelopes | Unchanged path, no resolver call, no instance read. |
+| Instance `TenantId` set and different from the partition | Throw `RuntimeSecretResolutionException(name, "TenantMismatch", false)`; resolver never called. |
 | Resolver composed, resolution succeeds | Convert with the envelope's plan; hydrate; register value with `IRuntimeSecretMask`; nothing written back. |
-| Resolution fails | Throw `RuntimeSecretResolutionException`; the handler's existing fault boundary records a fault whose `IsRetryable` comes from the exception. |
+| Resolution fails | Throw `RuntimeSecretResolutionException`; the handler's existing fault boundary records a fault whose `IsRetryable` and code come from `IRuntimeFaultClassification`, also when the exception is masked (the masking wrapper copies both). |
 | Conversion fails | Throw `RuntimeSecretResolutionException(name, "TypeMismatch", false)`. |
 | No `IRuntimeSecretResolver` composed | Throw the activation failure classified by `ActivityActivationFailureHandler` (new kind, recovery "compose `SecretsWorkflows`"); the activity waits with an incident and is not faulted (§E2.6.1). |
-| Withheld envelope of kind `PolicyRequiresEncryption` | Throw `VF-ACT-010`: the value was withheld and cannot be recovered. Never hydrate null. |
+| Withheld envelope of kind `PolicyRequiresEncryption` | Throw `VF-ACT-010`: the value was withheld and cannot be recovered. Never hydrate null. A backstop only: publish refuses literal and expression bindings on encryption-required inputs (`VF-ACT-011`). |
 
-Every activation path goes through the activator: invoke, bookmark resume, the retry boundary and structural parent
-evaluation. Each one re-resolves (FR-002).
+Resolution happens only in the activator's hydration branch, which runs for strategies with
+`RequiresInputHydration = true` (the CLR strategy). Every CLR activation goes through it: invoke, bookmark resume,
+structural parent evaluation, and the second activation on a re-materialized snapshot after a child completes. Each
+one re-resolves (FR-002). The boundary retry never activates anything: it clones graph boundary inputs and
+schedules a fresh execution of that graph boundary, which cannot carry a `Secret` binding. Activity kinds that read inputs outside the
+hydration branch (graph activities, checkpoint participants, intrinsics) cannot carry a `Secret` binding: publish
+refuses it with `VF-ACT-012`. The full path list is [research R3a](../research.md).
+
+## Publish-time refusals owned by this contract
+
+| Code | Refused |
+|---|---|
+| `VF-ACT-012` | a `Secret` binding on an intrinsic node, a non-CLR consumer (graph activity), or a CLR type implementing `IRuntimeActivityCheckpointParticipant` |
+| `VF-ACT-013` | a `Secret` binding whose reference declares a `typeName` with domain `StructuredText` on an input that is not a single string-typed value |
+| existing | a `Secret` binding on an input type with no conversion plan from `string` |
 
 ## Feature
 

@@ -4,7 +4,7 @@
 
 **Created**: 2026-09-30
 
-**Status**: Draft. Specification task [#2211](https://github.com/elsa-workflows/elsa-foundation/issues/2211); clarified 2026-09-30; implementation has not started.
+**Status**: Draft — specification task [#2211](https://github.com/elsa-workflows/elsa-foundation/issues/2211); clarified 2026-09-30; plan and tasks drafted 2026-10-01; implementation has not started.
 
 **Input**: Phase 0 of the [Connections and Secrets model](../../docs/plans/connections-and-secrets-model.md), decisions D1 and D10. Make secrets usable from workflows, and stop secret material from entering workflow definitions and persisted or emitted runtime output. No new concepts: Connections, authentication schemes, OAuth, and external secret stores are later phases.
 
@@ -26,6 +26,7 @@ The Secrets module stores, versions, rotates, and audits secrets, and Studio let
 - Q: At draft save, block or record the secret-literal violation? → A: Block. The literal is never stored, as an explicit exception to the non-blocking draft convention.
 - Q: Which inputs refuse literals? → A: Only activity-declared credential inputs. Non-credential sensitive inputs may hold literals and are masked.
 - Q: What does enforcing `RequiresEncryption` mean for values not derived from a secret reference? → A: Withhold. Persist a marker; no encryption at rest in phase 0.
+- Q (raised in plan review 2026-10-01): How does an expression-bound value that requires encryption reach the activity? → A: It cannot in phase 0 without persisting it, so such bindings are refused at publish; secret references are the only binding for encryption-required inputs. Phase 1's redacting value type revisits this.
 
 ## User Scenarios & Testing
 
@@ -106,7 +107,7 @@ Studio knows which inputs an activity declares as credentials or sensitive, so i
 - A secret referenced by name only, with no type or scope constraint: resolves by name within the tenant, as `ISecretValueResolver` already does.
 - A secret deleted between publish and run: faults with `Deleted` or `NotFound`, never with a stale cached value.
 - An activity reads a resolved secret, then the workflow suspends for days: nothing persisted during suspension contains the value; resumption re-resolves.
-- A credential input bound to an expression (for example JavaScript that builds a token from a variable): refused like a literal (FR-009). A non-credential sensitive input bound to an expression: allowed; the result follows the effective policy and, if it requires encryption, is withheld from persisted state (FR-010).
+- A credential input bound to an expression (for example JavaScript that builds a token from a variable): refused like a literal (FR-009). A non-credential sensitive input bound to an expression: allowed when its effective policy does not require encryption; the result follows the effective sensitive policy. A literal or expression on an input whose effective policy requires encryption is refused at publish (FR-010).
 - Definitions created before this rule that already contain literals on credential inputs: Elsa 4 is unreleased, so no migration; they are refused on their next save or publish.
 - A literal empty string or null on a credential input: treated as "unbound," not as a literal credential, and does not trip the rule.
 - The same secret consumed by many activities in one run: each consumption resolves at its point of use; phase 0 does not require caching.
@@ -129,7 +130,7 @@ Studio knows which inputs an activity declares as credentials or sensitive, so i
 - **FR-007**: The effective policy of a binding MUST be the stricter of the activity's declaration and the author's per-binding choice. An author MUST NOT be able to downgrade a declared policy; a downgrade attempt MUST be refused, consistent with the existing value-policy downgrade rule.
 - **FR-008**: A definition that binds a literal to a credential input MUST be refused, with one stable rule identifier, the activity id, and the input name, at: draft save, promote, publish, add-version, submit, file-based reconciliation import, and git export. At draft save the refusal MUST block: the literal is never stored, not even in a draft. This rule is a deliberate exception to the convention that draft save records validation errors without blocking, because the harm (credential material at rest) happens at save.
 - **FR-009**: The rule MUST apply only to inputs the activity declares as credentials (FR-006b). Sensitive inputs that are not credentials (for example personal data) MAY hold literals; their values are masked in Studio and follow the effective sensitive policy at run time. Expressions on credential inputs are refused like literals; only a secret reference or no binding is accepted.
-- **FR-010**: Values whose effective policy requires encryption MUST NOT be written to persisted state in plain text. Such values MUST be withheld: persisted state records a withheld marker instead of the value. Secret-bound inputs are re-resolved on resumption (FR-002). Other withheld values are not recoverable after the instance is persisted; an activity that needs one after resumption must derive it again. Phase 0 adds no encryption at rest to the workflow runtime.
+- **FR-010**: Values whose effective policy requires encryption MUST NOT be written to persisted state in plain text. In phase 0, an activity input whose effective policy requires encryption MUST be bound to a secret reference or left unbound; a literal or expression binding on such an input MUST be refused at publish with a stable rule identifier, because no phase 0 path can deliver that value to the activity without persisting it. Any other value whose effective policy requires encryption MUST be withheld: persisted state records a withheld marker instead of the value, and the value is not recoverable. Secret-bound inputs are re-resolved on resumption (FR-002). Phase 0 adds no encryption at rest to the workflow runtime.
 
 **No leakage**
 
