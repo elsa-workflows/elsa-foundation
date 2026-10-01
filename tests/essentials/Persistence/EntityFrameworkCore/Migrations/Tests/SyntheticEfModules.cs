@@ -93,4 +93,40 @@ internal static class SyntheticEfModules
         builder.Save(image);
         return Assembly.Load(image.ToArray());
     }
+
+    /// <summary>
+    /// Emits persisted shell feature metadata without EF enrollment. These features exercise the
+    /// normal host discovery and selection path while contributing no participant rows.
+    /// </summary>
+    public static Assembly BuildNonParticipantFeatures(string assemblyName, IReadOnlyList<string> featureNames)
+    {
+        var builder = new PersistedAssemblyBuilder(new AssemblyName(assemblyName), typeof(object).Assembly, []);
+        var module = builder.DefineDynamicModule(assemblyName);
+        var featureAttributeConstructor = typeof(ShellFeatureAttribute).GetConstructor([typeof(string)])!;
+        var contractMethod = typeof(IShellFeature).GetMethod(nameof(IShellFeature.ConfigureServices))!;
+
+        for (var index = 0; index < featureNames.Count; index++)
+        {
+            var featureType = module.DefineType(
+                $"SyntheticNonParticipantFeature{index:D5}",
+                TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.Class,
+                typeof(object),
+                [typeof(IShellFeature)]);
+            featureType.DefineDefaultConstructor(MethodAttributes.Public);
+            featureType.SetCustomAttribute(new CustomAttributeBuilder(featureAttributeConstructor, [featureNames[index]]));
+
+            var implementation = featureType.DefineMethod(
+                contractMethod.Name,
+                MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.Final | MethodAttributes.NewSlot,
+                contractMethod.ReturnType,
+                contractMethod.GetParameters().Select(parameter => parameter.ParameterType).ToArray());
+            implementation.GetILGenerator().Emit(OpCodes.Ret);
+            featureType.DefineMethodOverride(implementation, contractMethod);
+            featureType.CreateType();
+        }
+
+        using var image = new MemoryStream();
+        builder.Save(image);
+        return Assembly.Load(image.ToArray());
+    }
 }

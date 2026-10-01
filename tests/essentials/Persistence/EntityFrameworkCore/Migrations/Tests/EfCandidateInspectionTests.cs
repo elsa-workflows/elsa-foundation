@@ -872,6 +872,64 @@ public sealed class EfCandidateInspectionTests : IDisposable
         Assert.False(File.Exists(DatabasePath));
     }
 
+    [Fact]
+    public async Task Public_operation_reaches_the_exact_response_limit_and_refuses_one_byte_over()
+    {
+        const int maximumResponseBytes = 4 * 1024 * 1024;
+        const int enabledFeatureCount = 1862;
+        const int plusCount = 124;
+        const string largeShell = Shell + "-limit";
+        var enabledFeatureIds = Enumerable.Range(0, enabledFeatureCount)
+            .Select(index => LargeSelectionFeatureId(
+                'A',
+                index < 3 ? plusCount - 1 : plusCount,
+                index,
+                index is >= 3 and < 152,
+                index < 3 ? $"{index:X3}X" : null))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        var exactDisabledFeatureId = LargeSelectionFeatureId('D', plusCount - 5, 0, suffix: "000YYYY");
+        var oneByteOverDisabledFeatureId = $"{exactDisabledFeatureId}X";
+        var syntheticAssembly = SyntheticEfModules.BuildNonParticipantFeatures(
+            $"Elsa.Candidate.ResponseLimit.{Guid.NewGuid():N}",
+            [.. enabledFeatureIds, exactDisabledFeatureId, oneByteOverDisabledFeatureId]);
+
+        var exactCandidate = AddEnvironmentInput(
+            CreateCandidate(enabledFeatureIds,
+                BuildLargeSelectionFiles(enabledFeatureIds, exactDisabledFeatureId, largeShell)),
+            EnvironmentDocument(new Dictionary<string, string>()));
+        exactCandidate.Request["candidate"]!["shell"] = largeShell;
+        using var exactResponse = new MemoryStream();
+        var exactExitCode = await RunEnvironmentOperationAsync(
+            new EfCandidateEnvironmentInspectionOperation(() =>
+                [.. EfConfigurationProbeTests.HostAssemblies, syntheticAssembly]),
+            exactCandidate.Request, exactResponse, CancellationToken.None);
+
+        Assert.Equal(EfToolingExitCode.Success, exactExitCode);
+        Assert.Equal(maximumResponseBytes, exactResponse.Length);
+        using (var exactDocument = JsonDocument.Parse(exactResponse.ToArray()))
+        {
+            Assert.Equal("ok", exactDocument.RootElement.GetProperty("status").GetString());
+            Assert.Equal("captured-workbench-json-explicit-environment-v1",
+                exactDocument.RootElement.GetProperty("configurationResolution").GetProperty("source").GetString());
+        }
+
+        var oneByteOverCandidate = AddEnvironmentInput(
+            CreateCandidate(enabledFeatureIds,
+                BuildLargeSelectionFiles(enabledFeatureIds, oneByteOverDisabledFeatureId, largeShell)),
+            EnvironmentDocument(new Dictionary<string, string>()));
+        oneByteOverCandidate.Request["candidate"]!["shell"] = largeShell;
+        using var oneByteOverResponse = new MemoryStream();
+        var refusal = await Assert.ThrowsAsync<EfToolingRefusal>(() => RunEnvironmentOperationAsync(
+            new EfCandidateEnvironmentInspectionOperation(() =>
+                [.. EfConfigurationProbeTests.HostAssemblies, syntheticAssembly]),
+            oneByteOverCandidate.Request, oneByteOverResponse, CancellationToken.None));
+
+        Assert.Equal("candidate-host-unavailable", refusal.Code);
+        Assert.Equal(EfToolingExitCode.ResolutionFailure, refusal.ExitCode);
+        Assert.Empty(oneByteOverResponse.ToArray());
+    }
+
     [Theory]
     [InlineData(1022, EfToolingExitCode.Success, false)]
     [InlineData(1023, EfToolingExitCode.ResolutionFailure, false)]
@@ -2112,6 +2170,68 @@ public sealed class EfCandidateInspectionTests : IDisposable
             ["appsettings.Production.json"] = environmentAppSettings,
             ["shells.json"] = Encoding.UTF8.GetBytes(shellFiles.ToJsonString()),
             ["shells.Production.json"] = Encoding.UTF8.GetBytes(environmentShellFiles.ToJsonString())
+        };
+    }
+
+    private static string LargeSelectionFeatureId(
+        char prefix,
+        int plusCount,
+        int index,
+        bool replaceFinalPlus = false,
+        string? suffix = null)
+    {
+        var pluses = new string('+', plusCount);
+        if (replaceFinalPlus)
+            pluses = $"{pluses[..^1]}B";
+        return $"{prefix}{pluses}{suffix ?? $"{index:X3}"}";
+    }
+
+    private static Dictionary<string, byte[]> BuildLargeSelectionFiles(
+        IReadOnlyList<string> enabledFeatureIds,
+        string disabledFeatureId,
+        string shellName = Shell)
+    {
+        var features = new JsonObject();
+        foreach (var featureId in enabledFeatureIds)
+            features[featureId] = new JsonObject();
+        features[disabledFeatureId] = false;
+
+        var shells = new JsonObject
+        {
+            ["CShells"] = new JsonObject
+            {
+                ["Shells"] = new JsonObject
+                {
+                    [shellName] = new JsonObject
+                    {
+                        ["Name"] = shellName,
+                        ["Features"] = features,
+                        ["Configuration"] = new JsonObject()
+                    }
+                }
+            }
+        };
+        var options = new JsonSerializerOptions
+        {
+            Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+        };
+
+        return new Dictionary<string, byte[]>(StringComparer.Ordinal)
+        {
+            ["appsettings.json"] = Encoding.UTF8.GetBytes("{}"),
+            ["appsettings.Production.json"] = Encoding.UTF8.GetBytes("{}"),
+            ["shells.json"] = Encoding.UTF8.GetBytes(shells.ToJsonString(options)),
+            ["shells.Production.json"] = Encoding.UTF8.GetBytes(
+                JsonSerializer.Serialize(new
+                {
+                    CShells = new
+                    {
+                        Shells = new Dictionary<string, object>
+                        {
+                            [shellName] = new { Configuration = new { } }
+                        }
+                    }
+                }))
         };
     }
 
