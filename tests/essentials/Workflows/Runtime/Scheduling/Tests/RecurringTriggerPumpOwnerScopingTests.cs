@@ -34,7 +34,6 @@ public sealed class RecurringTriggerPumpOwnerScopingTests
             new GlobalBookmarkStimulusLookup(new InMemoryBookmarkStateStore()),
             _startDispatcher,
             new NoResumeDispatcher(),
-            new InMemoryStimulusStartDeduplicator(),
             new FakeTimeProvider(Now));
         var options = Microsoft.Extensions.Options.Options.Create(new RecurringTriggerPumpOptions
         {

@@ -493,6 +493,8 @@ Wave-A-first ordering (outgoing control room's recommendation). Kickoff decision
 - **Start-path idempotency is process-local** (from W7): `IStimulusStartDeduplicator` is an
   in-memory default; without an idempotency key the start path is at-least-once (a duplicate
   stimulus delivery may double-start). A durable dedup ledger is the hardening follow-up.
+  **Resolved by #2195:** a keyed start now derives its workflow execution id from the key, so a
+  redelivery converges on durable execution state; the in-memory deduplicator was removed.
 
 ### Follow-up findings recorded during Phase 2 execution
 

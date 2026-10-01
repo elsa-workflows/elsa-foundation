@@ -125,6 +125,14 @@ public sealed class EfModuleMigrator<TContext>(
             // activation reported active without bound: the gate's own catch deactivates it.
             using var activation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _stopping.Token);
             await gate.ActivateAsync(context, activation.Token);
+            // CancelAsync sets the stopping flag at once but cancels the linked token from a queued callback, so the
+            // activation can finish first (#2221): a stop that began in flight still cancels the admission.
+            if (_stopping.IsCancellationRequested)
+            {
+                gate.Deactivate();
+                throw new OperationCanceledException(_stopping.Token);
+            }
+
             // Before the gate is registered, so whatever finds it can have it refresh or read its status on demand
             // (spec 182, FR-014 and FR-022).
             gate.UseContexts(WithContextAsync);
@@ -165,7 +173,7 @@ public sealed class EfModuleMigrator<TContext>(
     /// <summary>
     /// Stops the gate's loops and ends the module's activity in the report. It cancels an admission in flight and waits for
     /// it to end, and a stopped migrator admits nothing after, so a gate that activates as the migrator stops is deactivated
-    /// here rather than left active for good.
+    /// here rather than left active for good. An admission in flight when the stop begins ends cancelled.
     /// </summary>
     private async Task StopGateAsync()
     {

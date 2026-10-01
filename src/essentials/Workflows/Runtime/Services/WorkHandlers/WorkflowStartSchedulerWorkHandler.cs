@@ -6,6 +6,8 @@ using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
 using Elsa.Workflows.Runtime.Services.Scheduler;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Elsa.Workflows.Runtime.Services.WorkHandlers;
 
@@ -20,20 +22,25 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
     private readonly IWorkflowExecutableReader? _executableReader;
     private readonly IIncidentStrategyCatalog? _incidentStrategyCatalog;
     private readonly RuntimeCheckpointCommitter? _checkpointCommitter;
+    private readonly IWorkflowExecutionStateStore _workflowExecutionStateStore;
+    private readonly ILogger<WorkflowStartSchedulerWorkHandler> _logger;
 
     public WorkflowStartSchedulerWorkHandler(
         IWorkflowExecutableStore workflowExecutableStore,
         IWorkflowSchedulerWorkQueue schedulerWorkQueue,
         IRuntimeExecutionIdGenerator idGenerator,
         TimeProvider timeProvider,
+        IWorkflowExecutionStateStore workflowExecutionStateStore,
         IWorkflowExecutableReader? executableReader = null,
         IIncidentStrategyCatalog? incidentStrategyCatalog = null,
-        RuntimeCheckpointCommitter? checkpointCommitter = null)
+        RuntimeCheckpointCommitter? checkpointCommitter = null,
+        ILogger<WorkflowStartSchedulerWorkHandler>? logger = null)
     {
         ArgumentNullException.ThrowIfNull(workflowExecutableStore);
         ArgumentNullException.ThrowIfNull(schedulerWorkQueue);
         ArgumentNullException.ThrowIfNull(idGenerator);
         ArgumentNullException.ThrowIfNull(timeProvider);
+        ArgumentNullException.ThrowIfNull(workflowExecutionStateStore);
 
         _workflowExecutableStore = workflowExecutableStore;
         _schedulerWorkQueue = schedulerWorkQueue;
@@ -42,6 +49,8 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
         _executableReader = executableReader;
         _incidentStrategyCatalog = incidentStrategyCatalog;
         _checkpointCommitter = checkpointCommitter;
+        _workflowExecutionStateStore = workflowExecutionStateStore;
+        _logger = logger ?? NullLogger<WorkflowStartSchedulerWorkHandler>.Instance;
     }
 
     public string Name => HandlerName;
@@ -59,6 +68,9 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
         cancellationToken.ThrowIfCancellationRequested();
 
         var startPayload = DeserializeStartPayload(workItem);
+        if (await HasStartedAsync(workItem, startPayload, cancellationToken))
+            return;
+
         var executable = await PinnedExecutableRead.FindAsync(_executableReader, _workflowExecutableStore, startPayload.RequestedArtifactId, cancellationToken);
         if (executable is null)
             throw new WorkflowExecutableNotFoundException(startPayload.RequestedArtifactId);
@@ -84,6 +96,57 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
 
         var checkpointWorkItem = NewWorkflowStartedCheckpointWorkItem(workItem, startPayload, postCommitIntents, now, commandMetadata);
         await _schedulerWorkQueue.EnqueueAsync(checkpointWorkItem, cancellationToken);
+    }
+
+    /// <summary>
+    /// Whether this execution already has state, which makes this Start a duplicate that converges as a no-op (#2195).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Every start names its execution before it is dispatched, and a keyed or DispatchWorkflow start names it
+    /// deterministically, so a second delivery of the same start reaches this mailbox as another Start for the same id.
+    /// The dispatcher answers it as a duplicate when the execution already exists, but that check and its enqueue are not
+    /// atomic: a duplicate that passed it while the first start was still in flight arrives here after the first start's
+    /// WorkflowStarted checkpoint committed. Running it would rebuild that checkpoint with a fresh root activity and
+    /// collide with the committed one, faulting a workflow that is running correctly.
+    /// </para>
+    /// <para>
+    /// Nothing legitimate starts an execution twice. The WorkflowStarted checkpoint is the only writer that brings a
+    /// started execution's state into being, and it runs after this handler, so a start being redelivered after a crash
+    /// finds no state and runs as before. The faulter that brings a refused child start's state into being does so
+    /// because that start can never run; a later delivery of it converges here too.
+    /// </para>
+    /// </remarks>
+    private async ValueTask<bool> HasStartedAsync(
+        RuntimeSchedulerWorkItem workItem,
+        WorkflowExecutionStartCommandPayload startPayload,
+        CancellationToken cancellationToken)
+    {
+        if (await _workflowExecutionStateStore.FindAsync(workItem.WorkflowExecutionId, cancellationToken) is not { } existing)
+            return false;
+
+        if (StringComparer.Ordinal.Equals(existing.PinnedExecutable.ArtifactId, startPayload.PinnedExecutable.ArtifactId))
+        {
+            _logger.LogInformation(
+                new EventId(68115, "WorkflowStartConvergedOnExistingExecution"),
+                "Workflow start {WorkItemId} found workflow execution {WorkflowExecutionId} already started; the duplicate start converged without running again",
+                workItem.WorkItemId,
+                workItem.WorkflowExecutionId);
+        }
+        else
+        {
+            // Not a redelivery: another workflow already owns this execution id. Running would overwrite it, and failing
+            // the work item would record its poison against the execution that owns the id. Leave it alone, loudly.
+            _logger.LogWarning(
+                new EventId(68116, "WorkflowStartRefusedForForeignExecution"),
+                "Workflow start {WorkItemId} for artifact {ArtifactId} was refused: workflow execution {WorkflowExecutionId} already exists for artifact {ExistingArtifactId}",
+                workItem.WorkItemId,
+                startPayload.PinnedExecutable.ArtifactId,
+                workItem.WorkflowExecutionId,
+                existing.PinnedExecutable.ArtifactId);
+        }
+
+        return true;
     }
 
     private async ValueTask CommitMissingIncidentStrategyAsync(

@@ -17,11 +17,13 @@ namespace Elsa.Workflows.Runtime.Services.Triggers;
 /// first guarantees those fresh bookmarks are not immediately resumed by the same stimulus that started them.
 /// </para>
 /// <para>
-/// Start-path idempotency (Condition A): when the request carries an idempotency key the router consults
-/// <see cref="IStimulusStartDeduplicator"/> so a duplicate delivery does not double-start; it also threads the
-/// key into the start and resume dispatch envelopes so the agent mailbox dedups redeliveries. When no key is
-/// supplied the start path is at-least-once and a duplicate delivery MAY double-start — a deliberately stated
-/// limit (see <c>docs/serialization.md</c>).
+/// Start-path idempotency (#2195): when the request carries an idempotency key, each matching start is a keyed start
+/// (<see cref="KeyedWorkflowStartIdentity"/>) named by the key and the matched artifact. A redelivery, on this node or any
+/// other and before or after a restart, resolves to the same workflow execution, and the start dispatcher answers a start
+/// that already ran as a duplicate, so a duplicate delivery never starts a second instance. The key is also threaded into
+/// the resume dispatch envelopes so the agent mailbox dedups redeliveries. When no key is supplied the start path is
+/// at-least-once and a duplicate delivery MAY double-start — a deliberately stated limit (see
+/// <c>docs/serialization.md</c>).
 /// </para>
 /// <para>
 /// Correlation (Condition B) is a passive threaded value: it scopes the resume fan-in and is stamped as metadata
@@ -34,16 +36,14 @@ public sealed class StimulusRouter : IStimulusRouter
     private readonly IGlobalBookmarkStimulusLookup _globalBookmarkStimulusLookup;
     private readonly IWorkflowStartDispatcher _startDispatcher;
     private readonly IBookmarkResumeDispatcher _resumeDispatcher;
-    private readonly IStimulusStartDeduplicator _startDeduplicator;
     private readonly TimeProvider _timeProvider;
 
     public StimulusRouter(
         IWorkflowTriggerBindingStore triggerBindingStore,
         IGlobalBookmarkStimulusLookup globalBookmarkStimulusLookup,
         IWorkflowStartDispatcher startDispatcher,
-        IBookmarkResumeDispatcher resumeDispatcher,
-        IStimulusStartDeduplicator startDeduplicator)
-        : this(triggerBindingStore, globalBookmarkStimulusLookup, startDispatcher, resumeDispatcher, startDeduplicator, TimeProvider.System)
+        IBookmarkResumeDispatcher resumeDispatcher)
+        : this(triggerBindingStore, globalBookmarkStimulusLookup, startDispatcher, resumeDispatcher, TimeProvider.System)
     {
     }
 
@@ -52,21 +52,18 @@ public sealed class StimulusRouter : IStimulusRouter
         IGlobalBookmarkStimulusLookup globalBookmarkStimulusLookup,
         IWorkflowStartDispatcher startDispatcher,
         IBookmarkResumeDispatcher resumeDispatcher,
-        IStimulusStartDeduplicator startDeduplicator,
         TimeProvider timeProvider)
     {
         ArgumentNullException.ThrowIfNull(triggerBindingStore);
         ArgumentNullException.ThrowIfNull(globalBookmarkStimulusLookup);
         ArgumentNullException.ThrowIfNull(startDispatcher);
         ArgumentNullException.ThrowIfNull(resumeDispatcher);
-        ArgumentNullException.ThrowIfNull(startDeduplicator);
         ArgumentNullException.ThrowIfNull(timeProvider);
 
         _triggerBindingStore = triggerBindingStore;
         _globalBookmarkStimulusLookup = globalBookmarkStimulusLookup;
         _startDispatcher = startDispatcher;
         _resumeDispatcher = resumeDispatcher;
-        _startDeduplicator = startDeduplicator;
         _timeProvider = timeProvider;
     }
 
@@ -135,18 +132,14 @@ public sealed class StimulusRouter : IStimulusRouter
 
         foreach (var binding in ordered)
         {
-            // Condition A: dedup the start when an idempotency key is supplied. The key is scoped per artifact so a
-            // single stimulus that matches two workflows still starts both, but a redelivery starts neither again.
-            string? startIdempotencyKey = null;
-            if (request.IdempotencyKey is not null)
-            {
-                startIdempotencyKey = $"{request.IdempotencyKey}:start:{binding.ArtifactId}";
-                if (!_startDeduplicator.TryBeginStart(startIdempotencyKey))
-                {
-                    outcomes.Add(StimulusStartOutcome.SkippedDuplicate(binding.TriggerBindingId, binding.ArtifactId));
-                    continue;
-                }
-            }
+            // A keyed request starts each matching workflow once however often it is delivered (#2195). The start key is
+            // scoped per artifact so a single stimulus that matches two workflows still starts both, while a redelivery
+            // resolves to the executions the first delivery started, which the dispatcher answers as duplicates. There is
+            // deliberately no process-local "already begun" check in front of it: one that recorded the key before the
+            // dispatch would turn the retry of a failed start into a silent skip.
+            var keyed = request.IdempotencyKey is null
+                ? null
+                : KeyedWorkflowStartIdentity.For(request.IdempotencyKey, binding.ArtifactId);
 
             // Spec 089 FR-001: the stimulus payload reaches started instances through the dedicated
             // stimulus-input channel — the start-side counterpart of the resume path's
@@ -157,7 +150,8 @@ public sealed class StimulusRouter : IStimulusRouter
             var startRequest = new WorkflowExecutionStartDispatchRequest(
                 artifactId: binding.ArtifactId,
                 requestedBy: request.RequestedBy,
-                idempotencyKey: startIdempotencyKey,
+                workflowExecutionId: keyed?.WorkflowExecutionId,
+                idempotencyKey: keyed?.StartKey,
                 metadata: dispatchMetadata,
                 stimulusInput: request.Input,
                 triggerNodeId: binding.ExecutableNodeId,
@@ -175,7 +169,9 @@ public sealed class StimulusRouter : IStimulusRouter
             // never persisted (see StimulusDispatchRequest.DispatchOptions), dropped by construction across process
             // boundaries. Stimulus-triggered starts are published dispatches (default reference scope, ADR 0040).
             var result = await _startDispatcher.DispatchAsync(startRequest, dispatchOptions: request.DispatchOptions, cancellationToken: cancellationToken);
-            outcomes.Add(StimulusStartOutcome.Started(binding.TriggerBindingId, binding.ArtifactId, result.WorkflowExecutionId));
+            outcomes.Add(keyed is not null && result.CommandDispatch.Status == WorkflowExecutionCommandDispatchStatus.Duplicate
+                ? StimulusStartOutcome.SkippedDuplicate(binding.TriggerBindingId, binding.ArtifactId)
+                : StimulusStartOutcome.Started(binding.TriggerBindingId, binding.ArtifactId, result.WorkflowExecutionId));
         }
 
         return outcomes;

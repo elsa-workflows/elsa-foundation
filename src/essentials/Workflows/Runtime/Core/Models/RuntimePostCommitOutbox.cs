@@ -474,6 +474,53 @@ public static class RuntimePostCommitOutboxClaimTransitions
         return new RuntimePostCommitOutboxClaim(claimedItem, request.OwnerId, token, request.Now, visibleAfter);
     }
 
+    /// <summary>
+    /// Extends <paramref name="claim"/>'s visibility to <paramref name="now"/> plus <paramref name="visibilityTimeout"/>
+    /// when it still holds <paramref name="current"/>, and returns the renewed claim; <see langword="null"/> when it does
+    /// not. "Holds" is exactly what completion checks: the item is delivering under the claim's owner and fence.
+    /// </summary>
+    /// <remarks>
+    /// The visibility deadline is deliberately not part of the check. A claim that lapsed but that nobody re-claimed still
+    /// carries the current fence, and renewing it is safe because a concurrent re-claim advances the fence and every store
+    /// applies this transition as a compare-and-set.
+    /// </remarks>
+    public static RuntimePostCommitOutboxClaim? Renew(
+        RuntimePostCommitOutboxItem current,
+        RuntimePostCommitOutboxClaim claim,
+        DateTimeOffset now,
+        TimeSpan visibilityTimeout)
+    {
+        ArgumentNullException.ThrowIfNull(current);
+        ArgumentNullException.ThrowIfNull(claim);
+        if (visibilityTimeout <= TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(nameof(visibilityTimeout), "Outbox claim visibility timeout must be greater than zero.");
+        if (!StringComparer.Ordinal.Equals(current.OutboxItemId, claim.OutboxItemId))
+            throw new InvalidOperationException($"Post-commit outbox renewal identity does not match claim '{claim.OutboxItemId}'.");
+        if (!IsHeldBy(current, claim))
+            return null;
+
+        // A clock read behind the claim time must still yield a deadline after it.
+        var visibleAfter = (now > claim.ClaimedAt ? now : claim.ClaimedAt).Add(visibilityTimeout);
+        var renewedItem = Copy(
+            current,
+            RuntimePostCommitOutboxStatus.Delivering,
+            current.AvailableAt,
+            current.DeliveryAttemptCount,
+            current.DeliveringOwnerId,
+            current.DeliveryStartedAt,
+            deliveredAt: null,
+            current.LastFailureMessage,
+            current.DeliveryFencingToken,
+            visibleAfter,
+            current.Metadata);
+        return new RuntimePostCommitOutboxClaim(renewedItem, claim.OwnerId, claim.FencingToken, claim.ClaimedAt, visibleAfter);
+    }
+
+    private static bool IsHeldBy(RuntimePostCommitOutboxItem current, RuntimePostCommitOutboxClaim claim) =>
+        current.Status == RuntimePostCommitOutboxStatus.Delivering &&
+        StringComparer.Ordinal.Equals(current.DeliveringOwnerId, claim.OwnerId) &&
+        current.DeliveryFencingToken == claim.FencingToken;
+
     public static RuntimePostCommitOutboxItem Complete(
         RuntimePostCommitOutboxItem current,
         RuntimePostCommitOutboxClaim claim,
@@ -489,9 +536,7 @@ public static class RuntimePostCommitOutboxClaimTransitions
             throw new InvalidOperationException($"Post-commit outbox completion identity does not match claim '{claim.OutboxItemId}'.");
         }
 
-        if (current.Status != RuntimePostCommitOutboxStatus.Delivering ||
-            !StringComparer.Ordinal.Equals(current.DeliveringOwnerId, claim.OwnerId) ||
-            current.DeliveryFencingToken != claim.FencingToken)
+        if (!IsHeldBy(current, claim))
         {
             throw new RuntimePostCommitOutboxStaleClaimException(
                 claim.OutboxItemId,

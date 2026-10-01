@@ -18708,6 +18708,16 @@
           "path": "src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj"
         },
         {
+          "type": "internal",
+          "id": "Elsa.Workflows.Runtime.Scheduling",
+          "path": "src/essentials/Workflows/Runtime/Scheduling/Elsa.Workflows.Runtime.Scheduling.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.Testing",
+          "path": "tests/essentials/Activities/Testing/Elsa.Activities.Testing.csproj"
+        },
+        {
           "type": "external",
           "id": "Microsoft.EntityFrameworkCore.SqlServer",
           "version": "10.0.10"
@@ -18716,6 +18726,11 @@
           "type": "external",
           "id": "Microsoft.EntityFrameworkCore.Sqlite",
           "version": "10.0.10"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.Extensions.TimeProvider.Testing",
+          "version": "10.8.0"
         },
         {
           "type": "external",
@@ -18878,6 +18893,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Workflows.Runtime.Scheduling",
+          "path": "src/essentials/Workflows/Runtime/Scheduling/Elsa.Workflows.Runtime.Scheduling.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Activities.Testing",
           "path": "tests/essentials/Activities/Testing/Elsa.Activities.Testing.csproj"
         },
@@ -18900,6 +18920,11 @@
           "type": "external",
           "id": "Microsoft.EntityFrameworkCore.Sqlite",
           "version": "10.0.10"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.Extensions.TimeProvider.Testing",
+          "version": "10.8.0"
         },
         {
           "type": "external",

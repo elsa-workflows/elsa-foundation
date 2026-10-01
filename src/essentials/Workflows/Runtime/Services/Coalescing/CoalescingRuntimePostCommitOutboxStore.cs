@@ -82,6 +82,22 @@ public sealed class CoalescingRuntimePostCommitOutboxStore(
             .ClaimAsync(request, cancellationToken);
     }
 
+    public ValueTask<RuntimePostCommitOutboxClaim?> RenewClaimAsync(
+        RuntimePostCommitOutboxClaim claim,
+        DateTimeOffset now,
+        TimeSpan visibilityTimeout,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(claim);
+
+        if (sessionAccessor.Current is { } session && session.IsActive && session.OwnsOutboxItem(claim.OutboxItemId))
+            return new ValueTask<RuntimePostCommitOutboxClaim?>(session.RenewOutboxClaim(claim, now, visibilityTimeout));
+
+        return (_innerClaimStore ?? throw new InvalidOperationException(
+            "The configured post-commit outbox store does not provide atomic claim support."))
+            .RenewClaimAsync(claim, now, visibilityTimeout, cancellationToken);
+    }
+
     public ValueTask RecordDeliveryResultAsync(
         RuntimePostCommitOutboxClaim claim,
         RuntimePostCommitOutboxDeliveryResult result,

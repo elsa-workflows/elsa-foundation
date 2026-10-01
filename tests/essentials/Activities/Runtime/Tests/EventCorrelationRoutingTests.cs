@@ -52,8 +52,7 @@ public sealed class EventCorrelationRoutingTests
             new InMemoryWorkflowTriggerBindingStore(),
             new GlobalBookmarkStimulusLookup(sharedBookmarks),
             new UnexpectedStartDispatcher(),
-            resumeDispatcher,
-            new InMemoryStimulusStartDeduplicator());
+            resumeDispatcher);
 
         var result = await router.RouteAsync(new StimulusDispatchRequest(
             EventStimulus.StimulusType,
@@ -104,8 +103,7 @@ public sealed class EventCorrelationRoutingTests
             new InMemoryWorkflowTriggerBindingStore(),
             new GlobalBookmarkStimulusLookup(sharedBookmarks),
             new UnexpectedStartDispatcher(),
-            resumeDispatcher,
-            new InMemoryStimulusStartDeduplicator());
+            resumeDispatcher);
 
         var result = await router.RouteAsync(new StimulusDispatchRequest(
             EventStimulus.StimulusType,
