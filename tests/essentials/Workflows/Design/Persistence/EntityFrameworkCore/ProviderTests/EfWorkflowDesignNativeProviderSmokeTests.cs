@@ -1,6 +1,10 @@
 using Elsa.Primitives.Contracts;
+using Elsa.Primitives.Versioning;
+using Elsa.Workflows.Design.Persistence.Core.Constants;
+using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Models;
+using Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Commands;
 using Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -20,8 +24,15 @@ public sealed class WorkflowsDesignPostgreSqlSmokeTests(WorkflowsDesignPostgreSq
     [SkippableFact]
     public Task PostgreSql_live_workflows_design_w01_w05_smoke() => WorkflowsDesignNativeProviderSmoke.RunAsync(
         fixture,
-        connection => new WorkflowsDesignPostgreSqlDbContext(new DbContextOptionsBuilder<WorkflowsDesignPostgreSqlDbContext>().UseNpgsql(connection).Options),
+        CreateContext,
         WorkflowsDesignPostgreSqlDbContext.ExpectedProviderName);
+
+    [SkippableFact]
+    public Task PostgreSql_permanently_deleted_definition_is_imported_again() =>
+        WorkflowsDesignNativeProviderSmoke.RunPermanentDeleteReimportAsync(fixture, CreateContext);
+
+    private static WorkflowsDesignDbContext CreateContext(string connection) =>
+        new WorkflowsDesignPostgreSqlDbContext(new DbContextOptionsBuilder<WorkflowsDesignPostgreSqlDbContext>().UseNpgsql(connection).Options);
 }
 
 [Collection(WorkflowsDesignSqlServerFixture.CollectionName)]
@@ -30,8 +41,15 @@ public sealed class WorkflowsDesignSqlServerSmokeTests(WorkflowsDesignSqlServerF
     [SkippableFact]
     public Task SqlServer_live_workflows_design_w01_w05_smoke() => WorkflowsDesignNativeProviderSmoke.RunAsync(
         fixture,
-        connection => new WorkflowsDesignSqlServerDbContext(new DbContextOptionsBuilder<WorkflowsDesignSqlServerDbContext>().UseSqlServer(connection).Options),
+        CreateContext,
         WorkflowsDesignSqlServerDbContext.ExpectedProviderName);
+
+    [SkippableFact]
+    public Task SqlServer_permanently_deleted_definition_is_imported_again() =>
+        WorkflowsDesignNativeProviderSmoke.RunPermanentDeleteReimportAsync(fixture, CreateContext);
+
+    private static WorkflowsDesignDbContext CreateContext(string connection) =>
+        new WorkflowsDesignSqlServerDbContext(new DbContextOptionsBuilder<WorkflowsDesignSqlServerDbContext>().UseSqlServer(connection).Options);
 }
 
 [Collection(WorkflowsDesignMySqlFixture.CollectionName)]
@@ -40,8 +58,15 @@ public sealed class WorkflowsDesignMySqlSmokeTests(WorkflowsDesignMySqlFixture f
     [SkippableFact]
     public Task MySql_live_workflows_design_w01_w05_smoke() => WorkflowsDesignNativeProviderSmoke.RunAsync(
         fixture,
-        connection => new WorkflowsDesignMySqlDbContext(new DbContextOptionsBuilder<WorkflowsDesignMySqlDbContext>().UseMySQL(connection).Options),
+        CreateContext,
         WorkflowsDesignMySqlDbContext.ExpectedProviderName);
+
+    [Fact(Skip = "MySQL cannot update or permanently delete a workflow definition yet: the provider reads LastModifiedAt without its fractional seconds, so the concurrency check matches no row.")]
+    public Task MySql_permanently_deleted_definition_is_imported_again() =>
+        WorkflowsDesignNativeProviderSmoke.RunPermanentDeleteReimportAsync(fixture, CreateContext);
+
+    private static WorkflowsDesignDbContext CreateContext(string connection) =>
+        new WorkflowsDesignMySqlDbContext(new DbContextOptionsBuilder<WorkflowsDesignMySqlDbContext>().UseMySQL(connection).Options);
 }
 
 internal static class WorkflowsDesignNativeProviderSmoke
@@ -276,9 +301,61 @@ internal static class WorkflowsDesignNativeProviderSmoke
         }
     }
 
+    /// <summary>
+    /// A permanent delete retires the reconciler's materialization markers with the definition, so a source that still
+    /// lists the definition imports it again. The re-import matches the first one exactly, so a surviving marker would
+    /// replay without writing a row (#2187). Each step gets its own context, as each pass and request gets its own scope.
+    /// </summary>
+    public static async Task RunPermanentDeleteReimportAsync(
+        WorkflowsDesignProviderFixture fixture,
+        Func<string, WorkflowsDesignDbContext> createContext)
+    {
+        Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? "Docker/native provider is unavailable.");
+        var tenant = $"provider-tenant-{Guid.NewGuid():N}";
+        var definitionId = $"provider-reimported-{Guid.NewGuid():N}";
+        var versionId = $"provider-reimported-version-{Guid.NewGuid():N}";
+        var access = new FixedAccess(PersistenceAccessContext.Scoped(new PersistenceScope(tenant)));
+        await InNewContextAsync((context, _) => context.Database.EnsureCreatedAsync());
+
+        await ImportAsync();
+        await InNewContextAsync((context, writer) => new EfSaveWorkflowDefinitionCommand(context, access, writer).Execute(
+            WorkflowReconciliationOperationKeys.DefinitionMetadataWrite(definitionId),
+            new WorkflowDefinition { Id = definitionId, Name = "Reimported", DeletedAt = Now, IsSourceOwned = true }));
+        await InNewContextAsync((context, writer) => new EfDeleteWorkflowDefinitionPermanentlyCommand(context, access, writer, [new NeverPublishedGuard()])
+            .Execute(new DesignOperationKey($"provider-permanent-delete-{Guid.NewGuid():N}"), definitionId));
+        await ImportAsync();
+
+        await InNewContextAsync(async (context, _) =>
+        {
+            Assert.Equal(definitionId, (await new EfWorkflowDefinitionStore(context, access).FindByIdAsync(definitionId))?.Id);
+            Assert.True(await context.Versions.AnyAsync(version => version.TenantId == tenant && version.Id == versionId));
+        });
+
+        Task ImportAsync() => InNewContextAsync(async (context, writer) =>
+        {
+            await new EfMaterializeWorkflowDefinitionCommand(context, access, writer).Execute(
+                WorkflowReconciliationOperationKeys.Definition(definitionId),
+                new WorkflowDefinition { Id = definitionId, Name = "Reimported", IsSourceOwned = true });
+            await new EfMaterializeWorkflowDefinitionVersionCommand(context, access, writer, new NativeProviderSerializer()).Execute(
+                WorkflowReconciliationOperationKeys.Version(definitionId, SemVer.ToSortKey("1.0.0")),
+                new WorkflowDefinitionVersion(definitionId, "1.0.0", "{}") { Id = versionId });
+        });
+
+        async Task InNewContextAsync(Func<WorkflowsDesignDbContext, EfDesignAtomicWriter, Task> step)
+        {
+            await using var context = createContext(fixture.ConnectionString);
+            await step(context, new EfDesignAtomicWriter(context, access));
+        }
+    }
+
     private sealed class FixedAccess(PersistenceAccessContext current) : IPersistenceAccessContextAccessor
     {
         public PersistenceAccessContext Current { get; } = current;
+    }
+
+    private sealed class NeverPublishedGuard : IWorkflowDefinitionPublicationDeletionGuard
+    {
+        public Task EnsureCanDeleteAsync(string definitionId, CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
 }
 

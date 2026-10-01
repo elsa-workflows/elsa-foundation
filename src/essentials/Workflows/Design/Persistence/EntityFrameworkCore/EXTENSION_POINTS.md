@@ -30,3 +30,9 @@ are not exposed by the Core contracts.
 The atomic writer persists the operation marker in the same transaction as staged definition,
 version, draft, and layout changes. Replays and marker-race losers do not publish duplicate
 post-commit lifecycle events.
+
+Markers are permanent, with one exception. A permanent delete removes, in its own transaction, the
+markers the workflow reconciler materialized the definition and its versions under
+(`WorkflowReconciliationOperationKeys`). A source that still lists the definition therefore imports it
+again instead of replaying markers that write no row. The reconciler's metadata writes need no such
+cleanup: each one uses a key no later write reuses.

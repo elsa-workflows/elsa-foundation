@@ -1,5 +1,5 @@
 using Elsa.Events.Core.Contracts;
-using Elsa.Workflows.Design.Persistence.Core.Models;
+using Elsa.Workflows.Design.Persistence.Core.Constants;
 using Elsa.Primitives.Enums;
 using Elsa.Primitives.Versioning;
 using Elsa.Serialization.Core;
@@ -96,7 +96,7 @@ public sealed class WorkflowsVersionReconciler(
             var sourceOwned = WorkflowDefinition.From(version.Definition);
             sourceOwned.IsSourceOwned = true;
             await materializeDefinitionCommand.Execute(
-                ReconciliationKey("definition", definitionId),
+                WorkflowReconciliationOperationKeys.Definition(definitionId),
                 sourceOwned,
                 cancellationToken);
         }
@@ -105,7 +105,6 @@ public sealed class WorkflowsVersionReconciler(
             await UpdateDefinitionMetadata(
                 definition,
                 version.Definition,
-                candidateSortKey,
                 cancellationToken);
         }
 
@@ -113,7 +112,7 @@ public sealed class WorkflowsVersionReconciler(
         if (!versionExists)
         {
             await materializeVersionCommand.Execute(
-                ReconciliationKey("version", definitionId, candidateSortKey),
+                WorkflowReconciliationOperationKeys.Version(definitionId, candidateSortKey),
                 WorkflowDefinitionVersion.From(version),
                 cancellationToken);
             return true;
@@ -129,9 +128,11 @@ public sealed class WorkflowsVersionReconciler(
 
     /// <summary>
     /// Applies the incoming source's mutable definition-level metadata (name, description, soft-delete) to
-    /// an already-persisted definition. Idempotent — writes only when a value actually changed — and never
-    /// touches any <see cref="WorkflowDefinitionVersion"/>: versions are immutable and
-    /// retention-authoritative, whereas name/description/<c>DeletedAt</c> are latest-wins per ADR 0034 (D5).
+    /// an already-persisted definition, and never touches any <see cref="WorkflowDefinitionVersion"/>: versions
+    /// are immutable and retention-authoritative, whereas name/description/<c>DeletedAt</c> are latest-wins per
+    /// ADR 0034 (D5). Idempotent per desired state: it writes only when a value actually changed, and each write
+    /// gets a key no earlier write used (<see cref="WorkflowReconciliationOperationKeys.DefinitionMetadataWrite"/>),
+    /// so any sequence of changes at one version, a change back included, converges (#2187).
     /// Latest-wins soft-delete is scoped to <see cref="WorkflowDefinition.IsSourceOwned"/> definitions:
     /// a source can never flip <c>DeletedAt</c> on a catalog-authored (Studio) definition.
     /// Runs for every <see cref="Contracts.IWorkflowReconciliationSource"/>, not only git, and only for the
@@ -140,7 +141,6 @@ public sealed class WorkflowsVersionReconciler(
     private async Task UpdateDefinitionMetadata(
         WorkflowDefinition persisted,
         IWorkflowDefinition incoming,
-        string sourceRevision,
         CancellationToken cancellationToken)
     {
         // Reconcile soft-delete as a latest-wins flag: set when the source marks it deleted and it is
@@ -167,7 +167,7 @@ public sealed class WorkflowsVersionReconciler(
             persisted.DeletedAt = incomingDeleted ? incoming.DeletedAt ?? DateTimeOffset.UtcNow : null;
 
         await saveDefinitionCommand.Execute(
-            ReconciliationKey("definition-metadata", persisted.Id, sourceRevision),
+            WorkflowReconciliationOperationKeys.DefinitionMetadataWrite(persisted.Id),
             persisted,
             cancellationToken);
         LogMetadataUpdated(persisted.Id);
@@ -248,12 +248,5 @@ public sealed class WorkflowsVersionReconciler(
     private async Task<WorkflowDefinition?> FindDefinition(string definitionId, CancellationToken cancellationToken)
     {
         return await definitionStore.FindByIdAsync(definitionId, cancellationToken);
-    }
-
-    private static DesignOperationKey ReconciliationKey(string kind, params string[] identityParts)
-    {
-        var framedIdentity = string.Concat(
-            identityParts.Select(part => $"{part.Length}:{part}"));
-        return new DesignOperationKey($"workflow-reconciliation:{kind}:{framedIdentity}");
     }
 }
