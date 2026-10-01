@@ -123,8 +123,11 @@ public sealed class HttpEndpointRouteTableConvergenceEndToEndTests : IAsyncLifet
         }
     }
 
-    private static Task<HttpResponseMessage> PostAsync(HttpEndpointHostFixture node, string path) =>
-        node.Client.PostAsync($"{BasePath}{path}", new StringContent("""{"ok":true}""", Encoding.UTF8, "application/json"));
+    private static async Task<HttpResponseMessage> PostAsync(HttpEndpointHostFixture node, string path)
+    {
+        using var content = new StringContent("""{"ok":true}""", Encoding.UTF8, "application/json");
+        return await node.Client.PostAsync($"{BasePath}{path}", content);
+    }
 
     private static async Task<IReadOnlyList<string>> ReadIdsAsync(HttpResponseMessage response, string property)
     {
