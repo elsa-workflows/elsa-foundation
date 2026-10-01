@@ -137,7 +137,7 @@ public sealed class EfDatabaseMigratorTests
         Assert.Empty(await fixture.Context.Database.GetPendingMigrationsAsync());
     }
 
-    /// <summary>The bound is the caller's: a lock older than it is reported.</summary>
+    /// <summary>The bound is the host's: a lock older than its options say is reported.</summary>
     [Fact]
     public async Task AutoMigrate_reports_a_lock_older_than_the_given_bound()
     {
@@ -147,8 +147,8 @@ public sealed class EfDatabaseMigratorTests
 
         var exception = await Assert.ThrowsAsync<EfMigrationLockStaleException>(() =>
             EfDatabaseMigrator.ApplyAsync(
-                fixture.Context, EfProviderNames.Sqlite, EfMigratePolicy.AutoMigrate, host: null,
-                sqliteLockStaleAfter: TimeSpan.FromMinutes(1)).WaitAsync(TimeSpan.FromSeconds(30)));
+                fixture.Context, EfProviderNames.Sqlite, new EfMigrateOptions { SqliteMigrationLockStaleAfter = TimeSpan.FromMinutes(1) })
+                .WaitAsync(TimeSpan.FromSeconds(30)));
 
         Assert.Contains("for longer than 00:01:00", exception.Message, StringComparison.Ordinal);
     }

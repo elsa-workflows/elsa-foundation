@@ -81,10 +81,9 @@ public sealed class EfModuleMigrator<TContext>(
         await EfDatabaseMigrator.ApplyAsync(
             context,
             migration.ExpectedProviderName,
-            options.Value.Policy,
+            options.Value,
             services.GetService<IEfSchemaFleet>()?.GetLocalStanding().Member,
-            cancellationToken,
-            options.Value.SqliteMigrationLockStaleAfter);
+            cancellationToken);
         // Under both policies (FR-056), and only ever after the schema is known to be current: an audit that
         // read a pre-migration schema would answer a question about a database that no longer exists. Under
         // Validate the line above has already thrown for a pending migration, so reaching here means current.

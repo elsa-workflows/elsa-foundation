@@ -203,7 +203,7 @@ public static class EfToolingHost
         {
             EfToolingCommands.Plan => Plan(ordered, provider!, schema, actions, cancellationToken),
             EfToolingCommands.Script => Script(ordered, provider!, schema, actions, request, cancellationToken),
-            EfToolingCommands.Apply => await Apply(ordered, provider!, schema, actions, request.Connection!, cancellationToken),
+            EfToolingCommands.Apply => await Apply(ordered, provider!, schema, actions, request.Connection!, new EfMigrateOptions(), cancellationToken),
             EfToolingCommands.Validate => await Validate(ordered, provider!, schema, actions, request.Connection!, cancellationToken),
             EfToolingCommands.PostMigrate => await PostMigrate(ordered, provider!, schema, actions, request.Connection!, cancellationToken),
             EfToolingCommands.Hold or EfToolingCommands.Release or EfToolingCommands.Status =>
@@ -533,6 +533,7 @@ public static class EfToolingHost
         string? schema,
         string connection,
         Action verifyTargets,
+        EfMigrateOptions migrate,
         CancellationToken cancellationToken)
     {
         var canonical = Canonical(provider);
@@ -543,7 +544,7 @@ public static class EfToolingHost
         var actions = PostMigrationActions(modules);
         return command switch
         {
-            EfToolingCommands.Apply => await Apply(modules, canonical, normalizedSchema, actions, connection, cancellationToken),
+            EfToolingCommands.Apply => await Apply(modules, canonical, normalizedSchema, actions, connection, migrate, cancellationToken),
             EfToolingCommands.Validate => await Validate(modules, canonical, normalizedSchema, actions, connection, cancellationToken),
             EfToolingCommands.PostMigrate => await PostMigrate(modules, canonical, normalizedSchema, actions, connection, cancellationToken),
             _ => throw EfToolingRefusal.Usage("unknown-command", "The live context operation command is not supported.")
@@ -798,7 +799,9 @@ public static class EfToolingHost
     /// <c>EfModuleMigrator&lt;T&gt;</c> uses — one module at a time, in dependency order, stopping at the
     /// first one that fails: a module after it may depend on the one that just failed to apply. This never
     /// reads or writes <c>migration-plan.json</c> (that is <c>script</c>'s artifact, for a DBA to review);
-    /// it reads the host's own compiled migrations.
+    /// it reads the host's own compiled migrations. A SQLite database's migration lock is waited for as long as
+    /// <paramref name="migrate"/> says (<see cref="EfMigrateOptions.SqliteMigrationLockStaleAfter"/>, read from the host's
+    /// configuration), whatever policy that host runs under.
     /// </summary>
     /// <remarks>
     /// Each module is audited for outstanding post-migration actions in the same pass, against the context
@@ -821,6 +824,7 @@ public static class EfToolingHost
         string? schema,
         IReadOnlyDictionary<string, IReadOnlyList<IEfPostMigrationAction>> actions,
         string connection,
+        EfMigrateOptions migrate,
         CancellationToken cancellationToken)
     {
         var entries = new List<EfToolingApplyEntry>(modules.Count);
@@ -835,7 +839,7 @@ public static class EfToolingHost
             {
                 using var context = CreateContext(descriptor, contextType, provider, connection, schema);
                 var pending = (await context.Database.GetPendingMigrationsAsync(cancellationToken)).ToArray();
-                await EfDatabaseMigrator.ApplyAsync(context, EfRelationalProviderBinding.ExpectedProviderName(provider), EfMigratePolicy.AutoMigrate, cancellationToken);
+                await EfDatabaseMigrator.ApplyAsync(context, EfRelationalProviderBinding.ExpectedProviderName(provider), migrate.WithPolicy(EfMigratePolicy.AutoMigrate), host: null, cancellationToken);
                 outstanding.AddRange(await RequiredActions(context, descriptor, provider, actions, cancellationToken));
                 entries.Add(new()
                 {

@@ -31,7 +31,7 @@ public sealed class OpenIddictPersistenceArchitectureTests
         {
             ["OpenIddictEntityFrameworkCoreDefaults.cs"] = "4e844102195aa3eab13220c513a423345b7100e53365a768e48dfa9f6469d3f2",
             ["OpenIddictIdentityDbContext.cs"] = "105b7bfb61bb87332c8bd5a5a83cff5f8f3f2ee0a40fc6733834afc84b11986f",
-            ["OpenIddictIdentityStoreInitializer.cs"] = "0e90f9b3a6e23372de1f6baf34e261a984c06573c0d205e71e4dde0bd22f76e6",
+            ["OpenIddictIdentityStoreInitializer.cs"] = "e0e4fd06238ee0d890ce278823be670d11cd7e4ce1952a05567895c0403f3a6b",
             ["Sqlite/Migrations/20260704221407_Initial.Designer.cs"] = "e49cc98bb32378c17bbad75fd3bbb071f3d70e7dbf654cc00019282d38e67e79",
             ["Sqlite/Migrations/20260704221407_Initial.cs"] = "d73cc67a51181faa7b1d454fd45bb897f458ecb46156e45dba7aa8cc15229b28",
             ["Sqlite/Migrations/OpenIddictIdentityDbContextModelSnapshot.cs"] = "88338ae62df8596eab3f87d007b121252f373c8670ac1d131d098692b48e27b6",

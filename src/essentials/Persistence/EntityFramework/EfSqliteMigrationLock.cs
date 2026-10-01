@@ -15,8 +15,13 @@ namespace Elsa.Persistence.EntityFramework;
 /// <remarks>
 /// <para>
 /// <b>Nothing pending, nothing locked.</b> A database whose migrations are all applied is current, whoever holds the lock, and
-/// migrations are only ever added by a new build, so the read cannot go stale into a missed migration: the history row of an
-/// applied migration is committed with the migration itself. <c>MigrateAsync</c> would apply nothing, so it is not called.
+/// migrations are only ever added by a new build, so the read cannot go stale into a missed migration: a migration's history
+/// row is written only after its operations have run, so an empty pending list means every operation ran. <c>MigrateAsync</c>
+/// would apply nothing, so it is not called. The row is not always committed atomically with the operations: a migration that
+/// suppresses its transaction (SQLite table rebuilds do) writes it in a statement of its own after them. That does not weaken the
+/// skip, because the row still comes last, but a process killed between the two leaves a migration pending whose operations
+/// have run. The next start finds it pending, so it takes the lock and <c>MigrateAsync</c> runs it again, as it would have without
+/// this class.
 /// </para>
 /// <para>
 /// <b>A lock that outlives the bound fails the start; it is never removed.</b> With migrations pending, a held lock may be a live
@@ -24,7 +29,9 @@ namespace Elsa.Persistence.EntityFramework;
 /// openable proves nothing about its holder, and a reclaimed row lets a second migrator in beside a live first one. The row's
 /// <c>Timestamp</c> is when it was taken, so a lock younger than <see cref="DefaultStaleAfter"/> is waited for, as EF waits, and an
 /// older one is reported with the way to clear it. A legitimate migration longer than the bound fails its waiting peers' start, which
-/// an orchestrator retries, instead of letting them run beside it.
+/// an orchestrator retries, instead of letting them run beside it. One window stays: a peer that takes the lock between the
+/// wait returning and EF's own acquire, and is killed there, still leaves EF waiting for it. Nothing here cancels a migration
+/// that is running, so no watchdog can stop a legitimate one.
 /// </para>
 /// </remarks>
 public static class EfSqliteMigrationLock
@@ -39,16 +46,17 @@ public static class EfSqliteMigrationLock
     /// Applies <paramref name="context"/>'s pending migrations as <c>Database.MigrateAsync</c> does, on SQLite only after the lock
     /// has been waited for, and not at all when none are pending.
     /// </summary>
-    /// <param name="staleAfter">How long a held lock is waited for before it is reported; <see cref="DefaultStaleAfter"/> when null.</param>
-    /// <exception cref="EfMigrationLockStaleException">Migrations are pending and the lock has been held longer than <paramref name="staleAfter"/>.</exception>
-    public static async Task MigrateAsync(DbContext context, TimeSpan? staleAfter = null, CancellationToken cancellationToken = default)
+    /// <param name="options">The host's migrate options; <see cref="EfMigrateOptions.SqliteMigrationLockStaleAfter"/> is how long a held lock is waited for before it is reported.</param>
+    /// <exception cref="EfMigrationLockStaleException">Migrations are pending and the lock has been held longer than the bound.</exception>
+    public static async Task MigrateAsync(DbContext context, EfMigrateOptions options, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(options);
         if (IsSqlite(context))
         {
             if (!(await context.Database.GetPendingMigrationsAsync(cancellationToken)).Any())
                 return;
-            await AwaitReleasedAsync(context, staleAfter, cancellationToken);
+            await AwaitReleasedAsync(context, options, cancellationToken);
         }
 
         await context.Database.MigrateAsync(cancellationToken);
@@ -58,11 +66,11 @@ public static class EfSqliteMigrationLock
     /// Returns once <paramref name="context"/>'s SQLite database holds no migration lock, which is immediately on any other provider.
     /// A lock taken after this returns is waited for by EF itself.
     /// </summary>
-    internal static async Task AwaitReleasedAsync(DbContext context, TimeSpan? staleAfter, CancellationToken cancellationToken)
+    internal static async Task AwaitReleasedAsync(DbContext context, EfMigrateOptions options, CancellationToken cancellationToken)
     {
         if (!IsSqlite(context))
             return;
-        var bound = staleAfter ?? DefaultStaleAfter;
+        var bound = options.SqliteMigrationLockStaleAfter;
         var firstSeen = DateTimeOffset.UtcNow;
         while (await ReadLockAsync(context, cancellationToken) is { } held)
         {

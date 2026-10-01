@@ -65,7 +65,8 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
             "unreachable from shell code: a hosted service the host starts once, and a shell container never starts its copy (a disposable one could not be shared in any case)",
             "Elsa.Persistence.EntityFramework.EfModuleMigrator<Elsa.Cluster.EntityFrameworkCore.ClusterMembershipDbContext>",
             "Elsa.Workbench.OpenIddict.OpenIddictIdentityStoreInitializer",
-            "Elsa.Workbench.Readiness.DefaultShellWarmup"),
+            "Elsa.Workbench.Readiness.DefaultShellWarmup",
+            "Elsa.Workbench.WorkbenchOpenIddictMigrator"),
         Entries(
             "unreachable from shell code: only CShells' runtime feature catalog, which the host holds, resolves the feature assembly provider, and a shell's copy would read a Nuplane catalog that has loaded nothing",
             "Elsa.Foundation.Host.Feed.NuplaneAssemblyProvider",

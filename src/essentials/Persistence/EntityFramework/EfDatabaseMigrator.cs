@@ -45,25 +45,31 @@ public static class EfDatabaseMigrator
     /// <c>migrator:&lt;host id&gt;</c>. Null where there is none, such as the persistence tool, when the machine name stands in.
     /// </param>
     /// <param name="cancellationToken">Cancels the work.</param>
-    /// <param name="sqliteLockStaleAfter">
-    /// <see cref="EfMigrateOptions.SqliteMigrationLockStaleAfter"/>: how long a SQLite database's migration lock is waited for under
-    /// <see cref="EfMigratePolicy.AutoMigrate"/> before it is reported as stale. <see cref="EfSqliteMigrationLock.DefaultStaleAfter"/> when null.
-    /// </param>
-    public static async Task ApplyAsync(
+    public static Task ApplyAsync(
         DbContext context,
         string expectedProviderName,
         EfMigratePolicy policy,
         SchemaFinalizationMember? host,
-        CancellationToken cancellationToken = default,
-        TimeSpan? sqliteLockStaleAfter = null)
+        CancellationToken cancellationToken = default) =>
+        ApplyAsync(context, expectedProviderName, new EfMigrateOptions { Policy = policy }, host, cancellationToken);
+
+    /// <summary><see cref="ApplyAsync(DbContext, string, EfMigratePolicy, SchemaFinalizationMember?, CancellationToken)"/> under all of the host's <paramref name="options"/>: the policy, and how long a SQLite migration lock is waited for.</summary>
+    /// <param name="options">The host's migrate options; <see cref="EfMigrateOptions.Policy"/> is what is applied.</param>
+    public static async Task ApplyAsync(
+        DbContext context,
+        string expectedProviderName,
+        EfMigrateOptions options,
+        SchemaFinalizationMember? host = null,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(options);
         EfProviderGuard.Ensure(context, expectedProviderName);
 
-        switch (policy)
+        switch (options.Policy)
         {
             case EfMigratePolicy.AutoMigrate:
-                await EfContractingMigrationCheck.MigrateAsync(context, host, cancellationToken, sqliteLockStaleAfter);
+                await EfContractingMigrationCheck.MigrateAsync(context, host, options, cancellationToken);
                 return;
             case EfMigratePolicy.Validate:
                 var pending = (await context.Database.GetPendingMigrationsAsync(cancellationToken)).ToArray();
@@ -75,7 +81,8 @@ public static class EfDatabaseMigrator
                     throw withheld;
                 throw PendingMigrations(context, expectedProviderName, pending);
             default:
-                throw new ArgumentOutOfRangeException(nameof(policy), policy, "Unknown EF migrate policy.");
+                // Named for the policy argument callers of either overload passed, not for the options that carry it.
+                throw new ArgumentOutOfRangeException("policy", options.Policy, "Unknown EF migrate policy.");
         }
     }
 

@@ -158,7 +158,7 @@ public sealed class EfToolingHostTests : IDisposable
 
         var refusal = await Assert.ThrowsAsync<InvalidOperationException>(() => EfToolingHost.RunLiveModulesAsync(
             [module], command, "Sqlite", null, connection,
-            () => throw new InvalidOperationException("target-mismatch-canary"), CancellationToken.None));
+            () => throw new InvalidOperationException("target-mismatch-canary"), new EfMigrateOptions(), CancellationToken.None));
 
         Assert.Equal("target-mismatch-canary", refusal.Message);
         Assert.Equal(0, ConstructionProbeContext.Constructions);
@@ -166,9 +166,41 @@ public sealed class EfToolingHostTests : IDisposable
         Assert.False(File.Exists(Path.Join(root, "construction-probe.db")));
 
         await Assert.ThrowsAsync<EfToolingRefusal>(() => EfToolingHost.RunLiveModulesAsync(
-            [module], command, "Sqlite", null, connection, () => { }, CancellationToken.None));
+            [module], command, "Sqlite", null, connection, () => { }, new EfMigrateOptions(), CancellationToken.None));
         Assert.Equal(1, ConstructionProbeContext.Constructions);
         Assert.Equal(1, ConstructionProbeAction.Constructions);
+    }
+
+    /// <summary>
+    /// <c>apply</c> migrates through the same SQLite lock policy a host does, with the bound the host's configuration sets, so a
+    /// lock a killed process left behind fails the run with the way to clear it instead of hanging it (#2196).
+    /// </summary>
+    [Fact]
+    public async Task Apply_reports_a_stale_sqlite_migration_lock_older_than_the_configured_bound()
+    {
+        var path = Path.Join(root, "stale-lock.db");
+        await using (var connection = new SqliteConnection($"Data Source={path};Pooling=False"))
+        {
+            await connection.OpenAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText =
+                "CREATE TABLE \"__EFMigrationsLock\" (\"Id\" INTEGER NOT NULL CONSTRAINT \"PK___EFMigrationsLock\" PRIMARY KEY, \"Timestamp\" TEXT NOT NULL);" +
+                $"INSERT INTO \"__EFMigrationsLock\"(\"Id\", \"Timestamp\") VALUES(1, '{DateTimeOffset.UtcNow.AddMinutes(-2):yyyy-MM-dd HH:mm:ss.fffffffzzz}');";
+            await command.ExecuteNonQueryAsync();
+        }
+
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection([new KeyValuePair<string, string?>(
+                $"{EfMigrateOptions.SectionName}:{nameof(EfMigrateOptions.SqliteMigrationLockStaleAfter)}", "00:01:00")])
+            .Build();
+
+        var refusal = await Assert.ThrowsAsync<EfToolingRefusal>(() => EfToolingHost.RunLiveModulesAsync(
+            [EfModuleCatalog.Find(Descriptors, "Secrets")!], "apply", "Sqlite", null, $"Data Source={path};Pooling=False", () => { },
+            EfMigrateOptions.FromConfiguration(configuration), CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(60)));
+
+        Assert.Contains("migration lock", refusal.Message, StringComparison.Ordinal);
+        Assert.Contains("DELETE FROM", refusal.Message, StringComparison.Ordinal);
+        Assert.Contains("00:01:00", refusal.Message, StringComparison.Ordinal);
     }
 
     public sealed class ConstructionProbeContext : DbContext

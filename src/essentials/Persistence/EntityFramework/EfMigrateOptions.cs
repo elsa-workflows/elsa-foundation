@@ -30,6 +30,47 @@ public sealed class EfMigrateOptions
     /// </summary>
     public TimeSpan SqliteMigrationLockStaleAfter { get; set; } = EfSqliteMigrationLock.DefaultStaleAfter;
 
+    /// <summary>These options as <paramref name="configuration"/> names them, for a caller with no options pipeline to resolve them from, such as the persistence tool and a host's own startup.</summary>
+    public static EfMigrateOptions FromConfiguration(IConfiguration? configuration)
+    {
+        var options = new EfMigrateOptions();
+        options.Bind(configuration);
+        return options;
+    }
+
+    /// <summary>Overwrites each setting <paramref name="configuration"/> names, and keeps the rest as they are.</summary>
+    internal void Bind(IConfiguration? configuration)
+    {
+        if (TryResolve(configuration, out var policy))
+            Policy = policy;
+        if (TryResolveSqliteMigrationLockStaleAfter(configuration, out var staleAfter))
+            SqliteMigrationLockStaleAfter = staleAfter;
+    }
+
+    /// <summary>These options with <paramref name="policy"/>: <c>apply</c> migrates whatever policy the host it reads configuration from runs under.</summary>
+    internal EfMigrateOptions WithPolicy(EfMigratePolicy policy) => new() { Policy = policy, SqliteMigrationLockStaleAfter = SqliteMigrationLockStaleAfter };
+
+    /// <summary>
+    /// <see cref="TryResolve"/> for <see cref="SqliteMigrationLockStaleAfter"/>: false when <paramref name="configuration"/> leaves it unset.
+    /// A value that is not a positive time span is refused rather than defaulted: zero would report every lock another
+    /// host's live migration holds.
+    /// </summary>
+    public static bool TryResolveSqliteMigrationLockStaleAfter(IConfiguration? configuration, out TimeSpan staleAfter)
+    {
+        staleAfter = EfSqliteMigrationLock.DefaultStaleAfter;
+        var configured = configuration?.GetSection(SectionName)[nameof(SqliteMigrationLockStaleAfter)];
+        if (string.IsNullOrWhiteSpace(configured))
+            return false;
+
+        if (!TimeSpan.TryParse(configured, CultureInfo.InvariantCulture, out staleAfter) || staleAfter <= TimeSpan.Zero)
+        {
+            throw new InvalidOperationException(
+                $"Configuration '{SectionName}:{nameof(SqliteMigrationLockStaleAfter)}' is '{configured}'. Use a positive time span such as '00:30:00'.");
+        }
+
+        return true;
+    }
+
     /// <summary>
     /// The policy <paramref name="configuration"/> names, or <see cref="DefaultPolicy"/> when it names none.
     /// Exposed because not every reader of this key resolves it through the options pipeline: the
@@ -70,21 +111,9 @@ public sealed class EfMigrateOptions
 /// A container with no <see cref="IConfiguration"/>, or one that leaves the key unset, keeps the AutoMigrate
 /// default. A value that names no policy is refused: taking the default instead would auto-migrate the database
 /// the operator meant to protect, and the log would look exactly like a healthy start. A stale-after that is not a positive
-/// time span is refused too: zero would report every lock another host's live migration holds.
+/// time span is refused too.
 /// </summary>
 internal sealed class EfMigrateOptionsConfigurator(IServiceProvider services) : IConfigureOptions<EfMigrateOptions>
 {
-    public void Configure(EfMigrateOptions options)
-    {
-        if (EfMigrateOptions.TryResolve(services.GetService<IConfiguration>(), out var policy))
-            options.Policy = policy;
-
-        var configured = services.GetService<IConfiguration>()?.GetSection(EfMigrateOptions.SectionName)[nameof(EfMigrateOptions.SqliteMigrationLockStaleAfter)];
-        if (string.IsNullOrWhiteSpace(configured))
-            return;
-        options.SqliteMigrationLockStaleAfter = TimeSpan.TryParse(configured, CultureInfo.InvariantCulture, out var staleAfter) && staleAfter > TimeSpan.Zero
-            ? staleAfter
-            : throw new InvalidOperationException(
-                $"Configuration '{EfMigrateOptions.SectionName}:{nameof(EfMigrateOptions.SqliteMigrationLockStaleAfter)}' is '{configured}'. Use a positive time span such as '00:30:00'.");
-    }
+    public void Configure(EfMigrateOptions options) => options.Bind(services.GetService<IConfiguration>());
 }

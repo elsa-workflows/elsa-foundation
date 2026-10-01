@@ -153,7 +153,14 @@ with migrations pending, a lock younger than `EfMigrateOptions.SqliteMigrationLo
 `Elsa:Persistence:EntityFramework:Migrate:SqliteMigrationLockStaleAfter`) is waited for as before, and an older one fails the
 start with `EfMigrationLockStaleException` naming the `DELETE` that clears it. Elsa never removes the row itself: the row is the
 only evidence of a holder, so nothing proves it dead. A host that migrates a SQLite store outside `EfDatabaseMigrator` calls
-`EfSqliteMigrationLock.MigrateAsync` rather than `Database.MigrateAsync`.
+`EfSqliteMigrationLock.MigrateAsync(context, EfMigrateOptions)` rather than `Database.MigrateAsync`; the options come from
+`EfMigrateOptions.FromConfiguration` where there is no options pipeline (`dotnet elsa persistence apply` reads the host's
+configuration that way, and Workbench's OpenIddict store does the same).
+Caveats: skipping when nothing is pending leans on EF writing a migration's history row after its operations, which holds for a
+migration that suppresses its transaction (SQLite table rebuilds do) as well, but there the row is not committed atomically
+with them, so a process killed between the two leaves a migration pending whose operations have run, and the next start
+migrates it again under the lock. And a peer that takes the lock between the wait returning and EF's own acquire, and is killed
+there, still leaves EF waiting; nothing cancels a running migration, so no watchdog can stop a legitimate one.
 `EfMigratePolicy.Validate` refuses to start when pending migrations exist.
 `EfModuleMigrator<TContext>` registers that apply on both `IHostedService` and CShells
 `IShellInitializer` — one instance under both — so a feature enable or reload uses the same policy as

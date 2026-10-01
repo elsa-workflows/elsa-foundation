@@ -101,23 +101,23 @@ public static class EfContractingMigrationCheck
     /// </summary>
     /// <param name="host">This host's member in the fleet, which a created record names prefixed with <see cref="MigratorHostIdPrefix"/>; the machine name when null.</param>
     /// <exception cref="EfContractingMigrationRefusedException">A pending contracting migration may not be applied yet.</exception>
-    internal static Task MigrateAsync(DbContext context, SchemaFinalizationMember? host, CancellationToken cancellationToken, TimeSpan? sqliteLockStaleAfter = null) =>
-        MigrateAsync(context, host, EfSchemaModuleFamilies.ForContext(context.GetType()), cancellationToken, sqliteLockStaleAfter);
+    internal static Task MigrateAsync(DbContext context, SchemaFinalizationMember? host, EfMigrateOptions options, CancellationToken cancellationToken) =>
+        MigrateAsync(context, host, EfSchemaModuleFamilies.ForContext(context.GetType()), options, cancellationToken);
 
-    /// <summary><see cref="MigrateAsync(DbContext, SchemaFinalizationMember?, CancellationToken, TimeSpan?)"/> as a build that declares <paramref name="families"/> runs it.</summary>
-    internal static async Task MigrateAsync(DbContext context, SchemaFinalizationMember? host, EfSchemaModuleFamilies? families, CancellationToken cancellationToken, TimeSpan? sqliteLockStaleAfter = null)
+    /// <summary><see cref="MigrateAsync(DbContext, SchemaFinalizationMember?, EfMigrateOptions, CancellationToken)"/> as a build that declares <paramref name="families"/> runs it.</summary>
+    internal static async Task MigrateAsync(DbContext context, SchemaFinalizationMember? host, EfSchemaModuleFamilies? families, EfMigrateOptions options, CancellationToken cancellationToken)
     {
         var contracting = ContractingMigrations(context);
         if (contracting.Count > 0)
         {
             if (!await IsAdmittedAsync(context, contracting, families, pending: null, cancellationToken))
-                await SeedAsync(context, contracting, families, host, sqliteLockStaleAfter, cancellationToken);
+                await SeedAsync(context, contracting, families, host, options, cancellationToken);
             else if (await JudgeAsync(contracting, families, new EfSchemaFinalizationStore(context), cancellationToken) is { Count: > 0 } unsafeMigrations &&
                      await RefuseBatchAsync(context, families, unsafeMigrations, pending: null, cancellationToken) is { } refusal)
                 throw refusal;
         }
 
-        await EfSqliteMigrationLock.MigrateAsync(context, sqliteLockStaleAfter, cancellationToken);
+        await EfSqliteMigrationLock.MigrateAsync(context, options, cancellationToken);
     }
 
     /// <summary>
@@ -183,7 +183,7 @@ public static class EfContractingMigrationCheck
         IReadOnlyList<ContractingMigration> contracting,
         EfSchemaModuleFamilies? families,
         SchemaFinalizationMember? host,
-        TimeSpan? sqliteLockStaleAfter,
+        EfMigrateOptions options,
         CancellationToken cancellationToken)
     {
         var module = ModuleOf(context, families);
@@ -197,7 +197,7 @@ public static class EfContractingMigrationCheck
         var applied = pending.TakeWhile(id => !StringComparer.Ordinal.Equals(id, first)).ToArray();
         if (applied.Length > 0)
         {
-            await EfSqliteMigrationLock.AwaitReleasedAsync(context, sqliteLockStaleAfter, cancellationToken);
+            await EfSqliteMigrationLock.AwaitReleasedAsync(context, options, cancellationToken);
             await MigrateBeforeAsync(context, first, cancellationToken);
         }
         if (!await EfSchemaFinalizationCheck.RecordTableExistsAsync(context, cancellationToken))

@@ -524,7 +524,10 @@ for ever. `EfSqliteMigrationLock.MigrateAsync` is `MigrateAsync` for that provid
 pending, waits for a lock younger than `Elsa:Persistence:EntityFramework:Migrate:SqliteMigrationLockStaleAfter` (default 10
 minutes), and fails an older one with `EfMigrationLockStaleException`, which names the `DELETE FROM "__EFMigrationsLock" WHERE
 "Id" = 1` that clears it. It never removes the row itself, because nothing in a SQLite file proves the holder dead. Every
-other provider releases its lock when the connection drops and passes straight through.
+other provider releases its lock when the connection drops and passes straight through. Skipping when nothing is pending is
+safe because a migration's history row is written after its operations; for a migration that suppresses its transaction
+(SQLite table rebuilds), it is a statement of its own and not committed atomically with them, so a process killed between the two
+leaves a migration pending whose operations have run, which the next start migrates again under the lock.
 
 ## Dual apply
 
