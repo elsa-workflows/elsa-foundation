@@ -115,8 +115,9 @@ the next occurrence, and the recurring-trigger pump (`RecurringTriggerPumpTask`,
 - **Republishing does not skip a due occurrence.** Activating a new publication of a slot replaces the
   replaced publication's schedules in one write. A schedule of the new publication takes over the replaced
   schedule's next occurrence of the same trigger (same slot, trigger node and stimulus) when that occurrence
-  is earlier than the new schedule's own and fell due no later than the new schedule was created, so the
-  occurrence that was due during the republish fires on the new publication. The replaced schedule changes
+  is earlier than the new schedule's own and fell due no later than the activation, so the occurrence that
+  was due during the republish, including one that fell due after the new publication was prepared and before
+  it was activated, fires on the new publication. The replaced schedule changes
   in the same write, so a claim a node still holds on it is stale and cannot settle the occurrence. If the
   replaced publication had already routed the occurrence, the new publication's fire carries the same key
   and starts nothing new, even though it serves another artifact: an occurrence start of a slot is keyed
@@ -141,8 +142,9 @@ the next occurrence, and the recurring-trigger pump (`RecurringTriggerPumpTask`,
 **Rolling deploys.** The claims and the start-once dedupe hold only among nodes that run this behaviour
 (#2198), and keyed starts need #2195 or later. A node from before #2198 advances a schedule before it
 routes the occurrence and ignores the claim columns; it keys the start with
-`recurring:{scheduleId}:{occurrenceTicks}` under the per-artifact identity (from #2195 on) or does not key
-it at all (before #2195). So during a rolling deploy an occurrence that falls due can fire on an old and a
+`recurring:{scheduleId}:{occurrenceTicks}` under the per-artifact identity (from #2195 on); before #2195 it
+sent that key too, but the router remembered it only in process memory, so a repeat after a restart, or on
+another node, started again. So during a rolling deploy an occurrence that falls due can fire on an old and a
 new node and start twice, and an old node that crashes mid-fire still loses its occurrence. Roll every node
 that runs the recurring-trigger pump before relying on the guarantee, or stop the pump on old nodes first.
 

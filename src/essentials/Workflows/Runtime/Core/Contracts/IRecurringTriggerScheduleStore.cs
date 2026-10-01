@@ -29,7 +29,7 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 /// <para>
 /// <b>Republish (#2198).</b> <see cref="ActivateAsync"/> replaces the replaced activation's schedules atomically, and each
 /// activated schedule takes over the cursor of the replaced schedule of the same trigger when that names an occurrence
-/// which fell due before the activated schedule was materialized (<see cref="RecurringTriggerSchedule.TakeOverFrom"/>).
+/// which fell due before the activation took place, as the store's clock reads it (<see cref="RecurringTriggerSchedule.TakeOverFrom"/>).
 /// The replaced schedules change in the same write, so a claim in flight on one of them is stale from then on.
 /// </para>
 /// </remarks>
@@ -70,7 +70,8 @@ public interface IRecurringTriggerScheduleStore
 
     /// <summary>
     /// Activates one activation and deactivates only the explicitly replaced activation. Each activated schedule takes over
-    /// a due, unsettled occurrence from the replaced schedule of the same trigger (<see cref="RecurringTriggerSchedule.TakeOverFrom"/>).
+    /// a due, unsettled occurrence from the replaced schedule of the same trigger, judged at the instant of the activation
+    /// (<see cref="RecurringTriggerSchedule.TakeOverFrom"/>).
     /// </summary>
     ValueTask ActivateAsync(
         string activationId,

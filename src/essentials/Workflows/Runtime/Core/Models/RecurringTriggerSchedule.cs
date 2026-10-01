@@ -30,7 +30,7 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 /// <para>
 /// <b>Republish.</b> Activating a new publication of a slot replaces the replaced publication's schedules, and each new
 /// schedule takes over the cursor of the replaced schedule of the same trigger (<see cref="IsSameTriggerAs"/>) when that
-/// cursor names an occurrence which fell due before the new schedule was materialized (<see cref="TakeOverFrom"/>). The
+/// cursor names an occurrence which fell due before the new schedule was activated (<see cref="TakeOverFrom"/>). The
 /// occurrence key identifies the trigger, not the publication, so the new publication's fire of that occurrence and any
 /// fire the replaced publication already made converge on one start.
 /// </para>
@@ -133,16 +133,17 @@ public sealed record RecurringTriggerSchedule(
 
     /// <summary>
     /// This schedule as it replaces <paramref name="replaced"/>, the same trigger's schedule in the publication it replaces
-    /// (#2198). It takes over the replaced cursor when that names an occurrence earlier than its own cursor and no later than
-    /// its own creation: one that fell due before this schedule was materialized, so its own cursor, the first occurrence
-    /// after its creation, would skip it. Otherwise it is unchanged.
+    /// (#2198), activated at <paramref name="activatedAt"/>. It takes over the replaced cursor when that names an occurrence
+    /// earlier than its own cursor and no later than the activation: one that fell due before this schedule took the
+    /// replaced one's place, whether before or after it was materialized, so its own cursor, the first occurrence after its
+    /// creation, would skip it. Otherwise it is unchanged.
     /// </summary>
-    public RecurringTriggerSchedule TakeOverFrom(RecurringTriggerSchedule replaced)
+    public RecurringTriggerSchedule TakeOverFrom(RecurringTriggerSchedule replaced, DateTimeOffset activatedAt)
     {
         ArgumentNullException.ThrowIfNull(replaced);
         if (!IsSameTriggerAs(replaced))
             throw new ArgumentException($"Schedule '{replaced.ScheduleId}' is not the same trigger as schedule '{ScheduleId}'.", nameof(replaced));
-        return replaced.NextOccurrence < NextOccurrence && replaced.NextOccurrence <= CreatedAt
+        return replaced.NextOccurrence < NextOccurrence && replaced.NextOccurrence <= activatedAt
             ? this with { NextOccurrence = replaced.NextOccurrence }
             : this;
     }

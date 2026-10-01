@@ -18,8 +18,10 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 public sealed class EfRecurringTriggerScheduleStore(
     RuntimeDbContext context,
     IPersistenceAccessContextAccessor accessContextAccessor,
-    IRuntimeRecoveryContinuationCodec continuationCodec) : IRecurringTriggerScheduleStore
+    IRuntimeRecoveryContinuationCodec continuationCodec,
+    TimeProvider? timeProvider = null) : IRecurringTriggerScheduleStore
 {
+    private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
     private const string ProjectionKind = "recurringSchedules";
     private const string ActivationCursorPurpose = "ef-runtime-recurring-schedule-activation-v1";
     private const string ArtifactCursorPurpose = "ef-runtime-recurring-schedule-artifact-v1";
@@ -227,11 +229,12 @@ public sealed class EfRecurringTriggerScheduleStore(
         // in this transaction. The replaced rows are rewritten below under a new revision, so a claim in flight on one of
         // them is stale from the same commit on, and cannot settle the occurrence the activated schedule now holds.
         var predecessors = replacedRows.Select(x => Read(x, scope)).ToArray();
+        var activatedAt = _timeProvider.GetUtcNow();
         foreach (var row in candidateRows)
         {
             var schedule = Read(row, scope);
             var predecessor = predecessors.SingleOrDefault(schedule.IsSameTriggerAs);
-            Copy(row, (predecessor is null ? schedule : schedule.TakeOverFrom(predecessor)) with { IsActive = true }, scope, checked(row.Revision + 1));
+            Copy(row, (predecessor is null ? schedule : schedule.TakeOverFrom(predecessor, activatedAt)) with { IsActive = true }, scope, checked(row.Revision + 1));
         }
         candidate.IsActive = true;
         candidate.Revision = checked(candidate.Revision + 1);
@@ -759,11 +762,13 @@ public sealed class EfRecurringTriggerScheduleStore(
         return new ProjectionStateSnapshot { Entity = entity, Scope = scope, ActivationId = Decode(entity.ActivationId), ArtifactId = entity.ArtifactId, IsActive = entity.IsActive, ScheduleCount = entity.ScheduleCount, ProjectionFingerprint = entity.ProjectionFingerprint, ScheduleIds = ids, ScheduleFingerprints = fps };
     }
 
+    // The prepare-time ProjectionFingerprint is not compared: it covers each cursor, which moves for as long as the schedule
+    // lives (a settled occurrence, a take-over at activation), so it would refuse an activation that was restored or
+    // compensated after its first one. The per-schedule immutable fingerprints cover what must not change.
     private static bool ProjectionMatches(ProjectionStateSnapshot state, IEnumerable<RecurringTriggerScheduleEntity> rows, string scope, string activation)
     {
         var schedules = rows.Select(x => Read(x, scope)).ToArray();
         return state.ActivationId == activation && state.ScheduleCount == schedules.Length &&
-               state.ProjectionFingerprint == ProjectionFingerprint(schedules) &&
                state.ScheduleIds.SequenceEqual(schedules.Select(x => x.ScheduleId).OrderBy(x => x, StringComparer.Ordinal)) &&
                schedules.All(x => x.ActivationId == activation && x.ArtifactId == Optional(state.ArtifactId) &&
                                   state.ScheduleFingerprints.TryGetValue(x.ScheduleId, out var fp) && fp == ImmutableFingerprint(x));

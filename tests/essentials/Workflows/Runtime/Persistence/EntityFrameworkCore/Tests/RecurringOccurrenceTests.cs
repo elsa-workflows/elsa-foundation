@@ -3,6 +3,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Services.Triggers;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
@@ -73,6 +74,18 @@ public sealed class RecurringOccurrenceTests : IAsyncDisposable
         WithStoresAsync(RecurringOccurrenceClaimContract.ActivatingAReplacementKeepsItsOwnCursorWhenNoDueOccurrenceOfItsTriggerPrecededItAsync);
 
     [Fact]
+    public Task Sqlite_activating_a_replacement_takes_over_an_occurrence_that_fell_due_between_its_preparation_and_its_activation() =>
+        WithStoresAsync(RecurringOccurrenceClaimContract.ActivatingAReplacementTakesOverAnOccurrenceThatFellDueBetweenItsPreparationAndItsActivationAsync);
+
+    [Fact]
+    public Task Sqlite_compensating_an_activation_that_took_over_a_due_occurrence_restores_the_replaced_schedule_and_removes_the_candidate() =>
+        WithStoresAsync(RecurringOccurrenceClaimContract.CompensatingAnActivationThatTookOverADueOccurrenceRestoresTheReplacedScheduleAndRemovesTheCandidateAsync);
+
+    [Fact]
+    public Task Sqlite_compensating_restores_a_replaced_schedule_that_settled_while_it_was_active() =>
+        WithStoresAsync(RecurringOccurrenceClaimContract.CompensatingRestoresAReplacedScheduleThatSettledWhileItWasActiveAsync);
+
+    [Fact]
     public Task InMemory_a_claim_holds_the_occurrence_until_its_lease_lapses() =>
         RecurringOccurrenceClaimContract.AClaimHoldsTheOccurrenceUntilItsLeaseLapsesAsync(InMemory());
 
@@ -92,18 +105,36 @@ public sealed class RecurringOccurrenceTests : IAsyncDisposable
     public Task InMemory_activating_a_replacement_keeps_its_own_cursor_when_no_due_occurrence_of_its_trigger_preceded_it() =>
         RecurringOccurrenceClaimContract.ActivatingAReplacementKeepsItsOwnCursorWhenNoDueOccurrenceOfItsTriggerPrecededItAsync(InMemory());
 
+    [Fact]
+    public Task InMemory_activating_a_replacement_takes_over_an_occurrence_that_fell_due_between_its_preparation_and_its_activation()
+    {
+        var clock = RecurringOccurrenceClaimContract.NewClock();
+        return RecurringOccurrenceClaimContract.ActivatingAReplacementTakesOverAnOccurrenceThatFellDueBetweenItsPreparationAndItsActivationAsync(InMemory(clock), clock);
+    }
+
+    [Fact]
+    public Task InMemory_compensating_an_activation_that_took_over_a_due_occurrence_restores_the_replaced_schedule_and_removes_the_candidate() =>
+        RecurringOccurrenceClaimContract.CompensatingAnActivationThatTookOverADueOccurrenceRestoresTheReplacedScheduleAndRemovesTheCandidateAsync(InMemory());
+
+    [Fact]
+    public Task InMemory_compensating_restores_a_replaced_schedule_that_settled_while_it_was_active() =>
+        RecurringOccurrenceClaimContract.CompensatingRestoresAReplacedScheduleThatSettledWhileItWasActiveAsync(InMemory());
+
     public ValueTask DisposeAsync() => _database.DisposeAsync();
 
-    private async Task WithStoresAsync(Func<Func<IRecurringTriggerScheduleStore>, Task> scenario)
+    private Task WithStoresAsync(Func<Func<IRecurringTriggerScheduleStore>, Task> scenario) =>
+        WithStoresAsync((node, _) => scenario(node));
+
+    private async Task WithStoresAsync(Func<Func<IRecurringTriggerScheduleStore>, FakeTimeProvider, Task> scenario)
     {
         await using var stores = await new EfRecurringScheduleStores(CreateContext).EnsureCreatedAsync();
-        await scenario(() => stores.Create());
+        await scenario(() => stores.Create(), stores.Clock);
     }
 
     // One store shared by every "node": the in-memory store is the storage.
-    private static Func<IRecurringTriggerScheduleStore> InMemory()
+    private static Func<IRecurringTriggerScheduleStore> InMemory(FakeTimeProvider? clock = null)
     {
-        var store = new InMemoryRecurringTriggerScheduleStore();
+        var store = new InMemoryRecurringTriggerScheduleStore(clock ?? RecurringOccurrenceClaimContract.NewClock());
         return () => store;
     }
 

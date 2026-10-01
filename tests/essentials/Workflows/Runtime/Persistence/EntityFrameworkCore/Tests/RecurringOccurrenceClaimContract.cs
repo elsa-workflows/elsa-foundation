@@ -4,6 +4,7 @@ using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Workflows.Runtime.Services.Recovery;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
@@ -22,6 +23,12 @@ internal static class RecurringOccurrenceClaimContract
     private static readonly RecurringTriggerSchedule Schedule = new(
         RecurringTriggerSchedule.BuildId("artifact-claims", "node-claims"), "artifact-claims", "node-claims", "Timer", "hash-claims",
         RecurringScheduleKind.Interval, "PT1M", Due, Due.AddHours(-1));
+
+    /// <summary>
+    /// A clock at this contract's <c>Now</c>, the instant its stores activate at unless a scenario moves it: the store's
+    /// activation judges a take-over at the instant it takes place, so a store without one would read the real time.
+    /// </summary>
+    public static FakeTimeProvider NewClock() => new(Now);
 
     /// <summary>
     /// A claim leaves the occurrence in the cursor and hides it from every other claimant until its lease lapses. The peer
@@ -169,12 +176,83 @@ internal static class RecurringOccurrenceClaimContract
         Assert.Empty(await store.ClaimDueAsync(Request("pump", Now)));
     }
 
+    /// <summary>
+    /// An occurrence of the replaced schedule can fall due after the replacement was prepared and before it is activated, as
+    /// the replaced publication keeps firing meanwhile. The replacement's own cursor, the first occurrence after it was
+    /// prepared, would skip that occurrence, so activation takes it over (#2198).
+    /// </summary>
+    public static async Task ActivatingAReplacementTakesOverAnOccurrenceThatFellDueBetweenItsPreparationAndItsActivationAsync(
+        Func<IRecurringTriggerScheduleStore> node,
+        FakeTimeProvider clock)
+    {
+        var store = node();
+        await ActivateAsync(store, Slotted("publication-a", "artifact-a", next: Now.AddSeconds(30), createdAt: Due.AddHours(-1)), replacedActivationId: null);
+        var replacement = Slotted("publication-b", "artifact-b", next: Now.AddSeconds(60), createdAt: Now);
+        await store.PrepareActivationAsync("publication-b", [replacement]);
+
+        clock.SetUtcNow(Now.AddSeconds(40));
+        await store.ActivateAsync("publication-b", "publication-a");
+
+        Assert.Equal(Now.AddSeconds(30), (await store.FindAsync(replacement.ScheduleId))!.NextOccurrence);
+        Assert.Equal(Now.AddSeconds(30), Assert.Single(await store.ClaimDueAsync(Request("pump", clock.GetUtcNow()))).Schedule.NextOccurrence);
+    }
+
+    /// <summary>
+    /// Compensation after a failed activation restores the replaced activation and removes the candidate, also when the
+    /// candidate took over the replaced schedule's due occurrence, which moved its cursor off the one it was prepared with.
+    /// </summary>
+    public static async Task CompensatingAnActivationThatTookOverADueOccurrenceRestoresTheReplacedScheduleAndRemovesTheCandidateAsync(Func<IRecurringTriggerScheduleStore> node)
+    {
+        var store = node();
+        var replaced = Slotted("publication-a", "artifact-a", next: Due, createdAt: Due.AddHours(-1));
+        await ActivateAsync(store, replaced, replacedActivationId: null);
+        var candidate = Slotted("publication-b", "artifact-b", next: Now.AddSeconds(50), createdAt: Now.AddSeconds(-10));
+        await ActivateAsync(store, candidate, replacedActivationId: "publication-a");
+        Assert.Equal(Due, (await store.FindAsync(candidate.ScheduleId))!.NextOccurrence);
+
+        await CompensateAsync(store, restored: "publication-a", removed: "publication-b");
+
+        Assert.Equal(Due, Assert.Single(await store.ClaimDueAsync(Request("pump", Now))).Schedule.NextOccurrence);
+        Assert.True((await store.FindAsync(replaced.ScheduleId))!.IsActive);
+        Assert.Null(await store.FindAsync(candidate.ScheduleId));
+        Assert.Equal(WorkflowActivationProjectionState.Missing, await store.FindActivationStateAsync("publication-b"));
+    }
+
+    /// <summary>
+    /// Compensation restores a replaced activation whose schedule settled occurrences while it was active, so its cursor is
+    /// no longer the one it was prepared with.
+    /// </summary>
+    public static async Task CompensatingRestoresAReplacedScheduleThatSettledWhileItWasActiveAsync(Func<IRecurringTriggerScheduleStore> node)
+    {
+        var store = node();
+        var replaced = Slotted("publication-a", "artifact-a", next: Due, createdAt: Due.AddHours(-1));
+        await ActivateAsync(store, replaced, replacedActivationId: null);
+        Assert.True(await store.SettleClaimAsync(Assert.Single(await store.ClaimDueAsync(Request("pump", Now))), Now.AddMinutes(1)));
+        var candidate = Slotted("publication-b", "artifact-b", next: Now.AddMinutes(2), createdAt: Now.AddSeconds(-10));
+        await ActivateAsync(store, candidate, replacedActivationId: "publication-a");
+
+        await CompensateAsync(store, restored: "publication-a", removed: "publication-b");
+
+        var restored = (await store.FindAsync(replaced.ScheduleId))!;
+        Assert.True(restored.IsActive);
+        Assert.Equal(Now.AddMinutes(1), restored.NextOccurrence);
+        Assert.Null(await store.FindAsync(candidate.ScheduleId));
+    }
+
     private static RecurringTriggerOccurrenceClaimRequest Request(string owner, DateTimeOffset now) => new(owner, now, Lease, 10);
 
     // A trigger's schedule in one publication of the slot "slot-claims", as activation preparation materializes it.
     private static RecurringTriggerSchedule Slotted(string activationId, string artifactId, DateTimeOffset next, DateTimeOffset createdAt, string node = "node-claims") =>
         new(RecurringTriggerSchedule.BuildId(activationId, artifactId, node), artifactId, node, "Timer", "hash-claims",
             RecurringScheduleKind.Interval, "PT1M", next, createdAt, activationId, "slot-claims");
+
+    // What the activation coordinator does when an activation fails after its projections switched: the replaced activation
+    // is restored in the candidate's place, then the candidate's projections are removed.
+    private static async Task CompensateAsync(IRecurringTriggerScheduleStore store, string restored, string removed)
+    {
+        await store.ActivateAsync(restored, removed);
+        await store.DeleteByActivationAsync(removed);
+    }
 
     private static async Task ActivateAsync(IRecurringTriggerScheduleStore store, RecurringTriggerSchedule schedule, string? replacedActivationId)
     {
@@ -192,6 +270,9 @@ internal sealed class EfRecurringScheduleStores(Func<IInterceptor[], RuntimeDbCo
     private const string Scope = "recurring-occurrences";
     private readonly List<RuntimeDbContext> _contexts = [];
 
+    /// <summary>The clock every store reads when an activation takes over an occurrence.</summary>
+    public FakeTimeProvider Clock { get; } = RecurringOccurrenceClaimContract.NewClock();
+
     /// <summary>Creates the schema, for a database no runtime node has migrated.</summary>
     public async Task<EfRecurringScheduleStores> EnsureCreatedAsync()
     {
@@ -205,7 +286,7 @@ internal sealed class EfRecurringScheduleStores(Func<IInterceptor[], RuntimeDbCo
         var context = createContext(interceptors);
         _contexts.Add(context);
         return new(context, new ScopeAccessor(), new HmacRuntimeRecoveryContinuationCodec(
-            Options.Create(new RuntimeRecoveryContinuationOptions { SigningKey = new string('k', 32) })));
+            Options.Create(new RuntimeRecoveryContinuationOptions { SigningKey = new string('k', 32) })), Clock);
     }
 
     public async ValueTask DisposeAsync()

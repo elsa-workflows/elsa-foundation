@@ -3,6 +3,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests;
@@ -89,10 +90,25 @@ public sealed class RecurringOccurrencePostgreSqlSmokeTests(RuntimeBookmarksPost
     public Task PostgreSql_activating_a_replacement_keeps_its_own_cursor_when_no_due_occurrence_of_its_trigger_preceded_it() =>
         WithStoresAsync(RecurringOccurrenceClaimContract.ActivatingAReplacementKeepsItsOwnCursorWhenNoDueOccurrenceOfItsTriggerPrecededItAsync);
 
-    private async Task WithStoresAsync(Func<Func<IRecurringTriggerScheduleStore>, Task> scenario)
+    [SkippableFact]
+    public Task PostgreSql_activating_a_replacement_takes_over_an_occurrence_that_fell_due_between_its_preparation_and_its_activation() =>
+        WithStoresAsync(RecurringOccurrenceClaimContract.ActivatingAReplacementTakesOverAnOccurrenceThatFellDueBetweenItsPreparationAndItsActivationAsync);
+
+    [SkippableFact]
+    public Task PostgreSql_compensating_an_activation_that_took_over_a_due_occurrence_restores_the_replaced_schedule_and_removes_the_candidate() =>
+        WithStoresAsync(RecurringOccurrenceClaimContract.CompensatingAnActivationThatTookOverADueOccurrenceRestoresTheReplacedScheduleAndRemovesTheCandidateAsync);
+
+    [SkippableFact]
+    public Task PostgreSql_compensating_restores_a_replaced_schedule_that_settled_while_it_was_active() =>
+        WithStoresAsync(RecurringOccurrenceClaimContract.CompensatingRestoresAReplacedScheduleThatSettledWhileItWasActiveAsync);
+
+    private Task WithStoresAsync(Func<Func<IRecurringTriggerScheduleStore>, Task> scenario) =>
+        WithStoresAsync((node, _) => scenario(node));
+
+    private async Task WithStoresAsync(Func<Func<IRecurringTriggerScheduleStore>, FakeTimeProvider, Task> scenario)
     {
         await using var stores = await new EfRecurringScheduleStores(Contexts(await CreateDatabaseAsync())).EnsureCreatedAsync();
-        await scenario(() => stores.Create());
+        await scenario(() => stores.Create(), stores.Clock);
     }
 
     private static Func<IInterceptor[], RuntimeDbContext> Contexts(string connectionString) =>

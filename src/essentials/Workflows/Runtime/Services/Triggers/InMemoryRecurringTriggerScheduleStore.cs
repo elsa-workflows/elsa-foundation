@@ -10,8 +10,9 @@ namespace Elsa.Workflows.Runtime.Services.Triggers;
 /// to make recurring schedules survive restarts.
 /// </summary>
 [RuntimeDefaultRegistration]
-public sealed class InMemoryRecurringTriggerScheduleStore : IRecurringTriggerScheduleStore
+public sealed class InMemoryRecurringTriggerScheduleStore(TimeProvider? timeProvider = null) : IRecurringTriggerScheduleStore
 {
+    private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
     private const string ProjectionName = "recurring-schedule";
     private readonly object _syncRoot = new();
     private readonly Dictionary<string, RecurringTriggerSchedule> _schedules = new(StringComparer.Ordinal);
@@ -124,10 +125,11 @@ public sealed class InMemoryRecurringTriggerScheduleStore : IRecurringTriggerSch
             // changes them, so a claim in flight on one is stale from then on (#2198).
             var replacing = replacedActivationId is not null && !StringComparer.Ordinal.Equals(replacedActivationId, activationId);
             var replaced = replacing ? SchedulesOf(replacedActivationId!).Where(schedule => schedule.IsActive).ToArray() : [];
+            var activatedAt = _timeProvider.GetUtcNow();
             foreach (var schedule in SchedulesOf(activationId))
             {
                 var predecessor = replaced.SingleOrDefault(schedule.IsSameTriggerAs);
-                _schedules[schedule.ScheduleId] = (predecessor is null ? schedule : schedule.TakeOverFrom(predecessor)) with { IsActive = true };
+                _schedules[schedule.ScheduleId] = (predecessor is null ? schedule : schedule.TakeOverFrom(predecessor, activatedAt)) with { IsActive = true };
             }
             if (replacing)
                 SetRowsActive(replacedActivationId!, false);
