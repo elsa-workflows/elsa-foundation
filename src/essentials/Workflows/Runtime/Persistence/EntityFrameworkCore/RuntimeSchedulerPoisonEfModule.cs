@@ -12,6 +12,7 @@ public static class RuntimeSchedulerPoisonEfModule
     /// upcasts through (spec 180, FR-010).</summary>
     public static readonly EfSchemaChain Chain = EfSchemaChain.Of(typeof(RuntimeSchedulerPoisonEfModule).Assembly, SchemaFamily);
     public const int IdentityMaximumLength = RuntimeOperationalStateEfModule.IdentityMaximumLength;
+    public const int IdentityProjectionMaximumLength = RuntimeOperationalStateEfModule.IdentityProjectionMaximumLength;
     public const int ScopeProjectionMaximumLength = RuntimeOperationalStateEfModule.ScopeProjectionMaximumLength;
     public const int OrderKeyMaximumLength = RuntimeOperationalStateEfModule.OrderKeyMaximumLength;
 
