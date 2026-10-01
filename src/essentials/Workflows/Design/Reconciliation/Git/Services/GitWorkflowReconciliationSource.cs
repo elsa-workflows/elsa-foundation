@@ -101,7 +101,7 @@ public sealed class GitWorkflowReconciliationSource(
     private DateTimeOffset? ReadCommitterDate(string repoPath, string file)
     {
         var relativePath = Path.GetRelativePath(repoPath, file).Replace(Path.DirectorySeparatorChar, '/');
-        var raw = gitClient.RunOrDefault(repoPath, "log", "-1", "--format=%cI", "--", relativePath);
+        var raw = gitClient.RunOrDefault(repoPath, GitPathspecs.Literal, "log", "-1", "--format=%cI", "--", relativePath);
         return DateTimeOffset.TryParse(raw, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var when)
             ? when
             : null;

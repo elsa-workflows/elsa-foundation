@@ -7,6 +7,8 @@ using Elsa.Tasks.Core;
 using Elsa.Tasks.Services;
 using Elsa.Workflows.Design.Core.Reconciliation;
 using Elsa.Workflows.Design.Reconciliation;
+using Elsa.Workflows.Design.Reconciliation.Git.Contracts;
+using Elsa.Workflows.Design.Reconciliation.Git.Startup;
 using Elsa.Workflows.Design.Reconciliation.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -17,7 +19,8 @@ namespace Elsa.Workflows.Design.Tests.Unit.Reconciliation;
 /// <summary>
 /// The design-side version reconcilers run on every node at shell start (#2192). Their inputs are node-local, so a node that
 /// skipped its pass because another node held a lock would never reconcile its own; two passes at once converge instead
-/// (#2189). Each task here runs through the shell's task executor while another node holds every lock there is.
+/// (#2189). The git export runs on every Writer node the same way (#2197): its fence is the push, not a lock. Each task
+/// here runs through the shell's task executor while another node holds every lock there is.
 /// </summary>
 public sealed class NodeLocalReconcilerStartupTaskTests
 {
@@ -46,6 +49,17 @@ public sealed class NodeLocalReconcilerStartupTaskTests
         await _executor.ExecuteTaskAsync(new WorkflowsVersionReconcilerStartupTask(reconciler), CancellationToken.None);
 
         Assert.Equal(1, reconciler.Passes);
+        Assert.Equal(0, _locks.Attempts);
+    }
+
+    [Fact]
+    public async Task The_git_export_runs_while_another_node_holds_every_lock()
+    {
+        var exporter = new SpyReconciler();
+
+        await _executor.ExecuteTaskAsync(new GitWorkflowExportStartupTask(exporter), CancellationToken.None);
+
+        Assert.Equal(1, exporter.Passes);
         Assert.Equal(0, _locks.Attempts);
     }
 
@@ -79,7 +93,7 @@ public sealed class NodeLocalReconcilerStartupTaskTests
 
     private sealed class MinimalWorkflowsDesignReconciliationFeature : WorkflowsDesignReconciliationFeature;
 
-    private sealed class SpyReconciler : IActivityVersionReconciler, IWorkflowVersionReconciler
+    private sealed class SpyReconciler : IActivityVersionReconciler, IWorkflowVersionReconciler, IGitWorkflowExporter
     {
         public int Passes { get; private set; }
 
@@ -88,6 +102,8 @@ public sealed class NodeLocalReconcilerStartupTaskTests
             Passes++;
             return Task.CompletedTask;
         }
+
+        public Task ExportAsync(CancellationToken cancellationToken) => Reconcile(cancellationToken);
     }
 
     /// <summary>Another node holds every lock, for longer than anyone waits.</summary>
