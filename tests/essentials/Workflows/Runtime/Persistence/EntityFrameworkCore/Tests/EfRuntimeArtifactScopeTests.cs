@@ -764,6 +764,82 @@ public sealed class EfRuntimeArtifactScopeTests
     }
 
     [Fact]
+    public async Task Concurrent_idempotent_executable_saves_reconcile_a_winner_committed_before_coordination_read()
+    {
+        await using var database = await Database.CreateFileAsync();
+        await using var winner = database.Open("tenant-a");
+        var candidate = Executable("coordination-read-race-artifact");
+        var interleaving = new BeforeExecutableCoordinationRead(
+            () => winner.Executable.SaveAsync(candidate).AsTask());
+        await using var contender = database.Open("tenant-a", interleaving);
+
+        await contender.Executable.SaveAsync(candidate);
+
+        Assert.Equal(1, interleaving.Callbacks);
+        Assert.NotNull(interleaving.TriggeredCommand);
+        Assert.Contains(
+            RuntimeArtifactEfModule.WorkflowExecutableCoordinationTableName,
+            interleaving.TriggeredCommand!,
+            StringComparison.OrdinalIgnoreCase);
+
+        var persisted = await contender.Executable.FindAsync(candidate.Identity.ArtifactId);
+        Assert.NotNull(persisted);
+        Assert.Equal(candidate.Identity.ArtifactId, persisted!.Identity.ArtifactId);
+        Assert.Equal(candidate.Identity.ArtifactHash, persisted.Identity.ArtifactHash);
+        Assert.NotEmpty(persisted.Nodes);
+        Assert.Empty(contender.Context.ChangeTracker.Entries());
+
+        await using var verification = database.Open("tenant-a");
+        var artifactRow = await verification.Context.WorkflowExecutables
+            .AsNoTracking()
+            .SingleAsync();
+        var coordinationRow = await verification.Context.WorkflowExecutableCoordinations
+            .AsNoTracking()
+            .SingleAsync();
+        Assert.Equal(artifactRow.IncarnationId, coordinationRow.IncarnationId);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Executable_pair_read_refreshes_tracked_entities_after_recreation_between_reads(bool acquireLease)
+    {
+        await using var database = await Database.CreateFileAsync();
+        await using var current = database.Open("tenant-a");
+        var candidate = Executable("recreated-between-pair-reads");
+        await current.Executable.SaveAsync(candidate);
+        var originalIncarnation = await current.Context.WorkflowExecutables
+            .AsNoTracking().Select(row => row.IncarnationId).SingleAsync();
+        var interleaving = new BeforeExecutableCoordinationRead(async () =>
+        {
+            Assert.True(await current.Executable.DeleteAsync(candidate.Identity.ArtifactId));
+            await current.Executable.SaveAsync(candidate);
+        });
+        await using var contender = database.Open("tenant-a", interleaving);
+
+        if (acquireLease)
+        {
+            var now = DateTimeOffset.UtcNow;
+            Assert.NotNull(await contender.Executable.TryAcquireRootWriteLeaseAsync(
+                candidate.Identity.ArtifactId, "recreated-lease", now.AddMinutes(1), now));
+        }
+        else
+            await contender.Executable.SaveAsync(candidate);
+
+        Assert.Equal(1, interleaving.Callbacks);
+        await using var verification = database.Open("tenant-a");
+        var artifactRow = await verification.Context.WorkflowExecutables.AsNoTracking().SingleAsync();
+        var coordinationRow = await verification.Context.WorkflowExecutableCoordinations.AsNoTracking().SingleAsync();
+        Assert.NotEqual(originalIncarnation, artifactRow.IncarnationId);
+        Assert.Equal(artifactRow.IncarnationId, coordinationRow.IncarnationId);
+        Assert.NotNull(await verification.Executable.FindAsync(candidate.Identity.ArtifactId));
+        if (acquireLease)
+            Assert.All(contender.Context.ChangeTracker.Entries(), entry => Assert.Equal(EntityState.Unchanged, entry.State));
+        else
+            Assert.Empty(contender.Context.ChangeTracker.Entries());
+    }
+
+    [Fact]
     public async Task Executable_save_reconciles_a_complete_winner_after_a_transient_race_the_provider_execution_strategy_wrapped()
     {
         await using var database = await Database.CreateFileAsync();
@@ -1553,6 +1629,7 @@ public sealed class EfRuntimeArtifactScopeTests
             return result;
         }
     }
+
 
     private sealed class HideTemplateLookupInterceptor(int lookupCount) : DbCommandInterceptor
     {
