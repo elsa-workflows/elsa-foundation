@@ -19,10 +19,11 @@ namespace Elsa.Workflows.Runtime.Reconciliation.Startup;
 /// <para>
 /// <b>A <c>[SingleNodeTask]</c>: one node at a time, and every node in turn</b> (#2192). Each node's mounted set is its
 /// own, so a node must never skip its pass because another node is running one: it waits for the lock and then
-/// reconciles. Serializing the passes is what keeps two nodes off the same activation slot at once. Unlike the design-side
-/// version reconcilers, whose concurrent passes converge (#2189), two concurrent activations of one artifact are not shown
-/// to: the one that loses the slot's compare-and-swap compensates, and its compensation addresses the activation id and
-/// source reference both nodes derive alike. A pass that runs after another finds the artifact already active instead.
+/// reconciles. A pass that runs after another finds the artifacts both mount already active.
+/// </para>
+/// <para>
+/// <b>Why the passes still take turns</b> (#2274). Concurrent passes over one mounted set still have silent windows,
+/// tracked in #2230, so this stays a <c>[SingleNodeTask]</c>. The README's "Why the passes take turns" describes them.
 /// </para>
 /// <para>
 /// Re-reconciliation needs no new trigger: this is an <see cref="IStartupTask"/>, so a shell reload replays it

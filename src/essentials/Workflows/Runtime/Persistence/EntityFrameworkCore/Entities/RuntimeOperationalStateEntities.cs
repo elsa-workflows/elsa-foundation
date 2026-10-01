@@ -212,7 +212,7 @@ public sealed class RecurringTriggerScheduleEntity
 }
 
 /// <summary>Atomic activation projection marker for recurring schedule preparation and activation.</summary>
-public sealed class RecurringTriggerScheduleProjectionStateEntity
+public sealed class RecurringTriggerScheduleProjectionStateEntity : IActivationProjectionState
 {
     public string Id { get; set; } = null!;
     public string ScopeKey { get; set; } = null!;

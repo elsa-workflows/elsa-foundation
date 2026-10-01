@@ -3,6 +3,10 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 /// <summary>
 /// Coordinates the provider-backed lease required before a durable executable retention root is written.
 /// </summary>
+/// <remarks>
+/// A lease id names one execution. The store hands an unexpired lease with the same id to every acquirer, and the first
+/// to release it ends it for all of them, so writes that may run at once must pass distinct ids (#2274).
+/// </remarks>
 public interface IWorkflowExecutableRootWriteLeaseManager
 {
     /// <summary>

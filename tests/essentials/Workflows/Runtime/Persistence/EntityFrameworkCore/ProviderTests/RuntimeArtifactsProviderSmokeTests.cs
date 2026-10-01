@@ -9,6 +9,7 @@ using Elsa.Workflows.Runtime.Services.Recovery;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Options;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 using Xunit;
 using Xunit.Sdk;
 
@@ -26,6 +27,11 @@ public sealed class RuntimeArtifactsPostgreSqlSmokeTests(RuntimeBookmarksPostgre
     [SkippableFact]
     public Task PostgreSql_doomed_reference_delete_loses_to_a_restore_between_its_read_and_its_delete() =>
         RuntimeArtifactsProviderSmoke.RunDoomedDeleteRaceAsync(fixture, "PostgreSql", (connection, interceptors) => new RuntimePostgreSqlDbContext(
+            new DbContextOptionsBuilder<RuntimePostgreSqlDbContext>().UseNpgsql(connection).AddInterceptors(interceptors).Options));
+
+    [SkippableFact]
+    public Task PostgreSql_concurrent_idempotent_executable_saves_reconcile_a_winner_before_coordination_read() =>
+        RuntimeArtifactsProviderSmoke.RunExecutableCoordinationRaceAsync(fixture, "PostgreSql", (connection, interceptors) => new RuntimePostgreSqlDbContext(
             new DbContextOptionsBuilder<RuntimePostgreSqlDbContext>().UseNpgsql(connection).AddInterceptors(interceptors).Options));
 }
 
@@ -190,6 +196,54 @@ internal static class RuntimeArtifactsProviderSmoke
 
         Assert.Null((await activation.FindAsync(retired.SourceReferenceId))!.DeletedAt);
     }
+
+    public static async Task RunExecutableCoordinationRaceAsync(
+        RuntimeBookmarksProviderFixture fixture,
+        string providerName,
+        Func<string, IInterceptor[], RuntimeDbContext> createContext)
+    {
+        Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? $"Docker/{providerName} is unavailable.");
+        var scope = $"provider-executable-race-{Guid.NewGuid():N}";
+        var candidate = Executable("provider-coordination-read-race");
+
+        await using var winnerContext = createContext(fixture.ConnectionString, []);
+        await winnerContext.Database.EnsureCreatedAsync();
+        var winner = new EfWorkflowExecutableStore(winnerContext, new FixedAccessor(scope));
+        var interleaving = new BeforeExecutableCoordinationRead(
+            () => winner.SaveAsync(candidate).AsTask());
+        await using var contenderContext = createContext(fixture.ConnectionString, [interleaving]);
+        var contender = new EfWorkflowExecutableStore(contenderContext, new FixedAccessor(scope));
+
+        await contender.SaveAsync(candidate);
+
+        Assert.Equal(1, interleaving.Callbacks);
+        Assert.NotNull(interleaving.TriggeredCommand);
+        Assert.Contains(
+            RuntimeArtifactEfModule.WorkflowExecutableCoordinationTableName,
+            interleaving.TriggeredCommand!,
+            StringComparison.OrdinalIgnoreCase);
+
+        var persisted = await contender.FindAsync(candidate.Identity.ArtifactId);
+        Assert.NotNull(persisted);
+        Assert.Equal(candidate.Identity.ArtifactId, persisted!.Identity.ArtifactId);
+        Assert.Equal(candidate.Identity.ArtifactHash, persisted.Identity.ArtifactHash);
+        Assert.NotEmpty(persisted.Nodes);
+        Assert.Empty(contenderContext.ChangeTracker.Entries());
+
+        await using var verificationContext = createContext(fixture.ConnectionString, []);
+        var artifactRow = await verificationContext.WorkflowExecutables
+            .AsNoTracking()
+            .SingleAsync(x =>
+                x.ScopeKey == Elsa.Persistence.EntityFramework.EfRelationalIdentity.Encode(scope) &&
+                x.ArtifactId == Elsa.Persistence.EntityFramework.EfRelationalIdentity.Encode(candidate.Identity.ArtifactId));
+        var coordinationRow = await verificationContext.WorkflowExecutableCoordinations
+            .AsNoTracking()
+            .SingleAsync(x =>
+                x.ScopeKey == Elsa.Persistence.EntityFramework.EfRelationalIdentity.Encode(scope) &&
+                x.ArtifactId == Elsa.Persistence.EntityFramework.EfRelationalIdentity.Encode(candidate.Identity.ArtifactId));
+        Assert.Equal(artifactRow.IncarnationId, coordinationRow.IncarnationId);
+    }
+
 
     private sealed class RestoreBeforeSaveInterceptor(Func<Task> restore) : SaveChangesInterceptor
     {

@@ -9,10 +9,8 @@ using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Workflows.Runtime.Services.Triggers;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
-using static Elsa.Persistence.EntityFramework.Tests.ProviderFailures;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 
@@ -305,8 +303,14 @@ public sealed class EfWorkflowTriggerBindingStoreTests
         Assert.Equal(2, (await store.ListByActivationAsync(new WorkflowTriggerBindingActivationPageQuery("split"))).Items.Count);
     }
 
+    /// <summary>
+    /// A second switch of an activation another context has switched since this one last read it finds the switch made and
+    /// writes nothing. It used to fail on the revisions its context still tracked, which made the second of two completions
+    /// of one slot fail (#2265). A switch now starts every attempt from a cleared tracker, so what this pins is the outcome,
+    /// a no-op success that moves no revision, not the tracking.
+    /// </summary>
     [Fact]
-    public async Task Competing_activate_using_stale_context_is_mapped_to_a_semantic_conflict_and_rolled_back()
+    public async Task A_switch_another_context_already_made_is_a_no_op_that_moves_no_revision()
     {
         const string connectionString = "Data Source=file:trigger-binding-cas;Mode=Memory;Cache=Shared";
         await using var keeper = new SqliteConnection(connectionString);
@@ -319,17 +323,47 @@ public sealed class EfWorkflowTriggerBindingStoreTests
         var storeB = new EfWorkflowTriggerBindingStore(contextB, new Accessor("tenant-a"));
         await storeA.PrepareActivationAsync("activation-cas", [binding]);
 
-        // Keep a stale state and row tracked in B. A then advances both revision tokens before B
-        // attempts the same activation, forcing EF's optimistic-concurrency predicate to fail.
+        // B tracks the state and row as they were before A's switch, as it did when this failed.
         _ = await contextB.WorkflowTriggerBindingProjectionStates.SingleAsync();
         _ = await contextB.WorkflowTriggerBindings.ToArrayAsync();
         await storeA.ActivateAsync("activation-cas", null);
+        var switched = await Revisions(contextA);
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => storeB.ActivateAsync("activation-cas", null).AsTask());
-        Assert.Contains("changed concurrently", exception.Message, StringComparison.Ordinal);
-        Assert.IsType<DbUpdateConcurrencyException>(exception.InnerException);
+        await storeB.ActivateAsync("activation-cas", null);
+
         Assert.Empty(contextB.ChangeTracker.Entries());
+        Assert.Equal(switched, await Revisions(contextA));
+        Assert.Equal(WorkflowActivationProjectionState.Active, await storeB.FindActivationStateAsync("activation-cas"));
         Assert.True((await storeA.ListByStimulusAsync(new WorkflowTriggerBindingPageQuery("Event", "cas-hash"))).Items.Single().IsActive);
+
+        static async Task<(long State, long Row)> Revisions(RuntimeDbContext context) => (
+            (await context.WorkflowTriggerBindingProjectionStates.AsNoTracking().SingleAsync()).Revision,
+            (await context.WorkflowTriggerBindings.AsNoTracking().SingleAsync()).Revision);
+    }
+
+    /// <summary>
+    /// The direction a retry must not hide: rows that disagree with a projection state that stood still while they were
+    /// read are corrupt, and reading the projection's state fails as such at once, rather than being retried as a
+    /// concurrent switch until it reads as one (#2265). This guards against a fix that retries too eagerly; it passes
+    /// without the #2265 fix too, which reported every disagreement as corrupt.
+    /// </summary>
+    [Fact]
+    public async Task Activation_state_whose_rows_disagree_with_a_state_that_stood_still_is_reported_corrupt()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        await using var context = new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connection).Options);
+        await context.Database.EnsureCreatedAsync();
+        var store = new EfWorkflowTriggerBindingStore(context, new Accessor("tenant-a"));
+        await store.PrepareActivationAsync("activation-a", [Binding("a", "activation-a", "hash-a")]);
+        await store.ActivateAsync("activation-a", null);
+        var state = await context.WorkflowTriggerBindingProjectionStates.SingleAsync();
+        state.IsActive = false;
+        await context.SaveChangesAsync();
+
+        var corrupt = await Assert.ThrowsAsync<InvalidDataException>(() => store.FindActivationStateAsync("activation-a").AsTask());
+
+        Assert.Equal("Trigger-binding activation projection 'activation-a' does not match its rows.", corrupt.Message);
     }
 
     [Fact]
@@ -369,72 +403,12 @@ public sealed class EfWorkflowTriggerBindingStoreTests
         Assert.False((await context.WorkflowTriggerBindings.AsNoTracking().SingleAsync()).IsActive);
     }
 
-    [Fact]
-    public async Task Activation_reports_a_transient_conflict_the_provider_execution_strategy_wrapped_and_rolls_back()
-    {
-        await using var activation = await PreparedActivation.CreateAsync(FailingSaveInterceptor.WrappedDeadlock());
-
-        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => activation.Store.ActivateAsync("activation-a", null).AsTask());
-
-        Assert.EndsWith("encountered a transient write conflict; retry the operation.", failure.Message, StringComparison.Ordinal);
-        Assert.Empty(activation.Context.ChangeTracker.Entries());
-        Assert.Empty((await activation.Store.ListByStimulusAsync(new WorkflowTriggerBindingPageQuery("Event", "hash-a"))).Items);
-    }
-
-    [Fact]
-    public async Task Activation_does_not_report_a_wrapped_provider_failure_that_is_not_a_transient_conflict_as_one()
-    {
-        var saves = FailingSaveInterceptor.WrappedProviderFailure();
-        await using var activation = await PreparedActivation.CreateAsync(saves);
-
-        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => activation.Store.ActivateAsync("activation-a", null).AsTask());
-
-        Assert.DoesNotContain("transient write conflict", failure.Message, StringComparison.Ordinal);
-        Assert.Equal(1, saves.Attempts);
-    }
-
     private static WorkflowTriggerBinding Binding(string id, string? activationId, string stimulusHash, string artifactId = "artifact-a") =>
         new(WorkflowTriggerBinding.BuildId(activationId is null ? artifactId : activationId, artifactId, "node-" + id, stimulusHash), artifactId, "definition-a", "1", "artifact-hash", "node-" + id, "Event", stimulusHash, null, new Dictionary<string, string> { ["k"] = id }, DateTimeOffset.UnixEpoch, activationId, activationId is null ? null : "slot-a");
 
     private sealed class Accessor(string scope) : IPersistenceAccessContextAccessor
     {
         public PersistenceAccessContext Current { get; } = PersistenceAccessContext.Scoped(new PersistenceScope(scope));
-    }
-
-    private sealed class PreparedActivation : IAsyncDisposable
-    {
-        private readonly SqliteConnection connection;
-
-        private PreparedActivation(SqliteConnection connection, RuntimeSqliteDbContext context)
-        {
-            this.connection = connection;
-            Context = context;
-            Store = new EfWorkflowTriggerBindingStore(context, new Accessor("tenant-a"));
-        }
-
-        public RuntimeSqliteDbContext Context { get; }
-
-        public EfWorkflowTriggerBindingStore Store { get; }
-
-        /// <summary>Prepares activation-a with one binding, then opens the store through a context whose saves run <paramref name="saves"/>.</summary>
-        public static async Task<PreparedActivation> CreateAsync(IInterceptor saves)
-        {
-            var connection = new SqliteConnection("Data Source=:memory:");
-            await connection.OpenAsync();
-            await using (var seed = new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connection).Options))
-            {
-                await seed.Database.EnsureCreatedAsync();
-                await new EfWorkflowTriggerBindingStore(seed, new Accessor("tenant-a")).PrepareActivationAsync("activation-a", [Binding("a", "activation-a", "hash-a")]);
-            }
-            return new PreparedActivation(connection, new(new DbContextOptionsBuilder<RuntimeSqliteDbContext>()
-                .UseSqlite(connection).AddInterceptors(saves).Options));
-        }
-
-        public async ValueTask DisposeAsync()
-        {
-            await Context.DisposeAsync();
-            await connection.DisposeAsync();
-        }
     }
 
     private sealed class MutableRegistrationState : IRuntimePersistenceRegistrationState

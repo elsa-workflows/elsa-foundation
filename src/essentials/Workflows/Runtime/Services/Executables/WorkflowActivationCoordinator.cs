@@ -68,12 +68,16 @@ public sealed partial class WorkflowActivationCoordinator(
             SlotId = slotId
         };
 
+        // The lease is this call's alone (#2274). Concurrent calls for one activation share its id, and a store hands an
+        // unexpired lease with the same id to every acquirer; the first call to release it would then end it for the
+        // others, whose next renewal would fail and discard their result, and whose artifact closure nothing would fence
+        // from reference garbage collection meanwhile.
         WorkflowActivationResult? result = null;
         try
         {
             await rootWriteLeaseManager.ExecuteAsync(
                 identity,
-                $"activation:{command.ActivationId}",
+                $"activation:{command.ActivationId}:{Guid.NewGuid():N}",
                 async leaseToken => result = await RunSequenceAsync(command, reference, slotId, leaseToken),
                 cancellationToken);
         }
@@ -815,7 +819,9 @@ public sealed partial class WorkflowActivationCoordinator(
 
         // A retry may rebuild the command later, so its wall-clock provenance can differ. Preserve the first
         // attempt's timestamps and require every other persisted identity/source field to be identical before an
-        // existing row is reused. The activation root lease serializes this recovery with competing attempts.
+        // existing row is reused. Nothing serializes this recovery with a competing attempt for the same activation:
+        // each call holds a root-write lease of its own (#2274). The compare-and-restore below admits one of them; an
+        // attempt that read the same retired row and lost it reports a resume conflict.
         var candidateAtOriginalTime = candidate with
         {
             CreatedAt = existing.CreatedAt,

@@ -24,9 +24,14 @@
     <ProjectReference Include="..\..\..\..\..\Testing\Elsa.Testing.csproj" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="..\Tests\BeforeExecutableCoordinationRead.cs" Link="BeforeExecutableCoordinationRead.cs" />
     <Compile Include="..\Tests\SchedulerWorkQueueClaimableDiscoveryContract.cs" Link="SchedulerWorkQueueClaimableDiscoveryContract.cs" />
     <Compile Include="..\Tests\RuntimeTestDoubles.cs" Link="RuntimeTestDoubles.cs" />
     <Compile Include="..\Tests\WorkflowActivationCrashRepairContract.cs" Link="WorkflowActivationCrashRepairContract.cs" />
+    <Compile Include="..\Tests\WorkflowActivationCrashRepairContract.ConcurrentCompletions.cs" Link="WorkflowActivationCrashRepairContract.ConcurrentCompletions.cs" />
+    <Compile Include="..\Tests\ProjectionSwitchContract.cs" Link="ProjectionSwitchContract.cs" />
+    <!-- Injects provider failures into the projection switch scenarios, such as a deadlock wrapped by SQL Server's execution strategy. -->
+    <Compile Include="..\..\..\..\..\Persistence\EntityFramework\Tests\ProviderFailures.cs" Link="ProviderFailures.cs" />
     <Compile Include="..\Tests\PauseAfterSlotTransition.cs" Link="PauseAfterSlotTransition.cs" />
     <Compile Include="..\Tests\ReferencesThatCannotRetire.cs" Link="ReferencesThatCannotRetire.cs" />
     <Compile Include="..\Tests\ClaimLeaseOverrunContract.cs" Link="ClaimLeaseOverrunContract.cs" />
@@ -41,5 +46,7 @@
     <Compile Include="..\Tests\OutboxStoreRegistration.cs" Link="OutboxStoreRegistration.cs" />
     <Compile Include="..\..\..\Tests\ForwardingOutboxStore.cs" Link="ForwardingOutboxStore.cs" />
     <Compile Include="..\Tests\PostCommitOutboxClaimedListingContract.cs" Link="PostCommitOutboxClaimedListingContract.cs" />
+    <!-- The crash-repair contract's concurrent calls through real root-write leases (#2274). -->
+    <Compile Include="..\Tests\WorkflowActivationCrashRepairContract.ConcurrentCalls.cs" Link="WorkflowActivationCrashRepairContract.ConcurrentCalls.cs" />
   </ItemGroup>
 </Project>

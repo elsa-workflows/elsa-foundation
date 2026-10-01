@@ -35,7 +35,7 @@ public sealed class WorkflowTriggerBindingEntity
 }
 
 /// <summary>Atomic activation projection marker for trigger-binding preparation and activation.</summary>
-public sealed class WorkflowTriggerBindingProjectionStateEntity
+public sealed class WorkflowTriggerBindingProjectionStateEntity : IActivationProjectionState
 {
     public string Id { get; set; } = null!;
     public string ScopeKey { get; set; } = null!;
