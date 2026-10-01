@@ -347,7 +347,7 @@ public sealed class CandidateInspectionTests
         Assert.NotNull(observedHandle);
         Assert.True(observedHandle!.EnvironmentMutated);
         Assert.Equal(1, observedHandle.DisposeCount);
-        Assert.True(observedHandle.HasExited);
+        Assert.True(observedHandle.ExitedBeforeDisposal);
         Assert.NotNull(refusal);
         fixture.AssertSourcesUnchanged();
         fixture.AssertInputsUnchanged();
@@ -713,6 +713,7 @@ public sealed class CandidateInspectionTests
         public bool HasExited => inner.HasExited;
         public int ExitCode => inner.ExitCode;
         public int DisposeCount { get; private set; }
+        public bool ExitedBeforeDisposal { get; private set; }
         public bool EnvironmentMutated => ((DriftAfterReadStream)StandardOutput).EnvironmentMutated;
         public Task WaitForOperationExitAsync(CancellationToken cancellationToken) =>
             inner.WaitForOperationExitAsync(cancellationToken);
@@ -721,8 +722,25 @@ public sealed class CandidateInspectionTests
         public void Dispose()
         {
             DisposeCount++;
-            StandardOutput.Dispose();
-            inner.Dispose();
+            try
+            {
+                ExitedBeforeDisposal = inner.HasExited;
+            }
+            catch (InvalidOperationException)
+            {
+                ExitedBeforeDisposal = false;
+            }
+            finally
+            {
+                try
+                {
+                    StandardOutput.Dispose();
+                }
+                finally
+                {
+                    inner.Dispose();
+                }
+            }
         }
     }
 
