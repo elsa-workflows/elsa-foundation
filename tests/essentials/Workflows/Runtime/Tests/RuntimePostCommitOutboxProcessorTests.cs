@@ -700,6 +700,29 @@ public sealed class RuntimePostCommitOutboxProcessorTests
             throw new NotSupportedException("The processor test provides a fixed ambient coalescing session.");
     }
 
+    [Fact]
+    public async Task Processor_SkipsWhatLapsedDuringItsBatch_AndAStaleCompletionDoesNotEndTheBatch()
+    {
+        // #2195. The first dispatch outlives the one-minute claim on the whole batch, so a peer re-claims and delivers both
+        // items meanwhile. The second item must not be dispatched again, and the refused completion of the first must not
+        // throw out of the batch.
+        var store = new InMemoryRuntimeCheckpointCommitStore();
+        await store.AddPendingForTestingAsync(NewOutboxItem("outbox-a", "intent-a", "wfexec-a", availableAt: _now.AddSeconds(-2)));
+        await store.AddPendingForTestingAsync(NewOutboxItem("outbox-b", "intent-b", "wfexec-b", availableAt: _now.AddSeconds(-1)));
+        var dispatcher = new OverrunningIntentDispatcher("intent-a");
+        var processor = new RuntimePostCommitOutboxProcessor(store, dispatcher, new FakeTimeProvider(_now));
+        var peer = new RuntimePostCommitOutboxProcessor(store, dispatcher, new FakeTimeProvider(_now.AddSeconds(61)));
+        dispatcher.WhileOverrunning = async () => Assert.Equal(2, (await peer.ProcessAsync(new RuntimePostCommitOutboxProcessRequest(10))).DeliveredCount);
+
+        var result = await processor.ProcessAsync(new RuntimePostCommitOutboxProcessRequest(10));
+
+        Assert.Equal(["intent-a", "intent-a", "intent-b"], dispatcher.Dispatched.Order(StringComparer.Ordinal));
+        Assert.Equal(0, result.DeliveredCount);
+        Assert.Equal(2, result.SupersededCount);
+        Assert.Equal(RuntimePostCommitOutboxStatus.Delivered, (await store.FindAsync("outbox-a"))!.Status);
+        Assert.Equal(RuntimePostCommitOutboxStatus.Delivered, (await store.FindAsync("outbox-b"))!.Status);
+    }
+
     private static RuntimePostCommitOutboxProcessor NewProcessor(
         IRuntimePostCommitOutboxStore store,
         RecordingDispatcher dispatcher,
@@ -801,6 +824,9 @@ public sealed class RuntimePostCommitOutboxProcessorTests
 
         public ValueTask<IReadOnlyCollection<RuntimePostCommitOutboxClaim>> ClaimAsync(RuntimePostCommitOutboxClaimRequest request, CancellationToken cancellationToken = default) =>
             inner.ClaimAsync(request, cancellationToken);
+
+        public ValueTask<RuntimePostCommitOutboxClaim?> RenewClaimAsync(RuntimePostCommitOutboxClaim claim, DateTimeOffset now, TimeSpan visibilityTimeout, CancellationToken cancellationToken = default) =>
+            inner.RenewClaimAsync(claim, now, visibilityTimeout, cancellationToken);
 
         public ValueTask RecordDeliveryResultAsync(RuntimePostCommitOutboxClaim claim, RuntimePostCommitOutboxDeliveryResult result, CancellationToken cancellationToken = default) =>
             inner.RecordDeliveryResultAsync(claim, result, cancellationToken);

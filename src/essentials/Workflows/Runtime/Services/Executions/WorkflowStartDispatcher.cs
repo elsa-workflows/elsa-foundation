@@ -109,6 +109,12 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         if (request.DispatchNestingDepth < 0)
             throw new ArgumentOutOfRangeException(nameof(request), "Dispatch nesting depth cannot be negative.");
 
+        // A keyed start that already ran is answered before anything else is resolved: the existing execution is the
+        // answer even if the workflow has since been unpublished, so a redelivery converges instead of failing (#2195).
+        var keyed = KeyedWorkflowStartIdentity.TryGet(request);
+        if (keyed is not null && await FindKeyedStartAsync(request, keyed, cancellationToken) is { } duplicate)
+            return duplicate;
+
         var executable = await _executableStore.FindAsync(request.ArtifactId, cancellationToken)
             ?? throw new WorkflowExecutableNotFoundException(request.ArtifactId);
 
@@ -137,10 +143,36 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
             resolved.Identity,
             resolved.Source,
             resolved.Dispatch,
+            keyed,
             partition,
             requiredScope,
             dispatchOptions,
             cancellationToken);
+    }
+
+    private async ValueTask<WorkflowExecutionStartDispatchResult?> FindKeyedStartAsync(
+        WorkflowExecutionStartDispatchRequest request,
+        KeyedWorkflowStartIdentity keyed,
+        CancellationToken cancellationToken)
+    {
+        // Without durable execution state a duplicate cannot be recognized, and re-running a start into an execution id
+        // that already exists is worse than the double start keying prevents. Refuse it loudly.
+        if (_workflowExecutionStateStore is null)
+        {
+            throw new InvalidOperationException(
+                $"Keyed workflow start '{keyed.StartKey}' requires an {nameof(IWorkflowExecutionStateStore)} to recognize a duplicate delivery.");
+        }
+
+        var existing = await _workflowExecutionStateStore.FindAsync(keyed.WorkflowExecutionId, cancellationToken);
+        if (existing is null)
+            return null;
+        if (!StringComparer.Ordinal.Equals(existing.PinnedExecutable.ArtifactId, request.ArtifactId))
+        {
+            throw new InvalidOperationException(
+                $"Workflow execution '{existing.WorkflowExecutionId}' already exists for artifact '{existing.PinnedExecutable.ArtifactId}', not for keyed start '{keyed.StartKey}' of artifact '{request.ArtifactId}'.");
+        }
+
+        return DuplicateStartResult(existing, keyed.EnvelopeId, existing.PinnedExecutable, existing.PinnedSource);
     }
 
     private async ValueTask<ResolvedPinnedExecutable> ResolveRetainedDependencyAsync(
@@ -337,6 +369,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         WorkflowExecutableIdentity pinnedIdentity,
         WorkflowExecutableSourceProvenance? pinnedSource,
         WorkflowDispatchRecord? retainedDispatch,
+        KeyedWorkflowStartIdentity? keyed,
         WorkflowExecutionPartition partition,
         WorkflowExecutableReferenceScope requiredScope,
         WorkflowExecutionCommandDispatchOptions? dispatchOptions,
@@ -365,10 +398,12 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
             testScope: request.TestScope,
             triggerMetadata: request.TriggerMetadata));
 
+        // A retained dispatch and a keyed start both name their command and envelope deterministically, so a repeated
+        // delivery enqueues the same start work item and the queue keeps the first.
         var command = new WorkflowExecutionCommand(
-            CommandId: retainedDispatch is null
-                ? _idGenerator.NewWorkflowExecutionCommandId()
-                : $"{retainedDispatch.DispatchId}:command:start",
+            CommandId: retainedDispatch is not null
+                ? $"{retainedDispatch.DispatchId}:command:start"
+                : keyed?.CommandId ?? _idGenerator.NewWorkflowExecutionCommandId(),
             WorkflowExecutionId: workflowExecutionId,
             Kind: WorkflowExecutionCommandKind.Start,
             EnqueuedAt: enqueuedAt,
@@ -376,9 +411,9 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
             Metadata: metadata);
 
         var envelope = new WorkflowExecutionCommandEnvelope(
-            envelopeId: retainedDispatch is null
-                ? _idGenerator.NewWorkflowExecutionCommandEnvelopeId()
-                : $"{retainedDispatch.DispatchId}:envelope:start",
+            envelopeId: retainedDispatch is not null
+                ? $"{retainedDispatch.DispatchId}:envelope:start"
+                : keyed?.EnvelopeId ?? _idGenerator.NewWorkflowExecutionCommandEnvelopeId(),
             workflowExecutionId: workflowExecutionId,
             command: command,
             idempotencyKey: request.IdempotencyKey ?? CreateDefaultIdempotencyKey(workflowExecutionId, pinnedIdentity.ArtifactId),
@@ -464,8 +499,15 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         if (!exact)
             throw new InvalidOperationException($"Workflow execution '{existing.WorkflowExecutionId}' already exists with conflicting dispatch identity or context.");
 
-        var envelopeId = $"{dispatch.DispatchId}:envelope:start";
-        return new WorkflowExecutionStartDispatchResult(
+        return DuplicateStartResult(existing, $"{dispatch.DispatchId}:envelope:start", pinnedIdentity, pinnedSource);
+    }
+
+    private static WorkflowExecutionStartDispatchResult DuplicateStartResult(
+        WorkflowExecutionState existing,
+        string envelopeId,
+        WorkflowExecutableIdentity pinnedIdentity,
+        WorkflowExecutableSourceProvenance? pinnedSource) =>
+        new(
             existing.WorkflowExecutionId,
             pinnedIdentity,
             new WorkflowExecutionCommandDispatchResult(
@@ -481,7 +523,6 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
                 WorkflowExecutionActorCapabilities.None,
                 existing.StartedAt ?? existing.CreatedAt),
             pinnedSource);
-    }
 
     private static bool AuthorityEquals(
         WorkflowExecutionAuthoritySnapshot? existing,

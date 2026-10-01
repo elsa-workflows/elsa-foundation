@@ -21,7 +21,6 @@ public sealed class WorkflowsRuntimeTriggersFeatureTests
         AssertRegistered<IWorkflowTriggerBindingExtractor>(services);
         AssertRegistered<IWorkflowTriggerIndexer>(services);
         AssertRegistered<IGlobalBookmarkStimulusLookup>(services);
-        AssertRegistered<IStimulusStartDeduplicator>(services);
         AssertRegistered<IStimulusRouter>(services);
 
         Assert.Equal(ServiceLifetime.Scoped, Assert.Single(services, x => x.ServiceType == typeof(IWorkflowTriggerIndexer)).Lifetime);
@@ -29,7 +28,6 @@ public sealed class WorkflowsRuntimeTriggersFeatureTests
         Assert.Equal(ServiceLifetime.Scoped, Assert.Single(services, x => x.ServiceType == typeof(IGlobalBookmarkStimulusLookup)).Lifetime);
         Assert.Equal(ServiceLifetime.Scoped, Assert.Single(services, x => x.ServiceType == typeof(IStimulusRouter)).Lifetime);
         Assert.Equal(ServiceLifetime.Singleton, Assert.Single(services, x => x.ServiceType == typeof(IWorkflowTriggerBindingExtractor)).Lifetime);
-        Assert.Equal(ServiceLifetime.Singleton, Assert.Single(services, x => x.ServiceType == typeof(IStimulusStartDeduplicator)).Lifetime);
 
         // The cross-execution index is bridged onto the bookmark state store via a factory, so assert by service type.
         Assert.Contains(services, descriptor =>

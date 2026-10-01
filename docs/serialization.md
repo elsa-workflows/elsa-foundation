@@ -181,13 +181,17 @@ serializer and versioning as every other runtime kind.
 ### Stimulus START idempotency is at-least-once
 
 Stimulus delivery is an at-least-once world (a stimulus can be delivered more than once). The router's START
-path dedups **only when an `idempotencyKey` is supplied**: `IStimulusStartDeduplicator` records the key and a
-repeated delivery with the same key does not start a second instance. When **no** `idempotencyKey` is
-supplied the router makes **no** dedup guarantee — a duplicate delivery **may double-start**. Callers that
-require exactly-once start semantics must supply a stable `idempotencyKey`. The default deduplicator is an
-in-process, best-effort store (not a durable cross-node dedup ledger); its guarantee is scoped to the
-process that owns it. This is documented on `IStimulusRouter`/`IStimulusStartDeduplicator` and is intentional
-scope for this wave — a heavy durable dedup store was explicitly out of scope.
+path dedups **only when an `idempotencyKey` is supplied**. Each matching start is then a keyed start
+(`KeyedWorkflowStartIdentity`, #2195): the workflow execution id, and the start command and envelope ids, derive
+from the key and the matched artifact, so a repeated delivery names the same execution and the start dispatcher,
+which reads durable execution state, answers it as a duplicate. The guarantee is durable and cross-node: it holds
+when a peer redelivers a PublishStimulus intent whose claim lapsed, and after a restart. When **no**
+`idempotencyKey` is supplied the router makes **no** dedup guarantee — a duplicate delivery **may double-start**.
+Callers that require start-once semantics must supply a stable `idempotencyKey`.
+
+This replaced the earlier in-process `IStimulusStartDeduplicator`. Besides being scoped to one process, it
+recorded a key before the start was dispatched, so the retry of a start whose first attempt failed was skipped as
+a duplicate and acknowledged although nothing had started.
 
 ### Published executables are durable (DS-2, W17)
 

@@ -3,6 +3,7 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
     <PackageReference Include="MySql.EntityFrameworkCore" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
     <PackageReference Include="Testcontainers.MsSql" />
@@ -16,9 +17,12 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Workflows\Runtime\Persistence\EntityFrameworkCore\Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Workflows\Runtime\Scheduling\Elsa.Workflows.Runtime.Scheduling.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="..\Tests\SchedulerWorkQueueClaimableDiscoveryContract.cs" Link="SchedulerWorkQueueClaimableDiscoveryContract.cs" />
     <Compile Include="..\Tests\RuntimeTestDoubles.cs" Link="RuntimeTestDoubles.cs" />
+    <Compile Include="..\Tests\ClaimLeaseOverrunContract.cs" Link="ClaimLeaseOverrunContract.cs" />
+    <Compile Include="..\..\..\Tests\OverrunningIntentDispatcher.cs" Link="OverrunningIntentDispatcher.cs" />
   </ItemGroup>
 </Project>

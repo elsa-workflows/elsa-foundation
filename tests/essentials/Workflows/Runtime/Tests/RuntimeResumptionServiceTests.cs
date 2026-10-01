@@ -118,6 +118,34 @@ public sealed class RuntimeResumptionServiceTests
     }
 
     [Fact]
+    public async Task SweepAsync_AStaleOutboxCompletionDoesNotAbortBacklogReDrive()
+    {
+        // #2195: a delivery that outran its claim, and whose item a peer re-claimed and completed meanwhile, used to throw
+        // its refused completion out of the outbox step, so the sweep never reached discovery or re-drive.
+        var store = new InMemoryRuntimeCheckpointCommitStore();
+        await store.AddPendingForTestingAsync(new RuntimePostCommitOutboxItem(
+            "outbox-marker-1",
+            NewMarkerIntent(),
+            RuntimePostCommitOutboxStatus.Pending,
+            Now,
+            Now,
+            new RuntimePostCommitRetryPolicy(3, TimeSpan.FromSeconds(10))));
+        var dispatcher = new OverrunningIntentDispatcher();
+        var processor = new RuntimePostCommitOutboxProcessor(store, dispatcher, new FakeTimeProvider(Now));
+        var peer = new RuntimePostCommitOutboxProcessor(store, dispatcher, new FakeTimeProvider(Now.AddSeconds(61)));
+        dispatcher.WhileOverrunning = () => peer.ProcessAsync(new RuntimePostCommitOutboxProcessRequest(10)).AsTask();
+        var harness = new Harness(outboxProcessor: processor);
+        harness.WorkQueue.PendingExecutionIds = ["wfexec-1"];
+
+        var result = await harness.Service.SweepAsync(new RuntimeResumptionSweepRequest());
+
+        Assert.Equal(1, result.OutboxAttemptedCount);
+        Assert.Equal(0, result.OutboxDeliveredCount);
+        Assert.Equal("wfexec-1", Assert.Single(result.Dispatches).WorkflowExecutionId);
+        Assert.Equal(RuntimePostCommitOutboxStatus.Delivered, (await store.FindAsync("outbox-marker-1"))!.Status);
+    }
+
+    [Fact]
     public async Task SweepAsync_RedrivesBacklogThroughAgentWithRecoveryEnvelope()
     {
         var harness = new Harness();
@@ -1134,10 +1162,11 @@ public sealed class RuntimeResumptionServiceTests
         public Harness(
             IRuntimeRecoveryCandidateSource? candidateSource = null,
             IWorkflowSchedulerWorkQueue? workQueue = null,
-            IWorkflowSchedulerPauseGate? pauseGate = null)
+            IWorkflowSchedulerPauseGate? pauseGate = null,
+            IRuntimePostCommitOutboxProcessor? outboxProcessor = null)
         {
             Service = new RuntimeResumptionService(
-                OutboxProcessor,
+                outboxProcessor ?? OutboxProcessor,
                 workQueue ?? WorkQueue,
                 RecoveryScanner,
                 AgentProvider,
