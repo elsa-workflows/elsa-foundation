@@ -154,6 +154,7 @@
       "tests/essentials/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests.csproj",
       "tests/essentials/Secrets/Persistence/EntityFrameworkCore/SqlServer/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.SqlServer.Tests.csproj",
       "tests/essentials/Studio/Preferences/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.ProviderTests.csproj",
+      "tests/essentials/Testing/Elsa.Testing.csproj",
       "tests/essentials/Workbench/Tests/Elsa.Workbench.Tests.csproj",
       "tests/essentials/Workflows/Dashboard/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.ProviderTests.csproj",
       "tests/essentials/Workflows/Design/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Design.Persistence.EntityFrameworkCore.ProviderTests.csproj",

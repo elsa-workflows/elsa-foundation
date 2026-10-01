@@ -277,13 +277,18 @@ internal static class PublicationJournalConvergence
         await node.AssertServingAsync(interrupted);
     }
 
-    /// <summary>Two nodes complete the same lagging slot at once; every transition is a compare-and-swap, so the journal settles once.</summary>
+    /// <summary>
+    /// Two nodes complete the same lagging slot at once; every journal transition is a compare-and-swap, so the journal
+    /// settles once. The runtime has completed the activation by then, so the race is the journal's own: two runtime
+    /// completions racing on one slot are Runtime's concern, and can fail one of them on the projection store.
+    /// </summary>
     private static async Task TwoNodesCompletingOneSlotConvergeAsync(JournalDatabases databases)
     {
         var first = await PublishAsync(databases, "version-1");
         var interrupted = await StopAfterSlotTransitionAsync(databases, "version-2");
         await using var one = new PublishingNode(databases);
         await using var other = new PublishingNode(databases);
+        await one.CompleteRuntimeAsync();
 
         var completions = await Task.WhenAll(one.CompleteAsync(), other.CompleteAsync());
 
@@ -401,10 +406,13 @@ internal static class PublicationJournalConvergence
 
         public async Task<PublicationCompletionResult> CompleteAsync() => await Activator.CompleteAsync(DefinitionId, SlotName);
 
+        /// <summary>The runtime's shell-start pass alone, which completes the slot's activation but not the journal.</summary>
+        public Task CompleteRuntimeAsync() => _runtimeShellStart.ExecuteAsync(CancellationToken.None);
+
         /// <summary>Both shell-start passes, in the order the task manager runs them.</summary>
         public async Task StartShellAsync()
         {
-            await _runtimeShellStart.ExecuteAsync(CancellationToken.None);
+            await CompleteRuntimeAsync();
             await _publishingShellStart.ExecuteAsync(CancellationToken.None);
         }
 

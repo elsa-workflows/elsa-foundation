@@ -17958,6 +17958,11 @@
           "path": "src/essentials/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj"
         },
         {
+          "type": "internal",
+          "id": "Elsa.Testing",
+          "path": "tests/essentials/Testing/Elsa.Testing.csproj"
+        },
+        {
           "type": "external",
           "id": "CShells.AspNetCore",
           "version": "0.0.30-preview.159"
