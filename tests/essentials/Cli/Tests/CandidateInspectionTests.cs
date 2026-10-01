@@ -303,6 +303,57 @@ public sealed class CandidateInspectionTests
     }
 
     [Fact]
+    public async Task Actual_workbench_environment_child_refuses_private_file_drift_before_final_render()
+    {
+        if (OperatingSystem.IsWindows())
+            return;
+        using var fixture = new CandidateInspectionFixture();
+        await PrepareWorkbenchAcceptedAsync(fixture);
+        var environmentPath = fixture.WriteEnvironmentInput(
+            ("UnrelatedBlank", ""),
+            ("Elsa__Persistence__DefaultResource", CandidateInspectionFixture.OverlayEnvironmentResource),
+            ("ConnectionStrings__OverlayConnection", CandidateInspectionFixture.PrivateEnvironmentCanary));
+        var originalEnvironment = File.ReadAllBytes(environmentPath);
+        var host = HostLayout.Resolve(fixture.WorkbenchHostDirectory);
+        using var capture = CompositionInspectionCapture.OpenWithEnvironmentInput(
+            host, fixture.SourceDirectory, fixture.ShellId, fixture.Environment,
+            fixture.InputPath("accepted.json"), environmentPath, fixture.InputPath("catalog.json"));
+        ActualDriftProcessHandle? observedHandle = null;
+        var worker = Path.Join(Path.GetDirectoryName(DotnetElsa.ToolAssembly)!, WorkerProcess.WorkerAssemblyFileName);
+        var process = new CandidateWorkerProcess(start: startInfo =>
+        {
+            var handle = new ActualDriftProcessHandle(CandidateProcessHandle.Start(startInfo), environmentPath);
+            observedHandle = handle;
+            return handle;
+        }, workerAssembly: worker);
+
+        CliRefusal? refusal = null;
+        try
+        {
+            _ = await process.RunEnvironmentAsync(capture, []);
+            refusal = Assert.Throws<CliRefusal>(() => capture.VerifyUnchanged());
+
+            Assert.Equal("composition-input-changed", refusal.Code);
+            Assert.False(capture.HasEnvironmentInput);
+            Assert.DoesNotContain(environmentPath, refusal.ToString(), StringComparison.Ordinal);
+            Assert.DoesNotContain(CandidateInspectionFixture.PrivateEnvironmentCanary,
+                refusal.ToString(), StringComparison.Ordinal);
+        }
+        finally
+        {
+            File.WriteAllBytes(environmentPath, originalEnvironment);
+        }
+
+        Assert.NotNull(observedHandle);
+        Assert.True(observedHandle!.EnvironmentMutated);
+        Assert.Equal(1, observedHandle.DisposeCount);
+        Assert.True(observedHandle.HasExited);
+        Assert.NotNull(refusal);
+        fixture.AssertSourcesUnchanged();
+        fixture.AssertInputsUnchanged();
+    }
+
+    [Fact]
     public async Task Explicit_environment_input_refuses_an_unenrolled_existing_fixture_host_without_private_echo()
     {
         if (OperatingSystem.IsWindows())
@@ -644,6 +695,85 @@ public sealed class CandidateInspectionTests
     {
         using var document = JsonDocument.Parse(File.ReadAllText(path ?? fixture.InputPath("accepted.json")));
         return Strings(document.RootElement.GetProperty("accepted").GetProperty("featureIds"));
+    }
+
+    private sealed class ActualDriftProcessHandle : ICandidateProcessHandle
+    {
+        private readonly ICandidateProcessHandle inner;
+
+        public ActualDriftProcessHandle(ICandidateProcessHandle inner, string environmentPath)
+        {
+            this.inner = inner;
+            StandardOutput = new DriftAfterReadStream(inner.StandardOutput, environmentPath);
+        }
+
+        public Stream StandardInput => inner.StandardInput;
+        public Stream StandardOutput { get; }
+        public Stream StandardError => inner.StandardError;
+        public bool HasExited => inner.HasExited;
+        public int ExitCode => inner.ExitCode;
+        public int DisposeCount { get; private set; }
+        public bool EnvironmentMutated => ((DriftAfterReadStream)StandardOutput).EnvironmentMutated;
+        public Task WaitForOperationExitAsync(CancellationToken cancellationToken) =>
+            inner.WaitForOperationExitAsync(cancellationToken);
+        public Task WaitForExitAsync(CancellationToken cancellationToken) => inner.WaitForExitAsync(cancellationToken);
+        public void KillTree() => inner.KillTree();
+        public void Dispose()
+        {
+            DisposeCount++;
+            StandardOutput.Dispose();
+            inner.Dispose();
+        }
+    }
+
+    private sealed class DriftAfterReadStream : Stream
+    {
+        private readonly Stream inner;
+        private readonly string environmentPath;
+        private int mutated;
+
+        public DriftAfterReadStream(Stream inner, string environmentPath)
+        {
+            this.inner = inner;
+            this.environmentPath = environmentPath;
+        }
+
+        public bool EnvironmentMutated => Volatile.Read(ref mutated) == 1;
+        public override bool CanRead => inner.CanRead;
+        public override bool CanSeek => inner.CanSeek;
+        public override bool CanWrite => inner.CanWrite;
+        public override long Length => inner.Length;
+        public override long Position { get => inner.Position; set => inner.Position = value; }
+        public override void Flush() => inner.Flush();
+        public override Task FlushAsync(CancellationToken cancellationToken) => inner.FlushAsync(cancellationToken);
+        public override int Read(byte[] buffer, int offset, int count) => ReadAndMutate(inner.Read(buffer, offset, count));
+        public override long Seek(long offset, SeekOrigin origin) => inner.Seek(offset, origin);
+        public override void SetLength(long value) => inner.SetLength(value);
+        public override void Write(byte[] buffer, int offset, int count) => inner.Write(buffer, offset, count);
+        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default) =>
+            ReadAsyncCore(buffer, cancellationToken);
+        public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default) =>
+            inner.WriteAsync(buffer, cancellationToken);
+
+        private async ValueTask<int> ReadAsyncCore(Memory<byte> buffer, CancellationToken cancellationToken)
+        {
+            var read = await inner.ReadAsync(buffer, cancellationToken).ConfigureAwait(false);
+            return ReadAndMutate(read);
+        }
+
+        private int ReadAndMutate(int read)
+        {
+            if (read > 0 && Interlocked.Exchange(ref mutated, 1) == 0)
+                File.AppendAllText(environmentPath, " ");
+            return read;
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+                inner.Dispose();
+            base.Dispose(disposing);
+        }
     }
 
     private static void AssertExpectedExit(CliRun run, int expected, string operation)
