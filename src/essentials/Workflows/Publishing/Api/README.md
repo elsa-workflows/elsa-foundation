@@ -18,8 +18,7 @@ the API capability declarations, transport authorization (`IActivityPublishingAu
 `HttpContext`), and the activity-draft publish/test-run services. The compiler, publication authority stores,
 and the policy/preflight/activation/projection services are supplied by the engine feature via `DependsOn` —
 see [the engine README](../README.md). The engine's in-memory stores are useful for tests and single-process
-development, but publication authority, policies, records, and reconciliation intents must be durable in a
-production host.
+development, but publication authority, policies, and records must be durable in a production host.
 
 For EF Core-backed authority state, reference
 `Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore` and compose:
@@ -54,9 +53,11 @@ operation:
    starts, the HTTP route table, or the recurring pump.
 4. Activate the slot with compare-and-swap using its expected revision, then switch the prepared serving
    projections to the new publication and retire the replaced projection.
-5. Persist idempotent per-publication projection intents. If stores cannot share a transaction, retries replay
-   the same intent identity and converge. A failed activation compensates by restoring the previous authority
-   before the candidate is removed; observers refresh only from the final serving state.
+5. The runtime `IWorkflowActivationCoordinator` runs steps 3 and 4 and the compensation. The slot and the
+   projection stores share no transaction: if a process dies after the slot transition, the coordinator completes
+   that activation before the slot's next activation, and at the next shell start. Unpublish turns off every
+   activation that serves the slot, whatever its history. A failed activation compensates by restoring the
+   previous authority before the candidate is removed; observers refresh only from the final serving state.
 6. Retire or restore the publication source reference as provenance. Existing executions remain pinned to their
    immutable executable artifact; unpublishing does not delete that artifact.
 
@@ -123,9 +124,8 @@ a new preflight; `OutcomeUnknown` requires receipt reconciliation before choosin
 
 - Policy errors and malformed requests return `400`; stale expected authority, preflight conflicts, and losing
   CAS transitions return `409`; missing Design/publication resources return `404`.
-- Publication records and projection intents expose pending/failed lifecycle facts. A host must retain them long
-  enough for operational diagnosis and reconciliation; HTTP success must not be synthesized while projections
-  are only partially switched.
+- Publication records expose pending/failed lifecycle facts. A host must retain them long enough for operational
+  diagnosis; HTTP success must not be synthesized while projections are only partially switched.
 - Unpublish and restore use the same revisioned slot lifecycle and projection compensation rules as publish.
 - HTTP route tables are derived from active trigger bindings. Runtime HTTP contributes a neutral trigger-index
   observer; Publishing does not reference the HTTP or Scheduling modules.

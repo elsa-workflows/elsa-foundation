@@ -41,7 +41,7 @@ public sealed class EfConfigurationProbeTests : IDisposable
     private const string UnknownSettingCanary = "raw-unknown-setting-canary-2172";
     private const string InlineIdentityCanary = "Data Source=fixture.db;Password=inline-reference-canary-2172";
 
-    private static readonly Assembly[] HostAssemblies = new[]
+    internal static readonly Assembly[] HostAssemblies = new[]
     {
         typeof(EfToolingHostTests).Assembly,
         typeof(RuntimeEntityFrameworkCoreFeature).Assembly,
@@ -312,7 +312,7 @@ public sealed class EfConfigurationProbeTests : IDisposable
             responseJson, document.RootElement.Clone());
     }
 
-    private static ShellSettingsPreparationContext ComposeRuntimeContext(IConfiguration configuration, string shell)
+    internal static ShellSettingsPreparationContext ComposeRuntimeContext(IConfiguration configuration, string shell)
     {
         var descriptors = FeatureDiscovery.DiscoverFeatures(HostAssemblies)
             .ToDictionary(feature => feature.Id, StringComparer.OrdinalIgnoreCase);

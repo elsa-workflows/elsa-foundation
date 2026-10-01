@@ -150,6 +150,8 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
             query = query.Where(x => x.DefinitionVersionIdHash == EfRelationalIdentity.Hash(definition) && x.DefinitionVersionId == Encode(definition));
         if (all?.Scope is { } sourceScope)
             query = query.Where(x => x.Scope == sourceScope.ToString());
+        if (all?.DefinitionId is { } definitionId)
+            query = query.Where(x => x.DefinitionIdHash == Hash(definitionId) && x.DefinitionId == Encode(definitionId));
         if (all?.LiveOnly == true)
             query = query.Where(x => !x.IsRetired && (x.ExpiresAtUtcTicks == null || x.ExpiresAtUtcTicks > all.Now!.Value.UtcTicks));
         if (cursor is not null)
@@ -609,6 +611,7 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
             Artifact = artifact,
             Definition = definition,
             FilterScope = all?.Scope?.ToString(),
+            FilterDefinition = all?.DefinitionId,
             all?.LiveOnly,
             NowTicks = all?.Now?.UtcTicks
         });

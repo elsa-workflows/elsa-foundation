@@ -8,7 +8,7 @@ Records direct project references only.
 
 - Source projects: 138
 - Test projects: 133
-- Direct project references: 1263
+- Direct project references: 1265
 
 ## Projects
 
@@ -194,7 +194,7 @@ Records direct project references only.
 | [Elsa.Cli.Fixtures.NuplaneHost](../../tests/essentials/Cli/Fixtures/NuplaneHost/Elsa.Cli.Fixtures.NuplaneHost.csproj) | test | Elsa.Cli | - | false | Elsa.Persistence.EntityFramework |
 | [Elsa.Cli.Fixtures.PartialContextHost](../../tests/essentials/Cli/Fixtures/PartialContextHost/Elsa.Cli.Fixtures.PartialContextHost.csproj) | test | Elsa.Cli | - | false | Elsa.Cli.Fixtures.PartialContextPersistence |
 | [Elsa.Cli.Fixtures.PartialContextPersistence](../../tests/essentials/Cli/Fixtures/PartialContextPersistence/Elsa.Cli.Fixtures.PartialContextPersistence.csproj) | test | Elsa.Cli | - | false | - |
-| [Elsa.Cli.Fixtures.ResourceAwareLiveHost](../../tests/essentials/Cli/Fixtures/ResourceAwareLiveHost/Elsa.Cli.Fixtures.ResourceAwareLiveHost.csproj) | test | Elsa.Cli | - | false | Elsa.Persistence.EntityFramework |
+| [Elsa.Cli.Fixtures.ResourceAwareLiveHost](../../tests/essentials/Cli/Fixtures/ResourceAwareLiveHost/Elsa.Cli.Fixtures.ResourceAwareLiveHost.csproj) | test | Elsa.Cli | - | false | Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore<br>Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore<br>Elsa.Persistence.EntityFramework |
 | [Elsa.Cli.Fixtures.ShellsHost](../../tests/essentials/Cli/Fixtures/ShellsHost/Elsa.Cli.Fixtures.ShellsHost.csproj) | test | Elsa.Cli | - | false | Elsa.Secrets.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Design.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore |
 | [Elsa.Cli.Fixtures.UnsupportedContextHost](../../tests/essentials/Cli/Fixtures/UnsupportedContextHost/Elsa.Cli.Fixtures.UnsupportedContextHost.csproj) | test | Elsa.Cli | - | false | Elsa.Cli.Fixtures.UnsupportedContextPersistence |
 | [Elsa.Cli.Fixtures.UnsupportedContextPersistence](../../tests/essentials/Cli/Fixtures/UnsupportedContextPersistence/Elsa.Cli.Fixtures.UnsupportedContextPersistence.csproj) | test | Elsa.Cli | - | false | - |
