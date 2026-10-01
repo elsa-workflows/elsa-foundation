@@ -1,0 +1,211 @@
+diff --git a/tests/essentials/Persistence/EntityFrameworkCore/Migrations/Tests/EfCandidateInspectionTests.cs b/tests/essentials/Persistence/EntityFrameworkCore/Migrations/Tests/EfCandidateInspectionTests.cs
+index fba18224d..b14fcc3bd 100644
+--- a/tests/essentials/Persistence/EntityFrameworkCore/Migrations/Tests/EfCandidateInspectionTests.cs
++++ b/tests/essentials/Persistence/EntityFrameworkCore/Migrations/Tests/EfCandidateInspectionTests.cs
+@@ -43,6 +43,206 @@ public sealed class EfCandidateInspectionTests : IDisposable
+
+     public void Dispose() => Directory.Delete(temporaryDirectory, recursive: true);
+
++    // Temporary #2184 discovery only. The capture below is test-owned; no production API accepts it.
++    [Fact]
++    public async Task Spike_external_environment_is_a_real_divergent_control_for_file_only_candidate_inspection()
++    {
++        var files = BuildSameCaptureFiles("environment-resource-override");
++        using var ownedEnvironment = new SpikeOwnedEnvironment();
++        ownedEnvironment.Set("Elsa__Persistence__DefaultResource", "root-base");
++        ownedEnvironment.Set("ConnectionStrings__PrimaryBase", ConnectionCanary);
++        using var frozen = ownedEnvironment.Capture(files);
++
++        var prepared = await SpikePrepareAsync(frozen);
++        Assert.True(prepared.ResolvedParticipants.All(row => row.ResourceName == "root-base"),
++            "The external root selection must change the actual prepared logical target.");
++        Assert.True(frozen.GetConnectionString("PrimaryBase") == ConnectionCanary,
++            "The captured private connection input must reach the shared root without publication.");
++        var (toolingExit, tooling) = await RunLegacyV2Async(frozen);
++        Assert.Equal(EfToolingExitCode.Success, toolingExit);
++        Assert.True(tooling.GetProperty("configurationContext").GetProperty("participants").EnumerateArray()
++                .All(row => row.GetProperty("resource").GetString() == "root-base"),
++            "The existing internal tooling context must consume the identical frozen root.");
++        Assert.Equal("not-performed", tooling.GetProperty("configurationContext").GetProperty("targetVerification").GetString());
++
++        var fileOnly = await RunSameCaptureAsync("environment-resource-override", files);
++        Assert.Equal(EfToolingExitCode.Success, fileOnly.CandidateExitCode);
++        var resolution = fileOnly.CandidateResponse.GetProperty("configurationResolution");
++        Assert.True(resolution.GetProperty("participants").EnumerateArray()
++                .All(row => row.GetProperty("resource").GetString() == "primary"),
++            "The real candidate v1 producer must remain a distinct file-only control.");
++        Assert.Equal("unverified", resolution.GetProperty("externalInputs").GetString());
++        Assert.Equal("unobserved", resolution.GetProperty("runtimeParity").GetString());
++        Assert.True(prepared.ResolvedParticipants.All(row => row.Source.Scope == "root"),
++            "Current preparation reports logical scope, not exact winning-provider provenance.");
++        Assert.True(!tooling.GetRawText().Contains(ConnectionCanary, StringComparison.Ordinal) &&
++                    !tooling.GetRawText().Contains(UnknownSettingCanary, StringComparison.Ordinal),
++            "Public tooling output must exclude private fixture values.");
++        Assert.Empty(Directory.EnumerateFiles(temporaryDirectory));
++    }
++
++    [Fact]
++    public async Task Spike_external_capture_survives_source_mutation_reload_and_removal()
++    {
++        var files = BuildSameCaptureFiles("environment-resource-override");
++        using var ownedEnvironment = new SpikeOwnedEnvironment();
++        const string selector = "Elsa__Persistence__DefaultResource";
++        ownedEnvironment.Set(selector, "root-base");
++        using var first = ownedEnvironment.Capture(files);
++        ownedEnvironment.Set(selector, "primary");
++        first.Reload();
++        using var changed = ownedEnvironment.Capture(files);
++        ownedEnvironment.Set(selector, null);
++        using var removed = ownedEnvironment.Capture(files);
++
++        Assert.True((await SpikePrepareAsync(first)).ResolvedParticipants.All(row => row.ResourceName == "root-base"),
++            "An already captured root must not reread the mutable environment, even on Reload.");
++        Assert.True((await SpikePrepareAsync(changed)).ResolvedParticipants.All(row => row.ResourceName == "primary"),
++            "A deliberate new capture must observe the changed external selection.");
++        Assert.True((await SpikePrepareAsync(removed)).ResolvedParticipants.All(row => row.ResourceName == "primary"),
++            "Removing an environment variable must reveal the file selection, not write a null override.");
++        Assert.True(removed["Elsa:Persistence:DefaultResource"] == "primary",
++            "Environment removal must retain the existing JSON value.");
++        Assert.Empty(Directory.EnumerateFiles(temporaryDirectory));
++    }
++
++    [Fact]
++    public async Task Spike_external_input_uses_existing_shell_default_and_explicit_binding_precedence()
++    {
++        var files = BuildSameCaptureFiles("shell-default-explicit-binding");
++        using var ownedEnvironment = new SpikeOwnedEnvironment();
++        ownedEnvironment.Set("Elsa__Persistence__DefaultResource", "telemetry");
++        using var first = ownedEnvironment.Capture(files);
++        var initial = await SpikePrepareAsync(first);
++        Assert.True(initial.ResolvedParticipants.Single(row => row.Participant.FeatureId == Runtime).ResourceName == "shell",
++            "The composed shell default must take precedence over the external root default.");
++        Assert.True(initial.ResolvedParticipants.Single(row => row.Participant.FeatureId == StructuredLogs).ResourceName == "logs",
++            "The explicit feature binding must take precedence over shell and root defaults.");
++        ownedEnvironment.Set($"CShells__Shells__{Shell}__Configuration__Elsa__Persistence__Bindings__{StructuredLogs}", "telemetry");
++        using var second = ownedEnvironment.Capture(files);
++        var changed = await SpikePrepareAsync(second);
++        Assert.True(changed.ResolvedParticipants.Single(row => row.Participant.FeatureId == StructuredLogs).ResourceName == "telemetry",
++            "A later environment provider can override the authored shell binding before composition.");
++        Assert.Empty(Directory.EnumerateFiles(temporaryDirectory));
++    }
++
++    [Fact]
++    public async Task Spike_external_false_changes_actual_feature_selection_without_changing_file_candidate()
++    {
++        var files = BuildSameCaptureFiles("environment-resource-override");
++        using var ownedEnvironment = new SpikeOwnedEnvironment();
++        ownedEnvironment.Set($"CShells__Shells__{Shell}__Features__{StructuredLogs}", "false");
++        using var frozen = ownedEnvironment.Capture(files);
++        var runtimeContext = EfConfigurationProbeTests.ComposeRuntimeContext(frozen, Shell);
++        Assert.Contains(StructuredLogs, runtimeContext.DisabledFeatureIds);
++        Assert.DoesNotContain(StructuredLogs, runtimeContext.EnabledFeatureIds);
++        var prepared = await SpikePrepareAsync(frozen);
++        Assert.DoesNotContain(prepared.ResolvedParticipants, row => row.Participant.FeatureId == StructuredLogs);
++        var fileOnly = await RunSameCaptureAsync("environment-resource-override", files);
++        Assert.Contains(StructuredLogs, fileOnly.AcceptedFeatureIds);
++        Assert.True(fileOnly.CandidateResponse.GetProperty("configurationResolution").GetProperty("participants").EnumerateArray()
++            .Any(row => row.GetProperty("feature").GetString() == StructuredLogs),
++            "File-only candidate inspection must retain its own accepted selection.");
++        Assert.Empty(Directory.EnumerateFiles(temporaryDirectory));
++    }
++
++    [Fact]
++    public async Task Spike_freezing_preserves_json_null_presence_and_existing_resource_refusal()
++    {
++        var files = BuildSameCaptureFiles("null-root-selection");
++        using var ownedEnvironment = new SpikeOwnedEnvironment();
++        using var frozen = ownedEnvironment.Capture(files);
++        var section = frozen.GetSection("Elsa:Persistence").GetChildren()
++            .Single(child => child.Key == "DefaultResource");
++        Assert.Null(section.Value);
++        var runtimeContext = EfConfigurationProbeTests.ComposeRuntimeContext(frozen, Shell);
++        var refusal = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
++            await new EfPersistenceShellSettingsPreparer(frozen).PrepareAsync(runtimeContext, CancellationToken.None));
++        Assert.True(refusal.Message.Contains("resource-selection-invalid", StringComparison.Ordinal),
++            "An authored null selection must remain an invalid new-mode selection after freezing.");
++        Assert.True(!refusal.ToString().Contains(ConnectionCanary, StringComparison.Ordinal),
++            "A null-selection refusal must not print private values.");
++        Assert.Empty(Directory.EnumerateFiles(temporaryDirectory));
++    }
++
++    [Fact]
++    public void Spike_environment_provider_folds_ambiguous_normalized_keys_and_loses_raw_ownership()
++    {
++        using var ownedEnvironment = new SpikeOwnedEnvironment();
++        ownedEnvironment.Set("Probe__Ambiguous", ConnectionCanary);
++        ownedEnvironment.Set("Probe:Ambiguous", DifferentConnectionCanary);
++        using var rawProvider = (ConfigurationRoot)new ConfigurationBuilder()
++            .AddEnvironmentVariables(ownedEnvironment.Prefix).Build();
++        Assert.Single(rawProvider.GetSection("Probe").GetChildren());
++        Assert.True(rawProvider["Probe:Ambiguous"] is not null,
++            "The standard provider folds alias keys; no deterministic winner or raw-key identity is promised here.");
++        Assert.Empty(Directory.EnumerateFiles(temporaryDirectory));
++    }
++
++    [Theory]
++    [InlineData("missing-owner")]
++    [InlineData("ambiguous-owner")]
++    public async Task Spike_candidate_v1_refuses_an_external_payload_before_host_discovery(string ownershipCase)
++    {
++        var candidate = CreateRuntimeCandidate();
++        candidate.Request["candidate"]!["externalInputs"] = new JsonObject
++        {
++            ["owner"] = ownershipCase == "missing-owner" ? null : new JsonArray("target-host", "caller"),
++            ["values"] = new JsonObject { ["ConnectionStrings:Primary"] = ConnectionCanary }
++        };
++        var discoveries = 0;
++        using var response = new MemoryStream();
++        var exit = await RunOperationAsync(CreateTrackingOperation(() => discoveries++),
++            candidate.Request, response, CancellationToken.None);
++        Assert.Equal(EfToolingExitCode.Refusal, exit);
++        Assert.Equal(0, discoveries);
++        using var document = JsonDocument.Parse(response.ToArray());
++        Assert.Equal("candidate-request-invalid", document.RootElement.GetProperty("error").GetProperty("code").GetString());
++        Assert.True(!Encoding.UTF8.GetString(response.ToArray()).Contains(ConnectionCanary, StringComparison.Ordinal),
++            "Unsupported external payloads must refuse without echoing their private content.");
++        Assert.Empty(Directory.EnumerateFiles(temporaryDirectory));
++    }
++
++    private static async Task<EfPersistencePreparationResult> SpikePrepareAsync(IConfigurationRoot frozen)
++    {
++        var context = EfConfigurationProbeTests.ComposeRuntimeContext(frozen, Shell);
++        var patch = await new EfPersistenceShellSettingsPreparer(frozen).PrepareAsync(context, CancellationToken.None);
++        var prepared = EfPersistencePreparation.Prepare(context, frozen,
++            EfConfigurationProbeTests.HostAssemblies, verifyConnectionValues: true);
++        Assert.Empty(prepared.RefusalCodes);
++        Assert.Equal(prepared.Patch.ConfigurationData.OrderBy(row => row.Key, StringComparer.Ordinal),
++            patch.ConfigurationData.OrderBy(row => row.Key, StringComparer.Ordinal));
++        return prepared;
++    }
++
++    private sealed class SpikeOwnedEnvironment : IDisposable
++    {
++        private readonly Dictionary<string, string?> original = new(StringComparer.Ordinal);
++        public string Prefix { get; } = $"ELSA_SPIKE_2184_{Guid.NewGuid():N}__";
++
++        public void Set(string key, string? value)
++        {
++            var name = Prefix + key;
++            original.TryAdd(name, System.Environment.GetEnvironmentVariable(name));
++            System.Environment.SetEnvironmentVariable(name, value);
++        }
++
++        public ConfigurationRoot Capture(IReadOnlyDictionary<string, byte[]> files)
++        {
++            using var fileOnly = ReadConfiguration(files);
++            using var composed = (ConfigurationRoot)new ConfigurationBuilder()
++                .AddConfiguration(fileOnly).AddEnvironmentVariables(Prefix).Build();
++            // Only a detached in-memory root crosses this test-only boundary; Reload cannot reread ambient input.
++            return (ConfigurationRoot)new ConfigurationBuilder().AddInMemoryCollection(composed.AsEnumerable()).Build();
++        }
++
++        public void Dispose()
++        {
++            foreach (var row in original)
++                System.Environment.SetEnvironmentVariable(row.Key, row.Value);
++        }
++    }
++
+     [Fact]
+     public async Task Real_host_candidate_returns_a_closed_safe_projection_without_opening_a_database()
+     {
