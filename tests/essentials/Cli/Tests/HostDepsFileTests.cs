@@ -1,4 +1,5 @@
 using Elsa.Cli.Worker;
+using System.Text;
 using Xunit;
 
 namespace Elsa.Cli.Tests;
@@ -87,4 +88,36 @@ public sealed class HostDepsFileTests : IDisposable
         File.WriteAllText(path, content);
         return HostDepsFile.Read(path);
     }
+
+    [Fact]
+    public void Candidate_deps_parse_only_the_captured_bytes()
+    {
+        var path = directory.File("Host.deps.json");
+        var content = """{"runtimeTarget":{"name":"net10.0"},"targets":{"net10.0":{"Contoso/1":{"runtime":{"lib/net10.0/Contoso.dll":{}}}}}}""";
+        File.WriteAllText(path, content);
+        var bytes = File.ReadAllBytes(path);
+        File.WriteAllText(path, "private-unreadable-canary");
+        Assert.Equal("1", HostDepsFile.ReadCaptured(bytes).ForAssembly("Contoso")!.Version);
+    }
+
+    [Fact]
+    public void Candidate_deps_allow_SDK_reference_aliases_of_one_runtime_asset()
+    {
+        var bytes = Encoding.UTF8.GetBytes("""{"runtimeTarget":{"name":"net10.0"},"targets":{"net10.0":{"Contoso/1":{"runtime":{"Contoso.dll":{}}},"Contoso.Reference/1.0.0.0":{"runtime":{"Contoso.dll":{}}}}}}""");
+        Assert.Equal("Contoso.Reference", HostDepsFile.ReadCaptured(bytes).ForAssembly("Contoso")!.Id);
+    }
+
+    [Theory]
+    [InlineData("private-json-canary")]
+    [InlineData("""{"targets":{},"targets":{}}""")]
+    [InlineData("""{"targets":{}}""")]
+    [InlineData("""{"runtimeTarget":{"name":"net10.0"},"targets":{"net10.0":{"A/1":{"runtime":{"a/Shared.dll":{}}},"B/2":{"runtime":{"b/shared.dll":{}}}}}}""")]
+    public void Candidate_deps_malformed_or_ambiguous_identity_is_value_free(string content)
+    {
+        var refusal = Assert.Throws<WorkerRefusal>(() => HostDepsFile.ReadCaptured(Encoding.UTF8.GetBytes(content)));
+        Assert.Equal("candidate-host-unavailable", refusal.Code);
+        Assert.DoesNotContain("canary", refusal.Message);
+        Assert.Empty(refusal.Details);
+    }
+
 }

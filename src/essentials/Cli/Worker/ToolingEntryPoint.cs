@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Runtime.ExceptionServices;
 using System.Text.Json;
 
 namespace Elsa.Cli.Worker;
@@ -15,6 +16,12 @@ namespace Elsa.Cli.Worker;
 /// </remarks>
 public sealed class ToolingEntryPoint
 {
+    private const int CandidateHostRequestMaximumBytes = 8 * 1024 * 1024;
+    private const int CandidateHostResponseMaximumBytes = 4 * 1024 * 1024;
+    private const string CandidateRequestTooLargeMessage = "The candidate request exceeds the supported size limit.";
+    private const string CandidateResponseTooLargeMessage = "The candidate host response exceeds the supported size limit.";
+    private const string CandidateHostUnavailableMessage = "The selected host candidate inspection could not be completed.";
+
     private const string ToolingHostTypeName = "Elsa.Persistence.EntityFramework.Tooling.EfToolingHost";
     private const string ProviderBindingTypeName = "Elsa.Persistence.EntityFramework.EfRelationalProviderBinding";
     private const string RequestTypeName = "Elsa.Persistence.EntityFramework.Tooling.EfToolingRequest";
@@ -128,6 +135,259 @@ public sealed class ToolingEntryPoint
 
         return new(run, packageId, describe, canonical, capabilitySelection, contextApi, skewAllowance, sqliteLockStaleAfter);
     }
+
+    /// <summary>Binds only the independently versioned candidate API, with no legacy tooling fallback.</summary>
+    public static MethodInfo BindCandidateInspection(Type? hostType, Type? operationContract)
+    {
+        try
+        {
+            var version = operationContract?.GetField("Version", BindingFlags.Public | BindingFlags.Static);
+            var run = hostType?.GetMethod("RunCandidateInspectionAsync", BindingFlags.Public | BindingFlags.Static,
+                [typeof(Stream), typeof(Stream), typeof(CancellationToken)]);
+            if (version?.IsLiteral != true || version.FieldType != typeof(int) || version.GetRawConstantValue() is not 1 ||
+                run is null || run.ContainsGenericParameters || run.ReturnType != typeof(Task<int>))
+                throw WorkerRefusal.Resolution("candidate-capability-unavailable",
+                    "The selected host has no complete candidate inspection capability.");
+            return run;
+        }
+        catch (WorkerRefusal)
+        {
+            throw;
+        }
+        catch (Exception failure) when (WorkerRunner.IsNonFatal(failure))
+        {
+            throw WorkerRefusal.Resolution("candidate-capability-unavailable",
+                "The selected host has no complete candidate inspection capability.");
+        }
+    }
+
+    /// <summary>Invokes only the separately-versioned, file-only candidate host operation.</summary>
+    /// <exception cref="WorkerRefusal">The bounded candidate request, capability or host response is unavailable or invalid.</exception>
+    public static async Task<WorkerResponse> InvokeCandidateInspectionAsync(
+        MethodInfo method,
+        string hostName,
+        string hostDirectory,
+        WorkerCandidatePayload candidate,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(method);
+        ArgumentNullException.ThrowIfNull(hostName);
+        ArgumentNullException.ThrowIfNull(hostDirectory);
+        ArgumentNullException.ThrowIfNull(candidate);
+
+        if (!method.IsStatic || method.ContainsGenericParameters || method.ReturnType != typeof(Task<int>) ||
+            method.GetParameters() is not { Length: 3 } parameters ||
+            parameters[0].ParameterType != typeof(Stream) || parameters[1].ParameterType != typeof(Stream) ||
+            parameters[2].ParameterType != typeof(CancellationToken))
+            throw WorkerRefusal.Resolution("candidate-capability-unavailable",
+                "The selected host has no complete candidate inspection capability.");
+
+        cancellationToken.ThrowIfCancellationRequested();
+        using var request = new CandidateBoundedMemoryStream(CandidateHostRequestMaximumBytes);
+        try
+        {
+            await JsonSerializer.SerializeAsync(request,
+                new { version = 1, host = new { name = hostName, directory = hostDirectory }, candidate },
+                RequestJson,
+                cancellationToken).ConfigureAwait(false);
+            request.Position = 0;
+            request.CompleteWrites();
+        }
+        catch (CandidateStreamLimitException)
+        {
+            throw WorkerRefusal.Usage("candidate-request-too-large", CandidateRequestTooLargeMessage);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception failure) when (WorkerRunner.IsNonFatal(failure))
+        {
+            if (request.LimitExceeded)
+                throw WorkerRefusal.Usage("candidate-request-too-large", CandidateRequestTooLargeMessage);
+            throw WorkerRefusal.Usage("candidate-request-invalid", "The candidate request could not be prepared.");
+        }
+
+        using var response = new CandidateBoundedMemoryStream(CandidateHostResponseMaximumBytes);
+        int processExitCode;
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var result = method.Invoke(null, [request, response, cancellationToken]);
+            if (result is not Task<int> operation)
+                throw new InvalidOperationException();
+            processExitCode = await operation.ConfigureAwait(false);
+        }
+        catch (TargetInvocationException failure) when
+            (failure.InnerException is OperationCanceledException && cancellationToken.IsCancellationRequested)
+        {
+            throw (OperationCanceledException)failure.InnerException!;
+        }
+        catch (TargetInvocationException failure) when
+            (failure.InnerException is { } inner && inner is not BadImageFormatException && !WorkerRunner.IsNonFatal(inner))
+        {
+            // Reflection wraps synchronous fatal host failures; preserve their original type and stack.
+            ExceptionDispatchInfo.Capture(failure.InnerException!).Throw();
+            throw;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception failure) when (failure is BadImageFormatException || WorkerRunner.IsNonFatal(failure))
+        {
+            // A malformed selected host image is a closure-resolution refusal in candidate mode.
+            if (response.LimitExceeded)
+                throw WorkerRefusal.Resolution("candidate-response-too-large", CandidateResponseTooLargeMessage);
+            throw WorkerRefusal.Resolution("candidate-host-unavailable", CandidateHostUnavailableMessage);
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+        response.CompleteWrites();
+        if (response.LimitExceeded)
+            throw WorkerRefusal.Resolution("candidate-response-too-large", CandidateResponseTooLargeMessage);
+
+        try
+        {
+            response.Position = 0;
+            var tooling = await WorkerContract.ReadCandidateHostResponseAsync(response,
+                candidate.InvocationId ?? string.Empty,
+                candidate.CaptureId ?? string.Empty,
+                processExitCode,
+                cancellationToken);
+            WorkerContract.ValidateCandidateHostResponse(tooling, candidate, processExitCode);
+            return new WorkerResponse { ExitCode = processExitCode, Tooling = tooling };
+        }
+        catch (WorkerRefusal)
+        {
+            throw;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception failure) when (WorkerRunner.IsNonFatal(failure))
+        {
+            throw WorkerRefusal.Resolution("candidate-host-unavailable", CandidateHostUnavailableMessage);
+        }
+
+    }
+
+    private sealed class CandidateBoundedMemoryStream(int maximumBytes) : Stream
+    {
+        private readonly MemoryStream buffer = new();
+        private bool writesCompleted;
+
+        public bool LimitExceeded { get; private set; }
+
+        public override bool CanRead => true;
+        public override bool CanSeek => true;
+        public override bool CanWrite => !writesCompleted;
+        public override long Length => buffer.Length;
+
+        public override long Position
+        {
+            get => buffer.Position;
+            set
+            {
+                if (value > maximumBytes)
+                    ThrowLimitExceeded();
+                buffer.Position = value;
+            }
+        }
+
+        public override void Flush() => buffer.Flush();
+
+        public override Task FlushAsync(CancellationToken cancellationToken) => buffer.FlushAsync(cancellationToken);
+
+        public override int Read(byte[] buffer, int offset, int count) => this.buffer.Read(buffer, offset, count);
+
+        public override int Read(Span<byte> buffer) => this.buffer.Read(buffer);
+
+        public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) =>
+            this.buffer.ReadAsync(buffer, offset, count, cancellationToken);
+
+        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default) =>
+            this.buffer.ReadAsync(buffer, cancellationToken);
+
+        public override long Seek(long offset, SeekOrigin origin)
+        {
+            var position = buffer.Seek(offset, origin);
+            if (position > maximumBytes)
+                ThrowLimitExceeded();
+            return position;
+        }
+
+        public override void SetLength(long value)
+        {
+            EnsureWritesOpen();
+            if (value > maximumBytes)
+                ThrowLimitExceeded();
+            buffer.SetLength(value);
+        }
+
+        public override void Write(byte[] buffer, int offset, int count)
+        {
+            EnsureWriteFits(count);
+            this.buffer.Write(buffer, offset, count);
+        }
+
+        public override void Write(ReadOnlySpan<byte> buffer)
+        {
+            EnsureWriteFits(buffer.Length);
+            this.buffer.Write(buffer);
+        }
+
+        public override void WriteByte(byte value)
+        {
+            EnsureWriteFits(1);
+            buffer.WriteByte(value);
+        }
+
+        public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            Write(buffer, offset, count);
+            return Task.CompletedTask;
+        }
+
+        public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            Write(buffer.Span);
+            return ValueTask.CompletedTask;
+        }
+
+        public void CompleteWrites() => writesCompleted = true;
+
+        private void EnsureWriteFits(int count)
+        {
+            EnsureWritesOpen();
+            if (count < 0 || buffer.Position > maximumBytes - count)
+                ThrowLimitExceeded();
+        }
+
+        private void EnsureWritesOpen()
+        {
+            if (writesCompleted)
+                throw new NotSupportedException("The bounded stream is read-only.");
+        }
+
+        private void ThrowLimitExceeded()
+        {
+            LimitExceeded = true;
+            throw new CandidateStreamLimitException();
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+                buffer.Dispose();
+            base.Dispose(disposing);
+        }
+    }
+
+    private sealed class CandidateStreamLimitException : Exception { }
 
     /// <summary>Whether a host's request type declares <paramref name="field"/>: the probe each optional request field is gated on.</summary>
     internal static bool Declares(Type? requestType, string field) =>

@@ -1,7 +1,11 @@
 using Acme.Widgets;
 using Elsa.Cli.Worker;
 using Elsa.Persistence.EntityFramework.Tooling;
+using System.Collections.Concurrent;
+using System.Reflection;
+using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Xunit;
 
 namespace Elsa.Cli.Tests;
@@ -10,8 +14,10 @@ namespace Elsa.Cli.Tests;
 /// Binding the host's own tooling entry point, and the refusal for a host whose persistence build predates
 /// it (FR-010).
 /// </summary>
-public sealed class ToolingEntryPointTests
+public sealed class ToolingEntryPointTests : IDisposable
 {
+    private readonly List<string> candidateInvocationIds = [];
+
     /// <summary>
     /// The decision is the entry point's presence, not a version string — a version cannot say whether a
     /// build carries a type — but the message still names the version the host pins and a version known to
@@ -381,6 +387,641 @@ public sealed class ToolingEntryPointTests
         Assert.Equal("Acme.Widgets", descriptor.Name);
         Assert.Equal("__EFMigrationsHistory_AcmeWidgets", descriptor.HistoryTableName);
         Assert.Null(descriptor.ProviderContext("MySql"));
+    }
+
+    [Fact]
+    public void Candidate_capability_requires_the_exact_independently_versioned_streamed_api()
+    {
+        var operation = ToolingEntryPoint.BindCandidateInspection(typeof(CompleteCandidateHost), typeof(CurrentCandidateProtocol));
+
+        Assert.Equal("RunCandidateInspectionAsync", operation.Name);
+        Assert.Equal(typeof(Task<int>), operation.ReturnType);
+        Assert.Equal(typeof(CompleteCandidateHost), operation.DeclaringType);
+        Assert.Equal(new[] { typeof(Stream), typeof(Stream), typeof(CancellationToken) },
+            operation.GetParameters().Select(parameter => parameter.ParameterType));
+    }
+
+    [Theory]
+    [InlineData("missing-host")]
+    [InlineData("legacy-host")]
+    [InlineData("missing-contract")]
+    [InlineData("wrong-version")]
+    [InlineData("mutable-version")]
+    [InlineData("wrong-return")]
+    [InlineData("wrong-signature")]
+    [InlineData("instance-method")]
+    [InlineData("generic-method")]
+    [InlineData("wrong-version-type")]
+    public void Candidate_capability_refuses_old_partial_or_skewed_hosts_without_legacy_fallback(string scenario)
+    {
+        var host = scenario switch
+        {
+            "missing-host" => null,
+            "legacy-host" => typeof(LegacyHost),
+            "wrong-return" => typeof(WrongReturnCandidateHost),
+            "wrong-signature" => typeof(WrongSignatureCandidateHost),
+            "instance-method" => typeof(InstanceCandidateHost),
+            "generic-method" => typeof(GenericCandidateHost),
+            _ => typeof(CompleteCandidateHost)
+        };
+        var protocol = scenario switch
+        {
+            "missing-contract" => null,
+            "wrong-version" => typeof(UnknownCandidateProtocol),
+            "mutable-version" => typeof(MutableCandidateProtocol),
+            "wrong-version-type" => typeof(WrongTypeCandidateProtocol),
+            _ => typeof(CurrentCandidateProtocol)
+        };
+
+        var refusal = Assert.Throws<WorkerRefusal>(() => ToolingEntryPoint.BindCandidateInspection(host, protocol));
+
+        Assert.Equal("candidate-capability-unavailable", refusal.Code);
+        Assert.Equal(ToolExitCode.ResolutionFailure, refusal.ExitCode);
+        Assert.Equal("The selected host has no complete candidate inspection capability.", refusal.Message);
+    }
+
+    [Fact]
+    public async Task Candidate_invocation_sends_a_closed_host_envelope_and_preserves_the_validated_response()
+    {
+        var payload = Candidate();
+        var state = CandidateHostState.For(payload);
+        var expectedResponse = CandidateHostState.SuccessResponse(payload.InvocationId!, payload.CaptureId!);
+
+        var workerResponse = await InvokeCandidateApiAsync(HostMethod(nameof(CandidateHost.Success)),
+            "Example.Host", "/compiled/host", payload, CancellationToken.None);
+
+        Assert.Equal(0, workerResponse.ExitCode);
+        Assert.Null(workerResponse.Error);
+        Assert.Equal(expectedResponse, workerResponse.Tooling!.Value.GetRawText());
+        using var hostRequest = JsonDocument.Parse(state.LastRequest!);
+        var root = hostRequest.RootElement;
+        Assert.Equal(1, root.GetProperty("version").GetInt32());
+        Assert.Equal("Example.Host", root.GetProperty("host").GetProperty("name").GetString());
+        Assert.Equal("/compiled/host", root.GetProperty("host").GetProperty("directory").GetString());
+        Assert.Equal(payload.InvocationId, root.GetProperty("candidate").GetProperty("invocationId").GetString());
+        Assert.Equal(payload.CaptureId, root.GetProperty("candidate").GetProperty("captureId").GetString());
+        Assert.Equal(3, root.GetProperty("candidate").GetProperty("files").GetArrayLength());
+    }
+
+    [Theory]
+    [InlineData("shell")]
+    [InlineData("environment")]
+    [InlineData("selection")]
+    [InlineData("removal")]
+    public async Task Candidate_invocation_refuses_valid_projection_for_different_candidate_contents(string mutation)
+    {
+        var payload = Candidate() with { RemovedFeatureIds = ["Removed"] };
+        var state = CandidateHostState.For(payload);
+        state.ExpectedCandidate = payload;
+        Assert.Equal(0, (await InvokeCandidateApiAsync(HostMethod(nameof(CandidateHost.Success)),
+            "Example.Host", "/compiled/host", payload, CancellationToken.None)).ExitCode);
+        state.TransformSuccess = response =>
+        {
+            var body = response["configurationResolution"]!.AsObject();
+            var selection = body["selection"]!.AsObject();
+            switch (mutation)
+            {
+                case "shell": body["shell"] = "OtherShell"; break;
+                case "environment": body["environment"] = "OtherEnvironment"; break;
+                case "selection":
+                    foreach (var field in new[] { "acceptedFeatureIds", "requestedFeatureIds", "effectiveFeatureIds" })
+                        selection[field] = new JsonArray("OtherFeature");
+                    body["participants"]![0]!["feature"] = "OtherFeature";
+                    break;
+                case "removal": selection["disabledFeatureIds"] = new JsonArray(); break;
+            }
+        };
+
+        var refusal = await Assert.ThrowsAsync<WorkerRefusal>(() => InvokeCandidateApiAsync(
+            HostMethod(nameof(CandidateHost.Success)), "Example.Host", "/compiled/host", payload, CancellationToken.None));
+        Assert.Equal("candidate-response-invalid", refusal.Code);
+        Assert.Equal(3, refusal.ExitCode);
+        Assert.DoesNotContain("Other", refusal.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Candidate_invocation_accepts_additional_observed_disabled_features()
+    {
+        var payload = Candidate();
+        CandidateHostState.For(payload).TransformSuccess = response =>
+            response["configurationResolution"]!["selection"]!["disabledFeatureIds"]!.AsArray().Add("OtherDisabled");
+        var result = await InvokeCandidateApiAsync(HostMethod(nameof(CandidateHost.Success)),
+            "Example.Host", "/compiled/host", payload, CancellationToken.None);
+        Assert.Equal(0, result.ExitCode);
+    }
+
+    [Theory]
+    [InlineData("version")]
+    [InlineData("source")]
+    [InlineData("file-capture")]
+    public async Task Candidate_invocation_refuses_an_invalid_expected_capture(string mutation)
+    {
+        var payload = Candidate();
+        payload = mutation switch
+        {
+            "version" => payload with { Version = 99 },
+            "source" => payload with { Source = "OtherSource" },
+            _ => payload with { Files = payload.Files!.Select((file, index) => index == 0
+                ? file with { CaptureId = "cccccccccccccccccccccccccccccccc" } : file).ToArray() }
+        };
+        CandidateHostState.For(payload).ExpectedCandidate = payload;
+        var refusal = await Assert.ThrowsAsync<WorkerRefusal>(() => InvokeCandidateApiAsync(
+            HostMethod(nameof(CandidateHost.Success)), "Example.Host", "/compiled/host", payload, CancellationToken.None));
+        Assert.Equal("candidate-response-invalid", refusal.Code);
+        Assert.Equal(3, refusal.ExitCode);
+    }
+
+    [Fact]
+    public void Candidate_response_validation_requires_an_expected_candidate() =>
+        Assert.Throws<ArgumentNullException>(() => WorkerContract.ValidateCandidateHostResponse(default, null!, 0));
+
+    [Fact]
+    public async Task Candidate_invocation_preserves_a_valid_redacted_host_refusal()
+    {
+        var payload = Candidate();
+
+        var workerResponse = await InvokeCandidateApiAsync(HostMethod(nameof(CandidateHost.Refused)),
+            "Example.Host", "/compiled/host", payload, CancellationToken.None);
+
+        Assert.Equal(ToolExitCode.Refusal, workerResponse.ExitCode);
+        Assert.Null(workerResponse.Error);
+        Assert.Equal("candidate-capture-invalid", workerResponse.Tooling!.Value.GetProperty("error").GetProperty("code").GetString());
+    }
+
+    [Theory]
+    [InlineData(nameof(CandidateHost.WrongCorrelation))]
+    [InlineData(nameof(CandidateHost.MalformedResponse))]
+    [InlineData(nameof(CandidateHost.ExitCodeMismatch))]
+    public async Task Candidate_invocation_rejects_wrong_or_malformed_host_responses_without_echoing_input(string hostMethod)
+    {
+        var payload = Candidate();
+
+        var refusal = await Assert.ThrowsAsync<WorkerRefusal>(() => InvokeCandidateApiAsync(HostMethod(hostMethod),
+            "Example.Host", "/compiled/host", payload, CancellationToken.None));
+
+        Assert.Equal("candidate-response-invalid", refusal.Code);
+        Assert.DoesNotContain("private-response-canary", refusal.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Candidate_invocation_converts_reflection_failures_to_a_fixed_value_free_refusal()
+    {
+        var refusal = await Assert.ThrowsAsync<WorkerRefusal>(() => InvokeCandidateApiAsync(
+            HostMethod(nameof(CandidateHost.ThrowCanary)), "Example.Host", "/compiled/host", Candidate(), CancellationToken.None));
+
+        Assert.Equal("candidate-host-unavailable", refusal.Code);
+        Assert.Equal(ToolExitCode.ResolutionFailure, refusal.ExitCode);
+        Assert.DoesNotContain("private-reflection-canary", refusal.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(nameof(CandidateHost.ThrowOutOfMemory))]
+    [InlineData(nameof(CandidateHost.FaultOutOfMemory))]
+    public async Task Candidate_invocation_preserves_fatal_memory_failures(string hostMethod)
+    {
+        await Assert.ThrowsAsync<OutOfMemoryException>(() => InvokeCandidateApiAsync(
+            HostMethod(hostMethod), "Example.Host", "/compiled/host", Candidate(), CancellationToken.None));
+    }
+
+    [Theory]
+    [InlineData(nameof(CandidateHost.ThrowAccessViolation))]
+    [InlineData(nameof(CandidateHost.FaultAccessViolation))]
+    public async Task Candidate_invocation_preserves_fatal_access_failures(string hostMethod)
+    {
+        await Assert.ThrowsAsync<AccessViolationException>(() => InvokeCandidateApiAsync(
+            HostMethod(hostMethod), "Example.Host", "/compiled/host", Candidate(), CancellationToken.None));
+    }
+
+    [Theory]
+    [InlineData(nameof(CandidateHost.ThrowBadImage))]
+    [InlineData(nameof(CandidateHost.FaultBadImage))]
+    public async Task Candidate_invocation_redacts_malformed_host_images(string hostMethod)
+    {
+        var refusal = await Assert.ThrowsAsync<WorkerRefusal>(() => InvokeCandidateApiAsync(
+            HostMethod(hostMethod), "Example.Host", "/compiled/host", Candidate(), CancellationToken.None));
+
+        Assert.Equal("candidate-host-unavailable", refusal.Code);
+        Assert.Equal(ToolExitCode.ResolutionFailure, refusal.ExitCode);
+        Assert.DoesNotContain("private-image-canary", refusal.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Candidate_invocation_honors_cancellation_before_and_during_host_execution()
+    {
+        var payload = Candidate();
+        var state = CandidateHostState.For(payload);
+        using var before = new CancellationTokenSource();
+        before.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => InvokeCandidateApiAsync(
+            HostMethod(nameof(CandidateHost.Success)), "Example.Host", "/compiled/host", payload, before.Token));
+        Assert.Equal(0, state.InvocationCount);
+
+        using var during = new CancellationTokenSource();
+        state.CancelCurrent = during.Cancel;
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => InvokeCandidateApiAsync(
+            HostMethod(nameof(CandidateHost.CancelDuringCall)), "Example.Host", "/compiled/host", payload, during.Token));
+        Assert.Equal(1, state.InvocationCount);
+    }
+
+    [Fact]
+    public async Task Candidate_invocation_refuses_oversized_host_requests_before_calling_the_host()
+    {
+        var payload = Candidate();
+        var state = CandidateHostState.For(payload);
+
+        var refusal = await Assert.ThrowsAsync<WorkerRefusal>(() => InvokeCandidateApiAsync(
+            HostMethod(nameof(CandidateHost.Success)), "Example.Host", new string('x', 8 * 1024 * 1024), payload, CancellationToken.None));
+
+        Assert.Equal("candidate-request-too-large", refusal.Code);
+        Assert.Equal(0, state.InvocationCount);
+        Assert.DoesNotContain("AAAA", refusal.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Candidate_invocation_bounds_host_output_during_writes()
+    {
+        var payload = Candidate();
+        var state = CandidateHostState.For(payload);
+
+        var refusal = await Assert.ThrowsAsync<WorkerRefusal>(() => InvokeCandidateApiAsync(
+            HostMethod(nameof(CandidateHost.WriteOversizedResponse)), "Example.Host", "/compiled/host", payload, CancellationToken.None));
+
+        Assert.Equal("candidate-response-too-large", refusal.Code);
+        Assert.True(state.OutputLimitBlocked);
+    }
+
+    [Fact]
+    public async Task Candidate_invocation_refuses_a_method_with_the_wrong_shape_before_calling_it()
+    {
+        var payload = Candidate();
+        var state = CandidateHostState.For(payload);
+        var malformedMethod = typeof(WrongSignatureCandidateHost).GetMethod("RunCandidateInspectionAsync",
+            BindingFlags.Public | BindingFlags.Static)!;
+
+        var refusal = await Assert.ThrowsAsync<WorkerRefusal>(() => InvokeCandidateApiAsync(
+            malformedMethod, "Example.Host", "/compiled/host", payload, CancellationToken.None));
+
+        Assert.Equal("candidate-capability-unavailable", refusal.Code);
+        Assert.Equal(0, state.InvocationCount);
+    }
+
+    [Fact]
+    public async Task Candidate_invocation_keeps_an_overflow_refusal_when_the_host_catches_the_write_failure()
+    {
+        var payload = Candidate();
+        var state = CandidateHostState.For(payload);
+
+        var refusal = await Assert.ThrowsAsync<WorkerRefusal>(() => InvokeCandidateApiAsync(
+            HostMethod(nameof(CandidateHost.WriteOversizedResponseAndSwallow)),
+            "Example.Host", "/compiled/host", payload, CancellationToken.None));
+
+        Assert.Equal("candidate-response-too-large", refusal.Code);
+        Assert.True(state.OutputLimitBlocked);
+    }
+
+    [Theory]
+    [InlineData(nameof(CandidateHost.SeekPastResponseLimit))]
+    [InlineData(nameof(CandidateHost.SetLengthPastResponseLimit))]
+    public async Task Candidate_invocation_refuses_response_stream_growth_through_seek_or_length(string hostMethod)
+    {
+        var payload = Candidate();
+        var state = CandidateHostState.For(payload);
+
+        var refusal = await Assert.ThrowsAsync<WorkerRefusal>(() => InvokeCandidateApiAsync(
+            HostMethod(hostMethod), "Example.Host", "/compiled/host", payload, CancellationToken.None));
+
+        Assert.Equal("candidate-response-too-large", refusal.Code);
+        Assert.True(state.OutputLimitBlocked);
+    }
+
+    [Fact]
+    public async Task Candidate_invocation_keeps_the_request_read_only_after_serialization()
+    {
+        var payload = Candidate();
+        var state = CandidateHostState.For(payload);
+
+        var workerResponse = await InvokeCandidateApiAsync(HostMethod(nameof(CandidateHost.AttemptRequestWrite)),
+            "Example.Host", "/compiled/host", payload, CancellationToken.None);
+
+        Assert.Equal(ToolExitCode.Success, workerResponse.ExitCode);
+        Assert.True(state.RequestWriteDenied);
+    }
+
+    [Fact]
+    public async Task Candidate_invocation_redacts_a_host_that_disposes_its_response_stream()
+    {
+        var refusal = await Assert.ThrowsAsync<WorkerRefusal>(() => InvokeCandidateApiAsync(
+            HostMethod(nameof(CandidateHost.DisposeResponse)),
+            "Example.Host", "/compiled/host", Candidate(), CancellationToken.None));
+
+        Assert.Equal("candidate-host-unavailable", refusal.Code);
+        Assert.Equal(ToolExitCode.ResolutionFailure, refusal.ExitCode);
+    }
+
+    [Fact]
+    public async Task Candidate_invocation_guards_all_required_arguments()
+    {
+        var hostMethod = HostMethod(nameof(CandidateHost.Success));
+        var candidate = Candidate();
+
+        await Assert.ThrowsAsync<ArgumentNullException>(() => InvokeCandidateApiAsync(null!, "Example.Host", "/compiled/host", candidate, CancellationToken.None));
+        await Assert.ThrowsAsync<ArgumentNullException>(() => InvokeCandidateApiAsync(hostMethod, null!, "/compiled/host", candidate, CancellationToken.None));
+        await Assert.ThrowsAsync<ArgumentNullException>(() => InvokeCandidateApiAsync(hostMethod, "Example.Host", null!, candidate, CancellationToken.None));
+        await Assert.ThrowsAsync<ArgumentNullException>(() => InvokeCandidateApiAsync(hostMethod, "Example.Host", "/compiled/host", null!, CancellationToken.None));
+    }
+
+    public void Dispose()
+    {
+        foreach (var invocationId in candidateInvocationIds)
+            CandidateHostState.Remove(invocationId);
+    }
+
+    private WorkerCandidatePayload Candidate()
+    {
+        var invocation = Guid.NewGuid().ToString("N");
+        var capture = Guid.NewGuid().ToString("N");
+        CandidateHostState.Register(invocation);
+        candidateInvocationIds.Add(invocation);
+        var payload = new WorkerCandidatePayload
+        {
+            Version = 1,
+            Source = "captured-workbench-json-v1",
+            InvocationId = invocation,
+            CaptureId = capture,
+            Shell = "candidate-test",
+            Environment = "Production",
+            AcceptedFeatureIds = ["WorkflowsRuntimeEntityFrameworkCore"],
+            RemovedFeatureIds = [],
+            Files =
+            [
+                new WorkerCandidateFile { Name = "appsettings.json", CaptureId = capture, Content = Convert.ToBase64String("{}"u8.ToArray()) },
+                new WorkerCandidateFile { Name = "shells.json", CaptureId = capture, Content = Convert.ToBase64String("{}"u8.ToArray()) },
+                new WorkerCandidateFile { Name = "shells.Production.json", CaptureId = capture, Content = Convert.ToBase64String("{}"u8.ToArray()) }
+            ]
+        };
+        CandidateHostState.For(invocation).ExpectedCandidate = payload;
+        return payload;
+    }
+
+    private static Task<WorkerResponse> InvokeCandidateApiAsync(
+        MethodInfo hostMethod,
+        string hostName,
+        string hostDirectory,
+        WorkerCandidatePayload candidate,
+        CancellationToken cancellationToken)
+        => ToolingEntryPoint.InvokeCandidateInspectionAsync(hostMethod, hostName, hostDirectory, candidate, cancellationToken);
+
+    private static MethodInfo HostMethod(string name) => typeof(CandidateHost).GetMethod(name,
+        BindingFlags.Public | BindingFlags.Static, binder: null,
+        types: [typeof(Stream), typeof(Stream), typeof(CancellationToken)], modifiers: null)!;
+
+    private static class CandidateHostState
+    {
+        private static readonly ConcurrentDictionary<string, CandidateInvocationState> States = new(StringComparer.Ordinal);
+
+        public static void Register(string invocationId) => States[invocationId] = new CandidateInvocationState();
+        public static void Remove(string invocationId) => States.TryRemove(invocationId, out _);
+        public static CandidateInvocationState For(WorkerCandidatePayload payload) => States[payload.InvocationId!];
+        public static CandidateInvocationState For(string invocationId) => States[invocationId];
+
+        public static string SuccessResponse(string invocation, string capture)
+        {
+            var state = For(invocation);
+            var response = CandidateHostResponseFixtures.Success(state.ExpectedCandidate!);
+            response["invocationId"] = invocation;
+            response["captureId"] = capture;
+            state.TransformSuccess?.Invoke(response);
+            return response.ToJsonString();
+        }
+
+        public static string RefusalResponse(string invocation, string capture) =>
+            $"{{\"version\":1,\"invocationId\":\"{invocation}\",\"captureId\":\"{capture}\",\"status\":\"refused\",\"exitCode\":2,\"error\":{{\"code\":\"candidate-capture-invalid\"}}}}";
+    }
+
+    private sealed class CandidateInvocationState
+    {
+        public WorkerCandidatePayload? ExpectedCandidate { get; set; }
+        public Action<JsonObject>? TransformSuccess { get; set; }
+        public string? LastRequest { get; set; }
+        public int InvocationCount { get; set; }
+        public Action? CancelCurrent { get; set; }
+        public bool OutputLimitBlocked { get; set; }
+        public bool RequestWriteDenied { get; set; }
+    }
+
+    private static class CandidateHost
+    {
+        public static Task<int> Success(Stream request, Stream response, CancellationToken cancellationToken) =>
+            WriteResponse(request, response, cancellationToken, 0);
+
+        public static Task<int> Refused(Stream request, Stream response, CancellationToken cancellationToken) =>
+            WriteResponse(request, response, cancellationToken, 2, refused: true);
+
+        public static Task<int> WrongCorrelation(Stream request, Stream response, CancellationToken cancellationToken) =>
+            WriteResponse(request, response, cancellationToken, 0, wrongCorrelation: true);
+
+        public static async Task<int> MalformedResponse(Stream request, Stream response, CancellationToken cancellationToken)
+        {
+            using var document = await Capture(request);
+            await response.WriteAsync("private-response-canary"u8.ToArray(), cancellationToken);
+            return 0;
+        }
+
+        public static Task<int> ExitCodeMismatch(Stream request, Stream response, CancellationToken cancellationToken) =>
+            WriteResponse(request, response, cancellationToken, 2);
+
+        public static Task<int> ThrowCanary(Stream request, Stream response, CancellationToken cancellationToken) =>
+            throw new InvalidOperationException("private-reflection-canary");
+
+        // Constructed exceptions exercise classification without exhausting memory or corrupting the process.
+        public static Task<int> ThrowOutOfMemory(Stream request, Stream response, CancellationToken cancellationToken) =>
+            throw new OutOfMemoryException();
+
+        public static Task<int> FaultOutOfMemory(Stream request, Stream response, CancellationToken cancellationToken) =>
+            Task.FromException<int>(new OutOfMemoryException());
+
+        public static Task<int> ThrowAccessViolation(Stream request, Stream response, CancellationToken cancellationToken) =>
+            throw new AccessViolationException();
+
+        public static Task<int> FaultAccessViolation(Stream request, Stream response, CancellationToken cancellationToken) =>
+            Task.FromException<int>(new AccessViolationException());
+
+        public static Task<int> ThrowBadImage(Stream request, Stream response, CancellationToken cancellationToken) =>
+            throw new BadImageFormatException("private-image-canary");
+
+        public static Task<int> FaultBadImage(Stream request, Stream response, CancellationToken cancellationToken) =>
+            Task.FromException<int>(new BadImageFormatException("private-image-canary"));
+
+        public static async Task<int> CancelDuringCall(Stream request, Stream response, CancellationToken cancellationToken)
+        {
+            using var document = await Capture(request);
+            var invocation = document.RootElement.GetProperty("candidate").GetProperty("invocationId").GetString()!;
+            CandidateHostState.For(invocation).CancelCurrent?.Invoke();
+            await Task.FromCanceled<int>(cancellationToken);
+            return 0;
+        }
+
+        public static async Task<int> WriteOversizedResponse(Stream request, Stream response, CancellationToken cancellationToken)
+        {
+            using var document = await Capture(request);
+            var invocation = document.RootElement.GetProperty("candidate").GetProperty("invocationId").GetString()!;
+            var state = CandidateHostState.For(invocation);
+            var chunk = new byte[1024 * 1024];
+            for (var index = 0; index < 4; index++)
+                await response.WriteAsync(chunk, cancellationToken);
+            try
+            {
+                await response.WriteAsync(new byte[1], cancellationToken);
+            }
+            catch
+            {
+                state.OutputLimitBlocked = true;
+                throw;
+            }
+            return 0;
+        }
+
+        public static async Task<int> WriteOversizedResponseAndSwallow(Stream request, Stream response,
+            CancellationToken cancellationToken)
+        {
+            using var document = await Capture(request);
+            var invocation = document.RootElement.GetProperty("candidate").GetProperty("invocationId").GetString()!;
+            var state = CandidateHostState.For(invocation);
+            var chunk = new byte[1024 * 1024];
+            for (var index = 0; index < 4; index++)
+                await response.WriteAsync(chunk, cancellationToken);
+            try
+            {
+                await response.WriteAsync(new byte[1], cancellationToken);
+            }
+            catch
+            {
+                state.OutputLimitBlocked = true;
+            }
+            return 0;
+        }
+
+        public static async Task<int> SeekPastResponseLimit(Stream request, Stream response,
+            CancellationToken cancellationToken)
+        {
+            using var document = await Capture(request);
+            var invocation = document.RootElement.GetProperty("candidate").GetProperty("invocationId").GetString()!;
+            try
+            {
+                response.Seek(4 * 1024 * 1024 + 1, SeekOrigin.Begin);
+            }
+            catch
+            {
+                CandidateHostState.For(invocation).OutputLimitBlocked = true;
+            }
+            return 0;
+        }
+
+        public static async Task<int> SetLengthPastResponseLimit(Stream request, Stream response,
+            CancellationToken cancellationToken)
+        {
+            using var document = await Capture(request);
+            var invocation = document.RootElement.GetProperty("candidate").GetProperty("invocationId").GetString()!;
+            try
+            {
+                response.SetLength(4 * 1024 * 1024 + 1);
+            }
+            catch
+            {
+                CandidateHostState.For(invocation).OutputLimitBlocked = true;
+            }
+            return 0;
+        }
+
+        public static async Task<int> AttemptRequestWrite(Stream request, Stream response,
+            CancellationToken cancellationToken)
+        {
+            using var document = await Capture(request);
+            var candidate = document.RootElement.GetProperty("candidate");
+            var invocation = candidate.GetProperty("invocationId").GetString()!;
+            var capture = candidate.GetProperty("captureId").GetString()!;
+            try
+            {
+                request.WriteByte(0);
+            }
+            catch (NotSupportedException)
+            {
+                CandidateHostState.For(invocation).RequestWriteDenied = true;
+            }
+            await response.WriteAsync(Encoding.UTF8.GetBytes(CandidateHostState.SuccessResponse(invocation, capture)),
+                cancellationToken);
+            return 0;
+        }
+
+        public static async Task<int> DisposeResponse(Stream request, Stream response,
+            CancellationToken cancellationToken)
+        {
+            using var document = await Capture(request);
+            response.Dispose();
+            return 0;
+        }
+
+        private static async Task<int> WriteResponse(Stream request, Stream response, CancellationToken cancellationToken,
+            int exitCode, bool refused = false, bool wrongCorrelation = false)
+        {
+            using var document = await Capture(request);
+            var candidate = document.RootElement.GetProperty("candidate");
+            var invocation = candidate.GetProperty("invocationId").GetString()!;
+            var capture = candidate.GetProperty("captureId").GetString()!;
+            var json = refused
+                ? CandidateHostState.RefusalResponse(invocation, capture)
+                : CandidateHostState.SuccessResponse(invocation, capture);
+            if (wrongCorrelation)
+            {
+                var changed = JsonNode.Parse(json)!;
+                changed["invocationId"] = "cccccccccccccccccccccccccccccccc";
+                json = changed.ToJsonString();
+            }
+            await response.WriteAsync(Encoding.UTF8.GetBytes(json), cancellationToken);
+            return exitCode;
+        }
+
+        private static async Task<JsonDocument> Capture(Stream request)
+        {
+            using var copy = new MemoryStream();
+            await request.CopyToAsync(copy);
+            var json = Encoding.UTF8.GetString(copy.ToArray());
+            using var document = JsonDocument.Parse(json);
+            var invocation = document.RootElement.GetProperty("candidate").GetProperty("invocationId").GetString()!;
+            var state = CandidateHostState.For(invocation);
+            state.InvocationCount++;
+            state.LastRequest = json;
+            return JsonDocument.Parse(json);
+        }
+    }
+
+    private static class CurrentCandidateProtocol { public const int Version = 1; }
+    private static class UnknownCandidateProtocol { public const int Version = 99; }
+    private static class WrongTypeCandidateProtocol { public const string Version = "1"; }
+    private static class MutableCandidateProtocol { public static readonly int Version = 1; }
+    private static class CompleteCandidateHost
+    {
+        public static Task<int> RunCandidateInspectionAsync(Stream request, Stream response,
+            CancellationToken cancellationToken) => Task.FromResult(0);
+    }
+    private static class WrongReturnCandidateHost
+    {
+        public static Task<string> RunCandidateInspectionAsync(Stream request, Stream response,
+            CancellationToken cancellationToken) => Task.FromResult("private-2177");
+    }
+    private static class WrongSignatureCandidateHost
+    {
+        public static Task<int> RunCandidateInspectionAsync(Stream request, Stream response) => Task.FromResult(0);
+    }
+    private static class GenericCandidateHost
+    {
+        public static Task<int> RunCandidateInspectionAsync<T>(Stream request, Stream response,
+            CancellationToken cancellationToken) => Task.FromResult(0);
+    }
+    private sealed class InstanceCandidateHost
+    {
+        public Task<int> RunCandidateInspectionAsync(Stream request, Stream response,
+            CancellationToken cancellationToken) => Task.FromResult(0);
     }
 
     private static class LegacyHost { }

@@ -6,6 +6,7 @@ using Elsa.Persistence.EntityFramework.Tooling;
 using Elsa.Secrets.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Publishing;
 using Elsa.Workflows.Runtime.Api;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -1379,9 +1380,18 @@ public sealed class EfToolingHostTests : IDisposable
 
 public sealed class EfToolingHostTestDefaults : IEfToolingShellDefaults
 {
+    internal static int OpaqueConfiguratorExecutionCount;
+
     public void Configure(ShellBuilder builder, IConfiguration configuration)
     {
         if (StringComparer.OrdinalIgnoreCase.Equals(configuration["ProbeDefaults:AddRuntimeEfFeature"], "true"))
             builder.WithFeature("WorkflowsRuntimeEntityFrameworkCore");
+        if (StringComparer.OrdinalIgnoreCase.Equals(configuration["ProbeDefaults:AddDiagnosticEfFeatures"], "true"))
+        {
+            builder.WithFeature("DiagnosticsStructuredLogsEntityFrameworkCore");
+            builder.WithFeature("DiagnosticsOpenTelemetryEntityFrameworkCore");
+        }
+        if (StringComparer.OrdinalIgnoreCase.Equals(configuration["ProbeDefaults:AddOpaqueRuntimeConfigurator"], "true"))
+            builder.WithFeature<RuntimeEntityFrameworkCoreFeature>(_ => Interlocked.Increment(ref OpaqueConfiguratorExecutionCount));
     }
 }

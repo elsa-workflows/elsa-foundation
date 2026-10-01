@@ -32,7 +32,8 @@ internal static class ElsaCli
             CompositionPlanCommand.Build(),
             CompositionAcceptCommand.Build(),
             CompositionImportCommand.Build(),
-            CompositionGenerateCommand.Build()
+            CompositionGenerateCommand.Build(),
+            CompositionInspectCommand.Build()
         };
 
         return new RootCommand("Elsa command-line tool.") { persistence, composition };
