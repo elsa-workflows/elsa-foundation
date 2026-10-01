@@ -390,7 +390,8 @@ public sealed class EfSchemaModuleGate : IEfSchemaModuleGate
     /// <summary>
     /// Runs evaluation and refresh until <paramref name="stopping"/> fires: refresh every refresh interval, evaluation
     /// every evaluation interval and whenever the fleet signals a change, each evaluation followed by a refresh
-    /// (FR-005, FR-010). A failed round is logged and the next one follows on schedule.
+    /// (FR-005, FR-010). A failed round is logged and the next one follows on schedule, whatever failed it, a cancellation
+    /// that is not <paramref name="stopping"/>'s included; only <paramref name="stopping"/> ends the loop.
     /// </summary>
     /// <param name="withContext">Runs its argument with a fresh context of the module, in a scope of its own.</param>
     public async Task RunAsync(Func<Func<DbContext, Task>, CancellationToken, Task> withContext, CancellationToken stopping)
@@ -422,11 +423,12 @@ public sealed class EfSchemaModuleGate : IEfSchemaModuleGate
                 // Stopping, as the shell or host is: whatever the round was doing is abandoned, not failed.
                 return;
             }
-            catch (Exception exception) when (exception is not OperationCanceledException and not OutOfMemoryException)
+            catch (Exception exception) when (exception is not OutOfMemoryException)
             {
-                // An arbitrary store or provider failure must not kill the loop; it is logged and the next round tries
-                // again on schedule. OperationCanceledException reaching here (stopping not requested) and
-                // OutOfMemoryException are not this round's business to swallow.
+                // Whatever failed, a cancellation that is not this loop's own included, such as a provider's timeout or a
+                // call the fleet's publish makes, must not end the loop, as the backfill's must not: a gate that stopped
+                // for good would keep this host's write versions where they were, with nothing saying so. It is logged and
+                // the next round tries again on schedule.
                 _logger.LogWarning(exception, "The finalization gate of EF module {Module} could not evaluate or refresh; it tries again on schedule.", Module);
             }
 

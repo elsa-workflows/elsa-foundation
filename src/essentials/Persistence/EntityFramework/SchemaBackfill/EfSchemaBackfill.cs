@@ -1,3 +1,4 @@
+using System.Runtime.ExceptionServices;
 using Elsa.Persistence.EntityFramework.SchemaFinalization;
 using Elsa.Persistence.Schema.SchemaFinalization;
 using Microsoft.Extensions.Logging;
@@ -47,9 +48,18 @@ namespace Elsa.Persistence.EntityFramework.SchemaBackfill;
 /// <para>
 /// Several workers may run it for one family and database at once, on several hosts or in several shells of one host.
 /// Each row write, the completion and its withdrawal are compare-and-sets, so they never both write one row version or
-/// the completion. A worker claims the run in the finish record to spare the others its reads, and nothing correct
-/// depends on the claim (FR-008): a crashed worker's claim expires, and a run with no finish record to claim in runs
-/// unclaimed.
+/// the completion. To spare the others its reads, a worker claims the family in its finish record before any pass reads
+/// a row: the survey, the upgrade pass, the settle condition, the verification passes and the audit. The claim names this
+/// host's write target and is held on the completion that stands or, while none stands, on the withdrawal that ended it,
+/// which keeps a claim that still holds, so after a withdrawal one worker goes on and the others wait. A worker that finds
+/// the family claimed elsewhere reads nothing of it until the claim expires, and defers its audit by an interval. The
+/// claimant keeps the claim only while its run goes on next round, settling or verifying again, and releases it on every
+/// other way out. Nothing correct depends on the claim (FR-008): a crashed worker's claim expires, and a claim lost to
+/// compare-and-set again and again leaves the run unclaimed. The claim only ever narrows who works: a worker renews it, or
+/// stops, between two batches, between two tables a selection counts and before each phase; it rewrites a row only after
+/// a read that shows no other worker's live claim; it withdraws and records a completion only while no other worker's
+/// live claim stands; and a worker whose member has lapsed from the fleet claims nothing, stops, and releases what it
+/// holds.
 /// </para>
 /// <para>
 /// Its parts: <see cref="EfSchemaBackfillPasses"/> selects and rewrites rows, <see cref="EfSchemaBackfillFinish"/> writes
@@ -93,7 +103,7 @@ public sealed class EfSchemaBackfill
         _time = time ?? TimeProvider.System;
         _logger = logger ?? NullLogger.Instance;
         _status = new EfSchemaBackfillStatusBoard(gate.Module, _logger);
-        _finish = new EfSchemaBackfillFinish(gate, _status, _options, _time, _logger);
+        _finish = new EfSchemaBackfillFinish(gate, fleet, _status, _options, _time, _logger);
         _settle = new EfSchemaBackfillSettle(fleet, _finish, _options, _time, _logger, _status);
         _passes = new EfSchemaBackfillPasses(_finish, _options, _time, _logger, _status);
         gate.ReportBackfillFrom(_status);
@@ -137,34 +147,115 @@ public sealed class EfSchemaBackfill
 
     /// <summary>
     /// One round over every family of the module: a standing completion is audited when its audit is due, and a family with
-    /// work is backfilled, unless it was blocked at the same target less than its re-survey interval ago. Rounds of one
-    /// worker never overlap.
+    /// work is backfilled, unless it was blocked at the same target less than its re-survey interval ago, or another
+    /// worker's claim on it still holds. A member that has lapsed from the fleet does neither. A family whose run fails is
+    /// logged and the round goes on to the module's other families; the round then fails with that failure, or with every
+    /// one of them, so its caller learns of it. Only the round's own cancellation stops it at once. Rounds of one worker
+    /// never overlap.
     /// </summary>
     public async Task RunOnceAsync(EfSchemaBackfillScopeRunner withScope, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(withScope);
         await _running.WaitAsync(cancellationToken);
+        var failures = new List<ExceptionDispatchInfo>();
         try
         {
             foreach (var chain in _gate.Families.Chains)
-                await RunFamilyAsync(withScope, chain, cancellationToken);
+            {
+                try
+                {
+                    await RunFamilyAsync(withScope, chain, cancellationToken);
+                }
+                catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
+                {
+                    _logger.LogWarning(exception,
+                        "The post-finalization backfill of schema family {Family} of EF module {Module} failed this round; the module's other " +
+                        "families go on, and it tries again next round.", chain.Family, Module);
+                    failures.Add(ExceptionDispatchInfo.Capture(exception));
+                }
+            }
         }
         finally
         {
             _running.Release();
         }
+
+        if (failures.Count == 1)
+            failures[0].Throw();
+        if (failures.Count > 1)
+            throw new AggregateException($"The post-finalization backfill of EF module {Module} failed for {failures.Count} families this round.",
+                failures.Select(failure => failure.SourceException));
     }
 
     private async Task RunFamilyAsync(EfSchemaBackfillScopeRunner scopes, EfSchemaChain chain, CancellationToken cancellationToken)
     {
         var family = chain.Family;
+        if (_finish.HasLapsed)
+        {
+            // Before anything the gate observed decides otherwise: others may count this member expired and take its work
+            // over (spec 183, FR-007), so it takes none, and lets go of what it holds rather than keep the family from them.
+            await LetGoAsLapsedAsync(scopes, family, EfSchemaBackfillFinish.Lapsed);
+            return;
+        }
+
+        // Every way out before the claim leaves the family until a later round, so a claim this worker kept from the last
+        // round, while its run settled or verified, is let go of here too, by the same bounded release; it holds none in a
+        // round that kept nothing, and then this costs nothing.
+        if (Plan(chain) is not { } round)
+        {
+            await _finish.ReleaseAsync(scopes, family);
+            return;
+        }
+
+        // The claim is kept only while the family's run goes on next round: settling, or verifying again. Every other way
+        // out releases it, so it never holds the other workers off until it expires: an audit that found nothing, a run that
+        // recorded completion, was blocked or had nothing left to do, a run that stopped, and a round that failed or was
+        // cancelled, which releases on a token of its own.
+        bool goesOn;
+        try
+        {
+            goesOn = await ClaimAndRunAsync(scopes, chain, round.Target, round.Identity, round.AuditDue, round.RunDue, round.Sole, round.Now, cancellationToken);
+        }
+        catch (EfSchemaBackfillStoppedException stopped) when (stopped.Reason == EfSchemaBackfillStop.Lapsed)
+        {
+            await LetGoAsLapsedAsync(scopes, family, stopped.Message);
+            return;
+        }
+        catch (EfSchemaBackfillStoppedException stopped)
+        {
+            _status.Update(family, status => status with
+            {
+                State = stopped.Reason == EfSchemaBackfillStop.TakenOver ? EfSchemaBackfillState.ClaimedElsewhere : EfSchemaBackfillState.Idle,
+                Detail = stopped.Message
+            });
+            goesOn = false;
+        }
+        catch (Exception)
+        {
+            await ReleaseAfterFailureAsync(scopes, family);
+            throw;
+        }
+
+        if (!goesOn)
+            await _finish.ReleaseAsync(scopes, family);
+    }
+
+    /// <summary>
+    /// What this round does with <paramref name="chain"/>'s family, decided from what the gate last observed with no I/O,
+    /// or null when it leaves the family this round, saying why on its status where there is a reason to give: the gate
+    /// has not admitted the module, the host refuses every write to the family, the completion is one this host cannot
+    /// place or is ahead of what it writes, or neither an audit nor a run is due.
+    /// </summary>
+    private FamilyRound? Plan(EfSchemaChain chain)
+    {
+        var family = chain.Family;
         var state = _gate.StateOf(family);
         if (state is null || _gate.ObservedRecordOf(family)?.Record is not { } observed || _gate.DatabaseIdentity is not { } identity)
-            return;
+            return null;
         if (state.WritesRefused)
         {
             _status.Update(family, status => status with { State = EfSchemaBackfillState.Idle, Detail = "This host refuses every write to the family, so it rewrites nothing." });
-            return;
+            return null;
         }
 
         var readable = chain.ReadableVersions;
@@ -180,7 +271,7 @@ public sealed class EfSchemaBackfill
                 State = EfSchemaBackfillState.Idle,
                 Detail = $"The finish record names '{completion}', which this host cannot place along [{string.Join(", ", readable)}]."
             });
-            return;
+            return null;
         }
 
         if (completionAt > targetAt)
@@ -192,41 +283,105 @@ public sealed class EfSchemaBackfill
                 State = EfSchemaBackfillState.Idle,
                 Detail = $"This host writes '{target}', behind the completion version '{completion}', so it leaves the family to hosts that write it."
             });
-            return;
+            return null;
         }
 
         // FR-018: a standing completion is audited on its interval whatever this host's target, so a family whose run
-        // towards a newer version is blocked or claimed elsewhere still has its stragglers found.
-        var audited = completion is not null && _time.GetUtcNow() >= NextAuditOf(family);
-        if (audited)
-            await AuditAsync(scopes, chain, sole: completionAt == targetAt, cancellationToken);
-
-        if (completionAt == targetAt)
+        // towards a newer version is blocked still has its stragglers found.
+        var now = _time.GetUtcNow();
+        var auditDue = completion is not null && now >= NextAuditOf(family);
+        var runDue = completionAt < targetAt && !SurveyDeferred(family, target);
+        if (!auditDue && !runDue)
         {
-            if (!audited)
+            if (completionAt == targetAt)
                 _status.Update(family, status => status with { State = EfSchemaBackfillState.Complete, TargetVersion = null, Blockers = [], SettleWaitingFor = [], ClaimedBy = null, Detail = null });
-            return;
+            return null;
         }
 
-        if (SurveyDeferred(family, target))
-            return;
+        return new FamilyRound(target, identity, auditDue, runDue, Sole: completionAt == targetAt, now);
+    }
 
+    /// <summary>What one round does with a family: the target, the database, whether an audit and a run are due, and when it decided.</summary>
+    private readonly record struct FamilyRound(string Target, string Identity, bool AuditDue, bool RunDue, bool Sole, DateTimeOffset Now);
+
+    /// <summary>
+    /// FR-008: the claim comes before any read of the family's rows, so a worker that finds it held elsewhere surveys,
+    /// settles, verifies and audits nothing. It waits out the claim, and leaves the audit due now to the holder, which
+    /// audits on its own interval while it holds the family. The claim names this host's write target, whether it covers
+    /// an audit, a run, or both. Returns whether the family's run goes on next round, and so keeps its claim.
+    /// </summary>
+    private async Task<bool> ClaimAndRunAsync(
+        EfSchemaBackfillScopeRunner scopes,
+        EfSchemaChain chain,
+        string target,
+        string identity,
+        bool auditDue,
+        bool runDue,
+        bool sole,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        var family = chain.Family;
+        var claim = await _finish.ClaimAsync(scopes, chain, target, evenIfComplete: auditDue, cancellationToken);
+        switch (claim.Outcome)
+        {
+            case EfSchemaBackfillClaimOutcome.Elsewhere:
+                if (auditDue)
+                    ScheduleAudit(family, now);
+                if (runDue)
+                    DeferSurvey(family, target, claim.Holder is { } holder ? holder.ExpiresAt - now : _options.CheckInterval);
+                return false;
+            case EfSchemaBackfillClaimOutcome.Lapsed:
+                throw new EfSchemaBackfillStoppedException(EfSchemaBackfillStop.Lapsed, EfSchemaBackfillFinish.Lapsed);
+            case EfSchemaBackfillClaimOutcome.NothingToDo or EfSchemaBackfillClaimOutcome.Unclaimable:
+                return false;
+        }
+
+        var goesOn = auditDue && await AuditAsync(scopes, chain, sole, cancellationToken);
+        if (runDue)
+            goesOn = await BackfillAsync(scopes, chain, target, identity, cancellationToken);
+        return goesOn;
+    }
+
+    /// <summary>
+    /// What a worker whose member has lapsed from the fleet does with a family, however it found the lapse (spec 183,
+    /// FR-007): it lets go of its claim at once, so another member takes the family over rather than wait for the claim to
+    /// expire, and says so.
+    /// </summary>
+    private async Task LetGoAsLapsedAsync(EfSchemaBackfillScopeRunner scopes, string family, string detail)
+    {
+        if (await _finish.ReleaseAsync(scopes, family))
+            _logger.LogInformation("The backfill of schema family {Family} of EF module {Module} released its claim: its member has lapsed from the fleet.", family, Module);
+        _status.Update(family, status => status with { State = EfSchemaBackfillState.Idle, ClaimedBy = null, Detail = detail });
+    }
+
+    /// <summary>
+    /// A round that failed, or was cancelled, lets go of the family's claim before the failure goes on, so a worker whose
+    /// rounds keep failing never holds the others off. A release that fails too is logged, not thrown, so the round's own
+    /// failure is the one reported; the claim then expires on its own.
+    /// </summary>
+    private async Task ReleaseAfterFailureAsync(EfSchemaBackfillScopeRunner scopes, string family)
+    {
         try
         {
-            await BackfillAsync(scopes, chain, target, identity, cancellationToken);
+            await _finish.ReleaseAsync(scopes, family);
         }
-        catch (EfSchemaBackfillClaimLostException lost)
+        catch (Exception exception) when (exception is not OutOfMemoryException)
         {
-            _status.Update(family, status => status with { State = EfSchemaBackfillState.ClaimedElsewhere, Detail = lost.Message });
+            _logger.LogWarning(exception,
+                "The backfill of schema family {Family} of EF module {Module} could not release its claim after its round failed; the claim expires on its own.",
+                family, Module);
         }
     }
 
     /// <summary>
-    /// One run for <paramref name="chain"/>'s family to <paramref name="target"/> (FR-005 to FR-014): a survey of what
-    /// blocks completion, the upgrade pass under a claim, the settle condition, and verification passes until one finds
-    /// nothing, which records completion.
+    /// One run for <paramref name="chain"/>'s family to <paramref name="target"/> (FR-005 to FR-014), under this worker's
+    /// claim: a survey of what blocks completion, the upgrade pass, the settle condition, and verification passes until one
+    /// finds nothing, which records completion. The claim is renewed between the tables a selection counts, between
+    /// batches, before the settle condition and before each verification pass, so a worker that no longer owns the run
+    /// stops there. Returns whether the run goes on next round, settling or verifying again, and so keeps its claim.
     /// </summary>
-    private async Task BackfillAsync(EfSchemaBackfillScopeRunner scopes, EfSchemaChain chain, string target, string identity, CancellationToken cancellationToken)
+    private async Task<bool> BackfillAsync(EfSchemaBackfillScopeRunner scopes, EfSchemaChain chain, string target, string identity, CancellationToken cancellationToken)
     {
         var family = chain.Family;
         // The record as it stands now, not as the gate last observed it: a completion another worker recorded since is the
@@ -235,7 +390,7 @@ public sealed class EfSchemaBackfill
         if (completion is not null && SchemaVersionChain.PositionOf(chain.ReadableVersions, completion.CompletionVersion) >= SchemaVersionChain.PositionOf(chain.ReadableVersions, target))
         {
             await scopes.WithScopeAsync(scope => _gate.RefreshAsync(scope.Context, cancellationToken), cancellationToken);
-            return;
+            return false;
         }
 
         var run = new EfSchemaBackfillRun(chain, target, completion, _gate.Families.DeclarationOf(family), await TablesAsync(scopes, chain, cancellationToken));
@@ -257,42 +412,39 @@ public sealed class EfSchemaBackfill
                 blockers.Add(new EfSchemaBackfillBlocker(EfSchemaBackfillBlockerKind.NoRewriter, null, toUpgrade,
                     $"{toUpgrade} row(s) of schema family '{family}' are below '{target}', and the family names no rewriter to upgrade them " +
                     "(spec 186, FR-004): declare one with [EfSchemaFamily(..., Rewriter = typeof(...))]."));
-            else if (await _finish.ClaimAsync(scopes, run, cancellationToken))
-                await _passes.UpgradeAsync(scopes, run, blockers, cancellationToken);
             else
-                return;
+                await _passes.UpgradeAsync(scopes, run, blockers, cancellationToken);
         }
 
         if (blockers.Count > 0)
         {
             Blocked(family, target, blockers);
-            return;
+            return false;
         }
 
+        await _finish.RenewClaimAsync(scopes, run, cancellationToken);
         var (settled, historyMark) = await _settle.CheckAsync(scopes, chain, target, identity, cancellationToken);
         switch (settled)
         {
             case EfSchemaBackfillSettle.Outcome.Blocked:
                 DeferSurvey(family, target, _options.AuditInterval);
-                return;
+                return false;
             case EfSchemaBackfillSettle.Outcome.Waiting:
-                return;
+                return true;
         }
 
         for (var pass = 1; pass <= _options.VerificationPasses; pass++)
         {
+            await _finish.RenewClaimAsync(scopes, run, cancellationToken);
             var verification = await _passes.VerifyAsync(scopes, run, historyMark, cancellationToken);
             if (verification.Blockers.Count > 0)
             {
                 Blocked(family, target, verification.Blockers);
-                return;
+                return false;
             }
 
             if (verification.Found == 0)
-            {
-                await RecordAsync(scopes, run, verification, cancellationToken);
-                return;
-            }
+                return await RecordAsync(scopes, run, verification, cancellationToken);
 
             _logger.LogInformation(
                 "The verification pass of schema family {Family} found {Found} row(s) below {Target} and rewrote them; it starts again (spec 186, FR-013).",
@@ -304,18 +456,21 @@ public sealed class EfSchemaBackfill
             State = EfSchemaBackfillState.Verifying,
             Detail = $"Each of {_options.VerificationPasses} verification passes found rows below '{target}' that the one before it had not; the next round tries again."
         });
+        return true;
     }
 
-    private async Task RecordAsync(EfSchemaBackfillScopeRunner scopes, EfSchemaBackfillRun run, EfSchemaBackfillVerification verification, CancellationToken cancellationToken)
+    /// <summary>Records the completion a verification pass proved; returns whether the run goes on next round, having recorded nothing.</summary>
+    private async Task<bool> RecordAsync(EfSchemaBackfillScopeRunner scopes, EfSchemaBackfillRun run, EfSchemaBackfillVerification verification, CancellationToken cancellationToken)
     {
         if (await _finish.RecordAsync(scopes, run, verification, cancellationToken) is { } unrecorded)
         {
             _status.Update(run.Family, status => status with { State = EfSchemaBackfillState.Verifying, Detail = unrecorded });
-            return;
+            return true;
         }
 
         ScheduleAudit(run.Family, _time.GetUtcNow());
         _status.Update(run.Family, status => status with { State = EfSchemaBackfillState.Complete, Blockers = [], SettleWaitingFor = [], ClaimedBy = null, Detail = null });
+        return false;
     }
 
     private void ScheduleAudit(string family, DateTimeOffset from)
@@ -329,9 +484,10 @@ public sealed class EfSchemaBackfill
     /// such row, rewritable or not, withdraws the completion first; then the rewritable ones are rewritten. With
     /// <paramref name="sole"/> the completion is at this host's target, so the audit is all the family has to do and the
     /// status says the family is complete; otherwise the run that follows says what it is doing. An audit that fails is
-    /// due again the next round.
+    /// due again the next round. Returns whether the family's run goes on next round: with <paramref name="sole"/>, when the
+    /// audit withdrew the completion, so the run towards this host's target starts again.
     /// </summary>
-    private async Task AuditAsync(EfSchemaBackfillScopeRunner scopes, EfSchemaChain chain, bool sole, CancellationToken cancellationToken)
+    private async Task<bool> AuditAsync(EfSchemaBackfillScopeRunner scopes, EfSchemaChain chain, bool sole, CancellationToken cancellationToken)
     {
         var family = chain.Family;
         var auditedAt = _time.GetUtcNow();
@@ -339,13 +495,13 @@ public sealed class EfSchemaBackfill
         if (examined is null || SchemaVersionChain.PositionOf(chain.ReadableVersions, examined.CompletionVersion) < 0)
         {
             ScheduleAudit(family, auditedAt);
-            return;
+            return false;
         }
 
         var run = new EfSchemaBackfillRun(chain, examined.CompletionVersion, examined, _gate.Families.DeclarationOf(family), await TablesAsync(scopes, chain, cancellationToken));
         string? found = null;
-        run.Completion = await _finish.WithdrawAsync(scopes, family, async (scope, standing) =>
-            found = await _passes.StragglersAsync(scope.Context, run, standing, audit: true, cancellationToken), cancellationToken);
+        run.Completion = await _finish.WithdrawAsync(scopes, run, async (scope, standing) =>
+            found = await _passes.StragglersAsync(scopes, scope.Context, run, standing, audit: true, cancellationToken), cancellationToken);
         var unrewritable = new List<EfSchemaBackfillBlocker>();
         if (found is not null)
         {
@@ -358,6 +514,7 @@ public sealed class EfSchemaBackfill
         _status.Update(family, status => sole
             ? status with { State = EfSchemaBackfillState.Complete, LastAuditAt = auditedAt, TargetVersion = null, Blockers = [], SettleWaitingFor = [], ClaimedBy = null, Detail = detail }
             : status with { LastAuditAt = auditedAt, Detail = detail ?? status.Detail });
+        return sole && found is not null;
     }
 
     /// <summary>

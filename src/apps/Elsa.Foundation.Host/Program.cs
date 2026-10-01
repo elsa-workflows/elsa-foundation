@@ -140,4 +140,6 @@ if (moduleManagement.Enabled)
 // endpoints are composed by CShells on activation and re-composed per generation on reload.
 app.MapShells();
 
-app.Run();
+// A host its cluster member stopped, because another process holds its host id, ends with exit code 1, so a supervisor
+// that restarts failed processes restarts it (spec 183, 2026-10-01 note).
+app.RunWithMembershipExitCode();

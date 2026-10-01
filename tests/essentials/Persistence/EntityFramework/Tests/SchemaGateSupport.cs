@@ -1,9 +1,11 @@
+using System.Collections.Concurrent;
 using Elsa.Persistence.EntityFramework.SchemaFinalization;
 using Elsa.Persistence.Schema;
 using Elsa.Persistence.Schema.SchemaFinalization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using static Elsa.Persistence.EntityFramework.Tests.SchemaChains;
 
 namespace Elsa.Persistence.EntityFramework.Tests;
@@ -100,4 +102,22 @@ internal sealed class OtherRow
     public string Id { get; set; } = "";
 
     public string SchemaVersion { get; set; } = "";
+}
+
+/// <summary>The warnings a gate or a backfill logged: each one's message and exception.</summary>
+internal sealed class WarningLogger : ILogger
+{
+    private readonly ConcurrentQueue<(string Message, Exception? Exception)> _warnings = new();
+
+    public IReadOnlyList<(string Message, Exception? Exception)> Warnings => _warnings.ToArray();
+
+    public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+    public bool IsEnabled(LogLevel logLevel) => logLevel >= LogLevel.Warning;
+
+    public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+    {
+        if (logLevel == LogLevel.Warning)
+            _warnings.Enqueue((formatter(state, exception), exception));
+    }
 }

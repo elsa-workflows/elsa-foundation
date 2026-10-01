@@ -7,9 +7,9 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 ## Summary
 
 - Source projects: 137
-- Test projects: 130
+- Test projects: 131
 - Domains: 31
-- Direct cross-domain references: 763
+- Direct cross-domain references: 764
 
 ## Domains
 
@@ -31,7 +31,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | Elsa.Http | 3 | 1 | contract<br>feature/implementation<br>test |
 | Elsa.Locking | 2 | 0 | contract<br>provider/implementation |
 | Elsa.Mediator | 2 | 1 | contract<br>feature/implementation<br>test |
-| Elsa.Modularity | 5 | 3 | contract<br>feature/implementation<br>test |
+| Elsa.Modularity | 5 | 4 | contract<br>feature/implementation<br>test |
 | Elsa.Persistence | 2 | 8 | feature/implementation<br>test |
 | Elsa.Pipelines | 1 | 0 | contract |
 | Elsa.Primitives | 2 | 2 | feature/implementation<br>test |
@@ -265,6 +265,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Mediator.Tests](../../tests/essentials/Mediator/Tests/Elsa.Mediator.Tests.csproj) | test | Elsa.Mediator | Tests | test | Elsa.Mediator |
 | [Elsa.Modularity.EntityFramework.Tests](../../tests/essentials/Modularity/EntityFramework/Tests/Elsa.Modularity.EntityFramework.Tests.csproj) | test | Elsa.Modularity | EntityFramework.Tests | test | Elsa.Modularity.EntityFramework<br>Elsa.Modularity.Nuplane<br>Elsa.Secrets.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Design.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore |
 | [Elsa.Modularity.Planning.Tests](../../tests/essentials/Modularity/Planning/Tests/Elsa.Modularity.Planning.Tests.csproj) | test | Elsa.Modularity | Planning.Tests | test | Elsa.Modularity.Planning |
+| [Elsa.Modularity.ProviderTests](../../tests/essentials/Modularity/ProviderTests/Elsa.Modularity.ProviderTests.csproj) | test | Elsa.Modularity | ProviderTests | test | Elsa.Workbench |
 | [Elsa.Modularity.Tests](../../tests/essentials/Modularity/Tests/Elsa.Modularity.Tests.csproj) | test | Elsa.Modularity | Tests | test | Elsa.Agent.Anthropic<br>Elsa.Api.Compatibility.Testing<br>Elsa.Foundation.Host<br>Elsa.Modularity.Api<br>Elsa.Modularity.Core<br>Elsa.Modularity.Nuplane<br>Elsa.Workbench<br>Elsa.Workflows.Design.Reconciliation.Git |
 | [Elsa.Persistence.EntityFramework.BindingDriftTests](../../tests/essentials/Persistence/EntityFramework/BindingDriftTests/Elsa.Persistence.EntityFramework.BindingDriftTests.csproj) | test | Elsa.Persistence | EntityFramework.BindingDriftTests | test | Elsa.Persistence.EntityFramework |
 | [Elsa.Persistence.EntityFramework.Tests](../../tests/essentials/Persistence/EntityFramework/Tests/Elsa.Persistence.EntityFramework.Tests.csproj) | test | Elsa.Persistence | EntityFramework.Tests | test | Elsa.Activities.Design.Persistence.EntityFrameworkCore<br>Elsa.Persistence.EntityFramework<br>Elsa.Tasks<br>Elsa.Workflows.Design.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Runtime.Resumption |
@@ -677,6 +678,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Modularity.EntityFramework.Tests](../../tests/essentials/Modularity/EntityFramework/Tests/Elsa.Modularity.EntityFramework.Tests.csproj) | Elsa.Modularity | [Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore](../../src/essentials/Workflows/Dashboard/Persistence/EntityFrameworkCore/Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.csproj) | Elsa.Workflows |
 | [Elsa.Modularity.EntityFramework.Tests](../../tests/essentials/Modularity/EntityFramework/Tests/Elsa.Modularity.EntityFramework.Tests.csproj) | Elsa.Modularity | [Elsa.Workflows.Design.Persistence.EntityFrameworkCore](../../src/essentials/Workflows/Design/Persistence/EntityFrameworkCore/Elsa.Workflows.Design.Persistence.EntityFrameworkCore.csproj) | Elsa.Workflows |
 | [Elsa.Modularity.EntityFramework.Tests](../../tests/essentials/Modularity/EntityFramework/Tests/Elsa.Modularity.EntityFramework.Tests.csproj) | Elsa.Modularity | [Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore](../../src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj) | Elsa.Workflows |
+| [Elsa.Modularity.ProviderTests](../../tests/essentials/Modularity/ProviderTests/Elsa.Modularity.ProviderTests.csproj) | Elsa.Modularity | [Elsa.Workbench](../../src/apps/Elsa.Workbench/Elsa.Workbench.csproj) | Elsa.Workbench |
 | [Elsa.Modularity.Tests](../../tests/essentials/Modularity/Tests/Elsa.Modularity.Tests.csproj) | Elsa.Modularity | [Elsa.Agent.Anthropic](../../src/extensions/Agent/src/Anthropic/Elsa.Agent.Anthropic.csproj) | Elsa.Agent |
 | [Elsa.Modularity.Tests](../../tests/essentials/Modularity/Tests/Elsa.Modularity.Tests.csproj) | Elsa.Modularity | [Elsa.Api.Compatibility.Testing](../../tests/essentials/Api/Compatibility/Testing/Elsa.Api.Compatibility.Testing.csproj) | Elsa.Api |
 | [Elsa.Modularity.Tests](../../tests/essentials/Modularity/Tests/Elsa.Modularity.Tests.csproj) | Elsa.Modularity | [Elsa.Foundation.Host](../../src/apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj) | Elsa.Foundation |

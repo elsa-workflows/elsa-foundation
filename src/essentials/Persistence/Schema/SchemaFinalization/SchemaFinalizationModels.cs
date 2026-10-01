@@ -46,6 +46,44 @@ public sealed record SchemaFinalizationRecord(
 
     /// <summary>Whether any hold keeps <paramref name="version"/> from finalizing.</summary>
     public bool IsHeld(string version, IReadOnlyList<string> chain) => Holds.Any(hold => hold.AppliesTo(version, chain));
+
+    /// <summary>
+    /// The finish history entry that withdrew the family's completion, while no completion has been recorded since (spec
+    /// 186, FR-018): what stands in the completion's place, which every host reports, and which holds the backfill run's
+    /// claim meanwhile.
+    /// </summary>
+    public SchemaFinishHistoryEntry? StandingWithdrawal =>
+        Finish is null && FinishHistory.Count > 0 && FinishHistory[^1] is { Transition: SchemaFinishTransition.Withdrawn } withdrawn ? withdrawn : null;
+
+    /// <summary>
+    /// The claim on the family's backfill run (spec 186, FR-008), wherever it is held: on the completion that stands, or,
+    /// while none stands, on the withdrawal that ended the last one. Null when no worker has claimed the run.
+    /// </summary>
+    public SchemaBackfillClaim? BackfillRun => Finish is { } finish ? finish.Run : StandingWithdrawal?.Run;
+
+    /// <summary>
+    /// The live claim of a worker other than <paramref name="worker"/> at <paramref name="at"/>, or null when none keeps it
+    /// off the family (spec 186, FR-008): the one rule every claim, withdrawal and completion is held to. A worker with no
+    /// claim, <paramref name="worker"/> null, is kept off by any live claim and by nothing else, so a worker that runs
+    /// unclaimed still acts while no claim holds.
+    /// </summary>
+    public SchemaBackfillClaim? ClaimKeepingOff(string? worker, DateTimeOffset at) =>
+        BackfillRun is { } held && held.HoldsAt(at) && !StringComparer.Ordinal.Equals(held.Worker, worker) ? held : null;
+
+    /// <summary>
+    /// This record with <paramref name="run"/> as the claim on the family's backfill run, held where
+    /// <see cref="BackfillRun"/> reads it. Holding it on the standing withdrawal changes only that entry's claim: no
+    /// entry is added, removed or reordered, and no transition, version, actor, instant or reason changes.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">Neither a completion nor a withdrawal of one stands to hold the claim.</exception>
+    public SchemaFinalizationRecord WithBackfillRun(SchemaBackfillClaim? run)
+    {
+        if (Finish is { } finish)
+            return this with { Finish = finish with { Run = run } };
+        if (StandingWithdrawal is { } withdrawal)
+            return this with { FinishHistory = [.. FinishHistory.Take(FinishHistory.Count - 1), withdrawal with { Run = run }] };
+        throw new InvalidOperationException($"Schema family '{Family}' has neither a completion nor a withdrawal of one to hold a backfill claim.");
+    }
 }
 
 /// <summary>The state of one version above a family's finalized version (spec 181, FR-004). A hold keeps a version pending.</summary>
@@ -151,10 +189,11 @@ public sealed record SchemaFinalizationHistoryEntry(
 /// FR-016).
 /// </summary>
 /// <param name="Run">
-/// The claim of the backfill run upgrading the family past <paramref name="CompletionVersion"/>, if one holds it (spec
-/// 186, FR-008). It only spares duplicate work: nothing correct depends on it, so it is absent from the JSON of a record
-/// no run has claimed, a build that does not know it reads the record unchanged, and a completion or a withdrawal drops
-/// it.
+/// The claim on the family's backfill run while this completion stands, if a worker holds one (spec 186, FR-008): a run
+/// upgrading the family past <paramref name="CompletionVersion"/>, or an audit of it. It only spares duplicate work:
+/// nothing correct depends on it, so it is absent from the JSON of a record no run has claimed, a build that does not
+/// know it reads the record unchanged, a completion drops it, and a withdrawal moves a claim that still holds onto the
+/// withdrawal (<see cref="SchemaFinishHistoryEntry.Run"/>).
 /// </param>
 public sealed record SchemaFinishRecord(
     string CompletionVersion,
@@ -166,8 +205,11 @@ public sealed record SchemaFinishRecord(
 
 /// <summary>
 /// A backfill worker's claim on a family's run in one database (spec 186, FR-008): the member and the worker that holds
-/// it, the version the run upgrades to, and until when it holds it. Another worker leaves the run alone until the claim
-/// expires, so a crashed worker delays the run by at most one claim period and never stops it.
+/// it, the claimant host's write version, which its run upgrades to and which is the standing completion's when the
+/// claim covers only an audit of it, and until when it holds it. It
+/// covers every pass that reads the family's rows: the survey, the upgrade pass, the settle condition, the verification
+/// passes and the audit. Another worker leaves the family alone until the claim expires, so a crashed worker delays the
+/// run by at most one claim period and never stops it.
 /// </summary>
 /// <param name="Worker">
 /// The worker within the member: one host serving the same database from two shells runs two workers under one member.
@@ -190,13 +232,30 @@ public enum SchemaFinishTransition
     Withdrawn
 }
 
-/// <summary>One append-only entry in a record's finish history (spec 186, FR-014 and FR-018).</summary>
+/// <summary>
+/// One entry in a record's finish history (spec 186, FR-014 and FR-018). The history is append-only: no entry is
+/// removed, reordered or has its transition, version, actor, instant or reason changed.
+/// </summary>
+/// <remarks>
+/// Adding <paramref name="Run"/> changed the primary constructor from five parameters to six. Source that calls it with
+/// five still compiles, but an assembly compiled against the five-parameter constructor fails with a missing method when
+/// it runs against this one. That is an accepted break before 1.0 (spec 186, 2026-10-01 note): nothing outside the
+/// finalization store constructs an entry, and this package has no public API tracking.
+/// </remarks>
+/// <param name="Run">
+/// On the newest entry alone, while it is a withdrawal no completion has followed: the claim on the family's backfill
+/// run (spec 186, FR-008), which a withdrawn completion leaves no finish record to hold. It is advisory, as the finish
+/// record's own claim is: absent from the JSON of an entry no run has claimed, read past by a build that does not know
+/// it and dropped when that build next rewrites the record, and cleared when a completion is recorded.
+/// </param>
 public sealed record SchemaFinishHistoryEntry(
     SchemaFinishTransition Transition,
     string Version,
     SchemaFinalizationActor Actor,
     DateTimeOffset At,
-    string? Reason = null);
+    string? Reason = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    SchemaBackfillClaim? Run = null);
 
 /// <summary>
 /// The outcome of a compare-and-set write. <see cref="Applied"/> is false when the record had changed since the
