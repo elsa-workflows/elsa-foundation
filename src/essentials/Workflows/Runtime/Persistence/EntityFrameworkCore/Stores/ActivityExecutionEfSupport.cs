@@ -227,8 +227,6 @@ internal static class ActivityExecutionEfSupport
             throw new ArgumentException($"The {parameterName} value cannot exceed {RuntimeActivityExecutionEfModule.IdentityMaximumLength} characters.", parameterName);
     }
 
-    public static int OffsetMinutes(DateTimeOffset value) => checked((int)value.Offset.TotalMinutes);
-
     public static void EnsureRowEnvelope(string schemaVersion, string scopeKey, string scope, string scopeHash, string expectedId, string actualId, long revision)
     {
         if (EfSchemaVersion.NotReadable(RuntimeActivityExecutionEfModule.Chain, schemaVersion) ||

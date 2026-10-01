@@ -15,4 +15,10 @@ public sealed class RecurringTriggerPumpOptions
 
     /// <summary>Hard cap on due schedules claimed and fired per sweep, bounding both the store scan and the start burst.</summary>
     public int MaxSchedulesPerTick { get; set; } = 100;
+
+    /// <summary>
+    /// Lease on a claimed occurrence, renewed immediately before it is routed. When a claimant dies before settling the
+    /// occurrence, a peer fires it again once this lease lapses, so it bounds how late a crashed fire is completed.
+    /// </summary>
+    public TimeSpan ClaimVisibilityTimeout { get; set; } = TimeSpan.FromMinutes(1);
 }

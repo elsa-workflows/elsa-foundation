@@ -363,10 +363,8 @@ public sealed class EfSchedulerWorkQueueStore(
         if (!Matches(row, claim))
             return RuntimeSchedulerWorkClaimTransitionResult.Stale;
         row.ClaimOwnerId = null;
-        row.ClaimedAtUtcTicks = null;
-        row.ClaimedAtOffsetMinutes = null;
-        row.VisibleAfterUtcTicks = visibleAt.UtcTicks;
-        row.VisibleAfterOffsetMinutes = OffsetMinutes(visibleAt);
+        (row.ClaimedAtUtcTicks, row.ClaimedAtOffsetMinutes) = EfRuntimeOperationalStoreSupport.TimestampColumns(null);
+        (row.VisibleAfterUtcTicks, row.VisibleAfterOffsetMinutes) = EfRuntimeOperationalStoreSupport.TimestampColumns(visibleAt);
         row.Revision = checked(row.Revision + 1);
         AttachForUpdate(row, claim.Revision);
         try
@@ -528,9 +526,9 @@ public sealed class EfSchedulerWorkQueueStore(
         WorkItemIdHash = EfRuntimeOperationalStoreSupport.Hash(item.WorkItemId),
         WorkOrderKey = WorkOrderKey(item),
         EnqueuedAtUtcTicks = item.EnqueuedAt.UtcTicks,
-        EnqueuedAtOffsetMinutes = OffsetMinutes(item.EnqueuedAt),
+        EnqueuedAtOffsetMinutes = EfRuntimeOperationalStoreSupport.OffsetMinutes(item.EnqueuedAt),
         RecordedAtUtcTicks = item.RecordedAt.UtcTicks,
-        RecordedAtOffsetMinutes = OffsetMinutes(item.RecordedAt),
+        RecordedAtOffsetMinutes = EfRuntimeOperationalStoreSupport.OffsetMinutes(item.RecordedAt),
         ContentJson = RuntimeArtifactJson.Serialize(item),
         SchemaVersion = RuntimeOperationalStateEfModule.SchemaVersion,
         Revision = revision
@@ -541,10 +539,8 @@ public sealed class EfSchedulerWorkQueueStore(
         var visibleAfter = request.Now.Add(request.VisibilityTimeout);
         row.ClaimOwnerId = EfRuntimeOperationalStoreSupport.Encode(request.OwnerId);
         row.ClaimToken = checked(row.ClaimToken + 1);
-        row.ClaimedAtUtcTicks = request.Now.UtcTicks;
-        row.ClaimedAtOffsetMinutes = OffsetMinutes(request.Now);
-        row.VisibleAfterUtcTicks = visibleAfter.UtcTicks;
-        row.VisibleAfterOffsetMinutes = OffsetMinutes(visibleAfter);
+        (row.ClaimedAtUtcTicks, row.ClaimedAtOffsetMinutes) = EfRuntimeOperationalStoreSupport.TimestampColumns(request.Now);
+        (row.VisibleAfterUtcTicks, row.VisibleAfterOffsetMinutes) = EfRuntimeOperationalStoreSupport.TimestampColumns(visibleAfter);
         row.Revision = checked(row.Revision + 1);
         return row;
     }
@@ -552,8 +548,7 @@ public sealed class EfSchedulerWorkQueueStore(
     private static SchedulerWorkItemEntity ToRenewedEntity(SchedulerWorkItemEntity row, DateTimeOffset now, TimeSpan visibilityTimeout)
     {
         var visibleAfter = now.Add(visibilityTimeout);
-        row.VisibleAfterUtcTicks = visibleAfter.UtcTicks;
-        row.VisibleAfterOffsetMinutes = OffsetMinutes(visibleAfter);
+        (row.VisibleAfterUtcTicks, row.VisibleAfterOffsetMinutes) = EfRuntimeOperationalStoreSupport.TimestampColumns(visibleAfter);
         row.Revision = checked(row.Revision + 1);
         return row;
     }
@@ -566,8 +561,8 @@ public sealed class EfSchedulerWorkQueueStore(
             EfRuntimeOperationalStoreSupport.Decode(row.ClaimOwnerId!),
             row.ClaimToken,
             row.Revision,
-            FromUtcTicks(row.ClaimedAtUtcTicks!.Value, row.ClaimedAtOffsetMinutes!.Value),
-            FromUtcTicks(row.VisibleAfterUtcTicks!.Value, row.VisibleAfterOffsetMinutes!.Value));
+            EfRuntimeOperationalStoreSupport.FromUtcTicks(row.ClaimedAtUtcTicks!.Value, row.ClaimedAtOffsetMinutes!.Value),
+            EfRuntimeOperationalStoreSupport.FromUtcTicks(row.VisibleAfterUtcTicks!.Value, row.VisibleAfterOffsetMinutes!.Value));
     }
 
     private static bool Matches(SchedulerWorkItemEntity row, RuntimeSchedulerWorkClaim claim) =>
@@ -607,9 +602,9 @@ public sealed class EfSchedulerWorkQueueStore(
             row.WorkItemIdHash != EfRuntimeOperationalStoreSupport.Hash(item.WorkItemId) ||
             row.WorkOrderKey != WorkOrderKey(item) ||
             row.EnqueuedAtUtcTicks != item.EnqueuedAt.UtcTicks ||
-            row.EnqueuedAtOffsetMinutes != OffsetMinutes(item.EnqueuedAt) ||
+            row.EnqueuedAtOffsetMinutes != EfRuntimeOperationalStoreSupport.OffsetMinutes(item.EnqueuedAt) ||
             row.RecordedAtUtcTicks != item.RecordedAt.UtcTicks ||
-            row.RecordedAtOffsetMinutes != OffsetMinutes(item.RecordedAt))
+            row.RecordedAtOffsetMinutes != EfRuntimeOperationalStoreSupport.OffsetMinutes(item.RecordedAt))
             throw new InvalidDataException("The scheduler-work row identity or ordering projection does not match its current content.");
         return item;
     }
@@ -707,11 +702,6 @@ public sealed class EfSchedulerWorkQueueStore(
     }
 
     private sealed record QueueCursor(int Version, string ScopeHash, string WorkflowHash, string OrderKey);
-
-    private static int OffsetMinutes(DateTimeOffset value) => checked((int)value.Offset.TotalMinutes);
-
-    private static DateTimeOffset FromUtcTicks(long utcTicks, int offsetMinutes) =>
-        new DateTimeOffset(new DateTime(utcTicks, DateTimeKind.Utc)).ToOffset(TimeSpan.FromMinutes(offsetMinutes));
 
     private static InvalidOperationException TransitionDidNotSettle(string transition, string workflowExecutionId, string? workItemId = null) =>
         new($"Scheduler-work {transition} for workflow execution '{workflowExecutionId}'" +

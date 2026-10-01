@@ -15,16 +15,24 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 /// named slots may share an artifact without collapsing their independent schedule lifecycles.
 /// </para>
 /// <para>
-/// <b>Missed-occurrence policy.</b> <see cref="NextOccurrence"/> is the single mutable cursor. On each fire the
-/// pump advances it to the first occurrence strictly after the wake instant — <i>not</i> to
-/// <c>previous + interval</c> — so a pump that wakes after downtime fires <b>at most once</b> per schedule and
-/// never replays the backlog of occurrences that elapsed while it was down.
+/// <b>Missed-occurrence policy.</b> <see cref="NextOccurrence"/> is the single mutable cursor. Once the occurrence in
+/// it has been fired, the pump advances it to the first occurrence strictly after the wake instant — <i>not</i> to
+/// <c>previous + interval</c> — so a pump that wakes after downtime fires the due occurrence once and never replays
+/// the backlog of occurrences that elapsed while it was down.
 /// </para>
 /// <para>
-/// <b>Cluster-safety hook.</b> The cursor is advanced through a compare-and-swap on
-/// <see cref="NextOccurrence"/> (see <c>IRecurringTriggerScheduleStore.TryAdvanceAsync</c>), so exactly one
-/// worker can claim a given occurrence. Single-node hosts get this for free; a future clustered store keeps the
-/// same CAS contract to make the pump cluster-safe without changing the pump.
+/// <b>At least once per occurrence (#2198).</b> The occurrence in the cursor is claimed as in flight under a fenced
+/// lease before it is fired (see <c>IRecurringTriggerScheduleStore.ClaimDueAsync</c>), and the cursor moves past it
+/// only when that claim is settled. A worker that dies before settling leaves the occurrence to a peer once the lease
+/// lapses; every fire of one occurrence carries the key <see cref="BuildOccurrenceKey"/> names, so the repeat converges
+/// on the workflow execution the first fire started.
+/// </para>
+/// <para>
+/// <b>Republish.</b> Activating a new publication of a slot replaces the replaced publication's schedules, and each new
+/// schedule takes over the cursor of the replaced schedule of the same trigger (<see cref="IsSameTriggerAs"/>) when that
+/// cursor names an occurrence which fell due before the new schedule was activated (<see cref="TakeOverFrom"/>). The
+/// occurrence key identifies the trigger, not the publication, so the new publication's fire of that occurrence and any
+/// fire the replaced publication already made converge on one start.
 /// </para>
 /// </remarks>
 /// <param name="ScheduleId">Deterministic id built from (artifactId, executableNodeId).</param>
@@ -37,7 +45,7 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 /// <param name="StimulusHash">The start stimulus hash — matches the trigger binding the router indexed for the same node.</param>
 /// <param name="Kind">Whether <see cref="Expression"/> is an interval or a cron expression.</param>
 /// <param name="Expression">The recurrence spec: an ISO-8601 duration (Interval) or a cron string (Cron).</param>
-/// <param name="NextOccurrence">The next wall-clock instant the schedule is due to fire (the CAS cursor).</param>
+/// <param name="NextOccurrence">The next wall-clock instant the schedule is due to fire: the occurrence in flight while it is claimed.</param>
 /// <param name="CreatedAt">When the schedule was first written.</param>
 public sealed record RecurringTriggerSchedule(
     string ScheduleId,
@@ -88,6 +96,56 @@ public sealed record RecurringTriggerSchedule(
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(activationId);
         return $"{Escape(activationId)}:{BuildFanOutId(artifactId, executableNodeId, stimulusHash)}";
+    }
+
+    /// <summary>
+    /// The idempotency key every fire of the occurrence in <see cref="NextOccurrence"/> carries (#2198). A slot-scoped
+    /// schedule keys the occurrence by its trigger, <c>recurring:{slotId}:{executableNodeId}:{stimulusHash}:{occurrenceTicks}</c>
+    /// with each id escaped as <see cref="BuildId(string,string)"/> escapes it, so every publication of the slot names one
+    /// occurrence alike; its fire starts under the artifact-free <see cref="KeyedWorkflowStartIdentity.ForOccurrence"/>. A
+    /// schedule without a slot (legacy artifact-scoped indexing) keeps <c>recurring:{ScheduleId}:{occurrenceTicks}</c> and the
+    /// per-artifact <see cref="KeyedWorkflowStartIdentity.For"/>.
+    /// </summary>
+    /// <remarks>
+    /// <b>Frozen.</b> The key is the input of a persisted keyed-start identity, and a repeated fire is recognized only by
+    /// deriving the same key again, so changing it silently starts every repeated occurrence a second time.
+    /// <c>KeyedWorkflowStartIdentityTests</c> pins it.
+    /// </remarks>
+    public string BuildOccurrenceKey() =>
+        SlotId is null
+            ? $"recurring:{ScheduleId}:{NextOccurrence.UtcTicks}"
+            : $"recurring:{Escape(SlotId)}:{Escape(ExecutableNodeId)}:{Escape(StimulusHash)}:{NextOccurrence.UtcTicks}";
+
+    /// <summary>
+    /// Whether <paramref name="other"/> is the same trigger in another publication of the same slot: the same slot (which
+    /// names the workflow definition and the slot), authored trigger node and stimulus. A schedule without a slot is never
+    /// the same trigger as another.
+    /// </summary>
+    public bool IsSameTriggerAs(RecurringTriggerSchedule other)
+    {
+        ArgumentNullException.ThrowIfNull(other);
+        return SlotId is not null &&
+               StringComparer.Ordinal.Equals(SlotId, other.SlotId) &&
+               StringComparer.Ordinal.Equals(ExecutableNodeId, other.ExecutableNodeId) &&
+               StringComparer.Ordinal.Equals(StimulusType, other.StimulusType) &&
+               StringComparer.Ordinal.Equals(StimulusHash, other.StimulusHash);
+    }
+
+    /// <summary>
+    /// This schedule as it replaces <paramref name="replaced"/>, the same trigger's schedule in the publication it replaces
+    /// (#2198), activated at <paramref name="activatedAt"/>. It takes over the replaced cursor when that names an occurrence
+    /// earlier than its own cursor and no later than the activation: one that fell due before this schedule took the
+    /// replaced one's place, whether before or after it was materialized, so its own cursor, the first occurrence after its
+    /// creation, would skip it. Otherwise it is unchanged.
+    /// </summary>
+    public RecurringTriggerSchedule TakeOverFrom(RecurringTriggerSchedule replaced, DateTimeOffset activatedAt)
+    {
+        ArgumentNullException.ThrowIfNull(replaced);
+        if (!IsSameTriggerAs(replaced))
+            throw new ArgumentException($"Schedule '{replaced.ScheduleId}' is not the same trigger as schedule '{ScheduleId}'.", nameof(replaced));
+        return replaced.NextOccurrence < NextOccurrence && replaced.NextOccurrence <= activatedAt
+            ? this with { NextOccurrence = replaced.NextOccurrence }
+            : this;
     }
 
     private static string Escape(string value) => value.Replace("%", "%25").Replace(":", "%3A");
