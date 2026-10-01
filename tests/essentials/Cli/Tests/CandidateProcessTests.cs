@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Reflection;
 using System.Text.Json;
 using Elsa.Cli.Worker;
 using Xunit;
@@ -290,9 +291,9 @@ public sealed class CandidateProcessTests
     [Fact]
     public void Explicit_environment_option_rejects_repeated_occurrences_at_parse_boundary()
     {
-        var omitted = ElsaCli.Build().Parse(InspectArguments());
-        var single = ElsaCli.Build().Parse(InspectArguments("--environment-input", "one.json"));
-        var repeated = ElsaCli.Build().Parse(InspectArguments(
+        var omitted = ParseCli(InspectArguments());
+        var single = ParseCli(InspectArguments("--environment-input", "one.json"));
+        var repeated = ParseCli(InspectArguments(
             "--environment-input", "one.json", "--environment-input", "two.json"));
 
         Assert.Empty(omitted.Errors);
@@ -302,6 +303,14 @@ public sealed class CandidateProcessTests
         var errors = string.Join(Environment.NewLine, repeated.Errors.Select(error => error.Message));
         Assert.DoesNotContain("one.json", errors, StringComparison.Ordinal);
         Assert.DoesNotContain("two.json", errors, StringComparison.Ordinal);
+    }
+
+    private static System.CommandLine.ParseResult ParseCli(string[] arguments)
+    {
+        var cliType = typeof(RegularFileOpener).Assembly.GetType("Elsa.Cli.ElsaCli", throwOnError: true)!;
+        var build = cliType.GetMethod("Build", BindingFlags.Public | BindingFlags.Static)!;
+        var root = (System.CommandLine.RootCommand)build.Invoke(null, null)!;
+        return root.Parse(arguments);
     }
 
     private static string[] InspectArguments(params string[] environmentInput) =>
