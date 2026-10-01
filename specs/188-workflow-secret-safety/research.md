@@ -476,15 +476,17 @@ command was composed.
 
 **Residual, stated plainly**: like `RequiredInputOutputValidator`, the validator skips nodes whose activity version
 the catalog cannot resolve, so it cannot tell whether their inputs are credentials. In the uninstalled-activity
-case, draft save, promote, add-version, submit, file reconciliation and git export all accept such a node. A draft
+case, draft save, add-version, submit, file reconciliation and git export all accept such a node. Promote accepts it only in
+a host with no publisher composed; in a standard host `UnknownActivityVersionValidator` reports the uncataloged node and
+promote answers 409. A draft
 or a version holding a literal on that input can therefore be stored, and exported to git. Storage does not stop it,
 and the rule cannot: what keeps it from running is publish. Publish must compile every node and cannot compile an
 activity version the catalog does not hold (`WorkflowExecutableCompiler` reads it through
 `IActivityDefinitionVersionStore.GetWithDefinitionAsync`, which in the EF store throws `EntityNotFoundException`,
 verified), and once
 the activity is installed, publish and every other entry point apply the rule. The existing
-`UnknownActivityVersionValidator` also blocks promote of such a draft, but only where the promotion command's
-optional in-lock gate runs. T112 (A22) proves both halves (spec FR-008 and its edge case state this).
+`UnknownActivityVersionValidator` reports the uncataloged node, so a standard host answers 409 on promote; promote
+accepts it only in a host with no publisher composed. T112 (A22) proves both halves (spec FR-008 and its edge case state this).
 
 ## R8: Enforcing RequiresEncryption (FR-010)
 
@@ -859,7 +861,9 @@ same PR, and published executables pinned to the old contract keep it.
 **Redirects**: the named client's primary handler is an `HttpClientHandler` built from `HttpActivityOptions`
 (`AllowAutoRedirect`, default true, and `MaxAutomaticRedirections`). The spec assumes that .NET removes the
 `Authorization` header on an automatic redirect, same-origin or cross-origin. T115 proves it through that handler
-configuration instead of assuming it.
+configuration instead of assuming it. Its bite-proof sets `AllowAutoRedirect = false` on that primary handler and adds a
+delegating handler that follows the 3xx itself and copies `Authorization` onto the follow-up request; a delegating handler
+alone cannot bite, because it wraps the primary handler and never sees the redirect it follows.
 
 **Proof**: T105 (unit: header applied, precedence, empty value, result and catalog flags), T106 (logs), T115 (redirects), T108 (end to
 end through the canary host: the local endpoint received the header, rotation took effect, and the encoded scanner

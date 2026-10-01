@@ -147,11 +147,11 @@ bite-proofs remove the call.
 
 - **Activities not in the catalog** (spec FR-008 and its edge case). The validator, like
   `RequiredInputOutputValidator`, skips nodes whose activity version the catalog cannot resolve, so it cannot tell
-  whether their inputs are credentials. Draft save, promote, add-version, submit, file reconciliation and git export
-  cannot judge such nodes and accept them. A draft or version holding such a literal can therefore be stored and
+  whether their inputs are credentials. Draft save, add-version, submit, file reconciliation and git export
+  cannot judge such nodes and accept them. Promote accepts one only in a host with no publisher composed; in a standard
+  host `UnknownActivityVersionValidator` reports the uncataloged node and promote answers 409. A draft or version holding such a literal can therefore be stored and
   exported: storage does not stop it, and what keeps it from running is publish, which cannot compile an activity
-  version the catalog does not hold and, once the activity is installed, applies the rule. The existing
-  `UnknownActivityVersionValidator` blocks promote of such a draft only where the in-lock gate runs. Proved by T112
+  version the catalog does not hold and, once the activity is installed, applies the rule. Proved by T112
   (A22).
 - **Runtime artifact import** carries compiled bindings and is not one of the seven entry points (research R13); the
   spec states it as out of scope for phase 0, with a follow-up (T090). Where the imported artifact's own policy marks
