@@ -139,12 +139,12 @@ the next occurrence, and the recurring-trigger pump (`RecurringTriggerPumpTask`,
   claims live in memory and are lost on restart.
 
 **Rolling deploys.** The claims and the start-once dedupe hold only among nodes that run this behaviour
-(#2198) and that recognize keyed starts (#2195 or later). A node from before #2198 advances a schedule
-before it routes the occurrence, ignores the claim columns, and keys the start with
-`recurring:{scheduleId}:{occurrenceTicks}` under the per-artifact identity, so during a rolling deploy an
-occurrence that falls due can fire on an old and a new node and start twice; an old node that crashes
-mid-fire still loses its occurrence. Roll every node that runs the recurring-trigger pump before relying on
-the guarantee, or stop the pump on old nodes first.
+(#2198), and keyed starts need #2195 or later. A node from before #2198 advances a schedule before it
+routes the occurrence and ignores the claim columns; it keys the start with
+`recurring:{scheduleId}:{occurrenceTicks}` under the per-artifact identity (from #2195 on) or does not key
+it at all (before #2195). So during a rolling deploy an occurrence that falls due can fire on an old and a
+new node and start twice, and an old node that crashes mid-fire still loses its occurrence. Roll every node
+that runs the recurring-trigger pump before relying on the guarantee, or stop the pump on old nodes first.
 
 ## Follow-ups (not in this wave)
 
