@@ -43,6 +43,13 @@ internal sealed record PublishingNativeProvider(
             await command.ExecuteNonQueryAsync();
         });
 
+    /// <summary>SQLite has no server, so each module's connection string names its own database file.</summary>
+    public static PublishingNativeProvider Sqlite { get; } = new(
+        (connection, interceptors) => new PublishingSnapshotReviewSqliteDbContext(Options<PublishingSnapshotReviewSqliteDbContext>(builder => builder.UseSqlite(connection), interceptors)),
+        (connection, interceptors) => new ActivitiesDesignSqliteDbContext(Options<ActivitiesDesignSqliteDbContext>(builder => builder.UseSqlite(connection), interceptors)),
+        (connection, interceptors) => new RuntimeSqliteDbContext(Options<RuntimeSqliteDbContext>(builder => builder.UseSqlite(connection), interceptors)),
+        (connection, interceptors) => new WorkflowsDesignSqliteDbContext(Options<WorkflowsDesignSqliteDbContext>(builder => builder.UseSqlite(connection), interceptors)));
+
     public static PublishingNativeProvider SqlServer { get; } = new(
         (connection, interceptors) => new PublishingSnapshotReviewSqlServerDbContext(Options<PublishingSnapshotReviewSqlServerDbContext>(builder => builder.UseSqlServer(connection), interceptors)),
         (connection, interceptors) => new ActivitiesDesignSqlServerDbContext(Options<ActivitiesDesignSqlServerDbContext>(builder => builder.UseSqlServer(connection), interceptors)),
@@ -358,7 +365,7 @@ internal static class PublishingLedgerNativeProviderSmoke
         EfWorkflowDraftRevision.Of((await scope.Workflows.Drafts.AsNoTracking()
             .SingleAsync(x => x.Id == ActivityUpgradeFixtures.WorkflowDraftId)).LastModifiedAt);
 
-    private static string WithDatabase(string connectionString, string database)
+    internal static string WithDatabase(string connectionString, string database)
     {
         var builder = new DbConnectionStringBuilder { ConnectionString = connectionString };
         builder.Remove("Initial Catalog");

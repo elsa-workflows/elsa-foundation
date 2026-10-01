@@ -2,8 +2,8 @@
 
 `Elsa.Workflows.Publishing` is the endpoint-free **publish + compile engine**. It compiles a persisted
 Design workflow version into a canonical Runtime executable and coordinates the publication authority
-transition (slot CAS, projection reconciliation, records) — all without mounting any HTTP transport and
-without any authorization dependency. A headless Runtime node can therefore compose the publish
+transition (slot CAS and projection switch through the runtime coordinator, records) — all without mounting any
+HTTP transport and without any authorization dependency. A headless Runtime node can therefore compose the publish
 capability directly; the management-client HTTP surface is a separate concern owned by
 `Elsa.Workflows.Publishing.Api`, which obtains this engine by `DependsOn` composition (framework §2.11).
 
@@ -91,8 +91,9 @@ The authority transition is one coordinated operation (identical to what the API
    route table, and the recurring pump).
 4. Activate the slot with compare-and-swap on its expected revision, then switch the prepared serving
    projections to the new publication and retire the replaced one.
-5. Persist idempotent per-publication projection intents; retries replay the same intent identity and
-   converge. A failed activation compensates by restoring the previous authority before the candidate is
+5. The runtime `IWorkflowActivationCoordinator` runs steps 3 and 4 and the compensation. If a process dies after
+   the slot transition, the coordinator completes that activation before the slot's next activation, and at the
+   next shell start. A failed activation compensates by restoring the previous authority before the candidate is
    removed.
 6. Retire or restore the publication source reference as provenance. Existing executions stay pinned to their
    immutable executable artifact; unpublishing does not delete that artifact.

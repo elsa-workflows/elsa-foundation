@@ -4,6 +4,7 @@ using CShells.DependencyInjection;
 using CShells.Features;
 using CShells.Lifecycle;
 using Elsa.Persistence.EntityFramework;
+using Elsa.Persistence.EntityFramework.SchemaBackfill;
 using Elsa.Persistence.EntityFramework.SchemaFinalization;
 using Elsa.Studio.Preferences.Persistence.EntityFrameworkCore;
 using Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.DependencyInjection;

@@ -12,9 +12,10 @@ namespace Elsa.Workflows.Runtime.Services.Triggers;
 [RuntimeDefaultRegistration]
 public sealed class InMemoryRecurringTriggerScheduleStore : IRecurringTriggerScheduleStore
 {
+    private const string ProjectionName = "recurring-schedule";
     private readonly object _syncRoot = new();
     private readonly Dictionary<string, RecurringTriggerSchedule> _schedules = new(StringComparer.Ordinal);
-    private readonly HashSet<string> _preparedActivations = new(StringComparer.Ordinal);
+    private readonly InMemoryActivationProjectionStates _activations = new();
 
     public ValueTask<RecurringTriggerSchedule> SaveAsync(RecurringTriggerSchedule schedule, CancellationToken cancellationToken = default)
     {
@@ -42,13 +43,13 @@ public sealed class InMemoryRecurringTriggerScheduleStore : IRecurringTriggerSch
 
         lock (_syncRoot)
         {
+            _activations.Prepare(activationId, ProjectionName);
             RemoveByActivation(activationId);
             foreach (var schedule in schedules)
             {
                 var prepared = schedule with { IsActive = false };
                 _schedules[prepared.ScheduleId] = prepared;
             }
-            _preparedActivations.Add(activationId);
         }
 
         return ValueTask.CompletedTask;
@@ -105,15 +106,46 @@ public sealed class InMemoryRecurringTriggerScheduleStore : IRecurringTriggerSch
 
         lock (_syncRoot)
         {
-            if (!_preparedActivations.Contains(activationId))
-                throw new InvalidOperationException($"Activation '{activationId}' has no prepared recurring-schedule projection.");
+            if (!_activations.Activate(activationId, replacedActivationId, ProjectionName))
+                return ValueTask.CompletedTask;
 
-            SetActivationActive(activationId, true);
+            SetRowsActive(activationId, true);
             if (replacedActivationId is not null && !StringComparer.Ordinal.Equals(replacedActivationId, activationId))
-                SetActivationActive(replacedActivationId, false);
+                SetRowsActive(replacedActivationId, false);
         }
 
         return ValueTask.CompletedTask;
+    }
+
+    public ValueTask<WorkflowActivationProjectionState> FindActivationStateAsync(
+        string activationId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(activationId);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (_syncRoot)
+        {
+            return ValueTask.FromResult(_activations.Find(activationId));
+        }
+    }
+
+    public ValueTask<IReadOnlyCollection<string>> ListServingActivationIdsAsync(
+        string slotId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(slotId);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (_syncRoot)
+        {
+            return ValueTask.FromResult<IReadOnlyCollection<string>>(_schedules.Values
+                .Where(schedule => schedule.IsActive && schedule.ActivationId is not null && StringComparer.Ordinal.Equals(schedule.SlotId, slotId))
+                .Select(schedule => schedule.ActivationId!)
+                .Distinct(StringComparer.Ordinal)
+                .Order(StringComparer.Ordinal)
+                .ToArray());
+        }
     }
 
     public ValueTask DeleteByActivationAsync(string activationId, CancellationToken cancellationToken = default)
@@ -124,7 +156,7 @@ public sealed class InMemoryRecurringTriggerScheduleStore : IRecurringTriggerSch
         lock (_syncRoot)
         {
             RemoveByActivation(activationId);
-            _preparedActivations.Remove(activationId);
+            _activations.Remove(activationId);
         }
 
         return ValueTask.CompletedTask;
@@ -187,11 +219,12 @@ public sealed class InMemoryRecurringTriggerScheduleStore : IRecurringTriggerSch
         {
             var doomed = _schedules.Values
                 .Where(schedule => StringComparer.Ordinal.Equals(schedule.ArtifactId, artifactId))
-                .Select(schedule => schedule.ScheduleId)
                 .ToArray();
 
-            foreach (var scheduleId in doomed)
-                _schedules.Remove(scheduleId);
+            foreach (var schedule in doomed)
+                _schedules.Remove(schedule.ScheduleId);
+            foreach (var activationId in doomed.Select(schedule => schedule.ActivationId).OfType<string>().Distinct(StringComparer.Ordinal))
+                _activations.Remove(activationId);
         }
 
         return ValueTask.CompletedTask;
@@ -223,7 +256,7 @@ public sealed class InMemoryRecurringTriggerScheduleStore : IRecurringTriggerSch
         }
     }
 
-    private void SetActivationActive(string activationId, bool isActive)
+    private void SetRowsActive(string activationId, bool isActive)
     {
         foreach (var schedule in _schedules.Values
                      .Where(schedule => StringComparer.Ordinal.Equals(schedule.ActivationId, activationId))

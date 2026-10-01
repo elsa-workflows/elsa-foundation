@@ -8,6 +8,10 @@ using Microsoft.EntityFrameworkCore;
 namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Stores;
 
 /// <summary>EF adapter for create-only publication projection intents and status CAS.</summary>
+/// <remarks>
+/// Nothing writes intents any more, and removal is pending; see <see cref="IPublicationProjectionIntentStore"/>. The
+/// table stays so existing rows remain readable until that schema decision is made.
+/// </remarks>
 public sealed class EfPublicationProjectionIntentStore(
     PublishingSnapshotReviewDbContext context,
     IPersistenceAccessContextAccessor accessContextAccessor) : IPublicationProjectionIntentStore

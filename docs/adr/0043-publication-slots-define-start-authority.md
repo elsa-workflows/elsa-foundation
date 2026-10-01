@@ -7,6 +7,19 @@ the ledger is now Runtime-owned as `IWorkflowActivationAuthority`. Publishing ow
 and publication records and reaches the ledger through `IWorkflowActivationCoordinator`; it does not
 own or persist a parallel publication-slot authority.
 
+Convergence amendment (2026-10-01, #2193). **Status: proposed, awaiting owner acceptance.** The durable
+projection intents described under "Projection intent makes cross-store activation durable" were never wired into the
+coordinator-based activation path, and their reconciler was removed. Projections converge toward the slot through
+`IWorkflowActivationCoordinator` instead. The slot transition commits before the projections switch, so a process
+that dies in between leaves the slot naming an activation that serves nothing while the one it replaced keeps
+serving. The coordinator completes that activation before the slot's next activation, and a shell-start pass
+completes it on every node. Both re-run the idempotent projection switch, observer notification and predecessor
+retirement. Unpublish completes nothing: it turns off every activation that serves the slot. Invariant 3 is
+therefore eventual across a crash, not immediate. Two races remain until the slot and the projections switch in one
+transaction (#2230). In the first, a stale completion of a first activation can switch it back on beside its
+successor; that double serving does not heal itself, and only unpublishing the slot clears it. In the second, a
+completion's retire can leave an activation that compensation restored serving with a retired reference.
+
 Related decisions: ADR 0038 (content-addressed executable identity), ADR 0039 (layout on source
 references), and ADR 0040 (reference- and execution-derived artifact lifetime).
 Plan of record: `specs/092-domain-owned-apis/`.
@@ -122,6 +135,9 @@ retirement timestamp.
 
 ### Projection intent makes cross-store activation durable
 
+*Superseded in mechanism by the proposed 2026-10-01 convergence amendment above; the requirement that projections
+converge toward the slot and never override it stands.*
+
 When the Runtime activation authority and every serving projection cannot share a transaction, Publishing records
 durable `PublicationProjectionIntent` entries. An intent identifies the publication, projection kind,
 operation, delivery status, and bounded retry diagnostics.
@@ -155,7 +171,9 @@ artifact for as long as their execution record is retained.
 
 1. A `(WorkflowDefinitionId, SlotName)` pair identifies exactly one slot.
 2. A slot selects zero or one active publication, and a publication is active in at most one slot.
-3. Only the selected active publication contributes new-start routing projections.
+3. Only the selected active publication contributes new-start routing projections. Across a process crash
+   between the slot transition and the projection switch this holds eventually, not immediately, apart from the
+   race the proposed convergence amendment names, which can leave two activations serving until #2230 closes it.
 4. Ordinary publishing replaces `default`; intentional coexistence uses explicit named slots.
 5. An Exclusive stimulus has at most one authoritative claimant per shell; FanOut claims may coexist.
 6. A failed or losing candidate leaves prior slot authority and serving behavior unchanged.

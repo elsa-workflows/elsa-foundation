@@ -3,7 +3,7 @@
 This catalog covers the extension points owned by the **transport** feature `Elsa.Workflows.Publishing.Api`:
 the HTTP endpoint surface, transport authorization, and the activity-draft publish/test-run seams. The
 auth-free **publish + compile engine** — the executable compiler, the publication authority stores, policy /
-preflight / activation / projection reconciliation, the compilation fan-in, and the activity-template provider
+preflight / activation, the compilation fan-in, and the activity-template provider
 registries — moved to `Elsa.Workflows.Publishing`, which this feature obtains by `DependsOn` composition. For
 those seams see [the engine extension-point catalog](../EXTENSION_POINTS.md).
 

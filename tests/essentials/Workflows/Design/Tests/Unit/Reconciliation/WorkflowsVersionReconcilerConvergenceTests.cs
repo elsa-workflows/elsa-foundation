@@ -1,6 +1,10 @@
+using Elsa.Events.Core.Contracts;
+using Elsa.Expressions.Core.Models;
+using Elsa.Primitives.Models;
 using Elsa.Primitives.Versioning;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
+using Elsa.Workflows.Design.Core.Reconciliation;
 using Elsa.Workflows.Design.Persistence.Core.Constants;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
@@ -9,6 +13,8 @@ using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Commands;
+using Elsa.Workflows.Design.Reconciliation.Handlers;
+using Elsa.Workflows.Design.Reconciliation.Models;
 using Elsa.Workflows.Design.Reconciliation.Options;
 using Elsa.Workflows.Design.Reconciliation.Services;
 using Elsa.Workflows.Design.Tests.Infrastructure;
@@ -32,6 +38,7 @@ public sealed class WorkflowsVersionReconcilerConvergenceTests : IAsyncLifetime
     private const string Version = "1.0.0";
     private static readonly string SortKey = SemVer.ToSortKey(Version);
     private static readonly WorkflowDefinitionState EmptyState = new([], null, [], [], null);
+    private static readonly WorkflowDefinitionState OtherState = new([new VariableDefinition("counter", "Counter", new TypeReference("Int32"), null, null)], null, [], [], null);
     private WorkflowsDesignTestHost _host = null!;
 
     public async Task InitializeAsync() => _host = await WorkflowsDesignTestHost.CreateAsync();
@@ -193,26 +200,133 @@ public sealed class WorkflowsVersionReconcilerConvergenceTests : IAsyncLifetime
         Assert.StartsWith($"{EfDeleteWorkflowDefinitionPermanentlyCommand.OperationKind} ", Assert.Single(after.Except(before)));
     }
 
+    [Fact]
+    public async Task A_version_materialized_under_a_generated_id_keeps_it_when_its_source_is_reconciled_again()
+    {
+        // What a database written before #2189 holds: the version under an id one node generated. The source now
+        // contributes it under its derived id, and the pass must find the stored version rather than add a second.
+        await ReconcileAsync(versionId: "generated-before-2189");
+        var markers = await ListMarkersAsync();
+
+        await ReconcileAsync(contributions: FromSource);
+
+        Assert.Equal("generated-before-2189", Assert.Single(await ListVersionIdsAsync()));
+        Assert.Equal(markers, await ListMarkersAsync());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_definition_materialized_under_the_earlier_fingerprint_is_never_compared_with_a_new_request(bool deleted)
+    {
+        // What a database written before #2189 holds: the definition, and its materialization marker fingerprinting the
+        // DeletedAt time instead of whether it is deleted.
+        await ReconcileAsync(deleted: deleted);
+        var stored = (await GetDefinitionAsync())!;
+        await ReplaceDefinitionMarkerAsync(new EarlierDefinitionMaterialization(
+            stored.Id, stored.Name, stored.Description, stored.DeletedAt, stored.DeletedReason, stored.IsSourceOwned));
+        // The marker does differ from what a materialization sends now: sending that request again conflicts.
+        var conflict = await Assert.ThrowsAsync<InvalidOperationException>(() => MaterializeDefinitionAgainAsync(stored));
+        Assert.Contains("conflicts with an earlier request", conflict.Message);
+        var markers = await ListMarkersAsync();
+
+        // The reconciler finds the definition, so it never sends one.
+        await ReconcileAsync(deleted: deleted);
+
+        Assert.Equal(markers, await ListMarkersAsync());
+        Assert.Equal(stored.LastModifiedAt, (await GetDefinitionAsync())!.LastModifiedAt);
+    }
+
+    [Fact]
+    public async Task Two_passes_that_bring_different_content_for_one_new_version_still_conflict()
+    {
+        // Every node derives the same version id now, so only the content in the request tells two writes apart. The
+        // pass that commits second must fail rather than report the other pass's version as its own.
+        await _host.EnsureDefinition(DefinitionId, "Original");
+        var versionId = WorkflowReconciliationVersionIds.For(DefinitionId, SortKey);
+        var emptyCheck = new Pause();
+        var otherCheck = new Pause();
+        var empty = ReconcileAsync(versionId: versionId, versions: store => new PausingVersionStore(store, emptyCheck));
+        var other = ReconcileAsync(versionId: versionId, state: OtherState, versions: store => new PausingVersionStore(store, otherCheck));
+        await Pause.ReleaseTogether((empty, emptyCheck), (other, otherCheck));
+
+        var failures = await Task.WhenAll(FailureOf(empty), FailureOf(other));
+
+        var conflict = Assert.IsType<InvalidOperationException>(Assert.Single(failures, failure => failure is not null));
+        Assert.Contains($"'{EfMaterializeWorkflowDefinitionVersionCommand.OperationKind}/", conflict.Message);
+        Assert.Contains("conflicts with an earlier request", conflict.Message);
+        var otherCommitted = failures[1] is null;
+        var stored = await GetLatestVersionAsync();
+        Assert.Equal(versionId, stored!.Id);
+        Assert.Equal(otherCommitted, stored.State.Variables.Any());
+    }
+
     private Task ReconcileAsync(
         string name = "Original",
         bool deleted = false,
         string? versionId = null,
         string definitionId = DefinitionId,
+        WorkflowDefinitionState? state = null,
         Func<IWorkflowDefinitionStore, IWorkflowDefinitionStore>? definitions = null,
-        Func<ISaveWorkflowDefinitionCommand, ISaveWorkflowDefinitionCommand>? saves = null) => InScopeAsync(services =>
+        Func<IWorkflowDefinitionVersionStore, IWorkflowDefinitionVersionStore>? versions = null,
+        Func<ISaveWorkflowDefinitionCommand, ISaveWorkflowDefinitionCommand>? saves = null,
+        Func<IServiceProvider, IInlineEventPublisher>? contributions = null) => InScopeAsync(services =>
     {
         var definition = services.GetRequiredService<IWorkflowDefinitionFactory>().Create(name, id: definitionId, deleted: deleted);
-        var version = services.GetRequiredService<IWorkflowDefinitionVersionFactory>().Create(definition, Version, EmptyState, id: versionId);
+        var version = services.GetRequiredService<IWorkflowDefinitionVersionFactory>().Create(definition, Version, state ?? EmptyState, id: versionId);
         var definitionStore = services.GetRequiredService<IWorkflowDefinitionStore>();
+        var versionStore = services.GetRequiredService<IWorkflowDefinitionVersionStore>();
         var saveCommand = services.GetRequiredService<ISaveWorkflowDefinitionCommand>();
         var reconciler = ActivatorUtilities.CreateInstance<WorkflowsVersionReconciler>(
             services,
-            new ContributingPublisher(version),
+            contributions?.Invoke(services) ?? new ContributingPublisher(version),
             Microsoft.Extensions.Options.Options.Create(new WorkflowVersionReconcilerOptions()),
             definitions?.Invoke(definitionStore) ?? definitionStore,
+            versions?.Invoke(versionStore) ?? versionStore,
             saves?.Invoke(saveCommand) ?? saveCommand);
         return reconciler.Reconcile(CancellationToken.None);
     });
+
+    /// <summary>Contributes the definition's one version through the real aggregating handler, as a source read does.</summary>
+    private static IInlineEventPublisher FromSource(IServiceProvider services) =>
+        new HandlingPublisher<WorkflowVersionsReconciling>(new WorkflowVersionsReconcilingHandler(
+            services.GetRequiredService<IWorkflowDefinitionFactory>(),
+            services.GetRequiredService<IWorkflowDefinitionVersionFactory>(),
+            [new StaticWorkflowSource(new WorkflowVersionReconciliationModel(DefinitionId, "Original", null, Version, EmptyState))]));
+
+    /// <summary>
+    /// Swaps the definition's materialization marker for one written from <paramref name="earlierRequest"/>, through the real
+    /// atomic writer, so its fingerprint is exactly what that request shape produced.
+    /// </summary>
+    private Task ReplaceDefinitionMarkerAsync(object earlierRequest) => InScopeAsync(async services =>
+    {
+        var key = WorkflowReconciliationOperationKeys.Definition(DefinitionId);
+        var db = services.GetRequiredService<WorkflowsDesignDbContext>();
+        db.Operations.Remove(await db.Operations.SingleAsync(marker =>
+            marker.OperationKind == EfMaterializeWorkflowDefinitionCommand.OperationKind && marker.OperationKey == key.Value));
+        await db.SaveChangesAsync();
+        await services.GetRequiredService<IDesignAtomicWriter>().ExecuteAsync(
+            key,
+            EfMaterializeWorkflowDefinitionCommand.OperationKind,
+            earlierRequest,
+            [DesignPersistenceUnitNames.Definitions],
+            _ => Task.FromResult(DefinitionId));
+    });
+
+    private Task MaterializeDefinitionAgainAsync(WorkflowDefinition stored) => InScopeAsync(services =>
+        services.GetRequiredService<IMaterializeWorkflowDefinitionCommand>().Execute(
+            WorkflowReconciliationOperationKeys.Definition(DefinitionId),
+            new WorkflowDefinition
+            {
+                Id = stored.Id,
+                Name = stored.Name,
+                Description = stored.Description,
+                DeletedAt = stored.DeletedAt,
+                DeletedReason = stored.DeletedReason,
+                IsSourceOwned = stored.IsSourceOwned
+            }));
+
+    private static Task<Exception?> FailureOf(Task pass) => Record.ExceptionAsync(() => pass);
 
     private Task RenameAsync(DesignOperationKey key, string name, string definitionId = DefinitionId) => InScopeAsync(async services =>
     {
@@ -234,6 +348,9 @@ public sealed class WorkflowsVersionReconcilerConvergenceTests : IAsyncLifetime
 
     private Task<WorkflowDefinitionVersion?> GetLatestVersionAsync() =>
         InScopeAsync(services => services.GetRequiredService<IWorkflowDefinitionVersionStore>().FindLatestVersionAsync(DefinitionId));
+
+    private Task<string[]> ListVersionIdsAsync() => InScopeAsync(async services =>
+        (await services.GetRequiredService<IWorkflowDefinitionVersionStore>().ListByDefinitionAsync(DefinitionId)).Select(version => version.Id).ToArray());
 
     private Task<string[]> ListMarkersAsync() => InScopeAsync(async services =>
     {
@@ -279,4 +396,16 @@ public sealed class WorkflowsVersionReconcilerConvergenceTests : IAsyncLifetime
             }
         }
     }
+
+    /// <summary>
+    /// The request a definition materialization sent before #2189. A fingerprint covers the request's JSON, so these member
+    /// names and their order are what existing markers were written from.
+    /// </summary>
+    private sealed record EarlierDefinitionMaterialization(
+        string DefinitionId,
+        string Name,
+        string? Description,
+        DateTimeOffset? DeletedAt,
+        string? DeletedReason,
+        bool IsSourceOwned);
 }

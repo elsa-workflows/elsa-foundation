@@ -19,7 +19,11 @@ public interface IWorkflowTriggerBindingStore
     /// <summary>Upserts a single trigger binding, keyed by its <see cref="WorkflowTriggerBinding.TriggerBindingId"/>.</summary>
     ValueTask<WorkflowTriggerBinding> SaveAsync(WorkflowTriggerBinding binding, CancellationToken cancellationToken = default);
 
-    /// <summary>Atomically replaces one activation's prepared bindings without exposing them to serving queries.</summary>
+    /// <summary>
+    /// Atomically replaces one activation's prepared bindings without exposing them to serving queries. An activation
+    /// whose projection serves, or has served and is still stored, is refused until <see cref="DeleteByActivationAsync"/>
+    /// removes it: reusing it would read as <see cref="WorkflowActivationProjectionState.Replaced"/> (#2193).
+    /// </summary>
     ValueTask PrepareActivationAsync(
         string activationId,
         IReadOnlyCollection<WorkflowTriggerBinding> bindings,
@@ -46,6 +50,26 @@ public interface IWorkflowTriggerBindingStore
         string? replacedActivationId,
         CancellationToken cancellationToken = default) =>
         ValueTask.FromException(new NotSupportedException("This trigger-binding store does not support activation-scoped activation."));
+
+    /// <summary>
+    /// Reports where one activation's projection stands: missing, prepared but never served, serving, or switched off
+    /// by the activation that replaced it. It must answer for an activation with no bindings. The activation
+    /// coordinator reads it to find an activation whose slot transition committed but whose projection was never
+    /// switched on, and a replaced activation whose reference was never retired, because a process died in between.
+    /// </summary>
+    ValueTask<WorkflowActivationProjectionState> FindActivationStateAsync(
+        string activationId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Lists, in ordinal order, the activations with at least one active binding minted for <paramref name="slotId"/>,
+    /// whatever their source references say. Deactivation reads it to turn off every activation that serves a slot,
+    /// including one whose reference is retired, expired or gone (#2193). An activation with no bindings serves nothing
+    /// through this store and is not listed.
+    /// </summary>
+    ValueTask<IReadOnlyCollection<string>> ListServingActivationIdsAsync(
+        string slotId,
+        CancellationToken cancellationToken = default);
 
     /// <summary>Deletes every binding owned by one activation without affecting shared artifacts or other slots.</summary>
     ValueTask DeleteByActivationAsync(string activationId, CancellationToken cancellationToken = default) =>

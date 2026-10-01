@@ -1,10 +1,12 @@
 using Elsa.Primitives.Contracts;
+using Elsa.Primitives.Versioning;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Services;
 using Elsa.Workflows.Design.Reconciliation.Contracts;
 using Elsa.Workflows.Design.Core.Reconciliation;
 using Elsa.Workflows.Design.Reconciliation.Handlers;
 using Elsa.Workflows.Design.Reconciliation.Models;
+using Elsa.Workflows.Design.Reconciliation.Services;
 using Xunit;
 
 namespace Elsa.Workflows.Design.Tests.Unit.Reconciliation;
@@ -77,6 +79,23 @@ public sealed class WorkflowVersionsReconcilingHandlerTests
     }
 
     [Fact]
+    public async Task Every_node_contributes_a_version_under_the_id_its_definition_and_sort_key_derive()
+    {
+        // Each node generates its own ids, but the version id must agree, or two nodes' materialization requests for
+        // the same version conflict and the second node's start fails (#2189). Build metadata does not change the sort key.
+        var entry = Entry("wf-a", "Workflow A", version: "1.0.0+build.7");
+        var first = new WorkflowVersionsReconciling();
+        var second = new WorkflowVersionsReconciling();
+
+        await NewHandler("node-1", new StubSource("Json", "a", [entry])).Handle(first, CancellationToken.None);
+        await NewHandler("node-2", new StubSource("Json", "a", [entry])).Handle(second, CancellationToken.None);
+
+        var expected = WorkflowReconciliationVersionIds.For("wf-a", SemVer.ToSortKey("1.0.0"));
+        Assert.Equal(expected, Assert.Single(first.Versions).Id);
+        Assert.Equal(expected, Assert.Single(second.Versions).Id);
+    }
+
+    [Fact]
     public async Task Multiple_sources_aggregate_their_entries()
     {
         var sourceA = new StubSource("Json", "a", [Entry("wf-a", "Workflow A", version: "1.0.0")]);
@@ -143,9 +162,11 @@ public sealed class WorkflowVersionsReconcilingHandlerTests
         Assert.True(claim.Deleted);
     }
 
-    private static WorkflowVersionsReconcilingHandler NewHandler(params IWorkflowReconciliationSource[] sources)
+    private static WorkflowVersionsReconcilingHandler NewHandler(params IWorkflowReconciliationSource[] sources) => NewHandler("gen", sources);
+
+    private static WorkflowVersionsReconcilingHandler NewHandler(string idPrefix, params IWorkflowReconciliationSource[] sources)
     {
-        var idGenerator = new SequentialIdGenerator();
+        var idGenerator = new SequentialIdGenerator(idPrefix);
         return new WorkflowVersionsReconcilingHandler(
             new WorkflowDefinitionFactory(idGenerator),
             new WorkflowDefinitionVersionFactory(idGenerator),
@@ -170,9 +191,9 @@ public sealed class WorkflowVersionsReconcilingHandlerTests
             => ValueTask.FromResult(_entries);
     }
 
-    private sealed class SequentialIdGenerator : IIdentityGenerator
+    private sealed class SequentialIdGenerator(string prefix) : IIdentityGenerator
     {
         private int _i;
-        public string Generate() => $"gen-{Interlocked.Increment(ref _i)}";
+        public string Generate() => $"{prefix}-{Interlocked.Increment(ref _i)}";
     }
 }
