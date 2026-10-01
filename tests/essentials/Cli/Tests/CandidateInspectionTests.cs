@@ -419,8 +419,7 @@ public sealed class CandidateInspectionTests
         var second = DotnetElsa.Run(fixture.SentinelEnvironment, arguments);
         Assert.Equal(ToolExitCode.Success, first.ExitCode);
         Assert.Equal(ToolExitCode.Success, second.ExitCode);
-        Assert.True(JsonNode.DeepEquals(NormalizeFreshIdentityFields(first.Output),
-            NormalizeFreshIdentityFields(second.Output)));
+        Assert.True(JsonNode.DeepEquals(JsonNode.Parse(first.Output), JsonNode.Parse(second.Output)));
         Assert.DoesNotContain(CandidateInspectionFixture.PrivateEnvironmentCanary, first.Text, StringComparison.Ordinal);
         Assert.DoesNotContain(CandidateInspectionFixture.PrivateEnvironmentCanary, second.Text, StringComparison.Ordinal);
 
@@ -627,29 +626,6 @@ public sealed class CandidateInspectionTests
     {
         using var document = JsonDocument.Parse(File.ReadAllText(fixture.InputPath("accepted.json")));
         return Strings(document.RootElement.GetProperty("accepted").GetProperty("featureIds"));
-    }
-
-    private static JsonNode NormalizeFreshIdentityFields(string output)
-    {
-        var document = JsonNode.Parse(output) ?? throw new JsonException("The public inspection output was empty.");
-        RemoveFreshIdentityFields(document);
-        return document;
-    }
-
-    private static void RemoveFreshIdentityFields(JsonNode node)
-    {
-        if (node is JsonObject objectNode)
-        {
-            objectNode.Remove("invocationId");
-            objectNode.Remove("captureId");
-            foreach (var child in objectNode.Values.ToArray())
-                if (child is not null)
-                    RemoveFreshIdentityFields(child);
-        }
-        else if (node is JsonArray arrayNode)
-            foreach (var child in arrayNode)
-                if (child is not null)
-                    RemoveFreshIdentityFields(child);
     }
 
     private static string[] PlanArguments(CandidateInspectionFixture fixture, string? profile)

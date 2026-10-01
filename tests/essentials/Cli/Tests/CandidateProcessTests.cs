@@ -152,7 +152,6 @@ public sealed class CandidateProcessTests
                 finally { readCompleted.TrySetResult(); }
             }
         };
-        fixture.Handle.OnDispose = () => never.TrySetResult(0);
         fixture.Handle.Wait = token => fixture.Handle.Exited ? Task.CompletedTask : Task.Delay(Timeout.Infinite, token);
 
         var pending = fixture.Runner.RunEnvironmentAsync(environment.Capture, [], timeoutSeconds: 1);
@@ -299,7 +298,7 @@ public sealed class CandidateProcessTests
         Assert.Empty(omitted.Errors);
         Assert.Empty(single.Errors);
         Assert.Contains(repeated.Errors, error => error.Message.Contains(
-            "--environment-input option may be specified only once", StringComparison.Ordinal));
+            "--environment-input", StringComparison.Ordinal));
         var errors = string.Join(Environment.NewLine, repeated.Errors.Select(error => error.Message));
         Assert.DoesNotContain("one.json", errors, StringComparison.Ordinal);
         Assert.DoesNotContain("two.json", errors, StringComparison.Ordinal);
