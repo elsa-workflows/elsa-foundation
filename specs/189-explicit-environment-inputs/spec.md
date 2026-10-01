@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-01
 
-**Status**: Approved — authoring review passed; implementation remains gated on #2277 delivery
+**Status**: Draft — authoring review passed; approval to implement remains gated on #2277 delivery
 
 **Input**: User description: Define a bounded first lane for explicitly supplied, private intended environment inputs during composition inspection while preserving candidate v1 and file-only compatibility.
 
