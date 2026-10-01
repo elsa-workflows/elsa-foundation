@@ -200,7 +200,7 @@ start sends a new key. And a recurring-trigger occurrence, routed with the key
 
 The keyed start identity is a frozen, persisted format. Its ids are `wfexec:start:v1:{digest}`,
 `command:start:v1:{digest}` and `envelope:start:v1:{digest}`; the digest is the lowercase hex SHA-256 of the
-length-prefixed UTF-8 values `"elsa.workflow-start"`, `"v1"` and the start key, which the router builds as
+values `"elsa.workflow-start"`, `"v1"` and the start key (each value's UTF-8 bytes prefixed by its 4-byte big-endian length), which the router builds as
 `{idempotencyKey}:start:{artifactId}`. A redelivery is recognized only by deriving the same id again, so any change to
 the derivation silently starts every redelivered occurrence a second time. Change it by adding a new version beside
 `v1`, never by editing `v1`; `KeyedWorkflowStartIdentityTests` pins the `v1` literals.

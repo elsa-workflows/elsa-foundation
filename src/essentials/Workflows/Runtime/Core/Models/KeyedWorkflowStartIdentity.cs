@@ -22,7 +22,7 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 /// <para>
 /// <b>The format is frozen (version <see cref="Version"/>).</b> Every id is <c>{prefix}:start:v1:{digest}</c>, with the
 /// prefixes <c>wfexec</c>, <c>command</c> and <c>envelope</c>. The digest is the lowercase hex SHA-256 of the
-/// length-prefixed UTF-8 values <c>"elsa.workflow-start"</c>, <c>"v1"</c> and the start key, and the router's start key
+/// values <c>"elsa.workflow-start"</c>, <c>"v1"</c> and the start key, each value's UTF-8 bytes prefixed by its 4-byte big-endian length, and the router's start key
 /// is <c>{idempotencyKey}:start:{artifactId}</c>. Execution ids derived this way are persisted and are what a redelivery
 /// is matched against, so changing any part of the derivation silently starts every redelivered occurrence a second
 /// time. To change it, add a new version beside this one; never edit <c>v1</c>.
@@ -32,7 +32,7 @@ public sealed class KeyedWorkflowStartIdentity
 {
     public const string Version = "v1";
 
-    public KeyedWorkflowStartIdentity(string startKey)
+    private KeyedWorkflowStartIdentity(string startKey)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(startKey);
 

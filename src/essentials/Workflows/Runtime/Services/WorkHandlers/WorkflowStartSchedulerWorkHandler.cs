@@ -22,7 +22,7 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
     private readonly IWorkflowExecutableReader? _executableReader;
     private readonly IIncidentStrategyCatalog? _incidentStrategyCatalog;
     private readonly RuntimeCheckpointCommitter? _checkpointCommitter;
-    private readonly IWorkflowExecutionStateStore? _workflowExecutionStateStore;
+    private readonly IWorkflowExecutionStateStore _workflowExecutionStateStore;
     private readonly ILogger<WorkflowStartSchedulerWorkHandler> _logger;
 
     public WorkflowStartSchedulerWorkHandler(
@@ -30,16 +30,17 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
         IWorkflowSchedulerWorkQueue schedulerWorkQueue,
         IRuntimeExecutionIdGenerator idGenerator,
         TimeProvider timeProvider,
+        IWorkflowExecutionStateStore workflowExecutionStateStore,
         IWorkflowExecutableReader? executableReader = null,
         IIncidentStrategyCatalog? incidentStrategyCatalog = null,
         RuntimeCheckpointCommitter? checkpointCommitter = null,
-        IWorkflowExecutionStateStore? workflowExecutionStateStore = null,
         ILogger<WorkflowStartSchedulerWorkHandler>? logger = null)
     {
         ArgumentNullException.ThrowIfNull(workflowExecutableStore);
         ArgumentNullException.ThrowIfNull(schedulerWorkQueue);
         ArgumentNullException.ThrowIfNull(idGenerator);
         ArgumentNullException.ThrowIfNull(timeProvider);
+        ArgumentNullException.ThrowIfNull(workflowExecutionStateStore);
 
         _workflowExecutableStore = workflowExecutableStore;
         _schedulerWorkQueue = schedulerWorkQueue;
@@ -121,11 +122,8 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
         WorkflowExecutionStartCommandPayload startPayload,
         CancellationToken cancellationToken)
     {
-        if (_workflowExecutionStateStore is null ||
-            await _workflowExecutionStateStore.FindAsync(workItem.WorkflowExecutionId, cancellationToken) is not { } existing)
-        {
+        if (await _workflowExecutionStateStore.FindAsync(workItem.WorkflowExecutionId, cancellationToken) is not { } existing)
             return false;
-        }
 
         if (StringComparer.Ordinal.Equals(existing.PinnedExecutable.ArtifactId, startPayload.PinnedExecutable.ArtifactId))
         {

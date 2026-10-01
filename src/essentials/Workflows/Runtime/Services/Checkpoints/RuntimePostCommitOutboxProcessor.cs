@@ -95,7 +95,7 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
         // context as this store, so a renewal running beside the dispatch would collide with the handler's own queries. A
         // dispatch that alone outlives the visibility timeout can therefore still be repeated by a peer. Each intent kind
         // converges under that repeat by its own mechanism, PublishStimulus included since its starts are keyed; the
-        // per-kind table in the Runtime EXTENSION_POINTS.md records each one and its limit.
+        // per-kind table under `IRuntimePostCommitOutboxStore` in Runtime EXTENSION_POINTS.md records each one and its limit.
         _claimLease = _claimStore is null
             ? null
             : new FencedClaimLease<RuntimePostCommitOutboxClaim>(

@@ -28,8 +28,8 @@ internal static class ClaimLeaseOverrunContract
     /// <summary>
     /// The item whose claim lapsed while it waited its turn is dispatched once. The outbox renews each claim just before its
     /// dispatch, never during it, so the in-flight item's long dispatch may be repeated by the peer: that repeat is the
-    /// documented residue, which each intent kind converges under by its own mechanism (the per-kind table in the Runtime
-    /// EXTENSION_POINTS.md), and this deliverer's refused completion of it is what must not end the batch.
+    /// documented residue, which each intent kind converges under by its own mechanism (the per-kind table under
+    /// `IRuntimePostCommitOutboxStore` in Runtime EXTENSION_POINTS.md), and this deliverer's refused completion of it is what must not end the batch.
     /// </summary>
     public static async Task OutboxDispatchesAnItemWhoseClaimLapsedWhileWaitingOnceAsync(Func<RuntimeDbContext> createContext)
     {

@@ -17,6 +17,7 @@ using Elsa.Workflows.Runtime.Services.Scheduler;
 using Elsa.Workflows.Runtime.Services.Values;
 using Elsa.Workflows.Runtime.Services.WorkHandlers;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
@@ -120,6 +121,7 @@ public sealed class RuntimeStartCommandSchedulingTests
             queue,
             new IncrementingRuntimeExecutionIdGenerator(),
             new FakeTimeProvider(_now),
+            workflowStore,
             incidentStrategyCatalog: provider.GetRequiredService<IIncidentStrategyCatalog>(),
             checkpointCommitter: committer);
 
@@ -470,13 +472,61 @@ public sealed class RuntimeStartCommandSchedulingTests
     }
 
     [Fact]
+    public async Task HandleAsync_StartForExecutionAlreadyStartedForSameArtifact_ConvergesWithoutEnqueuingWork()
+    {
+        var (handler, queue, logger, workItem) = await NewGuardScenarioAsync(existingArtifactId: "artifact-1");
+
+        await handler.HandleAsync(workItem);
+
+        Assert.Empty(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        Assert.Equal(68115, Assert.Single(logger.EventIds).Id);
+    }
+
+    [Fact]
+    public async Task HandleAsync_StartForExecutionOwnedByAnotherArtifact_IsRefusedWithoutEnqueuingWork()
+    {
+        var (handler, queue, logger, workItem) = await NewGuardScenarioAsync(existingArtifactId: "artifact-other");
+
+        await handler.HandleAsync(workItem);
+
+        Assert.Empty(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        Assert.Equal(68116, Assert.Single(logger.EventIds).Id);
+    }
+
+    private async Task<(WorkflowStartSchedulerWorkHandler Handler, InMemoryWorkflowSchedulerWorkQueue Queue, RecordingLogger<WorkflowStartSchedulerWorkHandler> Logger, RuntimeSchedulerWorkItem WorkItem)> NewGuardScenarioAsync(string existingArtifactId)
+    {
+        var executableStore = new InMemoryWorkflowExecutableStore();
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var workflowStore = new InMemoryWorkflowExecutionStateStore();
+        var logger = new RecordingLogger<WorkflowStartSchedulerWorkHandler>();
+        var executable = NewExecutable(["node-start"], ["node-start"]);
+        await executableStore.SaveAsync(executable);
+        await workflowStore.SaveAsync(new WorkflowExecutionState(
+            "wfexec-1",
+            executable.Identity with { ArtifactId = existingArtifactId },
+            WorkflowExecutionStatus.Running,
+            null,
+            _now,
+            _now,
+            _now,
+            null,
+            null,
+            null,
+            null,
+            new Dictionary<string, string>()));
+
+        return (NewHandler(executableStore, queue, workflowStore, logger), queue, logger, NewStartWorkItem(executable.Identity));
+    }
+
+    [Fact]
     public void CanHandle_AcceptsOnlyStartCommandWork()
     {
         var handler = new WorkflowStartSchedulerWorkHandler(
             new InMemoryWorkflowExecutableStore(),
             new InMemoryWorkflowSchedulerWorkQueue(),
             new IncrementingRuntimeExecutionIdGenerator(),
-            new FakeTimeProvider(_now));
+            new FakeTimeProvider(_now),
+            new InMemoryWorkflowExecutionStateStore());
 
         Assert.True(handler.CanHandle(NewStartWorkItem(NewIdentity())));
         Assert.False(handler.CanHandle(NewStartWorkItem(NewIdentity(), WorkflowExecutionCommandKind.ScheduleActivity)));
@@ -512,8 +562,28 @@ public sealed class RuntimeStartCommandSchedulingTests
 
     private WorkflowStartSchedulerWorkHandler NewHandler(
         IWorkflowExecutableStore store,
-        IWorkflowSchedulerWorkQueue queue) =>
-        new(store, queue, new IncrementingRuntimeExecutionIdGenerator(), new FakeTimeProvider(_now));
+        IWorkflowSchedulerWorkQueue queue,
+        IWorkflowExecutionStateStore? workflowStore = null,
+        ILogger<WorkflowStartSchedulerWorkHandler>? logger = null) =>
+        new(
+            store,
+            queue,
+            new IncrementingRuntimeExecutionIdGenerator(),
+            new FakeTimeProvider(_now),
+            workflowStore ?? new InMemoryWorkflowExecutionStateStore(),
+            logger: logger);
+
+    private sealed class RecordingLogger<T> : ILogger<T>
+    {
+        public List<EventId> EventIds { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
+            EventIds.Add(eventId);
+    }
 
     private WorkflowCheckpointSchedulerWorkHandler NewCheckpointHandler(
         IActivityExecutionStateStore activityStateStore,

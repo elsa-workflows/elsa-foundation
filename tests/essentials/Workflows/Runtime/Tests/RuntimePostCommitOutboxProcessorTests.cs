@@ -701,7 +701,7 @@ public sealed class RuntimePostCommitOutboxProcessorTests
     }
 
     [Fact]
-    public async Task Processor_ItemWhoseClaimLapsedWhileWaiting_IsDispatchedOnce_InFlightItemMayRepeat_StaleCompletionDoesNotEndBatch()
+    public async Task Processor_WaitingItemDispatchedOnce_InFlightItemMayRepeat()
     {
         // #2195. The first dispatch outlives the one-minute claim on the whole batch, so a peer re-claims and delivers both
         // items meanwhile. The waiting item, whose claim lapsed before its turn, must not be dispatched again. The in-flight
