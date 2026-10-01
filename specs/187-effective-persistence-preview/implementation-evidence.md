@@ -23,6 +23,8 @@ The full actor, same-capture preparer, lifecycle and mutation evidence remains i
 
 This supplies T020's missing resulting-main verification and completes the bounded #2177 implementation delivery. The program remains open. Separate schema-counter correction [#2250](https://github.com/elsa-workflows/elsa-foundation/pull/2250), the unexplained Event-bookmark incident in [#2216](https://github.com/elsa-workflows/elsa-foundation/issues/2216), and the [bounded SQLite cleanup investigation](../../docs/reports/sqlite-test-cleanup-probe.md) remain tracked; their causes and closure are not inferred from a green main run. Their review/verification ownership does not convert a completed file-only feature into external-provider or production-builder delivery. The next runtime-composition leaf is [#2184](https://github.com/elsa-workflows/elsa-foundation/issues/2184).
 
+Provider-state refresh (2026-10-01): GitHub records #2216 closed at `2026-10-01T13:27:14Z`; that closure does not supply a cause for the earlier Event-bookmark failure. #2185 remains open. PR #2250 merged as `dc79b23327d4de73661daa3f00694178ff37693e`; its exact resulting-main CI, Maps, filters, Code Quality and Packages passed, while Docker was cancelled. Its separate six-workflow checkpoint remains incomplete. This does not alter the six successful workflows at main `7bee192e9` that prove #2177 delivery.
+
 Earlier checkpoints below are retained history; their then-pending gate statements are superseded only by this explicit exact-main audit.
 
 ## Foundations: T001–T004

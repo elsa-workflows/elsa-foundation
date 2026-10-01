@@ -1,7 +1,7 @@
 # Tasks: Effective persistence preview
 
 **Input**: [plan](plan.md), [spec](spec.md), research, data model and contracts.
-Delivery verified (2026-10-01): T001–T020 are complete for the bounded file-only candidate-inspection actor. PR #2183 merged as e4a699879; actual verified resulting main `7bee192e9` contains it and all six delivery workflows pass. See the current delivery audit in [implementation-evidence.md](implementation-evidence.md) for exact branch/main identities, actual job/log results and retained native/mutation limits. Earlier dated checkpoints below describe their then-current state. Program outcomes beyond spec187 and independently tracked #2216/#2185/#2250 corrections remain open.
+Delivery verified (2026-10-01): T001–T020 are complete for the bounded file-only candidate-inspection actor. PR #2183 merged as e4a699879; actual verified resulting main `7bee192e9` contains it and all six delivery workflows pass. See the current delivery audit in [implementation-evidence.md](implementation-evidence.md) for exact branch/main identities, actual job/log results and retained native/mutation limits. Earlier dated checkpoints below describe their then-current state. Program outcomes beyond spec187 and separately tracked incident causes/correction verification remain incomplete; GitHub #2216 is closed without an established bookmark-failure cause, #2185 remains open, and #2250 merged with its own resulting-main checkpoint still incomplete.
 
 ## Phase 1: Setup
 
