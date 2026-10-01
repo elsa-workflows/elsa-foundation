@@ -83,3 +83,31 @@ public sealed record RuntimeSchedulerWorkQuery : RuntimeStorePageRequest
 
     public string WorkflowExecutionId { get; }
 }
+
+/// <summary>
+/// One bounded page of claimable-backlog discovery; see
+/// <see cref="Contracts.IWorkflowSchedulerWorkQueue.ListClaimableWorkflowExecutionIdsAsync"/>.
+/// </summary>
+public sealed class RuntimeSchedulerClaimableBacklogQuery
+{
+    public RuntimeSchedulerClaimableBacklogQuery(
+        DateTimeOffset now,
+        int limit = RuntimeStorePageRequest.DefaultLimit,
+        string? afterWorkflowExecutionId = null)
+    {
+        if (afterWorkflowExecutionId is not null)
+            ArgumentException.ThrowIfNullOrWhiteSpace(afterWorkflowExecutionId);
+
+        Now = now;
+        Limit = RuntimeStorePageRequest.ValidateLimit(limit, nameof(limit));
+        AfterWorkflowExecutionId = afterWorkflowExecutionId;
+    }
+
+    /// <summary>The instant claimability is judged at, as <see cref="RuntimeSchedulerWorkClaimRequest.Now"/> would be.</summary>
+    public DateTimeOffset Now { get; }
+
+    public int Limit { get; }
+
+    /// <summary>Exclusive ordinal lower bound, or <see langword="null"/> to start from the first execution.</summary>
+    public string? AfterWorkflowExecutionId { get; }
+}

@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -13,6 +12,7 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Xunit;
+using static Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.SchedulerWorkItems;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 
@@ -265,16 +265,6 @@ public sealed class EfSchedulerWorkQueueStoreTests
         }
     }
 
-    private static RuntimeSchedulerWorkItem Work(string workflowExecutionId, string workItemId, long sequence) =>
-        new(workItemId, workflowExecutionId, $"command-{workItemId}", WorkflowExecutionCommandKind.ScheduleActivity,
-            $"envelope-{workItemId}", $"idempotency-{workItemId}",
-            new DateTimeOffset(2030, 1, 2, 3, 4, 5, TimeSpan.FromHours(1)),
-            new DateTimeOffset(2030, 1, 2, 3, 4, 5, TimeSpan.FromHours(1)),
-            sequence,
-            JsonSerializer.SerializeToElement(new { sequence }),
-            new Dictionary<string, string> { ["command"] = "metadata" },
-            new Dictionary<string, string> { ["envelope"] = "metadata" });
-
     private sealed class TestDatabase(SqliteConnection keeper, string connectionString) : IAsyncDisposable
     {
         public static async Task<TestDatabase> CreateAsync()
@@ -313,11 +303,6 @@ public sealed class EfSchedulerWorkQueueStoreTests
             await Context.DisposeAsync();
             await connection.DisposeAsync();
         }
-    }
-
-    private sealed class FixedAccessor(string scope) : IPersistenceAccessContextAccessor
-    {
-        public PersistenceAccessContext Current { get; } = PersistenceAccessContext.Scoped(new PersistenceScope(scope));
     }
 
     private static async Task SaveSiblingStateAsync(TestFixture fixture, string workflowExecutionId)
