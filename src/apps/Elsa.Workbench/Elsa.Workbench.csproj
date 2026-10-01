@@ -58,10 +58,7 @@
 		<ProjectReference Include="..\..\extensions\Agent\src\Api\Elsa.Agent.Api.csproj" />
 		<ProjectReference Include="..\..\extensions\Agent\src\GitHubCopilot\Elsa.Agent.GitHubCopilot.csproj" />
 		<ProjectReference Include="..\..\extensions\Agent\src\Workflows\Elsa.Agent.Workflows.csproj" />
-		<!--
-			Optional (#2294): composed and mapped only when Elsa:ExtensionBuilder:Enabled is true, see Program.cs. The
-			reference alone adds no routes and no services.
-		-->
+		<!-- Optional (#2294): the reference alone adds nothing; Program.cs composes it behind Elsa:ExtensionBuilder:Enabled. -->
 		<ProjectReference Include="..\..\extensions\ExtensionBuilder\src\Api\Elsa.ExtensionBuilder.Api.csproj" />
 		<ProjectReference Include="..\..\essentials\Attention\Core\Elsa.Attention.Core.csproj" />
 		<ProjectReference Include="..\..\essentials\Attention\Api\Elsa.Attention.Api.csproj" />

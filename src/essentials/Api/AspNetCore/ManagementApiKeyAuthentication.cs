@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Elsa.Modularity.Api.Authorization;
+namespace Elsa.Api.AspNetCore;
 
 /// <summary>
 /// Authentication primitive for the host-control surfaces a host maps on its root route builder (module

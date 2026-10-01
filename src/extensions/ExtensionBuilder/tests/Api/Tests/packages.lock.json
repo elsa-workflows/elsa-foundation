@@ -41,29 +41,10 @@
         "resolved": "3.1.5",
         "contentHash": "tKi7dSTwP4m5m9eXPM2Ime4Kn7xNf4x4zT9sdLO/G4hZVnQCRiMTWoSZqI/pYTVeI27oPPqHBKYI/DjJ9GsYgA=="
       },
-      "Humanizer.Core": {
-        "type": "Transitive",
-        "resolved": "3.0.10",
-        "contentHash": "yZIhtw8sYuvsONzQbZxWpR60tMWYHXoo0DL6nyOqSFiU5POjBTSEyWFpTQtJEZuy+oqiYTXKXY/Mjx7KnqIQFw=="
-      },
       "JetBrains.Annotations": {
         "type": "Transitive",
         "resolved": "2025.2.4",
         "contentHash": "TwbgxAkXxY+vNEhNVx/QXjJ4vqxmepOjsgRvvImQPbHkHMMb4W+ahL3laMsxXKtNT7iMy+E1B3xkqao2hf1n3A=="
-      },
-      "Json.More.Net": {
-        "type": "Transitive",
-        "resolved": "3.0.1",
-        "contentHash": "fRctF2J2SILYG6wqP21drmeEODmCVkVQ/b3MndDu2fT1swfySyUgq7ePCk+aENGlDcIm05fyfjh9vcuqDEfv3w=="
-      },
-      "JsonPointer.Net": {
-        "type": "Transitive",
-        "resolved": "7.0.1",
-        "contentHash": "5C497yxfktYFsqxKG+GUQPsMvBqIjzLkqtDEdMGsnBpl3/OB8DOvTo7LEyRX7AVc1kVVj0IX5zhmLrlbvAYEnw==",
-        "dependencies": {
-          "Humanizer.Core": "3.0.10",
-          "Json.More.Net": "3.0.1"
-        }
       },
       "Microsoft.CodeCoverage": {
         "type": "Transitive",
@@ -74,11 +55,6 @@
         "type": "Transitive",
         "resolved": "10.1.0",
         "contentHash": "M3JWrgZMkVzyEybZzNkTiC/e8U1ipXTi8xm8bj+PHHp4AcEmhmIEqnxRS0VHVCKZjLkOPt2hY2CIisUFQ6gqLA=="
-      },
-      "Microsoft.Extensions.DependencyModel": {
-        "type": "Transitive",
-        "resolved": "10.0.1",
-        "contentHash": "IiWPd4j8JLNjSkyXl5hvJwX2ZENDVQVPDHYgZmYdw8+YkY2xp9iQt0vjdnAQZLpo/ipeW1xgOqfSBEnivKWPYQ=="
       },
       "Microsoft.Extensions.Diagnostics.ExceptionSummarization": {
         "type": "Transitive",
@@ -255,9 +231,6 @@
           "NativeEndpoints": "[1.0.0-preview.6, )"
         }
       },
-      "elsa.attention.core": {
-        "type": "Project"
-      },
       "elsa.cluster.core": {
         "type": "Project",
         "dependencies": {
@@ -288,7 +261,6 @@
           "Elsa.Foundation.Identity": "[4.0.0-dev, )",
           "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )",
           "Elsa.Git": "[4.0.0-dev, )",
-          "Elsa.Modularity.Api": "[4.0.0-dev, )",
           "Elsa.Modularity.Core": "[4.0.0-dev, )",
           "Nuplane.Admin": "[0.0.11-preview.94, )"
         }
@@ -308,49 +280,14 @@
       "elsa.git": {
         "type": "Project"
       },
-      "elsa.modularity.api": {
-        "type": "Project",
-        "dependencies": {
-          "CShells.Abstractions": "[0.0.30-preview.159, )",
-          "CShells.AspNetCore.Abstractions": "[0.0.30-preview.159, )",
-          "Elsa.Api.AspNetCore": "[4.0.0-dev, )",
-          "Elsa.Attention.Core": "[4.0.0-dev, )",
-          "Elsa.Cluster.Core": "[4.0.0-dev, )",
-          "Elsa.Foundation.Identity": "[4.0.0-dev, )",
-          "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )",
-          "Elsa.Modularity.Core": "[4.0.0-dev, )",
-          "Elsa.Modularity.Nuplane": "[4.0.0-dev, )",
-          "NativeEndpoints": "[1.0.0-preview.6, )"
-        }
-      },
       "elsa.modularity.core": {
         "type": "Project"
-      },
-      "elsa.modularity.nuplane": {
-        "type": "Project",
-        "dependencies": {
-          "CShells": "[0.0.30-preview.159, )",
-          "Elsa.Modularity.Core": "[4.0.0-dev, )",
-          "Elsa.Specifications.PackageManifests": "[0.0.1-preview.8, )",
-          "Nuplane.Admin": "[0.0.11-preview.94, )"
-        }
       },
       "elsa.persistence.schema": {
         "type": "Project"
       },
       "elsa.primitives": {
         "type": "Project"
-      },
-      "CShells": {
-        "type": "CentralTransitive",
-        "requested": "[0.0.30-preview.159, )",
-        "resolved": "0.0.30-preview.159",
-        "contentHash": "x6qrRjUbjj9FbgeeqgUWrDoSxbW48zna/cvXhZYJGsKBmnS0cErPY/+QiFSmuAzXrcwuf9nDBod5DK7BbpIReA==",
-        "dependencies": {
-          "CShells.Abstractions": "0.0.30-preview.159",
-          "JetBrains.Annotations": "2025.2.4",
-          "Microsoft.Extensions.DependencyModel": "10.0.1"
-        }
       },
       "CShells.Abstractions": {
         "type": "CentralTransitive",
@@ -369,24 +306,6 @@
         "dependencies": {
           "CShells.Abstractions": "0.0.30-preview.159",
           "JetBrains.Annotations": "2025.2.4"
-        }
-      },
-      "Elsa.Specifications.PackageManifests": {
-        "type": "CentralTransitive",
-        "requested": "[0.0.1-preview.8, )",
-        "resolved": "0.0.1-preview.8",
-        "contentHash": "d5Ka7jRMEJ5pzxNXPAWtCmfssmXz2/PtLo5bbXcod7K0ZcuCvUMmDZUEIkF6TlGO00dBBT07kTs3ShuNv58PRQ==",
-        "dependencies": {
-          "JsonSchema.Net": "9.2.0"
-        }
-      },
-      "JsonSchema.Net": {
-        "type": "CentralTransitive",
-        "requested": "[9.2.0, )",
-        "resolved": "9.2.0",
-        "contentHash": "pc1hr16zNQSxVsOSIYWliE3rtl5E4MwRXReflPf60l5tSvzMfl65eJV6M+iPXhZ2Ui5o078LJ2pS9O1o5ZT1zQ==",
-        "dependencies": {
-          "JsonPointer.Net": "7.0.1"
         }
       },
       "NativeEndpoints": {

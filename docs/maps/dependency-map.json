@@ -10130,11 +10130,6 @@
         },
         {
           "type": "internal",
-          "id": "Elsa.Modularity.Api",
-          "path": "src/essentials/Modularity/Api/Elsa.Modularity.Api.csproj"
-        },
-        {
-          "type": "internal",
           "id": "Elsa.Modularity.Core",
           "path": "src/essentials/Modularity/Core/Elsa.Modularity.Core.csproj"
         },
@@ -10145,11 +10140,6 @@
         },
         {
           "type": "pinned-transitive",
-          "id": "CShells",
-          "version": "0.0.30-preview.159"
-        },
-        {
-          "type": "pinned-transitive",
           "id": "CShells.Abstractions",
           "version": "0.0.30-preview.159"
         },
@@ -10157,16 +10147,6 @@
           "type": "pinned-transitive",
           "id": "CShells.AspNetCore.Abstractions",
           "version": "0.0.30-preview.159"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Elsa.Specifications.PackageManifests",
-          "version": "0.0.1-preview.8"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "JsonSchema.Net",
-          "version": "9.2.0"
         },
         {
           "type": "pinned-transitive",

@@ -3,7 +3,6 @@ using System.Text.Json.Nodes;
 using System.Text;
 using System.Xml.Linq;
 using Elsa.Api.AspNetCore;
-using Elsa.Modularity.Api.Authorization;
 using Elsa.Modularity.Core.Contracts;
 using Elsa.Modularity.Core.Models;
 using Microsoft.AspNetCore.Mvc;

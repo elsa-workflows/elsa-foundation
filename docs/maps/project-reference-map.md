@@ -8,7 +8,7 @@ Records direct project references only.
 
 - Source projects: 139
 - Test projects: 134
-- Direct project references: 1279
+- Direct project references: 1278
 
 ## Projects
 
@@ -156,7 +156,7 @@ Records direct project references only.
 | [Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.ProviderTests](../../src/extensions/Elsa3/tests/Activities/Design/Import/Persistence/EntityFrameworkCore/ProviderTests/Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.ProviderTests.csproj) | test | Elsa3 | - | false | Elsa.Serialization.SystemText<br>Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore<br>Elsa3.Mapping |
 | [Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.Tests](../../src/extensions/Elsa3/tests/Activities/Design/Import/Persistence/EntityFrameworkCore/Tests/Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.Tests.csproj) | test | Elsa3 | - | false | Elsa.Serialization.SystemText<br>Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore<br>Elsa3.Mapping |
 | [Elsa3.Mapping.Tests](../../src/extensions/Elsa3/tests/Mapping/Tests/Elsa3.Mapping.Tests.csproj) | test | Elsa3 | - | false | Elsa.Serialization.SystemText<br>Elsa3.Mapping |
-| [Elsa.ExtensionBuilder.Api](../../src/extensions/ExtensionBuilder/src/Api/Elsa.ExtensionBuilder.Api.csproj) | source | Elsa.ExtensionBuilder | - | true | Elsa.Api.AspNetCore<br>Elsa.Cluster.Readability<br>Elsa.Foundation.Identity<br>Elsa.Foundation.Identity.Core<br>Elsa.Git<br>Elsa.Modularity.Api<br>Elsa.Modularity.Core |
+| [Elsa.ExtensionBuilder.Api](../../src/extensions/ExtensionBuilder/src/Api/Elsa.ExtensionBuilder.Api.csproj) | source | Elsa.ExtensionBuilder | - | true | Elsa.Api.AspNetCore<br>Elsa.Cluster.Readability<br>Elsa.Foundation.Identity<br>Elsa.Foundation.Identity.Core<br>Elsa.Git<br>Elsa.Modularity.Core |
 | [Elsa.ExtensionBuilder.Api.Tests](../../src/extensions/ExtensionBuilder/tests/Api/Tests/Elsa.ExtensionBuilder.Api.Tests.csproj) | test | Elsa.ExtensionBuilder | - | false | Elsa.ExtensionBuilder.Api<br>Elsa.Git<br>Elsa.Modularity.Core |
 | [Elsa.Activities.Behavioral.Tests](../../tests/essentials/Activities/Behavioral/Tests/Elsa.Activities.Behavioral.Tests.csproj) | test | Elsa.Activities | - | false | Elsa.Activities.Bpmn<br>Elsa.Activities.ControlFlow<br>Elsa.Activities.DispatchWorkflow.Runtime<br>Elsa.Activities.Flowchart<br>Elsa.Activities.Graph.Runtime<br>Elsa.Activities.Http<br>Elsa.Activities.Primitives<br>Elsa.Activities.Runtime<br>Elsa.Activities.Runtime.Core<br>Elsa.Activities.Scheduling<br>Elsa.Activities.Scripting<br>Elsa.Activities.Sequence<br>Elsa.Activities.Testing<br>Elsa.Expressions.JavaScript<br>Elsa.Expressions.JavaScript.Jint<br>Elsa.Http<br>Elsa.Serialization.SystemText<br>Elsa.Workflows.Runtime.Api<br>Elsa.Workflows.Runtime.Core<br>Elsa.Workflows.Runtime.Resumption<br>Elsa.Workflows.Runtime.Scheduling |
 | [Elsa.Activities.Bpmn.Interchange.Tests](../../tests/essentials/Activities/Bpmn/Interchange/Tests/Elsa.Activities.Bpmn.Interchange.Tests.csproj) | test | Elsa.Activities | - | false | Elsa.Activities.Bpmn<br>Elsa.Activities.Bpmn.Interchange |

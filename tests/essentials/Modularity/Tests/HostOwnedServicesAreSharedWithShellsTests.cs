@@ -5,6 +5,7 @@ using CShells.Lifecycle;
 using Elsa.Attention.Core;
 using Elsa.Cluster.Core.Contracts;
 using Elsa.Cluster.Core.Models;
+using Elsa.ExtensionBuilder.Api.Extensions;
 using Elsa.Foundation.Host.ModuleManagement;
 using Elsa.Foundation.Host.Shells;
 using Elsa.Persistence.Schema.SchemaFinalization;
@@ -137,7 +138,7 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
     {
         using var content = ContentRoot.For(host);
         string[] arguments = extensionBuilder
-            ? [.. content.Arguments(durableMembership), "--Elsa:ExtensionBuilder:Enabled", "true"]
+            ? [.. content.Arguments(durableMembership), $"--{ExtensionBuilderServiceCollectionExtensions.EnabledConfigurationKey}", "true"]
             : content.Arguments(durableMembership);
         using var built = BuiltHost.Run(EntryAssembly(host), arguments);
         var root = built.Host.Services;

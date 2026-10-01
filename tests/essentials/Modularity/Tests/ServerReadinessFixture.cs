@@ -5,7 +5,7 @@ using CShells.AspNetCore.Extensions;
 using CShells.DependencyInjection;
 using CShells.Features;
 using CShells.Lifecycle;
-using Elsa.Modularity.Api.Authorization;
+using Elsa.Api.AspNetCore;
 using Elsa.Workbench;
 using Elsa.Workbench.Composition;
 using Elsa.Workbench.Readiness;

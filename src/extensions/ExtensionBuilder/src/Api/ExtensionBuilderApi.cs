@@ -1,6 +1,5 @@
 using System.Security.Claims;
 using Elsa.Api.AspNetCore;
-using Elsa.Modularity.Api.Authorization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;

@@ -44,7 +44,6 @@ using Elsa.Locking.FileSystem;
 using Elsa.Mediator;
 using Elsa.Modularity.Api;
 using Elsa.Modularity.Api.Attention;
-using Elsa.Modularity.Api.Authorization;
 using Elsa.Modularity.Core.Contracts;
 using Elsa.Modularity.EntityFramework.Extensions;
 using Elsa.Modularity.Nuplane.Extensions;
@@ -203,11 +202,9 @@ builder.Services.AddHostedService(services => services.GetRequiredService<Defaul
 
 // Extension Builder is an optional extension (#2294) and a root-hosted subsystem: root singletons, a background build
 // worker and management endpoints mapped on the root route builder below, none of which can live in a shell container.
-// It is composed here, at the application root, only when Elsa:ExtensionBuilder:Enabled is set (off unless set, like
-// ConsoleLogStreaming), and its endpoints are additionally gated by the management API key. Both the composition and
-// the mapping (MapElsaExtensionBuilderApi below) honor the switch, so a host that leaves it off has no trace of the
-// subsystem; a change takes effect on the next startup.
-var extensionBuilderEnabled = bool.TryParse(configuration["Elsa:ExtensionBuilder:Enabled"], out var ebEnabled) && ebEnabled;
+// Both the composition here and the mapping (MapElsaExtensionBuilderApi below) honor the switch, so a host that leaves
+// it off has no trace of the subsystem; a change takes effect on the next startup.
+var extensionBuilderEnabled = ExtensionBuilderServiceCollectionExtensions.IsEnabled(configuration);
 if (extensionBuilderEnabled)
     builder.Services.AddElsaExtensionBuilder(configuration);
 

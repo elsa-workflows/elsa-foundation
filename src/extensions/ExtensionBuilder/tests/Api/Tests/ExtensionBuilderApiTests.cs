@@ -1,8 +1,9 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.RegularExpressions;
+using Elsa.Api.AspNetCore;
 using Elsa.ExtensionBuilder.Api.Extensions;
-using Elsa.Modularity.Api.Authorization;
 using Elsa.Modularity.Core.Contracts;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -27,6 +28,7 @@ public sealed class ExtensionBuilderApiTests : IAsyncDisposable
 {
     private const string ManagementKey = "extension-builder-api-tests-key";
     private const string Prefix = "/_elsa/extension-builder";
+    private static readonly Regex RouteParameter = new(@"\{\*?\w+\}");
 
     /// <summary>Every route, as <c>METHOD template</c> under <see cref="Prefix"/>: the 42 that #1635 removed and #2294 restored.</summary>
     private static readonly string[] Routes =
@@ -99,11 +101,12 @@ public sealed class ExtensionBuilderApiTests : IAsyncDisposable
     {
         var client = Client(await StartAsync(configuredKey), providedKey);
 
-        using var capabilities = await client.GetAsync($"{Prefix}/capabilities");
-        using var templates = await client.GetAsync($"{Prefix}/templates");
-
-        Assert.Equal(expected, capabilities.StatusCode);
-        Assert.Equal(expected, templates.StatusCode);
+        foreach (var route in Routes)
+        {
+            using var request = Request(route);
+            using var response = await client.SendAsync(request);
+            Assert.True(response.StatusCode == expected, $"{route} answered {(int)response.StatusCode}, not {(int)expected}.");
+        }
     }
 
     [Fact]
@@ -152,7 +155,7 @@ public sealed class ExtensionBuilderApiTests : IAsyncDisposable
         builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
         {
             [ManagementApiKeyAuthentication.ConfigurationKey] = managementKey,
-            ["Elsa:ExtensionBuilder:StoragePath"] = Path.Combine(_directory, "state")
+            [$"{ExtensionBuilderServiceCollectionExtensions.ConfigurationSection}:StoragePath"] = Path.Combine(_directory, "state")
         });
         builder.Services.AddSingleton<INuplaneAdminOperations>(new FakeNuplaneAdmin());
         builder.Services.AddSingleton<IFeatureManagementService>(new FakeFeatureManagement());
@@ -165,6 +168,20 @@ public sealed class ExtensionBuilderApiTests : IAsyncDisposable
         app.MapElsaExtensionBuilderApi();
         await app.StartAsync();
         return app;
+    }
+
+    /// <summary>
+    /// A request for a <see cref="Routes"/> entry, with every route parameter given a sample value. Minimal APIs bind before
+    /// they run endpoint filters, so the request supplies what a route must bind: the required <c>staged</c> query value of
+    /// the diff route, and, on anything but a GET, an empty JSON body.
+    /// </summary>
+    private static HttpRequestMessage Request(string route)
+    {
+        var parts = route.Split(' ');
+        var request = new HttpRequestMessage(new HttpMethod(parts[0]), $"{Prefix}{RouteParameter.Replace(parts[1], "sample")}?staged=false");
+        if (parts[0] != "GET")
+            request.Content = JsonContent.Create(new { });
+        return request;
     }
 
     private static HttpClient Client(WebApplication app, string? managementKey)

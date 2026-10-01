@@ -1,6 +1,5 @@
 using CShells.Lifecycle;
 using Elsa.Api.AspNetCore;
-using Elsa.Modularity.Api.Authorization;
 using Elsa.Workbench.Readiness;
 using Microsoft.Extensions.Options;
 

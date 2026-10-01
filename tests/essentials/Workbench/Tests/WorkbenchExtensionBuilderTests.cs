@@ -32,10 +32,25 @@ public sealed class WorkbenchExtensionBuilderTests
         }
     };
 
-    [Fact]
-    public async Task A_stock_workbench_has_no_extension_builder_routes()
+    /// <summary>How the switch reaches a stock host: as appsettings.json commits it, or left out, or nulled, by an operator.</summary>
+    public enum StockSwitch { AsCommitted, Removed, Null }
+
+    /// <summary>Off unless set: a switch that is absent or null must not turn it on, as the parse before #1635 did.</summary>
+    [Theory]
+    [InlineData(StockSwitch.AsCommitted)]
+    [InlineData(StockSwitch.Removed)]
+    [InlineData(StockSwitch.Null)]
+    public async Task A_stock_workbench_has_no_extension_builder_routes(StockSwitch stockSwitch)
     {
-        await using var workbench = await WorkbenchProcess.StartAsync(WorkbenchShell.Development);
+        string[] enabled = ["Elsa", "ExtensionBuilder", "Enabled"];
+        await using var workbench = await WorkbenchProcess.StartAsync(WorkbenchShell.Development, contentRoot =>
+        {
+            var appSettings = Path.Join(contentRoot, "appsettings.json");
+            if (stockSwitch == StockSwitch.Removed)
+                WorkbenchConfigurationFile.RemoveValue(appSettings, enabled);
+            else if (stockSwitch == StockSwitch.Null)
+                WorkbenchConfigurationFile.WriteValue(appSettings, enabled, null);
+        });
 
         using var response = await workbench.ManagementClient.GetAsync($"{Api}/capabilities");
 
