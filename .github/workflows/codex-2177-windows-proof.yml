@@ -18,7 +18,7 @@ jobs:
       - name: Verify production source matches the reviewed head
         shell: pwsh
         run: |
-          $changed = @(git diff --name-only c82ced1935ffd0ff011f86046b325f51427ba3e4 HEAD)
+          $changed = @(git diff --name-only 42ad77d8d0ac6f2196fe1cfd9ab5866f8f1935d2 HEAD)
           if ($changed.Count -ne 1 -or $changed[0] -ne '.github/workflows/codex-2177-windows-proof.yml') { throw 'Validation branch contains other changes.' }
       - uses: actions/setup-dotnet@v4
         with:
@@ -26,11 +26,11 @@ jobs:
       - name: Exercise native Windows ownership and file handles
         shell: pwsh
         run: |
-          dotnet test tests/essentials/Cli/Tests/Elsa.Cli.Tests.csproj --configuration Release --filter 'FullyQualifiedName~Candidate_worker_process_|FullyQualifiedName~Default_candidate_reader_still_captures_regular_files|FullyQualifiedName~Native_opener_checks_same_handle_type_and_closes_owned_regular_handle' --logger 'trx;LogFileName=windows-native.trx' --results-directory artifacts
+          dotnet test tests/essentials/Cli/Tests/Elsa.Cli.Tests.csproj --configuration Release --filter 'FullyQualifiedName~Candidate_worker_process_|FullyQualifiedName~Default_candidate_reader_still_captures_regular_files|FullyQualifiedName~Native_opener_checks_same_handle_type_and_closes_owned_regular_handle|FullyQualifiedName~Candidate_reader_retains_all_windows_ancestor_handles_during_preflight|FullyQualifiedName~Candidate_reader_refuses_a_junction_parent_exchanged_after_preflight_on_windows|FullyQualifiedName~Regular_file_open_lease_' --logger 'trx;LogFileName=windows-native.trx' --results-directory artifacts
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           [xml]$trx = Get-Content artifacts/windows-native.trx
           $counts = $trx.TestRun.ResultSummary.Counters
-          if ([int]$counts.total -ne 8 -or [int]$counts.executed -ne 8 -or [int]$counts.passed -ne 8 -or [int]$counts.failed -ne 0 -or [int]$counts.notExecuted -ne 0) { throw 'Required native test counters were not established.' }
+          if ([int]$counts.total -ne 16 -or [int]$counts.executed -ne 16 -or [int]$counts.passed -ne 16 -or [int]$counts.failed -ne 0 -or [int]$counts.notExecuted -ne 0) { throw 'Required native test counters were not established.' }
       - uses: actions/upload-artifact@v4
         if: always()
         with:
