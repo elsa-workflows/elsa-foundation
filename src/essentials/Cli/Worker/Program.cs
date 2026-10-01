@@ -1,11 +1,29 @@
 using Elsa.Cli.Worker;
 using System.Text.Json;
 
+var ownerMode = args.Length == 7 && args[0] == "--candidate-inspection" && args[1] == "--candidate-owner";
+var candidateMode = args is ["--candidate-inspection"];
+
+using var cancellation = new CancellationTokenSource();
+Console.CancelKeyPress += (_, eventArgs) =>
+{
+    eventArgs.Cancel = true;
+    cancellation.Cancel();
+};
+
+if (ownerMode)
+{
+    // The supervisor's stdout/stderr are the forwarded private candidate transport. It never emits its own
+    // diagnostics on either stream, and closes the native handles after the payload status is sent.
+    Console.SetOut(TextWriter.Null);
+    Console.SetError(TextWriter.Null);
+    return await CandidateProcessOwner.RunSupervisorAsync(args, cancellation.Token);
+}
+
 // The worker speaks exactly one protocol on exactly two streams: a request in, one response out. Anything
 // else the host's closure decides to print — a logger, a module's own Console.WriteLine — is redirected to
 // stderr in normal mode. Candidate mode suppresses both console streams because configuration is private.
 var response = Console.OpenStandardOutput();
-var candidateMode = args is ["--candidate-inspection"];
 if (candidateMode)
 {
     // Suppress both managed console streams before parsing or loading any selected host code.
@@ -14,13 +32,6 @@ if (candidateMode)
 }
 else
     Console.SetOut(Console.Error);
-
-using var cancellation = new CancellationTokenSource();
-Console.CancelKeyPress += (_, eventArgs) =>
-{
-    eventArgs.Cancel = true;
-    cancellation.Cancel();
-};
 
 WorkerResponse result;
 try
