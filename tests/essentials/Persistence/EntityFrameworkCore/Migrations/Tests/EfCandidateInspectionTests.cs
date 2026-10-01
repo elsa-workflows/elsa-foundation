@@ -1480,6 +1480,8 @@ public sealed class EfCandidateInspectionTests : IDisposable
             "host-default-readds-removed-runtime" => [Runtime],
             _ => []
         };
+        if (removedFeatureIdsOverride is { Count: > 0 })
+            accepted = accepted.Where(id => !removedFeatureIdsOverride.Contains(id, StringComparer.Ordinal)).ToArray();
         if (scenario == "host-default-readds-removed-runtime")
             accepted = accepted.Where(id => !StringComparer.Ordinal.Equals(id, Runtime)).ToArray();
 
