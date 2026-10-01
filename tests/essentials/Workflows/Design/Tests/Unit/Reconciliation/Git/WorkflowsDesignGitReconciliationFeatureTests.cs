@@ -8,6 +8,7 @@ using Elsa.Workflows.Design.Reconciliation.Git.Services;
 using Elsa.Workflows.Design.Reconciliation.Git.Startup;
 using Elsa.Workflows.Design.Reconciliation.Services;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace Elsa.Workflows.Design.Tests.Unit.Reconciliation.Git;
@@ -40,6 +41,15 @@ public sealed class WorkflowsDesignGitReconciliationFeatureTests
     }
 
     [Fact]
+    public void Registers_one_clone_slot_per_shell_that_the_shell_container_releases()
+    {
+        var registration = Assert.Single(Configure(GitReconciliationRole.Writer), d => d.ServiceType == typeof(GitCloneSlot));
+
+        Assert.Equal(ServiceLifetime.Singleton, registration.Lifetime);
+        Assert.NotNull(registration.ImplementationFactory); // created, and so disposed, by the container
+    }
+
+    [Fact]
     public void Consumer_role_registers_no_exporter_or_export_task()
     {
         var services = Configure(GitReconciliationRole.Consumer);
@@ -68,5 +78,68 @@ public sealed class WorkflowsDesignGitReconciliationFeatureTests
         Assert.NotNull(setting);
         var secret = setting!.GetType().GetProperty("Secret")?.GetValue(setting);
         Assert.Equal(true, secret);
+    }
+
+    private static IServiceCollection ConfigureToken(string token, string remoteUrl = "https://git.example.test/acme/wf.git")
+    {
+        var services = new ServiceCollection();
+        new WorkflowsDesignGitReconciliationFeature { RemoteUrl = remoteUrl, CredentialsMode = GitCredentialsMode.Token, Token = token }
+            .ConfigureServices(services);
+        return services;
+    }
+
+    [Theory]
+    [InlineData("fake-token\n", "fake-token")]
+    [InlineData("fake-token\r\n", "fake-token")]
+    [InlineData("fake-token", "fake-token")]
+    public void A_trailing_line_break_is_no_part_of_the_token(string configured, string expected)
+    {
+        var options = (IOptions<GitReconciliationOptions>)ConfigureToken(configured)
+            .Single(d => d.ServiceType == typeof(IOptions<GitReconciliationOptions>)).ImplementationInstance!;
+
+        Assert.Equal(expected, options.Value.Token);
+    }
+
+    [Theory]
+    [InlineData("ab\ncd")]
+    [InlineData("ab\rcd")]
+    [InlineData("ab\0cd")]
+    [InlineData("ab\ncd\n")]
+    public void A_token_holding_a_line_break_or_nul_fails_registration(string token)
+    {
+        Assert.Throws<InvalidOperationException>(() => ConfigureToken(token));
+    }
+
+    [Fact]
+    public void A_line_break_in_the_token_is_not_checked_outside_token_mode()
+    {
+        var feature = new WorkflowsDesignGitReconciliationFeature { RemoteUrl = "git@example.com:acme/wf.git", Token = "ab\ncd" };
+
+        Assert.Null(Record.Exception(() => feature.ConfigureServices(new ServiceCollection())));
+    }
+
+    [Theory]
+    [InlineData("git@example.com:acme/wf.git")]
+    [InlineData("ssh://git@example.com/acme/wf.git")]
+    [InlineData("/srv/git/wf.git")]
+    [InlineData("")]
+    public void Token_mode_with_a_remote_that_is_not_http_fails_registration(string remoteUrl)
+    {
+        var refusal = Assert.Throws<InvalidOperationException>(() => ConfigureToken("fake-token", remoteUrl));
+
+        Assert.Contains("http(s)", refusal.Message);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(".")]
+    [InlineData("..")]
+    [InlineData("/etc")]
+    [InlineData(":/")]
+    public void An_unusable_workflows_path_fails_registration(string workflowsPath)
+    {
+        var feature = new WorkflowsDesignGitReconciliationFeature { RemoteUrl = "git@example.com:acme/wf.git", WorkflowsPath = workflowsPath };
+
+        Assert.Throws<InvalidOperationException>(() => feature.ConfigureServices(new ServiceCollection()));
     }
 }

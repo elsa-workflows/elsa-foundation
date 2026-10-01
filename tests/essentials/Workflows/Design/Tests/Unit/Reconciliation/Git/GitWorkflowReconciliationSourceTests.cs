@@ -32,7 +32,7 @@ public sealed class GitWorkflowReconciliationSourceTests : GitIntegrationTest
             LocalCachePath = cachePath, Role = GitReconciliationRole.Consumer,
         };
         var opts = GitTestSupport.Options(options);
-        var workspace = new GitWorkspace(_git, opts, NullLogger<GitWorkspace>.Instance);
+        var workspace = GitTestSupport.Workspace(_git, opts);
         var source = new GitWorkflowReconciliationSource(workspace, _git, new FakePayloadSerializer(), opts, NullLogger<GitWorkflowReconciliationSource>.Instance);
 
         return (await source.Read(CancellationToken.None)).ToList();

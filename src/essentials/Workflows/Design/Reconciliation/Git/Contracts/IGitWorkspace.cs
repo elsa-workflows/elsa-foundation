@@ -8,20 +8,32 @@ namespace Elsa.Workflows.Design.Reconciliation.Git.Contracts;
 public interface IGitWorkspace
 {
     /// <summary>
-    /// Clone-if-absent, apply credentials into the clone's git config, then integrate per role: a Writer
-    /// fetches and fast-forward-only merges (a non-ff divergence — the D7 single-writer signal — throws;
-    /// the Writer clone is never <c>reset --hard</c>); a Consumer fetches and <c>reset --hard</c> to the
-    /// remote branch. Returns the absolute repository path.
+    /// Clone-if-absent, then integrate per role. A Consumer
+    /// fetches and <c>reset --hard</c> to the remote branch. A Writer fetches and decides from how its branch
+    /// stands against the remote (#2197): up to date or only ahead, it keeps its unpushed export commits; only
+    /// behind, it fast-forwards; diverged, it resets to the remote when every commit the remote lacks was made
+    /// by the export, judged by author name, author email and committer email (the export regenerates them from the
+    /// catalog), and otherwise stays as it is and logs an error, once per clone until it is found healthy again (up to
+    /// date or only ahead), so a problem that comes back after a repair is logged again. The clone also stays, with an
+    /// error, when moving it would overwrite an uncommitted change outside the workflows path. None of these throws, so a
+    /// clone that cannot be moved never fails a shell start. Under the workflows path a Writer's
+    /// working tree is left at the commit it settles on: uncommitted residue of an interrupted export is discarded,
+    /// so callers read only what is committed. Uncommitted changes elsewhere in the clone are kept. Returns the
+    /// absolute repository path.
     /// </summary>
     Task<string> EnsureReadyAsync(CancellationToken cancellationToken);
 
-    /// <summary>Absolute path to the working clone (valid after <see cref="EnsureReadyAsync"/>).</summary>
+    /// <summary>
+    /// Absolute path to the working clone: an explicit <c>LocalCachePath</c>, else the clone in the shell's clone slot
+    /// (#2197), which the first use takes.
+    /// </summary>
     string RepositoryPath { get; }
 
     /// <summary>
-    /// The per-invocation <c>-c …</c> credential arguments (e.g. <c>core.sshCommand</c>) to prefix onto
-    /// network git commands so nothing secret rides the command line (FR-013). Valid after
-    /// <see cref="EnsureReadyAsync"/>; the exporter reuses them for its push.
+    /// Runs a git command that reaches the remote, such as a fetch or a push, in the clone with the configured
+    /// credentials (FR-013): per-invocation <c>-c …</c> arguments, and for a token an environment variable of that one
+    /// git process that a credential helper reads, so nothing secret rides the command line or is written to disk
+    /// (#2197). The exporter fetches its export branch and pushes through it.
     /// </summary>
-    IReadOnlyList<string> CredentialArgs { get; }
+    Task<string> RunRemoteAsync(CancellationToken cancellationToken, params string[] arguments);
 }
