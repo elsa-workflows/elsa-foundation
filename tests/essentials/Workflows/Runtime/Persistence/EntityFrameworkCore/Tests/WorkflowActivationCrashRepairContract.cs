@@ -47,7 +47,11 @@ internal static class WorkflowActivationCrashRepairContract
         ["projection-switch-is-a-no-op-once-made"] = ProjectionSwitchIsANoOpOnceMadeAsync,
         ["in-flight-activation-and-a-concurrent-completion-agree"] = InFlightActivationAndAConcurrentCompletionAgreeAsync,
         ["in-flight-activation-failing-after-a-completion-restores-the-predecessor"] = InFlightActivationFailingAfterACompletionRestoresThePredecessorAsync,
-        ["completion-retires-a-replaced-reference-left-live"] = CompletionRetiresAReplacedReferenceLeftLiveAsync
+        ["completion-retires-a-replaced-reference-left-live"] = CompletionRetiresAReplacedReferenceLeftLiveAsync,
+        ["projection-switch-is-refused-once-the-replaced-activation-is-off"] = ProjectionSwitchIsRefusedOnceTheReplacedActivationIsOffAsync,
+        ["retry-refuses-projections-a-failed-compensation-left-behind"] = RetryRefusesProjectionsAFailedCompensationLeftBehindAsync,
+        ["completion-leaves-a-predecessor-that-compensation-restored"] = CompletionLeavesAPredecessorThatCompensationRestoredAsync,
+        ["deactivating-turns-off-a-serving-activation-whose-reference-is-retired"] = DeactivatingTurnsOffAServingActivationWhoseReferenceIsRetiredAsync
     };
 
     public static TheoryData<string> Scenarios
@@ -230,8 +234,7 @@ internal static class WorkflowActivationCrashRepairContract
         await using (var stray = Start(open()))
         {
             await stray.PrepareCandidateAsync("activation-stray", "artifact-stray");
-            await stray.Stores.Bindings.ActivateAsync("activation-stray", null);
-            await stray.Stores.Schedules.ActivateAsync("activation-stray", null);
+            await stray.SwitchAsync("activation-stray", null);
         }
 
         await StopAfterSlotTransitionAsync(open, "activation-2", "artifact-2");
@@ -283,15 +286,11 @@ internal static class WorkflowActivationCrashRepairContract
         await node.AssertProjectionsAsync("activation-1", WorkflowActivationProjectionState.Missing);
         await node.PrepareCandidateAsync("activation-1", "artifact-1");
         await node.AssertProjectionsAsync("activation-1", WorkflowActivationProjectionState.Prepared);
-        await node.Stores.Bindings.ActivateAsync("activation-1", null);
-        await node.Stores.Schedules.ActivateAsync("activation-1", null);
+        await node.SwitchAsync("activation-1", null);
         await node.PrepareCandidateAsync("activation-2", "artifact-2");
 
         for (var attempt = 0; attempt < 2; attempt++)
-        {
-            await node.Stores.Bindings.ActivateAsync("activation-2", "activation-1");
-            await node.Stores.Schedules.ActivateAsync("activation-2", "activation-1");
-        }
+            await node.SwitchAsync("activation-2", "activation-1");
 
         await node.AssertProjectionsAsync("activation-2", WorkflowActivationProjectionState.Active);
         await node.AssertProjectionsAsync("activation-1", WorkflowActivationProjectionState.Replaced);
@@ -360,8 +359,7 @@ internal static class WorkflowActivationCrashRepairContract
         await ActivateAsync(open, "activation-1", "artifact-1");
         await StopAfterSlotTransitionAsync(open, "activation-2", "artifact-2");
         await using var node = Start(open());
-        await node.Stores.Bindings.ActivateAsync("activation-2", "activation-1");
-        await node.Stores.Schedules.ActivateAsync("activation-2", "activation-1");
+        await node.SwitchAsync("activation-2", "activation-1");
         await node.PrepareCandidateAsync("activation-3", "artifact-3");
         await node.AssertServingAsync("activation-2");
         await node.AssertLiveAsync("activation-1");
@@ -372,6 +370,137 @@ internal static class WorkflowActivationCrashRepairContract
         await node.AssertConsistentAsync("activation-2", "activation-1");
         await node.AssertLiveAsync("activation-3");
         await node.AssertProjectionsAsync("activation-3", WorkflowActivationProjectionState.Prepared);
+    }
+
+    /// <summary>
+    /// Every projection store, the in-memory ones included, refuses to switch on a candidate whose replaced activation no
+    /// longer serves, which fences a late completion, and refuses a candidate that serves beside its replaced activation.
+    /// Nothing changes on a refusal.
+    /// </summary>
+    private static async Task ProjectionSwitchIsRefusedOnceTheReplacedActivationIsOffAsync(Func<ActivationStores> open)
+    {
+        await using var node = Start(open());
+        await node.PrepareCandidateAsync("activation-1", "artifact-1");
+        await node.SwitchAsync("activation-1", null);
+        await node.PrepareCandidateAsync("activation-2", "artifact-2");
+        await node.SwitchAsync("activation-2", "activation-1");
+        await node.PrepareCandidateAsync("activation-3", "artifact-3");
+
+        await node.AssertSwitchRefusedAsync("activation-3", "activation-1");
+        await node.AssertSwitchRefusedAsync("activation-3", "activation-missing");
+        await node.SwitchAsync("activation-3", null);
+        await node.AssertSwitchRefusedAsync("activation-3", "activation-2");
+
+        await node.AssertProjectionsAsync("activation-1", WorkflowActivationProjectionState.Replaced);
+        await node.AssertServingAsync("activation-2", "activation-3");
+    }
+
+    /// <summary>
+    /// A double fault: an activation fails after its projection switch, and its compensation hands the slot back but
+    /// cannot delete the candidate's projections, so they stay stored as replaced. A retry must not reuse them. They read
+    /// as an activation that served and was replaced, so a completion of the slot that runs once the retry has resumed its
+    /// reference would retire that reference, and the retry would then win the slot and serve with it retired. Preparing
+    /// the activation again is refused instead: the retry fails loudly, its compensation deletes the projections, and the
+    /// next retry activates cleanly.
+    /// </summary>
+    private static async Task RetryRefusesProjectionsAFailedCompensationLeftBehindAsync(Func<ActivationStores> open)
+    {
+        await ActivateAsync(open, "activation-1", "artifact-1");
+        var failingStores = open();
+        await using (var failing = Start(failingStores with { Bindings = new BindingsThatCannotDelete(failingStores.Bindings) }, observer: new FailOnceObserver()))
+        {
+            var failed = await failing.ActivateAsync("activation-2", "artifact-2");
+            Assert.Equal(WorkflowActivationOutcome.Failed, failed.Outcome);
+            Assert.Contains("Candidate projection compensation failed", failed.CompensationDiagnostic);
+        }
+
+        await using var other = Start(open());
+        await other.AssertConsistentAsync("activation-1");
+        await other.AssertProjectionsAsync("activation-2", WorkflowActivationProjectionState.Replaced);
+        var retryStores = open();
+        var reference = WorkflowActivationReferenceIdentity.Create("activation-2");
+        await using var retry = Start(retryStores with
+        {
+            Authority = new AfterSlotRead(
+                retryStores.Authority,
+                async () => (await retryStores.References.FindAsync(reference))?.DeletedAt is null,
+                () => other.Coordinator.CompleteAsync(DefinitionId, SlotName).AsTask())
+        });
+
+        var result = await retry.ActivateAsync("activation-2", "artifact-2");
+
+        Assert.Equal(WorkflowActivationOutcome.Failed, result.Outcome);
+        Assert.Equal(WorkflowActivationStep.ProjectionPreparation, result.FailedStep);
+        Assert.Contains("cannot be prepared again", result.Diagnostic);
+        Assert.Null(result.CompensationDiagnostic);
+        await other.AssertConsistentAsync("activation-1");
+        await other.AssertProjectionsAsync("activation-2", WorkflowActivationProjectionState.Missing);
+        Assert.Equal(WorkflowActivationOutcome.AlreadyActive, (await other.Coordinator.CompleteAsync(DefinitionId, SlotName)).Outcome);
+        Assert.Equal(WorkflowActivationCoordinator.FailedRetireReason, (await other.FindReferenceAsync("activation-2")).DeletedReason);
+
+        Assert.Equal(WorkflowActivationOutcome.Activated, (await other.ActivateAsync("activation-2", "artifact-2")).Outcome);
+        await other.AssertConsistentAsync("activation-2", "activation-1");
+    }
+
+    /// <summary>
+    /// A completion switches an in-flight activation's projections on and reads the slot one last time before retiring
+    /// the predecessor's reference. Just after that read, the in-flight activation fails and its compensation hands the
+    /// slot and the projections back to the predecessor, finding its reference still live. Completion reads the
+    /// predecessor's projection state again before retiring, finds it serving, and leaves its reference alone; otherwise
+    /// the slot would serve an activation whose reference reads as retired.
+    /// </summary>
+    private static async Task CompletionLeavesAPredecessorThatCompensationRestoredAsync(Func<ActivationStores> open)
+    {
+        await ActivateAsync(open, "activation-1", "artifact-1");
+        var resume = new TaskCompletionSource();
+        var inFlightStores = open();
+        var pause = new PauseAfterSlotTransition(inFlightStores.Authority, resume.Task);
+        await using var inFlight = Start(inFlightStores with { Authority = pause }, observer: new FailOnceObserver());
+        var activation = inFlight.ActivateAsync("activation-2", "artifact-2");
+        Assert.Same(pause.Paused, await Task.WhenAny(activation, pause.Paused));
+        var otherStores = open();
+        await using var other = Start(otherStores with
+        {
+            Authority = new AfterSlotRead(
+                otherStores.Authority,
+                async () => await otherStores.Bindings.FindActivationStateAsync("activation-2") == WorkflowActivationProjectionState.Active,
+                async () =>
+                {
+                    resume.SetResult();
+                    Assert.Equal(WorkflowActivationStep.TriggerObserverNotification, (await activation).FailedStep);
+                })
+        });
+
+        var completion = await other.Coordinator.CompleteAsync(DefinitionId, SlotName);
+
+        Assert.Equal(WorkflowActivationOutcome.Activated, completion.Outcome);
+        Assert.Null(completion.ReplacedActivationId);
+        Assert.Null((await activation).CompensationDiagnostic);
+        await other.AssertConsistentAsync("activation-1");
+        Assert.Equal(WorkflowActivationCoordinator.FailedRetireReason, (await other.FindReferenceAsync("activation-2")).DeletedReason);
+    }
+
+    /// <summary>
+    /// The activation an interrupted replacement replaced still serves, but its reference was retired. The projection
+    /// stores still name it for the slot, so unpublishing turns it off too, rather than leaving it serving with nothing
+    /// that would ever find it again.
+    /// </summary>
+    private static async Task DeactivatingTurnsOffAServingActivationWhoseReferenceIsRetiredAsync(Func<ActivationStores> open)
+    {
+        await ActivateAsync(open, "activation-1", "artifact-1");
+        await StopAfterSlotTransitionAsync(open, "activation-2", "artifact-2");
+        await using var node = Start(open());
+        await node.Stores.References.RetireAsync(WorkflowActivationReferenceIdentity.Create("activation-1"), Now, "retired-elsewhere");
+        Assert.Equal(["activation-1"], await node.Stores.Bindings.ListServingActivationIdsAsync(SlotId));
+        Assert.Equal(["activation-1"], await node.Stores.Schedules.ListServingActivationIdsAsync(SlotId));
+
+        var result = await node.DeactivateAsync("artifact-2");
+
+        Assert.Equal(WorkflowActivationOutcome.Deactivated, result.Outcome);
+        await node.AssertServingAsync();
+        await node.AssertProjectionsAsync("activation-1", WorkflowActivationProjectionState.Missing);
+        Assert.Empty(await node.Stores.Bindings.ListServingActivationIdsAsync(SlotId));
+        Assert.Empty(await node.Stores.Schedules.ListServingActivationIdsAsync(SlotId));
     }
 
     private static ActivationNode Start(
@@ -489,6 +618,19 @@ internal static class WorkflowActivationCrashRepairContract
                 SlotId = SlotId
             });
             await _indexer.PrepareActivationAsync(Executable(artifactId), activationId, SlotId);
+        }
+
+        /// <summary>Switches one activation's projections on and its replaced activation's off, in both stores.</summary>
+        public async Task SwitchAsync(string activationId, string? replacedActivationId)
+        {
+            await Stores.Bindings.ActivateAsync(activationId, replacedActivationId);
+            await Stores.Schedules.ActivateAsync(activationId, replacedActivationId);
+        }
+
+        public async Task AssertSwitchRefusedAsync(string activationId, string replacedActivationId)
+        {
+            await Assert.ThrowsAsync<InvalidOperationException>(async () => await Stores.Bindings.ActivateAsync(activationId, replacedActivationId));
+            await Assert.ThrowsAsync<InvalidOperationException>(async () => await Stores.Schedules.ActivateAsync(activationId, replacedActivationId));
         }
 
         public async Task<string?> SlotActivationAsync() =>
@@ -623,6 +765,50 @@ internal static class WorkflowActivationCrashRepairContract
         public ValueTask<bool> TryRestoreAsync(WorkflowExecutableSourceReference expectedRetiredReference, WorkflowExecutableSourceReference restoredReference, CancellationToken cancellationToken = default) => inner.TryRestoreAsync(expectedRetiredReference, restoredReference, cancellationToken);
         public ValueTask<bool> TryDeleteDoomedAsync(WorkflowExecutableSourceReference expectedDoomedReference, DateTimeOffset now, CancellationToken cancellationToken = default) => inner.TryDeleteDoomedAsync(expectedDoomedReference, now, cancellationToken);
         public ValueTask<IReadOnlyCollection<string>> DeleteExpiredOrRetiredAsync(WorkflowExecutableSourceReferenceCleanupBatch batch, DateTimeOffset now, CancellationToken cancellationToken = default) => inner.DeleteExpiredOrRetiredAsync(batch, now, cancellationToken);
+    }
+
+    /// <summary>
+    /// Runs a hook once, just after the first slot read at which <c>when</c> holds. The read still returns what it read
+    /// before the hook ran, as if the hook's writes landed just after it.
+    /// </summary>
+    private sealed class AfterSlotRead(IWorkflowActivationAuthority inner, Func<Task<bool>> when, Func<Task> hook) : IWorkflowActivationAuthority
+    {
+        private Func<Task>? _hook = hook;
+
+        public async ValueTask<WorkflowActivationSlot?> FindAsync(string workflowDefinitionId, string slotName, CancellationToken cancellationToken = default)
+        {
+            var slot = await inner.FindAsync(workflowDefinitionId, slotName, cancellationToken);
+            if (_hook is { } pending && await when())
+            {
+                _hook = null;
+                await pending();
+            }
+            return slot;
+        }
+
+        public ValueTask<IReadOnlyCollection<WorkflowActivationSlot>> ListByDefinitionAsync(string workflowDefinitionId, CancellationToken cancellationToken = default) => inner.ListByDefinitionAsync(workflowDefinitionId, cancellationToken);
+        public ValueTask<WorkflowActivationTransition> TryActivateAsync(WorkflowActivationSlotRequest request, CancellationToken cancellationToken = default) => inner.TryActivateAsync(request, cancellationToken);
+        public ValueTask<WorkflowActivationTransition> TryDeactivateAsync(string workflowDefinitionId, string slotName, WorkflowActivationSource source, long expectedRevision, DateTimeOffset updatedAt, CancellationToken cancellationToken = default) =>
+            inner.TryDeactivateAsync(workflowDefinitionId, slotName, source, expectedRevision, updatedAt, cancellationToken);
+    }
+
+    /// <summary>A trigger-binding store whose activation-scoped deletes fail, as one that is unavailable during compensation would.</summary>
+    private sealed class BindingsThatCannotDelete(IWorkflowTriggerBindingStore inner) : IWorkflowTriggerBindingStore
+    {
+        public ValueTask DeleteByActivationAsync(string activationId, CancellationToken cancellationToken = default) =>
+            ValueTask.FromException(new InvalidOperationException("The trigger-binding store is unavailable."));
+
+        public ValueTask<WorkflowTriggerBinding> SaveAsync(WorkflowTriggerBinding binding, CancellationToken cancellationToken = default) => inner.SaveAsync(binding, cancellationToken);
+        public ValueTask PrepareActivationAsync(string activationId, IReadOnlyCollection<WorkflowTriggerBinding> bindings, CancellationToken cancellationToken = default) => inner.PrepareActivationAsync(activationId, bindings, cancellationToken);
+        public ValueTask<WorkflowTriggerBindingPage> ListByActivationAsync(WorkflowTriggerBindingActivationPageQuery query, CancellationToken cancellationToken = default) => inner.ListByActivationAsync(query, cancellationToken);
+        public ValueTask ActivateAsync(string activationId, string? replacedActivationId, CancellationToken cancellationToken = default) => inner.ActivateAsync(activationId, replacedActivationId, cancellationToken);
+        public ValueTask<WorkflowActivationProjectionState> FindActivationStateAsync(string activationId, CancellationToken cancellationToken = default) => inner.FindActivationStateAsync(activationId, cancellationToken);
+        public ValueTask<IReadOnlyCollection<string>> ListServingActivationIdsAsync(string slotId, CancellationToken cancellationToken = default) => inner.ListServingActivationIdsAsync(slotId, cancellationToken);
+        public ValueTask<int> DeleteByArtifactAsync(string artifactId, CancellationToken cancellationToken = default) => inner.DeleteByArtifactAsync(artifactId, cancellationToken);
+        public ValueTask<WorkflowTriggerBindingPage> ListByStimulusAsync(WorkflowTriggerBindingPageQuery query, CancellationToken cancellationToken = default) => inner.ListByStimulusAsync(query, cancellationToken);
+        public ValueTask<WorkflowTriggerBindingPage> ListByArtifactAsync(WorkflowTriggerBindingArtifactPageQuery query, CancellationToken cancellationToken = default) => inner.ListByArtifactAsync(query, cancellationToken);
+        public ValueTask<WorkflowTriggerBindingPage> ListByStimulusTypeAsync(WorkflowTriggerBindingTypePageQuery query, CancellationToken cancellationToken = default) => inner.ListByStimulusTypeAsync(query, cancellationToken);
+        public ValueTask<IReadOnlyCollection<string>> ListActiveStimulusHashesAsync(string stimulusType, CancellationToken cancellationToken = default) => inner.ListActiveStimulusHashesAsync(stimulusType, cancellationToken);
     }
 
     /// <summary>Root-write leases fence the reference GC, which none of these scenarios runs.</summary>

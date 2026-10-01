@@ -70,7 +70,8 @@ public sealed class EfWorkflowTriggerBindingStore(
         var prepared = bindings.Select(x => x with { IsActive = false }).ToArray();
         if (state is not null)
         {
-            if (!state.IsActive && ProjectionMatches(state, existing, scope, activationId) && ProjectionsEqual(existing, prepared, scope))
+            ActivationProjectionStateLifecycle.EnsurePreparable(state.IsActive, state.Revision, "trigger-binding", activationId);
+            if (ProjectionMatches(state, existing, scope, activationId) && ProjectionsEqual(existing, prepared, scope))
             {
                 await CommitAndClearAsync(transaction, cancellationToken, noChanges: true);
                 return;
@@ -95,7 +96,7 @@ public sealed class EfWorkflowTriggerBindingStore(
             ActivationId = Encode(activationId), ActivationIdHash = Hash(activationId), ActivationIdOrderKey = Order(activationId),
             IsActive = false, BindingCount = prepared.Length, ProjectionFingerprint = Fingerprint(prepared),
             ContentJson = Fingerprint(prepared),
-            SchemaVersion = RuntimeTriggerBindingEfModule.SchemaVersion, Revision = 1
+            SchemaVersion = RuntimeTriggerBindingEfModule.SchemaVersion, Revision = ActivationProjectionStateLifecycle.CreationRevision
         });
         try
         {
@@ -111,7 +112,9 @@ public sealed class EfWorkflowTriggerBindingStore(
             await RollbackAndClearAsync(transaction);
             var winner = await context.WorkflowTriggerBindingProjectionStates.AsNoTracking().SingleOrDefaultAsync(x => x.Id == ProjectionId(scope, activationId), cancellationToken);
             var winnerRows = await RowsForActivation(scope, activationId, cancellationToken);
-            if (winner is { IsActive: false } && ProjectionMatches(winner, winnerRows, scope, activationId) && ProjectionsEqual(winnerRows, prepared, scope))
+            if (winner is not null &&
+                ActivationProjectionStateLifecycle.Read(winner.IsActive, winner.Revision) == WorkflowActivationProjectionState.Prepared &&
+                ProjectionMatches(winner, winnerRows, scope, activationId) && ProjectionsEqual(winnerRows, prepared, scope))
                 return;
             throw new InvalidOperationException($"Trigger-binding activation projection '{activationId}' changed concurrently with different state.", exception);
         }
@@ -184,11 +187,23 @@ public sealed class EfWorkflowTriggerBindingStore(
         var rows = await RowsForActivation(scope, activationId, cancellationToken);
         context.ChangeTracker.Clear();
         EnsureProjection(state, rows, scope, activationId);
-        // A state is created at revision 1 and only ActivateAsync advances it, switching it on or, when its activation
-        // is replaced, off. Switching off requires it to serve, so an inactive state past revision 1 has served.
-        return state.IsActive ? WorkflowActivationProjectionState.Active
-            : state.Revision > 1 ? WorkflowActivationProjectionState.Replaced
-            : WorkflowActivationProjectionState.Prepared;
+        return ActivationProjectionStateLifecycle.Read(state.IsActive, state.Revision);
+    }
+
+    /// <summary>
+    /// No index covers the slot, so this reads the scope's active bindings once; only deactivation calls it. The rows'
+    /// activation ids are deduplicated here rather than with a database <c>DISTINCT</c> over a text column.
+    /// </summary>
+    public async ValueTask<IReadOnlyCollection<string>> ListServingActivationIdsAsync(string slotId, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(slotId);
+        cancellationToken.ThrowIfCancellationRequested();
+        var scope = RequireScope();
+        var activations = await context.WorkflowTriggerBindings.AsNoTracking()
+            .Where(x => x.ScopeKeyHash == Hash(scope) && x.ScopeKey == Encode(scope) && x.IsActive && x.SlotId == Encode(slotId) && x.ActivationId != null)
+            .Select(x => x.ActivationId!)
+            .ToArrayAsync(cancellationToken);
+        return activations.Select(Decode).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
     }
 
     public async ValueTask DeleteByActivationAsync(string activationId, CancellationToken cancellationToken = default)

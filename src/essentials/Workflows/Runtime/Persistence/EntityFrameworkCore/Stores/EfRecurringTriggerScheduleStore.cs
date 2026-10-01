@@ -92,7 +92,8 @@ public sealed class EfRecurringTriggerScheduleStore(
         var prepared = schedules.Select(x => x with { IsActive = false }).ToArray();
         if (existingState is not null)
         {
-            if (!existingState.IsActive && ProjectionMatches(existingState, existingRows, scope, activationId) && ProjectionsEqual(existingRows, prepared, scope))
+            ActivationProjectionStateLifecycle.EnsurePreparable(existingState.IsActive, existingState.Revision, "recurring-schedule", activationId);
+            if (ProjectionMatches(existingState, existingRows, scope, activationId) && ProjectionsEqual(existingRows, prepared, scope))
             {
                 await CommitAndClearAsync(transaction, cancellationToken, noChanges: true);
                 return;
@@ -112,7 +113,7 @@ public sealed class EfRecurringTriggerScheduleStore(
         }
         foreach (var schedule in prepared.Where(x => !existingById.ContainsKey(x.ScheduleId)))
             context.RecurringTriggerSchedules.Add(ToEntity(schedule, scope, Id(scope, schedule.ScheduleId), 1));
-        context.RecurringTriggerScheduleProjectionStates.Add(ToStateEntity(CreateProjectionState(scope, activationId, prepared, false), scope, 1));
+        context.RecurringTriggerScheduleProjectionStates.Add(ToStateEntity(CreateProjectionState(scope, activationId, prepared, false), scope, ActivationProjectionStateLifecycle.CreationRevision));
 
         try
         {
@@ -128,7 +129,9 @@ public sealed class EfRecurringTriggerScheduleStore(
             await RollbackAndClearAsync(transaction);
             var winner = await ActivationState(scope, activationId, cancellationToken);
             var winnerRows = await RowsForActivation(scope, activationId, cancellationToken);
-            if (winner is { IsActive: false } && ProjectionMatches(winner, winnerRows, scope, activationId) && ProjectionsEqual(winnerRows, prepared, scope))
+            if (winner is not null &&
+                ActivationProjectionStateLifecycle.Read(winner.IsActive, winner.Revision) == WorkflowActivationProjectionState.Prepared &&
+                ProjectionMatches(winner, winnerRows, scope, activationId) && ProjectionsEqual(winnerRows, prepared, scope))
                 return;
             throw new InvalidOperationException($"Recurring-schedule activation projection '{activationId}' changed concurrently with different state.", exception);
         }
@@ -244,12 +247,28 @@ public sealed class EfRecurringTriggerScheduleStore(
         context.ChangeTracker.Clear();
         var state = await ActivationState(scope, activationId, cancellationToken);
         context.ChangeTracker.Clear();
-        // As in the trigger-binding store, only ActivateAsync advances a state past revision 1, so an inactive state
-        // past it has served and been replaced.
-        return state is null ? WorkflowActivationProjectionState.Missing
-            : state.IsActive ? WorkflowActivationProjectionState.Active
-            : state.Revision > 1 ? WorkflowActivationProjectionState.Replaced
-            : WorkflowActivationProjectionState.Prepared;
+        return state is null
+            ? WorkflowActivationProjectionState.Missing
+            : ActivationProjectionStateLifecycle.Read(state.IsActive, state.Revision);
+    }
+
+    /// <summary>
+    /// No index covers the slot, so this reads the scope's active schedules once; only deactivation calls it. The rows'
+    /// activation ids are deduplicated here rather than with a database <c>DISTINCT</c> over a text column.
+    /// </summary>
+    public async ValueTask<IReadOnlyCollection<string>> ListServingActivationIdsAsync(string slotId, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(slotId);
+        cancellationToken.ThrowIfCancellationRequested();
+        var scope = RequireScope();
+        var scopeHash = Hash(scope);
+        var scopeKey = Encode(scope);
+        var slotKey = Encode(slotId);
+        var activations = await context.RecurringTriggerSchedules.AsNoTracking()
+            .Where(x => x.ScopeKeyHash == scopeHash && x.ScopeKey == scopeKey && x.IsActive && x.SlotId == slotKey && x.ActivationId != null)
+            .Select(x => x.ActivationId!)
+            .ToArrayAsync(cancellationToken);
+        return activations.Select(Decode).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
     }
 
     public async ValueTask DeleteByActivationAsync(string activationId, CancellationToken cancellationToken = default)
@@ -573,7 +592,7 @@ public sealed class EfRecurringTriggerScheduleStore(
         var ordered = schedules.OrderBy(x => x.ScheduleId, StringComparer.Ordinal).ToArray(); var artifacts = ordered.Select(x => x.ArtifactId).Distinct(StringComparer.Ordinal).ToArray();
         if (artifacts.Length > 1 || retainedArtifact is not null && artifacts.Length > 0 && artifacts[0] != retainedArtifact) throw new InvalidDataException($"Recurring-schedule activation '{activationId}' contains multiple artifacts.");
         var artifact = artifacts.SingleOrDefault() ?? retainedArtifact; var ids = ordered.Select(x => x.ScheduleId).ToArray(); var fps = ordered.ToDictionary(x => x.ScheduleId, ImmutableFingerprint, StringComparer.Ordinal);
-        var entity = new RecurringTriggerScheduleProjectionStateEntity { Id = ProjectionId(scope, activationId), ScopeKey = Encode(scope), ScopeKeyHash = Hash(scope), ActivationId = Encode(activationId), ActivationIdHash = Hash(activationId), ActivationIdOrderKey = Order(activationId), ArtifactId = artifact is null ? null : Encode(artifact), ArtifactIdHash = artifact is null ? null : Hash(artifact), ArtifactIdOrderKey = artifact is null ? null : Order(artifact), IsActive = active, ScheduleCount = ids.Length, ProjectionFingerprint = ProjectionFingerprint(ordered), ScheduleIdsJson = JsonSerializer.Serialize(ids, JsonOptions), ScheduleFingerprintsJson = JsonSerializer.Serialize(fps, JsonOptions), SchemaVersion = RuntimeOperationalStateEfModule.SchemaVersion, Revision = 1 };
+        var entity = new RecurringTriggerScheduleProjectionStateEntity { Id = ProjectionId(scope, activationId), ScopeKey = Encode(scope), ScopeKeyHash = Hash(scope), ActivationId = Encode(activationId), ActivationIdHash = Hash(activationId), ActivationIdOrderKey = Order(activationId), ArtifactId = artifact is null ? null : Encode(artifact), ArtifactIdHash = artifact is null ? null : Hash(artifact), ArtifactIdOrderKey = artifact is null ? null : Order(artifact), IsActive = active, ScheduleCount = ids.Length, ProjectionFingerprint = ProjectionFingerprint(ordered), ScheduleIdsJson = JsonSerializer.Serialize(ids, JsonOptions), ScheduleFingerprintsJson = JsonSerializer.Serialize(fps, JsonOptions), SchemaVersion = RuntimeOperationalStateEfModule.SchemaVersion, Revision = ActivationProjectionStateLifecycle.CreationRevision };
         entity.ContentJson = JsonSerializer.Serialize(new ProjectionStateContent(ProjectionKind, activationId, artifact, active, ids.Length, entity.ProjectionFingerprint, ids, fps), JsonOptions);
         return new ProjectionStateSnapshot { Entity = entity, Scope = scope, ActivationId = activationId, ArtifactId = entity.ArtifactId, IsActive = active, ScheduleCount = ids.Length, ProjectionFingerprint = entity.ProjectionFingerprint, ScheduleIds = ids, ScheduleFingerprints = fps };
     }

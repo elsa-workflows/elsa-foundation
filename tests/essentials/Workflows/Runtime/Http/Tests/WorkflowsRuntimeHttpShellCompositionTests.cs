@@ -123,6 +123,7 @@ public sealed class TriggerIndexStandInFeature : IShellFeature
         public ValueTask<WorkflowTriggerBindingPage> ListByStimulusTypeAsync(WorkflowTriggerBindingTypePageQuery query, CancellationToken cancellationToken = default) => Shared.ListByStimulusTypeAsync(query, cancellationToken);
         public ValueTask<IReadOnlyCollection<string>> ListActiveStimulusHashesAsync(string stimulusType, CancellationToken cancellationToken = default) => Shared.ListActiveStimulusHashesAsync(stimulusType, cancellationToken);
         public ValueTask<WorkflowActivationProjectionState> FindActivationStateAsync(string activationId, CancellationToken cancellationToken = default) => Shared.FindActivationStateAsync(activationId, cancellationToken);
+        public ValueTask<IReadOnlyCollection<string>> ListServingActivationIdsAsync(string slotId, CancellationToken cancellationToken = default) => Shared.ListServingActivationIdsAsync(slotId, cancellationToken);
     }
 
     private sealed class ScopedBookmarkStimulusIndex(InMemoryBookmarkStateStore shared)

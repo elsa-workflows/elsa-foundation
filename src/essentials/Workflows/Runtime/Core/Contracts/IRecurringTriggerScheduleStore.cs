@@ -30,7 +30,10 @@ public interface IRecurringTriggerScheduleStore
     /// <summary>Upserts a schedule (keyed by <see cref="RecurringTriggerSchedule.ScheduleId"/>) and returns the stored schedule.</summary>
     ValueTask<RecurringTriggerSchedule> SaveAsync(RecurringTriggerSchedule schedule, CancellationToken cancellationToken = default);
 
-    /// <summary>Atomically replaces one activation's prepared schedules without exposing them to the pump.</summary>
+    /// <summary>
+    /// Atomically replaces one activation's prepared schedules without exposing them to the pump, refusing an
+    /// activation whose projection serves or has served as <see cref="IWorkflowTriggerBindingStore.PrepareActivationAsync"/> does.
+    /// </summary>
     ValueTask PrepareActivationAsync(
         string activationId,
         IReadOnlyCollection<RecurringTriggerSchedule> schedules,
@@ -70,6 +73,14 @@ public interface IRecurringTriggerScheduleStore
     /// </summary>
     ValueTask<WorkflowActivationProjectionState> FindActivationStateAsync(
         string activationId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Lists, in ordinal order, the activations with at least one active schedule minted for <paramref name="slotId"/>,
+    /// with the same meaning as <see cref="IWorkflowTriggerBindingStore.ListServingActivationIdsAsync"/>.
+    /// </summary>
+    ValueTask<IReadOnlyCollection<string>> ListServingActivationIdsAsync(
+        string slotId,
         CancellationToken cancellationToken = default);
 
     /// <summary>Deletes schedules owned by one activation without affecting another activation of the artifact.</summary>

@@ -150,6 +150,7 @@ public sealed class RecurringTaskScopeIsolationTests
         public ValueTask DeleteByArtifactAsync(string artifactId, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
         public ValueTask DeleteAsync(string scheduleId, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
         public ValueTask<WorkflowActivationProjectionState> FindActivationStateAsync(string activationId, CancellationToken cancellationToken = default) => new(WorkflowActivationProjectionState.Missing);
+        public ValueTask<IReadOnlyCollection<string>> ListServingActivationIdsAsync(string slotId, CancellationToken cancellationToken = default) => new([]);
 
         public ValueTask DisposeAsync()
         {
@@ -169,6 +170,7 @@ public sealed class RecurringTaskScopeIsolationTests
         public ValueTask<WorkflowTriggerBindingPage> ListByStimulusTypeAsync(WorkflowTriggerBindingTypePageQuery query, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public ValueTask<IReadOnlyCollection<string>> ListActiveStimulusHashesAsync(string stimulusType, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public ValueTask<WorkflowActivationProjectionState> FindActivationStateAsync(string activationId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<IReadOnlyCollection<string>> ListServingActivationIdsAsync(string slotId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 
     private sealed class StimulusRouterProbe(ScopeObservations observations) : IStimulusRouter

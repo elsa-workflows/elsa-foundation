@@ -239,6 +239,10 @@ public sealed class PublicationActivationTests
             string activationId,
             CancellationToken cancellationToken = default) => ValueTask.FromResult(WorkflowActivationProjectionState.Active);
 
+        public ValueTask<IReadOnlyCollection<string>> ListServingActivationIdsAsync(
+            string slotId,
+            CancellationToken cancellationToken = default) => ValueTask.FromResult<IReadOnlyCollection<string>>([]);
+
         public ValueTask DeleteByActivationAsync(
             string activationId,
             CancellationToken cancellationToken = default) => ValueTask.CompletedTask;

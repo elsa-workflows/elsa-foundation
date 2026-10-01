@@ -162,14 +162,15 @@ public sealed class WorkflowActivationCoordinator(
 
         // Deactivation completes nothing first: it switches nothing on. A process that died mid-activation can leave the
         // activation it replaced, or a stray, serving this slot, so every other activation that serves the slot is turned
-        // off too, whatever the slot's history (#2193).
+        // off too, whatever the slot's history (#2193). The projection stores name them by slot, so one whose reference
+        // is retired, expired or gone is found as well.
         IReadOnlyList<SlotOccupant> others;
         try
         {
             await RemoveProjectionsAsync(activationId, cancellationToken);
             others = await ListOtherOccupantsAsync(slot, activationId, cancellationToken);
-            foreach (var other in others.Where(other => other.Serves))
-                await RemoveProjectionsAsync(other.ActivationId, cancellationToken);
+            foreach (var serving in await ListOtherServingActivationsAsync(slot, activationId, others, cancellationToken))
+                await RemoveProjectionsAsync(serving, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -197,33 +198,33 @@ public sealed class WorkflowActivationCoordinator(
             return await FailDeactivationAsync(command, activationId, transition, WorkflowActivationStep.TriggerObserverNotification, exception);
         }
 
-        await RetireSupersededReferencesAsync(slot, others);
+        // The deactivation has happened by now and nothing serves the slot, so retiring the other activations' references
+        // neither observes cancellation nor fails it.
+        await RetireReplacedReferencesAsync(
+            slot,
+            others.Where(other => other.Serves || other.WasReplaced).Select(other => other.ActivationId),
+            bestEffort: true,
+            CancellationToken.None);
         return new(true, WorkflowActivationOutcome.Deactivated, transition.Slot, ReplacedActivationId: activationId);
     }
 
     /// <summary>
-    /// Retires the references of the other activations a deactivation turned off or found already replaced. The
-    /// deactivation has happened by now and nothing serves the slot, so this neither observes cancellation nor fails the
-    /// deactivation: a failure is logged.
+    /// The activations other than <paramref name="activationId"/> that serve <paramref name="slot"/>: those a projection
+    /// store lists for the slot, whatever their source references say, and any listed occupant whose projection state
+    /// serves though it has no rows.
     /// </summary>
-    private async ValueTask RetireSupersededReferencesAsync(WorkflowActivationSlot slot, IReadOnlyList<SlotOccupant> others)
+    private async ValueTask<IReadOnlyCollection<string>> ListOtherServingActivationsAsync(
+        WorkflowActivationSlot slot,
+        string activationId,
+        IReadOnlyList<SlotOccupant> others,
+        CancellationToken cancellationToken)
     {
-        foreach (var other in others.Where(other => other.Serves || other.WasReplaced))
-        {
-            try
-            {
-                await RetireReplacedReferenceAsync(other.ActivationId, CancellationToken.None);
-            }
-            catch (Exception exception)
-            {
-                logger?.LogWarning(
-                    exception,
-                    "Deactivated definition {DefinitionId} slot {SlotName}, but the reference of activation {ActivationId}, which no longer serves it, could not be retired",
-                    slot.WorkflowDefinitionId,
-                    slot.SlotName,
-                    other.ActivationId);
-            }
-        }
+        var serving = new SortedSet<string>(others.Where(other => other.Serves).Select(other => other.ActivationId), StringComparer.Ordinal);
+        serving.UnionWith(await triggerBindingStore!.ListServingActivationIdsAsync(slot.SlotId, cancellationToken));
+        if (recurringScheduleStore is not null)
+            serving.UnionWith(await recurringScheduleStore.ListServingActivationIdsAsync(slot.SlotId, cancellationToken));
+        serving.Remove(activationId);
+        return serving;
     }
 
     public async ValueTask<WorkflowActivationResult> CompleteAsync(
@@ -268,10 +269,23 @@ public sealed class WorkflowActivationCoordinator(
     /// The slot is read again before the projections switch and before a reference is retired; if another writer moved
     /// it, that writer owns what happens next. Completion may also race the activation's own sequence on another node.
     /// The stores make the switch a no-op whichever of the two makes it second, and if that sequence then fails, its
-    /// compensation restores the reference completion retired. One window remains, because the slot and the projections
-    /// share no transaction. A first activation has no replaced activation whose projection fences the switch, so a
-    /// completion that read the slot just before another writer completed and then replaced that activation can still
-    /// switch it back on.
+    /// compensation restores the reference completion retired. Each replaced activation's projection state is read again
+    /// just before its reference is retired, and one that serves again is left alone: that sequence failed and its
+    /// compensation handed the slot back.
+    /// </para>
+    /// <para>
+    /// When nothing needs switching, retiring a leftover's reference is housekeeping: a failure is logged as an error and
+    /// does not fail the activation that called this.
+    /// </para>
+    /// <para>
+    /// Two windows remain, because the slot and the projections share no transaction; #2230 closes both by switching them
+    /// in one. A first activation has no replaced activation whose projection fences the switch, so a completion that
+    /// read the slot just before another writer completed and then replaced that activation switches it back on. It then
+    /// serves beside its successor, and because its reference is retired, no later completion finds it: the double
+    /// serving does not heal itself, and only unpublishing the slot clears it. Separately, the re-read before a retire
+    /// narrows but does not close the race with compensation: one that hands the slot back between that read and the
+    /// retire leaves the restored activation serving with a retired reference, so its artifact is no longer held
+    /// against garbage collection until the slot's next activation replaces it.
     /// </para>
     /// </remarks>
     /// <returns>
@@ -286,12 +300,10 @@ public sealed class WorkflowActivationCoordinator(
         var activationId = slot.ActiveActivationId!;
         try
         {
-            var triggers = await triggerBindingStore!.FindActivationStateAsync(activationId, cancellationToken);
-            var schedules = recurringScheduleStore is null
-                ? (WorkflowActivationProjectionState?)null
-                : await recurringScheduleStore.FindActivationStateAsync(activationId, cancellationToken);
-            var switchTriggers = IsSwitchedOff(triggers);
-            var switchSchedules = IsSwitchedOff(schedules);
+            var state = await ReadOccupantAsync(activationId, cancellationToken);
+            var switchTriggers = IsSwitchedOff(state.Triggers);
+            var switchSchedules = IsSwitchedOff(state.Schedules);
+            var switching = switchTriggers || switchSchedules;
 
             // A retired reference reads as nothing active: the activation was compensated, and the next activation of
             // this slot resumes it through the ordinary sequence.
@@ -302,7 +314,7 @@ public sealed class WorkflowActivationCoordinator(
             var others = await ListOtherOccupantsAsync(slot, activationId, cancellationToken);
             var retire = others.Where(other => other.WasReplaced).Select(other => other.ActivationId).ToList();
             string? predecessor = null;
-            if (switchTriggers || switchSchedules)
+            if (switching)
             {
                 var serving = others.Where(other => other.Serves).Select(other => other.ActivationId).ToArray();
                 if (serving.Length > 1)
@@ -315,27 +327,30 @@ public sealed class WorkflowActivationCoordinator(
             if (!await StillNamesAsync(slot, cancellationToken))
                 return null;
 
-            if (switchTriggers)
-                await triggerBindingStore.ActivateAsync(activationId, predecessor, cancellationToken);
-            if (switchSchedules)
-                await recurringScheduleStore!.ActivateAsync(activationId, predecessor, cancellationToken);
-            if (switchTriggers || switchSchedules)
-                await NotifyTriggerObserversAsync(activationId, reference.ArtifactId, cancellationToken);
-            if (predecessor is not null)
-                retire.Add(predecessor);
-            if (await StillNamesAsync(slot, cancellationToken))
+            if (switching)
             {
-                foreach (var replaced in retire)
-                    await RetireReplacedReferenceAsync(replaced, cancellationToken);
+                if (switchTriggers)
+                    await triggerBindingStore!.ActivateAsync(activationId, predecessor, cancellationToken);
+                if (switchSchedules)
+                    await recurringScheduleStore!.ActivateAsync(activationId, predecessor, cancellationToken);
+                await NotifyTriggerObserversAsync(activationId, reference.ArtifactId, cancellationToken);
+                if (predecessor is not null)
+                    retire.Add(predecessor);
+                if (!await StillNamesAsync(slot, cancellationToken))
+                    retire.Clear();
             }
+
+            var retired = await RetireReplacedReferencesAsync(slot, retire, bestEffort: !switching, cancellationToken);
+            if (!switching && retired.Count == 0)
+                return null;
 
             logger?.LogWarning(
                 "Completed activation {ActivationId} of definition {DefinitionId} slot {SlotName}, which an interrupted call left half done; replaced activations {ReplacedActivationIds} no longer serve it",
                 activationId,
                 slot.WorkflowDefinitionId,
                 slot.SlotName,
-                retire);
-            return new(true, WorkflowActivationOutcome.Activated, slot, reference, retire.FirstOrDefault());
+                retired);
+            return new(true, WorkflowActivationOutcome.Activated, slot, reference, retired.FirstOrDefault());
         }
         catch (Exception exception) when (NotRequestedCancellation(exception, cancellationToken))
         {
@@ -408,16 +423,55 @@ public sealed class WorkflowActivationCoordinator(
                     !StringComparer.Ordinal.Equals(reference.SlotId, slot.SlotId))
                     continue;
 
-                occupants.Add(new(
-                    other,
-                    await triggerBindingStore!.FindActivationStateAsync(other, cancellationToken),
-                    recurringScheduleStore is null ? null : await recurringScheduleStore.FindActivationStateAsync(other, cancellationToken)));
+                occupants.Add(await ReadOccupantAsync(other, cancellationToken));
             }
 
             continuationToken = page.NextContinuationToken;
         } while (continuationToken is not null);
 
         return occupants;
+    }
+
+    private async ValueTask<SlotOccupant> ReadOccupantAsync(string activationId, CancellationToken cancellationToken) => new(
+        activationId,
+        await triggerBindingStore!.FindActivationStateAsync(activationId, cancellationToken),
+        recurringScheduleStore is null ? null : await recurringScheduleStore.FindActivationStateAsync(activationId, cancellationToken));
+
+    /// <summary>
+    /// Retires the references of activations that no longer serve <paramref name="slot"/>. Each one's projection state is
+    /// read again first, and one that serves again is left alone: an in-flight activation that replaced it failed, and its
+    /// compensation handed the slot back (#2193). When <paramref name="bestEffort"/>, a failure is logged as an error and
+    /// the rest are still retired; otherwise it propagates.
+    /// </summary>
+    /// <returns>The activations whose references were retired.</returns>
+    private async ValueTask<IReadOnlyList<string>> RetireReplacedReferencesAsync(
+        WorkflowActivationSlot slot,
+        IEnumerable<string> activationIds,
+        bool bestEffort,
+        CancellationToken cancellationToken)
+    {
+        var retired = new List<string>();
+        foreach (var activationId in activationIds)
+        {
+            try
+            {
+                if ((await ReadOccupantAsync(activationId, cancellationToken)).Serves)
+                    continue;
+                await RetireReplacedReferenceAsync(activationId, cancellationToken);
+                retired.Add(activationId);
+            }
+            catch (Exception exception) when (bestEffort && NotRequestedCancellation(exception, cancellationToken))
+            {
+                logger?.LogError(
+                    exception,
+                    "The source reference of activation {ActivationId}, which no longer serves definition {DefinitionId} slot {SlotName}, could not be retired. It stays live and keeps its artifact from garbage collection; retire it as described under Operator recovery in the Runtime extension points",
+                    activationId,
+                    slot.WorkflowDefinitionId,
+                    slot.SlotName);
+            }
+        }
+
+        return retired;
     }
 
     private async ValueTask<bool> StillNamesAsync(WorkflowActivationSlot slot, CancellationToken cancellationToken) =>

@@ -33,8 +33,8 @@ namespace Elsa.Workflows.Runtime.Services.Executables;
 /// and skips when the lock is taken, so a node could skip work no other node does. Completion is idempotent and its
 /// races are benign: two completions, or a completion and the activation's own sequence, make the same switch, which
 /// the projection stores accept as a no-op whichever comes second, and a sequence that then fails restores the
-/// reference a completion retired. The one remaining window, a first activation completed after another writer has
-/// already replaced it, is described on the coordinator.
+/// reference a completion retired. The two windows that remain until the slot and the projections switch in one
+/// transaction (#2230) are described on the coordinator.
 /// </para>
 /// </remarks>
 [Order(4)]
