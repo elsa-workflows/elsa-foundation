@@ -1,5 +1,6 @@
 using Elsa.Foundation.Identity.OpenIddict;
 using Elsa.Persistence.EntityFramework;
+using Elsa.Persistence.EntityFramework.Tooling;
 using Elsa.Workbench.OpenIddict;
 using Elsa.Workbench.OpenIddictEngines;
 using Microsoft.Extensions.Configuration;
@@ -51,6 +52,8 @@ public static class WorkbenchOpenIddictStoreProvider
             provider.GetRequiredService<IOptions<OpenIddictIdentityOptions>>(),
             provider.GetRequiredService<IOptions<WorkbenchOpenIddictStoreOptions>>(),
             configuration,
+            provider.GetService<IEfToolingShellDefaults>(),
+            provider.GetService<IHostApplicationLifetime>(),
             provider.GetRequiredService<ILogger<WorkbenchOpenIddictStoreNotices>>()));
 
         AddEngineContext<OpenIddictIdentitySqlServerDbContext>(services, "SqlServer");
@@ -61,7 +64,7 @@ public static class WorkbenchOpenIddictStoreProvider
     }
 
     /// <summary>Why <paramref name="provider"/> cannot be the store's engine, or <see langword="null"/> when it can; unset is SQLite.</summary>
-    internal static string? Refusal(string? provider)
+    public static string? Refusal(string? provider)
     {
         try
         {
@@ -134,7 +137,7 @@ public sealed class WorkbenchOpenIddictStoreOptions
 }
 
 /// <summary>Fails the host's start for a <see cref="WorkbenchOpenIddictStoreOptions.Provider"/> the store cannot use, MySQL included, instead of its first use.</summary>
-internal sealed class WorkbenchOpenIddictStoreOptionsValidator : IValidateOptions<WorkbenchOpenIddictStoreOptions>
+public sealed class WorkbenchOpenIddictStoreOptionsValidator : IValidateOptions<WorkbenchOpenIddictStoreOptions>
 {
     public ValidateOptionsResult Validate(string? name, WorkbenchOpenIddictStoreOptions options) =>
         WorkbenchOpenIddictStoreProvider.Refusal(options.Provider) is { } refusal ? ValidateOptionsResult.Fail(refusal) : ValidateOptionsResult.Success;
@@ -145,10 +148,18 @@ internal sealed class WorkbenchOpenIddictStoreOptionsValidator : IValidateOption
 /// is an error: the store is only moved off its per-node SQLite by an explicit <c>Provider</c>, so an existing store never moves
 /// silently, and the demo store ignores the engine.
 /// </summary>
-internal sealed class WorkbenchOpenIddictStoreNotices(
+/// <remarks>
+/// The platform's providers are those of the default shell's EF consumers as the platform resolves them
+/// (<see cref="WorkbenchOpenIddictPlatformProviders"/>): the root and shell default resources, per-feature bindings and the legacy
+/// per-feature <c>Provider</c> settings. That needs the host's loaded features, so it is read once the host has started, not while it
+/// is starting; a consumer a shell enables later, or a setting changed after the start, is not seen.
+/// </remarks>
+public sealed class WorkbenchOpenIddictStoreNotices(
     IOptions<OpenIddictIdentityOptions> identity,
     IOptions<WorkbenchOpenIddictStoreOptions> store,
     IConfiguration configuration,
+    IEfToolingShellDefaults? hostDefaults,
+    IHostApplicationLifetime? lifetime,
     ILogger<WorkbenchOpenIddictStoreNotices> logger) : IHostedService
 {
     private const string Setting = $"{WorkbenchOpenIddictStoreOptions.SectionPath}:Provider";
@@ -164,11 +175,12 @@ internal sealed class WorkbenchOpenIddictStoreNotices(
                     "{Setting} is '{Provider}', but IsDevelopmentOrDemo is on, so the OpenIddict token store is the in-memory demo store: per node, and lost when the host stops. The provider is ignored.",
                     Setting, provider);
         }
-        else if (!set && PlatformProvider() is { } platform)
+        else if (!set)
         {
-            logger.LogWarning(
-                "The platform's persistence provider is {Platform}, but {Setting} is not set, so the OpenIddict token store is still a per-node SQLite file: a token issued on one node is not valid on another. Set {Setting} to share the store.",
-                platform, Setting, Setting);
+            if (lifetime is null)
+                NoticePlatformProvider();
+            else
+                lifetime.ApplicationStarted.Register(NoticePlatformProvider);
         }
 
         return Task.CompletedTask;
@@ -176,14 +188,35 @@ internal sealed class WorkbenchOpenIddictStoreNotices(
 
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
-    /// <summary>The provider of the platform's default persistence resource (<c>Elsa:Persistence:DefaultResource</c>) when it is not SQLite.</summary>
-    private string? PlatformProvider()
+    /// <summary>Warns when the platform's EF consumers are on an engine other than SQLite and the store, whose own provider is unset, is not.</summary>
+    public void NoticePlatformProvider()
     {
-        var persistence = configuration.GetSection("Elsa:Persistence");
-        if (persistence["DefaultResource"] is not { Length: > 0 } resource ||
-            persistence.GetSection("Resources").GetSection(resource)["Provider"] is not { Length: > 0 } provider)
-            return null;
+        IReadOnlyCollection<string> platform;
+        try
+        {
+            if (hostDefaults is null)
+                return;
+            platform = WorkbenchOpenIddictPlatformProviders.Resolve(configuration, hostDefaults, AppDomain.CurrentDomain.GetAssemblies());
+        }
+        catch (Exception failure) when (failure is not OutOfMemoryException)
+        {
+            // The notice is advice: a platform provider that cannot be read is not a reason to say anything, or to fail.
+            logger.LogInformation(failure, "The platform's persistence providers could not be read, so the OpenIddict token store is not compared with them.");
+            return;
+        }
 
-        return EfRelationalProviderBinding.Normalize(provider) == "sqlite" ? null : provider;
+        var others = platform.Where(provider => EfRelationalProviderBinding.Normalize(provider) != "sqlite").ToArray();
+        if (others.Length == 0)
+            return;
+
+        var shareable = others.FirstOrDefault(provider => WorkbenchOpenIddictStoreProvider.Refusal(provider) is null);
+        if (shareable is null)
+            logger.LogWarning(
+                "The platform's persistence provider is {Platform}, which the OpenIddict token store does not support, so the token store is still a per-node SQLite file: a token issued on one node is not valid on another. Sharing it needs a SQL Server or PostgreSQL database, selected with {Setting}.",
+                string.Join(", ", others), Setting);
+        else
+            logger.LogWarning(
+                "The platform's persistence provider is {Platform}, but {Setting} is not set, so the OpenIddict token store is still a per-node SQLite file: a token issued on one node is not valid on another. Set {Setting} to {Provider} to share the store.",
+                string.Join(", ", others), Setting, Setting, shareable);
     }
 }

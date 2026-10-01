@@ -102,13 +102,16 @@ its row (token-entry validation is on). A bearer token issued by one node is the
 and point every node at one database. The default, a SQLite file, is for one node, or for nodes that share one file, and the demo store
 (`IsDevelopmentOrDemo`) is in memory and per node, so it is for one node too.
 
-The store moves off SQLite only when `Provider` is set, so an existing store never moves silently. When the platform's persistence
-provider (`Elsa:Persistence`) is another engine and `Provider` is not set, the host warns at start that the token store is still a
-per-node SQLite file and names the setting to change.
+The store moves off SQLite only when `Provider` is set, so an existing store never moves silently. When `Provider` is not set and
+the default shell's EF consumers are on another engine, the host warns once it has started that the token store is still a
+per-node SQLite file, and names the setting to change (or, when that engine is MySQL, says the store needs a SQL Server or
+PostgreSQL database to be shared). The engine is the one the platform resolves for those consumers: the root
+`Elsa:Persistence:DefaultResource`, the shell's own default resource, a feature's `Bindings` entry, or a feature's own `Provider`
+setting. The warning reads the default shell's consumers at the host's start only; a consumer a shell enables later, or a setting
+changed after the start, is not seen.
 
 A node also needs the **same Data Protection keys** as the others, so a token or cookie one node protects the others can read. That
-is a separate, shared key ring, configured through the host's Data Protection settings (tracked in
-[#2191](https://github.com/elsa-workflows/elsa-foundation/issues/2191)); the token store does not provide it. A multi-node
+is a separate, shared key ring that the token store does not provide: see [Data Protection](#data-protection). A multi-node
 deployment needs both the shared store and the shared keys.
 
 The store follows the platform's provider conventions: the engine names are the ones every Elsa EF module takes, and without a
@@ -178,6 +181,18 @@ is required.
 The former `ApiSecurity.AllowAnonymous` setting has been removed, and no configuration disables authentication for a
 shell's API routes. Workflow-defined HTTP endpoints are anonymous unless their `HttpEndpoint` activity sets
 `Authorize`; see [Security posture](authentication-architecture.md#7-security-posture).
+
+## Data Protection
+
+ASP.NET Core Data Protection protects what a node hands out and reads back: the identity cookie, antiforgery tokens, and any
+payload a feature protects with it. Each node generates its own keys unless they are given somewhere to share, so on a deployment
+of more than one node a cookie or token one node protects is unreadable to the next, whatever store the token rows are in
+(see [Where the token store lives](#where-the-token-store-lives)).
+
+Every node must therefore configure Data Protection the same way: the **same application name**
+(`SetApplicationName`), and a **key ring in storage all the nodes share** (`PersistKeysTo...`), protected at rest
+(`ProtectKeysWith...`) wherever the storage is not itself private. Elsa does not choose that storage for the host. A single node,
+or nodes behind one shared volume, keeps working with the framework defaults.
 
 ## Same-origin hosting
 

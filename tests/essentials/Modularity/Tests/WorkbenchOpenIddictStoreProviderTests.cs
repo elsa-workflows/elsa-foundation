@@ -1,4 +1,5 @@
 using Elsa.Persistence.EntityFramework;
+using Elsa.Persistence.EntityFramework.Tooling;
 using Elsa.Workbench;
 using Elsa.Workbench.OpenIddict;
 using Elsa.Workbench.OpenIddictEngines;
@@ -124,33 +125,65 @@ public sealed class WorkbenchOpenIddictStoreProviderTests
         services.GetRequiredService<IStartupValidator>().Validate();
     }
 
-    /// <summary>The store moves off its per-node SQLite only when its own setting says so, so a platform on another engine is warned of.</summary>
+    /// <summary>
+    /// The store moves off its per-node SQLite only when its own setting says so, so a platform on another engine is warned of, however
+    /// the platform selects it: the root default resource, the shell's own, a feature's binding, or its own <c>Provider</c> setting.
+    /// </summary>
     [Theory]
-    [InlineData("PostgreSql")]
-    [InlineData("SqlServer")]
-    public async Task A_platform_on_another_engine_with_the_store_left_on_sqlite_is_warned_of(string platform)
+    [InlineData(PlatformSelection.RootDefaultResource, "PostgreSql")]
+    [InlineData(PlatformSelection.ShellDefaultResource, "SqlServer")]
+    [InlineData(PlatformSelection.FeatureBinding, "PostgreSql")]
+    [InlineData(PlatformSelection.LegacyFeatureProvider, "SqlServer")]
+    public void A_platform_on_another_engine_with_the_store_left_on_sqlite_is_warned_of(PlatformSelection selection, string platform)
     {
         var log = new CapturingLogger();
-        using var services = CreateProvider(provider: null, connectionString: null, log: log, platformProvider: platform);
+        using var services = CreateProvider(provider: null, connectionString: null, log: log, platform: (selection, platform));
 
-        await StartNoticesAsync(services);
+        Notices(services).NoticePlatformProvider();
 
         var warning = Assert.Single(log.Entries, entry => entry.Level == LogLevel.Warning);
         Assert.Contains("per-node SQLite", warning.Message, StringComparison.Ordinal);
-        Assert.Contains($"{Section}:Provider", warning.Message, StringComparison.Ordinal);
-        Assert.Contains(platform, warning.Message, StringComparison.Ordinal);
+        Assert.Contains($"{Section}:Provider to {platform}", warning.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>MySQL cannot be the store's engine, so the notice does not send the operator to a setting that would fail the start.</summary>
+    [Theory]
+    [InlineData(PlatformSelection.RootDefaultResource)]
+    [InlineData(PlatformSelection.LegacyFeatureProvider)]
+    public void A_platform_on_mysql_is_told_the_store_needs_another_engine_to_be_shared(PlatformSelection selection)
+    {
+        var log = new CapturingLogger();
+        using var services = CreateProvider(provider: null, connectionString: null, log: log, platform: (selection, "MySql"));
+
+        Notices(services).NoticePlatformProvider();
+
+        var warning = Assert.Single(log.Entries, entry => entry.Level == LogLevel.Warning);
+        Assert.Contains("does not support", warning.Message, StringComparison.Ordinal);
+        Assert.Contains("SQL Server or PostgreSQL", warning.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("to MySql", warning.Message, StringComparison.Ordinal);
     }
 
     [Theory]
-    [InlineData(null, "Sqlite")]
-    [InlineData(null, null)]
-    [InlineData("PostgreSql", "PostgreSql")]
-    public async Task No_warning_when_the_store_follows_the_platform_or_the_platform_is_sqlite(string? provider, string? platform)
+    [InlineData(PlatformSelection.RootDefaultResource, "Sqlite")]
+    [InlineData(PlatformSelection.LegacyFeatureProvider, "Sqlite")]
+    public void No_warning_when_the_platform_is_sqlite(PlatformSelection selection, string platform)
     {
         var log = new CapturingLogger();
-        using var services = CreateProvider(provider, connectionString: null, sharedConnection: "unused", log: log, platformProvider: platform);
+        using var services = CreateProvider(provider: null, connectionString: null, log: log, platform: (selection, platform));
 
-        await StartNoticesAsync(services);
+        Notices(services).NoticePlatformProvider();
+
+        Assert.DoesNotContain(log.Entries, entry => entry.Level == LogLevel.Warning);
+    }
+
+    /// <summary>With the store's own provider set there is nothing to point out, so the platform is never read.</summary>
+    [Fact]
+    public async Task No_warning_when_the_store_has_a_provider_of_its_own()
+    {
+        var log = new CapturingLogger();
+        using var services = CreateProvider("PostgreSql", connectionString: null, sharedConnection: "unused", log: log, platform: (PlatformSelection.RootDefaultResource, "PostgreSql"));
+
+        await Notices(services).StartAsync(CancellationToken.None);
 
         Assert.DoesNotContain(log.Entries, entry => entry.Level == LogLevel.Warning);
     }
@@ -196,10 +229,44 @@ public sealed class WorkbenchOpenIddictStoreProviderTests
         Assert.Equal(OpenIddictEntityFrameworkCoreDefaults.MigrationsHistoryTable, EfMigrationsHistory.TableName(WorkbenchOpenIddictStoreProvider.Module));
     }
 
-    private static async Task StartNoticesAsync(IServiceProvider services)
+    private static async Task StartNoticesAsync(IServiceProvider services) =>
+        await Notices(services).StartAsync(CancellationToken.None);
+
+    private static WorkbenchOpenIddictStoreNotices Notices(IServiceProvider services) =>
+        services.GetServices<IHostedService>().OfType<WorkbenchOpenIddictStoreNotices>().Single();
+
+    /// <summary>
+    /// The notice reads the features the process has loaded, as the host's CShells catalog has by the time the host has started; a test
+    /// process has loaded only what its tests touched, so this loads what Workbench references, to the depth the feature graph needs.
+    /// </summary>
+    private static class LoadedHostAssemblies
     {
-        foreach (var notices in services.GetServices<IHostedService>().OfType<WorkbenchOpenIddictStoreNotices>())
-            await notices.StartAsync(CancellationToken.None);
+        private static readonly Lazy<bool> Loaded = new(() =>
+        {
+            var pending = new Stack<System.Reflection.Assembly>([typeof(WorkbenchEfToolingShellDefaults).Assembly]);
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            while (pending.TryPop(out var assembly))
+            {
+                foreach (var reference in assembly.GetReferencedAssemblies().Where(name => name.Name?.StartsWith("Elsa.", StringComparison.Ordinal) == true))
+                {
+                    if (seen.Add(reference.FullName))
+                        pending.Push(System.Reflection.Assembly.Load(reference));
+                }
+            }
+
+            return true;
+        });
+
+        public static void Force() => _ = Loaded.Value;
+    }
+
+    /// <summary>The ways the platform selects the persistence provider of a feature, which the notice reads as the platform does.</summary>
+    public enum PlatformSelection
+    {
+        RootDefaultResource,
+        ShellDefaultResource,
+        FeatureBinding,
+        LegacyFeatureProvider
     }
 
     private static ServiceProvider CreateProvider(
@@ -208,7 +275,7 @@ public sealed class WorkbenchOpenIddictStoreProviderTests
         string? sharedConnection = null,
         bool isDevelopmentOrDemo = false,
         CapturingLogger? log = null,
-        string? platformProvider = null)
+        (PlatformSelection Selection, string Provider)? platform = null)
     {
         var settings = new Dictionary<string, string?> { [$"{Section}:IsDevelopmentOrDemo"] = isDevelopmentOrDemo.ToString() };
         if (provider is not null)
@@ -217,15 +284,41 @@ public sealed class WorkbenchOpenIddictStoreProviderTests
             settings[$"{Section}:ConnectionString"] = connectionString;
         if (sharedConnection is not null)
             settings["ConnectionStrings:Elsa"] = sharedConnection;
-        if (platformProvider is not null)
+        if (platform is { } selected)
         {
-            settings["Elsa:Persistence:DefaultResource"] = "primary";
-            settings["Elsa:Persistence:Resources:primary:Provider"] = platformProvider;
+            // A feature of the platform's that takes a provider, enabled in the default shell, selected as the case says.
+            const string Feature = "WorkflowsRuntimeEntityFrameworkCore";
+            var shell = "CShells:Shells:default";
+            LoadedHostAssemblies.Force();
+            settings[$"{shell}:Features:{Feature}:CacheWorkflowExecutables"] = "true";
+            settings["Elsa:Persistence:Resources:primary:Provider"] = selected.Provider;
             settings["Elsa:Persistence:Resources:primary:ConnectionName"] = "Elsa";
+            settings["ConnectionStrings:Elsa"] = "Data Source=platform-notice.db";
+            switch (selected.Selection)
+            {
+                case PlatformSelection.RootDefaultResource:
+                    settings["Elsa:Persistence:DefaultResource"] = "primary";
+                    break;
+                case PlatformSelection.ShellDefaultResource:
+                    settings[$"{shell}:Configuration:Elsa:Persistence:DefaultResource"] = "primary";
+                    break;
+                case PlatformSelection.FeatureBinding:
+                    settings[$"{shell}:Configuration:Elsa:Persistence:Bindings:{Feature}"] = "primary";
+                    break;
+                case PlatformSelection.LegacyFeatureProvider:
+                    settings.Remove("Elsa:Persistence:Resources:primary:Provider");
+                    settings.Remove("Elsa:Persistence:Resources:primary:ConnectionName");
+                    settings[$"{shell}:Features:{Feature}:Provider"] = selected.Provider;
+                    break;
+            }
         }
 
         return WorkbenchOpenIddictTestHost.CreateProvider(
             new ConfigurationBuilder().AddInMemoryCollection(settings).Build(),
-            configure: log is null ? null : services => services.AddSingleton<ILoggerFactory>(log));
+            configure: log is null ? null : services =>
+            {
+                services.AddSingleton<ILoggerFactory>(log);
+                services.AddSingleton<IEfToolingShellDefaults, WorkbenchEfToolingShellDefaults>();
+            });
     }
 }

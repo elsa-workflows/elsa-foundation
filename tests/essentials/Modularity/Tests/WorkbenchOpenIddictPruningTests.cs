@@ -134,11 +134,13 @@ public sealed class WorkbenchOpenIddictPruningTests : IAsyncLifetime
     /// hold every later prune of the node.
     /// </summary>
     [Fact]
-    public async Task A_prune_call_that_hangs_is_cancelled_after_the_timeout()
+    public async Task A_prune_call_that_hangs_is_cancelled_after_the_timeout_and_the_next_call_still_runs()
     {
         await using var node = CreateProvider(
             Durable(("Timeout", "00:01:00")),
             services => services.AddScoped(_ => DispatchProxy.Create<IOpenIddictTokenManager, HangingPrune>()));
+
+        var entries = await _scenario.SeedAsync();
 
         var prune = Service(node).PruneAsync(CancellationToken.None);
         Assert.False(prune.IsCompleted);
@@ -146,6 +148,9 @@ public sealed class WorkbenchOpenIddictPruningTests : IAsyncLifetime
         await prune.WaitAsync(TimeSpan.FromSeconds(30));
 
         Assert.Contains(_log.Entries, entry => entry.Level == LogLevel.Warning && entry.Message.Contains("Pruning the OpenIddict tokens did not finish in 00:01:00", StringComparison.Ordinal));
+        // The tokens' prune hung and was cancelled, and the authorizations' ran in the same cycle: its entry is gone, and the token is not.
+        Assert.Empty(await _scenario.RemainingAsync([entries.PrunedAuthorization]));
+        Assert.Equal([entries.PrunedToken], await _scenario.RemainingAsync([entries.PrunedToken]));
     }
 
     [Theory]

@@ -14,8 +14,9 @@ internal sealed class OpenIddictPruneScenario(IServiceProvider store, TimeProvid
 {
     /// <summary>
     /// What was seeded: <see cref="Kept"/> is the ids that must survive a prune with the default age, and <see cref="All"/> every id.
+    /// <see cref="PrunedToken"/> and <see cref="PrunedAuthorization"/> are one of each that a prune must remove.
     /// </summary>
-    internal sealed record Entries(string[] Kept, string[] All);
+    internal sealed record Entries(string[] Kept, string[] All, string PrunedToken, string PrunedAuthorization);
 
     /// <param name="extraExpired">How many more redeemed, old tokens to seed, to make the prune take more than one batch.</param>
     public async Task<Entries> SeedAsync(int extraExpired = 0)
@@ -54,17 +55,19 @@ internal sealed class OpenIddictPruneScenario(IServiceProvider store, TimeProvid
             await Authorization(Statuses.Valid, old),
             await Authorization(Statuses.Revoked, recent)
         };
+        var prunedToken = await Token(Statuses.Redeemed, old, future);
+        var prunedAuthorization = await Authorization(Statuses.Revoked, old);
         var pruned = new List<string>
         {
             await Token(Statuses.Valid, old, past),
-            await Token(Statuses.Redeemed, old, future),
+            prunedToken,
             await Token(Statuses.Revoked, old, future),
-            await Authorization(Statuses.Revoked, old)
+            prunedAuthorization
         };
         for (var extra = 0; extra < extraExpired; extra++)
             pruned.Add(await Token(Statuses.Redeemed, old, future));
 
-        return new Entries([.. kept.Order()], [.. kept, .. pruned]);
+        return new Entries([.. kept.Order()], [.. kept, .. pruned], prunedToken, prunedAuthorization);
     }
 
     /// <summary>The ids of <paramref name="ids"/> that are still in the store, as a token or as an authorization, in order.</summary>
