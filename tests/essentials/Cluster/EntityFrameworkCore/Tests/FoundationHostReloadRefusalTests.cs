@@ -108,7 +108,13 @@ public sealed class FoundationHostReloadRefusalTests(FoundationHostFeed feed, Mi
 
         await HostLogsAsync($"EF module '{MigratingModule.Name}' has pending migrations: {MigratingModule.AddColor}");
         Assert.NotEqual(HttpStatusCode.OK, (await Version()).Status);
-        Assert.NotEqual(HttpStatusCode.OK, (await _host.GetAsync("/health/ready")).Status);
+        var (readiness, probe) = await _host.GetAsync("/health/ready");
+        Assert.NotEqual(HttpStatusCode.OK, readiness);
+        // The probe says that a module refused, which an operator resolves and the host keeps checking back for (#2202), by its
+        // code alone: it is public, so it names neither the module nor its migrations.
+        Assert.Equal("activation-refused", JsonNode.Parse(probe)!["shells"]![0]!["reason"]!["code"]!.GetValue<string>());
+        Assert.DoesNotContain(MigratingModule.Name, probe, StringComparison.Ordinal);
+        Assert.DoesNotContain(MigratingModule.AddColor, probe, StringComparison.Ordinal);
 
         await ApplyAsync();
 

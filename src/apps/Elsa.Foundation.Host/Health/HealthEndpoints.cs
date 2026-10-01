@@ -1,5 +1,6 @@
 using CShells.Lifecycle;
 using Elsa.Api.AspNetCore;
+using Elsa.Foundation.Host.Shells;
 
 namespace Elsa.Foundation.Host.Health;
 
@@ -13,7 +14,9 @@ namespace Elsa.Foundation.Host.Health;
 /// </list>
 /// Readiness is read live from <see cref="IShellRegistry.GetActive(string)"/> — it reflects the shell's real
 /// state, so it is correct whether the shell was activated eagerly or lazily, and it drops back to not-ready
-/// for the window a shell is mid-reload.
+/// for the window a shell is mid-reload. A shell that is not active says why in its <c>reason</c>
+/// (<see cref="ShellNotActiveReason"/>), from what eager activation's failed attempts left in
+/// <see cref="ShellActivationTracker"/>; the probe itself activates nothing, the eager activation keeps retrying.
 /// <para>
 /// This deliberately does NOT evaluate feature-level health (a feature's own dependencies — a database, a
 /// broker). That lives inside the shell where those dependencies are registered; see the notes in README.
@@ -30,7 +33,7 @@ public static class HealthEndpoints
             .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
             .AllowPublic("health", "Reports whether the Foundation Host process is live.");
 
-        endpoints.MapGet("/health/ready", (IShellRegistry registry, IConfiguration configuration) =>
+        endpoints.MapGet("/health/ready", (IShellRegistry registry, IConfiguration configuration, ShellActivationTracker tracker) =>
         {
             var shellNames = configuration.GetSection(ConfiguredShellsSection).GetChildren()
                 .Select(child => child.Key)
@@ -45,7 +48,8 @@ public static class HealthEndpoints
                     name,
                     state = active is null ? "inactive" : active.State.ToString(),
                     generation = active?.Descriptor.Generation,
-                    active = active?.State == ShellLifecycleState.Active
+                    active = active?.State == ShellLifecycleState.Active,
+                    reason = active?.State == ShellLifecycleState.Active ? null : ShellNotActiveReason.For(active, tracker.FailureOf(name))
                 };
             }).ToArray();
 
