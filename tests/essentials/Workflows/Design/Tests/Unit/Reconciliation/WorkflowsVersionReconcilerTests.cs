@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Threading.Channels;
 using Elsa.Events.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Primitives.Contracts;
@@ -19,6 +20,7 @@ using Elsa.Workflows.Design.Reconciliation.Services;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Time.Testing;
 using Xunit;
 using Elsa.Testing;
 
@@ -479,15 +481,18 @@ public sealed class WorkflowsVersionReconcilerTests
         var defs = new StubDefinitionStore().With(new WorkflowDefinition { Id = "wf-contended", Name = "Old Name" });
         var versions = new StubVersionStore().With(new WorkflowDefinitionVersion("wf-contended", "1.0.0"));
         var saveDef = new FailingSaveDefinitionCommand(failureKind);
+        var clock = new SteppedClock();
 
         var reconciler = NewReconciler(
             new CapturingSender { ToContribute = [incoming] },
             defs, versions, new SpyMaterializeDefinitionCommand(), new SpyMaterializeVersionCommand(),
-            DuplicateHandling.Skip, saveDef);
+            DuplicateHandling.Skip, saveDef, timeProvider: clock);
 
-        var exception = await Assert.ThrowsAsync<DesignPersistenceException>(() => reconciler.Reconcile(CancellationToken.None));
+        var exception = await Assert.ThrowsAsync<DesignPersistenceException>(() => clock.RunAsync(reconciler.Reconcile(CancellationToken.None)));
         Assert.Same(saveDef.LastFailure, exception);
         Assert.Equal(expectedAttempts, saveDef.Keys.Distinct().Count());
+        // Each retry waited on the injected clock, not on wall time.
+        Assert.Equal(expectedAttempts - 1, clock.TimersStepped);
     }
 
     private static WorkflowVersionSourceClaim NewClaim(string definitionId, string version, string sourceId = "src-1") =>
@@ -502,7 +507,8 @@ public sealed class WorkflowsVersionReconcilerTests
         DuplicateHandling duplicateHandling,
         ISaveWorkflowDefinitionCommand? saveDef = null,
         ILogger<WorkflowsVersionReconciler>? logger = null,
-        IPayloadSerializer? serializer = null)
+        IPayloadSerializer? serializer = null,
+        TimeProvider? timeProvider = null)
     {
         var options = Microsoft.Extensions.Options.Options.Create(new WorkflowVersionReconcilerOptions { DuplicateHandling = duplicateHandling });
         return new WorkflowsVersionReconciler(
@@ -514,7 +520,8 @@ public sealed class WorkflowsVersionReconcilerTests
             addDef,
             addVer,
             saveDef ?? new SpySaveDefinitionCommand(),
-            serializer ?? new FakePayloadSerializer());
+            serializer ?? new FakePayloadSerializer(),
+            timeProvider);
     }
 
     private static IWorkflowDefinitionVersion BuildIncomingVersion(
@@ -689,6 +696,40 @@ public sealed class WorkflowsVersionReconcilerTests
                 DesignPersistenceDomain.Workflow, failureKind, EfSaveWorkflowDefinitionCommand.OperationKind, null,
                 new InvalidOperationException("The write failed."));
             throw LastFailure;
+        }
+    }
+
+    /// <summary>
+    /// A <see cref="FakeTimeProvider"/> stepped past each timer the code under test waits on, so a backoff costs no
+    /// wall time. <see cref="RunAsync"/> advances the clock by each timer's due time until the work ends.
+    /// </summary>
+    private sealed class SteppedClock : FakeTimeProvider
+    {
+        private readonly Channel<TimeSpan> _dueTimes = Channel.CreateUnbounded<TimeSpan>();
+
+        public int TimersStepped { get; private set; }
+
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
+        {
+            var timer = base.CreateTimer(callback, state, dueTime, period);
+            _dueTimes.Writer.TryWrite(dueTime);
+            return timer;
+        }
+
+        public async Task RunAsync(Task work)
+        {
+            while (true)
+            {
+                var nextTimer = _dueTimes.Reader.ReadAsync().AsTask();
+                if (await Task.WhenAny(work, nextTimer) == work)
+                {
+                    await work;
+                    return;
+                }
+
+                Advance(await nextTimer);
+                TimersStepped++;
+            }
         }
     }
 

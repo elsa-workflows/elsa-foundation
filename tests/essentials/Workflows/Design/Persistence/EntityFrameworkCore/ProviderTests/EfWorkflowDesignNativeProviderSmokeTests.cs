@@ -6,6 +6,12 @@ using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Commands;
 using Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Stores;
+using Elsa.Workflows.Design.Core.Models;
+using Elsa.Workflows.Design.Persistence.Core.Stores;
+using Elsa.Workflows.Design.Reconciliation.Options;
+using Elsa.Workflows.Design.Reconciliation.Services;
+using Elsa.Workflows.Design.Tests.Infrastructure;
+using Microsoft.Extensions.Logging.Abstractions;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Serialization.Core;
@@ -30,6 +36,12 @@ public sealed class WorkflowsDesignPostgreSqlSmokeTests(WorkflowsDesignPostgreSq
     [SkippableFact]
     public Task PostgreSql_permanently_deleted_definition_is_imported_again() =>
         WorkflowsDesignNativeProviderSmoke.RunPermanentDeleteReimportAsync(fixture, CreateContext);
+
+    [SkippableTheory]
+    [InlineData("Renamed")] // Two passes apply the same change.
+    [InlineData("Renamed elsewhere")] // The other pass applies a different one, so the paused pass has to write again.
+    public Task PostgreSql_metadata_write_that_loses_a_race_converges(string otherWritersName) =>
+        WorkflowsDesignNativeProviderSmoke.RunLostMetadataRaceAsync(fixture, CreateContext, otherWritersName);
 
     private static WorkflowsDesignDbContext CreateContext(string connection) =>
         new WorkflowsDesignPostgreSqlDbContext(new DbContextOptionsBuilder<WorkflowsDesignPostgreSqlDbContext>().UseNpgsql(connection).Options);
@@ -349,6 +361,61 @@ internal static class WorkflowsDesignNativeProviderSmoke
         {
             await using var context = createContext(fixture.ConnectionString);
             await step(context, new EfDesignAtomicWriter(context, access));
+        }
+    }
+
+    /// <summary>
+    /// Two reconciliation passes race on one definition's metadata. The paused pass reads the definition, another pass
+    /// commits, and the paused pass's write then fails the row's LastModifiedAt check on the provider. It must read again
+    /// and converge on the name it wants (#2187).
+    /// </summary>
+    public static async Task RunLostMetadataRaceAsync(
+        WorkflowsDesignProviderFixture fixture,
+        Func<string, WorkflowsDesignDbContext> createContext,
+        string otherWritersName)
+    {
+        Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? "Docker/native provider is unavailable.");
+        var tenant = $"provider-tenant-{Guid.NewGuid():N}";
+        var definitionId = $"provider-raced-{Guid.NewGuid():N}";
+        var versionId = $"provider-raced-version-{Guid.NewGuid():N}";
+        var access = new FixedAccess(PersistenceAccessContext.Scoped(new PersistenceScope(tenant)));
+        await using (var context = createContext(fixture.ConnectionString))
+            await context.Database.EnsureCreatedAsync();
+
+        await ReconcileAsync("Original");
+        var read = new Pause();
+        var paused = ReconcileAsync("Renamed", store => new PausingDefinitionStore(store, read));
+        await read.ReachedBy(paused);
+        await ReconcileAsync(otherWritersName);
+        read.Resume();
+        await paused;
+
+        await using (var context = createContext(fixture.ConnectionString))
+            Assert.Equal("Renamed", (await new EfWorkflowDefinitionStore(context, access).FindByIdAsync(definitionId))?.Name);
+
+        // One pass in its own context, as each reconciliation pass gets its own scope.
+        async Task ReconcileAsync(string name, Func<IWorkflowDefinitionStore, IWorkflowDefinitionStore>? definitions = null)
+        {
+            await using var context = createContext(fixture.ConnectionString);
+            var writer = new EfDesignAtomicWriter(context, access);
+            var serializer = new NativeProviderSerializer();
+            var definitionStore = new EfWorkflowDefinitionStore(context, access);
+            var version = new WorkflowDefinitionVersion(definitionId, "1.0.0")
+            {
+                Id = versionId,
+                State = new WorkflowDefinitionState([], null, [], [], null),
+                Definition = new WorkflowDefinition { Id = definitionId, Name = name }
+            };
+            await new WorkflowsVersionReconciler(
+                NullLogger<WorkflowsVersionReconciler>.Instance,
+                new ContributingPublisher(version),
+                Microsoft.Extensions.Options.Options.Create(new WorkflowVersionReconcilerOptions()),
+                definitions?.Invoke(definitionStore) ?? definitionStore,
+                new EfWorkflowDefinitionVersionStore(context, serializer, definitionStore, access),
+                new EfMaterializeWorkflowDefinitionCommand(context, access, writer),
+                new EfMaterializeWorkflowDefinitionVersionCommand(context, access, writer, serializer),
+                new EfSaveWorkflowDefinitionCommand(context, access, writer),
+                serializer).Reconcile(CancellationToken.None);
         }
     }
 

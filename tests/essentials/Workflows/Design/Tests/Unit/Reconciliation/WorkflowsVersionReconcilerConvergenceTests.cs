@@ -1,12 +1,10 @@
-using Elsa.Events.Core.Contracts;
 using Elsa.Primitives.Versioning;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
-using Elsa.Workflows.Design.Core.Reconciliation;
 using Elsa.Workflows.Design.Persistence.Core.Constants;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
-using Elsa.Workflows.Design.Persistence.Core.Filters;
+using Elsa.Workflows.Design.Persistence.Core.Exceptions;
 using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Persistence.EntityFrameworkCore;
@@ -92,19 +90,46 @@ public sealed class WorkflowsVersionReconcilerConvergenceTests : IAsyncLifetime
     public async Task A_metadata_write_that_loses_a_race_converges(string otherWritersName)
     {
         await ReconcileAsync(name: "Original");
-        var read = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var resume = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var paused = ReconcileAsync(name: "Renamed", definitions: store => new PausingDefinitionStore(store, read, resume.Task));
-        // Awaiting whichever ends first surfaces a pass that failed before it read the definition.
-        await await Task.WhenAny(read.Task, paused);
+        var read = new Pause();
+        var paused = ReconcileAsync(name: "Renamed", definitions: store => new PausingDefinitionStore(store, read));
+        await read.ReachedBy(paused);
 
         // The other writer commits between the paused pass's read and its write, which then fails its
         // LastModifiedAt check, and its own key has no marker to replay.
         await ReconcileAsync(name: otherWritersName);
-        resume.SetResult();
+        read.Resume();
         await paused;
 
         Assert.Equal("Renamed", (await GetDefinitionAsync())!.Name);
+    }
+
+    [Fact]
+    public async Task A_metadata_write_that_lost_its_race_to_a_permanent_delete_fails_with_that_lost_race()
+    {
+        await ReconcileAsync(name: "Original");
+        await ReconcileAsync(name: "Original", deleted: true);
+        var read = new Pause();
+        var reread = new Pause();
+        var failures = new List<DesignPersistenceException>();
+        var paused = ReconcileAsync(
+            name: "Renamed",
+            deleted: true,
+            definitions: store => new PausingDefinitionStore(store, read, reread),
+            saves: save => new FailureRecordingSaveCommand(save, failures));
+        await read.ReachedBy(paused);
+
+        // Another pass commits a rename, so the paused write loses its race, and the definition is deleted before
+        // the paused pass reads it again: nothing is left to compare against.
+        await ReconcileAsync(name: "Renamed elsewhere", deleted: true);
+        read.Resume();
+        await reread.ReachedBy(paused);
+        await DeletePermanentlyAsync();
+        reread.Resume();
+
+        var thrown = await Assert.ThrowsAsync<DesignPersistenceException>(() => paused);
+        Assert.Same(Assert.Single(failures), thrown);
+        Assert.Equal(DesignPersistenceFailureKind.Concurrency, thrown.FailureKind);
+        Assert.Null(await GetDefinitionAsync());
     }
 
     [Fact]
@@ -173,16 +198,19 @@ public sealed class WorkflowsVersionReconcilerConvergenceTests : IAsyncLifetime
         bool deleted = false,
         string? versionId = null,
         string definitionId = DefinitionId,
-        Func<IWorkflowDefinitionStore, IWorkflowDefinitionStore>? definitions = null) => InScopeAsync(services =>
+        Func<IWorkflowDefinitionStore, IWorkflowDefinitionStore>? definitions = null,
+        Func<ISaveWorkflowDefinitionCommand, ISaveWorkflowDefinitionCommand>? saves = null) => InScopeAsync(services =>
     {
         var definition = services.GetRequiredService<IWorkflowDefinitionFactory>().Create(name, id: definitionId, deleted: deleted);
         var version = services.GetRequiredService<IWorkflowDefinitionVersionFactory>().Create(definition, Version, EmptyState, id: versionId);
         var definitionStore = services.GetRequiredService<IWorkflowDefinitionStore>();
+        var saveCommand = services.GetRequiredService<ISaveWorkflowDefinitionCommand>();
         var reconciler = ActivatorUtilities.CreateInstance<WorkflowsVersionReconciler>(
             services,
             new ContributingPublisher(version),
             Microsoft.Extensions.Options.Options.Create(new WorkflowVersionReconcilerOptions()),
-            definitions?.Invoke(definitionStore) ?? definitionStore);
+            definitions?.Invoke(definitionStore) ?? definitionStore,
+            saves?.Invoke(saveCommand) ?? saveCommand);
         return reconciler.Reconcile(CancellationToken.None);
     });
 
@@ -235,38 +263,21 @@ public sealed class WorkflowsVersionReconcilerConvergenceTests : IAsyncLifetime
 
     private static string Marker(string operationKind, DesignOperationKey key) => operationKind + " " + key.Value;
 
-    /// <summary>Contributes the given versions to the pass, as the aggregating handler does for real sources.</summary>
-    private sealed class ContributingPublisher(params IWorkflowDefinitionVersion[] versions) : IInlineEventPublisher
+    /// <summary>Records each persistence failure the real save command throws, then lets it propagate.</summary>
+    private sealed class FailureRecordingSaveCommand(ISaveWorkflowDefinitionCommand inner, List<DesignPersistenceException> failures) : ISaveWorkflowDefinitionCommand
     {
-        public Task Publish(IEvent @event, CancellationToken cancellationToken = default)
+        public async Task Execute(DesignOperationKey operationKey, WorkflowDefinition definition, CancellationToken cancellationToken = default)
         {
-            if (@event is WorkflowVersionsReconciling reconciling)
-                foreach (var version in versions)
-                    reconciling.Versions.Add(version);
-            return Task.CompletedTask;
-        }
-    }
-
-    /// <summary>Holds the pass right after its first definition read, until the test lets it resume.</summary>
-    private sealed class PausingDefinitionStore(IWorkflowDefinitionStore inner, TaskCompletionSource read, Task resume) : IWorkflowDefinitionStore
-    {
-        private int _reads;
-
-        public async Task<WorkflowDefinition?> FindByIdAsync(string id, CancellationToken cancellationToken = default)
-        {
-            var definition = await inner.FindByIdAsync(id, cancellationToken);
-            if (Interlocked.Increment(ref _reads) == 1)
+            try
             {
-                read.SetResult();
-                await resume;
+                await inner.Execute(operationKey, definition, cancellationToken);
             }
-            return definition;
+            catch (DesignPersistenceException failure)
+            {
+                failures.Add(failure);
+                throw;
+            }
         }
-
-        public Task<WorkflowDefinition> GetAsync(string id, CancellationToken cancellationToken = default) => inner.GetAsync(id, cancellationToken);
-
-        public Task<IReadOnlyList<WorkflowDefinition>> ListAsync(WorkflowDefinitionFilter filter, CancellationToken cancellationToken = default) =>
-            inner.ListAsync(filter, cancellationToken);
     }
 
     /// <summary>Stands in for the Publishing module's guard: these definitions were never published.</summary>

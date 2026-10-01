@@ -33,7 +33,8 @@ public sealed class WorkflowsVersionReconciler(
     IMaterializeWorkflowDefinitionCommand materializeDefinitionCommand,
     IMaterializeWorkflowDefinitionVersionCommand materializeVersionCommand,
     ISaveWorkflowDefinitionCommand saveDefinitionCommand,
-    IPayloadSerializer payloadSerializer
+    IPayloadSerializer payloadSerializer,
+    TimeProvider? timeProvider = null
 )
     : IWorkflowVersionReconciler
 {
@@ -42,6 +43,11 @@ public sealed class WorkflowsVersionReconciler(
     /// the last one.
     /// </summary>
     public const int MaxMetadataConvergenceAttempts = 8;
+
+    /// <summary>The wait after a lost race, multiplied by the number of the attempt that lost it.</summary>
+    private static readonly TimeSpan MetadataRetryBackoff = TimeSpan.FromMilliseconds(25);
+
+    private readonly TimeProvider clock = timeProvider ?? TimeProvider.System;
 
     public async Task Reconcile(CancellationToken cancellationToken)
     {
@@ -177,7 +183,7 @@ public sealed class WorkflowsVersionReconciler(
                 // and write again under a new key when it does not. The atomic writer clears the change tracker
                 // when a write fails, so the read returns the committed row. Any other failure, and the last lost
                 // race, propagate unchanged.
-                await Task.Delay(TimeSpan.FromMilliseconds(25 * attempt), cancellationToken);
+                await Task.Delay(MetadataRetryBackoff * attempt, clock, cancellationToken);
                 var current = await FindDefinition(definitionId, cancellationToken);
                 if (current is null)
                     throw; // The race was lost to a delete, which leaves nothing to compare against.
