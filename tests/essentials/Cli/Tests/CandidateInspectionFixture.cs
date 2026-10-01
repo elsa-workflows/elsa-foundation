@@ -22,6 +22,8 @@ internal sealed class CandidateInspectionFixture : IDisposable
     public const string EnvironmentCaptureId = "22222222222222222222222222222222";
     public const string PublicEnvironmentResource = "EnvironmentResource";
     public const string PublicEnvironmentConnection = "DeclaredConnection";
+    public const string OverlayEnvironmentResource = "OverlayResource";
+    public const string OverlayEnvironmentConnection = "OverlayConnection";
     public const string PrivateEnvironmentCanary = "candidate-environment-private-canary-2292";
     public const string SafePrivateEnvironmentCanary = "PrivateEnvironmentValue2292";
     public const string WorkbenchModularityApiFeatureId = "ModularityApi";
@@ -141,6 +143,7 @@ internal sealed class CandidateInspectionFixture : IDisposable
         var appsettings = JsonNode.Parse(File.ReadAllText(Path.Join(SourceDirectory, "appsettings.json")))!.AsObject();
         appsettings["ConnectionStrings"]!["DeclaredConnection"] =
             $"Data Source={DatabasePath};Password={PrivateEnvironmentCanary}";
+        appsettings["ConnectionStrings"]![OverlayEnvironmentConnection] = "";
         appsettings["Elsa"]!["Persistence"]!["DefaultResource"] = PublicEnvironmentResource;
         appsettings["Elsa"]!["Persistence"]!["Resources"] = new JsonObject
         {
@@ -148,6 +151,11 @@ internal sealed class CandidateInspectionFixture : IDisposable
             {
                 ["Provider"] = "Sqlite",
                 ["ConnectionName"] = PublicEnvironmentConnection
+            },
+            [OverlayEnvironmentResource] = new JsonObject
+            {
+                ["Provider"] = "Sqlite",
+                ["ConnectionName"] = OverlayEnvironmentConnection
             }
         };
         File.WriteAllText(Path.Join(SourceDirectory, "appsettings.json"), appsettings.ToJsonString());

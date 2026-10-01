@@ -262,7 +262,8 @@ public sealed class CandidateInspectionTests
         await PrepareWorkbenchAcceptedAsync(fixture);
         var environmentPath = fixture.WriteEnvironmentInput(
             ("UnrelatedBlank", ""),
-            ("ConnectionStrings__DeclaredConnection", CandidateInspectionFixture.PrivateEnvironmentCanary));
+            ("Elsa__Persistence__DefaultResource", CandidateInspectionFixture.OverlayEnvironmentResource),
+            ("ConnectionStrings__OverlayConnection", CandidateInspectionFixture.PrivateEnvironmentCanary));
         var environmentBytes = File.ReadAllBytes(environmentPath);
         var environmentBase64 = Convert.ToBase64String(environmentBytes);
         var environmentDigest = Convert.ToHexString(SHA256.HashData(environmentBytes));
@@ -277,7 +278,9 @@ public sealed class CandidateInspectionTests
 
         var explicitRun = DotnetElsa.Run(ambient, arguments);
         AssertExpectedExit(explicitRun, ToolExitCode.Success, "explicit Workbench environment inspection");
-        AssertWorkbenchResolution(explicitRun.Output, externalInputs: "supplied-intended");
+        AssertWorkbenchResolution(explicitRun.Output, externalInputs: "supplied-intended",
+            expectedResource: CandidateInspectionFixture.OverlayEnvironmentResource,
+            expectedConnection: CandidateInspectionFixture.OverlayEnvironmentConnection);
         Assert.DoesNotContain(CandidateInspectionFixture.PrivateEnvironmentCanary, explicitRun.Text, StringComparison.Ordinal);
         Assert.DoesNotContain(environmentPath, explicitRun.Text, StringComparison.Ordinal);
         Assert.DoesNotContain(fixture.DatabasePath, explicitRun.Text, StringComparison.Ordinal);
@@ -607,7 +610,9 @@ public sealed class CandidateInspectionTests
                 "--output", fixture.InputPath(outputName)]);
 
     private static void AssertWorkbenchResolution(string output, string externalInputs,
-        string source = "captured-workbench-json-explicit-environment-v1", bool expectRuntimeFault = true)
+        string source = "captured-workbench-json-explicit-environment-v1", bool expectRuntimeFault = true,
+        string expectedResource = CandidateInspectionFixture.PublicEnvironmentResource,
+        string expectedConnection = CandidateInspectionFixture.PublicEnvironmentConnection)
     {
         using var document = JsonDocument.Parse(output);
         var resolution = document.RootElement.GetProperty("configurationResolution");
@@ -631,8 +636,8 @@ public sealed class CandidateInspectionTests
         var participants = resolution.GetProperty("participants").EnumerateArray().ToArray();
         Assert.NotEmpty(participants);
         Assert.Contains(participants, participant =>
-            participant.GetProperty("resource").GetString() == CandidateInspectionFixture.PublicEnvironmentResource &&
-            participant.GetProperty("connectionReference").GetString() == CandidateInspectionFixture.PublicEnvironmentConnection);
+            participant.GetProperty("resource").GetString() == expectedResource &&
+            participant.GetProperty("connectionReference").GetString() == expectedConnection);
     }
 
     private static string[] AcceptedFeatureIds(CandidateInspectionFixture fixture, string? path = null)
