@@ -16,6 +16,8 @@
     <!-- The backfill's clock: claims, the settle margin and the audit interval move when a test says so. -->
     <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
     <PackageReference Include="xunit" />
+    <!-- The opt-in SQLite pool stress test skips unless ELSA_SQLITE_POOL_STRESS is set (#2209). -->
+    <PackageReference Include="Xunit.SkippableFact" />
     <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" />
     <PackageReference Include="coverlet.collector" PrivateAssets="all" />
   </ItemGroup>
