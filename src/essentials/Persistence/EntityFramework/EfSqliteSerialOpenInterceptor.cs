@@ -22,7 +22,8 @@ namespace Elsa.Persistence.EntityFramework;
 /// is the shell activation failure of #2209: a Workbench start's module migrators, finalization gates and backfills
 /// open connections to the same file together. When SQLite does not refuse, the two owners silently share one
 /// transaction state. Upstream fixes the order in 10.0.13 (dotnet/efcore#39012). Until Elsa pins that version, this
-/// interceptor prevents the overlap.
+/// interceptor prevents the overlap. Removing it once that version is pinned is tracked by #2220, and a test fails as
+/// soon as it is.
 /// </para>
 /// <para>
 /// <b>What holds.</b> The race needs two checkouts of one pool at the same time, and a pool serves exactly one
@@ -67,7 +68,7 @@ internal sealed class EfSqliteSerialOpenInterceptor : DbConnectionInterceptor
 
     public override InterceptionResult ConnectionOpening(DbConnection connection, ConnectionEventData eventData, InterceptionResult result)
     {
-        // Another interceptor has opened it already; there is no checkout left to order.
+        // Another interceptor took over the open, so there is nothing for this gate to order.
         if (result.IsSuppressed)
             return result;
         var gate = GateOf(connection);

@@ -260,6 +260,7 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
         "tests/essentials/Persistence/EntityFramework/Tests/EfSchemaWriteGateInterceptorTests.cs",
         "tests/essentials/Persistence/EntityFramework/Tests/EfSchemaWriteRefusedExceptionTests.cs",
         "tests/essentials/Persistence/EntityFramework/Tests/EfSqliteSerialOpenInterceptorTests.cs",
+        "tests/essentials/Persistence/EntityFramework/Tests/EfSqliteSerialOpenStressTests.cs",
         "tests/essentials/Persistence/EntityFramework/Tests/EfToolingConfigurationContextTests.cs",
         "tests/essentials/Persistence/EntityFramework/Tests/EfToolingTargetSelectionTests.cs",
         "tests/essentials/Persistence/EntityFramework/Tests/EfWriteRetryTests.cs",

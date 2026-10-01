@@ -341,7 +341,7 @@ connection to two opens of the same connection string that check out at once (do
 connections to `elsa.db` together fails with "unable to delete/modify user-function due to active statements". Only the
 checkout waits, not the connection's use, and the other providers do not carry the interceptor. A context bound to
 SQLite outside the binding does not take the gate. Until Elsa pins 10.0.13, such a context must not share a module's
-connection string. The gate can be removed once that version is pinned.
+connection string. The gate is removed once that version is pinned (#2220); a test fails as soon as it is.
 
 ## Shared transactions
 

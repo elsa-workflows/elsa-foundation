@@ -2,7 +2,6 @@ using System.Reflection;
 using System.Xml.Linq;
 using Elsa.Persistence.EntityFramework.Tests;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Xunit;
 
@@ -78,7 +77,9 @@ public sealed class EfRelationalProviderBindingDriftTests
 
         EfRelationalProviderBinding.Use(builder, provider, engine.ConnectionString, HistoryTable);
 
-        var gates = builder.Options.FindExtension<CoreOptionsExtension>()?.Interceptors?.OfType<IDbConnectionInterceptor>().Count() ?? 0;
+        // The interceptor is internal to the policy package; a rename fails the lookup rather than the count.
+        var gate = typeof(EfRelationalProviderBinding).Assembly.GetType("Elsa.Persistence.EntityFramework.EfSqliteSerialOpenInterceptor", throwOnError: true)!;
+        var gates = builder.Options.FindExtension<CoreOptionsExtension>()?.Interceptors?.Count(interceptor => interceptor.GetType() == gate) ?? 0;
         Assert.Equal(engine.ProviderName == EfProviderNames.Sqlite ? 1 : 0, gates);
     }
 
