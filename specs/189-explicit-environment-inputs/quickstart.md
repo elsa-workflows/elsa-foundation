@@ -1,6 +1,6 @@
 # Planned validation journey
 
-This feature is not implemented by the planning artifacts. The commands below are the validation sequence for the implementation phase; they have not been run as part of SPECIFY/PLAN. Use the [proof matrix](contracts/acceptance-proof-matrix.md) for the complete case assignment.
+This feature is not implemented by the planning artifacts. The commands below define implementation validation; no feature acceptance journey has run during authoring. Local architecture and maps checks ran separately as authoring gates and do not execute this future proof matrix. Use the [proof matrix](contracts/acceptance-proof-matrix.md) for the complete case assignment.
 
 ## Prerequisites
 

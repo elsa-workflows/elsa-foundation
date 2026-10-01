@@ -1,8 +1,11 @@
 # Implementation Plan: Explicit Private Environment Inputs
 
-**Branch**: `codex/2277-explicit-environment-input-spec`  
-**Date**: 2026-10-01  
-**Spec**: [spec.md](./spec.md)  
+**Branch**: `codex/2277-explicit-environment-input-spec`
+
+**Date**: 2026-10-01
+
+**Spec**: [spec.md](./spec.md)
+
 **Owning program bucket**: runtime composition, #1959 / #1962; delivery issue #2277
 
 **Planning status**: Plan and 46 unchecked implementation tasks passed root and independent review on 2026-10-01. Authoring delivery gates remain. This plan contains no implementation claim and no executed-test claim.

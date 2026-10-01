@@ -1,8 +1,11 @@
 # Feature Specification: Explicit Private Environment Inputs
 
-**Feature Branch**: `codex/2277-explicit-environment-input-spec`  
-**Created**: 2026-10-01  
+**Feature Branch**: `codex/2277-explicit-environment-input-spec`
+
+**Created**: 2026-10-01
+
 **Status**: Approved — authoring review passed; implementation remains gated on #2277 delivery
+
 **Input**: User description: Define a bounded first lane for explicitly supplied, private intended environment inputs during composition inspection while preserving candidate v1 and file-only compatibility.
 
 This specification defines the actor-visible behavior and proof obligations for an explicit environment-input lane. Exact input grammar, numerical limits and protocol choices are recorded in the [reviewed plan](plan.md) and its contracts; source and integration constraints are linked in the planning handoff notes below.

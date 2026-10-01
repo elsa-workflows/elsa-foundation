@@ -1,7 +1,9 @@
 # Phase 0 Research: Explicit Private Environment Inputs
 
-**Feature**: [Explicit private environment inputs](./spec.md)  
-**Status**: Phase 0 decisions reviewed by root; Phase 1 contracts and proof matrix remain draft until reviewed  
+**Feature**: [Explicit private environment inputs](./spec.md)
+
+**Status**: Research decisions and Phase 1 contracts reviewed; implementation proof remains planned
+
 **Scope**: Resolve the source and policy choices needed to plan the first lane. This records design decisions, not production behavior or an executed proof.
 
 ## Constitution pre-check

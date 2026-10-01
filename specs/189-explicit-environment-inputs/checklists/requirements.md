@@ -1,7 +1,9 @@
 # Specification Quality Checklist: Explicit Private Environment Inputs
 
 **Purpose**: Review the specification before planning and implementation. This checklist records source alignment and unresolved planning work; it is not a claim that implementation gates have passed.
+
 **Created**: 2026-10-01
+
 **Feature**: [spec.md](../spec.md)
 
 ## Content Quality

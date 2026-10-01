@@ -1,7 +1,9 @@
 # Proposed ADR 0076 extension: explicit private environment input
 
-**Status**: Proposed additive extension for #2277. This document does not rewrite or accept ADR 0076.  
-**Source**: [ADR 0076, persistence tooling inside the host closure](../../../docs/adr/0076-persistence-tooling-runs-inside-the-host-closure.md)  
+**Status**: Proposed additive extension for #2277. This document does not rewrite or accept ADR 0076.
+
+**Source**: [ADR 0076, persistence tooling inside the host closure](../../../docs/adr/0076-persistence-tooling-runs-inside-the-host-closure.md)
+
 **Scope**: Extend D1, D4, and D7 for one explicit private environment-overlay inspection lane.
 
 ## Decision D1 extension: one host-owned capability
