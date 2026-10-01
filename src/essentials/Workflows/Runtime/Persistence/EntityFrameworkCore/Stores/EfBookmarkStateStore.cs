@@ -217,6 +217,46 @@ public sealed class EfBookmarkStateStore(
             cancellationToken);
     }
 
+    /// <summary>
+    /// The waiting bookmarks of one type, projected to their stimulus identities in the database. The lookup key rides
+    /// along in the DISTINCT: it is a hex hash of the exact identity, so two hashes a case-insensitive provider collation
+    /// would fold together still come back as two rows.
+    /// </summary>
+    public async ValueTask<IReadOnlyCollection<string>> ListWaitingStimulusHashesByTypeAsync(
+        string stimulusType,
+        DateTimeOffset evaluatedAt,
+        CancellationToken cancellationToken = default)
+    {
+        ValidateBound(stimulusType, BookmarkStateEfModule.StimulusTypeMaximumLength, nameof(stimulusType));
+        cancellationToken.ThrowIfCancellationRequested();
+        var scope = RequireScope();
+        var scopeHash = Hash(scope);
+        var scopeKey = EfRelationalIdentity.Encode(scope);
+        var lookup = StimulusTypeLookupKey(stimulusType);
+        var evaluatedAtUtcTicks = evaluatedAt.UtcTicks;
+        try
+        {
+            var identities = await context.Bookmarks.AsNoTracking()
+                .Where(row => row.ScopeKeyHash == scopeHash && row.ScopeKey == scopeKey &&
+                              row.StimulusTypeLookupKey == lookup && row.StimulusType == stimulusType &&
+                              (row.ExpiresAtUtcTicks == null || row.ExpiresAtUtcTicks > evaluatedAtUtcTicks))
+                .Select(row => new { row.StimulusLookupKey, row.StimulusHash })
+                .Distinct()
+                .ToArrayAsync(cancellationToken);
+            return identities.Select(identity => identity.StimulusHash).Distinct(StringComparer.Ordinal).ToArray();
+        }
+        catch (OperationCanceledException)
+        {
+            context.ChangeTracker.Clear();
+            throw;
+        }
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsStoreBoundaryFailure(exception))
+        {
+            context.ChangeTracker.Clear();
+            throw NormalizeProviderFailure("listing", stimulusType, exception);
+        }
+    }
+
     private async ValueTask<RuntimeStorePage<BookmarkState>> ReadPage(
         IQueryable<BookmarkStateEntity> source,
         RuntimeStorePageRequest query,

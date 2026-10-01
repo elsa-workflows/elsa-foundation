@@ -82,4 +82,20 @@ public interface IWorkflowTriggerBindingStore
     ValueTask<WorkflowTriggerBindingPage> ListByStimulusTypeAsync(
         WorkflowTriggerBindingTypePageQuery query,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Returns the distinct stimulus hashes of the active bindings of one stimulus type: the same population
+    /// <see cref="ListByStimulusTypeAsync"/> pages, reduced to the stimulus identities it carries. A per-node projection
+    /// rebuilt from this index (the HTTP route table) compares the result between reads to notice a change made on
+    /// another node without re-reading every binding. The default traverses <see cref="ListByStimulusTypeAsync"/>; a
+    /// store that can project the hashes alone should override it.
+    /// </summary>
+    async ValueTask<IReadOnlyCollection<string>> ListActiveStimulusHashesAsync(
+        string stimulusType,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(stimulusType);
+        var bindings = await this.ListAllByStimulusTypeAsync(stimulusType, cancellationToken);
+        return bindings.Select(binding => binding.StimulusHash).Distinct(StringComparer.Ordinal).ToArray();
+    }
 }

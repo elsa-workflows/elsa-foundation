@@ -65,6 +65,14 @@ public sealed class GlobalBookmarkStimulusLookup : IGlobalBookmarkStimulusLookup
         return new GlobalBookmarkStimulusLookupResult(matches);
     }
 
+    public ValueTask<IReadOnlyCollection<string>> FindWaitingStimulusHashesByTypeAsync(
+        GlobalBookmarkStimulusTypeLookupRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        return _bookmarkStimulusIndex.ListWaitingStimulusHashesByTypeAsync(request.StimulusType, request.EvaluatedAt, cancellationToken);
+    }
+
     private static bool Matches(BookmarkState bookmark, GlobalBookmarkStimulusLookupRequest request) =>
         StringComparer.Ordinal.Equals(bookmark.StimulusType, request.StimulusType) &&
         StringComparer.Ordinal.Equals(bookmark.StimulusHash, request.StimulusHash) &&

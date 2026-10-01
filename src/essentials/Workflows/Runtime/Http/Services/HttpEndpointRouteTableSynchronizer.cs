@@ -11,7 +11,7 @@ namespace Elsa.Workflows.Runtime.Http.Services;
 /// The single serialization point for HTTP route-table refreshes (spec 089 D review fix). A singleton owning a
 /// <see cref="SemaphoreSlim"/>(1,1): every <see cref="RefreshAsync"/> acquires the lock, opens a FRESH scope,
 /// resolves the scoped <see cref="IHttpEndpointRoutesResolver"/> and <see cref="IRouteTable"/> inside it, does the
-/// full read (<see cref="IHttpEndpointRoutesResolver.ResolveRoutesAsync"/>) + swap (<see cref="IRouteTable.Refresh(IEnumerable{Http.Core.Models.HttpRouteData})"/>),
+/// full read (<see cref="IHttpEndpointRoutesResolver.ResolveRouteSetAsync"/>) + swap (<see cref="IRouteTable.Refresh(IEnumerable{Http.Core.Models.HttpRouteData})"/>),
 /// then releases.
 /// </summary>
 /// <remarks>
@@ -25,6 +25,15 @@ namespace Elsa.Workflows.Runtime.Http.Services;
 /// commit that lands after a read has already queued its own refresh, so no update is lost.
 /// </para>
 /// <para>
+/// <b>Convergence across nodes (#2190).</b> The notifications that drive the observers fire only on the node that made
+/// the change, so each refresh also keeps the fingerprint of the stimulus identities its routes were projected from,
+/// computed from the rows it read. <see cref="ConvergeAsync"/>, run on an interval by the convergence pump, compares
+/// that with the fingerprint the durable sources give now and refreshes only when they differ. Because the kept
+/// fingerprint describes the rows that were loaded, not a separate earlier read, a change that lands and is undone
+/// between two checks cannot leave the table behind unnoticed. Any failed refresh forgets the fingerprint, so the next
+/// check rebuilds rather than trusting a table in an unknown state.
+/// </para>
+/// <para>
 /// The route table's state lives in the shared memory cache, so resolving it from any scope mutates the same table
 /// — resolving inside the per-refresh scope is therefore equivalent to (and matches) the observers' prior pattern,
 /// with the read+swap now guarded. Exceptions propagate unchanged: the trigger-index observer lets a throw fail the
@@ -35,27 +44,71 @@ public sealed class HttpEndpointRouteTableSynchronizer(IServiceScopeFactory scop
 {
     private readonly SemaphoreSlim _gate = new(1, 1);
 
-    public async ValueTask RefreshAsync(CancellationToken cancellationToken = default)
+    // The fingerprint of the identities the current table was built from; null until a refresh succeeds with a resolver
+    // that reports one, and after any refresh fails. Read and written only under _gate.
+    private string? _refreshedFingerprint;
+
+    public ValueTask RefreshAsync(CancellationToken cancellationToken = default) =>
+        ObserveRefreshAsync(async () =>
+        {
+            await _gate.WaitAsync(cancellationToken);
+            try
+            {
+                await using var scope = scopeFactory.CreateAsyncScope();
+                return await RefreshUnderGateAsync(scope.ServiceProvider, cancellationToken);
+            }
+            finally
+            {
+                _gate.Release();
+            }
+        });
+
+    public async ValueTask<bool> ConvergeAsync(CancellationToken cancellationToken = default)
+    {
+        await _gate.WaitAsync(cancellationToken);
+        try
+        {
+            await using var scope = scopeFactory.CreateAsyncScope();
+            var resolver = scope.ServiceProvider.GetRequiredService<IHttpEndpointRoutesResolver>();
+            var fingerprint = await resolver.ResolveRouteFingerprintAsync(cancellationToken);
+            if (fingerprint is not null && StringComparer.Ordinal.Equals(fingerprint, _refreshedFingerprint))
+                return false;
+
+            await ObserveRefreshAsync(() => RefreshUnderGateAsync(scope.ServiceProvider, cancellationToken));
+            return true;
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    public void Dispose() => _gate.Dispose();
+
+    private async Task<int> RefreshUnderGateAsync(IServiceProvider services, CancellationToken cancellationToken)
+    {
+        var resolver = services.GetRequiredService<IHttpEndpointRoutesResolver>();
+        var routeTable = services.GetRequiredService<IRouteTable>();
+
+        _refreshedFingerprint = null;
+        var routeSet = await resolver.ResolveRouteSetAsync(cancellationToken);
+        await routeTable.Refresh(routeSet.Routes);
+        _refreshedFingerprint = routeSet.Fingerprint;
+        return routeSet.Routes.Count;
+    }
+
+    private static async ValueTask ObserveRefreshAsync(Func<Task<int>> refresh)
     {
         var started = Stopwatch.GetTimestamp();
         var outcome = HttpRouteTableTelemetry.SuccessOutcome;
         int? routeCount = null;
-        var gateAcquired = false;
         using var activity = ObservationalTelemetryScope.Start(
             HttpRouteTableTelemetry.GetActivitySource,
             HttpRouteTableTelemetry.ActivityName);
 
         try
         {
-            await _gate.WaitAsync(cancellationToken);
-            gateAcquired = true;
-            await using var scope = scopeFactory.CreateAsyncScope();
-            var resolver = scope.ServiceProvider.GetRequiredService<IHttpEndpointRoutesResolver>();
-            var routeTable = scope.ServiceProvider.GetRequiredService<IRouteTable>();
-
-            var routes = await resolver.ResolveRoutesAsync(cancellationToken);
-            await routeTable.Refresh(routes);
-            routeCount = routes.Count;
+            routeCount = await refresh();
         }
         catch (OperationCanceledException)
         {
@@ -71,9 +124,6 @@ public sealed class HttpEndpointRouteTableSynchronizer(IServiceScopeFactory scop
         }
         finally
         {
-            if (gateAcquired)
-                _gate.Release();
-
             var tags = new TagList { { HttpRouteTableTelemetry.OutcomeTag, outcome } };
             activity.SetTag(HttpRouteTableTelemetry.OutcomeTag, outcome);
             if (routeCount is not null)
@@ -86,6 +136,4 @@ public sealed class HttpEndpointRouteTableSynchronizer(IServiceScopeFactory scop
                 histogram => histogram.Record(Stopwatch.GetElapsedTime(started).TotalMilliseconds, tags));
         }
     }
-
-    public void Dispose() => _gate.Dispose();
 }

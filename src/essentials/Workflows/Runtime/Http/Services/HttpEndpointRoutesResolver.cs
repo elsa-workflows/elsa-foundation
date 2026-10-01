@@ -1,9 +1,12 @@
+using System.Security.Cryptography;
+using System.Text;
 using Elsa.Http.Core;
 using Elsa.Http.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Http.Contracts;
 using Elsa.Workflows.Runtime.Http.Exceptions;
+using Elsa.Workflows.Runtime.Http.Models;
 using Microsoft.Extensions.Logging;
 
 namespace Elsa.Workflows.Runtime.Http.Services;
@@ -49,13 +52,26 @@ namespace Elsa.Workflows.Runtime.Http.Services;
 /// published trigger is legal (it is instance-scoped, not a competing definition, spec 089 D-D5), so bookmarks are
 /// deliberately exempt from the collision warning.
 /// </para>
+/// <para>
+/// <b>Fingerprint (#2190).</b> The route set is a function of the stimulus identities of the active HTTP-endpoint
+/// bindings and the waiting, unexpired HTTP-endpoint bookmarks, since an HTTP stimulus hash is the hash of its
+/// <c>(template, method)</c>. <see cref="ResolveRouteSetAsync"/> fingerprints the identities of the rows it projected;
+/// <see cref="ResolveRouteFingerprintAsync"/> fingerprints the identities the stores project in the database, reading no
+/// binding or bookmark content. The two agree exactly when the table holds what the durable index would give now.
+/// Authorization options are not part of an identity, so a change to them alone does not move the fingerprint: it
+/// reaches the inventory metadata on other nodes with the next change to the route set, while enforcement, which reads
+/// the durable claimants on every request, is never stale.
+/// </para>
 /// </remarks>
 public sealed class HttpEndpointRoutesResolver(
     IWorkflowTriggerBindingStore bindingStore,
     IGlobalBookmarkStimulusLookup bookmarkStimulusLookup,
     ILogger<HttpEndpointRoutesResolver> logger) : IHttpEndpointRoutesResolver
 {
-    public async ValueTask<IReadOnlyCollection<HttpRouteData>> ResolveRoutesAsync(CancellationToken cancellationToken = default)
+    public async ValueTask<IReadOnlyCollection<HttpRouteData>> ResolveRoutesAsync(CancellationToken cancellationToken = default) =>
+        (await ResolveRouteSetAsync(cancellationToken)).Routes;
+
+    public async ValueTask<HttpEndpointRouteSet> ResolveRouteSetAsync(CancellationToken cancellationToken = default)
     {
         // Distinct route-method entries: one endpoint publishes one binding per method (all sharing a template),
         // a suspended instance holds one bookmark per method (all sharing a template), two workflows may
@@ -95,7 +111,28 @@ public sealed class HttpEndpointRoutesResolver(
         foreach (var bookmark in waiting.Matches)
             AddTemplate(bookmark.Metadata, candidates);
 
-        return candidates.Values.Select(candidate => candidate.ToRouteData()).ToArray();
+        return new HttpEndpointRouteSet(
+            candidates.Values.Select(candidate => candidate.ToRouteData()).ToArray(),
+            Fingerprint(bindings.Select(binding => binding.StimulusHash).Concat(waiting.Matches.Select(bookmark => bookmark.StimulusHash))));
+    }
+
+    public async ValueTask<string?> ResolveRouteFingerprintAsync(CancellationToken cancellationToken = default)
+    {
+        var bindingHashes = await bindingStore.ListActiveStimulusHashesAsync(HttpEndpointRouting.StimulusType, cancellationToken);
+        var bookmarkHashes = await bookmarkStimulusLookup.FindWaitingStimulusHashesByTypeAsync(
+            new GlobalBookmarkStimulusTypeLookupRequest(HttpEndpointRouting.StimulusType, DateTimeOffset.UtcNow),
+            cancellationToken);
+        return Fingerprint(bindingHashes.Concat(bookmarkHashes));
+    }
+
+    // Order-insensitive and length-framed, so neither the order the stores return identities in nor an identity that
+    // contains the separator can make two different sets fingerprint alike.
+    private static string Fingerprint(IEnumerable<string> stimulusHashes)
+    {
+        var framed = new StringBuilder();
+        foreach (var stimulusHash in stimulusHashes.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal))
+            framed.Append(stimulusHash.Length).Append(':').Append(stimulusHash);
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(framed.ToString())));
     }
 
     private static void AddTemplate(IReadOnlyDictionary<string, string> metadata, IDictionary<RouteCandidateKey, RouteCandidate> candidates)

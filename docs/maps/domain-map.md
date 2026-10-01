@@ -9,7 +9,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 - Source projects: 137
 - Test projects: 130
 - Domains: 31
-- Direct cross-domain references: 758
+- Direct cross-domain references: 759
 
 ## Domains
 
@@ -171,7 +171,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Workflows.Runtime.Distributed](../../src/essentials/Workflows/Runtime/Distributed/Elsa.Workflows.Runtime.Distributed.csproj) | source | Elsa.Workflows | Runtime.Distributed | feature/implementation | Elsa.Cluster.Core<br>Elsa.Cluster.InProcess<br>Elsa.Tasks.Core<br>Elsa.Tasks.Schedules<br>Elsa.Workflows.Runtime<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore](../../src/essentials/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.csproj) | source | Elsa.Workflows | Runtime.Distributed.Persistence.EntityFrameworkCore | feature/implementation | Elsa.Persistence.EntityFramework<br>Elsa.Workflows.Runtime.Distributed |
 | [Elsa.Workflows.Runtime](../../src/essentials/Workflows/Runtime/Elsa.Workflows.Runtime.csproj) | source | Elsa.Workflows | Runtime | feature/implementation | Elsa.Activities.Runtime.Core<br>Elsa.Attention.Core<br>Elsa.Tasks.Core<br>Elsa.Tasks.Schedules<br>Elsa.Workflows.Runtime.Core |
-| [Elsa.Workflows.Runtime.Http](../../src/essentials/Workflows/Runtime/Http/Elsa.Workflows.Runtime.Http.csproj) | source | Elsa.Workflows | Runtime.Http | feature/implementation | Elsa.Http.Core<br>Elsa.Primitives<br>Elsa.Tasks.Core<br>Elsa.Workflows.Runtime.Core |
+| [Elsa.Workflows.Runtime.Http](../../src/essentials/Workflows/Runtime/Http/Elsa.Workflows.Runtime.Http.csproj) | source | Elsa.Workflows | Runtime.Http | feature/implementation | Elsa.Http.Core<br>Elsa.Primitives<br>Elsa.Tasks.Core<br>Elsa.Tasks.Schedules<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Workflows.Runtime.JavaScript](../../src/essentials/Workflows/Runtime/JavaScript/Elsa.Workflows.Runtime.JavaScript.csproj) | source | Elsa.Workflows | Runtime.JavaScript | feature/implementation | Elsa.Api.AspNetCore<br>Elsa.Events.Core<br>Elsa.Expressions.JavaScript.Core<br>Elsa.Expressions.JavaScript.Rendering.Core<br>Elsa.Foundation.Identity<br>Elsa.Foundation.Identity.Core<br>Elsa.Primitives<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore](../../src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj) | source | Elsa.Workflows | Runtime.Persistence.EntityFrameworkCore | feature/implementation | Elsa.Persistence.EntityFramework<br>Elsa.Tasks.Core<br>Elsa.Workflows.Runtime<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Workflows.Runtime.Reconciliation.Core](../../src/essentials/Workflows/Runtime/Reconciliation/Core/Elsa.Workflows.Runtime.Reconciliation.Core.csproj) | source | Elsa.Workflows | Runtime.Reconciliation.Core | contract | Elsa.Primitives<br>Elsa.Serialization.Core<br>Elsa.Workflows.Runtime.Core |
@@ -1018,6 +1018,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Workflows.Runtime.Http](../../src/essentials/Workflows/Runtime/Http/Elsa.Workflows.Runtime.Http.csproj) | Elsa.Workflows | [Elsa.Http.Core](../../src/essentials/Http/Core/Elsa.Http.Core.csproj) | Elsa.Http |
 | [Elsa.Workflows.Runtime.Http](../../src/essentials/Workflows/Runtime/Http/Elsa.Workflows.Runtime.Http.csproj) | Elsa.Workflows | [Elsa.Primitives](../../src/essentials/Primitives/Primitives/Elsa.Primitives.csproj) | Elsa.Primitives |
 | [Elsa.Workflows.Runtime.Http](../../src/essentials/Workflows/Runtime/Http/Elsa.Workflows.Runtime.Http.csproj) | Elsa.Workflows | [Elsa.Tasks.Core](../../src/essentials/Tasks/Core/Elsa.Tasks.Core.csproj) | Elsa.Tasks |
+| [Elsa.Workflows.Runtime.Http](../../src/essentials/Workflows/Runtime/Http/Elsa.Workflows.Runtime.Http.csproj) | Elsa.Workflows | [Elsa.Tasks.Schedules](../../src/essentials/Tasks/Schedules/Elsa.Tasks.Schedules.csproj) | Elsa.Tasks |
 | [Elsa.Workflows.Runtime.Http.Tests](../../tests/essentials/Workflows/Runtime/Http/Tests/Elsa.Workflows.Runtime.Http.Tests.csproj) | Elsa.Workflows | [Elsa.Http.Core](../../src/essentials/Http/Core/Elsa.Http.Core.csproj) | Elsa.Http |
 | [Elsa.Workflows.Runtime.JavaScript](../../src/essentials/Workflows/Runtime/JavaScript/Elsa.Workflows.Runtime.JavaScript.csproj) | Elsa.Workflows | [Elsa.Api.AspNetCore](../../src/essentials/Api/AspNetCore/Elsa.Api.AspNetCore.csproj) | Elsa.Api |
 | [Elsa.Workflows.Runtime.JavaScript](../../src/essentials/Workflows/Runtime/JavaScript/Elsa.Workflows.Runtime.JavaScript.csproj) | Elsa.Workflows | [Elsa.Events.Core](../../src/essentials/Events/Core/Elsa.Events.Core.csproj) | Elsa.Events |

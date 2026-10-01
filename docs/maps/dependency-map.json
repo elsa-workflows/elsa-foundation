@@ -8383,6 +8383,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Tasks.Schedules",
+          "path": "src/essentials/Tasks/Schedules/Elsa.Tasks.Schedules.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Workflows.Runtime.Core",
           "path": "src/essentials/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj"
         },
@@ -8395,6 +8400,11 @@
           "type": "external",
           "id": "Elsa.Specifications.PackageManifest.Generator",
           "version": "0.0.1-preview.8"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Cronos",
+          "version": "0.13.0"
         }
       ]
     },

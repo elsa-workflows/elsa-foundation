@@ -217,6 +217,25 @@ public sealed class EfWorkflowTriggerBindingStore(
     public ValueTask<WorkflowTriggerBindingPage> ListByStimulusTypeAsync(WorkflowTriggerBindingTypePageQuery query, CancellationToken cancellationToken = default) =>
         QueryPageAsync(query, $"type\0{query.StimulusType}", x => x.StimulusType == Encode(query.StimulusType) && x.IsActive, cancellationToken);
 
+    /// <summary>
+    /// The population <see cref="ListByStimulusTypeAsync"/> pages, projected to its stimulus identities in the database.
+    /// The lookup key rides along in the DISTINCT: it is a hex hash of the exact identity, so two hashes a
+    /// case-insensitive provider collation would fold together still come back as two rows.
+    /// </summary>
+    public async ValueTask<IReadOnlyCollection<string>> ListActiveStimulusHashesAsync(string stimulusType, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(stimulusType);
+        cancellationToken.ThrowIfCancellationRequested();
+        var scope = RequireScope();
+        var identities = await context.WorkflowTriggerBindings.AsNoTracking()
+            .Where(x => x.ScopeKeyHash == Hash(scope) && x.ScopeKey == Encode(scope) &&
+                        x.StimulusTypeLookupKey == Lookup(stimulusType) && x.StimulusType == Encode(stimulusType) && x.IsActive)
+            .Select(x => new { x.StimulusLookupKey, x.StimulusHash })
+            .Distinct()
+            .ToArrayAsync(cancellationToken);
+        return identities.Select(x => Decode(x.StimulusHash)).Distinct(StringComparer.Ordinal).ToArray();
+    }
+
     private async ValueTask<WorkflowTriggerBindingPage> QueryPageAsync(WorkflowTriggerBindingPageRequest query, string binding, System.Linq.Expressions.Expression<Func<WorkflowTriggerBindingEntity, bool>> predicate, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(query); cancellationToken.ThrowIfCancellationRequested();
