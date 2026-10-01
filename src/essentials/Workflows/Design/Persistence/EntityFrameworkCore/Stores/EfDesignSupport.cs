@@ -104,6 +104,38 @@ internal static class EfDesignSupport
     public static string ScopeKey(string? tenantId) =>
         (tenantId is null ? "0" : "1") + EfRelationalIdentity.Hash(tenantId ?? string.Empty);
 
+    /// <summary>The tenant a design mutation writes its operation marker under. Mutations require an explicit scope.</summary>
+    public static string OperationTenant(IPersistenceAccessContextAccessor access) =>
+        access.Current.Scope?.Value ?? throw new InvalidOperationException("Workflow design mutations require an explicit persistence scope.");
+
+    /// <summary>
+    /// The operation markers of one tenant and operation kind, by their physical scope and lookup hashes. Callers
+    /// narrow by key, choose tracking, and check the exact identity of what they find.
+    /// </summary>
+    public static IQueryable<DesignOperationEntity> Operations(WorkflowsDesignDbContext db, string tenantId, string operationKind)
+    {
+        var scopeKey = ScopeKey(tenantId);
+        var kindHash = LookupHash(operationKind);
+        return db.Operations.Where(x =>
+            EF.Property<string>(x, ScopeKeyProperty) == scopeKey &&
+            x.TenantId == tenantId &&
+            x.OperationKindLookupHash == kindHash);
+    }
+
+    /// <summary>Reads the one marker a design operation's identity names, untracked, or null when there is none.</summary>
+    public static Task<DesignOperationEntity?> FindOperationAsync(
+        WorkflowsDesignDbContext db,
+        string tenantId,
+        string operationKind,
+        string operationKey,
+        CancellationToken cancellationToken)
+    {
+        var keyHash = LookupHash(operationKey);
+        return Operations(db, tenantId, operationKind)
+            .AsNoTracking()
+            .SingleOrDefaultAsync(x => x.OperationKeyLookupHash == keyHash, cancellationToken);
+    }
+
     public static void EnsurePhysicalScope(DbContext db, Elsa.Primitives.Entities.TenantEntity entity, string operation)
     {
         var property = db.Entry(entity).Property<string>(ScopeKeyProperty);
@@ -112,8 +144,20 @@ internal static class EfDesignSupport
             throw new InvalidOperationException($"The {operation} returned a row with an invalid physical persistence scope.");
     }
 
-    private static DesignPersistenceException ProviderFailure(string operation, Exception exception) =>
-        new(DesignPersistenceDomain.Workflow, DesignPersistenceFailureKind.Provider, operation, null, exception.InnerException ?? exception);
+    /// <summary>
+    /// Translates a provider exception at the design persistence boundary. A save that lost an optimistic-concurrency
+    /// race becomes a <see cref="DesignPersistenceFailureKind.Concurrency"/> failure, which a caller may answer by
+    /// reading again; every other provider exception becomes a <see cref="DesignPersistenceFailureKind.Provider"/> failure.
+    /// </summary>
+    public static DesignPersistenceException ProviderFailure(string operation, Exception exception) =>
+        new(
+            DesignPersistenceDomain.Workflow,
+            EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.Concurrency)
+                ? DesignPersistenceFailureKind.Concurrency
+                : DesignPersistenceFailureKind.Provider,
+            operation,
+            null,
+            exception.InnerException ?? exception);
 
     public static IQueryable<T> InScope<T>(IQueryable<T> query, IPersistenceAccessContextAccessor access, Func<T, string?> tenant) where T : class
     {
