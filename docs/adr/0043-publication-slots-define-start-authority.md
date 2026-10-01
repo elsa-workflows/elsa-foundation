@@ -15,10 +15,14 @@ that dies in between leaves the slot naming an activation that serves nothing wh
 serving. The coordinator completes that activation before the slot's next activation, and a shell-start pass
 completes it on every node. Both re-run the idempotent projection switch, observer notification and predecessor
 retirement. Unpublish completes nothing: it turns off every activation that serves the slot. Invariant 3 is
-therefore eventual across a crash, not immediate. Two races remain until the slot and the projections switch in one
-transaction (#2230). In the first, a stale completion of a first activation can switch it back on beside its
-successor; that double serving does not heal itself, and only unpublishing the slot clears it. In the second, a
-completion's retire can leave an activation that compensation restored serving with a retired reference.
+therefore eventual across a crash, not immediate. Publishing's publication records follow the slot the same way
+(#2223): `IPublicationActivator.CompleteAsync` completes the slot's activation through the coordinator and, once it
+serves, marks its publication active and retires the publication it replaced. It runs before every publication, on a
+same-version republish that finds the record behind, and in its own shell-start pass, so Invariant 2 holds in the
+records eventually too, and the records never decide serving. Two races remain until the slot and the projections
+switch in one transaction (#2230). In the first, a stale completion of a first activation can switch it back on
+beside its successor; that double serving does not heal itself, and only unpublishing the slot clears it. In the
+second, a completion's retire can leave an activation that compensation restored serving with a retired reference.
 
 Related decisions: ADR 0038 (content-addressed executable identity), ADR 0039 (layout on source
 references), and ADR 0040 (reference- and execution-derived artifact lifetime).

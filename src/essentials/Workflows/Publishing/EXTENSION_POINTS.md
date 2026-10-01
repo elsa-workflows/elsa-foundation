@@ -26,7 +26,7 @@ compilation enrichment is the documented **contributor** (fan-in) exception.
 | `IActivityPublicationReceiptStore` | `InMemoryActivityPublicationReceiptStore` (singleton) | Activity publication outcomes and idempotency bindings must survive restart or be shared across nodes. |
 | `IPublicationPolicyResolver` | `PublicationPolicyResolver` (singleton) | A host needs a different policy source while preserving explicit-request precedence and safe defaults. |
 | `IPublicationPreflightService` | `PublicationPreflightService` (singleton) | A host adds claim constraints beyond provider cardinality. |
-| `IPublicationActivator` | `PublicationActivator` (scoped) | Authority coordination uses another transactional boundary while preserving CAS and compensation invariants. |
+| `IPublicationActivator` | `PublicationActivator` (scoped) | Authority coordination uses another transactional boundary while preserving CAS and compensation invariants, and `CompleteAsync`'s journal convergence (see Activation below). |
 
 Register replacements before the feature's `TryAdd` defaults, or use `services.Replace(...)`. Persistence
 packages that replace a related store family should remove and register the whole family explicitly so a host
@@ -86,13 +86,37 @@ after the slot compare-and-swap, notifies observers, and compensates a failed st
 ([Workflows Runtime extension points](../Runtime/EXTENSION_POINTS.md)). The slot transition commits before the
 projections switch. If a process dies between the two, the coordinator completes that activation before the slot's
 next activation, and `CompleteInterruptedActivationsStartupTask` completes it at the next shell start. Unpublish
-completes nothing: it turns off every activation that serves the slot, whatever the slot's history. Republishing the
-same version does not reach the coordinator, because `PublishWorkflowRequestHandler` finds the artifact already
-published. After such a crash, though, the publication record is still a candidate, so that republish fails rather
-than succeeding; the journal is not reconciled with the slot
-([elsa-workflows/elsa-foundation#2223](https://github.com/elsa-workflows/elsa-foundation/issues/2223)). Derived
+completes nothing: it turns off every activation that serves the slot, whatever the slot's history. Derived
 projection notifications occur only after the durable serving set reaches its final state; Runtime HTTP consumes the
 neutral `IWorkflowTriggerIndexObserver` seam and performs a full refresh when authority changes.
+
+The publication journal follows the slot the same way
+([elsa-workflows/elsa-foundation#2223](https://github.com/elsa-workflows/elsa-foundation/issues/2223)). The slot
+transition commits before the journal is written, so a process that dies in between leaves the slot's publication a
+`Candidate` and the one it replaced `Active`, whether it died before the projections switched or after.
+`IPublicationActivator.CompleteAsync(definition, slot)` first completes the slot's activation through the coordinator.
+Once that activation serves (the slot still names it at the revision completion read, and its source reference is
+live), it retires every other `Active` publication of the slot whose source reference the runtime has retired, then
+marks the slot's publication `Active` with an activation time; a `Retired` publication the slot names again, after a
+failed replacement handed the slot back, is marked `Active` the same way. Marking the slot's publication active is the
+last write, here and in `ActivateAsync`, so a process that stops part way leaves it lagging for the next completion.
+Every write is a status compare-and-swap, so completions are idempotent and concurrent ones apply each transition
+once. The journal is left alone when completion fails, when the slot is empty or owned by another source, and when the
+slot's publication has failed or its reference is retired: none of those serves. It runs:
+
+- before every `ActivateAsync`, so a replacement retires the publication it replaced from `Active`;
+- in `PublishWorkflowRequestHandler` when a same-version republish finds the slot's publication not yet `Active`. The
+  republish answers once it is; one that cannot be completed is refused with the completion's failure code (HTTP 409),
+  never reported as published;
+- at shell start, in `CompleteInterruptedPublicationsStartupTask` (`[Order(5)]`, every node), for every slot publishing
+  owns among those the runtime's pass visits (`OccupiedActivationSlots`), so a designer-published workflow heals
+  without another publish.
+
+One residual: when the runtime could not retire the replaced activation's source reference by the time the slot's
+publication is marked `Active` (a reference-store failure the Runtime catalog's operator recovery describes), that
+replaced publication stays `Active` in the journal, because nothing lags afterwards to send completion back to it. It
+serves nothing, and slot views and the publish-on-reconcile check read the publication the slot names, so it shows
+only in the slot's record history.
 
 ## Persistence-provider checklist
 

@@ -55,9 +55,11 @@ operation:
    projections to the new publication and retire the replaced projection.
 5. The runtime `IWorkflowActivationCoordinator` runs steps 3 and 4 and the compensation. The slot and the
    projection stores share no transaction: if a process dies after the slot transition, the coordinator completes
-   that activation before the slot's next activation, and at the next shell start. Unpublish turns off every
-   activation that serves the slot, whatever its history. A failed activation compensates by restoring the
-   previous authority before the candidate is removed; observers refresh only from the final serving state.
+   that activation before the slot's next activation, and at the next shell start, and the publication records
+   follow it; a same-version republish after such a crash answers once its record is active (#2223). Unpublish
+   turns off every activation that serves the slot, whatever its history. A failed activation compensates by
+   restoring the previous authority before the candidate is removed; observers refresh only from the final serving
+   state.
 6. Retire or restore the publication source reference as provenance. Existing executions remain pinned to their
    immutable executable artifact; unpublishing does not delete that artifact.
 

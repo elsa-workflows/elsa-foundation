@@ -3,6 +3,7 @@ using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Events.Core.Extensions;
 using Elsa.Mediator.Core.Extensions;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
+using Elsa.Tasks.Core;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Services;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
@@ -89,6 +90,9 @@ public class WorkflowsPublishingFeature : IShellFeature
         // Publishing operations consume provider-overridable stores. Durable providers register those stores as
         // scoped services, so their aggregators must share the request scope instead of capturing it globally.
         services.TryAddScoped<IPublicationActivator, PublicationActivator>();
+        // A process that stopped after a slot transition leaves the journal behind the slot; shell start brings it
+        // back into line on every node (#2223).
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IStartupTask, CompleteInterruptedPublicationsStartupTask>());
         services.TryAddScoped<WorkflowPublicationPreflightReader>();
         services.TryAddScoped<PublicationSnapshotReviewService>();
         if (!services.Any(service => service.ServiceType == typeof(IPublicationSnapshotReviewStore)))

@@ -152,7 +152,7 @@ internal sealed class WorkflowArtifactExportFixture
             new PublicationPolicyResolver(),
             PublicationRecords,
             new PublicationPreflightService(),
-            new PublicationActivator(coordinator, PublicationRecords, TimeProvider.System),
+            new PublicationActivator(coordinator, PublicationRecords, ActivationAuthority, SourceReferences, TimeProvider.System),
             TimeProvider.System,
             workflowVersionStore: versionStore,
             expressionValidator: ValidExpressionValidator.Instance);

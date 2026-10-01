@@ -93,8 +93,9 @@ The authority transition is one coordinated operation (identical to what the API
    projections to the new publication and retire the replaced one.
 5. The runtime `IWorkflowActivationCoordinator` runs steps 3 and 4 and the compensation. If a process dies after
    the slot transition, the coordinator completes that activation before the slot's next activation, and at the
-   next shell start. A failed activation compensates by restoring the previous authority before the candidate is
-   removed.
+   next shell start; `IPublicationActivator.CompleteAsync` then brings the publication records into line, also when a
+   republish of the same version finds them behind (#2223). A failed activation compensates by restoring the previous
+   authority before the candidate is removed.
 6. Retire or restore the publication source reference as provenance. Existing executions stay pinned to their
    immutable executable artifact; unpublishing does not delete that artifact.
 

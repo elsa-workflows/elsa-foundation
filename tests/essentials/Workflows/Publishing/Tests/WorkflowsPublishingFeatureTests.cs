@@ -1,10 +1,12 @@
 using Elsa.Events.Core.Contracts;
 using Elsa.Mediator.Core.Contracts;
+using Elsa.Tasks.Core;
 using Elsa.Workflows.Design.Core.Reconciliation;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Publishing.Core.Requests;
 using Elsa.Workflows.Publishing.Handlers;
+using Elsa.Workflows.Publishing.Services;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -86,6 +88,18 @@ public sealed class WorkflowsPublishingFeatureTests
         Assert.Contains(services, descriptor =>
             descriptor.ServiceType == typeof(IEventHandler<WorkflowVersionsReconciled>) &&
             descriptor.ImplementationType == typeof(PublishReconciledWorkflowVersions));
+    }
+
+    [Fact]
+    public void Registers_the_shell_start_pass_that_brings_the_publication_journal_into_line()
+    {
+        var services = ComposeEngine();
+
+        // #2223: without it a designer-published workflow interrupted after its slot transition keeps a candidate
+        // record, and nothing fails to say so.
+        Assert.Contains(services, descriptor =>
+            descriptor.ServiceType == typeof(IStartupTask) &&
+            descriptor.ImplementationType == typeof(CompleteInterruptedPublicationsStartupTask));
     }
 
     [Fact]

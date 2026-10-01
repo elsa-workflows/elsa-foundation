@@ -116,7 +116,7 @@ public sealed class PublicationActivationTests
     }
 
     private PublicationActivator NewActivator(IWorkflowTriggerIndexer? indexer = null) =>
-        new(NewCoordinator(indexer), _publications, new FakeTimeProvider(_now));
+        new(NewCoordinator(indexer), _publications, _authority, _references, new FakeTimeProvider(_now));
 
     private WorkflowActivationCoordinator NewCoordinator(IWorkflowTriggerIndexer? indexer = null) =>
         new(
