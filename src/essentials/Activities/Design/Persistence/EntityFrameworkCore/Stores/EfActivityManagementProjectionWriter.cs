@@ -360,7 +360,21 @@ public sealed class EfActivityManagementProjectionWriter(ActivitiesDesignDbConte
         PublishedAt = version.PublishedAt, CreatedAt = version.CreatedAt, LastModifiedAt = version.LastModifiedAt
     };
 
-    private static void Close(ActivityManagementProjectionRevision? current, long sequence) { if (current is not null) { current.ValidToSequenceExclusive = sequence; current.ValidToKey = SequenceKey(sequence); } }
+    /// <summary>
+    /// Closes the current revision at <paramref name="sequence"/>. Under read committed the watermark is read before the
+    /// current revision, so a checkpoint another writer committed in between leaves a current revision that already opens
+    /// at or after this one's sequence. This write is stale then, and is refused as the lost race it is, before the new
+    /// revision's key meets the one this context already tracks.
+    /// </summary>
+    private static void Close(ActivityManagementProjectionRevision? current, long sequence)
+    {
+        if (current is null)
+            return;
+        if (current.ValidFromSequence >= sequence)
+            throw new DbUpdateConcurrencyException($"The projection checkpoint at sequence {sequence} lost a race to a checkpoint that already reached sequence {current.ValidFromSequence}.");
+        current.ValidToSequenceExclusive = sequence;
+        current.ValidToKey = SequenceKey(sequence);
+    }
     private async Task EnsureDefinitionOwner(string definitionId, string? tenantId, IReadOnlyDictionary<ProjectionIdentity, EfActivityManagementDefinitionChange> changed, CancellationToken token)
     {
         string? ownerTenantId;

@@ -40,3 +40,10 @@ marker the workflow reconciler wrote for the definition (`WorkflowReconciliation
 materialization of the definition and its versions, and its metadata writes, including those written
 under the per-version key used before #2187. A source that still lists the definition therefore imports
 it again instead of replaying markers that write no row.
+
+A definition materialization's fingerprint covers whether the definition is deleted, not its `DeletedAt`
+time (#2189). Each node stamps its own time on a definition its source marks deleted, so two nodes
+importing it now send the same request, and the second replays the first, keeping the first's time.
+Markers written earlier fingerprint the time. They are never compared with a new request, because the
+reconciler materializes only a definition it found missing, and the permanent delete retires the marker
+together with the definition.
