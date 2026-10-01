@@ -210,6 +210,9 @@ public static class EfRelationalProviderBinding
         var optionsBuilderType = actionType.GenericTypeArguments[0];
         var configure = BuildRelationalConfigure(actionType, optionsBuilderType, historyTableName, migrationsAssembly, schema);
         method.Invoke(null, [builder, connectionString, configure]);
+        // Microsoft.Data.Sqlite can lend one pooled connection to two opens that check out at once (#2209).
+        if (engine == SqliteEngine)
+            EfSqliteSerialOpenInterceptor.EnsureAdded(builder);
 
         if (schema is null)
             return;
