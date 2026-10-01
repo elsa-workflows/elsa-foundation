@@ -13,14 +13,8 @@ public static class RegularFileOpener
     {
         try
         {
-            if (OperatingSystem.IsLinux())
-                return OpenLinux(path);
-            if (OperatingSystem.IsMacOS())
-                return OpenDarwin(path);
-            if (OperatingSystem.IsWindows())
-                return OpenWindows(path);
-
-            throw new IOException();
+            using var lease = Capture(path);
+            return lease.OpenRead();
         }
         catch (CliRefusal)
         {
@@ -33,71 +27,52 @@ public static class RegularFileOpener
         }
     }
 
-    private static Stream OpenLinux(string path)
+    internal static RegularFileOpenLease Capture(string path)
     {
-        var architecture = RuntimeInformation.ProcessArchitecture;
-        var layout = architecture switch
+        try
         {
-            Architecture.X64 => LinuxX64StatLayout,
-            Architecture.Arm64 => LinuxArm64StatLayout,
-            _ => default
-        };
-        if (layout.Size == 0)
-            throw new IOException();
-        var noFollow = architecture == Architecture.X64 ? 0x20000 : 0x8000;
-        var native = LinuxNative.Value ?? throw new IOException();
-        using var anchor = CaptureUnix(path, native.Open, native.OpenAt, native.FStat, native.Flock, layout,
-            noFollow, isMac: false);
-        return anchor.OpenRead();
-    }
-
-    private static Stream OpenDarwin(string path)
-    {
-        var architecture = RuntimeInformation.ProcessArchitecture;
-        if (architecture is not (Architecture.X64 or Architecture.Arm64))
-            throw new IOException();
-
-        var native = DarwinNative.Value;
-        using var anchor = CaptureUnix(path, native.Open, native.OpenAt, native.FStat, native.Flock, DarwinStatLayout,
-            OpenNoFollowDarwin, isMac: true);
-        return anchor.OpenRead();
-    }
-
-    internal static RegularFileAnchor Capture(string path)
-    {
-        if (OperatingSystem.IsLinux())
-        {
-            var architecture = RuntimeInformation.ProcessArchitecture;
-            var layout = architecture switch
+            if (OperatingSystem.IsLinux())
             {
-                Architecture.X64 => LinuxX64StatLayout,
-                Architecture.Arm64 => LinuxArm64StatLayout,
-                _ => default
-            };
-            if (layout.Size == 0)
-                throw new IOException();
-            var native = LinuxNative.Value ?? throw new IOException();
-            return CaptureUnix(path, native.Open, native.OpenAt, native.FStat, native.Flock, layout,
-                architecture == Architecture.X64 ? 0x20000 : 0x8000, isMac: false);
-        }
+                var architecture = RuntimeInformation.ProcessArchitecture;
+                var layout = architecture switch
+                {
+                    Architecture.X64 => LinuxX64StatLayout,
+                    Architecture.Arm64 => LinuxArm64StatLayout,
+                    _ => default
+                };
+                if (layout.Size == 0)
+                    throw new IOException();
+                var native = LinuxNative.Value ?? throw new IOException();
+                return CaptureUnix(path, native.Open, native.OpenAt, native.FStat, native.Flock, layout,
+                    architecture == Architecture.X64 ? 0x20000 : 0x8000, isMac: false);
+            }
 
-        if (OperatingSystem.IsMacOS())
+            if (OperatingSystem.IsMacOS())
+            {
+                var architecture = RuntimeInformation.ProcessArchitecture;
+                if (architecture is not (Architecture.X64 or Architecture.Arm64))
+                    throw new IOException();
+                var native = DarwinNative.Value;
+                return CaptureUnix(path, native.Open, native.OpenAt, native.FStat, native.Flock, DarwinStatLayout,
+                    OpenNoFollowDarwin, isMac: true);
+            }
+
+            if (OperatingSystem.IsWindows())
+                return WindowsFunctions.Capture(path);
+
+            throw new IOException();
+        }
+        catch (CliRefusal)
         {
-            var architecture = RuntimeInformation.ProcessArchitecture;
-            if (architecture is not (Architecture.X64 or Architecture.Arm64))
-                throw new IOException();
-            var native = DarwinNative.Value;
-            return CaptureUnix(path, native.Open, native.OpenAt, native.FStat, native.Flock, DarwinStatLayout,
-                OpenNoFollowDarwin, isMac: true);
+            throw;
         }
-
-        if (OperatingSystem.IsWindows())
-            return WindowsFunctions.Capture(path);
-
-        throw new IOException();
+        catch (Exception exception) when (exception is not (OutOfMemoryException or AccessViolationException or StackOverflowException or SEHException))
+        {
+            throw CliRefusal.Resolution("composition-input-unreadable", "A supplied composition input could not be read as a regular local file.");
+        }
     }
 
-    private static RegularFileAnchor CaptureUnix(string path, OpenDelegate open, OpenAtDelegate openAt,
+    private static RegularFileOpenLease CaptureUnix(string path, OpenDelegate open, OpenAtDelegate openAt,
         FStatDelegate fstat, FlockDelegate flock, NativeStatLayout layout, int noFollow, bool isMac)
     {
         var fullPath = NormalizeUnixPath(path);
@@ -111,12 +86,12 @@ public static class RegularFileOpener
             throw new IOException();
 
         var root = new SafeFileHandle(new IntPtr(rootDescriptor), ownsHandle: true);
-        SafeFileHandle current = root;
+        var directories = new List<SafeFileHandle> { root };
         try
         {
             for (var index = 0; index < components.Length - 1; index++)
             {
-                var descriptor = openAt(GetFileDescriptor(current), components[index],
+                var descriptor = openAt(GetFileDescriptor(directories[^1]), components[index],
                     OpenNonBlockingFor(isMac) | noFollow | closeOnExec);
                 if (descriptor < 0)
                     throw new IOException();
@@ -127,11 +102,7 @@ public static class RegularFileOpener
                     if (!HasMode(next, fstat, layout, DirectoryFileMode))
                         throw new IOException();
 
-                    if (ReferenceEquals(current, root))
-                        root.Dispose();
-                    else
-                        current.Dispose();
-                    current = next;
+                    directories.Add(next);
                     next = null;
                 }
                 finally
@@ -140,69 +111,30 @@ public static class RegularFileOpener
                 }
             }
 
-            return RegularFileAnchor.Unix(current, components[^1], openAt, fstat, flock, layout, noFollow, isMac);
+            return new RegularFileOpenLease(
+                () =>
+                {
+                    var descriptor = openAt(GetFileDescriptor(directories[^1]), components[^1],
+                        OpenNonBlockingFor(isMac) | noFollow | closeOnExec);
+                    if (descriptor < 0)
+                        throw new IOException();
+                    return WrapRegularFile(descriptor, fstat, flock, layout, isMac);
+                },
+                () => DisposeHandles(directories));
         }
         catch
         {
-            if (!ReferenceEquals(current, root))
-                current.Dispose();
-            root.Dispose();
+            DisposeHandles(directories);
             throw;
         }
     }
 
-    internal sealed class RegularFileAnchor : IDisposable
+    private static void DisposeHandles(IEnumerable<SafeFileHandle> handles)
     {
-        private readonly SafeFileHandle _parent;
-        private readonly string _fileName;
-        private readonly OpenAtDelegate? _openAt;
-        private readonly FStatDelegate? _fstat;
-        private readonly FlockDelegate? _flock;
-        private readonly NativeStatLayout _layout;
-        private readonly int _noFollow;
-        private readonly bool _isMac;
-
-        private RegularFileAnchor(SafeFileHandle parent, string fileName, OpenAtDelegate openAt,
-            FStatDelegate fstat, FlockDelegate flock, NativeStatLayout layout, int noFollow, bool isMac)
+        foreach (var handle in handles.Reverse())
         {
-            _parent = parent;
-            _fileName = fileName;
-            _openAt = openAt;
-            _fstat = fstat;
-            _flock = flock;
-            _layout = layout;
-            _noFollow = noFollow;
-            _isMac = isMac;
+            handle.Dispose();
         }
-
-        private RegularFileAnchor(SafeFileHandle parent, string fileName)
-        {
-            _parent = parent;
-            _fileName = fileName;
-        }
-
-        internal static RegularFileAnchor Unix(SafeFileHandle parent, string fileName, OpenAtDelegate openAt,
-            FStatDelegate fstat, FlockDelegate flock, NativeStatLayout layout, int noFollow, bool isMac) =>
-            new(parent, fileName, openAt, fstat, flock, layout, noFollow, isMac);
-
-        internal static RegularFileAnchor Windows(SafeFileHandle parent, string fileName) => new(parent, fileName);
-
-        internal Stream OpenRead()
-        {
-            if (_openAt is not null)
-            {
-                var descriptor = _openAt(GetFileDescriptor(_parent), _fileName, OpenNonBlockingFor(_isMac) |
-                    _noFollow | OpenCloseOnExecFor(_isMac));
-                if (descriptor < 0)
-                    throw new IOException();
-                return WrapRegularFile(descriptor, _fstat!, _flock!, _layout, _isMac);
-            }
-
-            var anchoredPath = Path.Join(WindowsFunctions.GetFinalPath(_parent), _fileName);
-            return OpenWindowsHandle(WindowsFunctions.CreateFile(anchoredPath));
-        }
-
-        public void Dispose() => _parent.Dispose();
     }
 
     private static int GetFileDescriptor(SafeFileHandle handle) => handle.DangerousGetHandle().ToInt32();
@@ -280,12 +212,6 @@ public static class RegularFileOpener
         if (result != 0 && error == wouldBlock)
             throw new IOException();
         // Match FileStream's best-effort shared lock: unsupported filesystems do not reject regular files.
-    }
-
-    private static Stream OpenWindows(string path)
-    {
-        using var anchor = WindowsFunctions.Capture(path);
-        return anchor.OpenRead();
     }
 
     private static Stream OpenWindowsHandle(SafeFileHandle handle)
@@ -417,7 +343,6 @@ public static class RegularFileOpener
         private const uint OpenReparsePoint = 0x00200000;
         private const uint BackupSemantics = 0x02000000;
         private const uint ShareWrite = 0x2;
-        private const uint ShareDelete = 0x4;
 
         [DllImport("kernel32.dll", EntryPoint = "CreateFileW", CharSet = CharSet.Unicode, SetLastError = true)]
         private static extern SafeFileHandle CreateFileNative(
@@ -439,7 +364,7 @@ public static class RegularFileOpener
         internal static SafeFileHandle CreateFile(string path) => CreateFileNative(
             path, GenericRead, ShareRead, IntPtr.Zero, OpenExisting, OpenReparsePoint, IntPtr.Zero);
 
-        internal static RegularFileAnchor Capture(string path)
+        internal static RegularFileOpenLease Capture(string path)
         {
             var fullPath = Path.GetFullPath(path);
             var parentPath = Path.GetDirectoryName(fullPath);
@@ -447,31 +372,49 @@ public static class RegularFileOpener
             if (string.IsNullOrEmpty(parentPath) || string.IsNullOrEmpty(fileName))
                 throw new IOException();
 
-            // Inspect every lexical ancestor before taking the deepest handle. This
-            // rejects junctions/symlinks in the path, including an exchanged host
-            // directory, before the final file handle is acquired.
+            // Acquire ancestors from the root down and retain every handle until the
+            // final file is acquired. Each handle excludes delete sharing, so a host
+            // cannot exchange a checked ancestor while a deeper path is opened.
+            var directories = new List<SafeFileHandle>();
+            var ancestorPaths = new List<string>();
             for (var directory = new DirectoryInfo(parentPath); directory is not null; directory = directory.Parent)
-            {
-                using var handle = CreateDirectory(directory.FullName);
-                if (handle.IsInvalid || GetFileType(handle) != DiskFileType ||
-                    (File.GetAttributes(handle) & FileAttributes.ReparsePoint) != 0)
-                    throw new IOException();
-            }
+                ancestorPaths.Add(directory.FullName);
+            ancestorPaths.Reverse();
 
-            var parent = CreateDirectory(parentPath);
             try
             {
-                if (parent.IsInvalid || GetFileType(parent) != DiskFileType ||
-                    (File.GetAttributes(parent) & FileAttributes.ReparsePoint) != 0)
-                    throw new IOException();
+                foreach (var ancestorPath in ancestorPaths)
+                {
+                    var handle = CreateDirectory(ancestorPath);
+                    var retained = false;
+                    try
+                    {
+                        if (handle.IsInvalid || GetFileType(handle) != DiskFileType ||
+                            (File.GetAttributes(handle) & FileAttributes.ReparsePoint) != 0)
+                            throw new IOException();
+                        directories.Add(handle);
+                        retained = true;
+                    }
+                    finally
+                    {
+                        if (!retained)
+                            handle.Dispose();
+                    }
+                }
+
+                return new RegularFileOpenLease(
+                    () =>
+                    {
+                        var anchoredPath = Path.Join(GetFinalPath(directories[^1]), fileName);
+                        return OpenWindowsHandle(CreateFile(anchoredPath));
+                    },
+                    () => DisposeHandles(directories));
             }
             catch
             {
-                parent.Dispose();
+                DisposeHandles(directories);
                 throw;
             }
-
-            return RegularFileAnchor.Windows(parent, fileName);
         }
 
         private static SafeFileHandle CreateDirectory(string path) => CreateFileNative(

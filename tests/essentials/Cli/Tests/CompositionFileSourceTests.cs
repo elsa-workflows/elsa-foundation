@@ -58,6 +58,37 @@ public sealed class CompositionFileSourceTests
     }
 
     [Fact]
+    public void Regular_file_open_lease_opens_once_and_disposes_once()
+    {
+        var opens = 0;
+        var disposals = 0;
+        using var lease = new RegularFileOpenLease(() =>
+        {
+            opens++;
+            return new MemoryStream([1, 2, 3]);
+        }, () => disposals++);
+
+        using var stream = lease.OpenRead();
+
+        Assert.Equal(1, opens);
+        Assert.Throws<InvalidOperationException>(() => lease.OpenRead());
+        lease.Dispose();
+        lease.Dispose();
+        Assert.Equal(1, disposals);
+    }
+
+    [Fact]
+    public void Regular_file_open_lease_disposes_when_open_fails()
+    {
+        var disposals = 0;
+        using var lease = new RegularFileOpenLease(() => throw new IOException("private-open-failure"), () => disposals++);
+
+        Assert.Throws<IOException>(() => lease.OpenRead());
+        Assert.Equal(1, disposals);
+        Assert.Throws<ObjectDisposedException>(() => lease.OpenRead());
+    }
+
+    [Fact]
     public void Candidate_reader_wraps_stream_failures_and_disposes_the_owned_stream()
     {
         using var stream = new UnreadableStream();
@@ -377,6 +408,40 @@ public sealed class CompositionFileSourceTests
         Assert.Equal("composition-input-unreadable", refusal.Code);
         Assert.DoesNotContain("private-canary", refusal.ToString(), StringComparison.Ordinal);
         Assert.False(openerReturned);
+    }
+
+    [Fact]
+    public void Candidate_reader_retains_all_windows_ancestor_handles_during_preflight()
+    {
+        if (!OperatingSystem.IsWindows())
+            return;
+
+        using var directory = new TempDirectory("elsa-candidate-ancestor-lease-");
+        var host = directory.File("host");
+        var moved = directory.File("host-before-race");
+        var admitted = Path.Join(host, "admitted");
+        var path = Path.Join(admitted, "candidate.json");
+        Directory.CreateDirectory(admitted);
+        File.WriteAllText(path, "{\"safe\":true}");
+        var exchangeBlocked = false;
+        var reader = new CompositionFileReader(candidatePath =>
+        {
+            CompositionFileReader.EnsureRegularFile(candidatePath);
+            try
+            {
+                Directory.Move(host, moved);
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                exchangeBlocked = true;
+            }
+        }, RegularFileOpener.OpenRead);
+
+        var bytes = reader.Read(path, FileLimit);
+
+        Assert.True(exchangeBlocked, "The retained ancestor handles must block replacement of a checked host directory.");
+        Assert.Equal("{\"safe\":true}", Encoding.UTF8.GetString(bytes));
+        Assert.False(Directory.Exists(moved));
     }
 
     [Fact]
