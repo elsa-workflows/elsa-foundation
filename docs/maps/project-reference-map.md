@@ -8,7 +8,7 @@ Records direct project references only.
 
 - Source projects: 137
 - Test projects: 130
-- Direct project references: 1241
+- Direct project references: 1242
 
 ## Projects
 
@@ -221,7 +221,7 @@ Records direct project references only.
 | [Elsa.Expressions.JavaScript.Jint.Tests](../../tests/essentials/Expressions/JavaScript/Jint/Tests/Elsa.Expressions.JavaScript.Jint.Tests.csproj) | test | Elsa.Expressions | - | false | Elsa.Expressions<br>Elsa.Expressions.Core<br>Elsa.Expressions.JavaScript<br>Elsa.Expressions.JavaScript.Core<br>Elsa.Expressions.JavaScript.Jint<br>Elsa.Expressions.Liquid |
 | [Elsa.Expressions.Tests](../../tests/essentials/Expressions/Tests/Elsa.Expressions.Tests.csproj) | test | Elsa.Expressions | - | false | Elsa.Activities.Design.Core<br>Elsa.Expressions<br>Elsa.Expressions.Core<br>Elsa.Expressions.JavaScript<br>Elsa.Expressions.JavaScript.Core<br>Elsa.Expressions.Liquid<br>Elsa.Primitives<br>Elsa.Serialization.SystemText |
 | [Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.Tests](../../tests/essentials/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/Tests/Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.Tests.csproj) | test | Elsa.Foundation | net10.0 | false | Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore<br>Elsa.Foundation.Identity.Core<br>Elsa.Foundation.Identity.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Runtime.Core |
-| [Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.ProviderTests](../../tests/essentials/Foundation/Identity/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.ProviderTests.csproj) | test | Elsa.Foundation | net10.0 | false | Elsa.Foundation.Identity.Persistence.EntityFrameworkCore |
+| [Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.ProviderTests](../../tests/essentials/Foundation/Identity/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.ProviderTests.csproj) | test | Elsa.Foundation | net10.0 | false | Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore<br>Elsa.Foundation.Identity.Persistence.EntityFrameworkCore |
 | [Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Tests](../../tests/essentials/Foundation/Identity/Persistence/EntityFrameworkCore/Tests/Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Tests.csproj) | test | Elsa.Foundation | net10.0 | false | Elsa.Foundation.Identity<br>Elsa.Foundation.Identity.Core<br>Elsa.Foundation.Identity.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Foundation.Identity.Tests](../../tests/essentials/Foundation/Identity/Tests/Elsa.Foundation.Identity.Tests.csproj) | test | Elsa.Foundation | - | false | Elsa.Api.Compatibility.Testing<br>Elsa.Foundation.Identity<br>Elsa.Foundation.Identity.Api<br>Elsa.Foundation.Identity.AspNetCoreIdentity<br>Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore<br>Elsa.Foundation.Identity.Core<br>Elsa.Foundation.Identity.Oidc<br>Elsa.Foundation.Identity.OpenIddict<br>Elsa.Foundation.Identity.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Http.Tests](../../tests/essentials/Http/Tests/Elsa.Http.Tests.csproj) | test | Elsa.Http | - | false | Elsa.Api.AspNetCore<br>Elsa.Http<br>Elsa.Testing |
