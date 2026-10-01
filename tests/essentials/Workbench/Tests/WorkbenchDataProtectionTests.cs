@@ -8,12 +8,25 @@ namespace Elsa.Workbench.Tests;
 /// starts and serves, and refuses only the cookies and antiforgery tokens another host issued. The same host sharing the key
 /// ring says nothing, so the warning is not one every clustered host logs.
 /// </summary>
-public sealed class WorkbenchDataProtectionTests
+public sealed class WorkbenchDataProtectionTests : IDisposable
 {
     /// <summary>What the host's startup check says, restated: nothing of the host is loaded into this process.</summary>
     private const string NotShared = "Data Protection key ring is its own";
 
     private static readonly TimeSpan Patience = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// The lock folder the clustered hosts name: a cluster refuses the file-system lock on its node-local default folder
+    /// (#2192), and the database lock refuses the SQLite database these hosts use, so the folder is set explicitly, as
+    /// the nodes of a real cluster would share one.
+    /// </summary>
+    private readonly string _locksFolderPath = Path.Join(Path.GetTempPath(), $"workbench-keys-locks-{Guid.NewGuid():n}");
+
+    public void Dispose()
+    {
+        if (Directory.Exists(_locksFolderPath))
+            Directory.Delete(_locksFolderPath, recursive: true);
+    }
 
     [Fact]
     public async Task A_clustered_workbench_without_the_shared_key_store_warns_as_it_starts()
@@ -38,12 +51,13 @@ public sealed class WorkbenchDataProtectionTests
 
     /// <summary>
     /// The stock development composition with the durable EF membership provider enabled under <paramref name="hostId"/>, over
-    /// a SQLite file in the host's own directory, which is its working directory too.
+    /// a SQLite file in the host's own directory, which is its working directory too, and the explicit lock folder.
     /// </summary>
-    private static WorkbenchShell Clustered(string hostId, IReadOnlyDictionary<string, string>? more = null)
+    private WorkbenchShell Clustered(string hostId, IReadOnlyDictionary<string, string>? more = null)
     {
         var settings = new Dictionary<string, string>(WorkbenchShell.Development.Settings)
         {
+            ["CShells:Shells:default:Features:FileSystemDistributedLocking:LocksFolderPath"] = _locksFolderPath,
             ["Elsa:Cluster:Membership:HostId"] = hostId,
             ["Elsa:Cluster:Membership:EntityFrameworkCore:Enabled"] = "true",
             ["Elsa:Cluster:Membership:EntityFrameworkCore:Provider"] = "Sqlite",
