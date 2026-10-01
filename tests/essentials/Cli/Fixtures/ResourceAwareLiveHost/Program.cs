@@ -151,12 +151,17 @@ public sealed class ResourceProbeShellDefaults : IEfToolingShellDefaults
         if (probeDefaults["DescendantMarker"] is { Length: > 0 } descendantMarker)
         {
             // Inherited pipes also exercise closure of streams held open by the descendant.
-            var start = new ProcessStartInfo("dotnet") { UseShellExecute = false };
+            var start = new ProcessStartInfo("dotnet")
+            {
+                UseShellExecute = false,
+                RedirectStandardOutput = false,
+                RedirectStandardError = false
+            };
             start.ArgumentList.Add(typeof(ResourceProbeShellDefaults).Assembly.Location);
             start.ArgumentList.Add("--candidate-test-descendant");
             start.ArgumentList.Add(descendantMarker);
             start.ArgumentList.Add("60000");
-            // Disposing this wrapper leaves the child running for the cleanup proof.
+            // Disposing this wrapper leaves the finite-lived child running for the cleanup proof.
             (Process.Start(start) ?? throw new InvalidOperationException("The test descendant did not start.")).Dispose();
         }
 

@@ -241,6 +241,11 @@ public sealed class CandidateWorkerOperationTests
             holdComposer: true, expectDescendant: true);
 
     [Fact]
+    public Task Candidate_worker_process_timeout_reaps_a_descendant_after_the_worker_exits() =>
+        AssertDefaultProcessRefusal("candidate-inspection-timeout", timeoutSeconds: 15,
+            expectDescendant: true, expectRootExited: true);
+
+    [Fact]
     public async Task Candidate_worker_process_cancels_a_real_child_while_its_stdin_write_is_blocked()
     {
         var host = HostLayout.Resolve(DotnetElsa.Host("ResourceAwareLiveHost"));
@@ -298,7 +303,7 @@ public sealed class CandidateWorkerOperationTests
 
     private static async Task AssertDefaultProcessRefusal(string expectedCode, int timeoutSeconds,
         bool holdComposer = false, bool cancelAfterStart = false, int standardErrorBytes = 0, int standardOutputBytes = 0,
-        bool expectDescendant = false)
+        bool expectDescendant = false, bool expectRootExited = false)
     {
         var host = HostLayout.Resolve(DotnetElsa.Host("ResourceAwareLiveHost"));
         using var sentinels = new TempDirectory($"{PrivateCanaryRootPrefix}adverse-child-");
@@ -332,6 +337,14 @@ public sealed class CandidateWorkerOperationTests
                         (descendant is null || TryReadProcessIdentity(descendant, out _)),
                 "The real worker completed or failed to record the required private process identity markers.");
 
+            if (expectRootExited)
+            {
+                Assert.NotNull(descendant);
+                Assert.True(await WaitForRootExitWithLiveDescendant(run, started, descendant!, TimeSpan.FromSeconds(30)),
+                    "The worker must exit while its marked descendant remains live and holds the worker pipes open.");
+                Assert.False(run.IsCompleted, "The worker exchange must remain pending until the inherited pipes are closed.");
+            }
+
             if (cancelAfterStart)
                 cancellation.Cancel();
 
@@ -359,6 +372,21 @@ public sealed class CandidateWorkerOperationTests
                 await KillMarkedProcessIfStillRunning(descendant);
             await KillMarkedProcessIfStillRunning(started);
         }
+    }
+
+    private static async Task<bool> WaitForRootExitWithLiveDescendant(Task run, string rootMarker,
+        string descendantMarker, TimeSpan maximumWait)
+    {
+        var stopAt = Stopwatch.GetTimestamp() + (long)(maximumWait.TotalSeconds * Stopwatch.Frequency);
+        while (Stopwatch.GetTimestamp() < stopAt)
+        {
+            if (run.IsCompleted)
+                return false;
+            if (!IsMarkedProcessRunning(rootMarker) && IsMarkedProcessRunning(descendantMarker))
+                return true;
+            await Task.Delay(TimeSpan.FromMilliseconds(100));
+        }
+        return false;
     }
 
     private static async Task<bool> WaitForMarkerOrCompletion(Task run, string marker, TimeSpan maximumWait)
