@@ -34,20 +34,26 @@ a test in the bridge test project, which references both, pins equality.
 
 ## Enforcement and refusal shape at each entry point
 
-The rule runs in the application layer only. No design persistence command and no persistence feature changes;
-[research R7](../research.md) records why the guarded-writer and decorator options were rejected.
+The rule runs in the application layer only, and every application-layer caller runs it through one shared helper,
+`WorkflowStateAdmission` (`Elsa.Workflows.Design.Validations.Core`): `AdmitAsync(state)` throws
+`CredentialLiteralRefusedException`; `FindRefusalsAsync(state)` returns the same findings for per-item callers. No
+design persistence command and no persistence feature changes; [research R7](../research.md) records why the
+guarded-writer and decorator options were rejected.
 
 | # | Entry point | Where the rule runs (integration point) | Refusal | HTTP (where an endpoint exists) |
 |---|---|---|---|---|
-| 1 | Draft save: Definitions/Add, Drafts/Replace, Definitions/Update | Design API admission: the endpoint or handler calls `EnsureNoCredentialLiteralsAsync` on the incoming state before `IAddWorkflowDefinitionCommand` or `IUpdateDraftCommand` | `CredentialLiteralRefusedException`; the command never runs, nothing is stored | 400, errors keyed by path |
-| 2 | Promote (Drafts/Promote) | the existing in-lock promotion gate: `CredentialLiteralValidator` is registered as an `IDraftValidator`, and `EfPromoteDraftToVersionCommand` already throws `DraftHasValidationErrorsException` on any gate error | existing promotion-gate refusal; no version row written | 409, the existing promotion-gate shape, errors keyed by path, messages starting with the rule id |
+| 1 | Draft save: Definitions/Add, Drafts/Replace, Definitions/Update | Design API admission: the endpoint or handler calls `WorkflowStateAdmission.AdmitAsync` on the incoming state before `IAddWorkflowDefinitionCommand` or `IUpdateDraftCommand` | `CredentialLiteralRefusedException`; the command never runs, nothing is stored | 400, errors keyed by path |
+| 2 | Promote (Drafts/Promote) | Design API admission: the endpoint reads the stored draft through `IWorkflowDefinitionDraftStore` and calls `WorkflowStateAdmission.AdmitAsync` on its state before `IPromoteDraftToVersionCommand`. It does not depend on the command's optional in-lock gate, which runs only when `IInlineEventPublisher` is composed | `CredentialLiteralRefusedException`; the command never runs, no version row written | 400, errors keyed by path |
 | 3 | Publish (including publish-on-reconcile and draft test runs) | `RuntimeInputBindingCompiler.CompileAll`, per input | `CredentialLiteralRefusedException`, surfaced through publication's existing compile-error translation | 400 |
 | 4 | Add version (Versions/Add) | Design API admission before `IAddWorkflowDefinitionVersionCommand` | same as row 1 | 400 |
 | 5 | Submit (Definitions/Submit) | Design API admission before `ISubmitWorkflowDefinitionCommand` | same as row 1 | 400 |
 | 6 | File-based reconciliation import (and git import, which feeds it) | `WorkflowsVersionReconciler.ReconcileVersion`, per item, before any catalog mutation for that item | that item only is refused; see "Per-item behavior" below | n/a |
 | 7 | Git export | `GitWorkflowExporter`, per version, before writing its file | that version file only is skipped; see "Per-item behavior" below | n/a |
 
-Each refusal carries the rule identifier, the activity (node) id and the input name. The 400 problem body follows
+Each refusal carries the rule identifier, the activity (node) id and the input name. Where the publisher is composed,
+`CredentialLiteralValidator`'s registration as an `IDraftValidator` also lets the promotion command's in-lock gate
+refuse (409, the existing gate shape) a draft changed between admission and the lock; that is defense in depth, not
+the enforcement. The 400 problem body follows
 the existing design translator shape (`WorkflowDesignExceptionTranslator.Validation`): `errors` keyed by
 `{nodeId}/inputs/{referenceKey}`, each message starting with `Inputs/CredentialLiteral`.
 
@@ -56,7 +62,8 @@ the existing design translator shape (`WorkflowDesignExceptionTranslator.Validat
 This is the one deliberate exception to "draft save records validation errors without blocking" (spec
 clarification). The exception is implemented by the Design API admission throwing before the command runs, not by
 changing `DraftValidationGate`. The same validator also contributes its findings to `DraftValidating`, where they are
-recorded like any other finding (and block only at promote, as every gate error already does).
+recorded like any other finding (and block at promote only where the promotion command's optional in-lock gate
+runs; promote's own admission blocks regardless).
 
 ## Per-item behavior during file reconciliation and git export
 
@@ -79,8 +86,9 @@ the reconciler materializes the definition record before the version (verified i
 
 ## Composition
 
-`ICredentialLiteralValidator` is a required constructor dependency of the five Design API callers,
-`WorkflowsVersionReconciler` and `GitWorkflowExporter`. `WorkflowsDesignApi`, `JsonWorkflowReconciliation` and
+`WorkflowStateAdmission` is a required constructor dependency of the six Design API callers (Definitions/Add,
+Drafts/Replace, Definitions/Update, Versions/Add, Definitions/Submit, Drafts/Promote), `WorkflowsVersionReconciler`
+and `GitWorkflowExporter`; it wraps `ICredentialLiteralValidator`. `WorkflowsDesignApi`, `JsonWorkflowReconciliation` and
 `WorkflowsDesignGitReconciliation` (the two concrete features deriving from `WorkflowsDesignReconciliationFeature`)
 declare `DependsOn` on `WorkflowDesignValidations`, so a host that composes them without the rule fails at
 composition instead of silently skipping it. The persistence features declare nothing new.
@@ -89,27 +97,33 @@ composition instead of silently skipping it. The persistence features declare no
 
 An architecture test (T055) keeps the seam from being bypassed:
 
-1. **Contract inventory.** Every public interface in `Elsa.Workflows.Design.Persistence.Core.Contracts` whose
-   methods accept `WorkflowDefinitionState`, `WorkflowDefinitionDraft`, `WorkflowDefinitionVersion` or
-   `UpdateDraftRequest` must be classified on the guard's list as either *admitted* (callers must admit) or *exempt
-   with a reason* (today: `ICloneDraftFromVersionCommand`, which copies a stored version; `IPromoteDraftToVersionCommand`,
-   covered by the promotion gate). A new state-carrying contract fails the guard until someone classifies it.
-2. **Caller coverage.** A source scan of `src/` finds every non-persistence type whose constructor takes an admitted
-   contract, and asserts that the same constructor takes `ICredentialLiteralValidator`. The scan must find at least
-   the six known callers, so it cannot pass by scanning nothing.
-3. **Other writers.** Every `IGitWorkflowExporter` implementation takes `ICredentialLiteralValidator`, and
-   `CredentialLiteralValidator` is registered as an `IDraftValidator`.
+1. **Contract inventory.** Every public `*Command` interface in `Elsa.Workflows.Design.Persistence.Core.Contracts`
+   must be classified on the guard's list as *state-writing, admitted* (today: `IAddWorkflowDefinitionCommand`,
+   `IUpdateDraftCommand`, `IAddWorkflowDefinitionVersionCommand`, `ISubmitWorkflowDefinitionCommand`,
+   `IPromoteDraftToVersionCommand`, `IMaterializeWorkflowDefinitionVersionCommand`, `ICreateDraftCommand`),
+   *state-writing, exempt with a reason* (today only `ICloneDraftFromVersionCommand`, which copies a stored version),
+   or *not state-writing* (`ISaveWorkflowDefinitionCommand`, `IMaterializeWorkflowDefinitionCommand`,
+   `IDiscardDraftCommand`, `IDeleteWorkflowDefinitionPermanentlyCommand`). A new command fails the guard until
+   someone classifies it.
+2. **Caller coverage, the one assertion.** A source scan of `src/` finds every non-persistence type whose
+   constructor takes an admitted command, and asserts that the same constructor takes `WorkflowStateAdmission`.
+   The scan must find at least the seven known callers (the six Design API callers and `WorkflowsVersionReconciler`),
+   so it cannot pass by scanning nothing.
+3. **Git export.** The exporter calls no design command, so it is listed by name: every `IGitWorkflowExporter`
+   implementation takes `WorkflowStateAdmission`.
 
-Mutations that must turn it red: remove the validator from one Design API caller; add a new admitted-contract
-caller without it; add a new state-carrying contract without classifying it.
+Mutations that must turn it red: remove `WorkflowStateAdmission` from one Design API caller (the promote endpoint
+among them); add a new admitted-command caller without it; add a new `*Command` contract without classifying it.
+Whether a caller actually calls the helper before the command is proved per entry point by T051 to T054, whose
+bite-proofs remove the call.
 
 ## Known gaps (not covered by this rule)
 
-- **Activities not in the catalog.** The validator, like `RequiredInputOutputValidator`, skips nodes whose activity
-  version the catalog cannot resolve, so it cannot tell whether their inputs are credentials. Draft save,
-  add-version, submit, file reconciliation and git export cannot judge such nodes and accept them. Publish resolves
-  every node and refuses there; promote refuses once the activity is installed. Until then such a literal can be
-  stored.
+- **Activities not in the catalog** (spec FR-008 and its edge case). The validator, like
+  `RequiredInputOutputValidator`, skips nodes whose activity version the catalog cannot resolve, so it cannot tell
+  whether their inputs are credentials. Draft save, add-version, submit, file reconciliation and git export cannot
+  judge such nodes and accept them. Publish resolves every node and refuses there; promote refuses once the activity
+  is installed. Until then such a literal can be stored.
 - **Runtime artifact import** carries compiled bindings and is not one of the seven entry points (research R13).
   R8's producer withholding and the `VF-ACT-010` activation refusal keep such a value out of persisted runtime
   state.

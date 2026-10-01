@@ -4,7 +4,9 @@ Baseline: `main` at `057adc44f` plus the specification commit `30dfd01ec`. Every
 read in that tree; everything else is a proposed implementation shape, not existing code. Scope is phase 0 of
 [the Connections and Secrets model](../../docs/plans/connections-and-secrets-model.md) (decisions D1 and D10 only).
 Connections, authentication schemes, OAuth and external secret stores stay out. Plan review round 1 (2026-10-01)
-re-read every code claim it changed (R2, R3, R3a, R7, R8, R10, R11, R12) in the same tree.
+re-read every code claim it changed (R2, R3, R3a, R7, R8, R10, R11, R12) in the same tree. Plan review round 2
+(2026-10-01) did the same for R3a, R5, R7, R11 and R12, on the branch tree that carries `057adc44f`'s source
+unchanged.
 
 ## R1: The runtime/Secrets seam
 
@@ -165,10 +167,42 @@ task is named. Paths that only copy or render the withheld envelope never see a 
 | IP11 | Engine intrinsics: `WorkflowIntrinsicExecutor` | evaluates bindings and writes durable variables and outputs | refuse at publish (R12, `VF-ACT-012`) | T010 |
 | IP12 | Executable inspection and hashing: `WorkflowExecutableInspector`, `WorkflowExecutableHasher` | read bindings, not values | format `SecretRead` by reference | T007, T067 |
 | IP13 | Evidence, run inspector and diagnostic snapshots: `ExecutionEvidenceCheckpointEnricher`, Runtime.Api activity-execution readers, `DefaultDiagnosticSnapshotFactory` | read committed state | render the withheld marker; read no value | T067 |
+| IP14 | Activities that copy a hydrated input into their own persisted state: `ForEach` (`ToItemEnvelope` writes each `Collection` item into the persisted iteration frame under the `Collection` binding's policy), `For` (the persisted iteration index starts at `Start` and walks by `Step` to `End`), `DispatchWorkflow` (`Inputs` and `CorrelationId` go into the persisted dispatch start payload), `PublishEvent` (`EventName`, `CorrelationId` and `Payload` are staged as a stimulus intent), `Delay` (the timer registration holds a due time derived from `Duration`) | hydrated by the activator, then copied by activity code | refuse at publish: the activity names the input in `[RefusesSecretBinding(..., PersistedByActivity)]` (R12), and a `Secret` binding on it fails with `VF-ACT-012` | T099 |
+| IP15 | Publish-time literal reader `HttpEndpointTriggerStimulusProvider` (`HttpEndpoint` `Path`, `SupportedMethods`, `CanStartWorkflow`, `Authorize`, `Policy`, `RequestTimeout`, `RequestSizeLimit`, `ResponseMode`) | reads literal bindings when the trigger is described; any other source throws a generic `ArgumentException` | refuse at publish: `[RefusesSecretBinding(..., FixedAtPublish)]`, `VF-ACT-012`; backstop: the reader throws a fixed `VF-ACT-012` message for `SecretRead` (T007) | T099 |
+| IP16 | Publish-time literal reader `EventTriggerStimulusProvider` (`Event` `EventName`, `CorrelationId`, `CanStartWorkflow`) | a non-literal `EventName` throws a generic error; a non-literal `CorrelationId` or `CanStartWorkflow` is silently treated as unauthored | as IP15 | T099 |
+| IP17 | Publish-time literal reader `SchedulingNodeInputs` (`Cron.Expression`, `Timer.Interval`, read by the Cron and Timer trigger and recurring-schedule providers) | a non-literal returns null, and the caller throws a generic "no literal" error | as IP15 | T099 |
+| IP18 | Publish-time literal reader `BpmnStartTriggerNodeInputs` (`BpmnProcess.CanStartWorkflow`, read by `BpmnProcessTriggerStimulusProvider` and `BpmnProcessRecurringScheduleProvider`) | a non-literal is silently treated as unauthored | as IP15 | T099 |
+| IP19 | Publish-time literal reader `DispatchPinSource` (`DispatchWorkflow` `WorkflowDefinitionId` and `Inputs`) | a non-literal `WorkflowDefinitionId` throws a generic error; a non-literal `Inputs` silently marks the pin incomplete | as IP15 | T099 |
+| IP20 | Value-derived outcomes: `ExecutableNodeCompiler.AddValueDerivedOutcomes` reads the input named by `[ActivityValueOutcomes]` (`RunJavaScript`'s possible outcomes, `SendHttpRequest.ExpectedStatusCodes`) | reads a literal array at publish; any other source silently adds no outcome | refuse at publish: the compiler refuses a `Secret` binding on the input the attribute names, `VF-ACT-012`, with no new annotation | T099 |
+| IP21 | Variable initial values: `ExecutableNodeCompiler.CompileVariableDeclaration` compiles a variable default through `RuntimeInputBindingCompiler.Compile`, and `RuntimeVariableDeclarationProjector` writes it into the persisted variable frame | a non-literal is refused at publish with a generic "requires a persistable literal initial binding" message | refuse at publish with an explicit `VF-ACT-012` message for a `Secret` default | T099 |
 
 Fused mode (spec 123) commits the same Started stage and dispatches the invoke handler inline, so it takes IP1 then
 IP2 and IP3 in one work item. A path added later that reads `ActivityInputSnapshot.Values` must handle
 `ValuePresence.Withheld` explicitly (T007's audit rule) or this table is stale.
+
+**How the table was built (round 2)**. Every reader of compiled input bindings, and every activity that builds a
+persisted envelope, was searched for in `src/` (essentials and extensions):
+
+```bash
+grep -rn --include='*.cs' "\.InputBindings" src | grep -v /Publishing/
+grep -rln --include='*.cs' "RuntimeInputBinding\b\|RuntimeInputBindingSource\.\|InputBindings" src
+grep -rn --include='*.cs' "\.LiteralValue\b\|\.Literal\b" src
+grep -rn --include='*.cs' "\.InputBindings\|\.LiteralValue\b\|Source [!=]= RuntimeInputBindingSource" src/essentials/Workflows/Publishing
+grep -rln --include='*.cs' "ValueEnvelope.Inline(\|ValueEnvelope\.Null(\|LoopIterationScopeRequest(\|SerializeToElement" src/essentials/Activities src/extensions
+```
+
+Readers of compiled bindings found and where each is handled: `RuntimeActivityInputMaterializer` (IP1),
+`WorkflowIntrinsicExecutor` (IP11), `WorkflowExecutableInspector` and `WorkflowExecutableHasher` (IP12),
+`RuntimeInputBindingResolver` (T007), `ForEach` (IP14), the five publish-time literal readers (IP15 to IP19),
+`ExecutableNodeCompiler` (intrinsic literal keys under IP11, value-derived outcomes IP20, variable defaults IP21),
+`RuntimeVariableDeclarationProjector` (IP21), `ActivityResultConversionPlanLinker` (reads only `ActivityResult`
+bindings), `ActivityTemplatePlacer` and `ActivityTemplateCompiler` (compile bindings, covered by the compiler rules),
+and `GraphActivityProvider` (emits empty bindings for graph boundaries, IP7). The `.Literal` hits in
+`Elsa.Workflows.Design.Core` authoring and `Elsa.Expressions.Api` read authored values, not compiled bindings.
+Activities that build persisted envelopes from their own hydrated inputs are the IP14 list. The other hits are
+structure handlers and state persisters (Flowchart, Sequence, If, Parallel, BPMN), which persist structure and
+engine state rather than input values, runtime services covered above, and `RunJavaScript`, `HttpEndpointMiddleware`
+and the dispatch runtime services, which write outputs or request data (R9 limits), not input values.
 
 ## R4: Failure semantics
 
@@ -206,8 +240,17 @@ withheld snapshot and re-resolves at the successor's activation. No automatic re
 **Decision**: `[ActivityInput]` gains two bool properties, `IsSensitive` and `IsCredential`; credential implies
 sensitive. `InputDefinition` gains `bool? IsSensitive = null` and `bool? IsCredential = null`, set only when true.
 `ClrAssemblyScanner` reads both by name (reflection-only, like `UIHint`), normalizes credential to also be
-sensitive, and refuses a credential input that declares `DefaultValue`. `ActivityInputDescriptorView` gains
-non-null `IsSensitive` and `IsCredential` so Studio and validators read them (FR-006).
+sensitive, and refuses a credential input that declares `DefaultValue`. It also refuses a credential input that could
+never be bound: a credential input accepts only a `Secret` binding, so it must not sit where R12 refuses one. The
+scanner therefore refuses, naming the type and input, a credential input on a type that implements
+`IRuntimeActivityCheckpointParticipant` (matched by full name, as the scanner already matches `IActivity`) and a
+credential input that the type names in `[RefusesSecretBinding]` (R12; read for this check only, never written to
+the catalog). Graph activities and intrinsics have no declaration surface: the only other producer of catalog
+`InputDefinition`s is the Activities Design API (`AddDefinitionCommandHandler`, `AddVersionCommandHandler`, whose
+commands accept `InputDefinition`s for any consumer), and it refuses an input with `isCredential: true`, because in
+phase 0 a credential is declared only through `[ActivityInput(IsCredential = true)]`. Intrinsic descriptors report
+`false` for both flags. `ActivityInputDescriptorView` gains non-null `IsSensitive` and `IsCredential` so Studio and
+validators read them (FR-006).
 
 Effective policy: sensitive sets `IsSensitive`; credential sets `IsSensitive` and `RequiresEncryption`. A
 `SecretRead` binding always adds the minimum `{IsSensitive, RequiresEncryption}`, whatever the declaration.
@@ -228,8 +271,11 @@ credentials are governed by R8's publish rule (`VF-ACT-011`), not by the credent
 - `DefaultActivityDefinitionHasher` serializes `Inputs` with `WhenWritingNull`. Nullable flags left null keep every
   existing CLR activity's catalog hash unchanged; non-null bools would change all of them and Model X reconciliation
   would throw `ActivityVersionHashMismatchException` on existing catalogs.
-- For the same reason phase 0 annotates no built-in activity. Annotating one changes its content under the same
-  version. Only test activities are annotated; `SendHttpRequest` and the agent options move in phase 1.
+- For the same reason phase 0 annotates no built-in activity with a sensitivity declaration. Annotating one changes
+  its content under the same version. Only test activities are annotated; `SendHttpRequest` and the agent options
+  move in phase 1. The `[RefusesSecretBinding]` attribute that R12 puts on built-ins is different: the scanner reads
+  it only to refuse a conflicting credential declaration and never writes it to `InputDefinition`, so those
+  activities keep their catalog hash (pinned by T040 and T099).
 - A credential default would be a literal credential in the activity catalog.
 
 **Alternatives considered**: an `InputSensitivity` enum in `Elsa.Primitives` (precedent: `ValueRepresentation`).
@@ -266,52 +312,69 @@ not trip it.
   every translator unchanged.
 - One tree-walking validator, `CredentialLiteralValidator` in `Elsa.Workflows.Design.Validations`, behind a §2.6.2
   replacement contract, `ICredentialLiteralValidator`, in `Elsa.Workflows.Design.Validations.Core`. It reuses
-  `ActivityTreeWalker` and `CatalogVersionResolver`. A throwing extension, `EnsureNoCredentialLiteralsAsync(state)`,
-  raises `CredentialLiteralRefusedException` carrying `ValidationError`s (path `{nodeId}/inputs/{referenceKey}`). The
-  same class is also registered as an `IDraftValidator`, so the existing validation gate reports the same findings.
+  `ActivityTreeWalker` and `CatalogVersionResolver`. The same class is also registered as an `IDraftValidator`, so
+  the validation panel (`DraftValidating`) reports the same findings. That registration only reports; no entry point
+  relies on it for enforcement.
+- One shared admission helper, `WorkflowStateAdmission`, a `public sealed` class in
+  `Elsa.Workflows.Design.Validations.Core` next to the existing `DraftValidationGate`, registered by
+  `WorkflowDesignValidations`. It is the only way an application-layer caller runs the rule:
+  `AdmitAsync(state)` raises `CredentialLiteralRefusedException` carrying `ValidationError`s (path
+  `{nodeId}/inputs/{referenceKey}`), and `FindRefusalsAsync(state)` returns the same findings without throwing, for the
+  per-item callers. Every caller of a state-writing design command takes it, which is what the coverage guard checks.
 - No persistence project gains a reference, a dependency or a rule. The EF design commands are unchanged, and
   `WorkflowsDesignEntityFrameworkCore` gains no `DependsOn`.
-- Five application-layer integration points cover the seven entry points:
-  1. **Design API admission.** The five application-layer callers of a state-carrying design command call
-     `EnsureNoCredentialLiteralsAsync` on the incoming state before the command runs: the Definitions/Add endpoint
+- Four application-layer integration points cover the seven entry points:
+  1. **Design API admission, including promote.** The six Design API callers of a state-writing design command call
+     `WorkflowStateAdmission.AdmitAsync` before the command runs: the Definitions/Add endpoint
      (`IAddWorkflowDefinitionCommand`), the Drafts/Replace endpoint and the Definitions/Update handler (both
-     `IUpdateDraftCommand`), the Versions/Add endpoint (`IAddWorkflowDefinitionVersionCommand`), and the
-     Definitions/Submit endpoint (`ISubmitWorkflowDefinitionCommand`), all under
-     `src/essentials/Workflows/Design/Api/Endpoints/`. This covers draft save, add-version and submit. Draft save
-     blocks because the refusal happens before the command, so nothing is stored. `Elsa.Workflows.Design.Api`
-     already references `Elsa.Workflows.Design.Validations.Core` (verified).
-  2. **The existing promotion gate.** `EfPromoteDraftToVersionCommand` already derives the validation error set
-     in-lock through `DraftValidationGate.DeriveValidationErrorsAsync` and throws
-     `DraftHasValidationErrorsException` on any error (verified). Registering the validator as an
-     `IDraftValidator` makes promote refuse with no change to persistence. This also refuses a draft stored before
-     the rule existed, or while its activity was not in the catalog.
-  3. **`WorkflowsVersionReconciler.ReconcileVersion`**, per item, before any catalog mutation for that item (see
+     `IUpdateDraftCommand`), the Versions/Add endpoint (`IAddWorkflowDefinitionVersionCommand`), the
+     Definitions/Submit endpoint (`ISubmitWorkflowDefinitionCommand`), and the Drafts/Promote endpoint
+     (`IPromoteDraftToVersionCommand`), all under `src/essentials/Workflows/Design/Api/Endpoints/`. The first five
+     admit the incoming state. Promote carries only a draft id, so its endpoint reads the stored draft through
+     `IWorkflowDefinitionDraftStore` (as the Drafts/Get endpoint already does) and admits the draft's state. This
+     covers draft save, promote, add-version and submit. Draft save blocks because the refusal happens before the
+     command, so nothing is stored. Promote refuses a draft stored before the rule existed, or while its activity was
+     not in the catalog. `Elsa.Workflows.Design.Api` already references `Elsa.Workflows.Design.Validations.Core`
+     (verified).
+
+     Promote does not rely on the in-lock gate. `EfPromoteDraftToVersionCommand` derives validation errors only when
+     its optional `IInlineEventPublisher? inlineEvents` constructor parameter is composed
+     (`if (inlineEvents is not null) ...`, verified), so a host without it would promote a credential literal
+     unchecked. The endpoint's admission runs whatever the command's composition. The endpoint reads the draft
+     outside the promotion lock; a concurrent writer can change it before the lock is taken, but every
+     state-writing caller is admitted too, so the only way that window admits a literal is the residual below,
+     which publish still refuses. Where the publisher is composed, the gate re-checks in-lock as defense in depth.
+  2. **`WorkflowsVersionReconciler.ReconcileVersion`**, per item, before any catalog mutation for that item (see
      the per-item contract in [the rule contract](contracts/credential-literal-rule.md)). This covers file
      reconciliation and git import, which both contribute through `WorkflowVersionsReconciling` sources (verified:
-     `WorkflowVersionsReconcilingHandler`).
-  4. **`RuntimeInputBindingCompiler.CompileAll`** (both overloads), which sees each input and its binding and
+     `WorkflowVersionsReconcilingHandler`). It calls `WorkflowStateAdmission.FindRefusalsAsync`.
+  3. **`RuntimeInputBindingCompiler.CompileAll`** (both overloads), which sees each input and its binding and
      applies the same predicate. This covers publish, publish-on-reconcile and draft test runs, with no catalog
      lookup. `Elsa.Workflows.Publishing` already references `Elsa.Workflows.Design.Core` and
      `Elsa.Workflows.Design.Validations` (verified).
-  5. **`GitWorkflowExporter`**, per version, before writing its file.
-- Coverage guard (T055): an architecture test classifies every design-persistence contract that carries workflow
-  state, and asserts that every `src/` type whose constructor takes a state-carrying contract also takes
-  `ICredentialLiteralValidator`, except the persistence implementations themselves. A new state-carrying command,
-  or a new caller of an existing one, fails the guard until it is classified or admitted.
+  4. **`GitWorkflowExporter`**, per version, before writing its file, through `WorkflowStateAdmission.FindRefusalsAsync`.
+- Coverage guard (T055): an architecture test classifies every `*Command` contract in
+  `Elsa.Workflows.Design.Persistence.Core.Contracts` as state-writing or not, and asserts one thing about the
+  state-writing ones: every non-persistence `src/` type whose constructor takes one also takes
+  `WorkflowStateAdmission`. Promote is state-writing (it writes a version from a stored draft) and is not exempt. A
+  new state-writing command, or a new caller of an existing one, fails the guard until it is classified or admitted.
 
-**Caller inventory (verified at `057adc44f`)**: outside the persistence projects, the only `src/` callers of
-state-carrying design commands are the five Design.Api callers above and `WorkflowsVersionReconciler`
-(`IMaterializeWorkflowDefinitionVersionCommand`). `ICreateDraftCommand` has no `src/` caller today.
-`ICloneDraftFromVersionCommand` takes only a source version id and copies a stored version, so it adds no new
-content; it is exempt with that reason, and a version that already holds a literal is the residual case below,
-caught at promote and publish. `ISaveWorkflowDefinitionCommand` and `IMaterializeWorkflowDefinitionCommand` carry
-definition metadata only (name, description, deleted flag), not state.
+**Caller inventory (verified at `057adc44f`, re-run in round 2)**: outside the persistence projects, the only `src/`
+callers of state-writing design commands are the six Design.Api callers above and `WorkflowsVersionReconciler`
+(`IMaterializeWorkflowDefinitionVersionCommand`); `IPromoteDraftToVersionCommand` has no other `src/` caller.
+`ICreateDraftCommand` has no `src/` caller today and is classified admitted. `ICloneDraftFromVersionCommand` takes
+only a source version id and copies a stored version, so it adds no new content; it is exempt with that reason, and a
+version that already holds a literal is the residual case below, caught at promote and publish.
+`ISaveWorkflowDefinitionCommand` and `IMaterializeWorkflowDefinitionCommand` carry definition metadata only (name,
+description, deleted flag), and `IDiscardDraftCommand` and `IDeleteWorkflowDefinitionPermanentlyCommand` remove state;
+none writes workflow state.
 
 **Rationale**: business rules live in the application layer; stores keep only storage integrity. The rule is a pure
 function of the incoming state and immutable catalog versions, so there is no read-then-write race to split across
 layers. Draft save blocks because the admission throws before the command; that is the deliberate exception to the
 non-blocking draft convention (spec clarification), and `DraftValidating` keeps its non-blocking contract for every
-other validator. Promote reuses the gate that already exists for exactly this purpose.
+other validator. Promote is admitted like every other entry point, so it does not depend on how the promotion
+command was composed.
 
 **Alternatives considered**:
 
@@ -331,15 +394,16 @@ other validator. Promote reuses the gate that already exists for exactly this pu
   serialization.
 - Making `DraftValidating` blocking for this category: add-version, submit and materialize have no draft, and it
   would change the documented contract of the shared gate.
-- An `IDraftValidator` only: records without blocking at draft save, which the spec rules out. It is used here, but
-  only for promote, where the gate already blocks.
+- An `IDraftValidator` only: records without blocking at draft save, which the spec rules out. For promote it blocks
+  only when the command's optional `IInlineEventPublisher` is composed, so it cannot be the enforcement there either.
+  It is registered here for reporting only.
 
 **Residual**: like `RequiredInputOutputValidator`, the validator skips nodes whose activity version the catalog
 cannot resolve, so it cannot tell whether their inputs are credentials. Draft save, add-version, submit, file
 reconciliation and git export therefore cannot judge such nodes. Publish must resolve every node, so it remains the
-backstop, and promote re-checks once the activity is installed. A literal on a credential input of an activity that
-is not installed in that environment can therefore be stored until the activity is installed and the definition is
-next promoted or published.
+backstop, and promote's admission re-checks once the activity is installed. A literal on a credential input of an
+activity that is not installed in that environment can therefore be stored until the activity is installed and the
+definition is next promoted or published (spec FR-008 states this).
 
 ## R8: Enforcing RequiresEncryption (FR-010)
 
@@ -459,7 +523,10 @@ leave the canary green and prove nothing. For each of them the canary has a dedi
 upstream failure with a test-only seam, so the protection under test is the only thing between a planted value and
 a surface. The test-only seams are DI replacements of existing contracts in the canary host only, never switches in
 production code: an `IRuntimeActivityInputMaterializer` decorator that re-plants a value the real materializer
-withheld, an `IRuntimePayloadCapturePolicy` double that captures every payload, a decorator over the invoke scheduler work
+withheld, the same decorator in a second mode that lowers the canary `SecretRead` binding's policy to
+`{IsSensitive: false, RequiresEncryption: false}` before delegating (so producer withholding, the commit backstop and
+every sensitive-value rule stand aside and the protection under test is the only one left; this is the shape a
+hand-built imported artifact can already have, R13, so the runtime protections must hold under it), an `IRuntimePayloadCapturePolicy` double that captures every payload, a decorator over the invoke scheduler work
 handler that throws a planted value after the handler returns (the only way an exception reaches a runtime span,
 since handlers record activity faults themselves), and a hand-built runtime artifact imported without publish
 (R13), which is how an encryption-required literal reaches the runtime. Each injection scenario asserts its
@@ -478,15 +545,18 @@ where a failure faults with `TypeMismatch`:
 1. The existing conversion rules (`ValueConversionPlanResolver`,
    `src/essentials/Workflows/Publishing/Services/ValueConversionPlanResolver.cs`) have no plan from `string` to the
    input's declared type at all.
-2. The reference declares a `typeName` whose value domain is known, and the input's declared type cannot hold that
-   domain (`VF-ACT-013`). Phase 0 knows two domains. `Text` (built-in `text`) is free text: no publish-time refusal,
-   since a text secret may legitimately hold a number. `StructuredText` (built-ins `rsa-key` and
-   `x509-certificate`, PEM-style multi-line text) can be held only by a single string-typed input; any other
-   declared type, including a collection, is refused. An `rsa-key` bound to an integer input is therefore refused at
-   publish, as the spec's edge case asks.
+2. The reference declares a `typeName` whose value domain is known, and the input's declared type certainly cannot
+   hold that domain (`VF-ACT-013`). Phase 0 knows two domains. `Text` (built-in `text`) is free text: no
+   publish-time refusal, since a text secret may legitimately hold a number. `StructuredText` (built-ins `rsa-key`
+   and `x509-certificate`, PEM-style multi-line text) is refused only on a declared type that certainly cannot hold
+   text: a numeric type, `Boolean`, a date or time type (`DateTime`, `DateTimeOffset`, `DateOnly`, `TimeOnly`,
+   `TimeSpan`), an enum, or a collection whose element type is one of those. `String`, `Object`, `Elsa.Any` (and
+   other any-typed aliases) and `JsonElement` can hold text and are accepted, single or as collection elements; so is
+   any type the rule does not recognize, because "not certain" is never refused. An `rsa-key` bound to an integer
+   input is therefore refused at publish, as the spec's edge case asks.
 
 A reference without a `typeName`, or whose type has no known domain (a custom secret type), keeps the run-time
-`TypeMismatch` fault.
+`TypeMismatch` fault. So does every case the rule accepts but conversion cannot satisfy.
 
 **Where the domain knowledge comes from, without a runtime-to-Secrets dependency**: the runtime contract that
 resolution already uses (R1) gains a second, optional replacement contract in `Elsa.Workflows.Runtime.Core`,
@@ -495,7 +565,8 @@ or `StructuredText`. The bridge `Elsa.Secrets.Workflows` implements it from `Sec
 (`src/essentials/Secrets/Core/Models/SecretModels.cs`): `text` to `Text`, `rsa-key` and `x509-certificate` to
 `StructuredText`, anything else to `Unknown`. `RuntimeInputBindingCompiler` takes it as an optional dependency. In
 a host that does not compose `SecretsWorkflows`, every domain is `Unknown` and only the run-time fault applies;
-both outcomes are loud, and the publish-time one needs the bridge. Publishing gains no reference: it already
+both outcomes are loud, and the publish-time one needs the bridge. That matches the spec edge case: without the
+bridge the domain is unknown, so the mismatch is not certain at publish (spec clarification, plan review round 2). Publishing gains no reference: it already
 references `Elsa.Workflows.Runtime.Core` (verified).
 
 **Alternatives considered**: hard-coding the three type names in publishing (a second copy of Secrets vocabulary,
@@ -504,20 +575,48 @@ type); descriptor metadata on `ActivityInputDescriptorView` (the domain belongs 
 
 ## R12: Secret bindings on activity kinds that cannot resolve at the point of use
 
-**Decision**: Publish refuses a `Secret` binding, with `VF-ACT-012` and a fixed message naming the node and input,
-on three kinds of node:
+**Decision**: Publish refuses a `Secret` binding, with `VF-ACT-012` and a fixed message naming the node and input
+(and, for the last three cases, the reason), in these cases (spec FR-001):
 
 - intrinsic nodes (Set Variable, Set Output and the other `WorkflowIntrinsicKind` values);
 - nodes whose activity descriptor consumer is not `elsa.clr-activity`, which today means graph activities
   (`WellKnownRuntimeActivityConsumers.GraphActivity`);
-- CLR activity types that implement `IRuntimeActivityCheckpointParticipant`.
+- CLR activity types that implement `IRuntimeActivityCheckpointParticipant` (today only `GraphActivity` implements
+  it, so this case guards future CLR participants);
+- an input the CLR activity type names in a new class-level attribute,
+  `[RefusesSecretBinding(inputKey, reason)]` (`Elsa.Activities.Runtime.Core.Attributes`, `AllowMultiple`), with reason
+  `PersistedByActivity` (the activity copies the hydrated value into its own persisted state, R3a IP14) or
+  `FixedAtPublish` (a publish-time reader needs a literal, R3a IP15 to IP19);
+- the input named by the type's existing `[ActivityValueOutcomes]` attribute (R3a IP20), which needs a literal at
+  publish;
+- a variable's initial value (R3a IP21), which is persisted in the variable frame.
 
-**Rationale**: each of them hands its inputs to code that persists them. Intrinsics write their value into a
+**The general mechanism (round 2)**: nothing in the code tells publish today that an activity persists a hydrated
+input or reads it at publish; the five literal readers and `ForEach` each decide it privately. The attribute makes it
+a declaration on the activity type, read at publish through `ExecutableNodeCompiler.ResolveClrActivityType`, the same
+reflection path that already reads `[ResumeTarget]` and `[ActivityValueOutcomes]` (verified). It is the way any
+activity author opts an input out of secret binding; it is not special-casing `ForEach`. Phase 0 applies it to the
+built-ins found by the R3a search: `ForEach.Collection`; `For.Start`, `End` and `Step`; `DispatchWorkflow`
+`WorkflowDefinitionId`, `Inputs` and `CorrelationId`; `PublishEvent` `EventName`, `CorrelationId` and `Payload`;
+`Delay.Duration`; the eight `HttpEndpoint` inputs of IP15; `Event` `EventName`, `CorrelationId` and
+`CanStartWorkflow`; `Cron.Expression`; `Timer.Interval`; `BpmnProcess.CanStartWorkflow`. The scanner never writes the
+attribute into the catalog, so these activities keep their catalog hash (R5). Each literal reader also handles a
+`SecretRead` binding explicitly, throwing the fixed `VF-ACT-012` message instead of treating it as unauthored or
+throwing its generic "no literal" error (T007's audit rule), so a missing attribute is still loud. Text an activity
+writes from other inputs into private state, bookmarks or outputs remains the activity author's responsibility
+(R9 limits).
+
+A credential input accepts only a `Secret` binding, so it must not sit in any of these places: the catalog refuses
+such a declaration (R5).
+
+**Rationale**: each of them hands its inputs to code that persists them or needs them fixed at publish. Intrinsics write their value into a
 durable variable or workflow output (`WorkflowIntrinsicExecutor`). Graph activities skip input hydration and capture
 their inputs as boundary input durable values (`GraphActivityScope.CaptureInputsAsync`), which the boundary retry
 later clones. Checkpoint participants receive their inputs through `MaterializeCheckpointInputsAsync` and may write
-them into checkpoint state. Resolving a secret into any of these would persist it, so the binding is refused where
-the author can act on it, the same loud-over-silent choice as for intrinsics. The spec scopes resolution to activity
+them into checkpoint state. Inputs named by `[RefusesSecretBinding]` are copied into persisted state or read at
+publish, and variable defaults are persisted in variable frames. Resolving a secret into any of these would persist
+it, and a publish-time reader has no value to read, so the binding is refused where the author can act on it, the
+same loud-over-silent choice as for intrinsics. The spec scopes resolution to activity
 inputs at the point of use. R3a lists every path and which ones this rule closes.
 
 ## R13: Entry points the spec does not list

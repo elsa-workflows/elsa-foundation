@@ -27,6 +27,13 @@ The Secrets module stores, versions, rotates, and audits secrets, and Studio let
 - Q: Which inputs refuse literals? → A: Only activity-declared credential inputs. Non-credential sensitive inputs may hold literals and are masked.
 - Q: What does enforcing `RequiresEncryption` mean for values not derived from a secret reference? → A: Withhold. Persist a marker; no encryption at rest in phase 0.
 - Q (raised in plan review 2026-10-01): How does an expression-bound value that requires encryption reach the activity? → A: It cannot in phase 0 without persisting it, so such bindings are refused at publish; secret references are the only binding for encryption-required inputs. Phase 1's redacting value type revisits this.
+- Q (raised in plan review 2026-10-01): Which activity inputs can take a secret reference? → A: Inputs whose value the activity reads only when it runs. Publish refuses a secret reference with rule `VF-ACT-012` on intrinsic nodes, graph activities and checkpoint participants, and on inputs the activity marks as copied into its own persisted state or read at publish time (the built-ins that do either are marked, for example a ForEach collection and trigger routing options).
+- Q (raised in plan review 2026-10-01): Can an input that refuses secret references be declared a credential? → A: No. A credential input would accept only a secret reference, so such an input could never be bound; the declaration is refused when the activity is cataloged.
+- Q (raised in plan review 2026-10-01): When is a secret refused at publish because the input type cannot hold it? → A: Only when that is certain: a structured-text secret (`rsa-key`, `x509-certificate`) on a numeric, boolean, date/time or enum input, or a collection of those, and only in a host that composes the Secrets bridge, which knows the secret types. Every other mismatch faults at run time with `TypeMismatch`.
+- Q (raised in plan review 2026-10-01): Can the credential rule judge a node whose activity is not in the catalog? → A: No. The rule applies where the activity's input contract is known; such a node is judged at publish, where it is refused, and until then its literal can be stored.
+- Q (raised in plan review 2026-10-01): What does file reconciliation or git export do with a definition the rule refuses? → A: It refuses that item only, logs a warning that names the rule, definition, version, node and input but no value, and continues the pass without blocking host readiness.
+- Q (raised in plan review 2026-10-01): What happens when the instance's tenant differs from the execution scope? → A: Resolution refuses with a `TenantMismatch` fault before any secret is read.
+- Q (raised in plan review 2026-10-01): What happens in a host that cannot resolve secrets at all? → A: A host that does not compose the secret resolution bridge has a composition fault, not a resolution failure: the activity parks with an activation-failure incident (constitution §E2.6.1).
 
 ## User Scenarios & Testing
 
@@ -69,7 +76,7 @@ An activity author marks an input as holding a credential. A workflow author who
 
 **Acceptance Scenarios**:
 
-1. **Given** an activity input declared as a credential, **When** a literal is bound to it, **Then** the definition is refused at every entry point with one stable rule identifier, the activity id, and the input name, and the literal is not stored.
+1. **Given** an activity input declared as a credential, **When** a literal or expression is bound to it, **Then** the definition is refused at every entry point with one stable rule identifier, the activity id, and the input name, and the literal is not stored.
 2. **Given** the same input bound to a secret reference, **When** saved and published, **Then** it is accepted.
 3. **Given** an activity input declared as a credential, **When** Studio renders it, **Then** the secret picker is offered by default and a literal cannot be entered.
 4. **Given** an author marks a binding as sensitive where the activity did not, **When** compiled, **Then** the stricter policy applies; an author can never weaken an activity's declared policy.
@@ -103,13 +110,16 @@ Studio knows which inputs an activity declares as credentials or sensitive, so i
 
 ### Edge Cases
 
-- A secret reference bound to an input whose type cannot represent the secret (for example an `rsa-key` into an integer input): refuse at publish when the declared types make it certain, otherwise fault at run time with a type-mismatch reason.
+- A secret reference bound to an input whose type cannot represent the secret (for example an `rsa-key` into an integer input): refuse at publish when the declared types make it certain, otherwise fault at run time with a type-mismatch reason. Certain means a structured-text secret on a numeric, boolean, date/time or enum input, or a collection of those; string, object, any-typed and JSON inputs can hold text and are accepted. The publish-time refusal needs the secret's type domain, so it applies only in hosts that compose the Secrets bridge; elsewhere the domain is unknown and the run-time fault applies.
+- A secret reference on an input that cannot resolve at the point of use: an intrinsic such as Set Variable, a graph activity, a checkpoint participant, an input the activity marks as copied into its own persisted state (for example a ForEach collection), or an input it marks as read at publish (for example an HTTP endpoint path or an event name). Refused at publish with `VF-ACT-012`. Such an input cannot be declared a credential.
 - A secret referenced by name only, with no type or scope constraint: resolves by name within the tenant, as `ISecretValueResolver` already does.
 - A secret deleted between publish and run: faults with `Deleted` or `NotFound`, never with a stale cached value.
 - An activity reads a resolved secret, then the workflow suspends for days: nothing persisted during suspension contains the value; resumption re-resolves.
 - A credential input bound to an expression (for example JavaScript that builds a token from a variable): refused like a literal (FR-009). A non-credential sensitive input bound to an expression: allowed when its effective policy does not require encryption; the result follows the effective sensitive policy. A literal or expression on an input whose effective policy requires encryption is refused at publish (FR-010).
 - Definitions created before this rule that already contain literals on credential inputs: Elsa 4 is unreleased, so no migration; they are refused on their next save or publish.
 - A literal empty string or null on a credential input: treated as "unbound," not as a literal credential, and does not trip the rule.
+- A literal on a credential input of an activity the catalog does not know: draft save, add-version, submit, file reconciliation and git export cannot tell that the input is a credential, so they accept it; publish refuses it (FR-008).
+- File reconciliation or git export meets a definition version the rule refuses: that item alone is refused, with a value-free warning naming the rule, definition, version, node and input; the pass continues and host readiness is not blocked.
 - The same secret consumed by many activities in one run: each consumption resolves at its point of use; phase 0 does not require caching.
 
 ## Requirements
@@ -118,17 +128,17 @@ Studio knows which inputs an activity declares as credentials or sensitive, so i
 
 **Resolution**
 
-- **FR-001**: A `Secret` binding on an activity input MUST resolve at the activity's point of use through the existing secret resolver, for the tenant of the executing workflow instance.
+- **FR-001**: A `Secret` binding on an activity input MUST resolve at the activity's point of use through the existing secret resolver, for the tenant of the executing workflow instance. Publish MUST refuse a `Secret` binding, with rule `VF-ACT-012`, on intrinsic nodes, graph activities, checkpoint participants, and inputs the activity marks as copied into its own persisted state or read at publish time.
 - **FR-002**: Resolution MUST happen on every execution and every resumption. A resolved value MUST NOT be restored from persisted state.
-- **FR-003**: Resolution failures MUST fault the activity with the reference name and the resolver's failure code, and no value or store-private detail. `StoreUnavailable` MUST be classified transient. All other codes MUST be classified permanent.
+- **FR-003**: Resolution failures MUST fault the activity with the reference name and the resolver's failure code, and no value or store-private detail. `StoreUnavailable` MUST be classified transient. All other codes MUST be classified permanent. A host that does not compose the secret resolution bridge cannot resolve at all; this is a composition fault, not a resolution failure, and MUST park the activity with an activation-failure incident (constitution §E2.6.1).
 - **FR-004**: The resolved value MUST be converted to the input's declared type using the existing input conversion rules. An impossible conversion MUST fault with a type-mismatch reason.
-- **FR-005**: The tenant of the executing instance MUST be available wherever activity inputs are resolved. A binding MUST NOT be able to select a tenant.
+- **FR-005**: The tenant of the executing instance MUST be available wherever activity inputs are resolved. A binding MUST NOT be able to select a tenant. If the instance's tenant is known and differs from the execution scope, resolution MUST refuse with a `TenantMismatch` fault before any secret is read.
 
 **Declaring and guarding sensitive inputs**
 
-- **FR-006**: Activity authors MUST be able to declare, on an input, that it (a) is sensitive and (b) is a credential that accepts only a secret reference. The declaration MUST reach the activity's input descriptor so Studio and validators can read it.
+- **FR-006**: Activity authors MUST be able to declare, on an input, that it (a) is sensitive and (b) is a credential that accepts only a secret reference. The declaration MUST reach the activity's input descriptor so Studio and validators can read it. An input that cannot take a secret reference (FR-001) MUST NOT be declarable as a credential: the declaration is refused when the activity is cataloged.
 - **FR-007**: The effective policy of a binding MUST be the stricter of the activity's declaration and the author's per-binding choice. An author MUST NOT be able to downgrade a declared policy; a downgrade attempt MUST be refused, consistent with the existing value-policy downgrade rule.
-- **FR-008**: A definition that binds a literal to a credential input MUST be refused, with one stable rule identifier, the activity id, and the input name, at: draft save, promote, publish, add-version, submit, file-based reconciliation import, and git export. At draft save the refusal MUST block: the literal is never stored, not even in a draft. This rule is a deliberate exception to the convention that draft save records validation errors without blocking, because the harm (credential material at rest) happens at save.
+- **FR-008**: A definition that binds a literal to a credential input MUST be refused, with one stable rule identifier, the activity id, and the input name, at: draft save, promote, publish, add-version, submit, file-based reconciliation import, and git export. The rule applies where the activity's input contract is known: a node whose activity is not in the catalog cannot be judged before publish, and publish MUST refuse it. During file-based reconciliation and git export the refusal MUST apply to the offending item only, with a value-free warning, and the pass MUST continue without blocking host readiness. At draft save the refusal MUST block: a literal the rule can judge is never stored, not even in a draft. This rule is a deliberate exception to the convention that draft save records validation errors without blocking, because the harm (credential material at rest) happens at save.
 - **FR-009**: The rule MUST apply only to inputs the activity declares as credentials (FR-006b). Sensitive inputs that are not credentials (for example personal data) MAY hold literals; their values are masked in Studio and follow the effective sensitive policy at run time. Expressions on credential inputs are refused like literals; only a secret reference or no binding is accepted.
 - **FR-010**: Values whose effective policy requires encryption MUST NOT be written to persisted state in plain text. In phase 0, an activity input whose effective policy requires encryption MUST be bound to a secret reference or left unbound; a literal or expression binding on such an input MUST be refused at publish with a stable rule identifier, because no phase 0 path can deliver that value to the activity without persisting it. Any other value whose effective policy requires encryption MUST be withheld: persisted state records a withheld marker instead of the value, and the value is not recoverable. Secret-bound inputs are re-resolved on resumption (FR-002). Phase 0 adds no encryption at rest to the workflow runtime.
 
@@ -163,7 +173,7 @@ Studio knows which inputs an activity declares as credentials or sensitive, so i
 
 - **SC-001**: A workflow author can bind a stored secret to an activity input and run the workflow successfully with no literal credential anywhere in the definition.
 - **SC-002**: Rotating a secret takes effect on the next activity execution in 100% of tested runs, with zero republishes.
-- **SC-003**: A literal on a guarded input is refused at 7 of 7 definition entry points (FR-008), with the same rule identifier each time.
+- **SC-003**: A literal or expression on a guarded input of a cataloged activity is refused at 7 of 7 definition entry points (FR-008), with the same rule identifier each time; on an activity the catalog does not know, it is refused at publish.
 - **SC-004**: The canary value appears 0 times across the 8 surfaces in FR-013, over the 4 run shapes.
 - **SC-005**: Each protection named in FR-014, when disabled alone, causes the canary test to fail. Zero protections are unguarded.
 - **SC-006**: Every resolution failure code produces a fault that names the reference and code and contains zero secret material.

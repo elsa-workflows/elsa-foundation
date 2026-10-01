@@ -16,14 +16,17 @@ activation point for every CLR activation, resolves it through a runtime-owned `
 kinds that read inputs outside the activator (intrinsics, graph activities, checkpoint participants) cannot carry a
 `Secret` binding: publish refuses it (research R3a). Resolution happens for the execution's own partition on every
 activation, so resumption re-resolves, and it fails closed when the instance's recorded tenant disagrees with the
-partition. A new bridge project, `Elsa.Secrets.Workflows`, implements that contract over the existing
+partition. Publish also refuses a `Secret` binding on inputs an activity copies into its own persisted state or
+reads at publish, which activity types declare with a new `[RefusesSecretBinding]` attribute (research R12). A new bridge project, `Elsa.Secrets.Workflows`, implements that contract over the existing
 `ISecretValueResolver`, owns the transient/permanent classification of its failure codes, and tells publish which
 secret types hold structured text. Activities declare sensitive and credential inputs on `[ActivityInput]`; the
 declaration reaches the catalog, the pinned contract, the authoring view and the compiled policy, and an author
-cannot downgrade it. One predicate decides whether a binding on a credential input is acceptable. It is enforced in
-the application layer only, at the seven definition entry points, through five integration points: Design API
-admission before the design commands, the existing promotion gate, the version reconciler (per item), the
-input-binding compiler, and the git exporter (per version). No persistence project gains a rule or a reference.
+cannot downgrade it, and an input that refuses secret bindings cannot be declared a credential. One predicate decides
+whether a binding on a credential input is acceptable. It is enforced in the application layer only, at the seven
+definition entry points, through four integration points: Design API admission before the design commands
+(promote included), the version reconciler (per item), the input-binding compiler, and the git exporter (per
+version). Every caller of a state-writing design command, and the exporter, goes through one shared helper,
+`WorkflowStateAdmission`. No persistence project gains a rule or a reference.
 An input whose policy requires encryption accepts only a secret reference; anything else that requires encryption
 is withheld at the producer and refused at the checkpoint-commit backstop. Values resolved during an activation are
 masked in fault, incident and log text without changing the fault's classification. A canary test proves all of it
@@ -79,7 +82,10 @@ Framework constitution v4.0.0:
 - **§2.6.2 replacement contracts**: `IRuntimeSecretResolver`, `IRuntimeSecretTypeDomains`,
   `ICredentialLiteralValidator` and `IRuntimeSecretMask` are declared as replacement contracts in their XML
   documentation and registered once; each feature registration test asserts a single implementation.
-  `CredentialLiteralValidator` is additionally registered as an `IDraftValidator` contribution (§2.6.1).
+  `CredentialLiteralValidator` is additionally registered as an `IDraftValidator` contribution (§2.6.1), for
+  reporting only. `WorkflowStateAdmission` is a `public sealed` helper, not a replacement contract, so a host cannot
+  swap the admission out; it sits in `Elsa.Workflows.Design.Validations.Core` next to the existing
+  `DraftValidationGate`.
 - **§2.6.4 design/runtime split**: the design-time rule (credential literal) and the runtime contract (secret
   resolution) are separate contracts with no shared runtime concern.
 - **§2.7 adapter**: the bridge adapts Secrets to the runtime contract. No sync-contributor exception (§2.6.5) is used.
@@ -132,8 +138,10 @@ Elsa constitution v4.2.0:
   behind the code and is not edited here (research R5).
 - **§E2.9 and §E2.9.7 (provisional)**: `WorkflowDefinitionState` gains no member; a secret reference is authored
   content, a withheld marker is runtime state. The rule lives in Design.Validations and runs in the application
-  layer, above the design commands; promote reuses the in-lock validation gate §E2.9.7 already places in the
-  promotion command, by contributing an `IDraftValidator`. No persistence code changes (research R7).
+  layer, above the design commands; promote is admitted by its endpoint like every other entry point, because the
+  in-lock validation gate §E2.9.7 places in the promotion command runs only when the command's optional
+  `IInlineEventPublisher` is composed. The validator still contributes an `IDraftValidator`, so that gate re-checks
+  in-lock where it runs. No persistence code changes (research R7).
 - **§E6 type names**: `IRuntimeSecretResolver`, `RuntimeSecretReference` and `RuntimeSecretResolution` use the
   `Runtime` qualifier to disambiguate from Secrets' `ISecretValueResolver` and `SecretReference` (R2 allows it);
   `ICredentialLiteralValidator` uses the `Validator` suffix for a findings-returning contract (R4);
@@ -181,20 +189,29 @@ Existing projects changed (paths verified at `057adc44f`):
   `MaterializeCheckpointInputsAsync`), `Services/WorkflowResumeBookmarkSchedulerWorkHandler.cs`,
   `Services/StructuralParentEvaluationSupport.cs` (activation request, masking boundary),
   `Services/ActivityFaultProjection.cs` callers, `Services/ActivityExecutionInspection.cs` (withheld tolerance).
-- `src/essentials/Activities/Runtime/Core/`: `Attributes/ActivityInputAttribute.cs` (flags) and
-  `Models/ActivityContract.cs` (explicit `ActivityInputContract.IsCredential`).
+- `src/essentials/Activities/Runtime/Core/`: `Attributes/ActivityInputAttribute.cs` (flags), new
+  `Attributes/RefusesSecretBindingAttribute.cs`, and `Models/ActivityContract.cs` (explicit
+  `ActivityInputContract.IsCredential`).
+- Built-in activities that gain `[RefusesSecretBinding]` (research R12) and literal readers that handle `SecretRead`
+  explicitly (research R3a IP14 to IP19): `ForEach`, `For`, `DispatchWorkflow` and `DispatchPinSource`,
+  `PublishEvent`, `Event` and `EventTriggerStimulusProvider`, `Delay`, `Cron`, `Timer` and `SchedulingNodeInputs`,
+  `HttpEndpoint` and `HttpEndpointTriggerStimulusProvider`, `BpmnProcess` and `BpmnStartTriggerNodeInputs`.
 - `src/essentials/Activities/Design/Core/Models/InputDefinition.cs`,
-  `src/essentials/Activities/Design/Reconciliation/Clr/Services/ClrAssemblyScanner.cs`,
+  `src/essentials/Activities/Design/Reconciliation/Clr/Services/ClrAssemblyScanner.cs` (flags; refuses an unbindable
+  credential declaration), `src/essentials/Activities/Design/Api/Handlers/AddDefinitionCommandHandler.cs` and
+  `AddVersionCommandHandler.cs` (refuse `isCredential`),
   `src/essentials/Activities/Design/Api/Models/ActivityAuthoringCatalogView.cs`,
   `src/essentials/Activities/Design/Api/Services/ActivityAuthoringCatalogReader.cs`,
   `src/essentials/Activities/Design/Api/Services/IntrinsicAuthoringDescriptorProvider.cs`.
 - `src/essentials/Workflows/Publishing/Services/RuntimeInputBindingCompiler.cs` (`SecretRead`, credential rule,
   `VF-ACT-011`, `VF-ACT-013`, plan) and `Services/ExecutableNodeCompiler.cs` (policy from declaration, pinned
-  `IsCredential`, `VF-ACT-012`).
+  `IsCredential`, `VF-ACT-012` including `[RefusesSecretBinding]`, `[ActivityValueOutcomes]` inputs and variable
+  defaults).
 - `src/essentials/Workflows/Design/Core/` (predicate and rule id), `Validations/Core/` (contract, exception,
-  throwing extension), `Validations/` (validator, registration as contract and `IDraftValidator`, shared `IsBound`).
-- `src/essentials/Workflows/Design/Api/`: the five admission callers under `Endpoints/` (Definitions/Add,
-  Drafts/Replace, Definitions/Update handler, Versions/Add, Definitions/Submit),
+  `WorkflowStateAdmission`), `Validations/` (validator, registration as contract and `IDraftValidator`, shared
+  `IsBound`).
+- `src/essentials/Workflows/Design/Api/`: the six admission callers under `Endpoints/` (Definitions/Add,
+  Drafts/Replace, Definitions/Update handler, Versions/Add, Definitions/Submit, Drafts/Promote),
   `Endpoints/WorkflowDesignExceptionTranslator.cs` (400 mapping), `WorkflowsDesignApiFeature.cs` (`DependsOn`).
 - `src/essentials/Workflows/Design/Reconciliation/Services/WorkflowsVersionReconciler.cs` (per-item admission),
   `Reconciliation/Json/JsonWorkflowReconciliationFeature.cs` and
@@ -245,14 +262,16 @@ the canary composes design, publishing, runtime and Secrets together, which no e
 
 1. Slice 1 (housekeeping) at any time.
 2. Slice 2 introduces the runtime value model, the `SecretRead` compile path, the withheld snapshot and the publish
-   refusals for activity kinds that cannot resolve at the point of use (`VF-ACT-012`) or whose type cannot hold the
+   refusals for activity kinds and inputs that cannot resolve at the point of use (`VF-ACT-012`, including the
+   `[RefusesSecretBinding]` attribute on built-ins) or whose type cannot hold the
    secret (`VF-ACT-013`). Activation refuses withheld inputs loudly until slice 3, so `main` never resolves a secret
    into the snapshot and never hydrates a withheld input as null (R3, R3a, R16).
 3. Slice 3 adds activation-time resolution and failure semantics behind a fake resolver.
 4. Slice 4 adds the bridge, composition and the two-tenant and lifecycle integration. Secrets become usable here.
-5. Slice 5 (declaration, policy and the `VF-ACT-011` encryption-required binding rule) is independent of slices 2
-   to 4 in behavior but edits `RuntimeInputBindingCompiler.cs` and `ExecutableNodeCompiler.cs`, so it lands after
-   slice 2 merges or rebases on it.
+5. Slice 5 (declaration, policy and the `VF-ACT-011` encryption-required binding rule) needs slice 2: its scanner
+   refuses a credential declaration on an input named by slice 2's `[RefusesSecretBinding]`, and it edits
+   `RuntimeInputBindingCompiler.cs` and `ExecutableNodeCompiler.cs`, which slice 2 also edits. It is independent of
+   slices 3 and 4.
 6. Slice 6 (the rule, application layer only) needs slice 5's `IsCredential`.
 7. Slice 7 (withholding backstop and surfaces) needs slices 2, 3 and 5; slice 8 (masking) needs slice 3.
 8. Slice 9 (canary) needs slices 2 to 8.
@@ -275,4 +294,4 @@ reviewer can challenge them:
 |---|---|---|
 | New `Elsa.Secrets.Workflows` project | keeps Secrets types, failure classification and secret type domains out of the runtime contract (R1, R11) | a direct Runtime to `Elsa.Secrets.Core` reference is viable and is the named fallback; it was not chosen because it moves Secrets vocabulary into the runtime |
 | A new `ValuePresence.Withheld` | the persisted snapshot needs a value-free shape that every consumer must handle explicitly (R3) | reusing external references conflates runtime payload storage with secrets and has no tenant parameter |
-| Five application-layer integration points for one rule, held together by a coverage guard | business rules stay out of persistence (R7) | a guarded writer inside the EF commands is a single choke point but puts the rule in persistence; decorators over the command contracts conflict with the design backend's exclusive ownership of those contracts |
+| Four application-layer integration points for one rule, one shared admission helper, and a coverage guard that asserts every state-writing caller takes the helper | business rules stay out of persistence (R7), and promote must not depend on the promotion command's optional publisher | a guarded writer inside the EF commands is a single choke point but puts the rule in persistence; decorators over the command contracts conflict with the design backend's exclusive ownership of those contracts; the in-lock promotion gate runs only when `IInlineEventPublisher` is composed |

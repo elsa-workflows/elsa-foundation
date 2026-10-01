@@ -93,15 +93,15 @@ Resolution happens only in the activator's hydration branch, which runs for stra
 structural parent evaluation, and the second activation on a re-materialized snapshot after a child completes. Each
 one re-resolves (FR-002). The boundary retry never activates anything: it clones graph boundary inputs and
 schedules a fresh execution of that graph boundary, which cannot carry a `Secret` binding. Activity kinds that read inputs outside the
-hydration branch (graph activities, checkpoint participants, intrinsics) cannot carry a `Secret` binding: publish
-refuses it with `VF-ACT-012`. The full path list is [research R3a](../research.md).
+hydration branch (graph activities, checkpoint participants, intrinsics), inputs an activity copies into its own
+persisted state, and inputs read at publish cannot carry a `Secret` binding: publish refuses it with `VF-ACT-012`. The full path list is [research R3a](../research.md).
 
 ## Publish-time refusals owned by this contract
 
 | Code | Refused |
 |---|---|
-| `VF-ACT-012` | a `Secret` binding on an intrinsic node, a non-CLR consumer (graph activity), or a CLR type implementing `IRuntimeActivityCheckpointParticipant` |
-| `VF-ACT-013` | a `Secret` binding whose reference declares a `typeName` with domain `StructuredText` on an input that is not a single string-typed value |
+| `VF-ACT-012` | a `Secret` binding on an intrinsic node, a non-CLR consumer (graph activity), a CLR type implementing `IRuntimeActivityCheckpointParticipant`, an input the CLR type names in `[RefusesSecretBinding]` (the activity persists its value, or a publish-time reader needs a literal), the input named by `[ActivityValueOutcomes]`, or a variable default (research R12, R3a IP14 to IP21) |
+| `VF-ACT-013` | a `Secret` binding whose reference declares a `typeName` with domain `StructuredText` on a numeric, boolean, date/time or enum input, or a collection of those. String, object, any-typed and `JsonElement` inputs are accepted. Applies only where `IRuntimeSecretTypeDomains` is composed (the bridge); elsewhere every domain is `Unknown` and nothing is refused here |
 | existing | a `Secret` binding on an input type with no conversion plan from `string` |
 
 ## Feature

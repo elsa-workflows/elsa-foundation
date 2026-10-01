@@ -49,6 +49,10 @@ grep -rn "ISecretResolver\b\|src/Elsa/Secrets" specs/079-secrets-module   # expe
 dotnet test tests/essentials/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj
 dotnet test tests/essentials/Workflows/Publishing/Api/Tests/Elsa.Workflows.Publishing.Api.Tests.csproj
 dotnet test tests/essentials/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj
+dotnet test tests/essentials/Activities/ControlFlow/Tests/Elsa.Activities.ControlFlow.Tests.csproj
+dotnet test tests/essentials/Activities/DispatchWorkflow/Tests/Elsa.Activities.DispatchWorkflow.Tests.csproj
+dotnet test tests/essentials/Activities/Bpmn/Tests/Elsa.Activities.Bpmn.Tests.csproj
+dotnet test tests/essentials/Activities/Design/Tests/Elsa.Activities.Design.Tests.csproj
 dotnet test tests/essentials/Architecture/Elsa.Architecture.Tests.csproj
 ```
 
@@ -89,14 +93,13 @@ dotnet test tests/essentials/Workflows/Publishing/Api/Tests/Elsa.Workflows.Publi
 
 ### Slice 6: credential-literal rule at seven entry points
 
-Journey: push one definition with a literal on a credential input through every Design API entry point (400, or the
-409 promotion-gate shape for promote), through file reconciliation and git export (that item refused, the pass
-completes), and through publish; confirm `git diff` for the slice touches nothing under
+Journey: push one definition with a literal on a credential input through every Design API entry point, promote
+included (400 from admission), through file reconciliation and git export (that item refused, the pass completes),
+and through publish; confirm `git diff` for the slice touches nothing under
 `src/essentials/Workflows/Design/Persistence/`.
 
 ```bash
 dotnet test tests/essentials/Workflows/Design/Tests/Elsa.Workflows.Design.Tests.csproj
-dotnet test tests/essentials/Workflows/Design/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Tests.csproj
 dotnet test tests/essentials/Workflows/Design/Api/Tests/Elsa.Workflows.Design.Api.Tests.csproj
 dotnet test tests/essentials/Workflows/Publishing/Api/Tests/Elsa.Workflows.Publishing.Api.Tests.csproj
 dotnet test tests/essentials/Architecture/Elsa.Architecture.Tests.csproj

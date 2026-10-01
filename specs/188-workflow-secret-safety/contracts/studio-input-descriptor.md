@@ -23,15 +23,18 @@ declares `StudioActivityInputDescriptor`: `src/extensions/Elsa.Studio.Secrets/Cl
 The backend view fields `isSensitive` and `isCredential` already reach the descriptor through
 `toActivityDescriptor`'s pass-through of `inputs`; no mapping change is needed.
 
+A vitest test in `src/apps/Elsa.Studio.Web/Client/src/__tests__/sdk-typing-copies.test.ts` reads the canonical SDK
+and the three copies and fails when any of them does not declare both members on `StudioActivityInputDescriptor`.
+
 ## Credential inputs (FR-016)
 
 - Default syntax: `Secret` when `isCredential` is true, ahead of `descriptor.defaultSyntax` and `"Literal"`
   (`readWrappedInputValue`, `src/essentials/Elsa.Studio.Workflows/Client/src/activityProperties.ts`).
 - The syntax picker for the input offers only `Secret` (`ActivityPropertiesPanel.tsx`). No literal or text editor is
-  rendered for the input. If the `Secret` expression descriptor is not available (Secrets module not installed),
-  the input renders a fixed "Install the Secrets module to bind this credential" state, not a literal box.
-- An existing authored literal on a credential input loads as an error state that shows no value and offers
-  "Replace with secret". The backend refuses to save it anyway.
+  rendered for the input. When the Secrets module is absent, no new UI state is added: the input shows the existing
+  unavailable state (the secret picker's unavailable-reference or load-error state when the Studio Secrets extension
+  is loaded, otherwise the panel's existing `UnavailableExpressionEditor` for the `Secret` syntax), never a literal
+  box.
 
 ## Masked editor (FR-017, FR-009)
 
@@ -48,3 +51,5 @@ The backend view fields `isSensitive` and `isCredential` already reach the descr
   reload.
 - `src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/`: credential input resolves to the secret picker with
   literal entry unavailable.
+- `src/apps/Elsa.Studio.Web/Client/src/__tests__/sdk-typing-copies.test.ts`: every SDK typing copy declares both
+  flags (FR-015).

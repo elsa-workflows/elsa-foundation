@@ -31,7 +31,12 @@ public string? ApiKey { get; set; }
 
 Null rather than `false` keeps `DefaultActivityDefinitionHasher` output byte-identical for every activity that
 declares nothing. `ClrAssemblyScanner` refuses (reconciliation error naming the activity type and input) a credential
-input that also declares `DefaultValue`.
+input that also declares `DefaultValue`, and a credential input that could never be bound because publish refuses a
+`Secret` binding there (research R12): on a type implementing `IRuntimeActivityCheckpointParticipant`, or on an input
+the type names in `[RefusesSecretBinding]`. The scanner reads that attribute for this check only and never writes it
+to the catalog. The Activities Design API (`AddDefinitionCommandHandler`, `AddVersionCommandHandler`) refuses an
+input with `isCredential: true`: in phase 0 a credential is declared only through `[ActivityInput(IsCredential =
+true)]`, so graph activities and other API-authored versions cannot declare one.
 
 ## Wire (`Elsa.Activities.Design.Api.Models.ActivityInputDescriptorView`)
 
