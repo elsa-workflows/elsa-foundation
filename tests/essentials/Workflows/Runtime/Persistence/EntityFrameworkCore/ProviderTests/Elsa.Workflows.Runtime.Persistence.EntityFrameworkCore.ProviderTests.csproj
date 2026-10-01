@@ -41,5 +41,7 @@
     <Compile Include="..\Tests\OutboxStoreRegistration.cs" Link="OutboxStoreRegistration.cs" />
     <Compile Include="..\..\..\Tests\ForwardingOutboxStore.cs" Link="ForwardingOutboxStore.cs" />
     <Compile Include="..\Tests\PostCommitOutboxClaimedListingContract.cs" Link="PostCommitOutboxClaimedListingContract.cs" />
+    <!-- The crash-repair contract's concurrent calls through real root-write leases (#2274). -->
+    <Compile Include="..\Tests\WorkflowActivationCrashRepairContract.ConcurrentCalls.cs" Link="WorkflowActivationCrashRepairContract.ConcurrentCalls.cs" />
   </ItemGroup>
 </Project>
