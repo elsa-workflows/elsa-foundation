@@ -5,6 +5,7 @@ This feature is not implemented by the planning artifacts. The commands below de
 ## Prerequisites
 
 - A clean implementation build of the public CLI and the actual `src/apps/Elsa.Workbench/Elsa.Workbench.csproj` output containing the declared v1 capability and Workbench enrollment attribute.
+- The actual `src/apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj` output for the unenrolled-host control; missing build artifacts fail the proof instead of skipping it.
 - Existing fixture/test output for controlled old-host, unenrolled-host, malformed-input, lifecycle, and source-drift cases.
 - A temporary source directory containing the selected Workbench JSON layers and an accepted composition.
 - A private regular environment input file. Keep its values and any canary private to the temporary fixture; do not put them in a command argument or check them into artifacts.
@@ -26,6 +27,8 @@ Create a private file such as `environment-input.json` in the temporary fixture 
 ```
 
 The first run should use the actual Workbench closure and the public CLI wrapper. A fixture host may be used afterward for controlled refusal cases, but it cannot replace the actual Workbench enrollment proof.
+
+Declare the resource and connection names in the captured source before selecting them or supplying their private values. A syntactically valid name introduced only by the private overlay must not become a public target identity. The automated Workbench fixture retains all four real JSON layers, trims feature selections in both shell layers, and imports/accepts the four intended requested IDs; host-implied dependencies are inspected separately.
 
 ## Public command journey
 
@@ -79,6 +82,8 @@ Run the existing affected projects after implementation, using the repository's 
 
 ```text
 bash tools/architecture/restore-ci-project-graph.sh --locked-mode -p:WarningsNotAsErrors=NU1603
+dotnet build src/apps/Elsa.Workbench/Elsa.Workbench.csproj -c Release --no-restore -p:WarningsNotAsErrors=NU1603
+dotnet build src/apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj -c Release --no-restore -p:WarningsNotAsErrors=NU1603
 dotnet test tests/essentials/Cli/Tests/Elsa.Cli.Tests.csproj -c Release --no-restore
 dotnet test tests/essentials/Modularity/Planning/Tests/Elsa.Modularity.Planning.Tests.csproj -c Release --no-restore
 dotnet test tests/essentials/Persistence/EntityFrameworkCore/Migrations/Tests/Elsa.Persistence.EntityFrameworkCore.Migrations.Tests.csproj -c Release --no-restore

@@ -66,3 +66,146 @@ T008 remains unchecked because command/process disposal, timeout/cancellation/cl
 Authorized maps `all` and `check` passed for this checkpoint. Logs `/tmp/runtime-2292-capture-maps-all.log` and `/tmp/runtime-2292-capture-maps-check.log`. Root read the manifest and both generated findings reports; all generated maps, findings and manifest remain byte-identical, so no generated file needs staging. Task accounting remains six complete and forty open.
 
 Main advanced to `f02354068b8a9ed2382286685ead9faf018331dc` with an unrelated identity fix. At refresh, CI `36923625909` was in progress. The prior #2293 SQLite report remains open and is not declared repaired or stale.
+
+## Worker dispatch and host/frontend integration checkpoint
+
+Root reviewed and integrated the additive worker dispatch, exact new-contract lookup and common bounded
+reflection exchange. Candidate commands share closure observation/loading but retain their own envelopes,
+capability binding and response validators. The worker binds the independent environment capability
+before metadata-only enrollment; there is no legacy fallback. Owned request/response streams have fixed
+capacity and clear their complete backing arrays, including bytes beyond a shortened logical length.
+Root review caught and corrected a zero-capacity `MemoryStream` constructor in the first preallocation
+patch before integration verification.
+
+Actual worker checkpoint command:
+
+```text
+dotnet test tests/essentials/Cli/Tests/Elsa.Cli.Tests.csproj --no-restore --filter 'FullyQualifiedName~ToolingEntryPointTests|FullyQualifiedName~WorkerProtocolTests|FullyQualifiedName~CandidateWorkerOperationTests|FullyQualifiedName~CompositionInspectionCaptureTests' --logger 'trx;LogFileName=runtime-2292-worker-integration.trx' --verbosity quiet
+```
+
+At root code head `fd9189a43`, the actual TRX records **349 executed/passed, zero failed/skipped**.
+Log: `/tmp/runtime-2292-worker-integration.log`. The only concurrent root edit was catalog documentation;
+host/frontend production slices were integrated after this process completed. This is focused
+worker/capture/contract evidence, not an actual Workbench operation or full-suite result.
+
+Root then integrated the host operation and frontend option. Host source review repaired request-pool
+rounding, partial decoded-buffer ownership and error classification, and extracted one shared
+`InspectComposition` core for both lanes. Frontend review restored post-validation cancellation/deadline
+checks, retained capture ownership through rendering, and added race-safe response-copy cleanup. A fixed
+parse validator refuses repeated `--environment-input` occurrences without echoing either path; omitted
+and single occurrences have companion parse controls.
+
+The first combined CLI build at root head `c82200230` failed with **CS0136** in the new host parser: a
+local request variable reused the enclosing JSON candidate name. **No tests executed** in that attempt.
+Log: `/tmp/runtime-2292-cli-lane-integration.log`. The correction and subsequent executed result must be
+recorded separately; this failure is not a test or runtime regression claim.
+
+Independent source review also found that syntax-only successful projection could promote a new
+overlay-only resource or connection label. That finding is a live privacy repair obligation: derive
+declared public labels from the pre-overlay captured configuration, keep one host composition/preparation,
+and refuse unknown target labels before serialization. Companion private-label canary tests and actual
+Workbench/public-wrapper proof remain required. No safe-preview, delivery or complete-task claim is made
+from the integrated source alone.
+
+## Host parity, privacy fence and actor harness review
+
+Root integrated the pre-overlay public-identity fence and direct-host raw-document controls through
+`356546913`. Captured resource/connection names use the configuration system's case-insensitive
+membership rules. Unknown overlay-only target labels refuse before serialization; source-declared
+aliases remain supported. The captured JSON configuration is built once and chained with the explicit
+overlay before the one shared composition/reconciliation/preparation path. A bounded source review of
+that exact head found no remaining must-fix in these production boundaries; it is not an external PR
+approval or complete acceptance result.
+
+Actual direct-host selection:
+
+```text
+dotnet test tests/essentials/Persistence/EntityFrameworkCore/Migrations/Tests/Elsa.Persistence.EntityFrameworkCore.Migrations.Tests.csproj --no-restore --filter 'FullyQualifiedName~EfCandidateInspectionTests|FullyQualifiedName~EfToolingHostTests' --logger 'trx;LogFileName=runtime-2292-host-restored.trx' --verbosity quiet
+```
+
+At root code head `d8f21beaa`, the final actual TRX records **171 executed/passed, zero failed/skipped**.
+Log: `/tmp/runtime-2292-host-restored.log`. The preceding run at `356546913` executed 171, passed 170 and
+failed one new removal fixture: accepted and removed IDs overlapped, so closed envelope admission
+correctly refused before reconciliation. The test-only correction makes the baseline reach the
+selection conflict and the intended overlay produce a valid removal.
+
+Root temporarily removed the real `AddInMemoryCollection` overlay application in the captured-root
+configuration builder. The connection-affinity parity case then **executed once and failed as intended**
+(expected success, actual refusal). Actual TRX: `runtime-2292-overlay-mutation.trx`; log:
+`/tmp/runtime-2292-overlay-mutation.log`. A Python `finally` restored the original source bytes, and the
+171-case run above passed with the overlay restored. This is a causal check of actual host preparation,
+not a second frontend resolver or real-database test.
+
+Frontend attempts preserved as separate evidence:
+
+- `runtime-2292-cli-repaired.log`: build failed with CS0122 from direct access to internal `ElsaCli`;
+  no tests executed. The test now uses the existing public assembly to reflect the internal entrypoint,
+  without widening production visibility.
+- `runtime-2292-cli-lifecycle.log`: build failed with CS1061 in a new repeatability helper;
+  no tests executed. The public renderer already excludes fresh correlation IDs, so root removed the
+  helper and compares the entire public JSON directly rather than masking arbitrary fields.
+- `runtime-2292-cli-compiled.trx`: **445 executed, 444 passed, one failed, zero skipped**. The sole failed
+  assertion expected a custom option message; native exact-one arity had already refused repeated
+  input without echoing either path. Root removed the unreachable redundant validator.
+- `runtime-2292-cli-final-focused.trx`: **445 executed, 444 passed, one failed, zero skipped**. The new
+  late-read fixture released its read during disposal, so cleanup could succeed instead of producing
+  the asserted cleanup failure. Root removed that release and retains the read until the assertion,
+  then releases it in `finally`. No production cleanup defect is inferred from that fixture race.
+- `runtime-2292-cli-corrections.trx`: **two executed/passed, zero failed/skipped** for the corrected
+  repeated-option and late-read controls. The complete focused rerun is recorded separately when terminal.
+
+Root reviewed the actual Workbench actor tests and corrected three harness assumptions before claiming
+an actor result: production shell layering could re-add features; an unenrolled fixture cannot reach
+an explicit-lane composer marker; and `composition accept` cannot overwrite an existing output. The
+reviewed Workbench fixture now trims both shell layers, asserts its exact four authored requested IDs,
+retains the real host closure and all four JSON layers, and creates fresh recovered/required-edge
+accepted files while preserving the original accepted file. The required-edge companion overlay
+explicitly disables the dependency while retaining its dependent feature. These are authored controls,
+not executed Workbench acceptance yet.
+
+Project 51's stale README was refreshed and read back on 2026-10-02: #2292 is the sole active delivery
+leaf; #2177/#2277/#2282 are closed; #2064 remains blocked on six real participant sessions. No genuinely
+Ready successor was found in the refreshed queue. The program and all-three-story delivery gate remain
+open. No new project, suite, provider matrix or workflow cadence was added.
+
+## Focused frontend pass and actual-host prerequisites
+
+At root code head `4e9932e0afdf69efff348dba2e9cc25242cc3cc4`, the final focused frontend
+TRX `runtime-2292-cli-restored.trx` records **445 executed/passed, zero failed/skipped**.
+Log: `/tmp/runtime-2292-cli-restored.log`. The selection covers `ToolingEntryPointTests`,
+`WorkerProtocolTests`, `CandidateWorkerOperationTests`, `CompositionInspectionCaptureTests`,
+`CandidateProcessTests`, and `CandidateInspectionOutputTests` in the existing CLI project.
+It is focused contract/lifecycle evidence, not the complete CLI suite or actual Workbench actor proof.
+
+The actual Workbench and Foundation Host outputs were then built serially with `dotnet build
+<project> --no-restore --verbosity quiet`. Workbench returned exit 0 with 12 warnings and zero errors
+(`/tmp/runtime-2292-workbench-build.log`); Foundation Host returned exit 0 with zero warnings/errors
+(`/tmp/runtime-2292-foundation-build.log`). These are build prerequisites only. The public actor
+selection `FullyQualifiedName~CandidateInspectionTests` is recorded separately after its terminal
+result; no runtime startup or database proof follows from these builds.
+
+The actual-host actor selection then finished with **31 executed, 28 passed, three failed, zero
+skipped** in `runtime-2292-actual-host-actors.trx` at that same code head. Log:
+`/tmp/runtime-2292-actual-host-actors.log`. The actual Foundation Host unenrolled control and public
+raw-input refusal controls passed. The actual Workbench success, repeatability and selection/recovery
+cases returned exit 3 where success or a selection refusal was expected. Their first exit assertions
+did not retain the safe fixed refusal code, so the cause is under investigation and no recovery,
+Workbench success or all-three-story acceptance is claimed. The no-option Workbench comparison in
+the failed success case was not reached. This failure changes the next action from final acceptance
+to exact actual-host diagnosis; it does not invalidate the separately recorded 171/445 focused results.
+
+Root's focused architecture selection returned **11 executed/passed, zero failed/skipped**, including
+the exact ADR 0072 pilot inventory and the three neutral activation/tooling dependency cases. Actual
+TRX: `runtime-2292-architecture-focused.trx`; log: `/tmp/runtime-2292-architecture-focused.log`.
+The full architecture suite remains required. Maps check first found the extension-point map stale
+after the owning catalog update; the authorized `-- all` refresh changed only that map. Root reviewed
+the unchanged manifest and both generated findings reports; the subsequent `-- check` returned exit 0
+and `Generated maps still describe the tree.` (`/tmp/runtime-2292-maps-restored.log`).
+
+Two bounded read-only audits found no additional definite production defect, but identified missing
+explicit-transport boundary and post-dispatch private-file drift controls. They also found that the
+Workbench success fixture used the same private connection value in source and overlay, so that
+assertion alone could not prove overlay consumption. Those controls are being strengthened without
+new projects, host enrollment, or test cadence. The closed raw overlay shape cannot admit a depth-64
+nested object; existing selected-source JSON depth controls remain the authoritative reachable depth
+boundary instead of inventing a valid deep overlay specimen.

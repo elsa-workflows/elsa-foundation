@@ -637,8 +637,6 @@ public sealed class ToolingEntryPointTests : IDisposable
         Assert.Equal(payload.CaptureId, root.GetProperty("environmentInput").GetProperty("captureId").GetString());
         var content = root.GetProperty("environmentInput").GetProperty("content").GetString();
         Assert.Equal(environmentInput.Content, content);
-        Assert.Equal(environmentInput.Content![0], content![0]);
-        Assert.Equal(environmentInput.Content[^1], content[^1]);
         Assert.False(root.GetProperty("environmentInput").TryGetProperty("sourcePath", out _));
         Assert.Equal("captured-workbench-json-explicit-environment-v1",
             workerResponse.Tooling!.Value.GetProperty("configurationResolution").GetProperty("source").GetString());

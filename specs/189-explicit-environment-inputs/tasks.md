@@ -70,7 +70,7 @@ description: "Dependency-ordered implementation and proof tasks for explicit pri
 
 - [ ] T022 [P] [US2] Add accepted/requested/effective/disabled/implicit selection, valid-removal, stale-identity, active-removal, and required-edge conflict cases in `tests/essentials/Persistence/EntityFrameworkCore/Migrations/Tests/EfCandidateInspectionTests.cs`; assert refusal precedes `EfPersistencePreparation` and accepted intent is not silently rewritten.
 - [ ] T023 [P] [US2] Add feature graph and required-edge reconciliation cases in `tests/essentials/Modularity/Planning/Tests/CompositionCandidateTests.cs` and `tests/essentials/Modularity/Planning/Tests/SelectionExpansionTests.cs`; keep existing feature identity and authored removal semantics intact.
-- [ ] T024 [P] [US2] Add the external-toggle recovery journey in `tests/essentials/Cli/Tests/CompositionAcceptCliTests.cs` and `tests/essentials/Cli/Tests/CandidateInspectionLifecycleTests.cs`; cover refusal, authored edit, existing interactive `composition accept`, fresh accepted file, fresh immutable capture, and successful matching inspection without silent acceptance.
+- [ ] T024 [P] [US2] Add the actual Workbench external-toggle recovery journey in `tests/essentials/Cli/Tests/CandidateInspectionTests.cs`, retaining existing accept/lifecycle companion controls in `CompositionAcceptCliTests.cs` and `CandidateInspectionLifecycleTests.cs`; cover refusal, authored edit, existing interactive `composition accept`, fresh accepted file, fresh immutable capture, and successful matching inspection without silent acceptance.
 
 ### Implementation for User Story 2
 
