@@ -21,9 +21,11 @@ internal sealed class CandidateInspectionFixture : IDisposable
     public const string EnvironmentInvocationId = "11111111111111111111111111111111";
     public const string EnvironmentCaptureId = "22222222222222222222222222222222";
     public const string PublicEnvironmentResource = "EnvironmentResource";
-    public const string PublicEnvironmentConnection = "EnvironmentConnection";
+    public const string PublicEnvironmentConnection = "DeclaredConnection";
     public const string PrivateEnvironmentCanary = "candidate-environment-private-canary-2292";
     public const string SafePrivateEnvironmentCanary = "PrivateEnvironmentValue2292";
+    public const string WorkbenchModularityApiFeatureId = "ModularityApi";
+    public const string WorkbenchRuntimeFaultStackTraceFeatureId = "RuntimeFaultStackTrace";
 
     public static byte[] EnvironmentDocument(params (string Key, string Value)[] entries) =>
         JsonSerializer.SerializeToUtf8Bytes(new
@@ -109,6 +111,45 @@ internal sealed class CandidateInspectionFixture : IDisposable
         _sourceBytes = Directory.GetFiles(SourceDirectory).ToDictionary(path => Path.GetFileName(path)!, File.ReadAllBytes);
     }
 
+    /// <summary>
+    /// Copies the real Workbench composition into this fixture and trims its shell to the small reviewed set
+    /// needed by the public environment-input proof. The actual host closure remains the built Workbench.
+    /// </summary>
+    public void UseWorkbenchFiles()
+    {
+        foreach (var file in Directory.GetFiles(SourceDirectory))
+            File.Delete(file);
+
+        foreach (var name in new[] { "shells.json", "shells.Production.json", "appsettings.json", "appsettings.Production.json" })
+            File.Copy(Path.Join(DotnetElsa.WorkbenchSource(), name), Path.Join(SourceDirectory, name));
+
+        var shells = JsonNode.Parse(File.ReadAllText(Path.Join(SourceDirectory, "shells.json")))!.AsObject();
+        var shell = shells["CShells"]!["Shells"]![ShellId]!.AsObject();
+        shell["Features"] = new JsonObject
+        {
+            [WorkbenchModularityApiFeatureId] = new JsonObject(),
+            [WorkbenchRuntimeFaultStackTraceFeatureId] = new JsonObject(),
+            [StructuredLogsFeatureId] = new JsonObject(),
+            [StructuredLogsEfFeatureId] = new JsonObject()
+        };
+        File.WriteAllText(Path.Join(SourceDirectory, "shells.json"), shells.ToJsonString());
+
+        var appsettings = JsonNode.Parse(File.ReadAllText(Path.Join(SourceDirectory, "appsettings.json")))!.AsObject();
+        appsettings["ConnectionStrings"]!["DeclaredConnection"] =
+            $"Data Source={DatabasePath};Password={PrivateEnvironmentCanary}";
+        appsettings["Elsa"]!["Persistence"]!["DefaultResource"] = PublicEnvironmentResource;
+        appsettings["Elsa"]!["Persistence"]!["Resources"] = new JsonObject
+        {
+            [PublicEnvironmentResource] = new JsonObject
+            {
+                ["Provider"] = "Sqlite",
+                ["ConnectionName"] = PublicEnvironmentConnection
+            }
+        };
+        File.WriteAllText(Path.Join(SourceDirectory, "appsettings.json"), appsettings.ToJsonString());
+        _sourceBytes = Directory.GetFiles(SourceDirectory).ToDictionary(path => Path.GetFileName(path)!, File.ReadAllBytes);
+    }
+
     public void WriteBundledCatalog() => WriteInput("catalog.json", JsonSerializer.Serialize(FoundationSelectionCatalog.Load(), Json));
 
     public string WriteWorkspaceStart()
@@ -172,7 +213,7 @@ internal sealed class CandidateInspectionFixture : IDisposable
 
     public string[] InspectionArguments(string? format = null, IReadOnlyList<string>? workspaceProfiles = null, bool trust = true,
         int? timeoutSeconds = null, string? settingReviewPath = null, string? hostDirectory = null,
-        IReadOnlyList<string>? packageRoots = null)
+        IReadOnlyList<string>? packageRoots = null, string? environmentInputPath = null)
     {
         if (timeoutSeconds is < 1 or > 300)
             throw new ArgumentOutOfRangeException(nameof(timeoutSeconds), "Inspection timeout must be between 1 and 300 seconds.");
@@ -190,6 +231,8 @@ internal sealed class CandidateInspectionFixture : IDisposable
             arguments.AddRange(["--catalog", InputPath("catalog.json")]);
         if (settingReviewPath is not null)
             arguments.AddRange(["--setting-review", settingReviewPath]);
+        if (environmentInputPath is not null)
+            arguments.AddRange(["--environment-input", environmentInputPath]);
         foreach (var packageRoot in packageRoots ?? [])
             arguments.AddRange(["--packages", packageRoot]);
         if (timeoutSeconds is { } seconds)
@@ -224,6 +267,14 @@ internal sealed class CandidateInspectionFixture : IDisposable
         var path = InputPath(name);
         File.WriteAllText(path, contents);
         _initialInputBytes[Path.GetFullPath(path)] = File.ReadAllBytes(path);
+    }
+
+    public string WriteEnvironmentInput(params (string Key, string Value)[] entries)
+    {
+        var path = InputPath("environment-input.json");
+        File.WriteAllBytes(path, EnvironmentDocument(entries));
+        _initialInputBytes[Path.GetFullPath(path)] = File.ReadAllBytes(path);
+        return path;
     }
 
     /// <summary>Captures all supported source files, including siblings that must remain unchanged.</summary>

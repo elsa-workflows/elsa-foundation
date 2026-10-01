@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Security.Cryptography;
 using Elsa.Cli.Worker;
 using Elsa.Modularity.Planning.Bridge;
 using Xunit;
@@ -251,6 +252,155 @@ public sealed class CandidateInspectionTests
         Assert.DoesNotContain("private-input-canary", refusal.Text, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task Explicit_environment_input_uses_the_actual_workbench_closure_without_ambient_values_or_side_effects()
+    {
+        if (OperatingSystem.IsWindows())
+            return;
+        using var fixture = new CandidateInspectionFixture();
+        await PrepareWorkbenchAcceptedAsync(fixture);
+        var environmentPath = fixture.WriteEnvironmentInput(
+            ("UnrelatedBlank", ""),
+            ("ConnectionStrings__DeclaredConnection", CandidateInspectionFixture.PrivateEnvironmentCanary));
+        var environmentBytes = File.ReadAllBytes(environmentPath);
+        var environmentBase64 = Convert.ToBase64String(environmentBytes);
+        var environmentDigest = Convert.ToHexString(SHA256.HashData(environmentBytes));
+        var ambientConnection = fixture.InputPath("ambient-connection-canary.db");
+        var ambient = new Dictionary<string, string>
+        {
+            ["ConnectionStrings__DeclaredConnection"] = $"Data Source={ambientConnection}",
+            ["CShells__Shells__default__Features__RuntimeFaultStackTrace"] = "false"
+        };
+        var arguments = fixture.InspectionArguments("json", hostDirectory: DotnetElsa.Workbench(),
+            environmentInputPath: environmentPath);
+
+        var explicitRun = DotnetElsa.Run(ambient, arguments);
+        Assert.Equal(ToolExitCode.Success, explicitRun.ExitCode);
+        AssertWorkbenchResolution(explicitRun.Output, externalInputs: "supplied-intended");
+        Assert.DoesNotContain(CandidateInspectionFixture.PrivateEnvironmentCanary, explicitRun.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain(environmentPath, explicitRun.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain(fixture.DatabasePath, explicitRun.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain(ambientConnection, explicitRun.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain(environmentBase64, explicitRun.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain(environmentDigest, explicitRun.Text, StringComparison.OrdinalIgnoreCase);
+        Assert.False(File.Exists(fixture.DatabasePath));
+        Assert.False(File.Exists(ambientConnection));
+        Assert.Equal(environmentBytes, File.ReadAllBytes(environmentPath));
+
+        var noOptionRun = DotnetElsa.Run(ambient, fixture.InspectionArguments(
+            "json", hostDirectory: DotnetElsa.Workbench()));
+        Assert.Equal(ToolExitCode.Success, noOptionRun.ExitCode);
+        AssertWorkbenchResolution(noOptionRun.Output, externalInputs: "unverified",
+            source: "captured-workbench-json-v1");
+        Assert.DoesNotContain(CandidateInspectionFixture.PrivateEnvironmentCanary, noOptionRun.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain(ambientConnection, noOptionRun.Text, StringComparison.Ordinal);
+        fixture.AssertSourcesUnchanged();
+        fixture.AssertInputsUnchanged();
+    }
+
+    [Fact]
+    public async Task Explicit_environment_input_refuses_an_unenrolled_existing_fixture_host_without_private_echo()
+    {
+        if (OperatingSystem.IsWindows())
+            return;
+        using var fixture = new CandidateInspectionFixture();
+        await PrepareAcceptedEditAsync(fixture, workspace: false);
+        var environmentPath = fixture.WriteEnvironmentInput(("UnrelatedBlank", ""));
+
+        var refusal = DotnetElsa.Run(fixture.SentinelEnvironment, fixture.InspectionArguments(
+            "json", hostDirectory: fixture.HostAssemblyDirectory, environmentInputPath: environmentPath));
+
+        Assert.Equal(ToolExitCode.ResolutionFailure, refusal.ExitCode);
+        Assert.Empty(refusal.Output);
+        Assert.Contains("candidate-environment-host-unenrolled", refusal.Error, StringComparison.Ordinal);
+        Assert.DoesNotContain(CandidateInspectionFixture.PrivateEnvironmentCanary, refusal.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain(environmentPath, refusal.Text, StringComparison.Ordinal);
+        fixture.AssertSourcesUnchanged();
+        fixture.AssertInputsUnchanged();
+    }
+
+    [Fact]
+    public async Task Explicit_environment_input_refuses_the_actual_unenrolled_foundation_host_without_private_echo()
+    {
+        if (OperatingSystem.IsWindows())
+            return;
+        using var fixture = new CandidateInspectionFixture();
+        await PrepareWorkbenchAcceptedAsync(fixture);
+        var environmentPath = fixture.WriteEnvironmentInput(("UnrelatedBlank", ""));
+
+        var refusal = DotnetElsa.Run(fixture.SentinelEnvironment, fixture.InspectionArguments(
+            "json", hostDirectory: DotnetElsa.FoundationHost(), environmentInputPath: environmentPath));
+
+        Assert.Equal(ToolExitCode.ResolutionFailure, refusal.ExitCode);
+        Assert.Empty(refusal.Output);
+        Assert.Contains("candidate-environment-host-unenrolled", refusal.Error, StringComparison.Ordinal);
+        Assert.DoesNotContain(CandidateInspectionFixture.PrivateEnvironmentCanary, refusal.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain(environmentPath, refusal.Text, StringComparison.Ordinal);
+        fixture.AssertSourcesUnchanged();
+        fixture.AssertInputsUnchanged();
+    }
+
+    [Theory]
+    [InlineData("MYSQLCONNSTR_Declared")]
+    [InlineData("SQLAZURECONNSTR_Declared")]
+    [InlineData("SQLCONNSTR_Declared")]
+    [InlineData("CUSTOMCONNSTR_Declared")]
+    [InlineData("POSTGRESQLCONNSTR_Declared")]
+    [InlineData("APIHUBCONNSTR_Declared")]
+    [InlineData("DOCDBCONNSTR_Declared")]
+    [InlineData("EVENTHUBCONNSTR_Declared")]
+    [InlineData("NOTIFICATIONHUBCONNSTR_Declared")]
+    [InlineData("REDISCACHECONNSTR_Declared")]
+    [InlineData("SERVICEBUSCONNSTR_Declared")]
+    public async Task Explicit_environment_input_refuses_each_standard_service_prefix_through_the_public_command(string key)
+    {
+        if (OperatingSystem.IsWindows())
+            return;
+        using var fixture = new CandidateInspectionFixture();
+        await PrepareWorkbenchAcceptedAsync(fixture);
+        var environmentPath = fixture.WriteEnvironmentInput((key, CandidateInspectionFixture.PrivateEnvironmentCanary));
+
+        var refusal = DotnetElsa.Run(fixture.SentinelEnvironment, fixture.InspectionArguments(
+            "json", hostDirectory: DotnetElsa.Workbench(), environmentInputPath: environmentPath));
+
+        Assert.Equal(ToolExitCode.Refusal, refusal.ExitCode);
+        Assert.Empty(refusal.Output);
+        Assert.Contains("candidate-environment-prefix-unsupported", refusal.Error, StringComparison.Ordinal);
+        Assert.DoesNotContain(CandidateInspectionFixture.PrivateEnvironmentCanary, refusal.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain(environmentPath, refusal.Text, StringComparison.Ordinal);
+        fixture.AssertSourcesUnchanged();
+        fixture.AssertInputsUnchanged();
+    }
+
+    [Theory]
+    [InlineData("malformed", "candidate-environment-input-invalid")]
+    [InlineData("collision", "candidate-environment-key-collision")]
+    public async Task Explicit_environment_input_refuses_malformed_or_colliding_documents_without_private_echo(string kind, string code)
+    {
+        if (OperatingSystem.IsWindows())
+            return;
+        using var fixture = new CandidateInspectionFixture();
+        await PrepareWorkbenchAcceptedAsync(fixture);
+        var environmentPath = fixture.InputPath("environment-input.json");
+        var bytes = kind == "malformed"
+            ? "{"u8.ToArray()
+            : CandidateInspectionFixture.EnvironmentDocument(("A__B", "one"), ("A:B", "two"));
+        File.WriteAllBytes(environmentPath, bytes);
+        var environmentBytes = File.ReadAllBytes(environmentPath);
+
+        var refusal = DotnetElsa.Run(fixture.SentinelEnvironment, fixture.InspectionArguments(
+            "json", hostDirectory: DotnetElsa.Workbench(), environmentInputPath: environmentPath));
+
+        Assert.Equal(ToolExitCode.Refusal, refusal.ExitCode);
+        Assert.Empty(refusal.Output);
+        Assert.Contains(code, refusal.Error, StringComparison.Ordinal);
+        Assert.DoesNotContain(CandidateInspectionFixture.PrivateEnvironmentCanary, refusal.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain(environmentPath, refusal.Text, StringComparison.Ordinal);
+        Assert.Equal(environmentBytes, File.ReadAllBytes(environmentPath));
+        fixture.AssertSourcesUnchanged();
+        fixture.AssertInputsUnchanged();
+    }
+
     internal static async Task<string?> PrepareAcceptedEditAsync(CandidateInspectionFixture fixture, bool workspace,
         bool fileEfEnabled = true, bool includeReviewedSetting = false)
     {
@@ -289,6 +439,60 @@ public sealed class CandidateInspectionTests
         Assert.DoesNotContain(CandidateInspectionFixture.PrivateCanary, accepted.Output + accepted.Error, StringComparison.Ordinal);
         fixture.TrackAcceptedInput();
         return profile;
+    }
+
+    private static async Task PrepareWorkbenchAcceptedAsync(CandidateInspectionFixture fixture)
+    {
+        fixture.UseWorkbenchFiles();
+        fixture.WriteBundledCatalog();
+        var imported = await PseudoTerminalCli.RunElsaAsync("Type accept to write the authored composition: ", "accept",
+            ["composition", "import", "--host-dir", fixture.SourceDirectory, "--shell", fixture.ShellId,
+                "--environment", fixture.Environment, "--catalog", fixture.InputPath("catalog.json"),
+                "--output", fixture.InputPath("authored.json")]);
+        Assert.Equal(ToolExitCode.Success, imported.ExitCode);
+        Assert.True(imported.ResponseSent);
+        Assert.False(imported.TimedOut);
+        var accepted = await PseudoTerminalCli.RunElsaAsync("Type accept to write the accepted composition: ", "accept",
+            ["composition", "accept", "--composition", fixture.InputPath("authored.json"),
+                "--output", fixture.InputPath("accepted.json")]);
+        Assert.Equal(ToolExitCode.Success, accepted.ExitCode);
+        Assert.True(accepted.ResponseSent);
+        Assert.False(accepted.TimedOut);
+        fixture.TrackAcceptedInput();
+
+        using var acceptedDocument = JsonDocument.Parse(File.ReadAllText(fixture.InputPath("accepted.json")));
+        var acceptedIds = acceptedDocument.RootElement.GetProperty("accepted").GetProperty("featureIds")
+            .EnumerateArray().Select(value => value.GetString()!).ToArray();
+        Assert.Contains(CandidateInspectionFixture.WorkbenchModularityApiFeatureId, acceptedIds);
+        Assert.Contains(CandidateInspectionFixture.WorkbenchRuntimeFaultStackTraceFeatureId, acceptedIds);
+        Assert.Contains(CandidateInspectionFixture.StructuredLogsFeatureId, acceptedIds);
+        Assert.Contains(CandidateInspectionFixture.StructuredLogsEfFeatureId, acceptedIds);
+    }
+
+    private static void AssertWorkbenchResolution(string output, string externalInputs,
+        string source = "captured-workbench-json-explicit-environment-v1")
+    {
+        using var document = JsonDocument.Parse(output);
+        var resolution = document.RootElement.GetProperty("configurationResolution");
+        Assert.Equal(source, resolution.GetProperty("source").GetString());
+        Assert.Equal(externalInputs, resolution.GetProperty("externalInputs").GetString());
+        Assert.Equal("not-performed", resolution.GetProperty("targetVerification").GetString());
+        Assert.Equal("unobserved", resolution.GetProperty("runtimeParity").GetString());
+        Assert.Equal("unverified", resolution.GetProperty("connectivity").GetString());
+        Assert.Equal("unverified", resolution.GetProperty("schemaReadiness").GetString());
+        Assert.Equal("unverified", resolution.GetProperty("migrationReadiness").GetString());
+        Assert.Equal("unobserved", resolution.GetProperty("activation").GetString());
+        var selection = resolution.GetProperty("selection");
+        var effective = Strings(selection.GetProperty("effectiveFeatureIds"));
+        Assert.Contains(CandidateInspectionFixture.WorkbenchModularityApiFeatureId, effective);
+        Assert.Contains(CandidateInspectionFixture.WorkbenchRuntimeFaultStackTraceFeatureId, effective);
+        Assert.Contains(CandidateInspectionFixture.StructuredLogsFeatureId, effective);
+        Assert.Contains(CandidateInspectionFixture.StructuredLogsEfFeatureId, effective);
+        var participants = resolution.GetProperty("participants").EnumerateArray().ToArray();
+        Assert.NotEmpty(participants);
+        Assert.Contains(participants, participant =>
+            participant.GetProperty("resource").GetString() == CandidateInspectionFixture.PublicEnvironmentResource &&
+            participant.GetProperty("connectionReference").GetString() == CandidateInspectionFixture.PublicEnvironmentConnection);
     }
 
     private static string[] PlanArguments(CandidateInspectionFixture fixture, string? profile)
