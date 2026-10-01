@@ -70,7 +70,8 @@ public sealed class EfWorkflowTriggerBindingStore(
         var prepared = bindings.Select(x => x with { IsActive = false }).ToArray();
         if (state is not null)
         {
-            if (!state.IsActive && ProjectionMatches(state, existing, scope, activationId) && ProjectionsEqual(existing, prepared, scope))
+            ActivationProjectionStateLifecycle.EnsurePreparable(state.IsActive, state.Revision, "trigger-binding", activationId);
+            if (ProjectionMatches(state, existing, scope, activationId) && ProjectionsEqual(existing, prepared, scope))
             {
                 await CommitAndClearAsync(transaction, cancellationToken, noChanges: true);
                 return;
@@ -95,7 +96,7 @@ public sealed class EfWorkflowTriggerBindingStore(
             ActivationId = Encode(activationId), ActivationIdHash = Hash(activationId), ActivationIdOrderKey = Order(activationId),
             IsActive = false, BindingCount = prepared.Length, ProjectionFingerprint = Fingerprint(prepared),
             ContentJson = Fingerprint(prepared),
-            SchemaVersion = RuntimeTriggerBindingEfModule.SchemaVersion, Revision = 1
+            SchemaVersion = RuntimeTriggerBindingEfModule.SchemaVersion, Revision = ActivationProjectionStateLifecycle.CreationRevision
         });
         try
         {
@@ -111,7 +112,9 @@ public sealed class EfWorkflowTriggerBindingStore(
             await RollbackAndClearAsync(transaction);
             var winner = await context.WorkflowTriggerBindingProjectionStates.AsNoTracking().SingleOrDefaultAsync(x => x.Id == ProjectionId(scope, activationId), cancellationToken);
             var winnerRows = await RowsForActivation(scope, activationId, cancellationToken);
-            if (winner is { IsActive: false } && ProjectionMatches(winner, winnerRows, scope, activationId) && ProjectionsEqual(winnerRows, prepared, scope))
+            if (winner is not null &&
+                ActivationProjectionStateLifecycle.Read(winner.IsActive, winner.Revision) == WorkflowActivationProjectionState.Prepared &&
+                ProjectionMatches(winner, winnerRows, scope, activationId) && ProjectionsEqual(winnerRows, prepared, scope))
                 return;
             throw new InvalidOperationException($"Trigger-binding activation projection '{activationId}' changed concurrently with different state.", exception);
         }
@@ -142,19 +145,27 @@ public sealed class EfWorkflowTriggerBindingStore(
         if (distinct)
         {
             replaced = await context.WorkflowTriggerBindingProjectionStates.SingleOrDefaultAsync(x => x.Id == ProjectionId(scope, replacedActivationId!), cancellationToken);
-            if (replaced is null || !replaced.IsActive) throw new InvalidOperationException($"Activation '{activationId}' cannot replace a projection that is missing or no longer active.");
-            replacedRows = await RowsForActivation(scope, replacedActivationId!, cancellationToken);
-            EnsureProjection(replaced, replacedRows, scope, replacedActivationId!);
+            if (replaced is not null)
+            {
+                replacedRows = await RowsForActivation(scope, replacedActivationId!, cancellationToken);
+                EnsureProjection(replaced, replacedRows, scope, replacedActivationId!);
+            }
         }
+        // The candidate is checked first, so a switch that already happened is a no-op whoever made it: the activation's
+        // own sequence and a completion of that activation (IWorkflowActivationCoordinator.CompleteAsync) may race (#2193).
         if (candidate.IsActive)
         {
-            if (!distinct || replaced is null || !replaced.IsActive)
+            if (replaced is not { IsActive: true })
             {
                 await CommitAndClearAsync(transaction, cancellationToken, noChanges: true);
                 return;
             }
             throw new InvalidOperationException($"Activation '{activationId}' is active while replaced activation '{replacedActivationId}' is still active.");
         }
+        // Switching a candidate on is refused once its replaced activation no longer serves: that fences a late
+        // completion against a writer that has since completed the candidate and replaced it in turn.
+        if (distinct && replaced is not { IsActive: true })
+            throw new InvalidOperationException($"Activation '{activationId}' cannot replace a projection that is missing or no longer active.");
         foreach (var row in candidateRows) SetActive(row, true);
         candidate.IsActive = true; candidate.Revision = checked(candidate.Revision + 1);
         if (replaced is not null)
@@ -163,6 +174,36 @@ public sealed class EfWorkflowTriggerBindingStore(
             replaced.IsActive = false; replaced.Revision = checked(replaced.Revision + 1);
         }
         await CommitMutationAndClearAsync(transaction, cancellationToken, $"Trigger-binding activation projection '{activationId}'");
+    }
+
+    public async ValueTask<WorkflowActivationProjectionState> FindActivationStateAsync(string activationId, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(activationId);
+        cancellationToken.ThrowIfCancellationRequested();
+        var scope = RequireScope();
+        var state = await context.WorkflowTriggerBindingProjectionStates.AsNoTracking().SingleOrDefaultAsync(x => x.Id == ProjectionId(scope, activationId), cancellationToken);
+        if (state is null)
+            return WorkflowActivationProjectionState.Missing;
+        var rows = await RowsForActivation(scope, activationId, cancellationToken);
+        context.ChangeTracker.Clear();
+        EnsureProjection(state, rows, scope, activationId);
+        return ActivationProjectionStateLifecycle.Read(state.IsActive, state.Revision);
+    }
+
+    /// <summary>
+    /// No index covers the slot, so this reads the scope's active bindings once; only deactivation calls it. The rows'
+    /// activation ids are deduplicated here rather than with a database <c>DISTINCT</c> over a text column.
+    /// </summary>
+    public async ValueTask<IReadOnlyCollection<string>> ListServingActivationIdsAsync(string slotId, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(slotId);
+        cancellationToken.ThrowIfCancellationRequested();
+        var scope = RequireScope();
+        var activations = await context.WorkflowTriggerBindings.AsNoTracking()
+            .Where(x => x.ScopeKeyHash == Hash(scope) && x.ScopeKey == Encode(scope) && x.IsActive && x.SlotId == Encode(slotId) && x.ActivationId != null)
+            .Select(x => x.ActivationId!)
+            .ToArrayAsync(cancellationToken);
+        return activations.Select(Decode).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
     }
 
     public async ValueTask DeleteByActivationAsync(string activationId, CancellationToken cancellationToken = default)

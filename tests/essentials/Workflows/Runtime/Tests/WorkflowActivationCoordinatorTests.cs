@@ -3,7 +3,9 @@ using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Executables;
+using Elsa.Testing;
 using Elsa.Workflows.Runtime.Services.Triggers;
+using Microsoft.Extensions.Logging;
 using Xunit;
 using Microsoft.Extensions.Time.Testing;
 
@@ -612,6 +614,41 @@ public sealed class WorkflowActivationCoordinatorTests
         Assert.Null((await harness.References.FindAsync(WorkflowActivationReferenceIdentity.Create("activation-1")))!.DeletedAt);
     }
 
+    [Fact]
+    public async Task Deactivation_logs_a_reference_it_cannot_retire_as_an_error_and_still_deactivates()
+    {
+        var harness = new Harness();
+        var first = await harness.ActivateAsync("activation-1", "artifact-1");
+        var slot = await harness.InterruptAfterSlotTransitionAsync("activation-2", "artifact-2", first.Slot.Revision);
+        harness.References.RefuseRetireOf.Add(WorkflowActivationReferenceIdentity.Create("activation-1"));
+
+        var result = await harness.DeactivateAsync(slot.Revision);
+
+        Assert.Equal(WorkflowActivationOutcome.Deactivated, result.Outcome);
+        Assert.Null(result.Slot.ActiveActivationId);
+        Assert.Empty(await harness.ServingBindingsAsync());
+        await harness.AssertLeakedAsync("activation-1", expectedErrors: 1);
+    }
+
+    [Fact]
+    public async Task Completion_housekeeping_that_cannot_retire_a_leaked_reference_does_not_block_activation()
+    {
+        var harness = new Harness();
+        var first = await harness.ActivateAsync("activation-1", "artifact-1");
+        var slot = await harness.InterruptAfterSlotTransitionAsync("activation-2", "artifact-2", first.Slot.Revision);
+        await harness.Bindings.ActivateAsync("activation-2", "activation-1");
+        harness.References.RefuseRetireOf.Add(WorkflowActivationReferenceIdentity.Create("activation-1"));
+
+        var same = await harness.ActivateAsync("activation-2", "artifact-2", slot.Revision);
+        var replacement = await harness.ActivateAsync("activation-3", "artifact-3", slot.Revision);
+
+        Assert.Equal(WorkflowActivationOutcome.AlreadyActive, same.Outcome);
+        Assert.Equal(WorkflowActivationOutcome.Activated, replacement.Outcome);
+        Assert.Equal("activation-2", replacement.ReplacedActivationId);
+        Assert.Equal(["activation-3"], (await harness.ServingBindingsAsync()).Select(binding => binding.ActivationId));
+        await harness.AssertLeakedAsync("activation-1", expectedErrors: 2);
+    }
+
     private sealed class Harness
     {
         public Harness()
@@ -622,9 +659,10 @@ public sealed class WorkflowActivationCoordinatorTests
             Authority = new(new InMemoryWorkflowActivationAuthority(), Calls);
             Observer = new(Calls);
             Lease = new(Calls);
-            Coordinator = new(Authority, References, Lease, new FakeTimeProvider(Now), Indexer, Bindings, triggerObservers: [Observer]);
+            Coordinator = new(Authority, References, Lease, new FakeTimeProvider(Now), Indexer, Bindings, triggerObservers: [Observer], logger: Logger);
         }
 
+        public RecordingLogger<WorkflowActivationCoordinator> Logger { get; } = new();
         public List<string> Calls { get; } = [];
         public RecordingAuthority Authority { get; }
         public RecordingReferenceStore References { get; }
@@ -675,6 +713,39 @@ public sealed class WorkflowActivationCoordinatorTests
 
         public async Task<IReadOnlyCollection<WorkflowTriggerBinding>> BindingsForAsync(string activationId) =>
             (await Bindings.ListByActivationAsync(new WorkflowTriggerBindingActivationPageQuery(activationId))).Items;
+
+        /// <summary>What an activation has written when its process stops for good right after its slot transition (#2193).</summary>
+        public async Task<WorkflowActivationSlot> InterruptAfterSlotTransitionAsync(string activationId, string artifactId, long expectedRevision)
+        {
+            var reference = ActivationReference(activationId, artifactId);
+            await References.SaveAsync(reference);
+            await Indexer.PrepareActivationAsync(Executable(artifactId), activationId, reference.SlotId!);
+            var transition = await Authority.TryActivateAsync(new(
+                "definition-1",
+                "default",
+                activationId,
+                WorkflowActivationSource.Publishing,
+                expectedRevision,
+                Now));
+            Assert.True(transition.Succeeded);
+            return transition.Slot;
+        }
+
+        /// <summary>
+        /// Asserts that the activation's reference, which could not be retired, is still live and was reported as an error
+        /// <paramref name="expectedErrors"/> times rather than failing the call.
+        /// </summary>
+        public async Task AssertLeakedAsync(string activationId, int expectedErrors)
+        {
+            Assert.Null((await References.FindAsync(WorkflowActivationReferenceIdentity.Create(activationId)))!.DeletedAt);
+            var errors = Logger.Entries.Where(entry => entry.Level == LogLevel.Error).ToArray();
+            Assert.Equal(expectedErrors, errors.Length);
+            Assert.All(errors, entry =>
+            {
+                Assert.Equal(activationId, entry.Fields["ActivationId"]);
+                Assert.IsType<InvalidOperationException>(entry.Exception);
+            });
+        }
 
         private static WorkflowExecutableSourceReference Reference(string artifactId) => new(
             SourceReferenceId: "caller-reference",
@@ -847,6 +918,7 @@ public sealed class WorkflowActivationCoordinatorTests
     private sealed class RecordingReferenceStore(IWorkflowExecutableSourceReferenceStore inner, List<string> calls) : IWorkflowExecutableSourceReferenceStore
     {
         public bool ThrowOnRetire { get; set; }
+        public HashSet<string> RefuseRetireOf { get; } = new(StringComparer.Ordinal);
         public Exception? ThrowAfterRetire { get; set; }
         public bool FailRestore { get; set; }
         public CancellationTokenSource? CancelAfterSave { get; set; }
@@ -882,7 +954,8 @@ public sealed class WorkflowActivationCoordinatorTests
         public async ValueTask<bool> RetireAsync(string sourceReferenceId, DateTimeOffset deletedAt, string? reason = null, CancellationToken cancellationToken = default)
         {
             calls.Add("reference:retire");
-            if (ThrowOnRetire && reason == WorkflowActivationCoordinator.ReplacedRetireReason)
+            if (ThrowOnRetire && reason == WorkflowActivationCoordinator.ReplacedRetireReason ||
+                RefuseRetireOf.Contains(sourceReferenceId))
                 throw new InvalidOperationException("predecessor retirement failed");
             var retired = await inner.RetireAsync(sourceReferenceId, deletedAt, reason, cancellationToken);
             if (ReplaceAfterRetire is { } replacement)
@@ -952,6 +1025,8 @@ public sealed class WorkflowActivationCoordinatorTests
 
         public ValueTask PrepareActivationAsync(string activationId, IReadOnlyCollection<WorkflowTriggerBinding> bindings, CancellationToken cancellationToken = default) => inner.PrepareActivationAsync(activationId, bindings, cancellationToken);
         public ValueTask<WorkflowTriggerBindingPage> ListByActivationAsync(WorkflowTriggerBindingActivationPageQuery query, CancellationToken cancellationToken = default) => inner.ListByActivationAsync(query, cancellationToken);
+        public ValueTask<WorkflowActivationProjectionState> FindActivationStateAsync(string activationId, CancellationToken cancellationToken = default) => inner.FindActivationStateAsync(activationId, cancellationToken);
+        public ValueTask<IReadOnlyCollection<string>> ListServingActivationIdsAsync(string slotId, CancellationToken cancellationToken = default) => inner.ListServingActivationIdsAsync(slotId, cancellationToken);
 
         public async ValueTask ActivateAsync(string activationId, string? replacedActivationId, CancellationToken cancellationToken = default)
         {

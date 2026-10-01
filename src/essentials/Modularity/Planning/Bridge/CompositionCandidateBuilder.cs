@@ -98,7 +98,8 @@ public static class CompositionCandidateBuilder
         var patches = ReadSettingPatches(settingRoot, source, review);
         var baseShellRoot = ParseObject(baseShellJson, "The base shell document is malformed or unsupported.");
         var overlayShellRoot = ParseObject(overlayShellJson, "The selected shell overlay is malformed or unsupported.");
-        var activationChanges = PatchFeatureSelection(baseShellRoot, overlayShellRoot, selection.ShellId, source, plan.SelectedFeatureIds);
+        var activationChanges = PatchFeatureSelection(
+            baseShellRoot, overlayShellRoot, selection.ShellId, source, plan.SelectedFeatureIds, authored.Remove);
         foreach (var patch in patches)
         {
             var target = patch.SourceLayer == CshellsSourceLayer.Base ? baseShellRoot : overlayShellRoot;
@@ -159,12 +160,16 @@ public static class CompositionCandidateBuilder
         JsonObject overlayRoot,
         string shellId,
         CshellsSource source,
-        ImmutableArray<string> selectedIds)
+        ImmutableArray<string> selectedIds,
+        ImmutableArray<string> explicitRemovedIds)
     {
         var selected = selectedIds.ToHashSet(StringComparer.Ordinal);
         var current = source.EnabledFeatureIds.ToHashSet(StringComparer.Ordinal);
         var additions = selected.Except(current, StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
-        var removals = current.Except(selected, StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+        var removals = current.Except(selected, StringComparer.Ordinal)
+            .Union(explicitRemovedIds.Where(id => !selected.Contains(id)), StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
         if (additions.Length == 0 && removals.Length == 0)
             return [];
         if (source.FeatureShape != CshellsFeatureShape.ObjectMap)
@@ -197,10 +202,15 @@ public static class CompositionCandidateBuilder
         {
             RefuseCaseAlias(baseFeatures, id);
             RefuseCaseAlias(overlayFeatures, id);
-            var prior = GetProperty(overlayFeatures, id);
-            if (prior is JsonObject or JsonArray)
-                throw Refuse("bridge-activation-mapping-unresolved", "Disabling this feature would discard selected-overlay settings.");
-            overlayFeatures[FindPropertyName(overlayFeatures, id) ?? id] = false;
+            var priorName = FindPropertyName(overlayFeatures, id);
+            if (priorName is not null)
+            {
+                if (overlayFeatures[priorName] is not JsonValue priorValue || !priorValue.TryGetValue<bool>(out var priorEnabled))
+                    throw Refuse("bridge-activation-mapping-unresolved", "Disabling this feature would discard selected-overlay settings.");
+                if (!priorEnabled)
+                    continue;
+            }
+            overlayFeatures[priorName ?? id] = false;
             changes.Add(new CompositionCandidateChange(id, "/features/" + id, "feature-disabled", "overlay", true));
         }
         return changes.ToImmutable();

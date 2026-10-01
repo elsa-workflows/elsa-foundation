@@ -53,6 +53,23 @@ public sealed class HostDepsFile
         }
     }
 
+    /// <summary>Parses only privately captured bytes, refusing ambiguous identities without raw diagnostics.</summary>
+    public static HostDepsFile ReadCaptured(ReadOnlyMemory<byte> content)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(content);
+            if (WorkerContract.HasDuplicateFields(document.RootElement))
+                throw new JsonException();
+            return Parse(document.RootElement, strict: true);
+        }
+        catch (Exception failure) when (WorkerRunner.IsNonFatal(failure))
+        {
+            throw WorkerRefusal.Resolution("candidate-host-unavailable",
+                "The selected installed host dependency identity could not be inspected.");
+        }
+    }
+
     /// <summary>The package facts for the assembly with this simple name, or <c>null</c> when the host's deps file does not list it.</summary>
     public PackageFacts? ForAssembly(string assemblyName) => byAssembly.GetValueOrDefault(assemblyName);
 
@@ -62,8 +79,13 @@ public sealed class HostDepsFile
     private static HostDepsFile Parse(string text)
     {
         using var document = JsonDocument.Parse(text);
-        var root = document.RootElement;
+        return Parse(document.RootElement, strict: false);
+    }
+
+    private static HostDepsFile Parse(JsonElement root, bool strict)
+    {
         var deps = new HostDepsFile();
+        var assetPaths = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         if (!root.TryGetProperty("targets", out var targets) || targets.ValueKind != JsonValueKind.Object)
             throw WorkerRefusal.Resolution("host-deps-file-invalid", "The host's dependency file declares no 'targets'.");
 
@@ -82,7 +104,13 @@ public sealed class HostDepsFile
             {
                 var name = Path.GetFileNameWithoutExtension(asset.Name.Replace('\\', '/'));
                 if (!string.IsNullOrEmpty(name))
+                {
+                    var assetPath = asset.Name.Replace('\\', '/');
+                    if (strict && assetPaths.TryGetValue(name, out var previous) && previous != assetPath)
+                        throw new JsonException();
+                    assetPaths[name] = assetPath;
                     deps.byAssembly[name] = facts;
+                }
             }
         }
 

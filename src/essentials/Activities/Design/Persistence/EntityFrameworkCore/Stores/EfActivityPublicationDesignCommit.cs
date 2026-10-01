@@ -1,10 +1,10 @@
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Contracts;
 using Elsa.Activities.Design.Persistence.Core.Entities;
+using Elsa.Activities.Design.Persistence.Core.Exceptions;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Primitives.Versioning;
-using Elsa.Workflows.Design.Persistence.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
@@ -19,10 +19,22 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Stores;
 /// This transaction is the linearization point of the ordered publication (ADR 0066): the publication is done
 /// exactly when it commits. The draft, the authoring state and both derived projections move under their own
 /// optimistic concurrency tokens, so a concurrent publication loses here as it would in one transaction.
-/// Every refusal is an <see cref="InvalidOperationException"/>; nothing is left tracked afterwards.
+/// Every refusal is an <see cref="InvalidOperationException"/>; nothing is left tracked afterwards. The narrower
+/// <see cref="ActivityVersionAlreadyPublishedException"/> means a read found the version's publication stored, and nothing
+/// else. A lost concurrency or uniqueness race says only that another writer committed first: the management
+/// projection's checkpoint sequence is global, so that writer may have published something unrelated.
 /// </remarks>
 public sealed class EfActivityPublicationDesignCommit
 {
+    /// <summary>
+    /// The attempts a source-owned publication gets. Losing to an unrelated checkpoint leaves nothing wrong with the
+    /// publication, and the winner has committed by the time the loss is reported, so a fresh attempt normally commits.
+    /// A transient provider conflict is not a lost race and fails the publication, as it always has.
+    /// </summary>
+    // Every loss means another checkpoint committed and each attempt re-reads fresh, so progress is global and 3 attempts without delay suffice.
+    // A deterministic unique violation loses every attempt, spends the budget, then fails as InvalidOperationException.
+    private static readonly EfWriteRetry SourcePublicationCommits = new(3, IsLostRace);
+
     private readonly ActivitiesDesignDbContext db;
     private readonly EfActivityDesignStores stores;
     private readonly IPersistenceAccessContextAccessor? access;
@@ -145,6 +157,14 @@ public sealed class EfActivityPublicationDesignCommit
     }
 
     /// <summary>Commits the design half of a source-owned publication.</summary>
+    /// <remarks>
+    /// The management projection's checkpoint sequence is global, so this commit can lose a race to any checkpoint, such
+    /// as another node publishing a different activity during the same cold start (#2189). That says nothing about this
+    /// publication, so a lost race runs the commit again with fresh reads, absence check included, within
+    /// <see cref="SourcePublicationCommits"/>. A race lost to this version's own publication shows up in that check as
+    /// <see cref="ActivityVersionAlreadyPublishedException"/>. A commit that loses every attempt fails with the last lost
+    /// race, the <see cref="InvalidOperationException"/> every lost race is.
+    /// </remarks>
     public async Task CommitSourcePublicationAsync<TExecutableTemplate, TSourceReference>(
         SourceActivityPublicationCommit<TExecutableTemplate, TSourceReference> commit,
         CancellationToken cancellationToken = default)
@@ -152,40 +172,64 @@ public sealed class EfActivityPublicationDesignCommit
         where TSourceReference : class
     {
         ArgumentNullException.ThrowIfNull(commit);
-        await CommitAsync(async () =>
-        {
-            var state = await LoadSourcePublicationAsync(commit, tracking: true, cancellationToken);
-            var definition = state.Definition ?? commit.Definition;
-            if (state.Definition is null)
-                db.ActivityDefinitions.Add(commit.Definition);
-
-            var authoring = state.Authoring ?? commit.AuthoringState;
-            if (state.Authoring is null)
-                db.ActivityDefinitionAuthoringStates.Add(commit.AuthoringState);
-            else
-            {
-                if (await ShouldAdvanceHeadAsync(state.Authoring.HeadVersionId, commit.CatalogVersion, cancellationToken))
-                    state.Authoring.HeadVersionId = commit.CatalogVersion.Id;
-                state.Authoring.LastModifiedAt = commit.Publication.PublishedAt;
-            }
-
-            if (!state.CatalogVersionExists)
-            {
-                EfActivityDesignStores.PrepareVersion(commit.CatalogVersion);
-                db.ActivityDefinitionVersions.Add(commit.CatalogVersion);
-            }
-
-            db.ActivityDefinitionVersionPublications.Add(commit.Publication);
-            db.ActivityDefinitionVersionLayouts.Add(commit.Layout);
-            await managementProjection.WriteInCurrentTransactionAsync(new EfActivityManagementProjectionMutation(
-                commit.Publication.PublishedAt,
-                [new EfActivityManagementDefinitionChange(definition, authoring)],
-                [],
-                [commit.Publication]), cancellationToken);
-        }, $"source-owned activity version publication '{commit.Publication.DefinitionVersionId}'", cancellationToken);
+        await SourcePublicationCommits.RunAsync(
+            db,
+            () => new ValueTask(CommitOnceAsync(() => StageSourcePublicationAsync(commit, cancellationToken), cancellationToken)),
+            lostRace => throw LostRace($"source-owned activity version publication '{commit.Publication.DefinitionVersionId}'", lostRace!),
+            cancellationToken);
     }
 
+    private async Task StageSourcePublicationAsync<TExecutableTemplate, TSourceReference>(
+        SourceActivityPublicationCommit<TExecutableTemplate, TSourceReference> commit,
+        CancellationToken cancellationToken)
+        where TExecutableTemplate : class
+        where TSourceReference : class
+    {
+        var state = await LoadSourcePublicationAsync(commit, tracking: true, cancellationToken);
+        var definition = state.Definition ?? commit.Definition;
+        if (state.Definition is null)
+            db.ActivityDefinitions.Add(commit.Definition);
+
+        var authoring = state.Authoring ?? commit.AuthoringState;
+        if (state.Authoring is null)
+            db.ActivityDefinitionAuthoringStates.Add(commit.AuthoringState);
+        else
+        {
+            if (await ShouldAdvanceHeadAsync(state.Authoring.HeadVersionId, commit.CatalogVersion, cancellationToken))
+                state.Authoring.HeadVersionId = commit.CatalogVersion.Id;
+            state.Authoring.LastModifiedAt = commit.Publication.PublishedAt;
+        }
+
+        if (!state.CatalogVersionExists)
+        {
+            EfActivityDesignStores.PrepareVersion(commit.CatalogVersion);
+            db.ActivityDefinitionVersions.Add(commit.CatalogVersion);
+        }
+
+        db.ActivityDefinitionVersionPublications.Add(commit.Publication);
+        db.ActivityDefinitionVersionLayouts.Add(commit.Layout);
+        await managementProjection.WriteInCurrentTransactionAsync(new EfActivityManagementProjectionMutation(
+            commit.Publication.PublishedAt,
+            [new EfActivityManagementDefinitionChange(definition, authoring)],
+            [],
+            [commit.Publication]), cancellationToken);
+    }
+
+    /// <summary>Commits <paramref name="stage"/> once, refusing a lost race as the <see cref="InvalidOperationException"/> it is.</summary>
     private async Task CommitAsync(Func<Task> stage, string subject, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await CommitOnceAsync(stage, cancellationToken);
+        }
+        catch (Exception exception) when (IsLostRace(exception))
+        {
+            throw LostRace(subject, exception);
+        }
+    }
+
+    /// <summary>Runs <paramref name="stage"/> in one transaction and commits it; on any failure it rolls back and rethrows.</summary>
+    private async Task CommitOnceAsync(Func<Task> stage, CancellationToken cancellationToken)
     {
         db.ChangeTracker.Clear();
         IDbContextTransaction? transaction = null;
@@ -194,18 +238,6 @@ public sealed class EfActivityPublicationDesignCommit
             transaction = await db.Database.BeginTransactionAsync(cancellationToken);
             await stage();
             await transaction.CommitAsync(cancellationToken);
-        }
-        catch (DbUpdateConcurrencyException exception)
-        {
-            await RollbackAsync(transaction);
-            throw new InvalidOperationException($"The {subject} lost an optimistic concurrency race and was rolled back.", exception);
-        }
-        catch (DesignPersistenceException exception) when (
-            exception.InnerException is DbUpdateException providerFailure &&
-            EfRelationalExceptionClassifier.IsUniqueConstraintViolation(providerFailure))
-        {
-            await RollbackAsync(transaction);
-            throw new InvalidOperationException($"The {subject} lost a uniqueness race and was rolled back.", exception);
         }
         catch
         {
@@ -227,6 +259,19 @@ public sealed class EfActivityPublicationDesignCommit
         if (transaction is not null)
             await EfPersistenceCleanup.RollbackQuietlyAsync(transaction);
     }
+
+    /// <summary>
+    /// Whether the commit lost a race: a concurrency token or the stale-checkpoint guard refused it, or a racing insert
+    /// took a unique key first. Either way another writer committed first, and nothing says what it wrote.
+    /// </summary>
+    private static bool IsLostRace(Exception exception) =>
+        EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.Concurrency | EfWriteConflict.UniqueKey);
+
+    private static InvalidOperationException LostRace(string subject, Exception exception) => new(
+        EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.Concurrency)
+            ? $"The {subject} lost an optimistic concurrency race and was rolled back."
+            : $"The {subject} lost a uniqueness race and was rolled back.",
+        exception);
 
     private async Task<DraftPublicationState> LoadDraftPublicationAsync(
         ActivityPublicationDesignMutation mutation,
@@ -324,7 +369,14 @@ public sealed class EfActivityPublicationDesignCommit
             throw Conflict($"Catalog version '{commit.CatalogVersion.Id}' is already bound to different content.");
 
         await EnsurePublicationAbsentAsync(commit.Publication, cancellationToken);
-        await EnsureAbsentAsync(db.ActivityDefinitionVersionLayouts, commit.Layout.Id, commit.Layout.TenantId, $"Activity version layout '{commit.Layout.Id}'", cancellationToken);
+        if (await InScope(EfActivityDesignStores.ById(db.ActivityDefinitionVersionLayouts.AsNoTracking(), commit.Layout.Id), commit.Layout.TenantId).AnyAsync(cancellationToken))
+        {
+            // A source-owned layout commits with its publication, so a layout found right after the publication was not is
+            // usually another node's publication of this version landing in between. Reading the publication again tells
+            // that, which is already published, from a layout some other publication owns, which is a conflict.
+            await EnsurePublicationAbsentAsync(commit.Publication, cancellationToken);
+            throw Conflict($"Activity version layout '{commit.Layout.Id}' already exists.");
+        }
         return new(definition, authoring, version is not null);
     }
 
@@ -341,13 +393,14 @@ public sealed class EfActivityPublicationDesignCommit
 
     private async Task EnsurePublicationAbsentAsync(ActivityDefinitionVersionPublication publication, CancellationToken cancellationToken)
     {
-        await EnsureAbsentAsync(db.ActivityDefinitionVersionPublications, publication.Id, publication.TenantId, $"Activity version publication '{publication.Id}'", cancellationToken);
+        if (await InScope(EfActivityDesignStores.ById(db.ActivityDefinitionVersionPublications.AsNoTracking(), publication.Id), publication.TenantId).AnyAsync(cancellationToken))
+            throw new ActivityVersionAlreadyPublishedException(publication.DefinitionVersionId, $"Activity version publication '{publication.Id}' already exists.");
         if (await InScope(EfActivityDesignStores.ByReference(
                     db.ActivityDefinitionVersionPublications.AsNoTracking(),
                     nameof(ActivityDefinitionVersionPublication.DefinitionVersionId),
                     publication.DefinitionVersionId), publication.TenantId)
                 .AnyAsync(cancellationToken))
-            throw Conflict($"Activity version '{publication.DefinitionVersionId}' is already published.");
+            throw new ActivityVersionAlreadyPublishedException(publication.DefinitionVersionId, $"Activity version '{publication.DefinitionVersionId}' is already published.");
     }
 
     private static async Task EnsureAbsentAsync<T>(DbSet<T> set, string id, string? tenantId, string subject, CancellationToken cancellationToken)

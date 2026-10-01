@@ -34,6 +34,24 @@ OpenIddict, IAM/provider configuration, Secrets, distributed/private stores, Das
 unknown/custom consumers are not automatically redirected. A selected resource contributes only
 Provider and ConnectionName; schema, pooling, and migration policy retain their existing owners.
 
+## Candidate inspection capability
+
+`EfCandidateInspectionContract.Version` and
+`EfToolingHost.RunCandidateInspectionAsync(Stream, Stream, CancellationToken)` expose the independently
+versioned candidate operation. `EfCandidateInspectionOperation` accepts captured post-edit file bytes
+and a separate compiled-host identity, uses the declared composer and real feature descriptors, and
+reconciles requested/expanded features against the accepted exact set before shared EF preparation.
+Configured-value affinity checks are enabled here; existing v2 offline tooling keeps its weaker,
+unchecked-value behavior. The streamed response contains safe logical targets or fixed refusals, with
+legacy targets unprojected and no database, activation or migration-readiness claim.
+
+A host must supply the complete matching capability; the worker refuses old or partial APIs rather than
+using the live configuration reader. The CLI remains EF-free and invokes the capability inside the
+installed host closure. The Elsa-owned inspection path does not activate a shell or execute migration
+actions; the declared composer remains arbitrary trusted code, without a sandbox. The private protocol, bounds and evidence limits are defined in
+[the candidate contract](../../../../specs/187-effective-persistence-preview/contracts/candidate-inspection-v1.md);
+operators use [`composition inspect`](../../Cli/README.md#inspecting-an-accepted-runtime-candidate).
+
 ## Module descriptor
 
 An assembly-level `[EfModule(name, contextType, ...)]` (`AllowMultiple`) is a module's single,

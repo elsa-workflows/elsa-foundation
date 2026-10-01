@@ -12,7 +12,7 @@ namespace Elsa.Cli;
 /// <summary>Plans a supplied authored selection without loading a host or entering the persistence worker.</summary>
 internal static class CompositionPlanCommand
 {
-    private static readonly JsonSerializerOptions s_jsonOptions = new()
+    internal static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         WriteIndented = true
@@ -69,7 +69,7 @@ internal static class CompositionPlanCommand
         cancellationToken.ThrowIfCancellationRequested();
         var plan = SelectionPlanner.Plan(catalog, authored, suppliedInventory, profiles, suppliedPersistence);
         var projection = Project(plan, suppliedInventory);
-        var rendered = outputFormat == "json" ? JsonSerializer.Serialize(projection, s_jsonOptions) : RenderText(projection);
+        var rendered = outputFormat == "json" ? JsonSerializer.Serialize(projection, JsonOptions) : RenderText(projection);
         Console.Out.WriteLine(rendered);
         return ToolExitCode.Success;
     }
@@ -86,7 +86,7 @@ internal static class CompositionPlanCommand
         }
     }
 
-    private static CompositionPlanOutput Project(SelectionPlan plan, HostInventory? suppliedInventory)
+    internal static CompositionPlanOutput Project(SelectionPlan plan, HostInventory? suppliedInventory)
     {
         static void RequireSafe(string? value)
         {
@@ -216,7 +216,7 @@ internal static class CompositionPlanCommand
         }
     }
 
-    private static string RenderText(CompositionPlanOutput plan)
+    internal static string RenderText(CompositionPlanOutput plan)
     {
         var unresolved = plan.Findings.Count(item => item.Severity == "unresolved");
         var advisory = plan.Findings.Count(item => item.Severity == "advisory");
@@ -303,7 +303,7 @@ internal static class CompositionPlanCommand
         }
     }
 
-    private sealed record CompositionPlanOutput(
+    internal sealed record CompositionPlanOutput(
         string SchemaVersion,
         string Kind,
         string EvidenceScope,
@@ -317,16 +317,16 @@ internal static class CompositionPlanCommand
         InventoryOutput? Inventory,
         PersistenceOutput Persistence);
 
-    private sealed record FeatureSetOutput(IReadOnlyList<string> FeatureIds)
+    internal sealed record FeatureSetOutput(IReadOnlyList<string> FeatureIds)
     {
         public int Count => FeatureIds.Count;
     }
 
-    private sealed record ReasonOutput(string FeatureId, string Action, string SourceKind, string SourceId, string? SourceVersion);
-    private sealed record DependencyOutput(string FeatureId, string DependencyId, string Mode, string EvidenceKind, string EvidenceSource, bool TargetSelected);
-    private sealed record FindingOutput(string Code, string Severity, string? FeatureId, string? DependencyId, string EvidenceSource, string Explanation);
-    private sealed record LockOutput(string FeatureId, string Kind, string? PackageId, string? PackageVersion, string? ManifestDigest, string EvidenceSource);
-    private sealed record CatalogOutput(string Id, string Version, string Digest);
-    private sealed record InventoryOutput(string? InventoryId, string? TargetId, DateTimeOffset? ObservedAt, string Source);
-    private sealed record PersistenceOutput(string Status, string Provenance, IReadOnlyList<string> ResourceReferences);
+    internal sealed record ReasonOutput(string FeatureId, string Action, string SourceKind, string SourceId, string? SourceVersion);
+    internal sealed record DependencyOutput(string FeatureId, string DependencyId, string Mode, string EvidenceKind, string EvidenceSource, bool TargetSelected);
+    internal sealed record FindingOutput(string Code, string Severity, string? FeatureId, string? DependencyId, string EvidenceSource, string Explanation);
+    internal sealed record LockOutput(string FeatureId, string Kind, string? PackageId, string? PackageVersion, string? ManifestDigest, string EvidenceSource);
+    internal sealed record CatalogOutput(string Id, string Version, string Digest);
+    internal sealed record InventoryOutput(string? InventoryId, string? TargetId, DateTimeOffset? ObservedAt, string Source);
+    internal sealed record PersistenceOutput(string Status, string Provenance, IReadOnlyList<string> ResourceReferences);
 }

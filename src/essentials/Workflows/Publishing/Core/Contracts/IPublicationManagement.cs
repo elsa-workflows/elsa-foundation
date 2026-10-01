@@ -44,27 +44,6 @@ public interface IPublicationPreflightService
         IReadOnlyCollection<PublicationAuthoritativeClaimSet> authoritativeClaims);
 }
 
-public interface IPublicationProjectionPreparer
-{
-    ValueTask PrepareAsync(PublicationRecord candidate, CancellationToken cancellationToken = default);
-
-    ValueTask ActivateAsync(
-        PublicationRecord candidate,
-        string? replacedPublicationId,
-        CancellationToken cancellationToken = default);
-
-    ValueTask CompensateAsync(
-        PublicationRecord candidate,
-        string? restoredPublicationId,
-        CancellationToken cancellationToken = default);
-
-    ValueTask RestoreAsync(
-        PublicationRecord publication,
-        CancellationToken cancellationToken = default);
-
-    ValueTask RemoveAsync(PublicationRecord publication, CancellationToken cancellationToken = default);
-}
-
 public interface IPublicationActivator
 {
     ValueTask<PublicationActivationResult> ActivateAsync(
@@ -72,6 +51,12 @@ public interface IPublicationActivator
         CancellationToken cancellationToken = default);
 }
 
+/// <summary>Durable, idempotent prepare/activate/remove intents for one publication's serving projections.</summary>
+/// <remarks>
+/// Nothing writes intents any more. Their only writer, <c>PublicationProjectionReconciler</c>, had not been registered
+/// since activation moved to the runtime <c>IWorkflowActivationCoordinator</c>, and was removed (#2193). The contract
+/// and its EF table stay so existing rows remain readable; removing them is a pending schema decision.
+/// </remarks>
 public interface IPublicationProjectionIntentStore
 {
     ValueTask SaveAsync(PublicationProjectionIntent intent, CancellationToken cancellationToken = default);

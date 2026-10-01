@@ -24,6 +24,8 @@
   <ItemGroup>
     <Compile Include="..\Tests\SchedulerWorkQueueClaimableDiscoveryContract.cs" Link="SchedulerWorkQueueClaimableDiscoveryContract.cs" />
     <Compile Include="..\Tests\RuntimeTestDoubles.cs" Link="RuntimeTestDoubles.cs" />
+    <Compile Include="..\Tests\WorkflowActivationCrashRepairContract.cs" Link="WorkflowActivationCrashRepairContract.cs" />
+    <Compile Include="..\Tests\PauseAfterSlotTransition.cs" Link="PauseAfterSlotTransition.cs" />
     <Compile Include="..\Tests\ClaimLeaseOverrunContract.cs" Link="ClaimLeaseOverrunContract.cs" />
     <Compile Include="..\..\..\Tests\OverrunningIntentDispatcher.cs" Link="OverrunningIntentDispatcher.cs" />
     <Compile Include="..\Tests\PublishStimulusStartContract.cs" Link="PublishStimulusStartContract.cs" />
