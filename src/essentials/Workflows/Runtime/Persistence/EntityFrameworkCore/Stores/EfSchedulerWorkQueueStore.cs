@@ -363,10 +363,8 @@ public sealed class EfSchedulerWorkQueueStore(
         if (!Matches(row, claim))
             return RuntimeSchedulerWorkClaimTransitionResult.Stale;
         row.ClaimOwnerId = null;
-        row.ClaimedAtUtcTicks = null;
-        row.ClaimedAtOffsetMinutes = null;
-        row.VisibleAfterUtcTicks = visibleAt.UtcTicks;
-        row.VisibleAfterOffsetMinutes = EfRuntimeOperationalStoreSupport.OffsetMinutes(visibleAt);
+        (row.ClaimedAtUtcTicks, row.ClaimedAtOffsetMinutes) = EfRuntimeOperationalStoreSupport.TimestampColumns(null);
+        (row.VisibleAfterUtcTicks, row.VisibleAfterOffsetMinutes) = EfRuntimeOperationalStoreSupport.TimestampColumns(visibleAt);
         row.Revision = checked(row.Revision + 1);
         AttachForUpdate(row, claim.Revision);
         try
@@ -541,10 +539,8 @@ public sealed class EfSchedulerWorkQueueStore(
         var visibleAfter = request.Now.Add(request.VisibilityTimeout);
         row.ClaimOwnerId = EfRuntimeOperationalStoreSupport.Encode(request.OwnerId);
         row.ClaimToken = checked(row.ClaimToken + 1);
-        row.ClaimedAtUtcTicks = request.Now.UtcTicks;
-        row.ClaimedAtOffsetMinutes = EfRuntimeOperationalStoreSupport.OffsetMinutes(request.Now);
-        row.VisibleAfterUtcTicks = visibleAfter.UtcTicks;
-        row.VisibleAfterOffsetMinutes = EfRuntimeOperationalStoreSupport.OffsetMinutes(visibleAfter);
+        (row.ClaimedAtUtcTicks, row.ClaimedAtOffsetMinutes) = EfRuntimeOperationalStoreSupport.TimestampColumns(request.Now);
+        (row.VisibleAfterUtcTicks, row.VisibleAfterOffsetMinutes) = EfRuntimeOperationalStoreSupport.TimestampColumns(visibleAfter);
         row.Revision = checked(row.Revision + 1);
         return row;
     }
@@ -552,8 +548,7 @@ public sealed class EfSchedulerWorkQueueStore(
     private static SchedulerWorkItemEntity ToRenewedEntity(SchedulerWorkItemEntity row, DateTimeOffset now, TimeSpan visibilityTimeout)
     {
         var visibleAfter = now.Add(visibilityTimeout);
-        row.VisibleAfterUtcTicks = visibleAfter.UtcTicks;
-        row.VisibleAfterOffsetMinutes = EfRuntimeOperationalStoreSupport.OffsetMinutes(visibleAfter);
+        (row.VisibleAfterUtcTicks, row.VisibleAfterOffsetMinutes) = EfRuntimeOperationalStoreSupport.TimestampColumns(visibleAfter);
         row.Revision = checked(row.Revision + 1);
         return row;
     }
