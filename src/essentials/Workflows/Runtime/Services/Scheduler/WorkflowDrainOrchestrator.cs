@@ -552,8 +552,8 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
     }
 
     // A failure this drain recorded in an earlier cycle is not final: the item is retried, claim-free, once its delay has
-    // passed, and a later cycle can deliver it. The failed items are therefore looked up, and only one still not delivered
-    // ends the drain as a failed delivery.
+    // passed, and a later cycle can deliver it. The failed items are therefore looked up, and any not found delivered ends
+    // the drain as a failed delivery.
     private async ValueTask<bool> AnyOwnDeliveryStillFailedAsync(
         IEnumerable<RuntimePostCommitOutboxProcessResult> outboxDeliveryResults,
         CancellationToken cancellationToken)
@@ -565,7 +565,14 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
             .Select(item => item.OutboxItemId)
             .Distinct(StringComparer.Ordinal)
             .ToArray();
-        return failedItemIds.Length > 0 && await AnyDeliveryFailedAsync(failedItemIds, cancellationToken);
+        foreach (var outboxItemId in failedItemIds)
+        {
+            var item = await _outboxLookupStore.FindAsync(outboxItemId, cancellationToken);
+            if (item?.Status != RuntimePostCommitOutboxStatus.Delivered)
+                return true;
+        }
+
+        return false;
     }
 
     private async ValueTask<bool> AnyDeliveryFailedAsync(IEnumerable<string> outboxItemIds, CancellationToken cancellationToken)
