@@ -134,7 +134,9 @@ internal sealed class CandidateInspectionFixture : IDisposable
         foreach (var name in new[] { "shells.json", "shells.Production.json", "appsettings.json", "appsettings.Production.json" })
             File.Copy(Path.Join(DotnetElsa.WorkbenchSource(), name), Path.Join(SourceDirectory, name));
 
-        _workbenchHostDirectory = _directory.File("workbench-host");
+        var workbenchHostPath = _directory.File("workbench-host");
+        _workbenchHostDirectory = Path.Join(ResolveExistingPath(Path.GetDirectoryName(workbenchHostPath)!),
+            Path.GetFileName(workbenchHostPath));
         var actualWorkbenchDirectory = DotnetElsa.Workbench();
         CopyActualWorkbenchClosure(actualWorkbenchDirectory, _workbenchHostDirectory);
         foreach (var fileName in new[] { "Elsa.Workbench.dll", "Elsa.Workbench.deps.json", "Elsa.Workbench.runtimeconfig.json" })
@@ -204,6 +206,25 @@ internal sealed class CandidateInspectionFixture : IDisposable
 
         static bool IsReparsePoint(string path) =>
             (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0;
+    }
+
+    private static string ResolveExistingPath(string path)
+    {
+        var fullPath = Path.GetFullPath(path);
+        var root = Path.GetPathRoot(fullPath)!;
+        var current = root;
+        foreach (var component in fullPath[root.Length..].Split(Path.DirectorySeparatorChar,
+                     StringSplitOptions.RemoveEmptyEntries))
+        {
+            var candidate = Path.Join(current, component);
+            var directory = new DirectoryInfo(candidate);
+            current = (directory.Attributes & FileAttributes.ReparsePoint) != 0
+                ? directory.ResolveLinkTarget(returnFinalTarget: true)?.FullName ??
+                  throw new InvalidOperationException("The fixture temporary directory has an unresolved reparse point.")
+                : candidate;
+        }
+
+        return current;
     }
 
     public void WriteBundledCatalog() => WriteInput("catalog.json", JsonSerializer.Serialize(FoundationSelectionCatalog.Load(), Json));
