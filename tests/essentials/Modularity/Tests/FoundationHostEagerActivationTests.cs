@@ -6,6 +6,7 @@ using CShells.Lifecycle;
 using Elsa.Attention.Core;
 using Elsa.Foundation.Host.Health;
 using Elsa.Foundation.Host.Shells;
+using Elsa.Modularity.Api.Authorization;
 using Elsa.Persistence.Schema;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -241,7 +242,9 @@ public sealed class FoundationHostEagerActivationTests : IAsyncDisposable
     [Fact]
     public void The_attention_contributor_asks_for_the_module_management_read_permission()
     {
-        Assert.Equal("module-management.read", _attention.Descriptor.RequiredPermission);
+        // Restated by the host, which compiles no feature in: tied to the feature's constant here, so a drift fails.
+        Assert.Equal(ModuleManagementPermissionKeys.Read, ShellActivationAttentionContributor.RequiredPermission);
+        Assert.Equal(ModuleManagementPermissionKeys.Read, _attention.Descriptor.RequiredPermission);
     }
 
     /// <summary>
@@ -275,6 +278,37 @@ public sealed class FoundationHostEagerActivationTests : IAsyncDisposable
         _registry.Deactivate(Shell);
 
         Assert.Empty(_tracker.Failing());
+    }
+
+    /// <summary>
+    /// An attempt can fail after the registry has already announced the shell active, a request having won the race for it: its
+    /// failure must not be written then, or it would come back when the shell leaves the active state.
+    /// </summary>
+    [Fact]
+    public async Task A_failure_that_arrives_after_the_shell_became_active_is_not_recorded()
+    {
+        _registry.Script(Fault());
+        _registry.DuringAttempt = () => _registry.BecomeActiveAsync(Shell, notify: true);
+
+        await _service.StartAsync(CancellationToken.None);
+        _registry.Deactivate(Shell);
+
+        Assert.Equal(1, _registry.Attempts);
+        Assert.Null(_tracker.FailureOf(Shell));
+        Assert.Empty(_tracker.Failing());
+    }
+
+    [Fact]
+    public async Task Observing_the_same_registry_twice_subscribes_the_tracker_once()
+    {
+        _tracker.Observe(_registry);
+        _tracker.Observe(_registry);
+        _registry.Script((Exception?)null);
+
+        await _service.StartAsync(CancellationToken.None);
+        await _service.StartAsync(CancellationToken.None);
+
+        Assert.Equal(1, _registry.SubscriberCount);
     }
 
     [Theory]
@@ -398,6 +432,11 @@ public sealed class FoundationHostEagerActivationTests : IAsyncDisposable
 
         public TaskCompletionSource? Hang { get; set; }
 
+        /// <summary>Runs inside an attempt, before it answers: what else happens while an activation is in flight.</summary>
+        public Func<Task>? DuringAttempt { get; set; }
+
+        public int SubscriberCount => _subscribers.Count;
+
         public void Script(params Exception?[] script) => _script = script;
 
         public async Task BecomeActiveAsync(string name, bool notify)
@@ -413,6 +452,8 @@ public sealed class FoundationHostEagerActivationTests : IAsyncDisposable
         public async Task<IShell> GetOrActivateAsync(string name, CancellationToken cancellationToken = default)
         {
             var step = _script[Math.Min(Attempts++, _script.Length - 1)];
+            if (DuringAttempt is { } during)
+                await during();
             if (Hang is { } hang)
                 await hang.Task;
             return step is null ? null! : throw step;

@@ -63,7 +63,16 @@ public sealed class ShellActivationTracker(TimeProvider? timeProvider = null) : 
     /// <summary>Attaches <paramref name="registry"/>: what it holds active is not failing, and a shell it activates is forgotten.</summary>
     public void Observe(IShellRegistry registry)
     {
-        _registry = registry;
+        lock (_gate)
+        {
+            // Idempotent: a second start of the host on the same registry does not subscribe the tracker twice.
+            if (ReferenceEquals(_registry, registry))
+                return;
+
+            _registry?.Unsubscribe(this);
+            _registry = registry;
+        }
+
         registry.Subscribe(this);
     }
 
@@ -83,7 +92,10 @@ public sealed class ShellActivationTracker(TimeProvider? timeProvider = null) : 
 
     /// <summary>
     /// Records one more failed activation of <paramref name="shell"/>, and with it how long the host waits before the next
-    /// attempt, from <paramref name="retry"/> and the number of failed attempts, this one included.
+    /// attempt, from <paramref name="retry"/> and the number of failed attempts, this one included. A shell the registry already
+    /// holds active is not recorded: its activation was observed while this attempt was failing, and writing the failure after
+    /// that would bring back a record nothing clears until the shell leaves and re-enters the active state. The failure is
+    /// returned all the same, for the caller's log and its next delay.
     /// </summary>
     public ShellActivationFailure Failed(string shell, string failureType, ShellActivationRefusal? refusal, EagerShellActivationRetryOptions retry)
     {
@@ -92,8 +104,12 @@ public sealed class ShellActivationTracker(TimeProvider? timeProvider = null) : 
         {
             var previous = _failing.GetValueOrDefault(shell);
             var attempts = (previous?.Attempts ?? 0) + 1;
-            return _failing[shell] = new ShellActivationFailure(
+            var failure = new ShellActivationFailure(
                 shell, attempts, failureType, refusal, previous?.FirstFailedAt ?? now, now, retry.NextDelay(attempts, refused: refusal is not null));
+            if (!IsActive(shell))
+                _failing[shell] = failure;
+
+            return failure;
         }
     }
 
