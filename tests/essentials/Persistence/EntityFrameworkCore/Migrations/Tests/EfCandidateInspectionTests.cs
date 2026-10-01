@@ -275,6 +275,158 @@ public sealed class EfCandidateInspectionTests : IDisposable
         WorkerContract.ValidateCandidateEnvironmentHostResponse(root, payload, exitCode);
     }
 
+    [Theory]
+    [InlineData("""{"version":1,"entries":[],"extra":true}""")]
+    [InlineData("""{"version":1,"version":1,"entries":[]}""")]
+    [InlineData("""{"version":1.0,"entries":[]}""")]
+    [InlineData("""{"version":2,"entries":[]}""")]
+    [InlineData("""{"version":1,"entries":[{"key":"A","value":null}]}""")]
+    [InlineData("""{"version":1,"entries":[{"key":"A","value":"v","delete":true}]}""")]
+    [InlineData("""{"version":1,"entries":[{"key":"A","value":{"nested":true}}]}""")]
+    [InlineData("""{"version":1,"entries":[{"key":"A","value":"v","extra":"x"}]}""")]
+    [InlineData("""{"version":1,"entries":[{"key":"","value":"v"}]}""")]
+    [InlineData("""{"version":1,"entries":[{"key":"A=bad","value":"v"}]}""")]
+    [InlineData("""{"version":1,"entries":[{"key":"A","value":"v\u0000"}]}""")]
+    public async Task Explicit_environment_host_rejects_closed_malformed_and_tombstone_documents_before_discovery(string raw)
+    {
+        var result = await RunEnvironmentAdmissionAsync(CreateEnvironmentCandidate(
+            new Dictionary<string, string>(), environmentDocument: raw));
+
+        Assert.Equal(EfToolingExitCode.Refusal, result.ExitCode);
+        Assert.Equal("candidate-environment-input-invalid", result.Response.GetProperty("error").GetProperty("code").GetString());
+        Assert.Equal(0, result.DiscoveryCalls);
+        AssertNoPrivateCandidateValues(result.ResponseJson);
+    }
+
+    [Fact]
+    public async Task Explicit_environment_host_rejects_invalid_utf8_and_duplicate_bom_before_discovery()
+    {
+        var validJson = Encoding.UTF8.GetBytes("{\"version\":1,\"entries\":[]}");
+        var invalidUtf8 = Encoding.UTF8.GetBytes("{\"version\":1,\"entries\":[{\"key\":\"");
+        invalidUtf8 = [.. invalidUtf8, 0xFF, .. Encoding.UTF8.GetBytes("\",\"value\":\"v\"}]}")];
+        var duplicateBom = [.. Encoding.UTF8.GetPreamble(), .. Encoding.UTF8.GetPreamble(), .. validJson];
+
+        foreach (var bytes in new[] { invalidUtf8, duplicateBom })
+        {
+            var result = await RunEnvironmentAdmissionAsync(CreateEnvironmentCandidate(
+                new Dictionary<string, string>(), environmentBytes: bytes));
+
+            Assert.Equal(EfToolingExitCode.Refusal, result.ExitCode);
+            Assert.Equal("candidate-environment-input-invalid", result.Response.GetProperty("error").GetProperty("code").GetString());
+            Assert.Equal(0, result.DiscoveryCalls);
+            AssertNoPrivateCandidateValues(result.ResponseJson);
+        }
+    }
+
+    [Fact]
+    public async Task Explicit_environment_host_accepts_one_leading_bom()
+    {
+        var document = Encoding.UTF8.GetBytes("{\"version\":1,\"entries\":[{\"key\":\"Unicode\",\"value\":\"line\\n\\t💡\"}]}");
+        var result = await RunEnvironmentAdmissionAsync(CreateEnvironmentCandidate(
+            new Dictionary<string, string>(), environmentBytes: [.. Encoding.UTF8.GetPreamble(), .. document]));
+
+        Assert.Equal(EfToolingExitCode.Success, result.ExitCode);
+        Assert.Equal("ok", result.Response.GetProperty("status").GetString());
+        Assert.Equal(1, result.DiscoveryCalls);
+        AssertNoPrivateCandidateValues(result.ResponseJson);
+    }
+
+    [Theory]
+    [InlineData("A", "A")]
+    [InlineData("A", "a")]
+    [InlineData("A__B", "A:B")]
+    public async Task Explicit_environment_host_rejects_duplicate_and_normalized_key_collisions_before_discovery(
+        string firstKey, string secondKey)
+    {
+        var raw = JsonSerializer.Serialize(new
+        {
+            version = 1,
+            entries = new[]
+            {
+                new { key = firstKey, value = "one" },
+                new { key = secondKey, value = "two" }
+            }
+        });
+        var result = await RunEnvironmentAdmissionAsync(CreateEnvironmentCandidate(
+            new Dictionary<string, string>(), environmentDocument: raw));
+
+        Assert.Equal(EfToolingExitCode.Refusal, result.ExitCode);
+        Assert.Equal("candidate-environment-key-collision", result.Response.GetProperty("error").GetProperty("code").GetString());
+        Assert.Equal(0, result.DiscoveryCalls);
+        AssertNoPrivateCandidateValues(result.ResponseJson);
+    }
+
+    [Theory]
+    [InlineData("MYSQLCONNSTR_")]
+    [InlineData("SQLAZURECONNSTR_")]
+    [InlineData("SQLCONNSTR_")]
+    [InlineData("CUSTOMCONNSTR_")]
+    [InlineData("POSTGRESQLCONNSTR_")]
+    [InlineData("APIHUBCONNSTR_")]
+    [InlineData("DOCDBCONNSTR_")]
+    [InlineData("EVENTHUBCONNSTR_")]
+    [InlineData("NOTIFICATIONHUBCONNSTR_")]
+    [InlineData("REDISCACHECONNSTR_")]
+    [InlineData("SERVICEBUSCONNSTR_")]
+    public async Task Explicit_environment_host_rejects_each_unsupported_service_prefix_before_discovery(string prefix)
+    {
+        var raw = JsonSerializer.Serialize(new
+        {
+            version = 1,
+            entries = new[] { new { key = prefix + "Candidate", value = "private" } }
+        });
+        var result = await RunEnvironmentAdmissionAsync(CreateEnvironmentCandidate(
+            new Dictionary<string, string>(), environmentDocument: raw));
+
+        Assert.Equal(EfToolingExitCode.Refusal, result.ExitCode);
+        Assert.Equal("candidate-environment-prefix-unsupported", result.Response.GetProperty("error").GetProperty("code").GetString());
+        Assert.Equal(0, result.DiscoveryCalls);
+        AssertNoPrivateCandidateValues(result.ResponseJson, "private");
+    }
+
+    [Fact]
+    public async Task Explicit_environment_host_enforces_unicode_key_value_and_raw_document_boundaries()
+    {
+        var exactKey = "é" + new string('a', 1022);
+        var overKey = exactKey + "a";
+        var exactValue = "💡" + new string('v', 65532);
+        var overValue = exactValue + "v";
+
+        var exactKeyResult = await RunEnvironmentAdmissionAsync(CreateEnvironmentCandidate(
+            new Dictionary<string, string>(), environmentDocument: EnvironmentDocument(exactKey, "ok")));
+        Assert.Equal(EfToolingExitCode.Success, exactKeyResult.ExitCode);
+        Assert.Equal(1, exactKeyResult.DiscoveryCalls);
+
+        var overKeyResult = await RunEnvironmentAdmissionAsync(CreateEnvironmentCandidate(
+            new Dictionary<string, string>(), environmentDocument: EnvironmentDocument(overKey, "ok")));
+        Assert.Equal(EfToolingExitCode.Refusal, overKeyResult.ExitCode);
+        Assert.Equal("candidate-environment-input-too-large", overKeyResult.Response.GetProperty("error").GetProperty("code").GetString());
+        Assert.Equal(0, overKeyResult.DiscoveryCalls);
+
+        var exactValueResult = await RunEnvironmentAdmissionAsync(CreateEnvironmentCandidate(
+            new Dictionary<string, string>(), environmentDocument: EnvironmentDocument("ValueBoundary", exactValue)));
+        Assert.Equal(EfToolingExitCode.Success, exactValueResult.ExitCode);
+        Assert.Equal(1, exactValueResult.DiscoveryCalls);
+
+        var overValueResult = await RunEnvironmentAdmissionAsync(CreateEnvironmentCandidate(
+            new Dictionary<string, string>(), environmentDocument: EnvironmentDocument("ValueBoundary", overValue)));
+        Assert.Equal(EfToolingExitCode.Refusal, overValueResult.ExitCode);
+        Assert.Equal("candidate-environment-input-too-large", overValueResult.Response.GetProperty("error").GetProperty("code").GetString());
+        Assert.Equal(0, overValueResult.DiscoveryCalls);
+
+        var valid = Encoding.UTF8.GetBytes("{\"version\":1,\"entries\":[]}");
+        var exactRawResult = await RunEnvironmentAdmissionAsync(CreateEnvironmentCandidate(
+            new Dictionary<string, string>(), environmentBytes: PadWithSpaces(valid, MaximumCandidateFileBytes)));
+        Assert.Equal(EfToolingExitCode.Success, exactRawResult.ExitCode);
+        Assert.Equal(1, exactRawResult.DiscoveryCalls);
+
+        var overRawResult = await RunEnvironmentAdmissionAsync(CreateEnvironmentCandidate(
+            new Dictionary<string, string>(), environmentBytes: PadWithSpaces(valid, MaximumCandidateFileBytes + 1)));
+        Assert.Equal(EfToolingExitCode.Refusal, overRawResult.ExitCode);
+        Assert.Equal("candidate-environment-input-too-large", overRawResult.Response.GetProperty("error").GetProperty("code").GetString());
+        Assert.Equal(0, overRawResult.DiscoveryCalls);
+    }
+
     [Fact]
     public async Task Host_refuses_a_malformed_selected_source_without_echoing_or_opening_a_database()
     {
@@ -827,6 +979,26 @@ public sealed class EfCandidateInspectionTests : IDisposable
     }
 
     [Fact]
+    public async Task Explicit_environment_lane_preserves_captured_targets_and_prepare_parity()
+    {
+        var environment = Encoding.UTF8.GetBytes(
+            EnvironmentDocument($"CShells__Shells__{Shell}__Features__{OpenTelemetry}", "false"));
+        var run = await RunSameCaptureAsync("feature-disabled-removed", environmentBytes: environment);
+
+        Assert.Null(run.RuntimeFailure);
+        Assert.Empty(run.RuntimeDetails.RefusalCodes);
+        Assert.Equal(EfToolingExitCode.Success, run.CandidateExitCode);
+        var resolution = run.CandidateResponse.GetProperty("configurationResolution");
+        Assert.Equal("captured-workbench-json-explicit-environment-v1", resolution.GetProperty("source").GetString());
+        Assert.Equal("supplied-intended", resolution.GetProperty("externalInputs").GetString());
+        AssertRuntimeAndCandidateTargetsAgree(run, resolution);
+        Assert.DoesNotContain(resolution.GetProperty("participants").EnumerateArray(), participant =>
+            participant.GetProperty("feature").GetString() == OpenTelemetry);
+        Assert.Contains(OpenTelemetry, StringValues(resolution.GetProperty("selection").GetProperty("disabledFeatureIds")));
+        AssertPrivateInputsRemainPrivate(run);
+    }
+
+    [Fact]
     public async Task All_legacy_partial_targets_remain_null_in_runtime_and_candidate_evidence()
     {
         var run = await RunSameCaptureAsync("all-legacy-partial");
@@ -929,32 +1101,8 @@ public sealed class EfCandidateInspectionTests : IDisposable
     [Fact]
     public async Task Candidate_refuses_an_authored_removal_that_disables_a_real_required_descriptor_edge()
     {
-        var files = BuildSameCaptureFiles("root-default-distinct-equal");
-        using var originalConfiguration = ReadConfiguration(files);
-        var originalContext = EfConfigurationProbeTests.ComposeRuntimeContext(originalConfiguration, Shell);
-        var descriptors = FeatureDiscovery.DiscoverFeatures(EfConfigurationProbeTests.HostAssemblies)
-            .ToDictionary(feature => feature.Id, StringComparer.OrdinalIgnoreCase);
-        var originalRequested = originalContext.RequestedFeatureIds.ToHashSet(StringComparer.Ordinal);
-        var edge = originalContext.OrderedFeatures
-            .Where(feature => originalRequested.Contains(feature.Id))
-            .SelectMany(feature => feature.Dependencies.Select(dependency => (Parent: feature.Id, Dependency: dependency)))
-            .First(edge => originalRequested.Contains(edge.Dependency) && descriptors.ContainsKey(edge.Dependency));
-
-        Assert.Contains(edge.Dependency, descriptors[edge.Parent].Dependencies, StringComparer.Ordinal);
-        Assert.Contains(edge.Parent, originalRequested);
-        Assert.Contains(edge.Dependency, originalRequested);
-
-        DisableShellFeature(files, edge.Dependency);
-        using var disabledConfiguration = ReadConfiguration(files);
-        var disabledContext = EfConfigurationProbeTests.ComposeRuntimeContext(disabledConfiguration, Shell);
-        Assert.Contains(edge.Parent, disabledContext.RequestedFeatureIds);
-        Assert.DoesNotContain(edge.Dependency, disabledContext.RequestedFeatureIds);
-        Assert.Contains(edge.Dependency, disabledContext.DisabledFeatureIds);
-        Assert.Contains(edge.Dependency, disabledContext.EnabledFeatureIds);
-
-        var acceptedFeatureIds = disabledContext.RequestedFeatureIds.Order(StringComparer.Ordinal).ToArray();
-        Assert.DoesNotContain(edge.Dependency, acceptedFeatureIds);
-        var candidate = CreateCandidate(acceptedFeatureIds, files, [edge.Dependency]);
+        var fixture = CreateAuthoredRemovalCandidate();
+        var candidate = fixture.Candidate;
         using var response = new MemoryStream();
         var operation = new EfCandidateInspectionOperation(() => EfConfigurationProbeTests.HostAssemblies);
 
@@ -966,7 +1114,31 @@ public sealed class EfCandidateInspectionTests : IDisposable
         Assert.Equal(EfToolingExitCode.Refusal, exitCode);
         Assert.Equal("candidate-selection-conflict", root.GetProperty("error").GetProperty("code").GetString());
         Assert.Equal("required-disabled", root.GetProperty("error").GetProperty("reason").GetString());
-        Assert.Equal(edge.Dependency, root.GetProperty("error").GetProperty("feature").GetString());
+        Assert.Equal(fixture.Dependency, root.GetProperty("error").GetProperty("feature").GetString());
+        Assert.False(root.TryGetProperty("configurationResolution", out _));
+        AssertNoPrivateCandidateValues(responseJson);
+        Assert.False(File.Exists(DatabasePath));
+        Assert.Empty(Directory.EnumerateFiles(temporaryDirectory));
+    }
+
+    [Fact]
+    public async Task Explicit_environment_lane_preserves_required_edge_conflict_before_prepare()
+    {
+        var fixture = CreateAuthoredRemovalCandidate();
+        var candidate = AddEnvironmentInput(fixture.Candidate,
+            Encoding.UTF8.GetBytes("{\"version\":1,\"entries\":[]}"));
+        using var response = new MemoryStream();
+        var operation = new EfCandidateEnvironmentInspectionOperation(() => EfConfigurationProbeTests.HostAssemblies);
+
+        var exitCode = await RunEnvironmentOperationAsync(operation, candidate.Request, response, CancellationToken.None);
+        var responseJson = Encoding.UTF8.GetString(response.ToArray());
+        using var document = JsonDocument.Parse(responseJson);
+        var root = document.RootElement;
+
+        Assert.Equal(EfToolingExitCode.Refusal, exitCode);
+        Assert.Equal("candidate-selection-conflict", root.GetProperty("error").GetProperty("code").GetString());
+        Assert.Equal("required-disabled", root.GetProperty("error").GetProperty("reason").GetString());
+        Assert.Equal(fixture.Dependency, root.GetProperty("error").GetProperty("feature").GetString());
         Assert.False(root.TryGetProperty("configurationResolution", out _));
         AssertNoPrivateCandidateValues(responseJson);
         Assert.False(File.Exists(DatabasePath));
@@ -1176,7 +1348,10 @@ public sealed class EfCandidateInspectionTests : IDisposable
         AssertPrivateInputsRemainPrivate(edited);
     }
 
-    private async Task<SameCaptureRun> RunSameCaptureAsync(string scenario, Dictionary<string, byte[]>? capturedFiles = null)
+    private async Task<SameCaptureRun> RunSameCaptureAsync(
+        string scenario,
+        Dictionary<string, byte[]>? capturedFiles = null,
+        byte[]? environmentBytes = null)
     {
         if (scenario == "opaque-composer-configurator")
             Interlocked.Exchange(ref EfToolingHostTestDefaults.OpaqueConfiguratorExecutionCount, 0);
@@ -1210,6 +1385,8 @@ public sealed class EfCandidateInspectionTests : IDisposable
             accepted = accepted.Where(id => !StringComparer.Ordinal.Equals(id, Runtime)).ToArray();
 
         var candidate = CreateCandidate(accepted, files, removed);
+        if (environmentBytes is not null)
+            candidate = AddEnvironmentInput(candidate, environmentBytes);
         var candidateFiles = candidate.Request["candidate"]!["files"]!.AsArray();
         Assert.Equal(4, candidateFiles.Count);
         foreach (var file in candidateFiles)
@@ -1221,8 +1398,13 @@ public sealed class EfCandidateInspectionTests : IDisposable
                 "The candidate payload must retain each captured file byte-for-byte.");
         }
         using var candidateResponse = new MemoryStream();
-        var operation = new EfCandidateInspectionOperation(() => EfConfigurationProbeTests.HostAssemblies);
-        var candidateExitCode = await RunOperationAsync(operation, candidate.Request, candidateResponse, CancellationToken.None);
+        var candidateExitCode = environmentBytes is null
+            ? await RunOperationAsync(
+                new EfCandidateInspectionOperation(() => EfConfigurationProbeTests.HostAssemblies),
+                candidate.Request, candidateResponse, CancellationToken.None)
+            : await RunEnvironmentOperationAsync(
+                new EfCandidateEnvironmentInspectionOperation(() => EfConfigurationProbeTests.HostAssemblies),
+                candidate.Request, candidateResponse, CancellationToken.None);
         var candidateJson = Encoding.UTF8.GetString(candidateResponse.ToArray());
         using var candidateDocument = JsonDocument.Parse(candidateJson);
 
@@ -1627,16 +1809,47 @@ public sealed class EfCandidateInspectionTests : IDisposable
         return new CandidateFixture(request, acceptedFeatureIds);
     }
 
+    private AuthoredRemovalFixture CreateAuthoredRemovalCandidate()
+    {
+        var files = BuildSameCaptureFiles("root-default-distinct-equal");
+        using var originalConfiguration = ReadConfiguration(files);
+        var originalContext = EfConfigurationProbeTests.ComposeRuntimeContext(originalConfiguration, Shell);
+        var descriptors = FeatureDiscovery.DiscoverFeatures(EfConfigurationProbeTests.HostAssemblies)
+            .ToDictionary(feature => feature.Id, StringComparer.OrdinalIgnoreCase);
+        var originalRequested = originalContext.RequestedFeatureIds.ToHashSet(StringComparer.Ordinal);
+        var edge = originalContext.OrderedFeatures
+            .Where(feature => originalRequested.Contains(feature.Id))
+            .SelectMany(feature => feature.Dependencies.Select(dependency => (Parent: feature.Id, Dependency: dependency)))
+            .First(edge => originalRequested.Contains(edge.Dependency) && descriptors.ContainsKey(edge.Dependency));
+
+        Assert.Contains(edge.Dependency, descriptors[edge.Parent].Dependencies, StringComparer.Ordinal);
+        Assert.Contains(edge.Parent, originalRequested);
+        Assert.Contains(edge.Dependency, originalRequested);
+
+        DisableShellFeature(files, edge.Dependency);
+        using var disabledConfiguration = ReadConfiguration(files);
+        var disabledContext = EfConfigurationProbeTests.ComposeRuntimeContext(disabledConfiguration, Shell);
+        Assert.Contains(edge.Parent, disabledContext.RequestedFeatureIds);
+        Assert.DoesNotContain(edge.Dependency, disabledContext.RequestedFeatureIds);
+        Assert.Contains(edge.Dependency, disabledContext.DisabledFeatureIds);
+        Assert.Contains(edge.Dependency, disabledContext.EnabledFeatureIds);
+
+        var acceptedFeatureIds = disabledContext.RequestedFeatureIds.Order(StringComparer.Ordinal).ToArray();
+        Assert.DoesNotContain(edge.Dependency, acceptedFeatureIds);
+        return new AuthoredRemovalFixture(CreateCandidate(acceptedFeatureIds, files, [edge.Dependency]), edge.Dependency);
+    }
+
     private CandidateFixture CreateEnvironmentCandidate(
         IReadOnlyDictionary<string, string> entries,
-        string? environmentDocument = null)
+        string? environmentDocument = null,
+        byte[]? environmentBytes = null)
     {
         var candidate = CreateRuntimeCandidate();
-        var environment = environmentDocument ?? JsonSerializer.Serialize(new
+        environmentBytes ??= Encoding.UTF8.GetBytes(environmentDocument ?? JsonSerializer.Serialize(new
         {
             version = 1,
             entries = entries.Select(entry => new { key = entry.Key, value = entry.Value }).ToArray()
-        });
+        }));
         var request = new JsonObject
         {
             ["version"] = 1,
@@ -1646,10 +1859,43 @@ public sealed class EfCandidateInspectionTests : IDisposable
             {
                 ["version"] = 1,
                 ["captureId"] = CaptureId,
-                ["content"] = Convert.ToBase64String(Encoding.UTF8.GetBytes(environment))
+                ["content"] = Convert.ToBase64String(environmentBytes)
             }
         };
         return new CandidateFixture(request, candidate.AcceptedFeatureIds);
+    }
+
+    private static CandidateFixture AddEnvironmentInput(CandidateFixture candidate, byte[] environmentBytes)
+    {
+        var request = candidate.Request.DeepClone().AsObject();
+        request["environmentInput"] = new JsonObject
+        {
+            ["version"] = 1,
+            ["captureId"] = CaptureId,
+            ["content"] = Convert.ToBase64String(environmentBytes)
+        };
+        return new CandidateFixture(request, candidate.AcceptedFeatureIds);
+    }
+
+    private static string EnvironmentDocument(string key, string value) => JsonSerializer.Serialize(new
+    {
+        version = 1,
+        entries = new[] { new { key, value } }
+    });
+
+    private async Task<EnvironmentAdmissionResult> RunEnvironmentAdmissionAsync(CandidateFixture candidate)
+    {
+        var discoveryCalls = 0;
+        var operation = new EfCandidateEnvironmentInspectionOperation(() =>
+        {
+            discoveryCalls++;
+            return EfConfigurationProbeTests.HostAssemblies;
+        });
+        using var response = new MemoryStream();
+        var exitCode = await RunEnvironmentOperationAsync(operation, candidate.Request, response, CancellationToken.None);
+        var responseJson = Encoding.UTF8.GetString(response.ToArray());
+        using var document = JsonDocument.Parse(responseJson);
+        return new EnvironmentAdmissionResult(exitCode, discoveryCalls, responseJson, document.RootElement.Clone());
     }
 
     private Dictionary<string, byte[]> BuildFiles(
@@ -1904,6 +2150,14 @@ public sealed class EfCandidateInspectionTests : IDisposable
     }
 
     private sealed record CandidateFixture(JsonObject Request, string[] AcceptedFeatureIds);
+
+    private sealed record AuthoredRemovalFixture(CandidateFixture Candidate, string Dependency);
+
+    private sealed record EnvironmentAdmissionResult(
+        int ExitCode,
+        int DiscoveryCalls,
+        string ResponseJson,
+        JsonElement Response);
 
     private sealed record SameCaptureRun(
         IReadOnlyDictionary<string, byte[]> FileBytes,
