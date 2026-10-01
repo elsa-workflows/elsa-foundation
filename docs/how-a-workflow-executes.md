@@ -201,9 +201,10 @@ registers `RuntimeResumptionPumpTask` as an `IRecurringTask` (it depends on the 
 Each tick calls `IRuntimeResumptionService.SweepAsync`, implemented by
 `src/essentials/Workflows/Runtime/Services/Recovery/RuntimeResumptionService.cs`. One sweep does three things: deliver pending
 post-commit outbox items, list executions that still have queued work
-(`IWorkflowSchedulerWorkQueue.ListPendingWorkflowExecutionIdsAsync`) plus candidates from
-`IRuntimeRecoveryScanner.ScanPageAsync`, and re-drive each execution by sending a `RunSchedulerWork` envelope to
-its mailbox. Re-driving never bypasses the mailbox, so the single-writer rule holds during recovery too.
+(`IWorkflowSchedulerWorkQueue.ListClaimableWorkflowExecutionIdsAsync`, which lists only work a claim could take now)
+plus candidates from `IRuntimeRecoveryScanner.ScanPageAsync`, and re-drive each execution whose next item the pause
+gate would let through by sending a `RunSchedulerWork` envelope to its mailbox. Re-driving never bypasses the mailbox,
+so the single-writer rule holds during recovery too.
 
 `IRuntimeRecoveryScanner` (`src/essentials/Workflows/Runtime/Core/Contracts/IRuntimeRecoveryScanner.cs`) defaults to
 `InMemoryRuntimeRecoveryScanner`, which reads `IExecutionLivenessStateStore`; the EF Core module replaces it with
