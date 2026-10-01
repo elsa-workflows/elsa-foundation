@@ -57,5 +57,7 @@
     <Compile Include="..\..\..\..\..\Persistence\EntityFramework\Tests\EfSchemaFinalizationTestSupport.cs" Link="EfSchemaFinalizationTestSupport.cs" />
     <!-- The claim-lease overrun scenarios share the runtime tests' overrunning dispatcher. -->
     <Compile Include="..\..\..\Tests\OverrunningIntentDispatcher.cs" Link="OverrunningIntentDispatcher.cs" />
+    <!-- The live-drain contention scenarios intercept the outbox store through the runtime tests' forwarding base. -->
+    <Compile Include="..\..\..\Tests\ForwardingOutboxStore.cs" Link="ForwardingOutboxStore.cs" />
   </ItemGroup>
 </Project>

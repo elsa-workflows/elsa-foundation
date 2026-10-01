@@ -724,6 +724,52 @@ public sealed class RuntimePostCommitOutboxProcessorTests
         Assert.Equal(RuntimePostCommitOutboxStatus.Delivered, (await store.FindAsync("outbox-b"))!.Status);
     }
 
+    /// <summary>
+    /// #2225: a continuation only enqueues, while another kind can need an execution's mailbox, which a live drain waiting
+    /// for that continuation holds. So a claimed batch dispatches its continuations first, each part in claim order.
+    /// </summary>
+    [Fact]
+    public async Task Processor_DispatchesTheBatchsContinuationsFirst_EachPartInClaimOrder()
+    {
+        var store = new InMemoryRuntimeCheckpointCommitStore();
+        await store.AddPendingForTestingAsync(NewOutboxItem("outbox-1", "intent-other-1", "wfexec-1", availableAt: _now.AddSeconds(-4)));
+        await store.AddPendingForTestingAsync(NewOutboxItem("outbox-2", "intent-continuation-1", "wfexec-1", availableAt: _now.AddSeconds(-3), kind: RuntimePostCommitIntentKinds.EnqueueSchedulerWork));
+        await store.AddPendingForTestingAsync(NewOutboxItem("outbox-3", "intent-other-2", "wfexec-2", availableAt: _now.AddSeconds(-2)));
+        await store.AddPendingForTestingAsync(NewOutboxItem("outbox-4", "intent-continuation-2", "wfexec-2", availableAt: _now.AddSeconds(-1), kind: RuntimePostCommitIntentKinds.EnqueueSchedulerWork));
+        var dispatcher = new RecordingDispatcher();
+
+        var result = await NewProcessor(store, dispatcher, _now).ProcessAsync(new RuntimePostCommitOutboxProcessRequest(limit: 10));
+
+        Assert.Equal(
+            ["intent-continuation-1", "intent-continuation-2", "intent-other-1", "intent-other-2"],
+            dispatcher.Intents.Select(intent => intent.IntentId));
+        Assert.Equal(4, result.DeliveredCount);
+    }
+
+    /// <summary>
+    /// The reordering leaves #2195 in place: the continuation, claimed second but dispatched first, outlives the batch's
+    /// claims and a peer re-claims both items. The item claimed first, whose turn now comes last, is renewed before its
+    /// dispatch, finds its claim lost and is skipped.
+    /// </summary>
+    [Fact]
+    public async Task Processor_StillRenewsEachItemBeforeItsDispatchAfterReorderingTheBatch()
+    {
+        var store = new InMemoryRuntimeCheckpointCommitStore();
+        await store.AddPendingForTestingAsync(NewOutboxItem("outbox-a", "intent-a", "wfexec-a", availableAt: _now.AddSeconds(-2)));
+        await store.AddPendingForTestingAsync(NewOutboxItem("outbox-b", "intent-b", "wfexec-b", availableAt: _now.AddSeconds(-1), kind: RuntimePostCommitIntentKinds.EnqueueSchedulerWork));
+        var dispatcher = new OverrunningIntentDispatcher("intent-b");
+        var processor = new RuntimePostCommitOutboxProcessor(store, dispatcher, new FakeTimeProvider(_now));
+        var peer = new RuntimePostCommitOutboxProcessor(store, dispatcher, new FakeTimeProvider(_now.AddSeconds(61)));
+        dispatcher.WhileOverrunning = async () => Assert.Equal(2, (await peer.ProcessAsync(new RuntimePostCommitOutboxProcessRequest(10))).DeliveredCount);
+
+        var result = await processor.ProcessAsync(new RuntimePostCommitOutboxProcessRequest(10));
+
+        Assert.Equal("intent-b", dispatcher.Dispatched[0]);
+        Assert.Equal(["intent-a", "intent-b", "intent-b"], dispatcher.Dispatched.Order(StringComparer.Ordinal));
+        Assert.Equal(2, result.SupersededCount);
+        Assert.Equal(RuntimePostCommitOutboxStatus.Delivered, (await store.FindAsync("outbox-a"))!.Status);
+    }
+
     private static RuntimePostCommitOutboxProcessor NewProcessor(
         IRuntimePostCommitOutboxStore store,
         RecordingDispatcher dispatcher,
@@ -828,6 +874,9 @@ public sealed class RuntimePostCommitOutboxProcessorTests
 
         public ValueTask<RuntimePostCommitOutboxClaim?> RenewClaimAsync(RuntimePostCommitOutboxClaim claim, DateTimeOffset now, TimeSpan visibilityTimeout, CancellationToken cancellationToken = default) =>
             inner.RenewClaimAsync(claim, now, visibilityTimeout, cancellationToken);
+
+        public ValueTask<IReadOnlyCollection<RuntimePostCommitOutboxItem>> ListClaimedAsync(RuntimePostCommitOutboxClaimedQuery query, CancellationToken cancellationToken = default) =>
+            inner.ListClaimedAsync(query, cancellationToken);
 
         public ValueTask RecordDeliveryResultAsync(RuntimePostCommitOutboxClaim claim, RuntimePostCommitOutboxDeliveryResult result, CancellationToken cancellationToken = default) =>
             inner.RecordDeliveryResultAsync(claim, result, cancellationToken);

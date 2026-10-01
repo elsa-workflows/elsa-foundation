@@ -436,6 +436,25 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         }
     }
 
+    public ValueTask<IReadOnlyCollection<RuntimePostCommitOutboxItem>> ListClaimedAsync(
+        RuntimePostCommitOutboxClaimedQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (_state.SyncRoot)
+        {
+            return new ValueTask<IReadOnlyCollection<RuntimePostCommitOutboxItem>>(_state.OutboxItems.Values
+                .Where(query.Matches)
+                .OrderBy(RuntimePostCommitOutboxClaimTransitions.ClaimableAt)
+                .ThenBy(item => item.RecordedAt)
+                .ThenBy(item => item.OutboxItemId, StringComparer.Ordinal)
+                .Take(query.Limit)
+                .ToArray());
+        }
+    }
+
     public ValueTask RecordDeliveryResultAsync(
         RuntimePostCommitOutboxClaim claim,
         RuntimePostCommitOutboxDeliveryResult result,

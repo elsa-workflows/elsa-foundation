@@ -1,4 +1,6 @@
+using System.Data.Common;
 using DotNet.Testcontainers.Builders;
+using Microsoft.EntityFrameworkCore;
 using Testcontainers.MsSql;
 using Testcontainers.MySql;
 using Testcontainers.PostgreSql;
@@ -63,6 +65,21 @@ public sealed class RuntimeBookmarksPostgreSqlFixture : RuntimeBookmarksProvider
     {
         if (container is not null)
             await container.DisposeAsync();
+    }
+
+    /// <summary>
+    /// Creates an empty database on this server and returns its connection string. A case that starts whole runtime
+    /// nodes needs one: the nodes' module migrator installs the schema, and the shared database already has one.
+    /// </summary>
+    public async Task<string> CreateEmptyDatabaseAsync(string prefix)
+    {
+        var database = $"{prefix}_{Guid.NewGuid():N}";
+        await using (var admin = new RuntimePostgreSqlDbContext(
+                         new DbContextOptionsBuilder<RuntimePostgreSqlDbContext>().UseNpgsql(ConnectionString).Options))
+            await admin.Database.ExecuteSqlRawAsync($"CREATE DATABASE {database}");
+        var connection = new DbConnectionStringBuilder { ConnectionString = ConnectionString };
+        connection["Database"] = database;
+        return connection.ConnectionString;
     }
 }
 

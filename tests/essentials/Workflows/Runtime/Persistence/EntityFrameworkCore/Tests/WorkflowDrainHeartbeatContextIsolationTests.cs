@@ -61,7 +61,10 @@ public sealed class WorkflowDrainHeartbeatContextIsolationTests
             operation.ServiceProvider.GetServices<IWorkflowSchedulerDrainObserver>(),
             operation.ServiceProvider.GetRequiredService<CheckpointRuleViolationWorkflowFaulter>(),
             operation.ServiceProvider.GetRequiredService<IRuntimeExecutionOwnershipService>(),
-            operation.ServiceProvider.GetRequiredService<IRuntimeExecutionOwnershipContextAccessor>()));
+            operation.ServiceProvider.GetRequiredService<IRuntimeExecutionOwnershipContextAccessor>(),
+            operation.ServiceProvider.GetRequiredService<IRuntimePostCommitOutboxClaimStore>(),
+            operation.ServiceProvider.GetRequiredService<IPostCommitOutboxLookupStore>(),
+            operation.ServiceProvider.GetRequiredService<IWorkflowSchedulerWorkQueue>()));
         Assert.Contains("CreateScoped", legacyConstruction.Message, StringComparison.Ordinal);
 
         var outerContext = operation.ServiceProvider.GetRequiredService<RuntimeDbContext>();

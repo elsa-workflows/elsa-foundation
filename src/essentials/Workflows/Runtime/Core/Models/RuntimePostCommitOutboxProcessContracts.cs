@@ -2,6 +2,17 @@ using System.Collections.ObjectModel;
 
 namespace Elsa.Workflows.Runtime.Core.Models;
 
+/// <summary>Claim timing that the runtime's post-commit outbox processor shares with the code that waits on its claims.</summary>
+public static class RuntimePostCommitOutboxProcessing
+{
+    /// <summary>
+    /// How long a claim taken by the runtime's outbox processor keeps the item from every other deliverer. A deliverer that
+    /// dies holding a claim holds the item this long. <see cref="WorkflowDrainOrchestratorOptions.DefaultContinuationClaimWaitLimit"/>
+    /// is derived from it, so a drain waiting on a dead deliverer's claim outlasts the claim.
+    /// </summary>
+    public static readonly TimeSpan ClaimVisibilityTimeout = TimeSpan.FromMinutes(1);
+}
+
 public sealed class RuntimePostCommitOutboxProcessRequest
 {
     public RuntimePostCommitOutboxProcessRequest(

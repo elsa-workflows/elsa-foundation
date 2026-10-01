@@ -1,6 +1,4 @@
-using System.Data.Common;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
-using Microsoft.EntityFrameworkCore;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests;
@@ -23,12 +21,6 @@ public sealed class PublishStimulusStartPostgreSqlSmokeTests(RuntimeBookmarksPos
     private async Task<string> CreateDatabaseAsync()
     {
         Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? "The native provider is unavailable.");
-        var database = $"elsa_runtime_keyed_start_{Guid.NewGuid():N}";
-        await using (var admin = new RuntimePostgreSqlDbContext(
-                         new DbContextOptionsBuilder<RuntimePostgreSqlDbContext>().UseNpgsql(fixture.ConnectionString).Options))
-            await admin.Database.ExecuteSqlRawAsync($"CREATE DATABASE {database}");
-        var connection = new DbConnectionStringBuilder { ConnectionString = fixture.ConnectionString };
-        connection["Database"] = database;
-        return connection.ConnectionString;
+        return await fixture.CreateEmptyDatabaseAsync("elsa_runtime_keyed_start");
     }
 }

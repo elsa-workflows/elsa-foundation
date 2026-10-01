@@ -12,6 +12,11 @@ namespace Elsa.Workflows.Runtime.Services.Scheduler;
 
 public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
 {
+    // Polling for another deliverer's claim on a continuation: a live deliverer finishes within a few store round trips,
+    // so the first polls are short; a stuck or dead one is waited out at a slower pace until its claim lapses.
+    private static readonly TimeSpan FirstClaimPoll = TimeSpan.FromMilliseconds(10);
+    private static readonly TimeSpan MaxClaimPoll = TimeSpan.FromMilliseconds(500);
+
     private readonly IWorkflowSchedulerDrainer _schedulerDrainer;
     private readonly IRuntimePostCommitOutboxProcessor _postCommitOutboxProcessor;
     private readonly IReadOnlyCollection<IWorkflowSchedulerDrainObserver> _schedulerDrainObservers;
@@ -23,19 +28,25 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
     private readonly IRuntimeCoalescingDrainScopeFactory? _coalescingScopeFactory;
     private readonly IRuntimeLiveDrainDeliveryAccessor? _liveDrainDeliveryAccessor;
     private readonly IRuntimeCheckpointCadenceResolver? _cadenceResolver;
+    private readonly IRuntimePostCommitOutboxClaimStore _claimStore;
+    private readonly IPostCommitOutboxLookupStore _outboxLookupStore;
+    private readonly IWorkflowSchedulerWorkQueue _schedulerWorkQueue;
     private readonly TimeProvider _timeProvider;
 
     /// <summary>
     /// Creates the orchestrator for a caller-owned ownership service. C1 (#1227): the six telescoping constructors
-    /// collapsed into this single primary constructor: six required collaborators followed by optional collaborators
+    /// collapsed into this single primary constructor: the required collaborators followed by optional collaborators
     /// that default to their no-op/system implementations. The ownership service and the ownership context accessor are <b>required by
     /// construction</b> so the single-writer lease, which fences every checkpoint commit made during the drain
     /// and cancels the drain when the lease is lost, can never be silently disabled by picking a narrower
     /// constructor. The drain observers are required for the same reason: they decide fault outcomes (blocking
     /// incidents, poison projection, incident strategy resolution), so the set must be handed in deliberately. So is
     /// the checkpoint rule violation faulter (#1780), which decides the outcome of an execution a rule refused. The
-    /// legacy path is rejected when the default ownership service is backed by scoped persistence; use
-    /// <see cref="CreateScoped"/> to renew through an isolated partition-bound operation scope.
+    /// outbox claim store, the outbox lookup store and the scheduler work queue are required too (#2225): they are how
+    /// a drain finds a continuation another deliverer took from it before it reports quiescence, and a drain without
+    /// them would report <see cref="RuntimeSchedulerDrainStopReason.Quiesced"/>, and its command Accepted, with its own
+    /// next step undrained. The legacy path is rejected when the default ownership service is backed by scoped
+    /// persistence; use <see cref="CreateScoped"/> to renew through an isolated partition-bound operation scope.
     /// </summary>
     public WorkflowDrainOrchestrator(
         IWorkflowSchedulerDrainer schedulerDrainer,
@@ -44,6 +55,9 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         CheckpointRuleViolationWorkflowFaulter checkpointRuleViolationFaulter,
         IRuntimeExecutionOwnershipService ownershipService,
         IRuntimeExecutionOwnershipContextAccessor ownershipContextAccessor,
+        IRuntimePostCommitOutboxClaimStore outboxClaimStore,
+        IPostCommitOutboxLookupStore outboxLookupStore,
+        IWorkflowSchedulerWorkQueue schedulerWorkQueue,
         WorkflowDrainOrchestratorOptions? options = null,
         IRuntimeCoalescingDrainScopeFactory? coalescingScopeFactory = null,
         IRuntimeLiveDrainDeliveryAccessor? liveDrainDeliveryAccessor = null,
@@ -56,6 +70,9 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
             checkpointRuleViolationFaulter,
             ownershipService,
             ownershipContextAccessor,
+            outboxClaimStore,
+            outboxLookupStore,
+            schedulerWorkQueue,
             options,
             coalescingScopeFactory,
             liveDrainDeliveryAccessor,
@@ -77,6 +94,9 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         CheckpointRuleViolationWorkflowFaulter checkpointRuleViolationFaulter,
         IRuntimeExecutionOwnershipService ownershipService,
         IRuntimeExecutionOwnershipContextAccessor ownershipContextAccessor,
+        IRuntimePostCommitOutboxClaimStore outboxClaimStore,
+        IPostCommitOutboxLookupStore outboxLookupStore,
+        IWorkflowSchedulerWorkQueue schedulerWorkQueue,
         WorkflowDrainOrchestratorOptions? options = null,
         IRuntimeCoalescingDrainScopeFactory? coalescingScopeFactory = null,
         IRuntimeLiveDrainDeliveryAccessor? liveDrainDeliveryAccessor = null,
@@ -91,6 +111,9 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
             checkpointRuleViolationFaulter,
             ownershipService,
             ownershipContextAccessor,
+            outboxClaimStore,
+            outboxLookupStore,
+            schedulerWorkQueue,
             options,
             coalescingScopeFactory,
             liveDrainDeliveryAccessor,
@@ -106,6 +129,9 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         CheckpointRuleViolationWorkflowFaulter checkpointRuleViolationFaulter,
         IRuntimeExecutionOwnershipService ownershipService,
         IRuntimeExecutionOwnershipContextAccessor ownershipContextAccessor,
+        IRuntimePostCommitOutboxClaimStore outboxClaimStore,
+        IPostCommitOutboxLookupStore outboxLookupStore,
+        IWorkflowSchedulerWorkQueue schedulerWorkQueue,
         WorkflowDrainOrchestratorOptions? options,
         IRuntimeCoalescingDrainScopeFactory? coalescingScopeFactory,
         IRuntimeLiveDrainDeliveryAccessor? liveDrainDeliveryAccessor,
@@ -119,6 +145,9 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         ArgumentNullException.ThrowIfNull(checkpointRuleViolationFaulter);
         ArgumentNullException.ThrowIfNull(ownershipService);
         ArgumentNullException.ThrowIfNull(ownershipContextAccessor);
+        ArgumentNullException.ThrowIfNull(outboxClaimStore);
+        ArgumentNullException.ThrowIfNull(outboxLookupStore);
+        ArgumentNullException.ThrowIfNull(schedulerWorkQueue);
 
         if (heartbeatScopeFactory is null && ownershipService is RuntimeExecutionOwnershipService runtimeOwnership &&
             runtimeOwnership.RequiresIsolatedHeartbeatScope)
@@ -140,6 +169,9 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         _coalescingScopeFactory = coalescingScopeFactory;
         _liveDrainDeliveryAccessor = liveDrainDeliveryAccessor;
         _cadenceResolver = cadenceResolver;
+        _claimStore = outboxClaimStore;
+        _outboxLookupStore = outboxLookupStore;
+        _schedulerWorkQueue = schedulerWorkQueue;
         _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
@@ -352,8 +384,8 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         var itemResults = new List<RuntimeSchedulerWorkItemResult>();
         var outboxDeliveryResults = new List<RuntimePostCommitOutboxProcessResult>();
         var stopReason = RuntimeSchedulerDrainStopReason.Quiesced;
-        var outboxDeliveryFailed = false;
         var completed = false;
+        var continuationWait = new ContinuationWaitDeadline(_options.ContinuationClaimWaitLimit);
 
         for (var cycle = 0; cycle < _options.MaxDrainCycles; cycle++)
         {
@@ -372,22 +404,24 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
             }
 
             var outboxResult = await _postCommitOutboxProcessor.ProcessAsync(
-                new RuntimePostCommitOutboxProcessRequest(
-                    limit: _options.OutboxDeliveryBatchSize,
-                    workflowExecutionId: request.WorkflowExecutionId,
-                    intentKind: RuntimePostCommitIntentKinds.EnqueueSchedulerWork),
+                ContinuationDelivery(request.WorkflowExecutionId),
                 cancellationToken);
             outboxDeliveryResults.Add(outboxResult);
-            outboxDeliveryFailed = outboxDeliveryFailed || outboxResult.FailedCount > 0;
 
-            if (outboxResult.DeliveredCount == 0)
-            {
-                stopReason = outboxDeliveryFailed
-                    ? RuntimeSchedulerDrainStopReason.OutboxDeliveryFailed
-                    : RuntimeSchedulerDrainStopReason.Quiesced;
-                completed = true;
-                break;
-            }
+            if (outboxResult.DeliveredCount > 0)
+                continue;
+
+            var settlement = await AnyOwnDeliveryStillFailedAsync(outboxDeliveryResults, cancellationToken)
+                ? ContinuationSettlement.Undelivered
+                : await SettleContinuationsAsync(request, drainResult, outboxResult, outboxDeliveryResults, continuationWait, cancellationToken);
+            if (settlement == ContinuationSettlement.DrainAgain)
+                continue;
+
+            stopReason = settlement == ContinuationSettlement.Quiesced
+                ? RuntimeSchedulerDrainStopReason.Quiesced
+                : RuntimeSchedulerDrainStopReason.OutboxDeliveryFailed;
+            completed = true;
+            break;
         }
 
         if (lastDrainResult is null || firstDrainResult is null)
@@ -403,6 +437,202 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
             items: itemResults,
             outboxDeliveryResults: outboxDeliveryResults,
             stopReason: stopReason);
+    }
+
+    private RuntimePostCommitOutboxProcessRequest ContinuationDelivery(string workflowExecutionId) =>
+        new(
+            limit: _options.OutboxDeliveryBatchSize,
+            workflowExecutionId: workflowExecutionId,
+            intentKind: RuntimePostCommitIntentKinds.EnqueueSchedulerWork);
+
+    /// <summary>
+    /// Decides whether a delivery step that delivered nothing ends the drain (#2225). It does only when no other deliverer
+    /// has this execution's continuations. The resumption sweep claims across every execution, so it can take one between
+    /// this drain's commit and its delivery step: the step then finds nothing deliverable, or reports the item superseded.
+    /// Reporting quiescence there returned the command before its own next step had run, so a start answered Accepted
+    /// before its first bookmark existed. Instead the drain waits, bounded, for a continuation another deliverer holds,
+    /// takes it back once that claim lapses, and drains whatever the other deliverer queued. The drain still holds the
+    /// execution's ownership lease, so nothing else would drain that work before the command returned. A continuation the
+    /// other deliverer failed ends the drain as a failed delivery of its own would.
+    /// </summary>
+    private async ValueTask<ContinuationSettlement> SettleContinuationsAsync(
+        RuntimeSchedulerDrainRequest request,
+        RuntimeSchedulerDrainResult drainResult,
+        RuntimePostCommitOutboxProcessResult outboxResult,
+        List<RuntimePostCommitOutboxProcessResult> outboxDeliveryResults,
+        ContinuationWaitDeadline continuationWait,
+        CancellationToken cancellationToken)
+    {
+        var workflowExecutionId = request.WorkflowExecutionId;
+        var taken = outboxResult.Items
+            .Where(item => item.IsSuperseded)
+            .Select(item => item.OutboxItemId)
+            .ToHashSet(StringComparer.Ordinal);
+        var poll = FirstClaimPoll;
+        var held = await ListHeldContinuationsAsync(workflowExecutionId, cancellationToken);
+        while (held.Count > 0)
+        {
+            // A failed attempt is not known to have queued anything, and its retry, after the policy's delay, is the sweep's
+            // to make, so it ends the drain exactly as a failed delivery of the drain's own would. This also covers an attempt
+            // that failed before this drain's first read.
+            if (held.Any(item => item.Status == RuntimePostCommitOutboxStatus.FailedRetryable))
+                return ContinuationSettlement.Undelivered;
+
+            taken.UnionWith(held.Select(item => item.OutboxItemId));
+            var now = _timeProvider.GetUtcNow();
+            if (held.Any(item => RuntimePostCommitOutboxClaimTransitions.ClaimableAt(item) <= now))
+            {
+                var delivery = await DeliverLapsedContinuationsAsync(workflowExecutionId, cancellationToken);
+                outboxDeliveryResults.Add(delivery);
+                if (delivery.FailedCount > 0)
+                    return ContinuationSettlement.Undelivered;
+                if (delivery.DeliveredCount > 0)
+                    return ContinuationSettlement.DrainAgain;
+            }
+
+            var deadline = continuationWait.StartOrGet(now);
+            if (now >= deadline)
+                return ContinuationSettlement.Undelivered;
+
+            await Task.Delay(UntilNextPoll(poll, held, now, deadline), _timeProvider, cancellationToken);
+            poll = poll * 2 < MaxClaimPoll ? poll * 2 : MaxClaimPoll;
+            held = await ListHeldContinuationsAsync(workflowExecutionId, cancellationToken);
+        }
+
+        // The other deliverer finished. A delivery that failed for good is no longer listed, so the items are looked up: a
+        // failure ends the drain as above, otherwise the work they queued is drained next.
+        if (taken.Count > 0)
+            return await AnyDeliveryFailedAsync(taken, cancellationToken)
+                ? ContinuationSettlement.Undelivered
+                : ContinuationSettlement.DrainAgain;
+
+        return await HasUndrainedWorkAsync(request, drainResult, cancellationToken)
+            ? ContinuationSettlement.DrainAgain
+            : ContinuationSettlement.Quiesced;
+    }
+
+    // The execution's continuations another deliverer has taken on and not settled: claimed, or failed and awaiting a retry.
+    // A continuation's every failed attempt but its last is FailedRetryable (RuntimeSchedulerPostCommitIntentDispatcher
+    // .RetryPolicy), so a transient failure on another deliverer is listed whenever it happened. A FailedFinal item is
+    // terminal and stays in the outbox, so it is not listed: every later drain of the execution would report a failed
+    // delivery, and skip incident resolution, for good. The cost is that a continuation whose attempts were all made and
+    // failed by other deliverers before this drain's first read goes unseen (#2225, docs/runtime-durable-resumption.md).
+    private ValueTask<IReadOnlyCollection<RuntimePostCommitOutboxItem>> ListHeldContinuationsAsync(
+        string workflowExecutionId,
+        CancellationToken cancellationToken) =>
+        _claimStore.ListClaimedAsync(
+            new RuntimePostCommitOutboxClaimedQuery(
+                workflowExecutionId,
+                RuntimePostCommitIntentKinds.EnqueueSchedulerWork,
+                _options.OutboxDeliveryBatchSize),
+            cancellationToken);
+
+    // A lapsed claim keeps its fencing token, and a claim-free delivery cannot complete a fenced item (#1798), so the drain
+    // takes its continuation back through the durable claim path: with no live-drain scope ambient, the processor claims
+    // what is claimable, the lapsed item included. If the other deliverer is still alive, its renewal before dispatch now
+    // fails and it skips the item.
+    private async ValueTask<RuntimePostCommitOutboxProcessResult> DeliverLapsedContinuationsAsync(
+        string workflowExecutionId,
+        CancellationToken cancellationToken)
+    {
+        using (_liveDrainDeliveryAccessor?.Push(null))
+            return await _postCommitOutboxProcessor.ProcessAsync(ContinuationDelivery(workflowExecutionId), cancellationToken);
+    }
+
+    // Wakes no later than the earliest lapse, so a dead deliverer's item is taken back as soon as it can be.
+    private static TimeSpan UntilNextPoll(
+        TimeSpan poll,
+        IReadOnlyCollection<RuntimePostCommitOutboxItem> claimed,
+        DateTimeOffset now,
+        DateTimeOffset deadline)
+    {
+        var wait = deadline - now < poll ? deadline - now : poll;
+        var untilLapse = claimed.Min(RuntimePostCommitOutboxClaimTransitions.ClaimableAt) - now;
+        return untilLapse > TimeSpan.Zero && untilLapse < wait ? untilLapse : wait;
+    }
+
+    // A failure this drain recorded in an earlier cycle is not final: the item is retried, claim-free, once its delay has
+    // passed, and a later cycle can deliver it. The failed items are therefore looked up, and any not found delivered ends
+    // the drain as a failed delivery.
+    private async ValueTask<bool> AnyOwnDeliveryStillFailedAsync(
+        IEnumerable<RuntimePostCommitOutboxProcessResult> outboxDeliveryResults,
+        CancellationToken cancellationToken)
+    {
+        var failedItemIds = outboxDeliveryResults
+            .SelectMany(result => result.Items)
+            .Where(item => !item.IsSuperseded &&
+                           item.RequestedDeliveryResultStatus is RuntimePostCommitOutboxStatus.FailedRetryable or RuntimePostCommitOutboxStatus.FailedFinal)
+            .Select(item => item.OutboxItemId)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        foreach (var outboxItemId in failedItemIds)
+        {
+            var item = await _outboxLookupStore.FindAsync(outboxItemId, cancellationToken);
+            if (item?.Status != RuntimePostCommitOutboxStatus.Delivered)
+                return true;
+        }
+
+        return false;
+    }
+
+    private async ValueTask<bool> AnyDeliveryFailedAsync(IEnumerable<string> outboxItemIds, CancellationToken cancellationToken)
+    {
+        foreach (var outboxItemId in outboxItemIds)
+        {
+            var item = await _outboxLookupStore.FindAsync(outboxItemId, cancellationToken);
+            if (item?.Status is RuntimePostCommitOutboxStatus.FailedRetryable or RuntimePostCommitOutboxStatus.FailedFinal)
+                return true;
+        }
+
+        return false;
+    }
+
+    // Another deliverer can also finish a continuation completely between this drain's commit and its delivery step. That
+    // leaves no claim to wait for, only work in the queue. The queue is read only after a scheduler drain that ran dry: one
+    // that stopped at the request's work-item budget leaves work queued on purpose, one that reached a terminal status must
+    // not run the rest, and one that claimed nothing could not run what is there.
+    private async ValueTask<bool> HasUndrainedWorkAsync(
+        RuntimeSchedulerDrainRequest request,
+        RuntimeSchedulerDrainResult drainResult,
+        CancellationToken cancellationToken)
+    {
+        if (drainResult.Items.Count == 0 ||
+            drainResult.StoppedOnTerminalStatus ||
+            request.MaxWorkItems is { } budget && drainResult.Items.Count >= budget)
+            return false;
+
+        var queued = await _schedulerWorkQueue.ListAsync(
+            new RuntimeSchedulerWorkQuery(request.WorkflowExecutionId, limit: 1),
+            cancellationToken);
+        return queued.Items.Count > 0;
+    }
+
+    private enum ContinuationSettlement
+    {
+        /// <summary>No continuation of the execution is out of this drain's hands and no queued work is left to it.</summary>
+        Quiesced,
+
+        /// <summary>Work for the execution may be queued that this drain has not run yet.</summary>
+        DrainAgain,
+
+        /// <summary>
+        /// A continuation was not delivered: another deliverer still held it when the wait limit passed, or failed it. The
+        /// drain stops with <see cref="RuntimeSchedulerDrainStopReason.OutboxDeliveryFailed"/>, the status it reports for a
+        /// failed delivery of its own; the durable item stays with the sweep.
+        /// </summary>
+        Undelivered
+    }
+
+    /// <summary>
+    /// The one deadline every wait for another deliverer shares within a drain request (#2225). It starts at the drain's
+    /// first wait and later waits do not reset it, so the drain's cycles cannot multiply
+    /// <see cref="WorkflowDrainOrchestratorOptions.ContinuationClaimWaitLimit"/>.
+    /// </summary>
+    private sealed class ContinuationWaitDeadline(TimeSpan limit)
+    {
+        private DateTimeOffset? _deadline;
+
+        public DateTimeOffset StartOrGet(DateTimeOffset now) => _deadline ??= now + limit;
     }
 
     private async ValueTask NotifyObserversAsync(
