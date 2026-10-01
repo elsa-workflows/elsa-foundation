@@ -526,7 +526,7 @@ internal static class WorkflowActivationCrashRepairContract
     /// <summary>
     /// The same race, but the winner stops for good once its slot transition commits. The direction that would look like
     /// success: answering "already active" straight away while the replaced activation still serves. The loser completes
-    /// the activation first, as a later call would.
+    /// the activation, and reports that it did, with the activation it replaced.
     /// </summary>
     private static async Task SameActivationLosingTheSlotTransitionCompletesAWinnerThatStoppedAsync(Func<ActivationStores> open)
     {
@@ -540,7 +540,8 @@ internal static class WorkflowActivationCrashRepairContract
         latch.Release();
         var result = await losing;
 
-        Assert.Equal(WorkflowActivationOutcome.AlreadyActive, result.Outcome);
+        Assert.Equal(WorkflowActivationOutcome.Activated, result.Outcome);
+        Assert.Equal("activation-1", result.ReplacedActivationId);
         await loser.AssertConsistentAsync("activation-2", "activation-1");
     }
 

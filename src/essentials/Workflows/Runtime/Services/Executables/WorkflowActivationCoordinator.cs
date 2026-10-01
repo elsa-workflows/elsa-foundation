@@ -936,9 +936,12 @@ public sealed class WorkflowActivationCoordinator(
     }
 
     /// <summary>
-    /// Answers a call whose activation <paramref name="slot"/> names (<see cref="FindSlotNamingAsync"/>) as
-    /// <see cref="ActivateAsync"/> would answer it a moment later: it completes the activation, then reports it already
-    /// active. Nothing is compensated. When there is nothing to report, because the slot moved on or the activation's
+    /// Answers a call whose activation <paramref name="slot"/> names (<see cref="FindSlotNamingAsync"/>) by completing
+    /// the activation, and nothing is compensated. Like <see cref="CompleteAsync"/>, the call reports
+    /// <see cref="WorkflowActivationOutcome.Activated"/> with the activation it replaced when completing it switched it on
+    /// or retired that activation's reference, so a caller that keeps its own record of the replaced activation, as
+    /// Publishing does, retires it; a completion failure is reported as such. Otherwise the activation already served,
+    /// and the call reports it already active. When neither applies, because the slot moved on or the activation's
     /// reference is no longer live, the writer that changed them owns the activation, and the call reports
     /// <paramref name="uncompensated"/>.
     /// </summary>
@@ -950,9 +953,8 @@ public sealed class WorkflowActivationCoordinator(
         const string leftToSlot = "The slot names this activation, so it was left to the slot rather than compensated.";
         try
         {
-            if (await CompleteServingActivationAsync(slot, CancellationToken.None) is { Outcome: WorkflowActivationOutcome.Failed } incomplete)
-                return incomplete;
-            return await TryResolveSameArtifactNoOpAsync(command, command.Executable.Identity.ArtifactId, CancellationToken.None) ??
+            return await CompleteServingActivationAsync(slot, CancellationToken.None) ??
+                await TryResolveSameArtifactNoOpAsync(command, command.Executable.Identity.ArtifactId, CancellationToken.None) ??
                 uncompensated with { Diagnostic = Truncate(Join(uncompensated.Diagnostic!, leftToSlot)) };
         }
         catch (Exception exception)

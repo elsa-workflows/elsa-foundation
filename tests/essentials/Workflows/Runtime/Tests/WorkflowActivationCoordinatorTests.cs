@@ -158,7 +158,8 @@ public sealed class WorkflowActivationCoordinatorTests
 
         var result = await harness.ActivateAsync("candidate", "artifact-2", expectedRevision: incumbent.Slot.Revision);
 
-        Assert.Equal(WorkflowActivationOutcome.AlreadyActive, result.Outcome);
+        Assert.Equal(WorkflowActivationOutcome.Activated, result.Outcome);
+        Assert.Equal("incumbent", result.ReplacedActivationId);
         Assert.Equal("candidate", result.Slot.ActiveActivationId);
         Assert.Equal(["candidate"], (await harness.ServingBindingsAsync()).Select(binding => binding.ActivationId));
         Assert.Null((await harness.References.FindAsync(WorkflowActivationReferenceIdentity.Create("candidate")))!.DeletedAt);

@@ -110,7 +110,8 @@ internal static class PublicationJournalConvergence
         ["same-version-republish-converges-a-journal-written-after-the-runtime-finished"] = SameVersionRepublishConvergesAfterTheRuntimeFinishedAsync,
         ["same-version-republish-of-a-publication-that-cannot-serve-is-refused"] = SameVersionRepublishOfAPublicationThatCannotServeIsRefusedAsync,
         ["a-stop-before-the-last-journal-write-leaves-the-candidate-lagging-until-the-next-completion"] = AStopBeforeTheLastJournalWriteLeavesTheCandidateLaggingAsync,
-        ["two-nodes-completing-one-slot-converge-to-one-journal-state"] = TwoNodesCompletingOneSlotConvergeAsync
+        ["two-nodes-completing-one-slot-converge-to-one-journal-state"] = TwoNodesCompletingOneSlotConvergeAsync,
+        ["a-publish-whose-slot-transition-commits-and-then-throws-converges-the-journal"] = APublishWhoseSlotTransitionCommitsAndThenThrowsConvergesAsync
     };
 
     public static TheoryData<string> Scenarios
@@ -296,6 +297,23 @@ internal static class PublicationJournalConvergence
         await one.AssertConvergedAsync(interrupted, first);
         await one.AssertServingAsync(interrupted);
         Assert.DoesNotContain(one.Log.Entries.Concat(other.Log.Entries), entry => entry.Level >= LogLevel.Error);
+    }
+
+    /// <summary>
+    /// A slot transition that commits and then throws, as one whose connection drops after the commit does. The slot names
+    /// the new publication, so the runtime completes its activation rather than compensating it (#2251), and the publish
+    /// succeeds. The coordinator reports the publication it replaced, so the activator retires that record. Otherwise both
+    /// would stay active, and no completion would correct it, because the record the slot names would not lag.
+    /// </summary>
+    private static async Task APublishWhoseSlotTransitionCommitsAndThenThrowsConvergesAsync(JournalDatabases databases)
+    {
+        var first = await PublishAsync(databases, "version-1");
+        await using var node = new PublishingNode(databases, wrapAuthority: authority => new ThrowAfterSlotTransition(authority));
+
+        var published = (await node.PublishAsync("version-2")).PublicationId;
+
+        await node.AssertConvergedAsync(published, first);
+        await node.AssertServingAsync(published);
     }
 
     private static async Task<string> PublishAsync(JournalDatabases databases, string versionId)
@@ -570,5 +588,24 @@ internal static class PublicationJournalConvergence
         public ValueTask SaveAsync(PublicationRecord publication, CancellationToken cancellationToken = default) => inner.SaveAsync(publication, cancellationToken);
         public ValueTask<PublicationRecord?> FindAsync(string publicationId, CancellationToken cancellationToken = default) => inner.FindAsync(publicationId, cancellationToken);
         public ValueTask<IReadOnlyCollection<PublicationRecord>> ListBySlotAsync(string slotId, CancellationToken cancellationToken = default) => inner.ListBySlotAsync(slotId, cancellationToken);
+    }
+
+    /// <summary>Commits the first slot transition and then throws, as one whose connection drops after the commit does.</summary>
+    private sealed class ThrowAfterSlotTransition(IWorkflowActivationAuthority inner) : IWorkflowActivationAuthority
+    {
+        private int _thrown;
+
+        public async ValueTask<WorkflowActivationTransition> TryActivateAsync(WorkflowActivationSlotRequest request, CancellationToken cancellationToken = default)
+        {
+            var transition = await inner.TryActivateAsync(request, cancellationToken);
+            if (transition.Succeeded && Interlocked.Exchange(ref _thrown, 1) == 0)
+                throw new InvalidOperationException("The connection was lost after the slot transition committed.");
+            return transition;
+        }
+
+        public ValueTask<WorkflowActivationSlot?> FindAsync(string workflowDefinitionId, string slotName, CancellationToken cancellationToken = default) => inner.FindAsync(workflowDefinitionId, slotName, cancellationToken);
+        public ValueTask<IReadOnlyCollection<WorkflowActivationSlot>> ListByDefinitionAsync(string workflowDefinitionId, CancellationToken cancellationToken = default) => inner.ListByDefinitionAsync(workflowDefinitionId, cancellationToken);
+        public ValueTask<WorkflowActivationTransition> TryDeactivateAsync(string workflowDefinitionId, string slotName, WorkflowActivationSource source, long expectedRevision, DateTimeOffset updatedAt, CancellationToken cancellationToken = default) =>
+            inner.TryDeactivateAsync(workflowDefinitionId, slotName, source, expectedRevision, updatedAt, cancellationToken);
     }
 }
