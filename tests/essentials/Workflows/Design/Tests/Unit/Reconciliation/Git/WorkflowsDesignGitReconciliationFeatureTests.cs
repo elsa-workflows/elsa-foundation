@@ -89,9 +89,9 @@ public sealed class WorkflowsDesignGitReconciliationFeatureTests
     }
 
     [Theory]
-    [InlineData("s3cr3t\n", "s3cr3t")]
-    [InlineData("s3cr3t\r\n", "s3cr3t")]
-    [InlineData("s3cr3t", "s3cr3t")]
+    [InlineData("fake-token\n", "fake-token")]
+    [InlineData("fake-token\r\n", "fake-token")]
+    [InlineData("fake-token", "fake-token")]
     public void A_trailing_line_break_is_no_part_of_the_token(string configured, string expected)
     {
         var options = (IOptions<GitReconciliationOptions>)ConfigureToken(configured)
@@ -125,7 +125,7 @@ public sealed class WorkflowsDesignGitReconciliationFeatureTests
     [InlineData("")]
     public void Token_mode_with_a_remote_that_is_not_http_fails_registration(string remoteUrl)
     {
-        var refusal = Assert.Throws<InvalidOperationException>(() => ConfigureToken("s3cr3t", remoteUrl));
+        var refusal = Assert.Throws<InvalidOperationException>(() => ConfigureToken("fake-token", remoteUrl));
 
         Assert.Contains("http(s)", refusal.Message);
     }
