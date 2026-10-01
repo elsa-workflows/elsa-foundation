@@ -13,7 +13,7 @@ public sealed class CompositionFileReader
     private readonly Action<string> _ensureRegularFile;
     private readonly Func<string, Stream> _openRead;
 
-    public CompositionFileReader() : this(EnsureRegularFile, File.OpenRead) { }
+    public CompositionFileReader() : this(EnsureRegularFile, RegularFileOpener.OpenRead) { }
 
     public CompositionFileReader(Action<string> ensureRegularFile, Func<string, Stream> openRead)
     {

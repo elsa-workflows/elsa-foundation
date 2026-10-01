@@ -4,12 +4,15 @@ using Elsa.Modularity.Planning.Json;
 using Elsa.Modularity.Planning.Models;
 using System.Diagnostics;
 using System.Text;
+using System.Xml.Linq;
 
 namespace Elsa.Cli.Tests;
 
 public sealed class CompositionFileSourceTests
 {
     private const int FileLimit = 1024 * 1024;
+    private const string FifoRaceChildMarker = "ELSA_CLI_FIFO_RACE_CHILD";
+    private const string FifoRaceDirectory = "ELSA_CLI_FIFO_RACE_DIRECTORY";
 
     [Fact]
     public void Candidate_reader_counts_bytes_without_trusting_stream_length_and_disposes_the_stream()
@@ -132,6 +135,208 @@ public sealed class CompositionFileSourceTests
         Assert.Equal(failedCheck == 1 ? 0 : 1, opens);
         if (opens != 0)
             Assert.True(bytes.Disposed);
+    }
+
+    [Fact]
+    public void Candidate_reader_rejects_a_fifo_replacing_a_regular_file_after_preflight_without_blocking()
+    {
+        if (OperatingSystem.IsWindows())
+            return;
+
+        if (Environment.GetEnvironmentVariable(FifoRaceChildMarker) == "1")
+        {
+            RunFifoReplacementProbe(Environment.GetEnvironmentVariable(FifoRaceDirectory)!);
+            return;
+        }
+
+        using var fixture = new TempDirectory("elsa-candidate-fifo-race-");
+        RunFifoReplacementProbeInOwnedChild(fixture.Path);
+    }
+
+    private static void RunFifoReplacementProbe(string fixtureDirectory)
+    {
+        var path = Path.Join(fixtureDirectory, "candidate.json");
+        File.WriteAllText(path, "{}");
+        var checks = 0;
+        var openerReturned = false;
+        var reader = new CompositionFileReader(candidatePath =>
+        {
+            CompositionFileReader.EnsureRegularFile(candidatePath);
+            if (Interlocked.Increment(ref checks) == 1)
+            {
+                File.Delete(candidatePath);
+                CreateFifo(candidatePath);
+            }
+        }, candidatePath =>
+        {
+            var stream = RegularFileOpener.OpenRead(candidatePath);
+            openerReturned = true;
+            return stream;
+        });
+
+        var refusal = Assert.Throws<CliRefusal>(() => reader.Read(path, FileLimit));
+
+        Assert.Equal("composition-input-unreadable", refusal.Code);
+        Assert.DoesNotContain(path, refusal.ToString(), StringComparison.Ordinal);
+        Assert.False(openerReturned);
+        Assert.Equal(1, checks);
+    }
+
+    private static void RunFifoReplacementProbeInOwnedChild(string fixtureDirectory)
+    {
+        using var resultsDirectory = new TempDirectory("elsa-candidate-fifo-results-");
+        var testName = $"{typeof(CompositionFileSourceTests).FullName}.{nameof(Candidate_reader_rejects_a_fifo_replacing_a_regular_file_after_preflight_without_blocking)}";
+        var startInfo = new ProcessStartInfo("dotnet")
+        {
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true
+        };
+        startInfo.ArgumentList.Add("vstest");
+        startInfo.ArgumentList.Add(typeof(CompositionFileSourceTests).Assembly.Location);
+        startInfo.ArgumentList.Add($"--TestCaseFilter:FullyQualifiedName={testName}");
+        startInfo.ArgumentList.Add($"--ResultsDirectory:{resultsDirectory.Path}");
+        startInfo.ArgumentList.Add("--logger:trx;LogFileName=fifo-probe.trx");
+        startInfo.Environment[FifoRaceChildMarker] = "1";
+        startInfo.Environment[FifoRaceDirectory] = fixtureDirectory;
+
+        using var process = Process.Start(startInfo);
+        Assert.NotNull(process);
+        var stdout = process.StandardOutput.ReadToEndAsync();
+        var stderr = process.StandardError.ReadToEndAsync();
+        var timedOut = false;
+        var reaped = false;
+        var drained = false;
+        try
+        {
+            timedOut = !process.WaitForExit(30_000);
+        }
+        finally
+        {
+            if (timedOut || !process.HasExited)
+            {
+                try
+                {
+                    process.Kill(entireProcessTree: true);
+                }
+                catch (InvalidOperationException)
+                {
+                    // It may have exited between the timeout and the kill attempt.
+                }
+            }
+
+            reaped = process.WaitForExit(5_000);
+            if (!reaped)
+            {
+                try
+                {
+                    process.Kill(entireProcessTree: true);
+                }
+                catch (InvalidOperationException)
+                {
+                    // Continue to the bounded final wait; never leave cleanup unbounded.
+                }
+                reaped = process.WaitForExit(5_000);
+            }
+
+            drained = Task.WaitAll([stdout, stderr], 5_000);
+            if (!drained)
+            {
+                try
+                {
+                    process.Kill(entireProcessTree: true);
+                }
+                catch (InvalidOperationException)
+                {
+                    // Continue to the final bounded waits.
+                }
+                reaped |= process.WaitForExit(5_000);
+                drained = Task.WaitAll([stdout, stderr], 5_000);
+            }
+        }
+
+        Assert.True(reaped && drained, "The owned FIFO probe process tree could not be reaped and drained within its cleanup deadline.");
+        Assert.False(timedOut, "The owned FIFO probe exceeded its 30 second deadline.");
+        Assert.Equal(0, process.ExitCode);
+
+        var resultPath = Path.Join(resultsDirectory.Path, "fifo-probe.trx");
+        Assert.True(File.Exists(resultPath), "The owned FIFO probe did not produce its result counters.");
+        var counters = XDocument.Load(resultPath).Descendants().Single(element => element.Name.LocalName == "Counters");
+        Assert.Equal("1", counters.Attribute("total")?.Value);
+        Assert.Equal("1", counters.Attribute("executed")?.Value);
+        Assert.Equal("1", counters.Attribute("passed")?.Value);
+        Assert.Equal("0", counters.Attribute("failed")?.Value);
+        Assert.Equal("0", counters.Attribute("notExecuted")?.Value);
+    }
+
+    [Fact]
+    public void Candidate_reader_rejects_a_symlink_replacing_a_regular_file_after_preflight()
+    {
+        if (OperatingSystem.IsWindows())
+            return;
+
+        using var directory = new TempDirectory("elsa-candidate-link-race-");
+        var path = directory.File("candidate.json");
+        var target = directory.File("target.json");
+        File.WriteAllText(path, "{}");
+        File.WriteAllText(target, "{\"private-canary\":true}");
+        var checks = 0;
+        var openerReturned = false;
+        var reader = new CompositionFileReader(candidatePath =>
+        {
+            CompositionFileReader.EnsureRegularFile(candidatePath);
+            if (Interlocked.Increment(ref checks) == 1)
+            {
+                File.Delete(candidatePath);
+                File.CreateSymbolicLink(candidatePath, target);
+            }
+        }, candidatePath =>
+        {
+            var stream = RegularFileOpener.OpenRead(candidatePath);
+            openerReturned = true;
+            return stream;
+        });
+
+        var refusal = Assert.Throws<CliRefusal>(() => reader.Read(path, FileLimit));
+
+        Assert.Equal("composition-input-unreadable", refusal.Code);
+        Assert.DoesNotContain(path, refusal.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain("private-canary", refusal.ToString(), StringComparison.Ordinal);
+        Assert.False(openerReturned);
+        Assert.Equal(1, checks);
+    }
+
+    [Fact]
+    public void Default_candidate_reader_still_captures_regular_files()
+    {
+        using var directory = new TempDirectory("elsa-candidate-regular-");
+        var path = directory.File("candidate.json");
+        File.WriteAllText(path, "{\"safe\":true}");
+
+        Assert.Equal("{\"safe\":true}", Encoding.UTF8.GetString(new CompositionFileReader().Read(path, FileLimit)));
+    }
+
+    [Fact]
+    public void Native_opener_checks_same_handle_type_and_closes_owned_regular_handle()
+    {
+        using var directory = new TempDirectory("elsa-candidate-handle-");
+        var path = directory.File("candidate.json");
+        var expected = Encoding.UTF8.GetBytes("{\"safe\":true}");
+        File.WriteAllBytes(path, expected);
+
+        using var stream = Assert.IsType<FileStream>(RegularFileOpener.OpenRead(path));
+        var handle = stream.SafeFileHandle;
+        Assert.False(handle.IsClosed);
+        using var captured = new MemoryStream();
+        stream.CopyTo(captured);
+        Assert.Equal(expected, captured.ToArray());
+        stream.Dispose();
+        Assert.True(handle.IsClosed);
+
+        Assert.Throws<CliRefusal>(() => RegularFileOpener.OpenRead(directory.Path));
+        var specialFile = OperatingSystem.IsWindows() ? Path.Join(Environment.SystemDirectory, "NUL") : "/dev/null";
+        Assert.Throws<CliRefusal>(() => RegularFileOpener.OpenRead(specialFile));
     }
 
     [Fact]
@@ -301,12 +506,7 @@ public sealed class CompositionFileSourceTests
             return;
         using var fixture = new LocalFixture();
         var fifo = Path.Join(fixture.Directory, name);
-        using (var process = Process.Start(new ProcessStartInfo("/usr/bin/mkfifo") { ArgumentList = { fifo } }))
-        {
-            Assert.NotNull(process);
-            Assert.True(process.WaitForExit(2_000));
-            Assert.Equal(0, process.ExitCode);
-        }
+        CreateFifo(fifo);
 
         var refusal = Assert.Throws<CliRefusal>(() =>
         {
@@ -321,6 +521,28 @@ public sealed class CompositionFileSourceTests
 
     private static CompositionFileSource CandidateSource(LocalFixture fixture, CompositionFileReader? reader = null) =>
         CompositionFileSource.OpenForCandidate(fixture.Directory, "default", "Production", reader);
+
+    private static void CreateFifo(string path)
+    {
+        var executable = File.Exists("/usr/bin/mkfifo") ? "/usr/bin/mkfifo" : "/bin/mkfifo";
+        using var process = Process.Start(new ProcessStartInfo(executable) { ArgumentList = { path } });
+        Assert.NotNull(process);
+        if (!process.WaitForExit(2_000))
+        {
+            try
+            {
+                process.Kill(entireProcessTree: true);
+            }
+            catch (InvalidOperationException)
+            {
+                // It may have exited after the bounded wait.
+            }
+            var reaped = process.WaitForExit(2_000);
+            Assert.True(reaped, "The owned mkfifo process did not terminate after the fixture deadline.");
+            Assert.Fail("mkfifo did not finish within the fixture deadline.");
+        }
+        Assert.Equal(0, process.ExitCode);
+    }
 
     private sealed class NonSeekingStream(byte[] bytes) : MemoryStream(bytes)
     {
