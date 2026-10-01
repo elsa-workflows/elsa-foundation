@@ -1,6 +1,8 @@
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Reflection;
+using System.Runtime.ExceptionServices;
 using Elsa.Cli.Worker;
 using Elsa.Modularity.Planning.Catalog;
 using Xunit;
@@ -9,6 +11,199 @@ namespace Elsa.Cli.Tests;
 
 public sealed class CompositionInspectionCaptureTests
 {
+    [Fact]
+    public void Explicit_environment_document_accepts_blank_whitespace_and_ordinary_connection_values()
+    {
+        var parsed = ParseEnvironment(CandidateInspectionFixture.EnvironmentDocument(
+            ("ConnectionStrings__Primary", "Data Source=:memory:"),
+            ("Blank", ""),
+            ("Whitespace", "\n\t"),
+            (" Key ", "  value  "),
+            ("café", "composed"),
+            ("café", "decomposed")));
+
+        Assert.Equal("Data Source=:memory:", parsed["ConnectionStrings:Primary"]);
+        Assert.Equal("", parsed["Blank"]);
+        Assert.Equal("\n\t", parsed["Whitespace"]);
+        Assert.Equal("  value  ", parsed[" Key "]);
+        Assert.Equal("composed", parsed["café"]);
+        Assert.Equal("decomposed", parsed["café"]);
+        Assert.Equal(6, parsed.Count);
+
+        var mutable = Assert.IsAssignableFrom<IDictionary<string, string>>(parsed);
+        Assert.Throws<NotSupportedException>(() => mutable["Blank"] = "changed");
+    }
+
+    [Fact]
+    public void Explicit_environment_document_accepts_one_leading_bom_but_not_a_second_one()
+    {
+        var document = CandidateInspectionFixture.EnvironmentDocument(("Key", "value"));
+        var withBom = new byte[document.Length + 3];
+        "\uFEFF"u8.CopyTo(withBom);
+        document.CopyTo(withBom, 3);
+
+        Assert.Equal("value", ParseEnvironment(withBom)["Key"]);
+
+        var withTwoBoms = new byte[withBom.Length + 3];
+        "\uFEFF"u8.CopyTo(withTwoBoms);
+        withBom.CopyTo(withTwoBoms, 3);
+        AssertInvalid(withTwoBoms);
+    }
+
+    [Fact]
+    public void Explicit_environment_document_refuses_invalid_utf8_without_echoing_bytes()
+    {
+        AssertInvalid([0x7B, 0x22, 0x76, 0x65, 0x72, 0x73, 0x69, 0x6F, 0x6E, 0x22, 0x3A, 0x31, 0x2C,
+            0x22, 0x65, 0x6E, 0x74, 0x72, 0x69, 0x65, 0x73, 0x22, 0x3A, 0x5B, 0x5D, 0x7D, 0xC3, 0x28]);
+    }
+
+    [Theory]
+    [InlineData("{\"version\":1,\"version\":1,\"entries\":[]}")]
+    [InlineData("{\"version\":1,\"entries\":[],\"extra\":true}")]
+    [InlineData("{\"version\":1.0,\"entries\":[]}")]
+    [InlineData("{\"version\":1,\"entries\":null}")]
+    [InlineData("{\"version\":1,\"entries\":[null]}")]
+    [InlineData("{\"version\":1,\"entries\":[{\"key\":\"x\",\"value\":\"y\",\"remove\":true}]}")]
+    [InlineData("{\"version\":1,\"entries\":[{\"key\":null,\"value\":\"y\"}]}")]
+    [InlineData("{\"version\":1,\"entries\":[{\"key\":\"x\",\"value\":null}]}")]
+    [InlineData("{\"version\":1,// comment\n\"entries\":[]}")]
+    [InlineData("{\"version\":1,\"entries\":[],}")]
+    [InlineData("{\"version\":1,\"entries\":[{\"key\":\"x\",\"value\":{}}]}")]
+    public void Explicit_environment_document_refuses_closed_shape_and_json_grammar_violations(string json)
+    {
+        AssertInvalid(Encoding.UTF8.GetBytes(json));
+    }
+
+    [Fact]
+    public void Explicit_environment_document_enforces_the_json_depth_limit()
+    {
+        var nested = "0";
+        for (var index = 0; index < 65; index++)
+            nested = $"[{nested}]";
+
+        AssertInvalid(Encoding.UTF8.GetBytes($"{{\"version\":1,\"entries\":[],\"unknown\":{nested}}}"));
+    }
+
+    [Theory]
+    [InlineData("{\"version\":1,\"entries\":[{\"key\":\"\",\"value\":\"ok\"}]}")]
+    [InlineData("{\"version\":1,\"entries\":[{\"key\":\"bad=key\",\"value\":\"ok\"}]}")]
+    [InlineData("{\"version\":1,\"entries\":[{\"key\":\"\\u0001\",\"value\":\"ok\"}]}")]
+    [InlineData("{\"version\":1,\"entries\":[{\"key\":\"\\uD800\",\"value\":\"ok\"}]}")]
+    [InlineData("{\"version\":1,\"entries\":[{\"key\":\"ok\",\"value\":\"\\u0000\"}]}")]
+    [InlineData("{\"version\":1,\"entries\":[{\"key\":\"ok\",\"value\":\"\\uDFFF\"}]}")]
+    public void Explicit_environment_document_refuses_invalid_key_value_scalars(string json)
+    {
+        AssertInvalid(Encoding.UTF8.GetBytes(json));
+    }
+
+    [Fact]
+    public void Explicit_environment_document_preserves_valid_surrogate_pairs()
+    {
+        var parsed = ParseEnvironment(Encoding.UTF8.GetBytes(
+            "{\"version\":1,\"entries\":[{\"key\":\"emoji\",\"value\":\"\\uD83D\\uDE00\"}]}"));
+
+        Assert.Equal("😀", parsed["emoji"]);
+    }
+
+    [Theory]
+    [InlineData("raw")]
+    [InlineData("case")]
+    [InlineData("alias")]
+    public void Explicit_environment_document_refuses_raw_case_and_normalized_key_collisions(string kind)
+    {
+        var entries = kind switch
+        {
+            "raw" => new[] { ("Key", "one"), ("Key", "two") },
+            "case" => new[] { ("Key", "one"), ("key", "two") },
+            _ => new[] { ("A__B", "one"), ("A:B", "two") }
+        };
+
+        var refusal = Assert.Throws<CliRefusal>(() => ParseEnvironment(CandidateInspectionFixture.EnvironmentDocument(entries)));
+        Assert.Equal("candidate-environment-key-collision", refusal.Code);
+        Assert.Empty(refusal.Details);
+    }
+
+    [Theory]
+    [InlineData("MYSQLCONNSTR_")]
+    [InlineData("SQLAZURECONNSTR_")]
+    [InlineData("SQLCONNSTR_")]
+    [InlineData("CUSTOMCONNSTR_")]
+    [InlineData("POSTGRESQLCONNSTR_")]
+    [InlineData("APIHUBCONNSTR_")]
+    [InlineData("DOCDBCONNSTR_")]
+    [InlineData("EVENTHUBCONNSTR_")]
+    [InlineData("NOTIFICATIONHUBCONNSTR_")]
+    [InlineData("REDISCACHECONNSTR_")]
+    [InlineData("SERVICEBUSCONNSTR_")]
+    public void Explicit_environment_document_refuses_each_service_prefix_before_normalization(string prefix)
+    {
+        var key = prefix.ToLowerInvariant() + "Name";
+        var refusal = Assert.Throws<CliRefusal>(() =>
+            ParseEnvironment(CandidateInspectionFixture.EnvironmentDocument((key, "private"))));
+
+        Assert.Equal("candidate-environment-prefix-unsupported", refusal.Code);
+        Assert.Empty(refusal.Details);
+    }
+
+    [Theory]
+    [InlineData(1_048_576, false)]
+    [InlineData(1_048_577, true)]
+    public void Explicit_environment_document_enforces_the_raw_byte_bound(int bytes, bool oversized)
+    {
+        if (oversized)
+        {
+            AssertTooLarge(CandidateInspectionFixture.EnvironmentDocumentOfSize(bytes));
+            return;
+        }
+
+        Assert.Empty(ParseEnvironment(CandidateInspectionFixture.EnvironmentDocumentOfSize(bytes)));
+    }
+
+    [Theory]
+    [InlineData(1_024, false)]
+    [InlineData(1_025, true)]
+    public void Explicit_environment_document_enforces_the_entry_count_bound(int count, bool oversized)
+    {
+        var entries = Enumerable.Range(0, count).Select(index => ($"Key{index}", "value")).ToArray();
+        if (oversized)
+        {
+            AssertTooLarge(CandidateInspectionFixture.EnvironmentDocument(entries));
+            return;
+        }
+
+        Assert.Equal(count, ParseEnvironment(CandidateInspectionFixture.EnvironmentDocument(entries)).Count);
+    }
+
+    [Theory]
+    [InlineData(1_024, false)]
+    [InlineData(1_025, true)]
+    public void Explicit_environment_document_enforces_the_key_byte_bound(int length, bool oversized)
+    {
+        var document = CandidateInspectionFixture.EnvironmentDocument((new string('k', length), "value"));
+        if (oversized)
+        {
+            AssertTooLarge(document);
+            return;
+        }
+
+        Assert.Equal("value", ParseEnvironment(document)[new string('k', length)]);
+    }
+
+    [Theory]
+    [InlineData(65_536, false)]
+    [InlineData(65_537, true)]
+    public void Explicit_environment_document_enforces_the_value_byte_bound(int length, bool oversized)
+    {
+        var document = CandidateInspectionFixture.EnvironmentDocument(("Key", new string('v', length)));
+        if (oversized)
+        {
+            AssertTooLarge(document);
+            return;
+        }
+
+        Assert.Equal(length, ParseEnvironment(document)["Key"].Length);
+    }
+
     [Fact]
     public void Capture_refuses_excessive_profile_inputs_before_any_file_read()
     {
@@ -212,4 +407,36 @@ public sealed class CompositionInspectionCaptureTests
         CompositionFileReader? reader = null, string? catalog = "fixture", string? review = "fixture") =>
         CompositionInspectionCapture.Open(fixture.HostDirectory, "default", "Production", fixture.OutputPath,
             catalog is null ? null : fixture.CatalogPath, review is null ? null : fixture.ReviewPath, profiles, reader);
+
+    private static IReadOnlyDictionary<string, string> ParseEnvironment(ReadOnlyMemory<byte> document)
+    {
+        var parserType = typeof(CompositionInputSnapshot).Assembly.GetType("Elsa.Cli.ExplicitEnvironmentInput", throwOnError: true)!;
+        var parse = parserType.GetMethod("Parse", BindingFlags.Static | BindingFlags.NonPublic)!;
+        try
+        {
+            return (IReadOnlyDictionary<string, string>)parse.Invoke(null, [document])!;
+        }
+        catch (TargetInvocationException exception) when (exception.InnerException is { } inner)
+        {
+            ExceptionDispatchInfo.Capture(inner).Throw();
+            throw;
+        }
+    }
+
+    private static IReadOnlyDictionary<string, string> ParseEnvironment(byte[] document) =>
+        ParseEnvironment((ReadOnlyMemory<byte>)document);
+
+    private static void AssertInvalid(byte[] document)
+    {
+        var refusal = Assert.Throws<CliRefusal>(() => ParseEnvironment(document));
+        Assert.Equal("candidate-environment-input-invalid", refusal.Code);
+        Assert.Empty(refusal.Details);
+    }
+
+    private static void AssertTooLarge(byte[] document)
+    {
+        var refusal = Assert.Throws<CliRefusal>(() => ParseEnvironment(document));
+        Assert.Equal("candidate-environment-input-too-large", refusal.Code);
+        Assert.Empty(refusal.Details);
+    }
 }
