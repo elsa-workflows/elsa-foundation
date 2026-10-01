@@ -84,6 +84,18 @@ durable claim path ran (fencing token advanced), not the in-memory fast path.
 - **INV-3 (single-writer)**: The marker is only ever ambient while the drain holds the execution's ownership
   lease, so no competing deliverer races the claim-free write for the same execution (decision (b)).
 
+*Note (2026-10-01, #2225):* FR-006, FR-007, INV-1 and INV-3 now hold, in the sense recorded here. Before #2225 the
+resumption sweep could take a live drain's own continuation (spec 169 tolerated that, so nothing failed), and the drain
+then exited on "nothing delivered" with that continuation's work undrained. FR-006's "exits on quiescence" did not hold.
+Now the drain treats a continuation another deliverer holds or has just delivered as still its own: it waits, bounded by
+`WorkflowDrainOrchestratorOptions.ContinuationClaimWaitLimit`, claims the item itself once the other claim lapses, and
+drains the work before it reports `Quiesced`. FR-007 holds because the sweep keeps its unchanged path. INV-1 holds with
+recovery at the sweep interval: no lease holds a crashed drain's continuation back from the sweep. INV-3's wording is
+still not literally true, since the sweep can still race the claim-free write. What it protects now holds: a race no
+longer changes the drain's outcome, which is the outcome a single writer would have reached. The check is not free: a
+drain that quiesces now pays two extra reads, `ListClaimedAsync` and a one-item queue list (the latter only after a
+scheduler drain that ran items). Neither writes, so the delivery-write counts below are unchanged.
+
 ## Durable-transaction-count delta per hop
 
 Per straight-line hop that produces one `EnqueueSchedulerWork` continuation (the checkpoint commit is

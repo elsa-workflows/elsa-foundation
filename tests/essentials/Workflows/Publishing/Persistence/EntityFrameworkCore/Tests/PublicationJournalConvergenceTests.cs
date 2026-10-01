@@ -110,7 +110,14 @@ internal static class PublicationJournalConvergence
         ["same-version-republish-converges-a-journal-written-after-the-runtime-finished"] = SameVersionRepublishConvergesAfterTheRuntimeFinishedAsync,
         ["same-version-republish-of-a-publication-that-cannot-serve-is-refused"] = SameVersionRepublishOfAPublicationThatCannotServeIsRefusedAsync,
         ["a-stop-before-the-last-journal-write-leaves-the-candidate-lagging-until-the-next-completion"] = AStopBeforeTheLastJournalWriteLeavesTheCandidateLaggingAsync,
-        ["two-nodes-completing-one-slot-converge-to-one-journal-state"] = TwoNodesCompletingOneSlotConvergeAsync
+        ["two-nodes-completing-one-slot-converge-to-one-journal-state"] = TwoNodesCompletingOneSlotConvergeAsync,
+        ["a-publish-whose-slot-transition-commits-and-then-throws-converges-the-journal"] = APublishWhoseSlotTransitionCommitsAndThenThrowsConvergesAsync,
+        ["a-publish-whose-slot-transition-commits-and-then-throws-beside-a-leaked-leftover-retires-the-replaced-record"] = APublishWhoseSlotTransitionCommitsAndThenThrowsBesideALeakedLeftoverAsync,
+        ["a-same-version-publish-that-read-the-slot-before-it-moved-is-answered-with-the-slots-publication"] = SameVersionPublishThatReadTheSlotBeforeItMovedAsync,
+        ["two-same-version-publishes-racing-leave-one-active-record"] = TwoSameVersionPublishesRacingAsync,
+        ["a-publish-whose-replaced-reference-cannot-be-retired-ends-active"] = APublishWhoseReplacedReferenceCannotBeRetiredEndsActiveAsync,
+        ["a-completion-that-cannot-retire-the-replaced-reference-retires-the-replaced-record"] = ACompletionThatCannotRetireTheReplacedReferenceRetiresTheReplacedRecordAsync,
+        ["a-replaced-record-left-active-beside-a-leaked-reference-is-retired-once-a-completion-reports-it"] = AReplacedRecordLeftActiveBesideALeakedReferenceIsRetiredOnceReportedAsync
     };
 
     public static TheoryData<string> Scenarios
@@ -298,6 +305,196 @@ internal static class PublicationJournalConvergence
         Assert.DoesNotContain(one.Log.Entries.Concat(other.Log.Entries), entry => entry.Level >= LogLevel.Error);
     }
 
+    /// <summary>
+    /// A slot transition that commits and then throws, as one whose connection drops after the commit does. The slot names
+    /// the new publication, so the runtime completes its activation rather than compensating it (#2251), and the publish
+    /// succeeds. The coordinator reports the publication it replaced, so the activator retires that record. Otherwise both
+    /// would stay active, and no completion would correct it, because the record the slot names would not lag.
+    /// </summary>
+    private static async Task APublishWhoseSlotTransitionCommitsAndThenThrowsConvergesAsync(JournalDatabases databases)
+    {
+        var first = await PublishAsync(databases, "version-1");
+        await using var node = new PublishingNode(databases, wrapAuthority: authority => new ThrowAfterSlotTransition(authority));
+
+        var published = (await node.PublishAsync("version-2")).PublicationId;
+
+        await node.AssertConvergedAsync(published, first);
+        await node.AssertServingAsync(published);
+    }
+
+    /// <summary>
+    /// The same publish beside a leaked leftover: the publication two back, switched off with a reference completion's
+    /// housekeeping could not retire. Completing the new publication's activation retires both references, and the
+    /// coordinator reports the publication the new one replaced, not the leftover, so the activator retires the replaced
+    /// record and leaves the leftover's as it was. Reporting the leftover would leave the replaced record active beside the
+    /// new one for good, because the record the slot names does not lag (#2251).
+    /// </summary>
+    private static async Task APublishWhoseSlotTransitionCommitsAndThenThrowsBesideALeakedLeftoverAsync(JournalDatabases databases)
+    {
+        var leftover = await PublishAsync(databases, "version-1");
+        var replaced = await PublishAsync(databases, "version-2");
+        await using var other = new PublishingNode(databases);
+        var leftoverRecord = await other.Records.FindAsync(leftover);
+        var leaked = false;
+        // Leaked only once the slot transition commits: the completions that run before it would otherwise retire it.
+        await using var node = new PublishingNode(
+            databases,
+            wrapAuthority: authority => new ThrowAfterSlotTransition(authority, afterCommit: async () =>
+            {
+                await other.LeakReferenceAsync(leftover);
+                leaked = true;
+            }));
+
+        var published = (await node.PublishAsync("version-3")).PublicationId;
+
+        Assert.True(leaked);
+        await node.AssertConvergedAsync(published, replaced, leftover);
+        Assert.Equal(leftoverRecord, await node.Records.FindAsync(leftover));
+        await node.AssertServingAsync(published);
+    }
+
+    /// <summary>
+    /// The loser of a same-version race preflights before the winner's slot transition and so skips the handler's early
+    /// return; its candidate then reaches a coordinator that finds the artifact already serving. It is answered with the
+    /// winner's publication, and its own record is failed: a second active record would hold a source reference nothing
+    /// minted, and nothing would ever retire it.
+    /// </summary>
+    private static async Task SameVersionPublishThatReadTheSlotBeforeItMovedAsync(JournalDatabases databases)
+    {
+        var first = await PublishAsync(databases, "version-1");
+        await using var loser = new PublishingNode(databases, preflightSlotsBeforeTheyMoved: true);
+
+        var republished = await loser.PublishAsync("version-1");
+
+        Assert.False(republished.WasCreated);
+        Assert.Equal(first, republished.PublicationId);
+        Assert.Equal(PublicationStatusView.Active, republished.Status);
+        await loser.AssertConvergedAsync(first);
+        await loser.AssertServingAsync(first);
+        var twin = Assert.Single(await loser.JournalAsync(), publication => publication.PublicationId != first);
+        Assert.Equal((PublicationStatus.Failed, PublicationFailureCodes.ArtifactAlreadyServing), (twin.Status, twin.Failure?.Code));
+    }
+
+    /// <summary>
+    /// Two nodes publish one version at once. Whichever interleaving the coordinator sees, exactly one record of the slot
+    /// is active, it is the one the slot names, and no caller is told its publication serves when it does not.
+    /// </summary>
+    private static async Task TwoSameVersionPublishesRacingAsync(JournalDatabases databases)
+    {
+        await using var one = new PublishingNode(databases);
+        await using var other = new PublishingNode(databases);
+
+        var outcomes = await Task.WhenAll(Attempt(one), Attempt(other));
+
+        var published = outcomes.Select(outcome => outcome.View).OfType<PublishedWorkflowView>().ToList();
+        Assert.All(outcomes.Select(outcome => outcome.Refusal).OfType<PublicationActivationException>(), refusal =>
+            Assert.Contains(refusal.Code, new[] { PublicationFailureCodes.SlotRevisionConflict, PublicationFailureCodes.ProjectionActivationFailed }));
+        Assert.NotEmpty(published);
+        var slot = (await one.SlotPublicationAsync())!;
+        Assert.All(published, view => Assert.Equal(slot, view.PublicationId));
+        await one.AssertConvergedAsync(slot);
+        await one.AssertServingAsync(slot);
+
+        static async Task<(PublishedWorkflowView? View, Exception? Refusal)> Attempt(PublishingNode node)
+        {
+            try
+            {
+                return (await node.PublishAsync("version-1"), null);
+            }
+            catch (PublicationActivationException refusal)
+            {
+                return (null, refusal);
+            }
+        }
+    }
+
+    /// <summary>
+    /// The publish whose slot transition commits and then throws, beside a reference store that then fails too, so
+    /// completing the new publication's activation cannot retire the reference of the one it replaced (#2251). The
+    /// activation serves, so the runtime reports it activated, naming the publication it replaced, and the publication ends
+    /// active, never failed: a failed record the slot names does not lag, so no completion would ever correct it. The
+    /// replaced record is retired on the runtime's report although its reference stays live.
+    /// </summary>
+    private static async Task APublishWhoseReplacedReferenceCannotBeRetiredEndsActiveAsync(JournalDatabases databases)
+    {
+        var first = await PublishAsync(databases, "version-1");
+        await using var node = new PublishingNode(
+            databases,
+            wrapAuthority: authority => new ThrowAfterSlotTransition(authority),
+            wrapCoordinatorReferences: references => new ReferencesThatCannotRetire(references));
+
+        var published = await node.PublishAsync("version-2");
+
+        Assert.Equal(PublicationStatusView.Active, published.Status);
+        Assert.DoesNotContain(await node.JournalAsync(), publication => publication.Status == PublicationStatus.Failed);
+        await node.AssertConvergedAsync(published.PublicationId, first);
+        await node.AssertServingAsync(published.PublicationId);
+        await AssertTheNextCompletionRetiresTheLeakedReferenceAsync(databases, first);
+    }
+
+    /// <summary>
+    /// An interrupted publish completed by publishing's own completion while the reference store cannot retire (#2251). The
+    /// runtime switches the publication's activation on and reports the publication it replaced, whose reference stays
+    /// live. Retiring replaced records by their reference alone would keep that one active beside the slot's for good,
+    /// because the slot's record would no longer lag; it is retired on the runtime's report instead.
+    /// </summary>
+    private static async Task ACompletionThatCannotRetireTheReplacedReferenceRetiresTheReplacedRecordAsync(JournalDatabases databases)
+    {
+        var first = await PublishAsync(databases, "version-1");
+        var interrupted = await StopAfterSlotTransitionAsync(databases, "version-2");
+        await using var node = new PublishingNode(databases, wrapCoordinatorReferences: references => new ReferencesThatCannotRetire(references));
+
+        var completion = await node.CompleteAsync();
+
+        Assert.True(completion.Succeeded);
+        await node.AssertConvergedAsync(interrupted, first);
+        await node.AssertServingAsync(interrupted);
+        await AssertTheNextCompletionRetiresTheLeakedReferenceAsync(databases, first);
+    }
+
+    /// <summary>
+    /// The residual the Publishing extension points describe, and how it heals. The runtime's own shell-start pass completes
+    /// an interrupted publish while the reference store cannot retire, so nothing reports the replaced publication to
+    /// publishing, and publishing's pass, finding its reference live, leaves its record active beside the slot's. Once the
+    /// store works again, the next completion publishing runs retires the reference and reports it, and the record is
+    /// retired then, although the slot's own record no longer lags (#2251).
+    /// </summary>
+    private static async Task AReplacedRecordLeftActiveBesideALeakedReferenceIsRetiredOnceReportedAsync(JournalDatabases databases)
+    {
+        var first = await PublishAsync(databases, "version-1");
+        var interrupted = await StopAfterSlotTransitionAsync(databases, "version-2");
+        await using (var failing = new PublishingNode(databases, wrapCoordinatorReferences: references => new ReferencesThatCannotRetire(references)))
+        {
+            await failing.StartShellAsync();
+            await failing.AssertStatusAsync(interrupted, PublicationStatus.Active);
+            await failing.AssertStatusAsync(first, PublicationStatus.Active);
+        }
+
+        await using var node = new PublishingNode(databases);
+
+        Assert.True((await node.CompleteAsync()).Succeeded);
+
+        await node.AssertConvergedAsync(interrupted, first);
+        await node.AssertServingAsync(interrupted);
+        Assert.Equal(WorkflowActivationCoordinator.ReplacedRetireReason, (await node.ReferenceAsync(first)).DeletedReason);
+    }
+
+    /// <summary>
+    /// Asserts that <paramref name="replaced"/>'s source reference was left live, and that the next completion, in a
+    /// process whose stores work, retires it and leaves the journal as it was.
+    /// </summary>
+    private static async Task AssertTheNextCompletionRetiresTheLeakedReferenceAsync(JournalDatabases databases, string replaced)
+    {
+        await using var next = new PublishingNode(databases);
+        Assert.Null((await next.ReferenceAsync(replaced)).DeletedAt);
+        var journal = await next.JournalAsync();
+
+        Assert.True((await next.CompleteAsync()).Succeeded);
+
+        Assert.Equal(WorkflowActivationCoordinator.ReplacedRetireReason, (await next.ReferenceAsync(replaced)).DeletedReason);
+        Assert.Equal(journal, await next.JournalAsync());
+    }
+
     private static async Task<string> PublishAsync(JournalDatabases databases, string versionId)
     {
         await using var node = new PublishingNode(databases);
@@ -349,7 +546,9 @@ internal static class PublicationJournalConvergence
         public PublishingNode(
             JournalDatabases databases,
             Func<IWorkflowActivationAuthority, IWorkflowActivationAuthority>? wrapAuthority = null,
-            Func<IPublicationRecordStore, IPublicationRecordStore>? wrapRecords = null)
+            Func<IPublicationRecordStore, IPublicationRecordStore>? wrapRecords = null,
+            bool preflightSlotsBeforeTheyMoved = false,
+            Func<IWorkflowExecutableSourceReferenceStore, IWorkflowExecutableSourceReferenceStore>? wrapCoordinatorReferences = null)
         {
             _publishing = databases.Provider.Publishing(databases.Publishing, []);
             _runtime = databases.Provider.Runtime(databases.Runtime, []);
@@ -366,7 +565,7 @@ internal static class PublicationJournalConvergence
             var records = wrapRecords?.Invoke(Records) ?? Records;
             var coordinator = new WorkflowActivationCoordinator(
                 authority,
-                References,
+                wrapCoordinatorReferences?.Invoke(References) ?? References,
                 new WorkflowExecutableRootWriteLeaseManager(executables, Options.Create(new WorkflowExecutableGarbageCollectionOptions()), time),
                 time,
                 _indexer,
@@ -380,7 +579,7 @@ internal static class PublicationJournalConvergence
                 extractor,
                 Bindings,
                 new EmptyWorkflowDefinitionVersionLayoutStore(),
-                Authority,
+                preflightSlotsBeforeTheyMoved ? new SlotsBeforeTheyMoved(Authority) : Authority,
                 new InMemoryPublicationPolicyStore(),
                 new PublicationPolicyResolver(),
                 records,
@@ -442,6 +641,20 @@ internal static class PublicationJournalConvergence
             await Bindings.ActivateAsync(activationId, null);
         }
 
+        /// <summary>
+        /// Makes a replaced publication's retired source reference live again: the leaked leftover that completion's
+        /// housekeeping leaves when it cannot retire one.
+        /// </summary>
+        public async Task LeakReferenceAsync(string publicationId)
+        {
+            var retired = await ReferenceAsync(publicationId);
+            Assert.True(await References.TryRestoreAsync(retired, retired with { DeletedAt = null, DeletedReason = null }));
+        }
+
+        public async Task<WorkflowExecutableSourceReference> ReferenceAsync(string publicationId) =>
+            await References.FindAsync(WorkflowActivationReferenceIdentity.Create(publicationId))
+            ?? throw new InvalidOperationException($"Publication '{publicationId}' has no source reference.");
+
         /// <summary>Asserts which activations serve, through the query the stimulus router uses.</summary>
         public async Task AssertServingAsync(params string[] activationIds)
         {
@@ -493,6 +706,28 @@ internal static class PublicationJournalConvergence
 
         private async Task<PublicationRecord> FindAsync(string publicationId) =>
             await Records.FindAsync(publicationId) ?? throw new InvalidOperationException($"Publication '{publicationId}' has no record.");
+    }
+
+    /// <summary>Preflight as a publish that read the slots before another node's activation moved them: every slot is empty.</summary>
+    private sealed class SlotsBeforeTheyMoved(IWorkflowActivationAuthority inner) : IWorkflowActivationAuthority
+    {
+        public ValueTask<WorkflowActivationSlot?> FindAsync(string workflowDefinitionId, string slotName, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<WorkflowActivationSlot?>(null);
+
+        public ValueTask<IReadOnlyCollection<WorkflowActivationSlot>> ListByDefinitionAsync(string workflowDefinitionId, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<IReadOnlyCollection<WorkflowActivationSlot>>([]);
+
+        public ValueTask<WorkflowActivationTransition> TryActivateAsync(WorkflowActivationSlotRequest request, CancellationToken cancellationToken = default) =>
+            inner.TryActivateAsync(request, cancellationToken);
+
+        public ValueTask<WorkflowActivationTransition> TryDeactivateAsync(
+            string workflowDefinitionId,
+            string slotName,
+            WorkflowActivationSource source,
+            long expectedRevision,
+            DateTimeOffset updatedAt,
+            CancellationToken cancellationToken = default) =>
+            inner.TryDeactivateAsync(workflowDefinitionId, slotName, source, expectedRevision, updatedAt, cancellationToken);
     }
 
     /// <summary>Compiles each version id to its own artifact with one start node.</summary>
@@ -570,5 +805,29 @@ internal static class PublicationJournalConvergence
         public ValueTask SaveAsync(PublicationRecord publication, CancellationToken cancellationToken = default) => inner.SaveAsync(publication, cancellationToken);
         public ValueTask<PublicationRecord?> FindAsync(string publicationId, CancellationToken cancellationToken = default) => inner.FindAsync(publicationId, cancellationToken);
         public ValueTask<IReadOnlyCollection<PublicationRecord>> ListBySlotAsync(string slotId, CancellationToken cancellationToken = default) => inner.ListBySlotAsync(slotId, cancellationToken);
+    }
+
+    /// <summary>
+    /// Commits the first slot transition and then throws, as one whose connection drops after the commit does. Runs
+    /// <c>afterCommit</c>, when given, in between.
+    /// </summary>
+    private sealed class ThrowAfterSlotTransition(IWorkflowActivationAuthority inner, Func<Task>? afterCommit = null) : IWorkflowActivationAuthority
+    {
+        private int _thrown;
+
+        public async ValueTask<WorkflowActivationTransition> TryActivateAsync(WorkflowActivationSlotRequest request, CancellationToken cancellationToken = default)
+        {
+            var transition = await inner.TryActivateAsync(request, cancellationToken);
+            if (!transition.Succeeded || Interlocked.Exchange(ref _thrown, 1) != 0)
+                return transition;
+            if (afterCommit is not null)
+                await afterCommit();
+            throw new InvalidOperationException("The connection was lost after the slot transition committed.");
+        }
+
+        public ValueTask<WorkflowActivationSlot?> FindAsync(string workflowDefinitionId, string slotName, CancellationToken cancellationToken = default) => inner.FindAsync(workflowDefinitionId, slotName, cancellationToken);
+        public ValueTask<IReadOnlyCollection<WorkflowActivationSlot>> ListByDefinitionAsync(string workflowDefinitionId, CancellationToken cancellationToken = default) => inner.ListByDefinitionAsync(workflowDefinitionId, cancellationToken);
+        public ValueTask<WorkflowActivationTransition> TryDeactivateAsync(string workflowDefinitionId, string slotName, WorkflowActivationSource source, long expectedRevision, DateTimeOffset updatedAt, CancellationToken cancellationToken = default) =>
+            inner.TryDeactivateAsync(workflowDefinitionId, slotName, source, expectedRevision, updatedAt, cancellationToken);
     }
 }

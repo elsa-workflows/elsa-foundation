@@ -2,6 +2,31 @@
 
 Issue [#2177](https://github.com/elsa-workflows/elsa-foundation/issues/2177), implementation branch `codex/2177-effective-persistence-preview`, foundation base `d87a5bcb1291b76348ae48aa14740a73e9eb46b5`.
 
+## Delivery audit: current main verified (2026-10-01)
+
+[#2183](https://github.com/elsa-workflows/elsa-foundation/pull/2183) merged normally as `e4a699879791fb7eb2bc1c6874f772f4a7fe5355` after exact reviewed head `66107a2557bf1675c0ef95097531e3abd35720af` had 44 terminal/nonblocking checks. Root refreshed the actual PR: its merge identity matches, current-head [Copilot 5378329785](https://github.com/elsa-workflows/elsa-foundation/pull/2183#pullrequestreview-5378329785) reports no findings, and all 33 current review threads are resolved with no next page. The 28-item direct-reply ledger and root/independent/native review remain recorded in the [pre-merge proof](https://github.com/elsa-workflows/elsa-foundation/pull/2183#issuecomment-5930241766). No unavailable Greptile or human approval is claimed.
+
+Verified resulting main `7bee192e9d7022fcb9889827ab051c9fb5977a20` contains that merge (verified ancestor relation) and has six terminal successful delivery workflows:
+
+| Workflow | Exact-main run |
+|---|---|
+| CI | [36858770921](https://github.com/elsa-workflows/elsa-foundation/actions/runs/36858770921) |
+| Maps | [36858770506](https://github.com/elsa-workflows/elsa-foundation/actions/runs/36858770506) |
+| Solution filters | [36858770517](https://github.com/elsa-workflows/elsa-foundation/actions/runs/36858770517) |
+| Code Quality | [36858769854](https://github.com/elsa-workflows/elsa-foundation/actions/runs/36858769854) |
+| Packages | [36858770618](https://github.com/elsa-workflows/elsa-foundation/actions/runs/36858770618) |
+| Docker Images | [36859276255](https://github.com/elsa-workflows/elsa-foundation/actions/runs/36859276255) |
+
+Root inspected the actual exact-main CI job records and logs: 26 jobs succeeded and only the red-main alert was skipped. Build/fast tests, selected provider suites/aggregate, architecture and core-only gates passed. Actual fast-test results include CLI 871, Planning 118, EF tooling/migrations 449, Identity EF contracts 52 and Workbench 32, all without failures/skips. Persistence EF reports 699 passed of 700 total with one existing opt-in stress skip. The architecture job reports 622 passed with zero skips. These are main-run results, not the correction branch's 700/701 EF result.
+
+The full actor, same-capture preparer, lifecycle and mutation evidence remains in the chronological sections and [acceptance matrix](contracts/acceptance-proof-matrix.md). Retained actual Linux 228 and Windows 18 proofs keep their explicit prior-source equivalence and platform limits; this audit does not relabel them as full-tree native runs. Abrupt Windows frontend death remains unexercised. The twelve-file/28-canary passing-artifact scan remains tied to its recorded sources. Configuration-only inspection remains distinct from external inputs, deployed-host parity, physical databases, migrations and live readiness.
+
+This supplies T020's missing resulting-main verification and completes the bounded #2177 implementation delivery. The program remains open. Separate schema-counter correction [#2250](https://github.com/elsa-workflows/elsa-foundation/pull/2250), the unexplained Event-bookmark incident in [#2216](https://github.com/elsa-workflows/elsa-foundation/issues/2216), and the [bounded SQLite cleanup investigation](../../docs/reports/sqlite-test-cleanup-probe.md) remain tracked; their causes and closure are not inferred from a green main run. Their review/verification ownership does not convert a completed file-only feature into external-provider or production-builder delivery. The next runtime-composition leaf is [#2184](https://github.com/elsa-workflows/elsa-foundation/issues/2184).
+
+Provider-state refresh (2026-10-01): GitHub records #2216 closed at `2026-10-01T13:27:14Z`; that closure does not supply a cause for the earlier Event-bookmark failure. #2185 remains open. PR #2250 merged as `dc79b23327d4de73661daa3f00694178ff37693e`; its exact resulting-main CI, Maps, filters, Code Quality and Packages passed, while Docker was cancelled. Its separate six-workflow checkpoint remains incomplete. This does not alter the six successful workflows at main `7bee192e9` that prove #2177 delivery.
+
+Earlier checkpoints below are retained history; their then-pending gate statements are superseded only by this explicit exact-main audit.
+
 ## Foundations: T001–T004
 
 Executed on 2026-09-30 in the existing CLI test project. No new test project, provider container matrix or workflow change.

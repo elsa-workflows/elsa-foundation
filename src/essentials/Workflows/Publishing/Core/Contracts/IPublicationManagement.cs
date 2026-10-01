@@ -51,6 +51,12 @@ public interface IPublicationActivator
     /// first completes the publication the slot already names (see <see cref="CompleteAsync"/>), so a replacement never
     /// starts from a journal that lags the slot.
     /// </summary>
+    /// <remarks>
+    /// When the slot already serves the candidate's artifact through another publication (the runtime answers
+    /// <c>AlreadyActive</c> for an activation it did not mint), the candidate is recorded failed and never active. The
+    /// result then succeeds and carries the publication the slot names, once that record is active, or fails with the
+    /// reason it cannot be confirmed; <see cref="PublicationActivationResult.Publication"/> is not always the candidate.
+    /// </remarks>
     ValueTask<PublicationActivationResult> ActivateAsync(
         PublicationActivationRequest request,
         CancellationToken cancellationToken = default);

@@ -98,6 +98,19 @@ public sealed class CoalescingRuntimePostCommitOutboxStore(
             .RenewClaimAsync(claim, now, visibilityTimeout, cancellationToken);
     }
 
+    // Always the durable store: an overlay item lives only in this session's working set, so only the drain that owns the
+    // session ever claims it, and that drain completes its claims before it asks who else holds its continuations.
+    public ValueTask<IReadOnlyCollection<RuntimePostCommitOutboxItem>> ListClaimedAsync(
+        RuntimePostCommitOutboxClaimedQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+
+        return (_innerClaimStore ?? throw new InvalidOperationException(
+            "The configured post-commit outbox store does not provide atomic claim support."))
+            .ListClaimedAsync(query, cancellationToken);
+    }
+
     public ValueTask RecordDeliveryResultAsync(
         RuntimePostCommitOutboxClaim claim,
         RuntimePostCommitOutboxDeliveryResult result,

@@ -303,6 +303,9 @@ public static class RuntimeCoreServiceCollectionExtensions
                 serviceProvider.GetRequiredService<CheckpointRuleViolationWorkflowFaulter>(),
                 serviceProvider.GetRequiredService<IRuntimeExecutionOwnershipService>(),
                 serviceProvider.GetRequiredService<IRuntimeExecutionOwnershipContextAccessor>(),
+                serviceProvider.GetRequiredService<IRuntimePostCommitOutboxClaimStore>(),
+                serviceProvider.GetRequiredService<IPostCommitOutboxLookupStore>(),
+                serviceProvider.GetRequiredService<IWorkflowSchedulerWorkQueue>(),
                 serviceProvider.GetRequiredService<WorkflowDrainOrchestratorOptions>(),
                 serviceProvider.GetService<IRuntimeCoalescingDrainScopeFactory>(),
                 serviceProvider.GetService<IRuntimeLiveDrainDeliveryAccessor>(),
@@ -368,7 +371,9 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddSingleton<IRuntimeCheckpointPersistencePolicy, ImmediateRuntimeCheckpointPersistencePolicy>();
         services.TryAddScoped<IRuntimeCheckpointCadenceResolver, RuntimeCheckpointCadenceResolver>();
         services.TryAddScoped<IRuntimePostCommitIntentDispatcher, RuntimePostCommitIntentDispatcher>();
-        services.AddRuntimePostCommitIntentHandler<RuntimeSchedulerPostCommitIntentDispatcher>(RuntimePostCommitIntentKinds.EnqueueSchedulerWork);
+        services.AddRuntimePostCommitIntentHandler<RuntimeSchedulerPostCommitIntentDispatcher>(
+            RuntimePostCommitIntentKinds.EnqueueSchedulerWork,
+            RuntimeSchedulerPostCommitIntentDispatcher.RetryPolicy);
         // spec 109: the in-process-hop fast path is on by default. A host or a guardrail test can disable it by
         // registering RuntimeInProcessHopFastPathOptions { Enabled = false } before this call; the durable deserialize
         // path then runs everywhere and MUST commit byte-identical state (ADR 0031 follow-up (c)).

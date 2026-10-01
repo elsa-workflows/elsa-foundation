@@ -102,6 +102,13 @@ public sealed class PublicationActivator(
                 activation.ReplacedActivationId);
         }
 
+        // The coordinator answers AlreadyActive without minting anything when the slot already serves this artifact, and the
+        // activation it names may be another publication's. Marking the candidate active then would journal a second
+        // active record for a reference that was never minted, and nothing would ever retire it.
+        if (activation.Outcome == WorkflowActivationOutcome.AlreadyActive &&
+            !StringComparer.Ordinal.Equals(activation.Slot.ActiveActivationId, candidate.PublicationId))
+            return await ResolveServedByAnotherPublicationAsync(candidate, activation.Slot, cancellationToken);
+
         var now = timeProvider.GetUtcNow();
         var active = Activated(candidate, now);
         try
@@ -154,6 +161,22 @@ public sealed class PublicationActivator(
             await publicationStore.FindAsync(publicationId, cancellationToken) is not { } publication)
             return new(true, slot);
 
+        // The runtime names the activation its completion switched off even when it could not retire that one's source
+        // reference, which then reads as live (#2251). Its record is therefore retired on the runtime's report, as
+        // ActivateAsync retires the record its activation replaced, rather than on the reference. The completion that
+        // finally retires a leaked reference reports it too, usually once the slot's own record no longer lags, so this
+        // comes before the lag check.
+        var now = timeProvider.GetUtcNow();
+        //
+        // The report can be stale: a completion that was overtaken (compensation handed the slot back to the activation it
+        // reported as replaced) names a predecessor that serves again. The slot is read again, and a report naming the
+        // activation it now serves retires nothing.
+        if (completion.ReplacedActivationId is { } replacedId &&
+            !StringComparer.Ordinal.Equals(replacedId, publicationId) &&
+            !(await activationAuthority.FindAsync(slot.WorkflowDefinitionId, slot.SlotName, cancellationToken) is { } served &&
+              StringComparer.Ordinal.Equals(served.ActiveActivationId, replacedId)))
+            await PublicationRecordRetirement.RetireAsync(publicationStore, await publicationStore.FindAsync(replacedId, cancellationToken), now, cancellationToken);
+
         // A publication the slot names that is already active is the common case and costs one read. One still a
         // candidate, or retired while the slot names it again, lags the slot. Marking it active is the last write, so a
         // process that stops before it leaves it lagging for the next completion.
@@ -161,7 +184,6 @@ public sealed class PublicationActivator(
             !await ServesAsync(slot, publication, cancellationToken))
             return new(true, slot, publication);
 
-        var now = timeProvider.GetUtcNow();
         var retired = await PublicationRecordRetirement.RetireReplacedAsync(publicationStore, sourceReferenceStore, slot.SlotId, publicationId, now, cancellationToken);
         var lagged = publication.Status;
         publication = await MarkActiveAsync(publication, now, cancellationToken);
@@ -176,6 +198,49 @@ public sealed class PublicationActivator(
             publication.Status,
             retired);
         return new(true, slot, publication);
+    }
+
+    /// <summary>
+    /// The slot already serves the candidate's artifact through another activation, which a same-version publish that won a
+    /// race, or one that read the slot before it moved, leaves behind. The candidate never serves, so it is recorded as
+    /// failed and no second active record exists. The caller asked for the artifact to serve and it does: when the
+    /// publication the slot names is active once the journal is brought into line with it, that record is the answer,
+    /// as it is for a same-version republish the handler recognises up front. Otherwise nothing proves the artifact
+    /// serves under a publication of ours, and the request fails.
+    /// </summary>
+    private async ValueTask<PublicationActivationResult> ResolveServedByAnotherPublicationAsync(
+        PublicationRecord candidate,
+        WorkflowActivationSlot served,
+        CancellationToken cancellationToken)
+    {
+        var servedId = served.ActiveActivationId!;
+        PublicationFailure failure;
+        if (served.Source is { } owner && !owner.IsSameOwnerAs(Source))
+            failure = new(
+                PublicationFailureCodes.SlotOwnerConflict,
+                $"Definition '{candidate.WorkflowDefinitionId}' slot '{candidate.SlotName}' is owned by activation source '{owner.Describe()}'; " +
+                $"'{Source.Describe()}' cannot publish to it. Ownership transfer is an explicit operator action.");
+        else
+        {
+            var completion = await CompleteAsync(candidate.WorkflowDefinitionId, candidate.SlotName, cancellationToken);
+            if (completion is { Succeeded: true, Publication: { Status: PublicationStatus.Active } publication } &&
+                StringComparer.Ordinal.Equals(publication.PublicationId, servedId))
+            {
+                await FailCandidateAsync(
+                    candidate,
+                    new(PublicationFailureCodes.ArtifactAlreadyServing, $"Publication '{servedId}' already serves artifact '{candidate.ArtifactId}' in this slot."),
+                    cancellationToken);
+                return new(true, publication, completion.Slot);
+            }
+
+            failure = completion.Failure ?? new(
+                PublicationFailureCodes.PublicationActivationFailed,
+                $"Definition '{candidate.WorkflowDefinitionId}' slot '{candidate.SlotName}' already serves artifact '{candidate.ArtifactId}' " +
+                $"through '{servedId}', which is not an active publication of the slot: it moved on, or it does not serve. " +
+                "The candidate was not activated.");
+        }
+
+        return new(false, await FailCandidateAsync(candidate, failure, cancellationToken), served, failure);
     }
 
     private static PublicationFailure MapFailure(WorkflowActivationResult activation) => activation.Conflict switch

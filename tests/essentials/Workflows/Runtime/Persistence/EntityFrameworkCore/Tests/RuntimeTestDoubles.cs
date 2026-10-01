@@ -32,6 +32,17 @@ internal sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
     public override DateTimeOffset GetUtcNow() => now;
 }
 
+/// <summary>Wall time plus a test-controlled offset, so a case can jump past a delay or timeout without freezing time.</summary>
+internal sealed class OffsetClock : TimeProvider
+{
+    private long _offsetTicks;
+
+    public void Advance(TimeSpan amount) => Interlocked.Add(ref _offsetTicks, amount.Ticks);
+
+    public override DateTimeOffset GetUtcNow() =>
+        System.GetUtcNow().AddTicks(Interlocked.Read(ref _offsetTicks));
+}
+
 internal sealed class NoOutboxProcessor : IRuntimePostCommitOutboxProcessor
 {
     public ValueTask<RuntimePostCommitOutboxProcessResult> ProcessAsync(
