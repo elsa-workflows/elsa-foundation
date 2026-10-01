@@ -85,9 +85,12 @@ internal sealed class CandidateProcessHandle : ICandidateProcessHandle
     public async Task WaitForExitAsync(CancellationToken cancellationToken)
     {
         await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
-        // Waiting for only the supervisor is insufficient on Windows: job termination is asynchronous.
+        // OS termination requests are asynchronous. Supervisor exit does not establish payload/descendant
+        // completion: verify the existing job/group under the caller's same bounded cleanup deadline.
         while (job is not null && job.ActiveProcesses != 0)
             await Task.Delay(10, cancellationToken).ConfigureAwait(false);
+        if (groupReady != 0)
+            await new CandidateUnixProcessGroup().WaitForExitAsync(process.Id, cancellationToken).ConfigureAwait(false);
     }
 
     public void KillTree()

@@ -247,7 +247,14 @@ public sealed class CandidateWorkerOperationTests
             expectDescendant: true, expectRootExited: true);
 
     [Fact]
-    public async Task Candidate_worker_owner_reaps_payload_and_descendant_when_frontend_lease_is_lost()
+    public Task Candidate_worker_owner_reaps_payload_and_descendant_when_frontend_lease_is_lost() =>
+        AssertUnixOwnerCompletion(killOwnerOnly: false);
+
+    [Fact]
+    public Task Unix_group_completion_waits_for_live_payload_after_its_leader_exits() =>
+        AssertUnixOwnerCompletion(killOwnerOnly: true);
+
+    private static async Task AssertUnixOwnerCompletion(bool killOwnerOnly)
     {
         // The manual owner handshake exercises the Unix session/process-group path. The Windows job
         // runtime is outside this manual Unix control.
@@ -298,6 +305,8 @@ public sealed class CandidateWorkerOperationTests
         Task? ownerExit = null;
         Task<string>? standardOutput = null;
         Task<string>? standardError = null;
+        Task? groupCompletion = null;
+        using var groupDeadline = new CancellationTokenSource(TimeSpan.FromSeconds(60));
         try
         {
             ownerProcess = Process.Start(start) ?? throw new InvalidOperationException("The candidate owner did not start.");
@@ -332,9 +341,41 @@ public sealed class CandidateWorkerOperationTests
             Assert.True(IsMarkedProcessRunning(descendant), "The payload descendant must be live before lease loss.");
             Assert.False(ownerExit!.IsCompleted, "The owner must retain the lease before the frontend closes control.");
 
-            // Simulate an abrupt frontend loss. The owner must observe EOF and reap its entire owned scope.
-            control.Dispose();
-            await ownerExit!.WaitAsync(TimeSpan.FromSeconds(20));
+            if (killOwnerOnly)
+            {
+                // Deliberately remove only this test's leader. Its original group remains anchored by the
+                // exact marked children: native completion observation must not mistake leader exit for exit.
+                ownerProcess.Kill();
+                await ownerExit!.WaitAsync(TimeSpan.FromSeconds(20));
+                Assert.True(ownerProcess.HasExited);
+                Assert.True(IsMarkedProcessRunning(started));
+                Assert.True(IsMarkedProcessRunning(descendant));
+                var liveGroupObserved = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                var monitor = new CandidateUnixProcessGroup((groupId, token) =>
+                {
+                    var members = CandidateUnixProcessGroup.ReadMembers(groupId, token).ToArray();
+                    if (members.Any(member => member.GroupId == groupId && member.IsExecuting))
+                        liveGroupObserved.TrySetResult();
+                    return members;
+                });
+                groupCompletion = monitor.WaitForExitAsync(ownerProcess.Id, groupDeadline.Token);
+                await liveGroupObserved.Task.WaitAsync(TimeSpan.FromSeconds(20));
+                Assert.False(groupCompletion.IsCompleted,
+                    "Native group completion returned after leader exit while a matching marked child remained live.");
+                Assert.True(IsMarkedProcessRunning(started));
+                Assert.True(IsMarkedProcessRunning(descendant));
+                await KillMarkedProcessIfStillRunning(descendant);
+                await KillMarkedProcessIfStillRunning(started);
+            }
+            else
+            {
+                // Simulate abrupt frontend loss. EOF must terminate the entire owned scope, with observed
+                // group completion rather than treating the supervisor's asynchronous exit as sufficient.
+                control.Dispose();
+                await ownerExit!.WaitAsync(TimeSpan.FromSeconds(20));
+                groupCompletion = new CandidateUnixProcessGroup().WaitForExitAsync(ownerProcess.Id, groupDeadline.Token);
+            }
+            await groupCompletion.WaitAsync(TimeSpan.FromSeconds(5));
             await Task.WhenAll(standardOutput!, standardError!).WaitAsync(TimeSpan.FromSeconds(20));
             Assert.False(IsMarkedProcessRunning(started), "The payload composer survived owner lease loss.");
             Assert.False(IsMarkedProcessRunning(descendant), "The payload descendant survived owner lease loss.");
@@ -344,6 +385,7 @@ public sealed class CandidateWorkerOperationTests
         }
         finally
         {
+            groupDeadline.Cancel();
             try
             {
                 control.Dispose();
@@ -390,7 +432,15 @@ public sealed class CandidateWorkerOperationTests
                                     }
                                     finally
                                     {
-                                        ownerProcess?.Dispose();
+                                        try
+                                        {
+                                            if (groupCompletion is not null)
+                                                await ObserveOwnedTask(groupCompletion);
+                                        }
+                                        finally
+                                        {
+                                            ownerProcess?.Dispose();
+                                        }
                                     }
                                 }
                             }
@@ -510,7 +560,11 @@ public sealed class CandidateWorkerOperationTests
                 refusal.ExitCode);
             Assert.DoesNotContain(PrivateCanaryRootPrefix, refusal.Message);
             Assert.DoesNotContain(PrivateCanaryRootPrefix, string.Join("\n", refusal.Details));
-            Assert.False(IsMarkedProcessRunning(started), "The candidate worker returned while its marked child was still alive.");
+            var childStillRunning = IsMarkedProcessRunning(started);
+            var observedState = childStillRunning && OperatingSystem.IsLinux() && TryReadProcessIdentity(started, out var childIdentity)
+                ? $" Linux PID {childIdentity.Pid}, state {ProcessIdentityReader.ReadLinux(childIdentity.Pid).State}."
+                : string.Empty;
+            Assert.False(childStillRunning, "The candidate worker returned while its marked child was still alive." + observedState);
             if (descendant is not null)
                 Assert.False(IsMarkedProcessRunning(descendant), "The candidate worker returned while its marked descendant was still alive.");
             Assert.False(File.Exists(database));
