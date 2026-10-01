@@ -235,6 +235,19 @@ public sealed class EfRecurringTriggerScheduleStore(
         await CommitMutationAndClearAsync(transaction, cancellationToken, $"Recurring-schedule activation projection '{activationId}'");
     }
 
+    public async ValueTask<WorkflowActivationProjectionState> FindActivationStateAsync(string activationId, CancellationToken cancellationToken = default)
+    {
+        ValidateIdentity(activationId, nameof(activationId));
+        cancellationToken.ThrowIfCancellationRequested();
+        var scope = RequireScope();
+        context.ChangeTracker.Clear();
+        var state = await ActivationState(scope, activationId, cancellationToken);
+        context.ChangeTracker.Clear();
+        return state is null ? WorkflowActivationProjectionState.Missing
+            : state.IsActive ? WorkflowActivationProjectionState.Active
+            : WorkflowActivationProjectionState.Inactive;
+    }
+
     public async ValueTask DeleteByActivationAsync(string activationId, CancellationToken cancellationToken = default)
     {
         ValidateIdentity(activationId, nameof(activationId));

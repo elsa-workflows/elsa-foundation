@@ -7,6 +7,15 @@ the ledger is now Runtime-owned as `IWorkflowActivationAuthority`. Publishing ow
 and publication records and reaches the ledger through `IWorkflowActivationCoordinator`; it does not
 own or persist a parallel publication-slot authority.
 
+Convergence amendment (2026-10-01, #2193): the durable projection intents described under "Projection intent
+makes cross-store activation durable" were never wired into the coordinator-based activation path, and their
+reconciler was removed. Projections converge toward the slot through `IWorkflowActivationCoordinator` instead. The
+slot transition commits before the projections switch, so a process that dies in between leaves the slot naming an
+activation that serves nothing while the one it replaced keeps serving. The coordinator completes that activation
+before the slot's next activation or deactivation, and a shell-start pass completes it on every node. Both re-run
+the idempotent projection switch, observer notification and predecessor retirement. Invariant 3 is therefore
+eventual across a crash, not immediate.
+
 Related decisions: ADR 0038 (content-addressed executable identity), ADR 0039 (layout on source
 references), and ADR 0040 (reference- and execution-derived artifact lifetime).
 Plan of record: `specs/092-domain-owned-apis/`.
@@ -121,6 +130,9 @@ and projection preparation before compare-and-swap. It is not implemented by mer
 retirement timestamp.
 
 ### Projection intent makes cross-store activation durable
+
+*Superseded in mechanism by the 2026-10-01 convergence amendment above; the requirement that projections converge
+toward the slot and never override it stands.*
 
 When the Runtime activation authority and every serving projection cannot share a transaction, Publishing records
 durable `PublicationProjectionIntent` entries. An intent identifies the publication, projection kind,

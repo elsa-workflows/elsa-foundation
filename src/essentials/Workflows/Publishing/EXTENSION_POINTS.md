@@ -22,12 +22,11 @@ compilation enrichment is the documented **contributor** (fan-in) exception.
 | `IWorkflowActivationAuthority` *(Core — Elsa.Workflows.Runtime.Core)* | `InMemoryWorkflowActivationAuthority` (singleton) | Activation-slot authority and revision CAS must survive restart. Owned by Runtime, not Publishing. |
 | `IPublicationRecordStore` | `InMemoryPublicationRecordStore` (singleton) | Publication lifecycle/audit history must survive restart. |
 | `IPublicationPolicyStore` | `InMemoryPublicationPolicyStore` (singleton) | Host/workflow policy and revision CAS must survive restart. |
-| `IPublicationProjectionIntentStore` | `InMemoryPublicationProjectionIntentStore` (singleton) | Projection delivery facts and retries must survive restart. |
+| `IPublicationProjectionIntentStore` | `InMemoryPublicationProjectionIntentStore` (singleton) | Existing projection-intent rows must stay readable. No built-in component writes intents (see below). |
 | `IActivityPublicationReceiptStore` | `InMemoryActivityPublicationReceiptStore` (singleton) | Activity publication outcomes and idempotency bindings must survive restart or be shared across nodes. |
 | `IPublicationPolicyResolver` | `PublicationPolicyResolver` (singleton) | A host needs a different policy source while preserving explicit-request precedence and safe defaults. |
 | `IPublicationPreflightService` | `PublicationPreflightService` (singleton) | A host adds claim constraints beyond provider cardinality. |
 | `IPublicationActivator` | `PublicationActivator` (scoped) | Authority coordination uses another transactional boundary while preserving CAS and compensation invariants. |
-| `IPublicationProjectionPreparer` | `PublicationProjectionReconciler` (scoped) | Serving projections use another durable reconciliation mechanism. |
 
 Register replacements before the feature's `TryAdd` defaults, or use `services.Replace(...)`. Persistence
 packages that replace a related store family should remove and register the whole family explicitly so a host
@@ -58,7 +57,9 @@ accepting the receipt.
 - `IPublicationPolicyStore` stores the host policy under a null workflow ID and optional workflow overrides;
   writes are revision-checked.
 - `IPublicationProjectionIntentStore` durably transitions idempotent prepare/activate/remove intents. Providers
-  must preserve deterministic intent IDs, attempt state, retry timing, and failure details across restart.
+  must preserve deterministic intent IDs, attempt state, retry timing, and failure details across restart. Its only
+  writer was `PublicationProjectionReconciler`, which nothing had registered since activation moved to the runtime
+  coordinator and which was removed (#2193). The contract and its EF table remain so existing rows stay readable.
 
 The supplied EF Core provider implements these four contracts. Compose
 `services.AddPublishingEntityFrameworkCore(...)`; its tables, indexes, CAS behavior, and serializers are
@@ -78,10 +79,16 @@ artifact identity as an authority exemption. Trigger extraction/cardinality belo
 `IPublicationActivator` coordinates prepared candidates, slot CAS, record lifecycle, old-authority preservation,
 and compensation. A losing or failed candidate cannot make the old publication invisible.
 
-`IPublicationProjectionPreparer` prepares inactive projections and supports activate, compensate, remove, and
-restore. Implementations must be idempotent and publication-scoped. Derived projection notifications occur only
-after the durable serving set reaches its final state; Runtime HTTP consumes the neutral
-`IWorkflowTriggerIndexObserver` seam and performs a full refresh when authority changes.
+Publishing has no projection seam of its own. `PublicationActivator` hands each candidate to Runtime's
+`IWorkflowActivationCoordinator`, which prepares the trigger bindings and recurring schedules, switches them over
+after the slot compare-and-swap, notifies observers, and compensates a failed step
+([Workflows Runtime extension points](../Runtime/EXTENSION_POINTS.md)). The slot transition commits before the
+projections switch. If a process dies between the two, the coordinator completes that activation before the slot's
+next activation or unpublish, and `CompleteInterruptedActivationsStartupTask` completes it at the next shell start.
+Republishing the same version does not reach the coordinator: `PublishWorkflowRequestHandler` finds the artifact
+already published and answers from the publication record. Derived projection notifications occur only after the
+durable serving set reaches its final state; Runtime HTTP consumes the neutral `IWorkflowTriggerIndexObserver` seam
+and performs a full refresh when authority changes.
 
 ## Persistence-provider checklist
 

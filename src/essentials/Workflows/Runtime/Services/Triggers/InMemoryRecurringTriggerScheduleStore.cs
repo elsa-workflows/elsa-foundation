@@ -15,6 +15,7 @@ public sealed class InMemoryRecurringTriggerScheduleStore : IRecurringTriggerSch
     private readonly object _syncRoot = new();
     private readonly Dictionary<string, RecurringTriggerSchedule> _schedules = new(StringComparer.Ordinal);
     private readonly HashSet<string> _preparedActivations = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _activeActivations = new(StringComparer.Ordinal);
 
     public ValueTask<RecurringTriggerSchedule> SaveAsync(RecurringTriggerSchedule schedule, CancellationToken cancellationToken = default)
     {
@@ -49,6 +50,7 @@ public sealed class InMemoryRecurringTriggerScheduleStore : IRecurringTriggerSch
                 _schedules[prepared.ScheduleId] = prepared;
             }
             _preparedActivations.Add(activationId);
+            _activeActivations.Remove(activationId);
         }
 
         return ValueTask.CompletedTask;
@@ -116,6 +118,22 @@ public sealed class InMemoryRecurringTriggerScheduleStore : IRecurringTriggerSch
         return ValueTask.CompletedTask;
     }
 
+    public ValueTask<WorkflowActivationProjectionState> FindActivationStateAsync(
+        string activationId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(activationId);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (_syncRoot)
+        {
+            return ValueTask.FromResult(
+                !_preparedActivations.Contains(activationId) ? WorkflowActivationProjectionState.Missing
+                : _activeActivations.Contains(activationId) ? WorkflowActivationProjectionState.Active
+                : WorkflowActivationProjectionState.Inactive);
+        }
+    }
+
     public ValueTask DeleteByActivationAsync(string activationId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(activationId);
@@ -125,6 +143,7 @@ public sealed class InMemoryRecurringTriggerScheduleStore : IRecurringTriggerSch
         {
             RemoveByActivation(activationId);
             _preparedActivations.Remove(activationId);
+            _activeActivations.Remove(activationId);
         }
 
         return ValueTask.CompletedTask;
@@ -225,6 +244,10 @@ public sealed class InMemoryRecurringTriggerScheduleStore : IRecurringTriggerSch
 
     private void SetActivationActive(string activationId, bool isActive)
     {
+        if (isActive)
+            _activeActivations.Add(activationId);
+        else
+            _activeActivations.Remove(activationId);
         foreach (var schedule in _schedules.Values
                      .Where(schedule => StringComparer.Ordinal.Equals(schedule.ActivationId, activationId))
                      .ToArray())

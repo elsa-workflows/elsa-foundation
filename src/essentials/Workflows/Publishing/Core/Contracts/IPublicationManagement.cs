@@ -44,27 +44,6 @@ public interface IPublicationPreflightService
         IReadOnlyCollection<PublicationAuthoritativeClaimSet> authoritativeClaims);
 }
 
-public interface IPublicationProjectionPreparer
-{
-    ValueTask PrepareAsync(PublicationRecord candidate, CancellationToken cancellationToken = default);
-
-    ValueTask ActivateAsync(
-        PublicationRecord candidate,
-        string? replacedPublicationId,
-        CancellationToken cancellationToken = default);
-
-    ValueTask CompensateAsync(
-        PublicationRecord candidate,
-        string? restoredPublicationId,
-        CancellationToken cancellationToken = default);
-
-    ValueTask RestoreAsync(
-        PublicationRecord publication,
-        CancellationToken cancellationToken = default);
-
-    ValueTask RemoveAsync(PublicationRecord publication, CancellationToken cancellationToken = default);
-}
-
 public interface IPublicationActivator
 {
     ValueTask<PublicationActivationResult> ActivateAsync(

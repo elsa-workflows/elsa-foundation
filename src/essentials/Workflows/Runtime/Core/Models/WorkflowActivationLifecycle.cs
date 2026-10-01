@@ -34,6 +34,19 @@ public enum WorkflowActivationStep
     ProjectionRemoval
 }
 
+/// <summary>Where one activation's serving projection stands in a projection store.</summary>
+public enum WorkflowActivationProjectionState
+{
+    /// <summary>The store holds no projection for the activation.</summary>
+    Missing,
+
+    /// <summary>The projection is prepared, or was replaced, and serves nothing.</summary>
+    Inactive,
+
+    /// <summary>The projection serves.</summary>
+    Active
+}
+
 /// <summary>Requests that an executable become live in a named activation slot.</summary>
 public sealed record WorkflowActivationCommand(
     WorkflowExecutable Executable,

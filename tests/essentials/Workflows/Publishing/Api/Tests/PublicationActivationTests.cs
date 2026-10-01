@@ -235,6 +235,10 @@ public sealed class PublicationActivationTests
             string? replacedActivationId,
             CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
 
+        public ValueTask<WorkflowActivationProjectionState> FindActivationStateAsync(
+            string activationId,
+            CancellationToken cancellationToken = default) => ValueTask.FromResult(WorkflowActivationProjectionState.Active);
+
         public ValueTask DeleteByActivationAsync(
             string activationId,
             CancellationToken cancellationToken = default) => ValueTask.CompletedTask;

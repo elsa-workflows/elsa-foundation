@@ -165,6 +165,20 @@ public sealed class EfWorkflowTriggerBindingStore(
         await CommitMutationAndClearAsync(transaction, cancellationToken, $"Trigger-binding activation projection '{activationId}'");
     }
 
+    public async ValueTask<WorkflowActivationProjectionState> FindActivationStateAsync(string activationId, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(activationId);
+        cancellationToken.ThrowIfCancellationRequested();
+        var scope = RequireScope();
+        var state = await context.WorkflowTriggerBindingProjectionStates.AsNoTracking().SingleOrDefaultAsync(x => x.Id == ProjectionId(scope, activationId), cancellationToken);
+        if (state is null)
+            return WorkflowActivationProjectionState.Missing;
+        var rows = await RowsForActivation(scope, activationId, cancellationToken);
+        context.ChangeTracker.Clear();
+        EnsureProjection(state, rows, scope, activationId);
+        return state.IsActive ? WorkflowActivationProjectionState.Active : WorkflowActivationProjectionState.Inactive;
+    }
+
     public async ValueTask DeleteByActivationAsync(string activationId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(activationId);

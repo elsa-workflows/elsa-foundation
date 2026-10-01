@@ -79,6 +79,33 @@ public sealed class PublishWorkflowTriggerIndexingTests
     }
 
     [Fact]
+    public async Task PublishingAfterACrashMidReplacement_ServesOnlyTheNewPublication()
+    {
+        await Handler("old", new StubTriggerProvider("Event", "hash-old")).Handle(new PublishWorkflow("version-1"), CancellationToken.None);
+
+        // The replacing publish stops for good once its slot transition commits, before its binding is switched on and
+        // the old one off (#2193): the slot names it, but the old publication keeps serving.
+        var extractor = new WorkflowTriggerBindingExtractor([new StubTriggerProvider("Event", "hash-interrupted")]);
+        var stopping = new StopAfterSlotTransition(_activationAuthority);
+        var interrupted = Handler(
+                WorkflowVersion(TriggerNode("trigger-node", [Input("EventName", "interrupted")])),
+                TriggerActivityVersion(),
+                extractor,
+                new WorkflowTriggerIndexer(extractor, _bindingStore),
+                coordinatorAuthority: stopping)
+            .Handle(new PublishWorkflow("version-1"), CancellationToken.None);
+        Assert.Same(stopping.Stopped, await Task.WhenAny(interrupted, stopping.Stopped));
+        Assert.Single(await ServingAsync("hash-old"));
+        Assert.Empty(await ServingAsync("hash-interrupted"));
+
+        var view = await Handler("new", new StubTriggerProvider("Event", "hash-new")).Handle(new PublishWorkflow("version-1"), CancellationToken.None);
+
+        Assert.Equal(view.ArtifactId, Assert.Single(await ServingAsync("hash-new")).ArtifactId);
+        Assert.Empty(await ServingAsync("hash-old"));
+        Assert.Empty(await ServingAsync("hash-interrupted"));
+    }
+
+    [Fact]
     public async Task UnroutableTrigger_FailsThePublish_AndWritesNoBinding()
     {
         // No provider recognizes the trigger node, so its stimulus cannot be derived.
@@ -272,6 +299,9 @@ public sealed class PublishWorkflowTriggerIndexingTests
             typeof(HttpEndpoint))
     ];
 
+    private async Task<IReadOnlyCollection<WorkflowTriggerBinding>> ServingAsync(string stimulusHash) =>
+        (await _bindingStore.ListByStimulusAsync(new WorkflowTriggerBindingPageQuery("Event", stimulusHash))).Items;
+
     private PublishWorkflowRequestHandler Handler(params IActivityTriggerStimulusProvider[] providers)
         => Handler(TriggerActivityTypeKey, providers);
 
@@ -332,7 +362,8 @@ public sealed class PublishWorkflowTriggerIndexingTests
         ActivityDefinitionVersion triggerActivity,
         IWorkflowTriggerBindingExtractor extractor,
         IWorkflowTriggerIndexer indexer,
-        Type? clrType = null)
+        Type? clrType = null,
+        IWorkflowActivationAuthority? coordinatorAuthority = null)
     {
         // The activation coordinator commits trigger bindings and recurring schedules as one serving
         // projection. Even scenarios without recurring providers must prepare the intentionally empty
@@ -349,7 +380,7 @@ public sealed class PublishWorkflowTriggerIndexingTests
         }
 
         var coordinator = new WorkflowActivationCoordinator(
-            _activationAuthority,
+            coordinatorAuthority ?? _activationAuthority,
             _referenceStore,
             TestRootWriteLeases.Create(_executableStore),
             TimeProvider.System,
@@ -463,6 +494,43 @@ public sealed class PublishWorkflowTriggerIndexingTests
             node.ActivityType == TriggerActivityTypeKey
                 ? ActivityTriggerStimulusResult.Recognized([new TriggerStimulusDescriptor(stimulusType, stimulusHash)])
                 : ActivityTriggerStimulusResult.NotRecognized;
+    }
+
+    /// <summary>
+    /// The crash: once a slot transition commits, the call never returns, so the coordinator neither switches the
+    /// projections nor compensates.
+    /// </summary>
+    private sealed class StopAfterSlotTransition(IWorkflowActivationAuthority inner) : IWorkflowActivationAuthority
+    {
+        private readonly TaskCompletionSource _stopped = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public Task Stopped => _stopped.Task;
+
+        public ValueTask<WorkflowActivationSlot?> FindAsync(string workflowDefinitionId, string slotName, CancellationToken cancellationToken = default) =>
+            inner.FindAsync(workflowDefinitionId, slotName, cancellationToken);
+
+        public ValueTask<IReadOnlyCollection<WorkflowActivationSlot>> ListByDefinitionAsync(string workflowDefinitionId, CancellationToken cancellationToken = default) =>
+            inner.ListByDefinitionAsync(workflowDefinitionId, cancellationToken);
+
+        public async ValueTask<WorkflowActivationTransition> TryActivateAsync(WorkflowActivationSlotRequest request, CancellationToken cancellationToken = default)
+        {
+            var transition = await inner.TryActivateAsync(request, cancellationToken);
+            if (!transition.Succeeded)
+                return transition;
+
+            _stopped.TrySetResult();
+            await new TaskCompletionSource().Task;
+            throw new System.Diagnostics.UnreachableException();
+        }
+
+        public ValueTask<WorkflowActivationTransition> TryDeactivateAsync(
+            string workflowDefinitionId,
+            string slotName,
+            WorkflowActivationSource source,
+            long expectedRevision,
+            DateTimeOffset updatedAt,
+            CancellationToken cancellationToken = default) =>
+            inner.TryDeactivateAsync(workflowDefinitionId, slotName, source, expectedRevision, updatedAt, cancellationToken);
     }
 
     public sealed record FirstPartyScenario(
