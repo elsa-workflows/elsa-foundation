@@ -2,6 +2,7 @@ using Elsa.Activities.Design.Persistence.EntityFrameworkCore;
 using Elsa.Activities.Design.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Services;
 using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Stores;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
@@ -16,6 +17,13 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Tests;
 /// </summary>
 internal sealed class ActivityPublicationScope : IAsyncDisposable
 {
+    /// <summary>The recovery-continuation codec every Publishing EF test composes its Runtime stores with.</summary>
+    public static IRuntimeRecoveryContinuationCodec RecoveryCodec { get; } = new HmacRuntimeRecoveryContinuationCodec(Options.Create(new RuntimeRecoveryContinuationOptions
+    {
+        SigningKey = "publishing-ef-test-recovery-signing-key-32-bytes",
+        AllowEphemeralDevelopmentKey = false
+    }));
+
     public ActivityPublicationScope(
         PublishingSnapshotReviewDbContext publishing,
         ActivitiesDesignDbContext design,
@@ -25,14 +33,9 @@ internal sealed class ActivityPublicationScope : IAsyncDisposable
         Publishing = publishing;
         Design = design;
         Runtime = runtime;
-        var codec = new HmacRuntimeRecoveryContinuationCodec(Options.Create(new RuntimeRecoveryContinuationOptions
-        {
-            SigningKey = "publishing-ef-test-recovery-signing-key-32-bytes",
-            AllowEphemeralDevelopmentKey = false
-        }));
         DesignStores = new EfActivityDesignStores(design, access, null, new EfActivityManagementProjectionWriter(design, access));
-        Templates = new EfExecutableActivityTemplateStore(runtime, access, codec);
-        SourceReferences = new EfWorkflowExecutableSourceReferenceStore(runtime, access, codec);
+        Templates = new EfExecutableActivityTemplateStore(runtime, access, RecoveryCodec);
+        SourceReferences = new EfWorkflowExecutableSourceReferenceStore(runtime, access, RecoveryCodec);
         Receipts = new EfActivityPublicationReceiptStore(publishing, access);
         Command = new EfActivityPublicationCommand(Receipts, Templates, SourceReferences, DesignStores, access);
         SourceCommand = new EfSourceActivityPublicationCommand(Templates, SourceReferences, DesignStores, access);

@@ -3,6 +3,7 @@ using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Services.Executables;
 using Microsoft.Extensions.Logging;
 
 namespace Elsa.Workflows.Publishing.Services;
@@ -12,13 +13,25 @@ namespace Elsa.Workflows.Publishing.Services;
 /// <see cref="IWorkflowActivationCoordinator"/>.
 /// </summary>
 /// <remarks>
+/// <para>
 /// Leases, source references, serving projections, slot CAS, observer notification and compensation all belong to
 /// the runtime coordinator. This type owns only the publication journal and maps runtime outcomes to publishing's
 /// failure vocabulary.
+/// </para>
+/// <para>
+/// The journal follows the slot; it never decides serving. The slot transition commits before the projections switch
+/// and before the journal is written, so a process that stops in between leaves the slot's publication a candidate
+/// and the one it replaced active (#2223). <see cref="CompleteAsync"/> brings the journal back into line once the
+/// runtime has completed the slot's activation. It runs before every activation, on a same-version republish that
+/// finds the journal lagging, and at shell start (<see cref="CompleteInterruptedPublicationsStartupTask"/>). It reads
+/// the slot and the source references, which the runtime owns, and writes only publication records.
+/// </para>
 /// </remarks>
 public sealed class PublicationActivator(
     IWorkflowActivationCoordinator activationCoordinator,
     IPublicationRecordStore publicationStore,
+    IWorkflowActivationAuthority activationAuthority,
+    IWorkflowExecutableSourceReferenceStore sourceReferenceStore,
     TimeProvider timeProvider,
     ILogger<PublicationActivator>? logger = null) : IPublicationActivator
 {
@@ -41,6 +54,17 @@ public sealed class PublicationActivator(
         WorkflowActivationResult activation;
         try
         {
+            // Complete the publication the slot names, and its journal, before replacing it (#2223). The coordinator
+            // completes the activation itself, but the journal would still hold that publication as a candidate, and
+            // retiring it as the replaced publication would fail.
+            var completion = await CompleteAsync(candidate.WorkflowDefinitionId, candidate.SlotName, cancellationToken);
+            if (!completion.Succeeded)
+                return new PublicationActivationResult(
+                    false,
+                    await FailCandidateAsync(candidate, completion.Failure!, cancellationToken),
+                    completion.Slot,
+                    completion.Failure);
+
             activation = await activationCoordinator.ActivateAsync(
                 new WorkflowActivationCommand(
                     request.Executable,
@@ -79,22 +103,24 @@ public sealed class PublicationActivator(
         }
 
         var now = timeProvider.GetUtcNow();
-        var active = candidate with
-        {
-            Status = PublicationStatus.Active,
-            ActivatedAt = now,
-            RetiredAt = null,
-            Failure = null
-        };
+        var active = Activated(candidate, now);
         try
         {
-            await TransitionOrThrowAsync(active, PublicationStatus.Candidate, cancellationToken);
+            // The candidate's own transition is the last journal write, so a process that stops before it leaves the
+            // candidate lagging the slot, which is what CompleteAsync looks for. A completion of this slot on another
+            // node may have recorded it first, and a replacement that followed may have retired it already; both leave
+            // the journal right.
             await RetireReplacedRecordAsync(candidate, activation.ReplacedActivationId, now, cancellationToken);
+            var recorded = await MarkActiveAsync(candidate, now, cancellationToken);
+            if (recorded.Status is not (PublicationStatus.Active or PublicationStatus.Retired))
+                throw new InvalidOperationException(
+                    $"Publication '{candidate.PublicationId}' did not transition from 'Candidate' to 'Active'; it is '{recorded.Status}'.");
+            active = recorded;
         }
         catch (Exception exception) when (exception is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
             // The slot has already flipped and serving projections are live. A journal failure must not roll back
-            // serving; the slot is runtime authority and the journal is reconciled separately.
+            // serving; the slot is runtime authority, and CompleteAsync brings the journal back into line.
             logger?.LogError(
                 exception,
                 "Publication {PublicationId} of workflow definition {DefinitionId} slot {SlotName} is active, but its publication journal could not be updated to match.",
@@ -108,6 +134,48 @@ public sealed class PublicationActivator(
             active,
             activation.Slot,
             ReplacedPublicationId: activation.ReplacedActivationId);
+    }
+
+    public async ValueTask<PublicationCompletionResult> CompleteAsync(
+        string workflowDefinitionId,
+        string slotName,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workflowDefinitionId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(slotName);
+
+        // The runtime first: the journal may say a publication serves only once its activation does.
+        var completion = await activationCoordinator.CompleteAsync(workflowDefinitionId, slotName, cancellationToken);
+        var slot = completion.Slot;
+        if (!completion.Succeeded)
+            return new(false, slot, Failure: MapFailure(completion));
+        if (slot is not { ActiveActivationId: { } publicationId, Source: { } source } ||
+            !source.IsSameOwnerAs(Source) ||
+            await publicationStore.FindAsync(publicationId, cancellationToken) is not { } publication)
+            return new(true, slot);
+
+        // A publication the slot names that is already active is the common case and costs one read. One still a
+        // candidate, or retired while the slot names it again, lags the slot. Marking it active is the last write, so a
+        // process that stops before it leaves it lagging for the next completion.
+        if (publication.Status is not (PublicationStatus.Candidate or PublicationStatus.Retired) ||
+            !await ServesAsync(slot, publication, cancellationToken))
+            return new(true, slot, publication);
+
+        var now = timeProvider.GetUtcNow();
+        var retired = await PublicationRecordRetirement.RetireReplacedAsync(publicationStore, sourceReferenceStore, slot.SlotId, publicationId, now, cancellationToken);
+        var lagged = publication.Status;
+        publication = await MarkActiveAsync(publication, now, cancellationToken);
+        if (lagged == PublicationStatus.Retired && publication.Status == PublicationStatus.Active)
+            publication = await RetireIfSlotMovedAsync(slot, publication, now, cancellationToken);
+        logger?.LogWarning(
+            "The publication journal of definition {DefinitionId} slot {SlotName} lagged the slot, which an interrupted call left half done: publication {PublicationId} was {LaggedStatus} and is now {Status}, and replaced publications {RetiredPublicationIds} are retired",
+            workflowDefinitionId,
+            slotName,
+            publicationId,
+            lagged,
+            publication.Status,
+            retired);
+        return new(true, slot, publication);
     }
 
     private static PublicationFailure MapFailure(WorkflowActivationResult activation) => activation.Conflict switch
@@ -161,9 +229,66 @@ public sealed class PublicationActivator(
 
         var replaced = await publicationStore.FindAsync(replacedId, cancellationToken)
             ?? throw new InvalidOperationException($"The replaced publication '{replacedId}' does not exist.");
-        var retired = replaced with { Status = PublicationStatus.Retired, RetiredAt = now };
-        await TransitionOrThrowAsync(retired, PublicationStatus.Active, cancellationToken);
+        await PublicationRecordRetirement.RetireAsync(publicationStore, replaced, now, cancellationToken);
     }
+
+    /// <summary>
+    /// The slot still names <paramref name="publication"/> at the revision completion read, and its source reference is
+    /// live. Completion has then switched its activation on, so it serves. A retired reference reads as nothing active,
+    /// as it does to the coordinator: the activation failed and was compensated.
+    /// </summary>
+    private async ValueTask<bool> ServesAsync(WorkflowActivationSlot slot, PublicationRecord publication, CancellationToken cancellationToken) =>
+        await FindReferenceAsync(publication, cancellationToken) is { DeletedAt: null } &&
+        await activationAuthority.FindAsync(slot.WorkflowDefinitionId, slot.SlotName, cancellationToken) is { } current &&
+        current.Revision == slot.Revision &&
+        StringComparer.Ordinal.Equals(current.ActiveActivationId, slot.ActiveActivationId);
+
+    /// <summary>
+    /// Takes back a retired publication that was just marked active when the slot no longer names it. A retired
+    /// publication is nobody's replaced record: once the slot moves on, nothing retires it again, so the mark would
+    /// otherwise stay. A publication that was a candidate needs no such check, because the activation that replaces it
+    /// retires it through the slot's own transitions.
+    /// </summary>
+    private async ValueTask<PublicationRecord> RetireIfSlotMovedAsync(
+        WorkflowActivationSlot slot,
+        PublicationRecord publication,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        if (await activationAuthority.FindAsync(slot.WorkflowDefinitionId, slot.SlotName, cancellationToken) is { } current &&
+            StringComparer.Ordinal.Equals(current.ActiveActivationId, publication.PublicationId))
+            return publication;
+
+        await PublicationRecordRetirement.RetireAsync(publicationStore, publication, now, cancellationToken);
+        return await publicationStore.FindAsync(publication.PublicationId, cancellationToken) ?? publication;
+    }
+
+    private async ValueTask<WorkflowExecutableSourceReference?> FindReferenceAsync(PublicationRecord publication, CancellationToken cancellationToken) =>
+        publication.SourceReferenceId is { } sourceReferenceId
+            ? await sourceReferenceStore.FindAsync(sourceReferenceId, cancellationToken)
+            : null;
+
+    /// <summary>
+    /// Moves <paramref name="publication"/> to <see cref="PublicationStatus.Active"/> from the status it was read in, and
+    /// returns the record as the journal then holds it. When another writer moved it first, that is the record as that
+    /// writer left it: a concurrent completion of the same slot makes the same move.
+    /// </summary>
+    private async ValueTask<PublicationRecord> MarkActiveAsync(PublicationRecord publication, DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        var active = Activated(publication, now);
+        return await publicationStore.TryTransitionAsync(active, publication.Status, cancellationToken)
+            ? active
+            : await publicationStore.FindAsync(publication.PublicationId, cancellationToken)
+              ?? throw new InvalidOperationException($"Publication '{publication.PublicationId}' disappeared while it was being activated.");
+    }
+
+    private static PublicationRecord Activated(PublicationRecord publication, DateTimeOffset now) => publication with
+    {
+        Status = PublicationStatus.Active,
+        ActivatedAt = publication.ActivatedAt ?? now,
+        RetiredAt = null,
+        Failure = null
+    };
 
     private async ValueTask TransitionOrThrowAsync(
         PublicationRecord publication,

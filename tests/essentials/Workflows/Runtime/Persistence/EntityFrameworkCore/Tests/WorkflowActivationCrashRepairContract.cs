@@ -570,10 +570,8 @@ internal static class WorkflowActivationCrashRepairContract
                 observer is null ? null : [observer],
                 NullLogger<WorkflowActivationCoordinator>.Instance);
             _shellStart = new(
-                stores.References,
-                stores.Authority,
+                new OccupiedActivationSlots(stores.References, stores.Authority, new FixedTimeProvider(Now)),
                 Coordinator,
-                new FixedTimeProvider(Now),
                 NullLogger<CompleteInterruptedActivationsStartupTask>.Instance);
         }
 

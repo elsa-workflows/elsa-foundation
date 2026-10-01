@@ -1,11 +1,16 @@
+using System.Reflection;
 using Elsa.Events.Core.Contracts;
 using Elsa.Mediator.Core.Contracts;
+using Elsa.Tasks.Core;
+using Elsa.Tasks.Core.Attributes;
 using Elsa.Workflows.Design.Core.Reconciliation;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Publishing.Core.Requests;
 using Elsa.Workflows.Publishing.Handlers;
+using Elsa.Workflows.Publishing.Services;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Services.Executables;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -86,6 +91,30 @@ public sealed class WorkflowsPublishingFeatureTests
         Assert.Contains(services, descriptor =>
             descriptor.ServiceType == typeof(IEventHandler<WorkflowVersionsReconciled>) &&
             descriptor.ImplementationType == typeof(PublishReconciledWorkflowVersions));
+    }
+
+    [Fact]
+    public void Registers_the_shell_start_pass_that_brings_the_publication_journal_into_line()
+    {
+        var services = ComposeEngine();
+
+        // #2223: without it a designer-published workflow interrupted after its slot transition keeps a candidate
+        // record, and nothing fails to say so.
+        Assert.Contains(services, descriptor =>
+            descriptor.ServiceType == typeof(IStartupTask) &&
+            descriptor.ImplementationType == typeof(CompleteInterruptedPublicationsStartupTask));
+    }
+
+    [Fact]
+    public void Orders_the_publication_journal_pass_after_the_runtime_pass_that_completes_the_activation()
+    {
+        // The journal pass finds the activation completed only if the runtime's pass ran first; the order is the one
+        // thing that says so, because the two live in assemblies that cannot depend on each other.
+        static float OrderOf(Type task) => task.GetCustomAttribute<OrderAttribute>()?.Order
+            ?? throw new Xunit.Sdk.XunitException($"{task.Name} has no [Order].");
+
+        Assert.True(
+            OrderOf(typeof(CompleteInterruptedPublicationsStartupTask)) > OrderOf(typeof(CompleteInterruptedActivationsStartupTask)));
     }
 
     [Fact]
