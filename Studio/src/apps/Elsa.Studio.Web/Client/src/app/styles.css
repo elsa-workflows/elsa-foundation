@@ -4339,12 +4339,20 @@ html[data-theme="black-glass"] .nav-section a {
   color: var(--studio-text-muted);
 }
 
+/*
+ * Accent-tinted glass: the --studio-glass-bg* tokens are gradient stacks, and color-mix()
+ * only takes colours, so mixing the accent into one invalidates the whole declaration.
+ * Layer a flat accent wash (a single-stop gradient) over the glass instead.
+ */
+
 /* Selected/active nav item = luminous glass slab with a glowing edge. */
 html[data-theme="black-glass"] .nav-section a.active,
 html[data-theme="black-glass"] .nav-section a:hover,
 html[data-theme="black-glass"] .nav-section a.has-active-child {
   border: 1px solid color-mix(in srgb, var(--studio-accent) 44%, var(--studio-glass-edge));
-  background: color-mix(in srgb, var(--studio-accent) 16%, var(--studio-glass-bg-soft));
+  background:
+    linear-gradient(color-mix(in srgb, var(--studio-accent) 16%, transparent) 0 0),
+    var(--studio-glass-bg-soft);
   color: var(--studio-text);
   box-shadow: inset 0 1px 0 color-mix(in srgb, white 14%, transparent),
     0 0 24px color-mix(in srgb, var(--studio-accent) 24%, transparent);
@@ -4367,7 +4375,9 @@ html[data-theme="black-glass"] .topbar-actions > button:hover,
 html[data-theme="black-glass"] .host-health-refresh:hover:not(:disabled),
 html[data-theme="black-glass"] .theme-selector-button:hover {
   border-color: var(--studio-glass-edge-strong);
-  background: color-mix(in srgb, var(--studio-accent) 20%, var(--studio-glass-bg-soft));
+  background:
+    linear-gradient(color-mix(in srgb, var(--studio-accent) 20%, transparent) 0 0),
+    var(--studio-glass-bg-soft);
   color: var(--studio-text);
   box-shadow: var(--studio-glass-glow);
 }
@@ -4390,7 +4400,9 @@ html[data-theme="black-glass"] .theme-mode-toggle-option[aria-checked="true"] {
 html[data-theme="black-glass"] .bottom-panel-tab-list button.active {
   color: var(--studio-text);
   border-color: color-mix(in srgb, var(--studio-accent) 42%, var(--studio-glass-edge));
-  background: color-mix(in srgb, var(--studio-accent) 16%, var(--studio-glass-bg-soft));
+  background:
+    linear-gradient(color-mix(in srgb, var(--studio-accent) 16%, transparent) 0 0),
+    var(--studio-glass-bg-soft);
   box-shadow: inset 0 1px 0 color-mix(in srgb, white 14%, transparent),
     0 0 20px color-mix(in srgb, var(--studio-accent) 20%, transparent);
 }
@@ -4399,7 +4411,9 @@ html[data-theme="black-glass"] .theme-item:hover,
 html[data-theme="black-glass"] .theme-item[data-highlighted],
 html[data-theme="black-glass"] .theme-item.active {
   border-color: var(--studio-glass-edge);
-  background: color-mix(in srgb, var(--studio-accent) 15%, var(--studio-glass-bg));
+  background:
+    linear-gradient(color-mix(in srgb, var(--studio-accent) 15%, transparent) 0 0),
+    var(--studio-glass-bg);
 }
 
 html[data-theme="black-glass"] .theme-color-dot {
@@ -4858,7 +4872,9 @@ html[data-theme="black-glass"] .studio-button {
 
 html[data-theme="black-glass"] .studio-button:hover:not(:disabled) {
   border-color: var(--studio-glass-edge-strong);
-  background: color-mix(in srgb, var(--studio-accent) 16%, var(--studio-glass-bg-soft));
+  background:
+    linear-gradient(color-mix(in srgb, var(--studio-accent) 16%, transparent) 0 0),
+    var(--studio-glass-bg-soft);
 }
 
 html[data-theme="black-glass"] .studio-button[data-variant="ghost"] {

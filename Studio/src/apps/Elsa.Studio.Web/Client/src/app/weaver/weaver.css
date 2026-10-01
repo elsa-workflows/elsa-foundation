@@ -356,7 +356,7 @@ html[data-theme="black-glass"] .weaver-surface-header,
 html[data-theme="black-glass"] .weaver-status,
 html[data-theme="black-glass"] .weaver-composer {
   border-color: var(--studio-glass-edge);
-  background: color-mix(in srgb, var(--studio-glass-bg) 82%, transparent);
+  background: var(--studio-glass-bg-soft);
 }
 
 html[data-theme="black-glass"] .weaver-surface-title span {
@@ -388,7 +388,9 @@ html[data-theme="black-glass"] .weaver-composer-input textarea {
 
 html[data-theme="black-glass"] .weaver-mode-option:hover,
 html[data-theme="black-glass"] .weaver-mode-option:focus-visible {
-  background: color-mix(in srgb, var(--studio-accent) 15%, var(--studio-glass-bg));
+  background:
+    linear-gradient(color-mix(in srgb, var(--studio-accent) 15%, transparent) 0 0),
+    var(--studio-glass-bg);
 }
 
 html[data-theme="black-glass"] .weaver-message-body,
@@ -404,7 +406,9 @@ html[data-theme="black-glass"] .agent-workflow-batch {
 
 html[data-theme="black-glass"] .weaver-message[data-role="user"] .weaver-message-body {
   border-color: color-mix(in srgb, var(--studio-accent) 44%, transparent);
-  background: color-mix(in srgb, var(--studio-accent) 13%, var(--studio-glass-bg));
+  background:
+    linear-gradient(color-mix(in srgb, var(--studio-accent) 13%, transparent) 0 0),
+    var(--studio-glass-bg);
 }
 
 html[data-theme="black-glass"] .weaver-send {
