@@ -290,8 +290,9 @@ public sealed class EfCandidateInspectionOperation
         var requestedCollision = FindCaseCollision(requested);
         var effectiveCollision = FindCaseCollision(effective);
         var disabledCollision = FindCaseCollision(disabled);
-        if (requestedCollision is not null || effectiveCollision is not null || disabledCollision is not null)
-            return new SelectionConflict("case-collision", publicFeature(requestedCollision ?? effectiveCollision ?? disabledCollision));
+        var collision = requestedCollision ?? effectiveCollision ?? disabledCollision;
+        if (collision is not null)
+            return new SelectionConflict("case-collision", publicFeature(collision));
 
         var removedActive = removed.Intersect(requested.Concat(effective), StringComparer.Ordinal).FirstOrDefault();
         if (removedActive is not null)

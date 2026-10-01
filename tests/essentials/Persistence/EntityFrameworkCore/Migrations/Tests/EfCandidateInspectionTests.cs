@@ -883,7 +883,7 @@ public sealed class EfCandidateInspectionTests : IDisposable
 
         // '+' is six bytes as the default JSON encoder's "\\u002B" escape and each selected ID is
         // repeated in three arrays. The first three IDs trim one plus; replacing the final plus for
-        // indexes 3..<152 removes 149 * 5 bytes to calibrate the 1,862-ID response to exactly 4 MiB.
+        // indexes 3..<152 removes 149 * 5 * 3 bytes to calibrate the 1,862-ID response to exactly 4 MiB.
         // The disabled ID appears once, so appending one ASCII byte makes the second response one byte over.
         var enabledFeatureIds = Enumerable.Range(0, enabledFeatureCount)
             .Select(index => LargeSelectionFeatureId(
