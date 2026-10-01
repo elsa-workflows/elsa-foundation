@@ -785,6 +785,39 @@ public sealed class RuntimePostCommitOutboxQuery
     public string? IntentKind { get; }
 }
 
+/// <summary>
+/// Selects the items <see cref="Contracts.IRuntimePostCommitOutboxClaimStore.ListClaimedAsync"/> returns: one workflow
+/// execution's items of one intent kind that are claimed for delivery. Both filters are required, so the read stays
+/// within one execution.
+/// </summary>
+public sealed class RuntimePostCommitOutboxClaimedQuery
+{
+    public RuntimePostCommitOutboxClaimedQuery(string workflowExecutionId, string intentKind, int limit)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
+        RuntimePostCommitIntent.ValidateKind(intentKind, nameof(intentKind));
+        if (limit <= 0)
+            throw new ArgumentOutOfRangeException(nameof(limit), "Outbox query limit must be greater than zero.");
+
+        WorkflowExecutionId = workflowExecutionId;
+        IntentKind = intentKind;
+        Limit = limit;
+    }
+
+    public string WorkflowExecutionId { get; }
+    public string IntentKind { get; }
+    public int Limit { get; }
+
+    /// <summary>Whether <paramref name="item"/> is one this query lists.</summary>
+    public bool Matches(RuntimePostCommitOutboxItem item)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        return item.Status == RuntimePostCommitOutboxStatus.Delivering &&
+               StringComparer.Ordinal.Equals(item.Intent.WorkflowExecutionId, WorkflowExecutionId) &&
+               StringComparer.Ordinal.Equals(item.Intent.Kind, IntentKind);
+    }
+}
+
 public sealed class RuntimePostCommitOutboxDeliveryResult
 {
     public RuntimePostCommitOutboxDeliveryResult(

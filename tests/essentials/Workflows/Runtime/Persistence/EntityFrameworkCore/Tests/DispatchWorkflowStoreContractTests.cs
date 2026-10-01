@@ -615,6 +615,11 @@ public abstract class DispatchWorkflowStoreContractTests : IAsyncLifetime
             CancellationToken cancellationToken = default) =>
             ((IRuntimePostCommitOutboxClaimStore)inner).RenewClaimAsync(claim, now, visibilityTimeout, cancellationToken);
 
+        public ValueTask<IReadOnlyCollection<RuntimePostCommitOutboxItem>> ListClaimedAsync(
+            RuntimePostCommitOutboxClaimedQuery query,
+            CancellationToken cancellationToken = default) =>
+            ((IRuntimePostCommitOutboxClaimStore)inner).ListClaimedAsync(query, cancellationToken);
+
         public ValueTask RecordDeliveryResultAsync(
             RuntimePostCommitOutboxClaim claim,
             RuntimePostCommitOutboxDeliveryResult result,

@@ -82,7 +82,10 @@ if (result.StopReason != RuntimeSchedulerDrainStopReason.Quiesced)
 ```
 
 Quiescence is decided by `WorkflowDrainOrchestrator.DrainSchedulerAndPostCommitWorkAsync`: the drain
-plus post-commit outbox delivery cycle until a cycle delivers nothing. The observer then collects
+plus post-commit outbox delivery cycle until a cycle delivers nothing and no continuation of the execution
+is left in another deliverer's hands or undrained in its queue (#2225, see
+[A live drain's continuation in the sweep's hands](runtime-durable-resumption.md#a-live-drains-continuation-in-the-sweeps-hands-2225)).
+The observer then collects
 blocking incidents that have no resolution outcome **and** carry an `ActivityExecutionId`, and hands
 them to `IncidentResolutionBatchExecutor`.
 

@@ -28,5 +28,8 @@
     <Compile Include="..\..\..\Tests\OverrunningIntentDispatcher.cs" Link="OverrunningIntentDispatcher.cs" />
     <Compile Include="..\Tests\PublishStimulusStartContract.cs" Link="PublishStimulusStartContract.cs" />
     <Compile Include="..\Tests\RuntimeEventExecutableTestFixture.cs" Link="RuntimeEventExecutableTestFixture.cs" />
+    <Compile Include="..\Tests\LiveDrainSweepContentionContract.cs" Link="LiveDrainSweepContentionContract.cs" />
+    <Compile Include="..\Tests\OutboxStoreRegistration.cs" Link="OutboxStoreRegistration.cs" />
+    <Compile Include="..\Tests\PostCommitOutboxClaimedListingContract.cs" Link="PostCommitOutboxClaimedListingContract.cs" />
   </ItemGroup>
 </Project>

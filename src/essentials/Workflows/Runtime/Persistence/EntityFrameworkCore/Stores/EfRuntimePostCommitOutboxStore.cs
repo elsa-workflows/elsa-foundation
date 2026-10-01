@@ -186,6 +186,34 @@ public sealed class EfRuntimePostCommitOutboxStore(
         }
     }
 
+    public async ValueTask<IReadOnlyCollection<RuntimePostCommitOutboxItem>> ListClaimedAsync(
+        RuntimePostCommitOutboxClaimedQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        cancellationToken.ThrowIfCancellationRequested();
+        var scope = EfRuntimeOperationalStoreSupport.RequireScope(accessContextAccessor);
+        var scopeKey = EfRuntimeOperationalStoreSupport.Encode(scope);
+        var scopeHash = EfRuntimeOperationalStoreSupport.Hash(scope);
+        var workflowKey = EfRuntimeOperationalStoreSupport.Encode(query.WorkflowExecutionId);
+        var workflowHash = EfRuntimeOperationalStoreSupport.Hash(query.WorkflowExecutionId);
+        var intentKindHash = EfRuntimeOperationalStoreSupport.Hash(query.IntentKind);
+        const int delivering = (int)RuntimePostCommitOutboxStatus.Delivering;
+        // Untracked, so a poll reads the row as it is now rather than a snapshot this context tracked when it claimed.
+        var rows = await context.RuntimePostCommitOutbox.AsNoTracking()
+            .Where(row => row.ScopeKey == scopeKey && row.ScopeKeyHash == scopeHash &&
+                          row.WorkflowExecutionId == workflowKey && row.WorkflowExecutionIdHash == workflowHash &&
+                          row.IntentKindHash == intentKindHash && row.IntentKind == query.IntentKind &&
+                          row.Status == delivering)
+            .OrderBy(row => row.ClaimableAtUtcTicks)
+            .ThenBy(row => row.RecordedAtUtcTicks)
+            .ThenBy(row => row.OutboxItemIdOrderKey)
+            .ThenBy(row => row.Id)
+            .Take(Math.Min(query.Limit, ProviderPageSize))
+            .ToArrayAsync(cancellationToken);
+        return rows.Select(row => ReadChecked(row, scope)).ToArray();
+    }
+
     public async ValueTask<RuntimePostCommitOutboxClaimCompletionOutcome> RecordDeliveryResultAsync(
         RuntimePostCommitOutboxDeliveryResult result,
         CancellationToken cancellationToken = default)

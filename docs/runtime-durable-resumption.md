@@ -55,7 +55,9 @@ unrelated command to arrive (**RT-3**).
      (`ProcessAsync(workflowExecutionId: null, intentKind: null)`) across every contributed intent
      kind, including due `FailedRetryable` retries — this closes RT-3. Normal per-execution draining
      remains intentionally filtered to `EnqueueSchedulerWork`, so non-local cross-execution work is
-     never executed inside that workflow's actor mailbox.
+     never executed inside that workflow's actor mailbox. The claim takes every claimable item, a live
+     drain's own continuations included; the drain accounts for that before it reports quiescence (see
+     [A live drain's continuation in the sweep's hands](#a-live-drains-continuation-in-the-sweeps-hands-2225)).
   2. **Discovers** the interrupted executions: the union of the durable queue backlog
      (`ListClaimableWorkflowExecutionIdsAsync`) and `IRuntimeRecoveryScanner` candidates.
   3. **Re-drives** each execution by enqueueing a `RunSchedulerWork` command envelope **through the
@@ -125,23 +127,64 @@ scheduler work claims one item at a time and dispatches it at once, and its rene
 dispatch deadline, and a claim its own checkpoint consumes); alteration jobs and transport items are fenced inside
 the checkpoint commit itself.
 
+## A live drain's continuation in the sweep's hands (#2225)
+
+The sweep claims across every execution, so it can claim a continuation a live drain has just committed,
+before the drain's own delivery step reaches it. The drain's step then finds nothing deliverable, or reports
+the item superseded (#1798). The drain used to treat that as quiescence and return. Nothing was lost, since
+the sweep delivered the item and re-drove the execution, but the command answered before its own next step
+had run: a start returned Accepted before its first bookmark existed, a resume before its workflow completed.
+The fixture-host evidence tests hit this in CI.
+
+The drain now treats such a continuation as still its own. `WorkflowDrainOrchestrator` reports `Quiesced`
+only once no other deliverer holds one of the execution's `EnqueueSchedulerWork` items and no work they
+queued is left undrained:
+
+- **Held by another deliverer.** The drain lists the execution's claimed continuations
+  (`IRuntimePostCommitOutboxClaimStore.ListClaimedAsync`) and waits for those deliveries to finish, polling
+  with backoff. Then it drains the work they queued: it still holds the execution's ownership lease, so
+  nothing else would drain that work before the command returned.
+- **The other deliverer died.** Its claim lapses after the processor's one-minute visibility timeout. The
+  drain then claims the item through the durable claim path and delivers it itself; a claimant that was only
+  slow finds its renewal refused and skips the item.
+- **Already delivered.** A sweep that finished the whole delivery before the drain's read leaves only queued
+  work, so after a scheduler drain that ran dry the drain also checks its execution's queue.
+- **Bounded.** Each wait is limited by `WorkflowDrainOrchestratorOptions.ContinuationClaimWaitLimit` (90
+  seconds by default: the visibility timeout plus a margin). When the limit passes, or the other deliverer's
+  attempt failed, the drain stops with `OutboxDeliveryFailed`, the status a failed delivery of its own
+  produces, so the command answers `AcceptedButFaulted` rather than `Accepted`. The item stays with its
+  claimant and then the sweep. Cancellation and a lost lease end the wait like any other drain step.
+
+The sweep itself is unchanged, so crash recovery stays at the sweep interval. The cost is latency under
+contention: a drain whose continuation sits in a sweep batch waits until the sweep reaches that item, and at
+most until the claim lapses. That includes the case where the batch reaches, first, an item that needs the
+same execution's mailbox, held by the waiting drain; the lapse resolves it.
+
+The interleavings are pinned on the in-memory stores, SQLite and PostgreSQL by
+`LiveDrainSweepContentionContract`, which runs the real sweep at the drain's read, and a claimant that delivers
+late, dies, or stays stuck. The orchestrator-level outcomes, cancellation included, are in
+`WorkflowDrainContinuationSettlementTests`.
+
 ## Crash windows
 
-Three recoverable windows, all covered by `DurableResumptionCrashTests`, which runs two
-provider generations over a shared `IDocumentStore` and asserts the crashed execution converges to the
-same terminal state as a crash-free control run.
+Three recoverable windows. Each is covered by the tests named under it.
 
 ### Window A — after checkpoint commit, before outbox delivery *(recovered)*
 
 The checkpoint is durable; the outbox row is durable and `Pending`; the scheduler work was never
 enqueued. On restart, the sweep's **outbox re-delivery** step delivers the row, enqueues the work, and
-re-drives. ✅
+re-drives. ✅ Nothing holds the row back for the dead drain: the sweep claims a continuation whether or not
+its execution has a live drain, so recovery takes one sweep interval (10 seconds by default). Covered by
+`RuntimeResumptionServiceTests.SweepAsync_DeliversContributedIntentCommittedThroughRealCheckpointAndOutbox`
+and, for a crash between the live drain's enqueue and its `Delivered` mark,
+`RuntimeLiveDrainDeliveryTests.LiveDrain_CrashWindow_UnmarkedIntent_RedrivesIdempotentlyToNoOp`.
 
 ### Window B — after outbox delivery, before drain *(recovered)*
 
 The outbox row is `Delivered` and the scheduler work is durably queued, but it was never drained. On
 restart, the sweep's **backlog discovery** (`ListClaimableWorkflowExecutionIdsAsync`) finds the
-execution and re-drives, draining the queue. ✅
+execution and re-drives, draining the queue. ✅ Covered by
+`RuntimeResumptionServiceTests.SweepAsync_RedrivesBacklogThroughAgentWithRecoveryEnvelope`.
 
 ### Window C — after the drainer picks up an item, before its handler checkpoint commit *(recovered)*
 
@@ -160,10 +203,9 @@ finds the execution once the dead drainer's claim lapses (`RuntimeSchedulerWorkC
 status guards (`existing.Status == Scheduled` / `state.Status == Running`) recognise the already-applied
 first write, and the deterministic follow-up work-item ids (`…:start:…`, `…:invoke:…`) are absorbed by the
 idempotent queue, so redelivery never double-applies. This is covered by
-`DurableResumptionCrashTests.WindowC_CrashAfterDequeueBeforeCheckpoint_ResumptionConvergesToControlState`
-(shared-`IDocumentStore` two-generation convergence) and, at the unit level, by
-`RuntimeSchedulerDrainTests.DrainAsync_RedriveSafe_CrashBetweenFallbackWrites_…` (crash-between-writes
-injection over the real Schedule handler) and the poison-path bounding in
+`RuntimeSchedulerDrainTests.DrainAsync_RedriveSafe_CrashBetweenFallbackWrites_LeavesSourceItemQueuedForRedelivery_AndConvergesOnRedrive`
+(crash-between-writes injection over the real Schedule handler, then a redrive that converges) and the
+poison-path bounding in
 `WorkflowSchedulerPoisonDrainTests` (ack-on-fault means a poisoned item is delivered a bounded number of
 times, never a hot-loop).
 

@@ -149,3 +149,5 @@ The delivery processor MUST classify a superseded item as **neither delivered no
 - It MUST NOT count toward the failed count or set a delivery-failed stop reason (FR-005). The item is not lost; it is being delivered by its owner.
 
 A drain cycle in which every item is superseded therefore reports zero delivered, and the drain quiesces — which is correct.
+
+*Note (2026-10-01, #2225):* the counting rules above stand, but the drain no longer quiesces on a superseded continuation of its own execution. It waits for the other deliverer to finish (or claims the item once that claim lapses) and drains what was queued before it reports quiescence; see the dated note on the corresponding edge case in [spec.md](../spec.md).

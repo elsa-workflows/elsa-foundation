@@ -829,6 +829,9 @@ public sealed class RuntimePostCommitOutboxProcessorTests
         public ValueTask<RuntimePostCommitOutboxClaim?> RenewClaimAsync(RuntimePostCommitOutboxClaim claim, DateTimeOffset now, TimeSpan visibilityTimeout, CancellationToken cancellationToken = default) =>
             inner.RenewClaimAsync(claim, now, visibilityTimeout, cancellationToken);
 
+        public ValueTask<IReadOnlyCollection<RuntimePostCommitOutboxItem>> ListClaimedAsync(RuntimePostCommitOutboxClaimedQuery query, CancellationToken cancellationToken = default) =>
+            inner.ListClaimedAsync(query, cancellationToken);
+
         public ValueTask RecordDeliveryResultAsync(RuntimePostCommitOutboxClaim claim, RuntimePostCommitOutboxDeliveryResult result, CancellationToken cancellationToken = default) =>
             inner.RecordDeliveryResultAsync(claim, result, cancellationToken);
 
