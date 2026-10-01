@@ -26,6 +26,8 @@ public sealed class EfSchedulerWorkQueueStore(
 
     public bool SupportsClaimTransitions => true;
 
+    public bool SupportsClaimableBacklogDiscovery => true;
+
     public async ValueTask<RuntimeSchedulerWorkItem> EnqueueAsync(
         RuntimeSchedulerWorkItem workItem,
         CancellationToken cancellationToken = default)
@@ -182,6 +184,43 @@ public sealed class EfSchedulerWorkQueueStore(
             .OrderBy(row => row.WorkflowExecutionIdOrderKey)
             .ThenBy(row => row.WorkflowExecutionId)
             .Take(limit)
+            .Select(row => EfRuntimeOperationalStoreSupport.Decode(row.WorkflowExecutionId))
+            .ToArrayAsync(cancellationToken);
+    }
+
+    public async ValueTask<IReadOnlyCollection<string>> ListClaimableWorkflowExecutionIdsAsync(
+        RuntimeSchedulerClaimableBacklogQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        if (query.AfterWorkflowExecutionId is { } after)
+            ValidateWorkflowExecutionId(after);
+        cancellationToken.ThrowIfCancellationRequested();
+        var scope = EfRuntimeOperationalStoreSupport.RequireScope(accessContextAccessor);
+        var scopeKey = EfRuntimeOperationalStoreSupport.Encode(scope);
+        var scopeHash = EfRuntimeOperationalStoreSupport.Hash(scope);
+        var now = query.Now.UtcTicks;
+        var rows = context.SchedulerWorkItems.AsNoTracking()
+            .Where(row => row.ScopeKey == scopeKey && row.ScopeKeyHash == scopeHash);
+
+        // One row per execution qualifies: its FIFO head (lowest WorkOrderKey, the row ClaimAsync takes), and only
+        // when that head is visible at Now under the same predicate ClaimAsync applies. Each execution's order key is
+        // unique and ordinal-preserving, so it alone is a total keyset order.
+        var heads = rows.Where(row =>
+            (row.VisibleAfterUtcTicks == null || row.VisibleAfterUtcTicks <= now) &&
+            !rows.Any(earlier =>
+                earlier.WorkflowExecutionIdHash == row.WorkflowExecutionIdHash &&
+                earlier.WorkflowExecutionId == row.WorkflowExecutionId &&
+                earlier.WorkOrderKey.CompareTo(row.WorkOrderKey) < 0));
+        if (query.AfterWorkflowExecutionId is not null)
+        {
+            var afterOrderKey = EfRuntimeOperationalStoreSupport.Order(query.AfterWorkflowExecutionId);
+            heads = heads.Where(row => row.WorkflowExecutionIdOrderKey.CompareTo(afterOrderKey) > 0);
+        }
+
+        return await heads
+            .OrderBy(row => row.WorkflowExecutionIdOrderKey)
+            .Take(query.Limit)
             .Select(row => EfRuntimeOperationalStoreSupport.Decode(row.WorkflowExecutionId))
             .ToArrayAsync(cancellationToken);
     }

@@ -2,6 +2,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 using Elsa.Workflows.Runtime.Services.Recovery;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -18,6 +19,11 @@ public sealed class RuntimeSchedulerWorkQueuePostgreSqlSmokeTests(RuntimeBookmar
         fixture,
         connection => new RuntimePostgreSqlDbContext(new DbContextOptionsBuilder<RuntimePostgreSqlDbContext>().UseNpgsql(connection).Options),
         RuntimePostgreSqlDbContext.ExpectedProviderName);
+
+    [SkippableFact]
+    public Task PostgreSql_scheduler_work_queue_claimable_discovery() => RuntimeSchedulerWorkQueueProviderSmoke.RunClaimableDiscoveryAsync(
+        fixture,
+        connection => new RuntimePostgreSqlDbContext(new DbContextOptionsBuilder<RuntimePostgreSqlDbContext>().UseNpgsql(connection).Options));
 }
 
 [Collection(RuntimeBookmarksSqlServerFixture.CollectionName)]
@@ -28,6 +34,11 @@ public sealed class RuntimeSchedulerWorkQueueSqlServerSmokeTests(RuntimeBookmark
         fixture,
         connection => new RuntimeSqlServerDbContext(new DbContextOptionsBuilder<RuntimeSqlServerDbContext>().UseSqlServer(connection).Options),
         RuntimeSqlServerDbContext.ExpectedProviderName);
+
+    [SkippableFact]
+    public Task SqlServer_scheduler_work_queue_claimable_discovery() => RuntimeSchedulerWorkQueueProviderSmoke.RunClaimableDiscoveryAsync(
+        fixture,
+        connection => new RuntimeSqlServerDbContext(new DbContextOptionsBuilder<RuntimeSqlServerDbContext>().UseSqlServer(connection).Options));
 }
 
 [Collection(RuntimeBookmarksMySqlFixture.CollectionName)]
@@ -38,6 +49,11 @@ public sealed class RuntimeSchedulerWorkQueueMySqlSmokeTests(RuntimeBookmarksMyS
         fixture,
         connection => new RuntimeMySqlDbContext(new DbContextOptionsBuilder<RuntimeMySqlDbContext>().UseMySQL(connection).Options),
         RuntimeMySqlDbContext.ExpectedProviderName);
+
+    [SkippableFact]
+    public Task MySql_scheduler_work_queue_claimable_discovery() => RuntimeSchedulerWorkQueueProviderSmoke.RunClaimableDiscoveryAsync(
+        fixture,
+        connection => new RuntimeMySqlDbContext(new DbContextOptionsBuilder<RuntimeMySqlDbContext>().UseMySQL(connection).Options));
 }
 
 internal static class RuntimeSchedulerWorkQueueProviderSmoke
@@ -101,6 +117,27 @@ internal static class RuntimeSchedulerWorkQueueProviderSmoke
             Assert.Equal(RuntimeSchedulerWorkClaimTransitionStatus.Succeeded,
                 (await store.CompleteClaimAsync(successor)).Status);
             Assert.Empty((await store.ListAsync(new RuntimeSchedulerWorkQuery("workflow-claim"))).Items);
+        }
+    }
+
+    // Claimable backlog discovery (#2188) under the provider's own collation and SQL translation. Each scenario gets a
+    // fresh scope, because the contract expects an empty queue and the provider database is shared.
+    public static async Task RunClaimableDiscoveryAsync(
+        RuntimeBookmarksProviderFixture fixture,
+        Func<string, RuntimeDbContext> createContext)
+    {
+        Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? "The native provider is unavailable.");
+        await using (var context = createContext(fixture.ConnectionString))
+        {
+            await context.Database.EnsureCreatedAsync();
+            await SchedulerWorkQueueClaimableDiscoveryContract.ListsExactlyTheExecutionsAClaimWouldServeAsync(
+                Store(context, $"native-2188-{Guid.NewGuid():N}"));
+        }
+
+        await using (var context = createContext(fixture.ConnectionString))
+        {
+            await SchedulerWorkQueueClaimableDiscoveryContract.PagesInOrdinalOrderAfterTheBoundAsync(
+                Store(context, $"native-2188-{Guid.NewGuid():N}"));
         }
     }
 

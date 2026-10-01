@@ -15,6 +15,8 @@ public sealed class InMemoryWorkflowSchedulerWorkQueue : IWorkflowSchedulerWorkQ
 
     public bool SupportsClaimTransitions => true;
 
+    public bool SupportsClaimableBacklogDiscovery => true;
+
     public ValueTask<RuntimeSchedulerWorkItem> EnqueueAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(workItem);
@@ -139,6 +141,31 @@ public sealed class InMemoryWorkflowSchedulerWorkQueue : IWorkflowSchedulerWorkQ
         }
     }
 
+    public ValueTask<IReadOnlyCollection<string>> ListClaimableWorkflowExecutionIdsAsync(
+        RuntimeSchedulerClaimableBacklogQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (_syncRoot)
+        {
+            // The head decides, through the same predicate ClaimAsync applies, so discovery never lists an execution
+            // a claim would refuse and never hides one a claim would serve.
+            var executionIds = _queuesByWorkflowExecutionId
+                .Where(entry => query.AfterWorkflowExecutionId is null ||
+                                StringComparer.Ordinal.Compare(entry.Key, query.AfterWorkflowExecutionId) > 0)
+                .Where(entry => entry.Value.TryPeek(out var head) &&
+                                !IsHidden(_claimsByScopedId[new SchedulerWorkItemKey(head.WorkflowExecutionId, head.WorkItemId)], query.Now))
+                .Select(entry => entry.Key)
+                .Order(StringComparer.Ordinal)
+                .Take(query.Limit)
+                .ToArray();
+
+            return new ValueTask<IReadOnlyCollection<string>>(executionIds);
+        }
+    }
+
     public ValueTask<IReadOnlyCollection<RuntimeSchedulerWorkClaim>> ListActiveClaimsAsync(
         string workflowExecutionId,
         DateTimeOffset now,
@@ -215,7 +242,7 @@ public sealed class InMemoryWorkflowSchedulerWorkQueue : IWorkflowSchedulerWorkQ
             var item = queue.Peek();
             var key = new SchedulerWorkItemKey(item.WorkflowExecutionId, item.WorkItemId);
             var state = _claimsByScopedId[key];
-            if (state.VisibleAfter is { } visibleAfter && visibleAfter > request.Now)
+            if (IsHidden(state, request.Now))
                 return new ValueTask<RuntimeSchedulerWorkClaim?>((RuntimeSchedulerWorkClaim?)null);
 
             state.OwnerId = request.OwnerId;
@@ -356,6 +383,10 @@ public sealed class InMemoryWorkflowSchedulerWorkQueue : IWorkflowSchedulerWorkQ
         state = null!;
         return false;
     }
+
+    // A live claim or a release with future visibility (backoff) hides the item until its deadline passes.
+    private static bool IsHidden(ClaimState state, DateTimeOffset now) =>
+        state.VisibleAfter is { } visibleAfter && visibleAfter > now;
 
     private static RuntimeSchedulerWorkClaim NewClaim(RuntimeSchedulerWorkItem item, ClaimState state) =>
         new(

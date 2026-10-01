@@ -26,7 +26,10 @@ public sealed class RuntimeResumptionOptions
     /// <summary>Maximum recovery-scanner candidates requested per sweep.</summary>
     public int RecoveryScanBatchSize { get; set; } = 100;
 
-    /// <summary>Hard cap on executions re-driven per sweep after discovery, bounding dispatch bursts.</summary>
+    /// <summary>
+    /// Hard cap on executions re-driven per sweep after discovery, bounding dispatch bursts. Half of it (at
+    /// least one slot) is kept for recovery-scanner candidates whenever the scanner has them.
+    /// </summary>
     public int MaxExecutionsPerSweep { get; set; } = 100;
 
     /// <summary>Lease-expiry threshold handed to the recovery scanner.</summary>

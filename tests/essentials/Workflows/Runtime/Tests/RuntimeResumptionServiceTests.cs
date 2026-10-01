@@ -295,8 +295,35 @@ public sealed class RuntimeResumptionServiceTests
         Assert.Equal("wfexec-legacy-store", Assert.Single(result.Dispatches).WorkflowExecutionId);
     }
 
+    /// <summary>
+    /// #2188: a backlog that filled <c>MaxExecutionsPerSweep</c> used to leave the recovery scanner no capacity, so it did
+    /// not run at all. It now keeps half the cap; the backlog IDs that did not fit are listed by the next sweep rather
+    /// than skipped by the backlog bound.
+    /// </summary>
     [Fact]
-    public async Task SweepAsync_DoesNotAdvanceRecoveryWhenBacklogFillsDispatchCap()
+    public async Task SweepAsync_KeepsTheRecoveryShareWhenTheBacklogFillsTheCap()
+    {
+        var harness = new Harness(workQueue: await QueueWithBacklogAsync("wfexec-a", "wfexec-b", "wfexec-c", "wfexec-d"));
+        harness.RecoveryScanner.Pages.Enqueue(new RecoveryPage(
+            [NewCandidate("wfexec-r1"), NewCandidate("wfexec-r2"), NewCandidate("wfexec-r3")],
+            "recovery-next"));
+        var request = new RuntimeResumptionSweepRequest(maxExecutionsPerSweep: 4);
+
+        var first = await harness.Service.SweepAsync(request);
+        var second = await harness.Service.SweepAsync(request);
+
+        Assert.Equal(2, harness.RecoveryScanner.Requests[0].Limit);
+        Assert.Equal(["wfexec-a", "wfexec-b", "wfexec-r1", "wfexec-r2"], first.Dispatches.Select(dispatch => dispatch.WorkflowExecutionId));
+        Assert.Equal(["wfexec-c", "wfexec-d"], second.Dispatches.Select(dispatch => dispatch.WorkflowExecutionId));
+        Assert.Equal("recovery-next", harness.RecoveryScanner.Requests[1].ContinuationToken);
+    }
+
+    /// <summary>
+    /// The recovery share holds on the earlier discovery path too, down to a cap of one: the scanner runs and its
+    /// candidate takes the only slot.
+    /// </summary>
+    [Fact]
+    public async Task SweepAsync_RunsTheRecoveryScannerWhenALegacyBacklogFillsTheCap()
     {
         var harness = new Harness();
         harness.WorkQueue.PendingExecutionIds = ["wfexec-backlog"];
@@ -308,8 +335,46 @@ public sealed class RuntimeResumptionServiceTests
             recoveryScanBatchSize: 1,
             maxExecutionsPerSweep: 1));
 
-        Assert.Equal("wfexec-backlog", Assert.Single(result.Dispatches).WorkflowExecutionId);
-        Assert.Empty(harness.RecoveryScanner.Requests);
+        Assert.Equal("wfexec-recovery", Assert.Single(result.Dispatches).WorkflowExecutionId);
+        Assert.Equal(1, Assert.Single(harness.RecoveryScanner.Requests).Limit);
+    }
+
+    /// <summary>
+    /// #2188: executions that stay claimable but never drain (a paused execution releases its head straight away) used
+    /// to take the first backlog page on every sweep. The backlog bound walks past them and starts over after a short
+    /// page, so every execution with claimable work is reached.
+    /// </summary>
+    [Fact]
+    public async Task SweepAsync_WalksTheBacklogSoTheSameExecutionsCannotHoldTheWindow()
+    {
+        var harness = new Harness(workQueue: await QueueWithBacklogAsync("wfexec-a", "wfexec-b", "wfexec-c", "wfexec-d", "wfexec-e"));
+        var request = new RuntimeResumptionSweepRequest(backlogBatchSize: 2);
+
+        var sweeps = new List<string[]>();
+        for (var sweep = 0; sweep < 4; sweep++)
+            sweeps.Add((await harness.Service.SweepAsync(request)).Dispatches.Select(dispatch => dispatch.WorkflowExecutionId).ToArray());
+
+        Assert.Equal(
+            [["wfexec-a", "wfexec-b"], ["wfexec-c", "wfexec-d"], ["wfexec-e"], ["wfexec-a", "wfexec-b"]],
+            sweeps);
+    }
+
+    /// <summary>
+    /// Unlike the recovery cursor, the backlog bound moves on past a failed re-drive. The failed execution keeps its
+    /// work and is reached again by the next walk; rewinding would let failing executions hold the window.
+    /// </summary>
+    [Fact]
+    public async Task SweepAsync_MovesTheBacklogBoundPastAFailedRedrive()
+    {
+        var harness = new Harness(workQueue: await QueueWithBacklogAsync("wfexec-a", "wfexec-b", "wfexec-c"));
+        harness.AgentProvider.FailFor = "wfexec-a";
+        var request = new RuntimeResumptionSweepRequest(backlogBatchSize: 2);
+
+        var first = await harness.Service.SweepAsync(request);
+        var second = await harness.Service.SweepAsync(request);
+
+        Assert.Equal(RuntimeResumptionDispatchOutcome.Faulted, first.Dispatches.Single(dispatch => dispatch.WorkflowExecutionId == "wfexec-a").Outcome);
+        Assert.Equal("wfexec-c", Assert.Single(second.Dispatches).WorkflowExecutionId);
     }
 
     [Fact]
@@ -582,6 +647,14 @@ public sealed class RuntimeResumptionServiceTests
             recordedAt: Now,
             sequence: index);
 
+    private static async Task<InMemoryWorkflowSchedulerWorkQueue> QueueWithBacklogAsync(params string[] workflowExecutionIds)
+    {
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        foreach (var workflowExecutionId in workflowExecutionIds)
+            await queue.EnqueueAsync(NewResidualWorkItem(workflowExecutionId, 1));
+        return queue;
+    }
+
     private static WorkflowExecutionState NewState(string workflowExecutionId, WorkflowExecutionStatus status) =>
         new(
             WorkflowExecutionId: workflowExecutionId,
@@ -633,11 +706,11 @@ public sealed class RuntimeResumptionServiceTests
 
     private sealed class Harness
     {
-        public Harness(IRuntimeRecoveryCandidateSource? candidateSource = null)
+        public Harness(IRuntimeRecoveryCandidateSource? candidateSource = null, IWorkflowSchedulerWorkQueue? workQueue = null)
         {
             Service = new RuntimeResumptionService(
                 OutboxProcessor,
-                WorkQueue,
+                workQueue ?? WorkQueue,
                 RecoveryScanner,
                 AgentProvider,
                 new ShortRuntimeExecutionIdGenerator(),

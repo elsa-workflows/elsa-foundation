@@ -192,7 +192,7 @@ registers `RuntimeResumptionPumpTask` as an `IRecurringTask` (it depends on the 
 Each tick calls `IRuntimeResumptionService.SweepAsync`, implemented by
 `src/essentials/Workflows/Runtime/Services/Recovery/RuntimeResumptionService.cs`. One sweep does three things: deliver pending
 post-commit outbox items, list executions that still have queued work
-(`IWorkflowSchedulerWorkQueue.ListPendingWorkflowExecutionIdsAsync`) plus candidates from
+(`IWorkflowSchedulerWorkQueue.ListClaimableWorkflowExecutionIdsAsync`, which lists only work a claim could take now) plus candidates from
 `IRuntimeRecoveryScanner.ScanPageAsync`, and re-drive each execution by sending a `RunSchedulerWork` envelope to
 its mailbox. Re-driving never bypasses the mailbox, so the single-writer rule holds during recovery too.
 

@@ -36,10 +36,36 @@ public interface IWorkflowSchedulerWorkQueue
     /// Lists up to <paramref name="limit"/> distinct workflow execution IDs that currently have pending scheduler
     /// work, ordered deterministically (ordinal). Implementations may make several finite provider requests to
     /// compensate for repeated work items belonging to the same execution; they must not underfill merely because
-    /// one provider page contains duplicates. Used by system-wide resumption sweeps to discover executions whose
-    /// queued work survived a process restart and would otherwise never be drained.
+    /// one provider page contains duplicates. Lists work whatever its claim state; resumption sweeps discover
+    /// executions through <see cref="ListClaimableWorkflowExecutionIdsAsync"/> and fall back to this method only for a
+    /// provider without <see cref="SupportsClaimableBacklogDiscovery"/>.
     /// </summary>
     ValueTask<IReadOnlyCollection<string>> ListPendingWorkflowExecutionIdsAsync(int limit, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Indicates that this provider implements <see cref="ListClaimableWorkflowExecutionIdsAsync"/>. Resumption sweeps
+    /// over a provider that returns <see langword="false"/> keep the earlier discovery through
+    /// <see cref="ListPendingWorkflowExecutionIdsAsync"/>: no visibility filter and no cursor.
+    /// </summary>
+    bool SupportsClaimableBacklogDiscovery => false;
+
+    /// <summary>
+    /// Lists up to <see cref="RuntimeSchedulerClaimableBacklogQuery.Limit"/> distinct workflow execution IDs whose
+    /// scheduler work is claimable at <see cref="RuntimeSchedulerClaimableBacklogQuery.Now"/>, in ordinal order and
+    /// strictly after <see cref="RuntimeSchedulerClaimableBacklogQuery.AfterWorkflowExecutionId"/> when one is given.
+    /// Used by resumption sweeps to discover executions to re-drive.
+    /// </summary>
+    /// <remarks>
+    /// An execution is listed exactly when <see cref="ClaimAsync"/> at the same instant would return a claim. Strict
+    /// FIFO means only the head decides: a head claimed under a live lease, or released with a future visibility
+    /// (backoff), hides the whole execution, while a head whose claim lapsed is claimable again. A page shorter than
+    /// the limit means the traversal reached the end. The bound is a plain ordinal position, not a snapshot, so a
+    /// caller may resume after any ID it was given, under any later <c>Now</c>.
+    /// </remarks>
+    ValueTask<IReadOnlyCollection<string>> ListClaimableWorkflowExecutionIdsAsync(
+        RuntimeSchedulerClaimableBacklogQuery query,
+        CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("This scheduler work queue does not support claimable backlog discovery.");
 
     /// <summary>
     /// Atomically claims the FIFO head when it is visible. An unexpired claim keeps the head hidden and

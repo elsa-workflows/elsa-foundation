@@ -55,6 +55,15 @@ public sealed class CoalescingWorkflowSchedulerWorkQueue(
     public ValueTask<IReadOnlyCollection<string>> ListPendingWorkflowExecutionIdsAsync(int limit, CancellationToken cancellationToken = default) =>
         _inner.ListPendingWorkflowExecutionIdsAsync(limit, cancellationToken);
 
+    // Backlog discovery runs in the resumption sweep, outside any coalescing session, so like the listing above it
+    // has no overlay to consult. Forwarding the capability keeps the sweep on the provider's claimable discovery.
+    public bool SupportsClaimableBacklogDiscovery => _inner.SupportsClaimableBacklogDiscovery;
+
+    public ValueTask<IReadOnlyCollection<string>> ListClaimableWorkflowExecutionIdsAsync(
+        RuntimeSchedulerClaimableBacklogQuery query,
+        CancellationToken cancellationToken = default) =>
+        _inner.ListClaimableWorkflowExecutionIdsAsync(query, cancellationToken);
+
     // Targeted deletion always addresses the durable inner queue. Its only caller is the out-of-drain terminal-residue
     // purge in the resumption sweep (spec 113), which never runs inside a coalescing session — so, like
     // ListPendingWorkflowExecutionIdsAsync, there is no overlay to consult and delegating to the inner queue is the
