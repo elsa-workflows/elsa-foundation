@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "0859a160c81cc3559a23f6a450ae443bed43aab7",
+  "last_publish_commit": "88e5fb70279e5ecfe773f9beb052d4aadab44b39",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -529,8 +529,8 @@
     },
     {
       "package_id": "Elsa.Workflows.Design.Persistence.EntityFrameworkCore",
-      "version": "4.0.10-preview",
-      "commit": "8a34a953685dc943bcf088d1eec0cb9cc94571e5"
+      "version": "4.0.11-preview",
+      "commit": "88e5fb70279e5ecfe773f9beb052d4aadab44b39"
     },
     {
       "package_id": "Elsa.Workflows.Design.Reconciliation",
