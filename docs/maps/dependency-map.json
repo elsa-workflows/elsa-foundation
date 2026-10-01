@@ -7231,11 +7231,6 @@
         },
         {
           "type": "internal",
-          "id": "Elsa.Locking.Core",
-          "path": "src/essentials/Locking/Core/Elsa.Locking.Core.csproj"
-        },
-        {
-          "type": "internal",
           "id": "Elsa.Serialization.Core",
           "path": "src/essentials/Serialization/Core/Elsa.Serialization.Core.csproj"
         },

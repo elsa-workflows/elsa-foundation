@@ -149,6 +149,10 @@ are no-ops for that version. Simulate a second writer; assert a rejected push or
 - **Malformed version file**: skip with a diagnostic; other entries still reconcile.
 - **Writer clone divergence** (non-ff on integrate): stop and surface (the D7 single-writer signal) —
   never merge or hard-reset the writer clone.
+  *Amended 2026-10-01 ([#2197](https://github.com/elsa-workflows/elsa-foundation/issues/2197); [ADR 0034](../../docs/adr/0034-workflow-definitions-reconcile-from-and-export-to-git.md), D7 and D11 amendments):* a diverged Writer clone no longer stops
+  the start. It resets to the remote when every commit the remote lacks was made by the export identity, and
+  otherwise stays as it is with an error logged; neither way throws. Several Writer nodes of one catalog are
+  supported, and the push is the fence.
 - **Bootstrap**: a fresh writer catalog is seeded by importing an existing repo before it exports.
 - **Drafts**: never cross the reconciliation boundary (D6); the optional WIP snapshot is one-way.
 
@@ -205,6 +209,11 @@ are no-ops for that version. Simulate a second writer; assert a rejected push or
 - **FR-012**: Clone modes MUST be role-based: **Writer** = persistent working copy, `fetch` + ff-only
   integrate, holds un-pushed commits, never `reset --hard`; **Consumer** = disposable mirror, `fetch`
   + `reset --hard origin/{Branch}`, read-only.
+  *Amended 2026-10-01 ([#2197](https://github.com/elsa-workflows/elsa-foundation/issues/2197); [ADR 0034](../../docs/adr/0034-workflow-definitions-reconcile-from-and-export-to-git.md), D11 amendment):* a Writer clone is no longer ff-only. It keeps its
+  unpushed export commits while the remote has not moved; only behind, it fast-forwards; diverged, it resets to the
+  remote when all the commits the remote lacks were made by the export identity (author name, author email and
+  committer email), and otherwise stays as it is with an error logged. A move that would overwrite an uncommitted
+  change outside the workflows path is refused the same way. None of these fails the start.
 - **FR-013**: Credentials MUST be supplied out-of-band (SSH deploy key, credential helper, or a
   `Secret` token) via `CredentialsMode` (`SshKey` | `Token` | `HostDefault`), never on the git
   command line.

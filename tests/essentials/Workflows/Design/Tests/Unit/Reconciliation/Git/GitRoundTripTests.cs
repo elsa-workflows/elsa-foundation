@@ -30,7 +30,7 @@ public sealed class GitRoundTripTests : GitIntegrationTest
             LocalCachePath = writerCache, Role = GitReconciliationRole.Writer,
         };
         var writerOpts = GitTestSupport.Options(writerOptions);
-        var writerWorkspace = new GitWorkspace(_git, writerOpts, NullLogger<GitWorkspace>.Instance);
+        var writerWorkspace = GitTestSupport.Workspace(_git, writerOpts);
         var defs = new InMemoryDefinitionStore().With(new WorkflowDefinition { Id = "wf-r", Name = "R" });
         var versions = new InMemoryVersionStore().With(new WorkflowDefinitionVersion("wf-r", "1.0.0") { State = WorkflowDefinitionState.Empty });
         var exporter = new GitWorkflowExporter(writerWorkspace, _git, new FakePayloadSerializer(), defs, versions, writerOpts, NullLogger<GitWorkflowExporter>.Instance);
@@ -46,7 +46,7 @@ public sealed class GitRoundTripTests : GitIntegrationTest
             LocalCachePath = consumerCache, Role = GitReconciliationRole.Consumer,
         };
         var consumerOpts = GitTestSupport.Options(consumerOptions);
-        var consumerWorkspace = new GitWorkspace(_git, consumerOpts, NullLogger<GitWorkspace>.Instance);
+        var consumerWorkspace = GitTestSupport.Workspace(_git, consumerOpts);
         var source = new GitWorkflowReconciliationSource(consumerWorkspace, _git, new FakePayloadSerializer(), consumerOpts, NullLogger<GitWorkflowReconciliationSource>.Instance);
 
         var model = Assert.Single(await source.Read(CancellationToken.None));

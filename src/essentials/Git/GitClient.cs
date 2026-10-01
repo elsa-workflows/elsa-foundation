@@ -6,22 +6,29 @@ namespace Elsa.Git;
 /// <summary>
 /// Canonical Git process invocation for the foundation. This is the single Git stack:
 /// <list type="bullet">
-/// <item><see cref="RunAsync"/> awaits a mutating Git command and throws on a non-zero exit.</item>
+/// <item><see cref="RunAsync(string, CancellationToken, string[])"/> awaits a Git command, returns its trimmed standard
+/// output, and throws on a non-zero exit; an overload adds environment variables to that one process.</item>
 /// <item><see cref="RunOrDefault"/> runs a read-only Git command synchronously and returns an empty
 /// string on any failure.</item>
-/// <item><see cref="IsGitRepository"/> reports whether a path is inside a Git work tree.</item>
+/// <item><see cref="IsGitRepository"/> reports whether a path is the top level of a Git work tree.</item>
 /// </list>
 /// Every invocation runs with <c>GIT_TERMINAL_PROMPT=0</c> so an unreachable or credential-protected
 /// remote fails fast instead of blocking on an interactive prompt.
 /// </summary>
 public sealed class GitClient(string gitExecutable, ILogger logger) : IGitClient
 {
-    public async Task RunAsync(string workingDirectory, CancellationToken cancellationToken, params string[] arguments)
+    private static readonly IReadOnlyDictionary<string, string> NoEnvironment = new Dictionary<string, string>();
+
+    public Task<string> RunAsync(string workingDirectory, CancellationToken cancellationToken, params string[] arguments) =>
+        RunAsync(workingDirectory, NoEnvironment, cancellationToken, arguments);
+
+    public async Task<string> RunAsync(
+        string workingDirectory, IReadOnlyDictionary<string, string> environment, CancellationToken cancellationToken, params string[] arguments)
     {
         Process process;
         try
         {
-            process = StartProcess(workingDirectory, arguments);
+            process = StartProcess(workingDirectory, arguments, environment);
         }
         catch (Exception ex) when (ex is not OperationCanceledException and not InvalidOperationException)
         {
@@ -46,6 +53,8 @@ public sealed class GitClient(string gitExecutable, ILogger logger) : IGitClient
             var error = await errorTask;
             if (process.ExitCode != 0)
                 throw new InvalidOperationException($"Git command failed: {string.Join(' ', arguments)}{Environment.NewLine}{error}".TrimEnd());
+
+            return output.Trim();
         }
     }
 
@@ -53,7 +62,7 @@ public sealed class GitClient(string gitExecutable, ILogger logger) : IGitClient
     {
         try
         {
-            using var process = StartProcess(workingDirectory, arguments);
+            using var process = StartProcess(workingDirectory, arguments, NoEnvironment);
             var output = process.StandardOutput.ReadToEnd();
             _ = process.StandardError.ReadToEnd();
             process.WaitForExit();
@@ -66,23 +75,26 @@ public sealed class GitClient(string gitExecutable, ILogger logger) : IGitClient
         }
     }
 
+    // One call: the first line says whether it is a work tree, the second the path from the top level, empty at the top
+    // level itself. A directory nested in another repository's work tree is no repository of its own.
     public bool IsGitRepository(string repositoryPath) =>
-        string.Equals(RunOrDefault(repositoryPath, "rev-parse", "--is-inside-work-tree"), "true", StringComparison.OrdinalIgnoreCase);
+        RunOrDefault(repositoryPath, "rev-parse", "--is-inside-work-tree", "--show-prefix") == "true";
 
-    private Process StartProcess(string workingDirectory, IReadOnlyList<string> arguments)
+    private Process StartProcess(string workingDirectory, IReadOnlyList<string> arguments, IReadOnlyDictionary<string, string> environment)
     {
-        var startInfo = CreateStartInfo(gitExecutable, workingDirectory, arguments);
+        var startInfo = CreateStartInfo(gitExecutable, workingDirectory, arguments, environment);
         return Process.Start(startInfo) ?? throw new InvalidOperationException($"Could not start '{gitExecutable}'.");
     }
 
     /// <summary>
-    /// Builds the <see cref="ProcessStartInfo"/> for a git invocation. Notably sets
-    /// <c>GIT_TERMINAL_PROMPT=0</c> so an unreachable or credential-protected remote fails fast
-    /// instead of blocking on an interactive prompt. Public (per §2.23.3, logic-bearing implementations
-    /// are directly testable without <c>InternalsVisibleTo</c>) so tests can assert this env var
-    /// directly, independent of whether the host has a TTY.
+    /// Builds the <see cref="ProcessStartInfo"/> for a git invocation, with <paramref name="environment"/> added to the
+    /// process environment. Notably sets <c>GIT_TERMINAL_PROMPT=0</c>, after that environment so it cannot be undone,
+    /// so an unreachable or credential-protected remote fails fast instead of blocking on an interactive prompt.
+    /// Public (per §2.23.3, logic-bearing implementations are directly testable without <c>InternalsVisibleTo</c>) so
+    /// tests can assert this env var directly, independent of whether the host has a TTY.
     /// </summary>
-    public static ProcessStartInfo CreateStartInfo(string gitExecutable, string workingDirectory, IReadOnlyList<string> arguments)
+    public static ProcessStartInfo CreateStartInfo(
+        string gitExecutable, string workingDirectory, IReadOnlyList<string> arguments, IReadOnlyDictionary<string, string>? environment = null)
     {
         var startInfo = new ProcessStartInfo(gitExecutable)
         {
@@ -91,6 +103,8 @@ public sealed class GitClient(string gitExecutable, ILogger logger) : IGitClient
             RedirectStandardOutput = true,
             UseShellExecute = false
         };
+        foreach (var (name, value) in environment ?? NoEnvironment)
+            startInfo.Environment[name] = value;
         startInfo.Environment["GIT_TERMINAL_PROMPT"] = "0";
         foreach (var argument in arguments)
             startInfo.ArgumentList.Add(argument);

@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Elsa.Git;
@@ -6,7 +8,10 @@ using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Filters;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
+using Elsa.Testing;
 using Elsa.Workflows.Design.Reconciliation.Git.Options;
+using Elsa.Workflows.Design.Reconciliation.Git.Services;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
@@ -74,20 +79,202 @@ internal sealed class GitTestRepo : IDisposable
 }
 
 /// <summary>
-/// Base for the GitOps integration tests: owns a real <see cref="IGitClient"/> and a list of temp
-/// directories deleted on dispose, so each test class stays free of repeated setup/teardown.
+/// Base for the GitOps integration tests: owns a real <see cref="IGitClient"/>, the clone slots its tests take (released
+/// on dispose) and a list of temp directories deleted on dispose, so each test class stays free of repeated
+/// setup/teardown.
 /// </summary>
 public abstract class GitIntegrationTest : IDisposable
 {
     protected readonly IGitClient _git = GitTestSupport.NewGitClient();
     protected readonly List<string> _tempPaths = new();
+    protected readonly List<GitCloneSlot> _slots = new();
+
+    /// <summary>A directory for clone slots, deleted on dispose.</summary>
+    protected string NewSlotsRoot()
+    {
+        var root = GitTestSupport.NewCachePath();
+        _tempPaths.Add(root);
+        return root;
+    }
+
+    /// <summary>A clone slot of <paramref name="options"/> under <paramref name="slotsRoot"/>, released on dispose.</summary>
+    protected GitCloneSlot Slot(GitReconciliationOptions options, string slotsRoot)
+    {
+        var slot = new GitCloneSlot(options, slotsRoot);
+        _slots.Add(slot);
+        return slot;
+    }
 
     public void Dispose()
     {
+        foreach (var slot in _slots)
+            slot.Dispose();
         foreach (var path in _tempPaths)
             try { if (Directory.Exists(path)) Directory.Delete(path, recursive: true); } catch { /* best-effort temp cleanup */ }
     }
 }
+
+/// <summary>
+/// Base for the export tests: one bare remote and one catalog, shared the way the nodes of one authoring deployment share
+/// them, and a factory for Writer nodes, each with a clone of its own.
+/// </summary>
+public abstract class GitExportTest : GitIntegrationTest
+{
+    protected readonly string _remote;
+    protected readonly InMemoryDefinitionStore _definitions = new();
+    protected readonly InMemoryVersionStore _versions = new();
+    private int _writers;
+
+    protected GitExportTest() => _remote = GitTestSupport.CreateRemoteWithMain(_git, _tempPaths);
+
+    /// <summary>Adds a definition and its versions to the shared catalog.</summary>
+    protected void Publish(string definitionId, string name, params string[] versions)
+    {
+        _definitions.With(new WorkflowDefinition { Id = definitionId, Name = name });
+        foreach (var version in versions)
+            _versions.With(new WorkflowDefinitionVersion(definitionId, version) { State = WorkflowDefinitionState.Empty });
+    }
+
+    /// <summary>
+    /// A Writer node of the shared catalog and remote, with a clone of its own: at a path of its own, or, given
+    /// <paramref name="slotsRoot"/>, in a clone slot there. A non-empty <paramref name="exportBranch"/> makes it export to
+    /// that branch rather than the one it tracks; <paramref name="configure"/> adjusts anything else.
+    /// </summary>
+    /// <remarks>
+    /// Each node dates its commits a day after the node before it. Two nodes exporting the same catalog on the same parent
+    /// would otherwise make the same commit, hash included, whenever they do it within one second (a commit records whole
+    /// seconds), and a push of an identical commit is no race at all.
+    /// </remarks>
+    protected GitWriterNode Writer(
+        GitPushMode pushMode = GitPushMode.Manual, string exportBranch = "", string? slotsRoot = null, Action<GitReconciliationOptions>? configure = null)
+    {
+        var settings = new GitReconciliationOptions
+        {
+            RemoteUrl = _remote, Branch = "main", WorkflowsPath = "workflows", Role = GitReconciliationRole.Writer,
+            Export = new GitExportOptions { PushMode = pushMode, Branch = exportBranch, Tag = true },
+        };
+        if (slotsRoot is null)
+        {
+            settings.LocalCachePath = GitTestSupport.NewCachePath();
+            _tempPaths.Add(settings.LocalCachePath);
+        }
+
+        configure?.Invoke(settings);
+        var options = GitTestSupport.Options(settings);
+        var slot = slotsRoot is null ? new GitCloneSlot(options) : Slot(settings, slotsRoot);
+        var git = new InterceptingGitClient(_git, new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero).AddDays(_writers++));
+        var workspaceLog = new RecordingLogger<GitWorkspace>();
+        var workspace = new GitWorkspace(git, options, slot, workspaceLog);
+        var exportLog = new RecordingLogger<GitWorkflowExporter>();
+        var serializer = new FakePayloadSerializer();
+        return new GitWriterNode(
+            slot.RepositoryPath,
+            slot,
+            git,
+            new GitWorkflowExporter(workspace, git, serializer, _definitions, _versions, options, exportLog),
+            new GitWorkflowReconciliationSource(workspace, git, serializer, options, NullLogger<GitWorkflowReconciliationSource>.Instance),
+            workspaceLog,
+            exportLog);
+    }
+
+    /// <summary>
+    /// Another writer, or a person, pushes a commit to <paramref name="branch"/> of the remote (created from main when it does
+    /// not exist yet). It rewrites <c>README.md</c>, so a clone with an uncommitted edit of it cannot move onto the commit.
+    /// </summary>
+    protected async Task AdvanceRemoteAsync(string branch)
+    {
+        var work = GitTestSupport.NewCachePath();
+        _tempPaths.Add(work);
+        Directory.CreateDirectory(System.IO.Path.GetDirectoryName(work)!);
+        await _git.RunAsync(System.IO.Path.GetDirectoryName(work)!, CancellationToken.None, "clone", _remote, work);
+        var start = _git.RunOrDefault(work, "ls-remote", "--heads", "origin", branch).Length > 0 ? $"origin/{branch}" : "origin/main";
+        await _git.RunAsync(work, CancellationToken.None, "checkout", "-B", branch, start);
+        await File.WriteAllTextAsync(System.IO.Path.Join(work, "README.md"), Guid.NewGuid().ToString("N"));
+        await _git.RunAsync(work, CancellationToken.None, "add", "--", "README.md");
+        await _git.RunAsync(work, CancellationToken.None,
+            "-c", "user.name=Other writer", "-c", "user.email=other@example.com", "commit", "-m", $"Other writer on {branch}");
+        await _git.RunAsync(work, CancellationToken.None, "push", "origin", $"HEAD:{branch}");
+    }
+
+    protected IReadOnlyList<string> Subjects(string repository, string revision = "HEAD") =>
+        _git.RunOrDefault(repository, "log", "--format=%s", revision).Split('\n', StringSplitOptions.RemoveEmptyEntries);
+
+    protected IReadOnlyList<string> RemoteSubjects() => Subjects(_remote, "main");
+
+    protected string Head(string repository, string revision = "HEAD") => _git.RunOrDefault(repository, "rev-parse", revision);
+
+    protected bool IsCommitted(string repository, string path) =>
+        _git.RunOrDefault(repository, "ls-tree", "--name-only", "HEAD", "--", path) == path;
+}
+
+/// <summary>One Writer node: its clone and the slot that holds it, the git client it runs (which a test can intercept), its export and its import.</summary>
+public sealed record GitWriterNode(
+    string CachePath,
+    GitCloneSlot Slot,
+    InterceptingGitClient Git,
+    GitWorkflowExporter Exporter,
+    GitWorkflowReconciliationSource Source,
+    RecordingLogger<GitWorkspace> WorkspaceLog,
+    RecordingLogger<GitWorkflowExporter> ExportLog);
+
+/// <summary>
+/// Runs every git command through the real client, except that a test can act just before a chosen run of a command: fail
+/// it, as a process that stops between two steps would, or let another node act in that moment. Commands are counted by
+/// name, skipping the leading global options (<c>-c key=value</c> pairs, <c>--literal-pathspecs</c>). Every run is
+/// recorded with its arguments and the environment it adds. Given a <paramref name="commitDate"/>, every <c>commit</c>
+/// is dated then.
+/// </summary>
+public sealed class InterceptingGitClient(IGitClient inner, DateTimeOffset? commitDate = null) : IGitClient
+{
+    private static readonly IReadOnlyDictionary<string, string> NoEnvironment = new Dictionary<string, string>();
+
+    private readonly List<(string Command, int Occurrence, Func<Task> Action)> _interceptions = [];
+    private readonly Dictionary<string, int> _runs = new(StringComparer.Ordinal);
+    private readonly List<GitRun> _recorded = [];
+
+    /// <summary>Every command run through <c>RunAsync</c> so far, as it reached the real client.</summary>
+    public IReadOnlyList<GitRun> Runs => _recorded;
+
+    /// <summary>Fails the given run of <paramref name="command"/> before it starts, the way a failed git command fails.</summary>
+    public void FailAt(string command, int occurrence = 1) =>
+        Before(command, occurrence, () => throw new InvalidOperationException($"Simulated stop before git {command} (run {occurrence})."));
+
+    public void Before(string command, int occurrence, Func<Task> action) => _interceptions.Add((command, occurrence, action));
+
+    public Task<string> RunAsync(string workingDirectory, CancellationToken cancellationToken, params string[] arguments) =>
+        RunAsync(workingDirectory, NoEnvironment, cancellationToken, arguments);
+
+    public async Task<string> RunAsync(
+        string workingDirectory, IReadOnlyDictionary<string, string> environment, CancellationToken cancellationToken, params string[] arguments)
+    {
+        var index = CommandIndex(arguments);
+        var command = index < arguments.Length ? arguments[index] : "";
+        var run = _runs[command] = _runs.GetValueOrDefault(command) + 1;
+        foreach (var interception in _interceptions.Where(i => i.Command == command && i.Occurrence == run))
+            await interception.Action();
+
+        if (command == "commit" && commitDate is { } date)
+            arguments = [.. arguments[..(index + 1)], $"--date={date.ToString("yyyy-MM-ddTHH:mm:sszzz", CultureInfo.InvariantCulture)}", .. arguments[(index + 1)..]];
+
+        _recorded.Add(new GitRun(command, arguments, environment));
+        return await inner.RunAsync(workingDirectory, environment, cancellationToken, arguments);
+    }
+
+    public string RunOrDefault(string workingDirectory, params string[] arguments) => inner.RunOrDefault(workingDirectory, arguments);
+
+    public bool IsGitRepository(string repositoryPath) => inner.IsGitRepository(repositoryPath);
+
+    private static int CommandIndex(string[] arguments)
+    {
+        var index = 0;
+        while (index < arguments.Length && arguments[index].StartsWith('-'))
+            index += arguments[index] == "-c" ? 2 : 1;
+        return index;
+    }
+}
+
+/// <summary>One git command an <see cref="InterceptingGitClient"/> ran: its name, its arguments and the environment it added.</summary>
+public sealed record GitRun(string Command, IReadOnlyList<string> Arguments, IReadOnlyDictionary<string, string> Environment);
 
 internal static class GitTestSupport
 {
@@ -110,6 +297,30 @@ internal static class GitTestSupport
 
     public static IOptions<GitReconciliationOptions> Options(GitReconciliationOptions options) =>
         Microsoft.Extensions.Options.Options.Create(options);
+
+    /// <summary>A workspace over the explicit <see cref="GitReconciliationOptions.LocalCachePath"/> of <paramref name="options"/>, which takes no slot.</summary>
+    public static GitWorkspace Workspace(IGitClient git, IOptions<GitReconciliationOptions> options, ILogger<GitWorkspace>? logger = null) =>
+        new(git, options, new GitCloneSlot(options), logger ?? NullLogger<GitWorkspace>.Instance);
+
+    /// <summary>
+    /// Runs <c>git credential fill</c> as a git command carrying <paramref name="credentials"/> would, for an HTTPS request
+    /// to <paramref name="host"/>, with the given machine-wide helper configured ahead of them, and returns what git
+    /// printed: the credential it would send. Standard input carries the request, so this does not go through
+    /// <see cref="GitClient.RunAsync(string, CancellationToken, string[])"/>.
+    /// </summary>
+    public static async Task<string> CredentialFillAsync(GitCredentials credentials, string host, string machineHelper)
+    {
+        var startInfo = GitClient.CreateStartInfo(
+            "git", System.IO.Path.GetTempPath(), ["-c", $"credential.helper={machineHelper}", .. credentials.Arguments, "credential", "fill"], credentials.Environment);
+        startInfo.RedirectStandardInput = true;
+        using var process = Process.Start(startInfo)!;
+        await process.StandardInput.WriteAsync($"protocol=https\nhost={host}\n\n");
+        process.StandardInput.Close();
+        var output = await process.StandardOutput.ReadToEndAsync();
+        await process.StandardError.ReadToEndAsync();
+        await process.WaitForExitAsync();
+        return output;
+    }
 
     public static string NewCachePath() =>
         System.IO.Path.Combine(System.IO.Path.GetTempPath(), "elsa-gitops-tests", "cache-" + Guid.NewGuid().ToString("N"));
@@ -138,7 +349,7 @@ internal static class GitTestSupport
 }
 
 /// <summary>In-memory <see cref="IWorkflowDefinitionStore"/> for exporter tests.</summary>
-internal sealed class InMemoryDefinitionStore : IWorkflowDefinitionStore
+public sealed class InMemoryDefinitionStore : IWorkflowDefinitionStore
 {
     private readonly List<WorkflowDefinition> _items = new();
     public InMemoryDefinitionStore With(WorkflowDefinition item) { _items.Add(item); return this; }
@@ -151,7 +362,7 @@ internal sealed class InMemoryDefinitionStore : IWorkflowDefinitionStore
 }
 
 /// <summary>In-memory <see cref="IWorkflowDefinitionVersionStore"/> for exporter tests (State pre-hydrated).</summary>
-internal sealed class InMemoryVersionStore : IWorkflowDefinitionVersionStore
+public sealed class InMemoryVersionStore : IWorkflowDefinitionVersionStore
 {
     private readonly List<WorkflowDefinitionVersion> _items = new();
     public InMemoryVersionStore With(WorkflowDefinitionVersion item) { _items.Add(item); return this; }
