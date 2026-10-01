@@ -788,6 +788,81 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
             workflowExecutionId: workflowExecutionId)));
     }
 
+    // #2225: EnqueueSchedulerWork retries, so an overlay delivery that fails leaves the item FailedRetryable in the working
+    // set. The next fold must still persist it: a checkpoint's outbox carries only Pending items, so the fold writes it as
+    // the Pending crash backstop it is, keeping its attempt count and retry time for the sweep that delivers it.
+    [Fact]
+    public async Task Fold_AfterAnOverlayContinuationFailedRetryably_PersistsItPendingWithItsRetryState()
+    {
+        const string workflowExecutionId = "wfexec-cap";
+        var retryDelay = TimeSpan.FromSeconds(1);
+        var innerStore = new InMemoryRuntimeCheckpointCommitStore();
+        var session = new RuntimeCoalescingSession(
+            workflowExecutionId,
+            new InMemoryWorkflowSchedulerWorkQueue(),
+            new CoalescingRuntimeCheckpointPersistenceOptions(),
+            innerOutboxStore: innerStore);
+        var store = new CoalescingRuntimeCheckpointCommitStore(
+            new CoalescingInner<IRuntimeCheckpointCommitStore>(innerStore),
+            new FixedCoalescingSessionAccessor(session));
+        var continuation = NewContinuationIntentCommit(workflowExecutionId, 1, new RuntimePostCommitRetryPolicy(4, retryDelay));
+        var outboxItemId = Assert.Single(continuation.StateChanges.PostCommitOutbox).StateId;
+        await store.CommitAsync(continuation, new(RuntimeCheckpointPersistenceMode.Deferred));
+        var failedAt = Now.AddSeconds(5);
+        session.RecordOutboxDelivery(new RuntimePostCommitOutboxDeliveryResult(
+            outboxItemId,
+            RuntimePostCommitOutboxStatus.FailedRetryable,
+            failedAt,
+            "Transient enqueue failure."));
+
+        await store.CommitAsync(
+            NewEmptyCommit(workflowExecutionId, 2, RuntimeCheckpointNames.WorkflowCompleted),
+            new(RuntimeCheckpointPersistenceMode.Immediate));
+
+        var persisted = await innerStore.FindAsync(outboxItemId);
+        Assert.NotNull(persisted);
+        Assert.Equal(RuntimePostCommitOutboxStatus.Pending, persisted.Status);
+        Assert.Equal(1, persisted.DeliveryAttemptCount);
+        Assert.Equal(failedAt + retryDelay, persisted.AvailableAt);
+    }
+
+    // The same fold after a cap flush already persisted the item: its durable Pending row is the backstop, and saving the
+    // changed overlay state over it would be a conflicting duplicate, so the fold leaves it as it is.
+    [Fact]
+    public async Task CapFold_AfterAnOverlayContinuationFailedRetryably_LeavesItsDurablePendingRowAlone()
+    {
+        const string workflowExecutionId = "wfexec-cap";
+        var innerStore = new InMemoryRuntimeCheckpointCommitStore();
+        var session = new RuntimeCoalescingSession(
+            workflowExecutionId,
+            new InMemoryWorkflowSchedulerWorkQueue(),
+            new CoalescingRuntimeCheckpointPersistenceOptions { MaxSegmentCheckpoints = 1 },
+            innerOutboxStore: innerStore);
+        var store = new CoalescingRuntimeCheckpointCommitStore(
+            new CoalescingInner<IRuntimeCheckpointCommitStore>(innerStore),
+            new FixedCoalescingSessionAccessor(session));
+        await store.CommitAsync(NewEmptyDeferredCommit(1), new(RuntimeCheckpointPersistenceMode.Deferred));
+        var continuation = NewContinuationIntentCommit(workflowExecutionId, 2, new RuntimePostCommitRetryPolicy(4, TimeSpan.FromSeconds(1)));
+        var outboxItemId = Assert.Single(continuation.StateChanges.PostCommitOutbox).StateId;
+        await store.CommitAsync(continuation, new(RuntimeCheckpointPersistenceMode.Deferred));
+        session.RecordOutboxDelivery(new RuntimePostCommitOutboxDeliveryResult(
+            outboxItemId,
+            RuntimePostCommitOutboxStatus.FailedRetryable,
+            Now.AddSeconds(5),
+            "Transient enqueue failure."));
+
+        // The next segment buffers one checkpoint, and the one after it trips the cap again.
+        await store.CommitAsync(NewEmptyDeferredCommit(3), new(RuntimeCheckpointPersistenceMode.Deferred));
+        await store.CommitAsync(NewEmptyDeferredCommit(4), new(RuntimeCheckpointPersistenceMode.Deferred));
+
+        Assert.Equal(2, innerStore.ListCommits().Count);
+        Assert.True(session.IsActive);
+        var persisted = await innerStore.FindAsync(outboxItemId);
+        Assert.NotNull(persisted);
+        Assert.Equal(RuntimePostCommitOutboxStatus.Pending, persisted.Status);
+        Assert.Equal(0, persisted.DeliveryAttemptCount);
+    }
+
     [Fact]
     public async Task Coalescing_FlushesDispatchRecordAndChildStartOutboxAtomicallyAfterBufferedWork()
     {
@@ -963,7 +1038,10 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
 
     // A deferrable (non-boundary) checkpoint commit carrying a pending EnqueueSchedulerWork continuation intent,
     // like a hot-loop ActivityCompleted hop that schedules its successor.
-    private static RuntimeCheckpointCommit NewContinuationIntentCommit(string workflowExecutionId, int checkpoint)
+    private static RuntimeCheckpointCommit NewContinuationIntentCommit(
+        string workflowExecutionId,
+        int checkpoint,
+        RuntimePostCommitRetryPolicy? retryPolicy = null)
     {
         var commit = NewEmptyCommit(workflowExecutionId, checkpoint, RuntimeCheckpointNames.ActivityCompleted) with
         {
@@ -982,7 +1060,14 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
 
         return commit with
         {
-            StateChanges = commit.StateChanges.WithPostCommitOutbox(RuntimePostCommitOutboxItems.CreatePendingChanges(commit)),
+            StateChanges = commit.StateChanges.WithPostCommitOutbox(RuntimePostCommitOutboxItems.CreatePendingChanges(
+                commit,
+                [
+                    new RuntimePostCommitIntentHandlerContribution(
+                        RuntimePostCommitIntentKinds.EnqueueSchedulerWork,
+                        typeof(RuntimeSchedulerPostCommitIntentDispatcher),
+                        retryPolicy ?? RuntimePostCommitRetryPolicy.None)
+                ])),
             PostCommitIntents = []
         };
     }

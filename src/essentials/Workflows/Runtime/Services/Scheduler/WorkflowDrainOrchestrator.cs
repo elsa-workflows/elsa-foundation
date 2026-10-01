@@ -411,7 +411,7 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
             if (outboxResult.DeliveredCount > 0)
                 continue;
 
-            var settlement = outboxDeliveryResults.Any(result => result.FailedCount > 0)
+            var settlement = await AnyOwnDeliveryStillFailedAsync(outboxDeliveryResults, cancellationToken)
                 ? ContinuationSettlement.Undelivered
                 : await SettleContinuationsAsync(request, drainResult, outboxResult, outboxDeliveryResults, continuationWait, cancellationToken);
             if (settlement == ContinuationSettlement.DrainAgain)
@@ -549,6 +549,23 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         var wait = deadline - now < poll ? deadline - now : poll;
         var untilLapse = claimed.Min(RuntimePostCommitOutboxClaimTransitions.ClaimableAt) - now;
         return untilLapse > TimeSpan.Zero && untilLapse < wait ? untilLapse : wait;
+    }
+
+    // A failure this drain recorded in an earlier cycle is not final: the item is retried, claim-free, once its delay has
+    // passed, and a later cycle can deliver it. The failed items are therefore looked up, and only one still not delivered
+    // ends the drain as a failed delivery.
+    private async ValueTask<bool> AnyOwnDeliveryStillFailedAsync(
+        IEnumerable<RuntimePostCommitOutboxProcessResult> outboxDeliveryResults,
+        CancellationToken cancellationToken)
+    {
+        var failedItemIds = outboxDeliveryResults
+            .SelectMany(result => result.Items)
+            .Where(item => !item.IsSuperseded &&
+                           item.RequestedDeliveryResultStatus is RuntimePostCommitOutboxStatus.FailedRetryable or RuntimePostCommitOutboxStatus.FailedFinal)
+            .Select(item => item.OutboxItemId)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        return failedItemIds.Length > 0 && await AnyDeliveryFailedAsync(failedItemIds, cancellationToken);
     }
 
     private async ValueTask<bool> AnyDeliveryFailedAsync(IEnumerable<string> outboxItemIds, CancellationToken cancellationToken)

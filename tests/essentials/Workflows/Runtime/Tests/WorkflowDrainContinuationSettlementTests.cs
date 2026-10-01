@@ -110,6 +110,35 @@ public sealed class WorkflowDrainContinuationSettlementTests
         Assert.Empty(_polls);
     }
 
+    /// <summary>
+    /// A failure the drain recorded in an earlier cycle is not final: the item is retried claim-free once its delay has
+    /// passed. When a later cycle delivers it, nothing is left undelivered, so the drain quiesces rather than reporting the
+    /// stale failure.
+    /// </summary>
+    [Fact]
+    public async Task A_continuation_this_drain_failed_in_an_earlier_cycle_and_delivered_on_retry_does_not_fail_the_drain()
+    {
+        _drainer.RetryPolicy = Retrying;
+        // Two continuations are committed together, so the first cycle's delivery step delivers one while failing the other.
+        _drainer.TakeContinuation = async _ =>
+            await _store.AddPendingForTestingAsync(_drainer.Continuation(1, _clock.GetUtcNow()));
+        var failing = new FailOnceDispatcher(new RuntimeSchedulerPostCommitIntentDispatcher(_queue), "intent-work-bookmark-0");
+        // The second cycle starts after the retry delay.
+        _drainer.BeforeDrain = drainCount =>
+        {
+            if (drainCount == 2)
+                _clock.Advance(Retrying.Delay!.Value);
+        };
+
+        var result = await RunAsync(dispatcher: failing);
+
+        Assert.Equal(RuntimeSchedulerDrainStopReason.Quiesced, result.StopReason);
+        Assert.Equal(2, failing.Dispatches[failing.FailingIntentId]);
+        Assert.Equal(1, result.OutboxDeliveryResults.Sum(delivery => delivery.FailedCount));
+        Assert.Equal(RuntimePostCommitOutboxStatus.Delivered, (await FindContinuationAsync(0)).Status);
+        Assert.Equal(RuntimePostCommitOutboxStatus.Delivered, (await FindContinuationAsync(1)).Status);
+    }
+
     [Fact]
     public async Task The_wait_doubles_from_ten_milliseconds_to_a_half_second_cap_and_ends_at_the_deadline()
     {
@@ -287,13 +316,14 @@ public sealed class WorkflowDrainContinuationSettlementTests
     private Task<RuntimeSchedulerDrainResult> RunAsync(
         WorkflowDrainOrchestratorOptions? options = null,
         int? maxWorkItems = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        IRuntimePostCommitIntentDispatcher? dispatcher = null)
     {
         var orchestrator = new WorkflowDrainOrchestrator(
             _drainer,
             new RuntimePostCommitOutboxProcessor(
                 _store,
-                new RuntimeSchedulerPostCommitIntentDispatcher(_queue),
+                dispatcher ?? new RuntimeSchedulerPostCommitIntentDispatcher(_queue),
                 _clock,
                 DefaultRuntimeFaultCapturePolicy.CreateDefault(),
                 workflowDispatchStore: null,
@@ -429,6 +459,7 @@ public sealed class WorkflowDrainContinuationSettlementTests
         public RuntimePostCommitRetryPolicy RetryPolicy { get; set; } = RuntimePostCommitRetryPolicy.None;
         public TimeSpan ClaimVisibility { get; set; } = TimeSpan.FromMinutes(10);
         public Func<RuntimePostCommitOutboxItem, Task>? TakeContinuation { get; set; }
+        public Action<int>? BeforeDrain { get; set; }
         public int DrainCount { get; private set; }
         public List<RuntimePostCommitOutboxClaim> OtherClaims { get; } = [];
 
@@ -436,6 +467,7 @@ public sealed class WorkflowDrainContinuationSettlementTests
 
         public async ValueTask<RuntimeSchedulerDrainResult> DrainAsync(RuntimeSchedulerDrainRequest request, CancellationToken cancellationToken = default)
         {
+            BeforeDrain?.Invoke(DrainCount + 1);
             var now = clock.GetUtcNow();
             List<string> ran = [];
             if (DrainCount++ == 0)
@@ -480,7 +512,7 @@ public sealed class WorkflowDrainContinuationSettlementTests
                 Wfid,
                 RuntimePostCommitIntentKinds.EnqueueSchedulerWork))));
 
-        private RuntimePostCommitOutboxItem Continuation(int index, DateTimeOffset now)
+        public RuntimePostCommitOutboxItem Continuation(int index, DateTimeOffset now)
         {
             var work = WorkItem($"work-bookmark-{index}");
             return new RuntimePostCommitOutboxItem(
@@ -497,6 +529,22 @@ public sealed class WorkflowDrainContinuationSettlementTests
                 now,
                 now,
                 RetryPolicy);
+        }
+    }
+
+    /// <summary>Fails the first dispatch of one intent, as a transient enqueue failure would, and counts every dispatch.</summary>
+    private sealed class FailOnceDispatcher(IRuntimePostCommitIntentDispatcher inner, string failingIntentId) : IRuntimePostCommitIntentDispatcher
+    {
+        public string FailingIntentId { get; } = failingIntentId;
+        public Dictionary<string, int> Dispatches { get; } = [];
+
+        public async ValueTask DispatchAsync(RuntimePostCommitIntent intent, CancellationToken cancellationToken = default)
+        {
+            var attempt = Dispatches[intent.IntentId] = Dispatches.GetValueOrDefault(intent.IntentId) + 1;
+            if (intent.IntentId == FailingIntentId && attempt == 1)
+                throw new InvalidOperationException("Transient enqueue failure.");
+
+            await inner.DispatchAsync(intent, cancellationToken);
         }
     }
 
