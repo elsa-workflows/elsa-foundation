@@ -63,6 +63,26 @@ public sealed class EfRelationalProviderBindingDriftTests
         MigrationsAssemblyAssert.BoundByTheAssemblyItself(migrations, relational);
     }
 
+    /// <summary>
+    /// #2209: the SQLite binding opens its connections one at a time per connection string, because Microsoft.Data.Sqlite's
+    /// pool can lend one connection to two opens that check out at once. The race is that library's, so no other engine's
+    /// opens wait at the gate.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(Providers))]
+    public void Only_the_SQLite_binding_gates_its_connection_opens(string provider)
+    {
+        var engine = Engines.Single(candidate => candidate.Provider == provider);
+        var builder = new DbContextOptionsBuilder();
+
+        EfRelationalProviderBinding.Use(builder, provider, engine.ConnectionString, HistoryTable);
+
+        // The interceptor is internal to the policy package; a rename fails the lookup rather than the count.
+        var gate = typeof(EfRelationalProviderBinding).Assembly.GetType("Elsa.Persistence.EntityFramework.EfSqliteSerialOpenInterceptor", throwOnError: true)!;
+        var gates = builder.Options.FindExtension<CoreOptionsExtension>()?.Interceptors?.Count(interceptor => interceptor.GetType() == gate) ?? 0;
+        Assert.Equal(engine.ProviderName == EfProviderNames.Sqlite ? 1 : 0, gates);
+    }
+
     [Theory]
     [MemberData(nameof(Packages))]
     public void The_bound_engine_is_the_version_Directory_Packages_props_pins(string package)

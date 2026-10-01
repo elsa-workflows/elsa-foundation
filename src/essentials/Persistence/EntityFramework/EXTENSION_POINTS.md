@@ -349,6 +349,17 @@ with `AddEfModuleHostMigrations<TContext>` instead: the same migrator and valida
 service. CShells copies every root registration into each shell, so the shell hook would otherwise migrate the module
 again on every shell activation, from the shell's configuration rather than the host's.
 
+## SQLite connection opens
+
+Not an extension point. Every context `EfRelationalProviderBinding` binds to SQLite opens its connections one at a time
+per connection string, through `EfSqliteSerialOpenInterceptor` (#2209). Microsoft.Data.Sqlite 10.0.10 can lend one pooled
+connection to two opens of the same connection string that check out at once (dotnet/efcore#39008, fixed upstream in
+10.0.13). The two then share one handle, and a host start whose module migrators, finalization gates and backfills open
+connections to `elsa.db` together fails with "unable to delete/modify user-function due to active statements". Only the
+checkout waits, not the connection's use, and the other providers do not carry the interceptor. A context bound to
+SQLite outside the binding does not take the gate. Until Elsa pins 10.0.13, such a context must not share a module's
+connection string. The gate is removed once that version is pinned (#2220); a test fails as soon as it is.
+
 ## Shared transactions
 
 `EfSharedTransaction` is the owner a cross-module write uses when several module contexts must commit
