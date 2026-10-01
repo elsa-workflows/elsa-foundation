@@ -8,7 +8,7 @@ Records direct project references only.
 
 - Source projects: 139
 - Test projects: 135
-- Direct project references: 1278
+- Direct project references: 1277
 
 ## Projects
 
@@ -122,7 +122,7 @@ Records direct project references only.
 | [Elsa.Workflows.Design.Persistence.Core](../../src/essentials/Workflows/Design/Persistence/Core/Elsa.Workflows.Design.Persistence.Core.csproj) | source | Elsa.Workflows | - | true | Elsa.Events.Core<br>Elsa.Tasks.Core<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Design.Validations.Core |
 | [Elsa.Workflows.Design.Persistence.EntityFrameworkCore](../../src/essentials/Workflows/Design/Persistence/EntityFrameworkCore/Elsa.Workflows.Design.Persistence.EntityFrameworkCore.csproj) | source | Elsa.Workflows | - | true | Elsa.Events.Core<br>Elsa.Locking.Core<br>Elsa.Persistence.EntityFramework<br>Elsa.Primitives<br>Elsa.Serialization.Core<br>Elsa.Tasks.Core<br>Elsa.Workflows.Design.Persistence.Core<br>Elsa.Workflows.Design.Validations.Core<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Workflows.Design.Reconciliation](../../src/essentials/Workflows/Design/Reconciliation/Elsa.Workflows.Design.Reconciliation.csproj) | source | Elsa.Workflows | - | true | Elsa.Events.Core<br>Elsa.Locking.Core<br>Elsa.Serialization.Core<br>Elsa.Tasks.Core<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Design.Persistence.Core |
-| [Elsa.Workflows.Design.Reconciliation.Git](../../src/essentials/Workflows/Design/Reconciliation/Git/Elsa.Workflows.Design.Reconciliation.Git.csproj) | source | Elsa.Workflows | - | true | Elsa.Git<br>Elsa.Locking.Core<br>Elsa.Serialization.Core<br>Elsa.Tasks.Core<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Design.Persistence.Core<br>Elsa.Workflows.Design.Reconciliation |
+| [Elsa.Workflows.Design.Reconciliation.Git](../../src/essentials/Workflows/Design/Reconciliation/Git/Elsa.Workflows.Design.Reconciliation.Git.csproj) | source | Elsa.Workflows | - | true | Elsa.Git<br>Elsa.Serialization.Core<br>Elsa.Tasks.Core<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Design.Persistence.Core<br>Elsa.Workflows.Design.Reconciliation |
 | [Elsa.Workflows.Design.Reconciliation.Json](../../src/essentials/Workflows/Design/Reconciliation/Json/Elsa.Workflows.Design.Reconciliation.Json.csproj) | source | Elsa.Workflows | net10.0 | true | Elsa.Serialization.Core<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Design.Reconciliation |
 | [Elsa.Workflows.Design.Validations.Core](../../src/essentials/Workflows/Design/Validations/Core/Elsa.Workflows.Design.Validations.Core.csproj) | source | Elsa.Workflows | - | true | Elsa.Events.Core<br>Elsa.Workflows.Design.Core |
 | [Elsa.Workflows.Design.Validations](../../src/essentials/Workflows/Design/Validations/Elsa.Workflows.Design.Validations.csproj) | source | Elsa.Workflows | - | true | Elsa.Activities.Design.Core<br>Elsa.Events.Core<br>Elsa.Expressions.Core<br>Elsa.Workflows.Design.Validations.Core |

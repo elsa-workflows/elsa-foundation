@@ -74,7 +74,7 @@ metadata falls back to id / empty / not-deleted.
 | `RemoteUrl` | `string` | `""` | setting | e.g. `git@github.com:acme/workflows.git`. |
 | `Branch` | `string` | `"main"` | setting | Tracked branch. |
 | `WorkflowsPath` | `string` | `"workflows"` | setting | Repo-relative root. |
-| `LocalCachePath` | `string` | `""` | setting | Empty → under host data dir. |
+| `LocalCachePath` | `string` | `""` | setting | Empty → under host data dir. *Amended 2026-10-01 ([#2197](https://github.com/elsa-workflows/elsa-foundation/issues/2197); [ADR 0034](../../docs/adr/0034-workflow-definitions-reconcile-from-and-export-to-git.md), D11 amendment):* empty → a clone slot, `{root}/{source hash}/slot-{n}/clone` (root: `elsa/gitops` under `$XDG_RUNTIME_DIR` when set and the user's alone, else under the user's local application data, `elsa-gitops` under the OS temp dir only as a last resort), held exclusively by one process or shell and taken with its clone by the next after a restart; set → used as given, one per process. |
 | `Role` | `GitReconciliationRole` | `Consumer` | setting | `Writer` \| `Consumer` — drives clone mode + export (D11). |
 | `CredentialsMode` | `GitCredentialsMode` | `HostDefault` | setting | `SshKey` \| `Token` \| `HostDefault` (FR-013). |
 | `KeyPath` | `string` | `""` | setting | SSH key path (SshKey mode). |
