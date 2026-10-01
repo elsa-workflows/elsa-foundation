@@ -10,7 +10,7 @@ namespace Elsa.Workflows.Design.Tests.Unit.Reconciliation.Git;
 /// </summary>
 public sealed class GitCredentialsTests : GitExportTest
 {
-    private const string Token = "s3cr3t-token-2197";
+    private const string Token = "fake-test-token";
     private const string MachineHelper = "!f() { echo username=machine; echo password=machine-secret; }; f";
 
     [Fact]
