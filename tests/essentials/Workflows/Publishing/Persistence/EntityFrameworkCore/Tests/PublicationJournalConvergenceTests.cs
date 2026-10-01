@@ -112,7 +112,9 @@ internal static class PublicationJournalConvergence
         ["a-stop-before-the-last-journal-write-leaves-the-candidate-lagging-until-the-next-completion"] = AStopBeforeTheLastJournalWriteLeavesTheCandidateLaggingAsync,
         ["two-nodes-completing-one-slot-converge-to-one-journal-state"] = TwoNodesCompletingOneSlotConvergeAsync,
         ["a-publish-whose-slot-transition-commits-and-then-throws-converges-the-journal"] = APublishWhoseSlotTransitionCommitsAndThenThrowsConvergesAsync,
-        ["a-publish-whose-slot-transition-commits-and-then-throws-beside-a-leaked-leftover-retires-the-replaced-record"] = APublishWhoseSlotTransitionCommitsAndThenThrowsBesideALeakedLeftoverAsync
+        ["a-publish-whose-slot-transition-commits-and-then-throws-beside-a-leaked-leftover-retires-the-replaced-record"] = APublishWhoseSlotTransitionCommitsAndThenThrowsBesideALeakedLeftoverAsync,
+        ["a-same-version-publish-that-read-the-slot-before-it-moved-is-answered-with-the-slots-publication"] = SameVersionPublishThatReadTheSlotBeforeItMovedAsync,
+        ["two-same-version-publishes-racing-leave-one-active-record"] = TwoSameVersionPublishesRacingAsync
     };
 
     public static TheoryData<string> Scenarios
@@ -348,6 +350,61 @@ internal static class PublicationJournalConvergence
         await node.AssertServingAsync(published);
     }
 
+    /// <summary>
+    /// The loser of a same-version race preflights before the winner's slot transition and so skips the handler's early
+    /// return; its candidate then reaches a coordinator that finds the artifact already serving. It is answered with the
+    /// winner's publication, and its own record is failed: a second active record would hold a source reference nothing
+    /// minted, and nothing would ever retire it.
+    /// </summary>
+    private static async Task SameVersionPublishThatReadTheSlotBeforeItMovedAsync(JournalDatabases databases)
+    {
+        var first = await PublishAsync(databases, "version-1");
+        await using var loser = new PublishingNode(databases, preflightSlotsBeforeTheyMoved: true);
+
+        var republished = await loser.PublishAsync("version-1");
+
+        Assert.False(republished.WasCreated);
+        Assert.Equal(first, republished.PublicationId);
+        Assert.Equal(PublicationStatusView.Active, republished.Status);
+        await loser.AssertConvergedAsync(first);
+        await loser.AssertServingAsync(first);
+        var twin = Assert.Single(await loser.JournalAsync(), publication => publication.PublicationId != first);
+        Assert.Equal((PublicationStatus.Failed, PublicationFailureCodes.ArtifactAlreadyServing), (twin.Status, twin.Failure?.Code));
+    }
+
+    /// <summary>
+    /// Two nodes publish one version at once. Whichever interleaving the coordinator sees, exactly one record of the slot
+    /// is active, it is the one the slot names, and no caller is told its publication serves when it does not.
+    /// </summary>
+    private static async Task TwoSameVersionPublishesRacingAsync(JournalDatabases databases)
+    {
+        await using var one = new PublishingNode(databases);
+        await using var other = new PublishingNode(databases);
+
+        var outcomes = await Task.WhenAll(Attempt(one), Attempt(other));
+
+        var published = outcomes.Select(outcome => outcome.View).OfType<PublishedWorkflowView>().ToList();
+        Assert.All(outcomes.Select(outcome => outcome.Refusal).OfType<PublicationActivationException>(), refusal =>
+            Assert.Contains(refusal.Code, new[] { PublicationFailureCodes.SlotRevisionConflict, PublicationFailureCodes.ProjectionActivationFailed }));
+        Assert.NotEmpty(published);
+        var slot = (await one.SlotPublicationAsync())!;
+        Assert.All(published, view => Assert.Equal(slot, view.PublicationId));
+        await one.AssertConvergedAsync(slot);
+        await one.AssertServingAsync(slot);
+
+        static async Task<(PublishedWorkflowView? View, Exception? Refusal)> Attempt(PublishingNode node)
+        {
+            try
+            {
+                return (await node.PublishAsync("version-1"), null);
+            }
+            catch (PublicationActivationException refusal)
+            {
+                return (null, refusal);
+            }
+        }
+    }
+
     private static async Task<string> PublishAsync(JournalDatabases databases, string versionId)
     {
         await using var node = new PublishingNode(databases);
@@ -399,7 +456,8 @@ internal static class PublicationJournalConvergence
         public PublishingNode(
             JournalDatabases databases,
             Func<IWorkflowActivationAuthority, IWorkflowActivationAuthority>? wrapAuthority = null,
-            Func<IPublicationRecordStore, IPublicationRecordStore>? wrapRecords = null)
+            Func<IPublicationRecordStore, IPublicationRecordStore>? wrapRecords = null,
+            bool preflightSlotsBeforeTheyMoved = false)
         {
             _publishing = databases.Provider.Publishing(databases.Publishing, []);
             _runtime = databases.Provider.Runtime(databases.Runtime, []);
@@ -430,7 +488,7 @@ internal static class PublicationJournalConvergence
                 extractor,
                 Bindings,
                 new EmptyWorkflowDefinitionVersionLayoutStore(),
-                Authority,
+                preflightSlotsBeforeTheyMoved ? new SlotsBeforeTheyMoved(Authority) : Authority,
                 new InMemoryPublicationPolicyStore(),
                 new PublicationPolicyResolver(),
                 records,
@@ -554,6 +612,28 @@ internal static class PublicationJournalConvergence
 
         private async Task<PublicationRecord> FindAsync(string publicationId) =>
             await Records.FindAsync(publicationId) ?? throw new InvalidOperationException($"Publication '{publicationId}' has no record.");
+    }
+
+    /// <summary>Preflight as a publish that read the slots before another node's activation moved them: every slot is empty.</summary>
+    private sealed class SlotsBeforeTheyMoved(IWorkflowActivationAuthority inner) : IWorkflowActivationAuthority
+    {
+        public ValueTask<WorkflowActivationSlot?> FindAsync(string workflowDefinitionId, string slotName, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<WorkflowActivationSlot?>(null);
+
+        public ValueTask<IReadOnlyCollection<WorkflowActivationSlot>> ListByDefinitionAsync(string workflowDefinitionId, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<IReadOnlyCollection<WorkflowActivationSlot>>([]);
+
+        public ValueTask<WorkflowActivationTransition> TryActivateAsync(WorkflowActivationSlotRequest request, CancellationToken cancellationToken = default) =>
+            inner.TryActivateAsync(request, cancellationToken);
+
+        public ValueTask<WorkflowActivationTransition> TryDeactivateAsync(
+            string workflowDefinitionId,
+            string slotName,
+            WorkflowActivationSource source,
+            long expectedRevision,
+            DateTimeOffset updatedAt,
+            CancellationToken cancellationToken = default) =>
+            inner.TryDeactivateAsync(workflowDefinitionId, slotName, source, expectedRevision, updatedAt, cancellationToken);
     }
 
     /// <summary>Compiles each version id to its own artifact with one start node.</summary>

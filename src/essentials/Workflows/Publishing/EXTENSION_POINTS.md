@@ -114,6 +114,17 @@ slot's publication has failed or its reference is retired: none of those serves.
   owns among those the runtime's pass visits (the `OccupiedActivationSlots` service), so a designer-published workflow heals
   without another publish.
 
+`ActivateAsync` never journals a second active record for an activation it did not mint. The coordinator answers
+`AlreadyActive` without minting anything when the slot already serves the candidate's artifact, which a same-version
+publish that lost a race, or that preflighted before the winner moved the slot, reaches. When the slot names the
+candidate itself (a retry of an interrupted publish) the candidate is marked `Active` as usual. When it names another
+publication, the candidate is recorded `Failed` with `artifact_already_serving` and the result is a success carrying the
+publication the slot names, once completion has brought that record to `Active`: the same answer a same-version republish
+gets from the handler's early return (`WasCreated` false), and what the caller asked for, since the artifact serves. When
+that record cannot be confirmed active, or another source owns the slot (`slot_owner_conflict`), the candidate is failed
+and the result is a failure. Implementers of `IPublicationActivator` keep this: a successful result's `Publication` may
+therefore be a record other than the candidate, and the publish handler reads the view from it.
+
 One residual: when the runtime could not retire the replaced activation's source reference by the time the slot's
 publication is marked `Active` (a reference-store failure the Runtime catalog's operator recovery describes), that
 replaced publication stays `Active` in the journal, because nothing lags afterwards to send completion back to it. It

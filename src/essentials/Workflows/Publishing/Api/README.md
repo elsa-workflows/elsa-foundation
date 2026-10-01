@@ -168,7 +168,8 @@ at every raise and map site (issue #1699).
 | `named_slot_required`             | 400    | Side-by-side publication requires a meaningful named slot other than the default slot. |
 
 A publication record's `failure.code` (`GET publishing/publications/{publicationId}`) uses the same vocabulary;
-`publication_activation_refused` and `projection_delivery_failed` are recorded there only and never appear as a
+`publication_activation_refused`, `projection_delivery_failed` and `artifact_already_serving` (a same-version publish that lost
+a race to a publication already serving the artifact; the request is answered with that publication) are recorded there only and never appear as a
 problem response's `errorCode`.
 
 See [the Publishing extension-point catalog](EXTENSION_POINTS.md) for supported replacements and provider work,
