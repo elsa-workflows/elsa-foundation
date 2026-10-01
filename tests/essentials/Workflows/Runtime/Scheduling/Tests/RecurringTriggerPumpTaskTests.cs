@@ -2,6 +2,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Scheduling.Options;
 using Elsa.Workflows.Runtime.Services.Triggers;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
@@ -143,6 +144,27 @@ public sealed class RecurringTriggerPumpTaskTests
 
         Assert.Equal([Key("dead", last), Key("dead", last)], router.Requests.Select(request => request.IdempotencyKey));
         Assert.Null(await _store.FindAsync("dead"));
+    }
+
+    [Fact]
+    public async Task Sweep_LogsAndCarriesOn_WhenTheStoreRefusesToDeleteTheExhaustedSchedule_BecauseARepublishDeactivatedIt()
+    {
+        // The last occurrence was routed, then a republish deactivated the schedule, so the store refuses the delete. That
+        // is a lost claim, not a failed sweep: the replacement's fire of the occurrence converges on the same key.
+        var last = Now.AddMinutes(-1);
+        var store = new DeleteRefusingStore(_store);
+        await SeedAsync(Schedule("dead", last, kind: RecurringScheduleKind.Cron, expression: "0 0 30 2 *"));
+        var router = new FakeRouter();
+        var logger = new RecordingLogger();
+        var (pump, _) = CreatePump(store, router, logger: logger);
+
+        await pump.ExecuteAsync(CancellationToken.None);
+
+        Assert.Equal(Key("dead", last), Assert.Single(router.Requests).IdempotencyKey);
+        Assert.NotNull(await _store.FindAsync("dead"));
+        // Logged like a lost claim, and not as the failed sweep an escaping exception would be.
+        Assert.Contains(LogLevel.Warning, logger.Levels);
+        Assert.DoesNotContain(LogLevel.Error, logger.Levels);
     }
 
     [Fact]
@@ -304,7 +326,8 @@ public sealed class RecurringTriggerPumpTaskTests
     private (RecurringTriggerPumpTask Pump, MutableTimeProvider Clock) CreatePump(
         IRecurringTriggerScheduleStore store,
         FakeRouter router,
-        int maxSchedulesPerTick = 100)
+        int maxSchedulesPerTick = 100,
+        ILogger<RecurringTriggerPumpTask>? logger = null)
     {
         var clock = new MutableTimeProvider(Now);
         var options = Microsoft.Extensions.Options.Options.Create(new RecurringTriggerPumpOptions
@@ -315,7 +338,7 @@ public sealed class RecurringTriggerPumpTaskTests
             ClaimVisibilityTimeout = Lease
         });
         var pump = new RecurringTriggerPumpTask(
-            store, _bindingStore, router, new RecurringScheduleCalculator(), options, clock, NullLogger<RecurringTriggerPumpTask>.Instance);
+            store, _bindingStore, router, new RecurringScheduleCalculator(), options, clock, logger ?? NullLogger<RecurringTriggerPumpTask>.Instance);
         return (pump, clock);
     }
 
@@ -429,6 +452,52 @@ public sealed class RecurringTriggerPumpTaskTests
 
         public ValueTask<IReadOnlyCollection<string>> ListServingActivationIdsAsync(string slotId, CancellationToken cancellationToken = default) =>
             new([]);
+    }
+
+    // The in-memory store, but its delete is refused the way a store refuses one on a schedule of an inactive activation.
+    private sealed class DeleteRefusingStore(IRecurringTriggerScheduleStore inner) : IRecurringTriggerScheduleStore
+    {
+        public ValueTask<RecurringTriggerSchedule> SaveAsync(RecurringTriggerSchedule schedule, CancellationToken cancellationToken = default) =>
+            inner.SaveAsync(schedule, cancellationToken);
+
+        public ValueTask<IReadOnlyCollection<RecurringTriggerOccurrenceClaim>> ClaimDueAsync(RecurringTriggerOccurrenceClaimRequest request, CancellationToken cancellationToken = default) =>
+            inner.ClaimDueAsync(request, cancellationToken);
+
+        public ValueTask<RecurringTriggerOccurrenceClaim?> RenewClaimAsync(RecurringTriggerOccurrenceClaim claim, DateTimeOffset now, TimeSpan visibilityTimeout, CancellationToken cancellationToken = default) =>
+            inner.RenewClaimAsync(claim, now, visibilityTimeout, cancellationToken);
+
+        public ValueTask<bool> SettleClaimAsync(RecurringTriggerOccurrenceClaim claim, DateTimeOffset nextOccurrence, CancellationToken cancellationToken = default) =>
+            inner.SettleClaimAsync(claim, nextOccurrence, cancellationToken);
+
+        public ValueTask<bool> ReleaseClaimAsync(RecurringTriggerOccurrenceClaim claim, DateTimeOffset visibleAt, CancellationToken cancellationToken = default) =>
+            inner.ReleaseClaimAsync(claim, visibleAt, cancellationToken);
+
+        public ValueTask<RecurringTriggerSchedule?> FindAsync(string scheduleId, CancellationToken cancellationToken = default) =>
+            inner.FindAsync(scheduleId, cancellationToken);
+
+        public ValueTask DeleteByArtifactAsync(string artifactId, CancellationToken cancellationToken = default) =>
+            inner.DeleteByArtifactAsync(artifactId, cancellationToken);
+
+        public ValueTask DeleteAsync(string scheduleId, CancellationToken cancellationToken = default) =>
+            ValueTask.FromException(new InvalidOperationException($"Cannot delete recurring-trigger schedule '{scheduleId}' from inactive prepared activation 'publication-a'."));
+
+        public ValueTask<WorkflowActivationProjectionState> FindActivationStateAsync(string activationId, CancellationToken cancellationToken = default) =>
+            inner.FindActivationStateAsync(activationId, cancellationToken);
+
+        public ValueTask<IReadOnlyCollection<string>> ListServingActivationIdsAsync(string slotId, CancellationToken cancellationToken = default) =>
+            inner.ListServingActivationIdsAsync(slotId, cancellationToken);
+    }
+
+    private sealed class RecordingLogger : ILogger<RecurringTriggerPumpTask>
+    {
+        public List<LogLevel> Levels { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
+            Levels.Add(logLevel);
     }
 
     private sealed class MutableTimeProvider(DateTimeOffset now) : TimeProvider

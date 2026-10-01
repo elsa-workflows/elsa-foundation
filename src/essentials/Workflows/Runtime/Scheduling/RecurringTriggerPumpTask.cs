@@ -49,7 +49,8 @@ namespace Elsa.Workflows.Runtime.Scheduling;
 /// <para>
 /// <b>Exhausted Cron.</b> When a schedule has no occurrence after the one in its cursor, that last occurrence is still
 /// routed under its claim, and the schedule is deleted only once the route returned. A failed route is released and retried
-/// like any other.
+/// like any other. A delete the store refuses because a republish deactivated the schedule meanwhile is logged like a lost
+/// claim, since the replacement's fire of that occurrence converges on the same key.
 /// </para>
 /// <para>
 /// <b>Missed-occurrence policy — no catch-up.</b> A schedule is due when its
@@ -261,7 +262,17 @@ public sealed class RecurringTriggerPumpTask : BackoffSweepPumpTask
                 "Recurring schedule '{ScheduleId}' fired its last occurrence {Occurrence}; its expression has no later one, so it is deleted",
                 schedule.ScheduleId,
                 schedule.NextOccurrence);
-            await store.DeleteAsync(schedule.ScheduleId, cancellationToken);
+            try
+            {
+                await store.DeleteAsync(schedule.ScheduleId, cancellationToken);
+            }
+            catch (InvalidOperationException exception)
+            {
+                // A republish deactivated the schedule while the last occurrence was routing, and a store refuses to delete
+                // a schedule of an inactive activation. The replacement holds the occurrence now, as when a claim is lost.
+                LogClaimLost(claim, "delete", exception);
+            }
+
             return true;
         }
 
