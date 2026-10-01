@@ -63,6 +63,7 @@ public sealed class CandidateWorkerResponseTests
     [InlineData("candidate-request-invalid", ToolExitCode.Refusal)]
     [InlineData("candidate-request-too-large", ToolExitCode.Refusal)]
     [InlineData("candidate-host-unavailable", ToolExitCode.ResolutionFailure)]
+    [InlineData("candidate-package-unavailable", ToolExitCode.ResolutionFailure)]
     [InlineData("candidate-closure-changed", ToolExitCode.ResolutionFailure)]
     [InlineData("candidate-capability-unavailable", ToolExitCode.ResolutionFailure)]
     [InlineData("candidate-response-invalid", ToolExitCode.ResolutionFailure)]
@@ -187,6 +188,7 @@ public sealed class CandidateWorkerResponseTests
     [Theory]
     [InlineData("unknown-code", "future-candidate-error", ToolExitCode.ResolutionFailure)]
     [InlineData("wrong-exit-class", "candidate-host-unavailable", ToolExitCode.Refusal)]
+    [InlineData("wrong-package-exit-class", "candidate-package-unavailable", ToolExitCode.Refusal)]
     [InlineData("wrong-input-exit-class", "candidate-request-invalid", ToolExitCode.ResolutionFailure)]
     [InlineData("host-only-code", "candidate-capture-invalid", ToolExitCode.Refusal)]
     [InlineData("details", "candidate-host-unavailable", ToolExitCode.ResolutionFailure)]
@@ -207,6 +209,7 @@ public sealed class CandidateWorkerResponseTests
             switch (mutation)
             {
                 case "unknown-code": error["code"] = code; break;
+                case "wrong-package-exit-class": break;
                 case "details": error["details"] = new JsonArray("private-detail-canary"); break;
                 case "missing-code": error.Remove("code"); break;
                 case "wrong-code-type": error["code"] = 7; break;

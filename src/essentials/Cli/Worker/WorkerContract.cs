@@ -254,7 +254,7 @@ public static class WorkerContract
 
         var code = codeElement.GetString()!;
         var isUsageRefusal = code is "candidate-request-invalid" or "candidate-request-too-large";
-        var isResolutionRefusal = code is "candidate-host-unavailable" or "candidate-closure-changed" or
+        var isResolutionRefusal = code is "candidate-host-unavailable" or "candidate-package-unavailable" or "candidate-closure-changed" or
             "candidate-capability-unavailable" or "candidate-response-invalid" or "candidate-response-too-large";
         if (isUsageRefusal && exitCode == ToolExitCode.Refusal ||
             isResolutionRefusal && exitCode == ToolExitCode.ResolutionFailure)
@@ -268,6 +268,7 @@ public static class WorkerContract
         "candidate-request-invalid" => CandidateRequestInvalidMessage,
         "candidate-request-too-large" => "The candidate host request exceeds the supported bound.",
         "candidate-host-unavailable" => "The selected installed host closure could not be inspected.",
+        "candidate-package-unavailable" => "The selected host package closure could not be loaded.",
         "candidate-closure-changed" => "The selected installed host closure changed during inspection.",
         "candidate-capability-unavailable" => "The selected host has no complete candidate inspection capability.",
         "candidate-response-invalid" => CandidateHostResponseInvalidMessage,

@@ -172,7 +172,15 @@ public sealed class ResourceProbeShellDefaults : IEfToolingShellDefaults
 
         var standardOutputBytes = ReadBoundedValue(probeDefaults, "StandardOutputBytes", MaximumFloodBytes);
         if (standardOutputBytes > 0)
+        {
             WriteCanaryBytes(Console.OpenStandardOutput(), "stdout", standardOutputBytes);
+            if (probeDefaults["OutputWrittenMarker"] is { Length: > 0 } outputWrittenMarker)
+                File.WriteAllText(outputWrittenMarker, ProcessIdentityReader.Current().ToMarker(), Encoding.ASCII);
+
+            var holdAfterOutput = ReadBoundedValue(probeDefaults, "HoldAfterOutput", MaximumHoldMilliseconds);
+            if (holdAfterOutput > 0)
+                Thread.Sleep(holdAfterOutput);
+        }
     }
 
     private static int ReadBoundedValue(IConfiguration configuration, string key, int maximum) =>
