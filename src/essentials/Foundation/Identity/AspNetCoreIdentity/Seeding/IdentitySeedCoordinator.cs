@@ -121,6 +121,42 @@ public sealed class IdentitySeedCoordinator(
         throw new InvalidOperationException("Identity seeding could not converge the administrator role after repeated conditional-write conflicts.");
     }
 
+    /// <summary>
+    /// Materializes the framework <c>UserRole</c> relationship for an already-seeded user so
+    /// <see cref="UserManager{TUser}"/> role queries observe the converged membership. Two nodes seeding the
+    /// same database race on this write, so every failed attempt re-reads the user: a membership that is
+    /// already present (including <c>UserAlreadyInRole</c>) counts as converged.
+    /// </summary>
+    public async Task EnsureFrameworkRoleMembershipAsync(string userName, string roleName, CancellationToken cancellationToken = default)
+    {
+        Exception? lastFailure = null;
+        for (var attempt = 0; attempt < MaxSeedConvergenceAttempts; attempt++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var user = await userManager.FindByNameAsync(userName)
+                       ?? throw new InvalidOperationException("The EF Identity administrator was not available after seeding.");
+            if (await userManager.IsInRoleAsync(user, roleName))
+                return;
+
+            try
+            {
+                var result = await userManager.AddToRoleAsync(user, roleName);
+                if (result.Succeeded)
+                    return;
+
+                lastFailure = new InvalidOperationException(
+                    "Failed to materialize the EF Identity administrator role membership: " + string.Join("; ", result.Errors.Select(x => x.Code)));
+            }
+            catch (InvalidOperationException exception)
+            {
+                // The store reports a lost revision race on the relationship write by throwing.
+                lastFailure = exception;
+            }
+        }
+
+        throw new InvalidOperationException("Identity seeding could not converge the administrator framework role membership after repeated conditional-write conflicts.", lastFailure);
+    }
+
     private async Task<SeedResult> EnsureAdminUserAsync(
         IdentitySeedOptions seed,
         string tenantId,
@@ -137,7 +173,21 @@ public sealed class IdentitySeedCoordinator(
 
         var user = CreateAdminUser(seed, tenantId);
 
-        var result = await userManager.CreateAsync(user, seed.Password);
+        IdentityResult result;
+        try
+        {
+            result = await userManager.CreateAsync(user, seed.Password);
+        }
+        catch (InvalidOperationException)
+        {
+            // A peer node that created the administrator after UserManager's existence check makes the store throw
+            // (its lockout write finds a row this user object has no revision for) instead of returning a failure.
+            // That is a lost create race like any other; the re-read below converges on the peer's row.
+            if (await userManager.FindByNameAsync(seed.UserName) is null)
+                throw;
+            result = IdentityResult.Failed();
+        }
+
         if (!result.Succeeded)
         {
             var raced = await userManager.FindByNameAsync(seed.UserName);
