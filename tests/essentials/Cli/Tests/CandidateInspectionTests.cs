@@ -330,7 +330,14 @@ public sealed class CandidateInspectionTests
         CliRefusal? refusal = null;
         try
         {
-            _ = await process.RunEnvironmentAsync(capture, []);
+            var response = await process.RunEnvironmentAsync(capture, []);
+            Assert.Equal(ToolExitCode.Success, response.ExitCode);
+            Assert.Null(response.Error);
+            Assert.True(response.Tooling.HasValue);
+            var resolution = response.Tooling!.Value.GetProperty("configurationResolution");
+            Assert.Equal("captured-workbench-json-explicit-environment-v1",
+                resolution.GetProperty("source").GetString());
+            Assert.Equal("supplied-intended", resolution.GetProperty("externalInputs").GetString());
             refusal = Assert.Throws<CliRefusal>(() => capture.VerifyUnchanged());
 
             Assert.Equal("composition-input-changed", refusal.Code);
