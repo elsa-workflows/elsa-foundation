@@ -9,7 +9,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 - Source projects: 138
 - Test projects: 133
 - Domains: 31
-- Direct cross-domain references: 770
+- Direct cross-domain references: 772
 
 ## Domains
 
@@ -231,7 +231,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Cli.Fixtures.NuplaneHost](../../tests/essentials/Cli/Fixtures/NuplaneHost/Elsa.Cli.Fixtures.NuplaneHost.csproj) | test | Elsa.Cli | Fixtures.NuplaneHost | test | Elsa.Persistence.EntityFramework |
 | [Elsa.Cli.Fixtures.PartialContextHost](../../tests/essentials/Cli/Fixtures/PartialContextHost/Elsa.Cli.Fixtures.PartialContextHost.csproj) | test | Elsa.Cli | Fixtures.PartialContextHost | test | Elsa.Cli.Fixtures.PartialContextPersistence |
 | [Elsa.Cli.Fixtures.PartialContextPersistence](../../tests/essentials/Cli/Fixtures/PartialContextPersistence/Elsa.Cli.Fixtures.PartialContextPersistence.csproj) | test | Elsa.Cli | Fixtures.PartialContextPersistence | test | - |
-| [Elsa.Cli.Fixtures.ResourceAwareLiveHost](../../tests/essentials/Cli/Fixtures/ResourceAwareLiveHost/Elsa.Cli.Fixtures.ResourceAwareLiveHost.csproj) | test | Elsa.Cli | Fixtures.ResourceAwareLiveHost | test | Elsa.Persistence.EntityFramework |
+| [Elsa.Cli.Fixtures.ResourceAwareLiveHost](../../tests/essentials/Cli/Fixtures/ResourceAwareLiveHost/Elsa.Cli.Fixtures.ResourceAwareLiveHost.csproj) | test | Elsa.Cli | Fixtures.ResourceAwareLiveHost | test | Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore<br>Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore<br>Elsa.Persistence.EntityFramework |
 | [Elsa.Cli.Fixtures.ShellsHost](../../tests/essentials/Cli/Fixtures/ShellsHost/Elsa.Cli.Fixtures.ShellsHost.csproj) | test | Elsa.Cli | Fixtures.ShellsHost | test | Elsa.Secrets.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Design.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore |
 | [Elsa.Cli.Fixtures.UnsupportedContextHost](../../tests/essentials/Cli/Fixtures/UnsupportedContextHost/Elsa.Cli.Fixtures.UnsupportedContextHost.csproj) | test | Elsa.Cli | Fixtures.UnsupportedContextHost | test | Elsa.Cli.Fixtures.UnsupportedContextPersistence |
 | [Elsa.Cli.Fixtures.UnsupportedContextPersistence](../../tests/essentials/Cli/Fixtures/UnsupportedContextPersistence/Elsa.Cli.Fixtures.UnsupportedContextPersistence.csproj) | test | Elsa.Cli | Fixtures.UnsupportedContextPersistence | test | - |
@@ -569,6 +569,8 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Cli.Fixtures.MinimalHost](../../tests/essentials/Cli/Fixtures/MinimalHost/Elsa.Cli.Fixtures.MinimalHost.csproj) | Elsa.Cli | [Acme.Widgets](../../tests/essentials/Cli/Fixtures/Widgets/Acme.Widgets.csproj) | Other |
 | [Elsa.Cli.Fixtures.NuplaneCapabilityHost](../../tests/essentials/Cli/Fixtures/NuplaneCapabilityHost/Elsa.Cli.Fixtures.NuplaneCapabilityHost.csproj) | Elsa.Cli | [Elsa.Persistence.EntityFramework](../../src/essentials/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj) | Elsa.Persistence |
 | [Elsa.Cli.Fixtures.NuplaneHost](../../tests/essentials/Cli/Fixtures/NuplaneHost/Elsa.Cli.Fixtures.NuplaneHost.csproj) | Elsa.Cli | [Elsa.Persistence.EntityFramework](../../src/essentials/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj) | Elsa.Persistence |
+| [Elsa.Cli.Fixtures.ResourceAwareLiveHost](../../tests/essentials/Cli/Fixtures/ResourceAwareLiveHost/Elsa.Cli.Fixtures.ResourceAwareLiveHost.csproj) | Elsa.Cli | [Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore](../../src/essentials/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.csproj) | Elsa.Diagnostics |
+| [Elsa.Cli.Fixtures.ResourceAwareLiveHost](../../tests/essentials/Cli/Fixtures/ResourceAwareLiveHost/Elsa.Cli.Fixtures.ResourceAwareLiveHost.csproj) | Elsa.Cli | [Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore](../../src/essentials/Diagnostics/StructuredLogs/Persistence/EntityFrameworkCore/Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.csproj) | Elsa.Diagnostics |
 | [Elsa.Cli.Fixtures.ResourceAwareLiveHost](../../tests/essentials/Cli/Fixtures/ResourceAwareLiveHost/Elsa.Cli.Fixtures.ResourceAwareLiveHost.csproj) | Elsa.Cli | [Elsa.Persistence.EntityFramework](../../src/essentials/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj) | Elsa.Persistence |
 | [Elsa.Cli.Fixtures.ShellsHost](../../tests/essentials/Cli/Fixtures/ShellsHost/Elsa.Cli.Fixtures.ShellsHost.csproj) | Elsa.Cli | [Elsa.Secrets.Persistence.EntityFrameworkCore](../../src/essentials/Secrets/Persistence/EntityFrameworkCore/Elsa.Secrets.Persistence.EntityFrameworkCore.csproj) | Elsa.Secrets |
 | [Elsa.Cli.Fixtures.ShellsHost](../../tests/essentials/Cli/Fixtures/ShellsHost/Elsa.Cli.Fixtures.ShellsHost.csproj) | Elsa.Cli | [Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore](../../src/essentials/Workflows/Dashboard/Persistence/EntityFrameworkCore/Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.csproj) | Elsa.Workflows |

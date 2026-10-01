@@ -140,6 +140,8 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
         "src/essentials/Persistence/EntityFramework/SchemaFinalization/EfSchemaModuleGate.cs",
         "src/essentials/Persistence/EntityFramework/SchemaFinalization/EfSchemaWriteGateInterceptor.cs",
         "src/essentials/Persistence/EntityFramework/SchemaFinalization/IEfSchemaBackfillStatusSource.cs",
+        "src/essentials/Persistence/EntityFramework/Tooling/EfCandidateInspectionContract.cs",
+        "src/essentials/Persistence/EntityFramework/Tooling/EfCandidateInspectionOperation.cs",
         "src/essentials/Persistence/EntityFramework/Tooling/EfMigrationPlan.cs",
         "src/essentials/Persistence/EntityFramework/Tooling/EfModuleOrder.cs",
         "src/essentials/Persistence/EntityFramework/Tooling/EfMySqlIdempotentScript.cs",

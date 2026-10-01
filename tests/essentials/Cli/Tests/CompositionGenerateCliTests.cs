@@ -19,7 +19,7 @@ public sealed class CompositionGenerateCliTests
     };
 
     [Fact]
-    public async Task Approved_generation_changes_only_the_reviewed_existing_base_field_and_preserves_every_source()
+    public async Task Approved_generation_changes_the_reviewed_field_and_materializes_explicit_removal_without_source_writes()
     {
         if (OperatingSystem.IsWindows())
             return;
@@ -51,6 +51,14 @@ public sealed class CompositionGenerateCliTests
             {
                 var expected = JsonNode.Parse(bytes)!;
                 expected["CShells"]!["Shells"]!["default"]!["Features"]!["A"]!["Limit"] = 1;
+                Assert.True(JsonNode.DeepEquals(expected, JsonNode.Parse(candidate)));
+            }
+            else if (name == "shells.Production.json")
+            {
+                // Import records base-disabled B as an explicit removal. The selected overlay must
+                // retain that intent even if a declared host composer later supplies B as a default.
+                var expected = JsonNode.Parse(bytes)!;
+                expected["CShells"]!["Shells"]!["default"]!["Features"]!["B"] = false;
                 Assert.True(JsonNode.DeepEquals(expected, JsonNode.Parse(candidate)));
             }
             else

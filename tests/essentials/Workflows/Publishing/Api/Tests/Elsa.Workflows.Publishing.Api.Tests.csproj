@@ -15,6 +15,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- #2193: the crash double the Runtime crash-repair contract uses, shared rather than copied. -->
+    <Compile Include="..\..\..\Runtime\Persistence\EntityFrameworkCore\Tests\PauseAfterSlotTransition.cs" Link="PauseAfterSlotTransition.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
     <PackageReference Include="Microsoft.AspNetCore.TestHost" />

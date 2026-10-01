@@ -103,6 +103,8 @@ public sealed class InMemoryPublicationPolicyStore : IPublicationPolicyStore
     private static string Key(string? workflowDefinitionId) => workflowDefinitionId ?? HostKey;
 }
 
+/// <summary>Process-local <see cref="IPublicationProjectionIntentStore"/>.</summary>
+/// <remarks>Nothing writes intents any more, and removal is pending; see <see cref="IPublicationProjectionIntentStore"/>.</remarks>
 public sealed class InMemoryPublicationProjectionIntentStore : IPublicationProjectionIntentStore
 {
     private readonly Lock _gate = new();

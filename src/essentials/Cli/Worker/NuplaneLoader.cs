@@ -49,16 +49,20 @@ internal static class NuplaneLoader
     /// groups packages into graphs exactly as the host that wrote the state does (FR-005, FR-072, FR-073).
     /// </summary>
     [MethodImpl(MethodImplOptions.NoInlining)]
-    public static async Task<NuplaneLoadResult> FromStateAsync(string stateFile, CancellationToken cancellationToken)
+    public static async Task<NuplaneLoadResult> FromStateAsync(string stateFile, CancellationToken cancellationToken,
+        Action<IReadOnlyList<InstalledPackage>>? beforeLoad = null)
     {
         var active = await ReadStateAsync(stateFile, cancellationToken);
         if (active.Count == 0)
             return new([], new Dictionary<string, string>());
 
+        var observed = active.Select(Describe).ToArray();
+        beforeLoad?.Invoke(observed);
+
         // No TargetFrameworkOverride: a worker launched on the host's own runtimeconfig already runs the
         // host's target framework, so overriding it would select assets the host itself would not.
         var result = await NuplaneHostIntegratedLoader.LoadFromStateAsync(stateFile, options: null, cancellationToken);
-        return new([.. active.Select(Describe)], result.FailedByPackageId);
+        return new(observed, result.FailedByPackageId);
     }
 
     /// <summary>
