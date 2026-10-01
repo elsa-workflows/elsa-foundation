@@ -85,8 +85,7 @@ public sealed class RuntimeResumptionPumpTask : BackoffSweepPumpTask
         {
             await _scopeRunner.RunAsync(async (persistenceScope, operationScope, operationCancellationToken) =>
             {
-                if (operationScope.ServiceProvider.GetService<IWorkflowTestScopeCleaner>() is { } scopeCleaner)
-                    await scopeCleaner.SweepAsync(now, operationCancellationToken);
+                await CleanTestScopesAsync(persistenceScope, operationScope, now, operationCancellationToken);
                 await SweepAsync(
                     persistenceScope,
                     operationScope.ServiceProvider.GetRequiredService<IRuntimeResumptionService>(),
@@ -116,6 +115,41 @@ public sealed class RuntimeResumptionPumpTask : BackoffSweepPumpTask
             "Runtime resumption sweep failed ({ConsecutiveFailures} consecutive); backing off to {Interval}",
             consecutiveFailures,
             backoffInterval);
+    }
+
+    // Test-scope cleanup rides on the resumption tick but must never cost it (#2195): a cleanup race or a persistently
+    // unreadable scope row would otherwise abort every sweep, so no outbox item is delivered and no execution re-driven
+    // while it lasts. Cleanup runs in an operation scope of its own, so a failure cannot leave half-written tracked state
+    // in the context the resumption sweep then saves through, and its failure is logged rather than thrown. Cancellation
+    // still propagates: shutdown is not a cleanup failure.
+    private async ValueTask CleanTestScopesAsync(
+        PersistenceScope persistenceScope,
+        PersistenceOperationScope operationScope,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        if (operationScope.ServiceProvider.GetService<IWorkflowTestScopeCleaner>() is null)
+            return;
+
+        try
+        {
+            await using var cleanupScope = await operationScope.ServiceProvider
+                .GetRequiredService<IPersistenceOperationScopeFactory>()
+                .CreateAsync(persistenceScope, cancellationToken);
+            await cleanupScope.ServiceProvider.GetRequiredService<IWorkflowTestScopeCleaner>().SweepAsync(now, cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            Logger.LogError(
+                new EventId(68114, "WorkflowTestScopeCleanupFailed"),
+                exception,
+                "Workflow test-scope cleanup failed in persistence scope {PersistenceScope}; the resumption sweep continues and cleanup is retried on the next tick",
+                persistenceScope.Value);
+        }
     }
 
     private async ValueTask SweepAsync(

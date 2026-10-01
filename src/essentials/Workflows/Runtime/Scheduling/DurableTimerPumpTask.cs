@@ -1,10 +1,10 @@
 using System.Collections.Concurrent;
-using System.Runtime.ExceptionServices;
 using Elsa.Tasks.Schedules;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Scheduling.Options;
+using Elsa.Workflows.Runtime.Services.Claims;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -31,6 +31,13 @@ namespace Elsa.Workflows.Runtime.Scheduling;
 /// workflow is gone) also deletes the timer; within the grace window it is retried to cover a very short
 /// delay racing its own bookmark commit. The bookmark is consumed at most once, so an at-least-once
 /// duplicate fire cannot double-resume.
+/// </para>
+/// <para>
+/// <b>Claims (#2195).</b> A claim-capable store hands the pump a batch of claims under one visibility timeout, and the pump
+/// fires them one at a time, so the claims at the end of a long batch can lapse and be re-claimed by a peer. Each timer is
+/// therefore fired under a <see cref="FencedClaimLease{TClaim}"/>: its claim is renewed immediately before the fire and
+/// kept renewed while the fire runs. A timer whose claim was lost, before, during or at its completion or release, is
+/// logged and skipped; it never ends the sweep for the timers behind it.
 /// </para>
 /// </remarks>
 public sealed class DurableTimerPumpTask : BackoffSweepPumpTask
@@ -142,6 +149,10 @@ public sealed class DurableTimerPumpTask : BackoffSweepPumpTask
                     options.ClaimVisibilityTimeout,
                     options.MaxTimersPerTick),
                 cancellationToken);
+            var lease = new FencedClaimLease<RuntimeDurableTimerClaim>(
+                RenewalOf(timerStore),
+                options.ClaimVisibilityTimeout,
+                _timeProvider);
             var claimedDispatches = 0;
             foreach (var claim in claims)
             {
@@ -150,6 +161,7 @@ public sealed class DurableTimerPumpTask : BackoffSweepPumpTask
                         persistenceScope,
                         timerStore,
                         dispatcher,
+                        lease,
                         claim,
                         options,
                         now,
@@ -192,67 +204,54 @@ public sealed class DurableTimerPumpTask : BackoffSweepPumpTask
         PersistenceScope persistenceScope,
         IDurableTimerStore timerStore,
         IBookmarkResumeDispatcher dispatcher,
+        FencedClaimLease<RuntimeDurableTimerClaim> lease,
         RuntimeDurableTimerClaim claim,
         DurableTimerPumpOptions options,
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {
-        var renewal = new ClaimRenewalState(claim);
-        BookmarkResumeDispatchResult result;
-        try
+        var run = await lease.RunRenewingAsync(
+            claim,
+            dispatchCancellationToken => dispatcher.DispatchAsync(
+                CreateRequest(claim.Timer),
+                cancellationToken: dispatchCancellationToken),
+            cancellationToken);
+
+        switch (run.Status)
         {
-            result = await DispatchWithClaimRenewalAsync(
-                timerStore,
-                renewal,
-                dispatchCancellationToken => dispatcher.DispatchAsync(
-                    CreateRequest(claim.Timer),
-                    cancellationToken: dispatchCancellationToken),
-                options,
-                cancellationToken);
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (RuntimeDurableTimerClaimLostException exception)
-        {
-            Logger.LogError(
-                exception,
-                "Durable timer '{TimerId}' claim was lost; leaving successor-owned state untouched",
-                claim.Timer.TimerId);
-            return false;
-        }
-        catch (Exception exception)
-        {
-            await ReleaseAfterFailureAsync(
-                persistenceScope,
-                timerStore,
-                renewal.Current,
-                options,
-                now,
-                cancellationToken);
-            Logger.LogError(exception, "Durable timer '{TimerId}' dispatch threw; releasing with backoff", claim.Timer.TimerId);
-            return false;
+            case FencedClaimRunStatus.LostBeforeSideEffect:
+                LogClaimLost(claim, "renew before firing", status: null, run.Exception);
+                return false;
+
+            case FencedClaimRunStatus.LostDuringSideEffect:
+                LogClaimLost(claim, "renew while firing", status: null, run.Exception);
+                return false;
+
+            case FencedClaimRunStatus.Faulted:
+                Logger.LogError(run.Exception, "Durable timer '{TimerId}' dispatch threw; releasing with backoff", claim.Timer.TimerId);
+                await ReleaseAfterFailureAsync(persistenceScope, timerStore, run.Claim, options, now, cancellationToken);
+                return false;
         }
 
+        var result = run.Result!;
         switch (result.Status)
         {
             case BookmarkResumeDispatchStatus.Dispatched:
             case BookmarkResumeDispatchStatus.Duplicate:
             case BookmarkResumeDispatchStatus.WorkflowExecutionMissing:
             case BookmarkResumeDispatchStatus.ExecutableMissing:
-                await CompleteClaimAsync(persistenceScope, timerStore, renewal.Current, cancellationToken);
+                await CompleteClaimAsync(persistenceScope, timerStore, run.Claim, cancellationToken);
                 return result.Status is BookmarkResumeDispatchStatus.Dispatched or BookmarkResumeDispatchStatus.Duplicate;
 
             case BookmarkResumeDispatchStatus.NotFound:
                 if (now - claim.Timer.DueTime > options.NotFoundGrace)
-                    await CompleteClaimAsync(persistenceScope, timerStore, renewal.Current, cancellationToken);
+                    await CompleteClaimAsync(persistenceScope, timerStore, run.Claim, cancellationToken);
                 else
-                    await ReleaseAfterFailureAsync(persistenceScope, timerStore, renewal.Current, options, now, cancellationToken);
+                    await ReleaseAfterFailureAsync(persistenceScope, timerStore, run.Claim, options, now, cancellationToken);
                 return false;
 
             default:
-                await ReleaseAfterFailureAsync(persistenceScope, timerStore, renewal.Current, options, now, cancellationToken);
+                await ReleaseAfterFailureAsync(persistenceScope, timerStore, run.Claim, options, now, cancellationToken);
                 if (Logger.IsEnabled(LogLevel.Debug))
                 {
                     Logger.LogDebug(
@@ -338,7 +337,11 @@ public sealed class DurableTimerPumpTask : BackoffSweepPumpTask
     {
         var completion = await timerStore.CompleteClaimAsync(claim, cancellationToken);
         if (!completion.Succeeded)
-            throw NewClaimLost(claim, "complete", completion.Status);
+        {
+            LogClaimLost(claim, "complete", completion.Status, exception: null);
+            return;
+        }
+
         _timerBackoff.TryRemove(
             new TimerKey(persistenceScope, claim.Timer.WorkflowExecutionId, claim.Timer.TimerId),
             out _);
@@ -356,100 +359,14 @@ public sealed class DurableTimerPumpTask : BackoffSweepPumpTask
         var delay = ComputeBackoff(options.SweepInterval, options.MaxBackoffInterval, failures);
         var release = await timerStore.ReleaseClaimAsync(claim, now.Add(delay), cancellationToken);
         if (!release.Succeeded)
-            throw NewClaimLost(claim, "release", release.Status);
+        {
+            LogClaimLost(claim, "release", release.Status, exception: null);
+            return;
+        }
+
         _timerBackoff.TryRemove(
             new TimerKey(persistenceScope, claim.Timer.WorkflowExecutionId, claim.Timer.TimerId),
             out _);
-    }
-
-    private async ValueTask<BookmarkResumeDispatchResult> DispatchWithClaimRenewalAsync(
-        IDurableTimerStore timerStore,
-        ClaimRenewalState renewal,
-        Func<CancellationToken, ValueTask<BookmarkResumeDispatchResult>> dispatch,
-        DurableTimerPumpOptions options,
-        CancellationToken cancellationToken)
-    {
-        using var renewalStop = new CancellationTokenSource();
-        using var dispatchCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        var renewalTask = RenewClaimUntilStoppedAsync(
-            timerStore,
-            renewal,
-            options.ClaimVisibilityTimeout,
-            renewalStop.Token,
-            dispatchCancellation);
-        BookmarkResumeDispatchResult? result = null;
-        Exception? dispatchFailure = null;
-        Exception? renewalFailure = null;
-        try
-        {
-            result = await dispatch(dispatchCancellation.Token);
-        }
-        catch (Exception exception)
-        {
-            dispatchFailure = exception;
-        }
-        finally
-        {
-            await renewalStop.CancelAsync();
-            try
-            {
-                await renewalTask;
-            }
-            catch (OperationCanceledException) when (renewalStop.IsCancellationRequested)
-            {
-                // Dispatch completed before the next renewal cadence.
-            }
-            catch (Exception exception)
-            {
-                renewalFailure = exception;
-            }
-        }
-
-        if (renewalFailure is not null)
-            ExceptionDispatchInfo.Capture(renewalFailure).Throw();
-        if (dispatchFailure is not null)
-            ExceptionDispatchInfo.Capture(dispatchFailure).Throw();
-        return result!;
-    }
-
-    private async Task RenewClaimUntilStoppedAsync(
-        IDurableTimerStore timerStore,
-        ClaimRenewalState renewal,
-        TimeSpan visibilityTimeout,
-        CancellationToken stopToken,
-        CancellationTokenSource dispatchCancellation)
-    {
-        var cadence = TimeSpan.FromTicks(Math.Max(1, visibilityTimeout.Ticks / 3));
-        while (true)
-        {
-            await Task.Delay(cadence, _timeProvider, stopToken);
-            RuntimeDurableTimerClaimTransitionResult result;
-            try
-            {
-                result = await timerStore.RenewClaimAsync(
-                    renewal.Current,
-                    _timeProvider.GetUtcNow(),
-                    visibilityTimeout,
-                    stopToken);
-            }
-            catch (OperationCanceledException) when (stopToken.IsCancellationRequested)
-            {
-                throw;
-            }
-            catch (Exception exception)
-            {
-                await dispatchCancellation.CancelAsync();
-                throw NewClaimLost(renewal.Current, "renew", status: null, exception);
-            }
-
-            if (result.Status != RuntimeDurableTimerClaimTransitionStatus.Succeeded || result.Claim is null)
-            {
-                await dispatchCancellation.CancelAsync();
-                throw NewClaimLost(renewal.Current, "renew", result.Status);
-            }
-
-            renewal.Current = result.Claim;
-        }
     }
 
     private static BookmarkResumeDispatchRequest CreateRequest(DurableTimer timer) =>
@@ -463,12 +380,27 @@ public sealed class DurableTimerPumpTask : BackoffSweepPumpTask
             payloadType: timer.PayloadType,
             providerId: timer.ProviderId);
 
-    private static RuntimeDurableTimerClaimLostException NewClaimLost(
+    private static FencedClaimRenewal<RuntimeDurableTimerClaim> RenewalOf(IDurableTimerStore timerStore) =>
+        async (claim, now, visibilityTimeout, cancellationToken) =>
+            await timerStore.RenewClaimAsync(claim, now, visibilityTimeout, cancellationToken) is
+                { Status: RuntimeDurableTimerClaimTransitionStatus.Succeeded, Claim: { } renewed }
+                ? renewed
+                : null;
+
+    // Warning, not Error: another claimant holds the timer and fires it, so nothing is lost. It is still worth seeing,
+    // because it means a sweep outran the claim visibility timeout.
+    private void LogClaimLost(
         RuntimeDurableTimerClaim claim,
         string transition,
         RuntimeDurableTimerClaimTransitionStatus? status,
-        Exception? innerException = null) =>
-        new(claim, transition, status, innerException);
+        Exception? exception) =>
+        Logger.LogWarning(
+            exception,
+            "Durable timer '{TimerId}' in workflow execution '{WorkflowExecutionId}' lost its claim during '{Transition}' (status {Status}); skipping it and leaving successor-owned state untouched",
+            claim.Timer.TimerId,
+            claim.Timer.WorkflowExecutionId,
+            transition,
+            status?.ToString() ?? "none");
 
     private bool IsBackingOff(PersistenceScope persistenceScope, DurableTimer timer, DateTimeOffset now) =>
         _timerBackoff.TryGetValue(new TimerKey(persistenceScope, timer.WorkflowExecutionId, timer.TimerId), out var backoff) &&
@@ -498,20 +430,4 @@ public sealed class DurableTimerPumpTask : BackoffSweepPumpTask
     private readonly record struct TimerKey(PersistenceScope PersistenceScope, string WorkflowExecutionId, string TimerId);
 
     private readonly record struct TimerBackoff(DateTimeOffset NextEligibleAt, int Failures);
-
-    private sealed class ClaimRenewalState(RuntimeDurableTimerClaim current)
-    {
-        public RuntimeDurableTimerClaim Current { get; set; } = current;
-    }
-
-    private sealed class RuntimeDurableTimerClaimLostException(
-        RuntimeDurableTimerClaim claim,
-        string transition,
-        RuntimeDurableTimerClaimTransitionStatus? status,
-        Exception? innerException = null)
-        : InvalidOperationException(
-            $"Durable timer claim for '{claim.Timer.TimerId}' in workflow execution '{claim.Timer.WorkflowExecutionId}' " +
-            $"was lost during '{transition}'" +
-            (status is null ? "." : $" with status '{status}'."),
-            innerException);
 }
