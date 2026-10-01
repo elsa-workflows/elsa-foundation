@@ -22,14 +22,8 @@ namespace Elsa.Workflows.Runtime.Reconciliation.Startup;
 /// reconciles. A pass that runs after another finds the artifacts both mount already active.
 /// </para>
 /// <para>
-/// <b>Why the passes still take turns</b> (#2274). Unlike the design-side version reconcilers, whose concurrent passes
-/// converge (#2189), two passes over one mounted set activate each artifact under the same activation id. A losing call no
-/// longer compensates the winner (#2251), two completions of one slot both succeed (#2265), and each call holds a
-/// root-write lease of its own (#2274), but two windows of that race still fail silently: a call cancelled while its slot
-/// transition is in flight hands the slot back, and a call whose mint or preparation fails or is cancelled before the
-/// other's transition lands can leave the slot naming an activation that serves nothing. Either way the other node has logged the artifact
-/// live. The README's "Why the passes take turns" gives the details, and a third, loud case; switching the slot and the
-/// projections in one transaction (#2230) closes the two windows.
+/// <b>Why the passes still take turns</b> (#2274). Concurrent passes over one mounted set still have silent windows,
+/// tracked in #2230, so this stays a <c>[SingleNodeTask]</c>. The README's "Why the passes take turns" describes them.
 /// </para>
 /// <para>
 /// Re-reconciliation needs no new trigger: this is an <see cref="IStartupTask"/>, so a shell reload replays it

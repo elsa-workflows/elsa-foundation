@@ -17,7 +17,7 @@ Two windows remain, and both fail silently:
 
 Nothing reports either one, and only a later pass repairs it. A third case is loud but wrong: two calls resuming an activation whose earlier attempt failed race on restoring its reference, and the loser reports the artifact rejected, and its dependents with it, although the other call activated it.
 
-The Runtime [extension-point catalog](../EXTENSION_POINTS.md) describes the first two under `IWorkflowActivationCoordinator`. Switching the slot and the projections in one transaction (#2230) closes them; the passes can stop taking turns once that and the third case are dealt with.
+The Runtime [extension-point catalog](../EXTENSION_POINTS.md) points here from `IWorkflowActivationCoordinator`. Switching the slot and the projections in one transaction (#2230) closes them; the passes can stop taking turns once that and the third case are dealt with.
 
 ## Starting a node that waits
 

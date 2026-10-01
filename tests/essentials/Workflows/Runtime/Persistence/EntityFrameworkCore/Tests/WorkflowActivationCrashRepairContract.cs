@@ -70,7 +70,7 @@ internal static partial class WorkflowActivationCrashRepairContract
         ["completion-that-cannot-read-the-slot-after-the-switch-reports-the-activation-it-switched-on"] = CompletionThatCannotReadTheSlotAfterTheSwitchReportsTheActivationAsync,
         ["same-activation-loser-keeps-its-lease-after-the-winner-releases-its-own"] = SameActivationLoserKeepsItsLeaseAfterTheWinnerReleasesItsOwnAsync,
         ["lease-of-a-call-that-stopped-inside-it-expires"] = LeaseOfACallThatStoppedInsideItExpiresAsync,
-        ["same-activation-loser-cancelled-in-its-slot-transition-hands-the-slot-back"] = SameActivationLoserCancelledInItsSlotTransitionHandsTheSlotBackAsync
+        ["known-bad-same-activation-loser-cancelled-in-its-slot-transition-hands-the-slot-back"] = KnownBadSameActivationLoserCancelledInItsSlotTransitionHandsTheSlotBackAsync
     };
 
     public static TheoryData<string> Scenarios
@@ -1194,7 +1194,7 @@ internal static partial class WorkflowActivationCrashRepairContract
     private sealed class RootWrites(ActivationStores stores, Func<Task>? beforeSequence) : IWorkflowExecutableRootWriteLeaseManager
     {
         private readonly IWorkflowExecutableRootWriteLeaseManager? _leases = stores.LeaseClock is { } clock
-            ? new WorkflowExecutableRootWriteLeaseManager(stores.Executables, Options.Create(new WorkflowExecutableGarbageCollectionOptions()), clock)
+            ? new WorkflowExecutableRootWriteLeaseManager(stores.Executables, Options.Create(GarbageCollectionOptions), clock)
             : null;
 
         public async ValueTask ExecuteAsync(string artifactId, string leaseId, Func<CancellationToken, ValueTask> write, CancellationToken cancellationToken = default)

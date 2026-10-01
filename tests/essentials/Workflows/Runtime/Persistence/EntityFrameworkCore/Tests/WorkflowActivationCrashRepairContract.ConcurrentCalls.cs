@@ -13,7 +13,10 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 /// </summary>
 internal static partial class WorkflowActivationCrashRepairContract
 {
-    private static readonly TimeSpan LeaseDuration = new WorkflowExecutableGarbageCollectionOptions().RootWriteLeaseDuration;
+    /// <summary>The options of every root-write lease manager here, and the source of <see cref="LeaseDuration"/>.</summary>
+    private static readonly WorkflowExecutableGarbageCollectionOptions GarbageCollectionOptions = new();
+
+    private static readonly TimeSpan LeaseDuration = GarbageCollectionOptions.RootWriteLeaseDuration;
 
     /// <summary>
     /// Two nodes activate the same artifact at once, so they share one activation id, and each holds a root-write lease
@@ -51,15 +54,20 @@ internal static partial class WorkflowActivationCrashRepairContract
 
     /// <summary>
     /// A call stops for good inside its root-write lease, once its slot transition commits. Nothing renews or releases that
-    /// lease, and no later call takes it over, since each call takes its own (#2274): it fences the artifact from reference
-    /// garbage collection until it expires, and no longer.
+    /// lease, and no concurrent call takes it over, since each call takes its own (#2274): a second call for the same
+    /// activation, held before its slot transition meanwhile, runs to the end and releases its own lease without ending the
+    /// first's, so the artifact stays fenced from reference garbage collection until the first lease expires, and no longer.
     /// </summary>
     private static async Task LeaseOfACallThatStoppedInsideItExpiresAsync(Func<ActivationStores> open)
     {
         await using var collector = await StartCollectorAsync(open);
         // The stopped process's clock, which nobody advances.
         var stopped = new FakeTimeProvider(Now);
-        await StopAfterSlotTransitionAsync(() => open() with { LeaseClock = stopped }, "activation-2", "artifact-2");
+        ActivationStores Stopped() => open() with { LeaseClock = stopped };
+        // The second call holds its own lease, held before its slot transition, while the first runs and stops.
+        await using var race = await StartRaceAsync(Stopped);
+        await StopAfterSlotTransitionAsync(Stopped, "activation-2", "artifact-2");
+        await race.ReleaseAsync();
         var expiry = Now.Add(LeaseDuration);
 
         Assert.Null(await TryBeginCollectingAsync(collector, expiry.AddSeconds(-1)));
@@ -70,14 +78,16 @@ internal static partial class WorkflowActivationCrashRepairContract
     }
 
     /// <summary>
-    /// The race that keeps the artifact reconciler a <c>[SingleNodeTask]</c> (#2274). The loser is cancelled, as a node
-    /// shutting down mid-reconcile is, while its slot transition is in flight, and then reads the slot naming its activation.
+    /// KNOWN BAD: pins the window that keeps the artifact reconciler a <c>[SingleNodeTask]</c> (#2274); it is not a
+    /// guarantee. When #2230 lands, flip it: the winner's activation-2 must stay serving and its <c>Activated</c> must hold.
+    /// The loser is cancelled, as a node shutting down mid-reconcile is, while its slot transition is in flight, and then
+    /// reads the slot naming its activation.
     /// It cannot tell the winner's transition from its own, so it compensates the activation as its own and hands the slot
     /// back to the activation it replaced. The slot, the projections and the references agree, but the winner reported
     /// <see cref="WorkflowActivationOutcome.Activated"/> for an activation that no longer serves, and nothing says so until
     /// the slot is activated again. Switching the slot and the projections in one transaction (#2230) closes this.
     /// </summary>
-    private static async Task SameActivationLoserCancelledInItsSlotTransitionHandsTheSlotBackAsync(Func<ActivationStores> open)
+    private static async Task KnownBadSameActivationLoserCancelledInItsSlotTransitionHandsTheSlotBackAsync(Func<ActivationStores> open)
     {
         await ActivateAsync(open, "activation-1", "artifact-1");
         using var cancellation = new CancellationTokenSource();
@@ -86,6 +96,7 @@ internal static partial class WorkflowActivationCrashRepairContract
         await cancellation.CancelAsync();
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(race.ReleaseAsync);
+        // TODO(#2230): flip. These pin the bad outcome: activation-1 serves again and activation-2 is failed, though the winner reported Activated.
         await race.Loser.AssertConsistentAsync("activation-1");
         await race.Loser.AssertProjectionsAsync("activation-2", WorkflowActivationProjectionState.Missing);
         Assert.Equal(WorkflowActivationCoordinator.FailedRetireReason, (await race.Loser.FindReferenceAsync("activation-2")).DeletedReason);
