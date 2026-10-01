@@ -74,12 +74,10 @@ public sealed class UnpublishPublicationSlotRequestHandler(
 
         var now = timeProvider.GetUtcNow();
         // The record may still be a candidate, if a process stopped after its slot transition and nothing has completed
-        // it since (#2223), and the publication it replaced may still be active. Nothing serves the slot now, so every
-        // active record of it is retired, from the status it is in.
+        // it since (#2223), and the publication it replaced may still be active. Only a sibling the runtime has recorded
+        // as replaced is retired: a publish that won the slot after the deactivation owns a live reference and stays.
         await PublicationRecordRetirement.RetireAsync(publicationStore, publication, now, cancellationToken);
-        foreach (var replaced in (await publicationStore.ListBySlotAsync(slot.SlotId, cancellationToken))
-                     .Where(other => other.Status == PublicationStatus.Active && !StringComparer.Ordinal.Equals(other.PublicationId, publicationId)))
-            await PublicationRecordRetirement.RetireAsync(publicationStore, replaced, now, cancellationToken);
+        await PublicationRecordRetirement.RetireReplacedAsync(publicationStore, sourceReferenceStore, slot.SlotId, publicationId, now, cancellationToken);
         if (publication.SourceReferenceId is { } sourceReferenceId)
         {
             logger?.LogInformation(

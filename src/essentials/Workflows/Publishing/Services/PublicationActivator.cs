@@ -162,7 +162,7 @@ public sealed class PublicationActivator(
             return new(true, slot, publication);
 
         var now = timeProvider.GetUtcNow();
-        var retired = await RetireReplacedRecordsAsync(slot, publicationId, now, cancellationToken);
+        var retired = await PublicationRecordRetirement.RetireReplacedAsync(publicationStore, sourceReferenceStore, slot.SlotId, publicationId, now, cancellationToken);
         var lagged = publication.Status;
         publication = await MarkActiveAsync(publication, now, cancellationToken);
         if (lagged == PublicationStatus.Retired && publication.Status == PublicationStatus.Active)
@@ -242,34 +242,6 @@ public sealed class PublicationActivator(
         await activationAuthority.FindAsync(slot.WorkflowDefinitionId, slot.SlotName, cancellationToken) is { } current &&
         current.Revision == slot.Revision &&
         StringComparer.Ordinal.Equals(current.ActiveActivationId, slot.ActiveActivationId);
-
-    /// <summary>
-    /// Retires every other active publication of <paramref name="slot"/> whose activation the runtime has recorded as
-    /// replaced: its source reference is retired or gone. One whose reference is live is left alone, because nothing
-    /// then says it stopped serving, and so is one whose reference a failed activation's compensation retired: that
-    /// activation's own activator records it as failed.
-    /// </summary>
-    /// <returns>The publications this call retired.</returns>
-    private async ValueTask<IReadOnlyList<string>> RetireReplacedRecordsAsync(
-        WorkflowActivationSlot slot,
-        string publicationId,
-        DateTimeOffset now,
-        CancellationToken cancellationToken)
-    {
-        var retired = new List<string>();
-        foreach (var other in (await publicationStore.ListBySlotAsync(slot.SlotId, cancellationToken))
-                     .Where(other => other.Status == PublicationStatus.Active && !StringComparer.Ordinal.Equals(other.PublicationId, publicationId)))
-        {
-            var reference = await FindReferenceAsync(other, cancellationToken);
-            if (reference is { DeletedAt: null } ||
-                StringComparer.Ordinal.Equals(reference?.DeletedReason, WorkflowActivationCoordinator.FailedRetireReason))
-                continue;
-            await PublicationRecordRetirement.RetireAsync(publicationStore, other, now, cancellationToken);
-            retired.Add(other.PublicationId);
-        }
-
-        return retired;
-    }
 
     /// <summary>
     /// Takes back a retired publication that was just marked active when the slot no longer names it. A retired

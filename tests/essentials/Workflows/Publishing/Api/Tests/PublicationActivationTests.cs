@@ -242,6 +242,42 @@ public sealed class PublicationActivationTests
         Assert.Equal(PublicationStatus.Retired, (await _publications.FindAsync("publication-old"))!.Status);
     }
 
+    [Fact]
+    public async Task UnpublishLeavesAPublicationThatWonTheSlotAfterTheDeactivationActive()
+    {
+        await SeedAsync("publication-current", PublicationStatus.Active, occupiesSlot: true);
+        // A publish that won the slot in between: active with a live reference, and the slot no longer names the record.
+        var winner = await SeedAsync("publication-winner", PublicationStatus.Active);
+
+        await NewUnpublisher().Handle(new UnpublishPublicationSlot("definition-1", "default"), CancellationToken.None);
+
+        Assert.Equal(PublicationStatus.Retired, (await _publications.FindAsync("publication-current"))!.Status);
+        Assert.Equal(winner, await _publications.FindAsync("publication-winner"));
+    }
+
+    [Fact]
+    public async Task UnpublishLeavesRecordsOfAnotherSlotAndNonActiveSiblingsAlone()
+    {
+        await SeedAsync("publication-current", PublicationStatus.Active, occupiesSlot: true);
+        var failed = await SeedAsync("publication-failed", PublicationStatus.Failed, ReferenceState.Retired);
+        var candidate = await SeedAsync("publication-candidate", PublicationStatus.Candidate, ReferenceState.Retired);
+        var otherSlot = Record("publication-other-slot", 0, PublicationStatus.Active, _now) with
+        {
+            SlotId = WorkflowActivationSlotIdentity.Create("definition-1", "other"),
+            SlotName = "other"
+        };
+        await _publications.SaveAsync(otherSlot);
+
+        await NewUnpublisher().Handle(new UnpublishPublicationSlot("definition-1", "default"), CancellationToken.None);
+
+        Assert.Equal(PublicationStatus.Retired, (await _publications.FindAsync("publication-current"))!.Status);
+        Assert.Equal(failed, await _publications.FindAsync("publication-failed"));
+        Assert.Equal(candidate, await _publications.FindAsync("publication-candidate"));
+        Assert.Equal(otherSlot, await _publications.FindAsync("publication-other-slot"));
+    }
+
+    private UnpublishPublicationSlotRequestHandler NewUnpublisher() =>
+        new(_authority, NewCoordinator(), _publications, _executables, _references, new FakeTimeProvider(_now));
 
     private PublicationActivator NewActivator(IWorkflowTriggerIndexer? indexer = null, IWorkflowActivationAuthority? authority = null) =>
         new(NewCoordinator(indexer), _publications, authority ?? _authority, _references, new FakeTimeProvider(_now));

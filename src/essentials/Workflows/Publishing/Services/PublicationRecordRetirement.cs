@@ -1,5 +1,7 @@
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Services.Executables;
 
 namespace Elsa.Workflows.Publishing.Services;
 
@@ -37,5 +39,40 @@ public static class PublicationRecordRetirement
                 return;
             publication = await publicationStore.FindAsync(publication.PublicationId, cancellationToken);
         }
+    }
+
+    /// <summary>
+    /// Retires every active publication of a slot other than <paramref name="exceptPublicationId"/> whose activation the
+    /// runtime has recorded as replaced: its source reference is retired or gone. One whose reference is live is left
+    /// alone, because nothing then says it stopped serving (it may be a publication that just won the slot), and so is
+    /// one whose reference a failed activation's compensation retired: that activation's own activator records it as
+    /// failed.
+    /// </summary>
+    /// <returns>The publications this call retired.</returns>
+    public static async ValueTask<IReadOnlyList<string>> RetireReplacedAsync(
+        IPublicationRecordStore publicationStore,
+        IWorkflowExecutableSourceReferenceStore sourceReferenceStore,
+        string slotId,
+        string exceptPublicationId,
+        DateTimeOffset now,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(publicationStore);
+        ArgumentNullException.ThrowIfNull(sourceReferenceStore);
+        var retired = new List<string>();
+        foreach (var other in (await publicationStore.ListBySlotAsync(slotId, cancellationToken))
+                     .Where(other => other.Status == PublicationStatus.Active && !StringComparer.Ordinal.Equals(other.PublicationId, exceptPublicationId)))
+        {
+            var reference = other.SourceReferenceId is { } sourceReferenceId
+                ? await sourceReferenceStore.FindAsync(sourceReferenceId, cancellationToken)
+                : null;
+            if (reference is { DeletedAt: null } ||
+                StringComparer.Ordinal.Equals(reference?.DeletedReason, WorkflowActivationCoordinator.FailedRetireReason))
+                continue;
+            await RetireAsync(publicationStore, other, now, cancellationToken);
+            retired.Add(other.PublicationId);
+        }
+
+        return retired;
     }
 }

@@ -1,6 +1,6 @@
+using System.Reflection;
 using Elsa.Events.Core.Contracts;
 using Elsa.Mediator.Core.Contracts;
-using System.Reflection;
 using Elsa.Tasks.Core;
 using Elsa.Tasks.Core.Attributes;
 using Elsa.Workflows.Design.Core.Reconciliation;
