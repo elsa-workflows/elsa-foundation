@@ -35,15 +35,6 @@ public interface IRuntimeFaultClassification
 
 public sealed class RuntimeSecretResolutionException(string referenceName, string failureCode, bool isRetryable)
     : Exception($"Secret '{referenceName}' could not be resolved ({failureCode})."), IRuntimeFaultClassification;
-
-/// Optional replacement contract (§2.6.2). Lets publish refuse a reference whose declared secret type cannot be held
-/// by the input type (research R11). Absent in hosts without the bridge: every domain is then Unknown.
-public interface IRuntimeSecretTypeDomains
-{
-    RuntimeSecretValueDomain GetDomain(string typeName);
-}
-
-public enum RuntimeSecretValueDomain { Unknown, Text, StructuredText }
 ```
 
 Rules:
@@ -58,8 +49,8 @@ Rules:
   withheld secret envelope is present.
 - `RuntimeSecretResolution.Value` and any resolved value never reach a log, exception message, metric, span
   attribute or persisted state. The fault message carries the reference name and the code only.
-- `FailureCode` is one of the codes below, `TypeMismatch` from conversion, or `TenantMismatch` from the tenant
-  check. It is a code name, not the resolver's error text.
+- `FailureCode` is one of the codes below, `TypeMismatch` from conversion (a backstop, research R11), or
+  `TenantMismatch` from the tenant check. It is a code name, not the resolver's error text.
 
 ## Bridge mapping (`Elsa.Secrets.Workflows`, `SecretValueRuntimeResolver`)
 
@@ -73,9 +64,6 @@ Rules:
 `StoreUnavailable`, which can carry store-private detail. Every enum member must appear in the mapping test, so a new
 member added later fails the test until someone classifies it.
 
-The bridge also implements `IRuntimeSecretTypeDomains` from `SecretTypeNames`: `text` maps to `Text`; `rsa-key`
-and `x509-certificate` map to `StructuredText`; any other type name maps to `Unknown`.
-
 ## Activation behavior (`ActivityActivator`)
 
 | Situation | Outcome |
@@ -84,7 +72,7 @@ and `x509-certificate` map to `StructuredText`; any other type name maps to `Unk
 | Instance `TenantId` set and different from the partition | Throw `RuntimeSecretResolutionException(name, "TenantMismatch", false)`; resolver never called. |
 | Resolver composed, resolution succeeds | Convert with the envelope's plan; hydrate; register value with `IRuntimeSecretMask`; nothing written back. |
 | Resolution fails | Throw `RuntimeSecretResolutionException`; the handler's existing fault boundary records a fault whose `IsRetryable` and code come from `IRuntimeFaultClassification`, also when the exception is masked (the masking wrapper copies both). |
-| Conversion fails | Throw `RuntimeSecretResolutionException(name, "TypeMismatch", false)`. |
+| Conversion fails | Throw `RuntimeSecretResolutionException(name, "TypeMismatch", false)`. A backstop: publish compiles only plans from text that cannot fail on a string (research R11), so this is reached only by an artifact that skipped publish. |
 | No `IRuntimeSecretResolver` composed | Throw the activation failure classified by `ActivityActivationFailureHandler` (new kind, recovery "compose `SecretsWorkflows`"); the activity waits with an incident and is not faulted (§E2.6.1). |
 | Withheld envelope of kind `PolicyRequiresEncryption` | Throw `VF-ACT-010`: the value was withheld and cannot be recovered. Never hydrate null. A backstop only: publish refuses literal and expression bindings on encryption-required inputs (`VF-ACT-011`). |
 
@@ -94,15 +82,14 @@ structural parent evaluation, and the second activation on a re-materialized sna
 one re-resolves (FR-002). The boundary retry never activates anything: it clones graph boundary inputs and
 schedules a fresh execution of that graph boundary, which cannot carry a `Secret` binding. Activity kinds that read inputs outside the
 hydration branch (graph activities, checkpoint participants, intrinsics), inputs an activity copies into its own
-persisted state, and inputs read at publish cannot carry a `Secret` binding: publish refuses it with `VF-ACT-012`. The full path list is [research R3a](../research.md).
+persisted state or returns in its result or fault, and inputs read at publish cannot carry a `Secret` binding: publish refuses it with `VF-ACT-012`. The full path list is [research R3a](../research.md).
 
 ## Publish-time refusals owned by this contract
 
 | Code | Refused |
 |---|---|
-| `VF-ACT-012` | a `Secret` binding on an intrinsic node, a non-CLR consumer (graph activity), a CLR type implementing `IRuntimeActivityCheckpointParticipant`, an input the CLR type names in `[RefusesSecretBinding]` (the activity persists its value, or a publish-time reader needs a literal), the input named by `[ActivityValueOutcomes]`, or a variable default (research R12, R3a IP14 to IP21) |
-| `VF-ACT-013` | a `Secret` binding whose reference declares a `typeName` with domain `StructuredText` on a numeric, boolean, date/time or enum input, or a collection of those. String, object, any-typed and `JsonElement` inputs are accepted. Applies only where `IRuntimeSecretTypeDomains` is composed (the bridge); elsewhere every domain is `Unknown` and nothing is refused here |
-| existing | a `Secret` binding on an input type with no conversion plan from `string` |
+| `VF-ACT-012` | a `Secret` binding on an intrinsic node, a non-CLR consumer (graph activity), a CLR type implementing `IRuntimeActivityCheckpointParticipant`, an input the CLR type names in `[RefusesSecretBinding]` (the activity persists its value, returns it in its result or fault, or a publish-time reader needs a literal), the input named by `[ActivityValueOutcomes]`, or a variable default (research R12, R3a IP14 to IP22). Checked before the conversion plan, so it wins over `VF-COER-001` |
+| `VF-COER-001` (existing) | a `Secret` binding on an input for which `ValueConversionPlanResolver` has no plan from source `String`, representation `TextValue`: everything except a single `String` (or its nullable alias) and a single `Elsa.Any`, `Any` or `JsonNode` input. Numeric, boolean, date/time, `TimeSpan`, enum, `Guid`, `Uri`, `Object`, `JsonElement`, `JsonObject` and every collection, including a collection of `String`, are refused, for every secret type and in every host (research R11) |
 
 ## Feature
 

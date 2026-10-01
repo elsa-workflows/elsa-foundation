@@ -49,5 +49,8 @@ values and inspection projections. The message names the state id and value key,
 The marker is `[secret:<reference name>]`. Values are matched ordinally in raw and JSON-escaped form. The mask lives
 in the work item's DI scope and is never persisted or logged.
 
-Not covered in phase 0 (spec assumption): text an activity writes to its own logger, values it returns as outputs,
-and values it places in private state or bookmark payloads.
+Not covered by masking in phase 0 (spec assumption): text an activity writes to the console or its own logger, values
+it returns as outputs, and values it places in private state or bookmark payloads. For the built-ins, publish refuses a
+`Secret` binding on every input found returned, copied or persisted (research R3a IP14 to IP22), so the remaining
+cases are `WriteLine.Text` on the console and a server that reflects `SendHttpRequest`'s `Authorization` value in its
+response (research R17).

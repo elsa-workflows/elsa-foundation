@@ -3,6 +3,20 @@
 This specification task changes no production code. The commands below become meaningful in the slice that
 introduces the code they exercise ([delivery slices](tasks.md#delivery-slices)); they are planned, not results.
 
+## For workflow authors: using a secret in phase 0
+
+- Bind the secret where it is used. In the input's syntax picker choose `Secret` and pick the secret; the definition
+  stores only the reference, and the value is read when the activity runs. `SendHttpRequest`'s `Authorization`
+  input is the built-in example: bind it to a secret holding the whole header value, such as `Bearer <token>`; it
+  replaces any `Authorization` entry in `RequestHeaders`.
+- A secret cannot be put into a workflow variable, or reused through one, in phase 0. Set Variable and a variable's
+  initial value refuse a secret reference at publish (`VF-ACT-012`), and no activity hands a resolved secret on
+  through its result. When two activities need the same secret, bind the secret reference on each input; each binding
+  resolves on its own when its activity runs.
+- A secret reference fits only a single text or any-typed input. Publish refuses it on a number, date, list,
+  `Object`, `JsonElement` or `JsonObject` input (`VF-COER-001`), and on inputs an activity echoes or persists, such as `Inline`'s expression or
+  `WriteHttpResponse`'s body (`VF-ACT-012`).
+
 ## Working rules for every slice
 
 - One branch per slice, cut from current `main`. Push to `origin` (`elsa-workflows/elsa-foundation`, or
@@ -94,13 +108,16 @@ dotnet test tests/essentials/Workflows/Publishing/Api/Tests/Elsa.Workflows.Publi
 ### Slice 6: credential-literal rule at seven entry points
 
 Journey: push one definition with a literal on a credential input through every Design API entry point, promote
-included (400 from admission), through file reconciliation and git export (that item refused, the pass completes),
-and through publish; confirm `git diff` for the slice touches nothing under
-`src/essentials/Workflows/Design/Persistence/`.
+included (400 from admission, 409 when the draft changed after admission), through file reconciliation and git export
+(that item refused, the pass completes), and through publish, also for an activity the catalog does not hold yet;
+confirm `git diff` for the slice touches under `src/essentials/Workflows/Design/Persistence/` only the promote
+precondition (`IPromoteDraftToVersionCommand.cs`, `WorkflowDraftChangedException.cs`, `EfWorkflowDesignCommands.cs`)
+and adds no rule there.
 
 ```bash
 dotnet test tests/essentials/Workflows/Design/Tests/Elsa.Workflows.Design.Tests.csproj
 dotnet test tests/essentials/Workflows/Design/Api/Tests/Elsa.Workflows.Design.Api.Tests.csproj
+dotnet test tests/essentials/Workflows/Design/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Tests.csproj
 dotnet test tests/essentials/Workflows/Publishing/Api/Tests/Elsa.Workflows.Publishing.Api.Tests.csproj
 dotnet test tests/essentials/Architecture/Elsa.Architecture.Tests.csproj
 ```
@@ -139,6 +156,20 @@ pnpm --filter @elsa-workflows/studio-workflows test
 pnpm typecheck
 pnpm lint
 ```
+
+### Slice 11: SendHttpRequest consumes a secret (owner decision)
+
+```bash
+dotnet test tests/essentials/Activities/Http/Tests/Elsa.Activities.Http.Tests.csproj
+dotnet test tests/essentials/Activities/Design/Tests/Elsa.Activities.Design.Tests.csproj
+dotnet test tests/essentials/Activities/Behavioral/Tests/Elsa.Activities.Behavioral.Tests.csproj
+dotnet test tests/essentials/Secrets/Workflows/Tests/Elsa.Secrets.Workflows.Tests.csproj --filter "FullyQualifiedName~SendHttpRequestSecretEndToEnd"
+```
+
+Journey: bind a secret to `SendHttpRequest.Authorization`, run against the recording local endpoint, confirm it
+received the value as the `Authorization` header and answered without repeating it, rotate and run again, then scan
+every surface with the canary scanner. A design catalog reconciled by a dev build from before this slice throws
+`ActivityVersionHashMismatchException` for `SendHttpRequest`; recreate it (research R17, no migration).
 
 ## Final gates (last slice of the backend)
 

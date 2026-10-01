@@ -32,8 +32,9 @@ public string? ApiKey { get; set; }
 Null rather than `false` keeps `DefaultActivityDefinitionHasher` output byte-identical for every activity that
 declares nothing. `ClrAssemblyScanner` refuses (reconciliation error naming the activity type and input) a credential
 input that also declares `DefaultValue`, and a credential input that could never be bound because publish refuses a
-`Secret` binding there (research R12): on a type implementing `IRuntimeActivityCheckpointParticipant`, or on an input
-the type names in `[RefusesSecretBinding]`. The scanner reads that attribute for this check only and never writes it
+`Secret` binding there: on a type implementing `IRuntimeActivityCheckpointParticipant`, on an input the type names in
+`[RefusesSecretBinding]` (research R12), or on a property whose CLR type is not `string`, since a `Secret` binding
+has a conversion plan only to a single string or any-typed input (research R11). The scanner reads that attribute for this check only and never writes it
 to the catalog. The Activities Design API (`AddDefinitionCommandHandler`, `AddVersionCommandHandler`) refuses an
 input with `isCredential: true`: in phase 0 a credential is declared only through `[ActivityInput(IsCredential =
 true)]`, so graph activities and other API-authored versions cannot declare one.
@@ -82,5 +83,11 @@ input the credential rule runs first, so it reports `Inputs/CredentialLiteral`.
 
 ## Not in this contract
 
-No built-in activity is annotated in phase 0 (see research R5). Workflow-level inputs, variables and outputs have no
-declaration surface in this work.
+Workflow-level inputs, variables and outputs have no declaration surface in this work.
+
+## Built-in declarations in phase 0
+
+One built-in input is declared, by owner decision (2026-10-01, research R17): `SendHttpRequest.Authorization`,
+`[ActivityInput(Key = nameof(Authorization), DisplayName = "Authorization", IsCredential = true)]`, type
+`string?`. Every other built-in input stays undeclared and keeps its catalog hash. `SendHttpRequest` takes a new
+activity version through the existing computed package version, not through a `[Version]` attribute (research R17).
