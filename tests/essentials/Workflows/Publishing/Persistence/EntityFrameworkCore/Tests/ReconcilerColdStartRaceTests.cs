@@ -82,16 +82,44 @@ public sealed class ReconcilerColdStartRaceSqliteTests : IAsyncLifetime
         new ReconcilerColdStartRace(PublishingNativeProvider.Sqlite, Databases, deletedInSource).RunAsync();
 
     /// <summary>
-    /// SQLite takes its write lock when a transaction begins, so the competing checkpoint lands just before the
-    /// publication's transaction, the latest point it can. That cannot make the commit lose; the PostgreSQL test pins
-    /// the lost race itself.
+    /// An ordering sanity check, not a lost-race test. SQLite takes its write lock when a transaction begins, so the
+    /// competing checkpoint lands just before the publication's transaction, the latest point it can. The commit
+    /// therefore never loses here; the PostgreSQL test pins the lost race itself.
     /// </summary>
     [Theory]
     [InlineData(false)]
     [InlineData(true)] // The other node publishes another version of the same activity.
-    public Task Two_nodes_publishing_different_activity_versions_at_once_both_publish(bool sameActivity) =>
+    public Task A_competing_checkpoint_landing_before_the_commit_transaction_leaves_both_versions_published(bool sameActivity) =>
         new SourcePublicationRace(PublishingNativeProvider.Sqlite, Databases).DifferentVersionsBothPublishAsync(
             competing => new BeforeFirstTransactionInterceptor(competing), sameActivity);
+
+    /// <summary>
+    /// A checkpoint whose watermark read is older than the current revision it then reads is stale: the revision
+    /// already opens at the sequence this write would use. Rewinding the watermark after a first checkpoint puts the
+    /// writer in exactly that state without needing a second connection, so the guard in the writer's close step is
+    /// pinned without a container (#2189).
+    /// </summary>
+    [Fact]
+    public async Task A_checkpoint_whose_watermark_is_behind_the_current_revision_is_refused_as_a_lost_race()
+    {
+        var access = TestAccess.Scoped("default");
+        var definition = new ActivityDefinition
+        {
+            Id = "stale-checkpoint", TenantId = "default", ActivityTypeKey = "test.stale", Category = "Tests",
+            DisplayName = "Stale checkpoint", CreatedAt = ActivityUpgradeFixtures.Now, LastModifiedAt = ActivityUpgradeFixtures.Now
+        };
+        var mutation = new EfActivityManagementProjectionMutation(
+            ActivityUpgradeFixtures.Now, [new(definition, ActivityUpgradeSeed.Authoring(definition.Id, null, "default"))], [], []);
+
+        await using (var first = PublishingNativeProvider.Sqlite.Design(activitiesDesign.ConnectionString, []))
+        {
+            await new EfActivityManagementProjectionWriter(first, access).WriteAsync(mutation);
+            await first.ActivityManagementProjectionWatermarks.ExecuteUpdateAsync(setters => setters.SetProperty(x => x.Sequence, 0L));
+        }
+
+        await using var db = PublishingNativeProvider.Sqlite.Design(activitiesDesign.ConnectionString, []);
+        await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() => new EfActivityManagementProjectionWriter(db, access).WriteAsync(mutation));
+    }
 
     [Theory]
     [InlineData(LandedPublication.Identical)]

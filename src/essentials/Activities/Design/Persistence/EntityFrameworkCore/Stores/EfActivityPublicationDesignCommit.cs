@@ -31,6 +31,8 @@ public sealed class EfActivityPublicationDesignCommit
     /// publication, and the winner has committed by the time the loss is reported, so a fresh attempt normally commits.
     /// A transient provider conflict is not a lost race and fails the publication, as it always has.
     /// </summary>
+    // Every loss means another checkpoint committed and each attempt re-reads fresh, so progress is global and 3 attempts without delay suffice.
+    // A deterministic unique violation loses every attempt, spends the budget, then fails as InvalidOperationException.
     private static readonly EfWriteRetry SourcePublicationCommits = new(3, IsLostRace);
 
     private readonly ActivitiesDesignDbContext db;
