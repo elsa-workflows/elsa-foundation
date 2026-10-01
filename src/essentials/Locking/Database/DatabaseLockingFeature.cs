@@ -73,7 +73,7 @@ public class DatabaseLockingFeature : IShellFeature
         });
     }
 
-    internal static DatabaseLockEngine ParseProvider(string? provider) =>
+    private static DatabaseLockEngine ParseProvider(string? provider) =>
         provider?.Trim().ToLowerInvariant() switch
         {
             "postgresql" or "postgres" or "npgsql" => DatabaseLockEngine.PostgreSql,
@@ -108,7 +108,7 @@ public class DatabaseLockingFeature : IShellFeature
                 $"{FeatureName} requires {nameof(ConnectionString)} or {nameof(ConnectionName)}, or ConnectionStrings:{DefaultConnectionName}.");
     }
 
-    internal enum DatabaseLockEngine
+    private enum DatabaseLockEngine
     {
         PostgreSql,
         SqlServer,

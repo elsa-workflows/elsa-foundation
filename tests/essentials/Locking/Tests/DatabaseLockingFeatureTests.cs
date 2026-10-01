@@ -1,6 +1,10 @@
 using Elsa.Locking.Core;
 using Elsa.Locking.Database;
+using Medallion.Threading.MySql;
+using Medallion.Threading.Postgres;
+using Medallion.Threading.SqlServer;
 using Microsoft.Extensions.Configuration;
+using System.Reflection;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Locking.Tests;
@@ -27,16 +31,24 @@ public sealed class DatabaseLockingFeatureTests
     }
 
     [Theory]
-    [InlineData("PostgreSql", "PostgreSql")]
-    [InlineData("postgres", "PostgreSql")]
-    [InlineData(" Npgsql ", "PostgreSql")]
-    [InlineData("SqlServer", "SqlServer")]
-    [InlineData("sql server", "SqlServer")]
-    [InlineData("mssql", "SqlServer")]
-    [InlineData("MySql", "MySql")]
-    [InlineData("my sql", "MySql")]
-    public void Maps_each_provider_name_and_alias_to_its_engine(string provider, string expected) =>
-        Assert.Equal(expected, DatabaseLockingFeature.ParseProvider(provider).ToString());
+    [InlineData("PostgreSql", typeof(PostgresDistributedSynchronizationProvider), "Host=localhost;Database=elsa")]
+    [InlineData("postgres", typeof(PostgresDistributedSynchronizationProvider), "Host=localhost;Database=elsa")]
+    [InlineData(" Npgsql ", typeof(PostgresDistributedSynchronizationProvider), "Host=localhost;Database=elsa")]
+    [InlineData("SqlServer", typeof(SqlDistributedSynchronizationProvider), "Server=localhost;Database=elsa")]
+    [InlineData("sql server", typeof(SqlDistributedSynchronizationProvider), "Server=localhost;Database=elsa")]
+    [InlineData("mssql", typeof(SqlDistributedSynchronizationProvider), "Server=localhost;Database=elsa")]
+    [InlineData("MySql", typeof(MySqlDistributedSynchronizationProvider), "Server=localhost;Database=elsa")]
+    [InlineData("my sql", typeof(MySqlDistributedSynchronizationProvider), "Server=localhost;Database=elsa")]
+    public void Maps_each_provider_name_and_alias_to_its_engine(string provider, Type engine, string connectionString)
+    {
+        var locks = Resolve(new DatabaseLockingFeature { Provider = provider, ConnectionString = connectionString });
+
+        // The adapter keeps the engine's provider in its primary-constructor field (the compiler names it <inner>P); nothing else exposes which engine was chosen.
+        var inner = typeof(MedallionDistributedLockProvider)
+            .GetField("<inner>P", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .GetValue(locks);
+        Assert.IsType(engine, inner);
+    }
 
     [Fact]
     public void Refuses_sqlite_as_single_node_and_points_at_the_file_system_lock()
