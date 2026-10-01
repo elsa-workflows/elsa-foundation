@@ -3,6 +3,7 @@ using Elsa.Primitives.Versioning;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Reconciliation.Contracts;
 using Elsa.Workflows.Design.Core.Reconciliation;
+using Elsa.Workflows.Design.Reconciliation.Services;
 
 namespace Elsa.Workflows.Design.Reconciliation.Handlers;
 
@@ -11,7 +12,8 @@ namespace Elsa.Workflows.Design.Reconciliation.Handlers;
 /// <see cref="IWorkflowReconciliationSource"/> in turn and contributes one definition version per
 /// entry (built via the factories) by adding to <c>event.Versions</c>. Source modules extend the
 /// reconciliation feature by registering their own <see cref="IWorkflowReconciliationSource"/>; they
-/// do not write their own handlers.
+/// do not write their own handlers. Each version gets the id <see cref="WorkflowReconciliationVersionIds"/>
+/// derives, so every node contributes the same version under the same id.
 /// </summary>
 public sealed class WorkflowVersionsReconcilingHandler(
     IWorkflowDefinitionFactory definitionFactory,
@@ -28,7 +30,14 @@ public sealed class WorkflowVersionsReconcilingHandler(
             foreach (var entry in entries)
             {
                 var definition = definitionFactory.Create(entry.Name, entry.Description, entry.DefinitionId, entry.Deleted);
-                var version = versionFactory.Create(definition, entry.Version, entry.State, entry.SourceCreatedAt);
+                var sortKey = SemVer.ToSortKey(entry.Version);
+                // A generated id would differ per node and make two nodes' materialization requests conflict (#2189).
+                var version = versionFactory.Create(
+                    definition,
+                    entry.Version,
+                    entry.State,
+                    entry.SourceCreatedAt,
+                    WorkflowReconciliationVersionIds.For(definition.Id, sortKey));
                 domainEvent.Versions.Add(version);
                 // Provenance beside the version: source identity is not persisted on design entities, so
                 // this claim is what survives to WorkflowVersionsReconciled (and the publish-on-reconcile
@@ -37,7 +46,7 @@ public sealed class WorkflowVersionsReconcilingHandler(
                 domainEvent.Claims.Add(new WorkflowVersionSourceClaim(
                     DefinitionId: definition.Id,
                     Version: entry.Version,
-                    SemVerSortKey: SemVer.ToSortKey(entry.Version),
+                    SemVerSortKey: sortKey,
                     SourceId: source.SourceId,
                     SourceKind: source.SourceKind,
                     PublishRequested: source.RequestsPublication,
