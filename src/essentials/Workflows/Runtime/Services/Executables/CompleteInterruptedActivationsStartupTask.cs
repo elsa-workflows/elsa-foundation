@@ -61,9 +61,9 @@ public sealed class CompleteInterruptedActivationsStartupTask(
                         now,
                         continuationToken: continuationToken),
                     cancellationToken);
-                foreach (var reference in page.Items)
+                foreach (var reference in page.Items.Where(reference => reference.ActivationId is not null))
                 {
-                    if (reference.ActivationId is not null && definitions.Add(reference.DefinitionId))
+                    if (definitions.Add(reference.DefinitionId))
                         await CompleteSlotsAsync(reference.DefinitionId, cancellationToken);
                 }
 
@@ -78,11 +78,8 @@ public sealed class CompleteInterruptedActivationsStartupTask(
 
     private async Task CompleteSlotsAsync(string definitionId, CancellationToken cancellationToken)
     {
-        foreach (var slot in await authority.ListByDefinitionAsync(definitionId, cancellationToken))
+        foreach (var slot in (await authority.ListByDefinitionAsync(definitionId, cancellationToken)).Where(slot => slot.ActiveActivationId is not null))
         {
-            if (slot.ActiveActivationId is null)
-                continue;
-
             // The coordinator logs a completion and a failure itself, with the activation's identity.
             try
             {

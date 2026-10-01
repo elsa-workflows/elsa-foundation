@@ -416,14 +416,12 @@ public sealed class WorkflowActivationCoordinator(
                     DefinitionId = slot.WorkflowDefinitionId
                 },
                 cancellationToken);
-            foreach (var reference in page.Items)
+            foreach (var reference in page.Items.Where(reference =>
+                         reference.ActivationId is { } other &&
+                         !StringComparer.Ordinal.Equals(other, activationId) &&
+                         StringComparer.Ordinal.Equals(reference.SlotId, slot.SlotId)))
             {
-                if (reference.ActivationId is not { } other ||
-                    StringComparer.Ordinal.Equals(other, activationId) ||
-                    !StringComparer.Ordinal.Equals(reference.SlotId, slot.SlotId))
-                    continue;
-
-                occupants.Add(await ReadOccupantAsync(other, cancellationToken));
+                occupants.Add(await ReadOccupantAsync(reference.ActivationId!, cancellationToken));
             }
 
             continuationToken = page.NextContinuationToken;
