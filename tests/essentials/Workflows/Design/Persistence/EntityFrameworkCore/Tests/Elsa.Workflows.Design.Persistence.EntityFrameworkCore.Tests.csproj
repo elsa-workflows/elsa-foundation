@@ -23,5 +23,7 @@
     <Compile Include="..\..\..\..\..\Persistence\EntityFramework\Tests\ProviderFailures.cs" Link="ProviderFailures.cs" />
     <!-- Excludes the finalization tables every module maps from own-table assertions. -->
     <Compile Include="..\..\..\..\..\Persistence\EntityFramework\Tests\EfSchemaFinalizationTestFilter.cs" Link="EfSchemaFinalizationTestFilter.cs" />
+    <!-- Updates and deletes rows whose LastModifiedAt is the concurrency token, shared with the native provider tests. -->
+    <Compile Include="..\..\..\Tests\Infrastructure\ConcurrencyTokenScenarios.cs" Link="ConcurrencyTokenScenarios.cs" />
   </ItemGroup>
 </Project>
