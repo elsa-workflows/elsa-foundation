@@ -1,4 +1,4 @@
-using Elsa.Workbench;
+using Elsa.Modularity.Api.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.Extensions.Configuration;

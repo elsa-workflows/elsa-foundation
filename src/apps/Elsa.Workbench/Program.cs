@@ -42,6 +42,7 @@ using Elsa.Locking.FileSystem;
 using Elsa.Mediator;
 using Elsa.Modularity.Api;
 using Elsa.Modularity.Api.Attention;
+using Elsa.Modularity.Api.Authorization;
 using Elsa.Modularity.Core.Contracts;
 using Elsa.Modularity.EntityFramework.Extensions;
 using Elsa.Modularity.Nuplane.Extensions;

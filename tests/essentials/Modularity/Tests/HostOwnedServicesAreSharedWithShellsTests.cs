@@ -233,7 +233,7 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
         : $"{type.Namespace}.{type.Name}";
 
     private static Assembly EntryAssembly(string host) => host == "Elsa.Workbench"
-        ? typeof(ManagementApiKeyAuthentication).Assembly
+        ? typeof(WorkbenchOpenIddictMigrator).Assembly
         : typeof(ModuleManagementOptions).Assembly;
 
     /// <summary>A content root of the host's own settings and a shell file of its own, so the shell that is activated enables no feature.</summary>
