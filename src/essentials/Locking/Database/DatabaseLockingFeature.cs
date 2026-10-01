@@ -63,17 +63,25 @@ public class DatabaseLockingFeature : IShellFeature
         services.AddSingleton<IDistributedLockProvider>(serviceProvider =>
         {
             var resolved = ResolveConnectionString(serviceProvider.GetService<IConfiguration>(), connectionString, connectionName);
-            Medallion.Threading.IDistributedLockProvider medallion = engine switch
-            {
-                DatabaseLockEngine.PostgreSql => new PostgresDistributedSynchronizationProvider(resolved),
-                DatabaseLockEngine.SqlServer => new SqlDistributedSynchronizationProvider(resolved),
-                _ => new MySqlDistributedSynchronizationProvider(resolved)
-            };
-            return new MedallionDistributedLockProvider(medallion, defaultTimeout);
+            return new MedallionDistributedLockProvider(CreateEngineProvider(engine, resolved), defaultTimeout);
         });
     }
 
-    private static DatabaseLockEngine ParseProvider(string? provider) =>
+    /// <summary>Builds Medallion's provider for <paramref name="engine"/>; an engine this feature does not know is refused.</summary>
+    public static Medallion.Threading.IDistributedLockProvider CreateEngineProvider(DatabaseLockEngine engine, string connectionString) =>
+        engine switch
+        {
+            DatabaseLockEngine.PostgreSql => new PostgresDistributedSynchronizationProvider(connectionString),
+            DatabaseLockEngine.SqlServer => new SqlDistributedSynchronizationProvider(connectionString),
+            DatabaseLockEngine.MySql => new MySqlDistributedSynchronizationProvider(connectionString),
+            _ => throw new ArgumentOutOfRangeException(nameof(engine), engine, "Unknown database lock engine.")
+        };
+
+    /// <summary>
+    /// Maps a <c>Provider</c> setting to its engine, accepting each engine's usual aliases case-insensitively. SQLite and any
+    /// unknown or missing name are refused with an explanation, never mapped to a default engine.
+    /// </summary>
+    public static DatabaseLockEngine ParseProvider(string? provider) =>
         provider?.Trim().ToLowerInvariant() switch
         {
             "postgresql" or "postgres" or "npgsql" => DatabaseLockEngine.PostgreSql,
@@ -106,12 +114,5 @@ public class DatabaseLockingFeature : IShellFeature
             ? fallback
             : throw new InvalidOperationException(
                 $"{FeatureName} requires {nameof(ConnectionString)} or {nameof(ConnectionName)}, or ConnectionStrings:{DefaultConnectionName}.");
-    }
-
-    private enum DatabaseLockEngine
-    {
-        PostgreSql,
-        SqlServer,
-        MySql
     }
 }
