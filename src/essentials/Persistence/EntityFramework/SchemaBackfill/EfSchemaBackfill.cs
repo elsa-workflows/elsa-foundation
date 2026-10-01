@@ -379,11 +379,13 @@ public sealed class EfSchemaBackfill
     /// <summary>
     /// Whether <paramref name="exception"/> is a service provider refusing a scope because it is being disposed, as a shell's
     /// is while its container is torn down under a round that has not been stopped yet. That is the shell stopping, not the
-    /// round failing, so it is not a warning.
+    /// round failing, so it is not a warning. The match cannot tell a disposed root provider from a disposed scope, which is
+    /// acceptable: the backfill only uses scopes it creates for the round, so a disposed <see cref="IServiceProvider"/> means
+    /// its shell is being torn down.
     /// </summary>
     private static bool IsProviderDisposal(Exception exception) =>
         exception is ObjectDisposedException { ObjectName: nameof(IServiceProvider) }
-        || exception is AggregateException aggregate && aggregate.InnerExceptions.All(IsProviderDisposal);
+        || exception is AggregateException aggregate && aggregate.InnerExceptions.Count > 0 && aggregate.InnerExceptions.All(IsProviderDisposal);
 
     private static LogLevel FailureLevel(Exception exception) => IsProviderDisposal(exception) ? LogLevel.Debug : LogLevel.Warning;
 

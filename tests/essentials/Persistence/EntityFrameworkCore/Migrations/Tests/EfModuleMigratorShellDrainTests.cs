@@ -114,7 +114,7 @@ public sealed class EfModuleMigratorShellDrainTests : IAsyncLifetime
         while (!_round.Parked.IsCompleted)
         {
             Assert.True(DateTimeOffset.UtcNow < deadline, "No backfill round started.");
-            _clock.Advance(TimeSpan.FromSeconds(15));
+            _clock.Advance(new EfSchemaBackfillOptions().CheckInterval + TimeSpan.FromSeconds(1));
             await Task.Delay(TimeSpan.FromMilliseconds(10));
         }
     }

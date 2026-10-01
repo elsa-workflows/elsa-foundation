@@ -835,8 +835,10 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
             return host.WithScopeAsync(action, token);
         }, stopping.Token);
         // The second round starts after the first one's failure was handled, so nothing it logged is still to come.
+        var deadline = DateTimeOffset.UtcNow + TimeSpan.FromSeconds(30);
         while (!secondRound.Task.IsCompleted)
         {
+            Assert.True(DateTimeOffset.UtcNow < deadline, "The loop did not start a second round.");
             clock.Advance(TimeSpan.FromSeconds(15));
             await Task.Delay(10);
         }
@@ -854,6 +856,7 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
         var logger = new WarningLogger();
         var host = await HostAsync("host-a", logger: logger);
         var failing = false;
+        var releaseAttempted = false;
         host.Probe.BeforeWrite = _ =>
         {
             failing = true;
@@ -861,8 +864,14 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
         };
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => host.Backfill.RunOnceAsync((action, token) =>
-            failing ? throw new ObjectDisposedException(nameof(IServiceProvider)) : host.WithScopeAsync(action, token)));
+        {
+            if (!failing)
+                return host.WithScopeAsync(action, token);
+            releaseAttempted = true;
+            throw new ObjectDisposedException(nameof(IServiceProvider));
+        }));
 
+        Assert.True(releaseAttempted);
         Assert.DoesNotContain(logger.Warnings, warning => warning.Message.Contains("could not release its claim", StringComparison.Ordinal));
     }
 

@@ -215,7 +215,7 @@ public sealed class EfModuleMigrator<TContext>(
 /// usable. The migrator is the shell's singleton, so this stops the instance the shell initializer started; the disposal that
 /// follows finds it stopped.
 /// </summary>
-internal sealed class StopEfModuleMigratorTerminator<TContext>(EfModuleMigrator<TContext> migrator) : IShellTerminator
+public sealed class StopEfModuleMigratorTerminator<TContext>(EfModuleMigrator<TContext> migrator) : IShellTerminator
     where TContext : DbContext
 {
     public Task TerminateAsync(CancellationToken cancellationToken = default) => migrator.StopAsync(cancellationToken);
