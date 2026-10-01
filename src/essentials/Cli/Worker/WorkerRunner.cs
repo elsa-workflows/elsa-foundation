@@ -180,6 +180,9 @@ internal static class WorkerRunner
                     selection = Selection(request.Selection),
                     shells = Shells(request),
                     capabilitySelection,
+                    sqliteMigrationLockStaleAfter = tooling.SupportsSqliteMigrationLockStaleAfter
+                        ? request.SqliteMigrationLockStaleAfter?.ToString("c", System.Globalization.CultureInfo.InvariantCulture)
+                        : null,
                     connection = ResolveConnection(request)
                 },
                 cancellationToken);

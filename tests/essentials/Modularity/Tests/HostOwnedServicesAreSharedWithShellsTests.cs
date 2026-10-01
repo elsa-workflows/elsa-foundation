@@ -7,6 +7,7 @@ using Elsa.Cluster.Core.Models;
 using Elsa.Foundation.Host.ModuleManagement;
 using Elsa.Persistence.Schema.SchemaFinalization;
 using Elsa.Workbench;
+using Elsa.Workbench.OpenIddict;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Nuplane.Reconciliation;
@@ -67,6 +68,9 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
             "Elsa.Workbench.OpenIddict.OpenIddictIdentityStoreInitializer",
             "Elsa.Workbench.Readiness.DefaultShellWarmup",
             "Elsa.Workbench.WorkbenchOpenIddictMigrator"),
+        Entries(
+            IntentionallyPerShell + "records what its own container's options pipeline resolved the store's AutoMigrate to, for the host's migrator, which a shell never starts",
+            "Elsa.Workbench.WorkbenchOpenIddictMigrationSwitch"),
         Entries(
             "unreachable from shell code: only CShells' runtime feature catalog, which the host holds, resolves the feature assembly provider, and a shell's copy would read a Nuplane catalog that has loaded nothing",
             "Elsa.Foundation.Host.Feed.NuplaneAssemblyProvider",
@@ -130,6 +134,26 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
         // The allowlist and the other things this compared are only worth anything if the comparison saw the services it exists for.
         Assert.Contains(typeof(IReconciliationTriggerIngress), compared.Select(service => service.Type));
         Assert.Contains(typeof(IEfSchemaFleet), compared.Select(service => service.Type));
+    }
+
+    /// <summary>
+    /// Elsa's migration policy for the OpenIddict store is wired in Workbench's own entry point, so deleting that call, or moving it
+    /// ahead of the vendor registration, is caught here and nowhere else: the policy's hosted service must be registered, and after
+    /// the vendor initializer, which turns its own migration off for it and creates the demo store (#2196).
+    /// </summary>
+    [Fact]
+    public void Workbench_registers_the_openiddict_migration_policy_after_the_vendor_initializer()
+    {
+        using var content = ContentRoot.For("Elsa.Workbench");
+        using var built = BuiltHost.Run(EntryAssembly("Elsa.Workbench"), content.Arguments(durableMembership: false));
+
+        var hosted = built.Host.Services.GetServices<IHostedService>().Select(service => service.GetType()).ToList();
+
+        Assert.Contains(typeof(WorkbenchOpenIddictMigrator), hosted);
+        Assert.Contains(typeof(OpenIddictIdentityStoreInitializer), hosted);
+        Assert.True(
+            hosted.IndexOf(typeof(OpenIddictIdentityStoreInitializer)) < hosted.IndexOf(typeof(WorkbenchOpenIddictMigrator)),
+            "The migration policy starts before the vendor initializer, which would then migrate the store itself.");
     }
 
     /// <summary>The service types the host registered as non-keyed singletons, of an Elsa or Nuplane assembly and closed, which a shell is built with copies of.</summary>

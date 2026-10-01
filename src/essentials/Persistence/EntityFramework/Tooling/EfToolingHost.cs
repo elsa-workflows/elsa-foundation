@@ -203,7 +203,7 @@ public static class EfToolingHost
         {
             EfToolingCommands.Plan => Plan(ordered, provider!, schema, actions, cancellationToken),
             EfToolingCommands.Script => Script(ordered, provider!, schema, actions, request, cancellationToken),
-            EfToolingCommands.Apply => await Apply(ordered, provider!, schema, actions, request.Connection!, new EfMigrateOptions(), cancellationToken),
+            EfToolingCommands.Apply => await Apply(ordered, provider!, schema, actions, request.Connection!, MigrateOptions(request), cancellationToken),
             EfToolingCommands.Validate => await Validate(ordered, provider!, schema, actions, request.Connection!, cancellationToken),
             EfToolingCommands.PostMigrate => await PostMigrate(ordered, provider!, schema, actions, request.Connection!, cancellationToken),
             EfToolingCommands.Hold or EfToolingCommands.Release or EfToolingCommands.Status =>
@@ -259,6 +259,7 @@ public static class EfToolingHost
             ("capabilitySelection", request.CapabilitySelection is not null, !list, false),
             ("connection", request.Connection is not null, opensDatabase, opensDatabase),
             ("skewAllowance", request.SkewAllowance is not null, command == EfToolingCommands.Status, false),
+            ("sqliteMigrationLockStaleAfter", request.SqliteMigrationLockStaleAfter is not null, command == EfToolingCommands.Apply, false),
             ("finalization", request.Finalization is not null, finalization, changesHolds),
             ("finalization.family", request.Finalization?.Family is not null, finalization, changesHolds),
             ("finalization.version", request.Finalization?.Version is not null, changesHolds, false),
@@ -1117,6 +1118,19 @@ public static class EfToolingHost
     }
 
     /// <summary>The skew allowance a <c>status</c> request names, refused when it is not a non-negative <c>TimeSpan</c>.</summary>
+    /// <summary>The migrate options a version-1 <c>apply</c> runs with: the defaults, and the lock bound the request carries (#2196).</summary>
+    private static EfMigrateOptions MigrateOptions(EfToolingRequest request)
+    {
+        var options = new EfMigrateOptions();
+        if (request.SqliteMigrationLockStaleAfter is null)
+            return options;
+
+        options.SqliteMigrationLockStaleAfter = TimeSpan.TryParse(request.SqliteMigrationLockStaleAfter, System.Globalization.CultureInfo.InvariantCulture, out var staleAfter) && staleAfter > TimeSpan.Zero
+            ? staleAfter
+            : throw EfToolingRefusal.Usage("invalid-request", "The 'apply' request is not valid.", [$"'sqliteMigrationLockStaleAfter' must be a positive time span such as 00:10:00, not '{request.SqliteMigrationLockStaleAfter}'."]);
+        return options;
+    }
+
     private static TimeSpan? SkewAllowance(EfToolingRequest request)
     {
         if (request.SkewAllowance is null)

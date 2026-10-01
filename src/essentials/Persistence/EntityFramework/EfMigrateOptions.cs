@@ -47,7 +47,7 @@ public sealed class EfMigrateOptions
             SqliteMigrationLockStaleAfter = staleAfter;
     }
 
-    /// <summary>These options with <paramref name="policy"/>: <c>apply</c> migrates whatever policy the host it reads configuration from runs under.</summary>
+    /// <summary>These options with <paramref name="policy"/> in place of their own, and every other setting, the SQLite lock bound included, carried across unchanged.</summary>
     internal EfMigrateOptions WithPolicy(EfMigratePolicy policy) => new() { Policy = policy, SqliteMigrationLockStaleAfter = SqliteMigrationLockStaleAfter };
 
     /// <summary>

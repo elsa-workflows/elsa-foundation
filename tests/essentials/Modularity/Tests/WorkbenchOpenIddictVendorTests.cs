@@ -1,6 +1,7 @@
 using Elsa.Workbench;
 using Elsa.Workbench.OpenIddict;
 using Microsoft.EntityFrameworkCore;
+using Elsa.Foundation.Identity.OpenIddict;
 using Elsa.Persistence.EntityFramework;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Configuration;
@@ -104,6 +105,34 @@ public sealed class WorkbenchOpenIddictVendorTests
     /// Elsa's migration policy sits beside the vendor store, not in it: with it the durable store still migrates and reopens, and a
     /// store that turns <c>AutoMigrate</c> off is still left alone.
     /// </summary>
+    /// <summary>
+    /// The store's <c>AutoMigrate</c> is the options pipeline's one answer: a setting made in code after the section is bound turns
+    /// the policy's migration off exactly as it turns the vendor's off, though the policy turns the vendor's off itself.
+    /// </summary>
+    [Fact]
+    public async Task Migration_policy_honours_an_AutoMigrate_set_in_code()
+    {
+        var directory = Directory.CreateTempSubdirectory("elsa-workbench-openiddict-code-");
+        try
+        {
+            await using var provider = CreateProvider(
+                DurableConfiguration(Path.Join(directory.FullName, "tokens.db"), autoMigrate: true),
+                withMigrationPolicy: true,
+                services => services.Configure<OpenIddictIdentityOptions>(options => options.AutoMigrate = false));
+            await StartAsync(provider);
+            await using var scope = provider.CreateAsyncScope();
+            var database = scope.ServiceProvider.GetRequiredService<OpenIddictIdentityDbContext>().Database;
+
+            Assert.Empty(await database.GetAppliedMigrationsAsync());
+            Assert.Single(await database.GetPendingMigrationsAsync());
+        }
+        finally
+        {
+            SqliteConnection.ClearAllPools();
+            directory.Delete(recursive: true);
+        }
+    }
+
     [Theory]
     [InlineData(true, 1, 0)]
     [InlineData(false, 0, 1)]
@@ -112,7 +141,7 @@ public sealed class WorkbenchOpenIddictVendorTests
         var directory = Directory.CreateTempSubdirectory("elsa-workbench-openiddict-policy-");
         try
         {
-            await using var provider = CreateProvider(DurableConfiguration(Path.Combine(directory.FullName, "tokens.db"), autoMigrate), withMigrationPolicy: true);
+            await using var provider = CreateProvider(DurableConfiguration(Path.Join(directory.FullName, "tokens.db"), autoMigrate), withMigrationPolicy: true);
             await StartAsync(provider);
             await using var scope = provider.CreateAsyncScope();
             var database = scope.ServiceProvider.GetRequiredService<OpenIddictIdentityDbContext>().Database;
@@ -136,7 +165,7 @@ public sealed class WorkbenchOpenIddictVendorTests
         var directory = Directory.CreateTempSubdirectory("elsa-workbench-openiddict-lock-");
         try
         {
-            var databasePath = Path.Combine(directory.FullName, "tokens.db");
+            var databasePath = Path.Join(directory.FullName, "tokens.db");
             await using (var connection = new SqliteConnection($"Data Source={databasePath};Pooling=False"))
             {
                 await connection.OpenAsync();
@@ -196,13 +225,14 @@ public sealed class WorkbenchOpenIddictVendorTests
         Assert.NotNull(await manager.FindByIdAsync(id));
     }
 
-    private static ServiceProvider CreateProvider(IConfiguration configuration, bool withMigrationPolicy = false)
+    private static ServiceProvider CreateProvider(IConfiguration configuration, bool withMigrationPolicy = false, Action<IServiceCollection>? configure = null)
     {
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddWorkbenchOpenIddictVendor(configuration);
         if (withMigrationPolicy)
             services.AddWorkbenchOpenIddictMigrationPolicy(configuration);
+        configure?.Invoke(services);
         return services.BuildServiceProvider();
     }
 

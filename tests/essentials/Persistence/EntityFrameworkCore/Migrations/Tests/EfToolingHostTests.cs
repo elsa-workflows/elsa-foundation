@@ -179,15 +179,7 @@ public sealed class EfToolingHostTests : IDisposable
     public async Task Apply_reports_a_stale_sqlite_migration_lock_older_than_the_configured_bound()
     {
         var path = Path.Join(root, "stale-lock.db");
-        await using (var connection = new SqliteConnection($"Data Source={path};Pooling=False"))
-        {
-            await connection.OpenAsync();
-            await using var command = connection.CreateCommand();
-            command.CommandText =
-                "CREATE TABLE \"__EFMigrationsLock\" (\"Id\" INTEGER NOT NULL CONSTRAINT \"PK___EFMigrationsLock\" PRIMARY KEY, \"Timestamp\" TEXT NOT NULL);" +
-                $"INSERT INTO \"__EFMigrationsLock\"(\"Id\", \"Timestamp\") VALUES(1, '{DateTimeOffset.UtcNow.AddMinutes(-2):yyyy-MM-dd HH:mm:ss.fffffffzzz}');";
-            await command.ExecuteNonQueryAsync();
-        }
+        await CreateStaleLockAsync(path, DateTimeOffset.UtcNow.AddMinutes(-2));
 
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection([new KeyValuePair<string, string?>(
@@ -201,6 +193,59 @@ public sealed class EfToolingHostTests : IDisposable
         Assert.Contains("migration lock", refusal.Message, StringComparison.Ordinal);
         Assert.Contains("DELETE FROM", refusal.Message, StringComparison.Ordinal);
         Assert.Contains("00:01:00", refusal.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The version-1 request, which the CLI sends unless a configuration context is named, carries no configuration of its own, so
+    /// the host's bound travels in it: a lock older than that fails <c>apply</c> with the way to clear it instead of hanging it (#2196).
+    /// </summary>
+    [Fact]
+    public async Task A_version_one_apply_reports_a_stale_sqlite_migration_lock_older_than_the_bound_it_carries()
+    {
+        var path = Path.Join(root, "stale-lock-v1.db");
+        await CreateStaleLockAsync(path, DateTimeOffset.UtcNow.AddMinutes(-2));
+
+        var apply = await RunAsync(ApplyRequest("apply", "Sqlite", ["Secrets"], $"Data Source={path};Pooling=False") with { SqliteMigrationLockStaleAfter = "00:01:00" })
+            .WaitAsync(TimeSpan.FromSeconds(60));
+
+        AssertExit(EfToolingExitCode.DatabaseFailure, apply);
+        var message = apply.Response.GetProperty("error").GetProperty("message").GetString()!;
+        Assert.Contains("migration lock", message, StringComparison.Ordinal);
+        Assert.Contains("DELETE FROM", message, StringComparison.Ordinal);
+        Assert.Contains("00:01:00", message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("validate")]
+    [InlineData("post-migrate")]
+    public async Task The_sqlite_migration_lock_bound_is_accepted_by_apply_only(string command)
+    {
+        var run = await RunAsync(ApplyRequest(command, "Sqlite", ["Secrets"], $"Data Source={Path.Join(root, "bound.db")}") with { SqliteMigrationLockStaleAfter = "00:01:00" });
+
+        AssertExit(EfToolingExitCode.Refusal, run);
+        Assert.Contains("sqliteMigrationLockStaleAfter", Describe(run.Response), StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("soon")]
+    [InlineData("00:00:00")]
+    public async Task A_version_one_apply_refuses_a_lock_bound_that_is_not_a_positive_time_span(string bound)
+    {
+        var run = await RunAsync(ApplyRequest("apply", "Sqlite", ["Secrets"], $"Data Source={Path.Join(root, "bound.db")}") with { SqliteMigrationLockStaleAfter = bound });
+
+        AssertExit(EfToolingExitCode.Refusal, run);
+        Assert.Contains("positive time span", Describe(run.Response), StringComparison.Ordinal);
+    }
+
+    private static async Task CreateStaleLockAsync(string path, DateTimeOffset takenAt)
+    {
+        await using var connection = new SqliteConnection($"Data Source={path};Pooling=False");
+        await connection.OpenAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText =
+            "CREATE TABLE \"__EFMigrationsLock\" (\"Id\" INTEGER NOT NULL CONSTRAINT \"PK___EFMigrationsLock\" PRIMARY KEY, \"Timestamp\" TEXT NOT NULL);" +
+            $"INSERT INTO \"__EFMigrationsLock\"(\"Id\", \"Timestamp\") VALUES(1, '{takenAt:yyyy-MM-dd HH:mm:ss.fffffffzzz}');";
+        await command.ExecuteNonQueryAsync();
     }
 
     public sealed class ConstructionProbeContext : DbContext
@@ -1328,6 +1373,7 @@ public sealed class EfToolingHostTests : IDisposable
         public SelectionBody? Selection { get; init; }
         public string? Schema { get; init; }
         public string? Connection { get; init; }
+        public string? SqliteMigrationLockStaleAfter { get; init; }
     }
 }
 

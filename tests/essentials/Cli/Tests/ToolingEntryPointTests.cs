@@ -78,6 +78,13 @@ public sealed class ToolingEntryPointTests
         Assert.True(ToolingEntryPoint.Resolve(typeof(EfToolingHost).Assembly, "4.0.0-preview.1", "4.0.0-preview.1").SupportsSkewAllowance);
     }
 
+    /// <summary>The same probe for the lock bound <c>apply</c> waits for a SQLite migration lock with (#2196).</summary>
+    [Fact]
+    public void A_persistence_build_carrying_the_sqlite_migration_lock_bound_field_is_detected()
+    {
+        Assert.True(ToolingEntryPoint.Resolve(typeof(EfToolingHost).Assembly, "4.0.0-preview.1", "4.0.0-preview.1").SupportsSqliteMigrationLockStaleAfter);
+    }
+
     /// <summary>
     /// The version-skew probe (spec 172 FR-004). The tooling contract refuses an unmapped request property,
     /// so a build that predates the field must be found before the field is sent — and the refusal that

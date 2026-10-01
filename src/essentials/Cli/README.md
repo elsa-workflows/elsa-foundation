@@ -45,7 +45,7 @@ extracts into its install root, which no other command may do to directories it 
 | `persistence plan` | Reports the migrations each selected module would apply, `0 → head`, offline. |
 | `persistence script` | Writes flat `NN-<slug>.sql` files plus one `migration-plan.json`. |
 | `persistence script-check <dir>` | Regenerates that directory's artifact from its own plan and byte-compares. |
-| `persistence apply` | Runs each selected module's compiled migrations against a database, through `EfDatabaseMigrator`/`DbContext.Database.MigrateAsync`. |
+| `persistence apply` | Runs each selected module's compiled migrations against a database, through `EfDatabaseMigrator`/`DbContext.Database.MigrateAsync`. On SQLite it waits for EF's migration lock no longer than the host's `Elsa:Persistence:EntityFramework:Migrate:SqliteMigrationLockStaleAfter` (default 10 minutes), read from its `appsettings.json` and `--environment` overlay, and fails a lock older than that with the `DELETE` that clears it instead of hanging (a host configured only through its process environment is not visible here). |
 | `persistence validate` | Fails (exit 1) if any selected module has a pending migration against a database. Applies nothing. |
 | `persistence post-migrate` | Runs selected modules' required post-migration actions against a database. |
 | `persistence hold` | Holds a schema family's finalization (`--family`, optionally `--version` and every later one), with a `--reason` and an `--operator` the record's history keeps. Writes the finalization record directly, creating it if no host has yet, so a hold can be placed before any gate-aware host runs, which a canary needs. A hold on a version already finalized is refused (exit 2): the rollback boundary has been crossed. |
