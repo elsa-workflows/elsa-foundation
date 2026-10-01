@@ -9,7 +9,8 @@ namespace Elsa.Persistence.EntityFramework;
 /// <see cref="DatabaseFacade.MigrateAsync"/> already takes
 /// <c>IHistoryRepository.AcquireDatabaseLockAsync</c> (EF 9+). Hosts that call
 /// <c>IMigrator.Migrate</c> or apply pending migrations themselves must take that same lock;
-/// wrapping <see cref="DatabaseFacade.MigrateAsync"/> in a second lock is not required and races.
+/// wrapping <see cref="DatabaseFacade.MigrateAsync"/> in a second lock is not required and races. On SQLite, whose lock a killed
+/// process leaves behind, it goes through <see cref="EfSqliteMigrationLock"/> instead (#2196).
 /// </summary>
 /// <remarks>
 /// <para>
@@ -44,12 +45,17 @@ public static class EfDatabaseMigrator
     /// <c>migrator:&lt;host id&gt;</c>. Null where there is none, such as the persistence tool, when the machine name stands in.
     /// </param>
     /// <param name="cancellationToken">Cancels the work.</param>
+    /// <param name="sqliteLockStaleAfter">
+    /// <see cref="EfMigrateOptions.SqliteMigrationLockStaleAfter"/>: how long a SQLite database's migration lock is waited for under
+    /// <see cref="EfMigratePolicy.AutoMigrate"/> before it is reported as stale. <see cref="EfSqliteMigrationLock.DefaultStaleAfter"/> when null.
+    /// </param>
     public static async Task ApplyAsync(
         DbContext context,
         string expectedProviderName,
         EfMigratePolicy policy,
         SchemaFinalizationMember? host,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        TimeSpan? sqliteLockStaleAfter = null)
     {
         ArgumentNullException.ThrowIfNull(context);
         EfProviderGuard.Ensure(context, expectedProviderName);
@@ -57,7 +63,7 @@ public static class EfDatabaseMigrator
         switch (policy)
         {
             case EfMigratePolicy.AutoMigrate:
-                await EfContractingMigrationCheck.MigrateAsync(context, host, cancellationToken);
+                await EfContractingMigrationCheck.MigrateAsync(context, host, cancellationToken, sqliteLockStaleAfter);
                 return;
             case EfMigratePolicy.Validate:
                 var pending = (await context.Database.GetPendingMigrationsAsync(cancellationToken)).ToArray();

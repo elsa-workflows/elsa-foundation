@@ -146,7 +146,14 @@ module's context maps them.
 
 ## Apply policy
 
-`EfMigratePolicy.AutoMigrate` runs `Database.MigrateAsync` (EF 9+ lock).
+`EfMigratePolicy.AutoMigrate` runs `Database.MigrateAsync` (EF 9+ lock). On SQLite it goes through
+`EfSqliteMigrationLock.MigrateAsync` instead (#2196): EF's SQLite lock is a row in `__EFMigrationsLock` that a killed process
+leaves behind, and EF waits for it for ever, even when nothing is pending. So nothing pending applies nothing and takes no lock;
+with migrations pending, a lock younger than `EfMigrateOptions.SqliteMigrationLockStaleAfter` (default 10 minutes, key
+`Elsa:Persistence:EntityFramework:Migrate:SqliteMigrationLockStaleAfter`) is waited for as before, and an older one fails the
+start with `EfMigrationLockStaleException` naming the `DELETE` that clears it. Elsa never removes the row itself: the row is the
+only evidence of a holder, so nothing proves it dead. A host that migrates a SQLite store outside `EfDatabaseMigrator` calls
+`EfSqliteMigrationLock.MigrateAsync` rather than `Database.MigrateAsync`.
 `EfMigratePolicy.Validate` refuses to start when pending migrations exist.
 `EfModuleMigrator<TContext>` registers that apply on both `IHostedService` and CShells
 `IShellInitializer` — one instance under both — so a feature enable or reload uses the same policy as

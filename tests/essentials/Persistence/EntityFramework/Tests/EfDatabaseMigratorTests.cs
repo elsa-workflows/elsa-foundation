@@ -81,6 +81,78 @@ public sealed class EfDatabaseMigratorTests
         Assert.Equal("policy", exception.ParamName);
     }
 
+    /// <summary>
+    /// A process killed during a migration leaves EF's SQLite lock row behind, and EF waits for it for ever. With nothing
+    /// pending there is nothing to lock for, so a start goes on past it (#2196).
+    /// </summary>
+    [Fact]
+    public async Task AutoMigrate_goes_on_past_a_stale_lock_when_no_migration_is_pending()
+    {
+        await using var fixture = await SqliteMigratorFixture.CreateAsync();
+        await EfDatabaseMigrator.ApplyAsync(fixture.Context, EfProviderNames.Sqlite);
+        await SqliteMigrationLockRow.TakeAsync(fixture.Context, DateTimeOffset.UtcNow.AddHours(-1));
+
+        await EfDatabaseMigrator.ApplyAsync(fixture.Context, EfProviderNames.Sqlite).WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.True(await SqliteMigrationLockRow.IsHeldAsync(fixture.Context), "A lock Elsa cannot prove dead is not removed.");
+    }
+
+    /// <summary>With migrations pending the lock is needed, so a stale one fails the start with the way to clear it instead of hanging it, and applies nothing.</summary>
+    [Fact]
+    public async Task AutoMigrate_fails_fast_on_a_stale_lock_when_a_migration_is_pending()
+    {
+        await using var fixture = await SqliteMigratorFixture.CreateAsync();
+        await fixture.Context.Database.MigrateAsync(EfTestMigrationIds.Initial);
+        await SqliteMigrationLockRow.TakeAsync(fixture.Context, DateTimeOffset.UtcNow.AddHours(-1));
+
+        var exception = await Assert.ThrowsAsync<EfMigrationLockStaleException>(() =>
+            EfDatabaseMigrator.ApplyAsync(fixture.Context, EfProviderNames.Sqlite).WaitAsync(TimeSpan.FromSeconds(30)));
+
+        Assert.Contains("DELETE FROM \"__EFMigrationsLock\" WHERE \"Id\" = 1", exception.Message, StringComparison.Ordinal);
+        Assert.Contains(fixture.DataSource, exception.Message, StringComparison.Ordinal);
+        Assert.Equal([EfTestMigrationIds.AddDescription], await fixture.Context.Database.GetPendingMigrationsAsync());
+        Assert.True(await SqliteMigrationLockRow.IsHeldAsync(fixture.Context));
+    }
+
+    /// <summary>
+    /// A lock younger than the bound may be a live migrator's, so the start waits for it as EF does and migrates once it is
+    /// released: two migrators of one file still run one at a time.
+    /// </summary>
+    [Fact]
+    public async Task AutoMigrate_waits_for_a_lock_younger_than_the_bound_and_then_migrates()
+    {
+        await using var fixture = await SqliteMigratorFixture.CreateAsync();
+        await fixture.Context.Database.MigrateAsync(EfTestMigrationIds.Initial);
+        await SqliteMigrationLockRow.TakeAsync(fixture.Context, DateTimeOffset.UtcNow);
+        await using var waiter = fixture.NewContext();
+
+        var applying = EfDatabaseMigrator.ApplyAsync(waiter, EfProviderNames.Sqlite);
+        await Task.Delay(TimeSpan.FromSeconds(2));
+        Assert.False(applying.IsCompleted);
+        Assert.Equal([EfTestMigrationIds.AddDescription], await fixture.Context.Database.GetPendingMigrationsAsync());
+
+        await SqliteMigrationLockRow.ReleaseAsync(fixture.Context);
+        await applying.WaitAsync(TimeSpan.FromSeconds(60));
+
+        Assert.Empty(await fixture.Context.Database.GetPendingMigrationsAsync());
+    }
+
+    /// <summary>The bound is the caller's: a lock older than it is reported.</summary>
+    [Fact]
+    public async Task AutoMigrate_reports_a_lock_older_than_the_given_bound()
+    {
+        await using var fixture = await SqliteMigratorFixture.CreateAsync();
+        await fixture.Context.Database.MigrateAsync(EfTestMigrationIds.Initial);
+        await SqliteMigrationLockRow.TakeAsync(fixture.Context, DateTimeOffset.UtcNow.AddMinutes(-2));
+
+        var exception = await Assert.ThrowsAsync<EfMigrationLockStaleException>(() =>
+            EfDatabaseMigrator.ApplyAsync(
+                fixture.Context, EfProviderNames.Sqlite, EfMigratePolicy.AutoMigrate, host: null,
+                sqliteLockStaleAfter: TimeSpan.FromMinutes(1)).WaitAsync(TimeSpan.FromSeconds(30)));
+
+        Assert.Contains("for longer than 00:01:00", exception.Message, StringComparison.Ordinal);
+    }
+
     private sealed class SqliteMigratorFixture : IAsyncDisposable
     {
         private readonly TemporarySqliteDatabase database;
@@ -93,16 +165,22 @@ public sealed class EfDatabaseMigratorTests
 
         public MigratorContext Context { get; }
 
+        public string DataSource => database.Path;
+
+        /// <summary>Another context on the same file, as a second migrator would hold.</summary>
+        public MigratorContext NewContext() => new(Options(database));
+
         public static ValueTask<SqliteMigratorFixture> CreateAsync()
         {
             var database = new TemporarySqliteDatabase("ef-migrate");
-            var options = new DbContextOptionsBuilder<MigratorContext>()
+            return ValueTask.FromResult(new SqliteMigratorFixture(database, new MigratorContext(Options(database))));
+        }
+
+        private static DbContextOptions<MigratorContext> Options(TemporarySqliteDatabase database) =>
+            new DbContextOptionsBuilder<MigratorContext>()
                 .UseSqlite(database.ConnectionString, sqlite => sqlite
                     .MigrationsAssembly(typeof(EfDatabaseMigratorTests).Assembly.GetName().Name))
                 .Options;
-            var context = new MigratorContext(options);
-            return ValueTask.FromResult(new SqliteMigratorFixture(database, context));
-        }
 
         public async ValueTask DisposeAsync()
         {

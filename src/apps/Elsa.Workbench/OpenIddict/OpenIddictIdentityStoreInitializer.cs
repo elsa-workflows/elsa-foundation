@@ -1,4 +1,5 @@
 using CShells.Lifecycle;
+using Elsa.Persistence.EntityFramework;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -35,10 +36,12 @@ public sealed class OpenIddictIdentityStoreInitializer(
 
         // The in-memory (dev/demo) provider has no migrations, so it is always ensure-created. Relational
         // providers migrate at startup unless AutoMigrate is turned off — a multi-instance deployment that
-        // applies migrations out-of-band opts out here to avoid concurrent MigrateAsync races.
+        // applies migrations out-of-band opts out here to avoid concurrent MigrateAsync races. Migrating goes through
+        // EfSqliteMigrationLock, so a SQLite store whose migration lock a killed process left behind fails the start with a
+        // way to clear it instead of hanging it (#2196).
         if (!db.Database.IsRelational())
             await db.Database.EnsureCreatedAsync(cancellationToken);
         else if (options.Value.AutoMigrate)
-            await db.Database.MigrateAsync(cancellationToken);
+            await EfSqliteMigrationLock.MigrateAsync(db, cancellationToken: cancellationToken);
     }
 }

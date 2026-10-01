@@ -67,7 +67,7 @@ Oracle container leg is the first of the three conditions ADR 0075 requires to r
 | `EfMigrationsHistory.TableName(module)` | `__EFMigrationsHistory_<Module>` so two modules in one database do not share history |
 | `EfProviderGuard.Ensure` | Refuse apply when `Database.ProviderName` does not match the derived context |
 | `EfMigratePolicy` | `AutoMigrate` vs `Validate` (fail if pending), chosen by the operator through `EfMigrateOptions` |
-| `EfDatabaseMigrator.ApplyAsync` | Guard, then `MigrateAsync` (EF 9+ takes the database lock) or fail closed |
+| `EfDatabaseMigrator.ApplyAsync` | Guard, then `MigrateAsync` (EF 9+ takes the database lock; on SQLite through `EfSqliteMigrationLock`) or fail closed |
 | `EfRelationalProviderBinding` | Invoke host-supplied `UseSqlite` / `UseSqlServer` / `UseNpgsql` / `UseMySQL` without this package referencing those engines; `Select` matches a provider name to what a module registers for that dialect |
 | `EfOrdinalCollation` | The one binary collation per provider, applied **per column** to the string columns a module compares or orders, so SQL comparison and ordering agree with `StringComparer.Ordinal` |
 | `EfSchema` | Resolve and validate the optional database schema a module's tables and history table live in |
@@ -518,6 +518,13 @@ obligation unaudited while every command still exited 0.
 `Database.MigrateAsync` already acquires `IHistoryRepository.AcquireDatabaseLockAsync`.
 Hosts that call `IMigrator.Migrate` or apply pending migrations themselves **must take the
 same lock** or concurrent hosts race. Do not roll a second lock around `MigrateAsync`.
+
+On SQLite that lock is a row in `__EFMigrationsLock`, which a process killed mid-migration leaves behind and EF then waits for
+for ever. `EfSqliteMigrationLock.MigrateAsync` is `MigrateAsync` for that provider (#2196): it applies nothing when nothing is
+pending, waits for a lock younger than `Elsa:Persistence:EntityFramework:Migrate:SqliteMigrationLockStaleAfter` (default 10
+minutes), and fails an older one with `EfMigrationLockStaleException`, which names the `DELETE FROM "__EFMigrationsLock" WHERE
+"Id" = 1` that clears it. It never removes the row itself, because nothing in a SQLite file proves the holder dead. Every
+other provider releases its lock when the connection drops and passes straight through.
 
 ## Dual apply
 

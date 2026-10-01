@@ -18,6 +18,7 @@ namespace Elsa.Persistence.EntityFramework.Tests;
 public sealed class EfMigrateOptionsTests : IDisposable
 {
     private const string PolicyKey = $"{EfMigrateOptions.SectionName}:{nameof(EfMigrateOptions.Policy)}";
+    private const string StaleAfterKey = $"{EfMigrateOptions.SectionName}:{nameof(EfMigrateOptions.SqliteMigrationLockStaleAfter)}";
     private const string ShellName = "ef-migrate-policy";
 
     private readonly string databasePath = Path.Join(Path.GetTempPath(), $"elsa-ef-migrate-policy-{Guid.NewGuid():N}.db");
@@ -82,6 +83,47 @@ public sealed class EfMigrateOptionsTests : IDisposable
 
         Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IConfigureOptions<EfMigrateOptions>));
         Assert.Equal(EfMigratePolicy.Validate, Resolve(services));
+    }
+
+    [Fact]
+    public void An_absent_stale_lock_bound_keeps_the_default() =>
+        Assert.Equal(EfSqliteMigrationLock.DefaultStaleAfter, StaleAfter(Configured()));
+
+    [Fact]
+    public void A_configured_stale_lock_bound_is_honored() =>
+        Assert.Equal(TimeSpan.FromMinutes(30), StaleAfter(Configured(staleAfter: "00:30:00")));
+
+    [Theory]
+    [InlineData("soon")]
+    [InlineData("00:00:00")]
+    [InlineData("-00:01:00")]
+    public void A_stale_lock_bound_that_is_not_a_positive_time_span_is_refused(string configured)
+    {
+        var exception = Assert.Throws<InvalidOperationException>(() => StaleAfter(Configured(staleAfter: configured)));
+
+        Assert.Contains($"{StaleAfterKey}' is '{configured}'", exception.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The module migrator every first-party EF module registers hands the configured bound to the migration, so a SQLite
+    /// lock a killed process left behind fails the host's start with the way to clear it instead of hanging it (#2196).
+    /// </summary>
+    [Fact]
+    public async Task A_plain_host_reports_a_stale_sqlite_lock_instead_of_hanging()
+    {
+        await using (var context = NewContext(ConnectionString))
+        {
+            await context.Database.MigrateAsync(EfTestMigrationIds.Initial);
+            await SqliteMigrationLockRow.TakeAsync(context, DateTimeOffset.UtcNow.AddMinutes(-2));
+        }
+
+        await using var provider = Migrations(Configured(staleAfter: "00:01:00")).BuildServiceProvider();
+
+        var exception = await Assert.ThrowsAsync<EfMigrationLockStaleException>(() =>
+            provider.GetRequiredService<IShellInitializer>().InitializeAsync().WaitAsync(TimeSpan.FromSeconds(30)));
+
+        Assert.Contains("for longer than 00:01:00", exception.Message, StringComparison.Ordinal);
+        Assert.Equal([EfTestMigrationIds.Initial], await AppliedMigrationsAsync());
     }
 
     [Fact]
@@ -190,9 +232,11 @@ public sealed class EfMigrateOptionsTests : IDisposable
 
     private EfMigratePolicy Policy(IServiceCollection services) => Resolve(Migrations(services));
 
-    private static IServiceCollection Configured(string? policy = null) =>
+    private static IServiceCollection Configured(string? policy = null, string? staleAfter = null) =>
         new ServiceCollection().AddSingleton<IConfiguration>(new ConfigurationBuilder()
-            .AddInMemoryCollection(policy is null ? [] : [new KeyValuePair<string, string?>(PolicyKey, policy)])
+            .AddInMemoryCollection(new[] { (PolicyKey, policy), (StaleAfterKey, staleAfter) }
+                .Where(setting => setting.Item2 is not null)
+                .Select(setting => new KeyValuePair<string, string?>(setting.Item1, setting.Item2)))
             .Build());
 
     /// <summary>What every first-party EF module registers: its context, and the migrator the policy governs.</summary>
@@ -202,10 +246,14 @@ public sealed class EfMigrateOptionsTests : IDisposable
         return services.AddEfModuleMigrations<EfDatabaseMigratorTests.MigratorContext>("Sqlite");
     }
 
-    private static EfMigratePolicy Resolve(IServiceCollection services)
+    private static EfMigratePolicy Resolve(IServiceCollection services) => Options(services).Policy;
+
+    private TimeSpan StaleAfter(IServiceCollection services) => Options(Migrations(services)).SqliteMigrationLockStaleAfter;
+
+    private static EfMigrateOptions Options(IServiceCollection services)
     {
         using var provider = services.BuildServiceProvider();
-        return provider.GetRequiredService<IOptions<EfMigrateOptions>>().Value.Policy;
+        return provider.GetRequiredService<IOptions<EfMigrateOptions>>().Value;
     }
 
     private static EfDatabaseMigratorTests.MigratorContext NewContext(string connectionString)

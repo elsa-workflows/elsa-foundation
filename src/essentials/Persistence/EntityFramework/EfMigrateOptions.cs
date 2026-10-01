@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -21,6 +22,13 @@ public sealed class EfMigrateOptions
     public const EfMigratePolicy DefaultPolicy = EfMigratePolicy.AutoMigrate;
 
     public EfMigratePolicy Policy { get; set; } = DefaultPolicy;
+
+    /// <summary>
+    /// How long a start waits for a SQLite database's EF migration lock before it reports the lock as stale instead of waiting
+    /// on (#2196); <c>Elsa:Persistence:EntityFramework:Migrate:SqliteMigrationLockStaleAfter</c>, a <see cref="TimeSpan"/> such as
+    /// <c>00:30:00</c>. Raise it for a migration that legitimately holds the lock longer. No other provider has the problem.
+    /// </summary>
+    public TimeSpan SqliteMigrationLockStaleAfter { get; set; } = EfSqliteMigrationLock.DefaultStaleAfter;
 
     /// <summary>
     /// The policy <paramref name="configuration"/> names, or <see cref="DefaultPolicy"/> when it names none.
@@ -57,11 +65,12 @@ public sealed class EfMigrateOptions
 }
 
 /// <summary>
-/// Reads <see cref="EfMigrateOptions.Policy"/> from the configuration of the container the migrator resolves its
+/// Reads <see cref="EfMigrateOptions.Policy"/> and <see cref="EfMigrateOptions.SqliteMigrationLockStaleAfter"/> from the configuration of the container the migrator resolves its
 /// options from — a shell's <c>ShellConfiguration</c> (shell keys over host keys) or a plain host's configuration.
 /// A container with no <see cref="IConfiguration"/>, or one that leaves the key unset, keeps the AutoMigrate
 /// default. A value that names no policy is refused: taking the default instead would auto-migrate the database
-/// the operator meant to protect, and the log would look exactly like a healthy start.
+/// the operator meant to protect, and the log would look exactly like a healthy start. A stale-after that is not a positive
+/// time span is refused too: zero would report every lock another host's live migration holds.
 /// </summary>
 internal sealed class EfMigrateOptionsConfigurator(IServiceProvider services) : IConfigureOptions<EfMigrateOptions>
 {
@@ -69,5 +78,13 @@ internal sealed class EfMigrateOptionsConfigurator(IServiceProvider services) : 
     {
         if (EfMigrateOptions.TryResolve(services.GetService<IConfiguration>(), out var policy))
             options.Policy = policy;
+
+        var configured = services.GetService<IConfiguration>()?.GetSection(EfMigrateOptions.SectionName)[nameof(EfMigrateOptions.SqliteMigrationLockStaleAfter)];
+        if (string.IsNullOrWhiteSpace(configured))
+            return;
+        options.SqliteMigrationLockStaleAfter = TimeSpan.TryParse(configured, CultureInfo.InvariantCulture, out var staleAfter) && staleAfter > TimeSpan.Zero
+            ? staleAfter
+            : throw new InvalidOperationException(
+                $"Configuration '{EfMigrateOptions.SectionName}:{nameof(EfMigrateOptions.SqliteMigrationLockStaleAfter)}' is '{configured}'. Use a positive time span such as '00:30:00'.");
     }
 }
