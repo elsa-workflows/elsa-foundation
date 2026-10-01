@@ -184,7 +184,12 @@ there, still leaves EF waiting; nothing cancels a running migration, so no watch
 `EfMigratePolicy.Validate` refuses to start when pending migrations exist.
 `EfModuleMigrator<TContext>` registers that apply on both `IHostedService` and CShells
 `IShellInitializer` — one instance under both — so a feature enable or reload uses the same policy as
-a cold start.
+a cold start. The same instance stops the same way: a plain host's `IHostedService.StopAsync` stops the gate's and the
+backfill's loops, and a shell stops them in its drain, through an `IShellTerminator` the migrator registers in the `Start`
+phase, while the shell's services are still usable. The shell container's disposal then finds nothing left to stop. Disposal
+alone cannot do it: the container marks its provider disposed before it disposes the migrator, so a backfill round still
+running then fails on a provider that refuses its scope (#2236). A round that does fail that way is logged at `Debug`, not as
+a warning, and does not try to release its claim, which expires on its own.
 
 Which one a deployment runs is an operator setting, not a code seam: `EfModuleMigrator<TContext>`
 reads `EfMigrateOptions`, bound from `Elsa:Persistence:EntityFramework:Migrate:Policy`
