@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Workbench's OpenIddict token store on SQL Server and PostgreSQL (#2201): the store migrated by the engine's own migrations,
+       a token one node issues read by another, nodes that start together, and the prune, each on a Testcontainers database. Set
+       ELSA_WORKBENCH_OPENIDDICT_REQUIRE_NATIVE_PROVIDERS to make a missing container fail instead of skip. -->
+  <PropertyGroup>
+    <IsTestProject>true</IsTestProject>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+    <PackageReference Include="Testcontainers.MsSql" />
+    <PackageReference Include="Testcontainers.PostgreSql" />
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="Xunit.SkippableFact" />
+    <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" />
+    <PackageReference Include="coverlet.collector" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\src\apps\Elsa.Workbench\Elsa.Workbench.csproj" />
+  </ItemGroup>
+
+  <!-- The node host and the prune scenario of the SQLite tests, linked so each engine runs the same scenario. -->
+  <ItemGroup>
+    <Compile Include="..\Tests\WorkbenchOpenIddictTestHost.cs;..\Tests\OpenIddictPruneScenario.cs" LinkBase="Shared" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+</Project>
