@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "fc5a2c63ded118a85579b798930979302b38e015",
+  "last_publish_commit": "7a3a12c87d6297ca4ed948ebcce208d47dfbaaa6",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -584,18 +584,18 @@
     },
     {
       "package_id": "Elsa.Workflows.Runtime",
-      "version": "4.0.6-preview",
-      "commit": "0859a160c81cc3559a23f6a450ae443bed43aab7"
+      "version": "4.0.7-preview",
+      "commit": "7a3a12c87d6297ca4ed948ebcce208d47dfbaaa6"
     },
     {
       "package_id": "Elsa.Workflows.Runtime.Api",
-      "version": "4.0.3-preview",
-      "commit": "22f3cda1c638cf9ba44e429da23b81aef762538b"
+      "version": "4.0.4-preview",
+      "commit": "7a3a12c87d6297ca4ed948ebcce208d47dfbaaa6"
     },
     {
       "package_id": "Elsa.Workflows.Runtime.Core",
-      "version": "4.0.7-preview",
-      "commit": "0859a160c81cc3559a23f6a450ae443bed43aab7"
+      "version": "4.0.8-preview",
+      "commit": "7a3a12c87d6297ca4ed948ebcce208d47dfbaaa6"
     },
     {
       "package_id": "Elsa.Workflows.Runtime.Distributed",
@@ -619,8 +619,8 @@
     },
     {
       "package_id": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore",
-      "version": "4.0.14-preview",
-      "commit": "fc5a2c63ded118a85579b798930979302b38e015"
+      "version": "4.0.15-preview",
+      "commit": "7a3a12c87d6297ca4ed948ebcce208d47dfbaaa6"
     },
     {
       "package_id": "Elsa.Workflows.Runtime.Reconciliation",
@@ -639,13 +639,13 @@
     },
     {
       "package_id": "Elsa.Workflows.Runtime.Resumption",
-      "version": "4.0.3-preview",
-      "commit": "fe1f6769f45a922b198b2f6df2b1ae3042a67828"
+      "version": "4.0.4-preview",
+      "commit": "7a3a12c87d6297ca4ed948ebcce208d47dfbaaa6"
     },
     {
       "package_id": "Elsa.Workflows.Runtime.Scheduling",
-      "version": "4.0.2-preview",
-      "commit": "22f3cda1c638cf9ba44e429da23b81aef762538b"
+      "version": "4.0.3-preview",
+      "commit": "7a3a12c87d6297ca4ed948ebcce208d47dfbaaa6"
     },
     {
       "package_id": "Elsa3.Activities.Design.Import",
