@@ -36,6 +36,7 @@ and a durable provider is composed once on the host container, never per shell.
 ### `[RequiresSchemaVersion(family, version)]` *(Core — `Elsa.Cluster.Core`)*
 - **Kind:** Static declaration on a shell feature class (spec 182, FR-001), in the style of `[UsesEfModule]`: constant arguments only, several allowed, `RequiresCompleteness = true` for a feature that queries the version's data and so also waits for the family's completeness (FR-005). Read by `SchemaVersionRequirement.DeclaredBy(type)` from attribute metadata by name.
 - **Consumed by:** the feature catalog's `FeatureAvailabilityCatalogContributor` and Modularity's Attention contributor (`Elsa.Modularity.Api`), which report the feature as dormant with its reason (FR-008 to FR-010), and by the feature's own operations, which pass its requirements to the check.
+- **On a task class:** `Elsa.Tasks`' `TaskExecutor` reads it from a startup, background or recurring task and asks the check before anything else, so a task this node is dormant for is skipped without taking its `[SingleNodeTask]` lock (#2192). A recurring task asks again on every run; a startup or background task only when the shell starts.
 
 ---
 

@@ -1,4 +1,6 @@
 using CShells.Features;
+using Elsa.Cluster.Core.Contracts;
+using Elsa.Cluster.Core.Models;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Locking.FileSystem.Options;
 using Medallion.Threading.FileSystem;
@@ -17,8 +19,11 @@ namespace Elsa.Locking.FileSystem;
 )]
 public class FileSystemLockingFeature : IShellFeature
 {
-    [ManifestSetting(DisplayName = "Locks folder path", Description = "Directory used to store file-system distributed lock files.", Category = "Locking", Required = true)]
-    public string LocksFolderPath { get; set; } = Path.Combine(Environment.CurrentDirectory, "App_Data/locks");
+    /// <summary>The folder this feature keeps its locks in unless <see cref="LocksFolderPath"/> names another: node-local.</summary>
+    private static string DefaultLocksFolderPath => Path.Join(Environment.CurrentDirectory, "App_Data", "locks");
+
+    [ManifestSetting(DisplayName = "Locks folder path", Description = "Directory used to store file-system distributed lock files. A lock excludes only the processes that share this folder, so a host that is a member of a cluster must name a folder every node shares, or compose DatabaseDistributedLocking instead.", Category = "Locking", Required = true)]
+    public string LocksFolderPath { get; set; } = DefaultLocksFolderPath;
 
     [ManifestSetting(DisplayName = "Lock acquisition timeout", Description = "Maximum time in minutes to wait when acquiring a distributed lock.", Category = "Locking", DefaultValue = "10")]
 
@@ -26,6 +31,8 @@ public class FileSystemLockingFeature : IShellFeature
 
     public void ConfigureServices(IServiceCollection services)
     {
+        RefuseNodeLocalFolderInACluster(services);
+
         services.Configure<DistributedLockingOptions>(options =>
         {
             options.LockAcquisitionTimeout = TimeSpan.FromMinutes(LockAcquisitionTimeoutMinutes);
@@ -37,4 +44,37 @@ public class FileSystemLockingFeature : IShellFeature
             return new DistributedLockProviderAdaptor(medallionLockProvider, options);
         });
     }
+
+    /// <summary>
+    /// Refuses the default, node-local folder on a host that joined a cluster through a durable membership provider (#2192):
+    /// there every node would take the same lock in a folder of its own, and each would believe it held it alone.
+    /// </summary>
+    /// <remarks>
+    /// The host composes membership on its own container, and CShells copies the host's registrations into the shell's
+    /// collection before any feature configures it, so the provider's registration is visible here. An explicit folder is
+    /// trusted to be one every node shares; only the default is known not to be.
+    /// </remarks>
+    private void RefuseNodeLocalFolderInACluster(IServiceCollection services)
+    {
+        var durable = services
+            .Where(descriptor => descriptor.ServiceType == typeof(ClusterMembershipProviderRegistration) && !descriptor.IsKeyedService)
+            .Select(descriptor => descriptor.ImplementationInstance)
+            .OfType<ClusterMembershipProviderRegistration>()
+            .FirstOrDefault(registration => registration.Kind == ClusterProviderKind.Durable);
+        if (durable is null || !IsDefaultFolder(LocksFolderPath))
+            return;
+
+        throw new InvalidOperationException(
+            $"FileSystemDistributedLocking keeps its locks in '{LocksFolderPath}', the default folder under this process's working " +
+            $"directory, but this host is a member of a cluster through the durable membership provider '{durable.Name}'. A lock " +
+            "in a node-local folder excludes only the processes that share it, so every node would take the same lock at once. " +
+            "Compose DatabaseDistributedLocking (PostgreSql, SqlServer or MySql) instead, or set " +
+            $"FileSystemDistributedLocking:{nameof(LocksFolderPath)} to a folder every node of the cluster shares.");
+    }
+
+    // Case-insensitively, so a spelling the file system treats as the same folder is still refused.
+    private static bool IsDefaultFolder(string path) =>
+        string.Equals(Normalize(path), Normalize(DefaultLocksFolderPath), StringComparison.OrdinalIgnoreCase);
+
+    private static string Normalize(string path) => Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
 }

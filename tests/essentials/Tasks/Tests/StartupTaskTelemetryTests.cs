@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
+using Elsa.Cluster.Core.Models;
 using Elsa.Locking.Core;
 using Elsa.Tasks.Core;
 using Elsa.Tasks.Core.Attributes;
@@ -31,13 +32,49 @@ public sealed class StartupTaskTelemetryTests
     }
 
     [Fact]
-    public async Task SingleNodeTaskWithoutLock_EmitsSkippedActivityAndDuration()
+    public async Task DormantTask_EmitsSkippedActivityAndDuration()
     {
         using var telemetry = new TelemetryCapture();
 
-        await ExecuteAsync(new SkippedTask(), new UnavailableLockProvider(), CancellationToken.None);
+        // No dormancy check is composed, so the declared requirement is never observed as met.
+        await ExecuteAsync(new DormantTask(), new UnavailableLockProvider(), CancellationToken.None);
 
-        telemetry.AssertSingle(typeof(SkippedTask), StartupTaskTelemetry.SkippedOutcome);
+        telemetry.AssertSingle(typeof(DormantTask), StartupTaskTelemetry.SkippedOutcome);
+    }
+
+    [Fact]
+    public async Task SingleNodeTaskWhoseLockWaitRunsOut_EmitsFailedActivityAndDuration_AndPropagatesTheTimeout()
+    {
+        using var telemetry = new TelemetryCapture();
+
+        await Assert.ThrowsAsync<TimeoutException>(() =>
+            ExecuteAsync(new NeverRunSingleNodeTask(), new UnavailableLockProvider(), CancellationToken.None));
+
+        telemetry.AssertSingle(typeof(NeverRunSingleNodeTask), StartupTaskTelemetry.FailedOutcome);
+    }
+
+    [Fact]
+    public async Task SingleNodeTaskThatLosesItsLock_EmitsFailedActivityAndDuration_NotCancelled()
+    {
+        using var telemetry = new TelemetryCapture();
+        var locks = new LosableLockProvider();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            ExecuteAsync(new SingleNodeCancellableTask(locks.Lose), locks, CancellationToken.None));
+
+        telemetry.AssertSingle(typeof(SingleNodeCancellableTask), StartupTaskTelemetry.FailedOutcome);
+    }
+
+    [Fact]
+    public async Task SingleNodeTaskCancelledByTheShell_EmitsCancelledActivityAndDuration_EvenWhenItsLockCanBeLost()
+    {
+        using var cancellation = new CancellationTokenSource();
+        using var telemetry = new TelemetryCapture();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            ExecuteAsync(new SingleNodeCancellableTask(cancellation.Cancel), new LosableLockProvider(), cancellation.Token));
+
+        telemetry.AssertSingle(typeof(SingleNodeCancellableTask), StartupTaskTelemetry.CancelledOutcome);
     }
 
     [Fact]
@@ -99,11 +136,30 @@ public sealed class StartupTaskTelemetryTests
         public Task ExecuteAsync(CancellationToken cancellationToken) => Task.CompletedTask;
     }
 
-    [SingleNodeTask]
-    private sealed class SkippedTask : IStartupTask
+    [RequiresSchemaVersion("Tests.Family", "2.0.0")]
+    private sealed class DormantTask : IStartupTask
     {
         public Task ExecuteAsync(CancellationToken cancellationToken) =>
             throw new InvalidOperationException("A skipped task must not execute.");
+    }
+
+    [SingleNodeTask]
+    private sealed class NeverRunSingleNodeTask : IStartupTask
+    {
+        public Task ExecuteAsync(CancellationToken cancellationToken) =>
+            throw new InvalidOperationException("A task whose lock was never acquired must not execute.");
+    }
+
+    /// <summary>Waits on its token, doing <paramref name="whileWaiting"/> once it does.</summary>
+    [SingleNodeTask]
+    private sealed class SingleNodeCancellableTask(Action whileWaiting) : IStartupTask
+    {
+        public async Task ExecuteAsync(CancellationToken cancellationToken)
+        {
+            var waiting = Task.Delay(Timeout.Infinite, cancellationToken);
+            whileWaiting();
+            await waiting;
+        }
     }
 
     private sealed class CancellingTask(CancellationTokenSource cancellation) : IStartupTask
@@ -138,9 +194,21 @@ public sealed class StartupTaskTelemetryTests
         public ValueTask<IDistributedSynchronizationHandle?> TryAcquireLockAsync(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default) => ValueTask.FromResult<IDistributedSynchronizationHandle?>(null);
     }
 
-    private sealed class Handle : IDistributedSynchronizationHandle
+    /// <summary>Hands out a handle whose loss it can signal, as a database provider's is.</summary>
+    private sealed class LosableLockProvider : IDistributedLockProvider
     {
-        public CancellationToken HandleLostToken => CancellationToken.None;
+        private readonly CancellationTokenSource _lost = new();
+
+        public void Lose() => _lost.Cancel();
+
+        public ValueTask<IDistributedSynchronizationHandle> AcquireLockAsync(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default) => throw new InvalidOperationException();
+        public IDistributedSynchronizationHandle? TryAcquireLock(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default) => new Handle(_lost.Token);
+        public ValueTask<IDistributedSynchronizationHandle?> TryAcquireLockAsync(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default) => ValueTask.FromResult<IDistributedSynchronizationHandle?>(new Handle(_lost.Token));
+    }
+
+    private sealed class Handle(CancellationToken lost = default) : IDistributedSynchronizationHandle
+    {
+        public CancellationToken HandleLostToken => lost;
         public void Dispose() { }
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }

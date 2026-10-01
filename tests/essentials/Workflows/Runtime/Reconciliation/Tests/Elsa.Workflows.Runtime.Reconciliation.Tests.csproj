@@ -22,6 +22,8 @@
          what the importer activated, not a recording double. -->
     <ProjectReference Include="..\..\..\..\Activities\Testing\Elsa.Activities.Testing.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\essentials\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />
+    <!-- The task executor that runs the startup pass, so [SingleNodeTask] is exercised as a shell runs it (#2192). -->
+    <ProjectReference Include="..\..\..\..\..\..\src\essentials\Tasks\Elsa.Tasks.csproj" />
   </ItemGroup>
 
 </Project>
