@@ -12,8 +12,10 @@ public interface IGitWorkspace
     /// fetches and <c>reset --hard</c> to the remote branch. A Writer fetches and decides from how its branch
     /// stands against the remote (#2197): up to date or only ahead, it keeps its unpushed export commits; only
     /// behind, it fast-forwards; diverged, it resets to the remote when every commit the remote lacks was made
-    /// by the export (the export regenerates them from the catalog), and otherwise stays as it is and logs an
-    /// error. A diverged clone never throws, so it never fails a shell start. Under the workflows path a Writer's
+    /// by the export, judged by author name, author email and committer email (the export regenerates them from the
+    /// catalog), and otherwise stays as it is and logs an error, once per clone per process. The clone also stays, with an
+    /// error, when moving it would overwrite an uncommitted change outside the workflows path. None of these throws, so a
+    /// clone that cannot be moved never fails a shell start. Under the workflows path a Writer's
     /// working tree is left at the commit it settles on: uncommitted residue of an interrupted export is discarded,
     /// so callers read only what is committed. Uncommitted changes elsewhere in the clone are kept. Returns the
     /// absolute repository path.

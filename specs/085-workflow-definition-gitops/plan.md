@@ -28,6 +28,8 @@ serialization (spec 086, merged); the on-disk file is its indented form. Full de
 `Elsa.Workflows.Design.Core`, `Elsa.Workflows.Design.Persistence.Core`, `Elsa.Serialization.Core`
 (`IPayloadSerializer`, deterministic per #549/ADR 0035), `Elsa.Tasks.Core`, `Elsa.Locking.Core`,
 `CShells.Abstractions`, `System.Text.Json` (`JsonNode` canonicalizer).
+*Amended 2026-10-01 ([#2197](https://github.com/elsa-workflows/elsa-foundation/issues/2197); [ADR 0034](../../docs/adr/0034-workflow-definitions-reconcile-from-and-export-to-git.md), D7 amendment):* `Elsa.Locking.Core` is no longer a dependency; the
+export takes no lock, so the project does not reference it.
 
 **Storage**: No new persistent store. Reads/writes JSON files in a local git working clone; upserts
 through the existing catalog commands. Git is never an `IWorkflowDefinitionStore` (FR-015).
@@ -41,6 +43,7 @@ project for source/exporter/canonicalizer/feature-registration using temp local 
 
 **Performance Goals**: Off the hot path — runs at startup under a single-node lock. Cost bounded by
 `--single-branch` fetch + O(versions) file writes on export.
+*Amended 2026-10-01 ([#2197](https://github.com/elsa-workflows/elsa-foundation/issues/2197)): the export runs at startup on every Writer node without a lock; the push is the fence.*
 
 **Constraints**: Dependency-envelope clean (no Design→app/runtime dep, SC-006); single-writer; git off
 the runtime read path; no interactive git prompt (`GIT_TERMINAL_PROMPT=0`); unreleased → no back-compat.
@@ -54,7 +57,7 @@ edits to shared seams, ~9 test obligations.
 
 | Gate | Assessment |
 |---|---|
-| **§E2.2 Design↔Runtime split** | Feature is Design-only; references Design + `Elsa.Git` (leaf) + serialization/tasks/locking cores. **No** Design→Runtime or Design→app dep. Arch-guard dependency-envelope stays green (SC-006). ✅ |
+| **§E2.2 Design↔Runtime split** | Feature is Design-only; references Design + `Elsa.Git` (leaf) + serialization/tasks/locking cores *(amended 2026-10-01, [#2197](https://github.com/elsa-workflows/elsa-foundation/issues/2197): no locking core any more)*. **No** Design→Runtime or Design→app dep. Arch-guard dependency-envelope stays green (SC-006). ✅ |
 | **§E2.6 artifact-only runtime** | Untouched — git never read at execution; catalog remains runtime read path. ✅ |
 | **§E2.8 / §E2.9.5 Model X** | Import obeys `(id,version)` lookup → create-if-absent / skip-or-throw; mismatch surfaced (R13). Versions never deleted. ✅ |
 | **§E2.9 State scope** | `versions/*.json` carries only `WorkflowDefinitionState` (authored content). Soft-delete is a definition-level `DeletedAt` (lifecycle metadata, peer of Name/Description) — **not** added to State. ✅ |

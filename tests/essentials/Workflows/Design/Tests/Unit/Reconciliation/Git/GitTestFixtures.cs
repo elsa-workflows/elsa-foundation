@@ -111,8 +111,11 @@ public abstract class GitExportTest : GitIntegrationTest
             _versions.With(new WorkflowDefinitionVersion(definitionId, version) { State = WorkflowDefinitionState.Empty });
     }
 
-    /// <summary>A Writer node of the shared catalog and remote, with a clone of its own.</summary>
-    protected GitWriterNode Writer(GitPushMode pushMode = GitPushMode.Manual)
+    /// <summary>
+    /// A Writer node of the shared catalog and remote, with a clone of its own. A non-empty <paramref name="exportBranch"/>
+    /// makes it export to that branch rather than the one it tracks.
+    /// </summary>
+    protected GitWriterNode Writer(GitPushMode pushMode = GitPushMode.Manual, string exportBranch = "")
     {
         var cachePath = GitTestSupport.NewCachePath();
         _tempPaths.Add(cachePath);
@@ -120,7 +123,7 @@ public abstract class GitExportTest : GitIntegrationTest
         {
             RemoteUrl = _remote, Branch = "main", WorkflowsPath = "workflows",
             LocalCachePath = cachePath, Role = GitReconciliationRole.Writer,
-            Export = new GitExportOptions { PushMode = pushMode, Tag = true },
+            Export = new GitExportOptions { PushMode = pushMode, Branch = exportBranch, Tag = true },
         });
         var git = new InterceptingGitClient(_git);
         var workspaceLog = new RecordingLogger<GitWorkspace>();
@@ -134,6 +137,32 @@ public abstract class GitExportTest : GitIntegrationTest
             new GitWorkflowReconciliationSource(workspace, git, serializer, options, NullLogger<GitWorkflowReconciliationSource>.Instance),
             workspaceLog,
             exportLog);
+    }
+
+    /// <summary>
+    /// Two nodes exporting the same catalog on the same parent make the same commit, hash included, when they do it within
+    /// one second (a commit records whole seconds), and a push of an identical commit is no race at all. A test that needs
+    /// two writers to differ lets the clock pass a second boundary between their commits.
+    /// </summary>
+    protected static Task LetCommitClockAdvanceAsync() => Task.Delay(TimeSpan.FromMilliseconds(1100));
+
+    /// <summary>
+    /// Another writer, or a person, pushes a commit to <paramref name="branch"/> of the remote (created from main when it does
+    /// not exist yet). It rewrites <c>README.md</c>, so a clone with an uncommitted edit of it cannot move onto the commit.
+    /// </summary>
+    protected async Task AdvanceRemoteAsync(string branch)
+    {
+        var work = GitTestSupport.NewCachePath();
+        _tempPaths.Add(work);
+        Directory.CreateDirectory(System.IO.Path.GetDirectoryName(work)!);
+        await _git.RunAsync(System.IO.Path.GetDirectoryName(work)!, CancellationToken.None, "clone", _remote, work);
+        var start = _git.RunOrDefault(work, "ls-remote", "--heads", "origin", branch).Length > 0 ? $"origin/{branch}" : "origin/main";
+        await _git.RunAsync(work, CancellationToken.None, "checkout", "-B", branch, start);
+        await File.WriteAllTextAsync(System.IO.Path.Join(work, "README.md"), Guid.NewGuid().ToString("N"));
+        await _git.RunAsync(work, CancellationToken.None, "add", "--", "README.md");
+        await _git.RunAsync(work, CancellationToken.None,
+            "-c", "user.name=Other writer", "-c", "user.email=other@example.com", "commit", "-m", $"Other writer on {branch}");
+        await _git.RunAsync(work, CancellationToken.None, "push", "origin", $"HEAD:{branch}");
     }
 
     protected IReadOnlyList<string> Subjects(string repository, string revision = "HEAD") =>

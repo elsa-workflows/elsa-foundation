@@ -133,6 +133,12 @@ lazy-scan-per-call):
 
 `LocalCachePath` defaults to `{hostDataDir}/gitops/{featureId-or-repo-hash}` when unset.
 
+> *Amended 2026-10-01 ([#2197](https://github.com/elsa-workflows/elsa-foundation/issues/2197); [ADR 0034](../../docs/adr/0034-workflow-definitions-reconcile-from-and-export-to-git.md), D7 and D11 amendments):* the Writer is no longer
+> `merge --ff-only`. It fetches, then decides from how HEAD stands against the remote: up to date or only ahead, it
+> stays; only behind, it fast-forwards; diverged, it resets to the remote when every commit the remote lacks was made
+> by the export identity, else stays with an error logged. It never discards a commit anyone else made, and none of
+> this throws. The default `LocalCachePath` is a per-source, per-process directory under the OS temp dir.
+
 **Rationale.** FR-012/D11 verbatim. Lazy-ensure keeps the first reconcile pass self-seeding
 (bootstrap, D11/edge-case) and re-runs pick up remote changes. `--single-branch` limits fetch cost.
 
@@ -218,6 +224,10 @@ files touched, commit per the D-config identity/message, optional tag `wf/{defin
 `PushMode == Immediate` → `git push --ff-only origin {ExportBranch}` (refuse on divergence, no force);
 `Manual` → local only. Present files are skipped (idempotent).
 
+> *Amended 2026-10-01 ([#2197](https://github.com/elsa-workflows/elsa-foundation/issues/2197); [ADR 0034](../../docs/adr/0034-workflow-definitions-reconcile-from-and-export-to-git.md), D7 amendment):* "absent" is judged against the HEAD tree, not the
+> disk, and the push follows whenever HEAD is ahead of the remote. A push refused because the remote moved is a lost
+> race: the workspace rebuilds onto the remote and the sweep runs again, at most three times a pass.
+
 **Rationale.** FR-009/FR-010/FR-011/D4. Immutability + "write-only-if-absent" (export) composed with
 "upsert-only-if-(id,version)-absent" (import) gives ping-pong-free round-trips with no trailer/event.
 Staging only touched files honors the shared-worktree caution (never `git add -A`).
@@ -235,6 +245,10 @@ precedes the first export.
 **Rationale.** Mirrors `WorkflowsVersionReconcilerStartupTask`. Single-node + lock keeps the single
 writer honest even under multi-instance hosting. v1 triggers on startup; an on-demand endpoint is a
 later thin follow-on (out of scope).
+
+> *Amended 2026-10-01 ([#2197](https://github.com/elsa-workflows/elsa-foundation/issues/2197); [ADR 0034](../../docs/adr/0034-workflow-definitions-reconcile-from-and-export-to-git.md), D7 amendment):* the task is no longer a `[SingleNodeTask]` and takes
+> no lock. A lock can take the nodes in turn but not keep their node-local clones in line, so every Writer node
+> exports at start and the push is the fence.
 
 **Alternatives rejected.** A recurring background task — startup-pass parity with import is enough for
 v1 and avoids a scheduling dependency.

@@ -1,3 +1,6 @@
+using System.Globalization;
+using Elsa.Git;
+
 namespace Elsa.Workflows.Design.Reconciliation.Git.Services;
 
 /// <summary>
@@ -10,4 +13,16 @@ internal static class GitRemoteRefs
 
     public static string[] FetchArgs(IReadOnlyList<string> credentialArgs, string branch) =>
         [.. credentialArgs, "fetch", "origin", $"+refs/heads/{branch}:{Tracking(branch)}"];
+
+    /// <summary>
+    /// How many commits HEAD has that the remote-tracking ref of <paramref name="branch"/> lacks (ahead) and the other
+    /// way round (behind), as of the last fetch of that ref.
+    /// </summary>
+    public static async Task<(int Ahead, int Behind)> AheadBehindAsync(
+        IGitClient gitClient, string repoPath, string branch, CancellationToken cancellationToken)
+    {
+        var counts = (await gitClient.RunAsync(repoPath, cancellationToken, "rev-list", "--left-right", "--count", $"HEAD...{Tracking(branch)}"))
+            .Split('\t', StringSplitOptions.TrimEntries);
+        return (int.Parse(counts[0], CultureInfo.InvariantCulture), int.Parse(counts[1], CultureInfo.InvariantCulture));
+    }
 }

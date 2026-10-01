@@ -1,4 +1,4 @@
-using System.Globalization;
+using System.Collections.Concurrent;
 using Elsa.Git;
 using Elsa.Workflows.Design.Reconciliation.Git.Contracts;
 using Elsa.Workflows.Design.Reconciliation.Git.Options;
@@ -19,6 +19,10 @@ public sealed class GitWorkspace(
     IOptions<GitReconciliationOptions> options,
     ILogger<GitWorkspace> logger) : IGitWorkspace
 {
+    // Every pass of every shell in the process runs EnsureReadyAsync, and a clone that stays diverged is diverged on each
+    // one, so an error about it is reported once per clone for the life of the process.
+    private static readonly ConcurrentDictionary<string, byte> ReportedClones = new(StringComparer.Ordinal);
+
     private readonly GitReconciliationOptions _options = options.Value;
     private string[] _credentialArgs = [];
 
@@ -69,9 +73,25 @@ public sealed class GitWorkspace(
         await DiscardExportResidueAsync(repoPath, cancellationToken);
         if (await WriterTargetAsync(repoPath, remote, cancellationToken) is { } target)
         {
-            // --keep moves the branch as --hard would, but keeps uncommitted changes anywhere else in the clone, which are
-            // not the export's, and fails rather than overwrite one.
+            await MoveToAsync(repoPath, target, cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// <c>reset --keep</c> moves the branch as <c>--hard</c> would, but keeps uncommitted changes anywhere else in the
+    /// clone, which are not the export's. It fails rather than overwrite one; the clone then stays as it stands, with an
+    /// error in the log, and does not fail the start, as with a commit the export did not make.
+    /// </summary>
+    private async Task MoveToAsync(string repoPath, string target, CancellationToken cancellationToken)
+    {
+        try
+        {
             await gitClient.RunAsync(repoPath, cancellationToken, "reset", "--keep", "-q", target);
+        }
+        catch (InvalidOperationException exception)
+        {
+            if (FirstReport(repoPath, "move"))
+                LogMoveRefused(repoPath, target, exception);
         }
     }
 
@@ -96,13 +116,11 @@ public sealed class GitWorkspace(
     /// Diverged, because another writer pushed: when every commit the remote lacks was made by the export, those commits
     /// are output the export regenerates from the catalog, so the clone moves to the remote; when any was not, it stays
     /// and the divergence is logged as an error. Neither way throws, so a diverged clone never fails a shell start.
+    /// The same holds when the move itself is refused (see <see cref="MoveToAsync"/>).
     /// </summary>
     private async Task<string?> WriterTargetAsync(string repoPath, string remote, CancellationToken cancellationToken)
     {
-        var counts = (await gitClient.RunAsync(repoPath, cancellationToken, "rev-list", "--left-right", "--count", $"HEAD...{remote}"))
-            .Split('\t', StringSplitOptions.TrimEntries);
-        var ahead = int.Parse(counts[0], CultureInfo.InvariantCulture);
-        var behind = int.Parse(counts[1], CultureInfo.InvariantCulture);
+        var (ahead, behind) = await GitRemoteRefs.AheadBehindAsync(gitClient, repoPath, _options.Branch, cancellationToken);
 
         if (behind == 0)
             return null;
@@ -116,18 +134,24 @@ public sealed class GitWorkspace(
             return remote;
         }
 
-        LogKeepingDivergedClone(repoPath, ahead, behind, foreignCommits);
+        if (FirstReport(repoPath, "diverged"))
+            LogKeepingDivergedClone(repoPath, ahead, behind, foreignCommits);
         return null;
     }
 
-    /// <summary>The commits this clone has and the remote lacks that the export did not make, as <c>{hash} {email}</c>.</summary>
+    /// <summary>The commits this clone has and the remote lacks that the export did not make, as <c>{hash} {author name} &lt;{author email}&gt;</c>, with the committer's email when it differs.</summary>
     private async Task<IReadOnlyList<string>> ForeignCommitsAsync(string repoPath, string remote, CancellationToken cancellationToken)
     {
-        var log = await gitClient.RunAsync(repoPath, cancellationToken, "log", "--format=%h %ae", $"{remote}..HEAD");
-        return log.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Where(line => !line.EndsWith($" {GitExportIdentity.Email}", StringComparison.OrdinalIgnoreCase))
+        var log = await gitClient.RunAsync(repoPath, cancellationToken, "log", $"--format=%h%x09{GitExportIdentity.LogFormat}", $"{remote}..HEAD");
+        return log.Lines()
+            .Select(line => line.Split('\t'))
+            .Where(fields => !GitExportIdentity.IsExport(fields[1], fields[2], fields[3]))
+            .Select(fields => $"{fields[0]} {fields[1]} <{fields[2]}>" + (fields[2] == fields[3] ? "" : $" (committed by {fields[3]})"))
             .ToList();
     }
+
+    /// <summary>Whether this is the first time in the process that <paramref name="problem"/> is reported for the clone.</summary>
+    private static bool FirstReport(string repoPath, string problem) => ReportedClones.TryAdd($"{problem}|{repoPath}", 0);
 
     /// <summary>
     /// Builds the credential <c>-c …</c> prefix per <see cref="GitCredentialsMode"/>, writing a 0600
@@ -197,5 +221,14 @@ public sealed class GitWorkspace(
             "The workflows clone at '{path}' has diverged from origin/{branch} ({ahead} commit(s) of its own, {behind} of the remote's), and commits not made by the export are among its own: {commits}. " +
             "It was left as it is, so nothing is lost: the import reads it as it stands and the export's push is refused until the clone is reconciled with the remote by hand.",
             repoPath, _options.Branch, ahead, behind, string.Join(", ", foreignCommits));
+    }
+
+    private void LogMoveRefused(string repoPath, string target, Exception exception)
+    {
+        logger.LogError(
+            exception,
+            "The workflows clone at '{path}' could not move to {target}: the move would overwrite an uncommitted change outside the workflows path. " +
+            "It was left as it is, so nothing is lost: the import reads it as it stands and the export's push is refused until the change is committed, stashed or discarded by hand.",
+            repoPath, target);
     }
 }

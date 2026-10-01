@@ -36,10 +36,10 @@ public class WorkflowsDesignGitReconciliationFeature : WorkflowsDesignReconcilia
     [ManifestSetting(DisplayName = "Branch", Description = "The tracked branch.", Category = "Git", DefaultValue = "main")]
     public string Branch { get; set; } = "main";
 
-    [ManifestSetting(DisplayName = "Workflows path", Description = "Repo-relative root under which definitions live.", Category = "Git", DefaultValue = "workflows")]
+    [ManifestSetting(DisplayName = "Workflows path", Description = "Repo-relative root under which definitions live: a relative folder path, never empty, rooted, '.' or '..'.", Category = "Git", DefaultValue = "workflows")]
     public string WorkflowsPath { get; set; } = "workflows";
 
-    [ManifestSetting(DisplayName = "Local cache path", Description = "Local working-clone directory. Empty defaults under the host data dir.", Category = "Git")]
+    [ManifestSetting(DisplayName = "Local cache path", Description = "Local working-clone directory. Empty defaults to a per-source, per-process directory under the OS temp dir; give each process its own.", Category = "Git")]
     public string LocalCachePath { get; set; } = string.Empty;
 
     [ManifestSetting(DisplayName = "Role", Description = "Writer (authors + exports) or Consumer (imports read-only).", Category = "Git", DefaultValue = "Consumer")]
@@ -61,7 +61,9 @@ public class WorkflowsDesignGitReconciliationFeature : WorkflowsDesignReconcilia
     {
         base.ConfigureServices(services);
 
-        services.AddSingleton(Microsoft.Extensions.Options.Options.Create(BuildOptions()));
+        var options = BuildOptions();
+        options.ValidateWorkflowsPath(); // fail fast at registration: it reaches git as a pathspec of clean and restore
+        services.AddSingleton(Microsoft.Extensions.Options.Options.Create(options));
         services.AddGitClient();
         services.AddScoped<IGitWorkspace, GitWorkspace>();
         services.AddScoped<IWorkflowReconciliationSource, GitWorkflowReconciliationSource>();

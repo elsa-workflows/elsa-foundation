@@ -261,11 +261,20 @@ Each role gets its own clone mode:
 *Amended 2026-10-01 ([#2197](https://github.com/elsa-workflows/elsa-foundation/issues/2197); see D7).* A
 Writer clone still holds its export commits until they are pushed, for as long as the remote has not
 moved. When the remote has moved it never stops: only behind, it fast-forwards; diverged, it resets to
-the remote when every commit the remote lacks was made by the export identity (they are output the
-export regenerates from the catalog), and otherwise it stays as it is and logs an error, so a commit
-the export did not make is never discarded. Uncommitted changes under the workflows path are residue of
-an export that stopped before its commit, and are discarded at every pass, so the import and the export
-both read only what is committed; uncommitted changes elsewhere in the clone are kept.
+the remote when every commit the remote lacks was made by the export identity (author name, author
+email and committer email all match, so a person's amend or rebase of an export commit makes it theirs;
+they are output the export regenerates from the catalog), and otherwise it stays as it is and logs an
+error, once per clone per process, so a commit the export did not make is never discarded. Uncommitted
+changes under the workflows path are residue of an export that stopped before its commit, and are
+discarded at every pass, so the import and the export both read only what is committed; uncommitted
+changes elsewhere in the clone are kept. When moving the clone onto the remote would overwrite one of
+those, the move is refused: the clone stays as it stands, an error is logged, and the start does not fail,
+the same posture as a commit the export did not make. A clone that stays behind the remote ends the pass's
+rebuilding at once, with one warning, rather than retrying a move that cannot happen. The default clone
+path is per source and per process, so two processes on one machine never share a clone; it is not
+reused across restarts, and `LocalCachePath` is set to keep one. `WorkflowsPath` must be a relative
+folder path (not empty, rooted, `.` or `..`), since it reaches git as the pathspec of `clean` and
+`restore`; the feature refuses to register otherwise.
 
 ## How the pieces map to existing seams
 
@@ -287,7 +296,7 @@ both read only what is committed; uncommitted changes elsewhere in the clone are
   "RemoteUrl": "git@github.com:acme/workflows.git",
   "Branch": "main",
   "WorkflowsPath": "workflows",
-  "LocalCachePath": "",              // defaults under the host data dir
+  "LocalCachePath": "",              // defaults to a per-source, per-process directory under the OS temp dir
   "Role": "Consumer",                // Writer | Consumer  (drives clone mode + export, D11)
   "CredentialsMode": "SshKey",       // SshKey | Token | HostDefault
   "Token": "",                        // [ManifestSetting(Secret=true)] — Token mode only

@@ -32,6 +32,11 @@ The Writer clone is a persistent working copy (`fetch` + **ff-only** integrate, 
 The export task writes+commits any catalog version missing from git as `indent(canonical State)`, refreshes
 `definition.json`, and (Immediate) pushes ff-only. A divergent remote refuses the push — no force, no merge.
 
+> *Amended 2026-10-01 ([#2197](https://github.com/elsa-workflows/elsa-foundation/issues/2197); [ADR 0034](../../docs/adr/0034-workflow-definitions-reconcile-from-and-export-to-git.md), D7 and D11 amendments):* the Writer clone is not ff-only and
+> may reset onto the remote when every commit it holds that the remote lacks was made by the export identity; it never
+> discards a commit anyone else made. Every Writer node runs the export at start, without a lock; a push refused
+> because another writer pushed first is rebuilt onto the remote and swept again. The default clone path is per process.
+
 ## Verify locally (tests)
 ```bash
 dotnet test tests/Elsa/Workflows/Design/Tests/Elsa.Workflows.Design.Tests.csproj \

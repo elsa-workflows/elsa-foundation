@@ -1,5 +1,6 @@
 using Elsa.Workflows.Design.Reconciliation.Git.Options;
 using Elsa.Workflows.Design.Reconciliation.Git.Services;
+using Microsoft.Extensions.Logging;
 using Xunit;
 
 namespace Elsa.Workflows.Design.Tests.Unit.Reconciliation.Git;
@@ -124,5 +125,73 @@ public sealed class GitWorkflowExporterTests : GitExportTest
         Assert.Equal(commits, Subjects(node.CachePath).Count);
         Assert.Contains("Publish P v1.0.0 (wf-p)", RemoteSubjects());
         Assert.Equal(Head(_remote, "main"), Head(node.CachePath));
+    }
+
+    [Fact]
+    public async Task An_export_branch_that_exists_in_line_with_the_tracked_one_receives_the_push()
+    {
+        Publish("wf-b", "B", "1.0.0");
+        await _git.RunAsync(_remote, CancellationToken.None, "branch", "release", "main");
+        var node = Writer(GitPushMode.Immediate, "release");
+
+        await node.Exporter.ExportAsync(CancellationToken.None);
+
+        Assert.Contains("Publish B v1.0.0 (wf-b)", Subjects(_remote, "release"));
+        Assert.DoesNotContain("Publish B v1.0.0 (wf-b)", RemoteSubjects());
+        Assert.DoesNotContain(node.ExportLog.Entries, entry => entry.Level >= LogLevel.Warning);
+    }
+
+    [Fact]
+    public async Task An_export_branch_not_created_yet_is_created_by_the_push()
+    {
+        Publish("wf-b", "B", "1.0.0");
+        var node = Writer(GitPushMode.Immediate, "release");
+
+        await node.Exporter.ExportAsync(CancellationToken.None);
+
+        Assert.Contains("Publish B v1.0.0 (wf-b)", Subjects(_remote, "release"));
+        Assert.DoesNotContain(node.ExportLog.Entries, entry => entry.Level >= LogLevel.Warning);
+    }
+
+    [Fact]
+    public async Task An_export_branch_that_cannot_be_fetched_yet_counts_as_behind_even_when_the_pass_commits_nothing()
+    {
+        var node = Writer(GitPushMode.Immediate, "release"); // an empty catalog: nothing to commit
+
+        await node.Exporter.ExportAsync(CancellationToken.None);
+
+        Assert.Equal(Head(_remote, "main"), Head(_remote, "release"));
+    }
+
+    [Fact]
+    public async Task An_export_branch_that_moved_logs_an_error_without_failing_and_keeps_the_commits()
+    {
+        Publish("wf-b", "B", "1.0.0");
+        await _git.RunAsync(_remote, CancellationToken.None, "branch", "release", "main");
+        await AdvanceRemoteAsync("release");
+        var node = Writer(GitPushMode.Immediate, "release");
+
+        await node.Exporter.ExportAsync(CancellationToken.None);
+
+        var error = Assert.Single(node.ExportLog.Entries, entry => entry.Level == LogLevel.Error);
+        Assert.Contains("origin/release", error.Message);
+        Assert.Contains("Publish B v1.0.0 (wf-b)", Subjects(node.CachePath));
+        Assert.DoesNotContain("Publish B v1.0.0 (wf-b)", Subjects(_remote, "release"));
+    }
+
+    [Fact]
+    public async Task A_push_refused_while_the_remote_has_not_moved_is_the_failure_it_always_was()
+    {
+        Publish("wf-h", "H", "1.0.0");
+        var hook = Path.Join(_remote, "hooks", "pre-receive");
+        await File.WriteAllTextAsync(hook, "#!/bin/sh\necho rejected by policy >&2\nexit 1\n");
+        if (!OperatingSystem.IsWindows())
+            File.SetUnixFileMode(hook, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        var node = Writer(GitPushMode.Immediate);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => node.Exporter.ExportAsync(CancellationToken.None));
+
+        Assert.DoesNotContain(node.ExportLog.Entries, entry => entry.Level >= LogLevel.Warning);
+        Assert.Contains("Publish H v1.0.0 (wf-h)", Subjects(node.CachePath));
     }
 }

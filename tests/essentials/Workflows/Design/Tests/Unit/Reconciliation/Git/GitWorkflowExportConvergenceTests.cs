@@ -1,4 +1,5 @@
 using Elsa.Workflows.Design.Reconciliation.Git.Options;
+using Elsa.Workflows.Design.Reconciliation.Git.Services;
 using Microsoft.Extensions.Logging;
 using Xunit;
 
@@ -25,7 +26,11 @@ public sealed class GitWorkflowExportConvergenceTests : GitExportTest
     {
         Publish("wf-r", "R", "1.0.0");
         // The first node exports and pushes in the moment between the second node's commits and its push.
-        _second.Git.Before("push", 1, () => _first.Exporter.ExportAsync(CancellationToken.None));
+        _second.Git.Before("push", 1, async () =>
+        {
+            await LetCommitClockAdvanceAsync();
+            await _first.Exporter.ExportAsync(CancellationToken.None);
+        });
 
         await _second.Exporter.ExportAsync(CancellationToken.None);
 
@@ -42,6 +47,7 @@ public sealed class GitWorkflowExportConvergenceTests : GitExportTest
         await _second.Source.Read(CancellationToken.None);
         _second.Git.FailAt("push");
         await Assert.ThrowsAsync<InvalidOperationException>(() => _second.Exporter.ExportAsync(CancellationToken.None));
+        await LetCommitClockAdvanceAsync();
         await _first.Exporter.ExportAsync(CancellationToken.None);
 
         // The second node starts again: the import task, then the export task. Neither may throw.
@@ -88,6 +94,79 @@ public sealed class GitWorkflowExportConvergenceTests : GitExportTest
 
         Assert.Equal(Head(_remote, "main"), Head(_second.CachePath));
         Assert.Equal("edited by hand", await File.ReadAllTextAsync(readme));
+    }
+
+    [Fact]
+    public async Task A_writer_that_loses_every_push_stops_after_its_attempts_without_failing_and_keeps_its_commits()
+    {
+        Publish("wf-e", "E", "1.0.0");
+        // Another writer moves the remote just before each of the attempts, so the rebuilt clone is behind again each time.
+        for (var push = 1; push <= GitWorkflowExporter.MaxPushAttempts; push++)
+            _second.Git.Before("push", push, () => AdvanceRemoteAsync("main"));
+
+        await _second.Exporter.ExportAsync(CancellationToken.None);
+
+        var refused = Assert.Single(_second.ExportLog.Warnings);
+        Assert.Contains($"other writers moved it before each of {GitWorkflowExporter.MaxPushAttempts} pushes", refused.Message);
+        Assert.Contains("Publish E v1.0.0 (wf-e)", Subjects(_second.CachePath));
+        Assert.DoesNotContain("Publish E v1.0.0 (wf-e)", RemoteSubjects());
+    }
+
+    [Fact]
+    public async Task A_move_that_would_overwrite_an_uncommitted_change_keeps_the_clone_and_still_starts_reporting_once()
+    {
+        Publish("wf-u", "U", "1.0.0");
+        await _second.Source.Read(CancellationToken.None);
+        var readme = Path.Join(_second.CachePath, "README.md");
+        await File.WriteAllTextAsync(readme, "edited by hand");
+        await AdvanceRemoteAsync("main"); // rewrites README.md, which the clone cannot move onto without losing the edit
+
+        await _second.Source.Read(CancellationToken.None);
+        await _second.Exporter.ExportAsync(CancellationToken.None);
+
+        Assert.Equal("edited by hand", await File.ReadAllTextAsync(readme));
+        Assert.Single(_second.WorkspaceLog.Entries, entry => entry.Level == LogLevel.Error && entry.Message.Contains("would overwrite an uncommitted change"));
+        var warning = Assert.Single(_second.ExportLog.Warnings);
+        Assert.Contains("could not be moved onto it", warning.Message);
+        Assert.DoesNotContain("before each of", warning.Message);
+        Assert.Contains("Publish U v1.0.0 (wf-u)", Subjects(_second.CachePath));
+        Assert.DoesNotContain("Publish U v1.0.0 (wf-u)", RemoteSubjects());
+    }
+
+    [Fact]
+    public async Task A_diverged_clone_holding_a_foreign_commit_reports_once_across_the_rebuild_attempts()
+    {
+        Publish("wf-o", "O", "1.0.0");
+        await _second.Source.Read(CancellationToken.None);
+        await CommitByHandAsync(_second.CachePath);
+        await _first.Exporter.ExportAsync(CancellationToken.None);
+
+        await _second.Source.Read(CancellationToken.None);
+        await _second.Exporter.ExportAsync(CancellationToken.None);
+
+        Assert.Single(_second.WorkspaceLog.Entries, entry => entry.Level == LogLevel.Error);
+        var warning = Assert.Single(_second.ExportLog.Warnings);
+        Assert.Contains("could not be moved onto it", warning.Message);
+        Assert.DoesNotContain("before each of", warning.Message);
+    }
+
+    [Theory]
+    [InlineData("Elsa Design", "human@example.com", "committed by human@example.com")] // an amend or rebase changes the committer
+    [InlineData("Someone Else", "design@elsa.local", "Someone Else")]                   // a different author name
+    public async Task A_commit_under_the_export_identity_that_a_person_amended_is_not_discarded(string authorName, string committerEmail, string reported)
+    {
+        Publish("wf-h", "H", "1.0.0");
+        await _second.Exporter.ExportAsync(CancellationToken.None);
+        await _git.RunAsync(_second.CachePath, CancellationToken.None,
+            "-c", $"user.name={authorName}", "-c", "user.email=design@elsa.local", "-c", $"committer.email={committerEmail}",
+            "commit", "--amend", "--no-edit", "--allow-empty", "--reset-author");
+        var amended = Head(_second.CachePath);
+        await AdvanceRemoteAsync("main");
+
+        await _second.Source.Read(CancellationToken.None);
+
+        Assert.Equal(amended, Head(_second.CachePath));
+        Assert.Single(_second.WorkspaceLog.Entries, entry => entry.Level == LogLevel.Error && entry.Message.Contains(reported));
     }
 
     private async Task<string> CommitByHandAsync(string repository)

@@ -69,4 +69,16 @@ public sealed class WorkflowsDesignGitReconciliationFeatureTests
         var secret = setting!.GetType().GetProperty("Secret")?.GetValue(setting);
         Assert.Equal(true, secret);
     }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(".")]
+    [InlineData("..")]
+    [InlineData("/etc")]
+    public void An_unusable_workflows_path_fails_registration(string workflowsPath)
+    {
+        var feature = new WorkflowsDesignGitReconciliationFeature { RemoteUrl = "git@example.com:acme/wf.git", WorkflowsPath = workflowsPath };
+
+        Assert.Throws<InvalidOperationException>(() => feature.ConfigureServices(new ServiceCollection()));
+    }
 }

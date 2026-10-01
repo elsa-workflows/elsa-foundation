@@ -53,21 +53,29 @@ writer per repository branch is kept by the remote, not by a lock or an election
   commits at a time. A writer whose push is refused because another writer pushed first resets onto the
   remote and sweeps again (at most `GitWorkflowExporter.MaxPushAttempts` times a pass), normally finding
   nothing left to commit. A push refused for any other reason still fails the pass.
-- **A diverged clone never fails a start.** On every pass (import and export alike) a Writer clone that
+- **A clone that cannot be moved never fails a start.** On every pass (import and export alike) a Writer clone that
   is only behind fast-forwards; one that diverged resets to the remote when all its unpushed commits were
-  made by the export identity (`Elsa Design <design@elsa.local>`), since the export regenerates them
-  from the catalog, and otherwise is left untouched with an error in the log, because a commit anyone
-  else made there is never discarded. Uncommitted changes under `WorkflowsPath` are residue of an
-  interrupted export and are discarded at every pass, so keep no work of your own there. Uncommitted
-  changes elsewhere in the clone are kept, and a move to the remote that would overwrite one fails
-  instead.
+  made by the export identity (author name, author email and committer email all
+  `Elsa Design <design@elsa.local>`, so a human's amend or rebase of an export commit counts as theirs),
+  since the export regenerates them from the catalog, and otherwise is left untouched with an error in
+  the log, once per clone per process, because a commit anyone else made there is never discarded.
+  Uncommitted changes under `WorkflowsPath` are residue of an interrupted export and are discarded at
+  every pass, so keep no work of your own there. Uncommitted changes elsewhere in the clone are kept,
+  and a move to the remote that would overwrite one is refused the same way: the clone stays as it
+  stands, with an error in the log, and the start goes on. A clone left behind the remote ends the
+  pass's rebuilding with one warning; the export's push is refused until the clone is reconciled by hand.
 - **Push modes.** Only `Immediate` has a fence. With `Manual` the push happens out-of-band from one
   clone; the others discard their own export commits once that push moves the remote.
 - **A distinct `Export.Branch`.** The writer rebuilds only onto the branch it tracks. A push to another
   export branch that was refused because that branch moved is logged as an error, without failing the
   start, until the export branch is brought back in line with the tracked one.
-- **One clone per process.** Two processes on one machine with the same `RemoteUrl` and `Branch` share
-  the default `LocalCachePath`; give each its own.
+- **One clone per process.** The default `LocalCachePath` is a per-source directory under the OS temp
+  dir that includes the process id, so two processes on one machine never share a clone and collide on
+  its `index.lock`. The cost is that a default clone is not reused across restarts: the next process
+  clones again. Set `LocalCachePath` to keep a clone, and give each process its own.
+- **`WorkflowsPath` is validated.** It must be a relative folder path inside the repository: not empty,
+  not rooted, with no `.` or `..` segment. It reaches git as the pathspec of `clean -f -d` and
+  `restore`, so the feature refuses to register with anything else.
 
 ## Configuration (CShells feature `WorkflowsDesignGitReconciliation`)
 
@@ -78,7 +86,7 @@ Enable the feature on a shell. **Do not** enable it in `shells.baseline.json` wi
 "WorkflowsDesignGitReconciliation": {
   "RemoteUrl": "git@github.com:acme/workflows.git",
   "Branch": "main",
-  "WorkflowsPath": "workflows",
+  "WorkflowsPath": "workflows",      // relative, inside the repo
   "Role": "Consumer",                 // Writer | Consumer
   "CredentialsMode": "SshKey",        // SshKey | Token | HostDefault
   "KeyPath": "/run/secrets/deploy_key",

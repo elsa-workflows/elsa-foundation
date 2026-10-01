@@ -1,4 +1,3 @@
-using System.Globalization;
 using Elsa.Git;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
@@ -84,6 +83,15 @@ public sealed class GitWorkflowExporter(
 
             LogRebuilding(attempt);
             await workspace.EnsureReadyAsync(cancellationToken);
+
+            // The workspace fetched the tracked branch. A clone it could not move onto it (it keeps a commit the export
+            // did not make, or a change of the operator's) is behind it still, and another pass would only meet the same
+            // refusal; the workspace has said why.
+            if ((await GitRemoteRefs.AheadBehindAsync(gitClient, repoPath, ExportBranch, cancellationToken)).Behind > 0)
+            {
+                LogRebuildBlocked();
+                return;
+            }
         }
     }
 
@@ -159,7 +167,7 @@ public sealed class GitWorkflowExporter(
     private async Task TagVersionsAsync(string repoPath, IReadOnlyList<CatalogDefinition> catalog, CancellationToken cancellationToken)
     {
         var tagged = (await gitClient.RunAsync(repoPath, cancellationToken, "tag", "--list", "--merged", "HEAD", "wf/*"))
-            .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Lines()
             .ToHashSet(StringComparer.Ordinal);
 
         foreach (var (definition, versions) in catalog)
@@ -194,13 +202,13 @@ public sealed class GitWorkflowExporter(
         if (!ExportsToTrackedBranch && !await TryFetchExportBranchAsync(repoPath, cancellationToken))
             return true;
 
-        return await CountAsync(repoPath, cancellationToken, $"{GitRemoteRefs.Tracking(ExportBranch)}..HEAD") > 0;
+        return (await GitRemoteRefs.AheadBehindAsync(gitClient, repoPath, ExportBranch, cancellationToken)).Ahead > 0;
     }
 
     /// <summary>Whether the remote export branch has commits HEAD lacks, which makes a refused push a lost race.</summary>
     private async Task<bool> RemoteMovedAsync(string repoPath, CancellationToken cancellationToken) =>
         await TryFetchExportBranchAsync(repoPath, cancellationToken)
-        && await CountAsync(repoPath, cancellationToken, $"HEAD..{GitRemoteRefs.Tracking(ExportBranch)}") > 0;
+        && (await GitRemoteRefs.AheadBehindAsync(gitClient, repoPath, ExportBranch, cancellationToken)).Behind > 0;
 
     private async Task<bool> TryFetchExportBranchAsync(string repoPath, CancellationToken cancellationToken)
     {
@@ -214,9 +222,6 @@ public sealed class GitWorkflowExporter(
             return false;
         }
     }
-
-    private async Task<int> CountAsync(string repoPath, CancellationToken cancellationToken, string range) =>
-        int.Parse(await gitClient.RunAsync(repoPath, cancellationToken, "rev-list", "--count", range), CultureInfo.InvariantCulture);
 
     private async Task PushAsync(string repoPath, CancellationToken cancellationToken)
     {
@@ -253,6 +258,14 @@ public sealed class GitWorkflowExporter(
             "Exported workflow versions were not pushed to origin/{branch}: other writers moved it before each of {attempts} pushes. " +
             "The commits stay in the clone, and the next pass pushes whatever the remote still lacks.",
             ExportBranch, attempts);
+    }
+
+    private void LogRebuildBlocked()
+    {
+        logger.LogWarning(
+            "Exported workflow versions were not pushed to origin/{branch}: another writer moved it, and the clone could not be moved onto it (the workflows clone's own log says why). " +
+            "The commits stay in the clone, and the next pass pushes whatever the remote still lacks once it can.",
+            ExportBranch);
     }
 
     private void LogExportBranchDiverged()
