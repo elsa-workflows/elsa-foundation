@@ -147,7 +147,8 @@ public sealed class EfToolingFinalizationTests : IAsyncLifetime
 
     /// <summary>
     /// Spec 186, FR-021: what the finish record holds, the status prints, since the tool runs where no backfill does: a
-    /// backfill run a worker has claimed, and a completion the audit withdrew with the tables and counts it found.
+    /// backfill run a worker has claimed, on the completion or, once that is withdrawn, on the withdrawal, and a completion
+    /// the audit withdrew with the tables and counts it found.
     /// </summary>
     [Fact]
     public async Task Status_reports_a_claimed_backfill_run_and_a_withdrawn_completion_from_the_finish_record()
@@ -173,9 +174,10 @@ public sealed class EfToolingFinalizationTests : IAsyncLifetime
             await store.WithdrawCompletionAsync(SecretsEfModule.SchemaFamily, record.Revision, member, "table 'secrets': 1 (rewritten)");
         }
 
+        // The claim still holds, so the withdrawal keeps it for the worker that goes on with the family (FR-008).
         var withdrawn = await StatusAsync();
         Assert.Equal(JsonValueKind.Null, withdrawn.GetProperty("completionVersion").ValueKind);
-        Assert.Equal(JsonValueKind.Null, withdrawn.GetProperty("backfillRun").ValueKind);
+        Assert.Equal(("next", "host-a (a)"), (withdrawn.GetProperty("backfillRun").GetProperty("targetVersion").GetString(), withdrawn.GetProperty("backfillRun").GetProperty("member").GetString()));
         Assert.Equal("table 'secrets': 1 (rewritten)", withdrawn.GetProperty("completionWithdrawn").GetProperty("reason").GetString());
 
         async Task<JsonElement> StatusAsync()

@@ -1,8 +1,10 @@
 using Elsa.Persistence.EntityFramework.SchemaFinalization;
 using Elsa.Persistence.Schema.SchemaFinalization;
+using System.Collections.Concurrent;
 using System.Data.Common;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.Extensions.Logging;
 using Xunit;
 using static Elsa.Persistence.EntityFramework.Tests.SchemaGate;
 
@@ -590,6 +592,38 @@ public sealed class EfSchemaModuleGateTests : IAsyncLifetime
         Assert.True(loop.IsCompletedSuccessfully);
     }
 
+    /// <summary>
+    /// The other direction, the case that looked like a clean stop: a cancellation that is not the loop's own, such as a
+    /// provider's timeout or a call the fleet's publish makes, fails one round and nothing more. The loop logs it and runs
+    /// the next round on schedule, as the backfill's does, rather than ending with nothing saying so and leaving this
+    /// host's write versions where they were for good.
+    /// </summary>
+    [Fact]
+    public async Task A_cancellation_that_is_not_the_loops_own_is_logged_and_the_next_round_runs()
+    {
+        var logger = new WarningLogger();
+        var gate = new EfSchemaModuleGate(Families("1"), Fleet("host-a", "1"), new EfSchemaFinalizationObservations(), Options(), logger: logger);
+        await gate.ActivateAsync(Context());
+        using var stopping = new CancellationTokenSource();
+        var rounds = 0;
+        var nextRound = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var loop = gate.RunAsync((_, _) =>
+        {
+            if (Interlocked.Increment(ref rounds) == 1)
+                throw new OperationCanceledException("A provider's own timeout, not the loop's stop.");
+            nextRound.TrySetResult();
+            return Task.CompletedTask;
+        }, stopping.Token);
+        await nextRound.Task.WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.False(loop.IsCompleted);
+        Assert.IsType<OperationCanceledException>(Assert.Single(logger.Warnings));
+        await stopping.CancelAsync();
+        await loop.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.True(loop.IsCompletedSuccessfully);
+    }
+
     private FakeFleet Fleet(string hostId, params string[] readable)
     {
         var member = fleet.Add(new FakeMember(hostId).Reading(Family, readable).Reading(OtherFamily, "1"));
@@ -601,6 +635,24 @@ public sealed class EfSchemaModuleGateTests : IAsyncLifetime
         var context = SchemaGate.Context(database.ConnectionString, gates: null, interceptors);
         contexts.Add(context);
         return context;
+    }
+
+    /// <summary>The exceptions the gate logged warnings with.</summary>
+    private sealed class WarningLogger : ILogger
+    {
+        private readonly ConcurrentQueue<Exception?> _warnings = new();
+
+        public IReadOnlyList<Exception?> Warnings => _warnings.ToArray();
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => logLevel >= LogLevel.Warning;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+        {
+            if (logLevel == LogLevel.Warning)
+                _warnings.Enqueue(exception);
+        }
     }
 
     /// <summary>Fails every read once armed, as a store that has gone away mid-activation does.</summary>

@@ -245,6 +245,15 @@ below it turns up ([spec 186](../../../../specs/186-post-finalization-backfill/s
 `IEfPostMigrationAction`, whose audit at Prepare would refuse the module finalization needs active. The gate's status
 carries the backfill's through an internal seam; neither exposes the other.
 
+Several hosts sharing a database each run the backfill, and a claim in the family's finalization record keeps all but
+one from repeating its reads (FR-008). It is taken before any pass reads a row, the survey, upgrade, settle,
+verification and audit alike, and is held on the completion that stands or, while none stands, on the withdrawal that
+ended it, so after a withdrawal one worker upgrades instead of every one. A worker that finds the family claimed
+elsewhere reads nothing of it until the claim expires. The claim only narrows who works: a worker whose claim was taken
+over stops at its next renewal and records no completion, and one whose cluster member has lapsed claims nothing,
+stops and releases what it holds. Nothing correct depends on the claim; every row write, completion and withdrawal
+stays a compare-and-set. See the spec's 2026-10-01 note.
+
 `EfSchemaBackfill`, `EfSchemaBackfillScope` and the `EfSchemaBackfillScopeRunner` delegate a round takes are public, but
 they are not an extension point either: only `EfModuleMigrator<TContext>` builds a backfill and gives it a scope runner.
 They are public because two test suites this assembly grants no internals drive rounds directly, with scopes of their

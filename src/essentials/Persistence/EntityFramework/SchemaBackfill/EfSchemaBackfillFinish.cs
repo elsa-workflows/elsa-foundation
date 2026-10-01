@@ -5,12 +5,13 @@ using Microsoft.Extensions.Logging;
 namespace Elsa.Persistence.EntityFramework.SchemaBackfill;
 
 /// <summary>
-/// The backfill's writes to a family's finish record (spec 186, FR-008, FR-014 and FR-018): the run's claim, the
+/// The backfill's writes to a family's finish record (spec 186, FR-008, FR-014 and FR-018): the claim on the family, the
 /// completion a verification pass proved, and its withdrawal when a row below it turns up. Each is a compare-and-set on
 /// the record, read afresh and decided again when it is lost, through <see cref="CompareAndSetAsync{T}"/>.
 /// </summary>
 internal sealed class EfSchemaBackfillFinish(
     EfSchemaModuleGate gate,
+    IEfSchemaFleet? fleet,
     EfSchemaBackfillStatusBoard status,
     EfSchemaBackfillOptions options,
     TimeProvider time,
@@ -18,7 +19,18 @@ internal sealed class EfSchemaBackfillFinish(
 {
     private const int RecordAttempts = 3;
 
+    /// <summary>Why a worker whose member has lapsed does nothing for a family.</summary>
+    public const string Lapsed = "This member has lapsed from the fleet, so it claims and rewrites nothing, and leaves the family to a member that has not.";
+
     private readonly string _worker = Guid.NewGuid().ToString("N");
+    private readonly object _lock = new();
+    private readonly Dictionary<string, (string Target, DateTimeOffset RenewedAt)> _held = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Whether this worker's member has concluded that it lapsed from the fleet (spec 183, FR-007): others may count it
+    /// expired and take its work over, so it takes none. A host that composes no fleet never lapses.
+    /// </summary>
+    public bool HasLapsed => fleet?.GetLocalStanding().HasLapsed == true;
 
     /// <summary>The family's finalization record as it stands now, not as the gate last observed it.</summary>
     public Task<SchemaFinalizationRecord?> ReadAsync(EfSchemaBackfillScopeRunner scopes, string family, CancellationToken cancellationToken) =>
@@ -27,15 +39,17 @@ internal sealed class EfSchemaBackfillFinish(
     /// <summary>
     /// Records the family complete at the run's target (FR-014), unless a completion at or after it already stands, or a
     /// completion was withdrawn, by this worker or another, after the settle margin the verification pass followed began,
-    /// which only a pass after a new margin can answer (FR-012). Then the gate reads the record again, so this host's
-    /// dormancy check answers from it at once (FR-017). Returns why nothing was recorded, or null when the completion stands.
+    /// which only a pass after a new margin can answer (FR-012). Nor does a worker record whose member has lapsed, or whose
+    /// claim lapsed and another worker took over: the run is that worker's now (FR-008). Then the gate reads the record
+    /// again, so this host's dormancy check answers from it at once (FR-017). Returns why nothing was recorded, or null when
+    /// the completion stands.
     /// </summary>
-    public Task<string?> RecordAsync(EfSchemaBackfillScopeRunner scopes, EfSchemaBackfillRun run, EfSchemaBackfillVerification verification, CancellationToken cancellationToken)
+    public async Task<string?> RecordAsync(EfSchemaBackfillScopeRunner scopes, EfSchemaBackfillRun run, EfSchemaBackfillVerification verification, CancellationToken cancellationToken)
     {
         var family = run.Family;
         var readable = run.Chain.ReadableVersions;
         var member = gate.LocalMember();
-        return CompareAndSetAsync<string?>(scopes, family, refreshGate: true, async (store, record, _) =>
+        var unrecorded = await CompareAndSetAsync<string?>(scopes, family, refreshGate: true, async (store, record, _) =>
         {
             if (record is null)
                 throw new InvalidOperationException($"The finalization record of '{family}' vanished while its backfill ran.");
@@ -47,6 +61,11 @@ internal sealed class EfSchemaBackfillFinish(
                 // history starts the margin again on every worker's next settle check (FR-012).
                 return Attempt<string?>.Done("A completion was withdrawn after the settle margin began, so only a verification pass after a new margin can prove it.");
             }
+
+            if (HasLapsed)
+                return Attempt<string?>.Done(Lapsed);
+            if (record.BackfillRun is { } held && held.HoldsAt(time.GetUtcNow()) && held.Worker != _worker)
+                return Attempt<string?>.Done($"The run is claimed by {held.Member} until {held.ExpiresAt:u}, after this worker's claim lapsed, so this worker records nothing; the claimant verifies again.");
 
             try
             {
@@ -61,6 +80,11 @@ internal sealed class EfSchemaBackfillFinish(
                 return Attempt<string?>.Done(null);
             }
         }, () => $"Each of {RecordAttempts} attempts to record the completion lost its compare-and-set; the next round tries again.", cancellationToken);
+
+        // A recorded completion dropped the claim.
+        if (unrecorded is null)
+            Forget(family);
+        return unrecorded;
     }
 
     /// <summary>
@@ -70,8 +94,9 @@ internal sealed class EfSchemaBackfillFinish(
     /// caller last looked is withdrawn only when rows below it remain, and never on stale evidence. Every host's Attention
     /// reads the withdrawal from the record; the gate reads the record again, so features that need completeness go dormant
     /// on this host at once; and every worker's settle margin starts again when it next finds the withdrawal in the
-    /// history. Returns the finish record that stands afterwards: null when it was withdrawn or none stood, and the
-    /// standing one when nothing below it remains.
+    /// history. A claim that still holds moves onto the withdrawal, so its holder goes on with the family. Returns the
+    /// finish record that stands afterwards: null when it was withdrawn or none stood, and the standing one when nothing
+    /// below it remains.
     /// </summary>
     /// <param name="evidence">Why the standing completion does not hold, read in the given scope, or null when nothing below it remains.</param>
     /// <exception cref="InvalidOperationException">
@@ -112,61 +137,145 @@ internal sealed class EfSchemaBackfillFinish(
     }
 
     /// <summary>
-    /// Claims the run in the finish record (FR-008), or returns false when another worker's claim holds. A record with no
-    /// finish record, or one whose claim is lost to compare-and-set again and again, runs unclaimed: nothing correct
-    /// depends on the claim.
+    /// Claims the family for this worker before any pass reads its rows (FR-008): the survey, the upgrade pass, the settle
+    /// condition, the verification passes and, with <paramref name="audit"/>, the audit of the standing completion. The
+    /// claim is held on the completion that stands or, while none stands, on the withdrawal that ended it, so it can be
+    /// taken after a withdrawal too. A claim this worker renewed less than a third of its period ago is kept without a
+    /// write. Another worker's live claim answers <see cref="EfSchemaBackfillClaimOutcome.Elsewhere"/> with its holder,
+    /// and this worker reads nothing more of the family. A member that has lapsed claims nothing. Nothing correct depends
+    /// on the claim: with no claim duration, or when the claim loses its compare-and-set again and again, the worker runs
+    /// unclaimed.
     /// </summary>
-    public Task<bool> ClaimAsync(EfSchemaBackfillScopeRunner scopes, EfSchemaBackfillRun run, CancellationToken cancellationToken)
+    /// <param name="audit">
+    /// Whether the claim covers an audit of the standing completion, so a completion at the target still leaves work; a
+    /// renewal passes true, since it keeps the claim for whatever the run is doing.
+    /// </param>
+    public Task<(EfSchemaBackfillClaimOutcome Outcome, SchemaBackfillClaim? Holder)> ClaimAsync(
+        EfSchemaBackfillScopeRunner scopes,
+        EfSchemaChain chain,
+        string target,
+        bool audit,
+        CancellationToken cancellationToken)
     {
+        if (HasLapsed)
+            return Task.FromResult<(EfSchemaBackfillClaimOutcome, SchemaBackfillClaim?)>((EfSchemaBackfillClaimOutcome.Lapsed, null));
         if (options.ClaimDuration <= TimeSpan.Zero)
-            return Task.FromResult(true);
-        var family = run.Family;
+            return Task.FromResult<(EfSchemaBackfillClaimOutcome, SchemaBackfillClaim?)>((EfSchemaBackfillClaimOutcome.Held, null));
+        var family = chain.Family;
+        var readable = chain.ReadableVersions;
+        var targetAt = SchemaVersionChain.PositionOf(readable, target);
         var member = gate.LocalMember();
-        return CompareAndSetAsync(scopes, family, refreshGate: false, async (store, record, scope) =>
+        return CompareAndSetAsync<(EfSchemaBackfillClaimOutcome, SchemaBackfillClaim?)>(scopes, family, refreshGate: false, async (store, record, scope) =>
         {
-            if (record is not { Finish: not null })
-                return Attempt<bool>.Done(true);
-            if (record.Finish.Run is { } own && own.Worker == _worker && own.TargetVersion == run.Target &&
-                own.ExpiresAt - time.GetUtcNow() > options.ClaimDuration * 2 / 3)
+            if (record is null)
+                return Done(EfSchemaBackfillClaimOutcome.Held);
+            if (!audit && record.Finish is { } standing && SchemaVersionChain.PositionOf(readable, standing.CompletionVersion) >= targetAt)
+                return await NothingToDoAsync(scope);
+
+            var now = time.GetUtcNow();
+            if (record.BackfillRun is { } own && own.Worker == _worker && own.TargetVersion == target && own.ExpiresAt - now > options.ClaimDuration * 2 / 3)
             {
-                run.ClaimRenewedAt = own.ExpiresAt - options.ClaimDuration;
-                return Attempt<bool>.Done(true);
+                Hold(family, target, own.ExpiresAt - options.ClaimDuration);
+                return Done(EfSchemaBackfillClaimOutcome.Held);
             }
 
             try
             {
-                if (!(await store.ClaimBackfillAsync(family, record.Revision, run.Target, run.Chain.ReadableVersions, member, _worker, options.ClaimDuration, cancellationToken)).Applied)
-                    return Attempt<bool>.Again;
-                run.ClaimRenewedAt = time.GetUtcNow();
-                return Attempt<bool>.Done(true);
+                if (!(await store.ClaimBackfillAsync(family, record.Revision, target, readable, member, _worker, options.ClaimDuration, cancellationToken)).Applied)
+                    return Attempt<(EfSchemaBackfillClaimOutcome, SchemaBackfillClaim?)>.Again;
+                Hold(family, target, now);
+                return Done(EfSchemaBackfillClaimOutcome.Held);
             }
             catch (SchemaFinalizationRefusedException refusal) when (refusal.Refusal == SchemaFinalizationRefusal.BackfillClaimed)
             {
-                var holder = record.Finish.Run;
+                var holder = record.BackfillRun;
+                Forget(family);
                 status.Update(family, current => current with
                 {
                     State = EfSchemaBackfillState.ClaimedElsewhere,
                     ClaimedBy = holder,
                     Detail = holder is null ? null : $"The run is claimed by {holder.Member} until {holder.ExpiresAt:u}."
                 });
-                return Attempt<bool>.Done(false);
+                return Done(EfSchemaBackfillClaimOutcome.Elsewhere, holder);
             }
             catch (SchemaFinalizationRefusedException refusal) when (refusal.Refusal is SchemaFinalizationRefusal.NotForward or SchemaFinalizationRefusal.CompletionBeyondFinalized)
             {
-                // The completion moved to the target or past it since this host last observed it: nothing to claim.
-                await gate.RefreshAsync(scope.Context, cancellationToken);
-                return Attempt<bool>.Done(false);
+                return await NothingToDoAsync(scope);
             }
-        }, () => true, cancellationToken);
+            catch (SchemaFinalizationRefusedException refusal) when (refusal.Refusal == SchemaFinalizationRefusal.NoCompletion)
+            {
+                // Neither a completion nor a withdrawal of one stands, which no record the store writes reaches: the run
+                // goes unclaimed rather than not at all, since nothing correct depends on the claim.
+                return Done(EfSchemaBackfillClaimOutcome.Held);
+            }
+        }, () => (EfSchemaBackfillClaimOutcome.Held, null), cancellationToken);
+
+        static Attempt<(EfSchemaBackfillClaimOutcome, SchemaBackfillClaim?)> Done(EfSchemaBackfillClaimOutcome outcome, SchemaBackfillClaim? holder = null) =>
+            Attempt<(EfSchemaBackfillClaimOutcome, SchemaBackfillClaim?)>.Done((outcome, holder));
+
+        // The completion moved to the target or past it since this host last observed it: nothing to claim.
+        async Task<Attempt<(EfSchemaBackfillClaimOutcome, SchemaBackfillClaim?)>> NothingToDoAsync(EfSchemaBackfillScope scope)
+        {
+            await gate.RefreshAsync(scope.Context, cancellationToken);
+            return Done(EfSchemaBackfillClaimOutcome.NothingToDo);
+        }
     }
 
-    /// <summary>Renews the run's claim once a third of its period has passed, and stops the run if another worker has taken it over.</summary>
+    /// <summary>
+    /// Between two batches of a pass and before each phase of a run (FR-008): stops the run, releasing its claim, when this
+    /// member has lapsed from the fleet; renews the claim once a third of its period has passed; and stops the run when
+    /// another worker has taken it over since this one's claim lapsed, so this worker finishes nothing it no longer owns.
+    /// </summary>
+    /// <exception cref="EfSchemaBackfillClaimLostException">The run stops, for one of those reasons.</exception>
     public async Task RenewClaimAsync(EfSchemaBackfillScopeRunner scopes, EfSchemaBackfillRun run, CancellationToken cancellationToken)
     {
-        if (run.ClaimRenewedAt is not { } renewedAt || time.GetUtcNow() - renewedAt < options.ClaimDuration / 3)
+        var family = run.Family;
+        EfSchemaBackfillClaimOutcome outcome;
+        if (HasLapsed)
+            outcome = EfSchemaBackfillClaimOutcome.Lapsed;
+        else if (HeldOf(family) is { } held && time.GetUtcNow() - held.RenewedAt >= options.ClaimDuration / 3)
+            outcome = (await ClaimAsync(scopes, run.Chain, held.Target, audit: true, cancellationToken)).Outcome;
+        else
             return;
-        if (!await ClaimAsync(scopes, run, cancellationToken))
-            throw new EfSchemaBackfillClaimLostException($"The run of schema family '{run.Family}' was taken over by another worker after this one's claim lapsed.");
+
+        switch (outcome)
+        {
+            case EfSchemaBackfillClaimOutcome.Held:
+                return;
+            case EfSchemaBackfillClaimOutcome.Lapsed:
+                await ReleaseAsync(scopes, family, cancellationToken);
+                throw new EfSchemaBackfillClaimLostException(Lapsed);
+            case EfSchemaBackfillClaimOutcome.NothingToDo:
+                Forget(family);
+                throw new EfSchemaBackfillClaimLostException($"The completion of schema family '{family}' moved past this worker's target while its run went on, so the run stops.");
+            default:
+                throw new EfSchemaBackfillClaimLostException($"The run of schema family '{family}' was taken over by another worker after this one's claim lapsed.");
+        }
+    }
+
+    /// <summary>
+    /// Releases this worker's claim on the family, held or lapsed, so another member's worker may take the family over at
+    /// once rather than when the claim expires: what a worker does once its member has lapsed from the fleet (spec 183,
+    /// FR-007). A claim another worker has taken since is left alone. A release that loses its compare-and-set on every
+    /// attempt fails the round, and the next round tries again.
+    /// </summary>
+    public async Task ReleaseAsync(EfSchemaBackfillScopeRunner scopes, string family, CancellationToken cancellationToken)
+    {
+        if (HeldOf(family) is null)
+            return;
+        await CompareAndSetAsync(scopes, family, refreshGate: true, async (store, record, _) =>
+        {
+            if (record?.BackfillRun is not { } held || held.Worker != _worker)
+                return Attempt<bool>.Done(false);
+            if (!(await store.ReleaseBackfillAsync(family, record.Revision, _worker, cancellationToken)).Applied)
+                return Attempt<bool>.Again;
+            logger.LogInformation(
+                "The backfill of schema family {Family} of EF module {Module} released its claim: its member {Member} has lapsed from the fleet.",
+                family, gate.Module, held.Member);
+            return Attempt<bool>.Done(true);
+        }, () => throw new InvalidOperationException(
+            $"Each of {RecordAttempts} attempts to release the backfill claim on schema family '{family}' lost its compare-and-set; the next round tries again."), cancellationToken);
+        Forget(family);
     }
 
     /// <summary>
@@ -194,6 +303,25 @@ internal sealed class EfSchemaBackfillFinish(
             return result;
         }, cancellationToken);
 
+    /// <summary>The claim this worker holds on <paramref name="family"/>, as far as it knows: its target, and when it last took or renewed it.</summary>
+    private (string Target, DateTimeOffset RenewedAt)? HeldOf(string family)
+    {
+        lock (_lock)
+            return _held.TryGetValue(family, out var held) ? held : null;
+    }
+
+    private void Hold(string family, string target, DateTimeOffset renewedAt)
+    {
+        lock (_lock)
+            _held[family] = (target, renewedAt);
+    }
+
+    private void Forget(string family)
+    {
+        lock (_lock)
+            _held.Remove(family);
+    }
+
     /// <summary>One attempt's outcome: done with a value, or lost its compare-and-set.</summary>
     private readonly record struct Attempt<T>(bool Finished, T Value)
     {
@@ -201,4 +329,20 @@ internal sealed class EfSchemaBackfillFinish(
 
         public static Attempt<T> Done(T value) => new(true, value);
     }
+}
+
+/// <summary>What a worker's attempt to claim a family found (spec 186, FR-008).</summary>
+internal enum EfSchemaBackfillClaimOutcome
+{
+    /// <summary>This worker holds the claim, or goes on unclaimed, since nothing correct depends on it.</summary>
+    Held,
+
+    /// <summary>Another worker's claim holds: this one reads nothing of the family until it expires.</summary>
+    Elsewhere,
+
+    /// <summary>The completion stands at the target or past it, so there is nothing to claim the family for.</summary>
+    NothingToDo,
+
+    /// <summary>This worker's member has lapsed from the fleet, so it claims nothing.</summary>
+    Lapsed
 }

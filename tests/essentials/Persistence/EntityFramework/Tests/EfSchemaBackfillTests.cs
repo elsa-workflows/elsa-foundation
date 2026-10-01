@@ -95,7 +95,11 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
         Assert.Equal("2", (await database.RecordAsync()).Finish!.CompletionVersion);
     }
 
-    /// <summary>FR-007, both ways: a row at the target is skipped, and a rerun, on this host or another, writes nothing.</summary>
+    /// <summary>
+    /// FR-007, both ways: a row at the target is skipped, and a rerun, on this host or another, writes no row and leaves the
+    /// proof as it was. The other host's first round audits the completion, under its claim (FR-008), which is all it
+    /// writes to the record.
+    /// </summary>
     [Fact]
     public async Task A_row_already_at_the_target_is_skipped_and_a_rerun_on_any_host_repeats_only_reads()
     {
@@ -109,13 +113,15 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
         var record = await database.RecordAsync();
 
         await host.RunOnceAsync();
+        Assert.Equal(record.Revision, (await database.RecordAsync()).Revision);
         var other = await HostAsync("host-b");
         await other.RunOnceAsync();
 
         Assert.Equal(2, host.Probe.WrittenRows.Count);
         Assert.Empty(other.Probe.WrittenRows);
         Assert.Equal(after, await database.SnapshotAsync());
-        Assert.Equal(record.Revision, (await database.RecordAsync()).Revision);
+        AssertProofUnchanged(record, await database.RecordAsync());
+        Assert.Equal("host-b", (await database.RecordAsync()).BackfillRun!.Member.HostId);
     }
 
     /// <summary>
@@ -213,8 +219,9 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
 
     /// <summary>
     /// User Story 4; SC-004, FR-018 and FR-019, both ways: an audit over a family with no row below its completion changes
-    /// nothing; a straggler written after completion by a writer still at 1 is rewritten, reported, and withdraws the
-    /// completion but not the finalized version, until a new verification pass records it again.
+    /// nothing of the proof, only the claim it ran under; a straggler written after completion by a writer still at 1 is
+    /// rewritten, reported, and withdraws the completion but not the finalized version, until a new verification pass
+    /// records it again.
     /// </summary>
     [Fact]
     public async Task A_straggler_after_completion_is_rewritten_and_withdraws_the_completion_until_verification_records_it_again()
@@ -226,7 +233,7 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
 
         clock.Advance(TimeSpan.FromHours(1));
         await host.RunOnceAsync();
-        Assert.Equal(complete.Revision, (await database.RecordAsync()).Revision);
+        AssertProofUnchanged(complete, await database.RecordAsync());
         Assert.NotNull(host.Status.LastAuditAt);
 
         await database.SeedAsync(Order("straggler", 7));
@@ -449,6 +456,185 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
         Assert.Equal(8, first.Probe.WrittenRows.Count);
         Assert.Equal("2", (await database.RecordAsync()).Finish!.CompletionVersion);
         Assert.Null((await database.RecordAsync()).Finish!.Run);
+    }
+
+    /// <summary>
+    /// FR-008, both ways, the case a survey taken before the claim would hide: a worker that finds the family claimed
+    /// elsewhere, here while the claimant waits out its settle margin, sends nothing to the family's tables, neither a
+    /// survey nor a verification pass nor its first audit, and sends nothing at all while the claim holds; once the claim
+    /// has expired, it takes the family over and finishes it.
+    /// </summary>
+    [Fact]
+    public async Task A_worker_that_finds_the_family_claimed_elsewhere_reads_none_of_its_rows_until_the_claim_expires()
+    {
+        var margin = TimeSpan.FromSeconds(35);
+        await SeedFamilyAsync();
+        var claimant = await HostAsync("host-a", margin: margin);
+        var other = await HostAsync("host-b", margin: margin);
+        await claimant.RunOnceAsync();
+        Assert.Equal(EfSchemaBackfillState.Settling, claimant.Status.State);
+        var selections = CountSelections(other);
+
+        await other.RunOnceAsync();
+
+        Assert.Equal(0, selections());
+        Assert.Empty(other.Probe.AskedRows);
+        Assert.Equal(EfSchemaBackfillState.ClaimedElsewhere, other.Status.State);
+        Assert.Equal("host-a", other.Status.ClaimedBy!.Member.HostId);
+        Assert.Null(other.Status.LastAuditAt);
+
+        var commands = CountCommands(other);
+        clock.Advance(TimeSpan.FromSeconds(30));
+        await other.RunOnceAsync();
+        Assert.Equal(0, commands());
+
+        // The claimant stops; its claim expires a minute after it was taken.
+        clock.Advance(TimeSpan.FromSeconds(31));
+        selections = CountSelections(other);
+        await other.RunOnceAsync();
+
+        Assert.True(selections() > 0);
+        Assert.Equal(EfSchemaBackfillState.Settling, other.Status.State);
+
+        clock.Advance(margin);
+        await other.RunOnceAsync();
+
+        Assert.Equal(("2", "host-b"), CompletedBy(await database.RecordAsync()));
+        Assert.Empty(other.Probe.WrittenRows);
+    }
+
+    /// <summary>
+    /// FR-008 after FR-018, both ways, the case that cost N-way contention: the worker whose audit withdraws the completion
+    /// keeps its claim, now on the withdrawal, and goes on rewriting what it found, while every other worker that finds the
+    /// withdrawal, its gate already showing no completion, leaves the family alone rather than rewrite the same rows. The
+    /// claimant then records the completion again, which drops its claim.
+    /// </summary>
+    [Fact]
+    public async Task After_a_withdrawal_the_worker_that_made_it_upgrades_and_the_others_read_none_of_the_rows()
+    {
+        await SeedFamilyAsync();
+        var auditor = await HostAsync("host-a");
+        await auditor.RunOnceAsync();
+        BackfillHost[] others = [await HostAsync("host-b"), await HostAsync("host-c"), await HostAsync("host-d")];
+        await database.SeedAsync(Order("s1", 1), Order("s2", 2), Order("s3", 3));
+        clock.Advance(AuditInterval);
+        var othersRan = false;
+        auditor.Probe.BeforeWrite = async _ =>
+        {
+            if (othersRan)
+                return;
+            othersRan = true;
+            Assert.Null((await database.RecordAsync()).Finish);
+            foreach (var other in others)
+            {
+                await other.RefreshAsync();
+                await other.RunOnceAsync();
+            }
+        };
+
+        await auditor.RunOnceAsync();
+
+        Assert.True(othersRan);
+        Assert.All(others, other =>
+        {
+            Assert.Empty(other.Probe.AskedRows);
+            Assert.Equal(EfSchemaBackfillState.ClaimedElsewhere, other.Status.State);
+            Assert.Equal("host-a", other.Status.ClaimedBy!.Member.HostId);
+        });
+        Assert.Equal(["BackfillOrderRow:s1", "BackfillOrderRow:s2", "BackfillOrderRow:s3"], auditor.Probe.WrittenRows.Skip(8));
+        Assert.Equal("host-a", (await database.RecordAsync()).BackfillRun!.Member.HostId);
+
+        await auditor.RunOnceAsync();
+
+        var record = await database.RecordAsync();
+        Assert.Equal(("2", "host-a"), CompletedBy(record));
+        Assert.Null(record.BackfillRun);
+        Assert.Single(record.FinishHistory, entry => entry.Transition == SchemaFinishTransition.Withdrawn);
+        Assert.All(await database.SnapshotAsync(), row => Assert.Contains(" 2 ", row));
+    }
+
+    /// <summary>
+    /// FR-008 after FR-018, the race: a completion withdrawn with no claim standing, found by several workers whose rounds
+    /// all read the finalization record before any of them writes it. One wins the claim on the withdrawal and upgrades
+    /// every row; the others lose the compare-and-set, find its claim, and read none of the rows.
+    /// </summary>
+    [Fact]
+    public Task After_a_withdrawal_several_workers_racing_for_the_claim_give_one_upgrader() =>
+        BackfillWithdrawalRace.RunAsync(database, clock, workers: 4);
+
+    /// <summary>
+    /// FR-008 with FR-014, the case that looks like success: a worker whose claim lapsed while it verified, and that
+    /// another worker took over, records no completion although its own pass found nothing, so it finishes nothing it no
+    /// longer owns; the claimant verifies after its own settle margin and records it.
+    /// </summary>
+    [Fact]
+    public async Task A_worker_whose_claim_was_taken_over_while_it_verified_records_nothing_and_the_claimant_records()
+    {
+        var margin = TimeSpan.FromSeconds(35);
+        await SeedFamilyAsync();
+        var stale = await HostAsync("host-a", margin: margin);
+        var taker = await HostAsync("host-b", margin: margin);
+        await stale.RunOnceAsync();
+        clock.Advance(margin);
+        var takenOver = false;
+        stale.Probe.BeforeCommand = async text =>
+        {
+            // At the last table of its verification pass, after its last renewal: its claim lapses, and another worker
+            // takes the family over.
+            if (takenOver || stale.Status.State != EfSchemaBackfillState.Verifying || !text.Contains(BackfillFamily.ReceiptsTable, StringComparison.Ordinal))
+                return;
+            takenOver = true;
+            clock.Advance(TimeSpan.FromMinutes(2));
+            await taker.RunOnceAsync();
+            Assert.Equal(EfSchemaBackfillState.Settling, taker.Status.State);
+        };
+
+        await stale.RunOnceAsync();
+
+        Assert.True(takenOver);
+        Assert.Equal("1", (await database.RecordAsync()).Finish!.CompletionVersion);
+        Assert.Equal(EfSchemaBackfillState.Verifying, stale.Status.State);
+        Assert.Contains("claimed by host-b", stale.Status.Detail);
+
+        clock.Advance(margin);
+        await taker.RunOnceAsync();
+
+        Assert.Equal(("2", "host-b"), CompletedBy(await database.RecordAsync()));
+    }
+
+    /// <summary>
+    /// FR-008 with spec 183's FR-007, both ways, the case a claim that merely expires would hide: a member that lapses from
+    /// the fleet mid-run stops at the end of the batch it is in, releases its claim, and reads nothing while it stays
+    /// lapsed, so another member takes the family over at once rather than a claim period later.
+    /// </summary>
+    [Fact]
+    public async Task A_member_that_lapses_mid_run_stops_releases_its_claim_and_another_takes_the_family_over_at_once()
+    {
+        await SeedFamilyAsync();
+        var lapsing = await HostAsync("host-a");
+        var other = await HostAsync("host-b");
+        lapsing.Probe.AfterWrite = _ =>
+        {
+            members["host-a"].Lapsed = true;
+            return Task.CompletedTask;
+        };
+
+        await lapsing.RunOnceAsync();
+
+        // Its first batch, two rows, and no more.
+        Assert.Equal(2, lapsing.Probe.WrittenRows.Count);
+        Assert.Equal(EfSchemaBackfillState.Idle, lapsing.Status.State);
+        Assert.Contains("lapsed", lapsing.Status.Detail);
+        Assert.Null((await database.RecordAsync()).BackfillRun);
+        var selections = CountSelections(lapsing);
+        await lapsing.RunOnceAsync();
+        Assert.Equal(0, selections());
+
+        await other.RunOnceAsync();
+
+        Assert.Equal(6, other.Probe.WrittenRows.Count);
+        Assert.Empty(lapsing.Probe.WrittenRows.Intersect(other.Probe.WrittenRows));
+        Assert.Equal(("2", "host-b"), CompletedBy(await database.RecordAsync()));
     }
 
     /// <summary>
@@ -728,8 +914,9 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
     {
         var margin = TimeSpan.FromSeconds(35);
         await SeedFamilyAsync();
-        var withdrawer = await HostAsync("host-a", margin: margin);
-        var other = await HostAsync("host-b", margin: margin);
+        // Without a claim, so both settle at once: the margin must restart whatever the claim does (FR-008).
+        var withdrawer = await HostAsync("host-a", margin: margin, claim: TimeSpan.Zero);
+        var other = await HostAsync("host-b", margin: margin, claim: TimeSpan.Zero);
         await withdrawer.RunOnceAsync();
         await other.RunOnceAsync();
         Assert.Equal(EfSchemaBackfillState.Settling, other.Status.State);
@@ -868,7 +1055,9 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
         var exhausted = await Assert.ThrowsAsync<InvalidOperationException>(() => host.RunOnceAsync());
 
         Assert.Contains("attempts to withdraw the completion", exhausted.Message);
-        Assert.Equal(3, lost);
+        // Three lost claims, after which the audit goes on unclaimed, since nothing correct depends on the claim (FR-008);
+        // then three lost withdrawals, which stop it.
+        Assert.Equal(6, lost);
         Assert.Equal(rows, await database.SnapshotAsync());
         Assert.Equal(written, host.Probe.WrittenRows.Count);
         var record = await database.RecordAsync();
@@ -979,6 +1168,30 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
             return Task.CompletedTask;
         };
         return () => selections;
+    }
+
+    /// <summary>Counts, from now on, every command <paramref name="host"/> sends, to the family's tables or to its record.</summary>
+    private static Func<int> CountCommands(BackfillHost host)
+    {
+        var commands = 0;
+        host.Probe.BeforeCommand = _ =>
+        {
+            commands++;
+            return Task.CompletedTask;
+        };
+        return () => commands;
+    }
+
+    /// <summary>
+    /// The proof <paramref name="after"/> carries is the one <paramref name="before"/> did: the finalized version, the
+    /// completion and both histories, whatever claim each was taken under (FR-008).
+    /// </summary>
+    private static void AssertProofUnchanged(SchemaFinalizationRecord before, SchemaFinalizationRecord after)
+    {
+        Assert.Equal(before.FinalizedVersion, after.FinalizedVersion);
+        Assert.Equal(before.Finish! with { Run = null }, after.Finish! with { Run = null });
+        Assert.Equal(before.History, after.History);
+        Assert.Equal(before.FinishHistory, after.FinishHistory);
     }
 
     private static bool IsRecordWrite(string text) =>

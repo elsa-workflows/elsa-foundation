@@ -47,8 +47,6 @@ internal sealed class EfSchemaBackfillRun(
     /// <summary>Whether a pass of this run rewrites <paramref name="table"/>'s rows: it is not content-addressed, and the family names a rewriter.</summary>
     public bool Rewrites(EfSchemaStampedTable table) => !table.ContentAddressed && Declaration.Rewriter is not null;
 
-    public DateTimeOffset? ClaimRenewedAt { get; set; }
-
     /// <summary>Why the family's rewriter cannot be constructed, once a row has found out.</summary>
     public string? RewriterFault { get; set; }
 
@@ -79,5 +77,8 @@ internal sealed record EfSchemaBackfillVerification(
     long Found,
     IReadOnlyList<EfSchemaBackfillBlocker> Blockers);
 
-/// <summary>This worker's claim lapsed and another worker took the run over: this one stops, which spares the other its reads.</summary>
+/// <summary>
+/// This worker no longer owns the run: its claim lapsed and another worker took the run over, or its member lapsed from
+/// the fleet. It stops, which spares the owner its reads and leaves the owner to finish.
+/// </summary>
 internal sealed class EfSchemaBackfillClaimLostException(string message) : Exception(message);

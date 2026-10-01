@@ -86,6 +86,7 @@ public static class EfClusterMembershipServiceCollectionExtensions
                 // Cleanup runs every tenth of its period, and never more often than the heartbeat.
                 TimeSpan.FromTicks(Math.Max(timings.HeartbeatInterval.Ticks, settings.CleanupPeriod.Ticks / 10)),
                 services.GetRequiredService<TimeProvider>(),
+                services.GetService<IHostApplicationLifetime>(),
                 Loggers(services).CreateLogger<EfClusterMembershipLifecycle>());
         }
 

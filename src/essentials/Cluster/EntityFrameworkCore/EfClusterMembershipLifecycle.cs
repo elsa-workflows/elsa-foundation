@@ -1,4 +1,5 @@
 using Elsa.Cluster.Core.Exceptions;
+using Elsa.Cluster.Core.Models;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -20,12 +21,21 @@ namespace Elsa.Cluster.EntityFrameworkCore;
 /// can never stretch the interval past the expiry period the way a widening backoff would (FR-027). The member keeps
 /// heartbeating while it drains, so it stays counted until it has really stopped.
 /// </para>
+/// <para>
+/// A member that finds itself displaced stops the host (FR-007). Another process now holds its host id, so it never
+/// rejoins and is never counted again once its entry expires, yet every loop of the host would go on working under its
+/// identity: claiming and renewing work, writing at write versions it no longer advances, and serving requests nobody in
+/// the fleet accounts for. Stopping is what a restart would decide anyway: the new incarnation either joins once the
+/// other has gone, or refuses to start as a live duplicate (FR-004b, FR-039). A member that only lapsed, and so rejoins
+/// as a new incarnation, keeps the host running; what it must not do meanwhile, each loop checks for itself.
+/// </para>
 /// </remarks>
 internal sealed class EfClusterMembershipLifecycle(
     EfClusterMembership member,
     TimeSpan heartbeatInterval,
     TimeSpan cleanupInterval,
     TimeProvider clock,
+    IHostApplicationLifetime? lifetime,
     ILogger<EfClusterMembershipLifecycle> logger) : IHostedLifecycleService, IAsyncDisposable, IDisposable
 {
     private readonly CancellationTokenSource _stopping = new();
@@ -82,6 +92,8 @@ internal sealed class EfClusterMembershipLifecycle(
                 try
                 {
                     await member.HeartbeatAsync(stopping);
+                    if (StopIfDisplaced())
+                        return;
                     if (clock.GetUtcNow() - lastCleanup >= cleanupInterval)
                     {
                         lastCleanup = clock.GetUtcNow();
@@ -100,6 +112,28 @@ internal sealed class EfClusterMembershipLifecycle(
             // Cancellation on shutdown is the normal exit, not a failure.
             logger.LogDebug("Cluster membership heartbeat loop stopped because the host is stopping.");
         }
+    }
+
+    /// <summary>
+    /// Stops the host, and with it this loop, once the member has concluded that another process holds its host id: it was
+    /// displaced, or found a live duplicate when it tried to rejoin. Returns whether it did.
+    /// </summary>
+    private bool StopIfDisplaced()
+    {
+        var standing = member.GetLocalStanding();
+        if (standing.Lapse is not { Reason: MemberLapseReason.Displaced or MemberLapseReason.DuplicateHostId } lapse)
+            return false;
+
+        logger.LogCritical(
+            "Cluster member {Member} was displaced ({Reason}): another process holds host id {HostId}, so this one never rejoins the fleet. " +
+            "The host stops, so nothing goes on working under an identity the fleet no longer counts; start it again under a host id of its own, " +
+            "or after the other process has stopped (spec 183, FR-007).",
+            standing.Identity, lapse.Reason, standing.Identity.HostId);
+        if (lifetime is null)
+            logger.LogCritical("Cluster member {Member} has no host lifetime to stop; its host keeps running until it is stopped.", standing.Identity);
+        else
+            lifetime.StopApplication();
+        return true;
     }
 
     private async Task StopHeartbeatsAsync()
