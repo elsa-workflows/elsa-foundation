@@ -107,12 +107,11 @@ if ($writerEvidence -and $writerEvidence.Payload.preview -ne $marker) {
 }
 
 $declaredHttpInputKeys = @('Url', 'Method', 'Content', 'ContentType', 'RequestHeaders', 'ExpectedStatusCodes', 'Timeout')
-$authoredHttpInputKeys = @('Url', 'Method')
 $httpInputSnapshots = @($httpDetail.valueSnapshots | Where-Object { $_.subject -ieq 'ActivityInput' })
 $httpInputKeys = @($httpInputSnapshots | ForEach-Object { $_.inputKey } | Sort-Object -Unique)
 $unkeyedHttpInputs = @($httpInputSnapshots | Where-Object { [string]::IsNullOrWhiteSpace($_.inputKey) })
 $unknownHttpInputKeys = @($httpInputSnapshots | Where-Object { $_.inputKey -and $_.inputKey -cnotin $declaredHttpInputKeys })
-$missingAuthoredHttpKeys = @($authoredHttpInputKeys | Where-Object { $_ -cnotin $httpInputKeys })
+$missingHttpInputKeys = @($declaredHttpInputKeys | Where-Object { $_ -cnotin $httpInputKeys })
 $inputKeyProblems = @()
 if ($unkeyedHttpInputs.Count -gt 0) {
     $inputKeyProblems += 'one or more recorded inputs have no inputKey'
@@ -120,8 +119,8 @@ if ($unkeyedHttpInputs.Count -gt 0) {
 if ($unknownHttpInputKeys.Count -gt 0) {
     $inputKeyProblems += 'one or more recorded inputKeys are not declared by SendHttpRequest'
 }
-if ($missingAuthoredHttpKeys.Count -gt 0) {
-    $inputKeyProblems += 'authored Url or Method inputKey is missing'
+if ($missingHttpInputKeys.Count -gt 0) {
+    $inputKeyProblems += "declared input keys are missing: $($missingHttpInputKeys -join ', ')"
 }
 if ($inputKeyProblems.Count -gt 0) {
     [void]$script:failures.Add("SendHttpRequest input keys: $($inputKeyProblems -join '; ')")
