@@ -162,6 +162,28 @@ public sealed class CompositionInspectionCaptureTests
     }
 
     [Theory]
+    [InlineData(1_048_576, false)]
+    [InlineData(1_048_577, true)]
+    public void Environment_capture_enforces_the_raw_private_file_bound(int bytes, bool oversized)
+    {
+        using var fixture = new CompositionBridgeFixture();
+        fixture.WriteAcceptedComposition();
+        var environmentPath = EnvironmentPath(fixture, "environment-boundary.json");
+        File.WriteAllBytes(environmentPath, CandidateInspectionFixture.EnvironmentDocumentOfSize(bytes));
+
+        if (oversized)
+        {
+            var refusal = Assert.Throws<CliRefusal>(() => OpenWithEnvironment(fixture, environmentPath));
+            Assert.Equal("candidate-environment-input-too-large", refusal.Code);
+            return;
+        }
+
+        using var capture = OpenWithEnvironment(fixture, environmentPath);
+        capture.VerifyUnchanged();
+        Assert.True(capture.HasEnvironmentInput);
+    }
+
+    [Theory]
     [InlineData(1_024, false)]
     [InlineData(1_025, true)]
     public void Explicit_environment_document_enforces_the_entry_count_bound(int count, bool oversized)
@@ -273,6 +295,39 @@ public sealed class CompositionInspectionCaptureTests
         File.WriteAllText(fixture.OutputPath, authored.ToJsonString());
 
         Assert.Equal("candidate-capture-invalid", Assert.Throws<CliRefusal>(() => Open(fixture, [])).Code);
+    }
+
+    [Theory]
+    [InlineData("accepted")]
+    [InlineData("remove")]
+    public void Capture_accepts_the_exact_selection_count_when_the_authored_candidate_is_reachable(string field)
+    {
+        using var fixture = new CompositionBridgeFixture();
+        fixture.WriteAcceptedComposition();
+        var authored = JsonNode.Parse(File.ReadAllText(fixture.OutputPath))!;
+        var ids = new JsonArray(Enumerable.Range(0, 4096)
+            .Select(index => (JsonNode?)JsonValue.Create(index == 0 ? "A" : $"Feature{index:D4}"))
+            .ToArray());
+        authored["settings"] = null;
+        if (field == "accepted")
+        {
+            authored["add"] = ids;
+            authored["remove"] = new JsonArray();
+            authored["accepted"]!["featureIds"] = ids.DeepClone();
+        }
+        else
+        {
+            authored["add"] = new JsonArray();
+            authored["remove"] = ids;
+            authored["accepted"]!["featureIds"] = new JsonArray();
+        }
+        File.WriteAllText(fixture.OutputPath, authored.ToJsonString());
+
+        using var capture = Open(fixture, []);
+        Assert.Equal(4096, field == "accepted"
+            ? capture.Payload.AcceptedFeatureIds!.Count
+            : capture.Payload.RemovedFeatureIds!.Count);
+        capture.VerifyUnchanged();
     }
 
     [Theory]

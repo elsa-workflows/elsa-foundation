@@ -95,6 +95,120 @@ public sealed class CandidateProcessTests
     }
 
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Explicit_environment_request_transport_enforces_the_8MiB_boundary(bool oversized)
+    {
+        const int maximumBytes = 8 * 1024 * 1024;
+        int baselineBytes;
+        using (var baseline = new EnvironmentCaptureFixture())
+        {
+            var request = baseline.Capture.BeginEnvironmentInspection(["p"]);
+            baselineBytes = JsonSerializer.SerializeToUtf8Bytes(request, WorkerContract.Json).Length;
+        }
+
+        var packageRootLength = checked(maximumBytes - baselineBytes + 1 + (oversized ? 1 : 0));
+        using var environment = new EnvironmentCaptureFixture();
+        using var fixture = new ProcessFixture();
+        var hostResponse = CandidateHostResponseFixtures.Success(environment.Capture.Payload);
+        hostResponse["configurationResolution"]!["source"] = "captured-workbench-json-explicit-environment-v1";
+        hostResponse["configurationResolution"]!["externalInputs"] = "supplied-intended";
+        fixture.SetOutput(hostResponse);
+
+        if (oversized)
+        {
+            var refusal = await Assert.ThrowsAsync<CliRefusal>(() =>
+                fixture.Runner.RunEnvironmentAsync(environment.Capture, [new string('p', packageRootLength)]));
+
+            Assert.Equal("candidate-request-too-large", refusal.Code);
+            Assert.Equal(0, fixture.StartCount);
+            return;
+        }
+
+        var result = await fixture.Runner.RunEnvironmentAsync(environment.Capture, [new string('p', packageRootLength)]);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Equal(maximumBytes, fixture.Handle.Input.ToArray().Length);
+        fixture.AssertClosed();
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Explicit_environment_response_transport_enforces_the_4MiB_boundary(bool oversized)
+    {
+        const int maximumBytes = 4 * 1024 * 1024;
+        using var environment = new EnvironmentCaptureFixture();
+        using var fixture = new ProcessFixture();
+        var response = EnvironmentSuccessResponse(environment.Capture.Payload);
+        fixture.SetOutputBytes(PadResponse(response, maximumBytes + (oversized ? 1 : 0)));
+
+        if (oversized)
+        {
+            var refusal = await Assert.ThrowsAsync<CliRefusal>(() =>
+                fixture.Runner.RunEnvironmentAsync(environment.Capture, []));
+
+            Assert.Equal("candidate-response-too-large", refusal.Code);
+            Assert.Equal(3, refusal.ExitCode);
+        }
+        else
+        {
+            var result = await fixture.Runner.RunEnvironmentAsync(environment.Capture, []);
+            Assert.Equal(0, result.ExitCode);
+        }
+
+        fixture.AssertClosed();
+    }
+
+    [Fact]
+    public async Task Explicit_environment_timeout_upper_endpoint_allows_launch()
+    {
+        using var environment = new EnvironmentCaptureFixture();
+        using var fixture = new ProcessFixture();
+        fixture.SetOutputBytes(EnvironmentSuccessResponse(environment.Capture.Payload));
+
+        var result = await fixture.Runner.RunEnvironmentAsync(environment.Capture, [], timeoutSeconds: 300);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Equal(1, fixture.StartCount);
+        fixture.AssertClosed();
+    }
+
+    [Fact]
+    public async Task Explicit_environment_drift_after_dispatch_is_refused_before_render()
+    {
+        using var environment = new EnvironmentCaptureFixture();
+        using var fixture = new ProcessFixture();
+        var response = EnvironmentSuccessResponse(environment.Capture.Payload);
+        var mutated = 0;
+        var offset = 0;
+        fixture.Handle.Output = new ControlledStream
+        {
+            Read = (buffer, _) =>
+            {
+                if (Interlocked.Exchange(ref mutated, 1) == 0)
+                    File.AppendAllText(environment.EnvironmentPath, " ");
+                var read = Math.Min(buffer.Length, response.Length - offset);
+                response.AsMemory(offset, read).CopyTo(buffer);
+                offset += read;
+                fixture.StageEntered.TrySetResult();
+                return ValueTask.FromResult(read);
+            }
+        };
+
+        // The fake child has completed the mechanical exchange. This is the command's final
+        // capture recheck seam; a real Workbench child/host dispatch proof remains separate.
+        _ = await fixture.Runner.RunEnvironmentAsync(environment.Capture, []);
+        var refusal = Assert.Throws<CliRefusal>(() => environment.Capture.VerifyUnchanged());
+
+        Assert.Equal("composition-input-changed", refusal.Code);
+        Assert.False(environment.Capture.HasEnvironmentInput);
+        Assert.DoesNotContain(environment.EnvironmentPath, refusal.ToString(), StringComparison.Ordinal);
+        Assert.True(fixture.StageEntered.Task.IsCompletedSuccessfully);
+        fixture.AssertClosed();
+    }
+
+    [Theory]
     [InlineData("write")]
     [InlineData("flush")]
     [InlineData("stdout")]
@@ -1175,11 +1289,16 @@ public sealed class CandidateProcessTests
 
         public void SetOutput(System.Text.Json.Nodes.JsonObject hostResponse)
         {
-            Handle.Output.Dispose();
-            Handle.Output = new MemoryStream(JsonSerializer.SerializeToUtf8Bytes(new WorkerResponse
+            SetOutputBytes(JsonSerializer.SerializeToUtf8Bytes(new WorkerResponse
             {
                 Tooling = JsonSerializer.SerializeToElement(hostResponse)
             }, WorkerContract.Json));
+        }
+
+        public void SetOutputBytes(byte[] bytes)
+        {
+            Handle.Output.Dispose();
+            Handle.Output = new MemoryStream(bytes);
         }
 
         public void Dispose()
@@ -1291,5 +1410,25 @@ public sealed class CandidateProcessTests
             public void Dispose() { lock (owner.sync) Due = TimeSpan.MaxValue; }
             public ValueTask DisposeAsync() { Dispose(); return ValueTask.CompletedTask; }
         }
+    }
+
+    private static byte[] EnvironmentSuccessResponse(WorkerCandidatePayload candidate)
+    {
+        var hostResponse = CandidateHostResponseFixtures.Success(candidate);
+        hostResponse["configurationResolution"]!["source"] = "captured-workbench-json-explicit-environment-v1";
+        hostResponse["configurationResolution"]!["externalInputs"] = "supplied-intended";
+        return JsonSerializer.SerializeToUtf8Bytes(new WorkerResponse
+        {
+            Tooling = JsonSerializer.SerializeToElement(hostResponse)
+        }, WorkerContract.Json);
+    }
+
+    private static byte[] PadResponse(byte[] response, int targetBytes)
+    {
+        Assert.True(response.Length <= targetBytes);
+        var padded = new byte[targetBytes];
+        response.CopyTo(padded, 0);
+        padded.AsSpan(response.Length).Fill((byte)' ');
+        return padded;
     }
 }
