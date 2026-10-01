@@ -75,6 +75,9 @@ public sealed class CandidateProcessTests
         Assert.Equal("candidate-inspection-cancelled", refusal.Code);
         Assert.Equal(0, fixture.StartCount);
         Assert.False(environment.Capture.HasEnvironmentInput);
+        var reused = await Assert.ThrowsAsync<CliRefusal>(() =>
+            fixture.Runner.RunEnvironmentAsync(environment.Capture, []));
+        Assert.Equal("candidate-capture-invalid", reused.Code);
     }
 
     [Fact]
@@ -88,6 +91,106 @@ public sealed class CandidateProcessTests
 
         Assert.Equal("candidate-request-too-large", refusal.Code);
         Assert.Equal(0, fixture.StartCount);
+    }
+
+    [Theory]
+    [InlineData("write")]
+    [InlineData("flush")]
+    [InlineData("stdout")]
+    [InlineData("stderr")]
+    [InlineData("wait")]
+    public async Task Explicit_environment_cancellation_at_each_exchange_stage_cleans_the_owned_handle(string stage)
+    {
+        using var environment = new EnvironmentCaptureFixture();
+        using var fixture = new ProcessFixture();
+        fixture.Block(stage);
+        using var cancellation = new CancellationTokenSource();
+        var pending = fixture.Runner.RunEnvironmentAsync(environment.Capture, [], cancellationToken: cancellation.Token);
+        await fixture.AwaitStageOrCompletion(pending);
+
+        cancellation.Cancel();
+        var refusal = await Assert.ThrowsAsync<CliRefusal>(() => pending);
+
+        Assert.Equal("candidate-inspection-cancelled", refusal.Code);
+        Assert.Equal(2, refusal.ExitCode);
+        fixture.AssertClosed();
+        Assert.Equal(1, fixture.Handle.KillCount);
+    }
+
+    [Fact]
+    public async Task Explicit_environment_deadline_bounds_a_stdout_stream_that_ignores_cancellation()
+    {
+        using var environment = new EnvironmentCaptureFixture();
+        using var fixture = new ProcessFixture();
+        fixture.Block("stdout");
+        var pending = fixture.Runner.RunEnvironmentAsync(environment.Capture, [], timeoutSeconds: 1);
+        await fixture.AwaitStageOrCompletion(pending);
+
+        fixture.Clock.Advance(TimeSpan.FromSeconds(1));
+        var refusal = await Assert.ThrowsAsync<CliRefusal>(() => pending);
+
+        Assert.Equal("candidate-inspection-timeout", refusal.Code);
+        Assert.Equal(3, refusal.ExitCode);
+        fixture.AssertClosed();
+        Assert.Equal(1, fixture.Handle.KillCount);
+    }
+
+    [Fact]
+    public async Task Explicit_environment_late_response_is_bounded_by_cleanup_after_timeout()
+    {
+        using var environment = new EnvironmentCaptureFixture();
+        using var fixture = new ProcessFixture();
+        var never = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var readCompleted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        fixture.Handle.Output = new ControlledStream
+        {
+            Read = async (_, _) =>
+            {
+                fixture.StageEntered.TrySetResult();
+                try { return await never.Task; }
+                finally { readCompleted.TrySetResult(); }
+            }
+        };
+        fixture.Handle.OnDispose = () => never.TrySetResult(0);
+        fixture.Handle.Wait = token => fixture.Handle.Exited ? Task.CompletedTask : Task.Delay(Timeout.Infinite, token);
+
+        var pending = fixture.Runner.RunEnvironmentAsync(environment.Capture, [], timeoutSeconds: 1);
+        try
+        {
+            await fixture.AwaitStageOrCompletion(pending);
+            fixture.Clock.Advance(TimeSpan.FromSeconds(1));
+            await Task.WhenAny(pending, fixture.Clock.CleanupTimerCreated.Task).WaitAsync(TimeSpan.FromSeconds(30));
+            fixture.Clock.Advance(TimeSpan.FromSeconds(5));
+            var refusal = await Assert.ThrowsAsync<CliRefusal>(() => pending.WaitAsync(TimeSpan.FromSeconds(30)));
+
+            Assert.Equal("candidate-cleanup-failed", refusal.Code);
+            fixture.AssertClosed();
+        }
+        finally
+        {
+            never.TrySetResult(0);
+            if (fixture.StageEntered.Task.IsCompletedSuccessfully)
+                await readCompleted.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        }
+    }
+
+    [Fact]
+    public async Task Explicit_environment_response_from_a_different_capture_is_refused()
+    {
+        using var expected = new EnvironmentCaptureFixture();
+        using var other = new EnvironmentCaptureFixture();
+        using var fixture = new ProcessFixture();
+        var hostResponse = CandidateHostResponseFixtures.Success(other.Capture.Payload);
+        hostResponse["configurationResolution"]!["source"] = "captured-workbench-json-explicit-environment-v1";
+        hostResponse["configurationResolution"]!["externalInputs"] = "supplied-intended";
+        fixture.SetOutput(hostResponse);
+
+        var refusal = await Assert.ThrowsAsync<CliRefusal>(() =>
+            fixture.Runner.RunEnvironmentAsync(expected.Capture, []));
+
+        Assert.Equal("candidate-response-invalid", refusal.Code);
+        Assert.Equal(3, refusal.ExitCode);
+        fixture.AssertClosed();
     }
 
     [Fact]

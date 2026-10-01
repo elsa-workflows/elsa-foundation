@@ -112,6 +112,51 @@ public sealed class CandidateInspectionLifecycleTests
     }
 
     [Fact]
+    public async Task Changed_explicit_environment_input_after_host_dispatch_refuses_before_final_stdout()
+    {
+        if (OperatingSystem.IsWindows())
+            return;
+        using var fixture = new CandidateInspectionFixture();
+        var selectedProfile = await CandidateInspectionTests.PrepareAcceptedEditAsync(fixture, workspace: true);
+        Assert.NotNull(selectedProfile);
+        var environmentPath = fixture.InputPath("explicit-environment-lifecycle.json");
+        File.WriteAllBytes(environmentPath, CandidateInspectionFixture.EnvironmentDocument(("Private",
+            CandidateInspectionFixture.PrivateEnvironmentCanary)));
+        var startedMarker = fixture.InputPath("environment-composer-started.txt");
+        ConfigureProbe(fixture, probe =>
+        {
+            probe["StartedMarker"] = startedMarker;
+            probe["HoldMilliseconds"] = 4_000;
+        });
+
+        var arguments = new List<string>(fixture.InspectionArguments("json", [selectedProfile!], timeoutSeconds: 15))
+        {
+            "--environment-input", environmentPath
+        };
+        var pending = Task.Run(() => DotnetElsa.Run(fixture.SentinelEnvironment, [.. arguments]));
+        try
+        {
+            await WaitForMarkerAsync(startedMarker, pending, TimeSpan.FromSeconds(10));
+            File.AppendAllText(environmentPath, " ");
+
+            var refusal = await pending.WaitAsync(TimeSpan.FromSeconds(20));
+            Assert.Equal(ToolExitCode.ResolutionFailure, refusal.ExitCode);
+            Assert.Empty(refusal.Output);
+            Assert.Contains("composition-input-changed", refusal.Error, StringComparison.Ordinal);
+            Assert.DoesNotContain(CandidateInspectionFixture.PrivateCanary, refusal.Text, StringComparison.Ordinal);
+            Assert.DoesNotContain(CandidateInspectionFixture.PrivateEnvironmentCanary, refusal.Text, StringComparison.Ordinal);
+            Assert.DoesNotContain(environmentPath, refusal.Text, StringComparison.Ordinal);
+            Assert.False(Directory.Exists(Path.Join(fixture.SourceDirectory, "candidate")));
+            AssertNoLiveArtifacts(fixture);
+        }
+        finally
+        {
+            if (!pending.IsCompleted)
+                _ = await pending.WaitAsync(TimeSpan.FromSeconds(30));
+        }
+    }
+
+    [Fact]
     public async Task Stale_accepted_selection_refuses_through_the_actual_command_without_preview()
     {
         if (OperatingSystem.IsWindows())
