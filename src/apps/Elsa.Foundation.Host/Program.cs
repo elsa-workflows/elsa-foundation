@@ -79,14 +79,8 @@ builder.Services.AddEfSchemaReadability();
 // the Data Protection key store below, nothing else.
 builder.Services.AddConfiguredClusterMembership(configuration);
 
-// ---------------------------------------------------------------------------------------------------------
-// Data Protection — the key ring every shell's sign-in cookie and antiforgery tokens are protected with (#2191).
-// ---------------------------------------------------------------------------------------------------------
-// Composed once, on this container, as membership is: CShells copies these registrations into every shell, and each shell
-// reads the host's one key store. The application name is always "Elsa", never derived from this host's content root. The
-// keys stay where ASP.NET Core keeps them by default unless the Elsa:DataProtection section enables its key store, which
-// shares them through the platform database, encrypted at rest with Elsa:DataProtection:Certificate when one is configured.
-// A clustered host that does not share them is warned about as it starts. Like membership, this line names no EF type.
+// The Data Protection key ring every shell protects its cookies and antiforgery tokens with, composed once per host as
+// membership is; the Elsa:DataProtection section names it and enables its shared key store (#2191).
 builder.Services.AddConfiguredDataProtection(configuration);
 
 // ---------------------------------------------------------------------------------------------------------

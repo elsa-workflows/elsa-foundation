@@ -86,9 +86,8 @@ public sealed partial class ArchitectureGuardTests
     /// <summary>
     /// What a host composes to reach its membership: the readability report, the fleet and the dormancy source (#2143). A
     /// host composes it whether or not it clusters, so it reaches no EF Core and no database engine: a cluster of one
-    /// needs no EF at all, and <c>Elsa.Foundation.Host</c> carries EF only for the opt-in durable provider and the opt-in Data
-    /// Protection key store (ADR 0076, amended 2026-09-29 and 2026-10-01; #2151, #2191). It is still classed as a provider
-    /// project by name below, which keeps the contract and
+    /// needs no EF at all, and <c>Elsa.Foundation.Host</c> carries EF only for the opt-in durable provider (ADR 0076,
+    /// amended 2026-09-29; #2151). It is still classed as a provider project by name below, which keeps the contract and
     /// the in-process default from reaching it.
     /// </summary>
     [Fact]

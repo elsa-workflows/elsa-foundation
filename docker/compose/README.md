@@ -34,7 +34,10 @@ Run the whole stack straight from these images.
 > **Persistence is ephemeral here.** The server image's baked-in default composition is **SQLite**
 > (written under `/app`), which is discarded when the `elsa-workbench` container is removed. For
 > durable, Postgres-backed persistence, use the build-from-source reference stack in sections 2–3
-> below.
+> below. `docker-compose.images.yml` keeps the Data Protection key ring, which protects the sign-in
+> cookie, in that same SQLite file (`Elsa__DataProtection__EntityFrameworkCore__Enabled`), so a restart
+> keeps you signed in and removing the container signs you out along with losing the data. See
+> [Data Protection keys](../../docs/docker.md#data-protection-keys).
 
 ### With Docker Compose
 

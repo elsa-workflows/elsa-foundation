@@ -6,7 +6,7 @@ namespace Elsa.Foundation.DataProtection.EntityFrameworkCore;
 /// The EF key store's settings (#2191). They follow the other EF modules': provider, connection string or connection name,
 /// schema and pooling.
 /// </summary>
-public sealed class EfDataProtectionKeyStoreOptions
+public sealed class EfDataProtectionKeyStoreOptions : IEfHostStoreOptions
 {
     /// <summary>The subsection of <see cref="DataProtectionConfigurationExtensions.SectionName"/> these are read from.</summary>
     public const string SectionKey = "EntityFrameworkCore";

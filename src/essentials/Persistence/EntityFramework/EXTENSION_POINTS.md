@@ -316,6 +316,12 @@ with `AddEfModuleHostMigrations<TContext>` instead: the same migrator and valida
 service. CShells copies every root registration into each shell, so the shell hook would otherwise migrate the module
 again on every shell activation, from the shell's configuration rather than the host's.
 
+Such a module reads its settings from the host's configuration with `EfHostConfigurationReader`, as cluster membership
+and the Data Protection key store do: an `Enabled` switch, which is refused when its section carries settings without it,
+then the `Provider`, `ConnectionString`, `ConnectionName`, `Schema` and `Pooling` of `IEfHostStoreOptions`. A value that
+does not parse is refused, naming its key, with `EfHostConfigurationException`, or with the exception the module's
+contract names, which the reader is constructed with.
+
 ## Shared transactions
 
 `EfSharedTransaction` is the owner a cross-module write uses when several module contexts must commit

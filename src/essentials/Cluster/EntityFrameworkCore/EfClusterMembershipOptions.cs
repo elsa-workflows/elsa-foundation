@@ -7,7 +7,7 @@ namespace Elsa.Cluster.EntityFrameworkCore;
 /// connection name, schema and pooling, plus the cleanup period. The host id, heartbeat interval, expiry period and skew
 /// allowance are the contract's <see cref="Core.Options.ClusterMembershipOptions"/>, shared by every provider.
 /// </summary>
-public sealed class EfClusterMembershipOptions
+public sealed class EfClusterMembershipOptions : IEfHostStoreOptions
 {
     /// <summary>The subsection of <see cref="Core.Options.ClusterMembershipOptions.SectionName"/> these are read from.</summary>
     public const string SectionKey = "EntityFrameworkCore";

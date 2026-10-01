@@ -32,6 +32,10 @@ services:
       # appsettings.Production.json validates instead, for deployments that apply them from CI/CD with
       # tools/ef/module-migrate.sh (or `dotnet elsa persistence`) before the host starts.
       Elsa__Persistence__EntityFramework__Migrate__Policy: AutoMigrate
+      # The Data Protection key ring that protects the sign-in cookie and the antiforgery tokens, kept with the rest of the
+      # data in the image's SQLite file (ConnectionStrings:Elsa), as docker-compose.yml keeps it in PostgreSQL. A restart keeps
+      # everyone signed in; removing the container loses the keys with the data. See docs/docker.md, "Data Protection keys".
+      Elsa__DataProtection__EntityFrameworkCore__Enabled: "true"
       # Elsa host management key accepted on the server's module-management API.
       # Server-side only. MUST match Studio's Studio__BackendModuleManagementApiKey.
       Elsa__ModuleManagement__ApiKey: elsa-docker-demo-key

@@ -379,7 +379,7 @@ public sealed class EfCoreDependencyGuardTests
     [Fact]
     public void Every_admitted_data_protection_project_resolves_only_its_reviewed_EF_closure()
     {
-        var offenders = DriftFromReviewedClosures(Issue2191DataProtectionEf.ExpectedEfPackagesByProject);
+        var offenders = DriftFromReviewedClosures(Adr0076DataProtectionKeyStoreEf.ExpectedEfPackagesByProject);
 
         Assert.True(offenders.Length == 0, Report("drift from the reviewed Data Protection key store EF closure", offenders));
     }
@@ -708,7 +708,7 @@ public sealed class EfCoreDependencyGuardTests
                     Adr0076ActivationGuardEf.IsProjectPath(relativePath) ||
                     Spec183ReadabilityEf.IsProjectPath(relativePath) ||
                     Adr0078ClusterMembershipEf.IsProjectPath(relativePath) ||
-                    Issue2191DataProtectionEf.IsProjectPath(relativePath)));
+                    Adr0076DataProtectionKeyStoreEf.IsProjectPath(relativePath)));
         }
         return projects;
     }
@@ -856,7 +856,7 @@ public sealed class EfCoreDependencyGuardTests
                Adr0076ActivationGuardEf.IsSurfacePath(relativePath) ||
                Spec183ReadabilityEf.IsSurfacePath(relativePath) ||
                Adr0078ClusterMembershipEf.IsSurfacePath(relativePath) ||
-               Issue2191DataProtectionEf.IsSurfacePath(relativePath) ||
+               Adr0076DataProtectionKeyStoreEf.IsSurfacePath(relativePath) ||
                OpenIddictPersistenceArchitectureTests.IsWorkbenchVendorEfSource(relativePath);
     }
 
@@ -1466,6 +1466,19 @@ public sealed class EfCoreDependencyGuardTests
     }
 
     /// <summary>
+    /// The closure of a provider-neutral module composed on a host's own container: EF Core and Relational with what they
+    /// bring, and no engine. Cluster membership and the Data Protection key store carry exactly this; each test project adds
+    /// the engines it runs on.
+    /// </summary>
+    private static string[] HostComposedModulePackages() =>
+    [
+        "Microsoft.EntityFrameworkCore",
+        "Microsoft.EntityFrameworkCore.Abstractions",
+        "Microsoft.EntityFrameworkCore.Analyzers",
+        "Microsoft.EntityFrameworkCore.Relational"
+    ];
+
+    /// <summary>
     /// The opt-in EF Core cluster membership provider (spec 183, B2, #2098; ADR 0078). The module is provider-neutral:
     /// a host composes it once on its own container and brings the engine; provider engines stay in its focused tests,
     /// SQLite in the fast suite and the three container engines in its provider legs.
@@ -1481,13 +1494,13 @@ public sealed class EfCoreDependencyGuardTests
         public static readonly IReadOnlyDictionary<string, string[]> ExpectedEfPackagesByProject =
             new Dictionary<string, string[]>(StringComparer.Ordinal)
             {
-                ["src/essentials/Cluster/EntityFrameworkCore/Elsa.Cluster.EntityFrameworkCore.csproj"] = CorePackages(),
+                ["src/essentials/Cluster/EntityFrameworkCore/Elsa.Cluster.EntityFrameworkCore.csproj"] = HostComposedModulePackages(),
                 // The shared conformance fixture and scenarios: engine-neutral, each test project supplies the engine.
-                ["tests/essentials/Cluster/EntityFrameworkCore/Testing/Elsa.Cluster.EntityFrameworkCore.Testing.csproj"] = CorePackages(),
+                ["tests/essentials/Cluster/EntityFrameworkCore/Testing/Elsa.Cluster.EntityFrameworkCore.Testing.csproj"] = HostComposedModulePackages(),
                 ["tests/essentials/Cluster/EntityFrameworkCore/Tests/Elsa.Cluster.EntityFrameworkCore.Tests.csproj"] =
-                    [.. CorePackages(), "Microsoft.EntityFrameworkCore.Sqlite", "Microsoft.EntityFrameworkCore.Sqlite.Core"],
+                    [.. HostComposedModulePackages(), "Microsoft.EntityFrameworkCore.Sqlite", "Microsoft.EntityFrameworkCore.Sqlite.Core"],
                 ["tests/essentials/Cluster/EntityFrameworkCore/ProviderTests/Elsa.Cluster.EntityFrameworkCore.ProviderTests.csproj"] =
-                    [.. CorePackages(), "Microsoft.EntityFrameworkCore.SqlServer", "MySql.EntityFrameworkCore", "Npgsql.EntityFrameworkCore.PostgreSQL"]
+                    [.. HostComposedModulePackages(), "Microsoft.EntityFrameworkCore.SqlServer", "MySql.EntityFrameworkCore", "Npgsql.EntityFrameworkCore.PostgreSQL"]
             };
 
         public static IEnumerable<string> ProjectPaths => ExpectedEfPackagesByProject.Keys;
@@ -1497,23 +1510,15 @@ public sealed class EfCoreDependencyGuardTests
 
         public static bool IsProjectPath(string relativePath) =>
             ProjectPaths.Contains(relativePath, StringComparer.Ordinal);
-
-        internal static string[] CorePackages() =>
-        [
-            "Microsoft.EntityFrameworkCore",
-            "Microsoft.EntityFrameworkCore.Abstractions",
-            "Microsoft.EntityFrameworkCore.Analyzers",
-            "Microsoft.EntityFrameworkCore.Relational"
-        ];
     }
 
     /// <summary>
-    /// The host's Data Protection composition and its opt-in EF key store (#2191; ADR 0076, amended 2026-10-01). Like cluster
-    /// membership, a host composes it once on its own container and brings the engine; provider engines stay in its focused
-    /// tests, SQLite in the fast suite (beside the durable membership its startup check warns about) and the three container
-    /// engines in its provider legs.
+    /// The host's Data Protection composition and its opt-in EF key store (ADR 0076, amended 2026-10-01: Elsa.Foundation.Host
+    /// may also carry it). Like cluster membership, a host composes it once on its own container and brings the engine;
+    /// provider engines stay in its focused tests, SQLite in the fast suite (beside the durable membership its startup check
+    /// warns about) and the three container engines in its provider legs.
     /// </summary>
-    internal static class Issue2191DataProtectionEf
+    internal static class Adr0076DataProtectionKeyStoreEf
     {
         public static readonly string[] SurfacePathPrefixes =
         [
@@ -1525,11 +1530,11 @@ public sealed class EfCoreDependencyGuardTests
             new Dictionary<string, string[]>(StringComparer.Ordinal)
             {
                 ["src/essentials/Foundation/DataProtection/EntityFrameworkCore/Elsa.Foundation.DataProtection.EntityFrameworkCore.csproj"] =
-                    Adr0078ClusterMembershipEf.CorePackages(),
+                    HostComposedModulePackages(),
                 ["tests/essentials/Foundation/DataProtection/EntityFrameworkCore/Tests/Elsa.Foundation.DataProtection.EntityFrameworkCore.Tests.csproj"] =
-                    [.. Adr0078ClusterMembershipEf.CorePackages(), "Microsoft.EntityFrameworkCore.Sqlite", "Microsoft.EntityFrameworkCore.Sqlite.Core"],
+                    [.. HostComposedModulePackages(), "Microsoft.EntityFrameworkCore.Sqlite", "Microsoft.EntityFrameworkCore.Sqlite.Core"],
                 ["tests/essentials/Foundation/DataProtection/EntityFrameworkCore/ProviderTests/Elsa.Foundation.DataProtection.EntityFrameworkCore.ProviderTests.csproj"] =
-                    [.. Adr0078ClusterMembershipEf.CorePackages(), "Microsoft.EntityFrameworkCore.SqlServer", "MySql.EntityFrameworkCore", "Npgsql.EntityFrameworkCore.PostgreSQL"]
+                    [.. HostComposedModulePackages(), "Microsoft.EntityFrameworkCore.SqlServer", "MySql.EntityFrameworkCore", "Npgsql.EntityFrameworkCore.PostgreSQL"]
             };
 
         public static IEnumerable<string> ProjectPaths => ExpectedEfPackagesByProject.Keys;

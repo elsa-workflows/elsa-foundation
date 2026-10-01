@@ -134,16 +134,23 @@ is required.
 The sign-in cookie and the antiforgery tokens are protected with ASP.NET Core Data Protection, whose key ring is the
 host's: `Elsa.Workbench` and `Elsa.Foundation.Host` compose it once on the host container with
 `AddConfiguredDataProtection(configuration)` (`Elsa.Foundation.DataProtection`), and every shell reads the host's key store.
-Its application name is always `Elsa`, never derived from the host's content root, so hosts deployed to different
-directories still read each other's payloads when they share a key ring.
+Its application name is configured, `Elsa` by default, never derived from the host's content root, so the hosts of one
+deployment still read each other's payloads when they share a key ring, wherever each is installed.
 
 | Setting (under `Elsa:DataProtection`) | Default | Notes |
 |---|---|---|
+| `ApplicationName` | `Elsa` | The name every protected payload is bound to. Give every host of one deployment the same name, and each deployment that must not read another's payloads a name of its own; see below. |
 | `EntityFrameworkCore:Enabled` | `false` | Keeps the key ring in the platform database, in the `DataProtection.Keys` EF module's `elsa_data_protection_keys` table, so every host on that database shares it and a recreated host keeps it. `false` leaves it where ASP.NET Core keeps it by default, on this machine. |
 | `EntityFrameworkCore:Provider` | `Sqlite` | `Sqlite`, `SqlServer`, `PostgreSql` or `MySql`. SQLite serves several processes on one machine only. |
 | `EntityFrameworkCore:ConnectionString`, `ConnectionName` | `ConnectionStrings:Elsa` | As for every other EF module. `Schema` and `Pooling` are accepted too. |
 | `Certificate:Path`, `Certificate:Password` | — | A PKCS#12 certificate with its private key, the same on every host, that encrypts every key at rest. A relative path is read from the content root. |
 
+- **The application name is the boundary between deployments.** The key table records no application, and ASP.NET
+  Core's default key directory is shared by every application one user runs on a machine. Deployments that share a key
+  store, a database or a machine and use the same name read each other's sign-in cookies and antiforgery tokens: two
+  Elsa deployments on one machine, both left at `Elsa` without the key store, now do, where each used to be isolated by
+  its content root. A deployment that must not share keys with another gets its own `ApplicationName`, its own key
+  store (its own database or `EntityFrameworkCore:Schema`), or both.
 - **Clustered hosts share it.** A host that enables durable cluster membership but keeps its key ring to itself logs a
   warning as it starts, naming `Elsa:DataProtection:EntityFrameworkCore:Enabled`: behind a load balancer without sticky
   sessions, a cookie or antiforgery token issued by one host is refused by the next. It is a warning rather than a
@@ -159,7 +166,9 @@ directories still read each other's payloads when they share a key ring.
   `AutoMigrate` the host creates it as it starts, and under `Validate` it refuses to start until
   `dotnet elsa persistence apply --modules DataProtection.Keys` has.
 - **The first upgrade signs everyone out once.** Hosts upgraded from a build that named the application after its
-  content root issued their cookies under that name, so the cookies they issued are refused after the upgrade.
+  content root issued their cookies and antiforgery tokens under that name, so those are refused after the upgrade:
+  every user signs in again, and a form open across the upgrade is posted again. Changing `ApplicationName` later has
+  the same effect.
 
 `src/essentials/Foundation/DataProtection/EntityFrameworkCore/EXTENSION_POINTS.md` is the reference; Docker deployments
 are covered in [Docker: Data Protection keys](../docker.md#data-protection-keys).

@@ -134,6 +134,7 @@ can override it. Standard .NET double-underscore (`__`) env keys override any co
 | `Elsa__Persistence__EntityFramework__Schema` | Optional database schema for every EF module's tables and history tables, for a deployment that shares a database with an application owning the default schema. Applied on SQL Server and PostgreSQL, ignored on SQLite, **refused on MySQL** — see below. | *(unset: the provider's own default)* |
 | `Elsa__DataProtection__EntityFrameworkCore__Enabled`, `…__Provider` | Keep the Data Protection key ring — what the sign-in cookie and the antiforgery tokens are protected with — in the platform database, so it survives the container and is shared by every container on that database. Connects through `ConnectionStrings__Elsa` unless `…__ConnectionString` or `…__ConnectionName` names another. See [Data Protection keys](#data-protection-keys). | `true`, `PostgreSql` |
 | `Elsa__DataProtection__Certificate__Path`, `…__Password` | A PKCS#12 certificate, the same on every container, that encrypts the keys at rest. Mount the file as a secret; the password is a secret too. | *(unset: the keys are stored unencrypted, which the container warns about as it starts)* |
+| `Elsa__DataProtection__ApplicationName` | The name every protected payload is bound to: the same on every container of one deployment, distinct for a deployment that must not read another's payloads. See [Data Protection keys](#data-protection-keys). | *(unset: `Elsa`)* |
 
 `Cors:AllowedOrigins` defaults (in `appsettings.json`) are localhost dev values for running the
 server outside Docker; the compose file adds the Studio container origin.
@@ -159,7 +160,8 @@ in the runtime user's home directory inside the container, which no volume cover
 
 The reference stack keeps the key ring in its PostgreSQL database instead (`Elsa__DataProtection__EntityFrameworkCore__Enabled`
 in `docker-compose.yml`), in the `elsa_data_protection_keys` table of the `DataProtection.Keys` EF module. Every container
-on that database then reads one key ring under the one application name, `Elsa`, whatever directory it runs from:
+on that database then reads one key ring under one application name, `Elsa` unless `Elsa__DataProtection__ApplicationName`
+says otherwise, whatever directory it runs from:
 
 ```yaml
 Elsa__DataProtection__EntityFrameworkCore__Enabled: "true"
@@ -180,10 +182,17 @@ Elsa__DataProtection__Certificate__Password: "…"                     # a secre
 - **A cluster without it is warned about.** A host that enables durable cluster membership but keeps its key ring to
   itself logs a warning as it starts, naming the switch to set. It still starts: a cluster whose features sign nobody in
   has nothing to share.
+- **Separate deployments need separate names or separate stores.** The key table records no application, so two
+  deployments that share a database, or containers that share a mounted home directory without the key store, read each
+  other's cookies when their application names match. Give a deployment that must stay apart, staging beside
+  production say, its own `Elsa__DataProtection__ApplicationName`, its own database, or both.
+- **Upgrading signs everyone out once.** Images built before the application name was fixed named it after the content
+  root, so the cookies and antiforgery tokens they issued are refused by the upgraded container: users sign in again.
+  Changing the application name later does the same.
 
-The published-images stack (`docker-compose.images.yml`) keeps its data in a SQLite file inside the container, so it
-loses the key ring with the rest of its data when the container is recreated. Enabling the key store there keeps the keys
-with that data, in the same file.
+The published-images stack (`docker-compose.images.yml`) keeps its data in a SQLite file inside the container, and keeps
+the key ring with it (`Elsa__DataProtection__EntityFrameworkCore__Enabled`): a restart keeps everyone signed in, and
+removing the container loses the keys together with the data.
 
 ---
 

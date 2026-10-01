@@ -1,3 +1,4 @@
+using Elsa.Persistence.EntityFramework;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.DataProtection.KeyManagement;
 using Microsoft.Extensions.Configuration;
@@ -32,8 +33,8 @@ public sealed class DataProtectionConfigurationTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// Unconfigured, the keys stay where ASP.NET Core keeps them by default, but the application name is fixed rather than
-    /// derived from the content root, which differs between two hosts deployed to two directories.
+    /// Unconfigured, the keys stay where ASP.NET Core keeps them by default, but the application name is the default rather
+    /// than derived from the content root, which differs between two hosts deployed to two directories.
     /// </summary>
     [Theory]
     [InlineData(null)]
@@ -46,9 +47,20 @@ public sealed class DataProtectionConfigurationTests : IAsyncLifetime
 
         var host = Built(settings);
 
-        Assert.Equal(DataProtectionConfigurationExtensions.ApplicationName, host.Services.GetRequiredService<IOptions<DataProtectionOptions>>().Value.ApplicationDiscriminator);
+        Assert.Equal(DataProtectionConfigurationExtensions.DefaultApplicationName, host.Services.GetRequiredService<IOptions<DataProtectionOptions>>().Value.ApplicationDiscriminator);
         Assert.Null(host.Services.GetRequiredService<IOptions<KeyManagementOptions>>().Value.XmlRepository);
         Assert.Null(host.Services.GetService<EfDataProtectionKeyRepository>());
+    }
+
+    /// <summary>A deployment that must not share keys with another names its own application; a blank name keeps the default.</summary>
+    [Theory]
+    [InlineData("Elsa.Staging", "Elsa.Staging")]
+    [InlineData(" ", DataProtectionConfigurationExtensions.DefaultApplicationName)]
+    public void The_application_name_is_read_from_configuration(string configured, string expected)
+    {
+        var host = Built(new() { [$"{DataProtectionConfigurationExtensions.SectionName}:{DataProtectionConfigurationExtensions.ApplicationNameKey}"] = configured });
+
+        Assert.Equal(expected, host.Services.GetRequiredService<IOptions<DataProtectionOptions>>().Value.ApplicationDiscriminator);
     }
 
     /// <summary>The control: what ASP.NET Core names the application without the composition is the host's content root.</summary>
@@ -60,7 +72,7 @@ public sealed class DataProtectionConfigurationTests : IAsyncLifetime
 
         var discriminator = plain.GetRequiredService<IOptions<DataProtectionOptions>>().Value.ApplicationDiscriminator;
 
-        Assert.NotEqual(DataProtectionConfigurationExtensions.ApplicationName, discriminator);
+        Assert.NotEqual(DataProtectionConfigurationExtensions.DefaultApplicationName, discriminator);
         Assert.Contains(Path.GetFileName(environment.ContentRootPath.TrimEnd(Path.DirectorySeparatorChar)), discriminator, StringComparison.Ordinal);
     }
 
@@ -79,7 +91,7 @@ public sealed class DataProtectionConfigurationTests : IAsyncLifetime
     [Fact]
     public void Key_store_settings_without_an_Enabled_switch_are_refused()
     {
-        var failure = Assert.Throws<DataProtectionConfigurationException>(() => Built(new() { [$"{Ef}:Provider"] = "PostgreSql" }));
+        var failure = Assert.Throws<EfHostConfigurationException>(() => Built(new() { [$"{Ef}:Provider"] = "PostgreSql" }));
 
         Assert.Contains($"{Ef}:{DataProtectionConfigurationExtensions.EnabledKey}", failure.Message, StringComparison.Ordinal);
     }
@@ -89,7 +101,7 @@ public sealed class DataProtectionConfigurationTests : IAsyncLifetime
     [InlineData("Pooling", "sometimes")]
     public void A_key_store_value_that_does_not_parse_is_refused_naming_its_key(string key, string value)
     {
-        var failure = Assert.Throws<DataProtectionConfigurationException>(() => Built(new() { [$"{Ef}:Enabled"] = "true", [$"{Ef}:{key}"] = value }));
+        var failure = Assert.Throws<EfHostConfigurationException>(() => Built(new() { [$"{Ef}:Enabled"] = "true", [$"{Ef}:{key}"] = value }));
 
         Assert.Contains($"{Ef}:{key}", failure.Message, StringComparison.Ordinal);
     }
@@ -109,7 +121,7 @@ public sealed class DataProtectionConfigurationTests : IAsyncLifetime
         var certificate = TestCertificate.Create();
         _certificates.Add(certificate);
 
-        var failure = Assert.Throws<DataProtectionConfigurationException>(() => Built(certificate.Settings()));
+        var failure = Assert.Throws<EfHostConfigurationException>(() => Built(certificate.Settings()));
 
         Assert.Contains($"{Ef}:{DataProtectionConfigurationExtensions.EnabledKey}", failure.Message, StringComparison.Ordinal);
     }
@@ -120,7 +132,7 @@ public sealed class DataProtectionConfigurationTests : IAsyncLifetime
         var settings = (await _database.CreateStoreAsync()).Settings();
         settings[$"{Certificate}:Password"] = TestCertificate.Password;
 
-        var failure = Assert.Throws<DataProtectionConfigurationException>(() => Built(settings));
+        var failure = Assert.Throws<EfHostConfigurationException>(() => Built(settings));
 
         Assert.Contains($"{Certificate}:Path", failure.Message, StringComparison.Ordinal);
     }
@@ -136,7 +148,7 @@ public sealed class DataProtectionConfigurationTests : IAsyncLifetime
         foreach (var setting in certificate.Settings(exists ? certificate.Path : certificate.Path + ".missing", password))
             settings[setting.Key] = setting.Value;
 
-        var failure = Assert.Throws<DataProtectionConfigurationException>(() => Built(settings));
+        var failure = Assert.Throws<EfHostConfigurationException>(() => Built(settings));
 
         Assert.Contains($"{Certificate}:Path", failure.Message, StringComparison.Ordinal);
     }
@@ -148,7 +160,7 @@ public sealed class DataProtectionConfigurationTests : IAsyncLifetime
         _certificates.Add(certificate);
         var settings = With((await _database.CreateStoreAsync()).Settings(), certificate.Settings());
 
-        var failure = Assert.Throws<DataProtectionConfigurationException>(() => Built(settings));
+        var failure = Assert.Throws<EfHostConfigurationException>(() => Built(settings));
 
         Assert.Contains("private key", failure.Message, StringComparison.Ordinal);
     }

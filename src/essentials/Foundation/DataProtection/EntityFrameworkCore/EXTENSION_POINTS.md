@@ -7,14 +7,17 @@ the host container, never by a shell feature.
 ## Composition
 
 - **From configuration.** `AddConfiguredDataProtection(configuration)` (namespace `Elsa.Foundation.DataProtection`, so a
-  host names no EF type) is what `Elsa.Workbench` and `Elsa.Foundation.Host` call. It always sets the application name
-  to `DataProtectionConfigurationExtensions.ApplicationName` (`Elsa`), never the default derived from the content root. It
-  enables the EF key store only when `Elsa:DataProtection:EntityFrameworkCore:Enabled` is `true`, with `Provider`,
-  `ConnectionString` or `ConnectionName` (falling back to `ConnectionStrings:Elsa`), `Schema` and `Pooling` beside the
-  switch. It encrypts the keys at rest with the PKCS#12 certificate under `Elsa:DataProtection:Certificate` (`Path`, read
-  from the content root when relative, and `Password`). Settings without the switch, a value that does not parse, a
-  certificate that cannot be loaded or holds no private key, and a certificate without the key store are refused while the
-  host composes itself, naming the key.
+  host names no EF type) is what `Elsa.Workbench` and `Elsa.Foundation.Host` call. It always sets the application name,
+  `Elsa:DataProtection:ApplicationName` or `DataProtectionConfigurationExtensions.DefaultApplicationName` (`Elsa`), never
+  the default derived from the content root. The name is the only boundary between deployments that share a key store or
+  a machine's default key directory, since the key table records no application. It enables the EF key store only when
+  `Elsa:DataProtection:EntityFrameworkCore:Enabled` is `true`, with `Provider`, `ConnectionString` or `ConnectionName`
+  (falling back to `ConnectionStrings:Elsa`), `Schema` and `Pooling` beside the switch, read by
+  `Elsa.Persistence.EntityFramework`'s `EfHostConfigurationReader` as cluster membership's are. It encrypts the keys at rest
+  with the PKCS#12 certificate under `Elsa:DataProtection:Certificate` (`Path`, read from the content root when relative,
+  and `Password`). Settings without the switch, a value that does not parse, a certificate that cannot be loaded or holds
+  no private key, and a certificate without the key store are refused with `EfHostConfigurationException` while the host
+  composes itself, naming the key.
 - **In code.** `IDataProtectionBuilder.PersistKeysToElsaDatabase(EfDataProtectionKeyStoreOptions)` composes the key store
   alone. Call it on the host container, once; a second call is refused.
 

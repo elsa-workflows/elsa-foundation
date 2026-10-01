@@ -10,6 +10,9 @@ namespace Elsa.Foundation.DataProtection.EntityFrameworkCore;
 
 public static class EfDataProtectionKeyStoreExtensions
 {
+    /// <summary>Data Protection's own hosted service, which loads the key ring as the host starts.</summary>
+    private const string KeyRingLoaderTypeName = "Microsoft.AspNetCore.DataProtection.Internal.DataProtectionHostedService";
+
     private static readonly EfModuleBinding Binding = EfModuleBinding.For(typeof(DataProtectionKeysDbContext));
 
     /// <summary>
@@ -54,15 +57,25 @@ public static class EfDataProtectionKeyStoreExtensions
     /// before the migrator has created it on the host's first start, and log the key ring as failed to load. Hosted services
     /// start in registration order, so it is moved behind the migrator, and reads the table the host has just made current.
     /// </summary>
+    /// <remarks>
+    /// The loader is internal to ASP.NET Core and implements nothing but <see cref="IHostedService"/>, so its full type name, in
+    /// the Data Protection assembly, is the most precise handle the framework offers. Should a framework release rename it,
+    /// nothing is moved and the host still starts, logging the first load as failed; <c>KeyRingStartupOrderTests</c> fails
+    /// then, naming the loader it no longer finds.
+    /// </remarks>
     private static void StartKeyRingLoadingAfterMigrations(IServiceCollection services)
     {
         var dataProtection = typeof(KeyManagementOptions).Assembly;
-        foreach (var loader in services.Where(descriptor => descriptor.ServiceType == typeof(IHostedService) && descriptor.ImplementationType?.Assembly == dataProtection).ToArray())
+        foreach (var loader in services.Where(descriptor => descriptor.ServiceType == typeof(IHostedService) &&
+                                                             descriptor.ImplementationType is { } type &&
+                                                             type.Assembly == dataProtection &&
+                                                             type.FullName == KeyRingLoaderTypeName).ToArray())
         {
             services.Remove(loader);
             services.Add(loader);
         }
     }
+
 
     private static void AddContext<TContext>(IServiceCollection services, EfDataProtectionKeyStoreOptions options)
         where TContext : DataProtectionKeysDbContext
