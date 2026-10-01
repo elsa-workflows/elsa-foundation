@@ -476,6 +476,9 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
 
                     b.HasIndex("ScopeKeyHash", "WorkflowExecutionIdHash");
 
+                    b.HasIndex("ScopeKeyHash", "StimulusTypeLookupKey", "ExpiresAtUtcTicks", "StimulusLookupKey", "StimulusHash")
+                        .HasDatabaseName("IX_elsa_runtime_bookmark_state_route_convergence");
+
                     b.ToTable("elsa_runtime_bookmark_state", (string)null);
                 });
 
@@ -2836,6 +2839,9 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     b.HasIndex("ScopeKeyHash", "StimulusLookupKey", "IsActive", "TriggerBindingIdHash");
 
                     b.HasIndex("ScopeKeyHash", "StimulusTypeLookupKey", "IsActive", "TriggerBindingIdHash");
+
+                    b.HasIndex("ScopeKeyHash", "StimulusTypeLookupKey", "IsActive", "StimulusLookupKey", "StimulusHash")
+                        .HasDatabaseName("IX_elsa_runtime_trigger_binding_route_convergence");
 
                     b.ToTable("elsa_runtime_workflow_trigger_binding", (string)null);
                 });

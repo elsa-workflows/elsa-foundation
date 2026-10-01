@@ -8383,6 +8383,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Tasks.Schedules",
+          "path": "src/essentials/Tasks/Schedules/Elsa.Tasks.Schedules.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Workflows.Runtime.Core",
           "path": "src/essentials/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj"
         },
@@ -8395,6 +8400,11 @@
           "type": "external",
           "id": "Elsa.Specifications.PackageManifest.Generator",
           "version": "0.0.1-preview.8"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Cronos",
+          "version": "0.13.0"
         }
       ]
     },
@@ -14886,6 +14896,75 @@
       ]
     },
     {
+      "path": "tests/essentials/Modularity/ProviderTests/Elsa.Modularity.ProviderTests.csproj",
+      "name": "Elsa.Modularity.ProviderTests",
+      "kind": "test",
+      "domain": "Elsa.Modularity",
+      "sub_domain": "ProviderTests",
+      "role": "test",
+      "declared_target_framework": null,
+      "packable": false,
+      "package_id": null,
+      "line": null,
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Workbench",
+          "path": "src/apps/Elsa.Workbench/Elsa.Workbench.csproj"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.EntityFrameworkCore.SqlServer",
+          "version": "10.0.10"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.Extensions.TimeProvider.Testing",
+          "version": "10.8.0"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.NET.Test.Sdk",
+          "version": "18.0.0"
+        },
+        {
+          "type": "external",
+          "id": "Npgsql.EntityFrameworkCore.PostgreSQL",
+          "version": "10.0.0"
+        },
+        {
+          "type": "external",
+          "id": "Testcontainers.MsSql",
+          "version": "4.15.0"
+        },
+        {
+          "type": "external",
+          "id": "Testcontainers.PostgreSql",
+          "version": "4.15.0"
+        },
+        {
+          "type": "external",
+          "id": "Xunit.SkippableFact",
+          "version": "1.5.23"
+        },
+        {
+          "type": "external",
+          "id": "coverlet.collector",
+          "version": "6.0.2"
+        },
+        {
+          "type": "external",
+          "id": "xunit",
+          "version": "2.9.3"
+        },
+        {
+          "type": "external",
+          "id": "xunit.runner.visualstudio",
+          "version": "3.1.5"
+        }
+      ]
+    },
+    {
       "path": "tests/essentials/Modularity/Tests/Elsa.Modularity.Tests.csproj",
       "name": "Elsa.Modularity.Tests",
       "kind": "test",
@@ -18319,6 +18398,16 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Http",
+          "path": "src/essentials/Http/Elsa.Http.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Tasks",
+          "path": "src/essentials/Tasks/Elsa.Tasks.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Workflows.Runtime.Core",
           "path": "src/essentials/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj"
         },
@@ -18334,6 +18423,11 @@
         },
         {
           "type": "external",
+          "id": "CShells",
+          "version": "0.0.30-preview.159"
+        },
+        {
+          "type": "external",
           "id": "Microsoft.AspNetCore.Authorization",
           "version": "10.0.10"
         },
@@ -18341,6 +18435,11 @@
           "type": "external",
           "id": "Microsoft.AspNetCore.Http",
           "version": "2.3.10"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.Extensions.Caching.Memory",
+          "version": "10.0.10"
         },
         {
           "type": "external",

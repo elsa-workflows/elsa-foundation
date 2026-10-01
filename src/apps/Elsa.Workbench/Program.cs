@@ -124,9 +124,14 @@ var configuration = startupArtifact?.Configuration ?? builder.Configuration;
 // provider select the same demo in-memory store or durable SQLite store. The behavior composite deliberately does not
 // register a DbContext, an EF store, or an initializer; this is the Workbench's explicit vendor choice.
 builder.Services.AddWorkbenchOpenIddictVendor(configuration);
+// The engine under that store, SQLite unless the default shell's OpenIddict settings name another. A token issued on one node is
+// valid on another only when every node reads one store, so a multi-node deployment selects a shared engine here.
+builder.Services.AddWorkbenchOpenIddictStoreProvider(configuration);
 // Elsa's migration policy for that store, kept out of the vendor sources: it migrates the durable store and reports a SQLite
 // migration lock a killed process left behind instead of hanging the start (#2196).
 builder.Services.AddWorkbenchOpenIddictMigrationPolicy(configuration);
+// Every access and refresh token is a row in that store, and nothing else deletes one: prune the expired and redeemed ones, on every node.
+builder.Services.AddWorkbenchOpenIddictPruning(configuration);
 
 // Opt-in cold-start phase instrument (spec 129). Null unless Elsa:Boot:PhaseTiming:Enabled is set, so the host
 // registers no boot services and pays nothing when the switch is off. When on, the timeline is a root singleton
@@ -461,4 +466,6 @@ if (consoleLogStreamingEnabled)
         .WithSecurityDisposition(EndpointSecurityDispositionMetadata.NamedPolicy("Default", "Elsa.Workbench"));
     consoleLogEndpoints.MapConsoleLogStreaming();
 }
-app.Run();
+// A host its cluster member stopped, because another process holds its host id, ends with exit code 1, so a supervisor
+// that restarts failed processes restarts it (spec 183, 2026-10-01 note).
+app.RunWithMembershipExitCode();

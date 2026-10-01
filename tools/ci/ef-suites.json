@@ -26,6 +26,11 @@
       "require": "ELSA_ACTIVITIES_DESIGN_EF_REQUIRE_NATIVE_PROVIDERS"
     },
     {
+      "suite": "workbench-openiddict",
+      "project": "tests/essentials/Modularity/ProviderTests/Elsa.Modularity.ProviderTests.csproj",
+      "require": "ELSA_WORKBENCH_OPENIDDICT_REQUIRE_NATIVE_PROVIDERS"
+    },
+    {
       "suite": "cluster-membership",
       "project": "tests/essentials/Cluster/EntityFrameworkCore/ProviderTests/Elsa.Cluster.EntityFrameworkCore.ProviderTests.csproj",
       "require": "ELSA_CLUSTER_MEMBERSHIP_EF_REQUIRE_NATIVE_PROVIDERS"

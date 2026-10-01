@@ -47,8 +47,6 @@ internal sealed class EfSchemaBackfillRun(
     /// <summary>Whether a pass of this run rewrites <paramref name="table"/>'s rows: it is not content-addressed, and the family names a rewriter.</summary>
     public bool Rewrites(EfSchemaStampedTable table) => !table.ContentAddressed && Declaration.Rewriter is not null;
 
-    public DateTimeOffset? ClaimRenewedAt { get; set; }
-
     /// <summary>Why the family's rewriter cannot be constructed, once a row has found out.</summary>
     public string? RewriterFault { get; set; }
 
@@ -79,5 +77,28 @@ internal sealed record EfSchemaBackfillVerification(
     long Found,
     IReadOnlyList<EfSchemaBackfillBlocker> Blockers);
 
-/// <summary>This worker's claim lapsed and another worker took the run over: this one stops, which spares the other its reads.</summary>
-internal sealed class EfSchemaBackfillClaimLostException(string message) : Exception(message);
+/// <summary>
+/// This worker's run of a family stops for <see cref="Reason"/>: it no longer owns the run, or there is nothing left for it
+/// to do. It is not a failure: the round says why on the family's status, and releases the claim the run held, so the
+/// worker that owns the family now, if any, finishes it.
+/// </summary>
+internal sealed class EfSchemaBackfillStoppedException(EfSchemaBackfillStop reason, string message) : Exception(message)
+{
+    public EfSchemaBackfillStop Reason { get; } = reason;
+}
+
+/// <summary>Why a worker's run of a family stops before it is done (spec 186, FR-008; spec 183, FR-007).</summary>
+internal enum EfSchemaBackfillStop
+{
+    /// <summary>Another worker's claim holds, taken over since this worker's own lapsed.</summary>
+    TakenOver,
+
+    /// <summary>This worker's member has lapsed from the fleet, so others may take its work over.</summary>
+    Lapsed,
+
+    /// <summary>The completion moved to or past this worker's target while its run went on.</summary>
+    CompletionMovedOn,
+
+    /// <summary>The record no longer has anywhere to hold a claim, which is reported as an error.</summary>
+    Unclaimable
+}

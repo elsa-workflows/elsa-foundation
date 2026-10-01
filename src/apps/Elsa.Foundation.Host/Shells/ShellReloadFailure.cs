@@ -31,11 +31,8 @@ namespace Elsa.Foundation.Host.Shells;
 /// <param name="Error">What went wrong, in words an operator can act on.</param>
 /// <param name="Refusal">The EF module's refusal behind the failure, when there is one.</param>
 /// <param name="Exception">The failure as CShells reported it.</param>
-internal sealed record ShellReloadFailure(string Shell, string Error, ShellReloadFailure.RefusalReading? Refusal, Exception Exception)
+internal sealed record ShellReloadFailure(string Shell, string Error, ShellActivationRefusal? Refusal, Exception Exception)
 {
-    /// <summary>What an EF module's refusal says of itself, however it was recognised, with the host's directory in its command.</summary>
-    internal sealed record RefusalReading(string Module, string Code, IReadOnlyList<string> PendingMigrations, string? Command);
-
     /// <summary>
     /// The host's own directory, which is what <c>--host</c> needs: the persistence tool loads the package set the running host
     /// last reconciled from that directory's <c>.nuplane</c> state and its build output beside it. That is where the host's
@@ -51,7 +48,8 @@ internal sealed record ShellReloadFailure(string Shell, string Error, ShellReloa
     public static IReadOnlyList<ShellReloadFailure> From(IEnumerable<ReloadResult> results, string hostDirectory) =>
         [.. results.Where(result => result.Error is not null).Select(result => Describe(result.Name, result.Error!, hostDirectory))];
 
-    private static ShellReloadFailure Describe(string shell, Exception error, string hostDirectory)
+    /// <summary>One shell's failure, from the exception that stopped it activating, read the way <see cref="From"/> reads a reload result.</summary>
+    internal static ShellReloadFailure Describe(string shell, Exception error, string hostDirectory)
     {
         var host = IEfModuleRefusal.HostPlaceholder;
         var directory = $"\"{hostDirectory}\"";
@@ -65,14 +63,14 @@ internal sealed record ShellReloadFailure(string Shell, string Error, ShellReloa
     }
 
     /// <summary>The first refusal in <paramref name="error"/> or what it wraps, however deep a shell's initializer nested it.</summary>
-    private static (Exception Exception, RefusalReading Reading)? Find(Exception? error) => error switch
+    private static (Exception Exception, ShellActivationRefusal Reading)? Find(Exception? error) => error switch
     {
         null => null,
         AggregateException aggregate => aggregate.InnerExceptions.Select(Find).FirstOrDefault(found => found is not null),
         _ => Read(error) ?? Find(error.InnerException)
     };
 
-    private static (Exception, RefusalReading)? Read(Exception error)
+    private static (Exception, ShellActivationRefusal)? Read(Exception error)
     {
         if (error is IEfModuleRefusal refusal)
             return (error, new(refusal.Module, refusal.Code, refusal.PendingMigrations, refusal.Command));
