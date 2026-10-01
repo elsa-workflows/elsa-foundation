@@ -6,6 +6,7 @@ using Elsa.Workflows.Design.Core.Reconciliation;
 using Elsa.Workflows.Design.Persistence.Core.Constants;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
+using Elsa.Workflows.Design.Persistence.Core.Filters;
 using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Persistence.EntityFrameworkCore;
@@ -31,6 +32,7 @@ public sealed class WorkflowsVersionReconcilerConvergenceTests : IAsyncLifetime
     private const string DefinitionId = "wf-converge";
     private const string SiblingId = "wf-converge-sibling";
     private const string Version = "1.0.0";
+    private static readonly string SortKey = SemVer.ToSortKey(Version);
     private static readonly WorkflowDefinitionState EmptyState = new([], null, [], [], null);
     private WorkflowsDesignTestHost _host = null!;
 
@@ -66,30 +68,51 @@ public sealed class WorkflowsVersionReconcilerConvergenceTests : IAsyncLifetime
         }
     }
 
-    [Fact]
-    public async Task An_unchanged_source_writes_nothing()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)] // The source still says deleted: the sources stamp a fresh DeletedAt on every read.
+    public async Task Repeating_a_pass_whose_change_already_landed_writes_nothing(bool deleted)
     {
         await ReconcileAsync(name: "Original");
-        await ReconcileAsync(name: "Renamed");
+        await ReconcileAsync(name: "Renamed", deleted: deleted);
         var settled = await GetDefinitionAsync();
         var markers = await ListMarkersAsync();
 
-        await ReconcileAsync(name: "Renamed");
+        await ReconcileAsync(name: "Renamed", deleted: deleted);
 
-        Assert.Equal(settled!.LastModifiedAt, (await GetDefinitionAsync())!.LastModifiedAt);
+        var current = await GetDefinitionAsync();
+        Assert.Equal(settled!.LastModifiedAt, current!.LastModifiedAt);
+        Assert.Equal(settled.DeletedAt, current.DeletedAt);
         Assert.Equal(markers, await ListMarkersAsync());
+    }
+
+    [Theory]
+    [InlineData("Renamed")] // Two nodes apply the same change.
+    [InlineData("Renamed elsewhere")] // Another writer applies a different one, so the paused pass has to write again.
+    public async Task A_metadata_write_that_loses_a_race_converges(string otherWritersName)
+    {
+        await ReconcileAsync(name: "Original");
+        var read = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var resume = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var paused = ReconcileAsync(name: "Renamed", definitions: store => new PausingDefinitionStore(store, read, resume.Task));
+        // Awaiting whichever ends first surfaces a pass that failed before it read the definition.
+        await await Task.WhenAny(read.Task, paused);
+
+        // The other writer commits between the paused pass's read and its write, which then fails its
+        // LastModifiedAt check, and its own key has no marker to replay.
+        await ReconcileAsync(name: otherWritersName);
+        resume.SetResult();
+        await paused;
+
+        Assert.Equal("Renamed", (await GetDefinitionAsync())!.Name);
     }
 
     [Fact]
     public async Task A_marker_written_under_the_per_version_metadata_key_does_not_block_a_later_rename()
     {
         await ReconcileAsync(name: "Original");
-        // What a database written before #2187 holds after one rename at this version: the metadata
-        // marker keyed on the definition and the sort key of its latest version.
-        var sortKey = SemVer.ToSortKey(Version);
-        var legacyKey = new DesignOperationKey(
-            $"workflow-reconciliation:definition-metadata:{DefinitionId.Length}:{DefinitionId}{sortKey.Length}:{sortKey}");
-        await RenameAsync(legacyKey, "Renamed");
+        // What a database written before #2187 holds after one rename at this version.
+        await RenameAsync(LegacyMetadataKey(DefinitionId), "Renamed");
 
         await ReconcileAsync(name: "Renamed again");
 
@@ -119,82 +142,96 @@ public sealed class WorkflowsVersionReconcilerConvergenceTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task A_permanent_delete_retires_that_definitions_materialization_markers_and_no_others()
+    public async Task A_permanent_delete_retires_every_reconciliation_marker_of_that_definition_and_no_others()
     {
-        await ReconcileAsync(name: "Original");
-        await ReconcileAsync(name: "Sibling", definitionId: SiblingId);
-        await ReconcileAsync(name: "Original", deleted: true);
+        // Both definitions get every kind of marker: materialization, a pre-#2187 metadata write, and a current one.
+        foreach (var definitionId in new[] { DefinitionId, SiblingId })
+        {
+            await ReconcileAsync(name: "Original", definitionId: definitionId);
+            await RenameAsync(LegacyMetadataKey(definitionId), "Renamed", definitionId);
+            await ReconcileAsync(name: "Original", deleted: true, definitionId: definitionId);
+        }
         var before = await ListMarkersAsync();
 
         await DeletePermanentlyAsync();
 
         var after = await ListMarkersAsync();
-        var sortKey = SemVer.ToSortKey(Version);
-        Assert.Equal(
-            [
-                Marker("workflow.definition.materialize.v1", WorkflowReconciliationOperationKeys.Definition(DefinitionId)),
-                Marker("workflow.version.materialize.v1", WorkflowReconciliationOperationKeys.Version(DefinitionId, sortKey))
-            ],
-            before.Except(after).Order(StringComparer.Ordinal));
-        Assert.StartsWith("workflow.definition.permanent-delete.v1 ", Assert.Single(after.Except(before)));
+        Assert.Collection(
+            before.Except(after),
+            marker => Assert.Equal(Marker(EfMaterializeWorkflowDefinitionCommand.OperationKind, WorkflowReconciliationOperationKeys.Definition(DefinitionId)), marker),
+            marker => Assert.StartsWith($"{EfSaveWorkflowDefinitionCommand.OperationKind} {WorkflowReconciliationOperationKeys.DefinitionMetadataWritePrefix(DefinitionId)}", marker),
+            marker => Assert.Equal(Marker(EfSaveWorkflowDefinitionCommand.OperationKind, LegacyMetadataKey(DefinitionId)), marker),
+            marker => Assert.Equal(Marker(EfMaterializeWorkflowDefinitionVersionCommand.OperationKind, WorkflowReconciliationOperationKeys.Version(DefinitionId, SortKey)), marker));
+        var siblingMarkers = before.Where(marker => marker.Contains($":{SiblingId.Length}:{SiblingId}", StringComparison.Ordinal)).ToArray();
+        Assert.Equal(4, siblingMarkers.Length);
+        Assert.All(siblingMarkers, marker => Assert.Contains(marker, after));
+        Assert.StartsWith($"{EfDeleteWorkflowDefinitionPermanentlyCommand.OperationKind} ", Assert.Single(after.Except(before)));
     }
 
-    private async Task ReconcileAsync(string name = "Original", bool deleted = false, string? versionId = null, string definitionId = DefinitionId)
+    private Task ReconcileAsync(
+        string name = "Original",
+        bool deleted = false,
+        string? versionId = null,
+        string definitionId = DefinitionId,
+        Func<IWorkflowDefinitionStore, IWorkflowDefinitionStore>? definitions = null) => InScopeAsync(services =>
     {
-        await using var scope = _host.Services.CreateAsyncScope();
-        var services = scope.ServiceProvider;
         var definition = services.GetRequiredService<IWorkflowDefinitionFactory>().Create(name, id: definitionId, deleted: deleted);
         var version = services.GetRequiredService<IWorkflowDefinitionVersionFactory>().Create(definition, Version, EmptyState, id: versionId);
+        var definitionStore = services.GetRequiredService<IWorkflowDefinitionStore>();
         var reconciler = ActivatorUtilities.CreateInstance<WorkflowsVersionReconciler>(
             services,
             new ContributingPublisher(version),
-            Microsoft.Extensions.Options.Options.Create(new WorkflowVersionReconcilerOptions()));
+            Microsoft.Extensions.Options.Options.Create(new WorkflowVersionReconcilerOptions()),
+            definitions?.Invoke(definitionStore) ?? definitionStore);
+        return reconciler.Reconcile(CancellationToken.None);
+    });
 
-        await reconciler.Reconcile(CancellationToken.None);
-    }
-
-    private async Task RenameAsync(DesignOperationKey key, string name)
+    private Task RenameAsync(DesignOperationKey key, string name, string definitionId = DefinitionId) => InScopeAsync(async services =>
     {
-        await using var scope = _host.Services.CreateAsyncScope();
-        var services = scope.ServiceProvider;
-        var definition = (await services.GetRequiredService<IWorkflowDefinitionStore>().FindByIdAsync(DefinitionId))!;
+        var definition = (await services.GetRequiredService<IWorkflowDefinitionStore>().FindByIdAsync(definitionId))!;
         definition.Name = name;
         await services.GetRequiredService<ISaveWorkflowDefinitionCommand>().Execute(key, definition);
-    }
+    });
 
-    private async Task DeletePermanentlyAsync()
-    {
-        await using var scope = _host.Services.CreateAsyncScope();
-        var services = scope.ServiceProvider;
-        var command = new EfDeleteWorkflowDefinitionPermanentlyCommand(
-            services.GetRequiredService<WorkflowsDesignDbContext>(),
-            services.GetRequiredService<IPersistenceAccessContextAccessor>(),
-            services.GetRequiredService<IDesignAtomicWriter>(),
-            [new NeverPublishedGuard()]);
-        await command.Execute(new DesignOperationKey($"permanent-delete-{Guid.NewGuid():N}"), DefinitionId);
-    }
+    private Task DeletePermanentlyAsync() => InScopeAsync(services =>
+        new EfDeleteWorkflowDefinitionPermanentlyCommand(
+                services.GetRequiredService<WorkflowsDesignDbContext>(),
+                services.GetRequiredService<IPersistenceAccessContextAccessor>(),
+                services.GetRequiredService<IDesignAtomicWriter>(),
+                [new NeverPublishedGuard()])
+            .Execute(new DesignOperationKey($"permanent-delete-{Guid.NewGuid():N}"), DefinitionId));
 
-    private async Task<WorkflowDefinition?> GetDefinitionAsync()
-    {
-        await using var scope = _host.Services.CreateAsyncScope();
-        return await scope.ServiceProvider.GetRequiredService<IWorkflowDefinitionStore>().FindByIdAsync(DefinitionId);
-    }
+    private Task<WorkflowDefinition?> GetDefinitionAsync() =>
+        InScopeAsync(services => services.GetRequiredService<IWorkflowDefinitionStore>().FindByIdAsync(DefinitionId));
 
-    private async Task<WorkflowDefinitionVersion?> GetLatestVersionAsync()
-    {
-        await using var scope = _host.Services.CreateAsyncScope();
-        return await scope.ServiceProvider.GetRequiredService<IWorkflowDefinitionVersionStore>().FindLatestVersionAsync(DefinitionId);
-    }
+    private Task<WorkflowDefinitionVersion?> GetLatestVersionAsync() =>
+        InScopeAsync(services => services.GetRequiredService<IWorkflowDefinitionVersionStore>().FindLatestVersionAsync(DefinitionId));
 
-    private async Task<string[]> ListMarkersAsync()
+    private Task<string[]> ListMarkersAsync() => InScopeAsync(async services =>
     {
-        await using var scope = _host.Services.CreateAsyncScope();
-        var markers = await scope.ServiceProvider.GetRequiredService<WorkflowsDesignDbContext>().Operations
+        var markers = await services.GetRequiredService<WorkflowsDesignDbContext>().Operations
             .AsNoTracking()
             .Select(marker => marker.OperationKind + " " + marker.OperationKey)
             .ToListAsync();
         return markers.Order(StringComparer.Ordinal).ToArray();
+    });
+
+    /// <summary>Runs one unit of work in its own DI scope, as each reconciliation pass and API request gets one.</summary>
+    private async Task<T> InScopeAsync<T>(Func<IServiceProvider, Task<T>> work)
+    {
+        await using var scope = _host.Services.CreateAsyncScope();
+        return await work(scope.ServiceProvider);
     }
+
+    private Task InScopeAsync(Func<IServiceProvider, Task> work) => InScopeAsync(async services =>
+    {
+        await work(services);
+        return true;
+    });
+
+    /// <summary>The key metadata writes used before #2187, spelled out to pin what existing databases hold.</summary>
+    private static DesignOperationKey LegacyMetadataKey(string definitionId) =>
+        new($"workflow-reconciliation:definition-metadata:{definitionId.Length}:{definitionId}{SortKey.Length}:{SortKey}");
 
     private static string Marker(string operationKind, DesignOperationKey key) => operationKind + " " + key.Value;
 
@@ -208,6 +245,28 @@ public sealed class WorkflowsVersionReconcilerConvergenceTests : IAsyncLifetime
                     reconciling.Versions.Add(version);
             return Task.CompletedTask;
         }
+    }
+
+    /// <summary>Holds the pass right after its first definition read, until the test lets it resume.</summary>
+    private sealed class PausingDefinitionStore(IWorkflowDefinitionStore inner, TaskCompletionSource read, Task resume) : IWorkflowDefinitionStore
+    {
+        private int _reads;
+
+        public async Task<WorkflowDefinition?> FindByIdAsync(string id, CancellationToken cancellationToken = default)
+        {
+            var definition = await inner.FindByIdAsync(id, cancellationToken);
+            if (Interlocked.Increment(ref _reads) == 1)
+            {
+                read.SetResult();
+                await resume;
+            }
+            return definition;
+        }
+
+        public Task<WorkflowDefinition> GetAsync(string id, CancellationToken cancellationToken = default) => inner.GetAsync(id, cancellationToken);
+
+        public Task<IReadOnlyList<WorkflowDefinition>> ListAsync(WorkflowDefinitionFilter filter, CancellationToken cancellationToken = default) =>
+            inner.ListAsync(filter, cancellationToken);
     }
 
     /// <summary>Stands in for the Publishing module's guard: these definitions were never published.</summary>

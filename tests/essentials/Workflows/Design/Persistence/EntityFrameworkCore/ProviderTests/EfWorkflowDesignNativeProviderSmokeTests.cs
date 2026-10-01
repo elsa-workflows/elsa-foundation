@@ -61,7 +61,7 @@ public sealed class WorkflowsDesignMySqlSmokeTests(WorkflowsDesignMySqlFixture f
         CreateContext,
         WorkflowsDesignMySqlDbContext.ExpectedProviderName);
 
-    [Fact(Skip = "MySQL cannot update or permanently delete a workflow definition yet: the provider reads LastModifiedAt without its fractional seconds, so the concurrency check matches no row.")]
+    [Fact(Skip = "Blocked by elsa-workflows/elsa-foundation#2204: the MySQL provider reads LastModifiedAt without its fractional seconds, so updating or permanently deleting a workflow definition fails its concurrency check.")]
     public Task MySql_permanently_deleted_definition_is_imported_again() =>
         WorkflowsDesignNativeProviderSmoke.RunPermanentDeleteReimportAsync(fixture, CreateContext);
 
@@ -323,6 +323,10 @@ internal static class WorkflowsDesignNativeProviderSmoke
             new WorkflowDefinition { Id = definitionId, Name = "Reimported", DeletedAt = Now, IsSourceOwned = true }));
         await InNewContextAsync((context, writer) => new EfDeleteWorkflowDefinitionPermanentlyCommand(context, access, writer, [new NeverPublishedGuard()])
             .Execute(new DesignOperationKey($"provider-permanent-delete-{Guid.NewGuid():N}"), definitionId));
+        // The tenant is this test's own, so the delete's marker is the only one its reconciliation markers leave.
+        await InNewContextAsync(async (context, _) => Assert.Equal(
+            EfDeleteWorkflowDefinitionPermanentlyCommand.OperationKind,
+            Assert.Single(await context.Operations.Where(marker => marker.TenantId == tenant).Select(marker => marker.OperationKind).ToListAsync())));
         await ImportAsync();
 
         await InNewContextAsync(async (context, _) =>

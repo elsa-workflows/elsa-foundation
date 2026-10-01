@@ -5,6 +5,7 @@ using Elsa.Primitives.Versioning;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
+using Elsa.Workflows.Design.Persistence.Core.Exceptions;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Core.Reconciliation;
@@ -36,6 +37,8 @@ public sealed class WorkflowsVersionReconciler(
 )
     : IWorkflowVersionReconciler
 {
+    private const int MaxMetadataConvergenceAttempts = 8;
+
     public async Task Reconcile(CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -132,7 +135,8 @@ public sealed class WorkflowsVersionReconciler(
     /// are immutable and retention-authoritative, whereas name/description/<c>DeletedAt</c> are latest-wins per
     /// ADR 0034 (D5). Idempotent per desired state: it writes only when a value actually changed, and each write
     /// gets a key no earlier write used (<see cref="WorkflowReconciliationOperationKeys.DefinitionMetadataWrite"/>),
-    /// so any sequence of changes at one version, a change back included, converges (#2187).
+    /// so any sequence of changes at one version, a change back included, converges (#2187). A write that loses a
+    /// race to another writer reads the definition again and compares afresh, a bounded number of times.
     /// Latest-wins soft-delete is scoped to <see cref="WorkflowDefinition.IsSourceOwned"/> definitions:
     /// a source can never flip <c>DeletedAt</c> on a catalog-authored (Studio) definition.
     /// Runs for every <see cref="Contracts.IWorkflowReconciliationSource"/>, not only git, and only for the
@@ -142,6 +146,49 @@ public sealed class WorkflowsVersionReconciler(
         WorkflowDefinition persisted,
         IWorkflowDefinition incoming,
         CancellationToken cancellationToken)
+    {
+        var definitionId = persisted.Id;
+        for (var attempt = 1; ; attempt++)
+        {
+            var desired = DesiredMetadata(persisted, incoming);
+            if (desired is null)
+                return;
+
+            try
+            {
+                await saveDefinitionCommand.Execute(
+                    WorkflowReconciliationOperationKeys.DefinitionMetadataWrite(definitionId),
+                    desired,
+                    cancellationToken);
+                LogMetadataUpdated(definitionId);
+                return;
+            }
+            catch (DesignPersistenceException exception) when (exception.FailureKind == DesignPersistenceFailureKind.Provider)
+            {
+                // Typically another node applied the same change between this pass's read and its write, so the
+                // write failed the row's LastModifiedAt check. Its key is its own, so no marker exists to replay.
+                // Read the row again and compare afresh: write nothing when it already matches, and write again
+                // under a new key when it does not. The atomic writer clears the change tracker when a write
+                // fails, so the read returns the committed row. A failure that is not a lost race surfaces when
+                // the attempts run out.
+                if (attempt == MaxMetadataConvergenceAttempts)
+                    throw new InvalidOperationException(
+                        $"The metadata of workflow definition '{definitionId}' did not converge after {MaxMetadataConvergenceAttempts} attempts.",
+                        exception);
+
+                persisted = await FindDefinition(definitionId, cancellationToken)
+                            ?? throw new InvalidOperationException(
+                                $"Workflow definition '{definitionId}' was deleted while its metadata was being reconciled.",
+                                exception);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Returns the definition as the source wants it, or <c>null</c> when the stored metadata already matches. The
+    /// result is a copy, so a failed write leaves <paramref name="persisted"/> exactly as it was read.
+    /// </summary>
+    private WorkflowDefinition? DesiredMetadata(WorkflowDefinition persisted, IWorkflowDefinition incoming)
     {
         // Reconcile soft-delete as a latest-wins flag: set when the source marks it deleted and it is
         // currently live; clear (un-delete) when the source reports it live and it is currently deleted.
@@ -159,18 +206,14 @@ public sealed class WorkflowsVersionReconciler(
         }
 
         if (persisted.Name == incoming.Name && persisted.Description == incoming.Description && !deletedChanged)
-            return;
+            return null;
 
-        persisted.Name = incoming.Name;
-        persisted.Description = incoming.Description;
+        var desired = (WorkflowDefinition)persisted.ShallowClone();
+        desired.Name = incoming.Name;
+        desired.Description = incoming.Description;
         if (deletedChanged)
-            persisted.DeletedAt = incomingDeleted ? incoming.DeletedAt ?? DateTimeOffset.UtcNow : null;
-
-        await saveDefinitionCommand.Execute(
-            WorkflowReconciliationOperationKeys.DefinitionMetadataWrite(persisted.Id),
-            persisted,
-            cancellationToken);
-        LogMetadataUpdated(persisted.Id);
+            desired.DeletedAt = incomingDeleted ? incoming.DeletedAt ?? DateTimeOffset.UtcNow : null;
+        return desired;
     }
 
     /// <summary>

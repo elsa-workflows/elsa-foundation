@@ -31,8 +31,8 @@ The atomic writer persists the operation marker in the same transaction as stage
 version, draft, and layout changes. Replays and marker-race losers do not publish duplicate
 post-commit lifecycle events.
 
-Markers are permanent, with one exception. A permanent delete removes, in its own transaction, the
-markers the workflow reconciler materialized the definition and its versions under
-(`WorkflowReconciliationOperationKeys`). A source that still lists the definition therefore imports it
-again instead of replaying markers that write no row. The reconciler's metadata writes need no such
-cleanup: each one uses a key no later write reuses.
+Markers are permanent, with one exception. A permanent delete removes, in its own transaction, every
+marker the workflow reconciler wrote for the definition (`WorkflowReconciliationOperationKeys`): the
+materialization of the definition and its versions, and its metadata writes, including those written
+under the per-version key used before #2187. A source that still lists the definition therefore imports
+it again instead of replaying markers that write no row.
