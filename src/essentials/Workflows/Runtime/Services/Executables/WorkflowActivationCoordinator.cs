@@ -205,7 +205,6 @@ public sealed partial class WorkflowActivationCoordinator(
         await RetireReplacedReferencesAsync(
             slot,
             others.Where(other => other.Serves || other.WasReplaced).Select(other => other.ActivationId),
-            bestEffort: true,
             CancellationToken.None);
         return new(true, WorkflowActivationOutcome.Deactivated, transition.Slot, ReplacedActivationId: activationId);
     }
@@ -276,8 +275,13 @@ public sealed partial class WorkflowActivationCoordinator(
     /// compensation handed the slot back.
     /// </para>
     /// <para>
-    /// When nothing needs switching, retiring a leftover's reference is housekeeping: a failure is logged as an error and
-    /// does not fail the activation that called this.
+    /// Retiring references never fails a completion (#2251). Once the slot's activation serves, because completion
+    /// switched it on or found it switched, a reference that cannot be retired, or a slot that cannot be read again before
+    /// retiring, is logged as an error and the reference left live for a later completion or an operator to retire.
+    /// Reporting the completion failed instead would tell a caller that keeps its own record of the activation, as
+    /// Publishing does, that an activation which serves has failed, and nothing would correct that record. A completion
+    /// that switched still names the activation it switched off as replaced, and its diagnostic names the references it
+    /// could not retire.
     /// </para>
     /// <para>
     /// Two windows remain, because the slot and the projections share no transaction; #2230 closes both by switching them
@@ -293,8 +297,9 @@ public sealed partial class WorkflowActivationCoordinator(
     /// <returns>
     /// <see langword="null"/> when there is nothing to complete, the activation's reference is no longer live, or the
     /// slot moved; an <see cref="WorkflowActivationOutcome.Activated"/> result when this call completed it, naming the
-    /// activation it replaced when it retired that one's reference, and otherwise the first activation whose reference it
-    /// retired; and a <see cref="WorkflowActivationOutcome.Failed"/> result when it could not.
+    /// activation it switched off unless that one served again or the slot moved before its reference was retired, and
+    /// otherwise the first activation whose reference it retired; and a <see cref="WorkflowActivationOutcome.Failed"/>
+    /// result when it could not switch the slot's activation on.
     /// </returns>
     private async ValueTask<WorkflowActivationResult?> CompleteServingActivationAsync(
         WorkflowActivationSlot slot,
@@ -339,12 +344,14 @@ public sealed partial class WorkflowActivationCoordinator(
                 await NotifyTriggerObserversAsync(activationId, reference.ArtifactId, cancellationToken);
                 if (predecessor is not null)
                     retire.Add(predecessor);
-                if (!await StillNamesAsync(slot, cancellationToken))
-                    retire.Clear();
             }
 
-            var retired = await RetireReplacedReferencesAsync(slot, retire, bestEffort: !switching, cancellationToken);
-            if (!switching && retired.Count == 0)
+            // The slot's activation serves from here on, so nothing below fails the completion (#2251): a reference that
+            // cannot be retired is logged and left live, never reported as a failed activation.
+            var retirement = switching
+                ? await RetireAfterSwitchAsync(slot, retire, cancellationToken)
+                : await RetireReplacedReferencesAsync(slot, retire, cancellationToken);
+            if (!switching && retirement.Retired.Count == 0)
                 return null;
 
             logger?.LogWarning(
@@ -352,15 +359,16 @@ public sealed partial class WorkflowActivationCoordinator(
                 activationId,
                 slot.WorkflowDefinitionId,
                 slot.SlotName,
-                retired);
+                retirement.Retired.Concat(retirement.Leaked).ToArray());
 
             // Leftovers are retired first and the predecessor last, but the predecessor is the activation this one
-            // replaced: a caller that keeps its own record of it, as Publishing does, retires the record reported here,
-            // so a leftover reported in its place would leave the predecessor recorded active (#2251).
-            var replaced = predecessor is not null && retired.Contains(predecessor, StringComparer.Ordinal)
+            // replaced, whether or not its reference could be retired: a caller that keeps its own record of it, as
+            // Publishing does, retires the record reported here, so a leftover, or nothing, reported in its place would
+            // leave the predecessor recorded active (#2251).
+            var replaced = predecessor is not null && retirement.Covers(predecessor)
                 ? predecessor
-                : retired.FirstOrDefault();
-            return new(true, WorkflowActivationOutcome.Activated, slot, reference, replaced);
+                : retirement.Retired.FirstOrDefault();
+            return new(true, WorkflowActivationOutcome.Activated, slot, reference, replaced, Diagnostic: retirement.Diagnostic);
         }
         catch (Exception exception) when (NotRequestedCancellation(exception, cancellationToken))
         {
@@ -446,19 +454,44 @@ public sealed partial class WorkflowActivationCoordinator(
         recurringScheduleStore is null ? null : await recurringScheduleStore.FindActivationStateAsync(activationId, cancellationToken));
 
     /// <summary>
+    /// Retires the references of the activations a completion has just switched off <paramref name="slot"/>, and of
+    /// leftovers, once the slot is read again and still names its activation; if another writer moved it, that writer owns
+    /// them. The slot's activation serves by now, so a slot that cannot be read leaves every reference live and logged,
+    /// rather than failing the completion (#2251).
+    /// </summary>
+    private async ValueTask<ReferenceRetirement> RetireAfterSwitchAsync(
+        WorkflowActivationSlot slot,
+        IReadOnlyList<string> activationIds,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            if (!await StillNamesAsync(slot, cancellationToken))
+                return ReferenceRetirement.None;
+        }
+        catch (Exception exception) when (NotRequestedCancellation(exception, cancellationToken))
+        {
+            foreach (var activationId in activationIds)
+                LogLeakedReference(exception, slot, activationId);
+            return new([], activationIds);
+        }
+
+        return await RetireReplacedReferencesAsync(slot, activationIds, cancellationToken);
+    }
+
+    /// <summary>
     /// Retires the references of activations that no longer serve <paramref name="slot"/>. Each one's projection state is
     /// read again first, and one that serves again is left alone: an in-flight activation that replaced it failed, and its
-    /// compensation handed the slot back (#2193). When <paramref name="bestEffort"/>, a failure is logged as an error and
-    /// the rest are still retired; otherwise it propagates.
+    /// compensation handed the slot back (#2193). A failure is logged as an error and leaves that reference live, and the
+    /// rest are still retired.
     /// </summary>
-    /// <returns>The activations whose references were retired.</returns>
-    private async ValueTask<IReadOnlyList<string>> RetireReplacedReferencesAsync(
+    private async ValueTask<ReferenceRetirement> RetireReplacedReferencesAsync(
         WorkflowActivationSlot slot,
         IEnumerable<string> activationIds,
-        bool bestEffort,
         CancellationToken cancellationToken)
     {
         var retired = new List<string>();
+        var leaked = new List<string>();
         foreach (var activationId in activationIds)
         {
             try
@@ -468,18 +501,38 @@ public sealed partial class WorkflowActivationCoordinator(
                 await RetireReplacedReferenceAsync(activationId, cancellationToken);
                 retired.Add(activationId);
             }
-            catch (Exception exception) when (bestEffort && NotRequestedCancellation(exception, cancellationToken))
+            catch (Exception exception) when (NotRequestedCancellation(exception, cancellationToken))
             {
-                logger?.LogError(
-                    exception,
-                    "The source reference of activation {ActivationId}, which no longer serves definition {DefinitionId} slot {SlotName}, could not be retired. It stays live and keeps its artifact from garbage collection; retire it as described under Operator recovery in the Runtime extension points",
-                    activationId,
-                    slot.WorkflowDefinitionId,
-                    slot.SlotName);
+                LogLeakedReference(exception, slot, activationId);
+                leaked.Add(activationId);
             }
         }
 
-        return retired;
+        return new(retired, leaked);
+    }
+
+    private void LogLeakedReference(Exception exception, WorkflowActivationSlot slot, string activationId) =>
+        logger?.LogError(
+            exception,
+            "The source reference of activation {ActivationId}, which no longer serves definition {DefinitionId} slot {SlotName}, could not be retired. It stays live and keeps its artifact from garbage collection; retire it as described under Operator recovery in the Runtime extension points",
+            activationId,
+            slot.WorkflowDefinitionId,
+            slot.SlotName);
+
+    /// <summary>The activations whose references a retirement retired, and those whose references it had to leave live.</summary>
+    private sealed record ReferenceRetirement(IReadOnlyList<string> Retired, IReadOnlyList<string> Leaked)
+    {
+        public static readonly ReferenceRetirement None = new([], []);
+
+        /// <summary>The activation was among those whose references were due for retirement, whether or not that succeeded.</summary>
+        public bool Covers(string activationId) =>
+            Retired.Contains(activationId, StringComparer.Ordinal) || Leaked.Contains(activationId, StringComparer.Ordinal);
+
+        public string? Diagnostic => Leaked.Count == 0
+            ? null
+            : Truncate(
+                $"The source references of replaced activations {string.Join(", ", Leaked.Select(id => $"'{id}'"))} could not be retired. " +
+                "They stay live, keeping their artifacts from garbage collection, until a later completion retires them; see Operator recovery in the Runtime extension points.");
     }
 
     private async ValueTask<bool> StillNamesAsync(WorkflowActivationSlot slot, CancellationToken cancellationToken) =>

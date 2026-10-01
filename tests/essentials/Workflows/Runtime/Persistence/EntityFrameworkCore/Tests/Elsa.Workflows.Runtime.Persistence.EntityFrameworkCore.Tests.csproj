@@ -41,6 +41,8 @@
     <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Activities\ControlFlow\Elsa.Activities.ControlFlow.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Api\Capabilities\Elsa.Api.Capabilities.csproj" />
     <ProjectReference Include="..\..\..\..\..\Activities\Testing\Elsa.Activities.Testing.csproj" />
+    <!-- RecordingLogger, for the crash-repair contract's leaked-reference errors (#2251). -->
+    <ProjectReference Include="..\..\..\..\..\Testing\Elsa.Testing.csproj" />
     <!-- A parent waiting on a DispatchWorkflow child, run end to end on the EF stores. -->
     <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Activities\DispatchWorkflow\Runtime\Elsa.Activities.DispatchWorkflow.Runtime.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Activities\Sequence\Elsa.Activities.Sequence.csproj" />

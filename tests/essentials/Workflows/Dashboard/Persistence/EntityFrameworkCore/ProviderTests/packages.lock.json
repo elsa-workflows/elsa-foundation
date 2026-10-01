@@ -740,6 +740,12 @@
           "Microsoft.Extensions.Logging.Abstractions": "[10.0.10, )"
         }
       },
+      "elsa.testing": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Primitives": "[4.0.0-dev, )"
+        }
+      },
       "elsa.workflows.dashboard": {
         "type": "Project",
         "dependencies": {
@@ -871,6 +877,7 @@
         "type": "Project",
         "dependencies": {
           "Elsa.Activities.Testing": "[1.0.0, )",
+          "Elsa.Testing": "[1.0.0, )",
           "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Scheduling": "[4.0.0-dev, )",
           "Microsoft.EntityFrameworkCore.SqlServer": "[10.0.10, )",

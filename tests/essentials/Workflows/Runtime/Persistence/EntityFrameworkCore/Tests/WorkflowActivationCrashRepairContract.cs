@@ -1,11 +1,13 @@
 using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Testing;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Workflows.Runtime.Services.Executables;
 using Elsa.Workflows.Runtime.Services.Recovery;
 using Elsa.Workflows.Runtime.Services.Triggers;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Xunit;
@@ -62,7 +64,9 @@ internal static class WorkflowActivationCrashRepairContract
         ["same-activation-completing-a-winner-that-stopped-reports-its-predecessor-beside-a-leaked-leftover"] = SameActivationCompletingAWinnerThatStoppedReportsItsPredecessorBesideALeakedLeftoverAsync,
         ["same-activation-reports-a-completion-that-fails"] = SameActivationReportsACompletionThatFailsAsync,
         ["retry-whose-trigger-bindings-are-missing-is-compensated"] = open => RetryWithProjectionsMissingFromOneStoreIsCompensatedAsync(open, triggersMissing: true),
-        ["retry-whose-recurring-schedules-are-missing-is-compensated"] = open => RetryWithProjectionsMissingFromOneStoreIsCompensatedAsync(open, triggersMissing: false)
+        ["retry-whose-recurring-schedules-are-missing-is-compensated"] = open => RetryWithProjectionsMissingFromOneStoreIsCompensatedAsync(open, triggersMissing: false),
+        ["completion-that-cannot-retire-the-replaced-reference-reports-the-activation-it-switched-on"] = CompletionThatCannotRetireTheReplacedReferenceReportsTheActivationAsync,
+        ["completion-that-cannot-read-the-slot-after-the-switch-reports-the-activation-it-switched-on"] = CompletionThatCannotReadTheSlotAfterTheSwitchReportsTheActivationAsync
     };
 
     public static TheoryData<string> Scenarios
@@ -698,6 +702,90 @@ internal static class WorkflowActivationCrashRepairContract
         Assert.Equal(WorkflowActivationCoordinator.FailedRetireReason, (await node.FindReferenceAsync("activation-1")).DeletedReason);
     }
 
+    /// <summary>
+    /// The reference store fails once completion has switched the slot's activation on, so the reference of the activation
+    /// it replaced cannot be retired (#2251). The activation serves, so a failure would be the wrong answer: a caller that
+    /// keeps its own record, as Publishing does, would record a serving activation as failed, and nothing would correct
+    /// it. Completion reports it activated, names the activation it replaced, and leaks that one's reference with an error.
+    /// The other direction holds too: a store failure before the switch still fails the completion and switches nothing.
+    /// </summary>
+    private static async Task CompletionThatCannotRetireTheReplacedReferenceReportsTheActivationAsync(Func<ActivationStores> open)
+    {
+        await ActivateAsync(open, "activation-1", "artifact-1");
+        await StopAfterSlotTransitionAsync(open, "activation-2", "artifact-2");
+        await using (var beforeSwitch = Start(open(), beforePredecessorScan: () => throw new InvalidOperationException("The source-reference store is unavailable.")))
+        {
+            Assert.Equal(WorkflowActivationOutcome.Failed, (await beforeSwitch.Coordinator.CompleteAsync(DefinitionId, SlotName)).Outcome);
+            await beforeSwitch.AssertServingAsync("activation-1");
+        }
+
+        var stores = open();
+        await using var node = Start(stores with { References = new ReferencesThatCannotRetire(stores.References) });
+
+        var result = await node.Coordinator.CompleteAsync(DefinitionId, SlotName);
+
+        await AssertActivatedWithALeakedReplacedReferenceAsync(node, result);
+        await AssertTheNextCompletionRetiresTheLeakAsync(open);
+    }
+
+    /// <summary>
+    /// The slot cannot be read again once completion has switched the slot's activation on, as when the database goes away
+    /// just after the switch. Completion cannot tell whether another writer moved the slot, so it retires nothing, and
+    /// because the activation serves, it reports it activated rather than failed and leaks the replaced activation's
+    /// reference with an error (#2251).
+    /// </summary>
+    private static async Task CompletionThatCannotReadTheSlotAfterTheSwitchReportsTheActivationAsync(Func<ActivationStores> open)
+    {
+        await ActivateAsync(open, "activation-1", "artifact-1");
+        await StopAfterSlotTransitionAsync(open, "activation-2", "artifact-2");
+        var stores = open();
+        await using var node = Start(stores with
+        {
+            Authority = new AfterSlotRead(
+                stores.Authority,
+                async () => await stores.Bindings.FindActivationStateAsync("activation-2") == WorkflowActivationProjectionState.Active,
+                () => throw new InvalidOperationException("The activation authority is unavailable."))
+        });
+
+        var result = await node.Coordinator.CompleteAsync(DefinitionId, SlotName);
+
+        await AssertActivatedWithALeakedReplacedReferenceAsync(node, result);
+        await AssertTheNextCompletionRetiresTheLeakAsync(open);
+    }
+
+    /// <summary>
+    /// Asserts what a completion that switched activation-2 on, and then could not retire activation-1's reference, reports
+    /// and leaves: activation-2 activated and alone serving, activation-1 named as the activation it replaced, switched off,
+    /// and its reference live, named in the diagnostic and in one error.
+    /// </summary>
+    private static async Task AssertActivatedWithALeakedReplacedReferenceAsync(ActivationNode node, WorkflowActivationResult result)
+    {
+        Assert.Equal(WorkflowActivationOutcome.Activated, result.Outcome);
+        Assert.Equal("activation-1", result.ReplacedActivationId);
+        Assert.Contains("'activation-1'", result.Diagnostic);
+        Assert.Equal("activation-2", await node.SlotActivationAsync());
+        await node.AssertServingAsync("activation-2");
+        await node.AssertProjectionsAsync("activation-1", WorkflowActivationProjectionState.Replaced);
+        await node.AssertLiveAsync("activation-1");
+        var leak = Assert.Single(node.Log.Entries, entry => entry.Level >= LogLevel.Error);
+        Assert.Equal("activation-1", leak.Fields["ActivationId"]);
+        Assert.IsType<InvalidOperationException>(leak.Exception);
+    }
+
+    /// <summary>The next completion, in a process whose stores work, retires the leaked reference as housekeeping.</summary>
+    private static async Task AssertTheNextCompletionRetiresTheLeakAsync(Func<ActivationStores> open)
+    {
+        await using var next = Start(open());
+
+        var result = await next.Coordinator.CompleteAsync(DefinitionId, SlotName);
+
+        Assert.Equal(WorkflowActivationOutcome.Activated, result.Outcome);
+        Assert.Equal("activation-1", result.ReplacedActivationId);
+        Assert.Null(result.Diagnostic);
+        await next.AssertConsistentAsync("activation-2", "activation-1");
+        Assert.DoesNotContain(next.Log.Entries, entry => entry.Level >= LogLevel.Error);
+    }
+
     private static ActivationNode Start(
         ActivationStores stores,
         Func<Task>? beforePredecessorScan = null,
@@ -801,7 +889,7 @@ internal static class WorkflowActivationCrashRepairContract
                 stores.Bindings,
                 stores.Schedules,
                 observer is null ? null : [observer],
-                NullLogger<WorkflowActivationCoordinator>.Instance);
+                Log);
             _shellStart = new(
                 new OccupiedActivationSlots(stores.References, stores.Authority, new FixedTimeProvider(Now)),
                 Coordinator,
@@ -810,6 +898,7 @@ internal static class WorkflowActivationCrashRepairContract
 
         public ActivationStores Stores { get; }
         public WorkflowActivationCoordinator Coordinator { get; }
+        public RecordingLogger<WorkflowActivationCoordinator> Log { get; } = new();
 
         public async Task<WorkflowActivationResult> ActivateAsync(string activationId, string artifactId, CancellationToken cancellationToken = default) =>
             await Coordinator.ActivateAsync(
