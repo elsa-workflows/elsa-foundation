@@ -16,7 +16,7 @@ namespace Elsa.Workbench;
 /// start with the way to clear it, or, with nothing pending, goes on past it, instead of hanging it (#2196). The vendor
 /// initializer is left to create the demo in-memory store and nothing else.
 /// </summary>
-internal static class WorkbenchOpenIddictMigrationPolicy
+public static class WorkbenchOpenIddictMigrationPolicy
 {
     /// <summary>
     /// Registered right after <c>AddWorkbenchOpenIddictVendor</c>, so the store is migrated at the same point in the host's start
@@ -24,7 +24,7 @@ internal static class WorkbenchOpenIddictMigrationPolicy
     /// the vendor initializer's: CShells copies root descriptors into shell providers, so a shell initializer would migrate again
     /// on activation.
     /// </summary>
-    internal static IServiceCollection AddWorkbenchOpenIddictMigrationPolicy(this IServiceCollection services, IConfiguration configuration)
+    public static IServiceCollection AddWorkbenchOpenIddictMigrationPolicy(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddSingleton<WorkbenchOpenIddictMigrationSwitch>();
         services.AddSingleton<IPostConfigureOptions<OpenIddictIdentityOptions>, TakeOverAutoMigrate>();
@@ -39,7 +39,7 @@ internal static class WorkbenchOpenIddictMigrationPolicy
 }
 
 /// <summary>Whether the store's <c>AutoMigrate</c> asked for migration, as the options pipeline resolved it before the vendor was told otherwise.</summary>
-internal sealed class WorkbenchOpenIddictMigrationSwitch
+public sealed class WorkbenchOpenIddictMigrationSwitch
 {
     public bool AutoMigrate { get; set; } = true;
 }
@@ -59,7 +59,7 @@ internal sealed class TakeOverAutoMigrate(WorkbenchOpenIddictMigrationSwitch mig
 }
 
 /// <summary>Migrates the durable OpenIddict store at the host's start, as the store's own <c>AutoMigrate</c> asked.</summary>
-internal sealed class WorkbenchOpenIddictMigrator : IHostedService
+public sealed class WorkbenchOpenIddictMigrator : IHostedService
 {
     private readonly WorkbenchOpenIddictMigrationSwitch _migration;
     private readonly IServiceProvider _services;

@@ -346,13 +346,16 @@ if [[ " $acts " == *" 1 "* ]]; then
     expect_eq "the shell is refused" 500 "$(http_code "http://127.0.0.1:$port_solo/demo/notes")"
     grep -q "has pending migrations" "$logs/solo.log" || fail "the host log does not say why the shell was refused"
     ok "the host log says the migrations are pending"
+    expect_has "readiness says the module refused" "$(curl -s "http://127.0.0.1:$port_solo/health/ready")" "activation-refused"
 
     step "Act 1.5 (fallback) dotnet elsa persistence apply"
     apply_solo
     expect_match "the module's row" "$out" '^01 +Samples\.Notes +NotesSqliteDbContext +__EFMigrationsHistory_ElsaSamplesNotes +1 *$'
 
-    step "Act 1.6 (fallback) the next request activates the shell"
-    expect_eq "readiness stays 503 until the first request" 503 "$(http_code "http://127.0.0.1:$port_solo/health/ready")"
+    # No request is sent: the host checks a refused shell again on its own, at Elsa:Boot:EagerShellActivation:Retry:MaxDelay
+    # (a minute, less up to a fifth of it), so readiness reaches 200 within that cap after the apply.
+    step "Act 1.6 (fallback) the host activates the shell by itself"
+    wait_until "host solo ready on its own after the apply" 75 ready solo "$port_solo"
     stage notes "$port_solo"
     expect_eq "the shell is active and lists the notes" 2 "$(line_count "$out")"
     reloaded_at="$(now)"

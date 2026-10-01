@@ -20,6 +20,8 @@ using Elsa.Workflows.Runtime.Api.Coalescing;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Http.Options;
+using Elsa.Workflows.Runtime.Http.Tasks;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -75,6 +77,8 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
 
     private readonly IHost _host;
     private readonly string? _databaseDirectory;
+    private readonly CancellationTokenSource _stopping = new();
+    private IScheduledTaskExecution? _routeTableConvergence;
 
     private HttpEndpointHostFixture(IHost host, string? databaseDirectory = null)
     {
@@ -83,6 +87,16 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
     }
 
     public HttpClient Client => _host.GetTestClient();
+
+    /// <summary>
+    /// Schedules this node's route-table convergence pump on its own adaptive schedule, as the Tasks feature schedules
+    /// every recurring task, until the fixture is disposed.
+    /// </summary>
+    public void StartRouteTableConvergence()
+    {
+        var pump = Services.GetServices<IRecurringTask>().OfType<HttpEndpointRouteTableConvergencePumpTask>().Single();
+        _routeTableConvergence = pump.GetSchedule().ScheduleExecution(() => pump.ExecuteAsync(_stopping.Token));
+    }
 
     public IServiceProvider Services => _host.Services;
 
@@ -99,29 +113,49 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
         var databaseDirectory = Path.Join(Path.GetTempPath(), $"elsa-http-runtime-ef-{Guid.NewGuid():N}");
         Directory.CreateDirectory(databaseDirectory);
         var databasePath = Path.Join(databaseDirectory, "runtime.db");
-        var connectionString = $"Data Source={databasePath};Pooling=False";
 
         return StartAsync(
+            services => AddDurableSqlite(services, databasePath, checkpointPersistenceMode, maxSegmentCheckpoints),
+            databaseDirectory);
+    }
+
+    /// <summary>
+    /// Starts one node of a multi-node deployment (#2190): its own host, so its own route table, observers and
+    /// convergence pump, over the EF Core SQLite database at <paramref name="databasePath"/> that the other nodes share.
+    /// The caller owns the database. The pump runs only once <see cref="StartRouteTableConvergence"/> is called, so a
+    /// test can first show what this node serves without it.
+    /// </summary>
+    public static Task<HttpEndpointHostFixture> StartSharedDurableSqliteNodeAsync(string databasePath, TimeSpan routeTableConvergenceInterval) =>
+        StartAsync(
             services =>
             {
-                // Durable composition refuses the ephemeral development signer, so the fixture supplies the
-                // stable recovery-continuation key a real durable host configures.
-                services.AddRuntimeEntityFrameworkCore(new RuntimeEntityFrameworkCoreOptions
-                {
-                    Provider = "Sqlite",
-                    ConnectionString = connectionString,
-                    RecoveryContinuationSigningKey = "http-endpoint-fixture-recovery-signing-key-32-bytes",
-                    HierarchyCursorSigningKey = "http-endpoint-fixture-hierarchy-signing-key-32-bytes"
-                });
-                services.AddEfModuleMigrations<RuntimeDbContext>("Sqlite");
-
-                new WorkflowsRuntimeCheckpointPersistenceFeature
-                {
-                    Mode = checkpointPersistenceMode,
-                    MaxSegmentCheckpoints = maxSegmentCheckpoints
-                }.PostConfigureServices(services);
+                AddDurableSqlite(services, databasePath, CheckpointPersistenceMode.Immediate, maxSegmentCheckpoints: 50);
+                services.Configure<HttpEndpointRouteTableConvergenceOptions>(options => options.Interval = routeTableConvergenceInterval);
             },
-            databaseDirectory);
+            databaseDirectory: null);
+
+    private static void AddDurableSqlite(
+        IServiceCollection services,
+        string databasePath,
+        CheckpointPersistenceMode checkpointPersistenceMode,
+        int maxSegmentCheckpoints)
+    {
+        // Durable composition refuses the ephemeral development signer, so the fixture supplies the
+        // stable recovery-continuation key a real durable host configures.
+        services.AddRuntimeEntityFrameworkCore(new RuntimeEntityFrameworkCoreOptions
+        {
+            Provider = "Sqlite",
+            ConnectionString = $"Data Source={databasePath};Pooling=False",
+            RecoveryContinuationSigningKey = "http-endpoint-fixture-recovery-signing-key-32-bytes",
+            HierarchyCursorSigningKey = "http-endpoint-fixture-hierarchy-signing-key-32-bytes"
+        });
+        services.AddEfModuleMigrations<RuntimeDbContext>("Sqlite");
+
+        new WorkflowsRuntimeCheckpointPersistenceFeature
+        {
+            Mode = checkpointPersistenceMode,
+            MaxSegmentCheckpoints = maxSegmentCheckpoints
+        }.PostConfigureServices(services);
     }
 
     private static async Task<HttpEndpointHostFixture> StartAsync(
@@ -180,6 +214,11 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
                     // above (the reflective feature loader can't resolve this out-of-assembly type). The
                     // BookmarkLifecycleNotifier that fans into it is already registered by WorkflowsRuntimeApiFeature.
                     services.TryAddEnumerable(ServiceDescriptor.Singleton<IBookmarkLifecycleObserver, Elsa.Workflows.Runtime.Http.Services.RouteTableBookmarkObserver>());
+
+                    // #2190. The pump that converges this node's route table with changes other nodes make, which reach
+                    // it only through the shared stores — the same pump WorkflowsRuntimeHttpFeature contributes. A plain
+                    // HostBuilder runs no recurring tasks; StartRouteTableConvergence schedules it the way Tasks does.
+                    services.TryAddEnumerable(ServiceDescriptor.Singleton<IRecurringTask, HttpEndpointRouteTableConvergencePumpTask>());
 
                     // Spec 089 sub-unit C (T010). The endpoint-policy seam services the middleware resolves from
                     // RequestServices: the REAL authorization + fault handlers from Elsa.Workflows.Runtime.Http and
@@ -862,6 +901,10 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        await _stopping.CancelAsync();
+        if (_routeTableConvergence is not null)
+            await _routeTableConvergence.DisposeAsync();
+        _stopping.Dispose();
         await _host.StopAsync();
         _host.Dispose();
 

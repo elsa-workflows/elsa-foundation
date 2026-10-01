@@ -52,6 +52,15 @@ under the base path `/workflows/http`. It matches the request against the shell'
 trigger index matches and resumes every waiting bookmark that matches. Both branches end in the same two
 dispatchers the API path uses, so the rest of this document applies to it too.
 
+Each node keeps its own `IRouteTable`, built from the durable trigger bindings and waiting HTTP bookmarks. The node
+that publishes an endpoint, or suspends on one, refreshes its table at once; every other node picks the change up
+within the `WorkflowsRuntimeHttp` feature's convergence interval (5 seconds by default), until which that endpoint
+returns 404 there. One thing lags longer: a republish that changes only an endpoint's authorization options
+(`Authorize`, `Policy`) leaves its template and method as they were, so other nodes' route inventory metadata keeps the
+old security disposition until the next change to the set of routes. Enforcement is not affected, because the middleware
+reads the authorization options from the durable trigger bindings and bookmarks on every request. See "Multi-node
+guarantee" in `src/essentials/Workflows/Runtime/Http/EXTENSION_POINTS.md`.
+
 ### 2. Resolving the executable
 
 Runtime never executes a workflow definition. It executes a `WorkflowExecutable`
@@ -192,9 +201,10 @@ registers `RuntimeResumptionPumpTask` as an `IRecurringTask` (it depends on the 
 Each tick calls `IRuntimeResumptionService.SweepAsync`, implemented by
 `src/essentials/Workflows/Runtime/Services/Recovery/RuntimeResumptionService.cs`. One sweep does three things: deliver pending
 post-commit outbox items, list executions that still have queued work
-(`IWorkflowSchedulerWorkQueue.ListPendingWorkflowExecutionIdsAsync`) plus candidates from
-`IRuntimeRecoveryScanner.ScanPageAsync`, and re-drive each execution by sending a `RunSchedulerWork` envelope to
-its mailbox. Re-driving never bypasses the mailbox, so the single-writer rule holds during recovery too.
+(`IWorkflowSchedulerWorkQueue.ListClaimableWorkflowExecutionIdsAsync`, which lists only work a claim could take now)
+plus candidates from `IRuntimeRecoveryScanner.ScanPageAsync`, and re-drive each execution whose next item the pause
+gate would let through by sending a `RunSchedulerWork` envelope to its mailbox. Re-driving never bypasses the mailbox,
+so the single-writer rule holds during recovery too.
 
 `IRuntimeRecoveryScanner` (`src/essentials/Workflows/Runtime/Core/Contracts/IRuntimeRecoveryScanner.cs`) defaults to
 `InMemoryRuntimeRecoveryScanner`, which reads `IExecutionLivenessStateStore`; the EF Core module replaces it with

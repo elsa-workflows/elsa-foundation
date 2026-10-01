@@ -2,6 +2,7 @@ using Elsa.Cluster.Core.Contracts;
 using Elsa.Cluster.Core.Extensions;
 using Elsa.Cluster.Core.Models;
 using Elsa.Cluster.Core.Options;
+using Elsa.Cluster.Hosting;
 using Elsa.Persistence.EntityFramework;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -43,6 +44,8 @@ public static class EfClusterMembershipServiceCollectionExtensions
             ServiceDescriptor.Singleton<IClusterMembership>(host.Membership)));
         services.TryAddSingleton(TimeProvider.System);
         services.AddSingleton<IValidateOptions<ClusterMembershipOptions>>(new CleanupPeriodValidator(options.CleanupPeriod));
+        // By instance, so every shell sees the host's one, and the host app reads it after the host stops.
+        services.AddSingleton(host.Stop);
 
         var addContext = Binding.Select<Action<IServiceCollection, EfClusterMembershipOptions>>(
             options.Provider,
@@ -75,6 +78,9 @@ public static class EfClusterMembershipServiceCollectionExtensions
         private readonly object _gate = new();
         private EfClusterMembership? _member;
 
+        /// <summary>Why the member stopped the host, if it did, for the host app's exit code.</summary>
+        public ClusterMembershipHostStop Stop { get; } = new();
+
         public IClusterMembership Membership(IServiceProvider services) => Get(services);
 
         public IHostedService Lifecycle(IServiceProvider services)
@@ -86,6 +92,8 @@ public static class EfClusterMembershipServiceCollectionExtensions
                 // Cleanup runs every tenth of its period, and never more often than the heartbeat.
                 TimeSpan.FromTicks(Math.Max(timings.HeartbeatInterval.Ticks, settings.CleanupPeriod.Ticks / 10)),
                 services.GetRequiredService<TimeProvider>(),
+                services.GetService<IHostApplicationLifetime>(),
+                Stop,
                 Loggers(services).CreateLogger<EfClusterMembershipLifecycle>());
         }
 

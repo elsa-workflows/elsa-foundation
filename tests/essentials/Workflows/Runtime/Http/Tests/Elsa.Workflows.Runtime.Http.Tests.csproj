@@ -14,6 +14,10 @@
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" />
     <PackageReference Include="coverlet.collector" />
+    <!-- CShells core: a composition test activates a real shell (AddCShells + IShellRegistry) to prove the Tasks
+         feature schedules the route-table convergence pump and that it runs (#2190). -->
+    <PackageReference Include="CShells" />
+    <PackageReference Include="Microsoft.Extensions.Caching.Memory" />
   </ItemGroup>
 
   <ItemGroup>
@@ -21,6 +25,9 @@
     <ProjectReference Include="..\..\..\..\..\..\src\essentials\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\essentials\Workflows\Runtime\Elsa.Workflows.Runtime.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\essentials\Http\Core\Elsa.Http.Core.csproj" />
+    <!-- The real Http (route table) and Tasks (recurring-task scheduling) features for the shell composition test. -->
+    <ProjectReference Include="..\..\..\..\..\..\src\essentials\Http\Elsa.Http.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\essentials\Tasks\Elsa.Tasks.csproj" />
   </ItemGroup>
 
 </Project>

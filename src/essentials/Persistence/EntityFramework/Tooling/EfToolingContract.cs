@@ -474,7 +474,10 @@ public sealed class EfToolingFinalizationFamily
     /// <summary>The finish record's completion version (spec 186), or null when none stands.</summary>
     public string? CompletionVersion { get; init; }
 
-    /// <summary>The backfill run a worker has claimed in the finish record (spec 186, FR-008 and FR-021), or null when none is.</summary>
+    /// <summary>
+    /// The backfill run a worker has claimed in the finish record (spec 186, FR-008 and FR-021), on the completion that
+    /// stands or, while none stands, on its withdrawal; or null when none is.
+    /// </summary>
     public EfToolingBackfillRun? BackfillRun { get; init; }
 
     /// <summary>The withdrawal of the family's completion while none has been recorded since (spec 186, FR-018), or null.</summary>

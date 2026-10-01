@@ -25,4 +25,13 @@ public interface IGlobalBookmarkStimulusLookup
     ValueTask<GlobalBookmarkStimulusLookupResult> FindWaitingByTypeAsync(
         GlobalBookmarkStimulusTypeLookupRequest request,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Returns the distinct stimulus hashes of the bookmarks <see cref="FindWaitingByTypeAsync"/> would match, without
+    /// returning the bookmarks. A per-node projection rebuilt from waiting bookmarks (the HTTP route table) compares
+    /// the result between reads to notice a suspension or resumption on another node.
+    /// </summary>
+    ValueTask<IReadOnlyCollection<string>> FindWaitingStimulusHashesByTypeAsync(
+        GlobalBookmarkStimulusTypeLookupRequest request,
+        CancellationToken cancellationToken = default);
 }

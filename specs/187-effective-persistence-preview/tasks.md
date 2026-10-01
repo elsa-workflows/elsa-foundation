@@ -1,7 +1,7 @@
 # Tasks: Effective persistence preview
 
 **Input**: [plan](plan.md), [spec](spec.md), research, data model and contracts.
-Implementation checkpoint: Unix group completion is restored after the hosted flood case exposed supervisor-only waiting. Rebuilt full CLI 769/769, real Linux native/worker/response controls 40/40, migrations 442/442, Planning 112/112 and architecture 620/620 passed with zero skipped; maps are refreshed/fresh. The exited-leader live-group mutation fails the intended pending-completion assertion and source is restored. Isolated Windows 8/8 remains exact-source proof for 38dd5e3a7, with a refresh planned for the next pushed head. T020 remains open pending fresh review/required CI and exact-main gates; this is not delivery completion.
+Implementation checkpoint: supervisor extraction and44 direct cases are pushed and its mapped review reply is posted. Current-main63ce is normally integrated; rebuilt combined CLI865, migrations448, architecture622 and actualLinux224 pass with zero skipped. Unchanged Planning retains112. Maps all/check and the24-canary bounded scan pass; protocol mutation2/2 fails as intended with source byte-restored. See [chronological evidence](implementation-evidence.md) for source/artifact identities, independent/root review, retained failures and main-red2216 investigation. T020 remains open pending fresh final-head review/CI/Windows and exact-main delivery gates.
 
 ## Phase 1: Setup
 

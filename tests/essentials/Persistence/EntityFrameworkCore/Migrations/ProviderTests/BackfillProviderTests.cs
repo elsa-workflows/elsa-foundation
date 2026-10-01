@@ -28,6 +28,20 @@ public sealed class BackfillProviderTests
     public Task The_backfill_upgrades_verifies_records_audits_and_withdraws_on_mysql() =>
         RunAsync("MySql", (builder, connection) => builder.UseMySQL(connection));
 
+    /// <summary>
+    /// FR-008 after FR-018 on PostgreSQL, where the claim on a withdrawal is a compare-and-set the engine's concurrency
+    /// check decides: several workers racing for it after a withdrawal give one upgrader.
+    /// </summary>
+    [SkippableFact]
+    public Task After_a_withdrawal_several_workers_racing_for_the_claim_give_one_upgrader_on_postgresql() =>
+        ProviderDatabase.RunAsync("PostgreSql", async connection =>
+        {
+            var clock = new FakeTimeProvider(new DateTimeOffset(2026, 9, 29, 12, 0, 0, TimeSpan.Zero));
+            var database = new BackfillDatabase(builder => builder.UseNpgsql(connection));
+            await database.CreateAsync(clock);
+            await BackfillWithdrawalRace.RunAsync(database, clock, workers: 4);
+        });
+
     private static Task RunAsync(string provider, Func<DbContextOptionsBuilder, string, DbContextOptionsBuilder> use) =>
         ProviderDatabase.RunAsync(provider, async connection =>
         {

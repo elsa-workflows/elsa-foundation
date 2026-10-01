@@ -70,7 +70,7 @@ public sealed record EfSchemaFamilyStatus(
             record.Holds,
             pending,
             record.Finish,
-            Withdrawal: record.Finish is null && record.FinishHistory.LastOrDefault() is { Transition: SchemaFinishTransition.Withdrawn } withdrawn ? withdrawn : null);
+            Withdrawal: record.StandingWithdrawal);
     }
 }
 

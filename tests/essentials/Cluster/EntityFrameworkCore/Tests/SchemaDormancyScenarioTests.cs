@@ -363,7 +363,7 @@ public sealed class SchemaDormancyScenarioTests : IAsyncLifetime
     /// <summary>The post-finalization backfill recording that no row below <paramref name="version"/> remains (spec 186, FR-014).</summary>
     private Task CompleteElsewhereAsync(string version) => WithStoreAsync(async store =>
         await store.RecordCompletionAsync(
-            _family, (await store.FindAsync(_family))!.Revision, version, _time.GetUtcNow(), _time.GetUtcNow(), Chain, new SchemaFinalizationMember("backfill", "b")));
+            _family, (await store.FindAsync(_family))!.Revision, version, _time.GetUtcNow(), _time.GetUtcNow(), Chain, new SchemaFinalizationMember("backfill", "b"), worker: null));
 
     private async Task WithStoreAsync(Func<EfSchemaFinalizationStore, Task> action)
     {

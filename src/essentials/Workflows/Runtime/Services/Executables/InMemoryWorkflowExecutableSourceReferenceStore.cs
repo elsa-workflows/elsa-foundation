@@ -131,12 +131,23 @@ public sealed class InMemoryWorkflowExecutableSourceReferenceStore : IWorkflowEx
         }
     }
 
-    public ValueTask<bool> DeleteAsync(string sourceReferenceId, CancellationToken cancellationToken = default)
+    public ValueTask<bool> TryDeleteDoomedAsync(
+        WorkflowExecutableSourceReference expectedDoomedReference,
+        DateTimeOffset now,
+        CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(sourceReferenceId);
+        ArgumentNullException.ThrowIfNull(expectedDoomedReference);
+        cancellationToken.ThrowIfCancellationRequested();
 
         lock (_gate)
-            return ValueTask.FromResult(_references.Remove(sourceReferenceId));
+        {
+            if (!_references.TryGetValue(expectedDoomedReference.SourceReferenceId, out var current) ||
+                !WorkflowExecutableSourceReferenceComparer.SameSnapshot(current, expectedDoomedReference) ||
+                current.IsLive(now))
+                return ValueTask.FromResult(false);
+
+            return ValueTask.FromResult(_references.Remove(current.SourceReferenceId));
+        }
     }
 
     public ValueTask<IReadOnlyCollection<string>> DeleteExpiredOrRetiredAsync(
