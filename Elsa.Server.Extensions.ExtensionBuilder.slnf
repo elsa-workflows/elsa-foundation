@@ -1,0 +1,22 @@
+{
+  "solution": {
+    "path": "Elsa.Server.slnx",
+    "projects": [
+      "src/essentials/Api/AspNetCore/Elsa.Api.AspNetCore.csproj",
+      "src/essentials/Attention/Core/Elsa.Attention.Core.csproj",
+      "src/essentials/Cluster/Core/Elsa.Cluster.Core.csproj",
+      "src/essentials/Cluster/InProcess/Elsa.Cluster.InProcess.csproj",
+      "src/essentials/Cluster/Readability/Elsa.Cluster.Readability.csproj",
+      "src/essentials/Foundation/Identity/Core/Elsa.Foundation.Identity.Core.csproj",
+      "src/essentials/Foundation/Identity/Elsa.Foundation.Identity.csproj",
+      "src/essentials/Git/Elsa.Git.csproj",
+      "src/essentials/Modularity/Api/Elsa.Modularity.Api.csproj",
+      "src/essentials/Modularity/Core/Elsa.Modularity.Core.csproj",
+      "src/essentials/Modularity/Nuplane/Elsa.Modularity.Nuplane.csproj",
+      "src/essentials/Persistence/Schema/Elsa.Persistence.Schema.csproj",
+      "src/essentials/Primitives/Primitives/Elsa.Primitives.csproj",
+      "src/extensions/ExtensionBuilder/src/Api/Elsa.ExtensionBuilder.Api.csproj",
+      "src/extensions/ExtensionBuilder/tests/Api/Tests/Elsa.ExtensionBuilder.Api.Tests.csproj"
+    ]
+  }
+}

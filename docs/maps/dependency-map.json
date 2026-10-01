@@ -619,6 +619,11 @@
           "path": "src/extensions/Agent/src/Workflows/Elsa.Agent.Workflows.csproj"
         },
         {
+          "type": "internal",
+          "id": "Elsa.ExtensionBuilder.Api",
+          "path": "src/extensions/ExtensionBuilder/src/Api/Elsa.ExtensionBuilder.Api.csproj"
+        },
+        {
           "type": "external",
           "id": "CShells.Management.Api",
           "version": "0.0.30-preview.159"
@@ -10087,6 +10092,159 @@
       ]
     },
     {
+      "path": "src/extensions/ExtensionBuilder/src/Api/Elsa.ExtensionBuilder.Api.csproj",
+      "name": "Elsa.ExtensionBuilder.Api",
+      "kind": "source",
+      "domain": "Elsa.ExtensionBuilder",
+      "sub_domain": "Api",
+      "role": "feature/implementation",
+      "declared_target_framework": null,
+      "packable": true,
+      "package_id": "Elsa.ExtensionBuilder.Api",
+      "line": "B",
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Api.AspNetCore",
+          "path": "src/essentials/Api/AspNetCore/Elsa.Api.AspNetCore.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Cluster.Readability",
+          "path": "src/essentials/Cluster/Readability/Elsa.Cluster.Readability.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Foundation.Identity.Core",
+          "path": "src/essentials/Foundation/Identity/Core/Elsa.Foundation.Identity.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Foundation.Identity",
+          "path": "src/essentials/Foundation/Identity/Elsa.Foundation.Identity.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Git",
+          "path": "src/essentials/Git/Elsa.Git.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Modularity.Api",
+          "path": "src/essentials/Modularity/Api/Elsa.Modularity.Api.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Modularity.Core",
+          "path": "src/essentials/Modularity/Core/Elsa.Modularity.Core.csproj"
+        },
+        {
+          "type": "external",
+          "id": "Nuplane.Admin",
+          "version": "0.0.11-preview.94"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "CShells",
+          "version": "0.0.30-preview.159"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "CShells.Abstractions",
+          "version": "0.0.30-preview.159"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "CShells.AspNetCore.Abstractions",
+          "version": "0.0.30-preview.159"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Elsa.Specifications.PackageManifests",
+          "version": "0.0.1-preview.8"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "JsonSchema.Net",
+          "version": "9.2.0"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "NativeEndpoints",
+          "version": "1.0.0-preview.6"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Newtonsoft.Json",
+          "version": "13.0.4"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Nuplane",
+          "version": "0.0.11-preview.94"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Nuplane.Loading.Abstractions",
+          "version": "0.0.11-preview.94"
+        }
+      ]
+    },
+    {
+      "path": "src/extensions/ExtensionBuilder/tests/Api/Tests/Elsa.ExtensionBuilder.Api.Tests.csproj",
+      "name": "Elsa.ExtensionBuilder.Api.Tests",
+      "kind": "test",
+      "domain": "Elsa.ExtensionBuilder",
+      "sub_domain": "Api.Tests",
+      "role": "test",
+      "declared_target_framework": null,
+      "packable": false,
+      "package_id": null,
+      "line": null,
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Git",
+          "path": "src/essentials/Git/Elsa.Git.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Modularity.Core",
+          "path": "src/essentials/Modularity/Core/Elsa.Modularity.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.ExtensionBuilder.Api",
+          "path": "src/extensions/ExtensionBuilder/src/Api/Elsa.ExtensionBuilder.Api.csproj"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.AspNetCore.TestHost",
+          "version": "10.0.10"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.NET.Test.Sdk",
+          "version": "18.0.0"
+        },
+        {
+          "type": "external",
+          "id": "coverlet.collector",
+          "version": "6.0.2"
+        },
+        {
+          "type": "external",
+          "id": "xunit",
+          "version": "2.9.3"
+        },
+        {
+          "type": "external",
+          "id": "xunit.runner.visualstudio",
+          "version": "3.1.5"
+        }
+      ]
+    },
+    {
       "path": "tests/essentials/Activities/Behavioral/Tests/Elsa.Activities.Behavioral.Tests.csproj",
       "name": "Elsa.Activities.Behavioral.Tests",
       "kind": "test",
@@ -15262,6 +15420,11 @@
           "type": "internal",
           "id": "Elsa.Agent.Anthropic",
           "path": "src/extensions/Agent/src/Anthropic/Elsa.Agent.Anthropic.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.ExtensionBuilder.Api",
+          "path": "src/extensions/ExtensionBuilder/src/Api/Elsa.ExtensionBuilder.Api.csproj"
         },
         {
           "type": "internal",
