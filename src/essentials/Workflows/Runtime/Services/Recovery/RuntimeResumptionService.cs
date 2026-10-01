@@ -12,8 +12,7 @@ namespace Elsa.Workflows.Runtime.Services.Recovery;
 /// <summary>
 /// Default <see cref="IRuntimeResumptionService"/>. One sweep pass performs three steps:
 /// system-wide post-commit outbox delivery (catches items stranded between checkpoint commit and
-/// dispatch, including due <c>FailedRetryable</c> retries; a scheduler-work continuation is left to the
-/// drain that holds its execution's ownership lease, #2225), backlog discovery (durably queued
+/// dispatch, including due <c>FailedRetryable</c> retries), backlog discovery (durably queued
 /// scheduler work plus recovery-scanner candidates), and per-execution re-drive through the agent
 /// mailbox with a <see cref="WorkflowExecutionCommandKind.RunSchedulerWork"/> envelope.
 /// </summary>
@@ -85,16 +84,11 @@ public sealed class RuntimeResumptionService(
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
 
-        // A continuation whose execution is draining belongs to that drain, which delivers it and drains the work it
-        // enqueues. Claiming it here would let the drain report quiescence with its next step still undrained, so a
-        // caller saw Accepted before the work its own command produced (#2225). The lease is the drain's liveness; a
-        // dead drain's lease expires and the item is claimed then.
         var outboxResult = await outboxProcessor.ProcessAsync(
             new RuntimePostCommitOutboxProcessRequest(
                 limit: request.OutboxBatchSize,
                 workflowExecutionId: null,
-                intentKind: null,
-                deferContinuationsToExecutionOwner: true),
+                intentKind: null),
             cancellationToken);
 
         var discovery = await DiscoverExecutionIdsAsync(request, cancellationToken);

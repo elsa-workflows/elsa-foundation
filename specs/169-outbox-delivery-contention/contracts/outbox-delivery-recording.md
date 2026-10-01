@@ -149,5 +149,3 @@ The delivery processor MUST classify a superseded item as **neither delivered no
 - It MUST NOT count toward the failed count or set a delivery-failed stop reason (FR-005). The item is not lost; it is being delivered by its owner.
 
 A drain cycle in which every item is superseded therefore reports zero delivered, and the drain quiesces — which is correct.
-
-*Note (2026-10-01, #2225):* the sweep's claim now skips an `EnqueueSchedulerWork` item while its execution holds an unexpired ownership lease (`RuntimePostCommitOutboxClaimRequest.DeferContinuationsToExecutionOwner`). A live drain's own continuations are therefore no longer superseded by the sweep; supersession now happens only to a continuation left over from before the drain's lease.

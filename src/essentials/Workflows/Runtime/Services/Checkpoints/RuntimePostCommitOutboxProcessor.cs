@@ -144,8 +144,7 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
                 visibilityTimeout: ClaimVisibilityTimeout,
                 limit: request.Limit,
                 workflowExecutionId: request.WorkflowExecutionId,
-                intentKind: request.IntentKind,
-                deferContinuationsToExecutionOwner: request.DeferContinuationsToExecutionOwner), cancellationToken);
+                intentKind: request.IntentKind), cancellationToken);
             // The whole batch shares one visibility timeout but is dispatched one item at a time, so a long batch can
             // outlive the claims at its end. Each item is renewed immediately before its dispatch, and an item whose
             // claim was lost is skipped rather than dispatched again or allowed to end the batch (#2195).

@@ -7,8 +7,7 @@ public sealed class RuntimePostCommitOutboxProcessRequest
     public RuntimePostCommitOutboxProcessRequest(
         int limit,
         string? workflowExecutionId = null,
-        string? intentKind = null,
-        bool deferContinuationsToExecutionOwner = false)
+        string? intentKind = null)
     {
         if (limit <= 0)
             throw new ArgumentOutOfRangeException(nameof(limit), "Outbox processing limit must be greater than zero.");
@@ -22,18 +21,11 @@ public sealed class RuntimePostCommitOutboxProcessRequest
         Limit = limit;
         WorkflowExecutionId = workflowExecutionId;
         IntentKind = intentKind;
-        DeferContinuationsToExecutionOwner = deferContinuationsToExecutionOwner;
     }
 
     public int Limit { get; }
     public string? WorkflowExecutionId { get; }
     public string? IntentKind { get; }
-
-    /// <summary>
-    /// Passed to the durable claim as <see cref="RuntimePostCommitOutboxClaimRequest.DeferContinuationsToExecutionOwner"/>.
-    /// It has no effect on the claim-free live-drain delivery, which is the owner's own path.
-    /// </summary>
-    public bool DeferContinuationsToExecutionOwner { get; }
 }
 
 public sealed class RuntimePostCommitOutboxProcessResult

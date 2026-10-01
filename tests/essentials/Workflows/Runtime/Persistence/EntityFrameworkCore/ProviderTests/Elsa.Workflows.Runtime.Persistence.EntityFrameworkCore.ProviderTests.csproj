@@ -23,7 +23,6 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="..\Tests\SchedulerWorkQueueClaimableDiscoveryContract.cs" Link="SchedulerWorkQueueClaimableDiscoveryContract.cs" />
-    <Compile Include="..\Tests\PostCommitOutboxContinuationDeferralContract.cs" Link="PostCommitOutboxContinuationDeferralContract.cs" />
     <Compile Include="..\Tests\RuntimeTestDoubles.cs" Link="RuntimeTestDoubles.cs" />
     <Compile Include="..\Tests\ClaimLeaseOverrunContract.cs" Link="ClaimLeaseOverrunContract.cs" />
     <Compile Include="..\..\..\Tests\OverrunningIntentDispatcher.cs" Link="OverrunningIntentDispatcher.cs" />

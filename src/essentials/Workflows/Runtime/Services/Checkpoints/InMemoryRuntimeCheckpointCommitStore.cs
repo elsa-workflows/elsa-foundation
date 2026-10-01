@@ -387,20 +387,17 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
             RuntimePostCommitOutboxClaimCompletionOutcome.Persisted);
     }
 
-    public async ValueTask<IReadOnlyCollection<RuntimePostCommitOutboxClaim>> ClaimAsync(
+    public ValueTask<IReadOnlyCollection<RuntimePostCommitOutboxClaim>> ClaimAsync(
         RuntimePostCommitOutboxClaimRequest request,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var unowned = await FindUnownedContinuationExecutionsAsync(request, cancellationToken);
         lock (_state.SyncRoot)
         {
             var claimable = _state.OutboxItems.Values
                 .Where(item => RuntimePostCommitOutboxClaimTransitions.CanClaim(item, request))
-                .Where(item => !RuntimePostCommitOutboxClaimTransitions.DefersToExecutionOwner(item, request) ||
-                               unowned.Contains(item.Intent.WorkflowExecutionId))
                 .OrderBy(RuntimePostCommitOutboxClaimTransitions.ClaimableAt)
                 .ThenBy(item => item.RecordedAt)
                 .ThenBy(item => item.OutboxItemId, StringComparer.Ordinal)
@@ -414,45 +411,8 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
                 claims[index] = claim;
             }
 
-            return claims;
+            return new ValueTask<IReadOnlyCollection<RuntimePostCommitOutboxClaim>>(claims);
         }
-    }
-
-    // The executions whose deferrable continuations this claim may take: those read here with no unexpired ownership
-    // lease. Leases are read after the items, so a continuation committed by a live drain is seen with that drain's
-    // lease. A continuation committed after the item read was never checked and is left for the next claim.
-    private async ValueTask<IReadOnlySet<string>> FindUnownedContinuationExecutionsAsync(
-        RuntimePostCommitOutboxClaimRequest request,
-        CancellationToken cancellationToken)
-    {
-        if (!request.DeferContinuationsToExecutionOwner)
-            return new HashSet<string>(StringComparer.Ordinal);
-
-        string[] candidates;
-        lock (_state.SyncRoot)
-        {
-            candidates = _state.OutboxItems.Values
-                .Where(item => RuntimePostCommitOutboxClaimTransitions.CanClaim(item, request) &&
-                               RuntimePostCommitOutboxClaimTransitions.DefersToExecutionOwner(item, request))
-                .Select(item => item.Intent.WorkflowExecutionId)
-                .Distinct(StringComparer.Ordinal)
-                .ToArray();
-        }
-
-        var unowned = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var workflowExecutionId in candidates)
-        {
-            var ownership = _operationalStateStore is null
-                ? null
-                : await _operationalStateStore.FindAsync(
-                    workflowExecutionId,
-                    RuntimeExecutionOwnershipStateId.For(workflowExecutionId),
-                    cancellationToken);
-            if (ownership?.ExecutionLease is not { } lease || lease.IsExpired(request.Now))
-                unowned.Add(workflowExecutionId);
-        }
-
-        return unowned;
     }
 
     public ValueTask<RuntimePostCommitOutboxClaim?> RenewClaimAsync(
