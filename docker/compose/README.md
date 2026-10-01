@@ -314,6 +314,19 @@ The admin account is created only if it doesn't exist yet, so changing the passw
 an existing account's password as it was. To seed it again with a new password, wipe the data
 (`docker compose down -v`).
 
+**Encrypt the Data Protection keys at rest.** `docker-compose.yml` keeps the key ring that protects the sign-in
+cookie and the antiforgery tokens in Postgres (`Elsa__DataProtection__EntityFrameworkCore__Enabled`), so recreating
+the `elsa-workbench` container keeps everyone signed in. Without a certificate the keys are stored unencrypted, which
+the container warns about as it starts. Mount a PKCS#12 certificate with its private key and point the server at it:
+
+```
+Elsa__DataProtection__Certificate__Path=/run/secrets/data-protection.pfx
+Elsa__DataProtection__Certificate__Password=<certificate-password>
+```
+
+See [`docs/docker.md`](../../docs/docker.md#data-protection-keys) for what the key ring is and why every server
+container on one database needs the same one.
+
 ---
 
 ## 7. Troubleshooting

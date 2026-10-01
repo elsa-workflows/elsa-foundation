@@ -3,6 +3,7 @@ using CShells.AspNetCore.Extensions;
 using CShells.DependencyInjection;
 using Elsa.Cluster.Hosting;
 using Elsa.Cluster.Readability;
+using Elsa.Foundation.DataProtection;
 using Elsa.Foundation.Host.Feed;
 using Elsa.Foundation.Host.Health;
 using Elsa.Foundation.Host.ModuleManagement;
@@ -74,8 +75,19 @@ builder.Services.AddEfSchemaReadability();
 // refuses to start without an explicit Elsa:Cluster:Membership:HostId (spec 183, FR-003a, FR-024; #2151). Hosts that
 // share one database this way count each other, so a feed-loaded EF module's new schema version is finalized only once
 // every live host can read it. Provider settings without the enabling switch are refused, never ignored. This line
-// names no EF type: the extension lives in a provider-neutral namespace, and the host's EF closure exists for it alone.
+// names no EF type: the extension lives in a provider-neutral namespace, and the host's EF closure exists for it and for
+// the Data Protection key store below, nothing else.
 builder.Services.AddConfiguredClusterMembership(configuration);
+
+// ---------------------------------------------------------------------------------------------------------
+// Data Protection — the key ring every shell's sign-in cookie and antiforgery tokens are protected with (#2191).
+// ---------------------------------------------------------------------------------------------------------
+// Composed once, on this container, as membership is: CShells copies these registrations into every shell, and each shell
+// reads the host's one key store. The application name is always "Elsa", never derived from this host's content root. The
+// keys stay where ASP.NET Core keeps them by default unless the Elsa:DataProtection section enables its key store, which
+// shares them through the platform database, encrypted at rest with Elsa:DataProtection:Certificate when one is configured.
+// A clustered host that does not share them is warned about as it starts. Like membership, this line names no EF type.
+builder.Services.AddConfiguredDataProtection(configuration);
 
 // ---------------------------------------------------------------------------------------------------------
 // CShells — activate shells, map them, own per-shell middleware.

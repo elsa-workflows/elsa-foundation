@@ -171,7 +171,10 @@ COPY --from=build /app/publish ./
 #   /app/packages            Nuplane directory feed (watched; optionally a volume mount)
 #   /app/.elsa               GitHubCopilotAgent working directory
 #   *.db / *.sqlite*.db      SQLite fallback stores (only when a SQLite lane is composed)
-# so the non-root runtime user needs write access to the app directory.
+# so the non-root runtime user needs write access to the app directory. The Data Protection key ring is not among
+# them: unless Elsa:DataProtection:EntityFrameworkCore:Enabled keeps it in the platform database, ASP.NET Core keeps it
+# in the runtime user's home directory, which no volume covers, so a recreated container signs everyone out
+# (docs/docker.md, "Data Protection keys").
 RUN mkdir -p /app/packages /app/.nuplane /app/.elsa && chown -R $APP_UID:$APP_UID /app
 
 # The root endpoint returns a small Healthy JSON payload (see Program.cs).

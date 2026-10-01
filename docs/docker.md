@@ -132,6 +132,8 @@ can override it. Standard .NET double-underscore (`__`) env keys override any co
 | `CShells__Shells__default__Features__FoundationIdentityOpenIddict__SigningKey` | Base64 PKCS#8 RSA private key that signs access tokens; whitespace in the value is ignored. The overlay turns off OpenIddict development mode, so without a usable key the default shell fails activation (`/health/ready` returns `503 shell_activation_failed`). See [identity configuration](reference/identity-configuration.md#foundationidentityopeniddict). | a demo key committed in the compose files |
 | `ConnectionStrings__Elsa` | The relational connection every EF module falls back to **except** OpenTelemetry and the Elsa 3 import lane, which look for `ConnectionStrings__ElsaOpenTelemetry` and `ConnectionStrings__ElsaElsa3Import` unless the feature names a connection — see [Demo persistence composition](#demo-persistence-composition). Supplies the shared fallback without editing `appsettings.json` or the mounted `shells.json`; a feature that names its own `ConnectionString` still wins over it. | `Host=postgres;Port=5432;Database=elsa;Username=elsa;Password=elsa` |
 | `Elsa__Persistence__EntityFramework__Schema` | Optional database schema for every EF module's tables and history tables, for a deployment that shares a database with an application owning the default schema. Applied on SQL Server and PostgreSQL, ignored on SQLite, **refused on MySQL** — see below. | *(unset: the provider's own default)* |
+| `Elsa__DataProtection__EntityFrameworkCore__Enabled`, `…__Provider` | Keep the Data Protection key ring — what the sign-in cookie and the antiforgery tokens are protected with — in the platform database, so it survives the container and is shared by every container on that database. Connects through `ConnectionStrings__Elsa` unless `…__ConnectionString` or `…__ConnectionName` names another. See [Data Protection keys](#data-protection-keys). | `true`, `PostgreSql` |
+| `Elsa__DataProtection__Certificate__Path`, `…__Password` | A PKCS#12 certificate, the same on every container, that encrypts the keys at rest. Mount the file as a secret; the password is a secret too. | *(unset: the keys are stored unencrypted, which the container warns about as it starts)* |
 
 `Cors:AllowedOrigins` defaults (in `appsettings.json`) are localhost dev values for running the
 server outside Docker; the compose file adds the Studio container origin.
@@ -143,6 +145,45 @@ server outside Docker; the compose file adds the Studio container origin.
 | `/app/shells.json` (ro) | Shell composition. The compose stack mounts `elsa-workbench.shells.json`. |
 | `/app/packages` | Nuplane directory feed — drop `.nupkg` activity/extension packages here to load them at runtime (watched). Backed by a named volume in compose. |
 | `/app/workflow-definitions` (ro) | Workflow definition JSON files deployed at startup by the `JsonWorkflowReconciliation` feature (`FolderPath` + optional `PublishOnReconcile`). Path is conventional — it is whatever the feature's `FolderPath` points at. See [Deploying workflow definitions from files](docker-hub-quickstart.md#deploying-workflow-definitions-from-files). |
+
+### Data Protection keys
+
+ASP.NET Core Data Protection signs and encrypts the sign-in cookie and the antiforgery tokens. Its key ring is the
+host's, composed once on the host container and shared with every shell. Without configuration ASP.NET Core keeps it
+in the runtime user's home directory inside the container, which no volume covers. Two things then fail:
+
+- **A recreated container signs everyone out.** It starts with an empty key ring, so every cookie the old one issued is
+  refused.
+- **Two containers behind one load balancer refuse each other's cookies.** Without sticky sessions, a sign-in on one
+  container fails on the next request that reaches the other, and so does a form post's antiforgery check.
+
+The reference stack keeps the key ring in its PostgreSQL database instead (`Elsa__DataProtection__EntityFrameworkCore__Enabled`
+in `docker-compose.yml`), in the `elsa_data_protection_keys` table of the `DataProtection.Keys` EF module. Every container
+on that database then reads one key ring under the one application name, `Elsa`, whatever directory it runs from:
+
+```yaml
+Elsa__DataProtection__EntityFrameworkCore__Enabled: "true"
+Elsa__DataProtection__EntityFrameworkCore__Provider: PostgreSql      # the engine ConnectionStrings__Elsa reaches
+Elsa__DataProtection__Certificate__Path: /run/secrets/data-protection.pfx
+Elsa__DataProtection__Certificate__Password: "…"                     # a secret, like the certificate
+```
+
+- **Encrypt the keys at rest.** Without a certificate each key's secret is stored as written, so whoever can read the
+  table can forge a sign-in; the container warns about that every time it starts. Give every container the same
+  PKCS#12 certificate with its private key. A relative path is read from the content root, `/app`. A certificate that
+  cannot be loaded, or holds no private key, stops the container at startup, naming the key.
+- **Migrations.** The key table is an EF module of its own. Under `AutoMigrate`, as in the compose stacks, the container
+  creates it as it starts; under `Validate` it refuses to start until `dotnet elsa persistence apply --modules DataProtection.Keys`
+  has created it, like any other module.
+- **Half a configuration is refused.** Settings under `Elsa__DataProtection__EntityFrameworkCore__` without `Enabled`, and
+  a certificate without the key store, stop the container at startup, naming the key.
+- **A cluster without it is warned about.** A host that enables durable cluster membership but keeps its key ring to
+  itself logs a warning as it starts, naming the switch to set. It still starts: a cluster whose features sign nobody in
+  has nothing to share.
+
+The published-images stack (`docker-compose.images.yml`) keeps its data in a SQLite file inside the container, so it
+loses the key ring with the rest of its data when the container is recreated. Enabling the key store there keeps the keys
+with that data, in the same file.
 
 ---
 

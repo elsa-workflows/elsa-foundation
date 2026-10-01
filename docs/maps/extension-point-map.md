@@ -6,9 +6,9 @@ Records Markdown catalog facts from `EXTENSION_POINTS.md` files. It does not val
 
 ## Summary
 
-- Catalog files discovered: 65
-- Source catalogs discovered: 64
-- Source catalogs indexed from root: 60
+- Catalog files discovered: 66
+- Source catalogs discovered: 65
+- Source catalogs indexed from root: 61
 - Discovered source catalogs not linked from root index: 4
 - Root-indexed catalogs missing on disk: 0
 
@@ -52,6 +52,7 @@ Records Markdown catalog facts from `EXTENSION_POINTS.md` files. It does not val
 | [src/essentials/Expressions/JavaScript/EXTENSION_POINTS.md](../../src/essentials/Expressions/JavaScript/EXTENSION_POINTS.md) | Elsa.Expressions.JavaScript | Elsa.Expressions | - | - | - | 0 | yes |
 | [src/essentials/Expressions/JavaScript/Rendering/EXTENSION_POINTS.md](../../src/essentials/Expressions/JavaScript/Rendering/EXTENSION_POINTS.md) | Elsa.Expressions.JavaScript.Rendering | Elsa.Expressions | Implementable contributor interfaces<br>Events | `IJavaScriptDeclarationContributor` *(Core — `Elsa.Expressions.JavaScript.Rendering.Core`)*<br>DeclarationsDocumentGenerating | Contributor (receives a contribution context and acts — push pattern). | 1 | yes |
 | [src/essentials/Expressions/Liquid/EXTENSION_POINTS.md](../../src/essentials/Expressions/Liquid/EXTENSION_POINTS.md) | Elsa.Expressions.Liquid | Elsa.Expressions | - | - | - | 0 | yes |
+| [src/essentials/Foundation/DataProtection/EntityFrameworkCore/EXTENSION_POINTS.md](../../src/essentials/Foundation/DataProtection/EntityFrameworkCore/EXTENSION_POINTS.md) | Elsa.Foundation.DataProtection.EntityFrameworkCore | Elsa.Foundation | Composition<br>The key store<br>Startup warnings<br>Replacing the store | - | - | 0 | yes |
 | [src/essentials/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/EXTENSION_POINTS.md](../../src/essentials/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/EXTENSION_POINTS.md) | Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore | Elsa.Foundation | Authority selection<br>Adapted framework contracts | - | - | 0 | yes |
 | [src/essentials/Foundation/Identity/Core/EXTENSION_POINTS.md](../../src/essentials/Foundation/Identity/Core/EXTENSION_POINTS.md) | Elsa.Foundation.Identity.Core | Elsa.Foundation | Overridable contracts<br>Implementable contributor interfaces<br>Endpoint permission metadata and trusted principals<br>Events | `IAuthenticationProviderModule`<br>`IPermissionContributor`<br>`IPermissionResourceHandler`<br>Async authorization context replacement window<br>`AuthEvent` | Contributor (registered provider module; one implementation per configured provider family/profile).<br>Contributor (feature-owned permission contribution to the shared catalog).<br>Contributor (resource-specific authorization decision hook).<br>Audit event abstraction (record emitted through `IAuthEventSink`; no concrete dispatcher is selected in this PR). | 0 | yes |
 | [src/essentials/Http/EXTENSION_POINTS.md](../../src/essentials/Http/EXTENSION_POINTS.md) | Elsa.Http | Elsa.Http | Implementable contributor interfaces<br>Replaceable single-implementation contracts<br>Dynamic workflow route publication *(Core + `Elsa.Http`)*<br>HTTP endpoint behaviour contracts *(Core — `Elsa.Http.Core`)* | `IDownloadableContentHandler` *(Core — `Elsa.Http.Core`)*<br>`IHttpRequestBodyParser` *(Core — `Elsa.Http.Core`)* | Contributor (handles a specific content type for download — priority-ordered multi-implementation).<br>Replacement (single implementation, resolved by `GetService`; override by registering your own before `HttpFeature`). | 1 | yes |

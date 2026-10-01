@@ -129,6 +129,41 @@ The backend-served login page (`GET /_elsa/identity/login`) embeds an antiforger
 cookie; the login `POST` validates it for the HTML-form flow. JSON API callers are unaffected. No configuration
 is required.
 
+### Data Protection key ring
+
+The sign-in cookie and the antiforgery tokens are protected with ASP.NET Core Data Protection, whose key ring is the
+host's: `Elsa.Workbench` and `Elsa.Foundation.Host` compose it once on the host container with
+`AddConfiguredDataProtection(configuration)` (`Elsa.Foundation.DataProtection`), and every shell reads the host's key store.
+Its application name is always `Elsa`, never derived from the host's content root, so hosts deployed to different
+directories still read each other's payloads when they share a key ring.
+
+| Setting (under `Elsa:DataProtection`) | Default | Notes |
+|---|---|---|
+| `EntityFrameworkCore:Enabled` | `false` | Keeps the key ring in the platform database, in the `DataProtection.Keys` EF module's `elsa_data_protection_keys` table, so every host on that database shares it and a recreated host keeps it. `false` leaves it where ASP.NET Core keeps it by default, on this machine. |
+| `EntityFrameworkCore:Provider` | `Sqlite` | `Sqlite`, `SqlServer`, `PostgreSql` or `MySql`. SQLite serves several processes on one machine only. |
+| `EntityFrameworkCore:ConnectionString`, `ConnectionName` | `ConnectionStrings:Elsa` | As for every other EF module. `Schema` and `Pooling` are accepted too. |
+| `Certificate:Path`, `Certificate:Password` | — | A PKCS#12 certificate with its private key, the same on every host, that encrypts every key at rest. A relative path is read from the content root. |
+
+- **Clustered hosts share it.** A host that enables durable cluster membership but keeps its key ring to itself logs a
+  warning as it starts, naming `Elsa:DataProtection:EntityFrameworkCore:Enabled`: behind a load balancer without sticky
+  sessions, a cookie or antiforgery token issued by one host is refused by the next. It is a warning rather than a
+  refusal because only the shells that sign users in need it, and a cluster whose features sign nobody in has nothing
+  to share.
+- **Keys are encrypted at rest only with a certificate.** Without one, each key's secret is stored as written, and
+  whoever can read the table can forge a sign-in; the host warns about that every time it starts. DPAPI is not used,
+  because it ties the keys to one machine, which defeats sharing them.
+- **Misconfiguration is refused at startup, naming the key**: settings under `EntityFrameworkCore` without `Enabled`, a
+  value that does not parse, a certificate without the key store, and a certificate that cannot be loaded or holds no
+  private key.
+- **Migrations.** The key table belongs to an EF module the host composes itself, as it does cluster membership: under
+  `AutoMigrate` the host creates it as it starts, and under `Validate` it refuses to start until
+  `dotnet elsa persistence apply --modules DataProtection.Keys` has.
+- **The first upgrade signs everyone out once.** Hosts upgraded from a build that named the application after its
+  content root issued their cookies under that name, so the cookies they issued are refused after the upgrade.
+
+`src/essentials/Foundation/DataProtection/EntityFrameworkCore/EXTENSION_POINTS.md` is the reference; Docker deployments
+are covered in [Docker: Data Protection keys](../docker.md#data-protection-keys).
+
 ### No API kill-switch
 
 The former `ApiSecurity.AllowAnonymous` setting has been removed, and no configuration disables authentication for a
@@ -170,6 +205,9 @@ same-origin as the server for the session cookie to flow. Cross-origin setups re
 
     The Elsa IAM schema is owned by `IdentityIamEntityFrameworkCore` and migrates separately from the
     OpenIddict vendor context.
+11. **Share and encrypt the Data Protection key ring.** Set `Elsa:DataProtection:EntityFrameworkCore:Enabled=true` and
+    give every host the same `Elsa:DataProtection:Certificate`, so a recreated or second host keeps every session (see
+    [Data Protection key ring](#data-protection-key-ring)).
 
 If the signing key is missing, malformed, or under 2048 bits outside `IsDevelopmentOrDemo`, startup fails (shell activation, for a
 shell host) with an error that says how to fix it (see the `SigningKey` note above). The encryption key falls back to

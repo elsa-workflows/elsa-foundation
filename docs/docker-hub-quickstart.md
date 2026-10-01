@@ -59,6 +59,9 @@ The non-obvious settings:
   the browser can call the API and the login flow can redirect back to Studio.
 - `elsa-workbench-packages:/app/packages` is the Nuplane directory feed: drop `.nupkg`
   activity/extension packages into that volume to load them.
+- Recreating `elsa-workbench` signs you out: the key ring that protects the sign-in cookie lives in the container.
+  A deployment keeps it in its database with `Elsa__DataProtection__EntityFrameworkCore__Enabled=true`; see
+  [Data Protection keys](docker.md#data-protection-keys).
 
 ## Custom `shells.json`: controlling which features are enabled
 

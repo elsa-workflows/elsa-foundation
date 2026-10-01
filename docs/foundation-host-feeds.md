@@ -242,8 +242,9 @@ the module admits, its gate never finalizes past the version its record was crea
 is refused as not observed. `SharedAssemblyClosureGuardTests` fails the build when a host does not share both.
 
 **`Elsa.Foundation.Host` carries EF Core for its membership provider, and its modules bind that copy.** It carries
-`Elsa.Cluster.EntityFrameworkCore`, `Elsa.Persistence.EntityFramework`, EF Core and the four engines, and nothing else
-of EF ([ADR 0076](adr/0076-persistence-tooling-runs-inside-the-host-closure.md), amended 2026-09-29). It shares
+`Elsa.Cluster.EntityFrameworkCore`, the Data Protection key store `Elsa.Foundation.DataProtection.EntityFrameworkCore`,
+`Elsa.Persistence.EntityFramework`, EF Core and the four engines, and nothing else of EF
+([ADR 0076](adr/0076-persistence-tooling-runs-inside-the-host-closure.md), amended 2026-09-29 and 2026-10-01). It shares
 `Elsa.Persistence.EntityFramework` and EF Core's three assemblies, and declares EF Core's host-provided in every build
 and `Elsa.Persistence.EntityFramework` in a build with computed versions. So a feed-loaded EF module's dependency on any
 of them is never acquired, and the module binds the host's copy: the one `dotnet elsa persistence` discovers modules
@@ -812,6 +813,12 @@ Elsa__Cluster__Membership__EntityFrameworkCore__ConnectionString="Host=db;Databa
   modules, which Nuplane refuses without it ([Selecting the EF provider engine](#selecting-the-ef-provider-engine)); each
   module's own `Provider` feature setting chooses the engine it binds, and membership's `Provider` the one its table
   uses. They are normally all the same.
+- **Share the Data Protection key ring too.** Membership does not share it. A feed-loaded feature that signs users in
+  or checks antiforgery tokens protects them with the host's key ring, so hosts behind one load balancer refuse each
+  other's cookies unless every host sets `Elsa:DataProtection:EntityFrameworkCore:Enabled=true` (with its `Provider`,
+  and the same database), and a certificate under `Elsa:DataProtection:Certificate` to encrypt the keys at rest. A
+  clustered host without it logs a warning as it starts and still starts; a cluster whose features sign nobody in has
+  nothing to share. See [Data Protection key ring](reference/identity-configuration.md#data-protection-key-ring).
 
 **Rolling a new module version out.** Install the new release of an EF module on one host and it reads the new schema
 version, but the version is finalized only once every live host can read it (spec 181). Until then that host writes the

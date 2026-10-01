@@ -32,6 +32,7 @@ using Elsa.Diagnostics.StructuredLogs;
 using Elsa.Events;
 using Elsa.Expressions;
 using Elsa.Expressions.Api;
+using Elsa.Foundation.DataProtection;
 using Elsa.Foundation.Identity;
 using Elsa.Foundation.Identity.Api;
 using Elsa.Foundation.Identity.AspNetCoreIdentity;
@@ -229,6 +230,11 @@ builder.Services.AddWorkflowRuntimeRunnabilityReport();
 // The durable EF provider replaces that default only when the Elsa:Cluster:Membership section enables it (ADR 0078;
 // spec 183, FR-024), and then requires an explicit Elsa:Cluster:Membership:HostId. It publishes the same report.
 builder.Services.AddConfiguredClusterMembership(configuration);
+// The Data Protection key ring every shell's sign-in cookie and antiforgery tokens are protected with, composed once on the
+// host container as membership is, so every shell reads the host's one key store (#2191). The application name is always
+// "Elsa"; the Elsa:DataProtection section's key store shares the keys through the platform database, and
+// Elsa:DataProtection:Certificate encrypts them at rest. A clustered host that does not share them is warned about as it starts.
+builder.Services.AddConfiguredDataProtection(configuration);
 builder.Services.AddDynamicEndpointApiExplorerRefresh();
 
 builder.Services.AddCShellsAspNetCore(shells =>

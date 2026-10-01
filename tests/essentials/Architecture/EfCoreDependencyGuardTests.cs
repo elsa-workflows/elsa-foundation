@@ -21,10 +21,10 @@ public sealed class EfCoreDependencyGuardTests
     private static readonly string[] AllowedEfConsumers = ["Elsa.Foundation.Host", "Elsa.Workbench"];
 
     /// <summary>
-    /// ADR 0076, amended 2026-09-29 (#2151): <c>Elsa.Foundation.Host</c> carries EF Core for its opt-in cluster membership
-    /// provider and nothing else, so its closure is that provider's - EF Core and Relational - plus the four engines the
-    /// membership table can live in. No design-time package, no in-memory provider and no vendor EF store: every EF
-    /// module still arrives from a feed.
+    /// ADR 0076, amended 2026-09-29 (#2151) and 2026-10-01 (#2191): <c>Elsa.Foundation.Host</c> carries EF Core for its opt-in
+    /// cluster membership provider and its opt-in Data Protection key store and nothing else, so its closure is theirs - EF
+    /// Core and Relational - plus the four engines their tables can live in. No design-time package, no in-memory provider
+    /// and no vendor EF store: every feature's EF module still arrives from a feed.
     /// </summary>
     private static readonly string[] AllowedFoundationHostEfPackages =
     [
@@ -371,7 +371,22 @@ public sealed class EfCoreDependencyGuardTests
     [Fact]
     public void Every_admitted_cluster_membership_project_resolves_only_its_reviewed_EF_closure()
     {
-        var offenders = Adr0078ClusterMembershipEf.ExpectedEfPackagesByProject
+        var offenders = DriftFromReviewedClosures(Adr0078ClusterMembershipEf.ExpectedEfPackagesByProject);
+
+        Assert.True(offenders.Length == 0, Report("drift from the reviewed cluster membership EF closure", offenders));
+    }
+
+    [Fact]
+    public void Every_admitted_data_protection_project_resolves_only_its_reviewed_EF_closure()
+    {
+        var offenders = DriftFromReviewedClosures(Issue2191DataProtectionEf.ExpectedEfPackagesByProject);
+
+        Assert.True(offenders.Length == 0, Report("drift from the reviewed Data Protection key store EF closure", offenders));
+    }
+
+    /// <summary>Every EF package each project resolves that its reviewed closure lacks, and every reviewed one it no longer resolves.</summary>
+    private static string[] DriftFromReviewedClosures(IReadOnlyDictionary<string, string[]> expectedByProject) =>
+        expectedByProject
             .SelectMany(project => RestoreConfigurations.SelectMany(configuration =>
             {
                 var resolved = ReadProjectEfPackages(project.Key, configuration);
@@ -382,9 +397,6 @@ public sealed class EfCoreDependencyGuardTests
             }))
             .Order(StringComparer.OrdinalIgnoreCase)
             .ToArray();
-
-        Assert.True(offenders.Length == 0, Report("drift from the reviewed cluster membership EF closure", offenders));
-    }
 
     /// <summary>
     /// The adapter's reviewed closure is exact, so a provider engine appearing in it is flagged rather than
@@ -695,7 +707,8 @@ public sealed class EfCoreDependencyGuardTests
                     Adr0073Elsa3ImportEf.IsProjectPath(relativePath) ||
                     Adr0076ActivationGuardEf.IsProjectPath(relativePath) ||
                     Spec183ReadabilityEf.IsProjectPath(relativePath) ||
-                    Adr0078ClusterMembershipEf.IsProjectPath(relativePath)));
+                    Adr0078ClusterMembershipEf.IsProjectPath(relativePath) ||
+                    Issue2191DataProtectionEf.IsProjectPath(relativePath)));
         }
         return projects;
     }
@@ -843,6 +856,7 @@ public sealed class EfCoreDependencyGuardTests
                Adr0076ActivationGuardEf.IsSurfacePath(relativePath) ||
                Spec183ReadabilityEf.IsSurfacePath(relativePath) ||
                Adr0078ClusterMembershipEf.IsSurfacePath(relativePath) ||
+               Issue2191DataProtectionEf.IsSurfacePath(relativePath) ||
                OpenIddictPersistenceArchitectureTests.IsWorkbenchVendorEfSource(relativePath);
     }
 
@@ -1419,7 +1433,8 @@ public sealed class EfCoreDependencyGuardTests
     /// source itself is no longer admitted here: it resolves no EF package, and
     /// <see cref="Only_admitted_consumers_and_pilot_projects_resolve_ef_core_packages"/> keeps it that way, which is what
     /// lets a host compose it without EF (ADR 0076); <c>Elsa.Foundation.Host</c> carries EF only for its opt-in durable
-    /// membership provider (ADR 0076, amended 2026-09-29; #2151). Its tests read the declarations of two
+    /// membership provider and its opt-in Data Protection key store (ADR 0076, amended 2026-09-29 and 2026-10-01; #2151,
+    /// #2191). Its tests read the declarations of two
     /// first-party module assemblies, which resolve EF Core and Relational and never a provider engine.
     /// </summary>
     internal static class Spec183ReadabilityEf
@@ -1483,12 +1498,46 @@ public sealed class EfCoreDependencyGuardTests
         public static bool IsProjectPath(string relativePath) =>
             ProjectPaths.Contains(relativePath, StringComparer.Ordinal);
 
-        private static string[] CorePackages() =>
+        internal static string[] CorePackages() =>
         [
             "Microsoft.EntityFrameworkCore",
             "Microsoft.EntityFrameworkCore.Abstractions",
             "Microsoft.EntityFrameworkCore.Analyzers",
             "Microsoft.EntityFrameworkCore.Relational"
         ];
+    }
+
+    /// <summary>
+    /// The host's Data Protection composition and its opt-in EF key store (#2191; ADR 0076, amended 2026-10-01). Like cluster
+    /// membership, a host composes it once on its own container and brings the engine; provider engines stay in its focused
+    /// tests, SQLite in the fast suite (beside the durable membership its startup check warns about) and the three container
+    /// engines in its provider legs.
+    /// </summary>
+    internal static class Issue2191DataProtectionEf
+    {
+        public static readonly string[] SurfacePathPrefixes =
+        [
+            "src/essentials/Foundation/DataProtection/EntityFrameworkCore/",
+            "tests/essentials/Foundation/DataProtection/EntityFrameworkCore/"
+        ];
+
+        public static readonly IReadOnlyDictionary<string, string[]> ExpectedEfPackagesByProject =
+            new Dictionary<string, string[]>(StringComparer.Ordinal)
+            {
+                ["src/essentials/Foundation/DataProtection/EntityFrameworkCore/Elsa.Foundation.DataProtection.EntityFrameworkCore.csproj"] =
+                    Adr0078ClusterMembershipEf.CorePackages(),
+                ["tests/essentials/Foundation/DataProtection/EntityFrameworkCore/Tests/Elsa.Foundation.DataProtection.EntityFrameworkCore.Tests.csproj"] =
+                    [.. Adr0078ClusterMembershipEf.CorePackages(), "Microsoft.EntityFrameworkCore.Sqlite", "Microsoft.EntityFrameworkCore.Sqlite.Core"],
+                ["tests/essentials/Foundation/DataProtection/EntityFrameworkCore/ProviderTests/Elsa.Foundation.DataProtection.EntityFrameworkCore.ProviderTests.csproj"] =
+                    [.. Adr0078ClusterMembershipEf.CorePackages(), "Microsoft.EntityFrameworkCore.SqlServer", "MySql.EntityFrameworkCore", "Npgsql.EntityFrameworkCore.PostgreSQL"]
+            };
+
+        public static IEnumerable<string> ProjectPaths => ExpectedEfPackagesByProject.Keys;
+
+        public static bool IsSurfacePath(string relativePath) =>
+            SurfacePathPrefixes.Any(prefix => relativePath.StartsWith(prefix, StringComparison.Ordinal));
+
+        public static bool IsProjectPath(string relativePath) =>
+            ProjectPaths.Contains(relativePath, StringComparer.Ordinal);
     }
 }

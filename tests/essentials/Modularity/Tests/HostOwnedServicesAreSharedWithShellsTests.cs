@@ -4,11 +4,16 @@ using CShells.DependencyInjection;
 using CShells.Lifecycle;
 using Elsa.Cluster.Core.Contracts;
 using Elsa.Cluster.Core.Models;
+using Elsa.Foundation.DataProtection.EntityFrameworkCore;
 using Elsa.Foundation.Host.ModuleManagement;
+using Elsa.Persistence.EntityFramework;
 using Elsa.Persistence.Schema.SchemaFinalization;
 using Elsa.Workbench;
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.DataProtection.KeyManagement;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 using Nuplane.Reconciliation;
 using Xunit;
 
@@ -64,6 +69,7 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
         Entries(
             "unreachable from shell code: a hosted service the host starts once, and a shell container never starts its copy (a disposable one could not be shared in any case)",
             "Elsa.Persistence.EntityFramework.EfModuleMigrator<Elsa.Cluster.EntityFrameworkCore.ClusterMembershipDbContext>",
+            "Elsa.Persistence.EntityFramework.EfModuleMigrator<Elsa.Foundation.DataProtection.EntityFrameworkCore.DataProtectionKeysDbContext>",
             "Elsa.Workbench.OpenIddict.OpenIddictIdentityStoreInitializer",
             "Elsa.Workbench.Readiness.DefaultShellWarmup"),
         Entries(
@@ -129,6 +135,38 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
         // The allowlist and the other things this compared are only worth anything if the comparison saw the services it exists for.
         Assert.Contains(typeof(IReconciliationTriggerIngress), compared.Select(service => service.Type));
         Assert.Contains(typeof(IEfSchemaFleet), compared.Select(service => service.Type));
+        if (durableMembership)
+            Assert.Contains(typeof(EfDataProtectionKeyRepository), compared.Select(service => service.Type));
+    }
+
+    /// <summary>
+    /// The key ring is the host's (#2191): a shell of the real composition protects and unprotects with the host's key store,
+    /// under the one application name, so a cookie or antiforgery token a shell issues is read by the host and by every other
+    /// shell, and, through the shared store, by every other host. Each direction is checked, since a shell that built a key
+    /// store of its own, from its own configuration, would still round-trip its own payloads.
+    /// </summary>
+    [Theory]
+    [InlineData("Elsa.Foundation.Host")]
+    [InlineData("Elsa.Workbench")]
+    public async Task A_shell_of_the_real_composition_protects_with_the_hosts_key_ring(string host)
+    {
+        using var content = ContentRoot.For(host);
+        using var built = BuiltHost.Run(EntryAssembly(host), [.. content.Arguments(durableMembership: false), .. content.KeyStoreArguments()]);
+        var root = built.Host.Services;
+        // The host is built, not started: its migrator is what creates the key table as it starts.
+        await root.GetRequiredService<EfModuleMigrator<DataProtectionKeysDbContext>>().StartAsync(CancellationToken.None);
+
+        var shell = (await root.GetRequiredService<IShellRegistry>().GetOrActivateAsync(ProbeShell)).ServiceProvider;
+
+        foreach (var container in new[] { root, shell })
+            Assert.Equal("Elsa", container.GetRequiredService<IOptions<DataProtectionOptions>>().Value.ApplicationDiscriminator);
+        var keyStore = root.GetRequiredService<IOptions<KeyManagementOptions>>().Value.XmlRepository;
+        Assert.IsType<EfDataProtectionKeyRepository>(keyStore);
+        Assert.Same(keyStore, shell.GetRequiredService<IOptions<KeyManagementOptions>>().Value.XmlRepository);
+        var atRoot = root.GetRequiredService<IDataProtectionProvider>().CreateProtector(nameof(HostOwnedServicesAreSharedWithShellsTests));
+        var inShell = shell.GetRequiredService<IDataProtectionProvider>().CreateProtector(nameof(HostOwnedServicesAreSharedWithShellsTests));
+        Assert.Equal("from the shell", atRoot.Unprotect(inShell.Protect("from the shell")));
+        Assert.Equal("from the host", inShell.Unprotect(atRoot.Protect("from the host")));
     }
 
     /// <summary>The service types the host registered as non-keyed singletons, of an Elsa or Nuplane assembly and closed, which a shell is built with copies of.</summary>
@@ -208,11 +246,20 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
                     "--Elsa:Cluster:Membership:HostId", "guard-test-host",
                     "--Elsa:Cluster:Membership:EntityFrameworkCore:Enabled", "true",
                     "--Elsa:Cluster:Membership:EntityFrameworkCore:Provider", "Sqlite",
-                    "--Elsa:Cluster:Membership:EntityFrameworkCore:ConnectionString", $"Data Source={Path.Join(_directory, "membership.db")};Pooling=False"
+                    "--Elsa:Cluster:Membership:EntityFrameworkCore:ConnectionString", $"Data Source={Path.Join(_directory, "membership.db")};Pooling=False",
+                    .. KeyStoreArguments()
                 ]);
 
             return [.. arguments];
         }
+
+        /// <summary>The Data Protection key store a clustered host shares its key ring through (#2191).</summary>
+        public string[] KeyStoreArguments() =>
+        [
+            "--Elsa:DataProtection:EntityFrameworkCore:Enabled", "true",
+            "--Elsa:DataProtection:EntityFrameworkCore:Provider", "Sqlite",
+            "--Elsa:DataProtection:EntityFrameworkCore:ConnectionString", $"Data Source={Path.Join(_directory, "keys.db")};Pooling=False"
+        ];
 
         public void Dispose()
         {

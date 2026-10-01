@@ -45,6 +45,8 @@
 		<ProjectReference Include="..\..\essentials\Activities\Scheduling\Elsa.Activities.Scheduling.csproj" />
 		<!-- Cluster membership, selected from host configuration on the host container (spec 183, FR-024). -->
 		<ProjectReference Include="..\..\essentials\Cluster\EntityFrameworkCore\Elsa.Cluster.EntityFrameworkCore.csproj" />
+		<!-- Data Protection and its opt-in EF key store, composed from host configuration on the host container (#2191). -->
+		<ProjectReference Include="..\..\essentials\Foundation\DataProtection\EntityFrameworkCore\Elsa.Foundation.DataProtection.EntityFrameworkCore.csproj" />
 		<ProjectReference Include="..\..\extensions\Agent\src\Core\Elsa.Agent.Core.csproj" />
 		<ProjectReference Include="..\..\extensions\Agent\src\Api\Elsa.Agent.Api.csproj" />
 		<ProjectReference Include="..\..\extensions\Agent\src\GitHubCopilot\Elsa.Agent.GitHubCopilot.csproj" />
