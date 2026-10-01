@@ -17,7 +17,7 @@ OpenIddict remains in its separate vendor-owned EF context.
 | `IRoleStore` and `IRoleClaimStore` | `EfCoreIdentityRoleStore` | Role aggregate CAS, normalized uniqueness, stable membership lookup, and atomic claim changes. |
 | `IUserClaimsPrincipalFactory` | `EfCoreIdentityClaimsPrincipalFactory` | Claims projection from the authoritative EF-backed user and role state. |
 | `IAuthenticationSessionInvalidator` and cookie events | `EfCoreIdentitySessionInvalidator`, `EfCoreIdentityCookieEvents` | Security-stamp rotation and tenant-bound session rejection. |
-| `IShellInitializer` and hosted seeding | `EfCoreIdentitySeeder` | Redacted, idempotent administrator convergence after schema initialization. |
+| `IShellInitializer` and hosted seeding | `EfCoreIdentitySeeder` | Redacted, idempotent administrator convergence after schema initialization. Nodes seeding one database concurrently all converge: administrator creation, the role and tenant-membership writes and the framework role-membership tail each run in one bounded re-read loop (8 attempts, a growing jittered pause between them) that retries only lost races (`IdentityRevisionConflictException`, `ConcurrencyFailure`) and treats `UserAlreadyInRole` as converged, so the loser does not fail. A create that loses a race but leaves no administrator visible on the re-read fails with an `InvalidOperationException` whose inner exception is the conflict; any other failure propagates unchanged. |
 
 These are single-authority adapter bindings, not additive contributor seams. Hosts should replace the provider-neutral IAM contracts through the persistence feature rather than registering individual framework stores beside this adapter.
 
