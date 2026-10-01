@@ -552,7 +552,7 @@ public sealed class WorkflowActivationCoordinator(
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            await CompensateAsync(command, reference, null);
+            await CompensateUnlessSlotNamesAsync(command, reference);
             throw;
         }
         catch (Exception exception) when (NotRequestedCancellation(exception, cancellationToken))
@@ -567,7 +567,7 @@ public sealed class WorkflowActivationCoordinator(
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            await CompensateAsync(command, reference, null);
+            await CompensateUnlessSlotNamesAsync(command, reference);
             throw;
         }
         catch (Exception exception) when (NotRequestedCancellation(exception, cancellationToken))
@@ -620,13 +620,27 @@ public sealed class WorkflowActivationCoordinator(
 
         if (!transition.Succeeded)
         {
+            var refusal = transition.Diagnostic ?? "The activation slot transition was refused.";
+            if (await FindSlotNamingAsync(command) is { } named)
+            {
+                logger?.LogInformation(
+                    "Activation {ActivationId} of definition {DefinitionId} slot {SlotName} lost its slot transition to another call activating it; completing it rather than compensating",
+                    command.ActivationId,
+                    command.Executable.Identity.DefinitionId,
+                    command.SlotName);
+                return await DeferToSlotAsync(
+                    command,
+                    named,
+                    new(false, WorkflowActivationOutcome.Conflict, transition.Slot, Conflict: transition.Conflict, Diagnostic: Truncate(refusal)));
+            }
+
             var compensationFailure = await CompensateAsync(command, reference, null);
             return new(
                 false,
                 WorkflowActivationOutcome.Conflict,
                 transition.Slot,
                 Conflict: transition.Conflict,
-                Diagnostic: Truncate(Join(transition.Diagnostic ?? "The activation slot transition was refused.", compensationFailure)),
+                Diagnostic: Truncate(Join(refusal, compensationFailure)),
                 CompensationDiagnostic: compensationFailure);
         }
 
@@ -836,6 +850,21 @@ public sealed class WorkflowActivationCoordinator(
         WorkflowExecutableSourceReference? predecessorReference = null,
         bool predecessorReferenceRetirementAttempted = false)
     {
+        if (activatedSlot is null && await FindSlotNamingAsync(command) is { } named)
+        {
+            logger?.LogWarning(
+                failure,
+                "Activation {ActivationId} of definition {DefinitionId} slot {SlotName} failed at step {FailedStep}, but the slot names it already; completing it rather than compensating",
+                command.ActivationId,
+                command.Executable.Identity.DefinitionId,
+                command.SlotName,
+                failedStep);
+            return await DeferToSlotAsync(
+                command,
+                named,
+                new(false, WorkflowActivationOutcome.Failed, named, Diagnostic: Truncate(SafeMessage(failure)), FailedStep: failedStep));
+        }
+
         logger?.LogWarning(
             failure,
             "Activation {ActivationId} of definition {DefinitionId} slot {SlotName} failed at step {FailedStep}; compensating",
@@ -858,6 +887,85 @@ public sealed class WorkflowActivationCoordinator(
             Diagnostic: Truncate(Join(SafeMessage(failure), compensationFailure)),
             FailedStep: failedStep,
             CompensationDiagnostic: compensationFailure);
+    }
+
+    /// <summary>
+    /// The slot, when it names this call's activation and that activation's projections are stored in every projection
+    /// store, although this call has not moved the slot there: its source reference and projections are then the slot's,
+    /// and compensating this call would take them from it (#2251).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Calls that activate the same artifact through the same source, such as two nodes reconciling one mounted set, share
+    /// one activation id, and with it one source reference and one set of projections. The call that wins the slot serves
+    /// through them, and the other cannot tell them from its own: compensating it would delete the winner's projections
+    /// and retire its reference, leaving the slot naming an activation that serves nothing. A call whose own slot
+    /// transition may have committed before it threw is in the same position, and is treated the same way.
+    /// </para>
+    /// <para>
+    /// Projections stored in every store tell such a call apart from a retry of the slot's activation whose earlier
+    /// compensation removed them and whose own preparation failed: that retry has nothing to complete, so it is still
+    /// compensated rather than reported already active while nothing serves. When the projection state cannot be read,
+    /// the call does not compensate either; completion reads it again and fails loudly if it still cannot. When the slot
+    /// cannot be read, the call compensates as before.
+    /// </para>
+    /// </remarks>
+    private async ValueTask<WorkflowActivationSlot?> FindSlotNamingAsync(WorkflowActivationCommand command)
+    {
+        var slot = await CurrentSlotAsync(command.Executable.Identity.DefinitionId, command.SlotName);
+        if (!StringComparer.Ordinal.Equals(slot.ActiveActivationId, command.ActivationId))
+            return null;
+
+        try
+        {
+            var state = await ReadOccupantAsync(command.ActivationId, CancellationToken.None);
+            return state.Triggers == WorkflowActivationProjectionState.Missing || state.Schedules == WorkflowActivationProjectionState.Missing
+                ? null
+                : slot;
+        }
+        catch (Exception exception)
+        {
+            logger?.LogWarning(
+                exception,
+                "The projections of activation {ActivationId}, which definition {DefinitionId} slot {SlotName} names, could not be read; it is left to the slot rather than compensated",
+                command.ActivationId,
+                slot.WorkflowDefinitionId,
+                slot.SlotName);
+            return slot;
+        }
+    }
+
+    /// <summary>
+    /// Answers a call whose activation <paramref name="slot"/> names (<see cref="FindSlotNamingAsync"/>) as
+    /// <see cref="ActivateAsync"/> would answer it a moment later: it completes the activation, then reports it already
+    /// active. Nothing is compensated. When there is nothing to report, because the slot moved on or the activation's
+    /// reference is no longer live, the writer that changed them owns the activation, and the call reports
+    /// <paramref name="uncompensated"/>.
+    /// </summary>
+    private async ValueTask<WorkflowActivationResult> DeferToSlotAsync(
+        WorkflowActivationCommand command,
+        WorkflowActivationSlot slot,
+        WorkflowActivationResult uncompensated)
+    {
+        const string leftToSlot = "The slot names this activation, so it was left to the slot rather than compensated.";
+        try
+        {
+            if (await CompleteServingActivationAsync(slot, CancellationToken.None) is { Outcome: WorkflowActivationOutcome.Failed } incomplete)
+                return incomplete;
+            return await TryResolveSameArtifactNoOpAsync(command, command.Executable.Identity.ArtifactId, CancellationToken.None) ??
+                uncompensated with { Diagnostic = Truncate(Join(uncompensated.Diagnostic!, leftToSlot)) };
+        }
+        catch (Exception exception)
+        {
+            return uncompensated with { Diagnostic = Truncate(Join(uncompensated.Diagnostic!, $"{leftToSlot} {SafeMessage(exception)}")) };
+        }
+    }
+
+    /// <summary>Compensates a cancelled call that has not attempted its slot transition, unless the slot names its activation.</summary>
+    private async ValueTask CompensateUnlessSlotNamesAsync(WorkflowActivationCommand command, WorkflowExecutableSourceReference reference)
+    {
+        if (await FindSlotNamingAsync(command) is null)
+            await CompensateAsync(command, reference, null);
     }
 
     private async ValueTask<WorkflowActivationResult> FailDeactivationAsync(
