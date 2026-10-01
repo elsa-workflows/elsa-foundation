@@ -9,6 +9,7 @@ using Elsa.Persistence.Schema.SchemaFinalization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace Elsa.Persistence.EntityFramework.Tests;
 
@@ -417,7 +418,8 @@ public sealed class BackfillHost : IAsyncDisposable
         EfSchemaBackfillOptions options,
         TimeProvider time,
         EfSchemaModuleFamilies? families = null,
-        EfSchemaFinalizationObservations? observations = null)
+        EfSchemaFinalizationObservations? observations = null,
+        ILogger? logger = null)
     {
         _database = database;
         Probe = new BackfillProbe();
@@ -433,7 +435,7 @@ public sealed class BackfillHost : IAsyncDisposable
             Observations,
             new EfSchemaFinalizationOptions { IntentWaitBound = TimeSpan.FromSeconds(2), IntentPollInterval = TimeSpan.FromMilliseconds(20) },
             time);
-        Backfill = new EfSchemaBackfill(Gate, fleet, options, time);
+        Backfill = new EfSchemaBackfill(Gate, fleet, options, time, logger);
     }
 
     public EfSchemaModuleGate Gate { get; }

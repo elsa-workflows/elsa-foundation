@@ -198,52 +198,12 @@ public sealed class EfSchemaBackfill
             return;
         }
 
-        var state = _gate.StateOf(family);
-        if (state is null || _gate.ObservedRecordOf(family)?.Record is not { } observed || _gate.DatabaseIdentity is not { } identity)
-            return;
-        if (state.WritesRefused)
+        // Every way out before the claim leaves the family until a later round, so a claim this worker kept from the last
+        // round, while its run settled or verified, is let go of here too, by the same bounded release; it holds none in a
+        // round that kept nothing, and then this costs nothing.
+        if (Plan(chain) is not { } round)
         {
-            _status.Update(family, status => status with { State = EfSchemaBackfillState.Idle, Detail = "This host refuses every write to the family, so it rewrites nothing." });
-            return;
-        }
-
-        var readable = chain.ReadableVersions;
-        var target = state.WriteVersion;
-        var targetAt = SchemaVersionChain.PositionOf(readable, target);
-        var completion = observed.Finish?.CompletionVersion;
-        var completionAt = completion is null ? -1 : SchemaVersionChain.PositionOf(readable, completion);
-        if (completion is not null && completionAt < 0)
-        {
-            // Activation refuses this (FR-020); a completion recorded since by a newer host lies after this host's chain.
-            _status.Update(family, status => status with
-            {
-                State = EfSchemaBackfillState.Idle,
-                Detail = $"The finish record names '{completion}', which this host cannot place along [{string.Join(", ", readable)}]."
-            });
-            return;
-        }
-
-        if (completionAt > targetAt)
-        {
-            // This host has not adopted the finalized version the completion names, so a row it rewrote would still be
-            // below it: it leaves the family to hosts that write the completion version.
-            _status.Update(family, status => status with
-            {
-                State = EfSchemaBackfillState.Idle,
-                Detail = $"This host writes '{target}', behind the completion version '{completion}', so it leaves the family to hosts that write it."
-            });
-            return;
-        }
-
-        // FR-018: a standing completion is audited on its interval whatever this host's target, so a family whose run
-        // towards a newer version is blocked still has its stragglers found.
-        var now = _time.GetUtcNow();
-        var auditDue = completion is not null && now >= NextAuditOf(family);
-        var runDue = completionAt < targetAt && !SurveyDeferred(family, target);
-        if (!auditDue && !runDue)
-        {
-            if (completionAt == targetAt)
-                _status.Update(family, status => status with { State = EfSchemaBackfillState.Complete, TargetVersion = null, Blockers = [], SettleWaitingFor = [], ClaimedBy = null, Detail = null });
+            await _finish.ReleaseAsync(scopes, family);
             return;
         }
 
@@ -254,7 +214,7 @@ public sealed class EfSchemaBackfill
         bool goesOn;
         try
         {
-            goesOn = await ClaimAndRunAsync(scopes, chain, target, identity, auditDue, runDue, sole: completionAt == targetAt, now, cancellationToken);
+            goesOn = await ClaimAndRunAsync(scopes, chain, round.Target, round.Identity, round.AuditDue, round.RunDue, round.Sole, round.Now, cancellationToken);
         }
         catch (EfSchemaBackfillStoppedException stopped) when (stopped.Reason == EfSchemaBackfillStop.Lapsed)
         {
@@ -279,6 +239,70 @@ public sealed class EfSchemaBackfill
         if (!goesOn)
             await _finish.ReleaseAsync(scopes, family);
     }
+
+    /// <summary>
+    /// What this round does with <paramref name="chain"/>'s family, decided from what the gate last observed with no I/O,
+    /// or null when it leaves the family this round, saying why on its status where there is a reason to give: the gate
+    /// has not admitted the module, the host refuses every write to the family, the completion is one this host cannot
+    /// place or is ahead of what it writes, or neither an audit nor a run is due.
+    /// </summary>
+    private FamilyRound? Plan(EfSchemaChain chain)
+    {
+        var family = chain.Family;
+        var state = _gate.StateOf(family);
+        if (state is null || _gate.ObservedRecordOf(family)?.Record is not { } observed || _gate.DatabaseIdentity is not { } identity)
+            return null;
+        if (state.WritesRefused)
+        {
+            _status.Update(family, status => status with { State = EfSchemaBackfillState.Idle, Detail = "This host refuses every write to the family, so it rewrites nothing." });
+            return null;
+        }
+
+        var readable = chain.ReadableVersions;
+        var target = state.WriteVersion;
+        var targetAt = SchemaVersionChain.PositionOf(readable, target);
+        var completion = observed.Finish?.CompletionVersion;
+        var completionAt = completion is null ? -1 : SchemaVersionChain.PositionOf(readable, completion);
+        if (completion is not null && completionAt < 0)
+        {
+            // Activation refuses this (FR-020); a completion recorded since by a newer host lies after this host's chain.
+            _status.Update(family, status => status with
+            {
+                State = EfSchemaBackfillState.Idle,
+                Detail = $"The finish record names '{completion}', which this host cannot place along [{string.Join(", ", readable)}]."
+            });
+            return null;
+        }
+
+        if (completionAt > targetAt)
+        {
+            // This host has not adopted the finalized version the completion names, so a row it rewrote would still be
+            // below it: it leaves the family to hosts that write the completion version.
+            _status.Update(family, status => status with
+            {
+                State = EfSchemaBackfillState.Idle,
+                Detail = $"This host writes '{target}', behind the completion version '{completion}', so it leaves the family to hosts that write it."
+            });
+            return null;
+        }
+
+        // FR-018: a standing completion is audited on its interval whatever this host's target, so a family whose run
+        // towards a newer version is blocked still has its stragglers found.
+        var now = _time.GetUtcNow();
+        var auditDue = completion is not null && now >= NextAuditOf(family);
+        var runDue = completionAt < targetAt && !SurveyDeferred(family, target);
+        if (!auditDue && !runDue)
+        {
+            if (completionAt == targetAt)
+                _status.Update(family, status => status with { State = EfSchemaBackfillState.Complete, TargetVersion = null, Blockers = [], SettleWaitingFor = [], ClaimedBy = null, Detail = null });
+            return null;
+        }
+
+        return new FamilyRound(target, identity, auditDue, runDue, Sole: completionAt == targetAt, now);
+    }
+
+    /// <summary>What one round does with a family: the target, the database, whether an audit and a run are due, and when it decided.</summary>
+    private readonly record struct FamilyRound(string Target, string Identity, bool AuditDue, bool RunDue, bool Sole, DateTimeOffset Now);
 
     /// <summary>
     /// FR-008: the claim comes before any read of the family's rows, so a worker that finds it held elsewhere surveys,

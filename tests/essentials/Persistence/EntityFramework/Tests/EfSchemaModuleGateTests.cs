@@ -1,10 +1,8 @@
 using Elsa.Persistence.EntityFramework.SchemaFinalization;
 using Elsa.Persistence.Schema.SchemaFinalization;
-using System.Collections.Concurrent;
 using System.Data.Common;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
-using Microsoft.Extensions.Logging;
 using Xunit;
 using static Elsa.Persistence.EntityFramework.Tests.SchemaGate;
 
@@ -618,7 +616,7 @@ public sealed class EfSchemaModuleGateTests : IAsyncLifetime
         await nextRound.Task.WaitAsync(TimeSpan.FromSeconds(10));
 
         Assert.False(loop.IsCompleted);
-        Assert.IsType<OperationCanceledException>(Assert.Single(logger.Warnings));
+        Assert.IsType<OperationCanceledException>(Assert.Single(logger.Warnings).Exception);
         await stopping.CancelAsync();
         await loop.WaitAsync(TimeSpan.FromSeconds(10));
         Assert.True(loop.IsCompletedSuccessfully);
@@ -635,24 +633,6 @@ public sealed class EfSchemaModuleGateTests : IAsyncLifetime
         var context = SchemaGate.Context(database.ConnectionString, gates: null, interceptors);
         contexts.Add(context);
         return context;
-    }
-
-    /// <summary>The exceptions the gate logged warnings with.</summary>
-    private sealed class WarningLogger : ILogger
-    {
-        private readonly ConcurrentQueue<Exception?> _warnings = new();
-
-        public IReadOnlyList<Exception?> Warnings => _warnings.ToArray();
-
-        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
-
-        public bool IsEnabled(LogLevel logLevel) => logLevel >= LogLevel.Warning;
-
-        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
-        {
-            if (logLevel == LogLevel.Warning)
-                _warnings.Enqueue(exception);
-        }
     }
 
     /// <summary>Fails every read once armed, as a store that has gone away mid-activation does.</summary>

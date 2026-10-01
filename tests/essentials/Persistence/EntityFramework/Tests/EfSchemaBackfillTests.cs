@@ -4,6 +4,7 @@ using Elsa.Persistence.Schema;
 using Elsa.Persistence.Schema.SchemaFinalization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Time.Testing;
 using Xunit;
 using static Elsa.Persistence.EntityFramework.Tests.BackfillDatabase;
@@ -747,6 +748,83 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
         Assert.Null(record.BackfillRun);
         Assert.Equal("1", record.Finish!.CompletionVersion);
         Assert.Equal("2", (await RecordOfAsync(TablelessFamily.Name)).Finish!.CompletionVersion);
+    }
+
+    /// <summary>
+    /// FR-008 with the round's isolation, both families failing: each lets go of its claim, and the round fails with both
+    /// failures, neither hiding the other.
+    /// </summary>
+    [Fact]
+    public async Task When_two_families_fail_in_one_round_both_release_their_claims_and_the_round_reports_both()
+    {
+        await SeedFamilyAsync();
+        var orders = BackfillFamily.Declaration() with { Entities = [typeof(BackfillOrderRow), typeof(BackfillReceiptRow)] };
+        var lines = BackfillFamily.Declaration() with { Name = "BackfillLines", Entities = [typeof(BackfillLineRow)], ContentAddressed = [] };
+        var host = await HostAsync("host-a", families: EfSchemaModuleFamilies.FromDeclarations(BackfillFamily.Module, [orders, lines]));
+        host.Probe.BeforeWrite = row => throw new InvalidOperationException($"The database went away under {row.Entity.Name}.");
+
+        var failed = await Assert.ThrowsAsync<AggregateException>(() => host.RunOnceAsync());
+
+        Assert.Equal(
+            ["The database went away under BackfillOrderRow.", "The database went away under BackfillLineRow."],
+            failed.InnerExceptions.Select(failure => failure.Message));
+        Assert.Null((await RecordOfAsync(orders.Name)).BackfillRun);
+        Assert.Null((await RecordOfAsync(lines.Name)).BackfillRun);
+    }
+
+    /// <summary>
+    /// FR-008, the release that fails after a failed round: the round's own failure is the one it reports, and the release's
+    /// failure is logged as a warning rather than thrown over it; the claim then expires on its own.
+    /// </summary>
+    [Fact]
+    public async Task A_release_that_fails_after_a_failed_round_is_logged_and_the_rounds_own_failure_is_reported()
+    {
+        await SeedFamilyAsync();
+        var logger = new WarningLogger();
+        var host = await HostAsync("host-a", logger: logger);
+        var failing = false;
+        host.Probe.BeforeWrite = _ =>
+        {
+            failing = true;
+            throw new InvalidOperationException("The database went away.");
+        };
+        host.Probe.BeforeCommand = text => failing && IsRecordWrite(text) ? throw new TimeoutException("The release timed out.") : Task.CompletedTask;
+
+        var failed = await Assert.ThrowsAsync<InvalidOperationException>(() => host.RunOnceAsync());
+
+        Assert.Equal("The database went away.", failed.Message);
+        var warning = Assert.Single(logger.Warnings, entry => entry.Message.Contains("could not release its claim", StringComparison.Ordinal));
+        Assert.NotNull(warning.Exception);
+        Assert.Equal("host-a", (await database.RecordAsync()).BackfillRun!.Member.HostId);
+    }
+
+    /// <summary>
+    /// FR-008, the early ways out of a round: a worker that kept its claim while its run settled, and whose host then comes
+    /// to refuse every write to the family, since a version it cannot read was finalized elsewhere, lets go of the claim on
+    /// that round rather than keep the family from the hosts that can still work on it.
+    /// </summary>
+    [Fact]
+    public async Task A_claim_kept_while_settling_is_released_once_the_host_refuses_every_write_to_the_family()
+    {
+        await SeedFamilyAsync();
+        var host = await HostAsync("host-a", margin: TimeSpan.FromSeconds(35));
+        await host.RunOnceAsync();
+        Assert.Equal(EfSchemaBackfillState.Settling, host.Status.State);
+        Assert.Equal("host-a", (await database.RecordAsync()).BackfillRun!.Member.HostId);
+        await WithStoreAsync(async store =>
+        {
+            string[] newer = ["1", "2", "3"];
+            var member = new SchemaFinalizationMember("host-newer", "n");
+            var intended = await store.RecordIntentAsync(BackfillFamily.Family, (await store.FindAsync(BackfillFamily.Family))!.Revision, "3", newer, member);
+            await store.CommitIntentAsync(BackfillFamily.Family, intended.Record.Revision, newer, member);
+        });
+        await host.RefreshAsync();
+        Assert.True(host.Gate.StateOf(BackfillFamily.Family)!.WritesRefused);
+
+        await host.RunOnceAsync();
+
+        Assert.Null((await database.RecordAsync()).BackfillRun);
+        Assert.Contains("refuses every write", host.Status.Detail);
     }
 
     /// <summary>
@@ -1571,7 +1649,8 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
         TimeSpan? claim = null,
         int verificationPasses = 3,
         string current = "2",
-        TimeSpan? configuredMargin = null)
+        TimeSpan? configuredMargin = null,
+        ILogger? logger = null)
     {
         families ??= BackfillFamily.Families(current);
         var member = members[hostId] = fleet.Add(new FakeMember(hostId));
@@ -1584,7 +1663,8 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
             Options(claim, verificationPasses, configuredMargin),
             clock,
             families,
-            member.Observations);
+            member.Observations,
+            logger);
         hosts.Add(host);
         await host.ActivateAsync();
         return host;
