@@ -18,7 +18,7 @@ jobs:
       - name: Verify production source matches the reviewed head
         shell: pwsh
         run: |
-          $changed = @(git diff --name-only 9aa0ea0eaa3afc0efa162f236129fdd280938eca HEAD)
+          $changed = @(git diff --name-only e98d378bf25bf4ccf5e999db271fb1a840470c69 HEAD)
           if ($changed.Count -ne 1 -or $changed[0] -ne '.github/workflows/codex-2177-windows-proof.yml') { throw 'Validation branch contains other changes.' }
       - uses: actions/setup-dotnet@v4
         with:
@@ -30,7 +30,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           [xml]$trx = Get-Content artifacts/windows-native.trx
           $counts = $trx.TestRun.ResultSummary.Counters
-          if ([int]$counts.total -ne 16 -or [int]$counts.executed -ne 16 -or [int]$counts.passed -ne 16 -or [int]$counts.failed -ne 0 -or [int]$counts.notExecuted -ne 0) { throw 'Required native test counters were not established.' }
+          if ([int]$counts.total -ne 18 -or [int]$counts.executed -ne 18 -or [int]$counts.passed -ne 18 -or [int]$counts.failed -ne 0 -or [int]$counts.notExecuted -ne 0) { throw 'Required native test counters were not established.' }
       - uses: actions/upload-artifact@v4
         if: always()
         with:
