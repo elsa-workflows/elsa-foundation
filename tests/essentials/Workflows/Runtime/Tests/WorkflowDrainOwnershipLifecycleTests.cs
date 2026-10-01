@@ -1,6 +1,7 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Services.Checkpoints;
 using Elsa.Workflows.Runtime.Services.Executions;
 using Elsa.Workflows.Runtime.Services.Scheduler;
 using Xunit;
@@ -85,15 +86,23 @@ public sealed class WorkflowDrainOwnershipLifecycleTests
 
     private static WorkflowDrainOrchestrator NewOrchestrator(
         IWorkflowSchedulerDrainer drainer,
-        IRuntimeExecutionOwnershipService ownership) =>
-        new(
+        IRuntimeExecutionOwnershipService ownership)
+    {
+        // No other deliverer takes a continuation here, so the outbox and the queue the drain checks before it quiesces
+        // (#2225) stay empty.
+        var outbox = new InMemoryRuntimeCheckpointCommitStore();
+        return new(
             drainer,
             EmptyPostCommitOutboxProcessor.Instance,
             [],
             TestCheckpointRuleViolationFaulter.Create(),
             ownership,
             new AsyncLocalRuntimeExecutionOwnershipContextAccessor(),
+            outbox,
+            outbox,
+            new InMemoryWorkflowSchedulerWorkQueue(),
             timeProvider: TimeProvider.System);
+    }
 
     private static WorkflowExecutionCommandEnvelope NewEnvelope()
     {

@@ -110,6 +110,26 @@ public sealed class RuntimeCoreCompositionRootTests : RuntimePipelineTestSupport
         Assert.IsType<WorkflowExecutableInputValidator>(provider.GetRequiredService<IWorkflowExecutableInputValidator>());
     }
 
+    // #2225: a continuation's retry policy is persisted on each outbox item at commit, so the registered numbers are the
+    // behaviour: four attempts one second apart, with only the last failed attempt final.
+    [Fact]
+    public void AddWorkflowRuntime_registers_the_scheduler_continuation_retry_policy()
+    {
+        var services = new ServiceCollection().AddWorkflowRuntime();
+
+        var contribution = Assert.Single(
+            services
+                .Where(descriptor => descriptor.ServiceType == typeof(RuntimePostCommitIntentHandlerContribution))
+                .Select(descriptor => descriptor.ImplementationInstance)
+                .OfType<RuntimePostCommitIntentHandlerContribution>(),
+            candidate => candidate.IntentKind == RuntimePostCommitIntentKinds.EnqueueSchedulerWork);
+
+        Assert.Equal(typeof(RuntimeSchedulerPostCommitIntentDispatcher), contribution.HandlerType);
+        Assert.Equal(4, contribution.RetryPolicy.MaxAttempts);
+        Assert.Equal(TimeSpan.FromSeconds(1), contribution.RetryPolicy.Delay);
+        Assert.False(contribution.RetryPolicy.RetryUntilAcknowledged);
+    }
+
     [Fact]
     public void AddWorkflowRuntime_scopes_the_source_reference_reader_alias()
     {

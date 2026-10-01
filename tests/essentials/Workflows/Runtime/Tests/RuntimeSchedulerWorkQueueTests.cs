@@ -3,6 +3,7 @@ using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.ActivityExecutions;
+using Elsa.Workflows.Runtime.Services.Checkpoints;
 using Elsa.Workflows.Runtime.Services.Executions;
 using Elsa.Workflows.Runtime.Services.Scheduler;
 using Xunit;
@@ -345,15 +346,22 @@ public sealed class RuntimeSchedulerWorkQueueTests
     }
 
     // Ownership is required by construction (C1), so these deferred-drain cases wire the real in-memory pair; the
-    // drain policy never lets the throwing drainer run, so the lease is acquired and released without draining.
-    private static WorkflowDrainOrchestrator NewDrainOrchestrator() =>
-        new(
+    // drain policy never lets the throwing drainer run, so the lease is acquired and released without draining. The
+    // outbox and queue the drain would check before it quiesces (#2225) are required too, and stay empty.
+    private static WorkflowDrainOrchestrator NewDrainOrchestrator()
+    {
+        var outbox = new InMemoryRuntimeCheckpointCommitStore();
+        return new(
             ThrowingSchedulerDrainer.Instance,
             EmptyPostCommitOutboxProcessor.Instance,
             [],
             TestCheckpointRuleViolationFaulter.Create(),
             new RuntimeExecutionOwnershipService(new InMemoryExecutionLivenessStateStore()),
-            new AsyncLocalRuntimeExecutionOwnershipContextAccessor());
+            new AsyncLocalRuntimeExecutionOwnershipContextAccessor(),
+            outbox,
+            outbox,
+            new InMemoryWorkflowSchedulerWorkQueue());
+    }
 
     private sealed class DeferredSchedulerDrainPolicy : IWorkflowSchedulerDrainPolicy
     {

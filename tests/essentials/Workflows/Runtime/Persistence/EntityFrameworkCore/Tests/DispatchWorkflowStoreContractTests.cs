@@ -532,17 +532,8 @@ public abstract class DispatchWorkflowStoreContractTests : IAsyncLifetime
     /// three contracts the processor reaches by casting that one resolution. The backend's other contracts keep resolving
     /// to the undecorated store, which is what a caller that does not go through the processor should see.
     /// </summary>
-    private static void DecorateOutboxStore(IServiceCollection services, ScriptedRecordingFailure failure)
-    {
-        var descriptor = services.Last(candidate => candidate.ServiceType == typeof(IRuntimePostCommitOutboxStore));
-        var factory = descriptor.ImplementationFactory
-            ?? throw new InvalidOperationException("The outbox store registration is expected to be a factory.");
-        services.Remove(descriptor);
-        services.Add(ServiceDescriptor.Describe(
-            typeof(IRuntimePostCommitOutboxStore),
-            provider => new FailingRecordingOutboxStore((IRuntimePostCommitOutboxStore)factory(provider), failure),
-            descriptor.Lifetime));
-    }
+    private static void DecorateOutboxStore(IServiceCollection services, ScriptedRecordingFailure failure) =>
+        OutboxStoreRegistration.Decorate(services, inner => new FailingRecordingOutboxStore(inner, failure));
 
     /// <summary>The scripted outage, as its own type so a sweep absorbs only this and never a real failure.</summary>
     private sealed class ScriptedRecordingOutageException()
@@ -624,6 +615,11 @@ public abstract class DispatchWorkflowStoreContractTests : IAsyncLifetime
             CancellationToken cancellationToken = default) =>
             ((IRuntimePostCommitOutboxClaimStore)inner).RenewClaimAsync(claim, now, visibilityTimeout, cancellationToken);
 
+        public ValueTask<IReadOnlyCollection<RuntimePostCommitOutboxItem>> ListClaimedAsync(
+            RuntimePostCommitOutboxClaimedQuery query,
+            CancellationToken cancellationToken = default) =>
+            ((IRuntimePostCommitOutboxClaimStore)inner).ListClaimedAsync(query, cancellationToken);
+
         public ValueTask RecordDeliveryResultAsync(
             RuntimePostCommitOutboxClaim claim,
             RuntimePostCommitOutboxDeliveryResult result,
@@ -637,17 +633,6 @@ public abstract class DispatchWorkflowStoreContractTests : IAsyncLifetime
             failure.ThrowIfArmed(completion.Claim);
             return ((IRuntimePostCommitOutboxClaimCompletionStore)inner).CompleteClaimAsync(completion, cancellationToken);
         }
-    }
-
-    /// <summary>Wall time plus a test-controlled offset, so a case can jump past a visibility timeout without freezing time.</summary>
-    private sealed class OffsetClock : TimeProvider
-    {
-        private long _offsetTicks;
-
-        public void Advance(TimeSpan amount) => Interlocked.Add(ref _offsetTicks, amount.Ticks);
-
-        public override DateTimeOffset GetUtcNow() =>
-            System.GetUtcNow().AddTicks(Interlocked.Read(ref _offsetTicks));
     }
 
     /// <summary>The default policy, which never retries, until a case asks for a faulted work item to be retried at once.</summary>
