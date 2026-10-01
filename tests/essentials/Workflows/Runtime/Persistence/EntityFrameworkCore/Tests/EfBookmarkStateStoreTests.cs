@@ -163,6 +163,41 @@ public sealed class EfBookmarkStateStoreTests
     }
 
     [Fact]
+    public async Task Waiting_stimulus_hashes_are_the_exact_distinct_hashes_of_the_unexpired_bookmarks_of_one_type()
+    {
+        // The HTTP route-table convergence check (#2190) compares this projection between reads. It applies the global
+        // lookup's expiry rule (no expiry, or one strictly after the instant) and must agree with the contract's default
+        // over the in-memory store.
+        var evaluatedAt = new DateTimeOffset(2026, 9, 14, 0, 0, 0, TimeSpan.Zero);
+        BookmarkState[] bookmarks =
+        [
+            State("wf-1", "a", "Event", "same") with { ExpiresAt = null },
+            State("wf-2", "a", "Event", "same") with { ExpiresAt = null },
+            State("wf-3", "a", "Event", "Same") with { ExpiresAt = null },
+            State("wf-4", "a", "Event", "after") with { ExpiresAt = evaluatedAt.AddTicks(1) },
+            State("wf-5", "a", "Event", "at") with { ExpiresAt = evaluatedAt.ToOffset(TimeSpan.FromHours(2)) },
+            State("wf-6", "a", "Event", "before") with { ExpiresAt = evaluatedAt.AddTicks(-1) },
+            State("wf-7", "a", "OtherEvent", "other-type") with { ExpiresAt = null }
+        ];
+        await using var fixture = await Fixture.CreateAsync("tenant-a");
+        var memory = new InMemoryBookmarkStateStore();
+        foreach (var bookmark in bookmarks)
+        {
+            await fixture.Store.SaveAsync(bookmark);
+            await memory.SaveAsync(bookmark);
+        }
+
+        string[] expected = ["Same", "after", "same"];
+        Assert.Equal(expected, (await ((IBookmarkStimulusIndex)fixture.Store).ListWaitingStimulusHashesByTypeAsync("Event", evaluatedAt)).Order(StringComparer.Ordinal));
+        Assert.Equal(expected, (await ((IBookmarkStimulusIndex)memory).ListWaitingStimulusHashesByTypeAsync("Event", evaluatedAt)).Order(StringComparer.Ordinal));
+        Assert.Equal(expected, (await new GlobalBookmarkStimulusLookup(fixture.Store).FindWaitingStimulusHashesByTypeAsync(
+            new GlobalBookmarkStimulusTypeLookupRequest("Event", evaluatedAt))).Order(StringComparer.Ordinal));
+
+        await using var otherScope = await fixture.ReopenAsync("tenant-b");
+        Assert.Empty(await ((IBookmarkStimulusIndex)otherScope.Store).ListWaitingStimulusHashesByTypeAsync("Event", evaluatedAt));
+    }
+
+    [Fact]
     public async Task Workflow_continuation_cannot_be_replayed_for_another_workflow()
     {
         await using var fixture = await Fixture.CreateAsync("tenant-a");
@@ -329,6 +364,10 @@ public sealed class EfBookmarkStateStoreTests
             var list = await Assert.ThrowsAsync<BookmarkStateEntityFrameworkPersistenceException>(() =>
                 read.Store.ListPageAsync(new BookmarkStatePageQuery("wf", 1)).AsTask());
             Assert.Equal("listing", list.Operation);
+
+            var hashes = await Assert.ThrowsAsync<BookmarkStateEntityFrameworkPersistenceException>(() =>
+                read.Store.ListWaitingStimulusHashesByTypeAsync("Event", DateTimeOffset.UnixEpoch).AsTask());
+            Assert.Equal("listing", hashes.Operation);
         }
     }
 
@@ -1244,6 +1283,7 @@ public sealed class EfBookmarkStateStoreTests
     {
         public ValueTask<RuntimeStorePage<BookmarkState>> ListByStimulusPageAsync(BookmarkStimulusPageQuery query, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public ValueTask<RuntimeStorePage<BookmarkState>> ListByStimulusTypePageAsync(BookmarkStimulusTypePageQuery query, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<IReadOnlyCollection<string>> ListWaitingStimulusHashesByTypeAsync(string stimulusType, DateTimeOffset evaluatedAt, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 
     private sealed class CustomRegistration
