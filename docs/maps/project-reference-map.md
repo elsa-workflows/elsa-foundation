@@ -7,8 +7,8 @@ Records direct project references only.
 ## Summary
 
 - Source projects: 137
-- Test projects: 130
-- Direct project references: 1246
+- Test projects: 131
+- Direct project references: 1247
 
 ## Projects
 
@@ -228,6 +228,7 @@ Records direct project references only.
 | [Elsa.Mediator.Tests](../../tests/essentials/Mediator/Tests/Elsa.Mediator.Tests.csproj) | test | Elsa.Mediator | - | false | Elsa.Mediator |
 | [Elsa.Modularity.EntityFramework.Tests](../../tests/essentials/Modularity/EntityFramework/Tests/Elsa.Modularity.EntityFramework.Tests.csproj) | test | Elsa.Modularity | - | false | Elsa.Modularity.EntityFramework<br>Elsa.Modularity.Nuplane<br>Elsa.Secrets.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Design.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore |
 | [Elsa.Modularity.Planning.Tests](../../tests/essentials/Modularity/Planning/Tests/Elsa.Modularity.Planning.Tests.csproj) | test | Elsa.Modularity | - | false | Elsa.Modularity.Planning |
+| [Elsa.Modularity.ProviderTests](../../tests/essentials/Modularity/ProviderTests/Elsa.Modularity.ProviderTests.csproj) | test | Elsa.Modularity | - | false | Elsa.Workbench |
 | [Elsa.Modularity.Tests](../../tests/essentials/Modularity/Tests/Elsa.Modularity.Tests.csproj) | test | Elsa.Modularity | - | false | Elsa.Agent.Anthropic<br>Elsa.Api.Compatibility.Testing<br>Elsa.Foundation.Host<br>Elsa.Modularity.Api<br>Elsa.Modularity.Core<br>Elsa.Modularity.Nuplane<br>Elsa.Workbench<br>Elsa.Workflows.Design.Reconciliation.Git |
 | [Elsa.Persistence.EntityFramework.BindingDriftTests](../../tests/essentials/Persistence/EntityFramework/BindingDriftTests/Elsa.Persistence.EntityFramework.BindingDriftTests.csproj) | test | Elsa.Persistence | - | false | Elsa.Persistence.EntityFramework |
 | [Elsa.Persistence.EntityFramework.Tests](../../tests/essentials/Persistence/EntityFramework/Tests/Elsa.Persistence.EntityFramework.Tests.csproj) | test | Elsa.Persistence | - | false | Elsa.Activities.Design.Persistence.EntityFrameworkCore<br>Elsa.Persistence.EntityFramework<br>Elsa.Tasks<br>Elsa.Workflows.Design.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Runtime.Resumption |
@@ -302,7 +303,7 @@ Records direct project references only.
 | Elsa.Http | 3 | 1 |
 | Elsa.Locking | 2 | 0 |
 | Elsa.Mediator | 2 | 1 |
-| Elsa.Modularity | 5 | 3 |
+| Elsa.Modularity | 5 | 4 |
 | Elsa.Persistence | 2 | 8 |
 | Elsa.Pipelines | 1 | 0 |
 | Elsa.Primitives | 2 | 2 |
