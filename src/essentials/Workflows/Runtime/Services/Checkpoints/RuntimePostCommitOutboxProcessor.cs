@@ -130,7 +130,8 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
                 visibilityTimeout: ClaimVisibilityTimeout,
                 limit: request.Limit,
                 workflowExecutionId: request.WorkflowExecutionId,
-                intentKind: request.IntentKind), cancellationToken);
+                intentKind: request.IntentKind,
+                deferContinuationsToExecutionOwner: request.DeferContinuationsToExecutionOwner), cancellationToken);
             foreach (var claim in claims)
                 processedItems.Add(await ProcessItemAsync(claim.Item, claim, cancellationToken));
         }

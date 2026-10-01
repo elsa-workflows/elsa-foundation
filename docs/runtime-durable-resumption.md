@@ -55,7 +55,14 @@ unrelated command to arrive (**RT-3**).
      (`ProcessAsync(workflowExecutionId: null, intentKind: null)`) across every contributed intent
      kind, including due `FailedRetryable` retries — this closes RT-3. Normal per-execution draining
      remains intentionally filtered to `EnqueueSchedulerWork`, so non-local cross-execution work is
-     never executed inside that workflow's actor mailbox.
+     never executed inside that workflow's actor mailbox. The claim defers to a live drain
+     (`deferContinuationsToExecutionOwner: true`, #2225): an `EnqueueSchedulerWork` continuation whose
+     execution holds an unexpired ownership lease is left to the drain holding it. That drain
+     delivers the continuation and drains what it enqueues before its command returns. Taking it
+     instead used to let the drain report quiescence with its next step undrained, so a start could
+     answer Accepted before its first bookmark existed, and a synchronous HTTP request could get 202
+     before its response was written. The lease is read after the item, and a drain acquires its
+     lease before it commits anything, so a live drain's own continuations are never claimed.
   2. **Discovers** the interrupted executions: the union of the durable queue backlog
      (`ListClaimableWorkflowExecutionIdsAsync`) and `IRuntimeRecoveryScanner` candidates.
   3. **Re-drives** each execution by enqueueing a `RunSchedulerWork` command envelope **through the
@@ -104,7 +111,11 @@ same terminal state as a crash-free control run.
 
 The checkpoint is durable; the outbox row is durable and `Pending`; the scheduler work was never
 enqueued. On restart, the sweep's **outbox re-delivery** step delivers the row, enqueues the work, and
-re-drives. ✅
+re-drives. ✅ A crash leaves the drain's ownership lease in place, and the sweep leaves a continuation
+alone while its execution's lease is unexpired (#2225). The row is therefore delivered once that lease
+expires (`RuntimeExecutionOwnershipOptions.LeaseDuration`, default one minute), or sooner if a new
+command drains the execution and delivers it itself. A graceful stop releases the lease, so this delay
+applies only to a hard crash.
 
 ### Window B — after outbox delivery, before drain *(recovered)*
 

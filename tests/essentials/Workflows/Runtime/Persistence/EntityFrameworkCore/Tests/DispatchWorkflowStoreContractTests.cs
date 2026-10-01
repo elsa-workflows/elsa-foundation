@@ -532,17 +532,8 @@ public abstract class DispatchWorkflowStoreContractTests : IAsyncLifetime
     /// three contracts the processor reaches by casting that one resolution. The backend's other contracts keep resolving
     /// to the undecorated store, which is what a caller that does not go through the processor should see.
     /// </summary>
-    private static void DecorateOutboxStore(IServiceCollection services, ScriptedRecordingFailure failure)
-    {
-        var descriptor = services.Last(candidate => candidate.ServiceType == typeof(IRuntimePostCommitOutboxStore));
-        var factory = descriptor.ImplementationFactory
-            ?? throw new InvalidOperationException("The outbox store registration is expected to be a factory.");
-        services.Remove(descriptor);
-        services.Add(ServiceDescriptor.Describe(
-            typeof(IRuntimePostCommitOutboxStore),
-            provider => new FailingRecordingOutboxStore((IRuntimePostCommitOutboxStore)factory(provider), failure),
-            descriptor.Lifetime));
-    }
+    private static void DecorateOutboxStore(IServiceCollection services, ScriptedRecordingFailure failure) =>
+        OutboxStoreRegistration.Decorate(services, inner => new FailingRecordingOutboxStore(inner, failure));
 
     /// <summary>The scripted outage, as its own type so a sweep absorbs only this and never a real failure.</summary>
     private sealed class ScriptedRecordingOutageException()

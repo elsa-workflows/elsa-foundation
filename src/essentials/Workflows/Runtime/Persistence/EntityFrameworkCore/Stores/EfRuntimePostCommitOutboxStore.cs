@@ -4,6 +4,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
+using Elsa.Workflows.Runtime.Services.Executions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 
@@ -105,12 +106,16 @@ public sealed class EfRuntimePostCommitOutboxStore(
                 intentKind: request.IntentKind),
             CandidateSelection.Claimable,
             cancellationToken);
+        var ownedExecutions = await FindOwnedExecutionsAsync(scope, candidates, request, cancellationToken);
         var claims = new List<RuntimePostCommitOutboxClaim>(Math.Min(request.Limit, candidates.Count));
         foreach (var candidate in candidates)
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (claims.Count == request.Limit)
                 break;
+            if (ownedExecutions.Contains(candidate.Intent.WorkflowExecutionId) &&
+                RuntimePostCommitOutboxClaimTransitions.DefersToExecutionOwner(candidate, request))
+                continue;
 
             var row = await LoadAsync(scope, candidate.OutboxItemId, tracking: true, cancellationToken);
             if (row is null)
@@ -421,6 +426,44 @@ public sealed class EfRuntimePostCommitOutboxStore(
             await RollbackAndDetachAsync(transaction, dispatchRow, deadLetterRow);
             throw;
         }
+    }
+
+    // The candidates' executions whose ownership lease is unexpired. This reads the leases after the candidates, never
+    // before: a drain acquires its lease before it commits a continuation, so every continuation read above comes with a
+    // lease this read sees, unless its drain has since released or lost it.
+    private async ValueTask<IReadOnlySet<string>> FindOwnedExecutionsAsync(
+        string scope,
+        IEnumerable<RuntimePostCommitOutboxItem> candidates,
+        RuntimePostCommitOutboxClaimRequest request,
+        CancellationToken cancellationToken)
+    {
+        var executionsByRowId = candidates
+            .Where(candidate => RuntimePostCommitOutboxClaimTransitions.DefersToExecutionOwner(candidate, request))
+            .Select(candidate => candidate.Intent.WorkflowExecutionId)
+            .Distinct(StringComparer.Ordinal)
+            .ToDictionary(
+                workflowExecutionId => EfRuntimeOperationalStoreSupport.CompositeId(
+                    scope, workflowExecutionId, RuntimeExecutionOwnershipStateId.For(workflowExecutionId)),
+                StringComparer.Ordinal);
+        if (executionsByRowId.Count == 0)
+            return new HashSet<string>(StringComparer.Ordinal);
+
+        var rowIds = executionsByRowId.Keys.ToArray();
+        var nowTicks = request.Now.UtcTicks;
+        var leased = await context.ExecutionLivenessStates.AsNoTracking()
+            .Where(row => rowIds.Contains(row.Id) && row.LeaseOwnerId != null && row.LeaseExpiresAtUtcTicks > nowTicks)
+            .Select(row => new { row.Id, row.ScopeKey, row.WorkflowExecutionId, row.OperationalStateId })
+            .ToArrayAsync(cancellationToken);
+        var scopeKey = EfRuntimeOperationalStoreSupport.Encode(scope);
+        return leased
+            .Select(row => (Row: row, WorkflowExecutionId: executionsByRowId[row.Id]))
+            .Where(match =>
+                match.Row.ScopeKey == scopeKey &&
+                match.Row.WorkflowExecutionId == EfRuntimeOperationalStoreSupport.Encode(match.WorkflowExecutionId) &&
+                match.Row.OperationalStateId == EfRuntimeOperationalStoreSupport.Encode(
+                    RuntimeExecutionOwnershipStateId.For(match.WorkflowExecutionId)))
+            .Select(match => match.WorkflowExecutionId)
+            .ToHashSet(StringComparer.Ordinal);
     }
 
     private async ValueTask<IReadOnlyCollection<RuntimePostCommitOutboxItem>> QueryCandidatesAsync(

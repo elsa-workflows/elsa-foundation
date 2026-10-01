@@ -83,6 +83,10 @@ durable claim path ran (fencing token advanced), not the in-memory fast path.
   re-execution.
 - **INV-3 (single-writer)**: The marker is only ever ambient while the drain holds the execution's ownership
   lease, so no competing deliverer races the claim-free write for the same execution (decision (b)).
+  *Note (2026-10-01, #2225):* this did not hold as written. The resumption sweep claims across all executions
+  and took live drains' continuations (spec 169 tolerated that rather than preventing it). It now holds for a
+  drain's own continuations, because the sweep's claim skips an `EnqueueSchedulerWork` item while its execution's
+  ownership lease is unexpired.
 
 ## Durable-transaction-count delta per hop
 

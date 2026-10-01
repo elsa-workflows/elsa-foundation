@@ -196,7 +196,8 @@ public sealed class RuntimePostCommitOutboxClaimRequest
         TimeSpan visibilityTimeout,
         int limit,
         string? workflowExecutionId = null,
-        string? intentKind = null)
+        string? intentKind = null,
+        bool deferContinuationsToExecutionOwner = false)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(ownerId);
         if (visibilityTimeout <= TimeSpan.Zero)
@@ -213,6 +214,7 @@ public sealed class RuntimePostCommitOutboxClaimRequest
         Limit = limit;
         WorkflowExecutionId = workflowExecutionId;
         IntentKind = intentKind;
+        DeferContinuationsToExecutionOwner = deferContinuationsToExecutionOwner;
     }
 
     public string OwnerId { get; }
@@ -221,6 +223,14 @@ public sealed class RuntimePostCommitOutboxClaimRequest
     public int Limit { get; }
     public string? WorkflowExecutionId { get; }
     public string? IntentKind { get; }
+
+    /// <summary>
+    /// When <c>true</c>, an <see cref="RuntimePostCommitIntentKinds.EnqueueSchedulerWork"/> item is not claimed while its
+    /// workflow execution holds an unexpired ownership lease (#2225). The drain holding that lease delivers its own
+    /// continuations; a claimer that took one would leave that drain reporting quiescence with its next step still
+    /// undrained. The resumption sweep sets this. A claimer that drains the execution itself must not.
+    /// </summary>
+    public bool DeferContinuationsToExecutionOwner { get; }
 
     private static void ValidateOptional(string? value, string parameterName)
     {
@@ -446,6 +456,20 @@ public static class RuntimePostCommitOutboxClaimTransitions
             return true;
         return item.Status == RuntimePostCommitOutboxStatus.FailedRetryable &&
                !item.RetryPolicy.IsExhaustedAfterAttempt(item.DeliveryAttemptCount);
+    }
+
+    /// <summary>
+    /// Whether a claim must first ask if <paramref name="item"/>'s execution holds an unexpired ownership lease, and skip
+    /// the item when it does (<see cref="RuntimePostCommitOutboxClaimRequest.DeferContinuationsToExecutionOwner"/>).
+    /// Stores read the lease after reading the item. A drain acquires its lease before it commits any continuation, so
+    /// that order is what guarantees a live drain's own continuation is never claimed from under it.
+    /// </summary>
+    public static bool DefersToExecutionOwner(RuntimePostCommitOutboxItem item, RuntimePostCommitOutboxClaimRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        ArgumentNullException.ThrowIfNull(request);
+        return request.DeferContinuationsToExecutionOwner &&
+               StringComparer.Ordinal.Equals(item.Intent.Kind, RuntimePostCommitIntentKinds.EnqueueSchedulerWork);
     }
 
     public static RuntimePostCommitOutboxClaim Claim(
