@@ -69,6 +69,7 @@ public sealed class PublishWorkflowRequestHandlerTests
         new InMemoryPublicationSnapshotReviewStore());
     private IPublicationPreflightService _preflightService = new PublicationPreflightService();
     private IWorkflowActivationAuthority? _preflightAuthority;
+    private Func<IPublicationActivator, IPublicationActivator>? _activatorWrapper;
 
     private static readonly WorkflowActivationSource ImportOwner = WorkflowActivationSource.ArtifactReconciliation("mounted-artifacts");
     private static readonly string DefaultSlotId = WorkflowActivationSlotIdentity.Create("definition-1", "default");
@@ -388,6 +389,21 @@ public sealed class PublishWorkflowRequestHandlerTests
         Assert.Equal(first.PublicationId, Assert.Single(records, record => record.Status == PublicationStatus.Active).PublicationId);
         Assert.Equal(PublicationFailureCodes.ArtifactAlreadyServing, Assert.Single(records, record => record.Status == PublicationStatus.Failed).Failure?.Code);
         Assert.Equal(first.PublicationId, (await _activationAuthority.FindAsync("definition-1", "default"))!.ActiveActivationId);
+    }
+
+    [Fact]
+    public async Task A_same_version_publish_whose_served_source_reference_was_retired_is_refused_not_reported_as_published()
+    {
+        var version = WorkflowVersion(Node("write-one", Text("one")));
+        var first = await Handler(version).Handle(new PublishWorkflow("version-1"), CancellationToken.None);
+        _preflightAuthority = new SlotReadBeforeItMoved(_activationAuthority);
+        // The activation answers with the publication the slot already serves; its reference is retired right after.
+        _activatorWrapper = activator => new RetiresServedReferenceAfterActivation(activator, _referenceStore, first.SourceReferenceId!);
+
+        var failure = await Assert.ThrowsAsync<PublicationActivationException>(() =>
+            Handler(version).Handle(new PublishWorkflow("version-1"), CancellationToken.None));
+
+        Assert.Contains("source reference is gone", failure.Message);
     }
 
     [Fact]
@@ -1128,7 +1144,7 @@ public sealed class PublishWorkflowRequestHandlerTests
             new PublicationPolicyResolver(),
             _publicationStore,
             _preflightService,
-            new PublicationActivator(Coordinator(extractor), _publicationStore, _activationAuthority, _referenceStore, TimeProvider.System),
+            WrapActivator(new PublicationActivator(Coordinator(extractor), _publicationStore, _activationAuthority, _referenceStore, TimeProvider.System)),
             TimeProvider.System,
             workflowVersionStore: versionStore,
             snapshotReviews: _snapshotReviews,
@@ -1179,9 +1195,27 @@ public sealed class PublishWorkflowRequestHandlerTests
         (await _referenceStore.ListAllAsync()).Count,
         (await _publicationStore.ListBySlotAsync(DefaultSlotId)).Count);
 
+    private IPublicationActivator WrapActivator(IPublicationActivator activator) => _activatorWrapper?.Invoke(activator) ?? activator;
+
     private sealed record PublishWrites(int Executables, int SourceReferences, int PublicationRecords);
 
-    /// <summary>Reports one authoritative Exclusive clash in another slot, whatever the candidate claims.</summary>
+    /// <summary>Retires a source reference once the activation has answered, as a retirement between activation and the answer would.</summary>
+    private sealed class RetiresServedReferenceAfterActivation(
+        IPublicationActivator inner,
+        IWorkflowExecutableSourceReferenceStore referenceStore,
+        string sourceReferenceId) : IPublicationActivator
+    {
+        public async ValueTask<PublicationActivationResult> ActivateAsync(PublicationActivationRequest request, CancellationToken cancellationToken = default)
+        {
+            var result = await inner.ActivateAsync(request, cancellationToken);
+            await referenceStore.RetireAsync(sourceReferenceId, DateTimeOffset.UtcNow, "test-retire", cancellationToken);
+            return result;
+        }
+
+        public ValueTask<PublicationCompletionResult> CompleteAsync(string workflowDefinitionId, string slotName, CancellationToken cancellationToken = default) =>
+            inner.CompleteAsync(workflowDefinitionId, slotName, cancellationToken);
+    }
+
     /// <summary>The authority as it stood before any slot moved: every slot is empty.</summary>
     private sealed class SlotReadBeforeItMoved(IWorkflowActivationAuthority inner) : IWorkflowActivationAuthority
     {
@@ -1204,6 +1238,7 @@ public sealed class PublishWorkflowRequestHandlerTests
             inner.TryDeactivateAsync(workflowDefinitionId, slotName, source, expectedRevision, updatedAt, cancellationToken);
     }
 
+    /// <summary>Reports one authoritative Exclusive clash in another slot, whatever the candidate claims.</summary>
     private sealed class ClashingPreflightService : IPublicationPreflightService
     {
         public static readonly PublicationTriggerConflict Clash = new(

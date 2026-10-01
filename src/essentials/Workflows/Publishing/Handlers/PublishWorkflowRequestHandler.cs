@@ -140,17 +140,8 @@ public sealed class PublishWorkflowRequestHandler(
                 StringComparer.Ordinal.Equals(current.ArtifactId, identity.ArtifactId) &&
                 plan.Result.Changes.All(change => change.Change == PublicationTriggerChangeKind.Retained))
             {
-                var currentReference = current.SourceReferenceId is { } sourceReferenceId
-                    ? await sourceReferenceStore.FindAsync(sourceReferenceId, cancellationToken)
-                    : null;
-                if (currentReference is not null &&
-                    currentReference.DeletedAt is null &&
-                    StringComparer.Ordinal.Equals(currentReference.TenantId, request.TenantId))
-                    return PublishedWorkflowView.From(
-                        executable,
-                        currentReference,
-                        await CompletedAsync(current, resolved.SlotName, cancellationToken),
-                        wasCreated: false);
+                if (await AlreadyPublishedAsync(executable, current, resolved.SlotName, request.TenantId, cancellationToken) is { } answer)
+                    return answer;
             }
         }
 
@@ -182,18 +173,38 @@ public sealed class PublishWorkflowRequestHandler(
         if (!StringComparer.Ordinal.Equals(activation.Publication.PublicationId, publicationId))
         {
             var served = activation.Publication;
-            var servedReference = served.SourceReferenceId is { } servedReferenceId
-                ? await sourceReferenceStore.FindAsync(servedReferenceId, cancellationToken)
-                : null;
-            return servedReference is { DeletedAt: null }
-                ? PublishedWorkflowView.From(executable, servedReference, served, wasCreated: false)
-                : throw ActivationFailed(served.PublicationId, served.WorkflowDefinitionId, new PublicationFailure(
+            return await AlreadyPublishedAsync(executable, served, resolved.SlotName, request.TenantId, cancellationToken)
+                ?? throw ActivationFailed(served.PublicationId, served.WorkflowDefinitionId, new PublicationFailure(
                     PublicationFailureCodes.PublicationActivationFailed,
                     $"Publication '{served.PublicationId}' already serves definition '{served.WorkflowDefinitionId}' slot '{resolved.SlotName}', " +
                     "but its source reference is gone. It is not reported as published."));
         }
 
         return PublishedWorkflowView.From(executable, reference, activation.Publication);
+    }
+
+    /// <summary>
+    /// The answer for a publication that already serves this artifact: its live source reference for the requesting
+    /// tenant, with the publication completed first when a stopped process left it a candidate. Null when the reference
+    /// is gone or belongs to another tenant, so the caller decides whether to mint a new publication or refuse.
+    /// </summary>
+    private async ValueTask<PublishedWorkflowView?> AlreadyPublishedAsync(
+        WorkflowExecutable executable,
+        PublicationRecord publication,
+        string slotName,
+        string? tenantId,
+        CancellationToken cancellationToken)
+    {
+        var reference = publication.SourceReferenceId is { } sourceReferenceId
+            ? await sourceReferenceStore.FindAsync(sourceReferenceId, cancellationToken)
+            : null;
+        return reference is { DeletedAt: null } && StringComparer.Ordinal.Equals(reference.TenantId, tenantId)
+            ? PublishedWorkflowView.From(
+                executable,
+                reference,
+                await CompletedAsync(publication, slotName, cancellationToken),
+                wasCreated: false)
+            : null;
     }
 
     /// <summary>
