@@ -96,7 +96,7 @@ internal static class WorkerRunner
         // install metadata before loading. No restore, feed or legacy configuration-context path runs.
         var packages = await NuplanePackageSet.LoadAsync(request.PackageRoots, directory, cancellationToken, observation);
         if (packages.Failures.Count != 0)
-            throw WorkerRefusal.Resolution("candidate-host-unavailable", "The selected installed package closure could not be loaded.");
+            throw WorkerRefusal.Resolution("candidate-package-unavailable", "The selected host package closure could not be loaded.");
         HostClosure.Preload(deps);
         HostClosure.LoadHostAssembly(directory, name);
         var persistence = HostClosure.LoadPersistence();

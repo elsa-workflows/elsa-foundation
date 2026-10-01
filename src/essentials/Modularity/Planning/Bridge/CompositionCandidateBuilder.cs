@@ -202,12 +202,15 @@ public static class CompositionCandidateBuilder
         {
             RefuseCaseAlias(baseFeatures, id);
             RefuseCaseAlias(overlayFeatures, id);
-            var prior = GetProperty(overlayFeatures, id);
-            if (prior is JsonObject or JsonArray)
-                throw Refuse("bridge-activation-mapping-unresolved", "Disabling this feature would discard selected-overlay settings.");
-            if (prior is JsonValue priorValue && priorValue.TryGetValue<bool>(out var priorEnabled) && !priorEnabled)
-                continue;
-            overlayFeatures[FindPropertyName(overlayFeatures, id) ?? id] = false;
+            var priorName = FindPropertyName(overlayFeatures, id);
+            if (priorName is not null)
+            {
+                if (overlayFeatures[priorName] is not JsonValue priorValue || !priorValue.TryGetValue<bool>(out var priorEnabled))
+                    throw Refuse("bridge-activation-mapping-unresolved", "Disabling this feature would discard selected-overlay settings.");
+                if (!priorEnabled)
+                    continue;
+            }
+            overlayFeatures[priorName ?? id] = false;
             changes.Add(new CompositionCandidateChange(id, "/features/" + id, "feature-disabled", "overlay", true));
         }
         return changes.ToImmutable();

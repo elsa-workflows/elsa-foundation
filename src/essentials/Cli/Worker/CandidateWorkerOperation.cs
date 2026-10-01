@@ -33,6 +33,7 @@ public sealed class CandidateWorkerOperation
             // get a local message instead of trusting an exception raised inside selected host code.
             return refusal.Code switch
             {
+                "candidate-package-unavailable" => WorkerRefusal.Resolution(refusal.Code, "The selected host package closure could not be loaded.").ToResponse(),
                 "candidate-closure-changed" => WorkerRefusal.Resolution(refusal.Code, "The selected installed host closure changed during inspection.").ToResponse(),
                 "candidate-capability-unavailable" => WorkerRefusal.Resolution(refusal.Code, "The selected host has no complete candidate inspection capability.").ToResponse(),
                 "candidate-response-invalid" => WorkerRefusal.Resolution(refusal.Code, "The candidate host response is invalid.").ToResponse(),

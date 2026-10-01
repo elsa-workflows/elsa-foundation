@@ -71,6 +71,7 @@ public sealed class CandidateWorkerOperationTests
     [Theory]
     [InlineData("candidate-closure-changed")]
     [InlineData("candidate-capability-unavailable")]
+    [InlineData("candidate-package-unavailable")]
     [InlineData("candidate-response-invalid")]
     public async Task Known_candidate_refusals_keep_the_code_but_replace_untrusted_messages(string code)
     {
@@ -139,6 +140,9 @@ public sealed class CandidateWorkerOperationTests
         var stateRoute = route is "state" or "corrupt-state";
         var probeRoute = route is "probe" or "corrupt-probe";
         var shouldRefuse = route is "negative" or "corrupt-state" or "corrupt-probe";
+        var expectedRefusalCode = route is "corrupt-state" or "corrupt-probe"
+            ? "candidate-package-unavailable"
+            : "candidate-host-unavailable";
         var installPath = NuplanePackageRootFixture.InstallInto(packages.Path, package, version, complete: probeRoute);
         var stateFile = Path.Join(packages.Path, NuplaneInstallRoot.StateFileName);
         var markerFile = Path.Join(installPath, NuplaneInstallRoot.ReadyMarker);
@@ -169,7 +173,7 @@ public sealed class CandidateWorkerOperationTests
         Assert.Equal(run.ExitCode, response.ExitCode);
         if (shouldRefuse)
         {
-            Assert.Equal("candidate-host-unavailable", response.Error?.Code);
+            Assert.Equal(expectedRefusalCode, response.Error?.Code);
             Assert.Null(response.Tooling);
         }
         else
@@ -200,6 +204,20 @@ public sealed class CandidateWorkerOperationTests
             Assert.True(bytes.AsSpan().SequenceEqual(filesAfter[path]), $"Package-root file changed: {path}.");
         Assert.DoesNotContain(NuplaneInstallRoot.StagingDirectory,
             Directory.EnumerateDirectories(packages.Path, "*", SearchOption.AllDirectories).Select(Path.GetFileName));
+    }
+
+    [Fact]
+    public async Task Built_candidate_worker_keeps_an_invalid_host_layout_as_a_generic_unavailable_refusal()
+    {
+        var host = HostLayout.Resolve(DotnetElsa.Host("ResourceAwareLiveHost"));
+        var run = await RunChild(host, ForHost(host) with { DepsFile = "/private-invalid-deps-canary" });
+
+        Assert.Equal(3, run.ExitCode);
+        Assert.Empty(run.Error);
+        Assert.DoesNotContain("private-invalid-deps-canary", run.Text);
+        var response = JsonSerializer.Deserialize<WorkerResponse>(run.Output, WorkerContract.Json)!;
+        Assert.Equal("candidate-host-unavailable", response.Error?.Code);
+        Assert.Null(response.Tooling);
     }
 
     [Fact]
@@ -234,6 +252,12 @@ public sealed class CandidateWorkerOperationTests
         AssertDefaultProcessRefusal("candidate-inspection-cancelled", timeoutSeconds: 120, holdComposer: true, cancelAfterStart: true);
 
     [Fact]
+    public Task Candidate_worker_process_cancels_while_reading_bounded_stdout_after_output_write() =>
+        AssertDefaultProcessRefusal("candidate-inspection-cancelled", timeoutSeconds: 120,
+            standardOutputBytes: 256 * 1024, holdAfterOutput: true, cancelAfterOutput: true,
+            observeOperationWait: true);
+
+    [Fact]
     public Task Candidate_worker_process_bounds_a_child_that_floods_stderr_then_stdout() =>
         AssertDefaultProcessRefusal("candidate-response-too-large", timeoutSeconds: 60,
             standardErrorBytes: 256 * 1024, standardOutputBytes: 4 * 1024 * 1024 + 1);
@@ -247,6 +271,11 @@ public sealed class CandidateWorkerOperationTests
     public Task Candidate_worker_process_timeout_reaps_a_descendant_after_the_worker_exits() =>
         AssertDefaultProcessRefusal("candidate-inspection-timeout", timeoutSeconds: 15,
             expectDescendant: true, expectRootExited: true);
+
+    [Fact]
+    public Task Candidate_worker_process_cancels_after_worker_exit_and_reaps_the_owned_descendant() =>
+        AssertDefaultProcessRefusal("candidate-inspection-cancelled", timeoutSeconds: 120,
+            expectDescendant: true, expectRootExited: true, cancelAfterStart: true, observeOperationWait: true);
 
     [Fact]
     public Task Candidate_worker_owner_reaps_payload_and_descendant_when_frontend_lease_is_lost() =>
@@ -511,12 +540,14 @@ public sealed class CandidateWorkerOperationTests
 
     private static async Task AssertDefaultProcessRefusal(string expectedCode, int timeoutSeconds,
         bool holdComposer = false, bool cancelAfterStart = false, int standardErrorBytes = 0, int standardOutputBytes = 0,
-        bool expectDescendant = false, bool expectRootExited = false)
+        bool expectDescendant = false, bool expectRootExited = false, bool holdAfterOutput = false,
+        bool cancelAfterOutput = false, bool observeOperationWait = false)
     {
         var host = HostLayout.Resolve(DotnetElsa.Host("ResourceAwareLiveHost"));
         using var sentinels = new TempDirectory($"{PrivateCanaryRootPrefix}adverse-child-");
         var started = sentinels.File("worker-started.txt");
         var descendant = expectDescendant ? sentinels.File("descendant-started.txt") : null;
+        var outputWritten = holdAfterOutput || cancelAfterOutput ? sentinels.File("output-written.txt") : null;
         var database = sentinels.File("must-not-create.db");
         var context = sentinels.File("context-constructed.txt");
         var action = sentinels.File("action-constructed.txt");
@@ -525,6 +556,8 @@ public sealed class CandidateWorkerOperationTests
             ["WriteConsoleCanary"] = false,
             ["StartedMarker"] = started,
             ["HoldMilliseconds"] = holdComposer ? 60_000 : 0,
+            ["HoldAfterOutput"] = holdAfterOutput ? 60_000 : 0,
+            ["OutputWrittenMarker"] = outputWritten ?? string.Empty,
             ["StandardErrorBytes"] = standardErrorBytes,
             ["StandardOutputBytes"] = standardOutputBytes,
             ["DescendantMarker"] = descendant ?? string.Empty,
@@ -534,7 +567,15 @@ public sealed class CandidateWorkerOperationTests
         var request = ForHost(host, database, probeDefaults);
         var worker = Path.Join(Path.GetDirectoryName(DotnetElsa.ToolAssembly), WorkerProcess.WorkerAssemblyFileName);
         using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(75));
-        var run = new CandidateWorkerProcess(workerAssembly: worker).RunAsync(host, request, timeoutSeconds, cancellation.Token);
+        ObservedCandidateProcessHandle? observedHandle = null;
+        var process = observeOperationWait
+            ? new CandidateWorkerProcess(start: startInfo =>
+            {
+                observedHandle = new ObservedCandidateProcessHandle(CandidateProcessHandle.Start(startInfo));
+                return observedHandle;
+            }, workerAssembly: worker)
+            : new CandidateWorkerProcess(workerAssembly: worker);
+        var run = process.RunAsync(host, request, timeoutSeconds, cancellation.Token);
 
         try
         {
@@ -551,9 +592,25 @@ public sealed class CandidateWorkerOperationTests
                 Assert.True(await WaitForRootExitWithLiveDescendant(run, started, descendant!, TimeSpan.FromSeconds(30)),
                     "The worker must exit while its marked descendant remains live and holds the worker pipes open.");
                 Assert.False(run.IsCompleted, "The worker exchange must remain pending until the inherited pipes are closed.");
+                if (observeOperationWait)
+                    AssertOperationWaitPending(observedHandle);
             }
 
-            if (cancelAfterStart)
+            if (cancelAfterOutput)
+            {
+                Assert.NotNull(outputWritten);
+                Assert.True(await WaitForMarkerOrCompletion(run, outputWritten!, TimeSpan.FromSeconds(60)),
+                    "The real fixture must finish its bounded stdout write and record completion before cancellation.");
+                Assert.False(run.IsCompleted, "The worker exchange must remain pending after the bounded stdout write and before cancellation.");
+                Assert.True(TryReadProcessIdentity(started, out var startedIdentity));
+                Assert.True(TryReadProcessIdentity(outputWritten!, out var outputIdentity));
+                Assert.Equal(startedIdentity, outputIdentity);
+                Assert.True(IsMarkedProcessRunning(started), "The composer must remain live after the stdout write and before cancellation.");
+                if (observeOperationWait)
+                    AssertOperationWaitPending(observedHandle);
+                cancellation.Cancel();
+            }
+            else if (cancelAfterStart)
                 cancellation.Cancel();
 
             var refusal = await Assert.ThrowsAsync<CliRefusal>(() => run.WaitAsync(TimeSpan.FromSeconds(30)));
@@ -599,6 +656,14 @@ public sealed class CandidateWorkerOperationTests
             await Task.Delay(TimeSpan.FromMilliseconds(100));
         }
         return false;
+    }
+
+    private static void AssertOperationWaitPending(ObservedCandidateProcessHandle? handle)
+    {
+        Assert.NotNull(handle);
+        Assert.NotNull(handle!.OperationWait);
+        Assert.False(handle.OperationWait!.IsCompleted,
+            "The delegated operation-exit wait must remain pending while the owned process scope is live.");
     }
 
     private static async Task<bool> WaitForMarkerOrCompletion(Task run, string marker, TimeSpan maximumWait)
@@ -870,4 +935,25 @@ public sealed class CandidateWorkerOperationTests
                 .Select(name => new WorkerCandidateFile { Name = name, CaptureId = new('2', 32), Content = "e30=" }).ToArray()
         }
     };
+
+    private sealed class ObservedCandidateProcessHandle(ICandidateProcessHandle inner) : ICandidateProcessHandle
+    {
+        public Task? OperationWait { get; private set; }
+        public Stream StandardInput => inner.StandardInput;
+        public Stream StandardOutput => inner.StandardOutput;
+        public Stream StandardError => inner.StandardError;
+        public bool HasExited => inner.HasExited;
+        public int ExitCode => inner.ExitCode;
+
+        public Task WaitForOperationExitAsync(CancellationToken cancellationToken)
+        {
+            var wait = inner.WaitForOperationExitAsync(cancellationToken);
+            OperationWait = wait;
+            return wait;
+        }
+
+        public Task WaitForExitAsync(CancellationToken cancellationToken) => inner.WaitForExitAsync(cancellationToken);
+        public void KillTree() => inner.KillTree();
+        public void Dispose() => inner.Dispose();
+    }
 }
