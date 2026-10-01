@@ -8,6 +8,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using OpenIddict.Abstractions;
 using Xunit;
+using static Elsa.Modularity.Tests.WorkbenchOpenIddictTestHost;
 
 namespace Elsa.Modularity.Tests;
 
@@ -194,16 +195,6 @@ public sealed class WorkbenchOpenIddictVendorTests
         }
     }
 
-    private static IConfiguration DurableConfiguration(string databasePath, bool autoMigrate) =>
-        new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                ["CShells:Shells:default:Features:FoundationIdentityOpenIddict:IsDevelopmentOrDemo"] = "false",
-                ["CShells:Shells:default:Features:FoundationIdentityOpenIddict:ConnectionString"] = $"Data Source={databasePath}",
-                ["CShells:Shells:default:Features:FoundationIdentityOpenIddict:AutoMigrate"] = autoMigrate.ToString()
-            })
-            .Build();
-
     private static async Task AssertDurableSqliteStoreAsync(IConfiguration configuration, string databasePath)
     {
         string id;
@@ -223,37 +214,5 @@ public sealed class WorkbenchOpenIddictVendorTests
         await using var readScope = reader.CreateAsyncScope();
         var manager = readScope.ServiceProvider.GetRequiredService<IOpenIddictTokenManager>();
         Assert.NotNull(await manager.FindByIdAsync(id));
-    }
-
-    private static ServiceProvider CreateProvider(IConfiguration configuration, bool withMigrationPolicy = false, Action<IServiceCollection>? configure = null)
-    {
-        var services = new ServiceCollection();
-        services.AddLogging();
-        services.AddWorkbenchOpenIddictVendor(configuration);
-        if (withMigrationPolicy)
-            services.AddWorkbenchOpenIddictMigrationPolicy(configuration);
-        configure?.Invoke(services);
-        return services.BuildServiceProvider();
-    }
-
-    /// <summary>The host's start, in registration order: the vendor initializer, then Elsa's migration policy when it is registered.</summary>
-    private static async Task StartAsync(IServiceProvider provider)
-    {
-        await provider.GetRequiredService<OpenIddictIdentityStoreInitializer>().StartAsync(CancellationToken.None);
-        if (provider.GetService<WorkbenchOpenIddictMigrator>() is { } migrator)
-            await migrator.StartAsync(CancellationToken.None);
-    }
-
-    private static async Task<string> CreateTokenAsync(IServiceProvider provider, string subject)
-    {
-        var manager = provider.GetRequiredService<IOpenIddictTokenManager>();
-        var token = await manager.CreateAsync(new OpenIddictTokenDescriptor
-        {
-            Subject = subject,
-            Type = OpenIddictConstants.TokenTypeHints.RefreshToken,
-            Status = OpenIddictConstants.Statuses.Valid
-        });
-        return await manager.GetIdAsync(token)
-               ?? throw new InvalidOperationException("OpenIddict did not assign an id to the created token.");
     }
 }

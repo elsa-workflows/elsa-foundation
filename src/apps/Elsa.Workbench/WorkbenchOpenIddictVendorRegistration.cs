@@ -13,9 +13,9 @@ namespace Elsa.Workbench;
 /// The OpenIddict feature itself remains provider-neutral and shell-composable; this host chooses the vendor
 /// persistence implementation and owns its startup lifecycle explicitly.
 /// </summary>
-internal static class WorkbenchOpenIddictVendorRegistration
+public static class WorkbenchOpenIddictVendorRegistration
 {
-    internal static IServiceCollection AddWorkbenchOpenIddictVendor(
+    public static IServiceCollection AddWorkbenchOpenIddictVendor(
         this IServiceCollection services,
         IConfiguration configuration)
     {

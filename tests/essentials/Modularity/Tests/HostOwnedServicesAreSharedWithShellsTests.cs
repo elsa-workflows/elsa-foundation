@@ -10,6 +10,7 @@ using Elsa.Foundation.Host.Shells;
 using Elsa.Persistence.Schema.SchemaFinalization;
 using Elsa.Workbench;
 using Elsa.Workbench.OpenIddict;
+using Elsa.Workbench.OpenIddictEngines;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Nuplane.Reconciliation;
@@ -160,6 +161,36 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
         Assert.True(
             hosted.IndexOf(typeof(OpenIddictIdentityStoreInitializer)) < hosted.IndexOf(typeof(WorkbenchOpenIddictMigrator)),
             "The migration policy starts before the vendor initializer, which would then migrate the store itself.");
+    }
+
+    /// <summary>
+    /// The OpenIddict store's engine and its prune are wired in Workbench's own entry point too: the engine the default shell's
+    /// OpenIddict settings name is the one the store resolves to, and the prune starts after the migration policy, so it prunes a
+    /// store that is migrated (#2201).
+    /// </summary>
+    [Fact]
+    public void Workbench_selects_the_openiddict_store_engine_and_prunes_the_store_after_it_is_migrated()
+    {
+        const string Settings = "--CShells:Shells:default:Features:FoundationIdentityOpenIddict:";
+        using var content = ContentRoot.For("Elsa.Workbench");
+        string[] arguments =
+        [
+            .. content.Arguments(durableMembership: false),
+            $"{Settings}IsDevelopmentOrDemo", "false",
+            $"{Settings}Provider", "PostgreSql",
+            "--ConnectionStrings:Elsa", "Host=wiring-test;Database=elsa;Username=elsa;Password=x"
+        ];
+        using var built = BuiltHost.Run(EntryAssembly("Elsa.Workbench"), arguments);
+
+        var hosted = built.Host.Services.GetServices<IHostedService>().Select(service => service.GetType()).ToList();
+        using var scope = built.Host.Services.CreateScope();
+        var store = scope.ServiceProvider.GetRequiredService<OpenIddictIdentityDbContext>();
+
+        Assert.IsType<OpenIddictIdentityPostgreSqlDbContext>(store);
+        Assert.Contains(typeof(WorkbenchOpenIddictPruningService), hosted);
+        Assert.True(
+            hosted.IndexOf(typeof(WorkbenchOpenIddictMigrator)) < hosted.IndexOf(typeof(WorkbenchOpenIddictPruningService)),
+            "The prune starts before the migration policy has migrated the store.");
     }
 
     /// <summary>The service types the host registered as non-keyed singletons, of an Elsa or Nuplane assembly and closed, which a shell is built with copies of.</summary>
