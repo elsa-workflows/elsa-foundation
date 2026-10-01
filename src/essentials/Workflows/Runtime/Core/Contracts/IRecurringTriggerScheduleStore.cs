@@ -15,14 +15,22 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 /// mirroring how the trigger index replaces a republished artifact's bindings.
 /// </para>
 /// <para>
-/// <see cref="ListDueAsync"/> returns schedules whose <see cref="RecurringTriggerSchedule.NextOccurrence"/> is
-/// at or before the supplied instant, ordered by (NextOccurrence, ScheduleId) and capped by <paramref name="limit"/>.
+/// <b>At-least-once occurrences (#2198).</b> The pump fires through the claim transitions: <see cref="ClaimDueAsync"/>
+/// records each due occurrence as in flight under a fenced, time-limited claim <i>before</i> it is routed, and the cursor
+/// moves past the occurrence only through <see cref="SettleClaimAsync"/> (or, for an exhausted Cron, by deleting the
+/// schedule once its last occurrence was routed). A claimant that dies, or whose fire fails, leaves the occurrence in the
+/// cursor, so it is fired again: by a peer once the claim's visibility lapses, or after the backoff a
+/// <see cref="ReleaseClaimAsync"/> set. Every claim transition is a compare-and-set on the claim's owner, fencing token and
+/// the row's revision, and on the stored schedule still being the one claimed. Fencing tokens increase with every claim of
+/// a schedule, and a schedule deleted and saved again later does not reissue the tokens it issued before; whatever the
+/// tokens, a claim on the earlier schedule cannot act on a recreated one that differs from it. The transitions have no
+/// default: a store that does not implement them does not compile, rather than falling back to at-most-once.
 /// </para>
 /// <para>
-/// <see cref="TryAdvanceAsync"/> is the compare-and-swap that claims an occurrence: it advances the cursor only
-/// if the stored <see cref="RecurringTriggerSchedule.NextOccurrence"/> still equals the caller's expected value,
-/// so at most one worker fires a given occurrence. This is the seam a future clustered store keeps to make the
-/// pump cluster-safe without changing the pump.
+/// <b>Republish (#2198).</b> <see cref="ActivateAsync"/> replaces the replaced activation's schedules atomically, and each
+/// activated schedule takes over the cursor of the replaced schedule of the same trigger when that names an occurrence
+/// which fell due before the activation took place, as the store's clock reads it (<see cref="RecurringTriggerSchedule.TakeOverFrom"/>).
+/// The replaced schedules change in the same write, so a claim in flight on one of them is stale from then on.
 /// </para>
 /// </remarks>
 public interface IRecurringTriggerScheduleStore
@@ -60,7 +68,11 @@ public interface IRecurringTriggerScheduleStore
         CancellationToken cancellationToken = default) =>
         await RuntimeOperationalStorePagingExtensions.ListAllByActivationAsync(this, activationId, cancellationToken);
 
-    /// <summary>Activates one activation and deactivates only the explicitly replaced activation.</summary>
+    /// <summary>
+    /// Activates one activation and deactivates only the explicitly replaced activation. Each activated schedule takes over
+    /// a due, unsettled occurrence from the replaced schedule of the same trigger, judged at the instant of the activation
+    /// (<see cref="RecurringTriggerSchedule.TakeOverFrom"/>).
+    /// </summary>
     ValueTask ActivateAsync(
         string activationId,
         string? replacedActivationId,
@@ -87,19 +99,49 @@ public interface IRecurringTriggerScheduleStore
     ValueTask DeleteByActivationAsync(string activationId, CancellationToken cancellationToken = default) =>
         ValueTask.FromException(new NotSupportedException("This recurring-schedule store does not support activation-scoped deletion."));
 
-    /// <summary>Returns due schedules (NextOccurrence &lt;= <paramref name="asOf"/>), ordered by next occurrence then id, capped by <paramref name="limit"/>.</summary>
-    ValueTask<IReadOnlyCollection<RecurringTriggerSchedule>> ListDueAsync(DateTimeOffset asOf, int limit, CancellationToken cancellationToken = default);
-
     /// <summary>Finds a single schedule by its id, or <c>null</c> if it does not exist.</summary>
     ValueTask<RecurringTriggerSchedule?> FindAsync(string scheduleId, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Compare-and-swap advance of the fire cursor: sets <see cref="RecurringTriggerSchedule.NextOccurrence"/> to
-    /// <paramref name="newNextOccurrence"/> only if the stored value still equals <paramref name="expectedNextOccurrence"/>.
-    /// Returns <c>true</c> when this caller won the claim, <c>false</c> when the schedule is gone or another
-    /// worker already advanced it.
+    /// Atomically claims at most <see cref="RecurringTriggerOccurrenceClaimRequest.Limit"/> active schedules whose
+    /// occurrence is due and whose earlier claim, if any, is no longer visible, ordered by next occurrence then id. The
+    /// claim is the occurrence's durable in-flight marker; the cursor is left on the occurrence. Competing claimants
+    /// cannot both receive a claim on one occurrence, and a schedule deleted and saved again later does not reissue its
+    /// earlier fencing tokens.
     /// </summary>
-    ValueTask<bool> TryAdvanceAsync(string scheduleId, DateTimeOffset expectedNextOccurrence, DateTimeOffset newNextOccurrence, CancellationToken cancellationToken = default);
+    ValueTask<IReadOnlyCollection<RecurringTriggerOccurrenceClaim>> ClaimDueAsync(
+        RecurringTriggerOccurrenceClaimRequest request,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Extends a claim's visibility to <paramref name="now"/> plus <paramref name="visibilityTimeout"/> while its owner,
+    /// fencing token and revision are current. Returns the renewed claim, or <see langword="null"/> when the claim no
+    /// longer holds the schedule.
+    /// </summary>
+    ValueTask<RecurringTriggerOccurrenceClaim?> RenewClaimAsync(
+        RecurringTriggerOccurrenceClaim claim,
+        DateTimeOffset now,
+        TimeSpan visibilityTimeout,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Settles the claimed occurrence: moves the cursor to <paramref name="nextOccurrence"/> and clears the claim, only
+    /// while the claim is current. This is the only transition that lets the pump drop an occurrence. Returns
+    /// <c>false</c> when the claim is stale, in which case nothing changed.
+    /// </summary>
+    ValueTask<bool> SettleClaimAsync(
+        RecurringTriggerOccurrenceClaim claim,
+        DateTimeOffset nextOccurrence,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Releases a current claim after a failed fire without moving the cursor, counting the failure. The occurrence stays
+    /// due and becomes claimable again at <paramref name="visibleAt"/>. Returns <c>false</c> when the claim is stale.
+    /// </summary>
+    ValueTask<bool> ReleaseClaimAsync(
+        RecurringTriggerOccurrenceClaim claim,
+        DateTimeOffset visibleAt,
+        CancellationToken cancellationToken = default);
 
     /// <summary>Deletes every schedule owned by an artifact. Deleting for an unknown artifact is a no-op.</summary>
     ValueTask DeleteByArtifactAsync(string artifactId, CancellationToken cancellationToken = default);

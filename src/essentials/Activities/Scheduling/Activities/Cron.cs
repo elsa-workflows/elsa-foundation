@@ -18,9 +18,11 @@ namespace Elsa.Activities.Scheduling.Activities;
 /// the publish.
 /// </para>
 /// <para>
-/// Fires <b>at most once</b> per due window: a pump that wakes after downtime advances to the next occurrence
-/// and fires once rather than replaying the elapsed backlog. When a run is started by the schedule the activity
-/// surfaces the cron expression as its result so the run is observable.
+/// Each occurrence is fired <b>at least once</b> and starts <b>one</b> run: a node that crashes or fails while firing
+/// it leaves it to be fired again, and every fire of one occurrence converges on the run the first one started. A
+/// pump that wakes after downtime fires the due occurrence once and moves on to the next one rather than replaying
+/// the elapsed backlog. When a run is started by the schedule the activity surfaces the cron expression as its
+/// result so the run is observable.
 /// </para>
 /// <para>
 /// Scope note: this ships the START form only. Delivering per-fire start input (e.g. the scheduled instant) is a

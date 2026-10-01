@@ -55,6 +55,7 @@ public sealed class WorkflowsRuntimeTriggersFeature : IShellFeature
 
         // Activation needs this spine, so this is where an activation that a dying process left with its triggers
         // switched off is completed at shell start (#2193).
+        services.TryAddScoped<OccupiedActivationSlots>();
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IStartupTask, CompleteInterruptedActivationsStartupTask>());
 
         // Cross-execution bookmark stimulus index, bridged onto the same bookmark state store the runtime

@@ -197,6 +197,15 @@ public sealed class RecurringTriggerScheduleEntity
     public string? ActivationIdOrderKey { get; set; }
     public string? SlotId { get; set; }
     public bool IsActive { get; set; }
+    // The in-flight claim on the occurrence in NextOccurrence (#2198). Operational columns beside the content document,
+    // as on DurableTimerEntity, so they are not part of the schema family's content.
+    public string? ClaimOwnerId { get; set; }
+    public long ClaimToken { get; set; }
+    public long? ClaimedAtUtcTicks { get; set; }
+    public int? ClaimedAtOffsetMinutes { get; set; }
+    public long? VisibleAfterUtcTicks { get; set; }
+    public int? VisibleAfterOffsetMinutes { get; set; }
+    public int FailureCount { get; set; }
     public string ContentJson { get; set; } = null!;
     public string SchemaVersion { get; set; } = null!;
     public long Revision { get; set; }

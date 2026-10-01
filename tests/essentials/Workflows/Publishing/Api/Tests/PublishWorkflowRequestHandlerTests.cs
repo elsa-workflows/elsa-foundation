@@ -1106,7 +1106,7 @@ public sealed class PublishWorkflowRequestHandlerTests
             new PublicationPolicyResolver(),
             _publicationStore,
             _preflightService,
-            new PublicationActivator(Coordinator(extractor), _publicationStore, TimeProvider.System),
+            new PublicationActivator(Coordinator(extractor), _publicationStore, _activationAuthority, _referenceStore, TimeProvider.System),
             TimeProvider.System,
             workflowVersionStore: versionStore,
             snapshotReviews: _snapshotReviews,

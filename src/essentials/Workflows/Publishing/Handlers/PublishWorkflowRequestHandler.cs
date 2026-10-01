@@ -146,7 +146,11 @@ public sealed class PublishWorkflowRequestHandler(
                 if (currentReference is not null &&
                     currentReference.DeletedAt is null &&
                     StringComparer.Ordinal.Equals(currentReference.TenantId, request.TenantId))
-                    return PublishedWorkflowView.From(executable, currentReference, current, wasCreated: false);
+                    return PublishedWorkflowView.From(
+                        executable,
+                        currentReference,
+                        await CompletedAsync(current, resolved.SlotName, cancellationToken),
+                        wasCreated: false);
             }
         }
 
@@ -173,6 +177,29 @@ public sealed class PublishWorkflowRequestHandler(
             throw ActivationFailed(publicationId, identity.DefinitionId, activation.Failure);
 
         return PublishedWorkflowView.From(executable, reference, activation.Publication);
+    }
+
+    /// <summary>
+    /// The publication the slot already names, once its journal record says it serves. A process that stopped after the
+    /// slot transition leaves that record a candidate (#2223), so the publication is completed first, and a republish
+    /// answers once it is active. One that cannot be completed is refused as a failed activation, never reported as
+    /// published.
+    /// </summary>
+    private async ValueTask<PublicationRecord> CompletedAsync(PublicationRecord current, string slotName, CancellationToken cancellationToken)
+    {
+        if (current.Status == PublicationStatus.Active)
+            return current;
+
+        var completion = await activator.CompleteAsync(current.WorkflowDefinitionId, slotName, cancellationToken);
+        if (completion.Publication is { Status: PublicationStatus.Active } completed &&
+            StringComparer.Ordinal.Equals(completed.PublicationId, current.PublicationId))
+            return completed;
+
+        throw ActivationFailed(current.PublicationId, current.WorkflowDefinitionId, completion.Failure ?? new PublicationFailure(
+            PublicationFailureCodes.PublicationActivationFailed,
+            $"Publication '{current.PublicationId}' held definition '{current.WorkflowDefinitionId}' slot '{slotName}' with a " +
+            $"'{current.Status}' record, which could not be brought into line with the slot: the slot moved on, or the " +
+            "publication does not serve. It is not reported as published."));
     }
 
     /// <summary>
