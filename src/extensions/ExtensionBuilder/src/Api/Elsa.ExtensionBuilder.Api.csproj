@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Extension Builder backend (spec 075): an optional, root-hosted subsystem that lets a trusted caller author a
+    Git-backed .NET repository, build it into a NuGet package and promote the package into a Nuplane feed. It was
+    removed by #1635 and restored as an optional extension by #2294; no host composes it unless asked to (the
+    Workbench gates it behind Elsa:ExtensionBuilder:Enabled, default off).
+  -->
+  <ItemGroup>
+    <PackageReference Include="Nuplane.Admin" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Minimal-API endpoint mapping (IEndpointRouteBuilder, Results, HttpContext, IFormFile, [FromServices]). -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\essentials\Api\AspNetCore\Elsa.Api.AspNetCore.csproj" />
+    <!-- ShareWithShells: the build queue and storage the root build worker drains must be the instances a shell-resolved request reaches. -->
+    <ProjectReference Include="..\..\..\..\essentials\Cluster\Readability\Elsa.Cluster.Readability.csproj" />
+    <ProjectReference Include="..\..\..\..\essentials\Foundation\Identity\Core\Elsa.Foundation.Identity.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\essentials\Foundation\Identity\Elsa.Foundation.Identity.csproj" />
+    <ProjectReference Include="..\..\..\..\essentials\Git\Elsa.Git.csproj" />
+    <!-- ManagementApiKeyAuthentication: the host management key every root host-control surface validates. -->
+    <ProjectReference Include="..\..\..\..\essentials\Modularity\Api\Elsa.Modularity.Api.csproj" />
+    <ProjectReference Include="..\..\..\..\essentials\Modularity\Core\Elsa.Modularity.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      Documented exception to the §2.23.3 no-InternalsVisibleTo rule: the Extension Builder subsystem is a large,
+      host-private surface (~80 interlocking internal types) whose contracts are not meant for consumption outside
+      this module. Publicizing it to satisfy tests would promote a host-private API into the public surface. Tracked
+      by the InternalsVisibleTo allow-list guard test
+      (ArchitectureGuardTests.InternalsVisibleTo_occurrences_are_limited_to_documented_exceptions).
+    -->
+    <InternalsVisibleTo Include="Elsa.ExtensionBuilder.Api.Tests" />
+  </ItemGroup>
+
+</Project>

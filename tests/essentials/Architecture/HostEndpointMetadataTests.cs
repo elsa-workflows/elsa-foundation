@@ -36,6 +36,14 @@ public sealed class HostEndpointMetadataTests
             "WithHostOwner(\"Elsa.Workbench\")",
             "EndpointSecurityDispositionMetadata.HostCredential(\n                ManagementApiKeyAuthentication.HeaderName",
             "WithHostCredentialEnforcement(ManagementApiKeyAuthentication.HeaderName, \"Elsa.Workbench\")");
+
+        // The optional Extension Builder (#2294) maps on the Workbench root when enabled, and keeps the same contract.
+        AssertSourceContains(
+            "src/extensions/ExtensionBuilder/src/Api/ExtensionBuilderApi.cs",
+            "WithHostOwner(\"Elsa.Workbench\")",
+            "EndpointSecurityDispositionMetadata.HostCredential(\n                ManagementApiKeyAuthentication.HeaderName",
+            "WithHostCredentialEnforcement(ManagementApiKeyAuthentication.HeaderName, \"Elsa.Workbench\")",
+            "RequireTrustedCallerAsync");
     }
 
     [Fact]
@@ -89,6 +97,7 @@ public sealed class HostEndpointMetadataTests
             "src/apps/Elsa.Workbench/Program.cs",
             "src/apps/Elsa.Workbench/Readiness/ShellReadinessEndpointExtensions.cs",
             "src/apps/Elsa.Workbench/ElsaModuleManagementApi.cs",
+            "src/extensions/ExtensionBuilder/src/Api/ExtensionBuilderApi.cs",
             "src/apps/Elsa.Foundation.Host/Health/HealthEndpoints.cs",
             "src/apps/Elsa.Foundation.Host/ModuleManagement/ModuleManagementEndpoints.cs"
         };

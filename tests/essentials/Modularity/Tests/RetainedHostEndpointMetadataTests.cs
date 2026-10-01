@@ -5,6 +5,7 @@ using CShells.Lifecycle;
 using Elsa.Api.AspNetCore;
 using Elsa.Api.Compatibility.Testing.Manifests;
 using Elsa.Diagnostics.ConsoleLogStreaming;
+using Elsa.ExtensionBuilder.Api;
 using Elsa.Workbench;
 using Elsa.Workbench.Readiness;
 using Microsoft.AspNetCore.Builder;
@@ -37,6 +38,7 @@ public sealed class RetainedHostEndpointMetadataTests
             .AllowPublic("health", "Provides the workbench process health response.");
         app.MapShellReadiness();
         app.MapElsaModuleManagementApi();
+        app.MapElsaExtensionBuilderApi();
         app.MapShellManagementApi("/_admin/shells")
             .WithHostOwner("Elsa.Workbench")
             .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
@@ -54,7 +56,7 @@ public sealed class RetainedHostEndpointMetadataTests
         await app.StartAsync();
         var manifest = new EndpointManifestBuilder(app.Services.GetServices<EndpointDataSource>()).Build();
 
-        Assert.Equal(22, manifest.Entries.Count);
+        Assert.Equal(64, manifest.Entries.Count);
         Assert.All(manifest.Entries, entry =>
         {
             Assert.Equal(EndpointOwnerKind.Host, entry.OwnerKind);
@@ -64,9 +66,10 @@ public sealed class RetainedHostEndpointMetadataTests
         });
 
         Assert.Equal(3, manifest.Entries.Count(entry => entry.SecurityDisposition?.Kind == EndpointSecurityDispositionKind.Public));
-        Assert.Equal(15, manifest.Entries.Count(entry => entry.SecurityDisposition?.Kind == EndpointSecurityDispositionKind.HostCredential));
+        Assert.Equal(57, manifest.Entries.Count(entry => entry.SecurityDisposition?.Kind == EndpointSecurityDispositionKind.HostCredential));
         Assert.Equal(4, manifest.Entries.Count(entry => entry.SecurityDisposition?.Kind == EndpointSecurityDispositionKind.NamedPolicy));
 
+        Assert.Equal(42, manifest.Entries.Count(entry => entry.Route.Value.StartsWith("/_elsa/extension-builder", StringComparison.Ordinal)));
         AssertRouteMethods(manifest, new Dictionary<string, string[]>
         {
             ["/"] = ["GET"],
@@ -93,6 +96,8 @@ public sealed class RetainedHostEndpointMetadataTests
         });
 
         Assert.All(manifest.Entries.Where(entry => entry.Route.Value.StartsWith("/_elsa/module-management", StringComparison.Ordinal)), entry =>
+            Assert.Equal(EndpointSecurityDispositionKind.HostCredential, entry.SecurityDisposition?.Kind));
+        Assert.All(manifest.Entries.Where(entry => entry.Route.Value.StartsWith("/_elsa/extension-builder", StringComparison.Ordinal)), entry =>
             Assert.Equal(EndpointSecurityDispositionKind.HostCredential, entry.SecurityDisposition?.Kind));
         Assert.All(manifest.Entries.Where(entry => entry.Route.Value.StartsWith("/_admin/shells", StringComparison.Ordinal)), entry =>
             Assert.Equal(EndpointSecurityDispositionKind.HostCredential, entry.SecurityDisposition?.Kind));

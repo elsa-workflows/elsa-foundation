@@ -27,6 +27,15 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<!--
+			Extension Builder scratch projects. Its storage root is outside the tree by default, but a relative
+			Elsa:ExtensionBuilder:StoragePath lands under this content root, and the sources it generates there must
+			not be compiled into the host.
+		-->
+		<Compile Remove="extension-builder\**\*.cs" />
+	</ItemGroup>
+
+	<ItemGroup>
 		<Content Update="shells.baseline.json">
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 		</Content>
@@ -49,6 +58,11 @@
 		<ProjectReference Include="..\..\extensions\Agent\src\Api\Elsa.Agent.Api.csproj" />
 		<ProjectReference Include="..\..\extensions\Agent\src\GitHubCopilot\Elsa.Agent.GitHubCopilot.csproj" />
 		<ProjectReference Include="..\..\extensions\Agent\src\Workflows\Elsa.Agent.Workflows.csproj" />
+		<!--
+			Optional (#2294): composed and mapped only when Elsa:ExtensionBuilder:Enabled is true, see Program.cs. The
+			reference alone adds no routes and no services.
+		-->
+		<ProjectReference Include="..\..\extensions\ExtensionBuilder\src\Api\Elsa.ExtensionBuilder.Api.csproj" />
 		<ProjectReference Include="..\..\essentials\Attention\Core\Elsa.Attention.Core.csproj" />
 		<ProjectReference Include="..\..\essentials\Attention\Api\Elsa.Attention.Api.csproj" />
 		<ProjectReference Include="..\..\essentials\Activities\Design\Api\Elsa.Activities.Design.Api.csproj" />

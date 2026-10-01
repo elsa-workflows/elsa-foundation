@@ -4,9 +4,9 @@
 
 **Created**: 2026-06-22
 
-**Status**: Superseded
+**Status**: Implemented — restored as an optional extension (#2294)
 
-Superseded: the Extension Builder module was removed on 2026-09-10 (owner decision in the maintainability review); this spec is kept as history.
+History: the Extension Builder module was removed on 2026-09-10 (#1635, owner decision in the maintainability review) and this spec was marked Superseded. On 2026-10-01 the owner reversed the removal: the backend came back from the pre-removal tree as the optional extension `src/extensions/ExtensionBuilder` (#2294), composed by the Workbench only when `Elsa:ExtensionBuilder:Enabled` is `true` and never by default. The capability and contract surface below is unchanged.
 
 **Input**: Coordinator handoff: "Extension Builder — backend pipeline (trusted-team v1). Lets a trusted user create and edit a .NET project workspace, build it server-side into a NuGet package, promote the validated package into a Nuplane-loadable feed, and have CShells expose the resulting capability at runtime — with status, diagnostics/logs, and rollback throughout. Backend pipeline only; the UI is a separate spec in elsa-foundation-studio."
 

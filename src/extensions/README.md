@@ -20,6 +20,26 @@ src/extensions/
 `<Name>` is the module bucket, not a project name: `src/extensions/Diagnostics` holds all eight diagnostics
 projects, `src/extensions/Elsa3` holds all four Elsa 3 import projects.
 
+## Extensions a host composes at its root
+
+Most extensions are CShells features: a shell lists them in `shells.json`, and nothing else is needed. One
+is a root-hosted subsystem the host has to compose itself:
+
+- **ExtensionBuilder** (`Elsa.ExtensionBuilder.Api`, spec 075, restored as optional by #2294 after #1635
+  removed it). Lets a trusted caller author a Git-backed .NET repository on the server, build it into a NuGet
+  package and promote it into a Nuplane feed, under `/_elsa/extension-builder`. Root singletons, a background
+  build worker and host-mapped routes cannot live in a shell container, so a host calls
+  `AddElsaExtensionBuilder(configuration)` and `MapElsaExtensionBuilderApi()` itself. No host does so by
+  default: the Workbench references the project and gates both calls behind `Elsa:ExtensionBuilder:Enabled`,
+  which is off unless set to `true` (`Elsa__ExtensionBuilder__Enabled=true` as an environment variable). The
+  routes additionally require the Elsa host management key (`Elsa:ModuleManagement:ApiKey`, sent as
+  `X-Elsa-Module-Management-Key`); with no key configured they answer 404, with a wrong or missing header 401.
+  Every route but `/capabilities` also needs the caller to hold one of `Elsa:ExtensionBuilder:TrustedRoles`,
+  which the management key's principal is given. `Elsa:ExtensionBuilder:StoragePath` (workspaces and build
+  output; outside the tree by default), `GitExecutable`, `DotNetExecutable` and `ServerLocalRepositoryRoots`
+  are the other settings. The Studio relay (studio ADR 0037) names these routes, so the surface is pinned by
+  `Elsa.ExtensionBuilder.Api.Tests`.
+
 ## What a move does and does not change
 
 Project names, assembly names, root namespaces and NuGet package ids are all driven by the `.csproj`
