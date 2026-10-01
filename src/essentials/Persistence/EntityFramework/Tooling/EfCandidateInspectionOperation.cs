@@ -70,7 +70,7 @@ public sealed class EfCandidateInspectionOperation
                     return EfToolingExitCode.Refusal;
                 if (length > MaximumRequestBytes)
                 {
-                    await WriteErrorAsync(response, correlation, "candidate-request-too-large", null, null, null, cancellationToken);
+                    await WriteErrorAsync(response, correlation, "candidate-request-too-large", null, null, cancellationToken);
                     return EfToolingExitCode.Refusal;
                 }
 
@@ -81,7 +81,7 @@ public sealed class EfCandidateInspectionOperation
                 catch (CandidateInputRefusal refusal)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    await WriteErrorAsync(response, correlation, refusal.Code, null, null, null, cancellationToken);
+                    await WriteErrorAsync(response, correlation, refusal.Code, null, null, cancellationToken);
                     return EfToolingExitCode.Refusal;
                 }
             }
@@ -96,7 +96,7 @@ public sealed class EfCandidateInspectionOperation
                 }
                 catch (CandidateInputRefusal refusal)
                 {
-                    await WriteErrorAsync(response, candidate.Correlation, refusal.Code, null, null, null, cancellationToken);
+                    await WriteErrorAsync(response, candidate.Correlation, refusal.Code, null, null, cancellationToken);
                     return EfToolingExitCode.Refusal;
                 }
 
@@ -108,13 +108,13 @@ public sealed class EfCandidateInspectionOperation
                     if (result.Conflict is { } conflict)
                     {
                         await WriteErrorAsync(response, candidate.Correlation, "candidate-selection-conflict",
-                            conflict.Reason, conflict.Feature, null, cancellationToken);
+                            conflict.Reason, conflict.Feature, cancellationToken);
                         return EfToolingExitCode.Refusal;
                     }
 
                     if (result.RefusalCode is { } refusalCode)
                     {
-                        await WriteErrorAsync(response, candidate.Correlation, refusalCode, null, null, null, cancellationToken);
+                        await WriteErrorAsync(response, candidate.Correlation, refusalCode, null, null, cancellationToken);
                         return EfToolingExitCode.Refusal;
                     }
 
@@ -157,6 +157,23 @@ public sealed class EfCandidateInspectionOperation
             throw HostUnavailable();
         var hostAssembly = matchingHostAssemblies[0];
 
+        return InspectComposition(candidate.Shell, candidate.Environment, candidate.AcceptedFeatureIds,
+            candidate.RemovedFeatureIds, configuration, hostAssembly, closure,
+            _ => SafeIdentityOrNull, cancellationToken);
+    }
+
+    /// <summary>Runs the shared host composition, reconciliation and EF preparation core for either candidate lane.</summary>
+    internal static InspectionResult InspectComposition(
+        string shell,
+        string environment,
+        IReadOnlyList<string> acceptedFeatureIds,
+        IReadOnlyList<string> removedFeatureIds,
+        IConfigurationRoot configuration,
+        Assembly hostAssembly,
+        Assembly[] closure,
+        Func<IReadOnlyDictionary<string, ShellFeatureDescriptor>, Func<string, string?>?>? publicFeatureFactory,
+        CancellationToken cancellationToken)
+    {
         IEfToolingShellDefaults defaults;
         IReadOnlyDictionary<string, ShellFeatureDescriptor> descriptors;
         ShellSettings settings;
@@ -167,13 +184,11 @@ public sealed class EfCandidateInspectionOperation
             defaults = EfToolingShellDefaultsDeclaration.Construct(composerType);
 
             var discovered = FeatureDiscovery.DiscoverFeatures(closure).ToArray();
-            if (discovered.Any(feature => !IsSafeIdentity(feature.Id)))
-                throw HostUnavailable();
-            if (discovered.GroupBy(feature => feature.Id, StringComparer.OrdinalIgnoreCase).Any(group => group.Count() != 1))
+            if (discovered.Any(feature => !IsSafeIdentity(feature.Id)) ||
+                discovered.GroupBy(feature => feature.Id, StringComparer.OrdinalIgnoreCase).Any(group => group.Count() != 1))
                 throw HostUnavailable();
             descriptors = discovered.ToDictionary(feature => feature.Id, StringComparer.OrdinalIgnoreCase);
-
-            settings = EfToolingConfigurationContext.ComposeShell(defaults, configuration, candidate.Shell);
+            settings = EfToolingConfigurationContext.ComposeShell(defaults, configuration, shell);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -202,8 +217,8 @@ public sealed class EfCandidateInspectionOperation
             return InspectionResult.Conflicted(new SelectionConflict("unavailable", null));
         }
 
-        var conflict = Reconcile(candidate.AcceptedFeatureIds, candidate.RemovedFeatureIds, requested, effective,
-            disabled, descriptors, SafeIdentityOrNull);
+        var conflict = Reconcile(acceptedFeatureIds, removedFeatureIds, requested, effective, disabled, descriptors,
+            publicFeatureFactory?.Invoke(descriptors));
         if (conflict is not null)
             return InspectionResult.Conflicted(conflict);
 
@@ -237,8 +252,8 @@ public sealed class EfCandidateInspectionOperation
 
         try
         {
-            return InspectionResult.Resolved(BuildResolution(candidate.Shell, candidate.Environment,
-                candidate.AcceptedFeatureIds, settings, prepared));
+            return InspectionResult.Resolved(BuildResolution(shell, environment,
+                acceptedFeatureIds, settings, prepared));
         }
         catch (CandidateInputRefusal refusal) when (ResourceRefusalCodes.Contains(refusal.Code))
         {
@@ -589,7 +604,6 @@ public sealed class EfCandidateInspectionOperation
         string code,
         string? reason,
         string? feature,
-        string? resource,
         CancellationToken cancellationToken)
     {
         using var output = new MemoryStream();
@@ -606,7 +620,6 @@ public sealed class EfCandidateInspectionOperation
             writer.WriteString("code", code);
             if (reason is not null) writer.WriteString("reason", reason);
             if (feature is not null && IsSafeIdentity(feature)) writer.WriteString("feature", feature);
-            if (resource is not null && IsLogicalIdentity(resource)) writer.WriteString("resource", resource);
             writer.WriteEndObject();
             writer.WriteEndObject();
         }
@@ -862,7 +875,7 @@ public sealed class EfCandidateInspectionOperation
         public static CandidateResolution Refused(string code) => throw new CandidateInputRefusal(code);
     }
 
-    private sealed record InspectionResult(CandidateResolution? Resolution, string? RefusalCode, SelectionConflict? Conflict)
+    internal sealed record InspectionResult(CandidateResolution? Resolution, string? RefusalCode, SelectionConflict? Conflict)
     {
         public static InspectionResult Resolved(CandidateResolution value) => new(value, null, null);
         public static InspectionResult Refused(string code) => new(null, code, null);
