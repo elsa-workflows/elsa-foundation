@@ -140,7 +140,7 @@ public sealed class EfSchemaBackfill
             {
                 // Whatever failed, a cancellation that is not this loop's own included, must not end the loop: a backfill
                 // that stopped for good would leave its families incomplete with nothing saying so.
-                _logger.LogWarning(exception, "The post-finalization backfill of EF module {Module} failed a round; it tries again on schedule.", Module);
+                _logger.Log(FailureLevel(exception), exception, "The post-finalization backfill of EF module {Module} failed a round; it tries again on schedule.", Module);
             }
         }
     }
@@ -168,7 +168,7 @@ public sealed class EfSchemaBackfill
                 }
                 catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
                 {
-                    _logger.LogWarning(exception,
+                    _logger.Log(FailureLevel(exception), exception,
                         "The post-finalization backfill of schema family {Family} of EF module {Module} failed this round; the module's other " +
                         "families go on, and it tries again next round.", chain.Family, Module);
                     failures.Add(ExceptionDispatchInfo.Capture(exception));
@@ -230,8 +230,10 @@ public sealed class EfSchemaBackfill
             });
             goesOn = false;
         }
-        catch (Exception)
+        catch (Exception exception) when (!IsProviderDisposal(exception))
         {
+            // Not for a provider that is being disposed: the release would take its scope from the same one, and the claim
+            // expires on its own.
             await ReleaseAfterFailureAsync(scopes, family);
             throw;
         }
@@ -368,11 +370,24 @@ public sealed class EfSchemaBackfill
         }
         catch (Exception exception) when (exception is not OutOfMemoryException)
         {
-            _logger.LogWarning(exception,
+            _logger.Log(FailureLevel(exception), exception,
                 "The backfill of schema family {Family} of EF module {Module} could not release its claim after its round failed; the claim expires on its own.",
                 family, Module);
         }
     }
+
+    /// <summary>
+    /// Whether <paramref name="exception"/> is a service provider refusing a scope because it is being disposed, as a shell's
+    /// is while its container is torn down under a round that has not been stopped yet. That is the shell stopping, not the
+    /// round failing, so it is not a warning. The match cannot tell a disposed root provider from a disposed scope, which is
+    /// acceptable: the backfill only uses scopes it creates for the round, so a disposed <see cref="IServiceProvider"/> means
+    /// its shell is being torn down.
+    /// </summary>
+    private static bool IsProviderDisposal(Exception exception) =>
+        exception is ObjectDisposedException { ObjectName: nameof(IServiceProvider) }
+        || exception is AggregateException aggregate && aggregate.InnerExceptions.Count > 0 && aggregate.InnerExceptions.All(IsProviderDisposal);
+
+    private static LogLevel FailureLevel(Exception exception) => IsProviderDisposal(exception) ? LogLevel.Debug : LogLevel.Warning;
 
     /// <summary>
     /// One run for <paramref name="chain"/>'s family to <paramref name="target"/> (FR-005 to FR-014), under this worker's
