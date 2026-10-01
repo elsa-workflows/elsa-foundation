@@ -13,10 +13,19 @@ namespace Elsa.Persistence.EntityFramework.SchemaBackfill;
 /// each a selection by stamp in bounded batches, and every rewrite asked of the family's rewriter in a fresh scope.
 /// </summary>
 /// <remarks>
+/// <para>
 /// A pass that meets a row below the completion standing withdraws that completion before it rewrites the row (FR-018),
 /// so a pass that dies midway never leaves a known straggler under a standing completion. What stands is read afresh
 /// before each row, and so whenever a batch starts, unless the run already knows of a completion at or after its target:
 /// another worker may record one while the run goes on.
+/// </para>
+/// <para>
+/// Every pass works under its worker's claim (FR-008): the claim is renewed, or the pass stopped, between two batches and
+/// before each table a selection counts, the same cadence throughout, and the read taken before each row stops the pass
+/// once another worker has taken the family over. A selection that runs inside a compare-and-set, the evidence of a
+/// withdrawal, writes no renewal, which would lose that compare-and-set; between its tables it only checks that no other
+/// worker has taken the family over, and the withdrawal renews before it starts and between its attempts.
+/// </para>
 /// </remarks>
 internal sealed class EfSchemaBackfillPasses(
     EfSchemaBackfillFinish finish,
@@ -39,6 +48,7 @@ internal sealed class EfSchemaBackfillPasses(
             long toUpgrade = 0;
             foreach (var table in run.Tables)
             {
+                await finish.RenewClaimAsync(scopes, run, cancellationToken);
                 blockers.AddRange(await BlockersAsync(scope.Context, run, table, cancellationToken));
                 if (!table.ContentAddressed)
                     toUpgrade += await table.CountAsync(scope.Context, EfSchemaStampFilter.In(run.Below), cancellationToken);
@@ -68,6 +78,7 @@ internal sealed class EfSchemaBackfillPasses(
         long found = 0;
         foreach (var table in run.Tables)
         {
+            await finish.RenewClaimAsync(scopes, run, cancellationToken);
             blockers.AddRange(await scopes.WithScopeAsync(scope => BlockersAsync(scope.Context, run, table, cancellationToken), cancellationToken));
             if (table.ContentAddressed)
                 continue;
@@ -90,9 +101,16 @@ internal sealed class EfSchemaBackfillPasses(
     /// Why <paramref name="standing"/> does not hold, read now in <paramref name="context"/> (FR-018), or null when no row
     /// below it remains: per table, the rows below its completion version, and for an audit every such row and every row
     /// with a stamp this host cannot read, whatever the table; for a pass only the rows it rewrites. It names the table,
-    /// the count, and what becomes of them.
+    /// the count, and what becomes of them. It runs inside the withdrawal's compare-and-set, so it writes no renewal; before
+    /// each table it checks that no other worker has taken the family over, and stops the audit if one has (FR-008).
     /// </summary>
-    public async Task<string?> StragglersAsync(DbContext context, EfSchemaBackfillRun run, SchemaFinishRecord standing, bool audit, CancellationToken cancellationToken)
+    public async Task<string?> StragglersAsync(
+        EfSchemaBackfillScopeRunner scopes,
+        DbContext context,
+        EfSchemaBackfillRun run,
+        SchemaFinishRecord standing,
+        bool audit,
+        CancellationToken cancellationToken)
     {
         var readable = run.Chain.ReadableVersions;
         if (SchemaVersionChain.PositionOf(readable, standing.CompletionVersion) < 0)
@@ -101,6 +119,7 @@ internal sealed class EfSchemaBackfillPasses(
         var found = new List<string>();
         foreach (var table in run.Tables.Where(table => audit || run.Rewrites(table)))
         {
+            await finish.EnsureNotTakenOverAsync(scopes, run, cancellationToken);
             if (audit && await table.CountAsync(context, EfSchemaStampFilter.NotIn(readable), cancellationToken) is > 0 and var unreadable)
                 found.Add($"table '{table.Name}': {unreadable} (with a stamp this host cannot read)");
             if (await table.CountAsync(context, EfSchemaStampFilter.In(below), cancellationToken) is > 0 and var count)
@@ -185,15 +204,21 @@ internal sealed class EfSchemaBackfillPasses(
     /// Withdraws the completion that stands over <paramref name="row"/> before the row is rewritten (FR-018). While the run
     /// knows of no completion at or after its target, it reads the finish record afresh first: a completion another worker
     /// recorded since the run began, or since this batch was selected, covers the row, and a row rewritten under it
-    /// unreported would hide a straggler. A completion at or after the target covers every row a pass selects, and the
-    /// withdrawal reads the record afresh itself.
+    /// unreported would hide a straggler. The same read stops the pass when another worker has taken the family over
+    /// (FR-008). A completion at or after the target covers every row a pass selects, which only a worker with no claim can
+    /// have recorded while this run held one, and the withdrawal reads the record afresh itself.
     /// </summary>
     private async Task WithdrawOverAsync(EfSchemaBackfillScopeRunner scopes, EfSchemaBackfillRun run, EfSchemaStampedRow row, CancellationToken cancellationToken)
     {
         if (!run.CompletionCoversTarget)
-            run.Completion = (await finish.ReadAsync(scopes, run.Family, cancellationToken))?.Finish;
+        {
+            var record = await finish.ReadAsync(scopes, run.Family, cancellationToken);
+            finish.EnsureOwned(run.Family, record);
+            run.Completion = record?.Finish;
+        }
+
         if (run.IsBelowCompletion(row.Stamp))
-            run.Completion = await finish.WithdrawAsync(scopes, run.Family, (scope, standing) => StragglersAsync(scope.Context, run, standing, audit: false, cancellationToken), cancellationToken);
+            run.Completion = await finish.WithdrawAsync(scopes, run, (scope, standing) => StragglersAsync(scopes, scope.Context, run, standing, audit: false, cancellationToken), cancellationToken);
     }
 
     /// <summary>

@@ -1242,7 +1242,7 @@ public static class EfToolingHost
                 WaitsFor = fleet?.Blockers(family, status.DatabaseIdentity, pending.Version)
             })],
             CompletionVersion = status.Finish?.CompletionVersion,
-            BackfillRun = status.Finish?.Run is { } run
+            BackfillRun = (status.Finish?.Run ?? status.Withdrawal?.Run) is { } run
                 ? new() { TargetVersion = run.TargetVersion, Member = run.Member.ToString(), ExpiresAt = run.ExpiresAt }
                 : null,
             CompletionWithdrawn = status.Withdrawal is { } withdrawal
