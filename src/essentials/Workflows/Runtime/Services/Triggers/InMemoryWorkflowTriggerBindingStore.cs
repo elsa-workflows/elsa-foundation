@@ -146,13 +146,15 @@ public sealed class InMemoryWorkflowTriggerBindingStore : IWorkflowTriggerBindin
 
         lock (_syncRoot)
         {
-            var doomed = _bindings.Values
+            var doomedBindings = _bindings.Values
                 .Where(binding => StringComparer.Ordinal.Equals(binding.ArtifactId, artifactId))
-                .Select(binding => binding.TriggerBindingId)
                 .ToArray();
+            var doomed = doomedBindings.Select(binding => binding.TriggerBindingId).ToArray();
 
             foreach (var id in doomed)
                 _bindings.Remove(id);
+            foreach (var activationId in doomedBindings.Select(binding => binding.ActivationId).OfType<string>().Distinct(StringComparer.Ordinal))
+                _activations.Remove(activationId);
 
             return new ValueTask<int>(doomed.Length);
         }

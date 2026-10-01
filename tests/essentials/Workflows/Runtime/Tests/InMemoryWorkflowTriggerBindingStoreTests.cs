@@ -386,6 +386,18 @@ public sealed class InMemoryWorkflowTriggerBindingStoreTests
         Assert.Single(await store.ListAllByArtifactAsync("artifact-2"));
     }
 
+    [Fact]
+    public async Task DeleteByArtifact_RemovesTheActivationProjectionStateOfTheDeletedRows()
+    {
+        var store = new InMemoryWorkflowTriggerBindingStore();
+        await store.PrepareActivationAsync("publication-1", [Binding("artifact-1", "node-a") with { ActivationId = "publication-1", SlotId = "default" }]);
+        Assert.Equal(WorkflowActivationProjectionState.Prepared, await store.FindActivationStateAsync("publication-1"));
+
+        await store.DeleteByArtifactAsync("artifact-1");
+
+        Assert.Equal(WorkflowActivationProjectionState.Missing, await store.FindActivationStateAsync("publication-1"));
+    }
+
     private WorkflowTriggerBinding Binding(
         string artifactId,
         string nodeId,

@@ -397,11 +397,9 @@ internal static class WorkflowActivationCrashRepairContract
 
     /// <summary>
     /// A double fault: an activation fails after its projection switch, and its compensation hands the slot back but
-    /// cannot delete the candidate's projections, so they stay stored as replaced. A retry must not reuse them. They read
-    /// as an activation that served and was replaced, so a completion of the slot that runs once the retry has resumed its
-    /// reference would retire that reference, and the retry would then win the slot and serve with it retired. Preparing
-    /// the activation again is refused instead: the retry fails loudly, its compensation deletes the projections, and the
-    /// next retry activates cleanly.
+    /// cannot delete the candidate's projections, so they stay stored as replaced. Preparing the activation again is
+    /// refused at preparation rather than reusing them: the retry fails loudly, its compensation deletes the leftover
+    /// projections, and the next retry activates cleanly.
     /// </summary>
     private static async Task RetryRefusesProjectionsAFailedCompensationLeftBehindAsync(Func<ActivationStores> open)
     {
@@ -417,15 +415,7 @@ internal static class WorkflowActivationCrashRepairContract
         await using var other = Start(open());
         await other.AssertConsistentAsync("activation-1");
         await other.AssertProjectionsAsync("activation-2", WorkflowActivationProjectionState.Replaced);
-        var retryStores = open();
-        var reference = WorkflowActivationReferenceIdentity.Create("activation-2");
-        await using var retry = Start(retryStores with
-        {
-            Authority = new AfterSlotRead(
-                retryStores.Authority,
-                async () => (await retryStores.References.FindAsync(reference))?.DeletedAt is null,
-                () => other.Coordinator.CompleteAsync(DefinitionId, SlotName).AsTask())
-        });
+        await using var retry = Start(open());
 
         var result = await retry.ActivateAsync("activation-2", "artifact-2");
 

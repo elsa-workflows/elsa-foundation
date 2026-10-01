@@ -219,11 +219,12 @@ public sealed class InMemoryRecurringTriggerScheduleStore : IRecurringTriggerSch
         {
             var doomed = _schedules.Values
                 .Where(schedule => StringComparer.Ordinal.Equals(schedule.ArtifactId, artifactId))
-                .Select(schedule => schedule.ScheduleId)
                 .ToArray();
 
-            foreach (var scheduleId in doomed)
-                _schedules.Remove(scheduleId);
+            foreach (var schedule in doomed)
+                _schedules.Remove(schedule.ScheduleId);
+            foreach (var activationId in doomed.Select(schedule => schedule.ActivationId).OfType<string>().Distinct(StringComparer.Ordinal))
+                _activations.Remove(activationId);
         }
 
         return ValueTask.CompletedTask;
