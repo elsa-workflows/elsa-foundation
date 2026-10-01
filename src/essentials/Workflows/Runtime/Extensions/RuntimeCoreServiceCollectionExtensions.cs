@@ -164,6 +164,7 @@ public static class RuntimeCoreServiceCollectionExtensions
         // startup so an unusable signing key fails shell activation instead of every sweep (see the startup task).
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IStartupTask, ValidateRuntimeRecoveryContinuationCodecStartupTask>());
         services.TryAddSingleton<IRuntimeRecoverySweepCursorStore, InMemoryRuntimeRecoverySweepCursorStore>();
+        services.TryAddSingleton<RuntimeResumptionDiscoveryStateStore>();
         services.TryAddSingleton<IActivityExecutionHierarchyStore, RuntimeInMemoryActivityExecutionHierarchyStore>();
         services.TryAddSingleton<IActivityExecutionHierarchyReader>(serviceProvider => serviceProvider.GetRequiredService<IActivityExecutionHierarchyStore>());
         services.TryAddSingleton<IActivityExecutionHierarchyWriter>(serviceProvider => serviceProvider.GetRequiredService<IActivityExecutionHierarchyStore>());

@@ -8,6 +8,8 @@ for file in "$dir"/*.cs; do
     -e 's#^([[:space:]]*)SqlServerModelBuilderExtensions\.UseIdentityColumns\(modelBuilder\);#\1// SqlServerModelBuilderExtensions.UseIdentityColumns omitted: the module stays provider-free.#' \
     -e 's#^([[:space:]]*)NpgsqlModelBuilderExtensions\.UseIdentityByDefaultColumns\(modelBuilder\);#\1// NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns omitted: the module stays provider-free.#' \
     -e 's#^([[:space:]]*)MySQLModelBuilderExtensions\.HasCharSet\(modelBuilder, "([^"]+)"\);#\1modelBuilder.HasAnnotation("MySQL:Charset", "\2");#' \
+    -e 's#^([[:space:]]*)SqlServerIndexBuilderExtensions\.IncludeProperties\((.*), (new\[\] \{[^}]*\})\);#\1\2.HasAnnotation("SqlServer:Include", \3);#' \
+    -e 's#^([[:space:]]*)NpgsqlIndexBuilderExtensions\.IncludeProperties\((.*), (new\[\] \{[^}]*\})\);#\1\2.HasAnnotation("Npgsql:IndexInclude", \3);#' \
     -e '/^using (Npgsql|MySql|Microsoft\.EntityFrameworkCore\.SqlServer|Microsoft\.EntityFrameworkCore\.Sqlite|MySql\.EntityFrameworkCore)[A-Za-z.]*;$/d' \
     "$file"
   rm -f "$file.bak"

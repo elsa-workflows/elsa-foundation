@@ -217,6 +217,28 @@ public sealed class EfWorkflowTriggerBindingStore(
     public ValueTask<WorkflowTriggerBindingPage> ListByStimulusTypeAsync(WorkflowTriggerBindingTypePageQuery query, CancellationToken cancellationToken = default) =>
         QueryPageAsync(query, $"type\0{query.StimulusType}", x => x.StimulusType == Encode(query.StimulusType) && x.IsActive, cancellationToken);
 
+    /// <summary>
+    /// The population <see cref="ListByStimulusTypeAsync"/> pages, projected to its stimulus identities in the database
+    /// under the two rules <see cref="EfBookmarkStateStore.ListWaitingStimulusHashesByTypeAsync"/> explains, over
+    /// <see cref="RuntimeTriggerBindingEfModule.RouteConvergenceIndexName"/>.
+    /// </summary>
+    public async ValueTask<IReadOnlyCollection<string>> ListActiveStimulusHashesAsync(string stimulusType, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(stimulusType);
+        cancellationToken.ThrowIfCancellationRequested();
+        var scope = RequireScope();
+        // Hash-only matching, where the page scan also compares the encoded scope and type: two scopes or types share a
+        // hash only through a SHA-256 collision. A colliding or corrupt row can at worst make this fingerprint differ from
+        // the last refresh's and so cause a rebuild, never a wrong route: the rebuild reads through ListByStimulusTypeAsync,
+        // which leaves a colliding row out by its encoded columns and validates every row it reads (Read).
+        var identities = await context.WorkflowTriggerBindings.AsNoTracking()
+            .Where(x => x.ScopeKeyHash == Hash(scope) && x.StimulusTypeLookupKey == Lookup(stimulusType) && x.IsActive)
+            .Select(x => new { x.StimulusLookupKey, x.StimulusHash })
+            .Distinct()
+            .ToArrayAsync(cancellationToken);
+        return StimulusHashes.DistinctOrdinal(identities.Select(x => Decode(x.StimulusHash)));
+    }
+
     private async ValueTask<WorkflowTriggerBindingPage> QueryPageAsync(WorkflowTriggerBindingPageRequest query, string binding, System.Linq.Expressions.Expression<Func<WorkflowTriggerBindingEntity, bool>> predicate, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(query); cancellationToken.ThrowIfCancellationRequested();

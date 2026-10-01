@@ -1,34 +1,85 @@
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 
 public sealed class RuntimeSqliteDbContext(DbContextOptions<RuntimeSqliteDbContext> options) : RuntimeDbContext(options)
 {
     public const string ExpectedProviderName = Elsa.Persistence.EntityFramework.EfProviderNames.Sqlite;
-    protected override void ConfigureProvider(ModelBuilder modelBuilder) => RuntimeProviderModel.ConfigureText(modelBuilder, "TEXT");
+    protected override void ConfigureProvider(ModelBuilder modelBuilder)
+    {
+        RuntimeProviderModel.ConfigureText(modelBuilder, "TEXT");
+        RuntimeProviderModel.ConfigureRouteConvergenceIndexes(modelBuilder, includeAnnotation: null, coverBindings: true);
+    }
 }
 
 public sealed class RuntimeSqlServerDbContext(DbContextOptions<RuntimeSqlServerDbContext> options) : RuntimeDbContext(options)
 {
     public const string ExpectedProviderName = Elsa.Persistence.EntityFramework.EfProviderNames.SqlServer;
-    protected override void ConfigureProvider(ModelBuilder modelBuilder) => RuntimeProviderModel.ConfigureText(modelBuilder, "nvarchar(max)");
+    protected override void ConfigureProvider(ModelBuilder modelBuilder)
+    {
+        RuntimeProviderModel.ConfigureText(modelBuilder, "nvarchar(max)");
+        RuntimeProviderModel.ConfigureRouteConvergenceIndexes(modelBuilder, includeAnnotation: "SqlServer:Include", coverBindings: true);
+    }
 }
 
 public sealed class RuntimePostgreSqlDbContext(DbContextOptions<RuntimePostgreSqlDbContext> options) : RuntimeDbContext(options)
 {
     public const string ExpectedProviderName = Elsa.Persistence.EntityFramework.EfProviderNames.PostgreSql;
-    protected override void ConfigureProvider(ModelBuilder modelBuilder) => RuntimeProviderModel.ConfigureText(modelBuilder, "text");
+    protected override void ConfigureProvider(ModelBuilder modelBuilder)
+    {
+        RuntimeProviderModel.ConfigureText(modelBuilder, "text");
+        RuntimeProviderModel.ConfigureRouteConvergenceIndexes(modelBuilder, includeAnnotation: "Npgsql:IndexInclude", coverBindings: true);
+    }
 }
 
 public sealed class RuntimeMySqlDbContext(DbContextOptions<RuntimeMySqlDbContext> options) : RuntimeDbContext(options)
 {
     public const string ExpectedProviderName = Elsa.Persistence.EntityFramework.EfProviderNames.MySql;
-    protected override void ConfigureProvider(ModelBuilder modelBuilder) => RuntimeProviderModel.ConfigureText(modelBuilder, "longtext");
+    protected override void ConfigureProvider(ModelBuilder modelBuilder)
+    {
+        RuntimeProviderModel.ConfigureText(modelBuilder, "longtext");
+        // No binding index: the binding identity columns are declared at 344 characters, and scope hash, type lookup
+        // key, activity, lookup key and hash come to more than InnoDB's 3072-byte key limit in utf8mb4, while MySQL has
+        // no INCLUDE. Its binding projection keeps one row lookup per active binding of the type, a publish-time count.
+        RuntimeProviderModel.ConfigureRouteConvergenceIndexes(modelBuilder, includeAnnotation: null, coverBindings: false);
+    }
 }
 
 file static class RuntimeProviderModel
 {
+    private static readonly string[] RouteConvergenceProjection = ["StimulusLookupKey", "StimulusHash"];
+
+    /// <summary>
+    /// The covering indexes of the HTTP route-table convergence check (#2190), which every node runs on an interval:
+    /// both of its projections are answered from an index alone, so a check reads index entries, never rows. A provider
+    /// with an INCLUDE annotation carries the projected columns there; elsewhere they join the key.
+    /// </summary>
+    public static void ConfigureRouteConvergenceIndexes(ModelBuilder modelBuilder, string? includeAnnotation, bool coverBindings)
+    {
+        Covering(
+            modelBuilder.Entity<BookmarkStateEntity>(),
+            [nameof(BookmarkStateEntity.ScopeKeyHash), nameof(BookmarkStateEntity.StimulusTypeLookupKey), nameof(BookmarkStateEntity.ExpiresAtUtcTicks)],
+            BookmarkStateEfModule.RouteConvergenceIndexName,
+            includeAnnotation);
+        if (coverBindings)
+            Covering(
+                modelBuilder.Entity<WorkflowTriggerBindingEntity>(),
+                [nameof(WorkflowTriggerBindingEntity.ScopeKeyHash), nameof(WorkflowTriggerBindingEntity.StimulusTypeLookupKey), nameof(WorkflowTriggerBindingEntity.IsActive)],
+                RuntimeTriggerBindingEfModule.RouteConvergenceIndexName,
+                includeAnnotation);
+    }
+
+    private static void Covering<TEntity>(EntityTypeBuilder<TEntity> entity, string[] keys, string name, string? includeAnnotation)
+        where TEntity : class
+    {
+        var index = includeAnnotation is null
+            ? entity.HasIndex([.. keys, .. RouteConvergenceProjection])
+            : entity.HasIndex(keys).HasAnnotation(includeAnnotation, RouteConvergenceProjection);
+        index.HasDatabaseName(name);
+    }
+
     public static void ConfigureText(ModelBuilder modelBuilder, string type)
     {
         modelBuilder.Entity<BookmarkStateEntity>().Property(row => row.ScopeKey).HasColumnType(type);

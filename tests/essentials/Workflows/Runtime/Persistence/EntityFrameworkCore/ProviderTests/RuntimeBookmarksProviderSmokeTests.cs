@@ -102,6 +102,15 @@ internal static class RuntimeBookmarksProviderSmoke
 
             Assert.True(await store.DeleteAsync(workflowId, bookmarkId));
             Assert.Null(await store.FindAsync(workflowId, bookmarkId));
+
+            // The convergence projection (#2190) applies the expiry rule in the database and must stay exact under the
+            // provider's default collation: SQL Server and MySQL compare text case-insensitively, so a DISTINCT over the
+            // hash alone would fold 'Route-A' and 'route-a' together.
+            await store.SaveAsync(Bookmark(workflowId, "route-1", "Route", "Route-A"));
+            await store.SaveAsync(Bookmark(workflowId, "route-2", "Route", "route-a"));
+            await store.SaveAsync(Bookmark(workflowId, "route-3", "Route", "route-a"));
+            await store.SaveAsync(Bookmark(workflowId, "route-4", "Route", "expired") with { ExpiresAt = CreatedAt });
+            Assert.Equal(["Route-A", "route-a"], (await store.ListWaitingStimulusHashesByTypeAsync("Route", CreatedAt)).Order(StringComparer.Ordinal));
         }
 
         var rollbackWorkflowId = $"provider-rollback-workflow-{Guid.NewGuid():N}";

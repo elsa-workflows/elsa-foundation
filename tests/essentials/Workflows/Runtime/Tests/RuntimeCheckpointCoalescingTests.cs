@@ -119,6 +119,35 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
         Assert.Empty(await inner.ListAllAsync(new RuntimeSchedulerWorkQuery(workflowExecutionId)));
     }
 
+    /// <summary>
+    /// #2188: the decorator must forward claimable backlog discovery. Not forwarding the capability would quietly put a
+    /// coalescing host back on the unfiltered first-page listing that starved newer executions.
+    /// </summary>
+    [Fact]
+    public async Task BacklogDiscovery_ForwardsClaimableDiscoveryToTheDurableQueue()
+    {
+        var inner = new InMemoryWorkflowSchedulerWorkQueue();
+        var queue = new CoalescingWorkflowSchedulerWorkQueue(
+            new CoalescingInner<IWorkflowSchedulerWorkQueue>(inner),
+            new AsyncLocalRuntimeCoalescingSessionAccessor());
+        foreach (var workflowExecutionId in new[] { "wfexec-claimed", "wfexec-visible" })
+        {
+            await inner.EnqueueAsync(new RuntimeSchedulerWorkItem(
+                "work-1",
+                workflowExecutionId,
+                "command-1",
+                WorkflowExecutionCommandKind.Start,
+                "envelope-1",
+                "idempotency-1",
+                Now,
+                Now));
+        }
+        Assert.NotNull(await inner.ClaimAsync(NewClaimRequest("wfexec-claimed")));
+
+        Assert.True(queue.SupportsClaimableBacklogDiscovery);
+        Assert.Equal(["wfexec-visible"], await queue.ListClaimableWorkflowExecutionIdsAsync(new RuntimeSchedulerClaimableBacklogQuery(Now)));
+    }
+
     [Fact]
     public async Task ActivityAttemptBoundary_FlushesBeforeActivation_AndStartsFreshSegment()
     {
