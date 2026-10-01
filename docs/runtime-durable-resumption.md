@@ -42,9 +42,13 @@ unrelated command to arrive (**RT-3**).
   idempotent by `(WorkflowExecutionId, WorkItemId)`; listing/dequeue are FIFO by
   `(RecordedAt, Sequence, WorkItemId)`; dequeue is load-first-then-delete.
 - **Backlog discovery** — an additive contract method
-  `IWorkflowSchedulerWorkQueue.ListPendingWorkflowExecutionIdsAsync(int limit)` returns the distinct
-  execution ids that still have queued work. After a restart, nothing else knows which executions were
-  interrupted; this is how the sweep finds them. Both the in-memory and EF Core queues implement it.
+  `IWorkflowSchedulerWorkQueue.ListClaimableWorkflowExecutionIdsAsync(RuntimeSchedulerClaimableBacklogQuery)`
+  returns, in ordinal order after an exclusive bound, the distinct execution ids whose queued work a claim
+  would serve right now (#2188). After a restart, nothing else knows which executions were interrupted;
+  this is how the sweep finds them. Both the in-memory and EF Core queues implement it and are held to one
+  contract. (`ListPendingWorkflowExecutionIdsAsync(int limit)`, the original method, still lists every
+  execution with any queued work; the sweep falls back to it only for a queue that does not implement
+  claimable discovery.)
 - **A resumption sweep service** — `IRuntimeResumptionService` (`RuntimeResumptionService`). One
   `SweepAsync` pass:
   1. **Re-delivers** stranded post-commit outbox items **system-wide**
@@ -53,7 +57,7 @@ unrelated command to arrive (**RT-3**).
      remains intentionally filtered to `EnqueueSchedulerWork`, so non-local cross-execution work is
      never executed inside that workflow's actor mailbox.
   2. **Discovers** the interrupted executions: the union of the durable queue backlog
-     (`ListPendingWorkflowExecutionIdsAsync`) and `IRuntimeRecoveryScanner` candidates.
+     (`ListClaimableWorkflowExecutionIdsAsync`) and `IRuntimeRecoveryScanner` candidates.
   3. **Re-drives** each execution by enqueueing a `RunSchedulerWork` command envelope **through the
      agent mailbox** — *not* by draining from the sweep. Re-driving through the mailbox preserves the
      single-writer discipline (RT-2): the agent remains the only writer for its execution.
@@ -105,7 +109,7 @@ re-drives. ✅
 ### Window B — after outbox delivery, before drain *(recovered)*
 
 The outbox row is `Delivered` and the scheduler work is durably queued, but it was never drained. On
-restart, the sweep's **backlog discovery** (`ListPendingWorkflowExecutionIdsAsync`) finds the
+restart, the sweep's **backlog discovery** (`ListClaimableWorkflowExecutionIdsAsync`) finds the
 execution and re-drives, draining the queue. ✅
 
 ### Window C — after the drainer picks up an item, before its handler checkpoint commit *(recovered)*
@@ -119,8 +123,9 @@ work item) — the case #412 item 3 named.
 destructively dequeues before dispatch. It peeks the head, dispatches it in place, and only **ack-deletes**
 it from the durable queue *after* the handler's effect is durable (a successful commit; or, on a *handler
 fault*, before the poison record / RetryNow re-enqueue). A process crash before the ack therefore leaves the
-source item durably queued, so the sweep's **backlog discovery** (`ListPendingWorkflowExecutionIdsAsync`)
-finds the execution and re-drives it, and the handler re-runs **idempotently** — the activity-execution
+source item durably queued, so the sweep's **backlog discovery** (`ListClaimableWorkflowExecutionIdsAsync`)
+finds the execution once the dead drainer's claim lapses (`RuntimeSchedulerWorkClaimOptions.VisibilityTimeout`,
+1 minute by default; until then no claim could take the item either) and re-drives it, and the handler re-runs **idempotently** — the activity-execution
 status guards (`existing.Status == Scheduled` / `state.Status == Running`) recognise the already-applied
 first write, and the deterministic follow-up work-item ids (`…:start:…`, `…:invoke:…`) are absorbed by the
 idempotent queue, so redelivery never double-applies. This is covered by
@@ -148,7 +153,32 @@ So a single restart with a large backlog — or one poisoned execution — canno
 sweep, the pump is bounded on two axes:
 
 - **Per tick:** `RuntimeResumptionSweepRequest.MaxExecutionsPerSweep` (default 100) caps how many
-  executions one sweep re-drives.
+  executions one sweep re-drives. The recovery scanner keeps half of the cap (at least one slot, at
+  most its batch size) and the backlog the rest, so neither can stop the other running; either side
+  may use the slots the other leaves, and a cap of one alternates between them (#2188).
+- **Across ticks:** backlog discovery lists only executions whose work is claimable now, so work held
+  by a live claim or a backoff cannot fill the page. Every candidate, from the backlog, the recovery
+  scanner or a candidate source, is re-driven only when the drainer's own pause gate would let its next
+  queued item advance: a paused head stays claimable (the drainer releases it at the closed gate), and
+  re-driving it only left one more `RunSchedulerWork` row queued behind it on every pass. A held
+  recovery or source candidate still counts as dealt with: the scanner's cursor moves on and the source
+  settles it. That costs ownership nothing, because the next drain acquires a strictly greater fencing
+  token whatever a stale lease says. A hold is lifted by saving hold state, with no event to react to,
+  so a resume is noticed the same way: the next pass that reaches the execution finds the gate open and
+  re-drives it. A held execution that has reached a terminal status is still purged and reaped, which
+  re-drives nothing. When the gate cannot be consulted the execution is not re-driven either, since its
+  drain would consult the same gate; its work stays queued, a recovery candidate keeps the scan cursor
+  in place so the scanner offers it again next sweep, and the sweep logs one warning
+  (`RuntimeResumptionPauseCheckFailed`) with the count. The sweep reads next items in one request per
+  page of executions and asks the gate only about executions it can use. A pass reads on past held
+  executions, up to ten pages. The sweep walks the backlog from a position it keeps between ticks
+  (`RuntimeResumptionDiscoveryStateStore`, least recently used scopes evicted first), resuming after
+  the last execution it visited and starting over after a short page, so a fixed set of executions that
+  stay claimable without draining cannot hold the window either. The position moves on past a failed
+  re-drive; the failed execution keeps its work and its per-execution backoff, and the next walk
+  reaches it again. A queue that does not implement claimable discovery keeps the earlier first-page
+  listing, and the sweep logs a warning (`RuntimeResumptionFirstPageBacklogDiscovery`) once per queue
+  type per host.
 - **Per execution:** the pump applies a geometric backoff to individual executions whose re-drive
   fails, passing them as `ExcludedWorkflowExecutionIds` so they are skipped until their backoff
   elapses. A separate whole-sweep geometric backoff (bounded by `MaxBackoffInterval`, default 5m)

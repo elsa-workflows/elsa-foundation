@@ -12,8 +12,8 @@ namespace Elsa.Persistence.EntityFramework.Tooling;
 /// <remarks>
 /// <para>
 /// Frozen means closed, not unchanging: an additive optional field does not move <see cref="Version"/>. A request field is
-/// sent only to a host build that declares it, as the worker does for <see cref="EfToolingRequest.CapabilitySelection"/> and
-/// <see cref="EfToolingRequest.SkewAllowance"/>. The rule, and why it does not contradict "do not add optional fields to the
+/// sent only to a host build that declares it, as the worker does for <see cref="EfToolingRequest.CapabilitySelection"/>,
+/// <see cref="EfToolingRequest.SkewAllowance"/> and <see cref="EfToolingRequest.SqliteMigrationLockStaleAfter"/>. The rule, and why it does not contradict "do not add optional fields to the
 /// closed version-1 DTOs", is the 2026-09-29 note in <c>specs/173-shared-persistence/contracts/tooling.md</c>. The 2026-09-29
 /// additions, all optional and all on <c>status</c>: the request's <c>skewAllowance</c>, the response's
 /// <c>finalization.cluster</c> (with its <c>availability</c> marker) and each pending version's <c>waitsFor</c>.
@@ -165,6 +165,15 @@ public sealed class EfToolingRequest
     /// counted that the hosts already count expired, or the reverse.
     /// </summary>
     public string? SkewAllowance { get; init; }
+
+    /// <summary>
+    /// How long <c>apply</c> waits for a SQLite database's EF migration lock before it reports the lock as stale, as a
+    /// <c>TimeSpan</c> in its invariant <c>c</c> format (<c>00:10:00</c>): the host's own
+    /// <see cref="EfMigrateOptions.SqliteMigrationLockStaleAfter"/>, as the CLI read it from the host's appsettings (#2196).
+    /// Optional and accepted by <c>apply</c> only: absent means the key's default. The version-1 request carries no configuration
+    /// of its own, so this is how a host's bound reaches it.
+    /// </summary>
+    public string? SqliteMigrationLockStaleAfter { get; init; }
 
     /// <summary>
     /// The connection string <c>apply</c>, <c>validate</c> and <c>post-migrate</c> run against. Required for

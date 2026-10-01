@@ -1,6 +1,9 @@
 using Elsa.Workbench;
 using Elsa.Workbench.OpenIddict;
 using Microsoft.EntityFrameworkCore;
+using Elsa.Foundation.Identity.OpenIddict;
+using Elsa.Persistence.EntityFramework;
+using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using OpenIddict.Abstractions;
@@ -98,6 +101,99 @@ public sealed class WorkbenchOpenIddictVendorTests
         }
     }
 
+    /// <summary>
+    /// The store's <c>AutoMigrate</c> is the options pipeline's one answer: a setting made in code after the section is bound turns
+    /// the policy's migration off exactly as it turns the vendor's off, though the policy turns the vendor's off itself.
+    /// </summary>
+    [Fact]
+    public async Task Migration_policy_honours_an_AutoMigrate_set_in_code()
+    {
+        var directory = Directory.CreateTempSubdirectory("elsa-workbench-openiddict-code-");
+        try
+        {
+            await using var provider = CreateProvider(
+                DurableConfiguration(Path.Join(directory.FullName, "tokens.db"), autoMigrate: true),
+                withMigrationPolicy: true,
+                services => services.Configure<OpenIddictIdentityOptions>(options => options.AutoMigrate = false));
+            await StartAsync(provider);
+            await using var scope = provider.CreateAsyncScope();
+            var database = scope.ServiceProvider.GetRequiredService<OpenIddictIdentityDbContext>().Database;
+
+            Assert.Empty(await database.GetAppliedMigrationsAsync());
+            Assert.Single(await database.GetPendingMigrationsAsync());
+        }
+        finally
+        {
+            SqliteConnection.ClearAllPools();
+            directory.Delete(recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// Elsa's migration policy sits beside the vendor store, not in it: with it the durable store still migrates and reopens, and a
+    /// store that turns <c>AutoMigrate</c> off is still left alone.
+    /// </summary>
+    [Theory]
+    [InlineData(true, 1, 0)]
+    [InlineData(false, 0, 1)]
+    public async Task Migration_policy_migrates_the_durable_store_as_its_AutoMigrate_asks(bool autoMigrate, int applied, int pending)
+    {
+        var directory = Directory.CreateTempSubdirectory("elsa-workbench-openiddict-policy-");
+        try
+        {
+            await using var provider = CreateProvider(DurableConfiguration(Path.Join(directory.FullName, "tokens.db"), autoMigrate), withMigrationPolicy: true);
+            await StartAsync(provider);
+            await using var scope = provider.CreateAsyncScope();
+            var database = scope.ServiceProvider.GetRequiredService<OpenIddictIdentityDbContext>().Database;
+
+            Assert.Equal(applied, (await database.GetAppliedMigrationsAsync()).Count());
+            Assert.Equal(pending, (await database.GetPendingMigrationsAsync()).Count());
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// A SQLite migration lock a killed process left behind fails the host's start with the way to clear it instead of hanging it,
+    /// under the bound the host's configuration sets (#2196).
+    /// </summary>
+    [Fact]
+    public async Task Migration_policy_reports_a_stale_sqlite_lock_older_than_the_configured_bound()
+    {
+        var directory = Directory.CreateTempSubdirectory("elsa-workbench-openiddict-lock-");
+        try
+        {
+            var databasePath = Path.Join(directory.FullName, "tokens.db");
+            await using (var connection = new SqliteConnection($"Data Source={databasePath};Pooling=False"))
+            {
+                await connection.OpenAsync();
+                await using var command = connection.CreateCommand();
+                command.CommandText =
+                    "CREATE TABLE \"__EFMigrationsLock\" (\"Id\" INTEGER NOT NULL CONSTRAINT \"PK___EFMigrationsLock\" PRIMARY KEY, \"Timestamp\" TEXT NOT NULL);" +
+                    $"INSERT INTO \"__EFMigrationsLock\"(\"Id\", \"Timestamp\") VALUES(1, '{DateTimeOffset.UtcNow.AddMinutes(-2):yyyy-MM-dd HH:mm:ss.fffffffzzz}');";
+                await command.ExecuteNonQueryAsync();
+            }
+
+            var configuration = new ConfigurationBuilder()
+                .AddConfiguration(DurableConfiguration(databasePath, autoMigrate: true))
+                .AddInMemoryCollection([new KeyValuePair<string, string?>(
+                    $"{EfMigrateOptions.SectionName}:{nameof(EfMigrateOptions.SqliteMigrationLockStaleAfter)}", "00:01:00")])
+                .Build();
+            await using var provider = CreateProvider(configuration, withMigrationPolicy: true);
+
+            var failure = await Assert.ThrowsAsync<EfMigrationLockStaleException>(() => StartAsync(provider).WaitAsync(TimeSpan.FromSeconds(60)));
+
+            Assert.Contains("00:01:00", failure.Message, StringComparison.Ordinal);
+        }
+        finally
+        {
+            SqliteConnection.ClearAllPools();
+            directory.Delete(recursive: true);
+        }
+    }
+
     private static IConfiguration DurableConfiguration(string databasePath, bool autoMigrate) =>
         new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -129,17 +225,24 @@ public sealed class WorkbenchOpenIddictVendorTests
         Assert.NotNull(await manager.FindByIdAsync(id));
     }
 
-    private static ServiceProvider CreateProvider(IConfiguration configuration)
+    private static ServiceProvider CreateProvider(IConfiguration configuration, bool withMigrationPolicy = false, Action<IServiceCollection>? configure = null)
     {
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddWorkbenchOpenIddictVendor(configuration);
+        if (withMigrationPolicy)
+            services.AddWorkbenchOpenIddictMigrationPolicy(configuration);
+        configure?.Invoke(services);
         return services.BuildServiceProvider();
     }
 
-    private static Task StartAsync(IServiceProvider provider) =>
-        provider.GetRequiredService<OpenIddictIdentityStoreInitializer>()
-            .StartAsync(CancellationToken.None);
+    /// <summary>The host's start, in registration order: the vendor initializer, then Elsa's migration policy when it is registered.</summary>
+    private static async Task StartAsync(IServiceProvider provider)
+    {
+        await provider.GetRequiredService<OpenIddictIdentityStoreInitializer>().StartAsync(CancellationToken.None);
+        if (provider.GetService<WorkbenchOpenIddictMigrator>() is { } migrator)
+            await migrator.StartAsync(CancellationToken.None);
+    }
 
     private static async Task<string> CreateTokenAsync(IServiceProvider provider, string subject)
     {
