@@ -62,10 +62,21 @@ internal static class CompositionInspectCommand
             };
             cancellationToken.ThrowIfCancellationRequested();
             capture.VerifyUnchanged();
-            var response = await new CandidateWorkerProcess().RunAsync(layout, request, seconds, cancellationToken);
-            if (response.Error is { } error)
-                throw new CliRefusal(response.ExitCode, error.Code, error.Message);
-            var rendered = new CandidateInspectionOutput().Render(capture, response.Tooling!.Value, response.ExitCode, outputFormat);
+            string rendered;
+            try
+            {
+                var response = await new CandidateWorkerProcess().RunAsync(layout, request, seconds, cancellationToken);
+                if (response.Error is { } error)
+                    throw new CliRefusal(response.ExitCode, error.Code, error.Message);
+                rendered = new CandidateInspectionOutput().Render(capture, response.Tooling!.Value, response.ExitCode, outputFormat);
+            }
+            catch (Exception failure) when (IsNonFatal(failure))
+            {
+                // Owned-process cleanup has already completed or refused. Recheck before reporting any
+                // bounded outcome, so a refusal about stale candidate inputs cannot escape as current.
+                capture.VerifyUnchanged();
+                throw;
+            }
             capture.VerifyUnchanged();
             cancellationToken.ThrowIfCancellationRequested();
             Console.Out.Write(rendered + Environment.NewLine);
@@ -87,11 +98,14 @@ internal static class CompositionInspectCommand
             Report.WriteRefusal(Console.Error, "candidate-inspection-cancelled", "Candidate inspection was cancelled.", []);
             return ToolExitCode.Refusal;
         }
-        catch (Exception failure) when (failure is not (OutOfMemoryException or StackOverflowException or AccessViolationException or
-            AppDomainUnloadedException or CannotUnloadAppDomainException or ThreadAbortException or BadImageFormatException))
+        catch (Exception failure) when (IsNonFatal(failure))
         {
             Report.WriteRefusal(Console.Error, "candidate-inspection-failed", "Candidate inspection could not be completed.", []);
             return ToolExitCode.ResolutionFailure;
         }
     }
+
+    private static bool IsNonFatal(Exception failure) => failure is not (OutOfMemoryException or StackOverflowException or
+        AccessViolationException or AppDomainUnloadedException or CannotUnloadAppDomainException or ThreadAbortException or
+        BadImageFormatException);
 }
