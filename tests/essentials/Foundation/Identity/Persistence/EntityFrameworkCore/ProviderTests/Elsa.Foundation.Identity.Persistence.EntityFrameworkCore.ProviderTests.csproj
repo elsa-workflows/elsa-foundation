@@ -18,10 +18,16 @@
     <PackageReference Include="coverlet.collector" PrivateAssets="all" />
   </ItemGroup>
   <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Foundation\Identity\AspNetCoreIdentity\EntityFrameworkCore\Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Foundation\Identity\Persistence\EntityFrameworkCore\Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.csproj" />
   </ItemGroup>
   <ItemGroup>
     <!-- Excludes the finalization tables every module maps from own-table assertions. -->
     <Compile Include="..\..\..\..\..\Persistence\EntityFramework\Tests\EfSchemaFinalizationTestFilter.cs" Link="EfSchemaFinalizationTestFilter.cs" />
+    <!-- Interleaves two EF Identity seeders against one database; shared with the SQLite contract tests. -->
+    <Compile Include="..\..\..\AspNetCoreIdentity\EntityFrameworkCore\Tests\EfCoreIdentitySeederRace.cs" Link="EfCoreIdentitySeederRace.cs" />
   </ItemGroup>
 </Project>

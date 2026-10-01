@@ -25,6 +25,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Xunit;
@@ -289,6 +290,101 @@ public sealed class EfCoreIdentityFrameworkContractTests
         var reloaded = await scenario.Users.FindByIdAsync(user.Id);
         Assert.NotNull(reloaded);
         Assert.Equal(originalCount, reloaded!.AccessFailedCount);
+    }
+
+    [Fact]
+    public async Task Lockout_write_for_an_existing_row_with_a_malformed_stamp_is_not_a_lost_race()
+    {
+        await using var scenario = await EfCoreIdentityScenario.CreateAsync();
+        var user = await scenario.CreateUserAsync("MalformedLockoutStamp");
+        user.ConcurrencyStamp = "not-a-guid-and-not-a-store-stamp";
+
+        var store = scenario.Services.GetRequiredService<IUserLockoutStore<AspNetCoreIdentityUser>>();
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => store.SetLockoutEnabledAsync(user, true, CancellationToken.None));
+
+        Assert.IsNotType<IdentityRevisionConflictException>(exception);
+    }
+
+    [Fact]
+    public async Task Lockout_write_for_an_existing_row_by_a_never_persisted_user_is_a_lost_create_race()
+    {
+        await using var scenario = await EfCoreIdentityScenario.CreateAsync();
+        var existing = await scenario.CreateUserAsync("ConcurrentlyCreated");
+        var neverPersisted = new AspNetCoreIdentityUser { Id = existing.Id, TenantId = scenario.TenantId, UserName = existing.UserName };
+        Assert.True(Guid.TryParse(neverPersisted.ConcurrencyStamp, out _), "A user the store never stamped carries the framework's default GUID stamp.");
+
+        var store = scenario.Services.GetRequiredService<IUserLockoutStore<AspNetCoreIdentityUser>>();
+        await Assert.ThrowsAsync<IdentityRevisionConflictException>(() => store.SetLockoutEnabledAsync(neverPersisted, true, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Role_add_on_a_stale_user_revision_throws_the_revision_conflict_type()
+    {
+        await using var scenario = await EfCoreIdentityScenario.CreateAsync();
+        var role = await scenario.CreateRoleAsync("Operators");
+        var user = await scenario.CreateUserAsync("StaleRoleAdd");
+        var staleStamp = user.ConcurrencyStamp;
+        Assert.True((await scenario.Users.AddClaimAsync(user, new Claim("department", "operations"))).Succeeded);
+        user.ConcurrencyStamp = staleStamp;
+
+        var store = scenario.Services.GetRequiredService<IUserRoleStore<AspNetCoreIdentityUser>>();
+        await Assert.ThrowsAsync<IdentityRevisionConflictException>(() => store.AddToRoleAsync(user, role.Name!, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Role_remove_on_a_stale_user_revision_throws_the_revision_conflict_type()
+    {
+        await using var scenario = await EfCoreIdentityScenario.CreateAsync();
+        var role = await scenario.CreateRoleAsync("Operators");
+        var user = await scenario.CreateUserAsync("StaleRoleRemove");
+        Assert.True((await scenario.Users.AddToRoleAsync(user, role.Name!)).Succeeded);
+        var staleStamp = user.ConcurrencyStamp;
+        Assert.True((await scenario.Users.AddClaimAsync(user, new Claim("department", "operations"))).Succeeded);
+        user.ConcurrencyStamp = staleStamp;
+
+        var store = scenario.Services.GetRequiredService<IUserRoleStore<AspNetCoreIdentityUser>>();
+        await Assert.ThrowsAsync<IdentityRevisionConflictException>(() => store.RemoveFromRoleAsync(user, role.Name!, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task External_login_ownership_conflict_stays_a_plain_invalid_operation()
+    {
+        await using var scenario = await EfCoreIdentityScenario.CreateAsync();
+        var owner = await scenario.CreateUserAsync("LoginOwner");
+        var intruder = await scenario.CreateUserAsync("LoginIntruder");
+        var login = new UserLoginInfo("oidc", "shared-subject", "OIDC");
+        Assert.True((await scenario.Users.AddLoginAsync(owner, login)).Succeeded);
+
+        var store = scenario.Services.GetRequiredService<IUserLoginStore<AspNetCoreIdentityUser>>();
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => store.AddLoginAsync(intruder, login, CancellationToken.None));
+
+        Assert.IsNotType<IdentityRevisionConflictException>(exception);
+        Assert.Contains("external login add", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Ef_seeder_surfaces_a_lost_create_race_when_the_re_read_finds_no_administrator()
+    {
+        await using var scenario = await EfCoreIdentityScenario.CreateAsync(
+            services =>
+            {
+                services.RemoveAll<UserManager<AspNetCoreIdentityUser>>();
+                services.AddScoped<UserManager<AspNetCoreIdentityUser>, ConflictingCreateUserManager>();
+            },
+            initialAdmin: new IdentitySeedOptions
+            {
+                UserName = "admin",
+                Password = "Correct Horse1!",
+                Email = "admin@example.test",
+                RoleName = "Administrators"
+            });
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => scenario.Services.GetRequiredService<EfCoreIdentitySeeder>().StartAsync(CancellationToken.None));
+
+        Assert.IsNotType<IdentityRevisionConflictException>(exception);
+        Assert.IsType<IdentityRevisionConflictException>(exception.InnerException);
+        Assert.Null(await scenario.Users.FindByNameAsync("admin"));
     }
 
     [Fact]
@@ -821,6 +917,25 @@ public sealed class EfCoreIdentityFrameworkContractTests
     }
 
     [Fact]
+    public Task Two_ef_seeders_both_succeed_when_both_pass_the_role_membership_check_on_sqlite() =>
+        RunSeederRaceOnSqliteAsync(SeederRaceStep.RoleMembership);
+
+    [Fact]
+    public Task Two_ef_seeders_both_succeed_when_one_loses_the_administrator_create_race_on_sqlite() =>
+        RunSeederRaceOnSqliteAsync(SeederRaceStep.AdminCreation);
+
+    private static async Task RunSeederRaceOnSqliteAsync(SeederRaceStep step)
+    {
+        await using var database = new TemporarySqliteDatabase("identity-seeder-interleave");
+
+        await EfCoreIdentitySeederRace.RunAsync(
+            new IdentityIamEntityFrameworkCoreOptions { Provider = "Sqlite", ConnectionString = database.ConnectionString },
+            context => context.Database.EnsureCreatedAsync(),
+            step,
+            iterations: 10);
+    }
+
+    [Fact]
     public void Feature_can_be_configured_without_adding_a_second_authority_marker()
     {
         var services = new ServiceCollection();
@@ -925,6 +1040,13 @@ public sealed class EfCoreIdentityFrameworkContractTests
         Assert.Equal(expectedRole, seed.RoleName);
         Assert.Equal(isDevelopment, seed.IsDevelopmentSeed);
     }
+}
+
+/// <summary>Reports every create as a lost create race while leaving no row behind.</summary>
+internal sealed class ConflictingCreateUserManager(IServiceProvider services) : ResolvingUserManager(services)
+{
+    public override Task<IdentityResult> CreateAsync(AspNetCoreIdentityUser user) =>
+        throw new IdentityRevisionConflictException("Simulated lost create race.");
 }
 
 internal sealed class DeliberateLookupNormalizer : ILookupNormalizer
