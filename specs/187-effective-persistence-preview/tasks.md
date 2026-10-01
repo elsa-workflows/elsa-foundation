@@ -1,7 +1,7 @@
 # Tasks: Effective persistence preview
 
 **Input**: [plan](plan.md), [spec](spec.md), research, data model and contracts.
-**Status**: Implementation in progress under #2177, following delivered specification #2175 / PR #2178. One coherent implementation issue/PR owns T001–T020; checks below record actual completed work, not delivery. Prior local acceptance and regression gates are retained in the evidence record. Copilot correctness findings now have integrated selection/file-acquisition fixes and adverse controls. The architecture gate found and removed undocumented friend access. Main was integrated before final regression gates. T020 retains PR, exact-head CI/review and post-merge obligations.
+Implementation checkpoint: local supervisor correction and strict Linux test identity are restored. Full CLI 737/737, migrations 442/442, Planning 112/112 and architecture 620/620 passed with zero skipped; Linux actual process controls passed 3/3 and maps are fresh. Failed baseline/integration/load/preflight attempts remain retained in implementation evidence. Windows native job runtime is unexecuted. T020 remains open pending fresh pushed-head review/required CI and exact-main gates; this is not delivery completion.
 
 ## Phase 1: Setup
 

@@ -14,7 +14,7 @@ internal readonly record struct LinuxProcessSnapshot(ProcessIdentity Identity, c
 
 internal static class ProcessIdentityReader
 {
-    private const string LinuxProcessStates = "RSDZTWXxKWPIN";
+    private const string LinuxProcessStates = "RSDZTtWXxKPI";
 
     public static ProcessIdentity Current()
     {

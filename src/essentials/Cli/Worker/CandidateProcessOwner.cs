@@ -39,7 +39,7 @@ public static class CandidateProcessOwner
         NamedPipeClientStream? control = null;
         Process? payload = null;
         Task? ownerClosed = null;
-        Task? payloadTask = null;
+        Task<int>? payloadTask = null;
         Stream? parentOutput = null;
         Stream? parentError = null;
         var unixOwnerEstablished = false;
@@ -68,7 +68,8 @@ public static class CandidateProcessOwner
             // Start watching before creating the payload. A frontend that disappears between GO and payload
             // creation must not leave a supervisor waiting forever with a newly-created owner scope.
             ownerClosed = WatchOwnerAsync(control, CancellationToken.None);
-            if (ownerClosed!.IsCompleted)
+            Observe(ownerClosed);
+            if (ownerClosed.IsCompleted)
             {
                 AbortUnixOwner(unixOwnerEstablished);
                 return ToolExitCode.ResolutionFailure;
@@ -78,16 +79,16 @@ public static class CandidateProcessOwner
             parentOutput = Console.OpenStandardOutput();
             parentError = Console.OpenStandardError();
             payloadTask = ForwardPayloadAsync(payload, parentOutput, parentError, cancellationToken);
-            var completed = await Task.WhenAny(payloadTask!, ownerClosed!).ConfigureAwait(false);
+            Observe(payloadTask);
+            var completed = await Task.WhenAny(payloadTask, ownerClosed).ConfigureAwait(false);
             if (completed == ownerClosed)
             {
-                TerminatePayload(payload);
                 AbortUnixOwner(unixOwnerEstablished);
                 return ToolExitCode.ResolutionFailure;
             }
 
-            var payloadExitCode = await payloadTask!.ConfigureAwait(false);
-            if (ownerClosed!.IsCompleted)
+            var payloadExitCode = await payloadTask.ConfigureAwait(false);
+            if (ownerClosed.IsCompleted)
             {
                 AbortUnixOwner(unixOwnerEstablished);
                 await ObserveOwnerAfterAbortAsync(ownerClosed).ConfigureAwait(false);
@@ -95,13 +96,10 @@ public static class CandidateProcessOwner
             }
             await WriteStatusAsync(control, payloadExitCode, cancellationToken).ConfigureAwait(false);
             statusSent = true;
-            CloseForwardedOutput(parentOutput, parentError);
-            parentOutput = null;
-            parentError = null;
 
-            // The owner remains alive until the frontend closes this control connection. On Unix this keeps
-            // the PGID anchored; its EOF path kills the complete owner group, including this process.
-            await ownerClosed!.ConfigureAwait(false);
+            // STATUS authorizes frontend scope termination after all forwarding has flushed. Retain the
+            // anchor until that termination or owner-channel loss; EOF aborts the complete Unix group.
+            await ownerClosed.ConfigureAwait(false);
             AbortUnixOwner(unixOwnerEstablished);
             return payloadExitCode;
         }
@@ -109,10 +107,9 @@ public static class CandidateProcessOwner
         {
             // Supervisor failures, including process-trust failures, never print exception text: its
             // stdout/stderr are the private candidate transport and the frontend maps this to a fixed refusal.
-            TerminatePayload(payload);
             if (goSent && ownerClosed is not null)
             {
-                await RetainOwnerAfterFailureAsync(control, ownerClosed, parentOutput, parentError,
+                await RetainOwnerAfterFailureAsync(control, ownerClosed,
                         unixOwnerEstablished, statusSent).ConfigureAwait(false);
             }
             else
@@ -173,14 +170,8 @@ public static class CandidateProcessOwner
     private static async Task WatchOwnerAsync(Stream control, CancellationToken cancellationToken)
     {
         var buffer = new byte[1];
-        while (true)
-        {
-            var read = await control.ReadAsync(buffer.AsMemory(), cancellationToken).ConfigureAwait(false);
-            if (read == 0)
-                return;
-            // No frontend-to-owner frame is valid after GO. Any byte is an abort rather than an instruction.
-            return;
-        }
+        // EOF loses the lease; no frontend-to-owner frame is valid after GO, so any byte also aborts.
+        await control.ReadAsync(buffer.AsMemory(), cancellationToken).ConfigureAwait(false);
     }
 
     private static async Task<byte> ReadByteAsync(Stream stream, CancellationToken cancellationToken, TimeSpan timeout)
@@ -189,7 +180,7 @@ public static class CandidateProcessOwner
         deadline.CancelAfter(timeout);
         var buffer = new byte[1];
         var read = await stream.ReadAsync(buffer.AsMemory(), deadline.Token).ConfigureAwait(false);
-        return read == 1 ? buffer[0] : 0;
+        return read == 1 ? buffer[0] : (byte)0;
     }
 
     private static Process StartPayload(string runtimeConfig, string depsFile, string payloadAssembly)
@@ -223,7 +214,9 @@ public static class CandidateProcessOwner
         var output = CopyAndFlushAsync(payload.StandardOutput.BaseStream, parentOutput, cancellationToken);
         var error = CopyAndFlushAsync(payload.StandardError.BaseStream, parentError, cancellationToken);
         var wait = payload.WaitForExitAsync(cancellationToken);
-        await Task.WhenAll(input, output, error, wait).ConfigureAwait(false);
+        var pumps = Task.WhenAll(input, output, error, wait);
+        Observe(pumps);
+        await pumps.ConfigureAwait(false);
         return payload.ExitCode;
     }
 
@@ -240,6 +233,10 @@ public static class CandidateProcessOwner
             await source.DisposeAsync().ConfigureAwait(false);
         }
     }
+
+    private static void Observe(Task task) => _ = task.ContinueWith(fault => _ = fault.Exception,
+        CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+        TaskScheduler.Default);
 
     private static async Task CopyAndFlushAsync(Stream source, Stream destination, CancellationToken cancellationToken)
     {
@@ -264,12 +261,10 @@ public static class CandidateProcessOwner
     }
 
     private static async Task RetainOwnerAfterFailureAsync(Stream? control, Task ownerClosed,
-        Stream? parentOutput, Stream? parentError, bool unixOwnerEstablished, bool statusSent)
+        bool unixOwnerEstablished, bool statusSent)
     {
-        // Keep the supervisor alive while the frontend can still perform authoritative cleanup. Closing the
-        // forwarded streams makes the frontend's response lane finish; the status lane then gives it a fixed
-        // process result before it closes the owner lease and kills the retained scope.
-        CloseForwardedOutput(parentOutput, parentError);
+        // Keep the anchor alive while the frontend still owns cleanup. STATUS requests scope termination,
+        // which closes all inherited output handles before the frontend accepts any response.
         try
         {
             if (!statusSent && control is not null)
@@ -305,28 +300,6 @@ public static class CandidateProcessOwner
         }
     }
 
-    private static void TerminatePayload(Process? payload)
-    {
-        if (payload is null)
-            return;
-        try
-        {
-            if (!payload.HasExited)
-                payload.Kill(entireProcessTree: true);
-        }
-        catch (Exception failure) when (WorkerRunner.IsNonFatal(failure))
-        {
-            // The frontend's owner cleanup remains authoritative. This path must not print the exception.
-        }
-    }
-
-    private static void CloseForwardedOutput(Stream? parentOutput, Stream? parentError)
-    {
-        try { parentOutput?.Dispose(); } catch { }
-        try { parentError?.Dispose(); } catch { }
-        Native.CloseStandardOutputAndError();
-    }
-
     private static void EstablishUnixOwner()
     {
         if (Native.SetSessionId() < 0)
@@ -358,28 +331,5 @@ public static class CandidateProcessOwner
         [DllImport("libc", EntryPoint = "kill", SetLastError = true)]
         internal static extern int Kill(int processId, int signal);
 
-        internal static void CloseStandardOutputAndError()
-        {
-            if (OperatingSystem.IsWindows())
-            {
-                _ = CloseHandle(GetStdHandle(-11));
-                _ = CloseHandle(GetStdHandle(-12));
-            }
-            else if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
-            {
-                _ = Close(1);
-                _ = Close(2);
-            }
-        }
-
-        [DllImport("libc", EntryPoint = "close", SetLastError = true)]
-        private static extern int Close(int descriptor);
-
-        [DllImport("kernel32.dll", EntryPoint = "GetStdHandle", SetLastError = true)]
-        private static extern nint GetStdHandle(int standardHandle);
-
-        [DllImport("kernel32.dll", EntryPoint = "CloseHandle", SetLastError = true)]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        private static extern bool CloseHandle(nint handle);
     }
 }

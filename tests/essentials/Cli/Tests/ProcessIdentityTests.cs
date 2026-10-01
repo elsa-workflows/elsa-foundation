@@ -30,12 +30,12 @@ public sealed class ProcessIdentityTests
     }
 
     [Theory]
-    [InlineData("?")]
-    [InlineData("not-a-number")]
-    [InlineData("0")]
-    public void Linux_stat_parser_rejects_unknown_state_or_start_token(string value)
+    [InlineData("?", "987654")]
+    [InlineData("S", "not-a-number")]
+    [InlineData("S", "0")]
+    public void Linux_stat_parser_rejects_unknown_state_or_start_token(string state, string startToken)
     {
-        Assert.Throws<InvalidDataException>(() => ProcessIdentityReader.ParseLinuxStat(321, Stat(321, value, value)));
+        Assert.Throws<InvalidDataException>(() => ProcessIdentityReader.ParseLinuxStat(321, Stat(321, state, startToken)));
     }
 
     private static string Stat(int pid, string state, string startToken)

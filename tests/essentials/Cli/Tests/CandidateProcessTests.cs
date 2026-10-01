@@ -33,6 +33,28 @@ public sealed class CandidateProcessTests
     }
 
     [Fact]
+    public async Task Exited_handle_does_not_skip_termination_of_its_owned_scope()
+    {
+        using var fixture = new ProcessFixture();
+        fixture.Handle.Exited = true;
+        await fixture.Runner.RunAsync(Host, fixture.Request);
+        Assert.Equal(1, fixture.Handle.KillCount);
+        fixture.AssertClosed();
+    }
+
+    [Fact]
+    public async Task Payload_exit_does_not_release_a_retained_supervisor_before_cleanup()
+    {
+        using var fixture = new ProcessFixture();
+        fixture.Handle.OperationWait = _ => Task.CompletedTask;
+        fixture.Handle.Wait = _ => fixture.Handle.Exited ? Task.CompletedTask : throw new InvalidOperationException();
+        var result = await fixture.Runner.RunAsync(Host, fixture.Request);
+        Assert.Equal(0, result.ExitCode);
+        Assert.Equal(1, fixture.Handle.KillCount);
+        fixture.AssertClosed();
+    }
+
+    [Fact]
     public async Task Stderr_is_drained_and_discarded_without_a_response_size_limit()
     {
         using var fixture = new ProcessFixture();
@@ -383,6 +405,7 @@ public sealed class CandidateProcessTests
         public int KillCount { get; private set; }
         public int DisposeCount { get; private set; }
         public Func<CancellationToken, Task>? Wait { get; set; }
+        public Func<CancellationToken, Task>? OperationWait { get; set; }
         public Action? OnDispose { get; set; }
         public Func<Stream>? InputLookup { get; set; }
         public Func<Stream>? ErrorLookup { get; set; }
@@ -394,6 +417,7 @@ public sealed class CandidateProcessTests
         public Action? OnKill { get; set; }
         public bool HasExited => ObserveExit?.Invoke() ?? Exited;
         public int ExitCode => ObserveExitCode?.Invoke() ?? 0;
+        public Task WaitForOperationExitAsync(CancellationToken token) => OperationWait?.Invoke(token) ?? WaitForExitAsync(token);
         public Task WaitForExitAsync(CancellationToken token)
         {
             if (Wait is not null) return Wait(token);

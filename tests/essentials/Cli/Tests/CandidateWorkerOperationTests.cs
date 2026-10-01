@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.IO.Pipes;
 using System.Text.Json;
 using Elsa.Cli.Worker;
 using Xunit;
@@ -246,6 +247,161 @@ public sealed class CandidateWorkerOperationTests
             expectDescendant: true, expectRootExited: true);
 
     [Fact]
+    public async Task Candidate_worker_owner_reaps_payload_and_descendant_when_frontend_lease_is_lost()
+    {
+        // The manual owner handshake exercises the Unix session/process-group path. The Windows job
+        // runtime is outside this manual Unix control.
+        if (!OperatingSystem.IsLinux() && !OperatingSystem.IsMacOS())
+            return;
+
+        var host = HostLayout.Resolve(DotnetElsa.Host("ResourceAwareLiveHost"));
+        using var sentinels = new TempDirectory($"{PrivateCanaryRootPrefix}owner-lease-");
+        var started = sentinels.File("worker-started.txt");
+        var descendant = sentinels.File("descendant-started.txt");
+        var database = sentinels.File("must-not-create.db");
+        var context = sentinels.File("context-constructed.txt");
+        var action = sentinels.File("action-constructed.txt");
+        var request = ForHost(host, database, new Dictionary<string, object>
+        {
+            ["WriteConsoleCanary"] = false,
+            ["StartedMarker"] = started,
+            ["HoldMilliseconds"] = 60_000,
+            ["DescendantMarker"] = descendant,
+            ["ContextMarker"] = context,
+            ["ActionMarker"] = action
+        });
+
+        var workerAssembly = Path.Join(Path.GetDirectoryName(DotnetElsa.ToolAssembly), WorkerProcess.WorkerAssemblyFileName);
+        var correlation = Guid.NewGuid();
+        var pipeName = "ec" + correlation.ToString("N");
+        using var control = new NamedPipeServerStream(pipeName, PipeDirection.InOut, 1, PipeTransmissionMode.Byte,
+            PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+        var start = new ProcessStartInfo(DotnetMuxer.Path())
+        {
+            RedirectStandardInput = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false
+        };
+        foreach (var argument in WorkerProcess.Arguments(host, workerAssembly).Append("--candidate-inspection"))
+            start.ArgumentList.Add(argument);
+        start.ArgumentList[5] = workerAssembly;
+        start.ArgumentList.Add("--candidate-owner");
+        start.ArgumentList.Add(pipeName);
+        start.ArgumentList.Add(correlation.ToString("N"));
+        start.ArgumentList.Add(start.ArgumentList[2]);
+        start.ArgumentList.Add(start.ArgumentList[4]);
+        start.ArgumentList.Add(workerAssembly);
+
+        Process? ownerProcess = null;
+        (int Pid, long StartToken) ownerIdentity = default;
+        Task? ownerExit = null;
+        Task<string>? standardOutput = null;
+        Task<string>? standardError = null;
+        try
+        {
+            ownerProcess = Process.Start(start) ?? throw new InvalidOperationException("The candidate owner did not start.");
+            ownerIdentity = (ownerProcess.Id, ProcessIdentityReader.Read(ownerProcess.Id).StartToken);
+            ownerExit = ownerProcess.WaitForExitAsync();
+            standardOutput = ownerProcess.StandardOutput.ReadToEndAsync();
+            standardError = ownerProcess.StandardError.ReadToEndAsync();
+
+            using var handshakeDeadline = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+            await control.WaitForConnectionAsync(handshakeDeadline.Token);
+            var ready = new byte[CandidateProcessOwner.ReadyFrameLength];
+            await control.ReadExactlyAsync(ready, handshakeDeadline.Token);
+            Assert.Equal(CandidateProcessOwner.Ready, ready[0]);
+            Assert.Equal(correlation, new Guid(ready.AsSpan(1)));
+
+            await control.WriteAsync(new byte[] { CandidateProcessOwner.Go }, handshakeDeadline.Token);
+            await control.FlushAsync(handshakeDeadline.Token);
+            await JsonSerializer.SerializeAsync(ownerProcess.StandardInput.BaseStream, request, WorkerContract.Json,
+                handshakeDeadline.Token);
+            await ownerProcess.StandardInput.BaseStream.FlushAsync(handshakeDeadline.Token);
+            ownerProcess.StandardInput.Close();
+
+            Assert.True(await WaitForMarkerOrCompletion(ownerExit!, started, TimeSpan.FromSeconds(20)),
+                "The payload composer did not record its process identity.");
+            Assert.True(await WaitForMarkerOrCompletion(ownerExit!, descendant, TimeSpan.FromSeconds(20)),
+                "The payload descendant did not record its process identity.");
+            Assert.True(TryReadProcessIdentity(started, out var payloadIdentity));
+            Assert.True(TryReadProcessIdentity(descendant, out var descendantIdentity));
+            Assert.NotEqual(ownerIdentity.Pid, payloadIdentity.Pid);
+            Assert.NotEqual(payloadIdentity.Pid, descendantIdentity.Pid);
+            Assert.True(IsMarkedProcessRunning(started), "The payload composer must be live before lease loss.");
+            Assert.True(IsMarkedProcessRunning(descendant), "The payload descendant must be live before lease loss.");
+            Assert.False(ownerExit!.IsCompleted, "The owner must retain the lease before the frontend closes control.");
+
+            // Simulate an abrupt frontend loss. The owner must observe EOF and reap its entire owned scope.
+            control.Dispose();
+            await ownerExit!.WaitAsync(TimeSpan.FromSeconds(20));
+            await Task.WhenAll(standardOutput!, standardError!).WaitAsync(TimeSpan.FromSeconds(20));
+            Assert.False(IsMarkedProcessRunning(started), "The payload composer survived owner lease loss.");
+            Assert.False(IsMarkedProcessRunning(descendant), "The payload descendant survived owner lease loss.");
+            Assert.False(File.Exists(database));
+            Assert.False(File.Exists(context));
+            Assert.False(File.Exists(action));
+        }
+        finally
+        {
+            try
+            {
+                control.Dispose();
+            }
+            finally
+            {
+                try
+                {
+                    if (ownerProcess is not null)
+                        await StopOwnedProcessIfStillRunning(ownerProcess, ownerIdentity);
+                }
+                finally
+                {
+                    try
+                    {
+                        await KillMarkedProcessIfStillRunning(descendant);
+                    }
+                    finally
+                    {
+                        try
+                        {
+                            await KillMarkedProcessIfStillRunning(started);
+                        }
+                        finally
+                        {
+                            try
+                            {
+                                if (ownerExit is not null)
+                                    await ObserveOwnedTask(ownerExit);
+                            }
+                            finally
+                            {
+                                try
+                                {
+                                    if (standardOutput is not null)
+                                        await ObserveOwnedTask(standardOutput);
+                                }
+                                finally
+                                {
+                                    try
+                                    {
+                                        if (standardError is not null)
+                                            await ObserveOwnedTask(standardError);
+                                    }
+                                    finally
+                                    {
+                                        ownerProcess?.Dispose();
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    [Fact]
     public async Task Candidate_worker_process_cancels_a_real_child_while_its_stdin_write_is_blocked()
     {
         var host = HostLayout.Resolve(DotnetElsa.Host("ResourceAwareLiveHost"));
@@ -403,7 +559,7 @@ public sealed class CandidateWorkerOperationTests
         return false;
     }
 
-    private static bool TryReadProcessIdentity(string marker, out (int Pid, long StartedAtTicks) identity)
+    private static bool TryReadProcessIdentity(string marker, out (int Pid, long StartToken) identity)
     {
         identity = default;
         if (!File.Exists(marker))
@@ -421,8 +577,13 @@ public sealed class CandidateWorkerOperationTests
             return false;
         try
         {
+            if (OperatingSystem.IsLinux())
+            {
+                var observed = ProcessIdentityReader.ReadLinux(identity.Pid);
+                return observed.Identity.StartToken == identity.StartToken && observed.State is not ('Z' or 'X' or 'x');
+            }
             using var process = Process.GetProcessById(identity.Pid);
-            if (process.HasExited || process.StartTime.ToUniversalTime().Ticks != identity.StartedAtTicks)
+            if (process.HasExited || ProcessIdentityReader.Read(process.Id).StartToken != identity.StartToken)
                 return false;
         }
         catch (ArgumentException)
@@ -433,9 +594,19 @@ public sealed class CandidateWorkerOperationTests
         {
             return false;
         }
+        catch (FileNotFoundException) when (OperatingSystem.IsLinux())
+        {
+            return false; // The kernel process entry disappeared.
+        }
+        catch (DirectoryNotFoundException) when (OperatingSystem.IsLinux())
+        {
+            return false;
+        }
         catch (System.ComponentModel.Win32Exception) when (!OperatingSystem.IsWindows())
         {
-            return IsUnixProcessRunning(identity.Pid);
+            if (!IsUnixProcessRunning(identity.Pid))
+                return false;
+            throw; // A live PID without an established identity is unknown, not a passing observation.
         }
         // Observer failures must propagate rather than being caught as identity-probe exit races.
         return OperatingSystem.IsWindows() || IsUnixProcessRunning(identity.Pid);
@@ -477,7 +648,7 @@ public sealed class CandidateWorkerOperationTests
         try
         {
             using var process = Process.GetProcessById(identity.Pid);
-            if (process.StartTime.ToUniversalTime().Ticks != identity.StartedAtTicks || process.HasExited)
+            if (ProcessIdentityReader.Read(process.Id).StartToken != identity.StartToken || process.HasExited)
                 return;
             process.Kill(entireProcessTree: true);
             using var cleanup = new CancellationTokenSource(TimeSpan.FromSeconds(5));
@@ -491,6 +662,14 @@ public sealed class CandidateWorkerOperationTests
         {
             // The marked child has already exited.
         }
+        catch (FileNotFoundException) when (OperatingSystem.IsLinux())
+        {
+            // The kernel process entry disappeared during identity observation.
+        }
+        catch (DirectoryNotFoundException) when (OperatingSystem.IsLinux())
+        {
+            // The marked process has already exited.
+        }
         catch (System.ComponentModel.Win32Exception)
         {
             // The marked child has already exited or is no longer owned by this test.
@@ -498,6 +677,67 @@ public sealed class CandidateWorkerOperationTests
         catch (OperationCanceledException)
         {
             // Cleanup was bounded; do not wait indefinitely on a broken test child.
+        }
+    }
+
+    private static async Task StopOwnedProcessIfStillRunning(Process process, (int Pid, long StartToken) identity)
+    {
+        try
+        {
+            if (process.Id != identity.Pid || ProcessIdentityReader.Read(process.Id).StartToken != identity.StartToken ||
+                process.HasExited)
+                return;
+            process.Kill();
+            using var cleanup = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            await process.WaitForExitAsync(cleanup.Token);
+        }
+        catch (ArgumentException)
+        {
+            // The owned supervisor has already exited.
+        }
+        catch (InvalidOperationException)
+        {
+            // The owned supervisor has already exited.
+        }
+        catch (FileNotFoundException) when (OperatingSystem.IsLinux())
+        {
+            // The kernel process entry disappeared during identity observation.
+        }
+        catch (DirectoryNotFoundException) when (OperatingSystem.IsLinux())
+        {
+            // The marked process has already exited.
+        }
+        catch (System.ComponentModel.Win32Exception)
+        {
+            // The owned supervisor has already exited or is no longer owned by this test.
+        }
+        catch (OperationCanceledException)
+        {
+            // Cleanup was bounded; do not wait indefinitely on a broken test supervisor.
+        }
+    }
+
+    private static async Task ObserveOwnedTask(Task task)
+    {
+        try
+        {
+            await task.WaitAsync(TimeSpan.FromSeconds(5));
+        }
+        catch (IOException)
+        {
+            // A bounded stream observer may fault when its owned process is terminated during cleanup.
+        }
+        catch (ObjectDisposedException)
+        {
+            // A bounded stream observer may be disposed with its owned process during cleanup.
+        }
+        catch (InvalidOperationException)
+        {
+            // The owned process may have been disposed while its bounded observer completed.
+        }
+        catch (OperationCanceledException)
+        {
+            // Cleanup was bounded; do not wait indefinitely on a broken test process.
         }
     }
 

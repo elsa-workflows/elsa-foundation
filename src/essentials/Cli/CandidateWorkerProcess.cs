@@ -200,8 +200,7 @@ public sealed class CandidateWorkerProcess
         if (start is not null)
             return start(startInfo) ?? throw new InvalidOperationException();
 
-        var process = Process.Start(startInfo) ?? throw new InvalidOperationException();
-        return new SystemCandidateProcessHandle(process);
+        return CandidateProcessHandle.Start(startInfo);
     }
 
     private async Task<WorkerResponse> ExchangeAsync(ICandidateProcessHandle handle, Stream input, Stream output,
@@ -218,7 +217,7 @@ public sealed class CandidateWorkerProcess
         Task waitTask;
         try
         {
-            waitTask = handle.WaitForExitAsync(exchange.Token) ?? throw new InvalidOperationException();
+            waitTask = handle.WaitForOperationExitAsync(exchange.Token) ?? throw new InvalidOperationException();
             pumps.Add(waitTask);
             ownedTasks.Add(waitTask);
         }
@@ -428,44 +427,32 @@ public sealed class CandidateWorkerProcess
             }
         }
 
-        bool exited = false;
         try
         {
-            exited = handle.HasExited;
+            // Payload exit does not release an owned job/group. Always request owned-scope termination.
+            handle.KillTree();
         }
         catch (Exception failure)
         {
             RecordCleanupFailure(failure, ref failed, ref fatalFailure);
         }
 
-        if (!exited)
+        try
         {
-            try
+            var wait = handle.WaitForExitAsync(cleanupDeadline?.Token ?? CancellationToken.None)
+                       ?? throw new InvalidOperationException();
+            ObserveFaults([wait]);
+            var remaining = Remaining();
+            if (remaining <= TimeSpan.Zero || cleanupDeadline is null)
+                failed = true;
+            else
             {
-                handle.KillTree();
+                await wait.WaitAsync(remaining, cleanupClock, cleanupDeadline.Token).ConfigureAwait(false);
             }
-            catch (Exception failure)
-            {
-                RecordCleanupFailure(failure, ref failed, ref fatalFailure);
-            }
-
-            try
-            {
-                var wait = handle.WaitForExitAsync(cleanupDeadline?.Token ?? CancellationToken.None)
-                           ?? throw new InvalidOperationException();
-                ObserveFaults([wait]);
-                var remaining = Remaining();
-                if (remaining <= TimeSpan.Zero || cleanupDeadline is null)
-                    failed = true;
-                else
-                {
-                    await wait.WaitAsync(remaining, cleanupClock, cleanupDeadline.Token).ConfigureAwait(false);
-                }
-            }
-            catch (Exception failure)
-            {
-                RecordCleanupFailure(failure, ref failed, ref fatalFailure);
-            }
+        }
+        catch (Exception failure)
+        {
+            RecordCleanupFailure(failure, ref failed, ref fatalFailure);
         }
 
         try
@@ -679,17 +666,6 @@ public sealed class CandidateWorkerProcess
 
     private sealed class CandidateBufferLimitException : Exception { }
 
-    private sealed class SystemCandidateProcessHandle(Process process) : ICandidateProcessHandle
-    {
-        public Stream StandardInput => process.StandardInput.BaseStream;
-        public Stream StandardOutput => process.StandardOutput.BaseStream;
-        public Stream StandardError => process.StandardError.BaseStream;
-        public bool HasExited => process.HasExited;
-        public int ExitCode => process.ExitCode;
-        public Task WaitForExitAsync(CancellationToken cancellationToken) => process.WaitForExitAsync(cancellationToken);
-        public void KillTree() => process.Kill(entireProcessTree: true);
-        public void Dispose() => process.Dispose();
-    }
 }
 
 /// <summary>The mechanical process operations used by the candidate exchange.</summary>
@@ -700,6 +676,8 @@ public interface ICandidateProcessHandle : IDisposable
     Stream StandardError { get; }
     bool HasExited { get; }
     int ExitCode { get; }
+    /// <summary>Waits for payload completion separately from the final owned-scope cleanup wait.</summary>
+    Task WaitForOperationExitAsync(CancellationToken cancellationToken) => WaitForExitAsync(cancellationToken);
     Task WaitForExitAsync(CancellationToken cancellationToken);
     void KillTree();
 }

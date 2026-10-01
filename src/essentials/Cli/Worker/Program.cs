@@ -14,7 +14,7 @@ Console.CancelKeyPress += (_, eventArgs) =>
 if (ownerMode)
 {
     // The supervisor's stdout/stderr are the forwarded private candidate transport. It never emits its own
-    // diagnostics on either stream, and closes the native handles after the payload status is sent.
+    // diagnostics on either stream. Payload status requests frontend termination of the owned scope.
     Console.SetOut(TextWriter.Null);
     Console.SetError(TextWriter.Null);
     return await CandidateProcessOwner.RunSupervisorAsync(args, cancellation.Token);
