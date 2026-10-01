@@ -150,17 +150,16 @@ public sealed class EfContractingMigrationRefusalTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// A stop that arrives while the gate is being admitted must still end the module's activity: the stop takes the
-    /// admission lock, so the gate that activates after it began is deactivated too, and a migrator that has stopped admits
-    /// nothing more, and the stop cancels the admission in flight. The barrier holds the admission at its first publish, so
-    /// the stop begins before the gate exists.
+    /// A stop that arrives while the gate is being admitted cancels the admission and ends the module's activity, and a
+    /// migrator that has stopped admits nothing more. The barrier holds the admission at its first publish, so the stop
+    /// begins before the gate exists. Once it lifts, either the stop's cancellation reaches the activation first, or the
+    /// activation runs to its end first and the migrator sees the stop itself (#2221): the outcome is the same either way.
     /// </summary>
     [Fact]
     public async Task A_migrator_stopped_while_its_gate_is_being_admitted_leaves_the_module_inactive()
     {
         var observations = new EfSchemaFinalizationObservations();
-        var state = new FakeFleetState();
-        var fleet = new FakeFleet(state, state.Add(new FakeMember("host-new").Reading(Family, Chain)));
+        var (migrator, fleet) = SoleMemberMigrator(observations);
         var inAdmission = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         fleet.BeforePublish = async () =>
@@ -168,7 +167,6 @@ public sealed class EfContractingMigrationRefusalTests : IAsyncLifetime
             inAdmission.TrySetResult();
             await release.Task;
         };
-        var migrator = Migrator(EfMigratePolicy.AutoMigrate, fleet, observations: observations);
 
         var initializing = migrator.InitializeAsync();
         await inAdmission.Task.WaitAsync(TimeSpan.FromSeconds(30));
@@ -178,6 +176,46 @@ public sealed class EfContractingMigrationRefusalTests : IAsyncLifetime
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => initializing.WaitAsync(TimeSpan.FromSeconds(30)));
 
         Assert.False(observations.Find(Family).ModuleActive);
+        Assert.Null(migrator.Gate);
+    }
+
+    /// <summary>
+    /// The interleaving behind #2221, forced: the stop is requested from the activation's last step, the publish of the
+    /// version its own evaluation finalized, after which the activation checks no token. The stop cancels the activation
+    /// through a linked token that <see cref="CancellationTokenSource.CancelAsync"/> cancels only from a callback it queues,
+    /// so under load that token can be cancelled too late for the activation to see; here it always is. The admission
+    /// must still end cancelled, leaving no gate and nothing active, rather than report success for a migrator that is
+    /// stopping. The database is staged as an earlier release left it, finalized at the earlier version, so the activation
+    /// finalizes the current one itself and the refresh that ends it publishes that.
+    /// </summary>
+    [Fact]
+    public async Task A_migrator_stopped_after_its_activation_last_checks_for_cancellation_still_cancels_the_admission()
+    {
+        await StageAsync(Provider, Connection, Contract);
+        var observations = new EfSchemaFinalizationObservations();
+        var (migrator, fleet) = SoleMemberMigrator(observations);
+        Task? stopping = null;
+        var publishesBeforeStop = 0;
+        fleet.BeforePublish = () =>
+        {
+            // The report carries the current version only once the activation's closing refresh has adopted it.
+            if (stopping is null && observations.Find(Family).ObservedFinalizedVersion == CurrentVersion)
+            {
+                publishesBeforeStop = fleet.Publishes;
+                stopping = migrator.StopAsync(CancellationToken.None);
+            }
+
+            return Task.CompletedTask;
+        };
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => migrator.InitializeAsync());
+        Assert.NotNull(stopping);
+        await stopping.WaitAsync(TimeSpan.FromSeconds(30));
+
+        // The activation ran to its end: the publish that requested the stop was not cancelled.
+        Assert.Equal(publishesBeforeStop + 1, fleet.Publishes);
+        Assert.False(observations.Find(Family).ModuleActive);
+        Assert.Null(migrator.Gate);
     }
 
     /// <summary>
@@ -188,15 +226,13 @@ public sealed class EfContractingMigrationRefusalTests : IAsyncLifetime
     public async Task A_migrator_stopped_during_a_hung_activation_cancels_it_and_leaves_the_module_inactive()
     {
         var observations = new EfSchemaFinalizationObservations();
-        var state = new FakeFleetState();
-        var fleet = new FakeFleet(state, state.Add(new FakeMember("host-new").Reading(Family, Chain)));
+        var (migrator, fleet) = SoleMemberMigrator(observations);
         var inActivation = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         fleet.BeforePublish = () =>
         {
             inActivation.TrySetResult();
             return Task.Delay(Timeout.Infinite);
         };
-        var migrator = Migrator(EfMigratePolicy.AutoMigrate, fleet, observations: observations);
 
         var initializing = migrator.InitializeAsync();
         await inActivation.Task.WaitAsync(TimeSpan.FromSeconds(30));
@@ -735,6 +771,14 @@ public sealed class EfContractingMigrationRefusalTests : IAsyncLifetime
         var host = services.BuildServiceProvider();
         _hosts.Add(host);
         return host.GetRequiredService<EfModuleMigrator<ContractingDbContext>>();
+    }
+
+    /// <summary>A migrator whose host, host-new, reads the whole chain and is the fleet's only member, reporting into <paramref name="observations"/>.</summary>
+    private (EfModuleMigrator<ContractingDbContext> Migrator, FakeFleet Fleet) SoleMemberMigrator(EfSchemaFinalizationObservations observations)
+    {
+        var state = new FakeFleetState();
+        var fleet = new FakeFleet(state, state.Add(new FakeMember("host-new").Reading(Family, Chain)));
+        return (Migrator(EfMigratePolicy.AutoMigrate, fleet, observations: observations), fleet);
     }
 
     /// <summary>Every table's definition and every row, as text: what a refusal must leave exactly as it found it.</summary>
