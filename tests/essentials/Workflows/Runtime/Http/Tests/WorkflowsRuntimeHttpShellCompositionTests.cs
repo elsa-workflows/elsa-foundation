@@ -7,6 +7,7 @@ using Elsa.Http.Core.Contracts;
 using Elsa.Locking.Core;
 using Elsa.Tasks;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Bookmarks;
 using Elsa.Workflows.Runtime.Services.Triggers;
 using Microsoft.Extensions.DependencyInjection;
@@ -15,10 +16,12 @@ using Xunit;
 namespace Elsa.Workflows.Runtime.Http.Tests;
 
 /// <summary>
-/// #2190 at the composition level: <see cref="WorkflowsRuntimeHttpFeature"/> in a real CShells shell, through the real
-/// Tasks and Http features, gets its convergence pump scheduled on activation, and the pump runs. The proof is an
-/// endpoint written straight to the shared trigger index after activation, as another node would write it: no observer
-/// fires for it here and the startup refresh is already over, so only a pump tick can bring it into the route table.
+/// #2190 at the composition level: <see cref="WorkflowsRuntimeHttpFeature"/> in a real CShells shell, with the real Http
+/// feature, gets its convergence pump scheduled on activation, and the pump runs. The Tasks feature is not listed: CShells
+/// enables a feature's DependsOn closure, so it arrives only because WorkflowsRuntimeHttp depends on it, and the test fails
+/// if that dependency is dropped. The proof is an endpoint written straight to the shared trigger index after activation,
+/// as another node would write it: no observer fires for it here and the startup refresh is already over, so only a pump
+/// tick can bring it into the route table.
 /// </summary>
 public sealed class WorkflowsRuntimeHttpShellCompositionTests : IAsyncDisposable
 {
@@ -40,7 +43,6 @@ public sealed class WorkflowsRuntimeHttpShellCompositionTests : IAsyncDisposable
                 typeof(WorkflowsRuntimeHttpFeature).Assembly,
                 typeof(TriggerIndexStandInFeature).Assembly)
             .AddShell(ShellName, shell => shell
-                .WithFeature<TasksFeature>()
                 .WithFeature<HttpFeature>()
                 .WithFeature<TriggerIndexStandInFeature>()
                 .WithFeature<WorkflowsRuntimeHttpFeature>(feature => feature.RouteTableConvergenceIntervalSeconds = 0.05)));
@@ -55,8 +57,9 @@ public sealed class WorkflowsRuntimeHttpShellCompositionTests : IAsyncDisposable
         var routeTable = scope.ServiceProvider.GetRequiredService<IRouteTable>();
         Assert.Empty(routeTable);
 
-        await shell.ServiceProvider.GetRequiredService<IWorkflowTriggerBindingStore>()
-            .SaveAsync(Bindings.HttpEndpoint("artifact-other-node", "node-http", "orders", "GET"));
+        await using (var writer = shell.BeginScope())
+            await writer.ServiceProvider.GetRequiredService<IWorkflowTriggerBindingStore>()
+                .SaveAsync(Bindings.HttpEndpoint("artifact-other-node", "node-http", "orders", "GET"));
 
         var elapsed = Stopwatch.StartNew();
         while (!routeTable.Any(route => route.Route == "orders"))
@@ -83,15 +86,49 @@ public sealed class WorkflowsRuntimeHttpShellCompositionTests : IAsyncDisposable
 
 /// <summary>
 /// Stands in for the WorkflowsRuntimeTriggers dependency, which brings the whole runtime API with it: only the trigger
-/// index and bookmark lookup the route-table resolver reads, over in-memory stores shared by the shell.
+/// index and bookmark lookup the route-table resolver reads. All three are scoped, as under a durable provider, whose
+/// stores are scoped EF adapters; the in-memory data behind them is shared. CShells builds shell providers without scope
+/// validation, so each scoped view refuses use after its scope ends: a pump or resolver that kept one past its scope
+/// fails here instead of passing.
 /// </summary>
 [ShellFeature(name: "WorkflowsRuntimeTriggers", DisplayName = "Trigger index stand-in", Description = "In-memory trigger index and bookmark lookup for composition tests.")]
 public sealed class TriggerIndexStandInFeature : IShellFeature
 {
     public void ConfigureServices(IServiceCollection services)
     {
-        services.AddSingleton<IWorkflowTriggerBindingStore, InMemoryWorkflowTriggerBindingStore>();
-        services.AddSingleton<IBookmarkStimulusIndex, InMemoryBookmarkStateStore>();
-        services.AddSingleton<IGlobalBookmarkStimulusLookup, GlobalBookmarkStimulusLookup>();
+        services.AddSingleton<InMemoryWorkflowTriggerBindingStore>();
+        services.AddSingleton<InMemoryBookmarkStateStore>();
+        services.AddScoped<IWorkflowTriggerBindingStore>(sp => new ScopedTriggerBindingStore(sp.GetRequiredService<InMemoryWorkflowTriggerBindingStore>()));
+        services.AddScoped<IBookmarkStimulusIndex>(sp => new ScopedBookmarkStimulusIndex(sp.GetRequiredService<InMemoryBookmarkStateStore>()));
+        services.AddScoped<IGlobalBookmarkStimulusLookup, GlobalBookmarkStimulusLookup>();
+    }
+
+    /// <summary>A view of shared state that a disposed scope can no longer use.</summary>
+    private abstract class ScopedView<T>(T shared) : IDisposable
+    {
+        private bool _disposed;
+
+        protected T Shared => _disposed ? throw new ObjectDisposedException(GetType().Name, "Used after its scope ended: a captive dependency.") : shared;
+
+        public void Dispose() => _disposed = true;
+    }
+
+    private sealed class ScopedTriggerBindingStore(InMemoryWorkflowTriggerBindingStore shared)
+        : ScopedView<IWorkflowTriggerBindingStore>(shared), IWorkflowTriggerBindingStore
+    {
+        public ValueTask<WorkflowTriggerBinding> SaveAsync(WorkflowTriggerBinding binding, CancellationToken cancellationToken = default) => Shared.SaveAsync(binding, cancellationToken);
+        public ValueTask<int> DeleteByArtifactAsync(string artifactId, CancellationToken cancellationToken = default) => Shared.DeleteByArtifactAsync(artifactId, cancellationToken);
+        public ValueTask<WorkflowTriggerBindingPage> ListByStimulusAsync(WorkflowTriggerBindingPageQuery query, CancellationToken cancellationToken = default) => Shared.ListByStimulusAsync(query, cancellationToken);
+        public ValueTask<WorkflowTriggerBindingPage> ListByArtifactAsync(WorkflowTriggerBindingArtifactPageQuery query, CancellationToken cancellationToken = default) => Shared.ListByArtifactAsync(query, cancellationToken);
+        public ValueTask<WorkflowTriggerBindingPage> ListByStimulusTypeAsync(WorkflowTriggerBindingTypePageQuery query, CancellationToken cancellationToken = default) => Shared.ListByStimulusTypeAsync(query, cancellationToken);
+        public ValueTask<IReadOnlyCollection<string>> ListActiveStimulusHashesAsync(string stimulusType, CancellationToken cancellationToken = default) => Shared.ListActiveStimulusHashesAsync(stimulusType, cancellationToken);
+    }
+
+    private sealed class ScopedBookmarkStimulusIndex(InMemoryBookmarkStateStore shared)
+        : ScopedView<IBookmarkStimulusIndex>(shared), IBookmarkStimulusIndex
+    {
+        public ValueTask<RuntimeStorePage<BookmarkState>> ListByStimulusPageAsync(BookmarkStimulusPageQuery query, CancellationToken cancellationToken = default) => Shared.ListByStimulusPageAsync(query, cancellationToken);
+        public ValueTask<RuntimeStorePage<BookmarkState>> ListByStimulusTypePageAsync(BookmarkStimulusTypePageQuery query, CancellationToken cancellationToken = default) => Shared.ListByStimulusTypePageAsync(query, cancellationToken);
+        public ValueTask<IReadOnlyCollection<string>> ListWaitingStimulusHashesByTypeAsync(string stimulusType, DateTimeOffset evaluatedAt, CancellationToken cancellationToken = default) => Shared.ListWaitingStimulusHashesByTypeAsync(stimulusType, evaluatedAt, cancellationToken);
     }
 }

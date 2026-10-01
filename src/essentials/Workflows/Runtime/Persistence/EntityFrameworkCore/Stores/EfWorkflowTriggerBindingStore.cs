@@ -227,6 +227,10 @@ public sealed class EfWorkflowTriggerBindingStore(
         ArgumentException.ThrowIfNullOrWhiteSpace(stimulusType);
         cancellationToken.ThrowIfCancellationRequested();
         var scope = RequireScope();
+        // Hash-only matching, where the page scan also compares the encoded scope and type: two scopes or types share a
+        // hash only through a SHA-256 collision. A colliding or corrupt row can at worst make this fingerprint differ from
+        // the last refresh's and so cause a rebuild, never a wrong route: the rebuild reads through ListByStimulusTypeAsync,
+        // which leaves a colliding row out by its encoded columns and validates every row it reads (Read).
         var identities = await context.WorkflowTriggerBindings.AsNoTracking()
             .Where(x => x.ScopeKeyHash == Hash(scope) && x.StimulusTypeLookupKey == Lookup(stimulusType) && x.IsActive)
             .Select(x => new { x.StimulusLookupKey, x.StimulusHash })

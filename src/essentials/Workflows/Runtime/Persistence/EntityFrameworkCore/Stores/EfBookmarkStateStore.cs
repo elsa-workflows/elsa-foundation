@@ -241,6 +241,10 @@ public sealed class EfBookmarkStateStore(
         var evaluatedAtUtcTicks = evaluatedAt.UtcTicks;
         try
         {
+            // Hash-only matching, where the page scans also reject a row whose decoded scope or type differs (MapChecked):
+            // two scopes or types share a hash only through a SHA-256 collision. A colliding or corrupt row can at worst
+            // make this fingerprint differ from the last refresh's and so cause a rebuild, never a wrong route: the
+            // rebuild reads through ListByStimulusTypePageAsync, whose MapChecked rejects such a row and fails the refresh.
             var identities = await context.Bookmarks.AsNoTracking()
                 .Where(row => row.ScopeKeyHash == scopeHash && row.StimulusTypeLookupKey == lookup &&
                               (row.ExpiresAtUtcTicks == null || row.ExpiresAtUtcTicks > evaluatedAtUtcTicks))
