@@ -308,6 +308,78 @@ public sealed class CompositionFileSourceTests
     }
 
     [Fact]
+    public void Candidate_reader_refuses_a_symlinked_parent_exchanged_after_preflight()
+    {
+        if (OperatingSystem.IsWindows())
+            return;
+
+        using var directory = new TempDirectory("elsa-candidate-parent-race-");
+        var admitted = directory.File("admitted");
+        var moved = directory.File("admitted-before-race");
+        var outside = directory.File("outside");
+        System.IO.Directory.CreateDirectory(admitted);
+        System.IO.Directory.CreateDirectory(outside);
+        var path = Path.Join(admitted, "candidate.json");
+        File.WriteAllText(path, "{}");
+        File.WriteAllText(Path.Join(outside, "candidate.json"), "{\"private-canary\":true}");
+
+        var openerReturned = false;
+        var reader = new CompositionFileReader(candidatePath =>
+        {
+            CompositionFileReader.EnsureRegularFile(candidatePath);
+            System.IO.Directory.Move(admitted, moved);
+            System.IO.Directory.CreateSymbolicLink(admitted, outside);
+        }, candidatePath =>
+        {
+            var stream = RegularFileOpener.OpenRead(candidatePath);
+            openerReturned = true;
+            return stream;
+        });
+
+        var refusal = Assert.Throws<CliRefusal>(() => reader.Read(path, FileLimit));
+
+        Assert.Equal("composition-input-unreadable", refusal.Code);
+        Assert.DoesNotContain("private-canary", refusal.ToString(), StringComparison.Ordinal);
+        Assert.False(openerReturned);
+    }
+
+    [Fact]
+    public void Candidate_reader_refuses_a_junction_parent_exchanged_after_preflight_on_windows()
+    {
+        if (!OperatingSystem.IsWindows())
+            return;
+
+        using var directory = new TempDirectory("elsa-candidate-junction-race-");
+        var admitted = directory.File("admitted");
+        var moved = directory.File("admitted-before-race");
+        var outside = directory.File("outside");
+        System.IO.Directory.CreateDirectory(admitted);
+        System.IO.Directory.CreateDirectory(outside);
+        var path = Path.Join(admitted, "candidate.json");
+        File.WriteAllText(path, "{}");
+        File.WriteAllText(Path.Join(outside, "candidate.json"), "{\"private-canary\":true}");
+
+        var openerReturned = false;
+        var reader = new CompositionFileReader(candidatePath =>
+        {
+            CompositionFileReader.EnsureRegularFile(candidatePath);
+            System.IO.Directory.Move(admitted, moved);
+            CreateWindowsJunction(admitted, outside);
+        }, candidatePath =>
+        {
+            var stream = RegularFileOpener.OpenRead(candidatePath);
+            openerReturned = true;
+            return stream;
+        });
+
+        var refusal = Assert.Throws<CliRefusal>(() => reader.Read(path, FileLimit));
+
+        Assert.Equal("composition-input-unreadable", refusal.Code);
+        Assert.DoesNotContain("private-canary", refusal.ToString(), StringComparison.Ordinal);
+        Assert.False(openerReturned);
+    }
+
+    [Fact]
     public void Default_candidate_reader_still_captures_regular_files()
     {
         using var directory = new TempDirectory("elsa-candidate-regular-");
@@ -541,6 +613,24 @@ public sealed class CompositionFileSourceTests
             Assert.True(reaped, "The owned mkfifo process did not terminate after the fixture deadline.");
             Assert.Fail("mkfifo did not finish within the fixture deadline.");
         }
+        Assert.Equal(0, process.ExitCode);
+    }
+
+    private static void CreateWindowsJunction(string path, string target)
+    {
+        using var process = Process.Start(new ProcessStartInfo("cmd.exe")
+        {
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            ArgumentList = { "/c", "mklink", "/J", path, target }
+        });
+        Assert.NotNull(process);
+        var output = process.StandardOutput.ReadToEndAsync();
+        var error = process.StandardError.ReadToEndAsync();
+        Assert.True(process.WaitForExit(5_000), "mklink did not finish within the fixture deadline.");
+        Task.WaitAll(output, error);
         Assert.Equal(0, process.ExitCode);
     }
 
