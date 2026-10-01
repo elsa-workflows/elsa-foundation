@@ -84,6 +84,7 @@ internal static class EfCoreIdentitySeederRace
         {
             case SeederRaceStep.RoleMembership:
                 Assert.True(first.AddToRoleCalls >= 1 && second.AddToRoleCalls >= 1, "Both nodes must have attempted the role-membership add.");
+                Assert.True(first.LostMembershipRace || second.LostMembershipRace, "One node must have lost the add to the other (UserAlreadyInRole, ConcurrencyFailure or a revision conflict).");
                 break;
             case SeederRaceStep.AdminCreation:
                 Assert.NotEqual(first.IsCreationWinner, second.IsCreationWinner);
@@ -158,6 +159,7 @@ internal static class EfCoreIdentitySeederRace
 
         public bool BarrierPassed { get; private set; }
         public int AddToRoleCalls;
+        public bool LostMembershipRace { get; set; }
         public bool IsCreationWinner { get; private set; }
         public bool LostCreateRace { get; set; }
 
@@ -203,18 +205,7 @@ internal static class EfCoreIdentitySeederRace
         }
     }
 
-    private sealed class RacingUserManager(
-        IUserStore<AspNetCoreIdentityUser> store,
-        IOptions<IdentityOptions> optionsAccessor,
-        IPasswordHasher<AspNetCoreIdentityUser> passwordHasher,
-        IEnumerable<IUserValidator<AspNetCoreIdentityUser>> userValidators,
-        IEnumerable<IPasswordValidator<AspNetCoreIdentityUser>> passwordValidators,
-        ILookupNormalizer keyNormalizer,
-        IdentityErrorDescriber errors,
-        IServiceProvider services,
-        ILogger<UserManager<AspNetCoreIdentityUser>> logger,
-        RaceGate gate)
-        : UserManager<AspNetCoreIdentityUser>(store, optionsAccessor, passwordHasher, userValidators, passwordValidators, keyNormalizer, errors, services, logger)
+    private sealed class RacingUserManager(IServiceProvider services, RaceGate gate) : ResolvingUserManager(services)
     {
         public override async Task<bool> IsInRoleAsync(AspNetCoreIdentityUser user, string role)
         {
@@ -223,10 +214,21 @@ internal static class EfCoreIdentitySeederRace
             return inRole;
         }
 
-        public override Task<IdentityResult> AddToRoleAsync(AspNetCoreIdentityUser user, string role)
+        public override async Task<IdentityResult> AddToRoleAsync(AspNetCoreIdentityUser user, string role)
         {
             Interlocked.Increment(ref gate.AddToRoleCalls);
-            return base.AddToRoleAsync(user, role);
+            try
+            {
+                var result = await base.AddToRoleAsync(user, role);
+                if (result.Errors.Any(error => error.Code is nameof(IdentityErrorDescriber.UserAlreadyInRole) or nameof(IdentityErrorDescriber.ConcurrencyFailure)))
+                    gate.LostMembershipRace = true;
+                return result;
+            }
+            catch (IdentityRevisionConflictException)
+            {
+                gate.LostMembershipRace = true;
+                throw;
+            }
         }
 
         public override async Task<IdentityResult> CreateAsync(AspNetCoreIdentityUser user)
@@ -247,3 +249,15 @@ internal static class EfCoreIdentitySeederRace
         }
     }
 }
+
+/// <summary>A <see cref="UserManager{TUser}"/> test double base that takes its collaborators from the scope, so a subclass overrides one member without restating UserManager's constructor.</summary>
+internal abstract class ResolvingUserManager(IServiceProvider services) : UserManager<AspNetCoreIdentityUser>(
+    services.GetRequiredService<IUserStore<AspNetCoreIdentityUser>>(),
+    services.GetRequiredService<IOptions<IdentityOptions>>(),
+    services.GetRequiredService<IPasswordHasher<AspNetCoreIdentityUser>>(),
+    services.GetServices<IUserValidator<AspNetCoreIdentityUser>>(),
+    services.GetServices<IPasswordValidator<AspNetCoreIdentityUser>>(),
+    services.GetRequiredService<ILookupNormalizer>(),
+    services.GetRequiredService<IdentityErrorDescriber>(),
+    services,
+    services.GetRequiredService<ILogger<UserManager<AspNetCoreIdentityUser>>>());
