@@ -273,7 +273,7 @@ Nuplane `0.0.11-preview.94` ([#2150](https://github.com/elsa-workflows/elsa-foun
 `Elsa.Persistence.EntityFramework` or EF Core (`Microsoft.EntityFrameworkCore`, `.Abstractions`, `.Relational`) a root
 brings is skipped, and the module binds the host's, so those need not be kept out of your roots, though nothing is gained
 by naming them. The engines' driver closures (`Microsoft.Data.Sqlite*`, `SQLitePCLRaw.*`, `Npgsql`, `MySql.Data`,
-`Microsoft.Data.SqlClient*`) are carried by the host but not shared, so a root for one brings a second copy of it: leave
+`MySqlConnector`, `Microsoft.Data.SqlClient*`) are carried by the host but not shared, so a root for one brings a second copy of it: leave
 them out of your roots; see [Generating the closure](#generating-the-closure). The engine package itself may stay, since
 the `ef-provider` selection injects it as a root anyway.
 
@@ -836,6 +836,13 @@ Elsa__Cluster__Membership__EntityFrameworkCore__ConnectionString="Host=db;Databa
   (FR-032). It is normally the database the EF modules' own features use, so each finalization record and the fleet that
   decides it live side by side. SQLite serves several processes on one machine only, which suits development and tests
   (FR-033); use PostgreSQL, SQL Server or MySQL across machines.
+- **Locks.** A lock excludes only the processes that reach the same lock store, so a cluster composes
+  `DatabaseDistributedLocking` (`Elsa.Locking.Database`), which holds its locks in the shared PostgreSQL, SQL Server or
+  MySQL database (#2192). A shell that composes `FileSystemDistributedLocking` on its default, node-local folder refuses to
+  start once the durable provider is enabled, naming both ways out: the database lock, or a `LocksFolderPath` every host
+  shares. SQLite has no database lock, so a SQLite composition keeps the file-system lock and is single-node by
+  definition: several processes on that machine share one explicit `LocksFolderPath`. What a lock guarantees to a
+  `[SingleNodeTask]` is one at a time, at shell start, and no more; see `src/essentials/Tasks/EXTENSION_POINTS.md`.
 - **Migrations.** The membership table is an EF module of its own (`Cluster.Membership`). Under the default policy the
   first host to start creates it; under `Elsa:Persistence:EntityFramework:Migrate:Policy=Validate` a host refuses to start
   until `dotnet elsa persistence apply` has created it, like any other module.

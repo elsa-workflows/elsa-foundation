@@ -314,6 +314,12 @@
       "elsa.caching.core": {
         "type": "Project"
       },
+      "elsa.cluster.core": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Primitives": "[4.0.0-dev, )"
+        }
+      },
       "elsa.events": {
         "type": "Project",
         "dependencies": {
@@ -388,6 +394,7 @@
         "dependencies": {
           "CShells.Abstractions": "[0.0.30-preview.159, )",
           "DistributedLock.FileSystem": "[1.0.3, )",
+          "Elsa.Cluster.Core": "[4.0.0-dev, )",
           "Elsa.Locking.Core": "[4.0.0-dev, )"
         }
       },
@@ -470,6 +477,7 @@
         "type": "Project",
         "dependencies": {
           "CShells.Abstractions": "[0.0.30-preview.159, )",
+          "Elsa.Cluster.Core": "[4.0.0-dev, )",
           "Elsa.Locking.Core": "[4.0.0-dev, )",
           "Elsa.Primitives": "[4.0.0-dev, )",
           "Elsa.Tasks.Core": "[4.0.0-dev, )"

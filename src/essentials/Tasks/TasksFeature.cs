@@ -24,8 +24,9 @@ public class TasksFeature : IShellFeature
         // BackgroundEventPublisher). They must therefore live for the shell's lifetime — a scoped
         // manager is disposed at the end of the shell-initializer scope, and its DisposeAsync would
         // then tear those singletons down (cancelling the tenant token and completing the event
-        // channel writer) seconds after activation. TaskExecutor depends only on the singleton
-        // IDistributedLockProvider, so singleton is scope-safe. Scoped IStartupTasks are still run in
+        // channel writer) seconds after activation. TaskExecutor depends only on singletons
+        // (IDistributedLockProvider, ShellSettings and the optional ISchemaDormancyCheck), so singleton
+        // is scope-safe. Scoped IStartupTasks are still run in
         // a dedicated scope created inside TaskManager (see RunStartupTasks).
         services.AddSingleton<TaskExecutor>();
         // Stays scoped deliberately: it is only ever resolved inside the dedicated scope

@@ -129,6 +129,7 @@
 			catalog. It used to arrive transitively through a deleted persistence project; reference it here.
 		-->
 		<ProjectReference Include="..\..\essentials\Events\Elsa.Events.csproj" />
+		<ProjectReference Include="..\..\essentials\Locking\Database\Elsa.Locking.Database.csproj" />
 		<ProjectReference Include="..\..\essentials\Locking\FileSystem\Elsa.Locking.FileSystem.csproj" />
 		<ProjectReference Include="..\..\essentials\Mediator\Elsa.Mediator.csproj" />
 		<ProjectReference Include="..\..\essentials\Modularity\Api\Elsa.Modularity.Api.csproj" />

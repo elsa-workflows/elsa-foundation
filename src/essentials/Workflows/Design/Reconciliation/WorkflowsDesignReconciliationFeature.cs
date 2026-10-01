@@ -22,17 +22,19 @@ public abstract class WorkflowsDesignReconciliationFeature : IShellFeature
 {
     public WorkflowVersionReconcilerOptions ReconcilerOptions { get; set; } = new();
 
+    /// <summary>Retired settings only (#2192); a value set here refuses to start. See <see cref="WorkflowVersionReconcilerStartupTaskOptions"/>.</summary>
     public WorkflowVersionReconcilerStartupTaskOptions StartupTaskOptions { get; set; } = new();
 
     public virtual IEnumerable<IWorkflowReconciliationSource> Sources { get; set; } = [];
 
     public virtual void ConfigureServices(IServiceCollection services)
     {
+        RefuseRetiredLockTimeout();
+
         foreach (var source in Sources)
             services.AddSingleton(source);
 
         services.AddSingleton(Microsoft.Extensions.Options.Options.Create(ReconcilerOptions));
-        services.AddSingleton(Microsoft.Extensions.Options.Options.Create(StartupTaskOptions));
 
         services.AddScoped<IWorkflowVersionReconciler, WorkflowsVersionReconciler>();
 
@@ -43,5 +45,18 @@ public abstract class WorkflowsDesignReconciliationFeature : IShellFeature
         services.AddScoped<IStartupTask, WorkflowsVersionReconcilerStartupTask>();
 
         services.AddEventHandlersFrom(typeof(WorkflowsDesignReconciliationFeature).Assembly);
+    }
+
+    private void RefuseRetiredLockTimeout()
+    {
+#pragma warning disable CS0618 // The refusal is the whole point of keeping the obsolete property.
+        if (StartupTaskOptions.LockTimeoutMs is not { } lockTimeoutMs)
+            return;
+
+        throw new InvalidOperationException(
+            $"'{nameof(StartupTaskOptions)}:{nameof(StartupTaskOptions.LockTimeoutMs)}' on '{GetType().Name}' is set to '{lockTimeoutMs}' and is retired. " +
+            "The workflow version reconciler takes no lock any more: it runs on every node at shell start, because each node must " +
+            "reconcile the sources it reads itself (#2192). Remove this setting.");
+#pragma warning restore CS0618
     }
 }

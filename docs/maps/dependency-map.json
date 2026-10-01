@@ -395,6 +395,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Locking.Database",
+          "path": "src/essentials/Locking/Database/Elsa.Locking.Database.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Locking.FileSystem",
           "path": "src/essentials/Locking/FileSystem/Elsa.Locking.FileSystem.csproj"
         },
@@ -4858,6 +4863,100 @@
       "edges": []
     },
     {
+      "path": "src/essentials/Locking/Database/Elsa.Locking.Database.csproj",
+      "name": "Elsa.Locking.Database",
+      "kind": "source",
+      "domain": "Elsa.Locking",
+      "sub_domain": "Database",
+      "role": "feature/implementation",
+      "declared_target_framework": null,
+      "packable": true,
+      "package_id": "Elsa.Locking.Database",
+      "line": "B",
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Locking.Core",
+          "path": "src/essentials/Locking/Core/Elsa.Locking.Core.csproj"
+        },
+        {
+          "type": "external",
+          "id": "CShells.Abstractions",
+          "version": "0.0.30-preview.159"
+        },
+        {
+          "type": "external",
+          "id": "DistributedLock.MySql",
+          "version": "1.0.2"
+        },
+        {
+          "type": "external",
+          "id": "DistributedLock.Postgres",
+          "version": "1.3.1"
+        },
+        {
+          "type": "external",
+          "id": "DistributedLock.SqlServer",
+          "version": "1.0.7"
+        },
+        {
+          "type": "external",
+          "id": "Elsa.Specifications.PackageManifest.Generator",
+          "version": "0.0.1-preview.8"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.Extensions.Configuration.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Data.SqlClient",
+          "version": "7.0.2"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Caching.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Caching.Memory",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Logging.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Options",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Primitives",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Npgsql",
+          "version": "10.0.3"
+        }
+      ]
+    },
+    {
       "path": "src/essentials/Locking/FileSystem/Elsa.Locking.FileSystem.csproj",
       "name": "Elsa.Locking.FileSystem",
       "kind": "source",
@@ -4869,6 +4968,11 @@
       "package_id": "Elsa.Locking.FileSystem",
       "line": "B",
       "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Cluster.Core",
+          "path": "src/essentials/Cluster/Core/Elsa.Cluster.Core.csproj"
+        },
         {
           "type": "internal",
           "id": "Elsa.Locking.Core",
@@ -6365,6 +6469,11 @@
       "package_id": "Elsa.Tasks",
       "line": "B",
       "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Cluster.Core",
+          "path": "src/essentials/Cluster/Core/Elsa.Cluster.Core.csproj"
+        },
         {
           "type": "internal",
           "id": "Elsa.Locking.Core",
@@ -14941,6 +15050,134 @@
       ]
     },
     {
+      "path": "tests/essentials/Locking/Database/ProviderTests/Elsa.Locking.Database.ProviderTests.csproj",
+      "name": "Elsa.Locking.Database.ProviderTests",
+      "kind": "test",
+      "domain": "Elsa.Locking",
+      "sub_domain": "Database.ProviderTests",
+      "role": "test",
+      "declared_target_framework": null,
+      "packable": false,
+      "package_id": null,
+      "line": null,
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Locking.Database",
+          "path": "src/essentials/Locking/Database/Elsa.Locking.Database.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Tasks",
+          "path": "src/essentials/Tasks/Elsa.Tasks.csproj"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.Extensions.DependencyInjection",
+          "version": "10.0.10"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.NET.Test.Sdk",
+          "version": "18.0.0"
+        },
+        {
+          "type": "external",
+          "id": "Testcontainers.MsSql",
+          "version": "4.15.0"
+        },
+        {
+          "type": "external",
+          "id": "Testcontainers.MySql",
+          "version": "4.15.0"
+        },
+        {
+          "type": "external",
+          "id": "Testcontainers.PostgreSql",
+          "version": "4.15.0"
+        },
+        {
+          "type": "external",
+          "id": "Xunit.SkippableFact",
+          "version": "1.5.23"
+        },
+        {
+          "type": "external",
+          "id": "coverlet.collector",
+          "version": "6.0.2"
+        },
+        {
+          "type": "external",
+          "id": "xunit",
+          "version": "2.9.3"
+        },
+        {
+          "type": "external",
+          "id": "xunit.runner.visualstudio",
+          "version": "3.1.5"
+        }
+      ]
+    },
+    {
+      "path": "tests/essentials/Locking/Tests/Elsa.Locking.Tests.csproj",
+      "name": "Elsa.Locking.Tests",
+      "kind": "test",
+      "domain": "Elsa.Locking",
+      "sub_domain": "Tests",
+      "role": "test",
+      "declared_target_framework": null,
+      "packable": false,
+      "package_id": null,
+      "line": null,
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Cluster.Core",
+          "path": "src/essentials/Cluster/Core/Elsa.Cluster.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Cluster.InProcess",
+          "path": "src/essentials/Cluster/InProcess/Elsa.Cluster.InProcess.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Locking.Database",
+          "path": "src/essentials/Locking/Database/Elsa.Locking.Database.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Locking.FileSystem",
+          "path": "src/essentials/Locking/FileSystem/Elsa.Locking.FileSystem.csproj"
+        },
+        {
+          "type": "external",
+          "id": "CShells",
+          "version": "0.0.30-preview.159"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.NET.Test.Sdk",
+          "version": "18.0.0"
+        },
+        {
+          "type": "external",
+          "id": "coverlet.collector",
+          "version": "6.0.2"
+        },
+        {
+          "type": "external",
+          "id": "xunit",
+          "version": "2.9.3"
+        },
+        {
+          "type": "external",
+          "id": "xunit.runner.visualstudio",
+          "version": "3.1.5"
+        }
+      ]
+    },
+    {
       "path": "tests/essentials/Mediator/Tests/Elsa.Mediator.Tests.csproj",
       "name": "Elsa.Mediator.Tests",
       "kind": "test",
@@ -17021,6 +17258,11 @@
       "edges": [
         {
           "type": "internal",
+          "id": "Elsa.Cluster.Core",
+          "path": "src/essentials/Cluster/Core/Elsa.Cluster.Core.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Locking.Core",
           "path": "src/essentials/Locking/Core/Elsa.Locking.Core.csproj"
         },
@@ -17736,6 +17978,11 @@
           "type": "internal",
           "id": "Elsa.Serialization.SystemText",
           "path": "src/essentials/Serialization/SystemText/Elsa.Serialization.SystemText.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Tasks",
+          "path": "src/essentials/Tasks/Elsa.Tasks.csproj"
         },
         {
           "type": "internal",
@@ -19059,6 +19306,11 @@
       "package_id": null,
       "line": null,
       "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Tasks",
+          "path": "src/essentials/Tasks/Elsa.Tasks.csproj"
+        },
         {
           "type": "internal",
           "id": "Elsa.Workflows.Runtime.Api",

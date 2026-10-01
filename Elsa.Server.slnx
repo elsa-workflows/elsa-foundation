@@ -197,6 +197,7 @@
   </Folder>
   <Folder Name="/src/essentials/Locking/">
     <Project Path="src/essentials/Locking/Core/Elsa.Locking.Core.csproj" />
+    <Project Path="src/essentials/Locking/Database/Elsa.Locking.Database.csproj" />
     <Project Path="src/essentials/Locking/FileSystem/Elsa.Locking.FileSystem.csproj" />
   </Folder>
   <Folder Name="/src/essentials/Mediator/">
@@ -476,6 +477,12 @@
   <Folder Name="/tests/essentials/Foundation/Identity/Persistence/EntityFrameworkCore/">
     <Project Path="tests/essentials/Foundation/Identity/Persistence/EntityFrameworkCore/Tests/Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Tests.csproj" />
     <Project Path="tests/essentials/Foundation/Identity/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.ProviderTests.csproj" />
+  </Folder>
+  <Folder Name="/tests/essentials/Locking/">
+    <Project Path="tests/essentials/Locking/Tests/Elsa.Locking.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/essentials/Locking/Database/">
+    <Project Path="tests/essentials/Locking/Database/ProviderTests/Elsa.Locking.Database.ProviderTests.csproj" />
   </Folder>
   <Folder Name="/tests/essentials/Modularity/">
     <Project Path="tests/essentials/Modularity/ProviderTests/Elsa.Modularity.ProviderTests.csproj" />

@@ -21,12 +21,45 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Tasks` — the co
   otherwise keep their previous DI-disposal behavior.
 
 ### `ITaskExecutor` *(Core — `Elsa.Tasks.Core`)*
-- **Default impl:** `TaskExecutor` (this feature).
+- **Default impl:** `TaskExecutor` (this feature). It applies what a task class declares, in this order:
+  1. **`[RequiresSchemaVersion]`** (`Elsa.Cluster.Core`): the requirements go to the shared
+     `ISchemaDormancyCheck` first, and a task this node is dormant for is skipped without touching the lock, so a
+     dormant node never holds the single-node lock while a capable node waits for it. A shell that composes no check
+     has observed nothing, so a declared requirement is never met there: the task is skipped with a warning.
+  2. **`[SingleNodeTask]`**: see [the guarantee](#singlenodetask-one-at-a-time-at-shell-start) below.
 - **Diagnostics:** startup-task execution emits activity `elsa.startup_task` and histogram
   `elsa.startup_task.duration` from source/meter `Elsa.Tasks.Startup`. Dimensions are bounded to the
   registered task type and `success`, `failed`, `cancelled`, or `skipped`; the skipped outcome is
-  determined at this seam because only the executor observes an unavailable single-node lock.
+  determined at this seam because only the executor observes that the node is dormant for the task. A
+  single-node lock that is never acquired, or lost while the task runs, is `failed`; only a cancellation
+  of the shell's own token is `cancelled`.
 - **Override:** `services.Replace(...)`.
+
+### `[SingleNodeTask]`: one at a time, at shell start
+The whole guarantee, and nothing more (#2192):
+
+- **One at a time.** The executor takes a distributed lock keyed by the shell's name and the task's type name
+  (`elsa:single-node-task:{shell}:{type}`, without the assembly version, so two releases of a task take the same lock
+  during a rolling upgrade). Two shells of one process never contend.
+- **Wait, then run.** A node that finds the lock held logs that it waits, waits for at most the lock provider's
+  acquisition timeout (`LockAcquisitionTimeoutMinutes` on the locking feature, 10 minutes by default), and then runs
+  the task itself. It is never skipped because another node ran it. When the wait runs out, the task fails with a
+  `TimeoutException` naming the lock, and so does the shell's start.
+- **A lost lock cancels the task.** The handle's `HandleLostToken` is linked into the token the task is given. A
+  cancellation caused by the loss surfaces as an `InvalidOperationException`, so it is reported and logged as the
+  failure it is, never as an orderly cancellation. A task that ignores its token and finishes anyway is logged as a
+  warning. Releasing a lock whose connection is gone fails; that is logged as a warning and never replaces the task's
+  own outcome.
+- **No failover, no fencing, no record.** Nothing records that the task ran, nothing reruns it elsewhere, and nothing
+  stops a write made after the lock was lost. The task must be safe to run on every node and after every restart.
+  Work that must happen on exactly one node needs a claim of its own.
+- **Only a shared lock makes it hold across nodes.** `DatabaseDistributedLocking` (`Elsa.Locking.Database`) holds the
+  lock in the shared PostgreSQL, SQL Server or MySQL database. `FileSystemDistributedLocking`'s default folder is
+  node-local, which is why a host that joined a cluster through a durable membership provider refuses it at startup;
+  a SQLite composition keeps it and is single-node by definition. See the
+  [Locking catalog](../Locking/FileSystem/EXTENSION_POINTS.md).
+- It is meant for startup tasks. On a background or recurring task, each start, run and stop takes the lock the same
+  way, which serializes the calls but elects no leader.
 
 ### `ITopologicalTaskSorter` *(Core — `Elsa.Tasks.Core`)*
 - **Default impl:** `TopologicalTaskSorter` (this feature) — orders startup tasks respecting `[TaskDependency]` + `[Order]` attributes.
@@ -42,13 +75,15 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Tasks` — the co
 - **Kind:** Contributor — run once at application startup in topological order (respecting `[TaskDependency]` + `[Order]`).
 - **Signature:** `ValueTask ExecuteAsync(CancellationToken cancellationToken);`
 - **Register:** `services.AddScoped<IStartupTask, MyTask>()`.
-- **Attributes:** `[TaskDependency(typeof(OtherTask))]` — runs after `OtherTask`; `[Order(float)]` — relative priority; `[SingleNodeTask]` — only one instance runs in a multi-node deployment.
+- **Attributes:** `[TaskDependency(typeof(OtherTask))]` — runs after `OtherTask`; `[Order(float)]` — relative priority; `[SingleNodeTask]` — runs one node at a time, every node in turn ([the guarantee](#singlenodetask-one-at-a-time-at-shell-start)); `[RequiresSchemaVersion(family, version)]` — skipped while this node is dormant for the family.
 
 **Known implementations (shipped — cross-domain IStartupTask consumers):**
 - `Elsa.Serialization` — `JsonPayloadConvertersInitializingStartupTask` *(cross-domain — initialises JSON converters)*
 - `Elsa.Activities.Runtime` — `RegisterActivityTypesStartupTask` *(seeds the well-known-type registry with activity and I/O aliases)*
-- `Elsa.Activities.Design.Reconciliation` — `ActivityVersionReconcilerStartupTask` *(cross-domain)*
-- `Elsa.Workflows.Design.Reconciliation` — `WorkflowsVersionReconcilerStartupTask` *(cross-domain)*
+- `Elsa.Activities.Design.Reconciliation` — `ActivityVersionReconcilerStartupTask` *(cross-domain; runs on every node at once, no lock, because its inputs are node-local and concurrent passes converge, #2189)*
+- `Elsa.Workflows.Design.Reconciliation` — `WorkflowsVersionReconcilerStartupTask` *(cross-domain; the same, #2187 and #2189)*
+- `Elsa.Workflows.Runtime.Reconciliation` — `WorkflowArtifactReconcilerStartupTask` *(cross-domain; `[SingleNodeTask]`, so each node reconciles its own mounted set in turn)*
+- `Elsa.Workflows.Design.Reconciliation.Git` — `GitWorkflowExportStartupTask` *(cross-domain; `[SingleNodeTask]` until #2197 moves it off)*
 
 ### `IRecurringTask : ITask` *(Core — `Elsa.Tasks.Core`)*
 - **Kind:** Contributor — run on a schedule. Configure schedule via `ITaskSchedule` (`Elsa.Tasks.Schedules`).

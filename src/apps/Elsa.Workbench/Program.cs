@@ -38,6 +38,7 @@ using Elsa.Foundation.Identity.Api;
 using Elsa.Foundation.Identity.AspNetCoreIdentity;
 using Elsa.Foundation.Identity.Oidc;
 using Elsa.Foundation.Identity.OpenIddict;
+using Elsa.Locking.Database;
 using Elsa.Locking.FileSystem;
 using Elsa.Mediator;
 using Elsa.Modularity.Api;
@@ -260,6 +261,8 @@ builder.Services.AddCShellsAspNetCore(shells =>
         .WithAssemblies(
             typeof(PrimitivesFeature).Assembly,
             typeof(FileSystemLockingFeature).Assembly,
+            // The lock a clustered Workbench composes in place of the file-system one, whose default folder is node-local (#2192).
+            typeof(DatabaseLockingFeature).Assembly,
             typeof(SerializationFeature).Assembly,
             typeof(NewtonsoftSerializationFeature).Assembly,
             typeof(TasksFeature).Assembly,

@@ -6,7 +6,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 
 ## Summary
 
-- Discovered feature classes: 105
+- Discovered feature classes: 106
 
 ## Features
 
@@ -61,6 +61,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 | IdentityProviderConfigurationEntityFrameworkCoreFeature | direct IShellFeature | Elsa.Foundation.Identity.Persistence.EntityFrameworkCore | IShellFeature | [IdentityProviderConfigurationEntityFrameworkCoreFeature.cs](../../src/essentials/Foundation/Identity/Persistence/EntityFrameworkCore/IdentityProviderConfigurationEntityFrameworkCoreFeature.cs) |
 | HttpFeature | direct IShellFeature | Elsa.Http | IShellFeature | [HttpFeature.cs](../../src/essentials/Http/HttpFeature.cs) |
 | HttpJavaScriptFeature | direct IShellFeature | Elsa.Http.JavaScript | IShellFeature | [HttpJavaScriptFeature.cs](../../src/essentials/Http/JavaScript/HttpJavaScriptFeature.cs) |
+| DatabaseLockingFeature | direct IShellFeature | Elsa.Locking.Database | IShellFeature | [DatabaseLockingFeature.cs](../../src/essentials/Locking/Database/DatabaseLockingFeature.cs) |
 | FileSystemLockingFeature | direct IShellFeature | Elsa.Locking.FileSystem | IShellFeature | [FileSystemLockingFeature.cs](../../src/essentials/Locking/FileSystem/FileSystemLockingFeature.cs) |
 | MediatorFeature | direct IShellFeature | Elsa.Mediator | IShellFeature | [MediatorFeature.cs](../../src/essentials/Mediator/MediatorFeature.cs) |
 | ModularityApiFeature | direct IWebShellFeature | Elsa.Modularity.Api | IWebShellFeature | [ModularityApiFeature.cs](../../src/essentials/Modularity/Api/ModularityApiFeature.cs) |
