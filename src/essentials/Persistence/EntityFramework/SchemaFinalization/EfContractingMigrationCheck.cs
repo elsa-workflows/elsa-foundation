@@ -101,23 +101,23 @@ public static class EfContractingMigrationCheck
     /// </summary>
     /// <param name="host">This host's member in the fleet, which a created record names prefixed with <see cref="MigratorHostIdPrefix"/>; the machine name when null.</param>
     /// <exception cref="EfContractingMigrationRefusedException">A pending contracting migration may not be applied yet.</exception>
-    internal static Task MigrateAsync(DbContext context, SchemaFinalizationMember? host, CancellationToken cancellationToken) =>
-        MigrateAsync(context, host, EfSchemaModuleFamilies.ForContext(context.GetType()), cancellationToken);
+    internal static Task MigrateAsync(DbContext context, SchemaFinalizationMember? host, EfMigrateOptions options, CancellationToken cancellationToken) =>
+        MigrateAsync(context, host, EfSchemaModuleFamilies.ForContext(context.GetType()), options, cancellationToken);
 
-    /// <summary><see cref="MigrateAsync(DbContext, SchemaFinalizationMember?, CancellationToken)"/> as a build that declares <paramref name="families"/> runs it.</summary>
-    internal static async Task MigrateAsync(DbContext context, SchemaFinalizationMember? host, EfSchemaModuleFamilies? families, CancellationToken cancellationToken)
+    /// <summary><see cref="MigrateAsync(DbContext, SchemaFinalizationMember?, EfMigrateOptions, CancellationToken)"/> as a build that declares <paramref name="families"/> runs it.</summary>
+    internal static async Task MigrateAsync(DbContext context, SchemaFinalizationMember? host, EfSchemaModuleFamilies? families, EfMigrateOptions options, CancellationToken cancellationToken)
     {
         var contracting = ContractingMigrations(context);
         if (contracting.Count > 0)
         {
             if (!await IsAdmittedAsync(context, contracting, families, pending: null, cancellationToken))
-                await SeedAsync(context, contracting, families, host, cancellationToken);
+                await SeedAsync(context, contracting, families, host, options, cancellationToken);
             else if (await JudgeAsync(contracting, families, new EfSchemaFinalizationStore(context), cancellationToken) is { Count: > 0 } unsafeMigrations &&
                      await RefuseBatchAsync(context, families, unsafeMigrations, pending: null, cancellationToken) is { } refusal)
                 throw refusal;
         }
 
-        await context.Database.MigrateAsync(cancellationToken);
+        await EfSqliteMigrationLock.MigrateAsync(context, options, cancellationToken);
     }
 
     /// <summary>
@@ -183,6 +183,7 @@ public static class EfContractingMigrationCheck
         IReadOnlyList<ContractingMigration> contracting,
         EfSchemaModuleFamilies? families,
         SchemaFinalizationMember? host,
+        EfMigrateOptions options,
         CancellationToken cancellationToken)
     {
         var module = ModuleOf(context, families);
@@ -195,7 +196,10 @@ public static class EfContractingMigrationCheck
         var first = seeding[0].Migration.Id;
         var applied = pending.TakeWhile(id => !StringComparer.Ordinal.Equals(id, first)).ToArray();
         if (applied.Length > 0)
+        {
+            await EfSqliteMigrationLock.AwaitReleasedAsync(context, options, cancellationToken);
             await MigrateBeforeAsync(context, first, cancellationToken);
+        }
         if (!await EfSchemaFinalizationCheck.RecordTableExistsAsync(context, cancellationToken))
             throw new InvalidOperationException(
                 $"EF module '{module}' was not migrated past '{first}': its migrations before that contracting migration do not " +

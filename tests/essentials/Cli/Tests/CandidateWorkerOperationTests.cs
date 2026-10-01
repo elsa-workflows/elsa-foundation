@@ -14,6 +14,7 @@ public sealed class CandidateWorkerOperationTests
     [InlineData("restore")]
     [InlineData("connection")]
     [InlineData("environment")]
+    [InlineData("sqlite-migration-lock")]
     [InlineData("candidate")]
     public async Task Invalid_or_live_requests_refuse_before_any_closure_call(string field)
     {
@@ -24,6 +25,7 @@ public sealed class CandidateWorkerOperationTests
             "restore" => request with { Restore = true },
             "connection" => request with { Connection = "secret-input-canary" },
             "environment" => request with { Environment = "Production" },
+            "sqlite-migration-lock" => request with { SqliteMigrationLockStaleAfter = TimeSpan.FromMinutes(1) },
             _ => request with { Candidate = null }
         };
         var result = await Run(request, (_, _) => { calls++; return Task.FromResult(new WorkerResponse()); });

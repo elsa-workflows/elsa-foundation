@@ -23,6 +23,8 @@ public sealed partial class RawSqlArchitectureTests
     /// <summary>Production files allowed to send raw SQL, each with why.</summary>
     private static readonly Dictionary<string, string> Sites = new(StringComparer.Ordinal)
     {
+        ["src/essentials/Persistence/EntityFramework/EfSqliteMigrationLock.cs"] =
+            "the read-only look at EF's SQLite migration lock row, which has no entity: EF's own lock table, left behind by a killed process (#2196)",
         ["src/essentials/Persistence/EntityFramework/SchemaFinalization/EfInsertIfAbsent.cs"] =
             "the startup seeds' insert-unless-present statement, one shape per engine (#2162)",
         ["src/essentials/Persistence/EntityFramework/SchemaFinalization/EfSchemaFinalizationCheck.cs"] =

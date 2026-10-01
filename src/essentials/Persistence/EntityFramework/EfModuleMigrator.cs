@@ -81,7 +81,7 @@ public sealed class EfModuleMigrator<TContext>(
         await EfDatabaseMigrator.ApplyAsync(
             context,
             migration.ExpectedProviderName,
-            options.Value.Policy,
+            options.Value,
             services.GetService<IEfSchemaFleet>()?.GetLocalStanding().Member,
             cancellationToken);
         // Under both policies (FR-056), and only ever after the schema is known to be current: an audit that

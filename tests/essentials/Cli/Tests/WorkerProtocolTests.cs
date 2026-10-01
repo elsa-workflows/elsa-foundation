@@ -86,6 +86,7 @@ public sealed class WorkerProtocolTests
     [InlineData("connection", "\"private-value\"")]
     [InlineData("finalization", "{}")]
     [InlineData("skewAllowance", "\"00:00:00\"")]
+    [InlineData("sqliteMigrationLockStaleAfter", "\"00:01:00\"")]
     public async Task Candidate_reader_rejects_non_null_legacy_live_fields(string field, string jsonValue)
     {
         var request = JsonNode.Parse(CandidateRequestJson)!.AsObject();
@@ -102,7 +103,8 @@ public sealed class WorkerProtocolTests
         foreach (var field in new[]
                  {
                      "selection", "provider", "schema", "output", "environment", "shell", "contextSource",
-                     "contextVersion", "resource", "shells", "connectionEnv", "connection", "finalization", "skewAllowance"
+                     "contextVersion", "resource", "shells", "connectionEnv", "connection", "finalization", "skewAllowance",
+                     "sqliteMigrationLockStaleAfter"
                  })
             request[field] = null;
 
