@@ -1,7 +1,7 @@
 # Tasks: Effective persistence preview
 
 **Input**: [plan](plan.md), [spec](spec.md), research, data model and contracts.
-Implementation checkpoint: exact source723 has hosted CI/Docker/Maps and actual Windows16/16 proof; subsequent Copilot review identifies a separate supervisor visibility/direct-unit-test correction now in progress. See [chronological implementation evidence](implementation-evidence.md) for source identities, full local suites, meaningful failing controls, native coverage and limits. T020 remains open pending corrected combined-source review/verification and exact-main gates; this is not delivery completion.
+Implementation checkpoint: supervisor extraction and44 direct cases are integrated; restored full CLI865, Planning112, migrations448, architecture620 and actualLinux224 pass with zero skipped. Maps all/check and the24-canary bounded scan pass; protocol mutation2/2 fails as intended with source byte-restored. See [chronological evidence](implementation-evidence.md) for exact source/artifact identities, the retained stale-assets architecture failure and main-red2216 investigation. T020 remains open pending fresh pushed-head review/CI/Windows and exact-main delivery gates.
 
 ## Phase 1: Setup
 
