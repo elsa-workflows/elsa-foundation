@@ -27,6 +27,16 @@ public sealed class CandidateProcessOwnerTests
         foreach (var args in invalid)
             Assert.Equal(ToolExitCode.ResolutionFailure, await fixture.CreateSupervisor().RunAsync(args, CancellationToken.None));
 
+        for (var index = 0; index < 7; index++)
+        {
+            string[] args = ["--candidate-inspection", "--candidate-owner", "pipe", Guid.NewGuid().ToString("N"), "runtime", "deps", "payload"];
+            args[index] = null!;
+            Assert.Equal(ToolExitCode.ResolutionFailure, await fixture.CreateSupervisor().RunAsync(args, CancellationToken.None));
+        }
+
+        Assert.Equal(ToolExitCode.ResolutionFailure, await fixture.CreateSupervisor().RunAsync(
+            ["wrong", "--candidate-owner", "pipe", Guid.NewGuid().ToString("N"), "runtime", "deps", "payload"], CancellationToken.None));
+
         Assert.Equal(ToolExitCode.ResolutionFailure,
             await fixture.CreateSupervisor().RunAsync((string[]?)null!, CancellationToken.None));
 
@@ -596,6 +606,26 @@ public sealed class CandidateProcessOwnerTests
     }
 
     [Fact]
+    public void Standard_stream_factory_transfers_all_acquired_streams_to_one_owner()
+    {
+        var input = new TrackingStream("input");
+        var output = new TrackingStream("output");
+        var error = new TrackingStream("error");
+        var factory = new CandidateSupervisorStandardStreamsFactory(() => input, () => output, () => error);
+
+        using (var owned = factory.Open())
+        {
+            Assert.Same(input, owned.StandardInput);
+            Assert.Same(output, owned.StandardOutput);
+            Assert.Same(error, owned.StandardError);
+        }
+
+        Assert.Equal(1, input.DisposeCount);
+        Assert.Equal(1, output.DisposeCount);
+        Assert.Equal(1, error.DisposeCount);
+    }
+
+    [Fact]
     public void Standard_stream_factory_closes_acquired_streams_when_later_acquisition_fails()
     {
         var input = new TrackingStream("input");
@@ -757,7 +787,7 @@ public sealed class CandidateProcessOwnerTests
                 if (buffer.Length == 0)
                     return ValueTask.FromResult(0);
                 buffer.Span[0] = InitialRead;
-                return ValueTask.FromResult(1);
+                return ValueTask.FromResult(InitialRead == 0 ? 0 : 1);
             }
 
             if (OwnerAlreadyClosed)
