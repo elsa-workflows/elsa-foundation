@@ -220,6 +220,8 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
 
         // Query 1 — drop expired/retired references unless a retained execution still pins their inspectable
         // executable/template graph. Terminal executions remain roots until their execution state is removed.
+        // The listing is only a snapshot: a restore (activation compensation or resume) can land before the delete, so
+        // each delete is fenced on the snapshot and on the row still being retired or expired.
         var deletedReferenceIds = new List<string>();
         var doomedReferences = (await _sourceReferenceStore.ListAllAsync(cancellationToken: cancellationToken))
             .Where(reference => reference.DeletedAt is not null || reference.IsExpired(now))
@@ -227,7 +229,7 @@ public sealed class WorkflowExecutableReferenceGarbageCollector : IWorkflowExecu
             .ToArray();
         foreach (var reference in doomedReferences)
         {
-            if (await _sourceReferenceStore.DeleteAsync(reference.SourceReferenceId, cancellationToken))
+            if (await _sourceReferenceStore.TryDeleteDoomedAsync(reference, now, cancellationToken))
                 deletedReferenceIds.Add(reference.SourceReferenceId);
         }
 

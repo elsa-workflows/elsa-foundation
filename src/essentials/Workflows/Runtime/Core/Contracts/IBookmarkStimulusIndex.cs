@@ -29,4 +29,17 @@ public interface IBookmarkStimulusIndex
     ValueTask<RuntimeStorePage<BookmarkState>> ListByStimulusTypePageAsync(
         BookmarkStimulusTypePageQuery query,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Returns the distinct stimulus hashes (<see cref="StimulusHashes.DistinctOrdinal"/>) of the bookmarks of one
+    /// stimulus type that are still waiting at <paramref name="evaluatedAt"/>: those with no
+    /// <see cref="BookmarkState.ExpiresAt"/>, or one after it. Unlike the page scans this read applies the expiry rule of
+    /// <see cref="IGlobalBookmarkStimulusLookup"/> itself, because it returns hashes rather than rows and so leaves the
+    /// lookup nothing to filter. A per-node projection (the HTTP route table) compares the result between reads, so a
+    /// store should answer it without materializing bookmarks.
+    /// </summary>
+    ValueTask<IReadOnlyCollection<string>> ListWaitingStimulusHashesByTypeAsync(
+        string stimulusType,
+        DateTimeOffset evaluatedAt,
+        CancellationToken cancellationToken = default);
 }

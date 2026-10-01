@@ -4,6 +4,7 @@ using Elsa.Api.Compatibility.Testing.Manifests;
 using Elsa.Api.AspNetCore;
 using Elsa.Foundation.Host.Health;
 using Elsa.Foundation.Host.ModuleManagement;
+using Elsa.Foundation.Host.Shells;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
@@ -23,6 +24,7 @@ public sealed class FoundationHostEndpointTests
         builder.WebHost.UseTestServer();
         builder.Services.AddSingleton<IShellRegistry>(_ => null!);
         builder.Services.AddSingleton<IRuntimeFeatureCatalog>(_ => null!);
+        builder.Services.AddSingleton<ShellActivationTracker>();
         using var app = builder.Build();
 
         app.MapHostHealth();
