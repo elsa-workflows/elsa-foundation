@@ -285,9 +285,9 @@ internal static class PublicationJournalConvergence
     }
 
     /// <summary>
-    /// Two nodes complete the same lagging slot at once; every journal transition is a compare-and-swap, so the journal
-    /// settles once. The runtime has completed the activation by then, so the race is the journal's own: two runtime
-    /// completions racing on one slot are Runtime's concern, and can fail one of them on the projection store.
+    /// Two nodes complete the same lagging slot at once, the runtime's activation and the journal both. The projection
+    /// stores take the second switch as a no-op however the two interleave (#2265), and every journal transition is a
+    /// compare-and-swap, so the journal settles once.
     /// </summary>
     private static async Task TwoNodesCompletingOneSlotConvergeAsync(JournalDatabases databases)
     {
@@ -295,7 +295,6 @@ internal static class PublicationJournalConvergence
         var interrupted = await StopAfterSlotTransitionAsync(databases, "version-2");
         await using var one = new PublishingNode(databases);
         await using var other = new PublishingNode(databases);
-        await one.CompleteRuntimeAsync();
 
         var completions = await Task.WhenAll(one.CompleteAsync(), other.CompleteAsync());
 
