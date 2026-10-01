@@ -91,6 +91,21 @@ public sealed class CandidateProcessOwnerTests
     }
 
     [Fact]
+    public async Task Supervisor_rejects_native_owner_establishment_failure_without_ready_payload_or_abort()
+    {
+        var fixture = new SupervisorFixture();
+        fixture.Native.EstablishFailure = new InvalidOperationException("establish");
+
+        var result = await fixture.RunAsync();
+
+        Assert.Equal(ToolExitCode.ResolutionFailure, result);
+        Assert.Empty(fixture.Control.Writes);
+        Assert.Equal(0, fixture.PayloadLauncher.StartCount);
+        Assert.Equal(1, fixture.Native.EstablishCount);
+        Assert.Equal(0, fixture.Native.AbortCount);
+    }
+
+    [Fact]
     public async Task Supervisor_honors_cancellation_while_connecting()
     {
         var fixture = new SupervisorFixture();
@@ -348,6 +363,32 @@ public sealed class CandidateProcessOwnerTests
         Assert.Equal(ToolExitCode.ResolutionFailure, StatusCode(fixture.Control.Writes[1]));
     }
 
+    [Theory]
+    [InlineData("output")]
+    [InlineData("error")]
+    public async Task Supervisor_writes_failure_status_and_closes_source_when_forward_destination_flush_fails(string stream)
+    {
+        var fixture = new SupervisorFixture();
+        var source = new TrackingStream($"payload-{stream}", stream);
+        var destination = new TrackingStream(stream) { FlushFailure = new IOException("destination flush") };
+        if (stream == "output")
+        {
+            fixture.Payload.StandardOutput = source;
+            fixture.Stdio.StandardOutput = destination;
+        }
+        else
+        {
+            fixture.Payload.StandardError = source;
+            fixture.Stdio.StandardError = destination;
+        }
+
+        var result = await fixture.RunAsync();
+
+        Assert.Equal(ToolExitCode.ResolutionFailure, result);
+        Assert.Equal(1, source.DisposeCount);
+        Assert.Equal(ToolExitCode.ResolutionFailure, StatusCode(fixture.Control.Writes[1]));
+    }
+
     [Fact]
     public async Task Supervisor_writes_failure_status_when_payload_wait_fails()
     {
@@ -491,6 +532,37 @@ public sealed class CandidateProcessOwnerTests
         killFailure.EstablishOwner();
         killFailure.AbortOwner();
         Assert.Equal([(-42, 9)], calls);
+    }
+
+    [Fact]
+    public void Public_supervisor_helpers_reject_null_constructor_dependencies()
+    {
+        var launcher = new CandidateProcessSupervisor.CandidateSupervisorPayloadLauncher(() => "/host", _ => null);
+        Assert.Throws<ArgumentNullException>(() => new CandidateProcessSupervisor.CandidateSupervisorPayloadLauncher(null!, _ => null));
+        Assert.Throws<ArgumentNullException>(() => new CandidateProcessSupervisor.CandidateSupervisorPayloadLauncher(() => "/host", null!));
+
+        var native = new CandidateProcessSupervisor.CandidateSupervisorNative(() => 0, () => 1, () => 1, (_, _) => 0);
+        Assert.Throws<ArgumentNullException>(() => new CandidateProcessSupervisor.CandidateSupervisorNative(null!, () => 1, () => 1, (_, _) => 0));
+        Assert.Throws<ArgumentNullException>(() => new CandidateProcessSupervisor.CandidateSupervisorNative(() => 0, null!, () => 1, (_, _) => 0));
+        Assert.Throws<ArgumentNullException>(() => new CandidateProcessSupervisor.CandidateSupervisorNative(() => 0, () => 1, null!, (_, _) => 0));
+        Assert.Throws<ArgumentNullException>(() => new CandidateProcessSupervisor.CandidateSupervisorNative(() => 0, () => 1, () => 1, null!));
+
+        Assert.Throws<ArgumentNullException>(() => new CandidateSupervisorStandardStreamsFactory(null!, () => new MemoryStream(),
+            () => new MemoryStream()));
+        Assert.Throws<ArgumentNullException>(() => new CandidateSupervisorStandardStreamsFactory(() => new MemoryStream(), null!,
+            () => new MemoryStream()));
+        Assert.Throws<ArgumentNullException>(() => new CandidateSupervisorStandardStreamsFactory(() => new MemoryStream(),
+            () => new MemoryStream(), null!));
+
+        Assert.Throws<ArgumentNullException>(() => new CandidateSupervisorStandardStreams(null!, new MemoryStream(),
+            new MemoryStream()));
+        Assert.Throws<ArgumentNullException>(() => new CandidateSupervisorStandardStreams(new MemoryStream(), null!,
+            new MemoryStream()));
+        Assert.Throws<ArgumentNullException>(() => new CandidateSupervisorStandardStreams(new MemoryStream(), new MemoryStream(),
+            null!));
+
+        _ = launcher;
+        _ = native;
     }
 
     [Fact]
@@ -851,7 +923,13 @@ public sealed class CandidateProcessOwnerTests
     {
         public int EstablishCount { get; private set; }
         public int AbortCount { get; private set; }
-        public void EstablishOwner() => EstablishCount++;
+        public Exception? EstablishFailure { get; set; }
+        public void EstablishOwner()
+        {
+            EstablishCount++;
+            if (EstablishFailure is not null)
+                throw EstablishFailure;
+        }
         public void AbortOwner() => AbortCount++;
     }
 
@@ -871,9 +949,14 @@ public sealed class CandidateProcessOwnerTests
         public int FlushCount { get; private set; }
         public int DisposeCount { get; private set; }
         public Exception? DisposeFailure { get; set; }
+        public Exception? FlushFailure { get; set; }
 
         public override void Flush() => FlushCount++;
-        public override Task FlushAsync(CancellationToken cancellationToken) { FlushCount++; return Task.CompletedTask; }
+        public override Task FlushAsync(CancellationToken cancellationToken)
+        {
+            FlushCount++;
+            return FlushFailure is null ? Task.CompletedTask : Task.FromException(FlushFailure);
+        }
         protected override void Dispose(bool disposing)
         {
             if (disposing)
