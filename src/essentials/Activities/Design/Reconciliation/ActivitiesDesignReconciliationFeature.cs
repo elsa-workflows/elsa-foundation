@@ -31,12 +31,13 @@ public class ActivitiesDesignReconciliationFeature : IShellFeature
 {
     public ActivityVersionReconcilerOptions ReconcilerOptions { get; set; } = new();
 
+    /// <summary>Retired settings only (#2192); a value set here refuses to start. See <see cref="ActivityVersionReconcilerStartupTaskOptions"/>.</summary>
     public ActivityVersionReconcilerStartupTaskOptions StartupTaskOptions { get; set; } = new();
 
     public virtual void ConfigureServices(IServiceCollection services)
     {
+        RefuseRetiredLockTimeout();
         services.AddSingleton(Microsoft.Extensions.Options.Options.Create(ReconcilerOptions));
-        services.AddSingleton(Microsoft.Extensions.Options.Options.Create(StartupTaskOptions));
 
         // The content hasher + entity factories are registered by the persistence feature (entity
         // construction lives with persistence); the reconciler consumes the factories.
@@ -45,5 +46,18 @@ public class ActivitiesDesignReconciliationFeature : IShellFeature
         services.AddScoped<IStartupTask, ActivityVersionReconcilerStartupTask>();
 
         services.AddEventHandler<ActivityVersionsReconciling, CollectActivityVersions>();
+    }
+
+    private void RefuseRetiredLockTimeout()
+    {
+#pragma warning disable CS0618 // The refusal is the whole point of keeping the obsolete property.
+        if (StartupTaskOptions.LockTimeoutMs is not { } lockTimeoutMs)
+            return;
+
+        throw new InvalidOperationException(
+            $"'{nameof(StartupTaskOptions)}:{nameof(StartupTaskOptions.LockTimeoutMs)}' on '{GetType().Name}' is set to '{lockTimeoutMs}' and is retired. " +
+            "The activity version reconciler takes no lock any more: it runs on every node at shell start, because each node must " +
+            "reconcile the assemblies and catalogs it loaded itself (#2192). Remove this setting.");
+#pragma warning restore CS0618
     }
 }

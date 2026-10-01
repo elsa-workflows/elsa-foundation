@@ -34,5 +34,9 @@
     <Compile Include="..\Tests\RecurringOccurrenceClaimContract.cs" Link="RecurringOccurrenceClaimContract.cs" />
     <Compile Include="..\Tests\RecurringOccurrenceDeliveryContract.cs" Link="RecurringOccurrenceDeliveryContract.cs" />
     <Compile Include="..\Tests\RuntimeEventExecutableTestFixture.cs" Link="RuntimeEventExecutableTestFixture.cs" />
+    <Compile Include="..\Tests\LiveDrainSweepContentionContract.cs" Link="LiveDrainSweepContentionContract.cs" />
+    <Compile Include="..\Tests\OutboxStoreRegistration.cs" Link="OutboxStoreRegistration.cs" />
+    <Compile Include="..\..\..\Tests\ForwardingOutboxStore.cs" Link="ForwardingOutboxStore.cs" />
+    <Compile Include="..\Tests\PostCommitOutboxClaimedListingContract.cs" Link="PostCommitOutboxClaimedListingContract.cs" />
   </ItemGroup>
 </Project>

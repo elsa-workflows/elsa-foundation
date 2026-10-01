@@ -27,10 +27,10 @@ namespace Elsa.Workflows.Runtime.Reconciliation;
 /// definition that is live and can never fire, which is worse than a loud refusal at boot.
 /// </para>
 /// <para>
-/// <b>A locking feature must also be composed.</b> The reconcile pass is a <c>[SingleNodeTask]</c> guarded by
-/// <c>IDistributedLockProvider</c>, and <b>no default is registered anywhere in the framework — deliberately</b>.
-/// A process-local stand-in would satisfy DI, behave perfectly on one node, and then silently let two nodes
-/// reconcile the same mount concurrently, which is the exact condition the single-node guard exists to prevent.
+/// <b>A locking feature must also be composed.</b> The reconcile pass is a <c>[SingleNodeTask]</c>, which runs one
+/// node at a time under <c>IDistributedLockProvider</c> (#2192), and <b>no default is registered anywhere in the
+/// framework — deliberately</b>. A process-local stand-in would satisfy DI, behave perfectly on one node, and then
+/// silently let two nodes reconcile the same mount concurrently, which is the exact condition the guard exists to prevent.
 /// Absence of a default is the safety property, not an oversight: composing without a locking feature fails at
 /// shell activation, when DI constructs this feature's startup task, and cannot be shipped past. (No production
 /// path sets <c>ValidateOnBuild</c>, so the refusal is a resolution failure at activation rather than at container
@@ -43,8 +43,9 @@ namespace Elsa.Workflows.Runtime.Reconciliation;
 /// failure and never be reached. It is deliberately not a <c>DependsOn</c> on a locking <em>feature</em>, because
 /// naming one would pin a provider choice — <c>FileSystemDistributedLocking</c> coordinates through the file system,
 /// so hard-wiring it would silently hand a multi-node deployment single-host locking. Depending on the abstraction
-/// and letting composition choose the provider is the seam; the design-side reconcilers carry it the same way.
-/// <c>Elsa.Locking.FileSystem</c> is the only provider this repository ships and is sufficient for a single host.
+/// and letting composition choose the provider is the seam. <c>Elsa.Locking.FileSystem</c> is sufficient for a single
+/// host; a cluster composes <c>Elsa.Locking.Database</c>, and a host that joined a cluster through a durable membership
+/// provider refuses the file-system provider's node-local default folder at startup.
 /// </para>
 /// </remarks>
 [ManifestRuntimeKind(ElsaRuntimeKinds.Server)]

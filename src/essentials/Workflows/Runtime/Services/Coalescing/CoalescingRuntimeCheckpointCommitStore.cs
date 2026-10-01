@@ -76,7 +76,7 @@ public sealed class CoalescingRuntimeCheckpointCommitStore(
         if (session.HasBufferedChanges)
         {
             var foldedState = session.FoldBufferedStateChangesWith(commit.StateChanges);
-            var outbox = UnionOutbox(remainingPendingOutbox, commit.StateChanges.PostCommitOutbox);
+            var outbox = UnionOutbox(FoldableOutbox(session, remainingPendingOutbox), commit.StateChanges.PostCommitOutbox);
             var foldedCommit = commit with
             {
                 StateChanges = foldedState.WithPostCommitOutbox(outbox),
@@ -123,6 +123,35 @@ public sealed class CoalescingRuntimeCheckpointCommitStore(
             session.Deactivate();
         return passthrough;
     }
+
+    // A checkpoint's outbox carries only Pending items, but an overlay continuation whose delivery failed retryably is
+    // FailedRetryable until it is retried (EnqueueSchedulerWork retries, #2225). It is folded as the Pending crash backstop
+    // it is, keeping its attempt count and retry time so the sweep that delivers it counts the attempt already made. One
+    // an earlier flush already persisted is left out: its durable Pending row is that backstop, and the overlay's changed
+    // copy would be a conflicting second save of the same item. Both are what the quiescence flush does with such an item.
+    private static IReadOnlyCollection<RuntimeStateChange<RuntimePostCommitOutboxItem>> FoldableOutbox(
+        RuntimeCoalescingSession session,
+        IReadOnlyCollection<RuntimeStateChange<RuntimePostCommitOutboxItem>> remaining) =>
+        remaining
+            .Where(change => change.State.Status != RuntimePostCommitOutboxStatus.FailedRetryable ||
+                             !session.IsOutboxDurablyPersisted(change.StateId))
+            .Select(change => change.State.Status == RuntimePostCommitOutboxStatus.FailedRetryable
+                ? change with { State = AsPending(change.State) }
+                : change)
+            .ToArray();
+
+    private static RuntimePostCommitOutboxItem AsPending(RuntimePostCommitOutboxItem item) =>
+        new(
+            item.OutboxItemId,
+            item.Intent,
+            RuntimePostCommitOutboxStatus.Pending,
+            item.RecordedAt,
+            item.AvailableAt,
+            item.RetryPolicy,
+            item.DeliveryAttemptCount,
+            lastFailureMessage: item.LastFailureMessage,
+            metadata: item.Metadata,
+            deliveryFencingToken: item.DeliveryFencingToken);
 
     private static bool CanContinueAfterBoundary(
         RuntimeCheckpointCommit commit,

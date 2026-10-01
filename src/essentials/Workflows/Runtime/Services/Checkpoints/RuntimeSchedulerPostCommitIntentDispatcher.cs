@@ -12,6 +12,21 @@ public sealed class RuntimeSchedulerPostCommitIntentDispatcher(
     RuntimeInProcessHopFastPathOptions? inProcessHopFastPathOptions = null)
     : IRuntimePostCommitIntentDispatcher, IRuntimePostCommitIntentHandler
 {
+    /// <summary>
+    /// The durable retry policy every <see cref="RuntimePostCommitIntentKinds.EnqueueSchedulerWork"/> outbox item carries
+    /// (#2225): four attempts, one second apart, the shape and numbers of the other bounded kinds (a PublishStimulus send,
+    /// and a DispatchWorkflow child start at its defaults). A failed attempt stays <c>FailedRetryable</c>, so the sweep
+    /// delivers the continuation once a transient failure clears, and a drain whose continuation another deliverer failed
+    /// sees it listed and does not report quiescence. Only the last failed attempt is <c>FailedFinal</c>.
+    /// </summary>
+    /// <remarks>
+    /// A repeat converges by the work item's id while it is queued. An attempt that failed before its enqueue committed
+    /// queued nothing, so its retry cannot repeat drained work; an enqueue that committed but whose acknowledgement was lost
+    /// did queue it, and that retry then falls in the window the per-kind table under <c>IRuntimePostCommitOutboxStore</c> in
+    /// Runtime EXTENSION_POINTS.md records for this kind.
+    /// </remarks>
+    public static RuntimePostCommitRetryPolicy RetryPolicy { get; } = new(maxAttempts: 4, delay: TimeSpan.FromSeconds(1));
+
     private readonly RuntimeInProcessHopFastPathOptions _fastPathOptions =
         inProcessHopFastPathOptions ?? new RuntimeInProcessHopFastPathOptions();
 

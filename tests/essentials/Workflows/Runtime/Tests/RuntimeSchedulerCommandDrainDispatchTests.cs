@@ -6,6 +6,7 @@ using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Services.Checkpoints;
 using Elsa.Workflows.Runtime.Services.Executions;
 using Elsa.Workflows.Runtime.Services.Scheduler;
 using Elsa.Workflows.Runtime.Services.WorkHandlers;
@@ -536,8 +537,12 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
         IEnumerable<IWorkflowSchedulerDrainObserver> observers,
         TimeProvider timeProvider,
         IRuntimePostCommitOutboxProcessor? outboxProcessor = null,
-        WorkflowDrainOrchestratorOptions? options = null) =>
-        new(
+        WorkflowDrainOrchestratorOptions? options = null)
+    {
+        // The drain checks an outbox and a queue of its own before it quiesces (#2225). Both stay empty: no other deliverer
+        // takes a continuation here, and some drainer doubles report queued work as run without dequeuing it.
+        var outbox = new InMemoryRuntimeCheckpointCommitStore();
+        return new(
             queue,
             drainPolicy,
             new WorkflowDrainOrchestrator(
@@ -547,8 +552,12 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
                 TestCheckpointRuleViolationFaulter.Create(timeProvider),
                 new RuntimeExecutionOwnershipService(new InMemoryExecutionLivenessStateStore()),
                 new AsyncLocalRuntimeExecutionOwnershipContextAccessor(),
+                outbox,
+                outbox,
+                new InMemoryWorkflowSchedulerWorkQueue(),
                 options),
             timeProvider);
+    }
 
     private RuntimeSchedulerWorkItem FollowUpWorkItem() =>
         new(

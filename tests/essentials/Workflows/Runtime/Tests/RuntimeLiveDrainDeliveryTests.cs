@@ -33,7 +33,7 @@ public sealed class RuntimeLiveDrainDeliveryTests
         var processor = NewProcessor(store, queue, liveDrain);
         // Hop 0's checkpoint commit appends one continuation intent, which the live drain then delivers in-memory.
         var drainer = new SeedingSchedulerDrainer(store, continuationsToSeed: 1);
-        var orchestrator = NewOrchestrator(drainer, processor, liveDrain);
+        var orchestrator = NewOrchestrator(drainer, processor, liveDrain, store, queue);
 
         var result = await orchestrator.DrainAsync(NewEnvelope(), new RuntimeSchedulerDrainRequest(Wfid));
 
@@ -60,7 +60,7 @@ public sealed class RuntimeLiveDrainDeliveryTests
         var liveDrain = new AsyncLocalRuntimeLiveDrainDeliveryAccessor();
         var processor = NewProcessor(store, queue, liveDrain);
         var drainer = new SeedingSchedulerDrainer(store, continuationsToSeed: 1);
-        var orchestrator = NewOrchestrator(drainer, processor, liveDrain);
+        var orchestrator = NewOrchestrator(drainer, processor, liveDrain, store, queue);
         await orchestrator.DrainAsync(NewEnvelope(), new RuntimeSchedulerDrainRequest(Wfid));
 
         // A later sweep pass runs the same processor with no live-drain marker, system-wide (claim path).
@@ -112,10 +112,14 @@ public sealed class RuntimeLiveDrainDeliveryTests
             liveDrain,
             coalescingSessionAccessor: null);
 
+    // Before it quiesces the drain checks, through the outbox store and the queue, that no other deliverer took a
+    // continuation (#2225); here none does, so the fast path's own delivery count still decides the loop (spec 106 FR-006).
     private static WorkflowDrainOrchestrator NewOrchestrator(
         IWorkflowSchedulerDrainer drainer,
         IRuntimePostCommitOutboxProcessor processor,
-        IRuntimeLiveDrainDeliveryAccessor liveDrain) =>
+        IRuntimeLiveDrainDeliveryAccessor liveDrain,
+        InMemoryRuntimeCheckpointCommitStore store,
+        InMemoryWorkflowSchedulerWorkQueue queue) =>
         new(
             drainer,
             processor,
@@ -123,6 +127,9 @@ public sealed class RuntimeLiveDrainDeliveryTests
             checkpointRuleViolationFaulter: TestCheckpointRuleViolationFaulter.Create(),
             ownershipService: new RuntimeExecutionOwnershipService(new InMemoryExecutionLivenessStateStore()),
             ownershipContextAccessor: new AsyncLocalRuntimeExecutionOwnershipContextAccessor(),
+            outboxClaimStore: store,
+            outboxLookupStore: store,
+            schedulerWorkQueue: queue,
             options: new WorkflowDrainOrchestratorOptions(),
             liveDrainDeliveryAccessor: liveDrain,
             timeProvider: new FakeTimeProvider(Now));

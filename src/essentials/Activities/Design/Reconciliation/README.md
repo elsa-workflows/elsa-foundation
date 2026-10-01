@@ -6,11 +6,11 @@ Reconciliation lifecycle for the activity catalog (Sipke item 6 — idempotent r
 
 - **`IActivityVersionReconciler`** — the public contract (`Reconcile(CancellationToken)`). Implementation in this feature dispatches the contribution event, processes contributed versions, and updates the reconciliation-state sibling.
 - **`DefaultActivityDefinitionHasher`** — default `IActivityDefinitionHasher` (SHA-256 over canonical JSON of definition + version). Replaceable per §2.6.2.
-- **`ActivityVersionReconcilerStartupTask`** — registered as an `IStartupTask`, acquires a distributed lock, runs `IActivityVersionReconciler.Reconcile()`. `[SingleNodeTask] [Order(1)]`.
+- **`ActivityVersionReconcilerStartupTask`** — registered as an `IStartupTask`, runs `IActivityVersionReconciler.Reconcile()` on every node, without a lock. `[Order(1)]`.
 
 ## Cross-domain contributions
 
-- **`IStartupTask`** *(Core — `Elsa.Tasks.Core`)* — `ActivityVersionReconcilerStartupTask` runs the reconciliation pass at startup under a distributed lock. Catalog: [`Elsa.Tasks/EXTENSION_POINTS.md`](../Elsa.Tasks/EXTENSION_POINTS.md)
+- **`IStartupTask`** *(Core — `Elsa.Tasks.Core`)* — `ActivityVersionReconcilerStartupTask` runs the reconciliation pass at startup on every node, without a lock: its inputs are node-local, and concurrent passes converge (#2189, #2192). Catalog: [`Elsa.Tasks/EXTENSION_POINTS.md`](../Elsa.Tasks/EXTENSION_POINTS.md)
 
 ## Events published
 
@@ -18,12 +18,12 @@ Reconciliation lifecycle for the activity catalog (Sipke item 6 — idempotent r
 
 ## Startup tasks
 
-- `ActivityVersionReconcilerStartupTask` — order 1, single-node. Runs `Reconcile` under a distributed lock.
+- `ActivityVersionReconcilerStartupTask` — order 1, on every node. Runs `Reconcile` without a lock (#2192).
 
 ## Options
 
 - `ActivityVersionReconcilerOptions.DuplicateHandling` — `Skip` (default) or `Throw` when a contributed version already exists in the catalog.
-- `ActivityVersionReconcilerStartupTaskOptions.LockTimeoutMs` — distributed-lock timeout (default 10s).
+- `ActivityVersionReconcilerStartupTaskOptions.LockTimeoutMs` — retired (#2192): the task takes no lock, and a shell that still sets it refuses to start.
 
 ## Replaceable services (per §2.6.2)
 

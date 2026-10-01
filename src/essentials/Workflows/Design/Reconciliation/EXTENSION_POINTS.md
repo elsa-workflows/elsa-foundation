@@ -55,7 +55,7 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Design.
 
 **Semantic.** A workflow-version reconcile pass completed with every contributed version materialized (or verified present). Not published when the pass aborts. Payload is the pass's provenance claims, in contribution order.
 
-**Delivery strategy.** Sequential (`IInlineEventPublisher`) — subscribers run inside the reconcile startup task, under its `[SingleNodeTask]` distributed lock, before shell activation completes (and therefore before `/health/ready` turns ready).
+**Delivery strategy.** Sequential (`IInlineEventPublisher`) — subscribers run inside the reconcile startup task, before shell activation completes (and therefore before `/health/ready` turns ready). The task takes no lock and runs on every node (#2192), so subscribers on several nodes can run at once and must converge as the reconciler's own writes do (#2189).
 
 **Dispatcher failure policy.** No exception shielding: a subscriber throw fails the reconcile pass and shell activation. **Subscribers MUST NOT throw** — recoverable per-item failures are logged and swallowed by the subscriber itself.
 
