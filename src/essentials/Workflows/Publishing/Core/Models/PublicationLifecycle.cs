@@ -79,6 +79,10 @@ public static class PublicationFailureCodes
     /// <summary>Publication activation failed for a reason not otherwise classified.</summary>
     public const string PublicationActivationFailed = "publication_activation_failed";
 
+    /// <summary>The slot already serves the candidate's artifact through another publication, so the candidate was never
+    /// activated; the request is answered with that publication instead. Recorded on the candidate only.</summary>
+    public const string ArtifactAlreadyServing = "artifact_already_serving";
+
     /// <summary>The runtime activation coordinator refused to run the activation lifecycle.</summary>
     public const string PublicationActivationRefused = "publication_activation_refused";
 

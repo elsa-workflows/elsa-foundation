@@ -68,6 +68,7 @@ public sealed class PublishWorkflowRequestHandlerTests
         TimeProvider.System,
         new InMemoryPublicationSnapshotReviewStore());
     private IPublicationPreflightService _preflightService = new PublicationPreflightService();
+    private IWorkflowActivationAuthority? _preflightAuthority;
 
     private static readonly WorkflowActivationSource ImportOwner = WorkflowActivationSource.ArtifactReconciliation("mounted-artifacts");
     private static readonly string DefaultSlotId = WorkflowActivationSlotIdentity.Create("definition-1", "default");
@@ -366,6 +367,27 @@ public sealed class PublishWorkflowRequestHandlerTests
             WorkflowExecutableReferenceScope.Published,
             liveOnly: true,
             now: ReferenceEvaluationTime));
+    }
+
+    [Fact]
+    public async Task A_same_version_publish_that_read_the_slot_before_it_moved_is_answered_with_the_publication_the_slot_names()
+    {
+        var version = WorkflowVersion(Node("write-one", Text("one")));
+        var first = await Handler(version).Handle(new PublishWorkflow("version-1"), CancellationToken.None);
+        // The loser of a race preflighted before the winner's slot transition, so the handler's early return does not apply
+        // and its candidate reaches a coordinator that finds the artifact already serving.
+        _preflightAuthority = new SlotReadBeforeItMoved(_activationAuthority);
+
+        var second = await Handler(version).Handle(new PublishWorkflow("version-1"), CancellationToken.None);
+
+        Assert.False(second.WasCreated);
+        Assert.Equal(first.PublicationId, second.PublicationId);
+        Assert.Equal(first.SourceReferenceId, second.SourceReferenceId);
+        Assert.Equal(PublicationStatusView.Active, second.Status);
+        var records = await _publicationStore.ListBySlotAsync(DefaultSlotId);
+        Assert.Equal(first.PublicationId, Assert.Single(records, record => record.Status == PublicationStatus.Active).PublicationId);
+        Assert.Equal(PublicationFailureCodes.ArtifactAlreadyServing, Assert.Single(records, record => record.Status == PublicationStatus.Failed).Failure?.Code);
+        Assert.Equal(first.PublicationId, (await _activationAuthority.FindAsync("definition-1", "default"))!.ActiveActivationId);
     }
 
     [Fact]
@@ -1101,7 +1123,7 @@ public sealed class PublishWorkflowRequestHandlerTests
             extractor,
             _bindingStore,
             new FakeLayoutStore(layout),
-            _activationAuthority,
+            _preflightAuthority ?? _activationAuthority,
             _policyStore,
             new PublicationPolicyResolver(),
             _publicationStore,
@@ -1160,6 +1182,28 @@ public sealed class PublishWorkflowRequestHandlerTests
     private sealed record PublishWrites(int Executables, int SourceReferences, int PublicationRecords);
 
     /// <summary>Reports one authoritative Exclusive clash in another slot, whatever the candidate claims.</summary>
+    /// <summary>The authority as it stood before any slot moved: every slot is empty.</summary>
+    private sealed class SlotReadBeforeItMoved(IWorkflowActivationAuthority inner) : IWorkflowActivationAuthority
+    {
+        public ValueTask<WorkflowActivationSlot?> FindAsync(string workflowDefinitionId, string slotName, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<WorkflowActivationSlot?>(null);
+
+        public ValueTask<IReadOnlyCollection<WorkflowActivationSlot>> ListByDefinitionAsync(string workflowDefinitionId, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<IReadOnlyCollection<WorkflowActivationSlot>>([]);
+
+        public ValueTask<WorkflowActivationTransition> TryActivateAsync(WorkflowActivationSlotRequest request, CancellationToken cancellationToken = default) =>
+            inner.TryActivateAsync(request, cancellationToken);
+
+        public ValueTask<WorkflowActivationTransition> TryDeactivateAsync(
+            string workflowDefinitionId,
+            string slotName,
+            WorkflowActivationSource source,
+            long expectedRevision,
+            DateTimeOffset updatedAt,
+            CancellationToken cancellationToken = default) =>
+            inner.TryDeactivateAsync(workflowDefinitionId, slotName, source, expectedRevision, updatedAt, cancellationToken);
+    }
+
     private sealed class ClashingPreflightService : IPublicationPreflightService
     {
         public static readonly PublicationTriggerConflict Clash = new(

@@ -50,6 +50,86 @@ public sealed class PublicationActivationTests
     }
 
     [Fact]
+    public async Task AlreadyActiveForTheCandidateTheSlotNamesMarksItActive()
+    {
+        // A retry of a publish that stopped after its slot transition: the slot already names the candidate.
+        var interrupted = await SeedAsync("publication-retried", PublicationStatus.Candidate, occupiesSlot: true);
+
+        var result = await NewActivator().ActivateAsync(new(interrupted, Executable(interrupted), Reference(interrupted)));
+
+        Assert.True(result.Succeeded);
+        Assert.Equal("publication-retried", result.Publication.PublicationId);
+        Assert.Equal(PublicationStatus.Active, result.Publication.Status);
+        Assert.Equal("publication-retried", Assert.Single(await ActivePublicationsAsync()).PublicationId);
+        Assert.Equal("publication-retried", (await _authority.FindAsync("definition-1", "default"))!.ActiveActivationId);
+    }
+
+    [Fact]
+    public async Task AlreadyActiveForAnotherPublicationOfTheSameArtifactReturnsThatPublicationAndFailsTheCandidate()
+    {
+        await SeedActivePublicationAsync("publication-current");
+        var twin = TwinOf("publication-current", "publication-twin");
+
+        var result = await NewActivator().ActivateAsync(await RequestAsync(twin));
+
+        Assert.True(result.Succeeded);
+        Assert.Equal("publication-current", result.Publication.PublicationId);
+        Assert.Equal(PublicationStatus.Active, result.Publication.Status);
+        Assert.Null(result.ReplacedPublicationId);
+        var failed = await _publications.FindAsync("publication-twin");
+        Assert.Equal((PublicationStatus.Failed, PublicationFailureCodes.ArtifactAlreadyServing), (failed!.Status, failed.Failure?.Code));
+        Assert.Equal("publication-current", Assert.Single(await ActivePublicationsAsync()).PublicationId);
+        Assert.Null(await _references.FindAsync(twin.SourceReferenceId!));
+        var slot = await _authority.FindAsync("definition-1", "default");
+        Assert.Equal(("publication-current", 1L), (slot!.ActiveActivationId, slot.Revision));
+    }
+
+    [Fact]
+    public async Task AlreadyActiveForAPublicationThatLagsTheSlotReturnsItOnceTheJournalHasCaughtUp()
+    {
+        await SeedAsync("publication-current", PublicationStatus.Candidate, occupiesSlot: true);
+        var twin = TwinOf("publication-current", "publication-twin");
+
+        var result = await NewActivator().ActivateAsync(await RequestAsync(twin));
+
+        Assert.True(result.Succeeded);
+        Assert.Equal("publication-current", result.Publication.PublicationId);
+        Assert.Equal(PublicationStatus.Active, (await _publications.FindAsync("publication-current"))!.Status);
+        Assert.Equal("publication-current", Assert.Single(await ActivePublicationsAsync()).PublicationId);
+    }
+
+    [Fact]
+    public async Task AlreadyActiveForASlotAnotherSourceOwnsFailsTheCandidateWithSlotOwnerConflict()
+    {
+        var owner = WorkflowActivationSource.ArtifactReconciliation("mounted-artifacts");
+        await SeedAsync("import:artifact-1", PublicationStatus.Active, occupiesSlot: true, source: owner);
+        var twin = TwinOf("import:artifact-1", "publication-twin");
+
+        var result = await NewActivator().ActivateAsync(await RequestAsync(twin));
+
+        Assert.False(result.Succeeded);
+        Assert.Equal(PublicationFailureCodes.SlotOwnerConflict, result.Failure?.Code);
+        Assert.Equal(PublicationStatus.Failed, result.Publication.Status);
+        Assert.Equal("publication-twin", result.Publication.PublicationId);
+        Assert.Equal(PublicationStatus.Failed, (await _publications.FindAsync("publication-twin"))!.Status);
+        Assert.Equal("import:artifact-1", (await _authority.FindAsync("definition-1", "default"))!.ActiveActivationId);
+    }
+
+    [Fact]
+    public async Task AlreadyActiveForAPublicationThatIsNotActiveFailsTheCandidateInsteadOfReportingItServing()
+    {
+        await SeedAsync("publication-current", PublicationStatus.Failed, occupiesSlot: true);
+        var twin = TwinOf("publication-current", "publication-twin");
+
+        var result = await NewActivator().ActivateAsync(await RequestAsync(twin));
+
+        Assert.False(result.Succeeded);
+        Assert.Equal(PublicationFailureCodes.PublicationActivationFailed, result.Failure?.Code);
+        Assert.Equal(PublicationStatus.Failed, (await _publications.FindAsync("publication-twin"))!.Status);
+        Assert.Empty(await ActivePublicationsAsync());
+    }
+
+    [Fact]
     public async Task ProjectionPreparationFailureLeavesPriorAuthorityUntouched()
     {
         await SeedActivePublicationAsync("publication-current");
@@ -274,6 +354,20 @@ public sealed class PublicationActivationTests
         Assert.Equal(failed, await _publications.FindAsync("publication-failed"));
         Assert.Equal(candidate, await _publications.FindAsync("publication-candidate"));
         Assert.Equal(otherSlot, await _publications.FindAsync("publication-other-slot"));
+    }
+
+    private async Task<IReadOnlyList<PublicationRecord>> ActivePublicationsAsync() =>
+        (await _publications.ListBySlotAsync(SlotId)).Where(publication => publication.Status == PublicationStatus.Active).ToList();
+
+    /// <summary>A candidate for the artifact <paramref name="publicationId"/> publishes, as a second publish of the same version would mint.</summary>
+    private PublicationRecord TwinOf(string publicationId, string twinId)
+    {
+        var original = Record(publicationId, 1, PublicationStatus.Candidate, activatedAt: null);
+        return Record(twinId, 1, PublicationStatus.Candidate, activatedAt: null) with
+        {
+            WorkflowDefinitionVersionId = original.WorkflowDefinitionVersionId,
+            ArtifactId = original.ArtifactId
+        };
     }
 
     private UnpublishPublicationSlotRequestHandler NewUnpublisher() =>

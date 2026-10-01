@@ -176,6 +176,23 @@ public sealed class PublishWorkflowRequestHandler(
         if (!activation.Succeeded)
             throw ActivationFailed(publicationId, identity.DefinitionId, activation.Failure);
 
+        // The slot already served this artifact through another publication, which this candidate never replaced: the
+        // same answer the early return above gives a same-version republish, and not a record of a publication that was
+        // never minted.
+        if (!StringComparer.Ordinal.Equals(activation.Publication.PublicationId, publicationId))
+        {
+            var served = activation.Publication;
+            var servedReference = served.SourceReferenceId is { } servedReferenceId
+                ? await sourceReferenceStore.FindAsync(servedReferenceId, cancellationToken)
+                : null;
+            return servedReference is { DeletedAt: null }
+                ? PublishedWorkflowView.From(executable, servedReference, served, wasCreated: false)
+                : throw ActivationFailed(served.PublicationId, served.WorkflowDefinitionId, new PublicationFailure(
+                    PublicationFailureCodes.PublicationActivationFailed,
+                    $"Publication '{served.PublicationId}' already serves definition '{served.WorkflowDefinitionId}' slot '{resolved.SlotName}', " +
+                    "but its source reference is gone. It is not reported as published."));
+        }
+
         return PublishedWorkflowView.From(executable, reference, activation.Publication);
     }
 
