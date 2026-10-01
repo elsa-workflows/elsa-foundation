@@ -502,6 +502,32 @@ public sealed class EfRuntimeArtifactScopeTests
     }
 
     [Fact]
+    public async Task Doomed_delete_loses_to_a_reference_recreated_between_its_read_and_its_delete()
+    {
+        await using var database = await Database.CreateAsync();
+        await using var seed = database.Open("tenant-a");
+        var retired = Reference("doomed-recreated-ref", "artifact-a").Retire(DateTimeOffset.UtcNow.AddMinutes(-1), "replaced");
+        await seed.Store.SaveAsync(retired);
+        await seed.DisposeAsync();
+
+        // The successor is identical to the snapshot (same id, still retired, same revision), so only the incarnation tells them apart.
+        await using var activation = database.Open("tenant-a");
+        await using var collector = database.Open("tenant-a", new RecreateBeforeTransactionInterceptor(async () =>
+        {
+            await DeleteAllReferencesAsync(activation);
+            await activation.Store.SaveAsync(retired);
+        }));
+        var snapshot = await collector.Store.FindAsync(retired.SourceReferenceId);
+        var originalIncarnation = await IncarnationOfAsync(activation);
+
+        Assert.False(await collector.Store.TryDeleteDoomedAsync(snapshot!, DateTimeOffset.UtcNow));
+
+        Assert.Empty(collector.Context.ChangeTracker.Entries());
+        Assert.NotNull(await activation.Store.FindAsync(retired.SourceReferenceId));
+        Assert.NotEqual(originalIncarnation, await IncarnationOfAsync(activation));
+    }
+
+    [Fact]
     public async Task Sweep_keeps_a_reference_restored_after_the_collector_read_it()
     {
         await using var database = await Database.CreateAsync();
@@ -1233,6 +1259,9 @@ public sealed class EfRuntimeArtifactScopeTests
     // so this is the last point at which a restore can commit on SQLite.
     private static RecreateBeforeTransactionInterceptor RestoreBeforeDelete(Fixture activation, WorkflowExecutableSourceReference retired) =>
         new(async () => Assert.True(await activation.Store.TryRestoreAsync(retired, retired with { DeletedAt = null, DeletedReason = null })));
+
+    private static Task<string> IncarnationOfAsync(Fixture fixture) =>
+        fixture.Context.WorkflowExecutableSourceReferences.AsNoTracking().Select(x => x.IncarnationId).SingleAsync();
 
     // The store has no unconditional hard delete; these tests need one to set up a "row recreated" interleaving.
     private static Task DeleteAllReferencesAsync(Fixture fixture) =>

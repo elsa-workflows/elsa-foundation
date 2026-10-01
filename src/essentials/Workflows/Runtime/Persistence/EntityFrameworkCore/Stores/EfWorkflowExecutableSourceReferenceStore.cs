@@ -294,7 +294,9 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
             () => RowsOf(scope, sourceReferenceId).SingleOrDefaultAsync(cancellationToken));
         if (row is null)
             return false;
-        var current = Read(row, scope, sourceReferenceId);
+        WorkflowExecutableSourceReference current;
+        try { current = Read(row, scope, sourceReferenceId); }
+        catch { context.ChangeTracker.Clear(); throw; }
         // The retired-or-expired check runs against the row as it is now. The row stays tracked with the revision and
         // incarnation it was read at, both concurrency tokens, so a restore landing between this read and the delete
         // fails the delete instead of losing to it.
@@ -303,7 +305,7 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
             context.ChangeTracker.Clear();
             return false;
         }
-        return await TryRemoveReadRowAsync(row, sourceReferenceId, cancellationToken);
+        return await TryRemoveValidatedRowAsync(row, sourceReferenceId, cancellationToken);
     }
 
     public async ValueTask<IReadOnlyCollection<string>> DeleteExpiredOrRetiredAsync(WorkflowExecutableSourceReferenceCleanupBatch batch, DateTimeOffset now, CancellationToken cancellationToken = default)
@@ -360,17 +362,17 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
             context.ChangeTracker.Clear();
             return false;
         }
-        return await TryRemoveReadRowAsync(row, sourceReferenceId, cancellationToken);
+        try { _ = Read(row, scope, sourceReferenceId); }
+        catch { context.ChangeTracker.Clear(); throw; }
+        return await TryRemoveValidatedRowAsync(row, sourceReferenceId, cancellationToken);
     }
 
     /// <summary>
-    /// Deletes a tracked row at the revision and incarnation it was read at. Both are concurrency tokens, so a row
+    /// Deletes a tracked row, already decoded and validated by the caller, at the revision and incarnation it was read at. Both are concurrency tokens, so a row
     /// that changed since the read (restored, retired again, recreated) makes the delete a no-op.
     /// </summary>
-    private async ValueTask<bool> TryRemoveReadRowAsync(WorkflowExecutableSourceReferenceEntity row, string sourceReferenceId, CancellationToken cancellationToken)
+    private async ValueTask<bool> TryRemoveValidatedRowAsync(WorkflowExecutableSourceReferenceEntity row, string sourceReferenceId, CancellationToken cancellationToken)
     {
-        var scope = RequireScope();
-        _ = Read(row, scope, sourceReferenceId);
         context.Remove(row);
         try
         {
@@ -428,7 +430,6 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
         return unreferenced;
     }
 
-    // Admits privileged maintenance of one partition, as every runtime artifact store does.
     // The one lookup for a source reference's row: identity, scope and both hashed projections must all match.
     private IQueryable<WorkflowExecutableSourceReferenceEntity> RowsOf(string scope, string sourceReferenceId)
     {
@@ -445,6 +446,7 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
             x.SourceReferenceId == encodedId);
     }
 
+    // Admits privileged maintenance of one partition, as every runtime artifact store does.
     private string RequireScope() => access.Current.RequireScope(admitPrivileged: true).Value;
 
     private string ScopeForRead() => RequireScope();
