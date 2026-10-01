@@ -273,7 +273,7 @@ public sealed class CandidateInspectionTests
             ["ConnectionStrings__DeclaredConnection"] = $"Data Source={ambientConnection}",
             ["CShells__Shells__default__Features__RuntimeFaultStackTrace"] = "false"
         };
-        var arguments = fixture.InspectionArguments("json", hostDirectory: DotnetElsa.Workbench(),
+        var arguments = fixture.InspectionArguments("json", hostDirectory: fixture.WorkbenchHostDirectory,
             environmentInputPath: environmentPath);
 
         var explicitRun = DotnetElsa.Run(ambient, arguments);
@@ -292,7 +292,7 @@ public sealed class CandidateInspectionTests
         Assert.Equal(environmentBytes, File.ReadAllBytes(environmentPath));
 
         var noOptionRun = DotnetElsa.Run(ambient, fixture.InspectionArguments(
-            "json", hostDirectory: DotnetElsa.Workbench()));
+            "json", hostDirectory: fixture.WorkbenchHostDirectory));
         Assert.Equal(ToolExitCode.Success, noOptionRun.ExitCode);
         AssertWorkbenchResolution(noOptionRun.Output, externalInputs: "unverified",
             source: "captured-workbench-json-v1");
@@ -365,7 +365,7 @@ public sealed class CandidateInspectionTests
         var environmentPath = fixture.WriteEnvironmentInput((key, CandidateInspectionFixture.PrivateEnvironmentCanary));
 
         var refusal = DotnetElsa.Run(fixture.SentinelEnvironment, fixture.InspectionArguments(
-            "json", hostDirectory: DotnetElsa.Workbench(), environmentInputPath: environmentPath));
+            "json", hostDirectory: fixture.WorkbenchHostDirectory, environmentInputPath: environmentPath));
 
         Assert.Equal(ToolExitCode.Refusal, refusal.ExitCode);
         Assert.Empty(refusal.Output);
@@ -393,7 +393,7 @@ public sealed class CandidateInspectionTests
         var environmentBytes = File.ReadAllBytes(environmentPath);
 
         var refusal = DotnetElsa.Run(fixture.SentinelEnvironment, fixture.InspectionArguments(
-            "json", hostDirectory: DotnetElsa.Workbench(), environmentInputPath: environmentPath));
+            "json", hostDirectory: fixture.WorkbenchHostDirectory, environmentInputPath: environmentPath));
 
         Assert.Equal(ToolExitCode.Refusal, refusal.ExitCode);
         Assert.Empty(refusal.Output);
@@ -415,7 +415,7 @@ public sealed class CandidateInspectionTests
         var environmentPath = fixture.WriteEnvironmentInput(
             ("UnrelatedBlank", ""),
             ("ConnectionStrings__DeclaredConnection", CandidateInspectionFixture.PrivateEnvironmentCanary));
-        var arguments = fixture.InspectionArguments("json", hostDirectory: DotnetElsa.Workbench(),
+        var arguments = fixture.InspectionArguments("json", hostDirectory: fixture.WorkbenchHostDirectory,
             environmentInputPath: environmentPath);
 
         var first = DotnetElsa.Run(fixture.SentinelEnvironment, arguments);
@@ -429,7 +429,7 @@ public sealed class CandidateInspectionTests
         var invalidPath = fixture.InputPath("repeatable-invalid-environment.json");
         var invalidBytes = CandidateInspectionFixture.EnvironmentDocument(("A__B", "one"), ("A:B", "two"));
         File.WriteAllBytes(invalidPath, invalidBytes);
-        var invalidArguments = fixture.InspectionArguments("json", hostDirectory: DotnetElsa.Workbench(),
+        var invalidArguments = fixture.InspectionArguments("json", hostDirectory: fixture.WorkbenchHostDirectory,
             environmentInputPath: invalidPath);
         var invalidFirst = DotnetElsa.Run(fixture.SentinelEnvironment, invalidArguments);
         var invalidSecond = DotnetElsa.Run(fixture.SentinelEnvironment, invalidArguments);
@@ -458,7 +458,7 @@ public sealed class CandidateInspectionTests
         var authoredBeforeEdit = File.ReadAllBytes(fixture.InputPath("authored.json"));
 
         var divergence = DotnetElsa.Run(fixture.SentinelEnvironment, fixture.InspectionArguments(
-            "json", hostDirectory: DotnetElsa.Workbench(), environmentInputPath: environmentPath));
+            "json", hostDirectory: fixture.WorkbenchHostDirectory, environmentInputPath: environmentPath));
         AssertExpectedExit(divergence, ToolExitCode.Refusal, "Workbench selection-divergence inspection");
         Assert.Empty(divergence.Output);
         Assert.Contains("candidate-selection-conflict", divergence.Error, StringComparison.Ordinal);
@@ -484,7 +484,7 @@ public sealed class CandidateInspectionTests
         fixture.TrackAcceptedInput(recoveredAcceptedPath);
 
         var recovered = DotnetElsa.Run(fixture.SentinelEnvironment, fixture.InspectionArguments(
-            "json", hostDirectory: DotnetElsa.Workbench(), environmentInputPath: environmentPath,
+            "json", hostDirectory: fixture.WorkbenchHostDirectory, environmentInputPath: environmentPath,
             compositionPath: recoveredAcceptedPath));
         Assert.Equal(ToolExitCode.Success, recovered.ExitCode);
         AssertWorkbenchResolution(recovered.Output, externalInputs: "supplied-intended", expectRuntimeFault: false);
@@ -514,7 +514,7 @@ public sealed class CandidateInspectionTests
         var authoredBeforeInspection = File.ReadAllBytes(fixture.InputPath("authored.json"));
 
         var edgeRefusal = DotnetElsa.Run(fixture.SentinelEnvironment, fixture.InspectionArguments(
-            "json", hostDirectory: DotnetElsa.Workbench(), environmentInputPath: requiredEdgeEnvironmentPath,
+            "json", hostDirectory: fixture.WorkbenchHostDirectory, environmentInputPath: requiredEdgeEnvironmentPath,
             compositionPath: requiredEdgeAcceptedPath));
         Assert.Equal(ToolExitCode.Refusal, edgeRefusal.ExitCode);
         Assert.Empty(edgeRefusal.Output);

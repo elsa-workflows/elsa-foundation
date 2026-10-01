@@ -52,6 +52,7 @@ internal sealed class CandidateInspectionFixture : IDisposable
     private readonly TempDirectory _directory = new("elsa-candidate-inspection-");
     private readonly Dictionary<string, byte[]> _initialInputBytes = new(StringComparer.Ordinal);
     private IReadOnlyDictionary<string, byte[]> _sourceBytes;
+    private string? _workbenchHostDirectory;
 
     public CandidateInspectionFixture()
     {
@@ -76,6 +77,14 @@ internal sealed class CandidateInspectionFixture : IDisposable
 
     /// <summary>The compiled host closure passed to the CLI's --host option; source files live separately.</summary>
     public string HostAssemblyDirectory { get; }
+
+    /// <summary>
+    /// A disposable copy of the actual Workbench build output, with only runtime-owned Nuplane state omitted.
+    /// Keeping this installation separate prevents a prior host run's package state from changing the closure
+    /// observed by the acceptance journey while preserving the real compiled assembly and dependency layout.
+    /// </summary>
+    public string WorkbenchHostDirectory => _workbenchHostDirectory ??
+        throw new InvalidOperationException("UseWorkbenchFiles must prepare the actual Workbench installation first.");
 
     public string SourceDirectory { get; }
 
@@ -125,6 +134,13 @@ internal sealed class CandidateInspectionFixture : IDisposable
         foreach (var name in new[] { "shells.json", "shells.Production.json", "appsettings.json", "appsettings.Production.json" })
             File.Copy(Path.Join(DotnetElsa.WorkbenchSource(), name), Path.Join(SourceDirectory, name));
 
+        _workbenchHostDirectory = _directory.File("workbench-host");
+        var actualWorkbenchDirectory = DotnetElsa.Workbench();
+        CopyActualWorkbenchClosure(actualWorkbenchDirectory, _workbenchHostDirectory);
+        foreach (var fileName in new[] { "Elsa.Workbench.dll", "Elsa.Workbench.deps.json", "Elsa.Workbench.runtimeconfig.json" })
+            Assert.Equal(File.ReadAllBytes(Path.Join(actualWorkbenchDirectory, fileName)),
+                File.ReadAllBytes(Path.Join(_workbenchHostDirectory, fileName)));
+
         var shells = JsonNode.Parse(File.ReadAllText(Path.Join(SourceDirectory, "shells.json")))!.AsObject();
         var shell = shells["CShells"]!["Shells"]![ShellId]!.AsObject();
         shell["Features"] = new JsonObject
@@ -160,6 +176,34 @@ internal sealed class CandidateInspectionFixture : IDisposable
         };
         File.WriteAllText(Path.Join(SourceDirectory, "appsettings.json"), appsettings.ToJsonString());
         _sourceBytes = Directory.GetFiles(SourceDirectory).ToDictionary(path => Path.GetFileName(path)!, File.ReadAllBytes);
+    }
+
+    private static void CopyActualWorkbenchClosure(string source, string destination)
+    {
+        if (IsReparsePoint(source))
+            throw new InvalidOperationException($"The actual Workbench output is a reparse point: {source}");
+
+        Directory.CreateDirectory(destination);
+        foreach (var file in Directory.EnumerateFiles(source))
+        {
+            if (string.Equals(Path.GetFileName(file), ".nuplane", StringComparison.Ordinal))
+                continue;
+            if (IsReparsePoint(file))
+                throw new InvalidOperationException($"The actual Workbench output contains a reparse point: {file}");
+            File.Copy(file, Path.Join(destination, Path.GetFileName(file)));
+        }
+
+        foreach (var directory in Directory.EnumerateDirectories(source))
+        {
+            if (string.Equals(Path.GetFileName(directory), ".nuplane", StringComparison.Ordinal))
+                continue;
+            if (IsReparsePoint(directory))
+                throw new InvalidOperationException($"The actual Workbench output contains a reparse point: {directory}");
+            CopyActualWorkbenchClosure(directory, Path.Join(destination, Path.GetFileName(directory)));
+        }
+
+        static bool IsReparsePoint(string path) =>
+            (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0;
     }
 
     public void WriteBundledCatalog() => WriteInput("catalog.json", JsonSerializer.Serialize(FoundationSelectionCatalog.Load(), Json));
