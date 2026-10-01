@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Testing;
+using Elsa.Workflows.Runtime.Core.Configuration;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
@@ -66,7 +67,10 @@ internal static partial class WorkflowActivationCrashRepairContract
         ["retry-whose-trigger-bindings-are-missing-is-compensated"] = open => RetryWithProjectionsMissingAsync(open, MissingProjections.Triggers),
         ["retry-whose-recurring-schedules-are-missing-is-compensated"] = open => RetryWithProjectionsMissingAsync(open, MissingProjections.Schedules),
         ["completion-that-cannot-retire-the-replaced-reference-reports-the-activation-it-switched-on"] = CompletionThatCannotRetireTheReplacedReferenceReportsTheActivationAsync,
-        ["completion-that-cannot-read-the-slot-after-the-switch-reports-the-activation-it-switched-on"] = CompletionThatCannotReadTheSlotAfterTheSwitchReportsTheActivationAsync
+        ["completion-that-cannot-read-the-slot-after-the-switch-reports-the-activation-it-switched-on"] = CompletionThatCannotReadTheSlotAfterTheSwitchReportsTheActivationAsync,
+        ["same-activation-loser-keeps-its-lease-after-the-winner-releases-its-own"] = SameActivationLoserKeepsItsLeaseAfterTheWinnerReleasesItsOwnAsync,
+        ["lease-of-a-call-that-stopped-inside-it-expires"] = LeaseOfACallThatStoppedInsideItExpiresAsync,
+        ["known-bad-same-activation-loser-cancelled-in-its-slot-transition-hands-the-slot-back"] = KnownBadSameActivationLoserCancelledInItsSlotTransitionHandsTheSlotBackAsync
     };
 
     public static TheoryData<string> Scenarios
@@ -871,7 +875,7 @@ internal static partial class WorkflowActivationCrashRepairContract
             Coordinator = new(
                 stores.Authority,
                 references,
-                new UnleasedRootWrites(beforeSequence),
+                new RootWrites(stores, beforeSequence),
                 new FixedTimeProvider(Now),
                 _indexer,
                 stores.Bindings,
@@ -1182,16 +1186,30 @@ internal static partial class WorkflowActivationCrashRepairContract
     }
 
     /// <summary>
-    /// Root-write leases fence the reference GC, which none of these scenarios runs. The activation sequence runs inside
-    /// the lease, after the checks that answer a call without one, so <c>beforeSequence</c> holds a call just there.
+    /// Root-write leases fence the reference GC, which most of these scenarios do not run, so a node takes them, through the
+    /// built-in manager on its own clock, only when its stores carry a <see cref="ActivationStores.LeaseClock"/> (#2274).
+    /// The activation sequence runs inside the lease, after the checks that answer a call without one, so
+    /// <c>beforeSequence</c> holds a call just there.
     /// </summary>
-    private sealed class UnleasedRootWrites(Func<Task>? beforeSequence) : IWorkflowExecutableRootWriteLeaseManager
+    private sealed class RootWrites(ActivationStores stores, Func<Task>? beforeSequence) : IWorkflowExecutableRootWriteLeaseManager
     {
+        private readonly IWorkflowExecutableRootWriteLeaseManager? _leases = stores.LeaseClock is { } clock
+            ? new WorkflowExecutableRootWriteLeaseManager(stores.Executables, Options.Create(GarbageCollectionOptions), clock)
+            : null;
+
         public async ValueTask ExecuteAsync(string artifactId, string leaseId, Func<CancellationToken, ValueTask> write, CancellationToken cancellationToken = default)
         {
-            if (beforeSequence is not null)
-                await beforeSequence();
-            await write(cancellationToken);
+            if (_leases is null)
+                await SequenceAsync(cancellationToken);
+            else
+                await _leases.ExecuteAsync(artifactId, leaseId, SequenceAsync, cancellationToken);
+
+            async ValueTask SequenceAsync(CancellationToken token)
+            {
+                if (beforeSequence is not null)
+                    await beforeSequence();
+                await write(token);
+            }
         }
     }
 }
@@ -1202,14 +1220,22 @@ internal sealed record ActivationStores(
     IWorkflowTriggerBindingStore Bindings,
     IRecurringTriggerScheduleStore Schedules,
     IWorkflowExecutableSourceReferenceStore References,
+    IWorkflowExecutableStore Executables,
     IAsyncDisposable? Lifetime = null)
 {
+    /// <summary>
+    /// The process's clock for root-write leases. When set, its activations take real leases on <see cref="Executables"/>
+    /// and renew them as this clock advances; a clock nobody advances is a process that stopped and never renews.
+    /// </summary>
+    public TimeProvider? LeaseClock { get; init; }
+
     /// <summary>In-memory state lives in the store instances, so every process shares one set.</summary>
     public static ActivationStores InMemory() => new(
         new InMemoryWorkflowActivationAuthority(),
         new InMemoryWorkflowTriggerBindingStore(),
         new InMemoryRecurringTriggerScheduleStore(),
-        new InMemoryWorkflowExecutableSourceReferenceStore());
+        new InMemoryWorkflowExecutableSourceReferenceStore(),
+        new InMemoryWorkflowExecutableStore());
 
     /// <summary>The EF Core stores over <paramref name="context"/>, which the process owns and disposes.</summary>
     public static ActivationStores EntityFramework(RuntimeDbContext context, string scope)
@@ -1225,6 +1251,7 @@ internal sealed record ActivationStores(
             new EfWorkflowTriggerBindingStore(context, access),
             new EfRecurringTriggerScheduleStore(context, access, codec),
             new EfWorkflowExecutableSourceReferenceStore(context, access, codec),
+            new EfWorkflowExecutableStore(context, access),
             context);
     }
 }
