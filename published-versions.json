@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "88e5fb70279e5ecfe773f9beb052d4aadab44b39",
+  "last_publish_commit": "e3886aa3b5a19e0c23bd4d1373d8bf533cf0da82",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -174,8 +174,8 @@
     },
     {
       "package_id": "Elsa.Cluster.EntityFrameworkCore",
-      "version": "4.0.9-preview",
-      "commit": "02c9bad9840cd704d677887eeb7e43021e441a69"
+      "version": "4.0.10-preview",
+      "commit": "e3886aa3b5a19e0c23bd4d1373d8bf533cf0da82"
     },
     {
       "package_id": "Elsa.Cluster.InProcess",
@@ -399,13 +399,13 @@
     },
     {
       "package_id": "Elsa.Persistence.EntityFramework",
-      "version": "4.0.16-preview",
-      "commit": "39f4cd0d22f3bdc251b8f6e4d281794254ef0763"
+      "version": "4.0.17-preview",
+      "commit": "e3886aa3b5a19e0c23bd4d1373d8bf533cf0da82"
     },
     {
       "package_id": "Elsa.Persistence.Schema",
-      "version": "4.0.5-preview",
-      "commit": "02c9bad9840cd704d677887eeb7e43021e441a69"
+      "version": "4.0.6-preview",
+      "commit": "e3886aa3b5a19e0c23bd4d1373d8bf533cf0da82"
     },
     {
       "package_id": "Elsa.Pipelines.Core",
