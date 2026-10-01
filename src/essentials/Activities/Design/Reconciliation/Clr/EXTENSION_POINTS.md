@@ -21,6 +21,10 @@ lifecycle anchored at `Elsa.Activities.Design.Reconciliation`; it owns no catalo
 - **Publication bridge:** when the Publishing API feature is present, its single
   `IActivitySourceVersionPublisher` commits the source-owned catalog and immutable runtime artifacts as
   one persistence operation. Reconciliation remains usable without Publishing for isolated catalog tests.
+  Nodes reconciling the same source converge: when another node publishes the version first, a commit that
+  then fails counts as published if the stored publication is identical. Identical means every persisted
+  member is equal except the clock readings and row number each node fills in itself, and the lifecycle,
+  which moves only after publication (#2189).
 - **Catalog:** [`Elsa.Activities.Design.Reconciliation/EXTENSION_POINTS.md`](../Elsa.Activities.Design.Reconciliation/EXTENSION_POINTS.md).
 
 ---

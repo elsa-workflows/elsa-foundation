@@ -1,6 +1,7 @@
 using Elsa.Workflows.Publishing.Api.Services;
 using Elsa.Workflows.Publishing.Services;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Contracts;
 using Elsa.Activities.Design.Persistence.Core.Entities;
@@ -89,14 +90,93 @@ public sealed class SourceOwnedActivityVersionPublisherTests
         await Assert.ThrowsAsync<InvalidOperationException>(() => publisher.PublishAsync(Definition(), version));
     }
 
-    private static SourceOwnedActivityVersionPublisher CreatePublisher(RecordingCommand command)
+    [Fact]
+    public async Task A_commit_that_loses_to_an_identical_publication_counts_as_published()
+    {
+        // Another node committed this version between the check and the commit (#2189). Its clock and a lifecycle change
+        // since then are the only differences.
+        var command = new LosingCommand(new InvalidOperationException("Activity version 'version-1' is already published."));
+        var store = new PeerPublicationStore(() => Altered(command.Attempted!, publication =>
+        {
+            publication["PublishedAt"] = DateTimeOffset.UnixEpoch;
+            publication["CreatedAt"] = DateTimeOffset.UnixEpoch;
+            publication["LastModifiedAt"] = DateTimeOffset.UnixEpoch;
+            publication["Lifecycle"] = (int)ActivityDefinitionVersionLifecycle.Retired;
+        }));
+
+        await CreatePublisher(command, store).PublishAsync(Definition(), Version("version-1", "1.0.0"));
+
+        Assert.Equal(2, store.Reads);
+    }
+
+    [Theory]
+    [InlineData("TenantId")]
+    [InlineData("TemplateHash")]
+    [InlineData("SourceReferenceId")]
+    [InlineData("Contract")]
+    [InlineData("Provider")]
+    public async Task A_commit_that_loses_to_a_different_publication_fails_with_its_own_error(string differingMember)
+    {
+        var failure = new InvalidOperationException("Activity version 'version-1' is already published.");
+        var command = new LosingCommand(failure);
+        var store = new PeerPublicationStore(() => Altered(command.Attempted!, publication =>
+        {
+            switch (differingMember)
+            {
+                case "Contract":
+                    publication["Contract"]!["Inputs"]![0]!["DisplayName"] = "Other message";
+                    break;
+                case "Provider":
+                    publication["Provider"]!["Payload"] = new JsonObject { ["typeAlias"] = "Acme.Other" };
+                    break;
+                default:
+                    publication[differingMember] = "other";
+                    break;
+            }
+        }));
+
+        var thrown = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            CreatePublisher(command, store).PublishAsync(Definition(), Version("version-1", "1.0.0")));
+
+        Assert.Same(failure, thrown);
+    }
+
+    [Fact]
+    public async Task A_commit_that_fails_with_nothing_published_fails_with_its_own_error()
+    {
+        var failure = new InvalidOperationException("The Runtime material changed concurrently.");
+        var store = new PeerPublicationStore(() => null);
+
+        var thrown = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            CreatePublisher(new LosingCommand(failure), store).PublishAsync(Definition(), Version("version-1", "1.0.0")));
+
+        Assert.Same(failure, thrown);
+        Assert.Equal(2, store.Reads);
+    }
+
+    [Fact]
+    public async Task A_cancelled_commit_is_not_taken_for_a_lost_race()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var command = new LosingCommand(new OperationCanceledException(cancellation.Token), cancellation.Cancel);
+        var store = new PeerPublicationStore(() => command.Attempted);
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() =>
+            CreatePublisher(command, store).PublishAsync(Definition(), Version("version-1", "1.0.0"), cancellation.Token));
+
+        Assert.Equal(1, store.Reads);
+    }
+
+    private static SourceOwnedActivityVersionPublisher CreatePublisher(
+        ICommitSourceActivityPublicationCommand<ExecutableActivityTemplate, WorkflowExecutableSourceReference> command,
+        IActivityDefinitionVersionPublicationStore? store = null)
     {
         var types = TestWellKnownTypeRegistry.Create();
         var structure = new DefaultActivityStructureService([]);
         var outputCompiler = new RuntimeOutputCaptureCompiler(
             new RuntimeDurableValueStorageDriverRegistry([new JsonRuntimeDurableValueStorageDriver()]));
         var nodeCompiler = new ExecutableNodeCompiler(structure, types, new RuntimeInputBindingCompiler(types), outputCompiler);
-        return new(command, new EmptyPublicationStore(), nodeCompiler, TimeProvider.System);
+        return new(command, store ?? new PeerPublicationStore(() => null), nodeCompiler, TimeProvider.System);
     }
 
     private static ActivityDefinition Definition() => new()
@@ -140,12 +220,37 @@ public sealed class SourceOwnedActivityVersionPublisherTests
         }
     }
 
-    private sealed class EmptyPublicationStore : IActivityDefinitionVersionPublicationStore
+    /// <summary>Commits nothing and fails as a commit that lost its race does, after <paramref name="onAttempt"/> runs.</summary>
+    private sealed class LosingCommand(Exception failure, Action? onAttempt = null)
+        : ICommitSourceActivityPublicationCommand<ExecutableActivityTemplate, WorkflowExecutableSourceReference>
     {
+        public ActivityDefinitionVersionPublication? Attempted { get; private set; }
+
+        public Task ExecuteAsync(SourceActivityPublicationCommit<ExecutableActivityTemplate, WorkflowExecutableSourceReference> commit, CancellationToken cancellationToken = default)
+        {
+            Attempted = commit.Publication;
+            onAttempt?.Invoke();
+            return Task.FromException(failure);
+        }
+    }
+
+    /// <summary>Holds no publication when the publisher first checks, and then whatever <paramref name="afterCheck"/> says a peer committed.</summary>
+    private sealed class PeerPublicationStore(Func<ActivityDefinitionVersionPublication?> afterCheck) : IActivityDefinitionVersionPublicationStore
+    {
+        public int Reads { get; private set; }
+
         public Task<ActivityDefinitionVersionPublication?> FindAsync(string definitionVersionId, CancellationToken cancellationToken = default) =>
-            Task.FromResult<ActivityDefinitionVersionPublication?>(null);
+            Task.FromResult(Reads++ == 0 ? null : afterCheck());
 
         public Task<IReadOnlyList<ActivityDefinitionVersionPublication>> ListByDefinitionAsync(string definitionId, CancellationToken cancellationToken = default) =>
             Task.FromResult<IReadOnlyList<ActivityDefinitionVersionPublication>>([]);
+    }
+
+    /// <summary>A copy of <paramref name="publication"/> as it reads back from storage, with <paramref name="alter"/> applied.</summary>
+    private static ActivityDefinitionVersionPublication Altered(ActivityDefinitionVersionPublication publication, Action<JsonObject> alter)
+    {
+        var members = JsonSerializer.SerializeToNode(publication)!.AsObject();
+        alter(members);
+        return members.Deserialize<ActivityDefinitionVersionPublication>()!;
     }
 }

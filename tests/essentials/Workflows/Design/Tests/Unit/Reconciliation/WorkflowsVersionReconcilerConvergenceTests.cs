@@ -1,6 +1,10 @@
+using Elsa.Events.Core.Contracts;
+using Elsa.Expressions.Core.Models;
+using Elsa.Primitives.Models;
 using Elsa.Primitives.Versioning;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
+using Elsa.Workflows.Design.Core.Reconciliation;
 using Elsa.Workflows.Design.Persistence.Core.Constants;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
@@ -9,6 +13,8 @@ using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Commands;
+using Elsa.Workflows.Design.Reconciliation.Handlers;
+using Elsa.Workflows.Design.Reconciliation.Models;
 using Elsa.Workflows.Design.Reconciliation.Options;
 using Elsa.Workflows.Design.Reconciliation.Services;
 using Elsa.Workflows.Design.Tests.Infrastructure;
@@ -32,6 +38,7 @@ public sealed class WorkflowsVersionReconcilerConvergenceTests : IAsyncLifetime
     private const string Version = "1.0.0";
     private static readonly string SortKey = SemVer.ToSortKey(Version);
     private static readonly WorkflowDefinitionState EmptyState = new([], null, [], [], null);
+    private static readonly WorkflowDefinitionState OtherState = new([new VariableDefinition("counter", "Counter", new TypeReference("Int32"), null, null)], null, [], [], null);
     private WorkflowsDesignTestHost _host = null!;
 
     public async Task InitializeAsync() => _host = await WorkflowsDesignTestHost.CreateAsync();
@@ -193,26 +200,89 @@ public sealed class WorkflowsVersionReconcilerConvergenceTests : IAsyncLifetime
         Assert.StartsWith($"{EfDeleteWorkflowDefinitionPermanentlyCommand.OperationKind} ", Assert.Single(after.Except(before)));
     }
 
+    [Fact]
+    public async Task A_version_materialized_under_a_generated_id_keeps_it_when_its_source_is_reconciled_again()
+    {
+        // What a database written before #2189 holds: the version under an id one node generated. The source now
+        // contributes it under its derived id, and the pass must find the stored version rather than add a second.
+        await ReconcileAsync(versionId: "generated-before-2189");
+        var markers = await ListMarkersAsync();
+
+        await ReconcileAsync(contributions: FromSource);
+
+        Assert.Equal("generated-before-2189", Assert.Single(await ListVersionIdsAsync()));
+        Assert.Equal(markers, await ListMarkersAsync());
+    }
+
+    [Fact]
+    public async Task Two_passes_that_bring_different_content_for_one_new_version_still_conflict()
+    {
+        // Every node derives the same version id now, so only the content in the request tells two writes apart. The
+        // pass that commits second must fail rather than report the other pass's version as its own.
+        await _host.EnsureDefinition(DefinitionId, "Original");
+        var versionId = WorkflowReconciliationVersionIds.For(DefinitionId, SortKey);
+        var emptyCheck = new Pause();
+        var otherCheck = new Pause();
+        var empty = ReconcileAsync(versionId: versionId, versions: store => new PausingVersionStore(store, emptyCheck));
+        var other = ReconcileAsync(versionId: versionId, state: OtherState, versions: store => new PausingVersionStore(store, otherCheck));
+        await Pause.ReleaseTogether((empty, emptyCheck), (other, otherCheck));
+
+        var failures = await Task.WhenAll(FailureOf(empty), FailureOf(other));
+
+        var conflict = Assert.IsType<InvalidOperationException>(Assert.Single(failures, failure => failure is not null));
+        Assert.Contains($"'{EfMaterializeWorkflowDefinitionVersionCommand.OperationKind}/", conflict.Message);
+        Assert.Contains("conflicts with an earlier request", conflict.Message);
+        var otherCommitted = failures[1] is null;
+        var stored = await GetLatestVersionAsync();
+        Assert.Equal(versionId, stored!.Id);
+        Assert.Equal(otherCommitted, stored.State.Variables.Any());
+    }
+
     private Task ReconcileAsync(
         string name = "Original",
         bool deleted = false,
         string? versionId = null,
         string definitionId = DefinitionId,
+        WorkflowDefinitionState? state = null,
         Func<IWorkflowDefinitionStore, IWorkflowDefinitionStore>? definitions = null,
-        Func<ISaveWorkflowDefinitionCommand, ISaveWorkflowDefinitionCommand>? saves = null) => InScopeAsync(services =>
+        Func<IWorkflowDefinitionVersionStore, IWorkflowDefinitionVersionStore>? versions = null,
+        Func<ISaveWorkflowDefinitionCommand, ISaveWorkflowDefinitionCommand>? saves = null,
+        Func<IServiceProvider, IInlineEventPublisher>? contributions = null) => InScopeAsync(services =>
     {
         var definition = services.GetRequiredService<IWorkflowDefinitionFactory>().Create(name, id: definitionId, deleted: deleted);
-        var version = services.GetRequiredService<IWorkflowDefinitionVersionFactory>().Create(definition, Version, EmptyState, id: versionId);
+        var version = services.GetRequiredService<IWorkflowDefinitionVersionFactory>().Create(definition, Version, state ?? EmptyState, id: versionId);
         var definitionStore = services.GetRequiredService<IWorkflowDefinitionStore>();
+        var versionStore = services.GetRequiredService<IWorkflowDefinitionVersionStore>();
         var saveCommand = services.GetRequiredService<ISaveWorkflowDefinitionCommand>();
         var reconciler = ActivatorUtilities.CreateInstance<WorkflowsVersionReconciler>(
             services,
-            new ContributingPublisher(version),
+            contributions?.Invoke(services) ?? new ContributingPublisher(version),
             Microsoft.Extensions.Options.Options.Create(new WorkflowVersionReconcilerOptions()),
             definitions?.Invoke(definitionStore) ?? definitionStore,
+            versions?.Invoke(versionStore) ?? versionStore,
             saves?.Invoke(saveCommand) ?? saveCommand);
         return reconciler.Reconcile(CancellationToken.None);
     });
+
+    /// <summary>Contributes the definition's one version through the real aggregating handler, as a source read does.</summary>
+    private static IInlineEventPublisher FromSource(IServiceProvider services) =>
+        new HandlingPublisher<WorkflowVersionsReconciling>(new WorkflowVersionsReconcilingHandler(
+            services.GetRequiredService<IWorkflowDefinitionFactory>(),
+            services.GetRequiredService<IWorkflowDefinitionVersionFactory>(),
+            [new StaticWorkflowSource(new WorkflowVersionReconciliationModel(DefinitionId, "Original", null, Version, EmptyState))]));
+
+    private static async Task<Exception?> FailureOf(Task pass)
+    {
+        try
+        {
+            await pass;
+            return null;
+        }
+        catch (Exception failure)
+        {
+            return failure;
+        }
+    }
 
     private Task RenameAsync(DesignOperationKey key, string name, string definitionId = DefinitionId) => InScopeAsync(async services =>
     {
@@ -234,6 +304,9 @@ public sealed class WorkflowsVersionReconcilerConvergenceTests : IAsyncLifetime
 
     private Task<WorkflowDefinitionVersion?> GetLatestVersionAsync() =>
         InScopeAsync(services => services.GetRequiredService<IWorkflowDefinitionVersionStore>().FindLatestVersionAsync(DefinitionId));
+
+    private Task<string[]> ListVersionIdsAsync() => InScopeAsync(async services =>
+        (await services.GetRequiredService<IWorkflowDefinitionVersionStore>().ListByDefinitionAsync(DefinitionId)).Select(version => version.Id).ToArray());
 
     private Task<string[]> ListMarkersAsync() => InScopeAsync(async services =>
     {

@@ -16,7 +16,8 @@ namespace Elsa.Workflows.Publishing.Api.Services;
 /// <summary>
 /// Closes source-owned activity catalog versions into the same immutable publication/template model
 /// used by Design-owned providers. The source remains sole content authority; customization forks to
-/// a new Design-owned definition through the normal authoring API.
+/// a new Design-owned definition through the normal authoring API. Nodes reconciling the same source
+/// converge: a commit that loses to an identical publication counts as published.
 /// </summary>
 public sealed class SourceOwnedActivityVersionPublisher(
     ICommitSourceActivityPublicationCommand<ExecutableActivityTemplate, WorkflowExecutableSourceReference> commitCommand,
@@ -142,15 +143,57 @@ public sealed class SourceOwnedActivityVersionPublisher(
             LastModifiedAt = now
         };
 
-        await commitCommand.ExecuteAsync(new(
-            persistedDefinition,
-            authoring,
-            catalogVersion,
-            publication,
-            layout,
-            template,
-            sourceReference), cancellationToken);
+        try
+        {
+            await commitCommand.ExecuteAsync(new(
+                persistedDefinition,
+                authoring,
+                catalogVersion,
+                publication,
+                layout,
+                template,
+                sourceReference), cancellationToken);
+        }
+        catch (Exception) when (!cancellationToken.IsCancellationRequested)
+        {
+            // Another node reconciling the same source can commit this publication after the check above. The commit
+            // then refuses it as already published, or loses a uniqueness race to it (#2189). When what is stored is
+            // the publication this call was about to write, the version is published, which is all this call promises.
+            // Anything else is a real failure and keeps the commit's own exception.
+            if (!IsIdentical(await publicationStore.FindAsync(version.Id, cancellationToken), publication))
+                throw;
+        }
     }
+
+    /// <summary>
+    /// Whether <paramref name="stored"/> is the publication <paramref name="candidate"/> describes. Every persisted member
+    /// must be equal except the ones that do not describe what was published:
+    /// <list type="bullet">
+    /// <item>the clock readings (<c>PublishedAt</c>, <c>CreatedAt</c>, <c>LastModifiedAt</c>) and the <c>RowNumber</c>
+    /// ordinal hint, which each node fills in for itself;</item>
+    /// <item>the <c>Lifecycle</c>, which moves only after publication, so a retired version is still the one published.</item>
+    /// </list>
+    /// A member added later is compared unless it is listed here, so a new difference fails rather than passes.
+    /// </summary>
+    private static bool IsIdentical(ActivityDefinitionVersionPublication? stored, ActivityDefinitionVersionPublication candidate) =>
+        stored is not null && StringComparer.Ordinal.Equals(PublishedContent(stored), PublishedContent(candidate));
+
+    private static string PublishedContent(ActivityDefinitionVersionPublication publication)
+    {
+        var members = JsonSerializer.SerializeToNode(publication)!.AsObject();
+        foreach (var member in MembersNotCompared)
+            members.Remove(member);
+        return ExecutableActivityTemplateBehaviorHasher.ComputeCanonicalValueHash(members);
+    }
+
+    private static readonly string[] MembersNotCompared =
+    [
+        nameof(ActivityDefinitionVersionPublication.PublishedAt),
+        nameof(ActivityDefinitionVersionPublication.CreatedAt),
+        nameof(ActivityDefinitionVersionPublication.LastModifiedAt),
+        nameof(ActivityDefinitionVersionPublication.RowNumber),
+        nameof(ActivityDefinitionVersionPublication.Lifecycle)
+    ];
 
     private static Elsa.Activities.Design.Core.Models.ActivityContract ToContract(IActivityDefinitionVersion version) => new(
         "1",

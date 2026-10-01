@@ -38,6 +38,8 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Design.
 
 **Semantic.** The workflow catalog reconciliation pass is running. Sources contribute their workflow versions; the reconciler diffs against the stored catalog. `Claims` (spec 147) carries one provenance record per contributed version — `(DefinitionId, Version, SemVerSortKey, SourceId, SourceKind, PublishRequested, Deleted)` — populated by the aggregating handler beside `Versions`; source identity is not persisted on design entities, so this is the only carrier that survives the pass.
 
+**Version ids.** The aggregating handler gives each contributed version the id `WorkflowReconciliationVersionIds.For(definitionId, semVerSortKey)` derives, never a generated one (#2189). Two nodes reconciling the same source therefore send identical materialization requests, and the one that writes second replays the first one's write instead of failing its shell start. A version already stored under a generated id keeps it: the reconciler finds existing versions by definition and sort key and does not materialize them again.
+
 **Delivery strategy.** Sequential.
 
 **Publication site.** `WorkflowsVersionReconcilerStartupTask` (`Elsa.Workflows.Design.Reconciliation`) — a startup task.
