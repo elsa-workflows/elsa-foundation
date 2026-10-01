@@ -53,6 +53,23 @@ public sealed class WorkerProtocolTests
     }
 
     [Fact]
+    public async Task Candidate_inspection_reader_dispatches_the_additive_command_without_widening_the_legacy_shape()
+    {
+        var environment = EnvironmentRequest(CandidateInspectionFixture.EnvironmentDocument()).ToJsonString();
+        using var input = new MemoryStream(Encoding.UTF8.GetBytes(environment));
+        var dispatched = await WorkerContract.ReadCandidateInspectionRequestAsync(input, CancellationToken.None);
+
+        Assert.Null(dispatched!.FileOnly);
+        Assert.Equal(WorkerCommands.InspectCandidateEnvironment, dispatched.Environment!.Command);
+
+        var oldCommand = EnvironmentRequest(CandidateInspectionFixture.EnvironmentDocument());
+        oldCommand["command"] = WorkerCommands.InspectCandidate;
+        using var oldInput = new MemoryStream(Encoding.UTF8.GetBytes(oldCommand.ToJsonString()));
+        await Assert.ThrowsAsync<JsonException>(() => WorkerContract.ReadCandidateInspectionRequestAsync(
+            oldInput, CancellationToken.None));
+    }
+
+    [Fact]
     public async Task Environment_reader_accepts_a_closed_separately_typed_envelope_and_preserves_raw_bytes()
     {
         var raw = CandidateInspectionFixture.EnvironmentDocument(("ConnectionStrings__Primary", ""));

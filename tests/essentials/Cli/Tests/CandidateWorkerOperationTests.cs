@@ -52,6 +52,25 @@ public sealed class CandidateWorkerOperationTests
     }
 
     [Theory]
+    [InlineData("candidate-environment-input-invalid", 2)]
+    [InlineData("candidate-environment-input-too-large", 2)]
+    [InlineData("candidate-environment-key-collision", 2)]
+    [InlineData("candidate-environment-prefix-unsupported", 2)]
+    [InlineData("candidate-environment-host-unenrolled", 3)]
+    [InlineData("candidate-capability-unavailable", 3)]
+    public async Task Additive_environment_lane_maps_only_its_fixed_refusals(string code, int exitCode)
+    {
+        var request = EnvironmentRequest();
+        var result = await new CandidateEnvironmentWorkerOperation((_, _) =>
+            throw WorkerRefusal.Resolution(code, "private-refusal-canary", ["private-detail-canary"]))
+            .RunAsync(request, CancellationToken.None);
+
+        Assert.Equal(exitCode, result.ExitCode);
+        Assert.Equal(code, result.Error?.Code);
+        Assert.DoesNotContain("canary", JsonSerializer.Serialize(result), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
     [InlineData("ordinary")]
     [InlineData("legacy-refusal")]
     [InlineData("json")]
@@ -918,6 +937,27 @@ public sealed class CandidateWorkerOperationTests
         Func<WorkerRequest, CancellationToken, Task<WorkerResponse>> closure, CancellationToken token = default)
     {
         return new CandidateWorkerOperation(closure).RunAsync(request, token);
+    }
+
+    private static CandidateEnvironmentWorkerRequestV2 EnvironmentRequest()
+    {
+        var fileOnly = Request();
+        return new CandidateEnvironmentWorkerRequestV2
+        {
+            Version = WorkerContract.Version,
+            Command = WorkerCommands.InspectCandidateEnvironment,
+            HostDirectory = fileOnly.HostDirectory,
+            HostName = fileOnly.HostName,
+            DepsFile = fileOnly.DepsFile,
+            PackageRoots = fileOnly.PackageRoots,
+            Candidate = fileOnly.Candidate,
+            EnvironmentInput = new WorkerEnvironmentInput
+            {
+                Version = 1,
+                CaptureId = fileOnly.Candidate!.CaptureId,
+                Content = Convert.ToBase64String(CandidateInspectionFixture.EnvironmentDocument())
+            }
+        };
     }
 
     private static Dictionary<string, byte[]> SnapshotPackageFiles(string root) =>

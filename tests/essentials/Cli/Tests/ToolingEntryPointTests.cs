@@ -454,6 +454,18 @@ public sealed class ToolingEntryPointTests : IDisposable
             operation.GetParameters().Select(parameter => parameter.ParameterType));
     }
 
+    [Fact]
+    public void Candidate_environment_resolver_selects_the_additive_contract_from_the_selected_persistence_assembly()
+    {
+        var persistence = CandidateEnvironmentCapabilityAssembly();
+
+        var operation = ToolingEntryPoint.ResolveCandidateEnvironmentInspection(persistence);
+
+        Assert.Equal("RunCandidateEnvironmentInspectionAsync", operation.Name);
+        Assert.Equal(typeof(Task<int>), operation.ReturnType);
+        Assert.Equal("Elsa.Persistence.EntityFramework.Tooling.EfToolingHost", operation.DeclaringType!.FullName);
+    }
+
     [Theory]
     [InlineData("missing-host")]
     [InlineData("old-candidate-only")]
@@ -600,6 +612,34 @@ public sealed class ToolingEntryPointTests : IDisposable
         Assert.Equal(payload.InvocationId, root.GetProperty("candidate").GetProperty("invocationId").GetString());
         Assert.Equal(payload.CaptureId, root.GetProperty("candidate").GetProperty("captureId").GetString());
         Assert.Equal(3, root.GetProperty("candidate").GetProperty("files").GetArrayLength());
+    }
+
+    [Fact]
+    public async Task Candidate_environment_invocation_sends_the_original_document_and_uses_the_new_response_lane()
+    {
+        var payload = Candidate();
+        var environmentInput = new WorkerEnvironmentInput
+        {
+            Version = 1,
+            CaptureId = payload.CaptureId,
+            Content = Convert.ToBase64String(CandidateInspectionFixture.EnvironmentDocument())
+        };
+        var state = CandidateHostState.For(payload);
+
+        var workerResponse = await InvokeCandidateEnvironmentApiAsync(
+            HostMethod(nameof(CandidateHost.EnvironmentSuccess)), "Example.Host", "/compiled/host",
+            payload, environmentInput, CancellationToken.None);
+
+        Assert.Equal(0, workerResponse.ExitCode);
+        using var hostRequest = JsonDocument.Parse(state.LastRequest!);
+        var root = hostRequest.RootElement;
+        Assert.Equal(1, root.GetProperty("version").GetInt32());
+        Assert.Equal(payload.CaptureId, root.GetProperty("environmentInput").GetProperty("captureId").GetString());
+        Assert.Equal(environmentInput.Content,
+            root.GetProperty("environmentInput").GetProperty("content").GetString());
+        Assert.False(root.GetProperty("environmentInput").TryGetProperty("sourcePath", out _));
+        Assert.Equal("captured-workbench-json-explicit-environment-v1",
+            workerResponse.Tooling!.Value.GetProperty("configurationResolution").GetProperty("source").GetString());
     }
 
     [Theory]
@@ -910,6 +950,16 @@ public sealed class ToolingEntryPointTests : IDisposable
         CancellationToken cancellationToken)
         => ToolingEntryPoint.InvokeCandidateInspectionAsync(hostMethod, hostName, hostDirectory, candidate, cancellationToken);
 
+    private static Task<WorkerResponse> InvokeCandidateEnvironmentApiAsync(
+        MethodInfo hostMethod,
+        string hostName,
+        string hostDirectory,
+        WorkerCandidatePayload candidate,
+        WorkerEnvironmentInput environmentInput,
+        CancellationToken cancellationToken)
+        => ToolingEntryPoint.InvokeCandidateEnvironmentInspectionAsync(
+            hostMethod, hostName, hostDirectory, candidate, environmentInput, cancellationToken);
+
     private static MethodInfo HostMethod(string name) => typeof(CandidateHost).GetMethod(name,
         BindingFlags.Public | BindingFlags.Static, binder: null,
         types: [typeof(Stream), typeof(Stream), typeof(CancellationToken)], modifiers: null)!;
@@ -952,6 +1002,25 @@ public sealed class ToolingEntryPointTests : IDisposable
     {
         public static Task<int> Success(Stream request, Stream response, CancellationToken cancellationToken) =>
             WriteResponse(request, response, cancellationToken, 0);
+
+        public static async Task<int> EnvironmentSuccess(Stream request, Stream response,
+            CancellationToken cancellationToken)
+        {
+            using var document = await Capture(request);
+            var environment = document.RootElement.GetProperty("environmentInput");
+            if (environment.GetProperty("version").GetInt32() != 1 ||
+                environment.GetProperty("content").ValueKind != JsonValueKind.String)
+                throw new InvalidOperationException("private-environment-envelope-canary");
+
+            var candidate = document.RootElement.GetProperty("candidate");
+            var invocation = candidate.GetProperty("invocationId").GetString()!;
+            var capture = candidate.GetProperty("captureId").GetString()!;
+            var json = JsonNode.Parse(CandidateHostState.SuccessResponse(invocation, capture))!.AsObject();
+            json["configurationResolution"]!["source"] = "captured-workbench-json-explicit-environment-v1";
+            json["configurationResolution"]!["externalInputs"] = "supplied-intended";
+            await response.WriteAsync(Encoding.UTF8.GetBytes(json.ToJsonString()), cancellationToken);
+            return 0;
+        }
 
         public static Task<int> Refused(Stream request, Stream response, CancellationToken cancellationToken) =>
             WriteResponse(request, response, cancellationToken, 2, refused: true);
@@ -1137,6 +1206,38 @@ public sealed class ToolingEntryPointTests : IDisposable
     private const string CandidateEnvironmentInputsAttributeName =
         "Elsa.Persistence.EntityFramework.Tooling.EfCandidateEnvironmentInputsAttribute";
     private const string CandidateEnvironmentInputsPolicy = CandidateInspectionFixture.EnvironmentPolicy;
+
+    private static Assembly CandidateEnvironmentCapabilityAssembly()
+    {
+        var assembly = AssemblyBuilder.DefineDynamicAssembly(
+            new AssemblyName($"CandidateEnvironmentCapability.{Guid.NewGuid():N}"), AssemblyBuilderAccess.RunAndCollect);
+        var module = assembly.DefineDynamicModule("main");
+        var contract = module.DefineType(
+            "Elsa.Persistence.EntityFramework.Tooling.EfCandidateEnvironmentInspectionContract",
+            TypeAttributes.Public | TypeAttributes.Abstract | TypeAttributes.Sealed);
+        var version = contract.DefineField("Version", typeof(int),
+            FieldAttributes.Public | FieldAttributes.Static | FieldAttributes.Literal);
+        version.SetConstant(1);
+        contract.CreateType();
+
+        var host = module.DefineType(
+            "Elsa.Persistence.EntityFramework.Tooling.EfToolingHost",
+            TypeAttributes.Public | TypeAttributes.Abstract | TypeAttributes.Sealed);
+        var method = host.DefineMethod("RunCandidateEnvironmentInspectionAsync",
+            MethodAttributes.Public | MethodAttributes.Static,
+            typeof(Task<int>), [typeof(Stream), typeof(Stream), typeof(CancellationToken)]);
+        var fromResult = typeof(Task).GetMethods(BindingFlags.Public | BindingFlags.Static)
+            .Single(candidate => candidate.Name == nameof(Task.FromResult) && candidate.IsGenericMethodDefinition &&
+                                 candidate.GetParameters().Length == 1 &&
+                                 candidate.GetParameters()[0].ParameterType.IsGenericParameter)
+            .MakeGenericMethod(typeof(int));
+        var il = method.GetILGenerator();
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Call, fromResult);
+        il.Emit(OpCodes.Ret);
+        host.CreateType();
+        return assembly;
+    }
 
     private static Assembly EnrollmentAttributeAssembly(bool exactConstructor = true, bool namedProperty = false)
     {

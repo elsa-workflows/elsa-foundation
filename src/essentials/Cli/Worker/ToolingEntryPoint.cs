@@ -28,6 +28,8 @@ public sealed class ToolingEntryPoint
     private const string ContextTypeName = "Elsa.Persistence.EntityFramework.Tooling.EfToolingConfigurationContext";
     private const string ContextContractTypeName = "Elsa.Persistence.EntityFramework.Tooling.EfToolingContextContract";
     private const string CandidateEnvironmentInspectionMethodName = "RunCandidateEnvironmentInspectionAsync";
+    private const string CandidateEnvironmentInspectionContractTypeName =
+        "Elsa.Persistence.EntityFramework.Tooling.EfCandidateEnvironmentInspectionContract";
     private const string CandidateEnvironmentInputsAttributeTypeName =
         "Elsa.Persistence.EntityFramework.Tooling.EfCandidateEnvironmentInputsAttribute";
     private const string CandidateEnvironmentInputsPolicy = "workbench-json-explicit-environment-v1";
@@ -152,6 +154,15 @@ public sealed class ToolingEntryPoint
     {
         return BindCandidateOperation(hostType, operationContract, CandidateEnvironmentInspectionMethodName,
             requireVersionDeclaredByContract: true);
+    }
+
+    /// <summary>Resolves both additive capability types from one selected persistence assembly.</summary>
+    internal static MethodInfo ResolveCandidateEnvironmentInspection(Assembly persistence)
+    {
+        ArgumentNullException.ThrowIfNull(persistence);
+        return BindCandidateEnvironmentInspection(
+            persistence.GetType(ToolingHostTypeName, throwOnError: false),
+            persistence.GetType(CandidateEnvironmentInspectionContractTypeName, throwOnError: false));
     }
 
     private static MethodInfo BindCandidateOperation(
@@ -285,11 +296,39 @@ public sealed class ToolingEntryPoint
 
     /// <summary>Invokes only the separately-versioned, file-only candidate host operation.</summary>
     /// <exception cref="WorkerRefusal">The bounded candidate request, capability or host response is unavailable or invalid.</exception>
-    public static async Task<WorkerResponse> InvokeCandidateInspectionAsync(
+    public static Task<WorkerResponse> InvokeCandidateInspectionAsync(
         MethodInfo method,
         string hostName,
         string hostDirectory,
         WorkerCandidatePayload candidate,
+        CancellationToken cancellationToken) =>
+        InvokeCandidateCoreAsync(method, hostName, hostDirectory, candidate, environmentInput: null, cancellationToken);
+
+    /// <summary>
+    /// Invokes the additive explicit-environment candidate operation. Its inner envelope is deliberately distinct
+    /// from the legacy request: the host receives the original captured document and correlation token, never a
+    /// normalized map or the private source path.
+    /// </summary>
+    public static Task<WorkerResponse> InvokeCandidateEnvironmentInspectionAsync(
+        MethodInfo method,
+        string hostName,
+        string hostDirectory,
+        WorkerCandidatePayload candidate,
+        WorkerEnvironmentInput environmentInput,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(candidate);
+        ArgumentNullException.ThrowIfNull(environmentInput);
+        WorkerContract.ValidateCandidateEnvironmentInput(candidate, environmentInput);
+        return InvokeCandidateCoreAsync(method, hostName, hostDirectory, candidate, environmentInput, cancellationToken);
+    }
+
+    private static async Task<WorkerResponse> InvokeCandidateCoreAsync(
+        MethodInfo method,
+        string hostName,
+        string hostDirectory,
+        WorkerCandidatePayload candidate,
+        WorkerEnvironmentInput? environmentInput,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(method);
@@ -301,17 +340,18 @@ public sealed class ToolingEntryPoint
             method.GetParameters() is not { Length: 3 } parameters ||
             parameters[0].ParameterType != typeof(Stream) || parameters[1].ParameterType != typeof(Stream) ||
             parameters[2].ParameterType != typeof(CancellationToken))
-            throw WorkerRefusal.Resolution("candidate-capability-unavailable",
-                "The selected host has no complete candidate inspection capability.");
+            throw CandidateCapabilityUnavailable();
 
         cancellationToken.ThrowIfCancellationRequested();
         using var request = new CandidateBoundedMemoryStream(CandidateHostRequestMaximumBytes);
         try
         {
-            await JsonSerializer.SerializeAsync(request,
-                new { version = 1, host = new { name = hostName, directory = hostDirectory }, candidate },
-                RequestJson,
-                cancellationToken).ConfigureAwait(false);
+            object envelope;
+            if (environmentInput is null)
+                envelope = new { version = 1, host = new { name = hostName, directory = hostDirectory }, candidate };
+            else
+                envelope = new { version = 1, host = new { name = hostName, directory = hostDirectory }, candidate, environmentInput };
+            await JsonSerializer.SerializeAsync(request, envelope, RequestJson, cancellationToken).ConfigureAwait(false);
             request.Position = 0;
             request.CompleteWrites();
         }
@@ -372,12 +412,17 @@ public sealed class ToolingEntryPoint
         try
         {
             response.Position = 0;
-            var tooling = await WorkerContract.ReadCandidateHostResponseAsync(response,
-                candidate.InvocationId ?? string.Empty,
-                candidate.CaptureId ?? string.Empty,
-                processExitCode,
-                cancellationToken);
-            WorkerContract.ValidateCandidateHostResponse(tooling, candidate, processExitCode);
+            var tooling = environmentInput is null
+                ? await WorkerContract.ReadCandidateHostResponseAsync(response,
+                    candidate.InvocationId ?? string.Empty, candidate.CaptureId ?? string.Empty, processExitCode,
+                    cancellationToken)
+                : await WorkerContract.ReadCandidateEnvironmentHostResponseAsync(response,
+                    candidate.InvocationId ?? string.Empty, candidate.CaptureId ?? string.Empty, processExitCode,
+                    cancellationToken);
+            if (environmentInput is null)
+                WorkerContract.ValidateCandidateHostResponse(tooling, candidate, processExitCode);
+            else
+                WorkerContract.ValidateCandidateEnvironmentHostResponse(tooling, candidate, processExitCode);
             return new WorkerResponse { ExitCode = processExitCode, Tooling = tooling };
         }
         catch (WorkerRefusal)
@@ -392,7 +437,6 @@ public sealed class ToolingEntryPoint
         {
             throw WorkerRefusal.Resolution("candidate-host-unavailable", CandidateHostUnavailableMessage);
         }
-
     }
 
     private sealed class CandidateBoundedMemoryStream(int maximumBytes) : Stream
@@ -504,7 +548,11 @@ public sealed class ToolingEntryPoint
         protected override void Dispose(bool disposing)
         {
             if (disposing)
+            {
+                if (buffer.TryGetBuffer(out var segment))
+                    Array.Clear(segment.Array!, segment.Offset, segment.Count);
                 buffer.Dispose();
+            }
             base.Dispose(disposing);
         }
     }

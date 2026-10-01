@@ -186,6 +186,46 @@ public static class WorkerContract
         }
     }
 
+    /// <summary>
+    /// Reads the two candidate commands from one bounded input stream. The command discriminator is inspected
+    /// before deserialization so the legacy closed reader remains closed while the additive lane can carry its
+    /// one extra envelope field.
+    /// </summary>
+    internal static async Task<CandidateInspectionRequest?> ReadCandidateInspectionRequestAsync(
+        Stream stream, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await ReadBoundedCandidateJsonAsync(stream, CandidateRequestMaxBytes,
+                () => WorkerRefusal.Usage("candidate-request-too-large", "The candidate request exceeds the supported size limit."),
+                root =>
+                {
+                    if (root.ValueKind != JsonValueKind.Object ||
+                        !root.TryGetProperty("version", out _) || HasDuplicateFields(root))
+                        throw InvalidCandidateRequest();
+
+                    if (root.TryGetProperty("command", out var command) &&
+                        command.ValueKind == JsonValueKind.String &&
+                        command.GetString() == WorkerCommands.InspectCandidateEnvironment)
+                    {
+                        var environment = ParseCandidateEnvironmentRequest(root);
+                        return new CandidateInspectionRequest(null, environment);
+                    }
+
+                    var candidate = root.Deserialize<WorkerRequest>(Json);
+                    if (candidate is null)
+                        throw InvalidCandidateRequest();
+                    ValidateCandidateRequest(root, candidate);
+                    return new CandidateInspectionRequest(candidate, null);
+                },
+                cancellationToken);
+        }
+        catch (JsonException)
+        {
+            throw InvalidCandidateRequest();
+        }
+    }
+
     /// <summary>Independently rechecks candidate correlation and the original raw private document.</summary>
     public static void ValidateCandidateEnvironmentRequest(CandidateEnvironmentWorkerRequestV2 request)
     {
@@ -193,9 +233,16 @@ public static class WorkerContract
         if (request.Version != Version || request.Command != WorkerCommands.InspectCandidateEnvironment)
             throw InvalidCandidateRequest();
         ValidateCandidateFields(request.FileOnlyClosureRequest());
-        var environmentInput = request.EnvironmentInput;
+        ValidateCandidateEnvironmentInput(request.Candidate!, request.EnvironmentInput);
+    }
+
+    /// <summary>Validates the inner environment value independently before it crosses the host reflection boundary.</summary>
+    internal static void ValidateCandidateEnvironmentInput(
+        WorkerCandidatePayload candidate, WorkerEnvironmentInput? environmentInput)
+    {
+        ArgumentNullException.ThrowIfNull(candidate);
         if (environmentInput is null || environmentInput.Version != 1 ||
-            environmentInput.CaptureId != request.Candidate!.CaptureId || environmentInput.Content is null)
+            environmentInput.CaptureId != candidate.CaptureId || environmentInput.Content is null)
             throw InvalidCandidateRequest();
 
         var bytes = DecodeEnvironmentInput(environmentInput.Content);
@@ -207,6 +254,23 @@ public static class WorkerContract
         {
             Array.Clear(bytes);
         }
+    }
+
+    internal static bool IsCandidateEnvironmentInputErrorCode(string? code) =>
+        code is not null && CandidateEnvironmentInputErrorCodes.Contains(code);
+
+    internal static string CandidateEnvironmentInputMessage(string code) =>
+        CandidateWorkerErrorMessage(code);
+
+    private static CandidateEnvironmentWorkerRequestV2 ParseCandidateEnvironmentRequest(JsonElement root)
+    {
+        if (!HasExactlyFields(root, CandidateEnvironmentRequestFields) || HasDuplicateFields(root))
+            throw InvalidCandidateRequest();
+        var request = root.Deserialize<CandidateEnvironmentWorkerRequestV2>(Json);
+        if (request is null)
+            throw InvalidCandidateRequest();
+        ValidateCandidateEnvironmentRequest(request);
+        return request;
     }
 
     /// <summary>Shared frontend/worker admission of raw supplied bytes; it reads no ambient sources.</summary>
@@ -1288,6 +1352,14 @@ public sealed record CandidateEnvironmentWorkerRequestV2
         Version = Version, Command = WorkerCommands.InspectCandidate, HostDirectory = HostDirectory,
         HostName = HostName, DepsFile = DepsFile, PackageRoots = PackageRoots!, Candidate = Candidate
     };
+}
+
+/// <summary>Discriminated candidate request selected after the command field is read from the bounded envelope.</summary>
+internal sealed record CandidateInspectionRequest(
+    WorkerRequest? FileOnly,
+    CandidateEnvironmentWorkerRequestV2? Environment)
+{
+    public bool IsEnvironment => Environment is not null;
 }
 
 /// <summary>Private raw captured document, bound to its candidate; no source path or public fingerprint.</summary>
