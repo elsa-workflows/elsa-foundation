@@ -8,11 +8,20 @@
 
   <ItemGroup>
     <PackageReference Include="CShells.Abstractions" />
+    <!-- Candidate installed-closure tests use this host's declared composer and real Nuplane loader. -->
+    <PackageReference Include="Nuplane" />
+    <PackageReference Include="Nuplane.Loading" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\..\src\essentials\Persistence\EntityFramework\Elsa.Persistence.EntityFramework.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\essentials\Diagnostics\StructuredLogs\Persistence\EntityFrameworkCore\Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\essentials\Diagnostics\OpenTelemetry\Persistence\EntityFrameworkCore\Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\ProcessIdentity.cs" Link="ProcessIdentity.cs" />
   </ItemGroup>
 
 </Project>

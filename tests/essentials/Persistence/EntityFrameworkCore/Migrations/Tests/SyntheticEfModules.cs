@@ -1,3 +1,4 @@
+using CShells.Features;
 using Elsa.Persistence.EntityFramework;
 using System.Reflection;
 using System.Reflection.Emit;
@@ -13,10 +14,9 @@ internal sealed record SyntheticModule(
     Type[]? PostMigration = null);
 
 /// <summary>
-/// Real assemblies carrying real <c>[EfModule]</c> metadata, for the module graphs no first-party module
-/// has: a dependency cycle, a dependency outside the selection, and a declared post-migration action.
-/// Emitted rather than checked in as a fixture project, so the graphs that must be refused travel with the
-/// test that refuses them — and discovered through exactly the path a third-party module would be.
+/// Persisted assemblies carrying real EF module or enrolled feature metadata for synthetic producer and
+/// module-graph cases. Emitted rather than checked in as a fixture project, so the cases travel with the
+/// tests that exercise them and are discovered through the same paths as third-party declarations.
 /// </summary>
 internal static class SyntheticEfModules
 {
@@ -56,5 +56,41 @@ internal static class SyntheticEfModules
         return image.ToArray();
 
         static PropertyInfo Property(string name) => typeof(EfModuleAttribute).GetProperty(name)!;
+    }
+
+    /// <summary>
+    /// Emits one real, non-dynamic shell feature carrying many existing EF enrollment attributes. The
+    /// loaded assembly is discovered by the same public producer path as any other host assembly.
+    /// </summary>
+    public static Assembly BuildParticipantFeature(string assemblyName, string featureName, int moduleCount)
+    {
+        var builder = new PersistedAssemblyBuilder(new AssemblyName(assemblyName), typeof(object).Assembly, []);
+        var module = builder.DefineDynamicModule(assemblyName);
+        var featureType = module.DefineType(
+            $"{featureName}Feature",
+            TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.Class,
+            typeof(object),
+            [typeof(IShellFeature)]);
+        featureType.DefineDefaultConstructor(MethodAttributes.Public);
+
+        var enrollmentConstructor = typeof(EfPersistenceResourceParticipantAttribute).GetConstructor(Type.EmptyTypes)!;
+        featureType.SetCustomAttribute(new CustomAttributeBuilder(enrollmentConstructor, []));
+        var moduleConstructor = typeof(UsesEfModuleAttribute).GetConstructor([typeof(string)])!;
+        for (var index = 0; index < moduleCount; index++)
+            featureType.SetCustomAttribute(new CustomAttributeBuilder(moduleConstructor, [$"Synthetic.Legacy.Module{index:D4}"]));
+
+        var contractMethod = typeof(IShellFeature).GetMethod(nameof(IShellFeature.ConfigureServices))!;
+        var implementation = featureType.DefineMethod(
+            contractMethod.Name,
+            MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.Final | MethodAttributes.NewSlot,
+            contractMethod.ReturnType,
+            contractMethod.GetParameters().Select(parameter => parameter.ParameterType).ToArray());
+        implementation.GetILGenerator().Emit(OpCodes.Ret);
+        featureType.DefineMethodOverride(implementation, contractMethod);
+        featureType.CreateType();
+
+        using var image = new MemoryStream();
+        builder.Save(image);
+        return Assembly.Load(image.ToArray());
     }
 }
