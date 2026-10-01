@@ -1,7 +1,7 @@
 # Tasks: Effective persistence preview
 
 **Input**: [plan](plan.md), [spec](spec.md), research, data model and contracts.
-Implementation checkpoint: supervisor extraction and44 direct cases are pushed and its mapped review reply is posted. Current-main63ce is normally integrated; rebuilt combined CLI865, migrations448, architecture622 and actualLinux224 pass with zero skipped. Unchanged Planning retains112. Maps all/check and the24-canary bounded scan pass; protocol mutation2/2 fails as intended with source byte-restored. See [chronological evidence](implementation-evidence.md) for source/artifact identities, independent/root review, retained failures and main-red2216 investigation. T020 remains open pending fresh final-head review/CI/Windows and exact-main delivery gates.
+Implementation checkpoint: supervisor extraction and 44 direct cases are pushed, and its mapped review reply is posted. Main `63ce` is normally integrated; rebuilt combined CLI 865, migrations 448, architecture 622 and actual Linux 224 pass with zero skipped tests. Unchanged Planning retains 112 passing tests. Maps all/check and the 24-canary bounded scan pass; protocol mutation 2/2 fails as intended with source restored byte for byte. See [chronological evidence](implementation-evidence.md) for source/artifact identities, independent/root review, retained failures and the main failure #2216 investigation. T020 remains open pending final review, CI and exact-main delivery gates; actual Windows proof at the same production source passes 16/16 with zero skipped tests.
 
 ## Phase 1: Setup
 
