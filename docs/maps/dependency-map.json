@@ -15603,6 +15603,11 @@
         },
         {
           "type": "external",
+          "id": "Microsoft.Extensions.TimeProvider.Testing",
+          "version": "10.8.0"
+        },
+        {
+          "type": "external",
           "id": "Microsoft.NET.Test.Sdk",
           "version": "18.0.0"
         },
