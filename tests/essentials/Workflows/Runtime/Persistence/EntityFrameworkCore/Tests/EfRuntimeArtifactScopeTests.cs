@@ -462,6 +462,47 @@ public sealed class EfRuntimeArtifactScopeTests
     }
 
     [Fact]
+    public async Task Doomed_delete_does_not_remove_a_reference_restored_after_its_snapshot()
+    {
+        await using var database = await Database.CreateAsync();
+        await using var seed = database.Open("tenant-a");
+        var retired = Reference("doomed-restored-ref", "artifact-a").Retire(DateTimeOffset.UtcNow.AddMinutes(-1), "replaced");
+        await seed.Store.SaveAsync(retired);
+        await seed.DisposeAsync();
+
+        await using var collector = database.Open("tenant-a");
+        await using var activation = database.Open("tenant-a");
+        var snapshot = await collector.Store.FindAsync(retired.SourceReferenceId);
+        Assert.True(await activation.Store.TryRestoreAsync(snapshot!, snapshot! with { DeletedAt = null, DeletedReason = null }));
+
+        Assert.False(await collector.Store.TryDeleteDoomedAsync(snapshot!, DateTimeOffset.UtcNow));
+
+        Assert.Null((await activation.Store.FindAsync(retired.SourceReferenceId))!.DeletedAt);
+    }
+
+    [Fact]
+    public async Task Doomed_delete_removes_a_reference_that_is_still_retired_or_expired()
+    {
+        await using var database = await Database.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        var now = DateTimeOffset.UtcNow;
+        var retired = Reference("doomed-retired-ref", "artifact-a").Retire(now.AddMinutes(-1), "replaced");
+        var expired = Reference("doomed-expired-ref", "artifact-a") with { ExpiresAt = now.AddMinutes(-1) };
+        var live = Reference("doomed-live-ref", "artifact-a");
+        await fixture.Store.SaveAsync(retired);
+        await fixture.Store.SaveAsync(expired);
+        await fixture.Store.SaveAsync(live);
+
+        Assert.True(await fixture.Store.TryDeleteDoomedAsync(retired, now));
+        Assert.True(await fixture.Store.TryDeleteDoomedAsync(expired, now));
+        Assert.False(await fixture.Store.TryDeleteDoomedAsync(live, now));
+
+        Assert.Null(await fixture.Store.FindAsync(retired.SourceReferenceId));
+        Assert.Null(await fixture.Store.FindAsync(expired.SourceReferenceId));
+        Assert.NotNull(await fixture.Store.FindAsync(live.SourceReferenceId));
+    }
+
+    [Fact]
     public async Task Source_reference_stale_conditional_update_cannot_touch_a_recreated_successor()
     {
         await using var database = await Database.CreateAsync();

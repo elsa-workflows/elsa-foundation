@@ -354,6 +354,34 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
         catch { context.ChangeTracker.Clear(); throw; }
     }
 
+    public async ValueTask<bool> TryDeleteDoomedAsync(WorkflowExecutableSourceReference expectedDoomedReference, DateTimeOffset now, CancellationToken cancellationToken = default)
+    {
+        context.ChangeTracker.Clear();
+        ArgumentNullException.ThrowIfNull(expectedDoomedReference);
+        Validate(expectedDoomedReference);
+        var scope = RequireScope();
+        var sourceReferenceId = expectedDoomedReference.SourceReferenceId;
+        var row = await RuntimeArtifactEfPersistenceBoundary.QueryAsync(
+            context,
+            "cleaning up",
+            sourceReferenceId,
+            () => context.WorkflowExecutableSourceReferences.AsNoTracking().SingleOrDefaultAsync(x =>
+                x.Id == CreateId(scope, sourceReferenceId) &&
+                x.ScopeKeyHash == Hash(scope) &&
+                x.ScopeKey == Encode(scope) &&
+                x.SourceReferenceIdHash == Hash(sourceReferenceId) &&
+                x.SourceReferenceId == Encode(sourceReferenceId),
+                cancellationToken));
+        if (row is null)
+            return false;
+        var current = Read(row, scope, sourceReferenceId);
+        // The retired-or-expired check runs against the row as it is now. The captured delete then pins the revision
+        // and incarnation read here, so a restore landing between this read and the delete still loses to the fence.
+        if (!WorkflowExecutableSourceReferenceComparer.SameSnapshot(current, expectedDoomedReference) || current.IsLive(now))
+            return false;
+        return await TryDeleteCapturedAsync(sourceReferenceId, row.IncarnationId, row.Revision, cancellationToken);
+    }
+
     public async ValueTask<IReadOnlyCollection<string>> DeleteExpiredOrRetiredAsync(WorkflowExecutableSourceReferenceCleanupBatch batch, DateTimeOffset now, CancellationToken cancellationToken = default)
     {
         context.ChangeTracker.Clear();

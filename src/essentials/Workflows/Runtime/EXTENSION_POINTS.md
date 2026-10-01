@@ -645,7 +645,7 @@ A handler that must not gain pipeline dispatch (the resume handler) implements t
 
 ### `IWorkflowExecutableSourceReferenceStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one store owns source/version/publication references to content-addressed workflow and activity artifacts).
-- **Signature:** find/list by source reference or artifact, save, retire/delete, and discover unreferenced artifacts.
+- **Signature:** find/list by source reference or artifact, save, retire/restore, delete, and discover unreferenced artifacts. `TryDeleteDoomedAsync(snapshot, now, ...)` is the compare-and-delete the garbage collector uses: it removes a reference only while the stored row still matches the snapshot and is still retired or expired, so a reference restored after the sweep's listing survives. The default implementation fails closed (deletes nothing).
 - **Usage:** keeps mutable lifecycle, retention, expiry, and layout sidecars outside immutable behavior artifacts. Source-owned CLR reconciliation creates a distinct source reference per definition version even when versions share one template hash. Runtime start pins the exact referenced artifact; garbage collection follows live references.
 - **Default implementation:** `InMemoryWorkflowExecutableSourceReferenceStore`; the EF Core module replaces it for durable hosts.
 - **EF Core implementation:** `EfWorkflowExecutableSourceReferenceStore` *(opt-in `WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence`; provider contexts and entities are owned by the Runtime persistence leaf)*.
