@@ -22,6 +22,7 @@ using Elsa.Workflows.Publishing.Core.Requests;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 using Elsa.Workflows.Runtime.Scheduling;
 using Elsa.Workflows.Runtime.Services.Executables;
 using Elsa.Workflows.Runtime.Services.Triggers;
@@ -76,6 +77,33 @@ public sealed class PublishWorkflowTriggerIndexingTests
             view.ArtifactId,
             Assert.Single((await _bindingStore.ListByStimulusAsync(
                 new WorkflowTriggerBindingPageQuery("Event", "hash-new"))).Items).ArtifactId);
+    }
+
+    [Fact]
+    public async Task PublishingAfterACrashMidReplacement_ServesOnlyTheNewPublication()
+    {
+        await Handler("old", new StubTriggerProvider("Event", "hash-old")).Handle(new PublishWorkflow("version-1"), CancellationToken.None);
+
+        // The replacing publish stops for good once its slot transition commits, before its binding is switched on and
+        // the old one off (#2193): the slot names it, but the old publication keeps serving.
+        var extractor = new WorkflowTriggerBindingExtractor([new StubTriggerProvider("Event", "hash-interrupted")]);
+        var stopping = new PauseAfterSlotTransition(_activationAuthority);
+        var interrupted = Handler(
+                WorkflowVersion(TriggerNode("trigger-node", [Input("EventName", "interrupted")])),
+                TriggerActivityVersion(),
+                extractor,
+                new WorkflowTriggerIndexer(extractor, _bindingStore),
+                coordinatorAuthority: stopping)
+            .Handle(new PublishWorkflow("version-1"), CancellationToken.None);
+        Assert.Same(stopping.Paused, await Task.WhenAny(interrupted, stopping.Paused));
+        Assert.Single(await ServingAsync("hash-old"));
+        Assert.Empty(await ServingAsync("hash-interrupted"));
+
+        var view = await Handler("new", new StubTriggerProvider("Event", "hash-new")).Handle(new PublishWorkflow("version-1"), CancellationToken.None);
+
+        Assert.Equal(view.ArtifactId, Assert.Single(await ServingAsync("hash-new")).ArtifactId);
+        Assert.Empty(await ServingAsync("hash-old"));
+        Assert.Empty(await ServingAsync("hash-interrupted"));
     }
 
     [Fact]
@@ -272,6 +300,9 @@ public sealed class PublishWorkflowTriggerIndexingTests
             typeof(HttpEndpoint))
     ];
 
+    private async Task<IReadOnlyCollection<WorkflowTriggerBinding>> ServingAsync(string stimulusHash) =>
+        (await _bindingStore.ListByStimulusAsync(new WorkflowTriggerBindingPageQuery("Event", stimulusHash))).Items;
+
     private PublishWorkflowRequestHandler Handler(params IActivityTriggerStimulusProvider[] providers)
         => Handler(TriggerActivityTypeKey, providers);
 
@@ -332,7 +363,8 @@ public sealed class PublishWorkflowTriggerIndexingTests
         ActivityDefinitionVersion triggerActivity,
         IWorkflowTriggerBindingExtractor extractor,
         IWorkflowTriggerIndexer indexer,
-        Type? clrType = null)
+        Type? clrType = null,
+        IWorkflowActivationAuthority? coordinatorAuthority = null)
     {
         // The activation coordinator commits trigger bindings and recurring schedules as one serving
         // projection. Even scenarios without recurring providers must prepare the intentionally empty
@@ -349,7 +381,7 @@ public sealed class PublishWorkflowTriggerIndexingTests
         }
 
         var coordinator = new WorkflowActivationCoordinator(
-            _activationAuthority,
+            coordinatorAuthority ?? _activationAuthority,
             _referenceStore,
             TestRootWriteLeases.Create(_executableStore),
             TimeProvider.System,

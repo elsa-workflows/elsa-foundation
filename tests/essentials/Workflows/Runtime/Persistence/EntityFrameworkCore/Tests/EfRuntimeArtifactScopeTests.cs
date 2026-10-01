@@ -404,6 +404,39 @@ public sealed class EfRuntimeArtifactScopeTests
         await Assert.ThrowsAsync<ArgumentException>(() => fixture.Store.ListPageAsync(new(WorkflowExecutableReferenceScope.Published, false, null, 1, token)).AsTask());
     }
 
+    /// <summary>
+    /// The definition filter the activation coordinator lists one slot's activations through (#2193). Each page holds
+    /// only that definition's references, and its continuation is bound to the definition, so another definition's query
+    /// refuses it rather than resuming past it.
+    /// </summary>
+    [Fact]
+    public async Task Source_reference_pages_narrow_to_one_definition_and_bind_the_continuation_to_it()
+    {
+        await using var database = await Database.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        foreach (var index in Enumerable.Range(0, 3))
+        {
+            await fixture.Store.SaveAsync(Reference($"ref-{index:D2}-a", "artifact-a", "definition-a"));
+            await fixture.Store.SaveAsync(Reference($"ref-{index:D2}-b", "artifact-b", "definition-b"));
+        }
+        var now = DateTimeOffset.UtcNow;
+        WorkflowExecutableSourceReferencePageQuery Page(string definitionId, string? continuationToken) =>
+            new(WorkflowExecutableReferenceScope.Published, true, now, 1, continuationToken) { DefinitionId = definitionId };
+
+        var traversed = new List<string>();
+        string? continuation = null;
+        do
+        {
+            var page = await fixture.Store.ListPageAsync(Page("definition-a", continuation));
+            traversed.AddRange(page.Items.Select(reference => reference.SourceReferenceId));
+            continuation = page.NextContinuationToken;
+        } while (continuation is not null);
+
+        Assert.Equal(["ref-00-a", "ref-01-a", "ref-02-a"], traversed);
+        var first = await fixture.Store.ListPageAsync(Page("definition-a", null));
+        await Assert.ThrowsAsync<ArgumentException>(() => fixture.Store.ListPageAsync(Page("definition-b", first.NextContinuationToken)).AsTask());
+    }
+
     [Fact]
     public async Task Definition_version_pages_allow_only_authorized_across_scope_reads_with_collision_safe_ordering()
     {
@@ -1267,8 +1300,8 @@ public sealed class EfRuntimeArtifactScopeTests
     private static Task DeleteAllReferencesAsync(Fixture fixture) =>
         fixture.Context.WorkflowExecutableSourceReferences.ExecuteDeleteAsync();
 
-    private static WorkflowExecutableSourceReference Reference(string id, string artifact) => new(
-        id, artifact, "WorkflowDefinition", "definition", "1", "definition", "definition-version", "1",
+    private static WorkflowExecutableSourceReference Reference(string id, string artifact, string definition = "definition") => new(
+        id, artifact, "WorkflowDefinition", "definition", "1", definition, "definition-version", "1",
         DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, WorkflowExecutableReferenceScope.Published);
 
     private static WorkflowExecutable Executable(

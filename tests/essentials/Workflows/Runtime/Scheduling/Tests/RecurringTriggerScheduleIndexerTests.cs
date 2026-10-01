@@ -423,6 +423,8 @@ public sealed class RecurringTriggerScheduleIndexerTests
         }
 
         public ValueTask DeleteAsync(string scheduleId, CancellationToken cancellationToken = default) => _inner.DeleteAsync(scheduleId, cancellationToken);
+        public ValueTask<WorkflowActivationProjectionState> FindActivationStateAsync(string activationId, CancellationToken cancellationToken = default) => _inner.FindActivationStateAsync(activationId, cancellationToken);
+        public ValueTask<IReadOnlyCollection<string>> ListServingActivationIdsAsync(string slotId, CancellationToken cancellationToken = default) => _inner.ListServingActivationIdsAsync(slotId, cancellationToken);
     }
 
     private sealed class FakeScheduleProvider(
