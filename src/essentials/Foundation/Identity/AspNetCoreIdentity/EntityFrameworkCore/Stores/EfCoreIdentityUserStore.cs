@@ -425,7 +425,7 @@ public sealed class EfCoreIdentityUserStore(
             new UserRoleEntity { TenantId = user.TenantId, UserId = user.Id, RoleId = role.RoleId, Revision = 1 },
             cancellationToken);
         ApplyRevisionStamp(user, result);
-        EnsureRelationshipSucceeded(result, "role add");
+        EnsureRelationshipSucceeded(result, "role add", conflictIsLostRace: true);
     }
 
     public async Task RemoveFromRoleAsync(AspNetCoreIdentityUser user, string roleName, CancellationToken cancellationToken)
@@ -441,7 +441,7 @@ public sealed class EfCoreIdentityUserStore(
             RequireRevision(user),
             cancellationToken);
         ApplyRevisionStamp(user, result);
-        EnsureRelationshipSucceeded(result, "role remove");
+        EnsureRelationshipSucceeded(result, "role remove", conflictIsLostRace: true);
     }
 
     public async Task<IList<string>> GetRolesAsync(AspNetCoreIdentityUser user, CancellationToken cancellationToken)
@@ -654,7 +654,14 @@ public sealed class EfCoreIdentityUserStore(
             // malformed revision on an existing row.
             if (await FindEntityAsync(user.TenantId, user.Id, forWrite: false, cancellationToken) is null)
                 return mutate(user);
-            throw new InvalidOperationException("The requested user has no valid EF revision stamp for a lockout mutation.");
+            // A user this store never stamped still carries IdentityUser's default stamp, a GUID, so a row that now
+            // exists was created by a concurrent writer: a lost create race. Store-issued stamps are never GUID-shaped:
+            // every one is produced by IdentityEntityFrameworkRevisionSupport.FromUser as "gw2:<64-hex fingerprint>:<20
+            // digits>" (89 characters; the older "gw:<n>" form is no GUID either), so a stamp the store ever wrote
+            // cannot be mistaken for a never-stamped one. Any other stamp is a malformed revision, not a lost race.
+            throw Guid.TryParse(user.ConcurrencyStamp, out _)
+                ? new IdentityRevisionConflictException("The requested user was created concurrently, so it has no EF revision stamp for a lockout mutation.")
+                : new InvalidOperationException("The requested user has no valid EF revision stamp for a lockout mutation.");
         }
         // The first attempt works on a copy of the caller's user; after a lost revision race the next one reloads it.
         var reload = false;
@@ -827,10 +834,20 @@ public sealed class EfCoreIdentityUserStore(
             user.ConcurrencyStamp = IdentityEntityFrameworkRevisionSupport.FromUser(user.TenantId, user.Id, version);
     }
 
-    private static void EnsureRelationshipSucceeded(EfIdentityWriteResult result, string operation)
+    /// <param name="conflictIsLostRace">
+    /// Set only by relationship writes whose <see cref="EfIdentityWriteStatus.Conflict"/> can only mean that a concurrent
+    /// writer won (a stale user revision, or the same link inserted twice). Other writes also report a conflict for
+    /// uniqueness and ownership violations, which a retry cannot fix, so those stay plain exceptions.
+    /// </param>
+    private static void EnsureRelationshipSucceeded(EfIdentityWriteResult result, string operation, bool conflictIsLostRace = false)
     {
-        if (!result.Succeeded)
-            throw new InvalidOperationException($"The EF Identity {operation} returned {result.Status}: {result.Message}");
+        if (result.Succeeded)
+            return;
+
+        var message = $"The EF Identity {operation} returned {result.Status}: {result.Message}";
+        throw conflictIsLostRace && result.Status == EfIdentityWriteStatus.Conflict
+            ? new IdentityRevisionConflictException(message)
+            : new InvalidOperationException(message);
     }
 
     private static void EnsureRelationshipMaterializationLimit(int count, string subject)
