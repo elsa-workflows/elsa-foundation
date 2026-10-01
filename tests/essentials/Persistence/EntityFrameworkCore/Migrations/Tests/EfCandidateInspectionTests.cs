@@ -117,6 +117,75 @@ public sealed class EfCandidateInspectionTests : IDisposable
     }
 
     [Fact]
+    public async Task Explicit_environment_host_returns_intended_input_projection_without_private_values()
+    {
+        var candidate = CreateEnvironmentCandidate(new Dictionary<string, string>
+        {
+            ["EmptyOverlay"] = string.Empty,
+            ["ConnectionStrings__Overlay"] = "candidate-environment-private-2292"
+        });
+        using var response = new MemoryStream();
+
+        var exitCode = await RunEnvironmentCandidateAsync(candidate.Request, response, CancellationToken.None);
+        var responseJson = Encoding.UTF8.GetString(response.ToArray());
+        using var document = JsonDocument.Parse(responseJson);
+        var root = document.RootElement;
+        var resolution = root.GetProperty("configurationResolution");
+
+        Assert.Equal(EfToolingExitCode.Success, exitCode);
+        Assert.Equal("captured-workbench-json-explicit-environment-v1", resolution.GetProperty("source").GetString());
+        Assert.Equal("supplied-intended", resolution.GetProperty("externalInputs").GetString());
+        Assert.DoesNotContain("candidate-environment-private-2292", responseJson, StringComparison.Ordinal);
+        AssertNoPrivateCandidateValues(responseJson, "candidate-environment-private-2292");
+        Assert.False(File.Exists(DatabasePath));
+        Assert.Empty(Directory.EnumerateFiles(temporaryDirectory));
+    }
+
+    [Fact]
+    public async Task Explicit_environment_host_rejects_unknown_overlay_feature_without_echoing_it()
+    {
+        const string unknownFeature = "UnknownOverlayFeaturePrivate2292";
+        var candidate = CreateEnvironmentCandidate(new Dictionary<string, string>
+        {
+            [$"CShells__Shells__{Shell}__Features__{unknownFeature}"] = "true"
+        });
+        using var response = new MemoryStream();
+
+        var exitCode = await RunEnvironmentCandidateAsync(candidate.Request, response, CancellationToken.None);
+        var responseJson = Encoding.UTF8.GetString(response.ToArray());
+        using var document = JsonDocument.Parse(responseJson);
+        var error = document.RootElement.GetProperty("error");
+
+        Assert.Equal(EfToolingExitCode.Refusal, exitCode);
+        Assert.Equal("candidate-selection-conflict", error.GetProperty("code").GetString());
+        Assert.DoesNotContain("feature", error.EnumerateObject().Select(property => property.Name));
+        Assert.DoesNotContain(unknownFeature, responseJson, StringComparison.Ordinal);
+        AssertNoPrivateCandidateValues(responseJson, unknownFeature);
+    }
+
+    [Fact]
+    public async Task Explicit_environment_host_rejects_invalid_document_before_assembly_discovery()
+    {
+        var candidate = CreateEnvironmentCandidate(new Dictionary<string, string>(), environmentDocument: "{\"version\":1,\"entries\":null}");
+        var discoveryCalls = 0;
+        var operation = new EfCandidateEnvironmentInspectionOperation(() =>
+        {
+            discoveryCalls++;
+            return EfConfigurationProbeTests.HostAssemblies;
+        });
+        using var response = new MemoryStream();
+
+        var exitCode = await RunEnvironmentOperationAsync(operation, candidate.Request, response, CancellationToken.None);
+        var responseJson = Encoding.UTF8.GetString(response.ToArray());
+        using var document = JsonDocument.Parse(responseJson);
+
+        Assert.Equal(EfToolingExitCode.Refusal, exitCode);
+        Assert.Equal("candidate-environment-input-invalid", document.RootElement.GetProperty("error").GetProperty("code").GetString());
+        Assert.Equal(0, discoveryCalls);
+        AssertNoPrivateCandidateValues(responseJson);
+    }
+
+    [Fact]
     public async Task Host_refuses_a_malformed_selected_source_without_echoing_or_opening_a_database()
     {
         var candidate = CreateRuntimeCandidate(malformedEnvironmentOverlay: true);
@@ -1451,6 +1520,31 @@ public sealed class EfCandidateInspectionTests : IDisposable
         return new CandidateFixture(request, acceptedFeatureIds);
     }
 
+    private CandidateFixture CreateEnvironmentCandidate(
+        IReadOnlyDictionary<string, string> entries,
+        string? environmentDocument = null)
+    {
+        var candidate = CreateRuntimeCandidate();
+        var environment = environmentDocument ?? JsonSerializer.Serialize(new
+        {
+            version = 1,
+            entries = entries.Select(entry => new { key = entry.Key, value = entry.Value }).ToArray()
+        });
+        var request = new JsonObject
+        {
+            ["version"] = 1,
+            ["host"] = candidate.Request["host"]!.DeepClone(),
+            ["candidate"] = candidate.Request["candidate"]!.DeepClone(),
+            ["environmentInput"] = new JsonObject
+            {
+                ["version"] = 1,
+                ["captureId"] = CaptureId,
+                ["content"] = Convert.ToBase64String(Encoding.UTF8.GetBytes(environment))
+            }
+        };
+        return new CandidateFixture(request, candidate.AcceptedFeatureIds);
+    }
+
     private Dictionary<string, byte[]> BuildFiles(
         IReadOnlyList<string> featureIds,
         bool malformedEnvironmentOverlay = false,
@@ -1612,6 +1706,13 @@ public sealed class EfCandidateInspectionTests : IDisposable
         return await EfToolingHost.RunCandidateInspectionAsync(input, response, cancellationToken);
     }
 
+    private static async Task<int> RunEnvironmentCandidateAsync(JsonObject request, Stream response,
+        CancellationToken cancellationToken)
+    {
+        using var input = new MemoryStream(Encoding.UTF8.GetBytes(request.ToJsonString()), writable: false);
+        return await EfToolingHost.RunCandidateEnvironmentInspectionAsync(input, response, cancellationToken);
+    }
+
     private static async Task<int> RunCandidateStreamAsync(Stream input, Stream response, CancellationToken cancellationToken) =>
         await EfToolingHost.RunCandidateInspectionAsync(input, response, cancellationToken);
 
@@ -1673,6 +1774,16 @@ public sealed class EfCandidateInspectionTests : IDisposable
 
     private static async Task<int> RunOperationAsync(
         EfCandidateInspectionOperation operation,
+        JsonObject request,
+        Stream response,
+        CancellationToken cancellationToken)
+    {
+        using var input = new MemoryStream(Encoding.UTF8.GetBytes(request.ToJsonString()), writable: false);
+        return await operation.RunAsync(input, response, cancellationToken);
+    }
+
+    private static async Task<int> RunEnvironmentOperationAsync(
+        EfCandidateEnvironmentInspectionOperation operation,
         JsonObject request,
         Stream response,
         CancellationToken cancellationToken)

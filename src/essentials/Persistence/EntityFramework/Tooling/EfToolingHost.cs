@@ -70,6 +70,14 @@ public static class EfToolingHost
         CancellationToken cancellationToken) =>
         new EfCandidateInspectionOperation(LoadedAssemblies).RunAsync(request, response, cancellationToken);
 
+    /// <summary>Inspects a captured candidate with one explicitly supplied environment document.</summary>
+    /// <exception cref="EfToolingRefusal">The selected host closure or bounded projection is unavailable.</exception>
+    public static Task<int> RunCandidateEnvironmentInspectionAsync(
+        Stream request,
+        Stream response,
+        CancellationToken cancellationToken) =>
+        new EfCandidateEnvironmentInspectionOperation(LoadedAssemblies).RunAsync(request, response, cancellationToken);
+
     /// <summary>
     /// Runs one command, reading the request from <paramref name="request"/> to its end and writing exactly
     /// one response to <paramref name="response"/>. The returned code is the same one the response carries,
