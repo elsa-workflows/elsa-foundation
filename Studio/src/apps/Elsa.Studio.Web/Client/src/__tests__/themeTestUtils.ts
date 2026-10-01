@@ -8,11 +8,14 @@ export function parseOklch(value: string) {
   return { lightness, chroma, hue };
 }
 
-/** The declarations of the first rule whose selector is exactly `selector` (comments ignored), as a property to value map. */
-export function ruleDeclarations(source: string, selector: string): Record<string, string> {
+/** The body of the first rule whose selector is exactly `selector` (comments ignored); empty when there is none. */
+export function ruleBody(source: string, selector: string): string {
   const css = source.replace(/\/\*[\s\S]*?\*\//g, "");
   const start = css.indexOf(`${selector} {`);
-  if (start < 0) return {};
-  const body = css.slice(css.indexOf("{", start) + 1, css.indexOf("}", start));
-  return Object.fromEntries([...body.matchAll(/(--[\w-]+):\s*([^;]+);/g)].map(match => [match[1], match[2].trim()]));
+  return start < 0 ? "" : css.slice(css.indexOf("{", start) + 1, css.indexOf("}", start));
+}
+
+/** The declarations of the first rule whose selector is exactly `selector` (comments ignored), as a property to value map. */
+export function ruleDeclarations(source: string, selector: string): Record<string, string> {
+  return Object.fromEntries([...ruleBody(source, selector).matchAll(/(--[\w-]+):\s*([^;]+);/g)].map(match => [match[1], match[2].trim()]));
 }

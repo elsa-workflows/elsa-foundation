@@ -235,7 +235,12 @@ describe("ThemeProvider and ThemeSwitcher", () => {
     await act(() => trigger.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
   }
 
-  const modeItems = () => Array.from(document.querySelectorAll<HTMLElement>('[role="menuitemradio"]'));
+  const radioItems = (group: string) => Array.from(document.querySelectorAll<HTMLElement>(`.${group} [role="menuitemradio"]`));
+  const modeItems = () => radioItems("theme-mode-group");
+  const navItems = () => radioItems("theme-nav-group");
+  const navMode = () => document.documentElement.getAttribute("data-nav-mode");
+  const statusBar = () => container.querySelector(".studio-statusbar");
+  const railCollapsed = () => container.querySelector(".studio-shell")!.classList.contains("sidebar-collapsed");
   const quickOptions = () => Array.from(container.querySelectorAll<HTMLButtonElement>('[role="radiogroup"][aria-label="Colour mode"] [role="radio"]'));
   const quickOption = (label: string) => quickOptions().find(option => option.getAttribute("aria-label") === label)!;
   const quickLabels = () => quickOptions().map(option => option.getAttribute("aria-label"));
@@ -256,7 +261,7 @@ describe("ThemeProvider and ThemeSwitcher", () => {
     await act(() => root.unmount());
     container.remove();
     document.body.removeAttribute("style");
-    for (const attribute of ["data-theme", "data-theme-mode", "data-theme-appearance", "data-theme-layout", "style"]) {
+    for (const attribute of ["data-theme", "data-theme-mode", "data-theme-appearance", "data-theme-layout", "data-nav-mode", "style"]) {
       document.documentElement.removeAttribute(attribute);
     }
     api = undefined;
@@ -408,17 +413,79 @@ describe("ThemeProvider and ThemeSwitcher", () => {
     expect(getStudioThemeLayout()).toBe("classic");
   });
 
-  it("gives the workbench layout a status bar and ignores the icon-rail collapse", async () => {
+  it("follows the theme's navigation placement until the user picks one: top for Schematic, with a status bar and no icon rail", async () => {
     localStorage.setItem("elsa-studio-sidebar-collapsed", "true");
     await render();
-    const shell = () => container.querySelector(".studio-shell")!;
 
-    expect(container.querySelector(".studio-statusbar")).toBeNull();
+    expect(api!.navModePreference).toBe("theme");
+    expect(navMode()).toBe("left");
+    expect(statusBar()).toBeNull();
+    expect(railCollapsed()).toBe(true);
 
     await act(() => api!.setTheme("schematic"));
 
-    expect(container.querySelector(".studio-statusbar")?.textContent).toContain("backend.example");
-    expect(container.querySelector(".studio-statusbar")?.textContent).toContain("Studio / Dashboard");
-    expect(shell().classList.contains("sidebar-collapsed")).toBe(false);
+    expect(navMode()).toBe("top");
+    expect(api!.themeNavMode).toBe("top");
+    expect(statusBar()?.textContent).toContain("backend.example");
+    expect(statusBar()?.textContent).toContain("Studio / Dashboard");
+    expect(railCollapsed()).toBe(false);
+  });
+
+  it.each(["meridian", "drift", "atelier", "stone"])("puts the navigation on top in %s when asked, leaving the theme's layout alone", async themeId => {
+    await render();
+    await act(() => api!.setTheme(themeId));
+    const layout = getStudioThemeLayout();
+
+    await act(() => api!.setNavModePreference("top"));
+
+    expect(navMode()).toBe("top");
+    expect(getStudioThemeLayout()).toBe(layout);
+    expect(statusBar()).not.toBeNull();
+    expect(localStorage.getItem("elsa-studio-nav-mode")).toBe("top");
+  });
+
+  it("gives Schematic back its sidebar, footer status and icon rail when the user picks Left", async () => {
+    localStorage.setItem("elsa-studio-sidebar-collapsed", "true");
+    await render();
+    await act(() => api!.setTheme("schematic"));
+    await act(() => api!.setNavModePreference("left"));
+
+    expect(navMode()).toBe("left");
+    expect(getStudioThemeLayout()).toBe("workbench");
+    expect(statusBar()).toBeNull();
+    expect(railCollapsed()).toBe(true);
+  });
+
+  it("carries the navigation choice across themes, and returns to the theme's own with Theme default", async () => {
+    await render();
+    await act(() => api!.setNavModePreference("top"));
+    await act(() => api!.setTheme("atelier"));
+
+    expect(navMode()).toBe("top");
+
+    await act(() => api!.setNavModePreference("theme"));
+
+    expect(navMode()).toBe("left");
+    expect(localStorage.getItem("elsa-studio-nav-mode")).toBe("theme");
+  });
+
+  it.each([["top", "top"], ["sideways", "left"]])("starts from a stored navigation choice of %s as %s", async (stored, expected) => {
+    localStorage.setItem("elsa-studio-nav-mode", stored);
+    await render();
+
+    expect(navMode()).toBe(expected);
+  });
+
+  it("offers Theme default, Left and Top in the theme menu and applies the one picked, keeping the menu open", async () => {
+    await render();
+    await openThemeMenu();
+
+    expect(navItems().map(item => item.textContent)).toEqual(["Theme default", "Left", "Top"]);
+    expect(navItems()[0].getAttribute("aria-checked")).toBe("true");
+
+    await act(() => navItems()[2].click());
+
+    expect(navMode()).toBe("top");
+    expect(navItems()[2].getAttribute("aria-checked")).toBe("true");
   });
 });

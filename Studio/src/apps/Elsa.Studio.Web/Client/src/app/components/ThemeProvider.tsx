@@ -11,6 +11,15 @@ import {
   resolveThemeMode,
   toTheme
 } from "../themes/presets";
+import {
+  getThemeNavMode,
+  isNavModePreference,
+  navModeAttribute,
+  navModeStorageKey,
+  resolveNavMode,
+  type NavMode,
+  type NavModePreference
+} from "../themes/navMode";
 import { findSelectableTheme, getSelectableThemes, getThemeStore, normalizeThemeStore, type ThemeStoreResponse } from "../themes/themeStoreApi";
 
 interface ThemeContextType {
@@ -22,6 +31,13 @@ interface ThemeContextType {
   setTheme: (themeId: string) => void;
   setMode: (mode: ThemeMode) => void;
   supportedModes: ThemeMode[];
+  /** Where the main navigation is rendered: the user's override, else the theme's own default. */
+  navMode: NavMode;
+  /** What the user picked; `theme` means "follow the current theme". */
+  navModePreference: NavModePreference;
+  /** The mode the current theme asks for, i.e. what `theme` resolves to. */
+  themeNavMode: NavMode;
+  setNavModePreference: (preference: NavModePreference) => void;
   previewTheme: (theme: StudioThemeDefinition) => void;
   availableThemes: Theme[];
   store: ThemeStoreResponse;
@@ -42,19 +58,23 @@ export function ThemeProvider({
   // The preferred mode survives theme switches: picking High contrast, visiting a light/dark-only
   // theme, and coming back restores High contrast rather than whatever that theme fell back to.
   const [preferredMode, setPreferredMode] = useState<ThemeMode>("light");
+  const [navModePreference, setNavModePreferenceState] = useState<NavModePreference>("theme");
   const [mounted, setMounted] = useState(false);
   const [persistThemeSelection, setPersistThemeSelection] = useState(true);
   const supportedModes = getSupportedThemeModes(currentTheme);
   const activeMode = resolveThemeMode(currentTheme, preferredMode);
+  const navMode = resolveNavMode(currentTheme.layout, navModePreference);
 
   // Initialize from localStorage on mount, falling back to the OS contrast and colour-scheme
   // preferences while the user has never chosen a mode. Once chosen, the stored mode always wins.
   useEffect(() => {
     const savedThemeId = getStoredPreference("elsa-studio-theme");
     const savedMode = getStoredPreference("elsa-studio-theme-mode");
+    const savedNavMode = getStoredPreference(navModeStorageKey);
     const nextTheme = findSelectableTheme(store, savedThemeId);
 
     setPreferredMode(isThemeMode(savedMode) ? savedMode : getSystemPreferredMode());
+    setNavModePreferenceState(isNavModePreference(savedNavMode) ? savedNavMode : "theme");
     setCurrentTheme(nextTheme);
     setPersistThemeSelection(true);
     setMounted(true);
@@ -109,6 +129,7 @@ export function ThemeProvider({
     root.setAttribute("data-theme-mode", getThemeColorScheme(activeMode));
     root.setAttribute("data-theme-appearance", activeMode);
     root.setAttribute(studioThemeLayoutAttribute, currentTheme.layout ?? "classic");
+    root.setAttribute(navModeAttribute, navMode);
     if (isMaterialTheme(currentTheme.id)) {
       root.setAttribute("data-theme-material", currentTheme.id);
     } else {
@@ -118,7 +139,7 @@ export function ThemeProvider({
     if (persistThemeSelection) {
       setStoredPreference("elsa-studio-theme", currentTheme.id);
     }
-  }, [currentTheme, activeMode, mounted, persistThemeSelection]);
+  }, [currentTheme, activeMode, navMode, mounted, persistThemeSelection]);
 
   const handleSetTheme = (themeId: string) => {
     setPersistThemeSelection(true);
@@ -128,6 +149,11 @@ export function ThemeProvider({
   const handleSetMode = (nextMode: ThemeMode) => {
     setPreferredMode(nextMode);
     setStoredPreference("elsa-studio-theme-mode", nextMode);
+  };
+
+  const handleSetNavModePreference = (preference: NavModePreference) => {
+    setNavModePreferenceState(preference);
+    setStoredPreference(navModeStorageKey, preference);
   };
 
   const handlePreviewTheme = (theme: StudioThemeDefinition) => {
@@ -150,6 +176,10 @@ export function ThemeProvider({
         setTheme: handleSetTheme,
         setMode: handleSetMode,
         supportedModes,
+        navMode,
+        navModePreference,
+        themeNavMode: getThemeNavMode(currentTheme.layout),
+        setNavModePreference: handleSetNavModePreference,
         previewTheme: handlePreviewTheme,
         availableThemes: getSelectableThemes(store),
         store,
@@ -260,6 +290,11 @@ function clearMaterialVariables(root: HTMLElement) {
       root.style.removeProperty(name);
     }
   }
+}
+
+/** The resolved navigation mode; `left` outside a ThemeProvider, where nothing publishes a preference. */
+export function useNavMode(): NavMode {
+  return useContext(ThemeContext)?.navMode ?? "left";
 }
 
 export function useTheme(): ThemeContextType {

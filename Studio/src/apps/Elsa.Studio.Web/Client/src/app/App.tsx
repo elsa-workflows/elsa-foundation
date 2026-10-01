@@ -29,13 +29,13 @@ import type {
   StudioNavigationContribution,
   StudioPanelContribution
 } from "../sdk";
-import { requestStudioNavigation, useStudioThemeLayout } from "../sdk";
+import { requestStudioNavigation } from "../sdk";
 import { createStudioRegistry, findFeatureAreaForPath } from "./registry";
 import type { AuthProviderManager } from "../sdk";
 import { getStudioRuntimeConfig, getStudioRuntimeSettings } from "./runtime";
 import { StudioAuthBoundary, createStudioAuthManager, createStudioEndpointContext } from "./auth/studioAuth";
 import { loadStudioModules } from "./loader";
-import { ThemeProvider } from "./components/ThemeProvider";
+import { ThemeProvider, useNavMode } from "./components/ThemeProvider";
 import { ThemeSwitcher } from "./components/ThemeSwitcher";
 import { defaultThemeStoreCapabilities, getThemeStoreCapabilities, type ThemeStoreCapabilities } from "./themes/themeStoreApi";
 import { QueryProvider } from "./providers/QueryProvider";
@@ -401,9 +401,9 @@ export function ShellFrame({
 }) {
   const [navQuery, setNavQuery] = useState("");
   const [navCollapsed, setNavCollapsed] = useState(() => getInitialBoolean(sidebarCollapsedStorageKey, false));
-  // The workbench layout turns the sidebar into a top menubar and moves backend status into a
+  // The top navigation mode turns the sidebar into a menubar and moves backend status into a
   // status bar; the icon-rail collapse has no meaning there, so it is ignored (not forgotten).
-  const workbench = useStudioThemeLayout() === "workbench";
+  const topNav = useNavMode() === "top";
   const backendHost = new URL(backendBaseUrl).host;
 
   useEffect(() => {
@@ -447,7 +447,7 @@ export function ShellFrame({
   const hasNavResults = navigationSections.length > 0;
 
   return (
-    <div className={navCollapsed && !workbench ? "studio-shell sidebar-collapsed" : "studio-shell"}>
+    <div className={navCollapsed && !topNav ? "studio-shell sidebar-collapsed" : "studio-shell"}>
       <aside className="sidebar">
         <div className="sidebar-top">
           <a className="brand" href="/" onClick={event => { event.preventDefault(); onNavigate("/"); }}>
@@ -577,7 +577,7 @@ export function ShellFrame({
         <main className="content">{children}</main>
       </div>
       {panels.length > 0 ? <BottomPanel panels={panels} /> : null}
-      {workbench ? (
+      {topNav ? (
         <footer className="studio-statusbar" aria-label="Status">
           <span><span className="sidebar-status-dot" aria-hidden="true" />Backend API · {backendHost}</span>
           <span>Studio / {title}</span>

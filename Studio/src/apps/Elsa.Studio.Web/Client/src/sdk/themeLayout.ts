@@ -6,7 +6,7 @@ import { useSyncExternalStore } from "react";
  *
  * - `classic` — docked side panels (the default, and every theme without a layout).
  * - `floating` — panels float as rounded islands over a full-bleed workspace (Drift).
- * - `workbench` — IDE-like: top menubar navigation, status bar, dense panels, squared wiring (Schematic).
+ * - `workbench` — IDE-like: dense panels, squared wiring, and top menubar navigation by default (Schematic).
  * - `editorial` — calm sheet-on-desk; authoring adds steps inline rather than from a toolbox (Atelier).
  */
 export type StudioThemeLayout = "classic" | "floating" | "workbench" | "editorial";

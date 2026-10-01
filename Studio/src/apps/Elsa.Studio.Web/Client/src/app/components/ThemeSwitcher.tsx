@@ -1,8 +1,9 @@
 import React from "react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { Check, Contrast, Moon, Palette, Sun, SunDim, type LucideIcon } from "lucide-react";
+import { Check, Contrast, Moon, Palette, PanelLeft, PanelTop, Sun, SunDim, SwatchBook, type LucideIcon } from "lucide-react";
 import { useTheme } from "./ThemeProvider";
 import { allThemeModes, getSupportedThemeModes, getThemeModeDefinition, isThemeMode, themeModeLabels, type ThemeMode } from "../themes/presets";
+import { isNavModePreference, navModePreferenceLabels, navModePreferences, type NavModePreference } from "../themes/navMode";
 import "./ThemeSwitcher.css";
 
 const modeIcons: Record<ThemeMode, LucideIcon> = {
@@ -72,8 +73,17 @@ function QuickModeToggle() {
   );
 }
 
+const navModeIcons: Record<NavModePreference, LucideIcon> = {
+  theme: SwatchBook,
+  left: PanelLeft,
+  top: PanelTop
+};
+
 export function ThemeSwitcher() {
-  const { currentTheme, mode, setTheme, setMode, availableThemes, supportedModes } = useTheme();
+  const {
+    currentTheme, mode, setTheme, setMode, availableThemes, supportedModes,
+    navModePreference, themeNavMode, setNavModePreference
+  } = useTheme();
 
   return (
     <div className="theme-switcher-container">
@@ -126,6 +136,33 @@ export function ThemeSwitcher() {
                   >
                     <Icon size={16} aria-hidden="true" />
                     <span>{themeModeLabels[themeMode]}</span>
+                  </DropdownMenu.RadioItem>
+                );
+              })}
+            </DropdownMenu.RadioGroup>
+
+            <DropdownMenu.Label className="theme-dropdown-header">
+              <span className="theme-dropdown-title">Navigation</span>
+            </DropdownMenu.Label>
+            <DropdownMenu.RadioGroup
+              className="theme-nav-group"
+              value={navModePreference}
+              onValueChange={value => isNavModePreference(value) && setNavModePreference(value)}
+            >
+              {navModePreferences.map(preference => {
+                const Icon = navModeIcons[preference];
+                return (
+                  <DropdownMenu.RadioItem
+                    key={preference}
+                    value={preference}
+                    className="theme-mode-item"
+                    title={preference === "theme"
+                      ? `Follow ${currentTheme.name}: ${navModePreferenceLabels[themeNavMode].toLowerCase()} navigation`
+                      : `${navModePreferenceLabels[preference]} navigation`}
+                    onSelect={event => event.preventDefault()}
+                  >
+                    <Icon size={16} aria-hidden="true" />
+                    <span>{navModePreferenceLabels[preference]}</span>
                   </DropdownMenu.RadioItem>
                 );
               })}

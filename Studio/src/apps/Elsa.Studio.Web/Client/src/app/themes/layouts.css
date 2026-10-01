@@ -5,6 +5,10 @@
  * (the default) needs no rules. Every layout is desktop-only: below 1025px the shell keeps its
  * responsive horizontal strip, which already suits a narrow screen. Selectors are keyed on the
  * layout attribute, so they outrank the base `.sidebar`/`.topbar` rules regardless of source order.
+ *
+ * Navigation placement is a separate axis: ThemeProvider publishes `data-nav-mode` ("left" | "top")
+ * on <html>, resolved from the user's choice and the theme's default (workbench -> top). The
+ * menubar and status bar rules key on that attribute, not on a layout, so any theme can have either.
  */
 
 @media (min-width: 1025px) {
@@ -47,123 +51,7 @@
     background: transparent;
   }
 
-  /* ── Workbench (Schematic): top menubar navigation, status bar, squared regions ────────── */
-
-  html[data-theme-layout="workbench"] .studio-shell {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto minmax(0, 1fr) auto auto;
-  }
-
-  html[data-theme-layout="workbench"] .sidebar {
-    flex-direction: row;
-    align-items: center;
-    gap: 6px;
-    min-height: 44px;
-    padding: 0 10px;
-    border-right: 0;
-    border-bottom: 1px solid var(--border);
-    overflow: visible;
-  }
-
-  html[data-theme-layout="workbench"] .sidebar-top .brand {
-    flex: none;
-    margin: 0 8px 0 0;
-  }
-
-  html[data-theme-layout="workbench"] .brand small,
-  html[data-theme-layout="workbench"] .sidebar-collapse-toggle,
-  html[data-theme-layout="workbench"] .nav-heading,
-  html[data-theme-layout="workbench"] .nav-icon-tile,
-  html[data-theme-layout="workbench"] .sidebar-footer {
-    display: none;
-  }
-
-  html[data-theme-layout="workbench"] .nav-section {
-    display: flex;
-    align-items: stretch;
-    gap: 0;
-  }
-
-  /* Settings items follow the workspace items after a hairline separator. */
-  html[data-theme-layout="workbench"] .nav-section + .nav-section {
-    margin-left: 6px;
-    padding-left: 6px;
-    border-left: 1px solid var(--border);
-  }
-
-  html[data-theme-layout="workbench"] .nav-item-group {
-    position: relative;
-    display: flex;
-  }
-
-  html[data-theme-layout="workbench"] .nav-section a {
-    min-height: 44px;
-    border-radius: 0;
-    padding: 0 10px;
-    white-space: nowrap;
-  }
-
-  html[data-theme-layout="workbench"] .nav-section a:hover,
-  html[data-theme-layout="workbench"] .nav-section a.active {
-    background: transparent;
-  }
-
-  /* The active marker moves from the left edge to an underline, as in a menubar. */
-  html[data-theme-layout="workbench"] .nav-section a::before {
-    top: auto;
-    right: 8px;
-    bottom: 0;
-    left: 8px;
-    width: auto;
-    height: 2px;
-  }
-
-  html[data-theme-layout="workbench"] .nav-section a.has-active-child::before {
-    opacity: 1;
-  }
-
-  /* Child navigation becomes a dropdown; :focus-within keeps it reachable from the keyboard. */
-  html[data-theme-layout="workbench"] .nav-children {
-    position: absolute;
-    top: 100%;
-    left: 0;
-    z-index: 40;
-    display: none;
-    min-width: 220px;
-    margin: 0;
-    padding: 6px;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    background: var(--card);
-    box-shadow: var(--shadow-lg);
-  }
-
-  html[data-theme-layout="workbench"] .nav-item-group:hover > .nav-children,
-  html[data-theme-layout="workbench"] .nav-item-group:focus-within > .nav-children {
-    display: grid;
-  }
-
-  html[data-theme-layout="workbench"] .nav-section a.nav-child {
-    min-height: 30px;
-    border-radius: var(--radius-sm);
-  }
-
-  html[data-theme-layout="workbench"] .nav-section a.nav-child::before {
-    display: none;
-  }
-
-  html[data-theme-layout="workbench"] .sidebar-search {
-    order: 1;
-    width: 260px;
-    height: 30px;
-    margin-left: auto;
-    font-family: var(--font-mono);
-  }
-
-  html[data-theme-layout="workbench"] .sidebar-search-empty {
-    order: 2;
-    margin: 0;
-  }
+  /* ── Workbench (Schematic): dense, squared regions ───────────────────────────────────── */
 
   html[data-theme-layout="workbench"] .topbar {
     min-height: 40px;
@@ -189,7 +77,11 @@
 
   /* ── Editorial (Atelier): the page is a sheet on a desk ────────────────────────────────── */
 
+  /* The desk margin around the sheet. On the start side the sidebar already provides it, so the
+     frame takes `--shell-frame-inset-start` there: unset (0) beside a sidebar, the full inset when
+     the navigation is on top. */
   html[data-theme-layout="editorial"] .studio-shell {
+    --shell-frame-inset: 10px;
     background: var(--background);
   }
 
@@ -233,7 +125,7 @@
   }
 
   html[data-theme-layout="editorial"] .main-frame {
-    margin: 10px 10px 10px 0;
+    margin: var(--shell-frame-inset) var(--shell-frame-inset) var(--shell-frame-inset) var(--shell-frame-inset-start, 0);
     border: 1px solid var(--border);
     border-radius: var(--radius-xl);
     background: var(--card);
@@ -258,15 +150,146 @@
   }
 
   html[data-theme-layout="editorial"] .bottom-panel {
-    margin: 0 10px 10px;
+    margin: 0 var(--shell-frame-inset) var(--shell-frame-inset);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
+  }
+
+  /* ── Top navigation: the sidebar becomes a menubar, whatever the theme ─────────────────── */
+  /* Last in the query so it outranks the floating/editorial `.sidebar` rules at equal specificity. */
+
+  /* With no sidebar beside it, the main frame keeps a layout's full frame inset on its start side. */
+  html[data-nav-mode="top"] .studio-shell {
+    --shell-frame-inset-start: var(--shell-frame-inset, 0);
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) auto auto;
+  }
+
+  /* Positioned above the main frame so dropdowns clear its sticky topbar even when a theme gives
+     the sidebar a backdrop-filter (its own stacking context). Wrapping keeps a long nav legible on a
+     narrow desktop: the search box drops to a second row rather than squeezing to a stub. */
+  html[data-nav-mode="top"] .sidebar {
+    position: relative;
+    z-index: 3;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    min-height: 44px;
+    padding: 0 10px;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+    overflow: visible;
+  }
+
+  html[data-nav-mode="top"] .sidebar-top,
+  html[data-nav-mode="top"] .sidebar-top .brand {
+    flex: none;
+  }
+
+  html[data-nav-mode="top"] .sidebar-top .brand {
+    margin: 0 8px 0 0;
+  }
+
+  html[data-nav-mode="top"] .brand small,
+  html[data-nav-mode="top"] .sidebar-collapse-toggle,
+  html[data-nav-mode="top"] .nav-heading,
+  html[data-nav-mode="top"] .nav-icon-tile,
+  html[data-nav-mode="top"] .sidebar-footer {
+    display: none;
+  }
+
+  html[data-nav-mode="top"] .nav-section {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+  }
+
+  /* Settings items follow the workspace items after a hairline separator. */
+  html[data-nav-mode="top"] .nav-section + .nav-section {
+    margin-left: 6px;
+    padding-left: 6px;
+    border-left: 1px solid var(--border);
+  }
+
+  html[data-nav-mode="top"] .nav-item-group {
+    position: relative;
+    display: flex;
+  }
+
+  html[data-nav-mode="top"] .nav-section a {
+    min-height: 44px;
+    border-radius: 0;
+    padding: 0 10px;
+    white-space: nowrap;
+  }
+
+  html[data-nav-mode="top"] .nav-section a:hover,
+  html[data-nav-mode="top"] .nav-section a.active {
+    background: transparent;
+  }
+
+  /* The active marker moves from the left edge to an underline, as in a menubar. */
+  html[data-nav-mode="top"] .nav-section a::before {
+    top: auto;
+    right: 8px;
+    bottom: 0;
+    left: 8px;
+    width: auto;
+    height: 2px;
+  }
+
+  html[data-nav-mode="top"] .nav-section a.has-active-child::before {
+    opacity: 1;
+  }
+
+  /* Child navigation becomes a dropdown; :focus-within keeps it reachable from the keyboard. */
+  html[data-nav-mode="top"] .nav-children {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    z-index: 40;
+    display: none;
+    min-width: 220px;
+    margin: 0;
+    padding: 6px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--card);
+    box-shadow: var(--shadow-lg);
+  }
+
+  html[data-nav-mode="top"] .nav-item-group:hover > .nav-children,
+  html[data-nav-mode="top"] .nav-item-group:focus-within > .nav-children {
+    display: grid;
+  }
+
+  html[data-nav-mode="top"] .nav-section a.nav-child {
+    min-height: 30px;
+    border-radius: var(--radius-sm);
+  }
+
+  html[data-nav-mode="top"] .nav-section a.nav-child::before {
+    display: none;
+  }
+
+  html[data-nav-mode="top"] .sidebar-search {
+    order: 1;
+    width: 260px;
+    height: 30px;
+    margin-left: auto;
+    font-family: var(--font-mono);
+  }
+
+  html[data-nav-mode="top"] .sidebar-search-empty {
+    order: 2;
+    margin: 0;
   }
 }
 
 /* The workbench status bar is keyed on the layout like every rule above, but sits outside the
    desktop media query: ShellFrame renders it in the workbench layout at every width. */
-html[data-theme-layout="workbench"] .studio-statusbar {
+html[data-nav-mode="top"] .studio-statusbar {
   grid-column: 1 / -1;
   display: flex;
   align-items: center;
@@ -281,7 +304,7 @@ html[data-theme-layout="workbench"] .studio-statusbar {
   white-space: nowrap;
 }
 
-html[data-theme-layout="workbench"] .studio-statusbar > span {
+html[data-nav-mode="top"] .studio-statusbar > span {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -290,7 +313,7 @@ html[data-theme-layout="workbench"] .studio-statusbar > span {
   text-overflow: ellipsis;
 }
 
-html[data-theme-layout="workbench"] .studio-statusbar .sidebar-status-dot {
+html[data-nav-mode="top"] .studio-statusbar .sidebar-status-dot {
   margin-top: 0;
   box-shadow: none;
 }

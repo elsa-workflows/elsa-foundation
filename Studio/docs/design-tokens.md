@@ -66,7 +66,7 @@ theme property that changes arrangement rather than paint:
 | --- | --- | --- |
 | `classic` | docked sidebar, topbar, bottom panel | docked palette / canvas / inspector |
 | `floating` | shell regions become rounded islands | palette and inspector float over a full-bleed canvas; curved connections |
-| `workbench` | top menubar navigation with dropdowns, status bar, mono dock tabs | dense palette, drafting-grid canvas, squared connections |
+| `workbench` | dense topbar, mono dock tabs; navigation defaults to `top` (see below) | dense palette, drafting-grid canvas, squared connections |
 | `editorial` | page as a raised sheet; serif italic section headings | no activity toolbox — an **Add step** button and an always-visible connection "+" add steps inline; curved connections |
 
 A module adapts to layout the same way it adapts to mode: CSS guarded on
@@ -74,6 +74,22 @@ A module adapts to layout the same way it adapts to mode: CSS guarded on
 changes markup or behaviour (an affordance that exists in one layout and not another),
 `useStudioThemeLayout()` from `@elsa-workflows/studio-sdk`. Keep layout CSS for a surface in a
 stylesheet that surface imports, so it does not grow shared landing-path CSS.
+
+A fourth attribute, `data-nav-mode` (`left` | `top`), says where the main navigation sits, and is
+a separate axis from layout ([ADR 0022](adr/0022-let-the-user-choose-where-the-navigation-sits.md)).
+The user picks **Theme default**, **Left** or **Top** in the theme menu (kept in `localStorage` as
+`elsa-studio-nav-mode`); Theme default resolves from the layout — `workbench` → `top`, every other
+layout → `left`.
+
+| Navigation mode | Shell |
+| --- | --- |
+| `left` | docked sidebar with section headings, nested child links, backend status in its footer, and the icon-rail collapse |
+| `top` | horizontal menubar: child links become dropdowns, the module search moves right, backend status moves to a status bar |
+
+It is host chrome. The shell's menubar and status-bar rules key on `html[data-nav-mode="top"]` and
+never on a layout or theme, and the mode applies at desktop widths only (below 1025px both share
+the responsive strip). Modules should not need it: a module that adapts to arrangement keys on
+`data-theme-layout`, which the navigation choice never changes.
 
 Modules should need neither: the tokens already resolve per mode, and High contrast additionally
 zeroes shadows, makes `--studio-focus` the solid ring colour and brightens the tinted-chip `-fg`
