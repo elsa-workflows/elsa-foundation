@@ -24,7 +24,10 @@ retirement: a publication a failed replacement handed the slot back to is `Retir
 and completion marks that record `Active` once it serves. This is a controlled lifecycle transition, not the
 restoration the Decision section forbids: it applies only to the record the slot itself names, only while the slot
 names it, and it never revives a record the slot does not name, so Restore keeps its own authority transition. A
-completion that finds the slot moved on after the mark retires the record again. Two races remain until the slot and the projections
+completion that finds the slot moved on after the mark retires the record again. A candidate the coordinator
+answers `AlreadyActive` for through another publication's activation (a same-version publish that lost a race) is
+never journaled active, because no source reference was minted for it: it is recorded `Failed`, and the request is
+answered with the publication the slot names once that record is `Active` (#2252). Two races remain until the slot and the projections
 switch in one transaction (#2230). In the first, a stale completion of a first activation can switch it back on
 beside its successor; that double serving does not heal itself, and only unpublishing the slot clears it. In the
 second, a completion's retire can leave an activation that compensation restored serving with a retired reference.
