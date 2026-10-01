@@ -96,15 +96,19 @@ The publication journal follows the slot the same way
 transition commits before the journal is written, so a process that dies in between leaves the slot's publication a
 `Candidate` and the one it replaced `Active`, whether it died before the projections switched or after.
 `IPublicationActivator.CompleteAsync(definition, slot)` first completes the slot's activation through the coordinator.
-Once that activation serves (the slot still names it at the revision completion read, and its source reference is
+When the coordinator reports the activation its completion replaced, the completion retires that publication's record
+whatever its source reference's state, as `ActivateAsync` retires the record its activation replaced: the runtime
+reports the activation it switched off even when it could not retire that one's reference (#2251), and the completion
+that later retires a leaked reference reports it too, whether or not the slot's publication still lags. Once that
+activation serves (the slot still names it at the revision completion read, and its source reference is
 live), it retires every other `Active` publication of the slot whose source reference the runtime has retired, then
 marks the slot's publication `Active` with an activation time; a `Retired` publication the slot names again, after a
 failed replacement handed the slot back, is marked `Active` the same way, and retired again if the slot has moved
 on by the time it is marked. Marking the slot's publication active is the
 last write, here and in `ActivateAsync`, so a process that stops part way leaves it lagging for the next completion.
 Every write is a status compare-and-swap, so completions are idempotent and concurrent ones apply each transition
-once. The journal is left alone when completion fails, when the slot is empty or owned by another source, and when the
-slot's publication has failed or its reference is retired: none of those serves. It runs:
+once. The journal is left alone when completion fails or when the slot is empty or owned by another source, and the
+slot's publication is left alone when it has failed or its reference is retired: none of those serves. It runs:
 
 - before every `ActivateAsync`, so a replacement retires the publication it replaced from `Active`;
 - in `PublishWorkflowRequestHandler` when a same-version republish finds the slot's publication not yet `Active`. The
@@ -125,11 +129,13 @@ that record cannot be confirmed active, or another source owns the slot (`slot_o
 and the result is a failure. Implementers of `IPublicationActivator` keep this: a successful result's `Publication` may
 therefore be a record other than the candidate, and the publish handler reads the view from it.
 
-One residual: when the runtime could not retire the replaced activation's source reference by the time the slot's
-publication is marked `Active` (a reference-store failure the Runtime catalog's operator recovery describes), that
-replaced publication stays `Active` in the journal, because nothing lags afterwards to send completion back to it. It
-serves nothing, and slot views and the publish-on-reconcile check read the publication the slot names, so it shows
-only in the slot's record history.
+One residual: when a completion publishing did not run, such as the runtime's own shell-start pass, switched the
+replaced activation off, and its source reference still could not be retired when the slot's publication was marked
+`Active` (a reference-store failure the Runtime catalog's operator recovery describes), that replaced publication stays
+`Active` in the journal. Nothing reported it to publishing, and nothing lags afterwards to send completion back to it.
+A later completion publishing runs that retires the reference reports it, and retires the record then. It serves
+nothing, and slot views and the publish-on-reconcile check read the publication the slot names, so it shows only in the
+slot's record history.
 
 ## Persistence-provider checklist
 

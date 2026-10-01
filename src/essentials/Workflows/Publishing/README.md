@@ -95,7 +95,9 @@ The authority transition is one coordinated operation (identical to what the API
    the slot transition, the coordinator completes that activation before the slot's next activation, and at the
    next shell start; `IPublicationActivator.CompleteAsync` then brings the publication records into line, also when a
    republish of the same version finds them behind (#2223). A failed activation compensates by restoring the previous
-   authority before the candidate is removed.
+   authority before the candidate is removed. A candidate that shares the winner's activation id, as two nodes
+   reconciling one mounted set do, keeps the winner's projections rather than compensating them away, and reports
+   `AlreadyActive`, or `Activated` when it completed the winner's activation (ADR 0043, Invariant 6; #2251).
 6. Retire or restore the publication source reference as provenance. Existing executions stay pinned to their
    immutable executable artifact; unpublishing does not delete that artifact.
 

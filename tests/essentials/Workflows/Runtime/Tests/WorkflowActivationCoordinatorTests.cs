@@ -150,6 +150,25 @@ public sealed class WorkflowActivationCoordinatorTests
     }
 
     [Fact]
+    public async Task Slot_transition_that_commits_and_then_throws_is_completed_rather_than_compensated()
+    {
+        var harness = new Harness();
+        var incumbent = await harness.ActivateAsync("incumbent", "artifact-1");
+        harness.Authority.ThrowAfterActivate = new InvalidOperationException("connection lost after commit");
+
+        var result = await harness.ActivateAsync("candidate", "artifact-2", expectedRevision: incumbent.Slot.Revision);
+
+        Assert.Equal(WorkflowActivationOutcome.Activated, result.Outcome);
+        Assert.Equal("incumbent", result.ReplacedActivationId);
+        Assert.Equal("candidate", result.Slot.ActiveActivationId);
+        Assert.Equal(["candidate"], (await harness.ServingBindingsAsync()).Select(binding => binding.ActivationId));
+        Assert.Null((await harness.References.FindAsync(WorkflowActivationReferenceIdentity.Create("candidate")))!.DeletedAt);
+        Assert.Equal(
+            WorkflowActivationCoordinator.ReplacedRetireReason,
+            (await harness.References.FindAsync(WorkflowActivationReferenceIdentity.Create("incumbent")))!.DeletedReason);
+    }
+
+    [Fact]
     public async Task Failed_activation_can_resume_its_exact_retired_reference_on_a_later_attempt()
     {
         var harness = new Harness();
@@ -793,6 +812,7 @@ public sealed class WorkflowActivationCoordinatorTests
     private sealed class RecordingAuthority(IWorkflowActivationAuthority inner, List<string> calls) : IWorkflowActivationAuthority
     {
         public Exception? ThrowOnActivate { get; set; }
+        public Exception? ThrowAfterActivate { get; set; }
         public bool RefuseDeactivation { get; set; }
         public HashSet<string> RefuseActivationIds { get; } = new(StringComparer.Ordinal);
         public CancellationTokenSource? CancelAfterActivate { get; set; }
@@ -816,6 +836,11 @@ public sealed class WorkflowActivationCoordinatorTests
                 return new(false, slot, Conflict: WorkflowActivationConflict.ForeignSource, Diagnostic: "authority compensation refused");
             }
             var result = await inner.TryActivateAsync(request, cancellationToken);
+            if (ThrowAfterActivate is { } committedFailure)
+            {
+                ThrowAfterActivate = null;
+                throw committedFailure;
+            }
             if (CancelAfterActivate is { } source)
             {
                 CancelAfterActivate = null;

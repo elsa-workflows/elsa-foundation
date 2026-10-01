@@ -4,7 +4,7 @@
 
 **Created**: 2026-09-30
 
-**Status**: Implemented — [PR #2183](https://github.com/elsa-workflows/elsa-foundation/pull/2183) for [#2177](https://github.com/elsa-workflows/elsa-foundation/issues/2177). This terminal status ships with the implementation merge, as required by the spec lifecycle. Local actor/configuration/adverse proof is recorded in this spec’s implementation evidence; exact-head and post-merge gates remain recorded on the issue and PR until verified.
+**Status**: Implemented — [PR #2183](https://github.com/elsa-workflows/elsa-foundation/pull/2183) for [#2177](https://github.com/elsa-workflows/elsa-foundation/issues/2177). Delivery verified on main `7bee192e9d7022fcb9889827ab051c9fb5977a20`: exact-head review/CI and resulting-main CI, Maps, filters, Code Quality, Packages and Docker gates passed. Canonical implementation evidence records actual results and retained platform/input limits; broader program outcomes and separately tracked corrections remain open.
 
 **Input**: Program [#1959](https://github.com/elsa-workflows/elsa-foundation/issues/1959), developer epic [#1962](https://github.com/elsa-workflows/elsa-foundation/issues/1962), and the delivered [persistence evidence investigation](../../docs/reports/runtime-composition/developer-persistence-evidence.md). Preserve granular selection, shared defaults, explicit overrides and legacy compatibility while explaining edited compositions before deployment.
 

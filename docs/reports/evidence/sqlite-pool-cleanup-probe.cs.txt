@@ -1,0 +1,233 @@
+using System.Collections.Concurrent;
+using System.Runtime.InteropServices;
+using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
+using Xunit;
+using Xunit.Abstractions;
+
+namespace Elsa.Persistence.EntityFramework.Tests;
+
+// Temporary #2185 discovery. Recorded provider failures are observations, not a passed correctness gate.
+public sealed class EfSqlitePoolCleanupProbeTests(ITestOutputHelper output)
+{
+    private const int Width = 4;
+    private const int Iterations = 1000;
+
+    [Theory]
+    [InlineData("global", true)]
+    [InlineData("scoped", false)]
+    public void Cleanup_observes_unrelated_idle_and_live_native_handles(string policy, bool idleClosed)
+    {
+        var a = new TemporarySqliteDatabase("cleanup-control-a");
+        var b = new TemporarySqliteDatabase("cleanup-control-b");
+        try
+        {
+            Seed(a.ConnectionString);
+            Seed(b.ConnectionString);
+            using var idle = new SqliteConnection(a.ConnectionString);
+            using var live = new SqliteConnection(a.ConnectionString);
+            idle.Open();
+            live.Open();
+            var idleHandle = idle.Handle!;
+            var liveHandle = live.Handle!;
+            Assert.NotEqual(idleHandle.DangerousGetHandle(), liveHandle.DangerousGetHandle());
+            idle.Close();
+            Assert.False(idleHandle.IsClosed);
+
+            Cleanup(b.Path, policy);
+
+            Assert.Equal(idleClosed, idleHandle.IsClosed);
+            Assert.False(liveHandle.IsClosed);
+            using var command = live.CreateCommand();
+            command.CommandText = "SELECT 1";
+            Assert.Equal(1L, command.ExecuteScalar());
+            output.WriteLine($"policy={policy}; unrelatedIdleClosed={idleHandle.IsClosed}; unrelatedLiveClosed={liveHandle.IsClosed}; liveRead=1");
+        }
+        finally
+        {
+            Cleanup(a.Path, "scoped");
+            Cleanup(b.Path, "scoped");
+        }
+        AssertFilesAbsent([a.Path, b.Path]);
+    }
+
+    [Fact]
+    public async Task Distinct_resource_openers_record_three_cleanup_policies()
+    {
+        foreach (var policy in new[] { "global", "scoped", "unpooled" })
+            await ObserveAsync(policy);
+    }
+
+    private async Task ObserveAsync(string policy)
+    {
+        var paths = Enumerable.Range(0, Width).Select(index => new TemporarySqliteDatabase($"cleanup-{policy}-a-{index}").Path).ToArray();
+        var b = new TemporarySqliteDatabase($"cleanup-{policy}-b");
+        var state = new Observation();
+        using var stopping = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+        using var start = new ManualResetEventSlim();
+        using var round = new Barrier(Width + 1);
+        var tasks = new List<Task>();
+        var joined = false;
+        try
+        {
+            foreach (var path in paths)
+                Seed(ConnectionString(path, policy));
+            for (var worker = 0; worker < Width; worker++)
+            {
+                var index = worker;
+                tasks.Add(Task.Factory.StartNew(() => OpenLoop(index), CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default));
+            }
+            tasks.Add(Task.Factory.StartNew(CleanupLoop, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default));
+            start.Set();
+            await Task.WhenAll(tasks).WaitAsync(TimeSpan.FromSeconds(70));
+            joined = true;
+        }
+        finally
+        {
+            stopping.Cancel();
+            start.Set();
+            if (!joined)
+            {
+                await Task.WhenAll(tasks).WaitAsync(TimeSpan.FromSeconds(10));
+                joined = true;
+            }
+            // Never delete files while an owned opener still uses them.
+            foreach (var path in paths.Append(b.Path))
+                Cleanup(path, "scoped");
+        }
+        AssertFilesAbsent(paths.Append(b.Path));
+        var complete = state.Attempted == Width * Iterations && state.Cleanups == Iterations;
+        output.WriteLine($"policy={policy}; workloadComplete={complete}; attempted={state.Attempted}; opened={state.Opened}; reads={state.Reads}; cleanups={state.Cleanups}; opensDuringCleanup={state.OpensDuringCleanup}; cleanupsDuringOpen={state.CleanupsDuringOpen}; providerFailures={state.FailureCount}; joined={joined}; leftovers=0");
+        foreach (var failure in state.Failures)
+            output.WriteLine(failure);
+        Assert.True(complete, "The bounded probe did not complete its fixed workload; outcomes cannot be compared as equal workloads.");
+
+        void OpenLoop(int worker)
+        {
+            try
+            {
+                start.Wait(stopping.Token);
+                for (var iteration = 0; iteration < Iterations; iteration++)
+                {
+                    round.SignalAndWait(stopping.Token);
+                    Interlocked.Increment(ref state.Attempted);
+                    SafeHandle? native = null;
+                    try
+                    {
+                        using var context = Context(ConnectionString(paths[worker], policy));
+                        Interlocked.Increment(ref state.Opening);
+                        try
+                        {
+                            if (Volatile.Read(ref state.Clearing) != 0)
+                                Interlocked.Increment(ref state.OpensDuringCleanup);
+                            if (worker % 2 == 0)
+                                context.Database.OpenConnection();
+                            else
+                                context.Database.OpenConnectionAsync(stopping.Token).GetAwaiter().GetResult();
+                            native = ((SqliteConnection)context.Database.GetDbConnection()).Handle;
+                            Interlocked.Increment(ref state.Opened);
+                        }
+                        finally { Interlocked.Decrement(ref state.Opening); }
+                        var count = worker % 2 == 0 ? context.Rows.Count() : context.Rows.CountAsync(stopping.Token).GetAwaiter().GetResult();
+                        if (count != 1)
+                            throw new InvalidOperationException("Expected one seed row.");
+                        Interlocked.Increment(ref state.Reads);
+                    }
+                    catch (OperationCanceledException) when (stopping.IsCancellationRequested) { return; }
+                    catch (Exception failure)
+                    {
+                        Record($"policy={policy}; worker={worker}; iteration={iteration}; thread={Environment.CurrentManagedThreadId}; path={paths[worker]}; native={NativeState(native)}\n{failure}");
+                    }
+                }
+            }
+            catch (OperationCanceledException) when (stopping.IsCancellationRequested) { }
+            catch (Exception failure) { Record($"opener loop failed: {failure}"); stopping.Cancel(); }
+        }
+
+        void CleanupLoop()
+        {
+            try
+            {
+                start.Wait(stopping.Token);
+                for (var iteration = 0; iteration < Iterations; iteration++)
+                {
+                    // Own B is closed before cleanup; each iteration recreates this unique owned path.
+                    using (var connection = new SqliteConnection(b.ConnectionString))
+                    {
+                        connection.Open();
+                        using var command = connection.CreateCommand();
+                        command.CommandText = "CREATE TABLE IF NOT EXISTS cleanup_row (Id INTEGER PRIMARY KEY)";
+                        command.ExecuteNonQuery();
+                    }
+                    round.SignalAndWait(stopping.Token);
+                    Interlocked.Exchange(ref state.Clearing, 1);
+                    if (Volatile.Read(ref state.Opening) != 0)
+                        Interlocked.Increment(ref state.CleanupsDuringOpen);
+                    try { Cleanup(b.Path, policy); Interlocked.Increment(ref state.Cleanups); }
+                    finally { Interlocked.Exchange(ref state.Clearing, 0); }
+                }
+            }
+            catch (OperationCanceledException) when (stopping.IsCancellationRequested) { }
+            catch (Exception failure) { Record($"cleanup loop failed: {failure}"); stopping.Cancel(); }
+        }
+
+        void Record(string failure)
+        {
+            if (Interlocked.Increment(ref state.FailureCount) <= 20)
+                state.Failures.Enqueue(failure);
+        }
+    }
+
+    private static void Seed(string connectionString)
+    {
+        using var context = Context(connectionString);
+        context.Database.EnsureCreated();
+        context.Rows.Add(new ProbeRow { Id = 1 });
+        context.SaveChanges();
+    }
+
+    private static ProbeContext Context(string connectionString)
+    {
+        var builder = new DbContextOptionsBuilder<ProbeContext>();
+        // Preserve the production per-pool serial-open workaround; each worker owns a different pool.
+        EfRelationalProviderBinding.UseSqlite(builder, connectionString, "__EFMigrationsHistory_CleanupProbe");
+        return new ProbeContext(builder.Options);
+    }
+
+    private static string ConnectionString(string path, string policy) => policy == "unpooled" ? $"Data Source={path};Pooling=False" : $"Data Source={path}";
+
+    private static void Cleanup(string path, string policy)
+    {
+        if (policy != "scoped")
+        {
+            TemporarySqliteDatabase.ClearPoolAndDeleteFiles(path);
+            return;
+        }
+        using var connection = new SqliteConnection($"Data Source={path}");
+        SqliteConnection.ClearPool(connection);
+        foreach (var file in Files(path))
+            File.Delete(file);
+    }
+
+    private static string[] Files(string path) => [path, $"{path}-wal", $"{path}-shm", $"{path}-journal"];
+    private static void AssertFilesAbsent(IEnumerable<string> paths)
+    {
+        foreach (var file in paths.SelectMany(Files))
+            Assert.False(File.Exists(file), "A probe-owned SQLite file or sidecar remains.");
+    }
+
+    private static string NativeState(SafeHandle? handle) => handle is null ? "unobserved" : $"0x{handle.DangerousGetHandle().ToInt64():x};closed={handle.IsClosed}";
+
+    private sealed class Observation
+    {
+        public int Attempted, Opened, Reads, Cleanups, Opening, Clearing, OpensDuringCleanup, CleanupsDuringOpen, FailureCount;
+        public ConcurrentQueue<string> Failures { get; } = new();
+    }
+
+    private sealed class ProbeContext(DbContextOptions<ProbeContext> options) : DbContext(options)
+    {
+        public DbSet<ProbeRow> Rows => Set<ProbeRow>();
+    }
+
+    private sealed class ProbeRow { public int Id { get; set; } }
+}
