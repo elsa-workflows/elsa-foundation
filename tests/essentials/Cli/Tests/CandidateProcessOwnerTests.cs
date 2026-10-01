@@ -537,32 +537,29 @@ public sealed class CandidateProcessOwnerTests
     [Fact]
     public void Public_supervisor_helpers_reject_null_constructor_dependencies()
     {
-        var launcher = new CandidateProcessSupervisor.CandidateSupervisorPayloadLauncher(() => "/host", _ => null);
+        using var stream = new MemoryStream();
         Assert.Throws<ArgumentNullException>(() => new CandidateProcessSupervisor.CandidateSupervisorPayloadLauncher(null!, _ => null));
         Assert.Throws<ArgumentNullException>(() => new CandidateProcessSupervisor.CandidateSupervisorPayloadLauncher(() => "/host", null!));
 
-        var native = new CandidateProcessSupervisor.CandidateSupervisorNative(() => 0, () => 1, () => 1, (_, _) => 0);
         Assert.Throws<ArgumentNullException>(() => new CandidateProcessSupervisor.CandidateSupervisorNative(null!, () => 1, () => 1, (_, _) => 0));
         Assert.Throws<ArgumentNullException>(() => new CandidateProcessSupervisor.CandidateSupervisorNative(() => 0, null!, () => 1, (_, _) => 0));
         Assert.Throws<ArgumentNullException>(() => new CandidateProcessSupervisor.CandidateSupervisorNative(() => 0, () => 1, null!, (_, _) => 0));
         Assert.Throws<ArgumentNullException>(() => new CandidateProcessSupervisor.CandidateSupervisorNative(() => 0, () => 1, () => 1, null!));
 
-        Assert.Throws<ArgumentNullException>(() => new CandidateSupervisorStandardStreamsFactory(null!, () => new MemoryStream(),
-            () => new MemoryStream()));
-        Assert.Throws<ArgumentNullException>(() => new CandidateSupervisorStandardStreamsFactory(() => new MemoryStream(), null!,
-            () => new MemoryStream()));
-        Assert.Throws<ArgumentNullException>(() => new CandidateSupervisorStandardStreamsFactory(() => new MemoryStream(),
-            () => new MemoryStream(), null!));
+        Assert.Throws<ArgumentNullException>(() => new CandidateSupervisorStandardStreamsFactory(null!, () => stream,
+            () => stream));
+        Assert.Throws<ArgumentNullException>(() => new CandidateSupervisorStandardStreamsFactory(() => stream, null!,
+            () => stream));
+        Assert.Throws<ArgumentNullException>(() => new CandidateSupervisorStandardStreamsFactory(() => stream,
+            () => stream, null!));
 
-        Assert.Throws<ArgumentNullException>(() => new CandidateSupervisorStandardStreams(null!, new MemoryStream(),
-            new MemoryStream()));
-        Assert.Throws<ArgumentNullException>(() => new CandidateSupervisorStandardStreams(new MemoryStream(), null!,
-            new MemoryStream()));
-        Assert.Throws<ArgumentNullException>(() => new CandidateSupervisorStandardStreams(new MemoryStream(), new MemoryStream(),
+        Assert.Throws<ArgumentNullException>(() => new CandidateSupervisorStandardStreams(null!, stream,
+            stream));
+        Assert.Throws<ArgumentNullException>(() => new CandidateSupervisorStandardStreams(stream, null!,
+            stream));
+        Assert.Throws<ArgumentNullException>(() => new CandidateSupervisorStandardStreams(stream, stream,
             null!));
 
-        _ = launcher;
-        _ = native;
     }
 
     [Fact]
