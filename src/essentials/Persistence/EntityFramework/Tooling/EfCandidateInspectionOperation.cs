@@ -251,7 +251,7 @@ public sealed class EfCandidateInspectionOperation
         IReadOnlyList<string> disabled,
         IReadOnlyDictionary<string, ShellFeatureDescriptor> descriptors)
     {
-        foreach (var id in candidate.AcceptedFeatureIds.Concat(candidate.RemovedFeatureIds))
+        foreach (var id in candidate.AcceptedFeatureIds.Concat(candidate.RemovedFeatureIds).Concat(disabled))
         {
             if (!descriptors.ContainsKey(id))
                 return new SelectionConflict("unknown", SafeIdentityOrNull(id));

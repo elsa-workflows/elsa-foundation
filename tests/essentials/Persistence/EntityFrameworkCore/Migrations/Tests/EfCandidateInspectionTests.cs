@@ -848,6 +848,69 @@ public sealed class EfCandidateInspectionTests : IDisposable
         Assert.Empty(Directory.EnumerateFiles(temporaryDirectory));
     }
 
+    [Theory]
+    [InlineData("unknown-disabled", "unknown")]
+    [InlineData("disabled-case-alias", "case-collision")]
+    public async Task Candidate_refuses_unknown_or_case_aliased_disabled_ids_while_runtime_preparation_uses_the_same_files(
+        string mutation, string expectedReason)
+    {
+        var sourceCandidate = CreateRuntimeCandidate();
+        var files = sourceCandidate.Request["candidate"]!["files"]!.AsArray()
+            .ToDictionary(
+                file => file!["name"]!.GetValue<string>(),
+                file => Convert.FromBase64String(file!["content"]!.GetValue<string>()),
+                StringComparer.Ordinal);
+        var descriptors = FeatureDiscovery.DiscoverFeatures(EfConfigurationProbeTests.HostAssemblies)
+            .ToDictionary(feature => feature.Id, StringComparer.OrdinalIgnoreCase);
+        string disabledId;
+
+        if (mutation == "unknown-disabled")
+        {
+            disabledId = "CandidateUnknownDisabledFeature";
+            Assert.False(descriptors.ContainsKey(disabledId));
+        }
+        else
+        {
+            var knownUnselectedId = descriptors.Keys.First(id =>
+                !sourceCandidate.AcceptedFeatureIds.Contains(id, StringComparer.OrdinalIgnoreCase) &&
+                id.Any(char.IsUpper));
+            disabledId = knownUnselectedId.ToLowerInvariant();
+            Assert.NotEqual(knownUnselectedId, disabledId);
+        }
+
+        var shellSettings = JsonNode.Parse(Encoding.UTF8.GetString(files["shells.json"]))!.AsObject();
+        var features = shellSettings["CShells"]!["Shells"]![Shell]!["Features"]!.AsObject();
+        Assert.False(features.ContainsKey(disabledId));
+        features[disabledId] = false;
+        files["shells.json"] = Encoding.UTF8.GetBytes(shellSettings.ToJsonString());
+        using var configuration = ReadConfiguration(files);
+        var runtimeContext = EfConfigurationProbeTests.ComposeRuntimeContext(configuration, Shell);
+        Assert.Contains(disabledId, runtimeContext.DisabledFeatureIds);
+        Assert.DoesNotContain(disabledId, runtimeContext.EnabledFeatureIds);
+        var runtimePatch = await new EfPersistenceShellSettingsPreparer(configuration)
+            .PrepareAsync(runtimeContext, CancellationToken.None);
+        Assert.NotEmpty(runtimePatch.ConfigurationData);
+        var runtimePatchJson = JsonSerializer.Serialize(runtimePatch);
+        Assert.DoesNotContain(ConnectionCanary, runtimePatchJson, StringComparison.Ordinal);
+        Assert.DoesNotContain(UnknownSettingCanary, runtimePatchJson, StringComparison.Ordinal);
+
+        var candidate = CreateCandidate(sourceCandidate.AcceptedFeatureIds, files);
+        using var response = new MemoryStream();
+        var operation = new EfCandidateInspectionOperation(() => EfConfigurationProbeTests.HostAssemblies);
+        var exitCode = await RunOperationAsync(operation, candidate.Request, response, CancellationToken.None);
+        var responseJson = Encoding.UTF8.GetString(response.ToArray());
+        using var document = JsonDocument.Parse(responseJson);
+        var root = document.RootElement;
+
+        Assert.Equal(EfToolingExitCode.Refusal, exitCode);
+        Assert.Equal("candidate-selection-conflict", root.GetProperty("error").GetProperty("code").GetString());
+        Assert.Equal(expectedReason, root.GetProperty("error").GetProperty("reason").GetString());
+        Assert.False(root.TryGetProperty("configurationResolution", out _));
+        AssertNoPrivateCandidateValues(responseJson);
+        Assert.False(File.Exists(DatabasePath));
+        Assert.Empty(Directory.EnumerateFiles(temporaryDirectory));
+    }
+
     [Fact]
     public async Task Deleting_an_explicit_diagnostic_binding_changes_runtime_and_candidate_targets_from_the_same_edited_bytes()
     {
