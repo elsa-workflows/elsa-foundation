@@ -96,9 +96,10 @@ public sealed class EfSchemaChainStoreTests : IAsyncDisposable
             Assert.False(document.RootElement.TryGetProperty("Lines", out _), "Expected the document to carry no lines of its own once version 5 removed them.");
         }
         Assert.Equal("[]", lines);
-        var calls = UpcasterCalls.Snapshot();
+        using var observation = UpcasterCalls.Begin();
+        var calls = observation.Snapshot();
         Assert.Equal(Expected with { Total = 43 }, await orders.Store().ReadAsync("order-1"));
-        Assert.Equal(calls, UpcasterCalls.Snapshot());
+        Assert.Equal(calls, observation.Snapshot());
     }
 
     /// <summary>US1, scenario 3 and FR-021: a row at the current version is read without running any upcaster.</summary>
@@ -106,11 +107,65 @@ public sealed class EfSchemaChainStoreTests : IAsyncDisposable
     public async Task A_row_at_the_current_version_runs_no_upcaster()
     {
         await orders.PutAsync("order-5", "5", "EUR", """{"Id":"order-5","Total":42,"Currency":"EUR"}""", "[]");
-        var calls = UpcasterCalls.Snapshot();
+        using var observation = UpcasterCalls.Begin();
+        var calls = observation.Snapshot();
 
         _ = await orders.Store().ReadAsync("order-5");
 
-        Assert.Equal(calls, UpcasterCalls.Snapshot());
+        Assert.Equal(calls, observation.Snapshot());
+    }
+
+    [Fact]
+    public async Task Overlapping_observation_scopes_keep_upcaster_counts_isolated_and_restore_the_parent()
+    {
+        await orders.PutAsync("order-own", "1", null, """{"Id":"order-own","Total":42}""");
+        await orders.PutAsync("order-unrelated", "1", null, """{"Id":"order-unrelated","Total":42}""");
+
+        using var parent = UpcasterCalls.Begin();
+        var start = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var ownReady = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var unrelatedReady = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var ownRead = Task.Run(async () =>
+        {
+            ownReady.SetResult();
+            await start.Task;
+            return await orders.Store().ReadAsync("order-own");
+        });
+        var unrelatedRead = Task.Run(async () =>
+        {
+            SyntheticOrders.Order value;
+            (int Currency, int Lines, int Move, int Remove) unrelatedCalls;
+            using (var unrelated = UpcasterCalls.Begin())
+            {
+                unrelatedReady.SetResult();
+                await start.Task;
+                value = await orders.Store().ReadAsync("order-unrelated");
+                await ownRead;
+                unrelatedCalls = unrelated.Snapshot();
+            }
+
+            // Disposing the nested scope must restore the parent recorder in this child flow.
+            _ = await orders.Store().ReadAsync("order-unrelated");
+            return (value, unrelatedCalls);
+        });
+
+        try
+        {
+            await Task.WhenAll(ownReady.Task, unrelatedReady.Task);
+            start.SetResult();
+            var own = await ownRead;
+            var (unrelated, unrelatedCalls) = await unrelatedRead;
+
+            Assert.Equal(Expected with { Id = "order-own" }, own);
+            Assert.Equal(Expected with { Id = "order-unrelated" }, unrelated);
+            Assert.Equal((1, 1, 1, 1), unrelatedCalls);
+            Assert.Equal((2, 2, 2, 2), parent.Snapshot());
+        }
+        finally
+        {
+            start.TrySetResult();
+            await Task.WhenAll(ownRead, unrelatedRead);
+        }
     }
 
     /// <summary>US2, scenarios 1 and 3: above the chain, below it and unstamped are skew, and never reported as corruption.</summary>

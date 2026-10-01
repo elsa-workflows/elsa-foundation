@@ -52,7 +52,7 @@ public sealed class EfRecurringTriggerScheduleStoreTests
         Assert.Equal(RuntimeOperationalStateEfModule.RecurringScheduleIdMaximumLength, schedule.ScheduleId.Length);
         await store.SaveAsync(schedule);
         Assert.Equal(schedule, await store.FindAsync(schedule.ScheduleId));
-        Assert.True(await store.TryAdvanceAsync(schedule.ScheduleId, Now, Now.AddMinutes(1)));
+        Assert.True(await store.SettleClaimAsync(Assert.Single(await store.ClaimDueAsync(Claim(Now))), Now.AddMinutes(1)));
         Assert.Equal(Now.AddMinutes(1), (await store.FindAsync(schedule.ScheduleId))!.NextOccurrence);
         await store.DeleteAsync(schedule.ScheduleId);
         Assert.Null(await store.FindAsync(schedule.ScheduleId));
@@ -61,13 +61,13 @@ public sealed class EfRecurringTriggerScheduleStoreTests
         await store.PrepareActivationAsync(activation, [schedule]);
         Assert.Equal(schedule.ScheduleId, Assert.Single((await store.ListByActivationPageAsync(new RecurringTriggerScheduleActivationPageQuery(activation))).Items).ScheduleId);
         await store.ActivateAsync(activation, null);
-        Assert.True(await store.TryAdvanceAsync(schedule.ScheduleId, Now, Now.AddMinutes(1)));
+        Assert.True(await store.SettleClaimAsync(Assert.Single(await store.ClaimDueAsync(Claim(Now))), Now.AddMinutes(1)));
         await store.DeleteByActivationAsync(activation);
         Assert.Null(await store.FindAsync(schedule.ScheduleId));
     }
 
     [Fact]
-    public async Task SQLite_round_trips_due_pages_scope_isolation_and_compare_and_swap()
+    public async Task SQLite_round_trips_due_claims_pages_scope_isolation_and_claim_fencing()
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");
         await connection.OpenAsync();
@@ -82,16 +82,17 @@ public sealed class EfRecurringTriggerScheduleStoreTests
         await store.SaveAsync(sameB);
         await store.SaveAsync(Schedule("artifact-a", "future", Now.AddMinutes(10)));
 
-        Assert.Equal([early.ScheduleId, sameA.ScheduleId, sameB.ScheduleId], (await store.ListDueAsync(Now, 10)).Select(x => x.ScheduleId));
-        Assert.Equal([early.ScheduleId, sameA.ScheduleId], (await store.ListDueAsync(Now, 2)).Select(x => x.ScheduleId));
+        var claims = await store.ClaimDueAsync(Claim(Now, limit: 2));
+        Assert.Equal([early.ScheduleId, sameA.ScheduleId], claims.Select(x => x.Schedule.ScheduleId));
+        Assert.Equal([sameB.ScheduleId], (await store.ClaimDueAsync(Claim(Now))).Select(x => x.Schedule.ScheduleId));
         var firstPage = await store.ListByArtifactPageAsync(new RecurringTriggerScheduleArtifactPageQuery("artifact-a", 2));
         Assert.Equal(2, firstPage.Items.Count);
         Assert.NotNull(firstPage.NextContinuationToken);
         Assert.Equal(2, (await store.ListByArtifactPageAsync(new RecurringTriggerScheduleArtifactPageQuery("artifact-a", 2, firstPage.NextContinuationToken))).Items.Count);
 
-        Assert.False(await store.TryAdvanceAsync(early.ScheduleId, Now.AddMinutes(-4), Now));
-        Assert.True(await store.TryAdvanceAsync(early.ScheduleId, early.NextOccurrence, Now));
-        Assert.False(await store.TryAdvanceAsync(early.ScheduleId, early.NextOccurrence, Now));
+        var earlyClaim = claims.First();
+        Assert.True(await store.SettleClaimAsync(earlyClaim, Now));
+        Assert.False(await store.SettleClaimAsync(earlyClaim, Now.AddMinutes(1)));
         Assert.Equal(Now, (await store.FindAsync(early.ScheduleId))!.NextOccurrence);
 
         var other = Store(context, "tenant-b");
@@ -115,11 +116,11 @@ public sealed class EfRecurringTriggerScheduleStoreTests
         await store.PrepareActivationAsync("publication-old", [old, oldSecond]);
         await store.PrepareActivationAsync("publication-new", [replacement]);
         Assert.All((await store.ListByActivationPageAsync(new RecurringTriggerScheduleActivationPageQuery("publication-old"))).Items, x => Assert.False(x.IsActive));
-        Assert.Empty(await store.ListDueAsync(Now, 10));
+        Assert.Empty(await ActiveDueAsync(store, "artifact-old"));
         await Assert.ThrowsAsync<InvalidOperationException>(() => store.SaveAsync(old with { Expression = "PT2M" }).AsTask());
 
         await store.ActivateAsync("publication-old", null);
-        Assert.Single(await store.ListDueAsync(Now, 10));
+        Assert.Single(await ActiveDueAsync(store, "artifact-old"));
         await store.ActivateAsync("publication-new", "publication-old");
         Assert.True(Assert.Single(await ((IRecurringTriggerScheduleStore)store).ListByActivationAsync("publication-new")).IsActive);
         Assert.All(await ((IRecurringTriggerScheduleStore)store).ListByActivationAsync("publication-old"), x => Assert.False(x.IsActive));
@@ -148,7 +149,7 @@ public sealed class EfRecurringTriggerScheduleStoreTests
         var row = await context.RecurringTriggerSchedules.SingleAsync(x => x.ArtifactId == EfRelationalIdentity.Encode("artifact-corrupt"));
         row.ArtifactIdHash = "corrupt";
         await context.SaveChangesAsync();
-        await Assert.ThrowsAsync<InvalidDataException>(() => store.ListDueAsync(Now, 10).AsTask());
+        await Assert.ThrowsAsync<InvalidDataException>(() => store.ClaimDueAsync(Claim(Now)).AsTask());
         Assert.Equal(1, await context.RecurringTriggerSchedules.CountAsync());
     }
 
@@ -187,7 +188,8 @@ public sealed class EfRecurringTriggerScheduleStoreTests
         await store.PrepareActivationAsync("publication-live", [advanced, exhausted]);
         await store.ActivateAsync("publication-live", null);
 
-        Assert.True(await store.TryAdvanceAsync(advanced.ScheduleId, Now, Now.AddMinutes(1)));
+        var claims = await store.ClaimDueAsync(Claim(Now));
+        Assert.True(await store.SettleClaimAsync(claims.Single(x => x.Schedule.ScheduleId == advanced.ScheduleId), Now.AddMinutes(1)));
         await store.DeleteAsync(exhausted.ScheduleId);
         await store.ActivateAsync("publication-live", null);
         Assert.Equal(Now.AddMinutes(1), (await store.FindAsync(advanced.ScheduleId))!.NextOccurrence);
@@ -249,24 +251,23 @@ public sealed class EfRecurringTriggerScheduleStoreTests
     }
 
     [Fact]
-    public async Task Advancing_loses_the_claim_on_a_transient_conflict_the_provider_execution_strategy_wrapped()
+    public async Task Claiming_loses_the_claim_on_a_transient_conflict_the_provider_execution_strategy_wrapped()
     {
         await using var schedules = await SeededSchedules.CreateAsync(FailingSaveInterceptor.WrappedDeadlock());
 
-        Assert.False(await schedules.Store.TryAdvanceAsync(SeededSchedules.Standalone.ScheduleId, Now, Now.AddMinutes(1)));
+        Assert.Empty(await schedules.Store.ClaimDueAsync(Claim(Now)));
 
         Assert.Empty(schedules.Context.ChangeTracker.Entries());
         Assert.Equal(Now, (await schedules.Store.FindAsync(SeededSchedules.Standalone.ScheduleId))!.NextOccurrence);
     }
 
     [Fact]
-    public async Task Advancing_fails_on_a_wrapped_provider_failure_that_is_not_a_transient_conflict()
+    public async Task Claiming_fails_on_a_wrapped_provider_failure_that_is_not_a_transient_conflict()
     {
         var saves = FailingSaveInterceptor.WrappedProviderFailure();
         await using var schedules = await SeededSchedules.CreateAsync(saves);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            schedules.Store.TryAdvanceAsync(SeededSchedules.Standalone.ScheduleId, Now, Now.AddMinutes(1)).AsTask());
+        await Assert.ThrowsAsync<InvalidOperationException>(() => schedules.Store.ClaimDueAsync(Claim(Now)).AsTask());
 
         Assert.Equal(1, saves.Attempts);
     }
@@ -316,6 +317,12 @@ public sealed class EfRecurringTriggerScheduleStoreTests
     private static IServiceCollection OperationalComposition() => new ServiceCollection()
         .AddWorkflowRuntime()
         .AddRuntimeOperationalStateEntityFrameworkCore(new RuntimeOperationalStateEntityFrameworkCoreOptions { Provider = "Sqlite", ConnectionString = "Data Source=:memory:", RecoveryContinuationSigningKey = new string('k', 32) });
+
+    private static RecurringTriggerOccurrenceClaimRequest Claim(DateTimeOffset now, int limit = 10) => new("pump", now, TimeSpan.FromMinutes(1), limit);
+
+    // The artifact's schedules the pump would claim now, read without claiming them.
+    private static async Task<IReadOnlyList<RecurringTriggerSchedule>> ActiveDueAsync(IRecurringTriggerScheduleStore store, string artifactId) =>
+        (await store.ListAllByArtifactAsync(artifactId)).Where(x => x.IsActive && x.NextOccurrence <= Now).ToArray();
 
     private static RuntimeSqliteDbContext Context(SqliteConnection connection) =>
         new(new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connection).Options);

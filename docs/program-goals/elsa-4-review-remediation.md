@@ -171,7 +171,9 @@ then the W16/W17/W19/W21 parallel wave ([#465](https://github.com/elsa-workflows
   recurring-trigger schedule store (new §E6 doc kind `recurringTriggerSchedule` + golden fixture,
   in-memory + Groundwork) + hosted pump through `IStimulusRouter`; missed-occurrence policy = fire at
   most once and advance to next future occurrence, never replay backlog; W20 cluster-safety hook =
-  `TryAdvanceAsync` compare-and-swap on `NextOccurrence`. Cronos pinned in `Directory.Packages.props`.
+  `TryAdvanceAsync` compare-and-swap on `NextOccurrence` (since #2198 each occurrence is fired at least
+  once under a fenced occurrence claim instead, and `TryAdvanceAsync` is gone; see
+  [durable timers](../runtime-durable-timers.md)). Cronos pinned in `Directory.Packages.props`.
   **3 `Elsa.Activities.Scripting` RunJavaScript:** hardened on the existing Jint infra (W11's
   `JintEngineFactory` already applies cancellation + timeout/statement/recursion constraints to the
   activity path — partial DS-9). Two new Runtime.Core seams catalogued
@@ -198,7 +200,8 @@ then the W16/W17/W19/W21 parallel wave ([#465](https://github.com/elsa-workflows
   harness only**; a durable Groundwork placement + transport store is a **named follow-up**, a
   mechanical drop-in against the now-frozen contracts and the committed v1 golden fixture (document kind
   `executionCommandTransport`, protected by a drift test). W16's `TryAdvanceAsync` recurring-pump
-  cluster-safety seam was **not** touched (out of required scope). New leaf seams catalogued in
+  cluster-safety seam was **not** touched (out of required scope; #2198 later replaced it with fenced
+  occurrence claims). New leaf seams catalogued in
   [`EXTENSION_POINTS.md`](../../src/essentials/Workflows/Runtime/EXTENSION_POINTS.md) and glossary.
 
 Phase 4 (W22–W32 + product track): **approved 2026-07-04** by Sipke per the

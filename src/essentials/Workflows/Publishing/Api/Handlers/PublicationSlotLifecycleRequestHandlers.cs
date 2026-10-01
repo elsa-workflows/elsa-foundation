@@ -73,9 +73,11 @@ public sealed class UnpublishPublicationSlotRequestHandler(
         }
 
         var now = timeProvider.GetUtcNow();
-        var retired = publication with { Status = PublicationStatus.Retired, RetiredAt = now };
-        if (!await publicationStore.TryTransitionAsync(retired, PublicationStatus.Active, cancellationToken))
-            throw new InvalidOperationException($"Publication '{publicationId}' could not be retired.");
+        // The record may still be a candidate, if a process stopped after its slot transition and nothing has completed
+        // it since (#2223), and the publication it replaced may still be active. Only a sibling the runtime has recorded
+        // as replaced is retired: a publish that won the slot after the deactivation owns a live reference and stays.
+        await PublicationRecordRetirement.RetireAsync(publicationStore, publication, now, cancellationToken);
+        await PublicationRecordRetirement.RetireReplacedAsync(publicationStore, sourceReferenceStore, slot.SlotId, publicationId, now, cancellationToken);
         if (publication.SourceReferenceId is { } sourceReferenceId)
         {
             logger?.LogInformation(

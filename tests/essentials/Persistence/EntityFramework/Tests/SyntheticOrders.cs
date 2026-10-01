@@ -122,21 +122,53 @@ public static class SyntheticOrders
     /// <summary>How often each upcaster has run: a test-only observation; the upcasters stay pure functions of their input.</summary>
     internal static class UpcasterCalls
     {
-        private static int currency;
-        private static int lines;
-        private static int move;
-        private static int remove;
+        private static readonly AsyncLocal<Scope?> Current = new();
 
-        public static void Currency() => Interlocked.Increment(ref currency);
+        public static Scope Begin() => new();
 
-        public static void Lines() => Interlocked.Increment(ref lines);
+        public static void Currency() => Current.Value?.RecordCurrency();
 
-        public static void Move() => Interlocked.Increment(ref move);
+        public static void Lines() => Current.Value?.RecordLines();
 
-        public static void Remove() => Interlocked.Increment(ref remove);
+        public static void Move() => Current.Value?.RecordMove();
 
-        public static (int Currency, int Lines, int Move, int Remove) Snapshot() =>
-            (Volatile.Read(ref currency), Volatile.Read(ref lines), Volatile.Read(ref move), Volatile.Read(ref remove));
+        public static void Remove() => Current.Value?.RecordRemove();
+
+        internal sealed class Scope : IDisposable
+        {
+            private readonly Scope? previous;
+            private int currency;
+            private int lines;
+            private int move;
+            private int remove;
+            private bool disposed;
+
+            internal Scope()
+            {
+                previous = Current.Value;
+                Current.Value = this;
+            }
+
+            internal void RecordCurrency() => Interlocked.Increment(ref currency);
+
+            internal void RecordLines() => Interlocked.Increment(ref lines);
+
+            internal void RecordMove() => Interlocked.Increment(ref move);
+
+            internal void RecordRemove() => Interlocked.Increment(ref remove);
+
+            public (int Currency, int Lines, int Move, int Remove) Snapshot() =>
+                (Volatile.Read(ref currency), Volatile.Read(ref lines), Volatile.Read(ref move), Volatile.Read(ref remove));
+
+            public void Dispose()
+            {
+                if (disposed)
+                    return;
+
+                Current.Value = previous;
+                disposed = true;
+            }
+        }
     }
 }
 

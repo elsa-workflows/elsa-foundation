@@ -703,6 +703,24 @@ public sealed class RuntimeWorkflowExecutionStartDispatchTests
     }
 
     [Fact]
+    public async Task DispatchAsync_OccurrenceStartThatTheReplacedPublicationRan_IsADuplicateAlthoughItPinsAnotherArtifact()
+    {
+        // #2198: an occurrence start names its occurrence whichever publication fires it, so the execution the replaced
+        // publication's artifact started for it is the duplicate, not a conflict that would fail every retry of the fire.
+        await ActivateAsync();
+        var occurrence = KeyedWorkflowStartIdentity.ForOccurrence("recurring:occurrence-1");
+        var states = new InMemoryWorkflowExecutionStateStore();
+        await states.SaveAsync(ExistingState(occurrence.WorkflowExecutionId, "artifact-replaced"));
+
+        var result = await NewDispatcher(states).DispatchAsync(KeyedRequest(occurrence));
+
+        Assert.Equal(WorkflowExecutionCommandDispatchStatus.Duplicate, result.CommandDispatch.Status);
+        Assert.Equal(occurrence.WorkflowExecutionId, result.WorkflowExecutionId);
+        Assert.Equal("artifact-replaced", result.PinnedExecutable.ArtifactId);
+        Assert.Empty(_agentProvider.Agent.Envelopes);
+    }
+
+    [Fact]
     public async Task DispatchAsync_KeyedStartWithoutExecutionState_IsRefusedRatherThanRunTwiceIntoOneExecution()
     {
         await ActivateAsync();

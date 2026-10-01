@@ -1,15 +1,9 @@
-using CShells.Lifecycle;
 using Elsa.Activities.Primitives.Activities;
 using Elsa.Activities.Primitives.Services;
 using Elsa.Activities.Testing;
-using Elsa.Persistence.EntityFramework;
-using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
-using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
-using Elsa.Workflows.Runtime.Services.Executions;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
@@ -24,8 +18,6 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 internal static class PublishStimulusStartContract
 {
     private const string EventName = "order-placed";
-    private const string RecoverySigningKey = "ef-runtime-publish-stimulus-recovery-signing-key-32";
-    private const string HierarchySigningKey = "ef-runtime-publish-stimulus-hierarchy-signing-key-32";
 
     // The started workflow waits on another event, so it stays running: a start that ran twice would collide with it
     // rather than meet a terminal execution the drainer refuses to touch.
@@ -72,48 +64,14 @@ internal static class PublishStimulusStartContract
         await AssertStartedOnceAsync(first);
     }
 
-    private static async Task AssertStartedOnceAsync(WorkflowExecutionHarness node)
-    {
-        await using var scope = node.Services.CreateAsyncScope();
-        var services = scope.ServiceProvider;
-        var execution = Assert.Single(await services.GetRequiredService<IWorkflowExecutionStateStore>().ListAsync());
-        Assert.Equal(Keyed.WorkflowExecutionId, execution.WorkflowExecutionId);
-        Assert.Equal(WorkflowExecutionStatus.Running, execution.Status);
-        Assert.Single(await services.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync(execution.WorkflowExecutionId));
-        Assert.Empty(await services.GetRequiredService<IWorkflowSchedulerPoisonStore>().ListAsync(execution.WorkflowExecutionId));
-        Assert.Empty(await services.GetRequiredService<IIncidentStateStore>().ListAsync(execution.WorkflowExecutionId));
-    }
+    private static Task AssertStartedOnceAsync(WorkflowExecutionHarness node) =>
+        KeyedStartNodes.AssertStartedOnceAsync(node, Keyed.WorkflowExecutionId);
 
-    private static async Task<WorkflowExecutionHarness> StartNodeAsync(
+    private static Task<WorkflowExecutionHarness> StartNodeAsync(
         string provider,
         string connectionString,
-        Action<IServiceCollection>? configure = null)
-    {
-        var node = WorkflowExecutionHarness.Create()
-            .ConfigureServices(services =>
-            {
-                services
-                    .AddRuntimeEntityFrameworkCore(new RuntimeEntityFrameworkCoreOptions
-                    {
-                        Provider = provider,
-                        ConnectionString = connectionString,
-                        RecoveryContinuationSigningKey = RecoverySigningKey,
-                        HierarchyCursorSigningKey = HierarchySigningKey
-                    })
-                    .AddEfModuleMigrations<RuntimeDbContext>(provider);
-                new WorkflowsRuntimeTriggersFeature().ConfigureServices(services);
-                // Real ids: the harness default names every execution alike, which would hide a second start.
-                services.Replace(ServiceDescriptor.Singleton<IRuntimeExecutionIdGenerator>(
-                    _ => new ShortRuntimeExecutionIdGenerator(TimeProvider.System)));
-                configure?.Invoke(services);
-            })
-            .Build();
-
-        foreach (var initializer in node.Services.GetServices<IShellInitializer>())
-            await initializer.InitializeAsync();
-        node.InitializeActivityTypes();
-        return node;
-    }
+        Action<IServiceCollection>? configure = null) =>
+        KeyedStartNodes.StartAsync(provider, connectionString, configure);
 
     private static async Task PublishMessageStartWorkflowAsync(WorkflowExecutionHarness node)
     {
@@ -138,7 +96,7 @@ internal static class PublishStimulusStartContract
 
     private static async Task<StimulusRoutingResult> DeliverAsync(WorkflowExecutionHarness node)
     {
-        var router = new ScopedStimulusRouter(node);
+        var router = new KeyedStartNodes.ScopedStimulusRouter(node);
         await new PublishStimulusExecutor(router).HandleAsync(Intent);
         return router.LastResult!;
     }
@@ -150,18 +108,6 @@ internal static class PublishStimulusStartContract
         var buffer = new PublishStimulusStagingBuffer();
         buffer.StagePublishStimulus(new PublishStimulusRequest("wfexec-publisher", "actexec-publish", EventName));
         return Assert.Single(buffer.TakePublishStimuli("wfexec-publisher", "actexec-publish"));
-    }
-
-    /// <summary>Routes through the node's real router in a fresh scope, as the outbox's handler scope does.</summary>
-    private sealed class ScopedStimulusRouter(WorkflowExecutionHarness node) : IStimulusRouter
-    {
-        public StimulusRoutingResult? LastResult { get; private set; }
-
-        public async ValueTask<StimulusRoutingResult> RouteAsync(StimulusDispatchRequest request, CancellationToken cancellationToken = default)
-        {
-            await using var scope = node.Services.CreateAsyncScope();
-            return LastResult = await scope.ServiceProvider.GetRequiredService<IStimulusRouter>().RouteAsync(request, cancellationToken);
-        }
     }
 
     /// <summary>

@@ -35,3 +35,17 @@ public sealed record PublicationActivationResult(
     WorkflowActivationSlot Slot,
     PublicationFailure? Failure = null,
     string? ReplacedPublicationId = null);
+
+/// <summary>The outcome of completing one publication slot (<c>IPublicationActivator.CompleteAsync</c>).</summary>
+/// <param name="Succeeded">False only when the runtime could not complete the slot's activation.</param>
+/// <param name="Slot">The slot as completion found it.</param>
+/// <param name="Publication">
+/// The record of the publication the slot names, as the journal holds it afterwards; <see langword="null"/> when the slot
+/// names none of publishing's publications.
+/// </param>
+/// <param name="Failure">Why the slot's activation could not be completed.</param>
+public sealed record PublicationCompletionResult(
+    bool Succeeded,
+    WorkflowActivationSlot Slot,
+    PublicationRecord? Publication = null,
+    PublicationFailure? Failure = null);
