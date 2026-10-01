@@ -187,7 +187,7 @@ public sealed class BackfillRewriter(BackfillContext context, EfSchemaFinalizati
     {
         probe.Asked(row);
         var gate = gates.FindModuleGate(typeof(BackfillContext)) ?? throw new InvalidOperationException("The module has not been admitted.");
-        var chain = gate.Families.Chains.Single();
+        var chain = gate.Families.Chains.Single(candidate => candidate.Family == BackfillFamily.Family);
         var writeVersion = gate.StateOf(BackfillFamily.Family)!.WriteVersion;
         if (row.Entity == typeof(BackfillOrderRow))
         {

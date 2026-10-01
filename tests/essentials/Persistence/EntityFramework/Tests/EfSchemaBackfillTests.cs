@@ -1,5 +1,6 @@
 using Elsa.Persistence.EntityFramework.SchemaBackfill;
 using Elsa.Persistence.EntityFramework.SchemaFinalization;
+using Elsa.Persistence.Schema;
 using Elsa.Persistence.Schema.SchemaFinalization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -382,17 +383,20 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
         await SeedFamilyAsync();
         var first = await HostAsync("host-a");
         var writes = 0;
+        var killed = false;
         // Lines are upgraded first, then orders, two rows a batch: o1/1 and o1/2, then o2/1; then o1 and o2, o3 and o4, o5.
         first.Probe.BeforeWrite = _ => crash switch
         {
             // o2/1: the first row of the second batch, before any of it is written.
-            "between batches" when writes == 2 => throw new HostKilledException(),
+            "between batches" when writes == 2 => Kill(),
             // o2: the second row of a batch whose first row, o1, is written.
-            "before a write" when writes == 4 => throw new HostKilledException(),
+            "before a write" when writes == 4 => Kill(),
             _ => Task.CompletedTask
         };
         // o1 is written, and the host dies before o2 of the same batch is read.
-        first.Probe.AfterWrite = _ => ++writes == 4 && crash == "after a write" ? throw new HostKilledException() : Task.CompletedTask;
+        first.Probe.AfterWrite = _ => ++writes == 4 && crash == "after a write" ? Kill() : Task.CompletedTask;
+        // A killed host sends nothing more, so it cannot release its claim as a host whose round merely failed does.
+        first.Probe.BeforeCommand = _ => killed ? throw new HostKilledException() : Task.CompletedTask;
 
         await Assert.ThrowsAsync<HostKilledException>(() => first.RunOnceAsync());
 
@@ -408,6 +412,12 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
         Assert.Equal(reference, await database.SnapshotAsync());
         Assert.Empty(first.Probe.WrittenRows.Intersect(second.Probe.WrittenRows));
         Assert.Equal("2", (await database.RecordAsync()).Finish!.CompletionVersion);
+
+        Task Kill()
+        {
+            killed = true;
+            throw new HostKilledException();
+        }
     }
 
     /// <summary>
@@ -718,6 +728,83 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// FR-008, the case that held the family for good: a round that fails with something other than a stop, here the
+    /// database going away under a row's write, lets go of its claim before the failure goes on, so a worker whose rounds
+    /// keep failing never holds the other workers off; and the module's other families still run that round, which then
+    /// fails with that failure.
+    /// </summary>
+    [Fact]
+    public async Task A_round_that_fails_releases_its_claim_and_the_modules_other_families_still_run()
+    {
+        await SeedFamilyAsync();
+        var host = await HostAsync("host-a", families: EfSchemaModuleFamilies.FromDeclarations(BackfillFamily.Module, [BackfillFamily.Declaration(), TablelessFamily]));
+        host.Probe.BeforeWrite = _ => throw new InvalidOperationException("The database went away.");
+
+        var failed = await Assert.ThrowsAsync<InvalidOperationException>(() => host.RunOnceAsync());
+
+        Assert.Equal("The database went away.", failed.Message);
+        var record = await database.RecordAsync();
+        Assert.Null(record.BackfillRun);
+        Assert.Equal("1", record.Finish!.CompletionVersion);
+        Assert.Equal("2", (await RecordOfAsync(TablelessFamily.Name)).Finish!.CompletionVersion);
+    }
+
+    /// <summary>
+    /// FR-008, the stop that held the family until its claim expired: a round cancelled mid-run, as a stopping shell
+    /// cancels it, still lets go of its claim, on a token of its own.
+    /// </summary>
+    [Fact]
+    public async Task A_round_cancelled_mid_run_releases_its_claim()
+    {
+        await SeedFamilyAsync();
+        var host = await HostAsync("host-a");
+        using var stopping = new CancellationTokenSource();
+        host.Probe.AfterWrite = async _ => await stopping.CancelAsync();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => host.RunOnceAsync(stopping.Token));
+
+        Assert.Single(host.Probe.WrittenRows);
+        Assert.Null((await database.RecordAsync()).BackfillRun);
+    }
+
+    /// <summary>
+    /// FR-008 with FR-018, the case a renewal inside the withdrawal's compare-and-set would lose: an audit whose evidence
+    /// takes longer than a third of the claim period, on every attempt, still withdraws the completion, since the claim is
+    /// renewed before the compare-and-set and between its attempts, and never written inside one.
+    /// </summary>
+    [Fact]
+    public async Task A_withdrawal_whose_evidence_spans_a_renewal_interval_still_lands()
+    {
+        await SeedFamilyAsync();
+        var host = await HostAsync("host-a");
+        await host.RunOnceAsync();
+        await database.SeedAsync(Order("straggler", 7));
+        clock.Advance(AuditInterval);
+        string? first = null;
+        string? previous = null;
+        var slowScans = 0;
+        host.Probe.BeforeCommand = text =>
+        {
+            if (FamilyTables.FirstOrDefault(table => text.Contains(table, StringComparison.Ordinal)) is not { } table)
+                return Task.CompletedTask;
+            first ??= table;
+            // Each selection over the family's tables takes longer than a third of the one-minute claim.
+            if (table == first && previous != first && slowScans++ < 3)
+                clock.Advance(TimeSpan.FromSeconds(25));
+            previous = table;
+            return Task.CompletedTask;
+        };
+
+        await host.RunOnceAsync();
+
+        var record = await database.RecordAsync();
+        Assert.Null(record.Finish);
+        var withdrawal = Assert.Single(record.FinishHistory, entry => entry.Transition == SchemaFinishTransition.Withdrawn);
+        Assert.Equal("host-a", withdrawal.Actor.Member!.HostId);
+        Assert.Contains(await database.SnapshotAsync(), row => row.StartsWith("order straggler 2 r2", StringComparison.Ordinal));
+    }
+
+    /// <summary>
     /// FR-008, the case a stalled worker would hide: a worker whose claim lapses mid-batch, and that another worker takes
     /// over, rewrites no further row of that batch, since the read it takes before each row finds the other's claim.
     /// </summary>
@@ -995,7 +1082,8 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
 
     /// <summary>
     /// FR-013 and FR-014, the case that looks like success: a verification pass that finds nothing, but during which
-    /// another worker withdrew the completion over a straggler it found, records nothing, and the pass after it does.
+    /// another worker withdrew the completion over a straggler it found, records nothing, and the pass after it does. The
+    /// other worker withdraws once this one's claim has lapsed, since no worker withdraws while another's claim holds.
     /// </summary>
     [Fact]
     public async Task A_withdrawal_that_lands_during_a_verification_pass_keeps_it_from_recording_completion()
@@ -1008,8 +1096,9 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
             if (withdrawn || host.Status.State != EfSchemaBackfillState.Verifying || !text.Contains(BackfillFamily.OrdersTable, StringComparison.Ordinal))
                 return;
             withdrawn = true;
+            clock.Advance(TimeSpan.FromMinutes(2));
             await WithStoreAsync(async store =>
-                await store.WithdrawCompletionAsync(BackfillFamily.Family, (await store.FindAsync(BackfillFamily.Family))!.Revision, HostB, "host-b found a straggler"));
+                await store.WithdrawCompletionAsync(BackfillFamily.Family, (await store.FindAsync(BackfillFamily.Family))!.Revision, HostB, "host-b found a straggler", worker: null));
         };
 
         await host.RunOnceAsync();
@@ -1125,10 +1214,10 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// The same on the claimed path: the worker that holds the claim, and whose settle condition has held for the whole
-    /// margin, waits a full margin again after a withdrawal it did not make, here written over its claim by a writer that
-    /// keeps none, such as an older build, and which carries its claim onto the withdrawal. It keeps the family throughout,
-    /// and records the completion only after the new margin.
+    /// The same on the claimed path: a worker that settles under its claim, and whose settle condition has held for the
+    /// whole margin, waits a full margin again after a withdrawal it did not make, here written by a writer that keeps no
+    /// claim once this worker's had lapsed, as the store allows; the worker claims the family again and records the
+    /// completion only after the new margin.
     /// </summary>
     [Fact]
     public async Task A_withdrawal_another_writer_makes_restarts_the_settle_margin_of_the_worker_that_holds_the_claim()
@@ -1138,11 +1227,12 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
         var claimant = await HostAsync("host-a", margin: margin);
         await claimant.RunOnceAsync();
         Assert.Equal(EfSchemaBackfillState.Settling, claimant.Status.State);
-        await WithStoreAsync(async store =>
-            await store.WithdrawCompletionAsync(BackfillFamily.Family, (await store.FindAsync(BackfillFamily.Family))!.Revision, HostB, "host-b found a straggler"));
         Assert.Equal("host-a", (await database.RecordAsync()).BackfillRun!.Member.HostId);
+        clock.Advance(TimeSpan.FromMinutes(1) + TimeSpan.FromSeconds(1));
+        await WithStoreAsync(async store =>
+            await store.WithdrawCompletionAsync(BackfillFamily.Family, (await store.FindAsync(BackfillFamily.Family))!.Revision, HostB, "host-b found a straggler", worker: null));
+        Assert.Null((await database.RecordAsync()).BackfillRun);
 
-        clock.Advance(margin);
         await claimant.RunOnceAsync();
 
         Assert.Null((await database.RecordAsync()).Finish);
@@ -1177,8 +1267,9 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
             if (raced || !IsRecordWrite(text) || ++recordWrites < 2)
                 return;
             raced = true;
-            // Another worker, between the audit's count and its withdrawal: it rewrites the straggler, withdraws the
-            // completion over it, and a new verification pass records it again.
+            // Another worker, between the audit's count and its withdrawal and once the audit's claim has lapsed: it
+            // rewrites the straggler, withdraws the completion over it, and a new verification pass records it again.
+            clock.Advance(TimeSpan.FromMinutes(2));
             await using (var context = database.Context())
             {
                 var row = await context.Orders.SingleAsync(order => order.Id == "straggler");
@@ -1188,8 +1279,8 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
 
             await WithStoreAsync(async store =>
             {
-                var withdrawn = await store.WithdrawCompletionAsync(BackfillFamily.Family, (await store.FindAsync(BackfillFamily.Family))!.Revision, HostB, "host-b found a straggler");
-                await store.RecordCompletionAsync(BackfillFamily.Family, withdrawn.Record.Revision, "2", clock.GetUtcNow(), clock.GetUtcNow(), BackfillFamily.Chain, HostB);
+                var withdrawn = await store.WithdrawCompletionAsync(BackfillFamily.Family, (await store.FindAsync(BackfillFamily.Family))!.Revision, HostB, "host-b found a straggler", worker: null);
+                await store.RecordCompletionAsync(BackfillFamily.Family, withdrawn.Record.Revision, "2", clock.GetUtcNow(), clock.GetUtcNow(), BackfillFamily.Chain, HostB, worker: null);
             });
         };
 
@@ -1392,6 +1483,18 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
             Assert.True((await store.ClaimBackfillAsync(
                 BackfillFamily.Family, (await store.FindAsync(BackfillFamily.Family))!.Revision, target, BackfillFamily.Chain, HostB, "worker-b", TimeSpan.FromMinutes(1))).Applied));
 
+    /// <summary>A second family of the module, at versions 1 and 2, that holds no table: its run has nothing to rewrite and records completion.</summary>
+    private static readonly EfSchemaFamilyDescriptor TablelessFamily = new("BackfillNotes", BackfillFamily.Module, "2", typeof(BackfillFamily).Assembly)
+    {
+        Upcasters = [new EfSchemaUpcasterDescriptor(typeof(BackfillFamily.AddNote), "1", "2")]
+    };
+
+    private async Task<SchemaFinalizationRecord> RecordOfAsync(string family)
+    {
+        await using var context = database.Context();
+        return (await new EfSchemaFinalizationStore(context, clock).FindAsync(family))!;
+    }
+
     /// <summary>Counts, from now on, the writes <paramref name="host"/> makes to the family's finalization record.</summary>
     private static Func<int> CountRecordWrites(BackfillHost host)
     {
@@ -1471,7 +1574,9 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
         TimeSpan? configuredMargin = null)
     {
         families ??= BackfillFamily.Families(current);
-        var member = members[hostId] = fleet.Add(new FakeMember(hostId).Reading(BackfillFamily.Family, [.. families.Chains.Single().ReadableVersions]));
+        var member = members[hostId] = fleet.Add(new FakeMember(hostId));
+        foreach (var chain in families.Chains)
+            member.Reading(chain.Family, [.. chain.ReadableVersions]);
         member.Observations = new EfSchemaFinalizationObservations();
         var host = new BackfillHost(
             database,

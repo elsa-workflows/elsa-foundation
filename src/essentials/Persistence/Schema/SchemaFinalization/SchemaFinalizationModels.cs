@@ -62,6 +62,15 @@ public sealed record SchemaFinalizationRecord(
     public SchemaBackfillClaim? BackfillRun => Finish is { } finish ? finish.Run : StandingWithdrawal?.Run;
 
     /// <summary>
+    /// The live claim of a worker other than <paramref name="worker"/> at <paramref name="at"/>, or null when none keeps it
+    /// off the family (spec 186, FR-008): the one rule every claim, withdrawal and completion is held to. A worker with no
+    /// claim, <paramref name="worker"/> null, is kept off by any live claim and by nothing else, so a worker that runs
+    /// unclaimed still acts while no claim holds.
+    /// </summary>
+    public SchemaBackfillClaim? ClaimKeepingOff(string? worker, DateTimeOffset at) =>
+        BackfillRun is { } held && held.HoldsAt(at) && !StringComparer.Ordinal.Equals(held.Worker, worker) ? held : null;
+
+    /// <summary>
     /// This record with <paramref name="run"/> as the claim on the family's backfill run, held where
     /// <see cref="BackfillRun"/> reads it. Holding it on the standing withdrawal changes only that entry's claim: no
     /// entry is added, removed or reordered, and no transition, version, actor, instant or reason changes.

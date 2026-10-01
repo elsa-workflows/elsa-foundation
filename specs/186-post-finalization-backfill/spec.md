@@ -662,11 +662,18 @@ which took one only for an upgrade pass with rows to rewrite and none while no c
   names the completion's version: a claim's target is now at or after the completion, never before it. The finalized
   and completion versions keep their forward-only rules unchanged.
 - **The claim is held for the work, and only for it.** The claimant renews it, or stops, between two batches, before
-  each table a selection counts, the audit's and the straggler scans' included, and before the settle condition and each
-  verification pass, so a settling family's record is written about once every third of the claim period, which the
-  2026-09-29 note avoided. It keeps the claim only while its run goes on next round, settling or verifying again, and
-  releases it on every other way out: an audit that found nothing, a run that recorded completion, was blocked, or found
-  nothing left to do. An audit that finds nothing therefore writes its claim and its release, and nothing else.
+  each table a survey or verification pass counts, and before the settle condition and each verification pass, so a
+  settling family's record is written about once every third of the claim period, which the 2026-09-29 note avoided. A
+  withdrawal renews before its compare-and-set and between its attempts, never inside one: a renewal there would move
+  the revision the attempt compares against and lose it. The evidence it reads inside, the audit's and the straggler
+  scans' selections, therefore writes nothing; between tables it only checks, reading the record once its own claim has
+  expired, that no other worker has taken the family over, and goes on otherwise, so a selection longer than the claim
+  still finishes and the compare-and-set catches anything that moved. The claimant keeps the claim only while its run
+  goes on next round, settling or verifying again, and releases it on every other way out: an audit that found nothing,
+  a run that recorded completion, was blocked, found nothing left to do or stopped, and a round that failed or was
+  cancelled, which releases on a token of its own bounded by a short timeout, so a worker whose rounds keep failing
+  never holds the others off. An audit that finds nothing therefore writes its claim and its release, and nothing else.
+  One family's failure does not stop the module's others that round; the round still reports it.
 - **The claim can be held while no completion stands.** A withdrawn completion leaves no finish record, so the claim is
   then held on the withdrawal that ended it: an optional `run` member of that newest finish history entry, beside the
   same member of the finish record. No entry is added, removed or reordered, and no transition, version, actor, instant
@@ -683,8 +690,12 @@ which took one only for an upgrade pass with rows to rewrite and none while no c
   compare-and-set on the record's revision. A worker rewrites a row only after the read it takes before that row shows
   no other worker's live claim; it withdraws a completion only while no other worker's live claim stands, judged on the
   record its compare-and-set compares against, so it never moves another's claim onto its withdrawal; and it records a
-  completion only on the same terms, even from a pass that found nothing. A worker refused on those grounds lets its gate
-  read the record again and gives up, leaving the family to the claimant. Nothing correct depends on the claim: with
+  completion only on the same terms, even from a pass that found nothing. The store holds every writer to this, not its
+  callers' discipline: a claim, a completion and a withdrawal each name the worker that makes it, null for a writer that
+  keeps no claim, and are refused while another worker's live claim stands, by one rule,
+  `SchemaFinalizationRecord.ClaimKeepingOff`. A writer that keeps no claim is kept off by any live claim and by nothing
+  else, so it still acts while none holds. A worker refused on those grounds lets its gate read the record again and
+  gives up, leaving the family to the claimant. Nothing correct depends on the claim: with
   `ClaimDuration` zero, or a claim that loses its compare-and-set again and again, workers run unclaimed as before. A
   record with nowhere to hold a claim, which nothing the store writes leaves, is logged as an error and the family
   skipped, not run unclaimed.

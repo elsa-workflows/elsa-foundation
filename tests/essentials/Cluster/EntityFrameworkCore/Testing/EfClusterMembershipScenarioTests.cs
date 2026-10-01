@@ -3,6 +3,7 @@ using Elsa.Cluster.Core.Contracts;
 using Elsa.Cluster.Core.Exceptions;
 using Elsa.Cluster.Core.Models;
 using Elsa.Cluster.Core.Options;
+using Elsa.Cluster.Hosting;
 using Elsa.Cluster.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -373,7 +374,7 @@ public abstract class EfClusterMembershipScenarioTests(EfClusterMembershipTestSt
         Assert.Equal(MemberLapseReason.Displaced, displaced.Services.GetRequiredService<IClusterMembership>().GetLocalStanding().Lapse?.Reason);
         Assert.Contains(displacedLogs.At(LogLevel.Critical), message => message.Contains(displacedIdentity.HostId, StringComparison.Ordinal));
         var hostStop = displaced.Services.GetRequiredService<ClusterMembershipHostStop>();
-        Assert.Equal((MemberLapseReason.Displaced, 1), (hostStop.Lapse?.Reason, hostStop.ExitCode));
+        Assert.Equal((MemberLapseReason.Displaced, true), (hostStop.Lapse?.Reason, hostStop.Stopped));
         Assert.Equal(0, Environment.ExitCode);
         Assert.Equal(MemberLapseReason.EntryMissing, lapsedMember.GetLocalStanding().Lapse?.Reason);
 
@@ -388,7 +389,7 @@ public abstract class EfClusterMembershipScenarioTests(EfClusterMembershipTestSt
         Assert.NotEqual(lapsedIdentity, rejoined.Identity);
         var lapsedStop = lapsed.Services.GetRequiredService<ClusterMembershipHostStop>();
         Assert.Null(lapsedStop.Lapse);
-        Assert.Equal(0, lapsedStop.ExitCode);
+        Assert.False(lapsedStop.Stopped);
     }
 
     /// <summary>
@@ -423,7 +424,7 @@ public abstract class EfClusterMembershipScenarioTests(EfClusterMembershipTestSt
         Assert.True(stopping.IsCancellationRequested, "A host that found a live duplicate of its host id kept running.");
         Assert.Equal(MemberLapseReason.DuplicateHostId, member.GetLocalStanding().Lapse?.Reason);
         var hostStop = host.Services.GetRequiredService<ClusterMembershipHostStop>();
-        Assert.Equal((MemberLapseReason.DuplicateHostId, 1), (hostStop.Lapse?.Reason, hostStop.ExitCode));
+        Assert.Equal((MemberLapseReason.DuplicateHostId, true), (hostStop.Lapse?.Reason, hostStop.Stopped));
         Assert.Equal(0, Environment.ExitCode);
         Assert.Contains(logs.At(LogLevel.Critical), message => message.Contains(identity.HostId, StringComparison.Ordinal));
         Assert.False(duplicate.Membership.GetLocalStanding().HasLapsed);

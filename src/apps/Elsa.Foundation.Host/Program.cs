@@ -1,7 +1,6 @@
 using CShells.AspNetCore.Configuration;
 using CShells.AspNetCore.Extensions;
 using CShells.DependencyInjection;
-using Elsa.Cluster.Core.Models;
 using Elsa.Cluster.Hosting;
 using Elsa.Cluster.Readability;
 using Elsa.Foundation.Host.Feed;
@@ -122,9 +121,6 @@ if (moduleManagement.Enabled)
     builder.Services.ShareWithShells<ManualReconcileCoordinator>().ShareWithShells<INuplaneAdminOperations>();
 
 var app = builder.Build();
-// Present only when the EF membership provider is composed: why its member stopped this host, if it did. Resolved before
-// the host runs, since running it disposes the container.
-var membershipStop = app.Services.GetService<ClusterMembershipHostStop>();
 
 // Host-level probes: liveness (process up) + readiness (configured shells activated — reflects eager load).
 app.MapHostHealth();
@@ -136,10 +132,6 @@ if (moduleManagement.Enabled)
 // endpoints are composed by CShells on activation and re-composed per generation on reload.
 app.MapShells();
 
-app.Run();
-
-// A host its cluster member stopped, because another process holds its host id, ends non-zero, so a supervisor that
-// restarts failed processes restarts it (spec 183, 2026-10-01 note). Read here, not set by the provider, so a host run
-// inside another process, as the tests run theirs, leaves that process's exit code alone.
-if (membershipStop?.ExitCode is > 0 and var exitCode)
-    Environment.ExitCode = exitCode;
+// A host its cluster member stopped, because another process holds its host id, ends with exit code 1, so a supervisor
+// that restarts failed processes restarts it (spec 183, 2026-10-01 note).
+app.RunWithMembershipExitCode();

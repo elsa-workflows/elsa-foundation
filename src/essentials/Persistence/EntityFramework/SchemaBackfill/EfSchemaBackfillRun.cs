@@ -78,7 +78,27 @@ internal sealed record EfSchemaBackfillVerification(
     IReadOnlyList<EfSchemaBackfillBlocker> Blockers);
 
 /// <summary>
-/// This worker no longer owns the run: its claim lapsed and another worker took the run over, or its member lapsed from
-/// the fleet. It stops, which spares the owner its reads and leaves the owner to finish.
+/// This worker's run of a family stops for <see cref="Reason"/>: it no longer owns the run, or there is nothing left for it
+/// to do. It is not a failure: the round says why on the family's status, and releases the claim the run held, so the
+/// worker that owns the family now, if any, finishes it.
 /// </summary>
-internal sealed class EfSchemaBackfillClaimLostException(string message) : Exception(message);
+internal sealed class EfSchemaBackfillStoppedException(EfSchemaBackfillStop reason, string message) : Exception(message)
+{
+    public EfSchemaBackfillStop Reason { get; } = reason;
+}
+
+/// <summary>Why a worker's run of a family stops before it is done (spec 186, FR-008; spec 183, FR-007).</summary>
+internal enum EfSchemaBackfillStop
+{
+    /// <summary>Another worker's claim holds, taken over since this worker's own lapsed.</summary>
+    TakenOver,
+
+    /// <summary>This worker's member has lapsed from the fleet, so others may take its work over.</summary>
+    Lapsed,
+
+    /// <summary>The completion moved to or past this worker's target while its run went on.</summary>
+    CompletionMovedOn,
+
+    /// <summary>The record no longer has anywhere to hold a claim, which is reported as an error.</summary>
+    Unclaimable
+}

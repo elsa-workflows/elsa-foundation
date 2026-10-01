@@ -322,10 +322,12 @@ public sealed class EfSchemaFinalizationStore
     /// <summary>
     /// Records that a verification pass found no row of the family below <paramref name="version"/> (spec 186, FR-014).
     /// A standing completion only moves forward, and never past the finalized version. It drops the backfill run's claim,
-    /// wherever it was held.
+    /// wherever it was held. <paramref name="worker"/> is the backfill worker that records it, or null for a writer that
+    /// keeps no claim, and is refused while another worker's claim holds (FR-008).
     /// </summary>
     /// <exception cref="SchemaFinalizationRefusedException">
-    /// The version is later than the finalized one, or not after the completion that stands.
+    /// The version is later than the finalized one, or not after the completion that stands, or another worker's claim
+    /// holds.
     /// </exception>
     public Task<SchemaFinalizationWrite> RecordCompletionAsync(
         string family,
@@ -335,6 +337,7 @@ public sealed class EfSchemaFinalizationStore
         DateTimeOffset verificationEndedAt,
         IReadOnlyList<string> chain,
         SchemaFinalizationMember member,
+        string? worker,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(member);
@@ -349,6 +352,7 @@ public sealed class EfSchemaFinalizationStore
                     $"completion cannot be recorded at '{version}', later than the finalized version '{record.FinalizedVersion}'.");
             if (record.Finish is { } standing)
                 EnsureForward(record.Family, chain, standing.CompletionVersion, version, "standing completion", "completion");
+            EnsureNotKeptOff(record, worker, at);
             var unclaimed = record.BackfillRun is null ? record : record.WithBackfillRun(null);
             return unclaimed with
             {
@@ -360,15 +364,18 @@ public sealed class EfSchemaFinalizationStore
 
     /// <summary>
     /// Withdraws the standing completion, for instance after an audit found a row below it (spec 186, FR-018). The
-    /// finalized version does not move (FR-019). A backfill claim that still holds moves onto the withdrawal, so the worker
-    /// that holds it goes on rewriting what the withdrawal found and the others leave the family alone.
+    /// finalized version does not move (FR-019). <paramref name="worker"/> is the backfill worker that withdraws it, or null
+    /// for a writer that keeps no claim, and is refused while another worker's claim holds (FR-008), so a withdrawal only
+    /// ever moves its own worker's claim onto itself: a claim that still holds moves onto the withdrawal, so the worker that
+    /// holds it goes on rewriting what the withdrawal found and the others leave the family alone.
     /// </summary>
-    /// <exception cref="SchemaFinalizationRefusedException">No completion stands.</exception>
+    /// <exception cref="SchemaFinalizationRefusedException">No completion stands, or another worker's claim holds.</exception>
     public Task<SchemaFinalizationWrite> WithdrawCompletionAsync(
         string family,
         long expectedRevision,
         SchemaFinalizationMember member,
-        string? reason = null,
+        string? reason,
+        string? worker,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(member);
@@ -376,6 +383,7 @@ public sealed class EfSchemaFinalizationStore
         {
             var finish = record.Finish
                          ?? throw Refused(record.Family, SchemaFinalizationRefusal.NoCompletion, "no completion stands to withdraw.");
+            EnsureNotKeptOff(record, worker, at);
             var claim = finish.Run is { } run && run.HoldsAt(at) ? run : null;
             return record with
             {
@@ -432,11 +440,8 @@ public sealed class EfSchemaFinalizationStore
             if (target > SchemaVersionChain.Require(record.Family, chain, record.FinalizedVersion, "finalized"))
                 throw Refused(record.Family, SchemaFinalizationRefusal.CompletionBeyondFinalized,
                     $"a backfill run cannot upgrade to '{targetVersion}', later than the finalized version '{record.FinalizedVersion}'.");
+            EnsureNotKeptOff(record, worker, at);
             var standing = record.BackfillRun;
-            if (standing is not null && standing.HoldsAt(at) && !StringComparer.Ordinal.Equals(standing.Worker, worker))
-                throw Refused(record.Family, SchemaFinalizationRefusal.BackfillClaimed,
-                    $"a backfill run to '{standing.TargetVersion}' is claimed by {standing.Member} until {standing.ExpiresAt:u}.");
-
             var renewed = standing is not null && StringComparer.Ordinal.Equals(standing.Worker, worker) && standing.HoldsAt(at);
             return record.WithBackfillRun(new SchemaBackfillClaim(member, worker, targetVersion, renewed ? standing!.ClaimedAt : at, at + duration));
         }, cancellationToken);
@@ -507,6 +512,17 @@ public sealed class EfSchemaFinalizationStore
         if (SchemaVersionChain.Require(family, chain, to, toRole) <= SchemaVersionChain.Require(family, chain, from, fromRole))
             throw Refused(family, SchemaFinalizationRefusal.NotForward,
                 $"the {toRole} version '{to}' is not after the {fromRole} version '{from}'. It only moves forward along the chain.");
+    }
+
+    /// <summary>
+    /// Refuses a claim, a completion or a withdrawal by <paramref name="worker"/> while another worker's claim holds the
+    /// family's backfill run (spec 186, FR-008), by <see cref="SchemaFinalizationRecord.ClaimKeepingOff"/>.
+    /// </summary>
+    private static void EnsureNotKeptOff(SchemaFinalizationRecord record, string? worker, DateTimeOffset at)
+    {
+        if (record.ClaimKeepingOff(worker, at) is { } held)
+            throw Refused(record.Family, SchemaFinalizationRefusal.BackfillClaimed,
+                $"a backfill run to '{held.TargetVersion}' is claimed by {held.Member} until {held.ExpiresAt:u}.");
     }
 
     private static void EnsureNotHeld(SchemaFinalizationRecord record, string version, IReadOnlyList<string> chain)

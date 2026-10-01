@@ -22,7 +22,9 @@ namespace Elsa.Persistence.EntityFramework.SchemaBackfill;
 /// <para>
 /// Every pass works under its worker's claim (FR-008): the claim is renewed, or the pass stopped, between two batches and
 /// before each table a selection counts, the same cadence throughout, and the read taken before each row stops the pass
-/// once another worker has taken the family over.
+/// once another worker has taken the family over. A selection that runs inside a compare-and-set, the evidence of a
+/// withdrawal, writes no renewal, which would lose that compare-and-set; between its tables it only checks that no other
+/// worker has taken the family over, and the withdrawal renews before it starts and between its attempts.
 /// </para>
 /// </remarks>
 internal sealed class EfSchemaBackfillPasses(
@@ -99,8 +101,8 @@ internal sealed class EfSchemaBackfillPasses(
     /// Why <paramref name="standing"/> does not hold, read now in <paramref name="context"/> (FR-018), or null when no row
     /// below it remains: per table, the rows below its completion version, and for an audit every such row and every row
     /// with a stamp this host cannot read, whatever the table; for a pass only the rows it rewrites. It names the table,
-    /// the count, and what becomes of them. The worker's claim is renewed before each table, so a long audit stops once
-    /// another worker has taken the family over (FR-008).
+    /// the count, and what becomes of them. It runs inside the withdrawal's compare-and-set, so it writes no renewal; before
+    /// each table it checks that no other worker has taken the family over, and stops the audit if one has (FR-008).
     /// </summary>
     public async Task<string?> StragglersAsync(
         EfSchemaBackfillScopeRunner scopes,
@@ -117,7 +119,7 @@ internal sealed class EfSchemaBackfillPasses(
         var found = new List<string>();
         foreach (var table in run.Tables.Where(table => audit || run.Rewrites(table)))
         {
-            await finish.RenewClaimAsync(scopes, run, cancellationToken);
+            await finish.EnsureNotTakenOverAsync(scopes, run, cancellationToken);
             if (audit && await table.CountAsync(context, EfSchemaStampFilter.NotIn(readable), cancellationToken) is > 0 and var unreadable)
                 found.Add($"table '{table.Name}': {unreadable} (with a stamp this host cannot read)");
             if (await table.CountAsync(context, EfSchemaStampFilter.In(below), cancellationToken) is > 0 and var count)
@@ -216,7 +218,7 @@ internal sealed class EfSchemaBackfillPasses(
         }
 
         if (run.IsBelowCompletion(row.Stamp))
-            run.Completion = await finish.WithdrawAsync(scopes, run.Family, (scope, standing) => StragglersAsync(scopes, scope.Context, run, standing, audit: false, cancellationToken), cancellationToken);
+            run.Completion = await finish.WithdrawAsync(scopes, run, (scope, standing) => StragglersAsync(scopes, scope.Context, run, standing, audit: false, cancellationToken), cancellationToken);
     }
 
     /// <summary>

@@ -171,7 +171,7 @@ public sealed class EfSchemaModuleGateTests : IAsyncLifetime
         await StoreRecordAsync("1", ["1", "2", "3"]);
         var finalized = await EfSchemaFinalizationTestSupport.FinalizeAsync(new EfSchemaFinalizationStore(Context()), Family, ["1", "2", "3"], "3", new("host-x", "i"));
         var at = DateTimeOffset.UtcNow;
-        await new EfSchemaFinalizationStore(Context()).RecordCompletionAsync(Family, finalized.Revision, "2", at, at, ["1", "2", "3"], new("host-x", "i"));
+        await new EfSchemaFinalizationStore(Context()).RecordCompletionAsync(Family, finalized.Revision, "2", at, at, ["1", "2", "3"], new("host-x", "i"), worker: null);
 
         var retired = EfSchemaModuleFamilies.FromDeclarations(Module, [Declaration(Family, "2-3") with { Entities = [typeof(GateRow)] }]);
         var gate = Gate(retired, Fleet("host-retired", "2", "3"));

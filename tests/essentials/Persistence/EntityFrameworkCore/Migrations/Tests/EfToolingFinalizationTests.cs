@@ -171,7 +171,7 @@ public sealed class EfToolingFinalizationTests : IAsyncLifetime
         {
             var store = new EfSchemaFinalizationStore(context);
             var record = (await store.FindAsync(SecretsEfModule.SchemaFamily))!;
-            await store.WithdrawCompletionAsync(SecretsEfModule.SchemaFamily, record.Revision, member, "table 'secrets': 1 (rewritten)");
+            await store.WithdrawCompletionAsync(SecretsEfModule.SchemaFamily, record.Revision, member, "table 'secrets': 1 (rewritten)", worker: "worker");
         }
 
         // The claim still holds, so the withdrawal keeps it for the worker that goes on with the family (FR-008).

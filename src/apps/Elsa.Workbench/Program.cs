@@ -24,7 +24,6 @@ using Elsa.Api.AspNetCore;
 using Elsa.Api.Capabilities;
 using Elsa.Attention.Api;
 using Elsa.Caching.Memory;
-using Elsa.Cluster.Core.Models;
 using Elsa.Cluster.Hosting;
 using Elsa.Cluster.Readability;
 using Elsa.Diagnostics.ConsoleLogStreaming;
@@ -396,9 +395,6 @@ builder.Services.AddAuthentication();
 builder.Services.AddAuthorization();
 
 var app = builder.Build();
-// Present only when the EF membership provider is composed: why its member stopped this host, if it did. Resolved before
-// the host runs, since running it disposes the container.
-var membershipStop = app.Services.GetService<ClusterMembershipHostStop>();
 
 if (bootTimeline is not null)
 {
@@ -465,10 +461,6 @@ if (consoleLogStreamingEnabled)
         .WithSecurityDisposition(EndpointSecurityDispositionMetadata.NamedPolicy("Default", "Elsa.Workbench"));
     consoleLogEndpoints.MapConsoleLogStreaming();
 }
-app.Run();
-
-// A host its cluster member stopped, because another process holds its host id, ends non-zero, so a supervisor that
-// restarts failed processes restarts it (spec 183, 2026-10-01 note). Read here, not set by the provider, so a host run
-// inside another process, as the tests run theirs, leaves that process's exit code alone.
-if (membershipStop?.ExitCode is > 0 and var exitCode)
-    Environment.ExitCode = exitCode;
+// A host its cluster member stopped, because another process holds its host id, ends with exit code 1, so a supervisor
+// that restarts failed processes restarts it (spec 183, 2026-10-01 note).
+app.RunWithMembershipExitCode();

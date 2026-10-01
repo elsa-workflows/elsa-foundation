@@ -1,5 +1,6 @@
 using Elsa.Cluster.Core.Exceptions;
 using Elsa.Cluster.Core.Models;
+using Elsa.Cluster.Hosting;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 

@@ -2,6 +2,7 @@ using Elsa.Cluster.Core.Contracts;
 using Elsa.Cluster.Core.Extensions;
 using Elsa.Cluster.Core.Models;
 using Elsa.Cluster.Core.Options;
+using Elsa.Cluster.Hosting;
 using Elsa.Persistence.EntityFramework;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;

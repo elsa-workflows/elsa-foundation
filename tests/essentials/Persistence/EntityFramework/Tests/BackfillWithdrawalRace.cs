@@ -43,7 +43,7 @@ public static class BackfillWithdrawalRace
             {
                 var store = new EfSchemaFinalizationStore(context, clock);
                 var record = (await store.FindAsync(BackfillFamily.Family))!;
-                Assert.True((await store.WithdrawCompletionAsync(BackfillFamily.Family, record.Revision, new SchemaFinalizationMember("auditor", "a"), "a straggler")).Applied);
+                Assert.True((await store.WithdrawCompletionAsync(BackfillFamily.Family, record.Revision, new SchemaFinalizationMember("auditor", "a"), "a straggler", worker: null)).Applied);
             }
 
             using var allRead = new CountdownEvent(workers);

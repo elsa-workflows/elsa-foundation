@@ -434,17 +434,17 @@ public sealed class EfSchemaFinalizationStoreTests : IAsyncLifetime
         var finalized = await FinalizedAsync(await CreatedAsync(), "3");
         var raw = await RawAsync();
         await AssertRefusedAsync(SchemaFinalizationRefusal.CompletionBeyondFinalized,
-            () => Store().RecordCompletionAsync(Family, finalized.Revision, "4", Now, Now, Chain, HostA));
+            () => Store().RecordCompletionAsync(Family, finalized.Revision, "4", Now, Now, Chain, HostA, worker: null));
         await AssertRefusedAsync(SchemaFinalizationRefusal.NotForward,
-            () => Store().RecordCompletionAsync(Family, finalized.Revision, "1", Now, Now, Chain, HostA));
+            () => Store().RecordCompletionAsync(Family, finalized.Revision, "1", Now, Now, Chain, HostA, worker: null));
         Assert.Equal(raw, await RawAsync());
 
-        var completed = Applied(await Store().RecordCompletionAsync(Family, finalized.Revision, "3", Now.AddMinutes(-5), Now.AddMinutes(-1), Chain, HostA));
+        var completed = Applied(await Store().RecordCompletionAsync(Family, finalized.Revision, "3", Now.AddMinutes(-5), Now.AddMinutes(-1), Chain, HostA, worker: null));
 
         Assert.Equal(new SchemaFinishRecord("3", Now.AddMinutes(-5), Now.AddMinutes(-1), SchemaFinalizationActor.Of(HostA)), completed.Finish);
         Assert.Equal(new SchemaFinishHistoryEntry(SchemaFinishTransition.Completed, "3", SchemaFinalizationActor.Of(HostA), Now), completed.FinishHistory[^1]);
         await AssertRefusedAsync(SchemaFinalizationRefusal.NotForward,
-            () => Store().RecordCompletionAsync(Family, completed.Revision, "2", Now, Now, Chain, HostB));
+            () => Store().RecordCompletionAsync(Family, completed.Revision, "2", Now, Now, Chain, HostB, worker: null));
     }
 
     /// <summary>Spec 186, FR-018 and FR-019: withdrawing completion is not unfinalizing, and the finish history keeps both.</summary>
@@ -452,17 +452,17 @@ public sealed class EfSchemaFinalizationStoreTests : IAsyncLifetime
     public async Task Withdrawing_a_completion_leaves_the_finalized_version_and_appends_to_the_finish_history()
     {
         var finalized = await FinalizedAsync(await CreatedAsync(), "2");
-        var completed = Applied(await Store().RecordCompletionAsync(Family, finalized.Revision, "2", Now, Now, Chain, HostA));
+        var completed = Applied(await Store().RecordCompletionAsync(Family, finalized.Revision, "2", Now, Now, Chain, HostA, worker: null));
 
-        var withdrawn = Applied(await Store().WithdrawCompletionAsync(Family, completed.Revision, HostB, "3 rows below 2"));
+        var withdrawn = Applied(await Store().WithdrawCompletionAsync(Family, completed.Revision, HostB, "3 rows below 2", worker: null));
 
         Assert.Null(withdrawn.Finish);
         Assert.Equal("2", withdrawn.FinalizedVersion);
         Assert.Equal(
             [SchemaFinishTransition.Completed, SchemaFinishTransition.Completed, SchemaFinishTransition.Withdrawn],
             withdrawn.FinishHistory.Select(entry => entry.Transition));
-        await AssertRefusedAsync(SchemaFinalizationRefusal.NoCompletion, () => Store().WithdrawCompletionAsync(Family, withdrawn.Revision, HostB));
-        Assert.Equal("2", Applied(await Store().RecordCompletionAsync(Family, withdrawn.Revision, "2", Now, Now, Chain, HostA)).Finish!.CompletionVersion);
+        await AssertRefusedAsync(SchemaFinalizationRefusal.NoCompletion, () => Store().WithdrawCompletionAsync(Family, withdrawn.Revision, HostB, reason: null, worker: null));
+        Assert.Equal("2", Applied(await Store().RecordCompletionAsync(Family, withdrawn.Revision, "2", Now, Now, Chain, HostA, worker: null)).Finish!.CompletionVersion);
     }
 
     /// <summary>
@@ -489,7 +489,7 @@ public sealed class EfSchemaFinalizationStoreTests : IAsyncLifetime
         var taken = Applied(await StoreAt(Now.AddMinutes(3)).ClaimBackfillAsync(Family, renewed.Revision, "3", Chain, HostB, "worker-b", TimeSpan.FromMinutes(2)));
         Assert.Equal(new SchemaBackfillClaim(HostB, "worker-b", "3", Now.AddMinutes(3), Now.AddMinutes(5)), taken.Finish!.Run);
 
-        var completed = Applied(await Store().RecordCompletionAsync(Family, taken.Revision, "3", Now, Now, Chain, HostB));
+        var completed = Applied(await Store().RecordCompletionAsync(Family, taken.Revision, "3", Now, Now, Chain, HostB, worker: "worker-b"));
         Assert.Null(completed.Finish!.Run);
     }
 
@@ -501,7 +501,7 @@ public sealed class EfSchemaFinalizationStoreTests : IAsyncLifetime
     public async Task A_claim_names_a_target_at_or_after_the_standing_completion_that_is_finalized()
     {
         var finalized = await FinalizedAsync(await CreatedAsync(), "3");
-        var completeAtTwo = Applied(await Store().RecordCompletionAsync(Family, finalized.Revision, "2", Now, Now, Chain, HostA));
+        var completeAtTwo = Applied(await Store().RecordCompletionAsync(Family, finalized.Revision, "2", Now, Now, Chain, HostA, worker: null));
         var raw = await RawAsync();
 
         await AssertRefusedAsync(SchemaFinalizationRefusal.NotForward,
@@ -526,7 +526,7 @@ public sealed class EfSchemaFinalizationStoreTests : IAsyncLifetime
     public async Task While_no_completion_stands_a_claim_is_held_on_the_withdrawal_and_the_next_completion_drops_it()
     {
         var finalized = await FinalizedAsync(await CreatedAsync(), "3");
-        var withdrawn = Applied(await Store().WithdrawCompletionAsync(Family, finalized.Revision, HostB, "a straggler"));
+        var withdrawn = Applied(await Store().WithdrawCompletionAsync(Family, finalized.Revision, HostB, "a straggler", worker: null));
         Assert.Null(withdrawn.BackfillRun);
 
         var claimed = Applied(await Store().ClaimBackfillAsync(Family, withdrawn.Revision, "3", Chain, HostA, "worker-a", TimeSpan.FromMinutes(2)));
@@ -543,7 +543,7 @@ public sealed class EfSchemaFinalizationStoreTests : IAsyncLifetime
             () => Store().ClaimBackfillAsync(Family, claimed.Revision, "3", Chain, HostB, "worker-b", TimeSpan.FromMinutes(2)));
         Assert.Equal(raw, await RawAsync());
 
-        var completed = Applied(await Store().RecordCompletionAsync(Family, claimed.Revision, "3", Now, Now, Chain, HostA));
+        var completed = Applied(await Store().RecordCompletionAsync(Family, claimed.Revision, "3", Now, Now, Chain, HostA, worker: "worker-a"));
 
         Assert.Null(completed.BackfillRun);
         Assert.All(completed.FinishHistory, entry => Assert.Null(entry.Run));
@@ -562,7 +562,7 @@ public sealed class EfSchemaFinalizationStoreTests : IAsyncLifetime
         var finalized = await FinalizedAsync(await CreatedAsync(), "3");
         var claimed = Applied(await Store().ClaimBackfillAsync(Family, finalized.Revision, "3", Chain, HostA, "worker-a", TimeSpan.FromMinutes(2)));
 
-        var withdrawn = Applied(await StoreAt(Now.AddMinutes(minutesLater)).WithdrawCompletionAsync(Family, claimed.Revision, HostA, "a straggler"));
+        var withdrawn = Applied(await StoreAt(Now.AddMinutes(minutesLater)).WithdrawCompletionAsync(Family, claimed.Revision, HostA, "a straggler", worker: "worker-a"));
 
         Assert.Equal(kept ? claimed.Finish!.Run : null, withdrawn.BackfillRun);
         Assert.Equal(SchemaFinishTransition.Withdrawn, withdrawn.StandingWithdrawal!.Transition);
@@ -588,10 +588,60 @@ public sealed class EfSchemaFinalizationStoreTests : IAsyncLifetime
         var taken = Applied(await Store().ClaimBackfillAsync(Family, released.Revision, "3", Chain, HostB, "worker-b", TimeSpan.FromMinutes(2)));
         Assert.Equal("worker-b", taken.BackfillRun!.Worker);
 
-        var withdrawn = Applied(await Store().WithdrawCompletionAsync(Family, taken.Revision, HostB, "a straggler"));
+        var withdrawn = Applied(await Store().WithdrawCompletionAsync(Family, taken.Revision, HostB, "a straggler", worker: "worker-b"));
         var releasedFromWithdrawal = Applied(await StoreAt(Now.AddMinutes(5)).ReleaseBackfillAsync(Family, withdrawn.Revision, "worker-b"));
         Assert.Null(releasedFromWithdrawal.BackfillRun);
         Assert.Equal(withdrawn.FinishHistory.Count, releasedFromWithdrawal.FinishHistory.Count);
+    }
+
+    /// <summary>
+    /// Spec 186, FR-008, both ways, in the store itself rather than in its callers' discipline: while another worker's
+    /// claim holds, neither a completion nor a withdrawal is written, whether the writer is a worker with a claim of its own
+    /// or one that keeps none, and the refusal writes nothing. The worker that holds the claim withdraws, and keeps its
+    /// claim on the withdrawal; once that claim has expired, a writer that keeps none records the completion.
+    /// </summary>
+    [Fact]
+    public async Task A_completion_or_a_withdrawal_is_refused_while_another_workers_claim_holds()
+    {
+        var finalized = await FinalizedAsync(await CreatedAsync(), "3");
+        var claimed = Applied(await Store().ClaimBackfillAsync(Family, finalized.Revision, "3", Chain, HostA, "worker-a", TimeSpan.FromMinutes(2)));
+        var raw = await RawAsync();
+
+        foreach (var worker in new[] { "worker-b", null })
+        {
+            await AssertRefusedAsync(SchemaFinalizationRefusal.BackfillClaimed,
+                () => Store().RecordCompletionAsync(Family, claimed.Revision, "3", Now, Now, Chain, HostB, worker));
+            await AssertRefusedAsync(SchemaFinalizationRefusal.BackfillClaimed,
+                () => Store().WithdrawCompletionAsync(Family, claimed.Revision, HostB, "a straggler", worker));
+        }
+
+        Assert.Equal(raw, await RawAsync());
+
+        var withdrawn = Applied(await Store().WithdrawCompletionAsync(Family, claimed.Revision, HostA, "a straggler", "worker-a"));
+        Assert.Equal("worker-a", withdrawn.BackfillRun!.Worker);
+        await AssertRefusedAsync(SchemaFinalizationRefusal.BackfillClaimed,
+            () => Store().RecordCompletionAsync(Family, withdrawn.Revision, "3", Now, Now, Chain, HostB, worker: null));
+
+        var completed = Applied(await StoreAt(Now.AddMinutes(3)).RecordCompletionAsync(Family, withdrawn.Revision, "3", Now, Now, Chain, HostB, worker: null));
+        Assert.Equal(("3", "host-b"), (completed.Finish!.CompletionVersion, completed.Finish.RecordedBy.Member!.HostId));
+        Assert.Null(completed.BackfillRun);
+    }
+
+    /// <summary>
+    /// Spec 186, FR-008: the one rule every claim, completion and withdrawal is held to. A live claim keeps every other
+    /// worker off, a worker that keeps none included, and never its own worker; an expired claim, or none, keeps no one off.
+    /// </summary>
+    [Fact]
+    public async Task Only_a_live_claim_keeps_off_every_worker_but_its_own()
+    {
+        var finalized = await FinalizedAsync(await CreatedAsync(), "3");
+        Assert.Null(finalized.ClaimKeepingOff(null, Now));
+        var claimed = Applied(await Store().ClaimBackfillAsync(Family, finalized.Revision, "3", Chain, HostA, "worker-a", TimeSpan.FromMinutes(2)));
+
+        Assert.Null(claimed.ClaimKeepingOff("worker-a", Now));
+        Assert.Equal(claimed.BackfillRun, claimed.ClaimKeepingOff("worker-b", Now));
+        Assert.Equal(claimed.BackfillRun, claimed.ClaimKeepingOff(null, Now));
+        Assert.Null(claimed.ClaimKeepingOff("worker-b", Now.AddMinutes(2)));
     }
 
     /// <summary>
@@ -620,7 +670,7 @@ public sealed class EfSchemaFinalizationStoreTests : IAsyncLifetime
     public async Task A_claim_on_a_withdrawal_is_absent_from_unclaimed_history_entries_and_a_build_that_does_not_know_it_reads_the_history()
     {
         var finalized = await FinalizedAsync(await CreatedAsync(), "3");
-        var withdrawn = Applied(await Store().WithdrawCompletionAsync(Family, finalized.Revision, HostB, "a straggler"));
+        var withdrawn = Applied(await Store().WithdrawCompletionAsync(Family, finalized.Revision, HostB, "a straggler", worker: null));
         Assert.DoesNotContain("\"run\"", await FinishHistoryJsonAsync(), StringComparison.Ordinal);
 
         Applied(await Store().ClaimBackfillAsync(Family, withdrawn.Revision, "3", Chain, HostA, "worker-a", TimeSpan.FromMinutes(2)));
