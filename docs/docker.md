@@ -204,7 +204,19 @@ volumes:
 ```
 
 The keys survive a restart and a recreate of the container for as long as the volume exists; `docker compose down -v`,
-or `docker volume rm elsa-data`, discards them. These stacks migrate as they start
+or `docker volume rm elsa-data`, discards them.
+
+- **A recreate still signs everyone out in this stack.** Its identity store is SQLite inside the container too, so a
+  recreated container seeds its users again, and a session issued before no longer matches a user. Only a stack whose
+  identity store is on a persistent database, such as the PostgreSQL reference stack, keeps everyone signed in across a
+  recreate.
+- **The volume needs an image built after #2191,** which creates `/app/data` owned by the image's `$APP_UID` (1654).
+  With an older image, Docker creates the volume's root owned by root, and the container cannot write its key store.
+  Pull the newer image (`docker pull elsaworkflows/elsa-workbench:latest`), or give the volume to `$APP_UID` once before
+  starting: `docker run --rm --user root --entrypoint chown -v elsa-data:/app/data elsaworkflows/elsa-workbench:latest 1654:1654 /app/data`
+  (with Compose: `docker compose -f docker-compose.images.yml run --rm --no-deps --user root --entrypoint chown elsa-workbench 1654:1654 /app/data`).
+
+These stacks migrate as they start
 (`Elsa__Persistence__EntityFramework__Migrate__Policy=AutoMigrate`). Under the image's own `Validate` policy a container
 on an empty volume exits as it starts, with `EfPendingMigrationsException: EF module 'DataProtection.Keys' has pending
 migrations`, until the table exists: run `dotnet elsa persistence apply --host "<host directory>" --modules

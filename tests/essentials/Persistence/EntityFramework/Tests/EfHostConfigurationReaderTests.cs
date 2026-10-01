@@ -46,15 +46,34 @@ public sealed class EfHostConfigurationReaderTests
         Assert.Equal(TimeSpan.FromSeconds(30), _reader.ReadTimeSpan(section, "Period"));
     }
 
+    /// <summary>Each setting that is parsed, with the value it refuses, what it expected, and the read that parses it.</summary>
+    public static TheoryData<string, string, string, Func<EfHostConfigurationReader, IConfigurationSection, object?>> Unparsable => new()
+    {
+        { "Enabled", "yes", "true or false", IsEnabled },
+        { "Pooling", "sometimes", "true or false", ReadStore },
+        { "Period", "half a minute", "a time span", ReadPeriod }
+    };
+
+    /// <summary>
+    /// Each refusal, with the setting that causes it and the read that raises it: a setting without the switch, then each
+    /// value that does not parse.
+    /// </summary>
+    public static TheoryData<string, string, Func<EfHostConfigurationReader, IConfigurationSection, object?>> Refusals => new()
+    {
+        { "Provider", "PostgreSql", IsEnabled },
+        { "Enabled", "yes", IsEnabled },
+        { "Pooling", "sometimes", ReadStore },
+        { "Period", "half a minute", ReadPeriod }
+    };
+
     [Theory]
-    [InlineData("Enabled", "yes", "true or false")]
-    [InlineData("Pooling", "sometimes", "true or false")]
-    [InlineData("Period", "half a minute", "a time span")]
-    public void A_value_that_does_not_parse_is_refused_naming_its_key(string key, string value, string expected)
+    [MemberData(nameof(Unparsable))]
+    public void A_value_that_does_not_parse_is_refused_naming_its_key(
+        string key, string value, string expected, Func<EfHostConfigurationReader, IConfigurationSection, object?> read)
     {
         var section = Section(new() { [$"{Store}:{key}"] = value });
 
-        var failure = Assert.Throws<EfHostConfigurationException>(() => Read(_reader, section, key));
+        var failure = Assert.Throws<EfHostConfigurationException>(() => read(_reader, section));
 
         Assert.Contains($"{Store}:{key} is '{value}'", failure.Message, StringComparison.Ordinal);
         Assert.Contains(expected, failure.Message, StringComparison.Ordinal);
@@ -94,27 +113,26 @@ public sealed class EfHostConfigurationReaderTests
     /// the switch, and a switch, a pooling setting or a time span that does not parse.
     /// </summary>
     [Theory]
-    [InlineData("Provider", "PostgreSql")]
-    [InlineData("Enabled", "yes")]
-    [InlineData("Pooling", "sometimes")]
-    [InlineData("Period", "half a minute")]
-    public void Refusals_are_raised_with_the_exception_the_reader_was_built_with(string key, string value)
+    [MemberData(nameof(Refusals))]
+    public void Refusals_are_raised_with_the_exception_the_reader_was_built_with(
+        string key, string value, Func<EfHostConfigurationReader, IConfigurationSection, object?> read)
     {
         var reader = new EfHostConfigurationReader(message => new ContractException(message));
         var section = Section(new() { [$"{Store}:{key}"] = value });
 
-        var failure = Assert.Throws<ContractException>(() => Read(reader, section, key));
+        var failure = Assert.Throws<ContractException>(() => read(reader, section));
 
         Assert.StartsWith(Store, failure.Message, StringComparison.Ordinal);
     }
 
-    /// <summary>Reads <paramref name="key"/> the way the reader reads it: the switch, a time span, or a store setting.</summary>
-    private static object? Read(EfHostConfigurationReader reader, IConfigurationSection section, string key) => key switch
-    {
-        "Enabled" or "Provider" => reader.IsEnabled(section, "to enable it", "to leave it off"),
-        "Period" => reader.ReadTimeSpan(section, key),
-        _ => reader.ReadStore(section, new TestStoreOptions())
-    };
+    private static object? IsEnabled(EfHostConfigurationReader reader, IConfigurationSection section) =>
+        reader.IsEnabled(section, "to enable it", "to leave it off");
+
+    private static object? ReadStore(EfHostConfigurationReader reader, IConfigurationSection section) =>
+        reader.ReadStore(section, new TestStoreOptions());
+
+    private static object? ReadPeriod(EfHostConfigurationReader reader, IConfigurationSection section) =>
+        reader.ReadTimeSpan(section, "Period");
 
     private static IConfigurationSection Section(Dictionary<string, string?> settings) =>
         new ConfigurationBuilder().AddInMemoryCollection(settings).Build().GetSection(Store);

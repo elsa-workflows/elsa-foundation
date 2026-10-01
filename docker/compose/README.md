@@ -37,8 +37,17 @@ Run the whole stack straight from these images.
 > below. The one exception is the Data Protection key ring, which protects the sign-in cookie and the
 > antiforgery tokens: both examples below keep it in a SQLite file on the `elsa-data` volume
 > (`Elsa__DataProtection__EntityFrameworkCore__*`, mounted at `/app/data`), so the keys survive a
-> restart and a recreate of `elsa-workbench` for as long as that volume exists. See
-> [Data Protection keys](../../docs/docker.md#data-protection-keys).
+> restart and a recreate of `elsa-workbench` for as long as that volume exists. A recreate still signs
+> everyone out here: the identity store is SQLite inside the container too, so a recreated container
+> seeds its users again and an earlier session no longer matches a user. Only a stack whose identity
+> store is on a persistent database, such as the Postgres reference stack below, keeps everyone signed
+> in across a recreate. See [Data Protection keys](../../docs/docker.md#data-protection-keys).
+>
+> The `elsa-data` volume needs an image built after #2191, which creates `/app/data` owned by the
+> image's `$APP_UID` (1654). With an older image the volume starts out owned by root and the container
+> cannot write to it: pull the newer image, or give the volume to `$APP_UID` once before the first start.
+> With Compose: `docker compose -f docker-compose.images.yml run --rm --no-deps --user root --entrypoint chown elsa-workbench 1654:1654 /app/data`;
+> with the Docker CLI: `docker run --rm --user root --entrypoint chown -v elsa-data:/app/data elsaworkflows/elsa-workbench:latest 1654:1654 /app/data`.
 
 ### With Docker Compose
 
@@ -55,8 +64,9 @@ Same result without Compose — start the server, then Studio pointed at it:
 
 ```bash
 # Elsa.Workbench (SQLite default composition; elsa-workbench-packages is the Nuplane package feed, elsa-data
-# holds the Data Protection key ring). The migrate policy applies the migrations as the container starts, as the
-# compose file does: the image's Production settings validate instead, and its key store would then refuse to start.
+# holds the Data Protection key ring).
+# DEMO ONLY: Migrate__Policy=AutoMigrate applies the migrations as the container starts, as the compose file does.
+# Real production keeps the image's default Validate policy and applies them first (see below the example).
 # The last three -e flags are the secrets Production requires: the recovery continuation signing key,
 # the seed admin password, and a freshly generated access-token signing key (needs openssl on your machine).
 docker run -d --name elsa-workbench \
@@ -86,12 +96,13 @@ docker run -d --name elsa-studio \
 Then open **http://localhost:14000** (Studio); it calls **http://localhost:13000** (the server).
 Sign in as `admin` / `Password123!`.
 
-Without `Elsa__Persistence__EntityFramework__Migrate__Policy=AutoMigrate` the image's Production settings apply
-`Validate`: on an empty `elsa-data` volume the container then exits as it starts, with
-`EfPendingMigrationsException: EF module 'DataProtection.Keys' has pending migrations`. Either set the policy as above,
-or apply the migrations out of process first, as a deployment pipeline does, with the command the exception names:
+`Elsa__Persistence__EntityFramework__Migrate__Policy=AutoMigrate` is **demo-only**: it is what keeps this example
+runnable against an empty volume. Real production leaves it out, so the image's Production settings apply their default
+`Validate` policy, and applies the migrations out of process before the container starts, as a deployment pipeline does:
 `dotnet elsa persistence apply --host "<host directory>" --modules DataProtection.Keys --provider Sqlite --connection-env ELSA_EF_CONNECTION`,
-where `ELSA_EF_CONNECTION` reaches the same database file (see [`docs/docker.md`](../../docs/docker.md#data-protection-keys)).
+where `ELSA_EF_CONNECTION` reaches the same database file. Under `Validate`, a container on an empty `elsa-data` volume
+exits as it starts with `EfPendingMigrationsException: EF module 'DataProtection.Keys' has pending migrations`, naming
+that command (see [`docs/docker.md`](../../docs/docker.md#data-protection-keys)).
 
 ### Pointing Studio at the server backend
 

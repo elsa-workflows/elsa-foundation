@@ -84,7 +84,11 @@ services:
       # Nuplane directory feed: drop .nupkg activity/extension packages here to load them.
       # (A subfolder mount — do NOT mount a volume over /app, that would shadow the app binaries.)
       - server-packages:/app/packages
-      # The Data Protection key store's SQLite file (see above). The image creates /app/data writable by its runtime user.
+      # The Data Protection key store's SQLite file (see above). An image built after #2191 creates /app/data owned by its
+      # runtime user ($APP_UID, 1654). With an older image the volume starts out owned by root and cannot be written: pull
+      # the newer image, or give the volume to that user once before the first start:
+      #   docker compose -f docker-compose.images.yml run --rm --no-deps --user root --entrypoint chown elsa-workbench 1654:1654 /app/data
+      # A recreate keeps the keys but still signs everyone out: the users live in the container's own SQLite files.
       - elsa-data:/app/data
 
   elsa-studio:

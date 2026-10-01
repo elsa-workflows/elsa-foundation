@@ -65,7 +65,14 @@ The non-obvious settings:
 - `Elsa__DataProtection__EntityFrameworkCore__*` and `elsa-data:/app/data` keep the Data Protection key ring, which
   protects the sign-in cookie and the antiforgery tokens, in a SQLite file on the `elsa-data` volume. The keys survive a
   restart and a recreate of `elsa-workbench` for as long as that volume exists; the rest of its data stays in the
-  container. See [Data Protection keys](docker.md#data-protection-keys).
+  container. A recreate still signs you out here: the users live in the container too, so a recreated container seeds
+  them again and an earlier session no longer matches a user. Only a stack whose identity store is on a persistent
+  database, such as the PostgreSQL [reference stack](docker.md), keeps everyone signed in across a recreate. See
+  [Data Protection keys](docker.md#data-protection-keys).
+- The `elsa-data` volume needs an image built after #2191, which creates `/app/data` owned by the image's `$APP_UID`
+  (1654). With an older image the volume starts out owned by root and the container cannot write to it: pull the newer
+  image, or give the volume to `$APP_UID` once before the first start:
+  `docker run --rm --user root --entrypoint chown -v elsa-data:/app/data elsaworkflows/elsa-workbench:latest 1654:1654 /app/data`.
 
 ## Custom `shells.json`: controlling which features are enabled
 
