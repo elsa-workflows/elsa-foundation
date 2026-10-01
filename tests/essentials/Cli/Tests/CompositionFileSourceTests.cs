@@ -483,11 +483,20 @@ public sealed class CompositionFileSourceTests
             return stream;
         });
 
-        var refusal = Assert.Throws<CliRefusal>(() => reader.Read(path, FileLimit));
+        try
+        {
+            var refusal = Assert.Throws<CliRefusal>(() => reader.Read(path, FileLimit));
 
-        Assert.Equal("composition-input-unreadable", refusal.Code);
-        Assert.DoesNotContain("private-canary", refusal.ToString(), StringComparison.Ordinal);
-        Assert.False(openerReturned);
+            Assert.Equal("composition-input-unreadable", refusal.Code);
+            Assert.DoesNotContain("private-canary", refusal.ToString(), StringComparison.Ordinal);
+            Assert.False(openerReturned);
+        }
+        finally
+        {
+            // Remove the owned junction itself before the enclosing fixture recursively removes its tree.
+            if (Directory.Exists(admitted) && (File.GetAttributes(admitted) & FileAttributes.ReparsePoint) != 0)
+                Directory.Delete(admitted, recursive: false);
+        }
     }
 
     [Fact]
