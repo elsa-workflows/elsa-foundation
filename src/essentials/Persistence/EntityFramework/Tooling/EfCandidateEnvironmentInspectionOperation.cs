@@ -262,7 +262,6 @@ public sealed class EfCandidateEnvironmentInspectionOperation
             throw EfCandidateInspectionOperation.HostUnavailable();
         }
 
-        identities = identities.WithActual(prepared);
         if (prepared.RefusalCodes.Count != 0)
         {
             var code = prepared.RefusalCodes.Order(StringComparer.Ordinal).First();
@@ -469,39 +468,6 @@ public sealed class EfCandidateEnvironmentInspectionOperation
             !encodedFiles.ContainsKey($"shells.{environment}.json"))
             throw CandidateInputRefusal.RequestInvalid();
 
-        var decodedFiles = new Dictionary<string, byte[]>(StringComparer.Ordinal);
-        try
-        {
-            foreach (var (name, content) in encodedFiles)
-            {
-                byte[] bytes;
-                try
-                {
-                    bytes = DecodeCanonicalBase64(content, MaximumFileBytes);
-                }
-                catch (FormatException)
-                {
-                    throw CandidateInputRefusal.CaptureInvalid();
-                }
-                if (!IsValidSourceJson(bytes))
-                {
-                    CryptographicOperations.ZeroMemory(bytes);
-                    throw CandidateInputRefusal.CaptureInvalid();
-                }
-                decodedFiles.Add(name, bytes);
-            }
-        }
-        catch (CandidateInputRefusal)
-        {
-            Clear(decodedFiles.Values);
-            throw;
-        }
-        catch (FormatException)
-        {
-            Clear(decodedFiles.Values);
-            throw CandidateInputRefusal.RequestInvalid();
-        }
-
         var environmentInput = Property(root, "environmentInput");
         if (environmentInput.ValueKind != JsonValueKind.Object || HasDuplicateProperties(environmentInput) ||
             !HasOnlyProperties(environmentInput, "version", "captureId", "content") ||
@@ -510,21 +476,14 @@ public sealed class EfCandidateEnvironmentInspectionOperation
             !TryString(environmentInput, "captureId", out var environmentCaptureId) || environmentCaptureId != captureId ||
             !TryString(environmentInput, "content", out var environmentContent))
         {
-            Clear(decodedFiles.Values);
             throw CandidateInputRefusal.RequestInvalid();
         }
 
         if (!TryBase64DecodedLength(environmentContent, out var estimatedEnvironmentLength))
-        {
-            Clear(decodedFiles.Values);
             throw CandidateInputRefusal.EnvironmentInvalid();
-        }
         if (environmentContent.Length > EncodedLengthFor(MaximumEnvironmentBytes) ||
             estimatedEnvironmentLength > MaximumEnvironmentBytes)
-        {
-            Clear(decodedFiles.Values);
             throw CandidateInputRefusal.EnvironmentTooLarge();
-        }
 
         byte[] environmentBytes;
         try
@@ -533,22 +492,63 @@ public sealed class EfCandidateEnvironmentInspectionOperation
         }
         catch (FormatException)
         {
-            Clear(decodedFiles.Values);
             throw CandidateInputRefusal.EnvironmentInvalid();
         }
 
+        IReadOnlyDictionary<string, string> environmentEntries;
         try
         {
-            var entries = ParseEnvironmentDocument(environmentBytes);
-            CryptographicOperations.ZeroMemory(environmentBytes);
-            return new CandidateEnvironmentRequest(correlation, hostName, hostDirectory, shell, environment,
-                accepted, removed, decodedFiles, entries);
+            environmentEntries = ParseEnvironmentDocument(environmentBytes);
         }
-        catch
+        finally
         {
             CryptographicOperations.ZeroMemory(environmentBytes);
-            Clear(decodedFiles.Values);
-            throw;
+        }
+
+        var decodedFiles = new Dictionary<string, byte[]>(StringComparer.Ordinal);
+        byte[]? currentBuffer = null;
+        var ownershipTransferred = false;
+        try
+        {
+            foreach (var (name, content) in encodedFiles)
+            {
+                byte[] decoded;
+                try
+                {
+                    decoded = DecodeCanonicalBase64(content, MaximumFileBytes);
+                }
+                catch (FormatException)
+                {
+                    throw CandidateInputRefusal.CaptureInvalid();
+                }
+                currentBuffer = decoded;
+                if (!IsValidSourceJson(decoded))
+                {
+                    CryptographicOperations.ZeroMemory(decoded);
+                    currentBuffer = null;
+                    throw CandidateInputRefusal.CaptureInvalid();
+                }
+                decodedFiles.Add(name, decoded);
+                currentBuffer = null;
+            }
+
+            var candidate = new CandidateEnvironmentRequest(correlation, hostName, hostDirectory, shell, environment,
+                accepted, removed, decodedFiles, environmentEntries);
+            ownershipTransferred = true;
+            return candidate;
+        }
+        catch (FormatException)
+        {
+            throw CandidateInputRefusal.RequestInvalid();
+        }
+        finally
+        {
+            if (!ownershipTransferred)
+            {
+                if (currentBuffer is not null)
+                    CryptographicOperations.ZeroMemory(currentBuffer);
+                Clear(decodedFiles.Values);
+            }
         }
     }
 
@@ -789,10 +789,11 @@ public sealed class EfCandidateEnvironmentInspectionOperation
     private static async Task<int> ReadBoundedAsync(Stream stream, byte[] buffer, CancellationToken cancellationToken)
     {
         var count = 0;
-        while (count < buffer.Length)
+        var boundedLength = MaximumRequestBytes + 1;
+        while (count < boundedLength)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var read = await stream.ReadAsync(buffer.AsMemory(count, buffer.Length - count), cancellationToken);
+            var read = await stream.ReadAsync(buffer.AsMemory(count, boundedLength - count), cancellationToken);
             if (read == 0)
                 break;
             count += read;
@@ -1016,8 +1017,5 @@ public sealed class EfCandidateEnvironmentInspectionOperation
         public static PublicIdentityAllowlist FromCandidate(CandidateEnvironmentRequest candidate, IEnumerable<string> source) =>
             new(candidate.AcceptedFeatureIds.Concat(candidate.RemovedFeatureIds), source, []);
 
-        public PublicIdentityAllowlist WithActual(EfPersistencePreparationResult prepared) =>
-            new([], features, prepared.ActiveFeatureIds.Concat(
-                prepared.ResolvedParticipants.Select(item => item.Participant.FeatureId)));
     }
 }

@@ -231,6 +231,28 @@ public sealed class EfCandidateInspectionTests : IDisposable
     }
 
     [Fact]
+    public async Task Explicit_environment_host_refuses_after_partial_source_decode_without_discovery()
+    {
+        var candidate = CreateEnvironmentCandidate(new Dictionary<string, string>());
+        ReplaceCandidateFile(candidate.Request, "appsettings.Production.json",
+            Encoding.UTF8.GetBytes("{\"broken\":"));
+        var discoveryCalls = 0;
+        var operation = new EfCandidateEnvironmentInspectionOperation(() =>
+        {
+            discoveryCalls++;
+            return EfConfigurationProbeTests.HostAssemblies;
+        });
+        using var response = new MemoryStream();
+
+        var exitCode = await RunEnvironmentOperationAsync(operation, candidate.Request, response, CancellationToken.None);
+        using var document = JsonDocument.Parse(response.ToArray());
+
+        Assert.Equal(EfToolingExitCode.Refusal, exitCode);
+        Assert.Equal("candidate-capture-invalid", document.RootElement.GetProperty("error").GetProperty("code").GetString());
+        Assert.Equal(0, discoveryCalls);
+    }
+
+    [Fact]
     public async Task Explicit_environment_host_emits_the_only_correlated_exit_three_and_worker_accepts_it()
     {
         var candidate = CreateEnvironmentCandidate(new Dictionary<string, string>());
@@ -548,6 +570,23 @@ public sealed class EfCandidateInspectionTests : IDisposable
         Assert.Equal(CaptureId, refused.GetProperty("captureId").GetString());
         Assert.Equal("candidate-request-too-large", refused.GetProperty("error").GetProperty("code").GetString());
         Assert.Single(refused.GetProperty("error").EnumerateObject());
+    }
+
+    [Fact]
+    public async Task Explicit_environment_host_bounds_reads_independently_of_array_pool_capacity()
+    {
+        const int maximumRequestBytes = 8 * 1024 * 1024;
+        var candidate = CreateEnvironmentCandidate(new Dictionary<string, string>());
+        var json = Encoding.UTF8.GetBytes(candidate.Request.ToJsonString());
+        var oversized = PadWithSpaces(json, maximumRequestBytes + 4096);
+        using var input = new CountingStream(oversized);
+        using var response = new MemoryStream();
+
+        Assert.Equal(EfToolingExitCode.Refusal,
+            await RunEnvironmentStreamAsync(input, response, CancellationToken.None));
+        Assert.Equal(maximumRequestBytes + 1, input.BytesRead);
+        using var document = JsonDocument.Parse(response.ToArray());
+        Assert.Equal("candidate-request-too-large", document.RootElement.GetProperty("error").GetProperty("code").GetString());
     }
 
     [Theory]
@@ -1783,6 +1822,10 @@ public sealed class EfCandidateInspectionTests : IDisposable
 
     private static async Task<int> RunCandidateStreamAsync(Stream input, Stream response, CancellationToken cancellationToken) =>
         await EfToolingHost.RunCandidateInspectionAsync(input, response, cancellationToken);
+
+    private static async Task<int> RunEnvironmentStreamAsync(Stream input, Stream response,
+        CancellationToken cancellationToken) =>
+        await EfToolingHost.RunCandidateEnvironmentInspectionAsync(input, response, cancellationToken);
 
     private static byte[] PadWithSpaces(byte[] json, int size)
     {
