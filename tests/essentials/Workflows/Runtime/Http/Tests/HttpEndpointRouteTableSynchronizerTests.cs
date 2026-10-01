@@ -3,6 +3,7 @@ using System.Diagnostics.Metrics;
 using Elsa.Http.Core.Contracts;
 using Elsa.Http.Core.Models;
 using Elsa.Workflows.Runtime.Http.Contracts;
+using Elsa.Workflows.Runtime.Http.Models;
 using Elsa.Workflows.Runtime.Http.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -238,19 +239,31 @@ public sealed class HttpEndpointRouteTableSynchronizerTests
     }
 
     /// <summary>A resolver whose <see cref="ResolveRoutesAsync"/> runs a supplied action, then returns no routes.</summary>
-    private sealed class BlockingResolver(Func<Task> onResolve) : IHttpEndpointRoutesResolver
+    private sealed class BlockingResolver(Func<Task> onResolve) : RoutesResolver
     {
-        public async ValueTask<IReadOnlyCollection<HttpRouteData>> ResolveRoutesAsync(CancellationToken cancellationToken = default)
+        public override async ValueTask<IReadOnlyCollection<HttpRouteData>> ResolveRoutesAsync(CancellationToken cancellationToken = default)
         {
             await onResolve();
             return Array.Empty<HttpRouteData>();
         }
     }
 
-    private sealed class StaticResolver(Func<CancellationToken, ValueTask<IReadOnlyCollection<HttpRouteData>>> resolve) : IHttpEndpointRoutesResolver
+    private sealed class StaticResolver(Func<CancellationToken, ValueTask<IReadOnlyCollection<HttpRouteData>>> resolve) : RoutesResolver
     {
-        public ValueTask<IReadOnlyCollection<HttpRouteData>> ResolveRoutesAsync(CancellationToken cancellationToken = default) =>
+        public override ValueTask<IReadOnlyCollection<HttpRouteData>> ResolveRoutesAsync(CancellationToken cancellationToken = default) =>
             resolve(cancellationToken);
+    }
+
+    /// <summary>The refresh path under test reads routes only; the fingerprint these doubles report is a constant.</summary>
+    private abstract class RoutesResolver : IHttpEndpointRoutesResolver
+    {
+        public abstract ValueTask<IReadOnlyCollection<HttpRouteData>> ResolveRoutesAsync(CancellationToken cancellationToken = default);
+
+        public async ValueTask<HttpEndpointRouteSet> ResolveRouteSetAsync(CancellationToken cancellationToken = default) =>
+            new(await ResolveRoutesAsync(cancellationToken), nameof(RoutesResolver));
+
+        public ValueTask<string> ResolveRouteFingerprintAsync(CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(nameof(RoutesResolver));
     }
 
     private sealed class TelemetryCapture : IDisposable

@@ -5,6 +5,7 @@ using Elsa.Primitives.Extensions;
 using Elsa.Tasks.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Http.Contracts;
+using Elsa.Workflows.Runtime.Http.Options;
 using Elsa.Workflows.Runtime.Http.Services;
 using Elsa.Workflows.Runtime.Http.Tasks;
 using Microsoft.Extensions.DependencyInjection;
@@ -21,8 +22,9 @@ namespace Elsa.Workflows.Runtime.Http;
     DisplayName = "Workflows Runtime HTTP",
     Description = "Provides HTTP endpoint routing, authorization, and fault handling for workflow runtime endpoints.",
     // Http contributes the IRouteTable implementation this feature refreshes; WorkflowsRuntimeTriggers contributes
-    // the IWorkflowTriggerBindingStore the resolver reads and the IWorkflowTriggerIndexer the observer hooks.
-    DependsOn = new object[] { "Http", "WorkflowsRuntimeTriggers" }
+    // the IWorkflowTriggerBindingStore the resolver reads and the IWorkflowTriggerIndexer the observer hooks; Tasks runs
+    // the startup task that fills the table and the pump that keeps it converged with other nodes (#2190).
+    DependsOn = new object[] { "Http", "WorkflowsRuntimeTriggers", "Tasks" }
 )]
 public class WorkflowsRuntimeHttpFeature : IShellFeature
 {
@@ -34,6 +36,12 @@ public class WorkflowsRuntimeHttpFeature : IShellFeature
 
     [ManifestSetting(DisplayName = "Route resolver type", Description = "CLR type name of the HTTP endpoint route resolver implementation.", Category = "Services", Advanced = true)]
     public string RouteResolverType { get; set; } = typeof(HttpEndpointRoutesResolver).GetSimpleAssemblyQualifiedName();
+
+    [ManifestSetting(DisplayName = "Route table convergence interval (seconds)", Description = "Seconds between checks that pick up HTTP endpoints published, and HTTP bookmarks created or consumed, on other nodes: the bound on how long such an endpoint can return 404 on this node. A check reads only stimulus identities; the route table is rebuilt only when they changed.", Category = "Runtime", DefaultValue = "5")]
+    public double RouteTableConvergenceIntervalSeconds { get; set; } = 5;
+
+    [ManifestSetting(DisplayName = "Route table convergence max backoff (seconds)", Description = "Upper bound the convergence interval widens to while checks keep failing.", Category = "Runtime", DefaultValue = "60")]
+    public double RouteTableConvergenceMaxBackoffSeconds { get; set; } = 60;
 
     public void ConfigureServices(IServiceCollection services)
     {
@@ -50,6 +58,18 @@ public class WorkflowsRuntimeHttpFeature : IShellFeature
         // has every published HTTP endpoint's route before the middleware runs.
         services.AddScoped<IStartupTask, UpdateRouteTableStartupTask>();
 
+        // Converge with changes made on other nodes (#2190): the observers below fire only where the change was made,
+        // so every node checks the durable index's stimulus identities on an interval and rebuilds when they moved.
+        // The settings are validated here so a bad value fails the shell, not the first tick.
+        var interval = PositiveSeconds(RouteTableConvergenceIntervalSeconds, nameof(RouteTableConvergenceIntervalSeconds));
+        var maxBackoffInterval = PositiveSeconds(RouteTableConvergenceMaxBackoffSeconds, nameof(RouteTableConvergenceMaxBackoffSeconds));
+        services.Configure<HttpEndpointRouteTableConvergenceOptions>(options =>
+        {
+            options.Interval = interval;
+            options.MaxBackoffInterval = maxBackoffInterval;
+        });
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IRecurringTask, HttpEndpointRouteTableConvergencePumpTask>());
+
         // Keep the route table fresh on every publish: the trigger indexer notifies this observer after it
         // rewrites an artifact's bindings. Contribution seam (fan-in), so TryAddEnumerable.
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowTriggerIndexObserver, RouteTableTriggerIndexObserver>());
@@ -65,6 +85,13 @@ public class WorkflowsRuntimeHttpFeature : IShellFeature
         // stimulus types. Contribution seam (fan-in), so TryAddEnumerable.
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowTriggerIndexValidator, HttpEndpointRoutingUniquenessValidator>());
     }
+
+    // The one validation of the convergence settings: positive, finite and representable as a TimeSpan. NaN and the
+    // infinities fail both comparisons.
+    private static TimeSpan PositiveSeconds(double seconds, string setting) =>
+        seconds > 0 && seconds < TimeSpan.MaxValue.TotalSeconds
+            ? TimeSpan.FromSeconds(seconds)
+            : throw new ArgumentOutOfRangeException(setting, seconds, $"{setting} must be a positive, finite number of seconds.");
 
     private void RegisterFaultHandler(IServiceCollection services)
     {

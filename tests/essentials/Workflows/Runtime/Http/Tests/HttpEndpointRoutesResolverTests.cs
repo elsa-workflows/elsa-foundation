@@ -385,4 +385,53 @@ public sealed class HttpEndpointRoutesResolverTests
             new[] { "orders/{id}", "products" }.OrderBy(x => x),
             routes.Select(r => r.Route).OrderBy(x => x));
     }
+
+    // ---- Route-set fingerprint (#2190) ----
+
+    [Fact]
+    public async Task RouteSetFingerprint_EqualsTheCheapFingerprintOfTheSameState()
+    {
+        // Every population rule the projection applies (HTTP only, waiting only) the cheap read must apply too, or a
+        // node would rebuild its table on every check, or never.
+        await _store.SaveAsync(Bindings.HttpEndpoint("a1", "n1", "orders/{id}", "GET"));
+        await _store.SaveAsync(Bindings.Other("a2", "n2"));
+        await _bookmarks.SaveAsync(Bookmarks.HttpEndpoint("wf1", "callbacks/{id}", "POST"));
+        await _bookmarks.SaveAsync(Bookmarks.HttpEndpoint("wf2", "expired", "GET", expiresAt: DateTimeOffset.UnixEpoch));
+        await _bookmarks.SaveAsync(Bookmarks.Other("wf3"));
+
+        var routeSet = await Resolver().ResolveRouteSetAsync();
+
+        Assert.Equal(2, routeSet.Routes.Count);
+        Assert.NotNull(routeSet.Fingerprint);
+        Assert.Equal(routeSet.Fingerprint, await Resolver().ResolveRouteFingerprintAsync());
+    }
+
+    [Fact]
+    public async Task RouteFingerprint_MovesWhenTheRouteSetChanges_AndOnlyThen()
+    {
+        var resolver = Resolver();
+        var empty = await resolver.ResolveRouteFingerprintAsync();
+
+        await _store.SaveAsync(Bindings.HttpEndpoint("a1", "n1", "orders/{id}", "GET"));
+        var published = await resolver.ResolveRouteFingerprintAsync();
+        Assert.NotEqual(empty, published);
+
+        // A second instance waiting on a routed template, a non-HTTP binding or bookmark, and an expired HTTP bookmark
+        // leave the route set as it is.
+        await _bookmarks.SaveAsync(Bookmarks.HttpEndpoint("wf1", "orders/{id}", "GET"));
+        await _store.SaveAsync(Bindings.Other("a2", "n2"));
+        await _bookmarks.SaveAsync(Bookmarks.Other("wf2"));
+        await _bookmarks.SaveAsync(Bookmarks.HttpEndpoint("wf3", "expired", "GET", expiresAt: DateTimeOffset.UnixEpoch));
+        Assert.Equal(published, await resolver.ResolveRouteFingerprintAsync());
+
+        // Retiring the trigger keeps the route while the instance still waits on it; consuming that bookmark removes it.
+        await _store.DeleteByArtifactAsync("a1");
+        Assert.Equal(published, await resolver.ResolveRouteFingerprintAsync());
+        var waiting = Bookmarks.HttpEndpoint("wf1", "orders/{id}", "GET");
+        await _bookmarks.DeleteAsync(waiting.WorkflowExecutionId, waiting.BookmarkId);
+        Assert.Equal(empty, await resolver.ResolveRouteFingerprintAsync());
+
+        await _bookmarks.SaveAsync(Bookmarks.HttpEndpoint("wf4", "callbacks/{id}", "POST"));
+        Assert.NotEqual(empty, await resolver.ResolveRouteFingerprintAsync());
+    }
 }

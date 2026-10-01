@@ -258,6 +258,11 @@ public sealed class PublicationActivationTests
             CancellationToken cancellationToken = default) =>
             ValueTask.FromResult(new WorkflowTriggerBindingPage(query, [], 0, null));
 
+        public ValueTask<IReadOnlyCollection<string>> ListActiveStimulusHashesAsync(
+            string stimulusType,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<IReadOnlyCollection<string>>([]);
+
         public ValueTask<WorkflowTriggerBindingPage> ListByStimulusTypeAsync(
             WorkflowTriggerBindingTypePageQuery query,
             CancellationToken cancellationToken = default) =>
