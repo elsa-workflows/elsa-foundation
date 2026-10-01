@@ -276,7 +276,7 @@ public sealed class CandidateInspectionTests
             environmentInputPath: environmentPath);
 
         var explicitRun = DotnetElsa.Run(ambient, arguments);
-        Assert.Equal(ToolExitCode.Success, explicitRun.ExitCode);
+        AssertExpectedExit(explicitRun, ToolExitCode.Success, "explicit Workbench environment inspection");
         AssertWorkbenchResolution(explicitRun.Output, externalInputs: "supplied-intended");
         Assert.DoesNotContain(CandidateInspectionFixture.PrivateEnvironmentCanary, explicitRun.Text, StringComparison.Ordinal);
         Assert.DoesNotContain(environmentPath, explicitRun.Text, StringComparison.Ordinal);
@@ -417,8 +417,8 @@ public sealed class CandidateInspectionTests
 
         var first = DotnetElsa.Run(fixture.SentinelEnvironment, arguments);
         var second = DotnetElsa.Run(fixture.SentinelEnvironment, arguments);
-        Assert.Equal(ToolExitCode.Success, first.ExitCode);
-        Assert.Equal(ToolExitCode.Success, second.ExitCode);
+        AssertExpectedExit(first, ToolExitCode.Success, "first Workbench environment inspection");
+        AssertExpectedExit(second, ToolExitCode.Success, "second Workbench environment inspection");
         Assert.True(JsonNode.DeepEquals(JsonNode.Parse(first.Output), JsonNode.Parse(second.Output)));
         Assert.DoesNotContain(CandidateInspectionFixture.PrivateEnvironmentCanary, first.Text, StringComparison.Ordinal);
         Assert.DoesNotContain(CandidateInspectionFixture.PrivateEnvironmentCanary, second.Text, StringComparison.Ordinal);
@@ -456,7 +456,7 @@ public sealed class CandidateInspectionTests
 
         var divergence = DotnetElsa.Run(fixture.SentinelEnvironment, fixture.InspectionArguments(
             "json", hostDirectory: DotnetElsa.Workbench(), environmentInputPath: environmentPath));
-        Assert.Equal(ToolExitCode.Refusal, divergence.ExitCode);
+        AssertExpectedExit(divergence, ToolExitCode.Refusal, "Workbench selection-divergence inspection");
         Assert.Empty(divergence.Output);
         Assert.Contains("candidate-selection-conflict", divergence.Error, StringComparison.Ordinal);
         Assert.DoesNotContain(CandidateInspectionFixture.PrivateEnvironmentCanary, divergence.Text, StringComparison.Ordinal);
@@ -639,6 +639,28 @@ public sealed class CandidateInspectionTests
     {
         using var document = JsonDocument.Parse(File.ReadAllText(path ?? fixture.InputPath("accepted.json")));
         return Strings(document.RootElement.GetProperty("accepted").GetProperty("featureIds"));
+    }
+
+    private static void AssertExpectedExit(CliRun run, int expected, string operation)
+    {
+        Assert.True(run.ExitCode == expected,
+            $"{operation} expected exit {expected}, got {run.ExitCode}; fixed diagnostic code: {FixedDiagnosticCode(run)}.");
+    }
+
+    private static string FixedDiagnosticCode(CliRun run)
+    {
+        const string prefix = "error [";
+        var start = run.Error.IndexOf(prefix, StringComparison.Ordinal);
+        if (start < 0)
+            return "none";
+        start += prefix.Length;
+        var end = run.Error.IndexOf(']', start);
+        if (end <= start)
+            return "malformed";
+        var code = run.Error[start..end];
+        return code.Length <= 96 && code.All(character => char.IsAsciiLetterOrDigit(character) || character == '-')
+            ? code
+            : "invalid";
     }
 
     private static string[] PlanArguments(CandidateInspectionFixture fixture, string? profile)
