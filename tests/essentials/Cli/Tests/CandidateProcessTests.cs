@@ -187,14 +187,26 @@ public sealed class CandidateProcessTests
     [Fact]
     public void Explicit_environment_option_rejects_repeated_occurrences_at_parse_boundary()
     {
-        var parse = ElsaCli.Build().Parse([
-            "composition", "inspect", "--host", "host", "--host-dir", "source", "--shell", "default",
-            "--environment", "Production", "--composition", "candidate", "--trust-host-code",
-            "--environment-input", "one.json", "--environment-input", "two.json"]);
+        var omitted = ElsaCli.Build().Parse(InspectArguments());
+        var single = ElsaCli.Build().Parse(InspectArguments("--environment-input", "one.json"));
+        var repeated = ElsaCli.Build().Parse(InspectArguments(
+            "--environment-input", "one.json", "--environment-input", "two.json"));
 
-        Assert.Contains(parse.Errors, error => error.Message.Contains(
+        Assert.Empty(omitted.Errors);
+        Assert.Empty(single.Errors);
+        Assert.Contains(repeated.Errors, error => error.Message.Contains(
             "--environment-input option may be specified only once", StringComparison.Ordinal));
+        var errors = string.Join(Environment.NewLine, repeated.Errors.Select(error => error.Message));
+        Assert.DoesNotContain("one.json", errors, StringComparison.Ordinal);
+        Assert.DoesNotContain("two.json", errors, StringComparison.Ordinal);
     }
+
+    private static string[] InspectArguments(params string[] environmentInput) =>
+    [
+        "composition", "inspect", "--host", "host", "--host-dir", "source", "--shell", "default",
+        "--environment", "Production", "--composition", "candidate", "--trust-host-code",
+        ..environmentInput
+    ];
 
     [Theory]
     [InlineData("write")]

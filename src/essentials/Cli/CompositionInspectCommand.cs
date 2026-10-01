@@ -25,7 +25,7 @@ internal static class CompositionInspectCommand
         environmentInput.Arity = ArgumentArity.ExactlyOne;
         environmentInput.Validators.Add(option =>
         {
-            if (option.IdentifierTokenCount != 1)
+            if (option.IdentifierTokenCount > 1)
                 option.AddError("The --environment-input option may be specified only once.");
         });
         var timeout = new Option<int?>("--timeout-seconds") { Description = "Inspection timeout, 1 to 300 seconds. Defaults to 60." };
