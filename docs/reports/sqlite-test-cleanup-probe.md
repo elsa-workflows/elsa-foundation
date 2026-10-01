@@ -21,6 +21,10 @@ Use the finding to refine an owned-resource cleanup contract: dispose every owne
 
 The failed fixture disposes its tracked contexts before its database helper. [PR #2250](https://github.com/elsa-workflows/elsa-foundation/pull/2250) changes only synthetic upcaster observation code/tests; it does not change this fixture or helper. The matching low-level stack across sites is evidence to investigate, not identification of the competing cleanup or its exact native interleaving. The embedded Event-bookmark incident in #2216 remains a different, unexplained failure.
 
+## Subsequent correction verification
+
+The unchanged schema-observation correction head `5a8adbe29b382fad5b7f69c237ada5bba73f6440` passed [CI36859130012 attempt2](https://github.com/elsa-workflows/elsa-foundation/actions/runs/36859130012/attempts/2); root read the actual full-EF result:700 passed, zero failed, one existing opt-in stress skip of701 total. The failed-only rerun request also executed dependent/provider jobs. [PR #2250](https://github.com/elsa-workflows/elsa-foundation/pull/2250) merged normally as `dc79b23327d4de73661daa3f00694178ff37693e` after its exact-head review/check gate. Attempt1 remains a failure. No cleanup implementation changed, and this later success neither identifies the disposed-handle cause nor completes #2185. Resulting-main verification belongs to the correction's own delivery record.
+
 ## Source boundary
 
 - [TemporarySqliteDatabase](../../tests/essentials/Persistence/EntityFramework/Tests/TemporarySqliteDatabase.cs) owns a unique file and calls process-wide `ClearAllPools` before deleting its database and sidecars.
