@@ -317,6 +317,13 @@ public sealed class CompositionInspectionCaptureTests
         }
         else
         {
+            // The default overlay carries object settings for A, whose removal is deliberately
+            // refused because it would discard those settings. Remove that overlay entry so this
+            // test exercises the reachable object-map boundary rather than that separate guard.
+            var overlayPath = Path.Join(fixture.HostDirectory, "shells.Production.json");
+            var overlay = JsonNode.Parse(File.ReadAllText(overlayPath))!;
+            overlay["CShells"]!["Shells"]!["default"]!["Features"]!.AsObject().Remove("A");
+            File.WriteAllText(overlayPath, overlay.ToJsonString());
             authored["add"] = new JsonArray();
             authored["remove"] = ids;
             authored["accepted"]!["featureIds"] = new JsonArray();

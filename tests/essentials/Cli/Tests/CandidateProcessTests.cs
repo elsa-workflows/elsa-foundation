@@ -43,10 +43,7 @@ public sealed class CandidateProcessTests
     {
         using var environment = new EnvironmentCaptureFixture();
         using var fixture = new ProcessFixture();
-        var hostResponse = CandidateHostResponseFixtures.Success(environment.Capture.Payload);
-        hostResponse["configurationResolution"]!["source"] = "captured-workbench-json-explicit-environment-v1";
-        hostResponse["configurationResolution"]!["externalInputs"] = "supplied-intended";
-        fixture.SetOutput(hostResponse);
+        ConfigureEnvironmentSuccess(fixture, environment.Capture);
 
         var result = await fixture.Runner.RunEnvironmentAsync(environment.Capture, []);
 
@@ -110,10 +107,7 @@ public sealed class CandidateProcessTests
         var packageRootLength = checked(maximumBytes - baselineBytes + 1 + (oversized ? 1 : 0));
         using var environment = new EnvironmentCaptureFixture();
         using var fixture = new ProcessFixture();
-        var hostResponse = CandidateHostResponseFixtures.Success(environment.Capture.Payload);
-        hostResponse["configurationResolution"]!["source"] = "captured-workbench-json-explicit-environment-v1";
-        hostResponse["configurationResolution"]!["externalInputs"] = "supplied-intended";
-        fixture.SetOutput(hostResponse);
+        ConfigureEnvironmentSuccess(fixture, environment.Capture);
 
         if (oversized)
         {
@@ -294,10 +288,7 @@ public sealed class CandidateProcessTests
         using var expected = new EnvironmentCaptureFixture();
         using var other = new EnvironmentCaptureFixture();
         using var fixture = new ProcessFixture();
-        var hostResponse = CandidateHostResponseFixtures.Success(other.Capture.Payload);
-        hostResponse["configurationResolution"]!["source"] = "captured-workbench-json-explicit-environment-v1";
-        hostResponse["configurationResolution"]!["externalInputs"] = "supplied-intended";
-        fixture.SetOutput(hostResponse);
+        ConfigureEnvironmentSuccess(fixture, other.Capture);
 
         var refusal = await Assert.ThrowsAsync<CliRefusal>(() =>
             fixture.Runner.RunEnvironmentAsync(expected.Capture, []));
@@ -1422,6 +1413,9 @@ public sealed class CandidateProcessTests
             Tooling = JsonSerializer.SerializeToElement(hostResponse)
         }, WorkerContract.Json);
     }
+
+    private static void ConfigureEnvironmentSuccess(ProcessFixture fixture, CompositionInspectionCapture capture) =>
+        fixture.SetOutputBytes(EnvironmentSuccessResponse(capture.Payload));
 
     private static byte[] PadResponse(byte[] response, int targetBytes)
     {
