@@ -219,8 +219,16 @@ public sealed class EfRecurringTriggerScheduleStore(
             replacedRows = await RowsForActivation(scope, replacedActivationId!, cancellationToken);
             await EnsureActiveProjectionAsync(replaced, replacedRows, scope, replacedActivationId!, cancellationToken);
         }
+        // Each activated schedule takes over a due, unsettled occurrence from the replaced schedule of its trigger (#2198),
+        // in this transaction. The replaced rows are rewritten below under a new revision, so a claim in flight on one of
+        // them is stale from the same commit on, and cannot settle the occurrence the activated schedule now holds.
+        var predecessors = replacedRows.Select(x => Read(x, scope)).ToArray();
         foreach (var row in candidateRows)
-            Copy(row, Read(row, scope) with { IsActive = true }, scope, checked(row.Revision + 1));
+        {
+            var schedule = Read(row, scope);
+            var predecessor = predecessors.SingleOrDefault(schedule.IsSameTriggerAs);
+            Copy(row, (predecessor is null ? schedule : schedule.TakeOverFrom(predecessor)) with { IsActive = true }, scope, checked(row.Revision + 1));
+        }
         candidate.IsActive = true;
         candidate.Revision = checked(candidate.Revision + 1);
         UpdateStateContent(candidate, scope);
@@ -260,25 +268,6 @@ public sealed class EfRecurringTriggerScheduleStore(
         await CommitMutationAndClearAsync(transaction, cancellationToken, $"Recurring-schedule activation projection '{activationId}' deletion");
     }
 
-    public async ValueTask<IReadOnlyCollection<RecurringTriggerSchedule>> ListDueAsync(DateTimeOffset asOf, int limit, CancellationToken cancellationToken = default)
-    {
-        RuntimeStorePageRequest.ValidateLimit(limit, nameof(limit));
-        cancellationToken.ThrowIfCancellationRequested();
-        var scope = RequireScope();
-        var scopeHash = Hash(scope);
-        var scopeKey = Encode(scope);
-        var rows = await context.RecurringTriggerSchedules.AsNoTracking()
-            .Where(x => x.ScopeKeyHash == scopeHash && x.ScopeKey == scopeKey && x.IsActive && x.NextOccurrenceUtcTicks <= asOf.UtcTicks)
-            .OrderBy(x => x.NextOccurrenceUtcTicks)
-            .ThenBy(x => x.ScheduleIdOrderKey)
-            .Take(limit)
-            .ToArrayAsync(cancellationToken);
-        var schedules = rows.Select(x => Read(x, scope)).ToArray();
-        if (schedules.Any(x => !x.IsActive || x.NextOccurrence > asOf))
-            throw new InvalidDataException("Recurring-trigger due query returned a row outside its active and due predicate.");
-        return schedules;
-    }
-
     public async ValueTask<RecurringTriggerSchedule?> FindAsync(string scheduleId, CancellationToken cancellationToken = default)
     {
         ValidateScheduleId(scheduleId, nameof(scheduleId));
@@ -286,21 +275,6 @@ public sealed class EfRecurringTriggerScheduleStore(
         var scope = RequireScope();
         var row = await context.RecurringTriggerSchedules.AsNoTracking().SingleOrDefaultAsync(x => x.Id == Id(scope, scheduleId), cancellationToken);
         return row is null ? null : Read(row, scope, scheduleId);
-    }
-
-    public async ValueTask<bool> TryAdvanceAsync(string scheduleId, DateTimeOffset expectedNextOccurrence, DateTimeOffset newNextOccurrence, CancellationToken cancellationToken = default)
-    {
-        ValidateScheduleId(scheduleId, nameof(scheduleId));
-        cancellationToken.ThrowIfCancellationRequested();
-        var scope = RequireScope();
-        context.ChangeTracker.Clear();
-        var row = await context.RecurringTriggerSchedules.AsNoTracking().SingleOrDefaultAsync(x => x.Id == Id(scope, scheduleId), cancellationToken);
-        if (row is null) return false;
-        var current = Read(row, scope, scheduleId);
-        if (!current.IsActive || current.NextOccurrence != expectedNextOccurrence) return false;
-        var originalRevision = row.Revision;
-        Copy(row, current with { NextOccurrence = newNextOccurrence }, scope, checked(row.Revision + 1));
-        return await TryWriteAsync(row, originalRevision, cancellationToken);
     }
 
     public async ValueTask<IReadOnlyCollection<RecurringTriggerOccurrenceClaim>> ClaimDueAsync(RecurringTriggerOccurrenceClaimRequest request, CancellationToken cancellationToken = default)
@@ -313,6 +287,9 @@ public sealed class EfRecurringTriggerScheduleStore(
         var scopeKey = Encode(scope);
         var now = request.Now.UtcTicks;
         context.ChangeTracker.Clear();
+        // Only the (scope, active, NextOccurrence) range is served by an index; the visibility filter and the order key's
+        // tie-break are evaluated on the rows in that range. That is acceptable because recurring schedules are few: one per
+        // Timer/Cron start trigger of an active publication.
         var rows = await context.RecurringTriggerSchedules.AsNoTracking()
             .Where(x => x.ScopeKeyHash == scopeHash && x.ScopeKey == scopeKey && x.IsActive && x.NextOccurrenceUtcTicks <= now &&
                         (x.VisibleAfterUtcTicks == null || x.VisibleAfterUtcTicks <= now))
@@ -330,9 +307,9 @@ public sealed class EfRecurringTriggerScheduleStore(
                 throw new InvalidDataException("Recurring-trigger claim query returned a row outside its active, due and visible predicate.");
             var originalRevision = row.Revision;
             row.ClaimOwnerId = Encode(request.OwnerId);
-            row.ClaimToken = checked(row.ClaimToken + 1);
-            SetClaimedAt(row, request.Now);
-            SetVisibleAfter(row, request.Now.Add(request.VisibilityTimeout));
+            row.ClaimToken = NextFencingToken(row);
+            (row.ClaimedAtUtcTicks, row.ClaimedAtOffsetMinutes) = EfRuntimeOperationalStoreSupport.TimestampColumns(request.Now);
+            (row.VisibleAfterUtcTicks, row.VisibleAfterOffsetMinutes) = EfRuntimeOperationalStoreSupport.TimestampColumns(request.Now.Add(request.VisibilityTimeout));
             row.Revision = checked(row.Revision + 1);
             if (await TryWriteAsync(row, originalRevision, cancellationToken))
                 claims.Add(ToClaim(row, schedule));
@@ -349,7 +326,7 @@ public sealed class EfRecurringTriggerScheduleStore(
             return null;
         var row = held.Row;
         var originalRevision = row.Revision;
-        SetVisibleAfter(row, now.Add(visibilityTimeout));
+        (row.VisibleAfterUtcTicks, row.VisibleAfterOffsetMinutes) = EfRuntimeOperationalStoreSupport.TimestampColumns(now.Add(visibilityTimeout));
         row.Revision = checked(row.Revision + 1);
         return await TryWriteAsync(row, originalRevision, cancellationToken) ? ToClaim(row, held.Schedule) : null;
     }
@@ -362,8 +339,8 @@ public sealed class EfRecurringTriggerScheduleStore(
         var originalRevision = row.Revision;
         Copy(row, held.Schedule with { NextOccurrence = nextOccurrence }, held.Scope, checked(row.Revision + 1));
         row.ClaimOwnerId = null;
-        SetClaimedAt(row, null);
-        SetVisibleAfter(row, null);
+        (row.ClaimedAtUtcTicks, row.ClaimedAtOffsetMinutes) = EfRuntimeOperationalStoreSupport.TimestampColumns(null);
+        (row.VisibleAfterUtcTicks, row.VisibleAfterOffsetMinutes) = EfRuntimeOperationalStoreSupport.TimestampColumns(null);
         row.FailureCount = 0;
         return await TryWriteAsync(row, originalRevision, cancellationToken);
     }
@@ -375,15 +352,17 @@ public sealed class EfRecurringTriggerScheduleStore(
         var row = held.Row;
         var originalRevision = row.Revision;
         row.ClaimOwnerId = null;
-        SetClaimedAt(row, null);
-        SetVisibleAfter(row, visibleAt);
+        (row.ClaimedAtUtcTicks, row.ClaimedAtOffsetMinutes) = EfRuntimeOperationalStoreSupport.TimestampColumns(null);
+        (row.VisibleAfterUtcTicks, row.VisibleAfterOffsetMinutes) = EfRuntimeOperationalStoreSupport.TimestampColumns(visibleAt);
         row.FailureCount = checked(row.FailureCount + 1);
         row.Revision = checked(row.Revision + 1);
         return await TryWriteAsync(row, originalRevision, cancellationToken);
     }
 
     // The schedule row a claim transition may act on: present, intact, and still held by exactly this claim — its owner,
-    // fencing token and revision. Anything else (a peer's re-claim, a deactivation, a republish, a delete) is stale.
+    // fencing token and revision — on the very schedule it claimed. Anything else (a peer's re-claim, a deactivation, a
+    // republish, a delete) is stale. The schedule comparison also fences a claim out of a schedule deleted and saved again
+    // under the same id, whose revision restarts, even if its tokens happened to coincide.
     private async Task<HeldClaim?> LoadHeldAsync(RecurringTriggerOccurrenceClaim claim, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(claim);
@@ -396,7 +375,8 @@ public sealed class EfRecurringTriggerScheduleStore(
         if (row is null)
             return null;
         var schedule = Read(row, scope, claim.Schedule.ScheduleId);
-        return row.Revision == claim.Revision && row.ClaimToken == claim.FencingToken && row.ClaimOwnerId == Encode(claim.OwnerId)
+        return row.Revision == claim.Revision && row.ClaimToken == claim.FencingToken && row.ClaimOwnerId == Encode(claim.OwnerId) &&
+               SchedulesEqual(schedule, claim.Schedule)
             ? new HeldClaim(row, schedule, scope)
             : null;
     }
@@ -633,27 +613,21 @@ public sealed class EfRecurringTriggerScheduleStore(
             throw new InvalidDataException("The persisted EF recurring-trigger schedule claim projection is inconsistent.");
     }
 
-    private static void SetClaimedAt(RecurringTriggerScheduleEntity row, DateTimeOffset? value)
-    {
-        row.ClaimedAtUtcTicks = value?.UtcTicks;
-        row.ClaimedAtOffsetMinutes = value is { } claimedAt ? OffsetMinutes(claimedAt) : null;
-    }
-
-    private static void SetVisibleAfter(RecurringTriggerScheduleEntity row, DateTimeOffset? value)
-    {
-        row.VisibleAfterUtcTicks = value?.UtcTicks;
-        row.VisibleAfterOffsetMinutes = value is { } visibleAfter ? OffsetMinutes(visibleAfter) : null;
-    }
+    // A fencing token is the row's previous token plus one, and never at or below the schedule's creation instant in ticks,
+    // so a schedule deleted and saved again does not count from zero again but on from its own creation instant (#2198).
+    // Successive claims of one row fall at strictly later instants (a claim needs the previous one settled, released or
+    // lapsed), so once a schedule is due after its creation its tokens never run more than one tick past its claim times,
+    // and a schedule recreated after its predecessor's last claim does not reissue any of the predecessor's tokens. The
+    // token is not the only fence: LoadHeldAsync also compares the claimed schedule, so a claim on a predecessor cannot act
+    // on a recreated schedule that differs from it, whatever the tokens.
+    private static long NextFencingToken(RecurringTriggerScheduleEntity row) => checked(Math.Max(row.ClaimToken, row.CreatedAtUtcTicks) + 1);
 
     private static RecurringTriggerOccurrenceClaim ToClaim(RecurringTriggerScheduleEntity row, RecurringTriggerSchedule schedule) =>
         row is { ClaimOwnerId: { } owner, ClaimedAtUtcTicks: { } claimedAt, ClaimedAtOffsetMinutes: { } claimedAtOffset, VisibleAfterUtcTicks: { } visibleAfter, VisibleAfterOffsetMinutes: { } visibleAfterOffset }
-            ? new(schedule, Decode(owner), row.ClaimToken, row.Revision, FromUtcTicks(claimedAt, claimedAtOffset), FromUtcTicks(visibleAfter, visibleAfterOffset), row.FailureCount)
+            ? new(schedule, Decode(owner), row.ClaimToken, row.Revision,
+                EfRuntimeOperationalStoreSupport.FromUtcTicks(claimedAt, claimedAtOffset),
+                EfRuntimeOperationalStoreSupport.FromUtcTicks(visibleAfter, visibleAfterOffset), row.FailureCount)
             : throw new InvalidDataException("The recurring-trigger claim projection is incomplete.");
-
-    private static int OffsetMinutes(DateTimeOffset value) => checked((int)value.Offset.TotalMinutes);
-
-    private static DateTimeOffset FromUtcTicks(long utcTicks, int offsetMinutes) =>
-        new DateTimeOffset(new DateTime(utcTicks, DateTimeKind.Utc)).ToOffset(TimeSpan.FromMinutes(offsetMinutes));
 
     private static string? Optional(string? value) => value is null ? null : Decode(value);
 

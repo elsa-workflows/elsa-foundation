@@ -5,11 +5,9 @@ using Elsa.Activities.Testing;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
-using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Workflows.Runtime.Scheduling;
 using Elsa.Workflows.Runtime.Scheduling.Options;
 using Elsa.Workflows.Runtime.Services.Triggers;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -36,6 +34,15 @@ internal static class RecurringOccurrenceDeliveryContract
     // The started workflow waits on an event, so it stays running: a start that ran twice would collide with it rather
     // than meet a terminal execution the drainer refuses to touch.
     private static readonly WorkflowExecutable Executable = RuntimeEventExecutableTestFixture.Create("recurring-start");
+
+    // A republish of the same workflow: another artifact, the same trigger node.
+    private static readonly WorkflowExecutable Republished = RuntimeEventExecutableTestFixture.Create("recurring-start", version: 2);
+
+    // The slot both publications serve, named as activation names it: by the workflow definition and the slot name.
+    private static readonly string Slot = WorkflowActivationSlotIdentity.Create(Executable.Identity.DefinitionId, "default");
+
+    // A Cron that never fires again: February 30 does not exist.
+    private const string ExhaustedCron = "0 0 30 2 *";
 
     /// <summary>
     /// The occurrence is claimed and the node dies before routing it. The dead node's lease keeps a peer off it until it
@@ -110,6 +117,82 @@ internal static class RecurringOccurrenceDeliveryContract
     }
 
     /// <summary>
+    /// A pump of the replaced publication has claimed the due occurrence and not routed it yet when the replacement is
+    /// activated, through the store's activation as publication activation drives it. The activation hands the occurrence to
+    /// the replacement and fences the claim out, so the replaced pump can neither renew nor settle it, and the replacement
+    /// fires the occurrence, starting the workflow once.
+    /// </summary>
+    public static async Task AReplacementActivatedWhileTheReplacedPublicationHoldsTheOccurrenceFiresItOnceAsync(
+        string provider,
+        string connectionString,
+        Func<IInterceptor[], RuntimeDbContext> createContext)
+    {
+        await using var deliveries = await Deliveries.StartAsync(provider, connectionString, createContext);
+        await deliveries.ActivatePublicationAsync(Executable, "publication-a", replacedActivationId: null, next: Due, createdAt: Due.AddHours(-1));
+        var replacedClaim = Assert.Single(await deliveries.Store().ClaimDueAsync(new("replaced-pump", Now, Lease, 10)));
+
+        var replacement = await deliveries.ActivatePublicationAsync(Republished, "publication-b", "publication-a", next: Now.AddSeconds(50), createdAt: Now.AddSeconds(-10));
+
+        Assert.Equal(Due, replacement.NextOccurrence);
+        Assert.Null(await deliveries.Store().RenewClaimAsync(replacedClaim, Now, Lease));
+        Assert.False(await deliveries.Store().SettleClaimAsync(replacedClaim, Now.AddMinutes(1)));
+
+        var router = new RecordingRouter(deliveries.Router);
+        await deliveries.Pump(router, Now).ExecuteAsync(CancellationToken.None);
+        await deliveries.Pump(router, Now).ExecuteAsync(CancellationToken.None);
+
+        Assert.Equal(StimulusStartStatus.Started, Assert.Single(Assert.Single(router.Results).Starts).Status);
+        await KeyedStartNodes.AssertStartedOnceAsync(deliveries.Node, KeyedExecutionId(replacement));
+        Assert.Equal(Now.AddMinutes(1), (await deliveries.Store().FindAsync(replacement.ScheduleId))!.NextOccurrence);
+    }
+
+    /// <summary>
+    /// The replaced publication already routed the due occurrence, which started the workflow, and its pump died before
+    /// settling. The replacement activated after it fires the same occurrence, under the same key, and converges on that
+    /// start although it serves another artifact: no second start.
+    /// </summary>
+    public static async Task AReplacementActivatedAfterTheReplacedPublicationRoutedTheOccurrenceDoesNotStartItAgainAsync(
+        string provider,
+        string connectionString,
+        Func<IInterceptor[], RuntimeDbContext> createContext)
+    {
+        await using var deliveries = await Deliveries.StartAsync(provider, connectionString, createContext);
+        var replaced = await deliveries.ActivatePublicationAsync(Executable, "publication-a", replacedActivationId: null, next: Due, createdAt: Due.AddHours(-1));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            deliveries.Pump(new DyingRouter(deliveries.Router, afterRouting: true), Now).ExecuteAsync(CancellationToken.None));
+        await KeyedStartNodes.AssertStartedOnceAsync(deliveries.Node, KeyedExecutionId(replaced));
+
+        var replacement = await deliveries.ActivatePublicationAsync(Republished, "publication-b", "publication-a", next: Now.AddSeconds(50), createdAt: Now.AddSeconds(-10));
+        var router = new RecordingRouter(deliveries.Router);
+        await deliveries.Pump(router, Now).ExecuteAsync(CancellationToken.None);
+
+        Assert.Equal(Due, replacement.NextOccurrence);
+        Assert.Equal(replaced.BuildOccurrenceKey(), Assert.Single(router.Requests).IdempotencyKey);
+        Assert.Equal(StimulusStartStatus.SkippedDuplicate, Assert.Single(Assert.Single(router.Results).Starts).Status);
+        await KeyedStartNodes.AssertStartedOnceAsync(deliveries.Node, KeyedExecutionId(replaced));
+    }
+
+    /// <summary>
+    /// A Cron with no occurrence after the one in its cursor fires that last occurrence, starting the workflow once, and
+    /// only then is the schedule deleted.
+    /// </summary>
+    public static async Task AnExhaustedCronFiresItsLastOccurrenceOnceAndIsThenDeletedAsync(
+        string provider,
+        string connectionString,
+        Func<IInterceptor[], RuntimeDbContext> createContext)
+    {
+        await using var deliveries = await Deliveries.StartAsync(provider, connectionString, createContext);
+        var schedule = await deliveries.PublishRecurringStartWorkflowAsync(RecurringScheduleKind.Cron, ExhaustedCron);
+        var router = new RecordingRouter(deliveries.Router);
+
+        await deliveries.Pump(router, Now).ExecuteAsync(CancellationToken.None);
+
+        Assert.Equal(StimulusStartStatus.Started, Assert.Single(Assert.Single(router.Results).Starts).Status);
+        await KeyedStartNodes.AssertStartedOnceAsync(deliveries.Node, KeyedExecutionId(schedule));
+        Assert.Null(await deliveries.Store().FindAsync(schedule.ScheduleId));
+    }
+
+    /// <summary>
     /// A republish lands while an occurrence is due and not yet fired. The re-index keeps that occurrence in the cursor
     /// instead of recomputing it from now, so the pump fires it under its own key rather than skipping to the next one.
     /// </summary>
@@ -132,8 +215,9 @@ internal static class RecurringOccurrenceDeliveryContract
         Assert.Equal(Now.AddMinutes(1), (await stores.Create().FindAsync(scheduleId))!.NextOccurrence);
     }
 
+    // Every schedule here serves a slot, so its occurrence starts under the artifact-free occurrence identity.
     private static string KeyedExecutionId(RecurringTriggerSchedule schedule) =>
-        KeyedWorkflowStartIdentity.For($"recurring:{schedule.ScheduleId}:{schedule.NextOccurrence.UtcTicks}", schedule.ArtifactId).WorkflowExecutionId;
+        KeyedWorkflowStartIdentity.ForOccurrence(schedule.BuildOccurrenceKey()).WorkflowExecutionId;
 
     private static RecurringTriggerPumpTask Pump(
         IRecurringTriggerScheduleStore store,
@@ -229,7 +313,9 @@ internal static class RecurringOccurrenceDeliveryContract
         }
 
         /// <summary>Publishes the workflow with its recurring trigger binding, and saves the schedule with a due occurrence.</summary>
-        public async Task<RecurringTriggerSchedule> PublishRecurringStartWorkflowAsync()
+        public async Task<RecurringTriggerSchedule> PublishRecurringStartWorkflowAsync(
+            RecurringScheduleKind kind = RecurringScheduleKind.Interval,
+            string expression = EveryMinuteProvider.Expression)
         {
             var reference = await Node.PublishAsync(Executable, "ref-recurring-start");
             var artifactId = Executable.Identity.ArtifactId;
@@ -248,14 +334,53 @@ internal static class RecurringOccurrenceDeliveryContract
                 TriggerNodeId,
                 EveryMinuteProvider.StimulusType,
                 EveryMinuteProvider.StimulusHash,
-                RecurringScheduleKind.Interval,
-                EveryMinuteProvider.Expression,
+                kind,
+                expression,
                 Due,
                 Due.AddHours(-1),
                 reference.ActivationId,
                 reference.SlotId);
             await Store().SaveAsync(schedule);
             return schedule;
+        }
+
+        /// <summary>
+        /// Publishes <paramref name="executable"/> as activation <paramref name="activationId"/> of the shared slot, with its
+        /// recurring trigger binding, and prepares and activates its schedule through the store's activation, replacing
+        /// <paramref name="replacedActivationId"/>. Returns the schedule as activation left it.
+        /// </summary>
+        public async Task<RecurringTriggerSchedule> ActivatePublicationAsync(
+            WorkflowExecutable executable,
+            string activationId,
+            string? replacedActivationId,
+            DateTimeOffset next,
+            DateTimeOffset createdAt)
+        {
+            var artifactId = executable.Identity.ArtifactId;
+            var published = await Node.PublishAsync(executable, $"ref-{activationId}");
+            await using (var scope = Node.Services.CreateAsyncScope())
+            {
+                await scope.ServiceProvider.GetRequiredService<IWorkflowExecutableSourceReferenceStore>().SaveAsync(
+                    published with { SourceReferenceId = $"ref-{activationId}-slot", ActivationId = activationId, SlotId = Slot });
+                await scope.ServiceProvider.GetRequiredService<IWorkflowTriggerBindingStore>().SaveAsync(Binding(artifactId, activationId, Slot));
+            }
+
+            var schedule = new RecurringTriggerSchedule(
+                RecurringTriggerSchedule.BuildId(activationId, artifactId, TriggerNodeId),
+                artifactId,
+                TriggerNodeId,
+                EveryMinuteProvider.StimulusType,
+                EveryMinuteProvider.StimulusHash,
+                RecurringScheduleKind.Interval,
+                EveryMinuteProvider.Expression,
+                next,
+                createdAt,
+                activationId,
+                Slot);
+            var store = Store();
+            await store.PrepareActivationAsync(activationId, [schedule]);
+            await store.ActivateAsync(activationId, replacedActivationId);
+            return (await store.FindAsync(schedule.ScheduleId))!;
         }
 
         public async ValueTask DisposeAsync()
@@ -297,46 +422,6 @@ internal static class RecurringOccurrenceDeliveryContract
     {
         public ValueTask<StimulusRoutingResult> RouteAsync(StimulusDispatchRequest request, CancellationToken cancellationToken = default) =>
             new(new StimulusRoutingResult([], []));
-    }
-
-    /// <summary>
-    /// Holds each participant's first occurrence-claim write until every participant has reached its own, so all of them
-    /// read the due row before any of them claims it.
-    /// </summary>
-    private sealed class ClaimWriteRendezvous(int participants)
-    {
-        private readonly TaskCompletionSource _met = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        private int _arrived;
-
-        public IInterceptor Participant() => new ClaimWriteHold(this);
-
-        private Task ArriveAsync(CancellationToken cancellationToken)
-        {
-            if (Interlocked.Increment(ref _arrived) == participants)
-                _met.TrySetResult();
-            return _met.Task.WaitAsync(TimeSpan.FromSeconds(30), cancellationToken);
-        }
-
-        private sealed class ClaimWriteHold(ClaimWriteRendezvous rendezvous) : SaveChangesInterceptor
-        {
-            private bool _held;
-
-            public override async ValueTask<InterceptionResult<int>> SavingChangesAsync(
-                DbContextEventData eventData,
-                InterceptionResult<int> result,
-                CancellationToken cancellationToken = default)
-            {
-                var claiming = eventData.Context!.ChangeTracker.Entries<RecurringTriggerScheduleEntity>()
-                    .Any(entry => entry.State == EntityState.Modified && entry.Entity.ClaimOwnerId is not null);
-                if (claiming && !_held)
-                {
-                    _held = true;
-                    await rendezvous.ArriveAsync(cancellationToken);
-                }
-
-                return result;
-            }
-        }
     }
 
     /// <summary>The index writer under the schedule indexer: it replaces the artifact's binding, as the trigger indexer does.</summary>

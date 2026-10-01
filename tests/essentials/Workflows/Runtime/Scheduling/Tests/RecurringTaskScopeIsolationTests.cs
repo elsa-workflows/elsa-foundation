@@ -144,10 +144,12 @@ public sealed class RecurringTaskScopeIsolationTests
         }
 
         public ValueTask<RecurringTriggerSchedule> SaveAsync(RecurringTriggerSchedule schedule, CancellationToken cancellationToken = default) => new(schedule);
-        public ValueTask<IReadOnlyCollection<RecurringTriggerSchedule>> ListDueAsync(DateTimeOffset asOf, int limit, CancellationToken cancellationToken = default) => new((IReadOnlyCollection<RecurringTriggerSchedule>)[]);
         public ValueTask<RecurringTriggerSchedule?> FindAsync(string scheduleId, CancellationToken cancellationToken = default) => new((RecurringTriggerSchedule?)null);
-        public ValueTask<bool> TryAdvanceAsync(string scheduleId, DateTimeOffset expectedNextOccurrence, DateTimeOffset newNextOccurrence, CancellationToken cancellationToken = default) => new(false);
+        // It holds no schedule, so it grants no claim and every claim it is handed is stale.
         public ValueTask<IReadOnlyCollection<RecurringTriggerOccurrenceClaim>> ClaimDueAsync(RecurringTriggerOccurrenceClaimRequest request, CancellationToken cancellationToken = default) => new((IReadOnlyCollection<RecurringTriggerOccurrenceClaim>)[]);
+        public ValueTask<RecurringTriggerOccurrenceClaim?> RenewClaimAsync(RecurringTriggerOccurrenceClaim claim, DateTimeOffset now, TimeSpan visibilityTimeout, CancellationToken cancellationToken = default) => new((RecurringTriggerOccurrenceClaim?)null);
+        public ValueTask<bool> SettleClaimAsync(RecurringTriggerOccurrenceClaim claim, DateTimeOffset nextOccurrence, CancellationToken cancellationToken = default) => new(false);
+        public ValueTask<bool> ReleaseClaimAsync(RecurringTriggerOccurrenceClaim claim, DateTimeOffset visibleAt, CancellationToken cancellationToken = default) => new(false);
         public ValueTask DeleteByArtifactAsync(string artifactId, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
         public ValueTask DeleteAsync(string scheduleId, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
 

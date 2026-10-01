@@ -38,6 +38,23 @@ public sealed class RecurringTriggerPumpTaskTests
     }
 
     [Fact]
+    public async Task Sweep_KeysASlotScopedOccurrence_ByItsTrigger_AndStartsItWhicheverArtifactServesIt()
+    {
+        // #2198: the key names the trigger (slot, node, stimulus), not the publication, so a republish's fire of an occurrence
+        // and the replaced publication's fire of it converge on one start.
+        var schedule = PublicationSchedule("s1", "publication-a") with { IsActive = true };
+        await SeedAsync(schedule);
+        var router = new FakeRouter();
+        var (pump, _) = CreatePump(_store, router);
+
+        await pump.ExecuteAsync(CancellationToken.None);
+
+        var request = Assert.Single(router.Requests);
+        Assert.Equal($"recurring:slot-default:node-s1:hash-s1:{schedule.NextOccurrence.UtcTicks}", request.IdempotencyKey);
+        Assert.Equal(StimulusStartKeyScope.Occurrence, request.StartKeyScope);
+    }
+
+    [Fact]
     public async Task Sweep_KeepsOccurrence_WhenOwningBindingIsMissing_AndFiresItOnceTheBindingIsBack()
     {
         // Index drift (e.g. mid-republish): the occurrence is neither hash-broadcast to whatever other artifacts share the
@@ -93,16 +110,38 @@ public sealed class RecurringTriggerPumpTaskTests
     }
 
     [Fact]
-    public async Task Sweep_DeletesSchedule_WhenCronExhausted()
+    public async Task Sweep_RoutesTheLastOccurrence_ThenDeletesTheSchedule_WhenCronIsExhausted()
     {
-        // Feb 30 never occurs: ComputeNext returns null, so the schedule is removed rather than left due.
-        await _store.SaveAsync(Schedule("dead", Now.AddMinutes(-1), kind: RecurringScheduleKind.Cron, expression: "0 0 30 2 *"));
+        // Feb 30 never occurs: ComputeNext returns null, so the occurrence in the cursor is the last one. It is still fired
+        // (#2198), and only then is the schedule removed rather than left due.
+        var last = Now.AddMinutes(-1);
+        await SeedAsync(Schedule("dead", last, kind: RecurringScheduleKind.Cron, expression: "0 0 30 2 *"));
         var router = new FakeRouter();
         var (pump, _) = CreatePump(_store, router);
 
         await pump.ExecuteAsync(CancellationToken.None);
 
-        Assert.Empty(router.Requests);
+        Assert.Equal(Key("dead", last), Assert.Single(router.Requests).IdempotencyKey);
+        Assert.Null(await _store.FindAsync("dead"));
+    }
+
+    [Fact]
+    public async Task Sweep_KeepsTheLastOccurrence_WhenItsRouteThrows_AndDeletesTheScheduleOnlyOnceItIsRouted()
+    {
+        // The direction that could pass for success: an exhausted schedule whose last fire failed must not be deleted.
+        var last = Now.AddMinutes(-1);
+        await SeedAsync(Schedule("dead", last, kind: RecurringScheduleKind.Cron, expression: "0 0 30 2 *"));
+        var router = new FakeRouter { Throw = new InvalidOperationException("boom") };
+        var (pump, clock) = CreatePump(_store, router);
+
+        await pump.ExecuteAsync(CancellationToken.None);
+        Assert.Equal(last, (await _store.FindAsync("dead"))!.NextOccurrence);
+
+        router.Throw = null;
+        clock.Advance(FirstBackoff);
+        await pump.ExecuteAsync(CancellationToken.None);
+
+        Assert.Equal([Key("dead", last), Key("dead", last)], router.Requests.Select(request => request.IdempotencyKey));
         Assert.Null(await _store.FindAsync("dead"));
     }
 
@@ -237,17 +276,29 @@ public sealed class RecurringTriggerPumpTaskTests
 
         await _store.PrepareActivationAsync("publication-old", [oldSchedule]);
         await _store.PrepareActivationAsync("publication-new", [candidateSchedule]);
-        Assert.Empty(await _store.ListDueAsync(Now, 10));
+        Assert.Empty(await ActiveActivationsAsync(oldSchedule, candidateSchedule));
 
         await _store.ActivateAsync("publication-old", replacedActivationId: null);
-        Assert.Equal("publication-old", Assert.Single(await _store.ListDueAsync(Now, 10)).ActivationId);
+        Assert.Equal("publication-old", Assert.Single(await ActiveActivationsAsync(oldSchedule, candidateSchedule)));
 
         await _store.ActivateAsync("publication-new", "publication-old");
-        Assert.Equal("publication-new", Assert.Single(await _store.ListDueAsync(Now, 10)).ActivationId);
+        Assert.Equal("publication-new", Assert.Single(await ActiveActivationsAsync(oldSchedule, candidateSchedule)));
 
         // Compensation restores the retired projection and makes the failed candidate invisible again.
         await _store.ActivateAsync("publication-old", "publication-new");
-        Assert.Equal("publication-old", Assert.Single(await _store.ListDueAsync(Now, 10)).ActivationId);
+        Assert.Equal("publication-old", Assert.Single(await ActiveActivationsAsync(oldSchedule, candidateSchedule)));
+    }
+
+    private async Task<IReadOnlyList<string?>> ActiveActivationsAsync(params RecurringTriggerSchedule[] schedules)
+    {
+        var active = new List<string?>();
+        foreach (var schedule in schedules)
+        {
+            if (await _store.FindAsync(schedule.ScheduleId) is { IsActive: true } current)
+                active.Add(current.ActivationId);
+        }
+
+        return active;
     }
 
     private (RecurringTriggerPumpTask Pump, MutableTimeProvider Clock) CreatePump(
@@ -349,19 +400,23 @@ public sealed class RecurringTriggerPumpTaskTests
         public ValueTask<RecurringTriggerSchedule> SaveAsync(RecurringTriggerSchedule schedule, CancellationToken cancellationToken = default) =>
             new(schedule);
 
-        public ValueTask<IReadOnlyCollection<RecurringTriggerSchedule>> ListDueAsync(DateTimeOffset asOf, int limit, CancellationToken cancellationToken = default) =>
-            new(Array.Empty<RecurringTriggerSchedule>());
-
+        // Healthy, it holds nothing, so it grants no claim and every claim it is handed is stale.
         public ValueTask<IReadOnlyCollection<RecurringTriggerOccurrenceClaim>> ClaimDueAsync(RecurringTriggerOccurrenceClaimRequest request, CancellationToken cancellationToken = default) =>
-            Healthy
-                ? new ValueTask<IReadOnlyCollection<RecurringTriggerOccurrenceClaim>>(Array.Empty<RecurringTriggerOccurrenceClaim>())
-                : throw new InvalidOperationException("store down");
+            Available<IReadOnlyCollection<RecurringTriggerOccurrenceClaim>>([]);
+
+        public ValueTask<RecurringTriggerOccurrenceClaim?> RenewClaimAsync(RecurringTriggerOccurrenceClaim claim, DateTimeOffset now, TimeSpan visibilityTimeout, CancellationToken cancellationToken = default) =>
+            Available<RecurringTriggerOccurrenceClaim?>(null);
+
+        public ValueTask<bool> SettleClaimAsync(RecurringTriggerOccurrenceClaim claim, DateTimeOffset nextOccurrence, CancellationToken cancellationToken = default) =>
+            Available(false);
+
+        public ValueTask<bool> ReleaseClaimAsync(RecurringTriggerOccurrenceClaim claim, DateTimeOffset visibleAt, CancellationToken cancellationToken = default) =>
+            Available(false);
 
         public ValueTask<RecurringTriggerSchedule?> FindAsync(string scheduleId, CancellationToken cancellationToken = default) =>
             new((RecurringTriggerSchedule?)null);
 
-        public ValueTask<bool> TryAdvanceAsync(string scheduleId, DateTimeOffset expectedNextOccurrence, DateTimeOffset newNextOccurrence, CancellationToken cancellationToken = default) =>
-            new(false);
+        private ValueTask<T> Available<T>(T result) => Healthy ? new(result) : throw new InvalidOperationException("store down");
 
         public ValueTask DeleteByArtifactAsync(string artifactId, CancellationToken cancellationToken = default) =>
             ValueTask.CompletedTask;

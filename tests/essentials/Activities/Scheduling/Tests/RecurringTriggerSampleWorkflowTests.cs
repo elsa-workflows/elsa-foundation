@@ -94,7 +94,7 @@ public sealed class RecurringTriggerSampleWorkflowTests
         await indexer.IndexAsync(Workflow("artifact-timer", TimerNode("PT9M")));
 
         // Only the republished schedule survives, keyed by the same node id.
-        var schedule = Assert.Single(await store.ListDueAsync(Now.AddHours(1), 10));
+        var schedule = Assert.Single(await store.ListAllByArtifactAsync("artifact-timer"));
         Assert.Equal(TimerStimulus.Hash("PT9M"), schedule.StimulusHash);
     }
 

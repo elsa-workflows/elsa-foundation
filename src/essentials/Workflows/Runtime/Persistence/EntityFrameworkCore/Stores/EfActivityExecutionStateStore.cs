@@ -174,7 +174,7 @@ public sealed class EfActivityExecutionStateStore(
         row.Status = state.Status.ToString();
         row.ExecutionSequence = state.ExecutionSequence;
         row.ScheduledAtUtcTicks = state.ScheduledAt.UtcTicks;
-        row.ScheduledAtOffsetMinutes = ActivityExecutionEfSupport.OffsetMinutes(state.ScheduledAt);
+        row.ScheduledAtOffsetMinutes = EfRuntimeOperationalStoreSupport.OffsetMinutes(state.ScheduledAt);
         row.ContentJson = RuntimeArtifactJson.Serialize(state);
         row.SchemaVersion = RuntimeActivityExecutionEfModule.SchemaVersion;
         row.Revision = revision;
@@ -223,7 +223,7 @@ public sealed class EfActivityExecutionStateStore(
         if (!StringComparer.Ordinal.Equals(state.Execution.WorkflowExecutionId, workflow) ||
             !StringComparer.Ordinal.Equals(state.Execution.ActivityExecutionId, activity) ||
             state.Status.ToString() != row.Status || state.ExecutionSequence != row.ExecutionSequence ||
-            state.ScheduledAt.UtcTicks != row.ScheduledAtUtcTicks || ActivityExecutionEfSupport.OffsetMinutes(state.ScheduledAt) != row.ScheduledAtOffsetMinutes ||
+            state.ScheduledAt.UtcTicks != row.ScheduledAtUtcTicks || EfRuntimeOperationalStoreSupport.OffsetMinutes(state.ScheduledAt) != row.ScheduledAtOffsetMinutes ||
             !StringComparer.Ordinal.Equals(ActivityExecutionEfSupport.EffectiveExecutionScope(state), row.ExecutionScopeId is null ? null : Decode(row.ExecutionScopeId)) ||
             !StringComparer.Ordinal.Equals(state.ParentActivityExecutionId, parent))
             throw new InvalidDataException("The persisted activity execution state projection does not match its content.");

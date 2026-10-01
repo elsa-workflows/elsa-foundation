@@ -42,6 +42,27 @@ public sealed class RecurringOccurrencePostgreSqlSmokeTests(RuntimeBookmarksPost
         await RecurringOccurrenceDeliveryContract.ARepublishWhileAnOccurrenceIsDueKeepsItForThePumpAsync(Contexts(await CreateDatabaseAsync()));
 
     [SkippableFact]
+    public async Task PostgreSql_a_replacement_activated_while_the_replaced_publication_holds_the_occurrence_fires_it_once()
+    {
+        var connectionString = await CreateDatabaseAsync();
+        await RecurringOccurrenceDeliveryContract.AReplacementActivatedWhileTheReplacedPublicationHoldsTheOccurrenceFiresItOnceAsync("PostgreSql", connectionString, Contexts(connectionString));
+    }
+
+    [SkippableFact]
+    public async Task PostgreSql_a_replacement_activated_after_the_replaced_publication_routed_the_occurrence_does_not_start_it_again()
+    {
+        var connectionString = await CreateDatabaseAsync();
+        await RecurringOccurrenceDeliveryContract.AReplacementActivatedAfterTheReplacedPublicationRoutedTheOccurrenceDoesNotStartItAgainAsync("PostgreSql", connectionString, Contexts(connectionString));
+    }
+
+    [SkippableFact]
+    public async Task PostgreSql_an_exhausted_cron_fires_its_last_occurrence_once_and_is_then_deleted()
+    {
+        var connectionString = await CreateDatabaseAsync();
+        await RecurringOccurrenceDeliveryContract.AnExhaustedCronFiresItsLastOccurrenceOnceAndIsThenDeletedAsync("PostgreSql", connectionString, Contexts(connectionString));
+    }
+
+    [SkippableFact]
     public Task PostgreSql_a_claim_holds_the_occurrence_until_its_lease_lapses() =>
         WithStoresAsync(RecurringOccurrenceClaimContract.AClaimHoldsTheOccurrenceUntilItsLeaseLapsesAsync);
 
@@ -50,8 +71,23 @@ public sealed class RecurringOccurrencePostgreSqlSmokeTests(RuntimeBookmarksPost
         WithStoresAsync(RecurringOccurrenceClaimContract.AReleaseKeepsTheOccurrenceAndCountsTheFailureAsync);
 
     [SkippableFact]
-    public Task PostgreSql_rewriting_or_deleting_the_schedule_fences_out_its_claim() =>
-        WithStoresAsync(RecurringOccurrenceClaimContract.RewritingOrDeletingTheScheduleFencesOutItsClaimAsync);
+    public Task PostgreSql_deleting_and_saving_the_schedule_again_fences_out_its_claim_without_reissuing_the_token() =>
+        WithStoresAsync(RecurringOccurrenceClaimContract.DeletingAndSavingTheScheduleAgainFencesOutItsClaimWithoutReissuingTheTokenAsync);
+
+    [SkippableFact]
+    public async Task PostgreSql_two_stores_that_read_one_due_row_grant_exactly_one_claim()
+    {
+        await using var stores = await new EfRecurringScheduleStores(Contexts(await CreateDatabaseAsync())).EnsureCreatedAsync();
+        await RecurringOccurrenceClaimContract.TwoStoresThatReadOneDueRowGrantExactlyOneClaimAsync(stores);
+    }
+
+    [SkippableFact]
+    public Task PostgreSql_activating_a_replacement_takes_over_the_due_occurrence_and_fences_out_the_replaced_claim() =>
+        WithStoresAsync(RecurringOccurrenceClaimContract.ActivatingAReplacementTakesOverTheDueOccurrenceAndFencesOutTheReplacedClaimAsync);
+
+    [SkippableFact]
+    public Task PostgreSql_activating_a_replacement_keeps_its_own_cursor_when_no_due_occurrence_of_its_trigger_preceded_it() =>
+        WithStoresAsync(RecurringOccurrenceClaimContract.ActivatingAReplacementKeepsItsOwnCursorWhenNoDueOccurrenceOfItsTriggerPrecededItAsync);
 
     private async Task WithStoresAsync(Func<Func<IRecurringTriggerScheduleStore>, Task> scenario)
     {

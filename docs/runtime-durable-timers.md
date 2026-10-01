@@ -105,24 +105,46 @@ the next occurrence, and the recurring-trigger pump (`RecurringTriggerPumpTask`,
   the schedule (for example while a republish is replacing the index), the occurrence is released with a
   backoff that doubles from the sweep interval up to the maximum backoff, and then fired again. Each retry
   is logged, so a persistently failing schedule shows up in the log rather than going quiet.
-- **Repeats start nothing new.** Every fire of one occurrence carries the idempotency key
-  `recurring:{scheduleId}:{occurrenceTicks}`, so the router starts it as a keyed start: a repeat finds the
-  run the first fire started and reports it as a duplicate (see *Stimulus START idempotency is
-  at-least-once* in [serialization](serialization.md)). Two nodes that sweep at the same moment cannot
-  both claim one occurrence.
-- **Republishing keeps a due occurrence.** Re-indexing a published workflow keeps an occurrence that is
-  due but has not fired yet, instead of recomputing the schedule from the current time.
+- **Repeats start nothing new.** Every fire of one occurrence carries the same idempotency key, so the
+  router starts it as a keyed start: a repeat finds the run the first fire started and reports it as a
+  duplicate (see *Stimulus START idempotency is at-least-once* in [serialization](serialization.md)). The
+  key names the trigger, not the publication: `recurring:{slotId}:{nodeId}:{stimulusHash}:{occurrenceTicks}`
+  for a schedule of a publication slot, which every publication of the slot shares, and
+  `recurring:{scheduleId}:{occurrenceTicks}` for a schedule without a slot. Two nodes that sweep at the same
+  moment cannot both claim one occurrence.
+- **Republishing does not skip a due occurrence.** Activating a new publication of a slot replaces the
+  replaced publication's schedules in one write. A schedule of the new publication takes over the replaced
+  schedule's next occurrence of the same trigger (same slot, trigger node and stimulus) when that occurrence
+  is earlier than the new schedule's own and fell due no later than the new schedule was created, so the
+  occurrence that was due during the republish fires on the new publication. The replaced schedule changes
+  in the same write, so a claim a node still holds on it is stale and cannot settle the occurrence. If the
+  replaced publication had already routed the occurrence, the new publication's fire carries the same key
+  and starts nothing new, even though it serves another artifact: an occurrence start of a slot is keyed
+  without the artifact. The legacy re-index path, which replaces an artifact's schedules without a
+  publication slot, likewise keeps a cursor whose occurrence is already due.
+- **An exhausted Cron fires its last occurrence.** When a Cron expression has no occurrence after the one
+  in the cursor, that last occurrence is still routed under its claim, and the schedule is deleted only
+  after the route returned. If the route fails, the occurrence is released and retried like any other.
 
 **What it does not do.**
 
 - **No catch-up.** After downtime, or while a failing occurrence is being retried, the occurrence in the
   cursor fires once and the schedule then moves to the first occurrence after the current time.
-  Occurrences that elapsed in between are not replayed.
-- **A replaced publication does not hand over its due occurrence.** Activating a new publication of a
-  workflow replaces its schedules. An occurrence that was due on the replaced publication but had not fired
-  yet is not fired on its behalf; the new publication's schedule counts from when it was prepared.
+  Occurrences that elapsed in between are not replayed. A republish hands over only the replaced
+  schedule's next occurrence, not a backlog.
+- **A trigger the new publication dropped is not fired.** An occurrence that was due on a replaced
+  publication's trigger which the new publication no longer has (another trigger node or another
+  stimulus, for example a changed Cron expression) is not fired on its behalf.
 - **The in-memory store is not durable.** Without the EF Core runtime persistence, schedules and their
   claims live in memory and are lost on restart.
+
+**Rolling deploys.** The claims and the start-once dedupe hold only among nodes that run this behaviour
+(#2198) and that recognize keyed starts (#2195 or later). A node from before #2198 advances a schedule
+before it routes the occurrence, ignores the claim columns, and keys the start with
+`recurring:{scheduleId}:{occurrenceTicks}` under the per-artifact identity, so during a rolling deploy an
+occurrence that falls due can fire on an old and a new node and start twice; an old node that crashes
+mid-fire still loses its occurrence. Roll every node that runs the recurring-trigger pump before relying on
+the guarantee, or stop the pump on old nodes first.
 
 ## Follow-ups (not in this wave)
 

@@ -54,6 +54,8 @@ internal static class RuntimeRecurringTriggerScheduleProviderSmoke
         Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? "The native provider is unavailable.");
         var scope = $"native-r27-{Guid.NewGuid():N}";
         var now = new DateTimeOffset(2030, 1, 2, 3, 4, 5, TimeSpan.Zero);
+        var lease = TimeSpan.FromMinutes(1);
+        RecurringTriggerOccurrenceClaim lapsedClaim;
 
         await using (var context = createContext(fixture.ConnectionString))
         {
@@ -71,8 +73,9 @@ internal static class RuntimeRecurringTriggerScheduleProviderSmoke
             await store.SaveAsync(late);
             await store.SaveAsync(early);
 
-            Assert.Equal(new[] { "artifact-order:c", "artifact-order:a", "artifact-order:b" },
-                (await store.ListDueAsync(now, 10)).Select(x => x.ScheduleId));
+            var ordered = await store.ClaimDueAsync(new RecurringTriggerOccurrenceClaimRequest("native-order", now, lease, 10));
+            Assert.Equal(new[] { "artifact-order:c", "artifact-order:a", "artifact-order:b" }, ordered.Select(x => x.Schedule.ScheduleId));
+            lapsedClaim = ordered.First();
             var firstPage = await store.ListByArtifactPageAsync(new RecurringTriggerScheduleArtifactPageQuery("artifact-order", 2));
             Assert.Equal(2, firstPage.Items.Count);
             Assert.NotNull(firstPage.NextContinuationToken);
@@ -98,7 +101,8 @@ internal static class RuntimeRecurringTriggerScheduleProviderSmoke
             Assert.Equal(RuntimeOperationalStateEfModule.RecurringScheduleIdMaximumLength, boundary.ScheduleId.Length);
             await store.SaveAsync(boundary);
             Assert.Equal(boundary, await store.FindAsync(boundary.ScheduleId));
-            Assert.True(await store.TryAdvanceAsync(boundary.ScheduleId, now, now.AddMinutes(1)));
+            var boundaryClaim = Assert.Single(await store.ClaimDueAsync(new RecurringTriggerOccurrenceClaimRequest("native-boundary", now, lease, 10)));
+            Assert.True(await store.SettleClaimAsync(boundaryClaim, now.AddMinutes(1)));
             await store.DeleteAsync(boundary.ScheduleId);
             Assert.Null(await store.FindAsync(boundary.ScheduleId));
 
@@ -112,27 +116,25 @@ internal static class RuntimeRecurringTriggerScheduleProviderSmoke
         {
             var store = Store(verification, scope);
             Assert.Null(await store.FindAsync(RecurringTriggerSchedule.BuildId("artifact-rollback", "node")));
-            var expected = Schedule("artifact-order", "a", now.AddMinutes(-2)).NextOccurrence;
-            Assert.True(await store.TryAdvanceAsync(RecurringTriggerSchedule.BuildId("artifact-order", "a"), expected, now));
-            Assert.False(await store.TryAdvanceAsync(RecurringTriggerSchedule.BuildId("artifact-order", "a"), expected, now));
-            Assert.Equal(now, (await store.FindAsync(RecurringTriggerSchedule.BuildId("artifact-order", "a")))!.NextOccurrence);
 
-            // The occurrence claim columns (#2198) round-trip: claim, release after a failure, re-claim, settle.
-            var failed = Assert.Single(await store.ClaimDueAsync(new RecurringTriggerOccurrenceClaimRequest("native-pump", now, TimeSpan.FromMinutes(1), 1)));
+            // The occurrence claim columns (#2198) round-trip: the claims taken above lapse, a re-claim fences them out, a
+            // release after a failure counts it, and a settlement moves the cursor.
+            var lapsed = now + lease;
+            var failed = Assert.Single(await store.ClaimDueAsync(new RecurringTriggerOccurrenceClaimRequest("native-pump", lapsed, lease, 1)));
             Assert.Equal(RecurringTriggerSchedule.BuildId("artifact-order", "c"), failed.Schedule.ScheduleId);
-            Assert.True(await store.ReleaseClaimAsync(failed, now.AddSeconds(10)));
-            var retried = Assert.Single(await store.ClaimDueAsync(new RecurringTriggerOccurrenceClaimRequest("native-pump", now.AddSeconds(10), TimeSpan.FromMinutes(1), 1)));
+            Assert.True(failed.FencingToken > lapsedClaim.FencingToken);
+            Assert.False(await store.SettleClaimAsync(lapsedClaim, now));
+            Assert.True(await store.ReleaseClaimAsync(failed, lapsed.AddSeconds(10)));
+            var retried = Assert.Single(await store.ClaimDueAsync(new RecurringTriggerOccurrenceClaimRequest("native-pump", lapsed.AddSeconds(10), lease, 1)));
             Assert.Equal((failed.Schedule.ScheduleId, 1), (retried.Schedule.ScheduleId, retried.FailureCount));
             Assert.True(await store.SettleClaimAsync(retried, now.AddMinutes(5)));
             Assert.Equal(now.AddMinutes(5), (await store.FindAsync(failed.Schedule.ScheduleId))!.NextOccurrence);
 
             var activationSchedule = Schedule("artifact-activation", "node", now, "activation", "slot");
             await store.PrepareActivationAsync("activation", [activationSchedule]);
-            Assert.DoesNotContain(RecurringTriggerSchedule.BuildId("activation", "artifact-activation", "node"),
-                (await store.ListDueAsync(now, 10)).Select(x => x.ScheduleId));
+            Assert.False((await store.FindAsync(activationSchedule.ScheduleId))!.IsActive);
             await store.ActivateAsync("activation", null);
-            Assert.Contains(RecurringTriggerSchedule.BuildId("activation", "artifact-activation", "node"),
-                (await store.ListDueAsync(now, 10)).Select(x => x.ScheduleId));
+            Assert.True((await store.FindAsync(activationSchedule.ScheduleId))!.IsActive);
 
             for (var index = 0; index < 257; index++)
             {

@@ -195,17 +195,33 @@ a duplicate and acknowledged although nothing had started.
 
 Two consequences follow from the dedupe being durable. A reused idempotency key on the stimulus API, for the same
 artifact, is answered `SkippedDuplicate` permanently, on every node and after any restart; a caller wanting a second
-start sends a new key. And a recurring-trigger occurrence, routed with the key
-`recurring:{scheduleId}:{occurrenceTicks}`, starts its workflow at most once however often that occurrence fires.
-The recurring-trigger pump relies on that: it fires each occurrence at least once, again after a crash or a failed
-start (#2198), and the repeats converge on the first start.
+start sends a new key. And a recurring-trigger occurrence starts its workflow at most once however often that
+occurrence fires. The recurring-trigger pump relies on that: it fires each occurrence at least once, again after a
+crash or a failed start (#2198), and the repeats converge on the first start.
 
-The keyed start identity is a frozen, persisted format. Its ids are `wfexec:start:v1:{digest}`,
-`command:start:v1:{digest}` and `envelope:start:v1:{digest}`; the digest is the lowercase hex SHA-256 of the
-values `"elsa.workflow-start"`, `"v1"` and the start key (each value's UTF-8 bytes prefixed by its 4-byte big-endian length), which the router builds as
-`{idempotencyKey}:start:{artifactId}`. A redelivery is recognized only by deriving the same id again, so any change to
-the derivation silently starts every redelivered occurrence a second time. Change it by adding a new version beside
-`v1`, never by editing `v1`; `KeyedWorkflowStartIdentityTests` pins the `v1` literals.
+The keyed start identity is a frozen, persisted format with two versions, side by side. Its ids are
+`wfexec:start:{version}:{digest}`, `command:start:{version}:{digest}` and `envelope:start:{version}:{digest}`; the
+digest is the lowercase hex SHA-256 of the values `"elsa.workflow-start"`, the version and the start key (each
+value's UTF-8 bytes prefixed by its 4-byte big-endian length).
+
+- `v1` (#2195, `KeyedWorkflowStartIdentity.For`) is every keyed start except a recurring occurrence of a publication
+  slot. The router builds its start key as `{idempotencyKey}:start:{artifactId}`, so one keyed stimulus that matches
+  two workflows starts each of them once.
+- `v2` (#2198, `KeyedWorkflowStartIdentity.ForOccurrence`) is a recurring-trigger occurrence of a schedule that
+  serves a publication slot, routed with `StimulusStartKeyScope.Occurrence`. Its start key is
+  `{occurrenceKey}:start`, with no artifact, and the occurrence key is
+  `recurring:{slotId}:{executableNodeId}:{stimulusHash}:{occurrenceTicks}` with each id escaped (`%` as `%25`, `:` as
+  `%3A`), as `RecurringTriggerSchedule.BuildOccurrenceKey` builds it. The key names the trigger, not the publication, so
+  when a republish hands a due occurrence to the new publication (which serves another artifact), the new publication's
+  fire and any fire the replaced publication already made converge on one start; the start dispatcher answers an
+  existing `v2` execution as the duplicate whichever artifact it is pinned to. A router refuses an occurrence-keyed
+  request that matches more than one binding, since the second would silently never start.
+- A recurring schedule without a slot (legacy artifact-scoped indexing) keeps the key
+  `recurring:{scheduleId}:{occurrenceTicks}` under `v1`.
+
+A redelivery is recognized only by deriving the same id again, so any change to a derivation, or to the occurrence
+key, silently starts every redelivered occurrence a second time. Change one by adding a new version beside `v1` and
+`v2`, never by editing either; `KeyedWorkflowStartIdentityTests` pins the literals of both and of the occurrence key.
 
 ### Published executables are durable (DS-2, W17)
 

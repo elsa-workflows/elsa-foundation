@@ -40,9 +40,16 @@ namespace Elsa.Workflows.Runtime.Scheduling;
 /// </para>
 /// <para>
 /// <b>Start once per occurrence.</b> Every fire of one occurrence carries the same idempotency key,
-/// <c>recurring:{ScheduleId}:{occurrenceTicks}</c>, so the router starts it as a keyed start
+/// <see cref="RecurringTriggerSchedule.BuildOccurrenceKey"/>, so the router starts it as a keyed start
 /// (<see cref="KeyedWorkflowStartIdentity"/>, #2195): a repeated fire, on any node and after any restart, converges on
-/// the execution the first fire started instead of starting another.
+/// the execution the first fire started instead of starting another. A slot-scoped schedule's key names its trigger, not
+/// its publication, and starts under the artifact-free <see cref="StimulusStartKeyScope.Occurrence"/>, so the fire of an
+/// occurrence a republish carried over to the new publication converges on a start the replaced publication already made.
+/// </para>
+/// <para>
+/// <b>Exhausted Cron.</b> When a schedule has no occurrence after the one in its cursor, that last occurrence is still
+/// routed under its claim, and the schedule is deleted only once the route returned. A failed route is released and retried
+/// like any other.
 /// </para>
 /// <para>
 /// <b>Missed-occurrence policy — no catch-up.</b> A schedule is due when its
@@ -211,13 +218,8 @@ public sealed class RecurringTriggerPumpTask : BackoffSweepPumpTask
             return false;
         }
 
-        if (next is null)
-        {
-            // Cron exhausted (no future occurrence): remove the schedule rather than leave it perpetually due.
-            await store.DeleteAsync(schedule.ScheduleId, cancellationToken);
-            return false;
-        }
-
+        // A null next means the Cron is exhausted: the occurrence in the cursor is its last. It is still routed under the
+        // claim below, and the schedule is removed only after that, rather than left perpetually due.
         var run = await lease.RunAsync(
             claim,
             routeCancellationToken => RouteAsync(bindingStore, router, schedule, routeCancellationToken),
@@ -253,6 +255,16 @@ public sealed class RecurringTriggerPumpTask : BackoffSweepPumpTask
             return false;
         }
 
+        if (next is null)
+        {
+            Logger.LogInformation(
+                "Recurring schedule '{ScheduleId}' fired its last occurrence {Occurrence}; its expression has no later one, so it is deleted",
+                schedule.ScheduleId,
+                schedule.NextOccurrence);
+            await store.DeleteAsync(schedule.ScheduleId, cancellationToken);
+            return true;
+        }
+
         if (!await store.SettleClaimAsync(run.Claim, next.Value, cancellationToken))
             LogClaimLost(claim, "settle", exception: null);
         return true;
@@ -275,9 +287,11 @@ public sealed class RecurringTriggerPumpTask : BackoffSweepPumpTask
             stimulusType: schedule.StimulusType,
             stimulusHash: schedule.StimulusHash,
             mode: StimulusRoutingMode.StartOnly,
-            idempotencyKey: $"recurring:{schedule.ScheduleId}:{schedule.NextOccurrence.UtcTicks}",
+            idempotencyKey: schedule.BuildOccurrenceKey(),
             requestedBy: PumpRequestedBy,
-            matchedTriggerBindings: ownedBindings);
+            matchedTriggerBindings: ownedBindings,
+            // A slot-scoped key names the trigger across publications, so its start is not scoped to this artifact (#2198).
+            startKeyScope: schedule.SlotId is null ? StimulusStartKeyScope.Artifact : StimulusStartKeyScope.Occurrence);
 
         await router.RouteAsync(request, cancellationToken);
         return true;

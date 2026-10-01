@@ -162,6 +162,51 @@ public sealed class StimulusRouterTests
     }
 
     [Fact]
+    public async Task Route_WithAnOccurrenceKey_NamesOneStartWhicheverArtifactServesIt()
+    {
+        // #2198: a recurring occurrence keyed by its trigger starts under the artifact-free identity, so the replacement
+        // publication's fire of an occurrence converges on the replaced publication's start of it.
+        var startDispatcher = new RecordingStartDispatcher();
+        var router = Router(new ThrowingTriggerBindingStore(), new InMemoryBookmarkStateStore(), startDispatcher, new RecordingResumeDispatcher());
+
+        var replaced = await router.RouteAsync(OccurrenceRequest(Binding("artifact-1", "node-a", "publication-a", "slot-1")));
+        var replacement = await router.RouteAsync(OccurrenceRequest(Binding("artifact-2", "node-a", "publication-b", "slot-1")));
+
+        var identity = KeyedWorkflowStartIdentity.ForOccurrence("recurring:occurrence-1");
+        Assert.Equal(1, replaced.StartedCount);
+        Assert.Equal(1, replacement.SkippedStartCount);
+        Assert.All(startDispatcher.Requests, request => Assert.Equal((identity.WorkflowExecutionId, identity.StartKey), (request.WorkflowExecutionId!, request.IdempotencyKey!)));
+        Assert.Equal(["artifact-1", "artifact-2"], startDispatcher.Requests.Select(request => request.ArtifactId));
+    }
+
+    [Fact]
+    public async Task Route_WithAnOccurrenceKey_RefusesMoreThanOneBinding_RatherThanStartingOnlyOne()
+    {
+        // The direction that could pass for success: two bindings under one occurrence key would collapse onto one
+        // execution, so the second would silently never start. The router refuses before it starts either.
+        var startDispatcher = new RecordingStartDispatcher();
+        var router = Router(new ThrowingTriggerBindingStore(), new InMemoryBookmarkStateStore(), startDispatcher, new RecordingResumeDispatcher());
+
+        await Assert.ThrowsAsync<InvalidOperationException>(async () => await router.RouteAsync(
+            OccurrenceRequest(Binding("artifact-1", "node-a", "publication-a", "slot-1"), Binding("artifact-2", "node-a", "publication-b", "slot-1"))));
+
+        Assert.Empty(startDispatcher.Requests);
+    }
+
+    [Fact]
+    public void An_occurrence_key_requires_a_start_only_request_with_its_key_and_its_pre_matched_binding()
+    {
+        var binding = Binding("artifact-1", "node-a");
+
+        Assert.Throws<ArgumentException>(() => new StimulusDispatchRequest(StimulusType, StimulusHash, mode: StimulusRoutingMode.StartOnly,
+            matchedTriggerBindings: [binding], startKeyScope: StimulusStartKeyScope.Occurrence));
+        Assert.Throws<ArgumentException>(() => new StimulusDispatchRequest(StimulusType, StimulusHash, mode: StimulusRoutingMode.StartAndResume,
+            idempotencyKey: "recurring:occurrence-1", matchedTriggerBindings: [binding], startKeyScope: StimulusStartKeyScope.Occurrence));
+        Assert.Throws<ArgumentException>(() => new StimulusDispatchRequest(StimulusType, StimulusHash, mode: StimulusRoutingMode.StartOnly,
+            idempotencyKey: "recurring:occurrence-1", startKeyScope: StimulusStartKeyScope.Occurrence));
+    }
+
+    [Fact]
     public async Task Route_WithoutIdempotencyKey_StartsUnkeyedExecutions()
     {
         var bindingStore = new InMemoryWorkflowTriggerBindingStore();
@@ -388,6 +433,10 @@ public sealed class StimulusRouterTests
         JsonElement? input = null,
         WorkflowExecutionCommandDispatchOptions? dispatchOptions = null) =>
         new(StimulusType, StimulusHash, input: input, mode: mode, correlationId: correlationId, idempotencyKey: idempotencyKey, dispatchOptions: dispatchOptions);
+
+    private static StimulusDispatchRequest OccurrenceRequest(params WorkflowTriggerBinding[] bindings) =>
+        new(StimulusType, StimulusHash, mode: StimulusRoutingMode.StartOnly, idempotencyKey: "recurring:occurrence-1",
+            matchedTriggerBindings: bindings, startKeyScope: StimulusStartKeyScope.Occurrence);
 
     private WorkflowTriggerBinding Binding(
         string artifactId,

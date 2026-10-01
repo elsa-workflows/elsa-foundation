@@ -9,7 +9,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 
 /// <summary>
 /// <see cref="RecurringOccurrenceDeliveryContract"/> and <see cref="RecurringOccurrenceClaimContract"/> (#2198) on SQLite, and
-/// the claim contract on the in-memory store. PostgreSQL runs them in the provider-test lane.
+/// the claim contract's single-store cases on the in-memory store. PostgreSQL runs them in the provider-test lane.
 /// </summary>
 public sealed class RecurringOccurrenceTests : IAsyncDisposable
 {
@@ -34,6 +34,18 @@ public sealed class RecurringOccurrenceTests : IAsyncDisposable
         RecurringOccurrenceDeliveryContract.ARepublishWhileAnOccurrenceIsDueKeepsItForThePumpAsync(CreateContext);
 
     [Fact]
+    public Task Sqlite_a_replacement_activated_while_the_replaced_publication_holds_the_occurrence_fires_it_once() =>
+        RecurringOccurrenceDeliveryContract.AReplacementActivatedWhileTheReplacedPublicationHoldsTheOccurrenceFiresItOnceAsync("Sqlite", ConnectionString, CreateContext);
+
+    [Fact]
+    public Task Sqlite_a_replacement_activated_after_the_replaced_publication_routed_the_occurrence_does_not_start_it_again() =>
+        RecurringOccurrenceDeliveryContract.AReplacementActivatedAfterTheReplacedPublicationRoutedTheOccurrenceDoesNotStartItAgainAsync("Sqlite", ConnectionString, CreateContext);
+
+    [Fact]
+    public Task Sqlite_an_exhausted_cron_fires_its_last_occurrence_once_and_is_then_deleted() =>
+        RecurringOccurrenceDeliveryContract.AnExhaustedCronFiresItsLastOccurrenceOnceAndIsThenDeletedAsync("Sqlite", ConnectionString, CreateContext);
+
+    [Fact]
     public Task Sqlite_a_claim_holds_the_occurrence_until_its_lease_lapses() =>
         WithStoresAsync(RecurringOccurrenceClaimContract.AClaimHoldsTheOccurrenceUntilItsLeaseLapsesAsync);
 
@@ -42,8 +54,23 @@ public sealed class RecurringOccurrenceTests : IAsyncDisposable
         WithStoresAsync(RecurringOccurrenceClaimContract.AReleaseKeepsTheOccurrenceAndCountsTheFailureAsync);
 
     [Fact]
-    public Task Sqlite_rewriting_or_deleting_the_schedule_fences_out_its_claim() =>
-        WithStoresAsync(RecurringOccurrenceClaimContract.RewritingOrDeletingTheScheduleFencesOutItsClaimAsync);
+    public Task Sqlite_deleting_and_saving_the_schedule_again_fences_out_its_claim_without_reissuing_the_token() =>
+        WithStoresAsync(RecurringOccurrenceClaimContract.DeletingAndSavingTheScheduleAgainFencesOutItsClaimWithoutReissuingTheTokenAsync);
+
+    [Fact]
+    public async Task Sqlite_two_stores_that_read_one_due_row_grant_exactly_one_claim()
+    {
+        await using var stores = await new EfRecurringScheduleStores(CreateContext).EnsureCreatedAsync();
+        await RecurringOccurrenceClaimContract.TwoStoresThatReadOneDueRowGrantExactlyOneClaimAsync(stores);
+    }
+
+    [Fact]
+    public Task Sqlite_activating_a_replacement_takes_over_the_due_occurrence_and_fences_out_the_replaced_claim() =>
+        WithStoresAsync(RecurringOccurrenceClaimContract.ActivatingAReplacementTakesOverTheDueOccurrenceAndFencesOutTheReplacedClaimAsync);
+
+    [Fact]
+    public Task Sqlite_activating_a_replacement_keeps_its_own_cursor_when_no_due_occurrence_of_its_trigger_preceded_it() =>
+        WithStoresAsync(RecurringOccurrenceClaimContract.ActivatingAReplacementKeepsItsOwnCursorWhenNoDueOccurrenceOfItsTriggerPrecededItAsync);
 
     [Fact]
     public Task InMemory_a_claim_holds_the_occurrence_until_its_lease_lapses() =>
@@ -54,8 +81,16 @@ public sealed class RecurringOccurrenceTests : IAsyncDisposable
         RecurringOccurrenceClaimContract.AReleaseKeepsTheOccurrenceAndCountsTheFailureAsync(InMemory());
 
     [Fact]
-    public Task InMemory_rewriting_or_deleting_the_schedule_fences_out_its_claim() =>
-        RecurringOccurrenceClaimContract.RewritingOrDeletingTheScheduleFencesOutItsClaimAsync(InMemory());
+    public Task InMemory_deleting_and_saving_the_schedule_again_fences_out_its_claim_without_reissuing_the_token() =>
+        RecurringOccurrenceClaimContract.DeletingAndSavingTheScheduleAgainFencesOutItsClaimWithoutReissuingTheTokenAsync(InMemory());
+
+    [Fact]
+    public Task InMemory_activating_a_replacement_takes_over_the_due_occurrence_and_fences_out_the_replaced_claim() =>
+        RecurringOccurrenceClaimContract.ActivatingAReplacementTakesOverTheDueOccurrenceAndFencesOutTheReplacedClaimAsync(InMemory());
+
+    [Fact]
+    public Task InMemory_activating_a_replacement_keeps_its_own_cursor_when_no_due_occurrence_of_its_trigger_preceded_it() =>
+        RecurringOccurrenceClaimContract.ActivatingAReplacementKeepsItsOwnCursorWhenNoDueOccurrenceOfItsTriggerPrecededItAsync(InMemory());
 
     public ValueTask DisposeAsync() => _database.DisposeAsync();
 

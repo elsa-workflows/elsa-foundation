@@ -118,9 +118,18 @@ public sealed class InMemoryRecurringTriggerScheduleStore : IRecurringTriggerSch
             if (!_preparedActivations.Contains(activationId))
                 throw new InvalidOperationException($"Activation '{activationId}' has no prepared recurring-schedule projection.");
 
-            SetActivationActive(activationId, true);
-            if (replacedActivationId is not null && !StringComparer.Ordinal.Equals(replacedActivationId, activationId))
-                SetActivationActive(replacedActivationId, false);
+            var replacing = replacedActivationId is not null && !StringComparer.Ordinal.Equals(replacedActivationId, activationId);
+            // A schedule being activated takes over a due occurrence from the replaced schedule of its trigger, read before
+            // the replaced schedules are deactivated; the deactivation then changes them, so a claim in flight on one is stale
+            // from then on (#2198). A repeated activation finds its schedules active already and takes nothing over again.
+            var replaced = replacing ? SchedulesOf(replacedActivationId!).Where(schedule => schedule.IsActive).ToArray() : [];
+            foreach (var schedule in SchedulesOf(activationId).Where(schedule => !schedule.IsActive))
+            {
+                var predecessor = replaced.SingleOrDefault(schedule.IsSameTriggerAs);
+                _schedules[schedule.ScheduleId] = (predecessor is null ? schedule : schedule.TakeOverFrom(predecessor)) with { IsActive = true };
+            }
+            if (replacing)
+                SetActivationActive(replacedActivationId!, false);
         }
 
         return ValueTask.CompletedTask;
@@ -140,25 +149,6 @@ public sealed class InMemoryRecurringTriggerScheduleStore : IRecurringTriggerSch
         return ValueTask.CompletedTask;
     }
 
-    public ValueTask<IReadOnlyCollection<RecurringTriggerSchedule>> ListDueAsync(DateTimeOffset asOf, int limit, CancellationToken cancellationToken = default)
-    {
-        if (limit is <= 0 or > RuntimeStorePageRequest.MaximumLimit)
-            throw new ArgumentOutOfRangeException(nameof(limit), $"Due-schedule listing limit must be between 1 and {RuntimeStorePageRequest.MaximumLimit}.");
-        cancellationToken.ThrowIfCancellationRequested();
-
-        lock (_syncRoot)
-        {
-            var due = _schedules.Values
-                .Where(schedule => schedule.IsActive && schedule.NextOccurrence <= asOf)
-                .OrderBy(schedule => schedule.NextOccurrence)
-                .ThenBy(schedule => schedule.ScheduleId, StringComparer.Ordinal)
-                .Take(limit)
-                .ToArray();
-
-            return new ValueTask<IReadOnlyCollection<RecurringTriggerSchedule>>(due);
-        }
-    }
-
     public ValueTask<RecurringTriggerSchedule?> FindAsync(string scheduleId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(scheduleId);
@@ -168,23 +158,6 @@ public sealed class InMemoryRecurringTriggerScheduleStore : IRecurringTriggerSch
         {
             return new ValueTask<RecurringTriggerSchedule?>(
                 _schedules.TryGetValue(scheduleId, out var schedule) ? schedule : null);
-        }
-    }
-
-    public ValueTask<bool> TryAdvanceAsync(string scheduleId, DateTimeOffset expectedNextOccurrence, DateTimeOffset newNextOccurrence, CancellationToken cancellationToken = default)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(scheduleId);
-        cancellationToken.ThrowIfCancellationRequested();
-
-        lock (_syncRoot)
-        {
-            // Compare-and-swap: claim the occurrence only if no other worker (or an earlier sweep) already moved
-            // the cursor. This is the single-node realization of the cluster-safe claim contract.
-            if (!_schedules.TryGetValue(scheduleId, out var schedule) || !schedule.IsActive || schedule.NextOccurrence != expectedNextOccurrence)
-                return new ValueTask<bool>(false);
-
-            _schedules[scheduleId] = schedule with { NextOccurrence = newNextOccurrence };
-            return new ValueTask<bool>(true);
         }
     }
 
@@ -330,19 +303,17 @@ public sealed class InMemoryRecurringTriggerScheduleStore : IRecurringTriggerSch
 
     private void SetActivationActive(string activationId, bool isActive)
     {
-        foreach (var schedule in _schedules.Values
-                     .Where(schedule => StringComparer.Ordinal.Equals(schedule.ActivationId, activationId))
-                     .ToArray())
+        foreach (var schedule in SchedulesOf(activationId))
             _schedules[schedule.ScheduleId] = schedule with { IsActive = isActive };
     }
 
+    private RecurringTriggerSchedule[] SchedulesOf(string activationId) =>
+        _schedules.Values.Where(schedule => StringComparer.Ordinal.Equals(schedule.ActivationId, activationId)).ToArray();
+
     private void RemoveByActivation(string activationId)
     {
-        foreach (var scheduleId in _schedules.Values
-                     .Where(schedule => StringComparer.Ordinal.Equals(schedule.ActivationId, activationId))
-                     .Select(schedule => schedule.ScheduleId)
-                     .ToArray())
-            Remove(scheduleId);
+        foreach (var schedule in SchedulesOf(activationId))
+            Remove(schedule.ScheduleId);
     }
 
     private void Remove(string scheduleId)

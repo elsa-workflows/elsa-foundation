@@ -77,30 +77,110 @@ internal static class RecurringOccurrenceClaimContract
     }
 
     /// <summary>
-    /// A republish rewrites the schedule, and a delete removes it: either way the claim on it is no longer current, so its
-    /// claimant can neither settle nor renew it, and the rewritten schedule is claimable at once.
+    /// A schedule deleted and saved again under the same id, as artifact-scoped indexing replaces it, fences out the claim
+    /// on its predecessor: its claimant can neither settle nor renew it, and the recreated schedule is claimable at once.
+    /// The recreated schedule restarts its revision, yet its claim does not reissue the predecessor's fencing token, even to
+    /// the same owner (#2198). Deleting the schedule fences out the claim on it as well.
     /// </summary>
-    public static async Task RewritingOrDeletingTheScheduleFencesOutItsClaimAsync(Func<IRecurringTriggerScheduleStore> node)
+    public static async Task DeletingAndSavingTheScheduleAgainFencesOutItsClaimWithoutReissuingTheTokenAsync(Func<IRecurringTriggerScheduleStore> node)
     {
         var store = node();
-        var republisher = node();
+        var indexer = node();
         await store.SaveAsync(Schedule);
         var claim = Assert.Single(await store.ClaimDueAsync(Request("pump", Now)));
 
-        await republisher.DeleteByArtifactAsync(Schedule.ArtifactId);
-        await republisher.SaveAsync(Schedule with { CreatedAt = Now });
+        await indexer.DeleteByArtifactAsync(Schedule.ArtifactId);
+        await indexer.SaveAsync(Schedule with { CreatedAt = Now });
 
         Assert.False(await store.SettleClaimAsync(claim, Now.AddMinutes(1)));
         Assert.Equal(Due, (await store.FindAsync(Schedule.ScheduleId))!.NextOccurrence);
         var reclaimed = Assert.Single(await store.ClaimDueAsync(Request("pump", Now)));
+        Assert.True(reclaimed.FencingToken > claim.FencingToken);
+        Assert.Null(await store.RenewClaimAsync(claim, Now, Lease));
 
-        await republisher.DeleteAsync(Schedule.ScheduleId);
+        await indexer.DeleteAsync(Schedule.ScheduleId);
 
         Assert.Null(await store.RenewClaimAsync(reclaimed, Now, Lease));
         Assert.False(await store.ReleaseClaimAsync(reclaimed, Now));
     }
 
+    /// <summary>
+    /// Two stores both read one due row before either writes its claim. Exactly one claim is granted: the loser's write is
+    /// refused by the row revision it read, which on PostgreSQL's read committed is the only thing that stops it.
+    /// </summary>
+    public static async Task TwoStoresThatReadOneDueRowGrantExactlyOneClaimAsync(EfRecurringScheduleStores stores)
+    {
+        await stores.Create().SaveAsync(Schedule);
+        var rendezvous = new ClaimWriteRendezvous(participants: 2);
+
+        var claims = await Task.WhenAll(
+            stores.Create(rendezvous.Participant()).ClaimDueAsync(Request("first", Now)).AsTask(),
+            stores.Create(rendezvous.Participant()).ClaimDueAsync(Request("second", Now)).AsTask());
+
+        var granted = Assert.Single(claims.SelectMany(batch => batch));
+        Assert.True(await stores.Create().SettleClaimAsync(granted, Now.AddMinutes(1)));
+    }
+
+    /// <summary>
+    /// Activating a replacement publication of the slot hands the replaced schedule's due, unsettled occurrence to the
+    /// replacement's schedule of the same trigger, in the same write that deactivates the replaced schedule (#2198). The
+    /// claim a pump holds on the replaced schedule is stale from then on, the replacement's schedule is claimable at once on
+    /// that occurrence, and activating the replacement again takes nothing over a second time.
+    /// </summary>
+    public static async Task ActivatingAReplacementTakesOverTheDueOccurrenceAndFencesOutTheReplacedClaimAsync(Func<IRecurringTriggerScheduleStore> node)
+    {
+        var store = node();
+        await ActivateAsync(store, Slotted("publication-a", "artifact-a", next: Due, createdAt: Due.AddHours(-1)), replacedActivationId: null);
+        var claim = Assert.Single(await store.ClaimDueAsync(Request("pump", Now)));
+
+        // Materialized after the occurrence fell due, so its own cursor is the first occurrence after its creation.
+        var replacement = Slotted("publication-b", "artifact-b", next: Now.AddSeconds(50), createdAt: Now.AddSeconds(-10));
+        await ActivateAsync(node(), replacement, replacedActivationId: "publication-a");
+
+        Assert.Null(await store.RenewClaimAsync(claim, Now, Lease));
+        Assert.False(await store.SettleClaimAsync(claim, Now.AddMinutes(1)));
+        var takenOver = Assert.Single(await store.ClaimDueAsync(Request("pump", Now)));
+        Assert.Equal(replacement.ScheduleId, takenOver.Schedule.ScheduleId);
+        Assert.Equal(Due, takenOver.Schedule.NextOccurrence);
+
+        Assert.True(await store.SettleClaimAsync(takenOver, Now.AddMinutes(1)));
+        await node().ActivateAsync("publication-b", "publication-a");
+        Assert.Equal(Now.AddMinutes(1), (await store.FindAsync(replacement.ScheduleId))!.NextOccurrence);
+    }
+
+    /// <summary>
+    /// The replacement keeps its own cursor when there is nothing to take over: the replaced occurrence fell due only after
+    /// the replacement was materialized (its own cursor covers that), or the replaced schedule is another trigger.
+    /// </summary>
+    public static async Task ActivatingAReplacementKeepsItsOwnCursorWhenNoDueOccurrenceOfItsTriggerPrecededItAsync(Func<IRecurringTriggerScheduleStore> node)
+    {
+        var store = node();
+        await store.PrepareActivationAsync("publication-a",
+        [
+            Slotted("publication-a", "artifact-a", next: Now.AddSeconds(30), createdAt: Due.AddHours(-1)),
+            Slotted("publication-a", "artifact-a", next: Due, createdAt: Due.AddHours(-1), node: "node-removed")
+        ]);
+        await store.ActivateAsync("publication-a", replacedActivationId: null);
+
+        var replacement = Slotted("publication-b", "artifact-b", next: Now.AddSeconds(50), createdAt: Now.AddSeconds(-10));
+        await ActivateAsync(store, replacement, replacedActivationId: "publication-a");
+
+        Assert.Equal(replacement.NextOccurrence, (await store.FindAsync(replacement.ScheduleId))!.NextOccurrence);
+        Assert.Empty(await store.ClaimDueAsync(Request("pump", Now)));
+    }
+
     private static RecurringTriggerOccurrenceClaimRequest Request(string owner, DateTimeOffset now) => new(owner, now, Lease, 10);
+
+    // A trigger's schedule in one publication of the slot "slot-claims", as activation preparation materializes it.
+    private static RecurringTriggerSchedule Slotted(string activationId, string artifactId, DateTimeOffset next, DateTimeOffset createdAt, string node = "node-claims") =>
+        new(RecurringTriggerSchedule.BuildId(activationId, artifactId, node), artifactId, node, "Timer", "hash-claims",
+            RecurringScheduleKind.Interval, "PT1M", next, createdAt, activationId, "slot-claims");
+
+    private static async Task ActivateAsync(IRecurringTriggerScheduleStore store, RecurringTriggerSchedule schedule, string? replacedActivationId)
+    {
+        await store.PrepareActivationAsync(schedule.ActivationId!, [schedule]);
+        await store.ActivateAsync(schedule.ActivationId!, replacedActivationId);
+    }
 }
 
 /// <summary>
