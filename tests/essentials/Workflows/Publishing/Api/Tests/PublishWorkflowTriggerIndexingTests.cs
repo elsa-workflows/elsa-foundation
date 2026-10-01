@@ -388,7 +388,7 @@ public sealed class PublishWorkflowTriggerIndexingTests
             indexer,
             _bindingStore,
             _scheduleStore);
-        var activator = new PublicationActivator(coordinator, _publicationStore, TimeProvider.System);
+        var activator = new PublicationActivator(coordinator, _publicationStore, coordinatorAuthority ?? _activationAuthority, _referenceStore, TimeProvider.System);
         return new PublishWorkflowRequestHandler(
             Compiler(workflowVersion, triggerActivity, clrType),
             _executableStore,

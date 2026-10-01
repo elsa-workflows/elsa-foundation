@@ -166,7 +166,9 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         var existing = await _workflowExecutionStateStore.FindAsync(keyed.WorkflowExecutionId, cancellationToken);
         if (existing is null)
             return null;
-        if (!StringComparer.Ordinal.Equals(existing.PinnedExecutable.ArtifactId, request.ArtifactId))
+        // An occurrence start (#2198) names its occurrence whichever publication of the trigger fires it, so an execution a
+        // replaced publication's artifact started for it is the duplicate, not a conflict.
+        if (keyed.IsArtifactScoped && !StringComparer.Ordinal.Equals(existing.PinnedExecutable.ArtifactId, request.ArtifactId))
         {
             throw new InvalidOperationException(
                 $"Workflow execution '{existing.WorkflowExecutionId}' already exists for artifact '{existing.PinnedExecutable.ArtifactId}', not for keyed start '{keyed.StartKey}' of artifact '{request.ArtifactId}'.");

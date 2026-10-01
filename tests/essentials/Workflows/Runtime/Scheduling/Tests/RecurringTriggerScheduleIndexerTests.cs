@@ -27,7 +27,7 @@ public sealed class RecurringTriggerScheduleIndexerTests
         await indexer.PrepareActivationAsync(executable, "publication-default-v1", "slot-default");
         await indexer.PrepareActivationAsync(executable, "publication-blue", "slot-blue");
 
-        Assert.Empty(await store.ListDueAsync(Now.AddMinutes(10), 10));
+        Assert.Empty(await ActiveDueAsync(store, "artifact-shared"));
         var defaultSchedule = Assert.Single(await store.ListByActivationAsync("publication-default-v1"));
         var blueSchedule = Assert.Single(await store.ListByActivationAsync("publication-blue"));
         Assert.Equal("publication-default-v1", defaultSchedule.ActivationId);
@@ -41,7 +41,7 @@ public sealed class RecurringTriggerScheduleIndexerTests
 
         Assert.Equal(
             ["publication-blue", "publication-default-v1"],
-            (await store.ListDueAsync(Now.AddMinutes(10), 10))
+            (await ActiveDueAsync(store, "artifact-shared"))
                 .Select(schedule => schedule.ActivationId)
                 .Order(StringComparer.Ordinal));
 
@@ -50,14 +50,14 @@ public sealed class RecurringTriggerScheduleIndexerTests
 
         Assert.Equal(
             ["publication-blue", "publication-default-v2"],
-            (await store.ListDueAsync(Now.AddMinutes(10), 10))
+            (await ActiveDueAsync(store, "artifact-shared"))
                 .Select(schedule => schedule.ActivationId)
                 .Order(StringComparer.Ordinal));
 
         await store.DeleteByActivationAsync("publication-default-v1");
         await store.DeleteByActivationAsync("publication-default-v2");
 
-        var survivingSchedule = Assert.Single(await store.ListDueAsync(Now.AddMinutes(10), 10));
+        var survivingSchedule = Assert.Single(await ActiveDueAsync(store, "artifact-shared"));
         Assert.Equal("publication-blue", survivingSchedule.ActivationId);
         Assert.Equal("slot-blue", survivingSchedule.SlotId);
     }
@@ -92,7 +92,7 @@ public sealed class RecurringTriggerScheduleIndexerTests
 
         await indexer.IndexAsync(Executable("artifact-1", PlainNode("node-1", "Elsa.Timer")));
 
-        Assert.Empty(await store.ListDueAsync(Now.AddMinutes(10), 10));
+        Assert.Empty(await ActiveDueAsync(store, "artifact-1"));
     }
 
     [Fact]
@@ -106,8 +106,35 @@ public sealed class RecurringTriggerScheduleIndexerTests
 
         await indexer.IndexAsync(Executable("artifact-1", TriggerNode("node-1", "Elsa.Timer")));
 
-        var schedule = Assert.Single(await store.ListDueAsync(Now.AddMinutes(10), 10));
+        var schedule = Assert.Single(await ActiveDueAsync(store, "artifact-1"));
         Assert.Equal(RecurringTriggerSchedule.BuildId("artifact-1", "node-1"), schedule.ScheduleId);
+    }
+
+    [Fact]
+    public async Task Index_Republish_KeepsAnOccurrenceThatIsDueButHasNotFired()
+    {
+        // #2198: a re-index recomputed the cursor from now, so an occurrence that fell due shortly before the republish and
+        // had not fired yet was replaced by the next one and silently skipped.
+        var store = new InMemoryRecurringTriggerScheduleStore();
+        var due = Now.AddSeconds(-5);
+        await store.SaveAsync(TimerSchedule(due));
+        var indexer = CreateIndexer(new FakeInner(), store, new FakeScheduleProvider("Elsa.Timer", "Timer", "hash-1", "PT5M"));
+
+        await indexer.IndexAsync(Executable("artifact-1", TriggerNode("node-1", "Elsa.Timer")));
+
+        Assert.Equal(due, (await store.FindAsync(RecurringTriggerSchedule.BuildId("artifact-1", "node-1")))!.NextOccurrence);
+    }
+
+    [Fact]
+    public async Task Index_Republish_ReanchorsAnOccurrenceThatIsNotDueYet()
+    {
+        var store = new InMemoryRecurringTriggerScheduleStore();
+        await store.SaveAsync(TimerSchedule(Now.AddMinutes(2)));
+        var indexer = CreateIndexer(new FakeInner(), store, new FakeScheduleProvider("Elsa.Timer", "Timer", "hash-1", "PT5M"));
+
+        await indexer.IndexAsync(Executable("artifact-1", TriggerNode("node-1", "Elsa.Timer")));
+
+        Assert.Equal(Now.AddMinutes(5), (await store.FindAsync(RecurringTriggerSchedule.BuildId("artifact-1", "node-1")))!.NextOccurrence);
     }
 
     [Fact]
@@ -304,8 +331,14 @@ public sealed class RecurringTriggerScheduleIndexerTests
         await indexer.IndexAsync(Executable("artifact-1", TriggerNode("node-1", "Elsa.Timer")));
 
         Assert.True(inner.Called);
-        Assert.Empty(await store.ListDueAsync(Now.AddMinutes(10), 10));
+        Assert.Empty(await ActiveDueAsync(store, "artifact-1"));
     }
+
+    // The artifact's schedules the pump would claim ten minutes from now: active, and due by then.
+    private static async Task<IReadOnlyList<RecurringTriggerSchedule>> ActiveDueAsync(IRecurringTriggerScheduleStore store, string artifactId) =>
+        (await store.ListAllByArtifactAsync(artifactId))
+            .Where(schedule => schedule.IsActive && schedule.NextOccurrence <= Now.AddMinutes(10))
+            .ToArray();
 
     private static RecurringTriggerScheduleIndexer CreateIndexer(
         IWorkflowTriggerIndexer inner,
@@ -328,6 +361,10 @@ public sealed class RecurringTriggerScheduleIndexerTests
     private static RecurringTriggerSchedule Schedule(string artifactId, string nodeId, string stimulusHash) =>
         new(RecurringTriggerSchedule.BuildId(artifactId, nodeId), artifactId, nodeId, "Cron", stimulusHash,
             RecurringScheduleKind.Cron, "0 * * * *", Now.AddHours(1), Now);
+
+    private static RecurringTriggerSchedule TimerSchedule(DateTimeOffset next) =>
+        new(RecurringTriggerSchedule.BuildId("artifact-1", "node-1"), "artifact-1", "node-1", "Timer", "hash-1",
+            RecurringScheduleKind.Interval, "PT5M", next, Now.AddHours(-1));
 
     private static WorkflowExecutable Executable(string artifactId, ExecutableNode root) =>
         new(
@@ -412,9 +449,11 @@ public sealed class RecurringTriggerScheduleIndexerTests
             return _inner.SaveAsync(schedule, cancellationToken);
         }
 
-        public ValueTask<IReadOnlyCollection<RecurringTriggerSchedule>> ListDueAsync(DateTimeOffset asOf, int limit, CancellationToken cancellationToken = default) => _inner.ListDueAsync(asOf, limit, cancellationToken);
         public ValueTask<RecurringTriggerSchedule?> FindAsync(string scheduleId, CancellationToken cancellationToken = default) => _inner.FindAsync(scheduleId, cancellationToken);
-        public ValueTask<bool> TryAdvanceAsync(string scheduleId, DateTimeOffset expectedNextOccurrence, DateTimeOffset newNextOccurrence, CancellationToken cancellationToken = default) => _inner.TryAdvanceAsync(scheduleId, expectedNextOccurrence, newNextOccurrence, cancellationToken);
+        public ValueTask<IReadOnlyCollection<RecurringTriggerOccurrenceClaim>> ClaimDueAsync(RecurringTriggerOccurrenceClaimRequest request, CancellationToken cancellationToken = default) => _inner.ClaimDueAsync(request, cancellationToken);
+        public ValueTask<RecurringTriggerOccurrenceClaim?> RenewClaimAsync(RecurringTriggerOccurrenceClaim claim, DateTimeOffset now, TimeSpan visibilityTimeout, CancellationToken cancellationToken = default) => _inner.RenewClaimAsync(claim, now, visibilityTimeout, cancellationToken);
+        public ValueTask<bool> SettleClaimAsync(RecurringTriggerOccurrenceClaim claim, DateTimeOffset nextOccurrence, CancellationToken cancellationToken = default) => _inner.SettleClaimAsync(claim, nextOccurrence, cancellationToken);
+        public ValueTask<bool> ReleaseClaimAsync(RecurringTriggerOccurrenceClaim claim, DateTimeOffset visibleAt, CancellationToken cancellationToken = default) => _inner.ReleaseClaimAsync(claim, visibleAt, cancellationToken);
 
         public ValueTask DeleteByArtifactAsync(string artifactId, CancellationToken cancellationToken = default)
         {
