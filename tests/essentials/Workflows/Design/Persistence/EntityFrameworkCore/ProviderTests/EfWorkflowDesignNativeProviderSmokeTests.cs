@@ -43,6 +43,18 @@ public sealed class WorkflowsDesignPostgreSqlSmokeTests(WorkflowsDesignPostgreSq
     public Task PostgreSql_metadata_write_that_loses_a_race_converges(string otherWritersName) =>
         WorkflowsDesignNativeProviderSmoke.RunLostMetadataRaceAsync(fixture, CreateContext, otherWritersName);
 
+    [SkippableTheory]
+    [InlineData(true)] // The scope that materialized the definition also updates and deletes it.
+    [InlineData(false)] // Each step reads the definition back in a scope of its own.
+    public Task PostgreSql_definition_commands_update_and_delete_a_definition(bool sameScope) =>
+        WorkflowsDesignNativeProviderSmoke.RunConcurrencyTokenScenarioAsync(fixture, CreateContext, ConcurrencyTokenScenarios.UpdateAndDeleteDefinitionAsync, sameScope);
+
+    [SkippableTheory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public Task PostgreSql_updates_and_deletes_every_row_with_a_LastModifiedAt_token(bool sameScope) =>
+        WorkflowsDesignNativeProviderSmoke.RunConcurrencyTokenScenarioAsync(fixture, CreateContext, ConcurrencyTokenScenarios.UpdateAndDeleteTokenEntitiesAsync, sameScope);
+
     private static WorkflowsDesignDbContext CreateContext(string connection) =>
         new WorkflowsDesignPostgreSqlDbContext(new DbContextOptionsBuilder<WorkflowsDesignPostgreSqlDbContext>().UseNpgsql(connection).Options);
 }
@@ -60,6 +72,18 @@ public sealed class WorkflowsDesignSqlServerSmokeTests(WorkflowsDesignSqlServerF
     public Task SqlServer_permanently_deleted_definition_is_imported_again() =>
         WorkflowsDesignNativeProviderSmoke.RunPermanentDeleteReimportAsync(fixture, CreateContext);
 
+    [SkippableTheory]
+    [InlineData(true)] // The scope that materialized the definition also updates and deletes it.
+    [InlineData(false)] // Each step reads the definition back in a scope of its own.
+    public Task SqlServer_definition_commands_update_and_delete_a_definition(bool sameScope) =>
+        WorkflowsDesignNativeProviderSmoke.RunConcurrencyTokenScenarioAsync(fixture, CreateContext, ConcurrencyTokenScenarios.UpdateAndDeleteDefinitionAsync, sameScope);
+
+    [SkippableTheory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public Task SqlServer_updates_and_deletes_every_row_with_a_LastModifiedAt_token(bool sameScope) =>
+        WorkflowsDesignNativeProviderSmoke.RunConcurrencyTokenScenarioAsync(fixture, CreateContext, ConcurrencyTokenScenarios.UpdateAndDeleteTokenEntitiesAsync, sameScope);
+
     private static WorkflowsDesignDbContext CreateContext(string connection) =>
         new WorkflowsDesignSqlServerDbContext(new DbContextOptionsBuilder<WorkflowsDesignSqlServerDbContext>().UseSqlServer(connection).Options);
 }
@@ -73,9 +97,21 @@ public sealed class WorkflowsDesignMySqlSmokeTests(WorkflowsDesignMySqlFixture f
         CreateContext,
         WorkflowsDesignMySqlDbContext.ExpectedProviderName);
 
-    [Fact(Skip = "Blocked by elsa-workflows/elsa-foundation#2204: the MySQL provider reads LastModifiedAt without its fractional seconds, so updating or permanently deleting a workflow definition fails its concurrency check.")]
+    [SkippableFact]
     public Task MySql_permanently_deleted_definition_is_imported_again() =>
         WorkflowsDesignNativeProviderSmoke.RunPermanentDeleteReimportAsync(fixture, CreateContext);
+
+    [SkippableTheory]
+    [InlineData(true)] // The scope that materialized the definition also updates and deletes it.
+    [InlineData(false)] // Each step reads the definition back in a scope of its own.
+    public Task MySql_definition_commands_update_and_delete_a_definition(bool sameScope) =>
+        WorkflowsDesignNativeProviderSmoke.RunConcurrencyTokenScenarioAsync(fixture, CreateContext, ConcurrencyTokenScenarios.UpdateAndDeleteDefinitionAsync, sameScope);
+
+    [SkippableTheory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public Task MySql_updates_and_deletes_every_row_with_a_LastModifiedAt_token(bool sameScope) =>
+        WorkflowsDesignNativeProviderSmoke.RunConcurrencyTokenScenarioAsync(fixture, CreateContext, ConcurrencyTokenScenarios.UpdateAndDeleteTokenEntitiesAsync, sameScope);
 
     private static WorkflowsDesignDbContext CreateContext(string connection) =>
         new WorkflowsDesignMySqlDbContext(new DbContextOptionsBuilder<WorkflowsDesignMySqlDbContext>().UseMySQL(connection).Options);
@@ -313,6 +349,17 @@ internal static class WorkflowsDesignNativeProviderSmoke
         }
     }
 
+    /// <summary>Runs one of the <see cref="ConcurrencyTokenScenarios"/> against the provider's database.</summary>
+    public static Task RunConcurrencyTokenScenarioAsync(
+        WorkflowsDesignProviderFixture fixture,
+        Func<string, WorkflowsDesignDbContext> createContext,
+        Func<Func<WorkflowsDesignDbContext>, bool, Task> scenario,
+        bool sameScope)
+    {
+        Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? "Docker/native provider is unavailable.");
+        return scenario(() => createContext(fixture.ConnectionString), sameScope);
+    }
+
     /// <summary>
     /// A permanent delete retires the reconciler's materialization markers with the definition, so a source that still
     /// lists the definition imports it again. The re-import matches the first one exactly, so a surviving marker would
@@ -417,16 +464,6 @@ internal static class WorkflowsDesignNativeProviderSmoke
                 new EfSaveWorkflowDefinitionCommand(context, access, writer),
                 serializer).Reconcile(CancellationToken.None);
         }
-    }
-
-    private sealed class FixedAccess(PersistenceAccessContext current) : IPersistenceAccessContextAccessor
-    {
-        public PersistenceAccessContext Current { get; } = current;
-    }
-
-    private sealed class NeverPublishedGuard : IWorkflowDefinitionPublicationDeletionGuard
-    {
-        public Task EnsureCanDeleteAsync(string definitionId, CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
 }
 
