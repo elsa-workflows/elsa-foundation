@@ -10,6 +10,8 @@
 	<ItemGroup>
 		<ProjectReference Include="..\Primitives\Primitives\Elsa.Primitives.csproj" />
 		<ProjectReference Include="..\Locking\Core\Elsa.Locking.Core.csproj" />
+		<!-- The shared schema dormancy check a task declaring [RequiresSchemaVersion] is asked through (#2192). -->
+		<ProjectReference Include="..\Cluster\Core\Elsa.Cluster.Core.csproj" />
 		<ProjectReference Include="Core\Elsa.Tasks.Core.csproj" />
 	</ItemGroup>
 

@@ -17,6 +17,8 @@
     <!-- The type under test lives here; it also arrives transitively through Elsa.Tasks, and an
          implicit dependency would let a future reference removal silently drop this coverage. -->
     <ProjectReference Include="..\..\..\..\src\essentials\Locking\Core\Elsa.Locking.Core.csproj" />
+    <!-- [RequiresSchemaVersion], which the executor reads from a task class (#2192). -->
+    <ProjectReference Include="..\..\..\..\src\essentials\Cluster\Core\Elsa.Cluster.Core.csproj" />
     <ProjectReference Include="..\..\..\..\src\essentials\Tasks\Schedules\Elsa.Tasks.Schedules.csproj" />
   </ItemGroup>
 

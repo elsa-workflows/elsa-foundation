@@ -30,6 +30,8 @@
     <ProjectReference Include="..\..\..\..\..\src\essentials\Primitives\Primitives\Elsa.Primitives.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\essentials\Primitives\Hosting\Elsa.Primitives.Hosting.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\essentials\Locking\Core\Elsa.Locking.Core.csproj" />
+    <!-- The task executor that runs the reconcile startup tasks, as a shell runs them (#2192). -->
+    <ProjectReference Include="..\..\..\..\..\src\essentials\Tasks\Elsa.Tasks.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\essentials\Workflows\Design\Core\Elsa.Workflows.Design.Core.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\essentials\Workflows\Dashboard\Elsa.Workflows.Dashboard.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\essentials\Workflows\Design\Api\Elsa.Workflows.Design.Api.csproj" />

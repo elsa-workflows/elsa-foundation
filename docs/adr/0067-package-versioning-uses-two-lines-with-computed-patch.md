@@ -290,7 +290,11 @@ propagates through the reverse closure.
   equal or higher version, so one written by a source build still resolves and one written by a computed
   build above `4.0.0.0` does not. Elsa persists no such name: types travel by alias, and a single-node
   task's lock name, the one runtime use, lives only while the lock is held; across the upgrade to this
-  change, as across every computed patch before it, nodes of the two builds take different lock names. A
+  change, as across every computed patch before it, nodes of the two builds take different lock names.
+  *Amended 2026-10-01:* a single-node task's lock name no longer carries an assembly-qualified name: it is the
+  shell's name and the task type's full name. From this change on, two releases share one lock; the first upgrade
+  across this change still uses different lock names, because the older release takes the assembly-qualified one
+  ([#2192](https://github.com/elsa-workflows/elsa-foundation/issues/2192)). A
   matching major is what a shared-assembly entry needs from the version, not all it needs: the entry must
   also bind, name the assembly's public key token, none for an Elsa assembly, and be honoured by every way
   Nuplane loads a package, which Nuplane does since `0.0.11-preview.94` (Decision, "An assembly version

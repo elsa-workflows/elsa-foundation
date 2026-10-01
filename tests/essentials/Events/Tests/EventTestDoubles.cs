@@ -1,3 +1,4 @@
+using CShells;
 using Elsa.Events.Channels;
 using Elsa.Events.Contexts;
 using Elsa.Events.Core.Contracts;
@@ -106,7 +107,8 @@ internal static class EventTestHosts
         services.AddSingleton<IEventChannel, EventChannel>();
         services.AddSingleton(inlinePublisher);
 
-        // TasksFeature lifetimes (shell-singleton).
+        // TasksFeature lifetimes (shell-singleton). A shell container has its ShellSettings; this one stands in for it.
+        services.AddSingleton(new ShellSettings("default"));
         services.AddSingleton<TaskExecutor>();
         services.AddSingleton<ITaskExecutor>(sp => sp.GetRequiredService<TaskExecutor>());
         services.AddSingleton<IBackgroundTaskStarter>(sp => sp.GetRequiredService<TaskExecutor>());

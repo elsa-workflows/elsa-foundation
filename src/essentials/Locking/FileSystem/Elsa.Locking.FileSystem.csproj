@@ -8,6 +8,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Core\Elsa.Locking.Core.csproj" />
+    <!-- Reads which cluster membership provider the host composed, to refuse a node-local lock folder in a cluster (#2192). -->
+    <ProjectReference Include="..\..\Cluster\Core\Elsa.Cluster.Core.csproj" />
   </ItemGroup>
 
 </Project>
