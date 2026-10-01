@@ -156,6 +156,9 @@ sandbox for arbitrary host code. The Elsa-owned inspection path does not activat
 database or run migrations; arbitrary trusted composer code is not constrained by that guarantee.
 The Elsa-owned path does not write source files or publish a temporary candidate directory. All captured
 inputs are rechecked before a complete preview is written; a changed input refuses without a partial preview.
+Native capture retains the checked parent directories until the regular file is acquired and refuses
+user-controlled parent links or Windows reparse points. The standard macOS temporary/configuration aliases
+remain supported. Input rechecks also run before reporting post-dispatch nonfatal refusals, after owned cleanup.
 The output defaults to text; `--format json` provides the same facts. `--timeout-seconds` defaults to 60
 and accepts 1–300. The worker exchange is byte-bounded, stderr is drained and discarded, and owned child
 cleanup has a separate finite budget.

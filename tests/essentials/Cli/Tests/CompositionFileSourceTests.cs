@@ -89,6 +89,52 @@ public sealed class CompositionFileSourceTests
     }
 
     [Fact]
+    public void Regular_file_open_lease_requires_both_ownership_callbacks()
+    {
+        Assert.Throws<ArgumentNullException>(() => new RegularFileOpenLease(null!, () => { }));
+        Assert.Throws<ArgumentNullException>(() => new RegularFileOpenLease(() => Stream.Null, null!));
+    }
+
+    [Fact]
+    public void Regular_file_open_lease_refuses_a_null_stream_and_releases_ownership()
+    {
+        var disposals = 0;
+        using var lease = new RegularFileOpenLease(() => null!, () => disposals++);
+
+        Assert.Throws<IOException>(() => lease.OpenRead());
+        Assert.Throws<ObjectDisposedException>(() => lease.OpenRead());
+        Assert.Equal(1, disposals);
+    }
+
+    [Fact]
+    public void Regular_file_open_lease_can_be_closed_before_opening()
+    {
+        var opens = 0;
+        var disposals = 0;
+        using var lease = new RegularFileOpenLease(() => { opens++; return Stream.Null; }, () => disposals++);
+
+        lease.Dispose();
+        lease.Dispose();
+
+        Assert.Throws<ObjectDisposedException>(() => lease.OpenRead());
+        Assert.Equal(0, opens);
+        Assert.Equal(1, disposals);
+    }
+
+    [Fact]
+    public void Regular_file_open_lease_does_not_repeat_a_failed_close()
+    {
+        var disposals = 0;
+        using var lease = new RegularFileOpenLease(() => Stream.Null, () => { disposals++; throw new IOException(); });
+
+        Assert.Throws<IOException>(() => lease.Dispose());
+        lease.Dispose();
+
+        Assert.Throws<ObjectDisposedException>(() => lease.OpenRead());
+        Assert.Equal(1, disposals);
+    }
+
+    [Fact]
     public void Candidate_reader_wraps_stream_failures_and_disposes_the_owned_stream()
     {
         using var stream = new UnreadableStream();
@@ -372,6 +418,40 @@ public sealed class CompositionFileSourceTests
         Assert.Equal("composition-input-unreadable", refusal.Code);
         Assert.DoesNotContain("private-canary", refusal.ToString(), StringComparison.Ordinal);
         Assert.False(openerReturned);
+    }
+
+    [Fact]
+    public void Candidate_reader_keeps_the_admitted_unix_parent_during_preflight_exchange()
+    {
+        if (OperatingSystem.IsWindows())
+            return;
+
+        using var directory = new TempDirectory("elsa-candidate-unix-parent-lease-");
+        var host = directory.File("host");
+        var moved = directory.File("host-before-race");
+        var outside = directory.File("outside");
+        var path = Path.Join(host, "admitted", "candidate.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        Directory.CreateDirectory(Path.Join(outside, "admitted"));
+        File.WriteAllText(path, "{\"safe\":true}");
+        File.WriteAllText(Path.Join(outside, "admitted", "candidate.json"), "{\"private-canary\":true}");
+        var checks = 0;
+        var reader = new CompositionFileReader(candidatePath =>
+        {
+            CompositionFileReader.EnsureRegularFile(candidatePath);
+            if (++checks == 1)
+            {
+                Directory.Move(host, moved);
+                Directory.CreateSymbolicLink(host, outside);
+            }
+        }, RegularFileOpener.OpenRead);
+
+        var bytes = reader.Read(path, FileLimit);
+
+        Assert.Equal("{\"safe\":true}", Encoding.UTF8.GetString(bytes));
+        Assert.Equal(2, checks);
+        var refusal = Assert.Throws<CliRefusal>(() => new CompositionFileReader().Read(path, FileLimit));
+        Assert.Equal("composition-input-unreadable", refusal.Code);
     }
 
     [Fact]
