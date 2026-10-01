@@ -22,7 +22,6 @@ interface ThemeContextType {
   setTheme: (themeId: string) => void;
   setMode: (mode: ThemeMode) => void;
   supportedModes: ThemeMode[];
-  canToggleMode: boolean;
   previewTheme: (theme: StudioThemeDefinition) => void;
   availableThemes: Theme[];
   store: ThemeStoreResponse;
@@ -47,7 +46,6 @@ export function ThemeProvider({
   const [persistThemeSelection, setPersistThemeSelection] = useState(true);
   const supportedModes = getSupportedThemeModes(currentTheme);
   const activeMode = resolveThemeMode(currentTheme, preferredMode);
-  const canToggleMode = supportedModes.length > 1;
 
   // Initialize from localStorage on mount, falling back to the OS contrast and colour-scheme
   // preferences while the user has never chosen a mode. Once chosen, the stored mode always wins.
@@ -152,7 +150,6 @@ export function ThemeProvider({
         setTheme: handleSetTheme,
         setMode: handleSetMode,
         supportedModes,
-        canToggleMode,
         previewTheme: handlePreviewTheme,
         availableThemes: getSelectableThemes(store),
         store,

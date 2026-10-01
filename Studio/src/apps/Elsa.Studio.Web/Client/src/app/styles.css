@@ -4355,7 +4355,7 @@ html[data-theme="black-glass"] .topbar-actions > button,
 html[data-theme="black-glass"] .host-health-refresh,
 html[data-theme="black-glass"] .bottom-panel-tab-list button,
 html[data-theme="black-glass"] .bottom-panel-action-button,
-html[data-theme="black-glass"] .theme-toggle-button,
+html[data-theme="black-glass"] .theme-mode-toggle,
 html[data-theme="black-glass"] .theme-selector-button {
   border-color: var(--studio-glass-edge);
   background: var(--studio-glass-bg-soft);
@@ -4365,12 +4365,25 @@ html[data-theme="black-glass"] .theme-selector-button {
 html[data-theme="black-glass"] .topbar-actions > a:hover,
 html[data-theme="black-glass"] .topbar-actions > button:hover,
 html[data-theme="black-glass"] .host-health-refresh:hover:not(:disabled),
-html[data-theme="black-glass"] .theme-toggle-button:hover,
 html[data-theme="black-glass"] .theme-selector-button:hover {
   border-color: var(--studio-glass-edge-strong);
   background: color-mix(in srgb, var(--studio-accent) 20%, var(--studio-glass-bg-soft));
   color: var(--studio-text);
   box-shadow: var(--studio-glass-glow);
+}
+
+/* Quick mode segments sit on the glass container, so they tint with a plain accent wash:
+   the glass-bg tokens are gradients and cannot be fed to color-mix(). */
+html[data-theme="black-glass"] .theme-mode-toggle-option:hover {
+  background: color-mix(in srgb, var(--studio-accent) 16%, transparent);
+  color: var(--studio-text);
+}
+
+html[data-theme="black-glass"] .theme-mode-toggle-option[aria-checked="true"] {
+  color: var(--studio-text);
+  border-color: color-mix(in srgb, var(--studio-accent) 42%, var(--studio-glass-edge));
+  background: color-mix(in srgb, var(--studio-accent) 26%, transparent);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 14%, transparent);
 }
 
 /* Active console tab = glowing glass slab. */
@@ -4500,7 +4513,7 @@ html[data-theme-material] .topbar-actions > button,
 html[data-theme-material] .host-health-refresh,
 html[data-theme-material] .bottom-panel-tab-list button,
 html[data-theme-material] .bottom-panel-action-button,
-html[data-theme-material] .theme-toggle-button,
+html[data-theme-material] .theme-mode-toggle,
 html[data-theme-material] .theme-selector-button {
   border-color: var(--studio-material-edge);
   background: var(--studio-material-control-bg);
@@ -4511,7 +4524,6 @@ html[data-theme-material] .theme-selector-button {
 html[data-theme-material] .topbar-actions > a:hover,
 html[data-theme-material] .topbar-actions > button:hover,
 html[data-theme-material] .host-health-refresh:hover:not(:disabled),
-html[data-theme-material] .theme-toggle-button:hover,
 html[data-theme-material] .theme-selector-button:hover {
   border-color: var(--studio-material-edge-strong);
   background: var(--studio-material-hover-bg);
@@ -4528,6 +4540,18 @@ html[data-theme-material] .theme-item.active {
 
 html[data-theme-material] .theme-color-dot {
   border-color: var(--studio-material-edge);
+}
+
+html[data-theme-material] .theme-mode-toggle-option:hover {
+  background: var(--studio-material-hover-bg);
+  color: var(--studio-text);
+}
+
+html[data-theme-material] .theme-mode-toggle-option[aria-checked="true"] {
+  color: var(--studio-text);
+  border-color: var(--studio-material-edge-strong);
+  background: var(--studio-material-active-bg);
+  box-shadow: var(--studio-material-inset);
 }
 
 html[data-theme-material] .bottom-panel-tab-list button.active {
@@ -4690,7 +4714,7 @@ html[data-theme="stone"] .topbar-actions > button,
 html[data-theme="stone"] .host-health-refresh,
 html[data-theme="stone"] .bottom-panel-tab-list button,
 html[data-theme="stone"] .bottom-panel-action-button,
-html[data-theme="stone"] .theme-toggle-button,
+html[data-theme="stone"] .theme-mode-toggle,
 html[data-theme="stone"] .theme-selector-button {
   box-shadow:
     var(--studio-material-inset-low),

@@ -4,45 +4,49 @@
   gap: 6px;
 }
 
-.theme-toggle-button {
-  display: flex;
+/* Quick mode control: Light / Dark / Dim as one segmented radiogroup. It shares the
+   theme-selector button's primitives and 40px height so the pair reads as one cluster; segments
+   the theme does not define are not rendered. */
+.theme-mode-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 40px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+}
+
+.theme-mode-toggle-option {
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 100%;
   padding: 0;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--card);
-  color: var(--foreground);
+  border: 1px solid transparent;
+  border-radius: calc(var(--radius) - 2px);
+  background: transparent;
+  color: var(--muted-foreground);
   cursor: pointer;
-  transition: all 0.2s ease;
-  font-size: inherit;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
 
-.theme-toggle-button:hover {
-  background: var(--primary);
-  color: var(--primary-foreground);
-  border-color: var(--primary);
-  transform: scale(1.05);
-  box-shadow: 0 2px 8px color-mix(in srgb, var(--primary) 20%, transparent);
-}
-
-.theme-toggle-button:active {
-  transform: scale(0.95);
-}
-
-.theme-toggle-button:disabled {
-  cursor: not-allowed;
-  opacity: 0.55;
-}
-
-.theme-toggle-button:disabled:hover {
-  background: var(--card);
+.theme-mode-toggle-option:hover {
+  background: var(--muted);
   color: var(--foreground);
-  border-color: var(--border);
-  transform: none;
-  box-shadow: none;
+}
+
+.theme-mode-toggle-option[aria-checked="true"] {
+  background: color-mix(in srgb, var(--primary) 14%, var(--card));
+  border-color: var(--primary);
+  color: var(--foreground);
+}
+
+.theme-mode-toggle-option:focus-visible {
+  outline: 2px solid var(--studio-focus);
+  outline-offset: 2px;
 }
 
 .theme-selector-wrapper {
