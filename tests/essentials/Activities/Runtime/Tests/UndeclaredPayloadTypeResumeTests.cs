@@ -57,8 +57,7 @@ public sealed class UndeclaredPayloadTypeResumeTests : IAsyncDisposable
             new InMemoryWorkflowTriggerBindingStore(),
             new GlobalBookmarkStimulusLookup(index),
             new UnexpectedStartDispatcher(),
-            _harness.Services.GetRequiredService<IBookmarkResumeDispatcher>(),
-            new InMemoryStimulusStartDeduplicator());
+            _harness.Services.GetRequiredService<IBookmarkResumeDispatcher>());
 
         var result = await router.RouteAsync(new StimulusDispatchRequest(
             EventStimulus.StimulusType,
