@@ -77,8 +77,11 @@ internal sealed class KeyRingHost : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        await using var host = (IAsyncDisposable)_host;
-        await _host.StopAsync();
+        await using (var host = (IAsyncDisposable)_host)
+        {
+            await _host.StopAsync();
+        }
+
         _contentRoot.Delete(recursive: true);
     }
 
