@@ -1,3 +1,4 @@
+using CShells;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using Elsa.Cluster.Core.Models;
@@ -120,7 +121,7 @@ public sealed class StartupTaskTelemetryTests
 
     private static async Task ExecuteAsync(IStartupTask task, IDistributedLockProvider lockProvider, CancellationToken cancellationToken)
     {
-        var executor = new TaskExecutor(lockProvider, NullLogger<TaskExecutor>.Instance);
+        var executor = new TaskExecutor(lockProvider, NullLogger<TaskExecutor>.Instance, new ShellSettings("default"));
         var services = new ServiceCollection();
         services.AddSingleton<ITaskExecutor>(executor);
         services.AddSingleton<IBackgroundTaskStarter>(executor);

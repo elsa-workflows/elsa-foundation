@@ -218,6 +218,37 @@ public sealed class TaskExecutorSingleNodeTests
         Assert.Equal(0, _locks.BlockingAcquireCallCount);
     }
 
+    [Fact]
+    public async Task A_background_task_whose_start_was_skipped_for_dormancy_is_not_stopped()
+    {
+        _dormancy.Dormant = true;
+        var task = new DormancyAwareBackgroundTask();
+        var executor = Executor();
+
+        await ((IBackgroundTaskStarter)executor).StartAsync(task, CancellationToken.None);
+        _dormancy.Dormant = false;
+        await ((IBackgroundTaskStarter)executor).StopAsync(task, CancellationToken.None);
+
+        Assert.False(task.Started);
+        Assert.False(task.Stopped);
+    }
+
+    [Fact]
+    public async Task A_background_task_that_started_is_stopped_even_when_the_node_has_since_gone_dormant()
+    {
+        var task = new DormancyAwareBackgroundTask();
+        var executor = Executor();
+
+        await ((IBackgroundTaskStarter)executor).StartAsync(task, CancellationToken.None);
+        _dormancy.Dormant = true;
+        _calls.Clear();
+        await ((IBackgroundTaskStarter)executor).StopAsync(task, CancellationToken.None);
+
+        Assert.True(task.Started);
+        Assert.True(task.Stopped);
+        Assert.DoesNotContain("dormancy", _calls);
+    }
+
     private TaskExecutor Executor(string shellName = ShellName) =>
         new(_locks, NullLogger<TaskExecutor>.Instance, new ShellSettings(shellName), _dormancy);
 
@@ -281,6 +312,27 @@ public sealed class TaskExecutorSingleNodeTests
         }
 
         public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public Task ExecuteAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+    }
+
+    [RequiresSchemaVersion("Tests.Family", "2.0.0")]
+    private sealed class DormancyAwareBackgroundTask : IBackgroundTask
+    {
+        public bool Started { get; private set; }
+        public bool Stopped { get; private set; }
+
+        public Task StartAsync(CancellationToken cancellationToken)
+        {
+            Started = true;
+            return Task.CompletedTask;
+        }
+
+        public Task StopAsync(CancellationToken cancellationToken)
+        {
+            Stopped = true;
+            return Task.CompletedTask;
+        }
 
         public Task ExecuteAsync(CancellationToken cancellationToken) => Task.CompletedTask;
     }

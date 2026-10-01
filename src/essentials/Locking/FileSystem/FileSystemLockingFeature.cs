@@ -23,7 +23,14 @@ public class FileSystemLockingFeature : IShellFeature
     private static string DefaultLocksFolderPath => Path.Join(Environment.CurrentDirectory, "App_Data", "locks");
 
     [ManifestSetting(DisplayName = "Locks folder path", Description = "Directory used to store file-system distributed lock files. A lock excludes only the processes that share this folder, so a host that is a member of a cluster must name a folder every node shares, or compose DatabaseDistributedLocking instead.", Category = "Locking", Required = true)]
-    public string LocksFolderPath { get; set; } = DefaultLocksFolderPath;
+    public string LocksFolderPath
+    {
+        get => _locksFolderPath ?? DefaultLocksFolderPath;
+        set => _locksFolderPath = value;
+    }
+
+    // Null until a host names a folder, so a folder that happens to equal the default still counts as chosen.
+    private string? _locksFolderPath;
 
     [ManifestSetting(DisplayName = "Lock acquisition timeout", Description = "Maximum time in minutes to wait when acquiring a distributed lock.", Category = "Locking", DefaultValue = "10")]
 
@@ -46,13 +53,14 @@ public class FileSystemLockingFeature : IShellFeature
     }
 
     /// <summary>
-    /// Refuses the default, node-local folder on a host that joined a cluster through a durable membership provider (#2192):
+    /// Refuses the unconfigured, node-local default folder on a host that joined a cluster through a durable membership provider (#2192):
     /// there every node would take the same lock in a folder of its own, and each would believe it held it alone.
     /// </summary>
     /// <remarks>
     /// The host composes membership on its own container, and CShells copies the host's registrations into the shell's
-    /// collection before any feature configures it, so the provider's registration is visible here. An explicit folder is
-    /// trusted to be one every node shares; only the default is known not to be.
+    /// collection before any feature configures it, so the provider's registration is visible here. A folder the host
+    /// configured is trusted to be one every node shares, even one equal to the default, because setting a shared path is the
+    /// remedy this refusal names; only a default nobody chose is known not to be.
     /// </remarks>
     private void RefuseNodeLocalFolderInACluster(IServiceCollection services)
     {
@@ -61,7 +69,7 @@ public class FileSystemLockingFeature : IShellFeature
             .Select(descriptor => descriptor.ImplementationInstance)
             .OfType<ClusterMembershipProviderRegistration>()
             .FirstOrDefault(registration => registration.Kind == ClusterProviderKind.Durable);
-        if (durable is null || !IsDefaultFolder(LocksFolderPath))
+        if (durable is null || _locksFolderPath is not null)
             return;
 
         throw new InvalidOperationException(
@@ -71,10 +79,4 @@ public class FileSystemLockingFeature : IShellFeature
             "Compose DatabaseDistributedLocking (PostgreSql, SqlServer or MySql) instead, or set " +
             $"FileSystemDistributedLocking:{nameof(LocksFolderPath)} to a folder every node of the cluster shares.");
     }
-
-    // Case-insensitively, so a spelling the file system treats as the same folder is still refused.
-    private static bool IsDefaultFolder(string path) =>
-        string.Equals(Normalize(path), Normalize(DefaultLocksFolderPath), StringComparison.OrdinalIgnoreCase);
-
-    private static string Normalize(string path) => Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
 }

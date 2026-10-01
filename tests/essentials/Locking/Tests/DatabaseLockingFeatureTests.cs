@@ -26,6 +26,18 @@ public sealed class DatabaseLockingFeatureTests
         Assert.NotNull(locks);
     }
 
+    [Theory]
+    [InlineData("PostgreSql", "PostgreSql")]
+    [InlineData("postgres", "PostgreSql")]
+    [InlineData(" Npgsql ", "PostgreSql")]
+    [InlineData("SqlServer", "SqlServer")]
+    [InlineData("sql server", "SqlServer")]
+    [InlineData("mssql", "SqlServer")]
+    [InlineData("MySql", "MySql")]
+    [InlineData("my sql", "MySql")]
+    public void Maps_each_provider_name_and_alias_to_its_engine(string provider, string expected) =>
+        Assert.Equal(expected, DatabaseLockingFeature.ParseProvider(provider).ToString());
+
     [Fact]
     public void Refuses_sqlite_as_single_node_and_points_at_the_file_system_lock()
     {

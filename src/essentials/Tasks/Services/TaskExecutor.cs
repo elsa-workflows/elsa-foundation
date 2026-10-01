@@ -9,6 +9,7 @@ using Elsa.Tasks.Core.Attributes;
 using Elsa.Tasks.Diagnostics;
 using Elsa.Tasks.Extension;
 using Microsoft.Extensions.Logging;
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Reflection;
 
@@ -33,11 +34,14 @@ namespace Elsa.Tasks.Services;
 public sealed class TaskExecutor(
     IDistributedLockProvider distributedLockProvider,
     ILogger<TaskExecutor> logger,
-    ShellSettings? shellSettings = null,
+    ShellSettings shellSettings,
     ISchemaDormancyCheck? dormancyCheck = null) : ITaskExecutor, IBackgroundTaskStarter
 {
     /// <summary>The start of every <c>[SingleNodeTask]</c> lock key; the shell's name and the task's type name follow it.</summary>
     private const string SingleNodeLockKeyPrefix = "elsa:single-node-task:";
+
+    /// <summary>Background tasks whose start was skipped because this node was dormant for them; their stop is skipped too.</summary>
+    private readonly ConcurrentDictionary<IBackgroundTask, byte> _skippedStarts = new(ReferenceEqualityComparer.Instance);
 
     public async Task ExecuteTaskAsync(ITask task, CancellationToken cancellationToken)
     {
@@ -52,12 +56,18 @@ public sealed class TaskExecutor(
 
     public async Task StartAsync(IBackgroundTask task, CancellationToken cancellationToken)
     {
-        await ExecuteInternalAsync(task, task.StartAsync, cancellationToken);
+        if (!await ExecuteInternalAsync(task, task.StartAsync, cancellationToken))
+            _skippedStarts[task] = 0;
     }
 
     public async Task StopAsync(IBackgroundTask task, CancellationToken cancellationToken)
     {
-        await ExecuteInternalAsync(task, task.StopAsync, cancellationToken);
+        // Dormancy is decided when the shell starts: a task that started is stopped even if this node has since gone dormant,
+        // and a task whose start was skipped has nothing to stop.
+        if (_skippedStarts.TryRemove(task, out _))
+            return;
+
+        await ExecuteInternalAsync(task, task.StopAsync, checkDormancy: false, cancellationToken);
     }
 
     private async Task ExecuteStartupTaskAsync(ITask task, CancellationToken cancellationToken)
@@ -109,10 +119,13 @@ public sealed class TaskExecutor(
     }
 
     /// <returns><c>false</c> when the task was skipped because this node is dormant for it; <c>true</c> when it ran.</returns>
-    private async Task<bool> ExecuteInternalAsync(ITask task, Func<CancellationToken, Task> action, CancellationToken cancellationToken)
+    private Task<bool> ExecuteInternalAsync(ITask task, Func<CancellationToken, Task> action, CancellationToken cancellationToken) =>
+        ExecuteInternalAsync(task, action, checkDormancy: true, cancellationToken);
+
+    private async Task<bool> ExecuteInternalAsync(ITask task, Func<CancellationToken, Task> action, bool checkDormancy, CancellationToken cancellationToken)
     {
         var taskType = task.GetType();
-        if (!await IsAvailableAsync(taskType, cancellationToken))
+        if (checkDormancy && !await IsAvailableAsync(taskType, cancellationToken))
             return false;
 
         if (taskType.GetCustomAttribute<SingleNodeTaskAttribute>() is null)
@@ -188,9 +201,7 @@ public sealed class TaskExecutor(
     private string SingleNodeLockKey(Type taskType)
     {
         var typeName = taskType.FullName ?? taskType.Name;
-        return shellSettings is null
-            ? $"{SingleNodeLockKeyPrefix}{typeName}"
-            : $"{SingleNodeLockKeyPrefix}{shellSettings.Id.Name}:{typeName}";
+        return $"{SingleNodeLockKeyPrefix}{shellSettings.Id.Name}:{typeName}";
     }
 
     private async Task<IDistributedSynchronizationHandle> AcquireSingleNodeLockAsync(Type taskType, string lockKey, CancellationToken cancellationToken)

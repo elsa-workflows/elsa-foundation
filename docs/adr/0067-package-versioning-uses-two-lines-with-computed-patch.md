@@ -292,7 +292,8 @@ propagates through the reverse closure.
   task's lock name, the one runtime use, lives only while the lock is held; across the upgrade to this
   change, as across every computed patch before it, nodes of the two builds take different lock names.
   *Amended 2026-10-01:* a single-node task's lock name no longer carries an assembly-qualified name: it is the
-  shell's name and the task type's full name, so nodes of two builds take the same lock
+  shell's name and the task type's full name. From this change on, two releases share one lock; the first upgrade
+  across this change still uses different lock names, because the older release takes the assembly-qualified one
   ([#2192](https://github.com/elsa-workflows/elsa-foundation/issues/2192)). A
   matching major is what a shared-assembly entry needs from the version, not all it needs: the entry must
   also bind, name the assembly's public key token, none for an Elsa assembly, and be honoured by every way

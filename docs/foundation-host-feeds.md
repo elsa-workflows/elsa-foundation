@@ -272,7 +272,7 @@ Nuplane `0.0.11-preview.94` ([#2150](https://github.com/elsa-workflows/elsa-foun
 `Elsa.Persistence.EntityFramework` or EF Core (`Microsoft.EntityFrameworkCore`, `.Abstractions`, `.Relational`) a root
 brings is skipped, and the module binds the host's, so those need not be kept out of your roots, though nothing is gained
 by naming them. The engines' driver closures (`Microsoft.Data.Sqlite*`, `SQLitePCLRaw.*`, `Npgsql`, `MySql.Data`,
-`Microsoft.Data.SqlClient*`) are carried by the host but not shared, so a root for one brings a second copy of it: leave
+`MySqlConnector`, `Microsoft.Data.SqlClient*`) are carried by the host but not shared, so a root for one brings a second copy of it: leave
 them out of your roots; see [Generating the closure](#generating-the-closure). The engine package itself may stay, since
 the `ef-provider` selection injects it as a root anyway.
 

@@ -18,4 +18,9 @@
     <ProjectReference Include="..\Core\Elsa.Locking.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Test-only visibility for the provider-name mapping. -->
+    <InternalsVisibleTo Include="Elsa.Locking.Tests" />
+  </ItemGroup>
+
 </Project>

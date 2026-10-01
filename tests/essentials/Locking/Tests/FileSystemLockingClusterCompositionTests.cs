@@ -14,7 +14,7 @@ using Microsoft.Extensions.Logging;
 namespace Elsa.Locking.Tests;
 
 /// <summary>
-/// A host that joined a cluster through a durable membership provider refuses the file-system lock on its default folder,
+/// A host that joined a cluster through a durable membership provider refuses the file-system lock on its unconfigured default folder,
 /// which is node-local, when the shell starts (#2192). The membership provider is composed on the host container, as a real
 /// host composes it, and the lock in a shell feature, so this also holds that the shell sees the host's provider.
 /// </summary>
@@ -40,13 +40,12 @@ public sealed class FileSystemLockingClusterCompositionTests : IAsyncDisposable
 
     [Theory]
     [InlineData("App_Data/locks")]
-    [InlineData("App_Data/locks/")]
-    [InlineData("app_data/LOCKS")]
-    public async Task A_cluster_member_refuses_the_default_folder_however_it_is_spelled(string spelling)
+    [InlineData("app_data/LOCKS/")]
+    public async Task A_cluster_member_accepts_a_configured_folder_even_when_it_equals_the_default(string spelling)
     {
-        var failure = await Assert.ThrowsAnyAsync<Exception>(() => ActivateAsync(durableMembership: true, locksFolderPath: spelling));
+        var shell = await ActivateAsync(durableMembership: true, locksFolderPath: Path.Join(Environment.CurrentDirectory, spelling));
 
-        Assert.Contains("FileSystemDistributedLocking keeps its locks in", Messages(failure));
+        Assert.NotNull(shell.ServiceProvider.GetRequiredService<IDistributedLockProvider>());
     }
 
     [Fact]
