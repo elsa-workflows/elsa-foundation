@@ -115,8 +115,136 @@ public sealed class PublicationActivationTests
         Assert.Equal(activated.Slot.Revision, slot.Revision);
     }
 
-    private PublicationActivator NewActivator(IWorkflowTriggerIndexer? indexer = null) =>
-        new(NewCoordinator(indexer), _publications, _authority, _references, new FakeTimeProvider(_now));
+    [Fact]
+    public async Task UnpublishRetiresARecordThatIsStillACandidateAndTheActivePublicationItReplaced()
+    {
+        // A process that stopped after the slot transition: the slot names the candidate, which nothing has completed.
+        await SeedAsync("publication-old", PublicationStatus.Active, ReferenceState.Retired);
+        await SeedAsync("publication-new", PublicationStatus.Candidate, occupiesSlot: true);
+        var handler = new UnpublishPublicationSlotRequestHandler(
+            _authority,
+            NewCoordinator(),
+            _publications,
+            _executables,
+            _references,
+            new FakeTimeProvider(_now));
+
+        var slot = await handler.Handle(new UnpublishPublicationSlot("definition-1", "default"), CancellationToken.None);
+
+        Assert.Null(slot.ActiveActivationId);
+        var unpublished = await _publications.FindAsync("publication-new");
+        Assert.Equal((PublicationStatus.Retired, (DateTimeOffset?)_now, (DateTimeOffset?)_now), (unpublished!.Status, unpublished.ActivatedAt, unpublished.RetiredAt));
+        Assert.Equal(PublicationStatus.Retired, (await _publications.FindAsync("publication-old"))!.Status);
+        Assert.Equal("publication-unpublished", (await _references.FindAsync(WorkflowActivationReferenceIdentity.Create("publication-new")))!.DeletedReason);
+    }
+
+    [Fact]
+    public async Task CompletionMarksARetiredPublicationTheSlotNamesAgainActive()
+    {
+        await SeedAsync("publication-handed-back", PublicationStatus.Retired, occupiesSlot: true);
+
+        var completion = await NewActivator().CompleteAsync("definition-1", "default");
+
+        Assert.True(completion.Succeeded);
+        var publication = await _publications.FindAsync("publication-handed-back");
+        Assert.Equal(publication, completion.Publication);
+        Assert.Equal((PublicationStatus.Active, _now, (DateTimeOffset?)null), (publication!.Status, publication.ActivatedAt, publication.RetiredAt));
+    }
+
+    [Fact]
+    public async Task CompletionRetiresARetiredPublicationAgainWhenTheSlotMovedOnAfterItWasMarkedActive()
+    {
+        await SeedAsync("publication-handed-back", PublicationStatus.Retired, occupiesSlot: true);
+        // The first read of the slot is the check that it serves; the second is the one after the mark.
+        var activator = NewActivator(authority: new MovesSlotBeforeRead(_authority, readNumber: 2, () => OccupySlotAsync("publication-successor")));
+
+        var completion = await activator.CompleteAsync("definition-1", "default");
+
+        Assert.True(completion.Succeeded);
+        var publication = await _publications.FindAsync("publication-handed-back");
+        Assert.Equal(publication, completion.Publication);
+        Assert.Equal((PublicationStatus.Retired, (DateTimeOffset?)_now, (DateTimeOffset?)_now), (publication!.Status, publication.ActivatedAt, publication.RetiredAt));
+    }
+
+    [Fact]
+    public async Task CompletionLeavesACandidateAloneWhenTheSlotMovesDuringIt()
+    {
+        await SeedAsync("publication-new", PublicationStatus.Candidate, occupiesSlot: true);
+        await SeedAsync("publication-old", PublicationStatus.Active);
+        var activator = NewActivator(authority: new MovesSlotBeforeRead(_authority, readNumber: 1, () => OccupySlotAsync("publication-successor")));
+
+        var completion = await activator.CompleteAsync("definition-1", "default");
+
+        Assert.True(completion.Succeeded);
+        Assert.Equal(PublicationStatus.Candidate, completion.Publication!.Status);
+        Assert.Equal(PublicationStatus.Candidate, (await _publications.FindAsync("publication-new"))!.Status);
+        Assert.Equal(PublicationStatus.Active, (await _publications.FindAsync("publication-old"))!.Status);
+    }
+
+    [Fact]
+    public async Task CompletionLeavesTheJournalOfASlotAnotherSourceOwnsAlone()
+    {
+        await SeedAsync("import:artifact-1", PublicationStatus.Candidate, occupiesSlot: true, source: WorkflowActivationSource.ArtifactReconciliation("mounted-artifacts"));
+
+        var completion = await NewActivator().CompleteAsync("definition-1", "default");
+
+        Assert.True(completion.Succeeded);
+        Assert.Null(completion.Publication);
+        Assert.Equal(PublicationStatus.Candidate, (await _publications.FindAsync("import:artifact-1"))!.Status);
+    }
+
+    [Theory]
+    [InlineData(PublicationStatus.Failed, ReferenceState.Live)]
+    [InlineData(PublicationStatus.Candidate, ReferenceState.RetiredByFailedActivation)]
+    [InlineData(PublicationStatus.Candidate, ReferenceState.Retired)]
+    [InlineData(PublicationStatus.Candidate, ReferenceState.Missing)]
+    public async Task CompletionLeavesAPublicationThatCannotServeAlone(PublicationStatus status, ReferenceState reference)
+    {
+        var before = await SeedAsync("publication-new", status, reference, occupiesSlot: true);
+        await SeedAsync("publication-old", PublicationStatus.Active, ReferenceState.Retired);
+
+        var completion = await NewActivator().CompleteAsync("definition-1", "default");
+
+        Assert.True(completion.Succeeded);
+        Assert.Equal(before, await _publications.FindAsync("publication-new"));
+        Assert.Equal(PublicationStatus.Active, (await _publications.FindAsync("publication-old"))!.Status);
+    }
+
+    [Theory]
+    [InlineData(ReferenceState.Live, PublicationStatus.Active)]
+    [InlineData(ReferenceState.RetiredByFailedActivation, PublicationStatus.Active)]
+    [InlineData(ReferenceState.Retired, PublicationStatus.Retired)]
+    [InlineData(ReferenceState.Missing, PublicationStatus.Retired)]
+    public async Task CompletionRetiresAnotherActivePublicationOnlyWhenTheRuntimeRetiredItsActivation(ReferenceState siblingReference, PublicationStatus expected)
+    {
+        await SeedAsync("publication-sibling", PublicationStatus.Active, siblingReference);
+        await SeedAsync("publication-new", PublicationStatus.Candidate, occupiesSlot: true);
+
+        await NewActivator().CompleteAsync("definition-1", "default");
+
+        Assert.Equal(PublicationStatus.Active, (await _publications.FindAsync("publication-new"))!.Status);
+        Assert.Equal(expected, (await _publications.FindAsync("publication-sibling"))!.Status);
+    }
+
+    [Fact]
+    public async Task ParallelCompletionsConvergeToOneJournalState()
+    {
+        await SeedAsync("publication-old", PublicationStatus.Active, ReferenceState.Retired);
+        await SeedAsync("publication-new", PublicationStatus.Candidate, occupiesSlot: true);
+        var activator = NewActivator();
+
+        var completions = await Task.WhenAll(
+            Enumerable.Range(0, 8).Select(_ => Task.Run(() => activator.CompleteAsync("definition-1", "default").AsTask())));
+
+        Assert.All(completions, completion => Assert.True(completion.Succeeded));
+        Assert.All(completions, completion => Assert.Equal("publication-new", completion.Publication!.PublicationId));
+        Assert.Equal(PublicationStatus.Active, (await _publications.FindAsync("publication-new"))!.Status);
+        Assert.Equal(PublicationStatus.Retired, (await _publications.FindAsync("publication-old"))!.Status);
+    }
+
+
+    private PublicationActivator NewActivator(IWorkflowTriggerIndexer? indexer = null, IWorkflowActivationAuthority? authority = null) =>
+        new(NewCoordinator(indexer), _publications, authority ?? _authority, _references, new FakeTimeProvider(_now));
 
     private WorkflowActivationCoordinator NewCoordinator(IWorkflowTriggerIndexer? indexer = null) =>
         new(
@@ -132,6 +260,82 @@ public sealed class PublicationActivationTests
         var executable = Executable(candidate);
         await _executables.SaveAsync(executable);
         return new(candidate, executable, Reference(candidate));
+    }
+
+    private static readonly string SlotId = WorkflowActivationSlotIdentity.Create("definition-1", "default");
+
+    /// <summary>What the runtime has done to a publication's source reference.</summary>
+    public enum ReferenceState
+    {
+        Live,
+        Retired,
+        RetiredByFailedActivation,
+        Missing
+    }
+
+    /// <summary>Seeds a record, its executable and its source reference, and optionally has the slot name it.</summary>
+    private async Task<PublicationRecord> SeedAsync(
+        string publicationId,
+        PublicationStatus status,
+        ReferenceState reference = ReferenceState.Live,
+        bool occupiesSlot = false,
+        WorkflowActivationSource? source = null)
+    {
+        var record = Record(publicationId, 0, status, status is PublicationStatus.Active or PublicationStatus.Retired ? _now : null) with
+        {
+            RetiredAt = status == PublicationStatus.Retired ? _now : null
+        };
+        await _publications.SaveAsync(record);
+        await _executables.SaveAsync(Executable(record));
+        if (reference != ReferenceState.Missing)
+        {
+            await _references.SaveAsync(Reference(record));
+            if (reference != ReferenceState.Live)
+                await _references.RetireAsync(
+                    record.SourceReferenceId!,
+                    _now,
+                    reference == ReferenceState.RetiredByFailedActivation ? WorkflowActivationCoordinator.FailedRetireReason : "activation-replaced");
+        }
+
+        if (occupiesSlot)
+            await OccupySlotAsync(publicationId, source);
+        return record;
+    }
+
+    private async Task OccupySlotAsync(string publicationId, WorkflowActivationSource? source = null)
+    {
+        var revision = (await _authority.FindAsync("definition-1", "default"))?.Revision ?? 0;
+        var transition = await _authority.TryActivateAsync(new WorkflowActivationSlotRequest(
+            "definition-1", "default", publicationId, source ?? WorkflowActivationSource.Publishing, revision, _now));
+        Assert.True(transition.Succeeded);
+    }
+
+    /// <summary>Moves the slot just before the authority's <c>readNumber</c>th read, as another node's activation would.</summary>
+    private sealed class MovesSlotBeforeRead(IWorkflowActivationAuthority inner, int readNumber, Func<Task> move) : IWorkflowActivationAuthority
+    {
+        private int _reads;
+
+        public async ValueTask<WorkflowActivationSlot?> FindAsync(string workflowDefinitionId, string slotName, CancellationToken cancellationToken = default)
+        {
+            if (Interlocked.Increment(ref _reads) == readNumber)
+                await move();
+            return await inner.FindAsync(workflowDefinitionId, slotName, cancellationToken);
+        }
+
+        public ValueTask<IReadOnlyCollection<WorkflowActivationSlot>> ListByDefinitionAsync(string workflowDefinitionId, CancellationToken cancellationToken = default) =>
+            inner.ListByDefinitionAsync(workflowDefinitionId, cancellationToken);
+
+        public ValueTask<WorkflowActivationTransition> TryActivateAsync(WorkflowActivationSlotRequest request, CancellationToken cancellationToken = default) =>
+            inner.TryActivateAsync(request, cancellationToken);
+
+        public ValueTask<WorkflowActivationTransition> TryDeactivateAsync(
+            string workflowDefinitionId,
+            string slotName,
+            WorkflowActivationSource source,
+            long expectedRevision,
+            DateTimeOffset updatedAt,
+            CancellationToken cancellationToken = default) =>
+            inner.TryDeactivateAsync(workflowDefinitionId, slotName, source, expectedRevision, updatedAt, cancellationToken);
     }
 
     private async Task SeedActivePublicationAsync(string publicationId)

@@ -92,6 +92,7 @@ public class WorkflowsPublishingFeature : IShellFeature
         services.TryAddScoped<IPublicationActivator, PublicationActivator>();
         // A process that stopped after a slot transition leaves the journal behind the slot; shell start brings it
         // back into line on every node (#2223).
+        services.TryAddScoped<OccupiedActivationSlots>();
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IStartupTask, CompleteInterruptedPublicationsStartupTask>());
         services.TryAddScoped<WorkflowPublicationPreflightReader>();
         services.TryAddScoped<PublicationSnapshotReviewService>();

@@ -165,6 +165,8 @@ public sealed class PublicationActivator(
         var retired = await RetireReplacedRecordsAsync(slot, publicationId, now, cancellationToken);
         var lagged = publication.Status;
         publication = await MarkActiveAsync(publication, now, cancellationToken);
+        if (lagged == PublicationStatus.Retired && publication.Status == PublicationStatus.Active)
+            publication = await RetireIfSlotMovedAsync(slot, publication, now, cancellationToken);
         logger?.LogWarning(
             "The publication journal of definition {DefinitionId} slot {SlotName} lagged the slot, which an interrupted call left half done: publication {PublicationId} was {LaggedStatus} and is now {Status}, and replaced publications {RetiredPublicationIds} are retired",
             workflowDefinitionId,
@@ -227,7 +229,7 @@ public sealed class PublicationActivator(
 
         var replaced = await publicationStore.FindAsync(replacedId, cancellationToken)
             ?? throw new InvalidOperationException($"The replaced publication '{replacedId}' does not exist.");
-        await RetireAsync(replaced, now, cancellationToken);
+        await PublicationRecordRetirement.RetireAsync(publicationStore, replaced, now, cancellationToken);
     }
 
     /// <summary>
@@ -262,11 +264,31 @@ public sealed class PublicationActivator(
             if (reference is { DeletedAt: null } ||
                 StringComparer.Ordinal.Equals(reference?.DeletedReason, WorkflowActivationCoordinator.FailedRetireReason))
                 continue;
-            await RetireAsync(other, now, cancellationToken);
+            await PublicationRecordRetirement.RetireAsync(publicationStore, other, now, cancellationToken);
             retired.Add(other.PublicationId);
         }
 
         return retired;
+    }
+
+    /// <summary>
+    /// Takes back a retired publication that was just marked active when the slot no longer names it. A retired
+    /// publication is nobody's replaced record: once the slot moves on, nothing retires it again, so the mark would
+    /// otherwise stay. A publication that was a candidate needs no such check, because the activation that replaces it
+    /// retires it through the slot's own transitions.
+    /// </summary>
+    private async ValueTask<PublicationRecord> RetireIfSlotMovedAsync(
+        WorkflowActivationSlot slot,
+        PublicationRecord publication,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        if (await activationAuthority.FindAsync(slot.WorkflowDefinitionId, slot.SlotName, cancellationToken) is { } current &&
+            StringComparer.Ordinal.Equals(current.ActiveActivationId, publication.PublicationId))
+            return publication;
+
+        await PublicationRecordRetirement.RetireAsync(publicationStore, publication, now, cancellationToken);
+        return await publicationStore.FindAsync(publication.PublicationId, cancellationToken) ?? publication;
     }
 
     private async ValueTask<WorkflowExecutableSourceReference?> FindReferenceAsync(PublicationRecord publication, CancellationToken cancellationToken) =>
@@ -295,31 +317,6 @@ public sealed class PublicationActivator(
         RetiredAt = null,
         Failure = null
     };
-
-    /// <summary>
-    /// Retires a publication the slot no longer names. A candidate is retired too, with an activation time: a process that
-    /// stopped after its slot transition left it one, and it served once completion switched it on. A lost
-    /// compare-and-swap is re-read once, because a concurrent completion may just have made the candidate active. A
-    /// publication already retired or failed is left as it is.
-    /// </summary>
-    private async ValueTask RetireAsync(PublicationRecord? publication, DateTimeOffset now, CancellationToken cancellationToken)
-    {
-        for (var attempt = 0; publication is { Status: PublicationStatus.Candidate or PublicationStatus.Active }; attempt++)
-        {
-            if (attempt == 2)
-                throw new InvalidOperationException(
-                    $"Publication '{publication.PublicationId}' did not transition from '{publication.Status}' to 'Retired'.");
-            var retired = publication with
-            {
-                Status = PublicationStatus.Retired,
-                ActivatedAt = publication.ActivatedAt ?? now,
-                RetiredAt = now
-            };
-            if (await publicationStore.TryTransitionAsync(retired, publication.Status, cancellationToken))
-                return;
-            publication = await publicationStore.FindAsync(publication.PublicationId, cancellationToken);
-        }
-    }
 
     private async ValueTask TransitionOrThrowAsync(
         PublicationRecord publication,

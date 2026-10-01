@@ -1,6 +1,6 @@
-using System.Collections.Concurrent;
 using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Testing;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
@@ -108,7 +108,9 @@ internal static class PublicationJournalConvergence
         ["shell-start-converges-the-journal-of-an-interrupted-replacement"] = ShellStartConvergesAnInterruptedReplacementAsync,
         ["replacing-an-interrupted-replacement-retires-it-without-a-journal-error"] = ReplacingAnInterruptedReplacementRetiresItAsync,
         ["same-version-republish-converges-a-journal-written-after-the-runtime-finished"] = SameVersionRepublishConvergesAfterTheRuntimeFinishedAsync,
-        ["same-version-republish-of-a-publication-that-cannot-serve-is-refused"] = SameVersionRepublishOfAPublicationThatCannotServeIsRefusedAsync
+        ["same-version-republish-of-a-publication-that-cannot-serve-is-refused"] = SameVersionRepublishOfAPublicationThatCannotServeIsRefusedAsync,
+        ["a-stop-before-the-last-journal-write-leaves-the-candidate-lagging-until-the-next-completion"] = AStopBeforeTheLastJournalWriteLeavesTheCandidateLaggingAsync,
+        ["two-nodes-completing-one-slot-converge-to-one-journal-state"] = TwoNodesCompletingOneSlotConvergeAsync
     };
 
     public static TheoryData<string> Scenarios
@@ -208,8 +210,8 @@ internal static class PublicationJournalConvergence
     private static async Task SameVersionRepublishConvergesAfterTheRuntimeFinishedAsync(JournalDatabases databases)
     {
         var first = await PublishAsync(databases, "version-1");
-        PauseOnFirstTransition? stopping = null;
-        await using (var stopped = new PublishingNode(databases, wrapRecords: records => stopping = new PauseOnFirstTransition(records)))
+        PauseOnTransition? stopping = null;
+        await using (var stopped = new PublishingNode(databases, wrapRecords: records => stopping = new PauseOnTransition(records, transitionNumber: 1)))
         {
             var publish = stopped.PublishAsync("version-2");
             Assert.Same(stopping!.Paused, await Task.WhenAny(publish, stopping.Paused));
@@ -244,6 +246,51 @@ internal static class PublicationJournalConvergence
         Assert.Equal(PublicationFailureCodes.ProjectionActivationFailed, refusal.Code);
         await node.AssertLaggingAsync(interrupted, first);
         await node.AssertServingAsync(first, "activation-stray");
+    }
+
+    /// <summary>
+    /// Marking the slot's publication active is the last journal write, so a process that stops just before it has
+    /// retired the publication it replaced and left the slot's own record a candidate. That record lags, and the next
+    /// completion finishes the job; had it been written first, nothing would be left to tell the journal it was behind.
+    /// </summary>
+    private static async Task AStopBeforeTheLastJournalWriteLeavesTheCandidateLaggingAsync(JournalDatabases databases)
+    {
+        var first = await PublishAsync(databases, "version-1");
+        PauseOnTransition? stopping = null;
+        await using (var stopped = new PublishingNode(databases, wrapRecords: records => stopping = new PauseOnTransition(records, transitionNumber: 2)))
+        {
+            var publish = stopped.PublishAsync("version-2");
+            Assert.Same(stopping!.Paused, await Task.WhenAny(publish, stopping.Paused));
+        }
+
+        await using var node = new PublishingNode(databases);
+        var interrupted = (await node.SlotPublicationAsync())!;
+        await node.AssertLaggingAsync(interrupted);
+        await node.AssertStatusAsync(first, PublicationStatus.Retired);
+        await node.AssertServingAsync(interrupted);
+
+        var completion = await node.CompleteAsync();
+
+        Assert.True(completion.Succeeded);
+        Assert.Equal(interrupted, completion.Publication!.PublicationId);
+        await node.AssertConvergedAsync(interrupted, first);
+        await node.AssertServingAsync(interrupted);
+    }
+
+    /// <summary>Two nodes complete the same lagging slot at once; every transition is a compare-and-swap, so the journal settles once.</summary>
+    private static async Task TwoNodesCompletingOneSlotConvergeAsync(JournalDatabases databases)
+    {
+        var first = await PublishAsync(databases, "version-1");
+        var interrupted = await StopAfterSlotTransitionAsync(databases, "version-2");
+        await using var one = new PublishingNode(databases);
+        await using var other = new PublishingNode(databases);
+
+        var completions = await Task.WhenAll(one.CompleteAsync(), other.CompleteAsync());
+
+        Assert.All(completions, completion => Assert.Equal(interrupted, completion.Publication!.PublicationId));
+        await one.AssertConvergedAsync(interrupted, first);
+        await one.AssertServingAsync(interrupted);
+        Assert.DoesNotContain(one.Log.Entries.Concat(other.Log.Entries), entry => entry.Level >= LogLevel.Error);
     }
 
     private static async Task<string> PublishAsync(JournalDatabases databases, string versionId)
@@ -287,12 +334,6 @@ internal static class PublicationJournalConvergence
     /// <summary>One process over the shared databases: its own contexts, EF stores, coordinator, activator, publish handler and shell-start passes.</summary>
     private sealed class PublishingNode : IAsyncDisposable
     {
-        private static readonly IRuntimeRecoveryContinuationCodec Codec = new HmacRuntimeRecoveryContinuationCodec(Options.Create(new RuntimeRecoveryContinuationOptions
-        {
-            SigningKey = "publishing-ef-test-recovery-signing-key-32-bytes",
-            AllowEphemeralDevelopmentKey = false
-        }));
-
         private readonly PublishingSnapshotReviewDbContext _publishing;
         private readonly RuntimeDbContext _runtime;
         private readonly WorkflowTriggerIndexer _indexer;
@@ -314,7 +355,7 @@ internal static class PublicationJournalConvergence
             Records = new EfPublicationRecordStore(_publishing, access);
             Authority = new EfWorkflowActivationAuthority(_runtime, access);
             Bindings = new EfWorkflowTriggerBindingStore(_runtime, access);
-            References = new EfWorkflowExecutableSourceReferenceStore(_runtime, access, Codec);
+            References = new EfWorkflowExecutableSourceReferenceStore(_runtime, access, ActivityPublicationScope.RecoveryCodec);
             _indexer = new WorkflowTriggerIndexer(extractor, Bindings);
             var authority = wrapAuthority?.Invoke(Authority) ?? Authority;
             var records = wrapRecords?.Invoke(Records) ?? Records;
@@ -326,7 +367,7 @@ internal static class PublicationJournalConvergence
                 _indexer,
                 Bindings,
                 logger: NullLogger<WorkflowActivationCoordinator>.Instance);
-            var activator = new PublicationActivator(coordinator, records, authority, References, time, Log);
+            Activator = new PublicationActivator(coordinator, records, authority, References, time, Log);
             _handler = new PublishWorkflowRequestHandler(
                 new FixedCompiler(),
                 executables,
@@ -339,15 +380,17 @@ internal static class PublicationJournalConvergence
                 new PublicationPolicyResolver(),
                 records,
                 new PublicationPreflightService(),
-                activator,
+                Activator,
                 time,
                 workflowVersionStore: new FixedVersionStore(),
                 expressionValidator: new ValidExpressions());
-            _runtimeShellStart = new(References, Authority, coordinator, time, NullLogger<CompleteInterruptedActivationsStartupTask>.Instance);
-            _publishingShellStart = new(References, Authority, activator, time, NullLogger<CompleteInterruptedPublicationsStartupTask>.Instance);
+            var slots = new OccupiedActivationSlots(References, Authority, time);
+            _runtimeShellStart = new(slots, coordinator, NullLogger<CompleteInterruptedActivationsStartupTask>.Instance);
+            _publishingShellStart = new(slots, Activator, NullLogger<CompleteInterruptedPublicationsStartupTask>.Instance);
         }
 
         public RecordingLogger<PublicationActivator> Log { get; } = new();
+        public PublicationActivator Activator { get; }
         public EfPublicationRecordStore Records { get; }
         public EfWorkflowActivationAuthority Authority { get; }
         public EfWorkflowTriggerBindingStore Bindings { get; }
@@ -355,6 +398,8 @@ internal static class PublicationJournalConvergence
 
         public Task<PublishedWorkflowView> PublishAsync(string versionId) =>
             _handler.Handle(new PublishWorkflow(versionId), CancellationToken.None);
+
+        public async Task<PublicationCompletionResult> CompleteAsync() => await Activator.CompleteAsync(DefinitionId, SlotName);
 
         /// <summary>Both shell-start passes, in the order the task manager runs them.</summary>
         public async Task StartShellAsync()
@@ -429,6 +474,9 @@ internal static class PublicationJournalConvergence
             }
         }
 
+        public async Task AssertStatusAsync(string publicationId, PublicationStatus status) =>
+            Assert.Equal(status, (await FindAsync(publicationId)).Status);
+
         public async ValueTask DisposeAsync()
         {
             await _publishing.DisposeAsync();
@@ -490,39 +538,29 @@ internal static class PublicationJournalConvergence
     }
 
     /// <summary>
-    /// Holds the first journal transition for good, as a process stopping just after the runtime finished would: the
-    /// slot, the projections and the references are complete, and the journal is not written.
+    /// Holds the <paramref name="transitionNumber"/>th journal transition for good, as a process stopping just before it
+    /// would: the slot, the projections and the references are complete, and the journal has been written up to there.
     /// </summary>
-    private sealed class PauseOnFirstTransition(IPublicationRecordStore inner) : IPublicationRecordStore
+    private sealed class PauseOnTransition(IPublicationRecordStore inner, int transitionNumber) : IPublicationRecordStore
     {
         private readonly TaskCompletionSource _paused = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int _transitions;
 
         public Task Paused => _paused.Task;
 
         public async ValueTask<bool> TryTransitionAsync(PublicationRecord publication, PublicationStatus expectedStatus, CancellationToken cancellationToken = default)
         {
-            if (_paused.TrySetResult())
+            if (Interlocked.Increment(ref _transitions) == transitionNumber)
+            {
+                _paused.SetResult();
                 await new TaskCompletionSource().Task;
+            }
+
             return await inner.TryTransitionAsync(publication, expectedStatus, cancellationToken);
         }
 
         public ValueTask SaveAsync(PublicationRecord publication, CancellationToken cancellationToken = default) => inner.SaveAsync(publication, cancellationToken);
         public ValueTask<PublicationRecord?> FindAsync(string publicationId, CancellationToken cancellationToken = default) => inner.FindAsync(publicationId, cancellationToken);
         public ValueTask<IReadOnlyCollection<PublicationRecord>> ListBySlotAsync(string slotId, CancellationToken cancellationToken = default) => inner.ListBySlotAsync(slotId, cancellationToken);
-    }
-
-    /// <summary>Records every entry, so a scenario can assert that nothing was logged as an error.</summary>
-    internal sealed class RecordingLogger<T> : ILogger<T>
-    {
-        private readonly ConcurrentQueue<(LogLevel Level, string Message)> _entries = new();
-
-        public IReadOnlyCollection<(LogLevel Level, string Message)> Entries => _entries;
-
-        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
-
-        public bool IsEnabled(LogLevel logLevel) => true;
-
-        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
-            _entries.Enqueue((logLevel, formatter(state, exception)));
     }
 }

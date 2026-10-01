@@ -1,6 +1,5 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
-using Microsoft.Extensions.Logging;
 
 namespace Elsa.Workflows.Runtime.Services.Executables;
 
@@ -12,21 +11,27 @@ namespace Elsa.Workflows.Runtime.Services.Executables;
 /// A half-done activation always has a live Published source reference, minted before its slot transition, so these are
 /// all the slots a dying process can have left half done. <see cref="CompleteInterruptedActivationsStartupTask"/> completes
 /// the activations; a feature that keeps its own record of activations, such as Publishing's journal (#2223), sweeps the
-/// same slots to bring that record into line. Failures are logged and never stop the shell from starting.
+/// same slots to bring that record into line. A failure never stops the sweep or the shell from starting: the caller is
+/// told, and logs it in its own words.
 /// </remarks>
-public static class OccupiedActivationSlots
+public sealed class OccupiedActivationSlots(
+    IWorkflowExecutableSourceReferenceStore sourceReferenceStore,
+    IWorkflowActivationAuthority authority,
+    TimeProvider timeProvider)
 {
-    /// <summary>Calls <paramref name="visit"/> once for each occupied slot, logging rather than propagating any failure.</summary>
-    public static async Task VisitAsync(
-        IWorkflowExecutableSourceReferenceStore sourceReferenceStore,
-        IWorkflowActivationAuthority authority,
-        DateTimeOffset now,
+    /// <summary>Calls <paramref name="visit"/> once for each occupied slot, reporting rather than propagating any failure.</summary>
+    /// <param name="visit">What to do with one slot.</param>
+    /// <param name="sweepFailed">Told of a failure to list the slots, which ends the sweep.</param>
+    /// <param name="visitFailed">Told of a slot <paramref name="visit"/> failed for; the sweep goes on with the next.</param>
+    public async Task VisitAsync(
         Func<WorkflowActivationSlot, CancellationToken, ValueTask> visit,
-        ILogger logger,
+        Action<Exception> sweepFailed,
+        Action<WorkflowActivationSlot, Exception> visitFailed,
         CancellationToken cancellationToken)
     {
         try
         {
+            var now = timeProvider.GetUtcNow();
             var definitions = new HashSet<string>(StringComparer.Ordinal);
             string? continuationToken = null;
             do
@@ -41,7 +46,7 @@ public static class OccupiedActivationSlots
                 foreach (var reference in page.Items.Where(reference => reference.ActivationId is not null))
                 {
                     if (definitions.Add(reference.DefinitionId))
-                        await VisitSlotsAsync(authority, reference.DefinitionId, visit, logger, cancellationToken);
+                        await VisitSlotsAsync(reference.DefinitionId, visit, visitFailed, cancellationToken);
                 }
 
                 continuationToken = page.NextContinuationToken;
@@ -49,15 +54,14 @@ public static class OccupiedActivationSlots
         }
         catch (Exception exception) when (exception is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
-            logger.LogError(exception, "Interrupted workflow activations could not be completed at shell start");
+            sweepFailed(exception);
         }
     }
 
-    private static async Task VisitSlotsAsync(
-        IWorkflowActivationAuthority authority,
+    private async Task VisitSlotsAsync(
         string definitionId,
         Func<WorkflowActivationSlot, CancellationToken, ValueTask> visit,
-        ILogger logger,
+        Action<WorkflowActivationSlot, Exception> visitFailed,
         CancellationToken cancellationToken)
     {
         foreach (var slot in (await authority.ListByDefinitionAsync(definitionId, cancellationToken)).Where(slot => slot.ActiveActivationId is not null))
@@ -68,12 +72,7 @@ public static class OccupiedActivationSlots
             }
             catch (Exception exception) when (exception is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
             {
-                logger.LogError(
-                    exception,
-                    "Activation {ActivationId} of definition {DefinitionId} slot {SlotName} could not be checked for an interrupted activation",
-                    slot.ActiveActivationId,
-                    definitionId,
-                    slot.SlotName);
+                visitFailed(slot, exception);
             }
         }
     }

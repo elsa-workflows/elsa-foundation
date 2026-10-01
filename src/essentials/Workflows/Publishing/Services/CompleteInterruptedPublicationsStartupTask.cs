@@ -1,7 +1,6 @@
 using Elsa.Tasks.Core;
 using Elsa.Tasks.Core.Attributes;
 using Elsa.Workflows.Publishing.Core.Contracts;
-using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Services.Executables;
 using Microsoft.Extensions.Logging;
 
@@ -26,22 +25,23 @@ namespace Elsa.Workflows.Publishing.Services;
 /// </remarks>
 [Order(5)]
 public sealed class CompleteInterruptedPublicationsStartupTask(
-    IWorkflowExecutableSourceReferenceStore sourceReferenceStore,
-    IWorkflowActivationAuthority authority,
+    OccupiedActivationSlots occupiedSlots,
     IPublicationActivator activator,
-    TimeProvider timeProvider,
     ILogger<CompleteInterruptedPublicationsStartupTask> logger) : IStartupTask
 {
     public Task ExecuteAsync(CancellationToken cancellationToken) =>
-        OccupiedActivationSlots.VisitAsync(
-            sourceReferenceStore,
-            authority,
-            timeProvider.GetUtcNow(),
+        occupiedSlots.VisitAsync(
             async (slot, cancellation) =>
             {
                 if (slot.Source is { } source && source.IsSameOwnerAs(PublicationActivator.Source))
                     await activator.CompleteAsync(slot.WorkflowDefinitionId, slot.SlotName, cancellation);
             },
-            logger,
+            exception => logger.LogError(exception, "The publication journal could not be brought into line with the slots at shell start"),
+            (slot, exception) => logger.LogError(
+                exception,
+                "The publication journal of definition {DefinitionId} slot {SlotName} could not be brought into line with publication {PublicationId}",
+                slot.WorkflowDefinitionId,
+                slot.SlotName,
+                slot.ActiveActivationId),
             cancellationToken);
 }

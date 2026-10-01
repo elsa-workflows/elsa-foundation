@@ -19,7 +19,12 @@ therefore eventual across a crash, not immediate. Publishing's publication recor
 (#2223): `IPublicationActivator.CompleteAsync` completes the slot's activation through the coordinator and, once it
 serves, marks its publication active and retires the publication it replaced. It runs before every publication, on a
 same-version republish that finds the record behind, and in its own shell-start pass, so Invariant 2 holds in the
-records eventually too, and the records never decide serving. Two races remain until the slot and the projections
+records eventually too, and the records never decide serving. One transition there is not a clearing of a
+retirement: a publication a failed replacement handed the slot back to is `Retired` while the slot names it again,
+and completion marks that record `Active` once it serves. This is a controlled lifecycle transition, not the
+restoration the Decision section forbids: it applies only to the record the slot itself names, only while the slot
+names it, and it never revives a record the slot does not name, so Restore keeps its own authority transition. A
+completion that finds the slot moved on after the mark retires the record again. Two races remain until the slot and the projections
 switch in one transaction (#2230). In the first, a stale completion of a first activation can switch it back on
 beside its successor; that double serving does not heal itself, and only unpublishing the slot clears it. In the
 second, a completion's retire can leave an activation that compensation restored serving with a retired reference.

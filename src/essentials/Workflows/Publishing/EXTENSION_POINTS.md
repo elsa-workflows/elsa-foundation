@@ -86,7 +86,8 @@ after the slot compare-and-swap, notifies observers, and compensates a failed st
 ([Workflows Runtime extension points](../Runtime/EXTENSION_POINTS.md)). The slot transition commits before the
 projections switch. If a process dies between the two, the coordinator completes that activation before the slot's
 next activation, and `CompleteInterruptedActivationsStartupTask` completes it at the next shell start. Unpublish
-completes nothing: it turns off every activation that serves the slot, whatever the slot's history. Derived
+completes nothing: it turns off every activation that serves the slot, whatever the slot's history, and retires the
+slot's publication record and every other `Active` record of the slot from the status it is in, a `Candidate` included. Derived
 projection notifications occur only after the durable serving set reaches its final state; Runtime HTTP consumes the
 neutral `IWorkflowTriggerIndexObserver` seam and performs a full refresh when authority changes.
 
@@ -98,7 +99,8 @@ transition commits before the journal is written, so a process that dies in betw
 Once that activation serves (the slot still names it at the revision completion read, and its source reference is
 live), it retires every other `Active` publication of the slot whose source reference the runtime has retired, then
 marks the slot's publication `Active` with an activation time; a `Retired` publication the slot names again, after a
-failed replacement handed the slot back, is marked `Active` the same way. Marking the slot's publication active is the
+failed replacement handed the slot back, is marked `Active` the same way, and retired again if the slot has moved
+on by the time it is marked. Marking the slot's publication active is the
 last write, here and in `ActivateAsync`, so a process that stops part way leaves it lagging for the next completion.
 Every write is a status compare-and-swap, so completions are idempotent and concurrent ones apply each transition
 once. The journal is left alone when completion fails, when the slot is empty or owned by another source, and when the
@@ -109,7 +111,7 @@ slot's publication has failed or its reference is retired: none of those serves.
   republish answers once it is; one that cannot be completed is refused with the completion's failure code (HTTP 409),
   never reported as published;
 - at shell start, in `CompleteInterruptedPublicationsStartupTask` (`[Order(5)]`, every node), for every slot publishing
-  owns among those the runtime's pass visits (`OccupiedActivationSlots`), so a designer-published workflow heals
+  owns among those the runtime's pass visits (the `OccupiedActivationSlots` service), so a designer-published workflow heals
   without another publish.
 
 One residual: when the runtime could not retire the replaced activation's source reference by the time the slot's

@@ -38,19 +38,20 @@ namespace Elsa.Workflows.Runtime.Services.Executables;
 /// </remarks>
 [Order(4)]
 public sealed class CompleteInterruptedActivationsStartupTask(
-    IWorkflowExecutableSourceReferenceStore sourceReferenceStore,
-    IWorkflowActivationAuthority authority,
+    OccupiedActivationSlots occupiedSlots,
     IWorkflowActivationCoordinator coordinator,
-    TimeProvider timeProvider,
     ILogger<CompleteInterruptedActivationsStartupTask> logger) : IStartupTask
 {
     // The coordinator logs a completion and a failure itself, with the activation's identity.
     public Task ExecuteAsync(CancellationToken cancellationToken) =>
-        OccupiedActivationSlots.VisitAsync(
-            sourceReferenceStore,
-            authority,
-            timeProvider.GetUtcNow(),
+        occupiedSlots.VisitAsync(
             async (slot, cancellation) => await coordinator.CompleteAsync(slot.WorkflowDefinitionId, slot.SlotName, cancellation),
-            logger,
+            exception => logger.LogError(exception, "Interrupted workflow activations could not be completed at shell start"),
+            (slot, exception) => logger.LogError(
+                exception,
+                "Activation {ActivationId} of definition {DefinitionId} slot {SlotName} could not be checked for an interrupted activation",
+                slot.ActiveActivationId,
+                slot.WorkflowDefinitionId,
+                slot.SlotName),
             cancellationToken);
 }
