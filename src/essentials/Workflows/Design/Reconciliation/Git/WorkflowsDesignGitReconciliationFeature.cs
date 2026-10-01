@@ -40,7 +40,7 @@ public class WorkflowsDesignGitReconciliationFeature : WorkflowsDesignReconcilia
     [ManifestSetting(DisplayName = "Workflows path", Description = "Repo-relative root under which definitions live: a relative folder path, never empty, rooted, '.' or '..', and not starting with ':'.", Category = "Git", DefaultValue = "workflows")]
     public string WorkflowsPath { get; set; } = "workflows";
 
-    [ManifestSetting(DisplayName = "Local cache path", Description = "Local working-clone directory, used as given; give each process its own. Empty takes a clone slot of this source under the OS temp dir: one per running process or shell, reused by the next one after a restart.", Category = "Git")]
+    [ManifestSetting(DisplayName = "Local cache path", Description = "Local working-clone directory, used as given; give each process its own. Empty takes a clone slot of this source in a per-user directory ($XDG_RUNTIME_DIR, else the user's local application data): one per running process or shell, reused by the next one after a restart.", Category = "Git")]
     public string LocalCachePath { get; set; } = string.Empty;
 
     [ManifestSetting(DisplayName = "Role", Description = "Writer (authors + exports) or Consumer (imports read-only).", Category = "Git", DefaultValue = "Consumer")]
@@ -64,6 +64,7 @@ public class WorkflowsDesignGitReconciliationFeature : WorkflowsDesignReconcilia
 
         var options = BuildOptions();
         options.ValidateWorkflowsPath(); // fail fast at registration: it reaches git as a pathspec of clean and restore
+        options.ValidateTokenCredentials(); // and the token and remote, which only an http(s) remote and a one-line token can use
         services.AddSingleton(Microsoft.Extensions.Options.Options.Create(options));
         // One per shell, taken on first use and released when the shell's container is disposed (#2197).
         services.AddSingleton(sp => new GitCloneSlot(sp.GetRequiredService<IOptions<GitReconciliationOptions>>()));
@@ -87,7 +88,7 @@ public class WorkflowsDesignGitReconciliationFeature : WorkflowsDesignReconcilia
         Role = Role,
         CredentialsMode = CredentialsMode,
         KeyPath = KeyPath,
-        Token = Token,
+        Token = CredentialsMode == GitCredentialsMode.Token ? Token.TrimEnd('\r', '\n') : Token, // a secret file or a paste carries a trailing newline
         Export = Export,
     };
 }

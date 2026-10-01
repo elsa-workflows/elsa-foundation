@@ -25,6 +25,25 @@ public sealed class GitWorkspaceTests : GitExportTest
         await Assert.ThrowsAsync<InvalidOperationException>(() => workspace.EnsureReadyAsync(CancellationToken.None));
     }
 
+    [Fact]
+    public async Task An_empty_directory_nested_in_another_repository_is_cloned_into_not_taken_for_a_repository()
+    {
+        using var outer = GitTestRepo.InitWorking(_git);
+        outer.WriteFile("README.md", "outer");
+        outer.CommitAll("outer");
+        var nested = Path.Join(outer.Path, "clone");
+        Directory.CreateDirectory(nested);
+        var options = new GitReconciliationOptions { RemoteUrl = _remote, Branch = "main", LocalCachePath = nested, Role = GitReconciliationRole.Writer };
+
+        Assert.False(_git.IsGitRepository(nested));
+        Assert.True(_git.IsGitRepository(outer.Path));
+        var path = await GitTestSupport.Workspace(_git, GitTestSupport.Options(options)).EnsureReadyAsync(CancellationToken.None);
+
+        Assert.Equal(nested, path);
+        Assert.True(File.Exists(Path.Join(nested, ".git", "HEAD")));
+        Assert.Equal(Head(_remote, "main"), Head(nested));
+    }
+
     /// <summary>
     /// The feature refuses a leading ':' at registration; the workspace must hold without that check. Read as pathspecs,
     /// each of these names the whole clone, so <c>restore</c> would undo the edit and <c>clean -f -d</c> would delete the

@@ -72,14 +72,18 @@ writer per repository branch is kept by the remote, not by a lock or an election
   export branch that was refused because that branch moved is logged as an error, without failing the
   start, until the export branch is brought back in line with the tracked one.
 - **One clone slot per process or shell.** With `LocalCachePath` empty the clone lives in a clone slot,
-  `{temp}/elsa-gitops/{source hash}/slot-{n}/clone`, the hash covering remote, branch and role (so a
+  `{root}/{source hash}/slot-{n}/clone`, the hash covering remote, branch and role (so a
   Consumer never takes over a Writer's clone). Each shell takes the lowest slot whose lock file
   it can open exclusively and holds it until the shell stops, so two processes on one machine, or two
   shells of one process, never share a clone and collide on its `index.lock`. The operating system
   releases the lock of a process however it ends, so the next process takes the slot with its clone:
   the Writer clone is persistent, keeping its unpushed export commits across a restart, and there are
-  never more slots than processes that ran at once. On Unix every directory from `elsa-gitops` down is
-  the user's alone (0700), and one owned by another user, or a symbolic link, is refused. An explicit
+  never more slots than processes that ran at once. The root is a per-user directory, never one shared at a
+  predictable path: `elsa/gitops` under `$XDG_RUNTIME_DIR` when that is set and the user's alone (Unix), else under the
+  user's local application data (`~/.local/share`, `%LOCALAPPDATA%`), and `elsa-gitops` under the OS temp dir only when
+  neither is available. On Unix every directory from the root down is the user's alone (0700), and one owned by
+  another user, or a symbolic link, is refused. On Windows an identity whose temp is `C:\Windows\Temp` (LocalSystem,
+  an application pool without a loaded profile) shares the temp fallback, so such a host sets `LocalCachePath`. An explicit
   `LocalCachePath` is used as given, with no slot: give each process its own. A host that sets
   `DOTNET_SYSTEM_IO_DISABLEFILELOCKING` turns off the exclusive locks slots rely on, so it sets
   `LocalCachePath` per process instead.
@@ -111,7 +115,9 @@ Credentials are applied as per-invocation `-c …` git config on the commands th
 nothing secret rides the command line; `GIT_TERMINAL_PROMPT=0` guarantees fail-fast on missing creds.
 A Token is never written to disk either: a credential helper scoped to the remote's scheme and host
 reads it from the `ELSA_GIT_TOKEN` environment variable of each such git process, which only the
-user running it can read. That helper replaces the machine's helpers for that host, so they neither
+user running it can read, and prints it with `printf '%s'` so backslashes in it stay verbatim. The feature refuses to
+register a token that holds a CR, LF or NUL once trailing line breaks are trimmed, and Token mode with a remote
+that is not `http(s)`. That helper replaces the machine's helpers for that host, so they neither
 answer in its place nor receive the token to store.
 
 ## Boundaries

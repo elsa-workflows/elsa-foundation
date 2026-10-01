@@ -18,7 +18,8 @@ public sealed class GitReconciliationOptions
 
     /// <summary>
     /// Local working-clone directory, used as given; give each process its own. Empty → a clone slot of this source under
-    /// the OS temp dir, one per running process or shell and reused by the next one after a restart (see
+    /// a per-user directory (<c>$XDG_RUNTIME_DIR</c> or the user's local application data, the OS temp dir only when neither is available),
+    /// one per running process or shell and reused by the next one after a restart (see
     /// <c>Services.GitCloneSlot</c>, #2197).
     /// </summary>
     public string LocalCachePath { get; set; } = string.Empty;
@@ -60,6 +61,34 @@ public sealed class GitReconciliationOptions
                 $"{nameof(GitReconciliationOptions)}.{nameof(WorkflowsPath)} must be a relative path to a folder inside the repository, " +
                 $"such as 'workflows': not empty, not rooted, not starting with ':', and with no '.' or '..' segment. Got '{WorkflowsPath}'.");
     }
+
+    /// <summary>
+    /// Fails fast on <see cref="Token"/> credentials git could not use as configured; nothing in other modes. The token
+    /// reaches git as an environment variable that a credential helper writes into the credential protocol, one line per
+    /// attribute, so a CR, LF or NUL in it would end the line, or the value, early and could add attributes of its own.
+    /// A trailing newline, which a secret file or a pasted value commonly carries, is no part of the token and is
+    /// trimmed by the feature before this check. Only HTTP(S) remotes authenticate by token: the helper is scoped to the
+    /// remote's scheme and host, and an SSH or file remote has none to scope it to.
+    /// </summary>
+    public void ValidateTokenCredentials()
+    {
+        if (CredentialsMode != GitCredentialsMode.Token)
+            return;
+
+        if (Token.AsSpan().IndexOfAny('\r', '\n', '\0') >= 0)
+            throw new InvalidOperationException(
+                $"{nameof(GitReconciliationOptions)}.{nameof(Token)} must not contain a carriage return, a line feed or a NUL character, " +
+                "other than a trailing line break, which is trimmed.");
+
+        if (HttpRemote(RemoteUrl) is null)
+            throw new InvalidOperationException(
+                $"{nameof(GitReconciliationOptions)}.{nameof(CredentialsMode)} {nameof(GitCredentialsMode.Token)} authenticates only to an http(s) remote, " +
+                $"so '{RemoteUrl}' cannot be used with it. Use an https:// {nameof(RemoteUrl)}, or the {nameof(GitCredentialsMode.SshKey)} or {nameof(GitCredentialsMode.HostDefault)} mode.");
+    }
+
+    /// <summary><paramref name="remoteUrl"/> as a URI when it is an absolute <c>http</c> or <c>https</c> URL; otherwise <c>null</c>.</summary>
+    public static Uri? HttpRemote(string remoteUrl) =>
+        Uri.TryCreate(remoteUrl, UriKind.Absolute, out var uri) && (uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == Uri.UriSchemeHttp) ? uri : null;
 
     /// <summary>The branch export pushes to: explicit <see cref="GitExportOptions.Branch"/> else <see cref="Branch"/>.</summary>
     public string ResolvedExportBranch => string.IsNullOrWhiteSpace(Export.Branch) ? Branch : Export.Branch;

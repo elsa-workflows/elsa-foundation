@@ -28,7 +28,8 @@ public interface IGitClient
     string RunOrDefault(string workingDirectory, params string[] arguments);
 
     /// <summary>
-    /// Reports whether <paramref name="repositoryPath"/> is inside a Git work tree.
+    /// Reports whether <paramref name="repositoryPath"/> is the top level of a Git work tree. A directory nested in the
+    /// work tree of another repository is not: it holds no repository of its own.
     /// </summary>
     bool IsGitRepository(string repositoryPath);
 }

@@ -7,8 +7,8 @@ namespace Elsa.Workflows.Design.Reconciliation.Git.Services;
 
 /// <summary>
 /// Where a shell's workflows clone lives (#2197). An explicit <see cref="GitReconciliationOptions.LocalCachePath"/> is
-/// used as given. Otherwise the clone lives in a clone slot, <c>{temp}/elsa-gitops/{source hash}/slot-{n}/clone</c>, the
-/// hash covering the remote, the branch and the role: the lowest slot whose lock file this instance can open exclusively,
+/// used as given. Otherwise the clone lives in a clone slot, <c>{root}/{source hash}/slot-{n}/clone</c>, the
+/// root being a per-user directory (see <see cref="DefaultRoot()"/>), the hash covering the remote, the branch and the role: the lowest slot whose lock file this instance can open exclusively,
 /// held from the first use of <see cref="RepositoryPath"/> until dispose. The feature registers one per shell, so two
 /// processes, or two shells of one process, never share a clone and never collide on its <c>index.lock</c>. The operating
 /// system frees the slot of a process however the process ends, so the next process to start takes the slot with its
@@ -16,12 +16,17 @@ namespace Elsa.Workflows.Design.Reconciliation.Git.Services;
 /// processes that ran at once.
 /// </summary>
 /// <remarks>
-/// On Unix each directory from <c>elsa-gitops</c> down to the slot is created owner-only (0700) and set so again before
-/// use. Only a directory's owner may change its mode, so one that belongs to another user, or is a symbolic link, is
-/// refused rather than used: whoever owns it could read or replace the clone, and with its configuration and hooks choose
-/// what git runs. A process running as root may change any directory's mode, so for it the check proves less. Exclusive
-/// opens rely on the file locks the runtime takes, which <c>DOTNET_SYSTEM_IO_DISABLEFILELOCKING</c> turns off; a host
-/// that sets it gives each process its own <see cref="GitReconciliationOptions.LocalCachePath"/>.
+/// The root is the user's own, never a directory shared with other users at a predictable path: <c>$XDG_RUNTIME_DIR</c>
+/// when it is set and the user's alone, else the user's local application data, each under <c>elsa/gitops</c>. Only when
+/// neither is available does it fall back to <c>elsa-gitops</c> under the OS temp directory. On Unix each directory from
+/// the root down to the slot is created owner-only (0700) and set so again before use. Only a directory's owner may change
+/// its mode, so one that belongs to another user, or is a symbolic link, is refused rather than used: whoever owns it
+/// could read or replace the clone, and with its configuration and hooks choose what git runs. Under a per-user root no
+/// other user can plant such a directory; the checks matter chiefly for the shared temp fallback, where
+/// creating a directory and setting its mode are two steps another user can race. A process running as root may change
+/// any directory's mode, so for it the check proves less. Exclusive opens rely on the file locks the runtime takes, which
+/// <c>DOTNET_SYSTEM_IO_DISABLEFILELOCKING</c> turns off; a host that sets it gives each process its own
+/// <see cref="GitReconciliationOptions.LocalCachePath"/>.
 /// </remarks>
 public sealed class GitCloneSlot : IDisposable
 {
@@ -37,8 +42,8 @@ public sealed class GitCloneSlot : IDisposable
     private string? _repositoryPath;
     private bool _disposed;
 
-    /// <summary>The clone location of <paramref name="options"/>, with slots under <c>{temp}/elsa-gitops</c>.</summary>
-    public GitCloneSlot(IOptions<GitReconciliationOptions> options) : this(options.Value, Path.Join(Path.GetTempPath(), "elsa-gitops"))
+    /// <summary>The clone location of <paramref name="options"/>, with slots under <see cref="DefaultRoot()"/>.</summary>
+    public GitCloneSlot(IOptions<GitReconciliationOptions> options) : this(options.Value, DefaultRoot())
     {
     }
 
@@ -47,6 +52,27 @@ public sealed class GitCloneSlot : IDisposable
     {
         _options = options;
         _slotsRoot = slotsRoot;
+    }
+
+    /// <summary><see cref="DefaultRoot(string?, string, string)"/> for the environment of this process.</summary>
+    public static string DefaultRoot() => DefaultRoot(
+        Environment.GetEnvironmentVariable("XDG_RUNTIME_DIR"), Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), Path.GetTempPath());
+
+    /// <summary>
+    /// Where slots live: <c>elsa/gitops</c> under <paramref name="runtimeDirectory"/> (Unix only) when it is an absolute
+    /// path to a directory that is not a symbolic link and is the user's alone, else under
+    /// <paramref name="localApplicationData"/>, else <c>elsa-gitops</c> under <paramref name="tempPath"/>.
+    /// </summary>
+    /// <remarks>
+    /// A directory is the user's alone when its mode is exactly 0700 and this process can list it: only its owner, or
+    /// root, can list a 0700 directory, and the XDG specification has the runtime directory owned by the user with that mode.
+    /// </remarks>
+    public static string DefaultRoot(string? runtimeDirectory, string localApplicationData, string tempPath)
+    {
+        if (IsUsersRuntimeDirectory(runtimeDirectory))
+            return Path.Join(runtimeDirectory, "elsa", "gitops");
+
+        return string.IsNullOrWhiteSpace(localApplicationData) ? Path.Join(tempPath, "elsa-gitops") : Path.Join(localApplicationData, "elsa", "gitops");
     }
 
     /// <summary>The absolute path of the clone. The first use takes the slot.</summary>
@@ -110,6 +136,27 @@ public sealed class GitCloneSlot : IDisposable
     private static string SourceKey(string sourceAndRole) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(sourceAndRole)))[..16].ToLowerInvariant();
 
+    private static bool IsUsersRuntimeDirectory(string? path)
+    {
+        if (OperatingSystem.IsWindows() || string.IsNullOrWhiteSpace(path) || !Path.IsPathRooted(path))
+            return false;
+
+        try
+        {
+            var directory = new DirectoryInfo(path);
+            if (!directory.Exists || directory.LinkTarget is not null || File.GetUnixFileMode(path) != OwnerOnly)
+                return false;
+
+            using var entries = directory.EnumerateFileSystemInfos().GetEnumerator();
+            entries.MoveNext(); // throws when this process may not list it, as a 0700 directory of another user
+            return true;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
     private static FileStreamOptions LockFileOptions()
     {
         var options = new FileStreamOptions { Mode = FileMode.OpenOrCreate, Access = FileAccess.ReadWrite, Share = FileShare.None };
@@ -122,7 +169,10 @@ public sealed class GitCloneSlot : IDisposable
     {
         if (OperatingSystem.IsWindows())
         {
-            Directory.CreateDirectory(path); // under the user profile, whose ACL already keeps other users out
+            // Created with the ACL it inherits. Under the local application data of the user the process runs as, that is a
+            // profile other users cannot read; under the temp fallback it is not: an identity whose TEMP is C:\Windows\Temp, such
+            // as LocalSystem or an application pool without a loaded profile, shares it, so such a host sets LocalCachePath.
+            Directory.CreateDirectory(path);
             return;
         }
 

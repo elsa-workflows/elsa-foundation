@@ -110,5 +110,44 @@ public sealed class GitCloneSlotTests : GitExportTest
         Assert.Empty(Directory.EnumerateFileSystemEntries(target));
     }
 
+    [Fact]
+    public void The_default_root_is_the_runtime_directory_when_it_is_the_users_alone()
+    {
+        if (OperatingSystem.IsWindows())
+            return;
+
+        var runtime = NewSlotsRoot();
+        Directory.CreateDirectory(runtime, OwnerOnlyDirectory);
+
+        Assert.Equal(Path.Join(runtime, "elsa", "gitops"), GitCloneSlot.DefaultRoot(runtime, "/home/u/.local/share", "/tmp"));
+    }
+
+    [Fact]
+    public void The_default_root_skips_a_runtime_directory_others_can_use()
+    {
+        if (OperatingSystem.IsWindows())
+            return;
+
+        var shared = NewSlotsRoot();
+        Directory.CreateDirectory(shared, OwnerOnlyDirectory | UnixFileMode.GroupRead | UnixFileMode.GroupExecute);
+        var link = NewSlotsRoot();
+        var own = NewSlotsRoot();
+        Directory.CreateDirectory(own, OwnerOnlyDirectory);
+        Directory.CreateSymbolicLink(link, own);
+        var expected = Path.Join("/home/u/.local/share", "elsa", "gitops");
+
+        Assert.Equal(expected, GitCloneSlot.DefaultRoot(shared, "/home/u/.local/share", "/tmp"));
+        Assert.Equal(expected, GitCloneSlot.DefaultRoot(link, "/home/u/.local/share", "/tmp"));
+        Assert.Equal(expected, GitCloneSlot.DefaultRoot(Path.Join(shared, "missing"), "/home/u/.local/share", "/tmp"));
+        Assert.Equal(expected, GitCloneSlot.DefaultRoot("relative/run", "/home/u/.local/share", "/tmp"));
+        Assert.Equal(expected, GitCloneSlot.DefaultRoot(null, "/home/u/.local/share", "/tmp"));
+    }
+
+    [Fact]
+    public void The_default_root_falls_back_to_the_temp_dir_only_without_a_per_user_directory()
+    {
+        Assert.Equal(Path.Join("/tmp", "elsa-gitops"), GitCloneSlot.DefaultRoot(null, "", "/tmp"));
+    }
+
     private static string SlotName(string repositoryPath) => Path.GetFileName(Path.GetDirectoryName(repositoryPath))!;
 }

@@ -22,7 +22,7 @@ serialization (spec 086, merged); the on-disk file is its indented form. Full de
 
 *Amended 2026-10-01 ([#2197](https://github.com/elsa-workflows/elsa-foundation/issues/2197); [ADR 0034](../../docs/adr/0034-workflow-definitions-reconcile-from-and-export-to-git.md), D7 and D11 amendments):* the Writer clone is a persistent working copy but no
 longer ff-only: diverged, it resets onto the remote when every commit the remote lacks was made by the export
-identity, and otherwise stays with an error logged. It persists in a clone slot under the OS temp dir, one per
+identity, and otherwise stays with an error logged. It persists in a clone slot in a per-user directory (not the shared temp dir), one per
 running process or shell, which the next process takes with its clone after a restart.
 
 ## Technical Context

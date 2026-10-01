@@ -12,7 +12,8 @@ Owns the local working clone; role-driven clone modes (D11/R7).
 public interface IGitWorkspace
 {
     /// Clone-if-absent, then integrate per role (Writer: fetch + ff-only merge; Consumer: fetch +
-    /// reset --hard). Applies credentials into the clone's git config first (R8). Returns repo path.
+    /// reset --hard). Credentials are applied per git invocation (environment and `-c` arguments of
+    /// that process) and never written to the clone's git config (R8, as amended below). Returns repo path.
     /// Throws on a non-ff Writer divergence (the D7 single-writer signal) — never reset --hard the Writer.
     /// (Amended 2026-10-01, [#2197](https://github.com/elsa-workflows/elsa-foundation/issues/2197): it no longer throws. A diverged Writer resets to the remote when every
     /// commit the remote lacks was made by the export identity, else stays with an error logged; see [ADR 0034](../../../docs/adr/0034-workflow-definitions-reconcile-from-and-export-to-git.md).)
@@ -23,7 +24,7 @@ public interface IGitWorkspace
 }
 ```
 *Amended 2026-10-01 ([#2197](https://github.com/elsa-workflows/elsa-foundation/issues/2197); [ADR 0034](../../../docs/adr/0034-workflow-definitions-reconcile-from-and-export-to-git.md), D11 amendment):* `RepositoryPath` is an explicit
-`LocalCachePath`, else the clone in the shell's clone slot (`GitCloneSlot`, a singleton per shell). The workspace also
+`LocalCachePath`, else the clone in the shell's clone slot (`GitCloneSlot`, a singleton per shell, under a per-user directory). The workspace also
 exposes `Task<string> RunRemoteAsync(CancellationToken, params string[])`, which runs a fetch or push in the clone with the
 credentials applied (a token through the environment of that git process, never argv or disk); the exporter pushes
 through it.

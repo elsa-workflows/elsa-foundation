@@ -10,7 +10,7 @@ namespace Elsa.Git;
 /// output, and throws on a non-zero exit; an overload adds environment variables to that one process.</item>
 /// <item><see cref="RunOrDefault"/> runs a read-only Git command synchronously and returns an empty
 /// string on any failure.</item>
-/// <item><see cref="IsGitRepository"/> reports whether a path is inside a Git work tree.</item>
+/// <item><see cref="IsGitRepository"/> reports whether a path is the top level of a Git work tree.</item>
 /// </list>
 /// Every invocation runs with <c>GIT_TERMINAL_PROMPT=0</c> so an unreachable or credential-protected
 /// remote fails fast instead of blocking on an interactive prompt.
@@ -75,8 +75,10 @@ public sealed class GitClient(string gitExecutable, ILogger logger) : IGitClient
         }
     }
 
+    // One call: the first line says whether it is a work tree, the second the path from the top level, empty at the top
+    // level itself. A directory nested in another repository's work tree is no repository of its own.
     public bool IsGitRepository(string repositoryPath) =>
-        string.Equals(RunOrDefault(repositoryPath, "rev-parse", "--is-inside-work-tree"), "true", StringComparison.OrdinalIgnoreCase);
+        RunOrDefault(repositoryPath, "rev-parse", "--is-inside-work-tree", "--show-prefix") == "true";
 
     private Process StartProcess(string workingDirectory, IReadOnlyList<string> arguments, IReadOnlyDictionary<string, string> environment)
     {

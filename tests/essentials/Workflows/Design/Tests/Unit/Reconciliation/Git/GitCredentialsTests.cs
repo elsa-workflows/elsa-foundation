@@ -53,4 +53,19 @@ public sealed class GitCredentialsTests : GitExportTest
         Assert.DoesNotContain(Token, otherHost);
         Assert.Contains("password=machine-secret", otherHost);
     }
+
+    [Fact]
+    public async Task A_token_with_backslashes_reaches_git_verbatim()
+    {
+        // Where sh is dash or has xpg-echo, echo would read \n as a line break and \\ as one backslash.
+        const string token = """ab\ncd\\e""";
+        var credentials = GitCredentials.For(new GitReconciliationOptions
+        {
+            RemoteUrl = "https://git.example.test/acme/workflows.git", CredentialsMode = GitCredentialsMode.Token, Token = token,
+        });
+
+        var filled = await GitTestSupport.CredentialFillAsync(credentials, "git.example.test", MachineHelper);
+
+        Assert.Equal(["protocol=https", "host=git.example.test", "username=x-access-token", $"password={token}"], filled.Split('\n', StringSplitOptions.RemoveEmptyEntries));
+    }
 }

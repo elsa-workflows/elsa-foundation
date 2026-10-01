@@ -19,9 +19,11 @@ public sealed class GitCredentials
     /// <summary>The environment variable the token helper reads the token from.</summary>
     public const string TokenVariable = "ELSA_GIT_TOKEN";
 
-    // Git appends the action (get, store, erase) as the argument; only a get is answered.
+    // Git appends the action (get, store, erase) as the argument; only a get is answered. printf, not echo: where sh is dash
+    // or has xpg-echo, echo reads backslash sequences in the token, and printf's %s writes it verbatim. The snippet is
+    // static, with nothing of the remote or the token interpolated into it.
     private const string TokenHelper =
-        "!f() { test \"$1\" = get || return 0; echo username=x-access-token; echo \"password=$" + TokenVariable + "\"; }; f";
+        "!f() { test \"$1\" = get || return 0; printf 'username=x-access-token\\npassword=%s\\n' \"$" + TokenVariable + "\"; }; f";
 
     private static readonly GitCredentials None = new([], new Dictionary<string, string>());
 
@@ -59,7 +61,5 @@ public sealed class GitCredentials
 
     /// <summary><c>{scheme}://{host[:port]}.</c> for an HTTP(S) remote, so git applies the helper to that host only; else empty.</summary>
     private static string HostScope(string remoteUrl) =>
-        Uri.TryCreate(remoteUrl, UriKind.Absolute, out var uri) && (uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == Uri.UriSchemeHttp)
-            ? $"{uri.Scheme}://{uri.Authority}."
-            : "";
+        GitReconciliationOptions.HttpRemote(remoteUrl) is { } uri ? $"{uri.Scheme}://{uri.Authority}." : "";
 }

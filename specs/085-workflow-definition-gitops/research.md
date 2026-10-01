@@ -137,9 +137,12 @@ lazy-scan-per-call):
 > `merge --ff-only`. It fetches, then decides from how HEAD stands against the remote: up to date or only ahead, it
 > stays; only behind, it fast-forwards; diverged, it resets to the remote when every commit the remote lacks was made
 > by the export identity, else stays with an error logged. It never discards a commit anyone else made, and none of
-> this throws. With `LocalCachePath` empty the clone lives in a clone slot, `{temp}/elsa-gitops/{source hash}/slot-{n}/clone`:
-> each shell holds the lowest slot whose lock file it can open exclusively, and the next process takes it with its
-> clone after a restart. On Unix the slot directories are the user's alone (0700); another user's is refused.
+> this throws. With `LocalCachePath` empty the clone lives in a clone slot, `{root}/{source hash}/slot-{n}/clone`, where the root is
+> a per-user directory, `elsa/gitops` under `$XDG_RUNTIME_DIR` (when set and the user's alone) or else under the user's local
+> application data, and `elsa-gitops` under the OS temp dir only when neither is available (no predictable shared path to
+> pre-create or to swap for a symbolic link): each shell holds the lowest slot whose lock file it can open exclusively, and the next process takes it with its
+> clone after a restart. On Unix the slot directories are the user's alone (0700); another user's is refused. On Windows the local application data of the running identity is the user's own;
+> an identity whose temp is `C:\Windows\Temp` shares the fallback and sets `LocalCachePath`.
 
 **Rationale.** FR-012/D11 verbatim. Lazy-ensure keeps the first reconcile pass self-seeding
 (bootstrap, D11/edge-case) and re-runs pick up remote changes. `--single-branch` limits fetch cost.
@@ -176,7 +179,9 @@ lib (FR-001 "just add a ProjectReference").
 > to every other helper configured on the machine to store. `IGitClient.RunAsync` gained an overload that adds
 > environment variables to one git process, and every command that reaches the remote carries
 > `-c credential.{scheme}://{host}.helper=` (clearing the machine's helpers for that host) and a helper that answers
-> `get` with `x-access-token` and the token read from `ELSA_GIT_TOKEN`, which that process carries. Nothing is written
+> `get` with `x-access-token` and the token read from `ELSA_GIT_TOKEN`, which that process carries and which the helper prints with `printf '%s'`
+> (not `echo`, which reads backslash sequences under `dash`). The feature refuses to register a token holding a CR, LF or
+> NUL once trailing line breaks are trimmed, and Token mode with a non-http(s) remote. Nothing is written
 > to disk; a process's environment is readable only by its own user. `SshKey` and `HostDefault` are unchanged.
 
 ## R9 — FR-008a: gate metadata apply to the newest version (the carried-over defect)
