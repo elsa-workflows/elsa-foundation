@@ -181,42 +181,34 @@ public sealed class CompositionInspectionCapture : IDisposable
             if (roots.Any(root => root is null))
                 throw CaptureInvalid();
 
-            // Reserve the operation while holding the lifecycle gate. A failed recheck releases the
-            // reservation, but no concurrent caller can create a second request.
+            // An observed drift consumes this invocation even if a caller later restores the file.
+            // Recovery requires a fresh capture with fresh correlation identities.
             _environmentInspectionBegun = true;
+            VerifyUnchangedCore();
+            var raw = _inputs.ReadBytes(_environmentInputPath);
             try
             {
-                VerifyUnchangedCore();
-                var raw = _inputs.ReadBytes(_environmentInputPath);
-                try
+                var content = Convert.ToBase64String(raw);
+                return new CandidateEnvironmentWorkerRequestV2
                 {
-                    var content = Convert.ToBase64String(raw);
-                    return new CandidateEnvironmentWorkerRequestV2
+                    Version = WorkerContract.Version,
+                    Command = WorkerCommands.InspectCandidateEnvironment,
+                    HostDirectory = _host.Directory,
+                    HostName = _host.Name,
+                    DepsFile = _host.DepsFile,
+                    PackageRoots = Array.AsReadOnly(roots),
+                    Candidate = ClonePayload(Payload),
+                    EnvironmentInput = new WorkerEnvironmentInput
                     {
-                        Version = WorkerContract.Version,
-                        Command = WorkerCommands.InspectCandidateEnvironment,
-                        HostDirectory = _host.Directory,
-                        HostName = _host.Name,
-                        DepsFile = _host.DepsFile,
-                        PackageRoots = Array.AsReadOnly(roots),
-                        Candidate = ClonePayload(Payload),
-                        EnvironmentInput = new WorkerEnvironmentInput
-                        {
-                            Version = 1,
-                            CaptureId = Payload.CaptureId,
-                            Content = content
-                        }
-                    };
-                }
-                finally
-                {
-                    Array.Clear(raw);
-                }
+                        Version = 1,
+                        CaptureId = Payload.CaptureId,
+                        Content = content
+                    }
+                };
             }
-            catch
+            finally
             {
-                _environmentInspectionBegun = false;
-                throw;
+                Array.Clear(raw);
             }
         }
     }
@@ -245,8 +237,17 @@ public sealed class CompositionInspectionCapture : IDisposable
 
     private void VerifyUnchangedCore()
     {
-        _source.VerifyUnchanged();
-        _inputs.VerifyUnchanged();
+        try
+        {
+            _source.VerifyUnchanged();
+            _inputs.VerifyUnchanged();
+        }
+        catch (CliRefusal) when (_environmentInputPath is not null)
+        {
+            // Invalidate and release private bytes after observed drift, including a prelaunch recheck.
+            Dispose();
+            throw;
+        }
     }
 
     private static WorkerCandidatePayload ClonePayload(WorkerCandidatePayload payload) => new()

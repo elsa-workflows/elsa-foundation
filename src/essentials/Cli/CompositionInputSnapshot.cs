@@ -71,22 +71,17 @@ public sealed class CompositionInputSnapshot : IDisposable
                                                  refusal.Code == "candidate-capture-invalid" &&
                                                  totalBytes <= CompositionFileReader.MaximumContextBytes)
                 {
-                    if (bytes is not null)
-                        Array.Clear(bytes);
                     throw CliRefusal.Usage("candidate-environment-input-too-large",
                         "The explicit environment input exceeds the supported size limit.");
                 }
-                catch (CliRefusal)
-                {
-                    if (bytes is not null)
-                        Array.Clear(bytes);
-                    throw;
-                }
                 catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
                 {
+                    throw Unreadable();
+                }
+                finally
+                {
                     if (bytes is not null)
                         Array.Clear(bytes);
-                    throw Unreadable();
                 }
             }
         }

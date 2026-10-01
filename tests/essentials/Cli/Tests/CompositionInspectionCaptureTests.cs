@@ -465,6 +465,8 @@ public sealed class CompositionInspectionCaptureTests
         Assert.Equal(1, reads[environmentPath]);
         capture.VerifyUnchanged();
         Assert.Equal(2, reads[environmentPath]);
+        var request = capture.BeginEnvironmentInspection([]);
+        Assert.Equal(withBom, Convert.FromBase64String(request.EnvironmentInput!.Content!));
     }
 
     [Fact]
@@ -582,7 +584,7 @@ public sealed class CompositionInspectionCaptureTests
     }
 
     [Fact]
-    public void Environment_capture_failed_begin_releases_its_single_use_reservation()
+    public void Environment_capture_drift_consumes_the_invocation_and_recovery_requires_a_fresh_capture()
     {
         using var fixture = new CompositionBridgeFixture();
         fixture.WriteAcceptedComposition();
@@ -595,25 +597,29 @@ public sealed class CompositionInspectionCaptureTests
         Assert.Equal("composition-input-changed", Assert.Throws<CliRefusal>(() => capture.BeginEnvironmentInspection([])).Code);
         File.WriteAllBytes(environmentPath, raw);
 
-        var request = capture.BeginEnvironmentInspection([]);
-        Assert.Equal(request.Candidate!.CaptureId, request.EnvironmentInput!.CaptureId);
+        Assert.Equal("candidate-capture-invalid", Assert.Throws<CliRefusal>(() => capture.BeginEnvironmentInspection([])).Code);
+        using var freshCapture = OpenWithEnvironment(fixture, environmentPath);
+        var request = freshCapture.BeginEnvironmentInspection([]);
+        Assert.NotEqual(capture.Payload.CaptureId, request.Candidate!.CaptureId);
+        Assert.NotEqual(capture.Payload.InvocationId, request.Candidate.InvocationId);
+        Assert.Equal(request.Candidate.CaptureId, request.EnvironmentInput!.CaptureId);
     }
 
     [Fact]
-    public void Environment_capture_begin_allows_exactly_one_concurrent_request()
+    public async Task Environment_capture_begin_allows_exactly_one_concurrent_request()
     {
         using var fixture = new CompositionBridgeFixture();
         fixture.WriteAcceptedComposition();
         var environmentPath = EnvironmentPath(fixture, "environment.json");
         File.WriteAllBytes(environmentPath, CandidateInspectionFixture.EnvironmentDocument(("Key", "value")));
         using var capture = OpenWithEnvironment(fixture, environmentPath);
-        using var start = new Barrier(3);
+        var start = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var successfulRequests = 0;
         var refusedRequests = 0;
 
-        var callers = Enumerable.Range(0, 2).Select(_ => Task.Run(() =>
+        var callers = Enumerable.Range(0, 2).Select(index => Task.Run(async () =>
         {
-            start.SignalAndWait();
+            await start.Task;
             try
             {
                 _ = capture.BeginEnvironmentInspection([]);
@@ -624,8 +630,8 @@ public sealed class CompositionInspectionCaptureTests
                 Interlocked.Increment(ref refusedRequests);
             }
         })).ToArray();
-        start.SignalAndWait();
-        Task.WaitAll(callers);
+        start.SetResult();
+        await Task.WhenAll(callers);
 
         Assert.Equal(1, successfulRequests);
         Assert.Equal(1, refusedRequests);
@@ -641,6 +647,51 @@ public sealed class CompositionInspectionCaptureTests
 
         Assert.False(capture.HasEnvironmentInput);
         Assert.Equal("candidate-capture-invalid", Assert.Throws<CliRefusal>(() => capture.BeginEnvironmentInspection([])).Code);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Bounded_reader_clears_its_owned_read_buffer_on_success_and_limit_refusal(bool exceedLimit)
+    {
+        var raw = Encoding.UTF8.GetBytes(CandidateInspectionFixture.PrivateEnvironmentCanary);
+        var stream = new ObservedReadBufferStream(raw);
+        var reader = new CompositionFileReader(_ => { }, _ => stream);
+        if (exceedLimit)
+            Assert.Equal("candidate-capture-invalid", Assert.Throws<CliRefusal>(() => reader.Read("private", raw.Length - 1)).Code);
+        else
+            Assert.Equal(raw, reader.Read("private", raw.Length));
+
+        Assert.NotEmpty(stream.ReadBuffers);
+        Assert.All(stream.ReadBuffers, buffer => Assert.All(buffer, value => Assert.Equal((byte)0, value)));
+        Assert.Contains(raw, value => value != 0);
+    }
+
+    [Fact]
+    public void Observed_private_drift_disposes_the_capture_before_later_launch()
+    {
+        using var fixture = new CompositionBridgeFixture();
+        fixture.WriteAcceptedComposition();
+        var path = EnvironmentPath(fixture, "environment.json");
+        var raw = CandidateInspectionFixture.EnvironmentDocument(("Private", CandidateInspectionFixture.PrivateEnvironmentCanary));
+        File.WriteAllBytes(path, raw);
+        using var capture = OpenWithEnvironment(fixture, path);
+        File.AppendAllText(path, " ");
+        Assert.Equal("composition-input-changed", Assert.Throws<CliRefusal>(() => capture.VerifyUnchanged()).Code);
+        File.WriteAllBytes(path, raw);
+        Assert.False(capture.HasEnvironmentInput);
+        Assert.Equal("candidate-capture-invalid", Assert.Throws<CliRefusal>(() => capture.BeginEnvironmentInspection([])).Code);
+        Assert.Equal(raw, File.ReadAllBytes(path));
+    }
+
+    private sealed class ObservedReadBufferStream(byte[] bytes) : MemoryStream(bytes, writable: false)
+    {
+        public List<byte[]> ReadBuffers { get; } = [];
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            ReadBuffers.Add(buffer);
+            return base.Read(buffer, offset, count);
+        }
     }
 
     private static CompositionInspectionCapture Open(CompositionBridgeFixture fixture, IReadOnlyList<string> profiles,

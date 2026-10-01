@@ -189,7 +189,7 @@ This feature is one coherent production leaf. The US1 checkpoint is an internal 
 
 ## Notes
 
-- Every task is intentionally unchecked and describes future work.
+- Unchecked tasks describe remaining work. Checked tasks have executed evidence recorded in [implementation-evidence.md](implementation-evidence.md).
 - `[P]` appears only where the marked work uses distinct files and has no incomplete dependency on another marked task.
 - Existing explicit CLI file locations and finite assembly-loader/deps/package-root metadata remain allowed implementation metadata for current file checks/loading; private values, raw configuration, private-input paths in public diagnostics/results, and private-input-derived fingerprints remain prohibited.
 - No task creates a new project, provider, cadence, transport, acceptance command, or ambient environment reader.
