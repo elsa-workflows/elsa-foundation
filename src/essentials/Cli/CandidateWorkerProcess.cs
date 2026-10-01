@@ -176,7 +176,7 @@ public sealed class CandidateWorkerProcess
         {
             refusalResult = FixedRefusal("candidate-inspection-cancelled");
         }
-        catch (Exception)
+        catch (Exception failure) when (IsNonFatal(failure))
         {
             refusalResult = FixedRefusal("candidate-inspection-failed");
         }
@@ -377,7 +377,7 @@ public sealed class CandidateWorkerProcess
         {
             firstFailure ??= failure;
         }
-        catch (Exception failure)
+        catch (Exception failure) when (!IsNonFatal(failure))
         {
             fatalFailure ??= failure;
         }
@@ -396,6 +396,8 @@ public sealed class CandidateWorkerProcess
             started = cleanupClock.GetTimestamp();
             cleanupDeadline = new CancellationTokenSource(CleanupTimeout, cleanupClock);
         }
+        // Timer providers can throw arbitrary exceptions. Record them and finish every owned cleanup
+        // attempt before rethrowing fatal failures; a narrower catch could abandon the child or streams.
         catch (Exception failure)
         {
             RecordCleanupFailure(failure, ref failed, ref fatalFailure);

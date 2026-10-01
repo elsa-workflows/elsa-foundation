@@ -137,6 +137,8 @@ public sealed class CompositionFileReader
         }
         catch (Exception)
         {
+            // Any stat/process anomaly fails closed. Do not expose a path-bearing platform exception
+            // or admit an input whose regular-file identity could not be established.
             return false;
         }
     }

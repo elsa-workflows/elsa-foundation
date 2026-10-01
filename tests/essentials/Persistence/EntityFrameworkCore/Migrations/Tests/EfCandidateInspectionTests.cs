@@ -1563,10 +1563,12 @@ public sealed class EfCandidateInspectionTests : IDisposable
 
     private static byte[] NestedObjectJson(int objectDepth, string leafJson)
     {
-        var json = leafJson;
+        var json = new StringBuilder();
         for (var depth = 0; depth < objectDepth; depth++)
-            json = "{\"nested\":" + json + "}";
-        return Encoding.UTF8.GetBytes(json);
+            json.Append("{\"nested\":");
+        json.Append(leafJson);
+        json.Append('}', objectDepth);
+        return Encoding.UTF8.GetBytes(json.ToString());
     }
 
     private static void ReplaceCandidateFile(JsonObject request, string name, byte[] bytes)

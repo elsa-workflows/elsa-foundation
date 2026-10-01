@@ -172,8 +172,9 @@ public sealed class CandidateWorkerOperationTests
         else
         {
             Assert.Null(response.Error);
-            Assert.Equal("ok", response.Tooling!.Value.GetProperty("status").GetString());
-            var resolution = response.Tooling.Value.GetProperty("configurationResolution");
+            var tooling = Assert.IsType<JsonElement>(response.Tooling);
+            Assert.Equal("ok", tooling.GetProperty("status").GetString());
+            var resolution = tooling.GetProperty("configurationResolution");
             Assert.Equal("default", resolution.GetProperty("shell").GetString());
             var participant = Assert.Single(resolution.GetProperty("participants").EnumerateArray());
             Assert.Equal("ResourceProbe", participant.GetProperty("feature").GetString());
@@ -393,7 +394,8 @@ public sealed class CandidateWorkerOperationTests
         try
         {
             using var process = Process.GetProcessById(identity.Pid);
-            return !process.HasExited && process.StartTime.ToUniversalTime().Ticks == identity.StartedAtTicks;
+            if (process.HasExited || process.StartTime.ToUniversalTime().Ticks != identity.StartedAtTicks)
+                return false;
         }
         catch (ArgumentException)
         {
@@ -405,31 +407,39 @@ public sealed class CandidateWorkerOperationTests
         }
         catch (System.ComponentModel.Win32Exception) when (!OperatingSystem.IsWindows())
         {
-            // macOS can retain a terminated descendant as a zombie while StartTime is unavailable.
-            // Only an absent PID or explicit zombie state proves non-execution; all other errors fail.
-            var start = new ProcessStartInfo("/bin/ps")
-            {
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true
-            };
-            start.ArgumentList.Add("-p");
-            start.ArgumentList.Add(identity.Pid.ToString(System.Globalization.CultureInfo.InvariantCulture));
-            start.ArgumentList.Add("-o");
-            start.ArgumentList.Add("stat=");
-            using var observer = Process.Start(start) ?? throw new InvalidOperationException("Process observation failed.");
-            if (!observer.WaitForExit(5000))
-            {
-                observer.Kill(entireProcessTree: true);
-                Assert.True(observer.WaitForExit(5000), "The owned process observer did not terminate.");
-                throw new TimeoutException("Process observation did not complete.");
-            }
-            var state = observer.StandardOutput.ReadToEnd().Trim();
-            Assert.Contains(observer.ExitCode, new[] { 0, 1 });
-            if (state.Length == 0 && observer.ExitCode == 1 || state.StartsWith('Z'))
-                return false;
-            throw;
+            return IsUnixProcessRunning(identity.Pid);
         }
+        // Observer failures must propagate rather than being caught as identity-probe exit races.
+        return OperatingSystem.IsWindows() || IsUnixProcessRunning(identity.Pid);
+    }
+
+    private static bool IsUnixProcessRunning(int pid)
+    {
+        // macOS zombies can retain a readable StartTime and HasExited=false. Always inspect state,
+        // not just when StartTime throws. Only an absent PID or explicit zombie proves non-execution.
+        var start = new ProcessStartInfo("/bin/ps")
+        {
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true
+        };
+        start.ArgumentList.Add("-p");
+        start.ArgumentList.Add(pid.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        start.ArgumentList.Add("-o");
+        start.ArgumentList.Add("stat=");
+        using var observer = Process.Start(start) ?? throw new InvalidOperationException("Process observation failed.");
+        if (!observer.WaitForExit(5000))
+        {
+            observer.Kill(entireProcessTree: true);
+            Assert.True(observer.WaitForExit(5000), "The owned process observer did not terminate.");
+            throw new TimeoutException("Process observation did not complete.");
+        }
+        var state = observer.StandardOutput.ReadToEnd().Trim();
+        Assert.Contains(observer.ExitCode, new[] { 0, 1 });
+        if (state.Length == 0 && observer.ExitCode == 1 || state.StartsWith('Z'))
+            return false;
+        Assert.True(observer.ExitCode == 0 && state.Length > 0, "Process state could not be established.");
+        return true;
     }
 
     private static async Task KillMarkedProcessIfStillRunning(string marker)

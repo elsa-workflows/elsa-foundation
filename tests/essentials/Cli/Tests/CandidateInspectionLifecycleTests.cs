@@ -155,10 +155,10 @@ public sealed class CandidateInspectionLifecycleTests
             .RunAsync(host, request, 60, CancellationToken.None);
         Assert.Equal(ToolExitCode.Success, response.ExitCode);
         Assert.Null(response.Error);
-        Assert.NotNull(response.Tooling);
+        var tooling = Assert.IsType<JsonElement>(response.Tooling);
         var output = new CandidateInspectionOutput();
-        var json = output.Render(capture, response.Tooling.Value, response.ExitCode, "json");
-        var text = output.Render(capture, response.Tooling.Value, response.ExitCode, "text");
+        var json = output.Render(capture, tooling, response.ExitCode, "json");
+        var text = output.Render(capture, tooling, response.ExitCode, "text");
         capture.VerifyUnchanged();
 
         using var document = JsonDocument.Parse(json);

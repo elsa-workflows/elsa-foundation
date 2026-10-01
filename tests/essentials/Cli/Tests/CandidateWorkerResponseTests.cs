@@ -24,7 +24,8 @@ public sealed class CandidateWorkerResponseTests
         Assert.Equal(WorkerContract.Version, response.Version);
         Assert.Equal(ToolExitCode.Success, response.ExitCode);
         Assert.Null(response.Error);
-        Assert.Equal(host, response.Tooling!.Value.GetRawText());
+        var tooling = Assert.IsType<JsonElement>(response.Tooling);
+        Assert.Equal(host, tooling.GetRawText());
     }
 
     [Fact]
@@ -37,8 +38,9 @@ public sealed class CandidateWorkerResponseTests
 
         Assert.Equal(ToolExitCode.Refusal, response.ExitCode);
         Assert.Null(response.Error);
-        Assert.Equal(host, response.Tooling!.Value.GetRawText());
-        Assert.Equal("resource-definition-invalid", response.Tooling.Value.GetProperty("error").GetProperty("code").GetString());
+        var tooling = Assert.IsType<JsonElement>(response.Tooling);
+        Assert.Equal(host, tooling.GetRawText());
+        Assert.Equal("resource-definition-invalid", tooling.GetProperty("error").GetProperty("code").GetString());
     }
 
     [Theory]
@@ -52,8 +54,9 @@ public sealed class CandidateWorkerResponseTests
 
         var response = Parse(OuterTooling(host, ToolExitCode.Refusal), ToolExitCode.Refusal, candidate);
 
-        Assert.Equal(host, response.Tooling!.Value.GetRawText());
-        Assert.Equal(code, response.Tooling.Value.GetProperty("error").GetProperty("code").GetString());
+        var tooling = Assert.IsType<JsonElement>(response.Tooling);
+        Assert.Equal(host, tooling.GetRawText());
+        Assert.Equal(code, tooling.GetProperty("error").GetProperty("code").GetString());
     }
 
     [Theory]
