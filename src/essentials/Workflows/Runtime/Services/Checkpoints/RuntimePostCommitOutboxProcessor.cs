@@ -30,7 +30,7 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
     private readonly ILogger<RuntimePostCommitOutboxProcessor> _logger;
     private readonly FencedClaimLease<RuntimePostCommitOutboxClaim>? _claimLease;
     private readonly string _claimOwnerId = $"runtime-outbox-{Guid.NewGuid():N}";
-    private static readonly TimeSpan ClaimVisibilityTimeout = TimeSpan.FromMinutes(1);
+    private static readonly TimeSpan ClaimVisibilityTimeout = RuntimePostCommitOutboxProcessing.ClaimVisibilityTimeout;
 
     public RuntimePostCommitOutboxProcessor(
         IRuntimePostCommitOutboxStore outboxStore,
@@ -148,7 +148,7 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
             // The whole batch shares one visibility timeout but is dispatched one item at a time, so a long batch can
             // outlive the claims at its end. Each item is renewed immediately before its dispatch, and an item whose
             // claim was lost is skipped rather than dispatched again or allowed to end the batch (#2195).
-            foreach (var claim in claims)
+            foreach (var claim in ContinuationsFirst(claims))
                 processedItems.Add(await ProcessClaimedItemAsync(claim, cancellationToken));
         }
         else
@@ -179,6 +179,18 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
 
         return new RuntimePostCommitOutboxProcessResult(processedItems);
     }
+
+    // Dispatches the batch's EnqueueSchedulerWork continuations before every other kind, each part in its claim order
+    // (#2225). A continuation only enqueues work. Another kind can need an execution's mailbox: a PublishStimulus start or
+    // resume, a DispatchWorkflow parent resume (BookmarkResumeDispatcher -> agent.EnqueueAsync). A live drain holds its
+    // execution's mailbox while it waits for a continuation another deliverer claimed, so that continuation must never
+    // queue behind a dispatch waiting for the same mailbox. Reordering does not touch the claims: each item is still
+    // renewed immediately before its own dispatch.
+    private static IEnumerable<RuntimePostCommitOutboxClaim> ContinuationsFirst(IReadOnlyCollection<RuntimePostCommitOutboxClaim> claims) =>
+        claims.Where(IsContinuation).Concat(claims.Where(claim => !IsContinuation(claim)));
+
+    private static bool IsContinuation(RuntimePostCommitOutboxClaim claim) =>
+        StringComparer.Ordinal.Equals(claim.Item.Intent.Kind, RuntimePostCommitIntentKinds.EnqueueSchedulerWork);
 
     // The live-drain fast path engages only when: a live drain owns this exact execution's delivery, the request
     // targets EnqueueSchedulerWork intents (every other kind stays on the durable claim path, condition (e)), and no

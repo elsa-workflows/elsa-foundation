@@ -303,13 +303,14 @@ public static class RuntimeCoreServiceCollectionExtensions
                 serviceProvider.GetRequiredService<CheckpointRuleViolationWorkflowFaulter>(),
                 serviceProvider.GetRequiredService<IRuntimeExecutionOwnershipService>(),
                 serviceProvider.GetRequiredService<IRuntimeExecutionOwnershipContextAccessor>(),
+                serviceProvider.GetRequiredService<IRuntimePostCommitOutboxClaimStore>(),
+                serviceProvider.GetRequiredService<IPostCommitOutboxLookupStore>(),
+                serviceProvider.GetRequiredService<IWorkflowSchedulerWorkQueue>(),
                 serviceProvider.GetRequiredService<WorkflowDrainOrchestratorOptions>(),
                 serviceProvider.GetService<IRuntimeCoalescingDrainScopeFactory>(),
                 serviceProvider.GetService<IRuntimeLiveDrainDeliveryAccessor>(),
                 serviceProvider.GetService<IRuntimeCheckpointCadenceResolver>(),
-                serviceProvider.GetRequiredService<TimeProvider>(),
-                serviceProvider.GetRequiredService<IRuntimePostCommitOutboxStore>(),
-                serviceProvider.GetRequiredService<IWorkflowSchedulerWorkQueue>()));
+                serviceProvider.GetRequiredService<TimeProvider>()));
         services.TryAddScoped<WorkflowSchedulerCommandRouter>();
         services.TryAddSingleton<IWorkflowExecutionCommandExecutor, ScopedWorkflowExecutionCommandExecutor>();
         services.TryAddSingleton<InMemoryRuntimeDiagnosticsSettingsStore>();

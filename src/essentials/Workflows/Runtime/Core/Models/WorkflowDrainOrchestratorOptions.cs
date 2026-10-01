@@ -6,10 +6,18 @@ public sealed class WorkflowDrainOrchestratorOptions
     public const int DefaultOutboxDeliveryBatchSize = 64;
 
     /// <summary>
-    /// The default <see cref="ContinuationClaimWaitLimit"/>: the post-commit outbox processor's one-minute claim visibility
-    /// timeout, so a claim whose deliverer died lapses and the drain delivers the item itself, plus a 30-second margin.
+    /// What <see cref="DefaultContinuationClaimWaitLimit"/> adds to the claim visibility timeout: time for the drain to see
+    /// the lapse and deliver the item itself.
     /// </summary>
-    public static readonly TimeSpan DefaultContinuationClaimWaitLimit = TimeSpan.FromSeconds(90);
+    public static readonly TimeSpan ContinuationClaimWaitMargin = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// The default <see cref="ContinuationClaimWaitLimit"/>: the post-commit outbox processor's claim visibility timeout
+    /// (<see cref="RuntimePostCommitOutboxProcessing.ClaimVisibilityTimeout"/>), so a claim whose deliverer died lapses
+    /// within the wait and the drain delivers the item itself, plus <see cref="ContinuationClaimWaitMargin"/>.
+    /// </summary>
+    public static readonly TimeSpan DefaultContinuationClaimWaitLimit =
+        RuntimePostCommitOutboxProcessing.ClaimVisibilityTimeout + ContinuationClaimWaitMargin;
 
     public WorkflowDrainOrchestratorOptions(
         int maxDrainCycles = DefaultMaxDrainCycles,
@@ -34,8 +42,9 @@ public sealed class WorkflowDrainOrchestratorOptions
     public int OutboxDeliveryBatchSize { get; }
 
     /// <summary>
-    /// How long a drain waits, each time, for another deliverer that holds a claim on one of its execution's continuations
-    /// (#2225). When the limit passes with the claim still held, the drain stops with
+    /// How long one drain request waits, in total, for other deliverers that hold its execution's continuations (#2225).
+    /// The deadline starts at the drain's first wait and every later wait in the same request shares it, so the drain's
+    /// cycles cannot multiply the limit. When it passes with a continuation still held, the drain stops with
     /// <see cref="RuntimeSchedulerDrainStopReason.OutboxDeliveryFailed"/> rather than reporting quiescence.
     /// </summary>
     public TimeSpan ContinuationClaimWaitLimit { get; }

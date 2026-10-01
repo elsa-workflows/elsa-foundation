@@ -112,8 +112,8 @@ public sealed class RuntimeLiveDrainDeliveryTests
             liveDrain,
             coalescingSessionAccessor: null);
 
-    // With the outbox store and queue the drain checks, before it quiesces, that no other deliverer took a continuation
-    // (#2225); here none does, so the fast path's own delivery count still decides the loop (spec 106 FR-006).
+    // Before it quiesces the drain checks, through the outbox store and the queue, that no other deliverer took a
+    // continuation (#2225); here none does, so the fast path's own delivery count still decides the loop (spec 106 FR-006).
     private static WorkflowDrainOrchestrator NewOrchestrator(
         IWorkflowSchedulerDrainer drainer,
         IRuntimePostCommitOutboxProcessor processor,
@@ -127,11 +127,12 @@ public sealed class RuntimeLiveDrainDeliveryTests
             checkpointRuleViolationFaulter: TestCheckpointRuleViolationFaulter.Create(),
             ownershipService: new RuntimeExecutionOwnershipService(new InMemoryExecutionLivenessStateStore()),
             ownershipContextAccessor: new AsyncLocalRuntimeExecutionOwnershipContextAccessor(),
+            outboxClaimStore: store,
+            outboxLookupStore: store,
+            schedulerWorkQueue: queue,
             options: new WorkflowDrainOrchestratorOptions(),
             liveDrainDeliveryAccessor: liveDrain,
-            timeProvider: new FakeTimeProvider(Now),
-            outboxStore: store,
-            schedulerWorkQueue: queue);
+            timeProvider: new FakeTimeProvider(Now));
 
     private static RuntimeSchedulerWorkItem NewWorkItem(string workItemId) =>
         new(

@@ -89,11 +89,12 @@ resumption sweep could take a live drain's own continuation (spec 169 tolerated 
 then exited on "nothing delivered" with that continuation's work undrained. FR-006's "exits on quiescence" did not hold.
 Now the drain treats a continuation another deliverer holds or has just delivered as still its own: it waits, bounded by
 `WorkflowDrainOrchestratorOptions.ContinuationClaimWaitLimit`, claims the item itself once the other claim lapses, and
-drains the work before it reports `Quiesced`. FR-007 holds because the sweep keeps its unchanged path; an interim
-sweep-side deferral tied to the ownership lease was reverted. INV-1 holds with recovery at the sweep interval: no lease
-holds a crashed drain's continuation back from the sweep. INV-3's wording is still not literally true, since the sweep
-can still race the claim-free write. What it protects now holds: a race no longer changes the drain's outcome, which is
-the outcome a single writer would have reached.
+drains the work before it reports `Quiesced`. FR-007 holds because the sweep keeps its unchanged path. INV-1 holds with
+recovery at the sweep interval: no lease holds a crashed drain's continuation back from the sweep. INV-3's wording is
+still not literally true, since the sweep can still race the claim-free write. What it protects now holds: a race no
+longer changes the drain's outcome, which is the outcome a single writer would have reached. The check is not free: a
+drain that quiesces now pays two extra reads, `ListClaimedAsync` and a one-item queue list (the latter only after a
+scheduler drain that ran items). Neither writes, so the delivery-write counts below are unchanged.
 
 ## Durable-transaction-count delta per hop
 

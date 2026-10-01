@@ -16,19 +16,19 @@ public sealed class PostCommitOutboxClaimedListingContractTests : IAsyncDisposab
     private RuntimeSqliteDbContext? _context;
 
     [Fact]
-    public Task The_in_memory_store_lists_one_executions_claimed_items_of_one_kind()
+    public Task The_in_memory_store_lists_one_executions_held_items_of_one_kind()
     {
         var store = new InMemoryRuntimeCheckpointCommitStore();
-        return ListsOneExecutionsClaimedItemsOfOneKindAsync(new Backend(store, item => store.AddPendingForTestingAsync(item)));
+        return ListsOneExecutionsHeldItemsOfOneKindAsync(new Backend(store, item => store.AddPendingForTestingAsync(item)));
     }
 
     [Fact]
-    public async Task The_entity_framework_store_lists_one_executions_claimed_items_of_one_kind()
+    public async Task The_entity_framework_store_lists_one_executions_held_items_of_one_kind()
     {
         await _connection.OpenAsync();
         _context = new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(_connection).Options);
         await _context.Database.EnsureCreatedAsync();
-        await ListsOneExecutionsClaimedItemsOfOneKindAsync(PostCommitOutboxClaimedListingContract.EntityFramework(_context, "tenant-a"));
+        await ListsOneExecutionsHeldItemsOfOneKindAsync(PostCommitOutboxClaimedListingContract.EntityFramework(_context, "tenant-a"));
     }
 
     public async ValueTask DisposeAsync()

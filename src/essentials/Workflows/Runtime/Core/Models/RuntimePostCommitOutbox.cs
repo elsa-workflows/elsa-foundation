@@ -787,8 +787,10 @@ public sealed class RuntimePostCommitOutboxQuery
 
 /// <summary>
 /// Selects the items <see cref="Contracts.IRuntimePostCommitOutboxClaimStore.ListClaimedAsync"/> returns: one workflow
-/// execution's items of one intent kind that are claimed for delivery. Both filters are required, so the read stays
-/// within one execution.
+/// execution's items of one intent kind whose delivery a deliverer took on and has not settled. That is an item claimed
+/// for delivery (<see cref="RuntimePostCommitOutboxStatus.Delivering"/>) or one whose attempt failed and waits for a retry
+/// (<see cref="RuntimePostCommitOutboxStatus.FailedRetryable"/>). Both filters are required, so the read stays within one
+/// execution.
 /// </summary>
 public sealed class RuntimePostCommitOutboxClaimedQuery
 {
@@ -812,7 +814,7 @@ public sealed class RuntimePostCommitOutboxClaimedQuery
     public bool Matches(RuntimePostCommitOutboxItem item)
     {
         ArgumentNullException.ThrowIfNull(item);
-        return item.Status == RuntimePostCommitOutboxStatus.Delivering &&
+        return item.Status is RuntimePostCommitOutboxStatus.Delivering or RuntimePostCommitOutboxStatus.FailedRetryable &&
                StringComparer.Ordinal.Equals(item.Intent.WorkflowExecutionId, WorkflowExecutionId) &&
                StringComparer.Ordinal.Equals(item.Intent.Kind, IntentKind);
     }

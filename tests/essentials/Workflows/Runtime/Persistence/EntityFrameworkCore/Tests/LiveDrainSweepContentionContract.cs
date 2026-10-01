@@ -7,21 +7,12 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Workflows.Runtime.Services.Recovery;
+using Elsa.Workflows.Runtime.Tests;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
-
-/// <summary>Where a resumption sweep lands relative to a live drain's read of its own continuation.</summary>
-public enum LiveDrainSweepTiming
-{
-    /// <summary>The sweep claims and delivers the continuation before the drain reads its deliverable items.</summary>
-    BeforeTheDrainReads,
-
-    /// <summary>The sweep claims and delivers it after that read and before the drain records the delivery.</summary>
-    BetweenTheDrainsReadAndRecord
-}
 
 /// <summary>
 /// #2225: another deliverer takes a live drain's own continuation between the drain's commit and its delivery step.
@@ -32,8 +23,9 @@ public enum LiveDrainSweepTiming
 /// once its drain has run that continuation. When another deliverer, the resumption sweep in production, took the
 /// continuation first, the drain saw nothing to deliver, reported quiescence, and the caller got Accepted with no
 /// bookmark: the failure the fixture-host evidence tests hit in CI. Each scenario lets another deliverer act at the
-/// drain's read of that continuation, in its own scope and execution context as the sweep's timer would. Written once
-/// so the in-memory stores, SQLite and PostgreSQL are held to the same outcome.
+/// drain's read of that continuation, in its own scope and execution context as the sweep's timer would. Written once,
+/// as a table of scenarios each store runs through <see cref="RunAsync"/>, so the in-memory stores, SQLite and
+/// PostgreSQL are held to the same outcome and a new scenario is added in one place.
 /// </remarks>
 internal static class LiveDrainSweepContentionContract
 {
@@ -42,6 +34,41 @@ internal static class LiveDrainSweepContentionContract
     private const string HierarchySigningKey = "ef-runtime-contention-hierarchy-signing-key-32";
     private const string WorkflowExecutionId = WorkflowExecutionHarness.WorkflowExecutionId;
     private static readonly TimeSpan Patience = TimeSpan.FromSeconds(30);
+
+    private static readonly Dictionary<string, Func<Action<IServiceCollection>, Task>> All = new()
+    {
+        ["real-sweep-before-the-drains-read"] = store =>
+            ARealSweepAtTheDrainsReadLeavesTheStartWithItsBookmarkAsync(store, SweepTiming.BeforeTheDrainReads),
+        ["real-sweep-between-the-drains-read-and-record"] = store =>
+            ARealSweepAtTheDrainsReadLeavesTheStartWithItsBookmarkAsync(store, SweepTiming.BetweenTheDrainsReadAndRecord),
+        ["drain-waits-for-another-deliverer-that-holds-its-continuation"] = ADrainWaitsForAnotherDelivererThatHoldsItsContinuationAsync,
+        ["drain-delivers-a-continuation-whose-other-claim-lapsed"] = ADrainDeliversAContinuationWhoseOtherClaimLapsedAsync,
+        ["drain-whose-continuation-stays-taken-does-not-report-quiescence"] = ADrainWhoseContinuationStaysTakenDoesNotReportQuiescenceAsync
+    };
+
+    /// <summary>Where a resumption sweep lands relative to a live drain's read of its own continuation.</summary>
+    private enum SweepTiming
+    {
+        /// <summary>The sweep claims and delivers the continuation before the drain reads its deliverable items.</summary>
+        BeforeTheDrainReads,
+
+        /// <summary>The sweep claims and delivers it after that read and before the drain records the delivery.</summary>
+        BetweenTheDrainsReadAndRecord
+    }
+
+    public static TheoryData<string> Scenarios
+    {
+        get
+        {
+            var scenarios = new TheoryData<string>();
+            foreach (var scenario in All.Keys)
+                scenarios.Add(scenario);
+            return scenarios;
+        }
+    }
+
+    /// <summary>Runs one scenario on the store <paramref name="configureStore"/> selects.</summary>
+    public static Task RunAsync(string scenario, Action<IServiceCollection> configureStore) => All[scenario](configureStore);
 
     /// <summary>The runtime's default in-memory stores.</summary>
     public static void InMemory(IServiceCollection services)
@@ -64,9 +91,9 @@ internal static class LiveDrainSweepContentionContract
     /// The real resumption sweep claims and delivers the drain's continuation at the drain's read. The drain drains the
     /// work the sweep queued instead of reporting quiescence, so the start returns with its bookmark.
     /// </summary>
-    public static async Task ARealSweepAtTheDrainsReadLeavesTheStartWithItsBookmarkAsync(
+    private static async Task ARealSweepAtTheDrainsReadLeavesTheStartWithItsBookmarkAsync(
         Action<IServiceCollection> configureStore,
-        LiveDrainSweepTiming timing)
+        SweepTiming timing)
     {
         var sweep = new SweepAtDrainRead(timing);
         await using var harness = await StartAsync(configureStore, sweep);
@@ -84,7 +111,7 @@ internal static class LiveDrainSweepContentionContract
     /// Another deliverer claims the continuation before the drain reads it and finishes delivering it only once the drain
     /// is waiting for it. The drain waits, then drains the work that deliverer queued.
     /// </summary>
-    public static async Task ADrainWaitsForAnotherDelivererThatHoldsItsContinuationAsync(Action<IServiceCollection> configureStore)
+    private static async Task ADrainWaitsForAnotherDelivererThatHoldsItsContinuationAsync(Action<IServiceCollection> configureStore)
     {
         var other = new ClaimAtDrainRead("other-deliverer", TimeSpan.FromMinutes(1), deliverOnceTheDrainWaits: true);
         await using var harness = await StartAsync(configureStore, other);
@@ -102,7 +129,7 @@ internal static class LiveDrainSweepContentionContract
     /// The deliverer that claimed the continuation dies without delivering it. Its claim lapses, the drain claims the item
     /// itself and delivers it, and the start still returns with its bookmark, well inside the drain's wait limit.
     /// </summary>
-    public static async Task ADrainDeliversAContinuationWhoseOtherClaimLapsedAsync(Action<IServiceCollection> configureStore)
+    private static async Task ADrainDeliversAContinuationWhoseOtherClaimLapsedAsync(Action<IServiceCollection> configureStore)
     {
         var dead = new ClaimAtDrainRead("dead-deliverer", TimeSpan.FromMilliseconds(500), deliverOnceTheDrainWaits: false);
         await using var harness = await StartAsync(configureStore, dead, waitLimit: TimeSpan.FromSeconds(20));
@@ -120,7 +147,7 @@ internal static class LiveDrainSweepContentionContract
     /// The drain gives up without reporting quiescence: the start is answered AcceptedButFaulted, not Accepted, and the
     /// item stays with that deliverer and, after it, the sweep.
     /// </summary>
-    public static async Task ADrainWhoseContinuationStaysTakenDoesNotReportQuiescenceAsync(Action<IServiceCollection> configureStore)
+    private static async Task ADrainWhoseContinuationStaysTakenDoesNotReportQuiescenceAsync(Action<IServiceCollection> configureStore)
     {
         var stuck = new ClaimAtDrainRead("stuck-deliverer", TimeSpan.FromMinutes(10), deliverOnceTheDrainWaits: false);
         await using var harness = await StartAsync(configureStore, stuck, waitLimit: TimeSpan.FromMilliseconds(300));
@@ -150,7 +177,7 @@ internal static class LiveDrainSweepContentionContract
                 services.TryAddScoped<IRuntimeResumptionService, RuntimeResumptionService>();
                 if (waitLimit is { } limit)
                     services.Replace(ServiceDescriptor.Singleton(new WorkflowDrainOrchestratorOptions(continuationClaimWaitLimit: limit)));
-                OutboxStoreRegistration.Decorate(services, inner => new InterceptingOutboxStore(inner, interceptor));
+                OutboxStoreRegistration.DecorateWithClaimsAndLookup(services, inner => new InterceptingOutboxStore(inner, interceptor));
             })
             .Build(ActivityExecutionId);
         foreach (var initializer in harness.Services.GetServices<IShellInitializer>())
@@ -238,7 +265,7 @@ internal static class LiveDrainSweepContentionContract
     }
 
     /// <summary>Runs one real resumption sweep at the drain's read.</summary>
-    private sealed class SweepAtDrainRead(LiveDrainSweepTiming timing) : DrainReadInterceptor
+    private sealed class SweepAtDrainRead(SweepTiming timing) : DrainReadInterceptor
     {
         public List<RuntimeResumptionSweepResult> Results { get; } = [];
         public List<RuntimePostCommitOutboxItem> Claimed { get; } = [];
@@ -253,7 +280,7 @@ internal static class LiveDrainSweepContentionContract
             Results.Add(await RunAsAnotherDelivererAsync(Services, services =>
                 services.GetRequiredService<IRuntimeResumptionService>().SweepAsync(new RuntimeResumptionSweepRequest(
                     excludedWorkflowExecutionIds: new HashSet<string>(StringComparer.Ordinal) { WorkflowExecutionId })).AsTask()));
-            return timing == LiveDrainSweepTiming.BeforeTheDrainReads ? await read() : items;
+            return timing == SweepTiming.BeforeTheDrainReads ? await read() : items;
         }
 
         public override void ObserveClaims(RuntimePostCommitOutboxClaimRequest request, IEnumerable<RuntimePostCommitOutboxClaim> claims)
@@ -317,63 +344,31 @@ internal static class LiveDrainSweepContentionContract
             (IRuntimePostCommitOutboxClaimStore)services.GetRequiredService<IRuntimePostCommitOutboxStore>();
     }
 
-    private sealed class InterceptingOutboxStore(IRuntimePostCommitOutboxStore inner, DrainReadInterceptor interceptor) :
-        IRuntimePostCommitOutboxStore,
-        IRuntimePostCommitOutboxClaimStore,
-        IRuntimePostCommitOutboxClaimCompletionStore,
-        IPostCommitOutboxLookupStore
+    /// <summary>The effective outbox store, with the interceptor on the drain's reads and on every claim.</summary>
+    private sealed class InterceptingOutboxStore(IRuntimePostCommitOutboxStore inner, DrainReadInterceptor interceptor)
+        : ForwardingOutboxStore(inner)
     {
-        private IRuntimePostCommitOutboxClaimStore Claims => (IRuntimePostCommitOutboxClaimStore)inner;
-
-        public ValueTask<IReadOnlyCollection<RuntimePostCommitOutboxItem>> GetDeliverableAsync(
+        public override ValueTask<IReadOnlyCollection<RuntimePostCommitOutboxItem>> GetDeliverableAsync(
             RuntimePostCommitOutboxQuery query,
             CancellationToken cancellationToken = default) =>
-            interceptor.ReadAsync(query, () => inner.GetDeliverableAsync(query, cancellationToken));
+            interceptor.ReadAsync(query, () => base.GetDeliverableAsync(query, cancellationToken));
 
-        public ValueTask<RuntimePostCommitOutboxClaimCompletionOutcome> RecordDeliveryResultAsync(
-            RuntimePostCommitOutboxDeliveryResult result,
-            CancellationToken cancellationToken = default) =>
-            inner.RecordDeliveryResultAsync(result, cancellationToken);
-
-        public async ValueTask<IReadOnlyCollection<RuntimePostCommitOutboxClaim>> ClaimAsync(
+        public override async ValueTask<IReadOnlyCollection<RuntimePostCommitOutboxClaim>> ClaimAsync(
             RuntimePostCommitOutboxClaimRequest request,
             CancellationToken cancellationToken = default)
         {
-            var claims = await Claims.ClaimAsync(request, cancellationToken);
+            var claims = await base.ClaimAsync(request, cancellationToken);
             interceptor.ObserveClaims(request, claims);
             return claims;
         }
 
-        public ValueTask<RuntimePostCommitOutboxClaim?> RenewClaimAsync(
-            RuntimePostCommitOutboxClaim claim,
-            DateTimeOffset now,
-            TimeSpan visibilityTimeout,
-            CancellationToken cancellationToken = default) =>
-            Claims.RenewClaimAsync(claim, now, visibilityTimeout, cancellationToken);
-
-        public ValueTask RecordDeliveryResultAsync(
-            RuntimePostCommitOutboxClaim claim,
-            RuntimePostCommitOutboxDeliveryResult result,
-            CancellationToken cancellationToken = default) =>
-            Claims.RecordDeliveryResultAsync(claim, result, cancellationToken);
-
-        public async ValueTask<IReadOnlyCollection<RuntimePostCommitOutboxItem>> ListClaimedAsync(
+        public override async ValueTask<IReadOnlyCollection<RuntimePostCommitOutboxItem>> ListClaimedAsync(
             RuntimePostCommitOutboxClaimedQuery query,
             CancellationToken cancellationToken = default)
         {
-            var claimed = await Claims.ListClaimedAsync(query, cancellationToken);
+            var claimed = await base.ListClaimedAsync(query, cancellationToken);
             interceptor.ObserveClaimed(claimed);
             return claimed;
         }
-
-        public ValueTask<RuntimePostCommitOutboxClaimCompletionOutcome> CompleteClaimAsync(
-            RuntimePostCommitOutboxClaimCompletion completion,
-            CancellationToken cancellationToken = default) =>
-            ((IRuntimePostCommitOutboxClaimCompletionStore)inner).CompleteClaimAsync(completion, cancellationToken);
-
-        public ValueTask<RuntimePostCommitOutboxItem?> FindAsync(
-            string outboxItemId,
-            CancellationToken cancellationToken = default) =>
-            ((IPostCommitOutboxLookupStore)inner).FindAsync(outboxItemId, cancellationToken);
     }
 }

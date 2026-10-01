@@ -193,25 +193,16 @@ public sealed class EfRuntimePostCommitOutboxStore(
         ArgumentNullException.ThrowIfNull(query);
         cancellationToken.ThrowIfCancellationRequested();
         var scope = EfRuntimeOperationalStoreSupport.RequireScope(accessContextAccessor);
-        var scopeKey = EfRuntimeOperationalStoreSupport.Encode(scope);
-        var scopeHash = EfRuntimeOperationalStoreSupport.Hash(scope);
-        var workflowKey = EfRuntimeOperationalStoreSupport.Encode(query.WorkflowExecutionId);
-        var workflowHash = EfRuntimeOperationalStoreSupport.Hash(query.WorkflowExecutionId);
-        var intentKindHash = EfRuntimeOperationalStoreSupport.Hash(query.IntentKind);
         const int delivering = (int)RuntimePostCommitOutboxStatus.Delivering;
-        // Untracked, so a poll reads the row as it is now rather than a snapshot this context tracked when it claimed.
-        var rows = await context.RuntimePostCommitOutbox.AsNoTracking()
-            .Where(row => row.ScopeKey == scopeKey && row.ScopeKeyHash == scopeHash &&
-                          row.WorkflowExecutionId == workflowKey && row.WorkflowExecutionIdHash == workflowHash &&
-                          row.IntentKindHash == intentKindHash && row.IntentKind == query.IntentKind &&
-                          row.Status == delivering)
-            .OrderBy(row => row.ClaimableAtUtcTicks)
-            .ThenBy(row => row.RecordedAtUtcTicks)
-            .ThenBy(row => row.OutboxItemIdOrderKey)
-            .ThenBy(row => row.Id)
-            .Take(Math.Min(query.Limit, ProviderPageSize))
-            .ToArrayAsync(cancellationToken);
-        return rows.Select(row => ReadChecked(row, scope)).ToArray();
+        const int failedRetryable = (int)RuntimePostCommitOutboxStatus.FailedRetryable;
+        // Untracked (Rows), so a poll reads the row as it is now rather than a snapshot this context tracked when it claimed.
+        return await ReadPageAsync(
+            scope,
+            Rows(scope, query.WorkflowExecutionId, query.IntentKind)
+                .Where(row => row.Status == delivering || row.Status == failedRetryable)
+                .OrderBy(row => row.ClaimableAtUtcTicks),
+            query.Limit,
+            cancellationToken);
     }
 
     public async ValueTask<RuntimePostCommitOutboxClaimCompletionOutcome> RecordDeliveryResultAsync(
@@ -499,39 +490,60 @@ public sealed class EfRuntimePostCommitOutboxStore(
         CandidateSelection selection,
         CancellationToken cancellationToken)
     {
-        var scopeKey = EfRuntimeOperationalStoreSupport.Encode(scope);
-        var scopeHash = EfRuntimeOperationalStoreSupport.Hash(scope);
-        var maximumResults = Math.Min(query.Limit, ProviderPageSize);
         var nowTicks = query.Now.UtcTicks;
-        var candidates = context.RuntimePostCommitOutbox.AsNoTracking()
-            .Where(row => row.ScopeKey == scopeKey && row.ScopeKeyHash == scopeHash);
+        var candidates = Rows(scope, query.WorkflowExecutionId, query.IntentKind);
 
         if (selection == CandidateSelection.Deliverable)
             candidates = candidates.Where(row => row.DeliverableAtUtcTicks != null && row.DeliverableAtUtcTicks <= nowTicks);
         else
             candidates = candidates.Where(row => row.ClaimableIsEligible && row.ClaimableAtUtcTicks <= nowTicks);
 
-        if (query.WorkflowExecutionId is { } workflowExecutionId)
+        return await ReadPageAsync(
+            scope,
+            candidates.OrderBy(row => selection == CandidateSelection.Deliverable ? row.DeliverableAtUtcTicks : row.ClaimableAtUtcTicks),
+            query.Limit,
+            cancellationToken);
+    }
+
+    // The untracked rows of one scope, narrowed to one workflow execution and one intent kind when either is given. Every
+    // outbox listing starts here, so the scope and identity predicates are written once.
+    private IQueryable<RuntimePostCommitOutboxEntity> Rows(string scope, string? workflowExecutionId, string? intentKind)
+    {
+        var scopeKey = EfRuntimeOperationalStoreSupport.Encode(scope);
+        var scopeHash = EfRuntimeOperationalStoreSupport.Hash(scope);
+        var rows = context.RuntimePostCommitOutbox.AsNoTracking()
+            .Where(row => row.ScopeKey == scopeKey && row.ScopeKeyHash == scopeHash);
+
+        if (workflowExecutionId is not null)
         {
             var workflowKey = EfRuntimeOperationalStoreSupport.Encode(workflowExecutionId);
             var workflowHash = EfRuntimeOperationalStoreSupport.Hash(workflowExecutionId);
-            candidates = candidates.Where(row => row.WorkflowExecutionId == workflowKey && row.WorkflowExecutionIdHash == workflowHash);
+            rows = rows.Where(row => row.WorkflowExecutionId == workflowKey && row.WorkflowExecutionIdHash == workflowHash);
         }
 
-        if (query.IntentKind is { } intentKind)
+        if (intentKind is not null)
         {
             var intentKindHash = EfRuntimeOperationalStoreSupport.Hash(intentKind);
-            candidates = candidates.Where(row => row.IntentKindHash == intentKindHash && row.IntentKind == intentKind);
+            rows = rows.Where(row => row.IntentKindHash == intentKindHash && row.IntentKind == intentKind);
         }
 
-        var rows = await candidates
-            .OrderBy(row => selection == CandidateSelection.Deliverable ? row.DeliverableAtUtcTicks : row.ClaimableAtUtcTicks)
+        return rows;
+    }
+
+    // Breaks ties in the listing's own order the same way for every listing, so a page is stable across providers.
+    private static async ValueTask<IReadOnlyCollection<RuntimePostCommitOutboxItem>> ReadPageAsync(
+        string scope,
+        IOrderedQueryable<RuntimePostCommitOutboxEntity> rows,
+        int limit,
+        CancellationToken cancellationToken)
+    {
+        var page = await rows
             .ThenBy(row => row.RecordedAtUtcTicks)
             .ThenBy(row => row.OutboxItemIdOrderKey)
             .ThenBy(row => row.Id)
-            .Take(maximumResults)
+            .Take(Math.Min(limit, ProviderPageSize))
             .ToArrayAsync(cancellationToken);
-        return rows.Select(row => ReadChecked(row, scope)).ToArray();
+        return page.Select(row => ReadChecked(row, scope)).ToArray();
     }
 
     private async ValueTask<RuntimePostCommitOutboxEntity?> LoadAsync(

@@ -12,13 +12,13 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests;
 public sealed class PostCommitOutboxClaimedListingPostgreSqlSmokeTests(RuntimeBookmarksPostgreSqlFixture fixture)
 {
     [SkippableFact]
-    public async Task PostgreSql_store_lists_one_executions_claimed_items_of_one_kind()
+    public async Task PostgreSql_store_lists_one_executions_held_items_of_one_kind()
     {
         Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? "The native provider is unavailable.");
         await using var context = new RuntimePostgreSqlDbContext(
             new DbContextOptionsBuilder<RuntimePostgreSqlDbContext>().UseNpgsql(fixture.ConnectionString).Options);
         await context.Database.EnsureCreatedAsync();
-        await PostCommitOutboxClaimedListingContract.ListsOneExecutionsClaimedItemsOfOneKindAsync(
+        await PostCommitOutboxClaimedListingContract.ListsOneExecutionsHeldItemsOfOneKindAsync(
             PostCommitOutboxClaimedListingContract.EntityFramework(context, $"native-2225-{Guid.NewGuid():N}"));
     }
 }

@@ -142,28 +142,63 @@ queued is left undrained:
 
 - **Held by another deliverer.** The drain lists the execution's claimed continuations
   (`IRuntimePostCommitOutboxClaimStore.ListClaimedAsync`) and waits for those deliveries to finish, polling
-  with backoff. Then it drains the work they queued: it still holds the execution's ownership lease, so
-  nothing else would drain that work before the command returned.
-- **The other deliverer died.** Its claim lapses after the processor's one-minute visibility timeout. The
-  drain then claims the item through the durable claim path and delivers it itself; a claimant that was only
-  slow finds its renewal refused and skips the item.
+  with backoff from 10 ms to a 500 ms cap. Then it drains the work they queued: it still holds the execution's
+  ownership lease, so nothing else would drain that work before the command returned.
+- **The other deliverer died.** Its claim lapses after the processor's visibility timeout
+  (`RuntimePostCommitOutboxProcessing.ClaimVisibilityTimeout`, one minute). The drain never sleeps past the
+  earliest lapse; it then claims the item through the durable claim path and delivers it itself, and a
+  claimant that was only slow finds its renewal refused and skips the item.
 - **Already delivered.** A sweep that finished the whole delivery before the drain's read leaves only queued
-  work, so after a scheduler drain that ran dry the drain also checks its execution's queue.
-- **Bounded.** Each wait is limited by `WorkflowDrainOrchestratorOptions.ContinuationClaimWaitLimit` (90
-  seconds by default: the visibility timeout plus a margin). When the limit passes, or the other deliverer's
-  attempt failed, the drain stops with `OutboxDeliveryFailed`, the status a failed delivery of its own
-  produces, so the command answers `AcceptedButFaulted` rather than `Accepted`. The item stays with its
-  claimant and then the sweep. Cancellation and a lost lease end the wait like any other drain step.
+  work, so after a scheduler drain that ran items and stopped neither on a terminal status nor at its
+  work-item budget the drain also checks its execution's queue.
+- **The other deliverer failed it.** The listing also returns the execution's `FailedRetryable`
+  continuations, so an attempt that failed and awaits a retry is seen even when it failed before the drain's
+  first read. An awaited item that ended failed is found by looking it up once it leaves the listing. A failed
+  attempt queued nothing, so the drain stops with `OutboxDeliveryFailed`, the status a failed delivery of its
+  own produces, and the command answers `AcceptedButFaulted` rather than `Accepted`. The item's retry stays
+  with the sweep.
+- **Bounded.** `WorkflowDrainOrchestratorOptions.ContinuationClaimWaitLimit` bounds all of a drain request's
+  waiting: one deadline, set at the first wait and shared by every later one, so the drain's 64 cycles cannot
+  multiply it. It defaults to the claim visibility timeout plus `ContinuationClaimWaitMargin`, 90 seconds.
+  When it passes with a continuation still held, the drain stops with `OutboxDeliveryFailed` as above. The
+  item stays with its claimant and then the sweep. Cancellation and a lost lease end the wait like any other
+  drain step.
+
+**Continuations go first in a sweep batch.** `RuntimePostCommitOutboxProcessor` dispatches a claimed batch's
+`EnqueueSchedulerWork` items before every other kind, each part in claim order. A continuation only enqueues
+work, but another kind can need an execution's mailbox: a `PublishStimulus` start or resume, or a
+DispatchWorkflow parent resume, both reach `agent.EnqueueAsync`. A drain waiting for its continuation holds
+its execution's mailbox, so in claim order a batch holding such an item ahead of that continuation would wait
+on the drain while the drain waited on it, until the claim lapsed. Each item is still renewed immediately
+before its own dispatch (#2195).
+
+**One case stays open.** `EnqueueSchedulerWork` carries no retry policy, so every failed attempt is recorded
+`FailedFinal` at once, and `FailedFinal` items are not listed. A continuation another deliverer failed for
+good before the drain's first read is therefore not seen, and the drain still reports `Quiesced`. Listing terminal
+failures is not the fix: they stay in the outbox, so every later drain of the execution would report
+`OutboxDeliveryFailed`, and skip incident strategy resolution, for good. Telling this drain's failure from an
+older one needs either a clock comparison (a continuation's recorded time is not always the drain's: a retry
+boundary records its source work item's time) or a read of the execution's failed continuations at the start
+of every drain.
+
+**Synchronous HTTP endpoints.** A synchronous `HttpEndpoint` dispatch drains inline, bounded by the endpoint's
+`RequestTimeout`. Under contention the request can therefore wait for its continuation. With continuations
+first in a sweep batch that wait is short: the sweep reaches the continuation right after the continuations
+claimed before it, each an enqueue. It is long only when the claimant died or stalled. Then the drain waits
+up to the claim lapse, and a `RequestTimeout` shorter than that ends the request with the endpoint's timeout
+status (408 by default) while the workflow goes on through the sweep. An endpoint without a `RequestTimeout`
+waits at most the drain's wait limit.
 
 The sweep itself is unchanged, so crash recovery stays at the sweep interval. The cost is latency under
-contention: a drain whose continuation sits in a sweep batch waits until the sweep reaches that item, and at
-most until the claim lapses. That includes the case where the batch reaches, first, an item that needs the
-same execution's mailbox, held by the waiting drain; the lapse resolves it.
+contention, and two reads for a drain that quiesces: `ListClaimedAsync`, and the one-item queue read after a
+scheduler drain that ran items.
 
 The interleavings are pinned on the in-memory stores, SQLite and PostgreSQL by
 `LiveDrainSweepContentionContract`, which runs the real sweep at the drain's read, and a claimant that delivers
-late, dies, or stays stuck. The orchestrator-level outcomes, cancellation included, are in
-`WorkflowDrainContinuationSettlementTests`.
+late, dies, or stays stuck. The orchestrator-level outcomes are in `WorkflowDrainContinuationSettlementTests`:
+cancellation, failed attempts before and during the wait, the queue-read skip rules, the backoff, the lapse and
+the per-request deadline on a fake clock, and a sweep batch holding a mailbox-needing item ahead of the drain's
+continuation. `RuntimePostCommitOutboxProcessorTests` pins the batch order and its renewals.
 
 ## Crash windows
 

@@ -79,6 +79,38 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
         Assert.Null(await store.FindAsync(expected.OutboxItemId));
     }
 
+    /// <summary>
+    /// #2225: a drain asks who else holds its execution's continuations. Only the drain that owns a session ever claims an
+    /// overlay item, so the decorator answers from the durable store, with or without an active session.
+    /// </summary>
+    [Fact]
+    public async Task CoalescingOutboxListClaimed_AnswersFromTheDurableStoreWithOrWithoutASession()
+    {
+        const string workflowExecutionId = "wfexec-held-elsewhere";
+        var inner = new InMemoryRuntimeCheckpointCommitStore();
+        var accessor = new AsyncLocalRuntimeCoalescingSessionAccessor();
+        var store = new CoalescingRuntimePostCommitOutboxStore(
+            new CoalescingInner<IRuntimePostCommitOutboxStore>(inner),
+            accessor,
+            new InMemoryWorkflowExecutionStateStore());
+        await inner.AddPendingForTestingAsync(new RuntimePostCommitOutboxItem(
+            "outbox-held",
+            new RuntimePostCommitIntent("intent-held", workflowExecutionId, RuntimePostCommitIntentKinds.EnqueueSchedulerWork, Now, null, null, null),
+            RuntimePostCommitOutboxStatus.Pending,
+            Now,
+            Now));
+        var claim = Assert.Single(await inner.ClaimAsync(new RuntimePostCommitOutboxClaimRequest("sweep", Now, TimeSpan.FromMinutes(1), limit: 1)));
+        var session = new RuntimeCoalescingSession(
+            workflowExecutionId,
+            new InMemoryWorkflowSchedulerWorkQueue(),
+            new CoalescingRuntimeCheckpointPersistenceOptions());
+        var query = new RuntimePostCommitOutboxClaimedQuery(workflowExecutionId, RuntimePostCommitIntentKinds.EnqueueSchedulerWork, limit: 10);
+
+        Assert.Equal([claim.OutboxItemId], (await store.ListClaimedAsync(query)).Select(item => item.OutboxItemId));
+        using (accessor.Push(session))
+            Assert.Equal([claim.OutboxItemId], (await store.ListClaimedAsync(query)).Select(item => item.OutboxItemId));
+    }
+
     [Fact]
     public async Task ClaimsAcquiredAfterBoundaryFlush_AreCompletedAgainstDurableQueue()
     {
