@@ -13,7 +13,10 @@ namespace Elsa.Foundation.Identity.OpenIddict;
 /// JwtBearer scheme as default (with <c>??=</c>). Since our selector forwards external bearer tokens to that
 /// same scheme, we take over not only when no default is set but also when the current default IS that
 /// external scheme — the outcome is then identical for external tokens and deterministic regardless of
-/// feature registration order. A host-chosen <c>DefaultScheme</c> is always respected.
+/// feature registration order. The same holds for the interactive cookie scheme: the ASP.NET Core Identity
+/// module defaults authentication to its cookie, and the selector already routes cookie requests back to it,
+/// so taking over keeps cookie sessions working while letting bearer tokens authenticate the ambient user.
+/// A host-chosen <c>DefaultScheme</c> is always respected.
 /// </remarks>
 internal sealed class ConfigureOpenIddictDefaultAuthenticationSchemes(IOptions<OpenIddictIdentityOptions> options) :
     IConfigureOptions<AuthenticationOptions>
@@ -25,7 +28,8 @@ internal sealed class ConfigureOpenIddictDefaultAuthenticationSchemes(IOptions<O
         if (!value.Enabled || target.DefaultScheme is not null)
             return;
 
-        if (target.DefaultAuthenticateScheme is null || target.DefaultAuthenticateScheme == value.ExternalBearerScheme)
+        if (target.DefaultAuthenticateScheme is null || target.DefaultAuthenticateScheme == value.ExternalBearerScheme
+            || target.DefaultAuthenticateScheme == value.InteractiveScheme)
             target.DefaultAuthenticateScheme = OpenIddictIdentityDefaults.SelectorScheme;
 
         if (target.DefaultChallengeScheme is null || target.DefaultChallengeScheme == value.ExternalBearerScheme)

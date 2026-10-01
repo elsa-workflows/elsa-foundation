@@ -1,4 +1,6 @@
 using System.Security.Cryptography;
+using Elsa.Foundation.Identity.AspNetCoreIdentity;
+using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.Authentication;
 using Elsa.Foundation.Identity.Core.Authentication;
 using Elsa.Foundation.Identity.OpenIddict;
 using Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore;
@@ -87,6 +89,45 @@ public sealed class OpenIddictSchemeCompositionTests : IAsyncDisposable
 
         Assert.Equal(OpenIddictIdentityDefaults.SelectorScheme, options.DefaultAuthenticateScheme);
         Assert.Equal(OpenIddictIdentityDefaults.SelectorScheme, options.DefaultChallengeScheme);
+
+        static void AddOpenIddict(IServiceCollection services)
+        {
+            services.AddOpenIddictVendorForTests(
+                builder => builder.UseInMemoryDatabase($"openiddict-{Guid.NewGuid():n}"));
+            services.AddFoundationIdentityOpenIddict(options => options.IsDevelopmentOrDemo = true);
+        }
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Selector_Becomes_Default_Authenticate_Scheme_Regardless_Of_Identity_Cookie_Registration_Order(bool cookieDefaultFirst)
+    {
+        // The ASP.NET Core Identity module defaults authentication to its cookie; without the selector taking over,
+        // bearer tokens never authenticate the ambient user and every first-party bearer client is anonymous.
+        var services = new ServiceCollection();
+        services.AddLogging();
+
+        if (cookieDefaultFirst)
+        {
+            AddCookieDefault(services);
+            AddOpenIddict(services);
+        }
+        else
+        {
+            AddOpenIddict(services);
+            AddCookieDefault(services);
+        }
+
+        using var provider = services.BuildServiceProvider();
+        var options = provider.GetRequiredService<IOptions<AuthenticationOptions>>().Value;
+
+        Assert.Equal(OpenIddictIdentityDefaults.SelectorScheme, options.DefaultAuthenticateScheme);
+        Assert.Equal(OpenIddictIdentityDefaults.SelectorScheme, options.DefaultChallengeScheme);
+        Assert.Equal(AspNetCoreIdentityDefaults.CookieScheme, options.DefaultSignInScheme);
+
+        static void AddCookieDefault(IServiceCollection services) =>
+            services.AddSingleton<IConfigureOptions<AuthenticationOptions>, ConfigureEfCoreIdentityDefaultAuthenticationSchemes>();
 
         static void AddOpenIddict(IServiceCollection services)
         {
