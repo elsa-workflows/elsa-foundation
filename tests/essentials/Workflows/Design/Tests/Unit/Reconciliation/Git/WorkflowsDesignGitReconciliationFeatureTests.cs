@@ -40,6 +40,15 @@ public sealed class WorkflowsDesignGitReconciliationFeatureTests
     }
 
     [Fact]
+    public void Registers_one_clone_slot_per_shell_that_the_shell_container_releases()
+    {
+        var registration = Assert.Single(Configure(GitReconciliationRole.Writer), d => d.ServiceType == typeof(GitCloneSlot));
+
+        Assert.Equal(ServiceLifetime.Singleton, registration.Lifetime);
+        Assert.NotNull(registration.ImplementationFactory); // created, and so disposed, by the container
+    }
+
+    [Fact]
     public void Consumer_role_registers_no_exporter_or_export_task()
     {
         var services = Configure(GitReconciliationRole.Consumer);
@@ -75,6 +84,7 @@ public sealed class WorkflowsDesignGitReconciliationFeatureTests
     [InlineData(".")]
     [InlineData("..")]
     [InlineData("/etc")]
+    [InlineData(":/")]
     public void An_unusable_workflows_path_fails_registration(string workflowsPath)
     {
         var feature = new WorkflowsDesignGitReconciliationFeature { RemoteUrl = "git@example.com:acme/wf.git", WorkflowsPath = workflowsPath };

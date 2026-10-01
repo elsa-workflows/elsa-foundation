@@ -26,11 +26,7 @@ public sealed class GitWorkflowExportConvergenceTests : GitExportTest
     {
         Publish("wf-r", "R", "1.0.0");
         // The first node exports and pushes in the moment between the second node's commits and its push.
-        _second.Git.Before("push", 1, async () =>
-        {
-            await LetCommitClockAdvanceAsync();
-            await _first.Exporter.ExportAsync(CancellationToken.None);
-        });
+        _second.Git.Before("push", 1, () => _first.Exporter.ExportAsync(CancellationToken.None));
 
         await _second.Exporter.ExportAsync(CancellationToken.None);
 
@@ -47,7 +43,6 @@ public sealed class GitWorkflowExportConvergenceTests : GitExportTest
         await _second.Source.Read(CancellationToken.None);
         _second.Git.FailAt("push");
         await Assert.ThrowsAsync<InvalidOperationException>(() => _second.Exporter.ExportAsync(CancellationToken.None));
-        await LetCommitClockAdvanceAsync();
         await _first.Exporter.ExportAsync(CancellationToken.None);
 
         // The second node starts again: the import task, then the export task. Neither may throw.
@@ -151,14 +146,16 @@ public sealed class GitWorkflowExportConvergenceTests : GitExportTest
     }
 
     [Theory]
-    [InlineData("Elsa Design", "human@example.com", "committed by human@example.com")] // an amend or rebase changes the committer
-    [InlineData("Someone Else", "design@elsa.local", "Someone Else")]                   // a different author name
-    public async Task A_commit_under_the_export_identity_that_a_person_amended_is_not_discarded(string authorName, string committerEmail, string reported)
+    [InlineData("Elsa Design", "design@elsa.local", "human@example.com", "committed by human@example.com")] // an amend or rebase changes the committer
+    [InlineData("Someone Else", "design@elsa.local", "design@elsa.local", "Someone Else")]                  // a different author name
+    [InlineData("Elsa Design", "human@example.com", "design@elsa.local", "<human@example.com>")]             // a different author email
+    public async Task A_commit_under_the_export_identity_that_a_person_amended_is_not_discarded(
+        string authorName, string authorEmail, string committerEmail, string reported)
     {
         Publish("wf-h", "H", "1.0.0");
         await _second.Exporter.ExportAsync(CancellationToken.None);
         await _git.RunAsync(_second.CachePath, CancellationToken.None,
-            "-c", $"user.name={authorName}", "-c", "user.email=design@elsa.local", "-c", $"committer.email={committerEmail}",
+            "-c", $"user.name={authorName}", "-c", $"user.email={authorEmail}", "-c", $"committer.email={committerEmail}",
             "commit", "--amend", "--no-edit", "--allow-empty", "--reset-author");
         var amended = Head(_second.CachePath);
         await AdvanceRemoteAsync("main");
@@ -167,6 +164,27 @@ public sealed class GitWorkflowExportConvergenceTests : GitExportTest
 
         Assert.Equal(amended, Head(_second.CachePath));
         Assert.Single(_second.WorkspaceLog.Entries, entry => entry.Level == LogLevel.Error && entry.Message.Contains(reported));
+    }
+
+    [Fact]
+    public async Task A_divergence_that_comes_back_after_a_repair_is_reported_again()
+    {
+        Publish("wf-g", "G", "1.0.0");
+        await _second.Source.Read(CancellationToken.None);
+        await CommitByHandAsync(_second.CachePath);
+        await _first.Exporter.ExportAsync(CancellationToken.None);
+        await _second.Source.Read(CancellationToken.None);
+        await _second.Source.Read(CancellationToken.None); // still diverged: not reported again
+
+        // The operator reconciles the clone with the remote by hand; the next pass finds it healthy.
+        await _git.RunAsync(_second.CachePath, CancellationToken.None, "reset", "--hard", "refs/remotes/origin/main");
+        await _second.Source.Read(CancellationToken.None);
+        // Then it diverges again.
+        await CommitByHandAsync(_second.CachePath);
+        await AdvanceRemoteAsync("main");
+        await _second.Source.Read(CancellationToken.None);
+
+        Assert.Equal(2, _second.WorkspaceLog.Entries.Count(entry => entry.Level == LogLevel.Error && entry.Message.Contains("operator@example.com")));
     }
 
     private async Task<string> CommitByHandAsync(string repository)

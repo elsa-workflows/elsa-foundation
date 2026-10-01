@@ -22,6 +22,11 @@ public interface IGitWorkspace
     string RepositoryPath { get; }
 }
 ```
+*Amended 2026-10-01 ([#2197](https://github.com/elsa-workflows/elsa-foundation/issues/2197); [ADR 0034](../../../docs/adr/0034-workflow-definitions-reconcile-from-and-export-to-git.md), D11 amendment):* `RepositoryPath` is an explicit
+`LocalCachePath`, else the clone in the shell's clone slot (`GitCloneSlot`, a singleton per shell). The workspace also
+exposes `Task<string> RunRemoteAsync(CancellationToken, params string[])`, which runs a fetch or push in the clone with the
+credentials applied (a token through the environment of that git process, never argv or disk); the exporter pushes
+through it.
 
 ### `IGitWorkflowExporter`
 Writer-only export reconciler (set-diff sweep, D4/R11).

@@ -264,17 +264,26 @@ moved. When the remote has moved it never stops: only behind, it fast-forwards; 
 the remote when every commit the remote lacks was made by the export identity (author name, author
 email and committer email all match, so a person's amend or rebase of an export commit makes it theirs;
 they are output the export regenerates from the catalog), and otherwise it stays as it is and logs an
-error, once per clone per process, so a commit the export did not make is never discarded. Uncommitted
+error, so a commit the export did not make is never discarded. The error is logged once per clone, and
+again only if the problem returns after the clone was found healthy (up to date or only ahead). Uncommitted
 changes under the workflows path are residue of an export that stopped before its commit, and are
 discarded at every pass, so the import and the export both read only what is committed; uncommitted
 changes elsewhere in the clone are kept. When moving the clone onto the remote would overwrite one of
 those, the move is refused: the clone stays as it stands, an error is logged, and the start does not fail,
 the same posture as a commit the export did not make. A clone that stays behind the remote ends the pass's
-rebuilding at once, with one warning, rather than retrying a move that cannot happen. The default clone
-path is per source and per process, so two processes on one machine never share a clone; it is not
-reused across restarts, and `LocalCachePath` is set to keep one. `WorkflowsPath` must be a relative
-folder path (not empty, rooted, `.` or `..`), since it reaches git as the pathspec of `clean` and
-`restore`; the feature refuses to register otherwise.
+rebuilding at once, with one warning, rather than retrying a move that cannot happen. With no
+`LocalCachePath` the clone lives in a clone slot, `{temp}/elsa-gitops/{source hash}/slot-{n}/clone`,
+the hash covering remote, branch and role, so a Consumer never takes over a Writer's clone: each shell holds the lowest slot whose lock file it can open exclusively, so two processes on one
+machine, or two shells of one process, never share a clone. The operating system frees the slot of a
+process however it ends, so the next process takes it with its clone: the Writer clone persists across
+restarts, and the slots never outnumber the processes that ran at once. On Unix the slot directories are
+the user's alone (0700); one owned by another user, or a symbolic link, is refused. An explicit
+`LocalCachePath` is used as given, one per process. `WorkflowsPath` must be a relative folder path (not
+empty, rooted, `.` or `..`, and not starting with `:`), since it reaches git as the pathspec of `clean`
+and `restore`; the feature refuses to register otherwise, and every git command that takes it runs with
+`--literal-pathspecs`, so pathspec magic or a wildcard names only itself. A `Token` reaches git through a
+credential helper, scoped to the remote's host, that reads it from the environment of each git process
+reaching the remote: it is on neither the command line nor the disk.
 
 ## How the pieces map to existing seams
 
@@ -296,7 +305,7 @@ folder path (not empty, rooted, `.` or `..`), since it reaches git as the pathsp
   "RemoteUrl": "git@github.com:acme/workflows.git",
   "Branch": "main",
   "WorkflowsPath": "workflows",
-  "LocalCachePath": "",              // defaults to a per-source, per-process directory under the OS temp dir
+  "LocalCachePath": "",              // defaults to a clone slot under the OS temp dir: one per running process, reused after a restart
   "Role": "Consumer",                // Writer | Consumer  (drives clone mode + export, D11)
   "CredentialsMode": "SshKey",       // SshKey | Token | HostDefault
   "Token": "",                        // [ManifestSetting(Secret=true)] — Token mode only

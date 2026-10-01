@@ -16,7 +16,11 @@ public sealed class GitReconciliationOptions
     /// <summary>Repo-relative root under which definitions live. Default <c>workflows</c>.</summary>
     public string WorkflowsPath { get; set; } = "workflows";
 
-    /// <summary>Local working-clone directory. Empty → a per-source, per-process path under the OS temp dir (see <see cref="ResolveLocalCachePath"/>).</summary>
+    /// <summary>
+    /// Local working-clone directory, used as given; give each process its own. Empty → a clone slot of this source under
+    /// the OS temp dir, one per running process or shell and reused by the next one after a restart (see
+    /// <c>Services.GitCloneSlot</c>, #2197).
+    /// </summary>
     public string LocalCachePath { get; set; } = string.Empty;
 
     /// <summary>The role (Writer|Consumer) — drives clone mode and export (D11).</summary>
@@ -41,36 +45,20 @@ public sealed class GitReconciliationOptions
     public string ResolvedSourceId => $"{RemoteUrl}#{Branch}";
 
     /// <summary>
-    /// The effective local clone path. Explicit <see cref="LocalCachePath"/> when set, else a directory under the OS
-    /// temp area keyed by a hash of remote+branch, so distinct sources never collide, and by the process id, so two
-    /// processes of one machine never share a clone and fight over its <c>index.lock</c> (#2197). The default clone
-    /// is therefore not reused across restarts: the process that comes next clones again. A deployment that wants a clone
-    /// that outlives its process sets <see cref="LocalCachePath"/>, and gives each process its own.
-    /// </summary>
-    public string ResolveLocalCachePath()
-    {
-        if (!string.IsNullOrWhiteSpace(LocalCachePath))
-            return Path.GetFullPath(LocalCachePath);
-
-        var key = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
-            System.Text.Encoding.UTF8.GetBytes(ResolvedSourceId)))[..16].ToLowerInvariant();
-        return Path.Join(Path.GetTempPath(), "elsa-gitops", key, Environment.ProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture));
-    }
-
-    /// <summary>
     /// Fails fast on a <see cref="WorkflowsPath"/> that is not a plain relative path inside the clone. It reaches git as
     /// a pathspec of <c>clean -f -d</c> and <c>restore</c>, so an empty, rooted, <c>.</c> or <c>..</c> value would aim
-    /// them at the whole clone or outside it.
+    /// them at the whole clone or outside it. Git reads it literally, so a wildcard names only itself; a leading
+    /// <c>:</c>, which git would otherwise read as pathspec magic such as <c>:/</c> or <c>:(top)</c>, is refused as well.
     /// </summary>
     public void ValidateWorkflowsPath()
     {
         if (string.IsNullOrWhiteSpace(WorkflowsPath)
             || Path.IsPathRooted(WorkflowsPath)
-            || WorkflowsPath[0] is '/' or '\\'
+            || WorkflowsPath[0] is '/' or '\\' or ':'
             || WorkflowsPath.Split('/', '\\').Any(segment => segment is "." or ".."))
             throw new InvalidOperationException(
                 $"{nameof(GitReconciliationOptions)}.{nameof(WorkflowsPath)} must be a relative path to a folder inside the repository, " +
-                $"such as 'workflows': not empty, not rooted, and with no '.' or '..' segment. Got '{WorkflowsPath}'.");
+                $"such as 'workflows': not empty, not rooted, not starting with ':', and with no '.' or '..' segment. Got '{WorkflowsPath}'.");
     }
 
     /// <summary>The branch export pushes to: explicit <see cref="GitExportOptions.Branch"/> else <see cref="Branch"/>.</summary>

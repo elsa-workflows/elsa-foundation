@@ -11,8 +11,7 @@ internal static class GitRemoteRefs
 {
     public static string Tracking(string branch) => $"refs/remotes/origin/{branch}";
 
-    public static string[] FetchArgs(IReadOnlyList<string> credentialArgs, string branch) =>
-        [.. credentialArgs, "fetch", "origin", $"+refs/heads/{branch}:{Tracking(branch)}"];
+    public static string[] FetchArgs(string branch) => ["fetch", "origin", $"+refs/heads/{branch}:{Tracking(branch)}"];
 
     /// <summary>
     /// How many commits HEAD has that the remote-tracking ref of <paramref name="branch"/> lacks (ahead) and the other

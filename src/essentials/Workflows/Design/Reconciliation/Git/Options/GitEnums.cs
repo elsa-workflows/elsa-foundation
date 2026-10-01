@@ -24,7 +24,10 @@ public enum GitCredentialsMode
     /// <summary>An SSH private key at <c>KeyPath</c> (configured via <c>core.sshCommand</c>).</summary>
     SshKey,
 
-    /// <summary>An HTTPS token (configured via a 0600 credential-store file).</summary>
+    /// <summary>
+    /// An HTTPS token, handed to git by a credential helper scoped to the remote's host that reads it from the environment
+    /// of each git process: never on the command line, never written to disk (#2197).
+    /// </summary>
     Token,
 }
 

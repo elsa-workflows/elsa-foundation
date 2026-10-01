@@ -35,7 +35,7 @@ form (a pure-whitespace transform via `GitCanonicalJson`), so reviewable diffs n
 | Role | Import | Export | Clone mode |
 |---|---|---|---|
 | `Consumer` | ✅ read-only | ✕ | disposable mirror (`fetch` + `reset --hard`) |
-| `Writer` | ✅ bootstrap + idempotent | ✅ | persistent working copy (`fetch`; keeps its unpushed export commits while the remote has not moved, otherwise is brought to the remote, see below) |
+| `Writer` | ✅ bootstrap + idempotent | ✅ | persistent working copy in a clone slot that outlives the process (`fetch`; keeps its unpushed export commits while the remote has not moved, across restarts too, otherwise is brought to the remote, see below) |
 
 Single-writer is enforced structurally: a Writer pushes fast-forward-only (a divergent remote is
 **refused**, never forced/merged), and the reconciler's Model X tripwire surfaces a same-`(id,version)`
@@ -58,7 +58,9 @@ writer per repository branch is kept by the remote, not by a lock or an election
   made by the export identity (author name, author email and committer email all
   `Elsa Design <design@elsa.local>`, so a human's amend or rebase of an export commit counts as theirs),
   since the export regenerates them from the catalog, and otherwise is left untouched with an error in
-  the log, once per clone per process, because a commit anyone else made there is never discarded.
+  the log, because a commit anyone else made there is never discarded. The error is logged once per
+  clone, and again only if the problem comes back after the clone was found healthy (up to date or only
+  ahead of the remote) in between.
   Uncommitted changes under `WorkflowsPath` are residue of an interrupted export and are discarded at
   every pass, so keep no work of your own there. Uncommitted changes elsewhere in the clone are kept,
   and a move to the remote that would overwrite one is refused the same way: the clone stays as it
@@ -69,13 +71,23 @@ writer per repository branch is kept by the remote, not by a lock or an election
 - **A distinct `Export.Branch`.** The writer rebuilds only onto the branch it tracks. A push to another
   export branch that was refused because that branch moved is logged as an error, without failing the
   start, until the export branch is brought back in line with the tracked one.
-- **One clone per process.** The default `LocalCachePath` is a per-source directory under the OS temp
-  dir that includes the process id, so two processes on one machine never share a clone and collide on
-  its `index.lock`. The cost is that a default clone is not reused across restarts: the next process
-  clones again. Set `LocalCachePath` to keep a clone, and give each process its own.
+- **One clone slot per process or shell.** With `LocalCachePath` empty the clone lives in a clone slot,
+  `{temp}/elsa-gitops/{source hash}/slot-{n}/clone`, the hash covering remote, branch and role (so a
+  Consumer never takes over a Writer's clone). Each shell takes the lowest slot whose lock file
+  it can open exclusively and holds it until the shell stops, so two processes on one machine, or two
+  shells of one process, never share a clone and collide on its `index.lock`. The operating system
+  releases the lock of a process however it ends, so the next process takes the slot with its clone:
+  the Writer clone is persistent, keeping its unpushed export commits across a restart, and there are
+  never more slots than processes that ran at once. On Unix every directory from `elsa-gitops` down is
+  the user's alone (0700), and one owned by another user, or a symbolic link, is refused. An explicit
+  `LocalCachePath` is used as given, with no slot: give each process its own. A host that sets
+  `DOTNET_SYSTEM_IO_DISABLEFILELOCKING` turns off the exclusive locks slots rely on, so it sets
+  `LocalCachePath` per process instead.
 - **`WorkflowsPath` is validated.** It must be a relative folder path inside the repository: not empty,
-  not rooted, with no `.` or `..` segment. It reaches git as the pathspec of `clean -f -d` and
-  `restore`, so the feature refuses to register with anything else.
+  not rooted, not starting with `:`, with no `.` or `..` segment. It reaches git as the pathspec of
+  `clean -f -d` and `restore`, so the feature refuses to register with anything else. Every git
+  command that takes it runs with `--literal-pathspecs`, so pathspec magic (`:/`, `:(top)`) or a
+  wildcard (`*`) in it, or in a definition id, names only itself and never reaches past it.
 
 ## Configuration (CShells feature `WorkflowsDesignGitReconciliation`)
 
@@ -95,8 +107,12 @@ Enable the feature on a shell. **Do not** enable it in `shells.baseline.json` wi
 }
 ```
 
-Credentials are applied as per-invocation `-c …` git config (or a 0600 credential file for Token) so
+Credentials are applied as per-invocation `-c …` git config on the commands that reach the remote, so
 nothing secret rides the command line; `GIT_TERMINAL_PROMPT=0` guarantees fail-fast on missing creds.
+A Token is never written to disk either: a credential helper scoped to the remote's scheme and host
+reads it from the `ELSA_GIT_TOKEN` environment variable of each such git process, which only the
+user running it can read. That helper replaces the machine's helpers for that host, so they neither
+answer in its place nor receive the token to store.
 
 ## Boundaries
 

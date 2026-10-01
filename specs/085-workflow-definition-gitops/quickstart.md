@@ -35,7 +35,9 @@ The export task writes+commits any catalog version missing from git as `indent(c
 > *Amended 2026-10-01 ([#2197](https://github.com/elsa-workflows/elsa-foundation/issues/2197); [ADR 0034](../../docs/adr/0034-workflow-definitions-reconcile-from-and-export-to-git.md), D7 and D11 amendments):* the Writer clone is not ff-only and
 > may reset onto the remote when every commit it holds that the remote lacks was made by the export identity; it never
 > discards a commit anyone else made. Every Writer node runs the export at start, without a lock; a push refused
-> because another writer pushed first is rebuilt onto the remote and swept again. The default clone path is per process.
+> because another writer pushed first is rebuilt onto the remote and swept again. With no `LocalCachePath` the clone
+> lives in a clone slot under the OS temp dir, one per running process or shell; after a restart the next process
+> takes the slot with its clone, so the Writer clone and its unpushed export commits persist.
 
 ## Verify locally (tests)
 ```bash

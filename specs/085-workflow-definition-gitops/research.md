@@ -137,7 +137,9 @@ lazy-scan-per-call):
 > `merge --ff-only`. It fetches, then decides from how HEAD stands against the remote: up to date or only ahead, it
 > stays; only behind, it fast-forwards; diverged, it resets to the remote when every commit the remote lacks was made
 > by the export identity, else stays with an error logged. It never discards a commit anyone else made, and none of
-> this throws. The default `LocalCachePath` is a per-source, per-process directory under the OS temp dir.
+> this throws. With `LocalCachePath` empty the clone lives in a clone slot, `{temp}/elsa-gitops/{source hash}/slot-{n}/clone`:
+> each shell holds the lowest slot whose lock file it can open exclusively, and the next process takes it with its
+> clone after a restart. On Unix the slot directories are the user's alone (0700); another user's is refused.
 
 **Rationale.** FR-012/D11 verbatim. Lazy-ensure keeps the first reconcile pass self-seeding
 (bootstrap, D11/edge-case) and re-runs pick up remote changes. `--single-branch` limits fetch cost.
@@ -167,6 +169,15 @@ lib (FR-001 "just add a ProjectReference").
 
 **Alternatives rejected.** (a) `-c http.extraHeader="AUTHORIZATION: bearer …"` — token visible in
 `ps`/argv. (b) Extending `IGitClient` with an env-bag — out of scope; the shared lib stays untouched.
+
+> *Amended 2026-10-01 ([#2197](https://github.com/elsa-workflows/elsa-foundation/issues/2197); [ADR 0034](../../docs/adr/0034-workflow-definitions-reconcile-from-and-export-to-git.md), D11 amendment):* alternative (b) is now the decision for `Token`. The
+> credential-store file was one per source shared by every process, written in place, readable by others until it was
+> chmod'ed, in a predictable temp path another local user could pre-create, and never deleted; and git handed the token
+> to every other helper configured on the machine to store. `IGitClient.RunAsync` gained an overload that adds
+> environment variables to one git process, and every command that reaches the remote carries
+> `-c credential.{scheme}://{host}.helper=` (clearing the machine's helpers for that host) and a helper that answers
+> `get` with `x-access-token` and the token read from `ELSA_GIT_TOKEN`, which that process carries. Nothing is written
+> to disk; a process's environment is readable only by its own user. `SshKey` and `HostDefault` are unchanged.
 
 ## R9 — FR-008a: gate metadata apply to the newest version (the carried-over defect)
 

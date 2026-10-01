@@ -58,7 +58,7 @@ public sealed class GitWorkflowExporter(
 
             try
             {
-                await PushAsync(repoPath, cancellationToken);
+                await PushAsync(cancellationToken);
                 return;
             }
             catch (InvalidOperationException)
@@ -123,7 +123,7 @@ public sealed class GitWorkflowExporter(
     private async Task<HashSet<string>> CommittedPathsAsync(string repoPath, CancellationToken cancellationToken)
     {
         var listing = await gitClient.RunAsync(repoPath, cancellationToken,
-            "ls-tree", "-r", "-z", "--name-only", "HEAD", "--", _options.WorkflowsPath);
+            GitPathspecs.Literal, "ls-tree", "-r", "-z", "--name-only", "HEAD", "--", _options.WorkflowsPath);
         return listing.Split('\0', StringSplitOptions.RemoveEmptyEntries).ToHashSet(StringComparer.Ordinal);
     }
 
@@ -179,7 +179,7 @@ public sealed class GitWorkflowExporter(
 
             var path = RepositoryPath(repoPath, VersionFile(repoPath, definition.Id, version.Version));
             var commit = await gitClient.RunAsync(repoPath, cancellationToken,
-                "log", "-1", "--format=%H", "--no-renames", "--diff-filter=A", "HEAD", "--", path);
+                GitPathspecs.Literal, "log", "-1", "--format=%H", "--no-renames", "--diff-filter=A", "HEAD", "--", path);
             if (commit.Length > 0)
                 await gitClient.RunAsync(repoPath, cancellationToken, "tag", "--force", tag, commit);
         }
@@ -188,8 +188,8 @@ public sealed class GitWorkflowExporter(
     /// <summary>Stages only the given path and commits it under the machine identity (never <c>add -A</c>).</summary>
     private async Task CommitAsync(string repoPath, string path, string message, CancellationToken cancellationToken)
     {
-        await gitClient.RunAsync(repoPath, cancellationToken, "add", "--", path);
-        await gitClient.RunAsync(repoPath, cancellationToken, [.. GitExportIdentity.CommitArgs, "commit", "-m", message, "--", path]);
+        await gitClient.RunAsync(repoPath, cancellationToken, GitPathspecs.Literal, "add", "--", path);
+        await gitClient.RunAsync(repoPath, cancellationToken, [.. GitExportIdentity.CommitArgs, GitPathspecs.Literal, "commit", "-m", message, "--", path]);
     }
 
     /// <summary>
@@ -199,7 +199,7 @@ public sealed class GitWorkflowExporter(
     /// </summary>
     private async Task<bool> IsAheadOfRemoteAsync(string repoPath, CancellationToken cancellationToken)
     {
-        if (!ExportsToTrackedBranch && !await TryFetchExportBranchAsync(repoPath, cancellationToken))
+        if (!ExportsToTrackedBranch && !await TryFetchExportBranchAsync(cancellationToken))
             return true;
 
         return (await GitRemoteRefs.AheadBehindAsync(gitClient, repoPath, ExportBranch, cancellationToken)).Ahead > 0;
@@ -207,14 +207,14 @@ public sealed class GitWorkflowExporter(
 
     /// <summary>Whether the remote export branch has commits HEAD lacks, which makes a refused push a lost race.</summary>
     private async Task<bool> RemoteMovedAsync(string repoPath, CancellationToken cancellationToken) =>
-        await TryFetchExportBranchAsync(repoPath, cancellationToken)
+        await TryFetchExportBranchAsync(cancellationToken)
         && (await GitRemoteRefs.AheadBehindAsync(gitClient, repoPath, ExportBranch, cancellationToken)).Behind > 0;
 
-    private async Task<bool> TryFetchExportBranchAsync(string repoPath, CancellationToken cancellationToken)
+    private async Task<bool> TryFetchExportBranchAsync(CancellationToken cancellationToken)
     {
         try
         {
-            await gitClient.RunAsync(repoPath, cancellationToken, GitRemoteRefs.FetchArgs(workspace.CredentialArgs, ExportBranch));
+            await workspace.RunRemoteAsync(cancellationToken, GitRemoteRefs.FetchArgs(ExportBranch));
             return true;
         }
         catch (InvalidOperationException)
@@ -223,13 +223,12 @@ public sealed class GitWorkflowExporter(
         }
     }
 
-    private async Task PushAsync(string repoPath, CancellationToken cancellationToken)
+    private async Task PushAsync(CancellationToken cancellationToken)
     {
         // No --force: git refuses a non-fast-forward push by default, so a divergent remote is rejected
         // (surfaced, never forced or merged — the D7 single-writer gate).
         LogPush(ExportBranch);
-        await gitClient.RunAsync(repoPath, cancellationToken,
-            [.. workspace.CredentialArgs, "push", "origin", $"HEAD:{ExportBranch}"]);
+        await workspace.RunRemoteAsync(cancellationToken, "push", "origin", $"HEAD:{ExportBranch}");
     }
 
     private string VersionFile(string repoPath, string definitionId, string version) =>

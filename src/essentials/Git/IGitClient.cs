@@ -14,6 +14,14 @@ public interface IGitClient
     Task<string> RunAsync(string workingDirectory, CancellationToken cancellationToken, params string[] arguments);
 
     /// <summary>
+    /// Awaits a Git command as <see cref="RunAsync(string, CancellationToken, string[])"/> does, with
+    /// <paramref name="environment"/> added to the environment of that one Git process. For a value that must stay off the
+    /// command line, such as a token a credential helper reads: unlike an argument, the environment of a process is
+    /// readable only by its own user.
+    /// </summary>
+    Task<string> RunAsync(string workingDirectory, IReadOnlyDictionary<string, string> environment, CancellationToken cancellationToken, params string[] arguments);
+
+    /// <summary>
     /// Runs a read-only Git command synchronously and returns its trimmed standard output, or an empty
     /// string on any failure.
     /// </summary>
