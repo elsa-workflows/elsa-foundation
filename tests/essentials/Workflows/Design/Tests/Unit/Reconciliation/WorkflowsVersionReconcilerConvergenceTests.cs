@@ -326,18 +326,7 @@ public sealed class WorkflowsVersionReconcilerConvergenceTests : IAsyncLifetime
                 IsSourceOwned = stored.IsSourceOwned
             }));
 
-    private static async Task<Exception?> FailureOf(Task pass)
-    {
-        try
-        {
-            await pass;
-            return null;
-        }
-        catch (Exception failure)
-        {
-            return failure;
-        }
-    }
+    private static Task<Exception?> FailureOf(Task pass) => Record.ExceptionAsync(() => pass);
 
     private Task RenameAsync(DesignOperationKey key, string name, string definitionId = DefinitionId) => InScopeAsync(async services =>
     {

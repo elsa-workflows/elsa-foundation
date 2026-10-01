@@ -8,6 +8,7 @@ using Elsa.Activities.Design.Persistence.Core.Exceptions;
 using Elsa.Activities.Design.Persistence.Core.Services;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Activities.Design.Persistence.EntityFrameworkCore;
+using Elsa.Activities.Design.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Activities.Design.Reconciliation.Handlers;
 using Elsa.Activities.Design.Reconciliation.Options;
 using Elsa.Activities.Design.Reconciliation.Services;
@@ -146,6 +147,35 @@ public sealed class ReconcilerColdStartRacePostgreSqlTests(PublishingPostgreSqlC
     [InlineData(true)] // The source marks the definition deleted at first import.
     public async Task Two_nodes_cold_starting_against_new_content_converge_on_one_definition_version_and_publication(bool deletedInSource) =>
         await new ReconcilerColdStartRace(PublishingNativeProvider.PostgreSql, await CreateDatabasesAsync(), deletedInSource).RunAsync();
+
+    /// <summary>
+    /// The checkpoint reads the watermark, then the definition's current revision, in one read-committed transaction. A
+    /// checkpoint that commits between the two leaves a current revision that already opens at the sequence this write
+    /// is about to use. That is a lost race, and must not surface as the context's own identity conflict (#2189).
+    /// </summary>
+    [SkippableFact]
+    public async Task A_checkpoint_committed_between_the_watermark_and_current_revision_reads_is_a_lost_race()
+    {
+        var databases = await CreateDatabasesAsync();
+        var access = TestAccess.Scoped("default");
+        var definition = new ActivityDefinition
+        {
+            Id = "stale-checkpoint", TenantId = "default", ActivityTypeKey = "test.stale", Category = "Tests",
+            DisplayName = "Stale checkpoint", CreatedAt = ActivityUpgradeFixtures.Now, LastModifiedAt = ActivityUpgradeFixtures.Now
+        };
+        var authoring = ActivityUpgradeSeed.Authoring(definition.Id, null, "default");
+        var mutation = new EfActivityManagementProjectionMutation(ActivityUpgradeFixtures.Now, [new(definition, authoring)], [], []);
+
+        var competing = new BeforeFirstReadInterceptor("elsa_activity_management_definitions", async () =>
+        {
+            await using var other = PublishingNativeProvider.PostgreSql.Design(databases.ActivitiesDesign, []);
+            await new EfActivityManagementProjectionWriter(other, access).WriteAsync(mutation);
+        });
+        await using var db = PublishingNativeProvider.PostgreSql.Design(databases.ActivitiesDesign, [competing]);
+
+        await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() => new EfActivityManagementProjectionWriter(db, access).WriteAsync(mutation));
+        Assert.True(competing.Fired);
+    }
 
     /// <summary>Creates this run's database for each module on the server, with its schema.</summary>
     private async Task<ReconcilerDatabases> CreateDatabasesAsync()

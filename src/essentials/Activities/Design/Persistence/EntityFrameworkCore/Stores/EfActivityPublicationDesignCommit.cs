@@ -21,7 +21,7 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Stores;
 /// exactly when it commits. The draft, the authoring state and both derived projections move under their own
 /// optimistic concurrency tokens, so a concurrent publication loses here as it would in one transaction.
 /// Every refusal is an <see cref="InvalidOperationException"/>; nothing is left tracked afterwards. Finding the version
-/// already published, or losing a uniqueness race, is the narrower <see cref="ActivityVersionAlreadyPublishedException"/>.
+/// already published, or losing a uniqueness or concurrency race on a source-owned publication, is the narrower <see cref="ActivityVersionAlreadyPublishedException"/>.
 /// </remarks>
 public sealed class EfActivityPublicationDesignCommit
 {
@@ -184,10 +184,15 @@ public sealed class EfActivityPublicationDesignCommit
                 [new EfActivityManagementDefinitionChange(definition, authoring)],
                 [],
                 [commit.Publication]), cancellationToken);
-        }, $"source-owned activity version publication '{commit.Publication.DefinitionVersionId}'", commit.Publication.DefinitionVersionId, cancellationToken);
+        }, $"source-owned activity version publication '{commit.Publication.DefinitionVersionId}'", commit.Publication.DefinitionVersionId, cancellationToken, lostRaceIsAlreadyPublished: true);
     }
 
-    private async Task CommitAsync(Func<Task> stage, string subject, string definitionVersionId, CancellationToken cancellationToken)
+    /// <param name="lostRaceIsAlreadyPublished">
+    /// Reports an optimistic-concurrency loss as <see cref="ActivityVersionAlreadyPublishedException"/>, as a uniqueness loss
+    /// is. A source-owned publication loses either way to another node publishing the same version, and the caller reads
+    /// the stored publication back to tell that from a different one.
+    /// </param>
+    private async Task CommitAsync(Func<Task> stage, string subject, string definitionVersionId, CancellationToken cancellationToken, bool lostRaceIsAlreadyPublished = false)
     {
         db.ChangeTracker.Clear();
         IDbContextTransaction? transaction = null;
@@ -200,7 +205,10 @@ public sealed class EfActivityPublicationDesignCommit
         catch (DbUpdateConcurrencyException exception)
         {
             await RollbackAsync(transaction);
-            throw new InvalidOperationException($"The {subject} lost an optimistic concurrency race and was rolled back.", exception);
+            var message = $"The {subject} lost an optimistic concurrency race and was rolled back.";
+            throw lostRaceIsAlreadyPublished
+                ? new ActivityVersionAlreadyPublishedException(definitionVersionId, message, exception)
+                : new InvalidOperationException(message, exception);
         }
         catch (DesignPersistenceException exception) when (
             exception.InnerException is DbUpdateException providerFailure &&
@@ -326,7 +334,10 @@ public sealed class EfActivityPublicationDesignCommit
             throw Conflict($"Catalog version '{commit.CatalogVersion.Id}' is already bound to different content.");
 
         await EnsurePublicationAbsentAsync(commit.Publication, cancellationToken);
-        await EnsureAbsentAsync(db.ActivityDefinitionVersionLayouts, commit.Layout.Id, commit.Layout.TenantId, $"Activity version layout '{commit.Layout.Id}'", cancellationToken);
+        // A source-owned layout commits with its publication, so one that exists is another node's publication landing
+        // after the check above: the version is published, not a conflict.
+        if (await InScope(EfActivityDesignStores.ById(db.ActivityDefinitionVersionLayouts.AsNoTracking(), commit.Layout.Id), commit.Layout.TenantId).AnyAsync(cancellationToken))
+            throw new ActivityVersionAlreadyPublishedException(commit.Publication.DefinitionVersionId, $"Activity version layout '{commit.Layout.Id}' already exists.");
         return new(definition, authoring, version is not null);
     }
 
