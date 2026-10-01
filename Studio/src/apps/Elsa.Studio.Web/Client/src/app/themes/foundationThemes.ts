@@ -340,6 +340,89 @@ const elsaCloud = definition(
   }
 );
 
-export const foundationThemeIds = ["meridian", "drift", "schematic", "atelier", "elsa-cloud"] as const;
+// Signal: an instrument panel. Olive-tinted neutrals, hairline borders, tight corners, mono labels and a single
+// phosphor-lime accent (hue 125). Light shifts to hue 135, a deeper ink-green, because the lime itself washes out on a
+// pale ground; the accent keeps its identity without matching the dark modes exactly. Mono is carried by the display
+// face, so titles read like panel legends. Density comes from smaller type-size tokens (tokens.css); the mono eyebrow
+// labels and status chips are a small scoped stylesheet (signal.css).
+const signalHue = 125;
+const signalLightHue = 135;
 
-export const foundationThemeDefinitions: StudioThemeDefinition[] = [meridian, drift, schematic, atelier, elsaCloud];
+const signal = definition(
+  "signal",
+  "Signal",
+  "An instrument panel: hairline borders, tight corners, mono legends and one phosphor-lime accent.",
+  {
+    sans: `"Geist Variable", "Geist", ${sansFallback}`,
+    display: `"JetBrains Mono Variable", "JetBrains Mono", ${monoFallback}`,
+    mono: `"JetBrains Mono Variable", "JetBrains Mono", ${monoFallback}`
+  },
+  { radiusSm: "2px", radius: "3px", radiusMd: "3px", radiusLg: "4px", radiusXl: "6px" },
+  "classic",
+  {
+    light: mode({
+      scheme: "light", hue: signalHue, chroma: 0.01,
+      background: 0.972, card: 0.999, muted: 0.948, border: 0.875, input: 0.999, sidebar: 0.955, foreground: 0.2, mutedForeground: 0.48,
+      primary: oklch(0.5, 0.15, signalLightHue), primaryForeground: white,
+      wash: oklch(0.93, 0.05, signalHue), activeForeground: oklch(0.34, 0.1, signalLightHue)
+    }),
+    dark: mode({
+      scheme: "dark", hue: signalHue, chroma: 0.014,
+      background: 0.15, card: 0.185, muted: 0.225, border: 0.285, input: 0.165, sidebar: 0.165, foreground: 0.94, mutedForeground: 0.72,
+      primary: oklch(0.88, 0.22, signalHue), primaryForeground: oklch(0.19, 0.05, signalHue),
+      wash: oklch(0.3, 0.075, signalHue), activeForeground: oklch(0.92, 0.17, signalHue)
+    }),
+    dim: mode({
+      scheme: "dim", hue: signalHue, chroma: 0.02,
+      background: 0.27, card: 0.305, muted: 0.34, border: 0.4, input: 0.285, sidebar: 0.25, foreground: 0.95, mutedForeground: 0.79,
+      primary: oklch(0.84, 0.2, signalHue), primaryForeground: oklch(0.2, 0.05, signalHue),
+      wash: oklch(0.39, 0.08, signalHue), activeForeground: oklch(0.93, 0.14, signalHue)
+    }),
+    highContrast: highContrast(oklch(0.92, 0.22, signalHue), signalHue)
+  }
+);
+
+// Dusk: dim-first. Violet slate with an amber highlight. Dim is the hero mode (a lifted violet ground, amber accent
+// and amber-filled active navigation); Light and Dark share the violet and keep it as the accent.
+const duskHue = 292;
+const duskAmberHue = 80;
+const duskAmber = oklch(0.83, 0.15, duskAmberHue);
+const duskAmberInk = oklch(0.2, 0.05, 70);
+
+const dusk = definition(
+  "dusk",
+  "Dusk",
+  "Dim-first: violet slate with an amber highlight, tuned for long low-light sessions.",
+  {
+    sans: `"Instrument Sans Variable", "Instrument Sans", ${sansFallback}`,
+    mono: `"JetBrains Mono Variable", "JetBrains Mono", ${monoFallback}`
+  },
+  { radiusSm: "7px", radius: "10px", radiusMd: "12px", radiusLg: "16px", radiusXl: "20px" },
+  "classic",
+  {
+    light: mode({
+      scheme: "light", hue: duskHue, chroma: 0.014,
+      background: 0.966, card: 0.998, muted: 0.945, border: 0.89, input: 0.998, sidebar: 0.945, foreground: 0.22, mutedForeground: 0.5,
+      primary: oklch(0.5, 0.2, 288), primaryForeground: white,
+      wash: oklch(0.93, 0.04, duskHue), activeForeground: oklch(0.4, 0.2, 288)
+    }),
+    dark: mode({
+      scheme: "dark", hue: duskHue, chroma: 0.024,
+      background: 0.14, card: 0.18, muted: 0.22, border: 0.28, input: 0.16, sidebar: 0.155, foreground: 0.95, mutedForeground: 0.73,
+      primary: oklch(0.7, 0.17, 290), primaryForeground: oklch(0.17, 0.05, 290),
+      wash: oklch(0.29, 0.07, duskHue), activeForeground: oklch(0.86, 0.1, 290)
+    }),
+    dim: mode({
+      scheme: "dim", hue: duskHue, chroma: 0.04,
+      background: 0.265, card: 0.31, muted: 0.35, border: 0.415, input: 0.285, sidebar: 0.24, foreground: 0.95, mutedForeground: 0.8,
+      primary: duskAmber, primaryForeground: duskAmberInk,
+      wash: oklch(0.4, 0.07, duskHue), activeForeground: duskAmberInk,
+      overrides: { sidebarActive: duskAmber }
+    }),
+    highContrast: highContrast(oklch(0.86, 0.17, duskAmberHue), duskAmberHue)
+  }
+);
+
+export const foundationThemeIds = ["meridian", "drift", "schematic", "atelier", "elsa-cloud", "signal", "dusk"] as const;
+
+export const foundationThemeDefinitions: StudioThemeDefinition[] = [meridian, drift, schematic, atelier, elsaCloud, signal, dusk];

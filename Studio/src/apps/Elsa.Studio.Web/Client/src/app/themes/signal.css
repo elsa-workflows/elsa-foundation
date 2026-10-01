@@ -1,0 +1,34 @@
+/*
+ * Signal — the chrome a theme definition cannot carry.
+ *
+ * Colours, typography and radii come from the definition (foundationThemes.ts) and elevation from
+ * tokens.css. What lives here is the instrument-panel legend treatment, all keyed on the theme:
+ * small labels, chips and pills set in the mono face, with squared chip corners.
+ */
+
+/* Legends are mono: the breadcrumb above each page title, the navigation section headings and the
+   status chips and pills. */
+html[data-theme="signal"] .breadcrumb,
+html[data-theme="signal"] .nav-heading,
+html[data-theme="signal"] .studio-status-chip,
+html[data-theme="signal"] .studio-status-pill {
+  font-family: var(--font-mono);
+  letter-spacing: 0.04em;
+}
+
+/* The two eyebrow legends are also small, spaced capitals. They are dimmed in the shared rules (opacity
+   .6); here they stay full strength because mono at this size needs the contrast. */
+html[data-theme="signal"] .breadcrumb,
+html[data-theme="signal"] .nav-heading {
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 1;
+}
+
+/* Chips and pills follow the tight Signal corners rather than the pill shape. */
+html[data-theme="signal"] .studio-status-chip,
+html[data-theme="signal"] .studio-status-pill {
+  border-radius: var(--radius-sm);
+}

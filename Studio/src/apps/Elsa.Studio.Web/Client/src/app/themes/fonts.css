@@ -1,5 +1,5 @@
 /*
- * Self-hosted typefaces for the built-in themes (Meridian, Drift, Schematic, Atelier, Elsa Cloud).
+ * Self-hosted typefaces for the built-in themes (Meridian, Drift, Schematic, Atelier, Elsa Cloud, Signal, Dusk).
  *
  * Bundled rather than fetched from a font CDN so Studio stays usable offline and in locked-down
  * networks. These only declare @font-face rules: a browser downloads a face the first time an

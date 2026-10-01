@@ -21,7 +21,7 @@ public class ThemeConfiguration
     public string ThemesMode { get; set; } = "AddToBuiltIns";
 
     /// <summary>
-    /// Default theme ID to select on first load (e.g., "material-design").
+    /// Default theme ID to select on first load (e.g., "meridian").
     /// </summary>
     public string? DefaultThemeId { get; set; }
 }

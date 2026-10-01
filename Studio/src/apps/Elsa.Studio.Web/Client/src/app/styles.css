@@ -2,6 +2,7 @@
 @import "./themes/fonts.css";
 @import "./themes/layouts.css";
 @import "./themes/elsaCloud.css";
+@import "./themes/signal.css";
 
 :root {
   /* Typography */
@@ -4223,96 +4224,6 @@ textarea:focus {
   height: 15px;
 }
 
-/* Material Design theme: flat color fields, compact 4px geometry, and purposeful elevation. */
-html[data-theme="material-design"] .sidebar {
-  border-right: 0;
-  box-shadow: var(--shadow-sm);
-  position: relative;
-  z-index: 3;
-}
-
-html[data-theme="material-design"] .topbar {
-  border-bottom: 0;
-  background: var(--sidebar);
-  box-shadow: var(--shadow-md);
-  backdrop-filter: none;
-}
-
-html[data-theme="material-design"][data-theme-mode="light"] .topbar {
-  background: var(--accent);
-}
-
-html[data-theme="material-design"][data-theme-mode="light"] .topbar h1,
-html[data-theme="material-design"][data-theme-mode="light"] .topbar .breadcrumb {
-  color: var(--accent-foreground);
-}
-
-html[data-theme="material-design"][data-theme-mode="light"] .topbar .breadcrumb {
-  opacity: 0.84;
-}
-
-html[data-theme="material-design"][data-theme-mode="light"] .topbar-actions > a,
-html[data-theme="material-design"][data-theme-mode="light"] .topbar-actions > button {
-  border-color: color-mix(in srgb, var(--accent-foreground) 22%, transparent);
-  background: color-mix(in srgb, var(--accent-foreground) 8%, transparent);
-  color: var(--accent-foreground);
-}
-
-html[data-theme="material-design"][data-theme-mode="light"] .topbar-actions > a:hover,
-html[data-theme="material-design"][data-theme-mode="light"] .topbar-actions > button:hover {
-  border-color: color-mix(in srgb, var(--accent-foreground) 32%, transparent);
-  background: color-mix(in srgb, var(--accent-foreground) 12%, transparent);
-  color: var(--accent-foreground);
-}
-
-html[data-theme="material-design"][data-theme-mode="light"] .console-stream-panel,
-html[data-theme="material-design"][data-theme-mode="light"] .console-stream-page {
-  --cs-accent: var(--accent);
-  --cs-accent-text: var(--accent-foreground);
-  --cs-accent-soft: color-mix(in srgb, var(--accent) 10%, transparent);
-}
-
-html[data-theme="material-design"] .host-health-strip,
-html[data-theme="material-design"] .admin-card,
-html[data-theme="material-design"] .studio-card,
-html[data-theme="material-design"] .diagnostic-row,
-html[data-theme="material-design"] .empty-state,
-html[data-theme="material-design"] .error-state,
-html[data-theme="material-design"] .studio-inspector,
-html[data-theme="material-design"] .studio-stat-tile {
-  border-color: color-mix(in srgb, var(--border) 76%, transparent);
-  box-shadow: var(--shadow-sm);
-}
-
-html[data-theme="material-design"] .admin-card:hover,
-html[data-theme="material-design"] .studio-card:hover {
-  border-color: color-mix(in srgb, var(--primary) 52%, var(--border));
-  box-shadow: var(--shadow-md);
-}
-
-html[data-theme="material-design"] .studio-button.studio-button-primary {
-  box-shadow: var(--shadow-sm);
-  letter-spacing: 0.02em;
-  transition:
-    box-shadow var(--transition-fast),
-    filter var(--transition-fast),
-    transform var(--transition-fast);
-}
-
-html[data-theme="material-design"] .studio-button.studio-button-primary:hover:not(:disabled) {
-  box-shadow: var(--shadow-md);
-  transform: translateY(-1px);
-}
-
-html[data-theme="material-design"] .studio-button.studio-button-primary:active:not(:disabled) {
-  box-shadow: var(--shadow-sm);
-  transform: translateY(0);
-}
-
-html[data-theme="material-design"] .studio-tabs button {
-  letter-spacing: 0.02em;
-}
-
 html[data-theme="black-glass"] body {
   background: var(--studio-blueprint-bg);
   background-size: var(--studio-blueprint-bg-size);
@@ -4796,86 +4707,6 @@ html[data-theme="stone"] .nav-section a.has-active-child {
     0 10px 20px color-mix(in srgb, var(--studio-accent) 10%, transparent);
 }
 
-html[data-theme="paper"] .sidebar,
-html[data-theme="paper"] .topbar,
-html[data-theme="paper"] .bottom-panel,
-html[data-theme="paper"] .studio-card,
-html[data-theme="paper"] .admin-card,
-html[data-theme="paper"] .theme-dropdown {
-  outline: 1px solid color-mix(in srgb, white 36%, transparent);
-  box-shadow:
-    var(--studio-material-shadow),
-    inset 0 1px 0 color-mix(in srgb, white 42%, transparent),
-    inset 0 -1px 0 color-mix(in srgb, #7c6847 10%, transparent);
-}
-
-html[data-theme="paper"] .topbar,
-html[data-theme="paper"] .bottom-panel-tabs,
-html[data-theme="paper"] .bottom-panel-resize-handle {
-  border-style: dotted;
-}
-
-html[data-theme="paper"] .host-health-strip,
-html[data-theme="paper"] .studio-card,
-html[data-theme="paper"] .admin-card,
-html[data-theme="paper"] .diagnostic-row,
-html[data-theme="paper"] .empty-state,
-html[data-theme="paper"] .error-state,
-html[data-theme="paper"] .theme-dropdown,
-html[data-theme="paper"] .sidebar-search {
-  border-color: color-mix(in srgb, var(--studio-material-edge) 72%, transparent);
-  background:
-    linear-gradient(180deg, color-mix(in srgb, white 34%, transparent), transparent 52%),
-    var(--studio-material-texture),
-    color-mix(in srgb, var(--studio-surface) 88%, transparent);
-  background-size: auto, var(--studio-material-texture-size), auto;
-}
-
-html[data-theme="paper"] .studio-card,
-html[data-theme="paper"] .admin-card,
-html[data-theme="paper"] .diagnostic-row,
-html[data-theme="paper"] .empty-state,
-html[data-theme="paper"] .error-state {
-  border-style: dashed;
-}
-
-html[data-theme="paper"] .topbar-actions > a,
-html[data-theme="paper"] .topbar-actions > button,
-html[data-theme="paper"] .host-health-refresh,
-html[data-theme="paper"] .bottom-panel-tab-list button,
-html[data-theme="paper"] .bottom-panel-action-button,
-html[data-theme="paper"] .theme-toggle-button,
-html[data-theme="paper"] .theme-selector-button {
-  border-color: color-mix(in srgb, var(--studio-material-edge) 78%, transparent);
-  background:
-    var(--studio-material-texture),
-    color-mix(in srgb, var(--studio-surface-raised) 78%, transparent);
-  background-size: var(--studio-material-texture-size), auto;
-  box-shadow: inset 0 1px 0 color-mix(in srgb, white 48%, transparent);
-}
-
-html[data-theme="paper"] .sidebar {
-  position: relative;
-}
-
-html[data-theme="paper"] .sidebar::before {
-  content: "";
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: 8px;
-  background:
-    linear-gradient(#d2c2a1, #eadcc5),
-    linear-gradient(90deg, color-mix(in srgb, #5a4630 18%, transparent), transparent);
-  border-right: 1px solid color-mix(in srgb, #8b7758 26%, transparent);
-  pointer-events: none;
-}
-
-html[data-theme="paper"] .nav-section a.active,
-html[data-theme="paper"] .nav-section a:hover,
-html[data-theme="paper"] .nav-section a.has-active-child {
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, #245ca3 22%, transparent);
-}
-
 html[data-theme="blueprint"] .topbar,
 html[data-theme="blueprint"] .sidebar,
 html[data-theme="blueprint"] .bottom-panel,
@@ -4894,50 +4725,6 @@ html[data-theme="blueprint"] .theme-dropdown {
     linear-gradient(90deg, color-mix(in srgb, white 5%, transparent) 1px, transparent 1px),
     var(--studio-material-panel-bg);
   background-size: 24px 24px, 24px 24px, auto;
-}
-
-html[data-theme="ceramic"][data-theme-mode="dark"] .sidebar {
-  color: #f4f2ec;
-}
-
-html[data-theme="ceramic"][data-theme-mode="dark"] .sidebar .nav-section a {
-  color: color-mix(in srgb, white 78%, transparent);
-}
-
-html[data-theme="ceramic"][data-theme-mode="dark"] .sidebar .nav-section a.active,
-html[data-theme="ceramic"][data-theme-mode="dark"] .sidebar .nav-section a:hover,
-html[data-theme="ceramic"][data-theme-mode="dark"] .sidebar .nav-section a.has-active-child {
-  background: linear-gradient(180deg, color-mix(in srgb, white 16%, transparent), color-mix(in srgb, black 8%, transparent));
-  color: white;
-}
-
-html[data-theme="ceramic"][data-theme-mode="light"] .sidebar .nav-section a {
-  color: color-mix(in srgb, #1f211f 74%, transparent);
-}
-
-html[data-theme="ceramic"][data-theme-mode="light"] .sidebar .nav-section a.active,
-html[data-theme="ceramic"][data-theme-mode="light"] .sidebar .nav-section a:hover,
-html[data-theme="ceramic"][data-theme-mode="light"] .sidebar .nav-section a.has-active-child {
-  background: linear-gradient(180deg, color-mix(in srgb, white 72%, transparent), color-mix(in srgb, #d9d4c8 54%, transparent));
-  color: #1f211f;
-  text-shadow: none;
-}
-
-html[data-theme="carbon"][data-theme-mode="dark"] .sidebar,
-html[data-theme="carbon"][data-theme-mode="dark"] .topbar,
-html[data-theme="carbon"][data-theme-mode="dark"] .bottom-panel,
-html[data-theme="carbon"][data-theme-mode="dark"] .studio-card,
-html[data-theme="carbon"][data-theme-mode="dark"] .admin-card,
-html[data-theme="carbon"][data-theme-mode="dark"] .theme-dropdown {
-  text-shadow: 0 1px 0 color-mix(in srgb, black 55%, transparent);
-}
-
-html[data-theme="carbon"] .nav-section a.active,
-html[data-theme="carbon"] .nav-section a:hover,
-html[data-theme="carbon"] .nav-section a.has-active-child,
-html[data-theme="carbon"] .theme-selector-button:hover,
-html[data-theme="carbon"] .theme-toggle-button:hover {
-  box-shadow: var(--studio-material-shadow), 0 0 18px color-mix(in srgb, var(--studio-accent) 13%, transparent);
 }
 
 html[data-theme="brass-instrument"] .brand,
@@ -4970,52 +4757,6 @@ html[data-theme="brass-instrument"] .admin-card,
 html[data-theme="brass-instrument"] .theme-dropdown {
   box-shadow: var(--studio-material-shadow),
     inset 0 0 0 1px color-mix(in srgb, #f1d992 12%, transparent);
-}
-
-html[data-theme="walnut-workshop"] .sidebar,
-html[data-theme="walnut-workshop"] .topbar,
-html[data-theme="walnut-workshop"] .bottom-panel,
-html[data-theme="walnut-workshop"] .studio-card,
-html[data-theme="walnut-workshop"] .admin-card,
-html[data-theme="walnut-workshop"] .theme-dropdown,
-html[data-theme="walnut-workshop"] .wf-palette,
-html[data-theme="walnut-workshop"] .wf-inspector {
-  outline: 1px solid color-mix(in srgb, var(--studio-material-edge) 28%, transparent);
-  outline-offset: -1px;
-}
-
-html[data-theme="walnut-workshop"] .wf-node {
-  border-width: 2px;
-  border-color: var(--studio-material-edge-strong);
-  color: var(--studio-accent-text);
-  text-shadow: 0 1px 0 color-mix(in srgb, black 42%, transparent);
-}
-
-html[data-theme="walnut-workshop"] .wf-node small {
-  color: color-mix(in srgb, var(--studio-accent-text) 78%, transparent);
-}
-
-html[data-theme="walnut-workshop"] .nav-section a.active,
-html[data-theme="walnut-workshop"] .nav-section a:hover,
-html[data-theme="walnut-workshop"] .nav-section a.has-active-child,
-html[data-theme="walnut-workshop"] .bottom-panel-tab-list button.active,
-html[data-theme="walnut-workshop"] .wf-panel-tab-list button.active,
-html[data-theme="walnut-workshop"] .theme-item:hover,
-html[data-theme="walnut-workshop"] .theme-item[data-highlighted],
-html[data-theme="walnut-workshop"] .theme-item.active {
-  color: var(--studio-accent-text);
-  text-shadow: 0 1px 0 color-mix(in srgb, black 54%, transparent);
-}
-
-html[data-theme="walnut-workshop"] .wf-panel-tab-list button.active {
-  background: var(--studio-material-active-bg);
-}
-
-html[data-theme="walnut-workshop"] .nav-section-header,
-html[data-theme="walnut-workshop"] .theme-dropdown-title,
-html[data-theme="walnut-workshop"] .bottom-panel-tab-list button.active {
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
 }
 
 /* ==========================================================================

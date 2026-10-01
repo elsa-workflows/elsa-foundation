@@ -1497,7 +1497,7 @@ function browserVersion(
 }
 
 const theme = searchParams.get("theme");
-document.documentElement.dataset.theme = theme === "black-glass" ? "black-glass" : "harbor";
+document.documentElement.dataset.theme = theme === "black-glass" ? "black-glass" : "meridian";
 document.documentElement.dataset.themeMode = theme === "black-glass" ? "dark" : "light";
 createRoot(document.getElementById("root")!).render(
   publicationReviewFixture

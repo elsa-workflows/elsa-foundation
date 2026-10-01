@@ -1,20 +1,14 @@
 // @vitest-environment node
 
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { allThemeModes, getTheme, getThemeModeDefinition } from "../app/themes/presets";
+import { parseOklch, read } from "./themeTestUtils";
 
-const read = (path: string) => readFileSync(new URL(path, import.meta.url), "utf8");
 const tokensCss = read("../app/ui/tokens.css");
 const elsaCloudCss = read("../app/themes/elsaCloud.css");
 const stylesCss = read("../app/styles.css");
 
 const cloud = getTheme("elsa-cloud")!;
-
-function parseOklch(value: string) {
-  const [lightness, chroma, hue] = value.match(/^oklch\(([\d.]+) ([\d.]+) ([\d.]+)\)$/)!.slice(1).map(Number);
-  return { lightness, chroma, hue };
-}
 
 describe("Elsa Cloud palette", () => {
   it("is a near-black, neutral dark ground with cards one step lighter", () => {

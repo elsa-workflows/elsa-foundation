@@ -6625,15 +6625,6 @@ html[data-theme="black-glass"] .availability-search .wf-search {
   box-shadow: var(--wf-well-shadow);
 }
 
-html[data-theme="paper"] .react-flow__edge-path,
-html[data-theme="paper"] .wf-node .react-flow__handle {
-  filter: none;
-}
-
-html[data-theme="paper"] .wf-node {
-  transform: rotate(-0.2deg);
-}
-
 html[data-theme="blueprint"] .wf-node,
 html[data-theme="blueprint"] .wf-palette,
 html[data-theme="blueprint"] .wf-inspector,

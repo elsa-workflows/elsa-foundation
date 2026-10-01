@@ -105,14 +105,4 @@ describe("material theme visual contracts", () => {
     expect(disabledRule).toContain("color: var(--studio-text-muted)");
     expect(disabledRule).toContain("opacity: 1");
   });
-
-  it("keeps Walnut Workshop navigation text legible on hover", () => {
-    const hoverRule = ruleBody(
-      stylesCss,
-      'html[data-theme="walnut-workshop"] .nav-section a:hover'
-    );
-
-    expect(hoverRule).toContain("color: var(--studio-accent-text)");
-    expect(hoverRule).toContain("text-shadow:");
-  });
 });

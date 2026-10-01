@@ -86,56 +86,13 @@ html[data-theme-mode="dark"] {
 }
 
 /*
- * Google Material Design treatment for the Elsa 3-compatible palette. This is deliberately
- * separate from `data-theme-material`, which denotes Studio's textured physical materials.
- */
-html[data-theme="material-design"] {
-  --font-sans: "Roboto", "Segoe UI", Arial, sans-serif;
-  --radius-sm: 2px;
-  --radius: 4px;
-  --radius-md: 4px;
-  --radius-lg: 8px;
-  --radius-xl: 12px;
-  --shadow-sm:
-    0 1px 2px rgb(15 23 42 / 0.16),
-    0 1px 3px rgb(15 23 42 / 0.12);
-  --shadow-md:
-    0 2px 4px -1px rgb(15 23 42 / 0.18),
-    0 4px 8px rgb(15 23 42 / 0.12);
-  --shadow-lg:
-    0 6px 10px -2px rgb(15 23 42 / 0.18),
-    0 4px 14px rgb(15 23 42 / 0.12);
-  --shadow-xl:
-    0 12px 18px -4px rgb(15 23 42 / 0.2),
-    0 8px 28px rgb(15 23 42 / 0.14);
-  --studio-surface-raised: #ffffff;
-  --studio-accent-soft: color-mix(in srgb, var(--primary) 12%, transparent);
-  --studio-focus: var(--ring);
-}
-
-html[data-theme="material-design"][data-theme-mode="dark"] {
-  --shadow-sm:
-    0 1px 2px rgb(0 0 0 / 0.36),
-    0 1px 3px rgb(0 0 0 / 0.3);
-  --shadow-md:
-    0 2px 4px -1px rgb(0 0 0 / 0.42),
-    0 4px 8px rgb(0 0 0 / 0.32);
-  --shadow-lg:
-    0 6px 10px -2px rgb(0 0 0 / 0.46),
-    0 4px 14px rgb(0 0 0 / 0.36);
-  --shadow-xl:
-    0 12px 18px -4px rgb(0 0 0 / 0.5),
-    0 8px 28px rgb(0 0 0 / 0.4);
-  --studio-surface-raised: #1e293b;
-}
-
-/*
- * Signature themes — Meridian, Drift, Schematic, Atelier, Elsa Cloud.
+ * Signature themes — Meridian, Drift, Schematic, Atelier, Elsa Cloud, Signal, Dusk.
  *
  * Their colours, fonts and radii come from the theme definitions (foundationThemes.ts) through
  * ThemeProvider. What lives here is what a definition cannot carry: elevation recipes and a few
  * layer-2 refinements. Every one of these themes defines all four modes; a dark-scheme block
- * therefore covers both Dark and Dim: the shared one below for the first four, and Elsa Cloud's own.
+ * therefore covers both Dark and Dim: the shared one below for Meridian, Drift, Schematic, Atelier and Dusk,
+ * and Elsa Cloud's and Signal's own.
  */
 html[data-theme="meridian"] {
   --shadow-sm: 0 1px 2px oklch(0.25 0.03 265 / 0.07);
@@ -191,12 +148,48 @@ html[data-theme="elsa-cloud"] {
   --studio-title-weight: 600;
 }
 
-html:is([data-theme="meridian"], [data-theme="drift"], [data-theme="schematic"], [data-theme="atelier"])[data-theme-mode="dark"] {
+/* Signal is an instrument panel: a hairline border separates surfaces and the shadows stay almost flat in every
+   mode. This is its light recipe; Dark and Dim override it below. Titles are semibold, not bold. */
+html[data-theme="signal"] {
+  --shadow-sm: 0 1px 0 oklch(0.2 0.02 125 / 0.05);
+  --shadow-md: 0 1px 2px oklch(0.2 0.02 125 / 0.06), 0 4px 10px -6px oklch(0.2 0.02 125 / 0.1);
+  --shadow-lg: 0 1px 3px oklch(0.2 0.02 125 / 0.07), 0 10px 24px -10px oklch(0.2 0.02 125 / 0.16);
+  --shadow-xl: 0 2px 6px oklch(0.2 0.02 125 / 0.08), 0 18px 40px -12px oklch(0.2 0.02 125 / 0.22);
+  --studio-surface-raised: var(--card);
+  --studio-accent-soft: color-mix(in srgb, var(--primary) 12%, transparent);
+  --studio-title-weight: 600;
+  /* Density is the feature: a step down on every type-size token, in all modes. */
+  --studio-page-title-size: 18px;
+  --studio-section-title-size: 14px;
+  --studio-body-size: 12.5px;
+  --studio-label-size: 11px;
+}
+
+/* Dusk's light recipe: soft violet-tinted shadows. Dark and Dim use the shared dark recipe below. */
+html[data-theme="dusk"] {
+  --shadow-sm: 0 1px 2px oklch(0.25 0.05 292 / 0.07);
+  --shadow-md: 0 1px 2px oklch(0.25 0.05 292 / 0.05), 0 6px 16px -4px oklch(0.25 0.05 292 / 0.12);
+  --shadow-lg: 0 2px 6px oklch(0.25 0.05 292 / 0.05), 0 18px 44px -10px oklch(0.25 0.05 292 / 0.2);
+  --shadow-xl: 0 4px 10px oklch(0.25 0.05 292 / 0.06), 0 28px 64px -12px oklch(0.25 0.05 292 / 0.26);
+  --studio-surface-raised: var(--card);
+  --studio-accent-soft: color-mix(in srgb, var(--primary) 12%, transparent);
+}
+
+html:is([data-theme="meridian"], [data-theme="drift"], [data-theme="schematic"], [data-theme="atelier"], [data-theme="dusk"])[data-theme-mode="dark"] {
   --shadow-sm: 0 1px 2px oklch(0 0 0 / 0.3);
   --shadow-md: 0 1px 2px oklch(0 0 0 / 0.3), 0 8px 20px -6px oklch(0 0 0 / 0.45);
   --shadow-lg: 0 2px 6px oklch(0 0 0 / 0.3), 0 22px 50px -12px oklch(0 0 0 / 0.6);
   --shadow-xl: 0 4px 10px oklch(0 0 0 / 0.35), 0 30px 70px -14px oklch(0 0 0 / 0.66);
   --studio-accent-soft: color-mix(in srgb, var(--primary) 18%, transparent);
+}
+
+/* Signal's dark recipe: near-flat, the hairline border does the separating. */
+html[data-theme="signal"][data-theme-mode="dark"] {
+  --shadow-sm: 0 1px 0 oklch(0 0 0 / 0.3);
+  --shadow-md: 0 1px 2px oklch(0 0 0 / 0.3), 0 4px 10px -6px oklch(0 0 0 / 0.45);
+  --shadow-lg: 0 1px 3px oklch(0 0 0 / 0.32), 0 10px 24px -10px oklch(0 0 0 / 0.5);
+  --shadow-xl: 0 2px 6px oklch(0 0 0 / 0.34), 0 18px 40px -12px oklch(0 0 0 / 0.56);
+  --studio-accent-soft: color-mix(in srgb, var(--primary) 16%, transparent);
 }
 
 /* Elsa Cloud's dark recipe: lighter and tighter than the shared one, matching the console's subtle shadows. */
@@ -441,91 +434,11 @@ html[data-theme="stone"] {
     0 20px 34px color-mix(in srgb, black 52%, transparent),
     inset 0 1px 0 color-mix(in srgb, white 15%, transparent),
     inset 0 -1px 0 color-mix(in srgb, black 55%, transparent);
-  /* Steel-blue raised send button, mirroring paper/ceramic/brass. */
+  /* Steel-blue raised send button, mirroring brass. */
   --studio-material-send-bg: linear-gradient(180deg, #3d7ba6, #245f88);
   --studio-material-send-text: #f2f8fb;
   /* Selected sidebar items read as a clearly lighter raised slab. */
   --studio-material-active-bg: color-mix(in srgb, var(--studio-accent) 20%, #2c363c);
-}
-
-html[data-theme="paper"] {
-  color-scheme: light;
-  --radius: 3px;
-  --radius-sm: 3px;
-  --radius-md: 4px;
-  --radius-lg: 6px;
-  --studio-bg: #ebe2d0;
-  --studio-surface: #f7f1e5;
-  --studio-surface-muted: #eadfcb;
-  --studio-surface-raised: #fffaf0;
-  --studio-text: #26251f;
-  --studio-text-muted: #6c604f;
-  --studio-border: #d8cbae;
-  --studio-accent: #245ca3;
-  --studio-accent-text: #fffaf0;
-  --studio-success-fg: #2f7b4d;
-  --studio-warning-fg: #8a6420;
-  --studio-danger-fg: #a34035;
-  --studio-material-edge: color-mix(in srgb, #8c7856 36%, transparent);
-  --studio-material-edge-strong: color-mix(in srgb, #7f6b4b 54%, transparent);
-  --studio-material-texture: url("../../assets/materials/paper-vellum-tile.png");
-  --studio-material-texture-size: 430px 430px;
-  --studio-material-panel-bg:
-    linear-gradient(180deg, color-mix(in srgb, white 52%, transparent), color-mix(in srgb, #d6c39d 20%, transparent)),
-    var(--studio-material-texture),
-    linear-gradient(180deg, #fbf5e8, #eee4d0);
-  --studio-material-panel-bg-strong:
-    linear-gradient(180deg, color-mix(in srgb, white 62%, transparent), color-mix(in srgb, #d7c49d 18%, transparent)),
-    var(--studio-material-texture),
-    linear-gradient(180deg, #fffaf0, #f0e6d3);
-  --studio-material-panel-bg-soft:
-    linear-gradient(180deg, color-mix(in srgb, white 40%, transparent), color-mix(in srgb, #c7b38e 16%, transparent)),
-    var(--studio-material-texture),
-    linear-gradient(180deg, #f6eedf, #e9dec8);
-  --studio-material-panel-bg-size: auto, var(--studio-material-texture-size), auto;
-  --studio-material-body-bg:
-    linear-gradient(color-mix(in srgb, #6d5a3a 5%, transparent) 1px, transparent 1px),
-    linear-gradient(90deg, color-mix(in srgb, #6d5a3a 4%, transparent) 1px, transparent 1px),
-    var(--studio-material-texture),
-    linear-gradient(135deg, #d8ccb5 0%, #f3ead8 36%, #c8b894 100%);
-  --studio-material-body-bg-size: 48px 48px, 48px 48px, var(--studio-material-texture-size), auto;
-  --studio-material-content-bg:
-    radial-gradient(circle at 22% 12%, color-mix(in srgb, white 52%, transparent), transparent 18rem),
-    linear-gradient(color-mix(in srgb, #927d57 8%, transparent) 1px, transparent 1px),
-    linear-gradient(90deg, color-mix(in srgb, #927d57 7%, transparent) 1px, transparent 1px),
-    var(--studio-material-texture),
-    #f4eddf;
-  --studio-material-content-bg-size: auto, 28px 28px, 28px 28px, var(--studio-material-texture-size), auto;
-  --studio-material-canvas-bg:
-    linear-gradient(color-mix(in srgb, #927d57 9%, transparent) 1px, transparent 1px),
-    linear-gradient(90deg, color-mix(in srgb, #927d57 8%, transparent) 1px, transparent 1px),
-    var(--studio-material-texture),
-    #f8f0df;
-  --studio-material-canvas-bg-size: 26px 26px, 26px 26px, var(--studio-material-texture-size), auto;
-  --studio-material-node-bg:
-    linear-gradient(180deg, color-mix(in srgb, white 56%, transparent), color-mix(in srgb, #c4ae84 14%, transparent)),
-    var(--studio-material-texture),
-    linear-gradient(180deg, #fffaf0, #eee3cd);
-  --studio-material-node-bg-size: auto, 350px 350px, auto;
-  --studio-material-shadow: 0 8px 14px color-mix(in srgb, #5f5036 18%, transparent),
-    0 1px 0 color-mix(in srgb, white 70%, transparent);
-  --studio-material-shadow-strong: 0 14px 24px color-mix(in srgb, #4c402d 18%, transparent),
-    0 0 0 1px color-mix(in srgb, #fff 42%, transparent);
-  --studio-material-node-shadow: 0 6px 10px color-mix(in srgb, #5f5036 16%, transparent),
-    0 2px 0 color-mix(in srgb, #8e7d60 12%, transparent);
-  --studio-material-send-bg: linear-gradient(180deg, #376fb4, #215798);
-  --studio-material-send-text: #fffaf0;
-  /* Flat dense-row fill: vellum grain over paper base, bevel + shadow dropped. */
-  --studio-material-row-bg:
-    var(--studio-material-texture),
-    linear-gradient(180deg, #f6eede, #ece2ce);
-  --studio-material-row-bg-size: var(--studio-material-texture-size), auto;
-  --studio-material-well-bg:
-    var(--studio-material-texture),
-    linear-gradient(180deg, #e6dcc6, #f0e7d5);
-  --studio-material-well-bg-size: var(--studio-material-texture-size), auto;
-  --studio-material-well-shadow: inset 0 2px 4px color-mix(in srgb, #5f5036 20%, transparent),
-    inset 0 0 0 1px color-mix(in srgb, #5f5036 12%, transparent);
 }
 
 html[data-theme="blueprint"] {
@@ -610,150 +523,6 @@ html[data-theme="blueprint"] {
     inset 0 0 0 1px color-mix(in srgb, white 10%, transparent);
 }
 
-html[data-theme="ceramic"] {
-  color-scheme: light;
-  --radius: 7px;
-  --radius-sm: 5px;
-  --radius-md: 8px;
-  --radius-lg: 10px;
-  --studio-bg: #efede8;
-  --studio-surface: #f8f6f1;
-  --studio-surface-muted: #ebe8e0;
-  --studio-surface-raised: #fffdf8;
-  --studio-text: #1f211f;
-  --studio-text-muted: #666863;
-  --studio-border: #d1cec5;
-  --studio-accent: #252725;
-  --studio-accent-text: #fbf9f4;
-  --studio-success-fg: #477758;
-  --studio-warning-fg: #7e682e;
-  --studio-danger-fg: #9a443e;
-  --studio-material-edge: #d4d0c7;
-  --studio-material-edge-strong: #a9a59a;
-  --studio-material-texture: url("../../assets/materials/ceramic-glaze-tile.png");
-  --studio-material-texture-size: 420px 420px;
-  --studio-material-panel-bg:
-    radial-gradient(circle at 24% 0%, color-mix(in srgb, white 54%, transparent), transparent 18rem),
-    var(--studio-material-texture),
-    linear-gradient(180deg, #fffdf9, #eeeae2);
-  --studio-material-panel-bg-strong:
-    radial-gradient(circle at 24% 0%, color-mix(in srgb, white 64%, transparent), transparent 18rem),
-    var(--studio-material-texture),
-    linear-gradient(180deg, #ffffff, #f0ece4);
-  --studio-material-panel-bg-soft:
-    radial-gradient(circle at 24% 0%, color-mix(in srgb, white 42%, transparent), transparent 18rem),
-    var(--studio-material-texture),
-    linear-gradient(180deg, #f8f5ef, #e8e4dc);
-  --studio-material-panel-bg-size: auto, var(--studio-material-texture-size), auto;
-  --studio-material-body-bg:
-    radial-gradient(circle at 72% 14%, color-mix(in srgb, white 72%, transparent), transparent 24rem),
-    var(--studio-material-texture),
-    linear-gradient(135deg, #e5e1d8, #fbfaf6 48%, #dfdbd1);
-  --studio-material-body-bg-size: auto, var(--studio-material-texture-size), auto;
-  --studio-material-content-bg:
-    linear-gradient(color-mix(in srgb, #76746d 5%, transparent) 1px, transparent 1px),
-    linear-gradient(90deg, color-mix(in srgb, #76746d 4%, transparent) 1px, transparent 1px),
-    var(--studio-material-texture),
-    #f8f6f1;
-  --studio-material-content-bg-size: 32px 32px, 32px 32px, var(--studio-material-texture-size), auto;
-  --studio-material-canvas-bg:
-    linear-gradient(color-mix(in srgb, #77746d 5%, transparent) 1px, transparent 1px),
-    linear-gradient(90deg, color-mix(in srgb, #77746d 4%, transparent) 1px, transparent 1px),
-    var(--studio-material-texture),
-    #faf8f3;
-  --studio-material-canvas-bg-size: 32px 32px, 32px 32px, var(--studio-material-texture-size), auto;
-  --studio-material-node-bg:
-    linear-gradient(180deg, color-mix(in srgb, white 52%, transparent), color-mix(in srgb, #ded8cc 18%, transparent)),
-    var(--studio-material-texture),
-    linear-gradient(180deg, #fffdf9, #eeeae2);
-  --studio-material-node-bg-size: auto, 330px 330px, auto;
-  --studio-material-shadow: 0 10px 24px color-mix(in srgb, #4b4d46 14%, transparent),
-    0 1px 0 color-mix(in srgb, white 80%, transparent);
-  --studio-material-shadow-strong: 0 18px 38px color-mix(in srgb, #4b4d46 18%, transparent),
-    0 0 0 1px color-mix(in srgb, white 70%, transparent);
-  --studio-material-node-shadow: 0 8px 18px color-mix(in srgb, #4b4d46 15%, transparent),
-    inset 0 1px 0 color-mix(in srgb, white 84%, transparent);
-  --studio-material-send-bg: linear-gradient(180deg, #323432, #1b1d1b);
-  --studio-material-send-text: #fbf9f4;
-  /* Flat dense-row fill: glaze texture over ceramic base, bevel + shadow dropped. */
-  --studio-material-row-bg:
-    var(--studio-material-texture),
-    linear-gradient(180deg, #f8f5ef, #ece8e0);
-  --studio-material-row-bg-size: var(--studio-material-texture-size), auto;
-  --studio-material-well-bg:
-    var(--studio-material-texture),
-    linear-gradient(180deg, #e7e3db, #f2eee6);
-  --studio-material-well-bg-size: var(--studio-material-texture-size), auto;
-  --studio-material-well-shadow: inset 0 2px 4px color-mix(in srgb, #4b4d46 16%, transparent),
-    inset 0 0 0 1px color-mix(in srgb, #4b4d46 10%, transparent);
-}
-
-html[data-theme="carbon"] {
-  color-scheme: dark;
-  --radius: 3px;
-  --radius-sm: 2px;
-  --radius-md: 4px;
-  --radius-lg: 6px;
-  --studio-bg: #050708;
-  --studio-surface: #0d1114;
-  --studio-surface-muted: #151b20;
-  --studio-surface-raised: #1a2228;
-  --studio-text: #e8eff2;
-  --studio-text-muted: #87949c;
-  --studio-border: #2c3941;
-  --studio-accent: #21b9ff;
-  --studio-accent-text: #061017;
-  --studio-success-fg: #55dc8f;
-  --studio-warning-fg: #f1bf52;
-  --studio-danger-fg: #ff7a72;
-  --studio-material-edge: color-mix(in srgb, #5f7783 45%, transparent);
-  --studio-material-edge-strong: color-mix(in srgb, #21b9ff 58%, transparent);
-  --studio-material-texture: none;
-  --studio-material-texture-size: 1px 1px;
-  --studio-material-panel-bg:
-    linear-gradient(180deg, #10161a, #080b0d);
-  --studio-material-panel-bg-strong:
-    linear-gradient(180deg, #141c21, #090d10);
-  --studio-material-panel-bg-soft:
-    linear-gradient(180deg, #172027, #0d1115);
-  --studio-material-panel-bg-size: auto;
-  --studio-material-body-bg:
-    radial-gradient(circle at 70% 16%, color-mix(in srgb, #21b9ff 12%, transparent), transparent 24rem),
-    linear-gradient(135deg, #070a0c, #0c1114 54%, #030506);
-  --studio-material-body-bg-size: auto, auto;
-  --studio-material-content-bg:
-    linear-gradient(color-mix(in srgb, #21b9ff 5%, transparent) 1px, transparent 1px),
-    linear-gradient(90deg, color-mix(in srgb, #21b9ff 5%, transparent) 1px, transparent 1px),
-    #090d10;
-  --studio-material-content-bg-size: 32px 32px, 32px 32px, auto;
-  --studio-material-canvas-bg:
-    linear-gradient(color-mix(in srgb, #21b9ff 5%, transparent) 1px, transparent 1px),
-    linear-gradient(90deg, color-mix(in srgb, #21b9ff 5%, transparent) 1px, transparent 1px),
-    #080c0f;
-  --studio-material-canvas-bg-size: 32px 32px, 32px 32px, auto;
-  --studio-material-node-bg:
-    linear-gradient(180deg, #151d23, #0a0f12);
-  --studio-material-node-bg-size: auto;
-  --studio-material-shadow: 0 15px 34px color-mix(in srgb, black 48%, transparent),
-    0 0 0 1px color-mix(in srgb, #21b9ff 12%, transparent);
-  --studio-material-shadow-strong: 0 22px 48px color-mix(in srgb, black 58%, transparent),
-    0 0 0 1px color-mix(in srgb, #21b9ff 32%, transparent);
-  --studio-material-node-shadow: 0 16px 30px color-mix(in srgb, black 52%, transparent),
-    inset 0 1px 0 color-mix(in srgb, white 8%, transparent);
-  /* Flat dense-row fill: carbon weave over base, shadow dropped. */
-  --studio-material-row-bg:
-    repeating-linear-gradient(45deg, color-mix(in srgb, white 4%, transparent) 0 2px, transparent 2px 8px),
-    var(--studio-material-texture),
-    linear-gradient(180deg, #14191d, #0c0f11);
-  --studio-material-row-bg-size: 22px 22px, var(--studio-material-texture-size), auto;
-  --studio-material-well-bg:
-    var(--studio-material-texture),
-    linear-gradient(180deg, #070a0c, #0e1215);
-  --studio-material-well-bg-size: var(--studio-material-texture-size), auto;
-  --studio-material-well-shadow: inset 0 2px 5px color-mix(in srgb, black 56%, transparent),
-    inset 0 0 0 1px color-mix(in srgb, black 30%, transparent);
-}
-
 html[data-theme="brass-instrument"] {
   color-scheme: dark;
   --radius: 4px;
@@ -823,104 +592,6 @@ html[data-theme="brass-instrument"] {
   --studio-material-well-bg-size: auto;
   --studio-material-well-shadow: inset 0 2px 5px color-mix(in srgb, black 50%, transparent),
     inset 0 0 0 1px color-mix(in srgb, #f1d992 10%, transparent);
-}
-
-html[data-theme="walnut-workshop"] {
-  color-scheme: light;
-  --radius: 4px;
-  --radius-sm: 3px;
-  --radius-md: 5px;
-  --radius-lg: 7px;
-  --studio-bg: #bec4bf;
-  --studio-surface: #e3e6e2;
-  --studio-surface-muted: #d1d6d2;
-  --studio-surface-raised: #f3f1eb;
-  --studio-text: #252826;
-  --studio-text-muted: #585e5a;
-  --studio-border: #858c87;
-  --studio-accent: #8a5034;
-  --studio-accent-text: #fff8ee;
-  --studio-success-fg: #356335;
-  --studio-warning-fg: #7b541b;
-  --studio-danger-fg: #8b3f31;
-  --studio-material-edge: color-mix(in srgb, #646b66 68%, transparent);
-  --studio-material-edge-strong: color-mix(in srgb, #343a36 80%, transparent);
-  --studio-material-texture: url("../../assets/materials/walnut-workshop-tile.png");
-  --studio-material-texture-size: 720px 720px;
-  /* The appliance shell stays matte; walnut is reserved for tactile inlays. */
-  --studio-material-panel-bg:
-    linear-gradient(180deg, color-mix(in srgb, white 40%, transparent), transparent 38%),
-    repeating-linear-gradient(90deg, color-mix(in srgb, #4e5550 2%, transparent) 0 1px, transparent 1px 6px),
-    linear-gradient(180deg, #e3e6e2, #d2d7d3);
-  --studio-material-panel-bg-strong:
-    linear-gradient(180deg, color-mix(in srgb, white 62%, transparent), transparent 42%),
-    repeating-linear-gradient(90deg, color-mix(in srgb, #5a605c 2%, transparent) 0 1px, transparent 1px 7px),
-    linear-gradient(180deg, #f4f2ec, #e4e6e1);
-  --studio-material-panel-bg-soft:
-    linear-gradient(180deg, color-mix(in srgb, white 28%, transparent), transparent 44%),
-    repeating-linear-gradient(90deg, color-mix(in srgb, #48504b 2%, transparent) 0 1px, transparent 1px 6px),
-    linear-gradient(180deg, #d5dad6, #c6ccc7);
-  --studio-material-panel-bg-size: auto, 6px 6px, auto;
-  --studio-material-row-bg:
-    linear-gradient(180deg, color-mix(in srgb, white 34%, transparent), transparent),
-    #dce1dd;
-  --studio-material-row-bg-size: auto, auto;
-  --studio-material-well-bg:
-    linear-gradient(180deg, #d1d6d2, #e4e6e2);
-  --studio-material-well-bg-size: auto;
-  --studio-material-well-shadow:
-    inset 0 2px 6px color-mix(in srgb, #414743 28%, transparent),
-    inset 0 0 0 1px color-mix(in srgb, white 46%, transparent);
-  --studio-material-body-bg:
-    radial-gradient(circle at 72% 10%, color-mix(in srgb, white 24%, transparent), transparent 30rem),
-    linear-gradient(135deg, color-mix(in srgb, #4b524d 5%, transparent) 0 1px, transparent 1px 12px),
-    linear-gradient(135deg, #c9cfca, #b8c0ba);
-  --studio-material-body-bg-size: auto, 12px 12px, auto;
-  --studio-material-content-bg:
-    radial-gradient(circle at 28% 10%, color-mix(in srgb, white 32%, transparent), transparent 26rem),
-    linear-gradient(160deg, #d8ddd9, #c8cfca 72%);
-  --studio-material-content-bg-size: auto, auto;
-  --studio-material-canvas-bg:
-    linear-gradient(color-mix(in srgb, #525854 10%, transparent) 1px, transparent 1px),
-    linear-gradient(90deg, color-mix(in srgb, #525854 9%, transparent) 1px, transparent 1px),
-    linear-gradient(160deg, #f3f1eb, #e7e9e4);
-  --studio-material-canvas-bg-size: 28px 28px, 28px 28px, auto;
-  --studio-material-grid-size: 28px 28px;
-  --studio-material-node-bg:
-    linear-gradient(180deg, color-mix(in srgb, white 18%, transparent), color-mix(in srgb, #3b2015 16%, transparent)),
-    var(--studio-material-texture),
-    linear-gradient(160deg, #9f6240, #75432d 74%);
-  --studio-material-node-bg-size: auto, 360px 360px, auto;
-  --studio-material-inset:
-    inset 0 1px 0 color-mix(in srgb, white 64%, transparent),
-    inset 0 -1px 0 color-mix(in srgb, #4b504d 24%, transparent);
-  --studio-material-inset-low:
-    inset 0 1px 0 color-mix(in srgb, white 54%, transparent),
-    inset 0 -1px 0 color-mix(in srgb, #4b504d 16%, transparent);
-  --studio-material-shadow:
-    0 1px 0 color-mix(in srgb, white 58%, transparent),
-    0 3px 8px color-mix(in srgb, #505652 16%, transparent),
-    0 0 0 1px color-mix(in srgb, #707672 18%, transparent);
-  --studio-material-shadow-strong:
-    0 1px 0 color-mix(in srgb, white 66%, transparent),
-    0 8px 24px color-mix(in srgb, #474c49 22%, transparent),
-    0 0 0 1px color-mix(in srgb, #525854 28%, transparent);
-  --studio-material-node-shadow:
-    0 1px 0 color-mix(in srgb, white 22%, transparent),
-    0 4px 8px color-mix(in srgb, #29190f 38%, transparent),
-    0 14px 24px color-mix(in srgb, #424744 18%, transparent),
-    inset 0 1px 0 color-mix(in srgb, white 24%, transparent);
-  --studio-material-control-bg:
-    linear-gradient(180deg, color-mix(in srgb, white 48%, transparent), transparent 44%),
-    repeating-linear-gradient(90deg, color-mix(in srgb, #4c534e 2%, transparent) 0 1px, transparent 1px 6px),
-    linear-gradient(180deg, #e7e9e4, #cfd5d0);
-  --studio-material-hover-bg: color-mix(in srgb, #8a5034 12%, var(--studio-surface-muted));
-  --studio-material-active-bg:
-    linear-gradient(180deg, color-mix(in srgb, white 12%, transparent), color-mix(in srgb, #3b2015 18%, transparent)),
-    var(--studio-material-texture),
-    linear-gradient(160deg, #9b5d3c, #6f3d27 76%);
-  --studio-material-send-bg: var(--studio-material-active-bg);
-  --studio-material-send-text: #fff8ee;
 }
 
 html[data-theme="black-glass"][data-theme-mode="light"] {
@@ -1115,81 +786,6 @@ html[data-theme="stone"][data-theme-mode="light"] {
     inset 0 1px 0 color-mix(in srgb, white 60%, transparent);
 }
 
-html[data-theme="paper"][data-theme-mode="dark"] {
-  color-scheme: dark;
-  --studio-bg: #151410;
-  --studio-surface: #24231d;
-  --studio-surface-muted: #302e26;
-  --studio-surface-raised: #353229;
-  --studio-text: #e9dfc9;
-  --studio-text-muted: #b1a58f;
-  --studio-border: #5c5140;
-  --studio-accent: #9ab7ff;
-  --studio-accent-text: #12141d;
-  --studio-success-fg: #8adca9;
-  --studio-warning-fg: #f0c872;
-  --studio-danger-fg: #ff9f90;
-  --studio-material-edge: #5c5140;
-  --studio-material-edge-strong: #89795f;
-  --studio-material-texture: url("../../assets/materials/paper-charcoal-tile.png");
-  --studio-material-texture-size: 430px 430px;
-  --studio-material-panel-bg:
-    linear-gradient(180deg, color-mix(in srgb, white 8%, transparent), color-mix(in srgb, #000 18%, transparent)),
-    var(--studio-material-texture),
-    linear-gradient(180deg, #26241e, #171612);
-  --studio-material-panel-bg-strong:
-    linear-gradient(180deg, color-mix(in srgb, white 10%, transparent), color-mix(in srgb, #000 16%, transparent)),
-    var(--studio-material-texture),
-    linear-gradient(180deg, #302d25, #191813);
-  --studio-material-panel-bg-soft:
-    linear-gradient(180deg, color-mix(in srgb, white 6%, transparent), color-mix(in srgb, #000 14%, transparent)),
-    var(--studio-material-texture),
-    linear-gradient(180deg, #343127, #1d1b15);
-  --studio-material-panel-bg-size: auto, var(--studio-material-texture-size), auto;
-  --studio-material-body-bg:
-    linear-gradient(color-mix(in srgb, #d0c19d 5%, transparent) 1px, transparent 1px),
-    linear-gradient(90deg, color-mix(in srgb, #d0c19d 4%, transparent) 1px, transparent 1px),
-    var(--studio-material-texture),
-    linear-gradient(135deg, #181610 0%, #27241d 36%, #11100d 100%);
-  --studio-material-body-bg-size: 48px 48px, 48px 48px, var(--studio-material-texture-size), auto;
-  --studio-material-content-bg:
-    radial-gradient(circle at 22% 12%, color-mix(in srgb, white 6%, transparent), transparent 18rem),
-    linear-gradient(color-mix(in srgb, #d0c19d 7%, transparent) 1px, transparent 1px),
-    linear-gradient(90deg, color-mix(in srgb, #d0c19d 6%, transparent) 1px, transparent 1px),
-    var(--studio-material-texture),
-    #24221c;
-  --studio-material-content-bg-size: auto, 28px 28px, 28px 28px, var(--studio-material-texture-size), auto;
-  --studio-material-canvas-bg:
-    linear-gradient(color-mix(in srgb, #d0c19d 8%, transparent) 1px, transparent 1px),
-    linear-gradient(90deg, color-mix(in srgb, #d0c19d 7%, transparent) 1px, transparent 1px),
-    var(--studio-material-texture),
-    #29261f;
-  --studio-material-canvas-bg-size: 26px 26px, 26px 26px, var(--studio-material-texture-size), auto;
-  --studio-material-node-bg:
-    linear-gradient(180deg, color-mix(in srgb, white 9%, transparent), color-mix(in srgb, #000 14%, transparent)),
-    var(--studio-material-texture),
-    linear-gradient(180deg, #302d25, #191813);
-  --studio-material-node-bg-size: auto, 350px 350px, auto;
-  --studio-material-shadow: 0 10px 18px color-mix(in srgb, black 35%, transparent),
-    0 1px 0 color-mix(in srgb, white 8%, transparent);
-  --studio-material-shadow-strong: 0 16px 30px color-mix(in srgb, black 46%, transparent),
-    0 0 0 1px color-mix(in srgb, #d0c19d 14%, transparent);
-  --studio-material-node-shadow: 0 8px 15px color-mix(in srgb, black 38%, transparent),
-    0 2px 0 color-mix(in srgb, #d0c19d 10%, transparent);
-  --studio-material-send-bg: linear-gradient(180deg, #b5c8ff, #82a1f5);
-  --studio-material-send-text: #12141d;
-  --studio-material-row-bg:
-    var(--studio-material-texture),
-    linear-gradient(180deg, #2a2820, #1c1a15);
-  --studio-material-row-bg-size: var(--studio-material-texture-size), auto;
-  --studio-material-well-bg:
-    var(--studio-material-texture),
-    linear-gradient(180deg, #16150f, #1f1d16);
-  --studio-material-well-bg-size: var(--studio-material-texture-size), auto;
-  --studio-material-well-shadow: inset 0 2px 5px color-mix(in srgb, black 44%, transparent),
-    inset 0 0 0 1px color-mix(in srgb, black 24%, transparent);
-}
-
 html[data-theme="blueprint"][data-theme-mode="light"] {
   color-scheme: light;
   --studio-bg: #eef5f7;
@@ -1255,131 +851,6 @@ html[data-theme="blueprint"][data-theme-mode="light"] {
   --studio-material-well-bg-size: auto;
   --studio-material-well-shadow: inset 0 2px 4px color-mix(in srgb, #6f8fa1 20%, transparent),
     inset 0 0 0 1px color-mix(in srgb, #126fa9 12%, transparent);
-}
-
-html[data-theme="ceramic"][data-theme-mode="dark"] {
-  color-scheme: dark;
-  --studio-bg: #0b0e0f;
-  --studio-surface: #15191a;
-  --studio-surface-muted: #202526;
-  --studio-surface-raised: #262c2e;
-  --studio-text: #eef4f3;
-  --studio-text-muted: #a9b3b2;
-  --studio-border: #3e494b;
-  --studio-accent: #9fd8df;
-  --studio-accent-text: #081112;
-  --studio-success-fg: #8cdca7;
-  --studio-warning-fg: #f0ce77;
-  --studio-danger-fg: #ff9d92;
-  --studio-material-edge: #3f4a4c;
-  --studio-material-edge-strong: #718184;
-  --studio-material-texture: url("../../assets/materials/ceramic-obsidian-tile.png");
-  --studio-material-texture-size: 780px 780px;
-  --studio-material-panel-bg:
-    radial-gradient(circle at 24% 0%, color-mix(in srgb, white 8%, transparent), transparent 18rem),
-    linear-gradient(180deg, #171c1d, #101314);
-  --studio-material-panel-bg-strong:
-    radial-gradient(circle at 24% 0%, color-mix(in srgb, white 11%, transparent), transparent 18rem),
-    linear-gradient(180deg, #202628, #121516);
-  --studio-material-panel-bg-soft:
-    radial-gradient(circle at 24% 0%, color-mix(in srgb, white 6%, transparent), transparent 18rem),
-    linear-gradient(180deg, #202526, #151819);
-  --studio-material-panel-bg-size: auto, auto;
-  --studio-material-body-bg:
-    radial-gradient(circle at 72% 14%, color-mix(in srgb, #9fd8df 9%, transparent), transparent 24rem),
-    radial-gradient(circle at 16% 82%, color-mix(in srgb, white 4%, transparent), transparent 30rem),
-    linear-gradient(135deg, #080b0c, #15191a 50%, #090c0d);
-  --studio-material-body-bg-size: auto, auto, auto;
-  --studio-material-content-bg:
-    linear-gradient(color-mix(in srgb, #9fd8df 3%, transparent) 1px, transparent 1px),
-    linear-gradient(90deg, color-mix(in srgb, #9fd8df 3%, transparent) 1px, transparent 1px),
-    #15191a;
-  --studio-material-content-bg-size: 36px 36px, 36px 36px, auto;
-  --studio-material-canvas-bg:
-    linear-gradient(color-mix(in srgb, #9fd8df 3%, transparent) 1px, transparent 1px),
-    linear-gradient(90deg, color-mix(in srgb, #9fd8df 3%, transparent) 1px, transparent 1px),
-    #111516;
-  --studio-material-canvas-bg-size: 36px 36px, 36px 36px, auto;
-  --studio-material-node-bg:
-    linear-gradient(180deg, color-mix(in srgb, white 9%, transparent), color-mix(in srgb, #000 14%, transparent)),
-    linear-gradient(180deg, #202628, #101314);
-  --studio-material-node-bg-size: auto, auto;
-  --studio-material-shadow: 0 12px 28px color-mix(in srgb, black 44%, transparent),
-    0 1px 0 color-mix(in srgb, white 7%, transparent);
-  --studio-material-shadow-strong: 0 20px 44px color-mix(in srgb, black 54%, transparent),
-    0 0 0 1px color-mix(in srgb, #9fd8df 14%, transparent);
-  --studio-material-node-shadow: 0 12px 24px color-mix(in srgb, black 46%, transparent),
-    inset 0 1px 0 color-mix(in srgb, white 10%, transparent);
-  --studio-material-send-bg: linear-gradient(180deg, #cfedf4, #89cbdc);
-  --studio-material-send-text: #081112;
-  --studio-material-row-bg:
-    var(--studio-material-texture),
-    linear-gradient(180deg, #191e20, #101315);
-  --studio-material-row-bg-size: var(--studio-material-texture-size), auto;
-  --studio-material-well-bg:
-    var(--studio-material-texture),
-    linear-gradient(180deg, #0b0e0f, #14181a);
-  --studio-material-well-bg-size: var(--studio-material-texture-size), auto;
-  --studio-material-well-shadow: inset 0 2px 5px color-mix(in srgb, black 52%, transparent),
-    inset 0 0 0 1px color-mix(in srgb, black 26%, transparent);
-}
-
-html[data-theme="carbon"][data-theme-mode="light"] {
-  color-scheme: light;
-  --studio-bg: #cdd4d7;
-  --studio-surface: #e7ebec;
-  --studio-surface-muted: #d4dbde;
-  --studio-surface-raised: #f7f9f9;
-  --studio-text: #11191d;
-  --studio-text-muted: #405058;
-  --studio-border: #89979d;
-  --studio-accent: #086895;
-  --studio-accent-text: #f8fcff;
-  --studio-success-fg: #217c51;
-  --studio-warning-fg: #7d5f1e;
-  --studio-danger-fg: #9e433b;
-  --studio-material-edge: color-mix(in srgb, #5f6d73 48%, transparent);
-  --studio-material-edge-strong: color-mix(in srgb, #086895 48%, #9fadb3);
-  --studio-material-texture: none;
-  --studio-material-texture-size: 1px 1px;
-  --studio-material-panel-bg:
-    linear-gradient(180deg, #f2f5f5, #d9e0e2);
-  --studio-material-panel-bg-strong:
-    linear-gradient(180deg, #fbfcfc, #e0e7e9);
-  --studio-material-panel-bg-soft:
-    linear-gradient(180deg, #dce3e5, #c4cdd1);
-  --studio-material-panel-bg-size: auto;
-  --studio-material-body-bg:
-    radial-gradient(circle at 70% 16%, color-mix(in srgb, #086895 8%, transparent), transparent 24rem),
-    linear-gradient(135deg, #c4ccd0, #e4e8ea 54%, #b8c2c6);
-  --studio-material-body-bg-size: auto, auto;
-  --studio-material-content-bg:
-    linear-gradient(color-mix(in srgb, #086895 4%, transparent) 1px, transparent 1px),
-    linear-gradient(90deg, color-mix(in srgb, #086895 4%, transparent) 1px, transparent 1px),
-    #e7ebec;
-  --studio-material-content-bg-size: 34px 34px, 34px 34px, auto;
-  --studio-material-canvas-bg:
-    linear-gradient(color-mix(in srgb, #086895 4%, transparent) 1px, transparent 1px),
-    linear-gradient(90deg, color-mix(in srgb, #086895 4%, transparent) 1px, transparent 1px),
-    #edf1f2;
-  --studio-material-canvas-bg-size: 34px 34px, 34px 34px, auto;
-  --studio-material-node-bg:
-    linear-gradient(180deg, #f8fafb, #d7e0e3);
-  --studio-material-node-bg-size: auto;
-  --studio-material-shadow: 0 14px 28px color-mix(in srgb, #4e5b61 18%, transparent),
-    0 0 0 1px color-mix(in srgb, white 38%, transparent);
-  --studio-material-shadow-strong: 0 20px 38px color-mix(in srgb, #3f4d54 24%, transparent),
-    0 0 0 1px color-mix(in srgb, #086895 18%, transparent);
-  --studio-material-node-shadow: 0 14px 26px color-mix(in srgb, #4e5b61 20%, transparent),
-    inset 0 1px 0 color-mix(in srgb, white 52%, transparent);
-  --studio-material-row-bg:
-    linear-gradient(180deg, #d5dadc, #c0c8cb);
-  --studio-material-row-bg-size: auto;
-  --studio-material-well-bg:
-    linear-gradient(180deg, #b6bec1, #c9d0d2);
-  --studio-material-well-bg-size: auto;
-  --studio-material-well-shadow: inset 0 2px 4px color-mix(in srgb, #4e5b61 26%, transparent),
-    inset 0 0 0 1px color-mix(in srgb, #4e5b61 16%, transparent);
 }
 
 html[data-theme="brass-instrument"][data-theme-mode="light"] {

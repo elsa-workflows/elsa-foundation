@@ -93,7 +93,7 @@ describe("signature themes", () => {
   });
 
   it("gives each signature theme its layout, and every other built-in the classic one", () => {
-    expect(foundationThemeIds.map(id => getTheme(id)!.layout)).toEqual(["classic", "floating", "workbench", "editorial", "classic"]);
+    expect(foundationThemeIds.map(id => getTheme(id)!.layout)).toEqual(["classic", "floating", "workbench", "editorial", "classic", "classic", "classic"]);
     expect(builtInThemeDefinitions.slice(foundationThemeIds.length).every(theme => theme.layout === undefined)).toBe(true);
   });
 
@@ -113,13 +113,13 @@ describe("theme modes", () => {
   });
 
   it("offers only light and dark for themes that define no optional modes", () => {
-    expect(getSupportedThemeModes(getTheme("harbor")!)).toEqual(["light", "dark"]);
+    expect(getSupportedThemeModes(getTheme("stone")!)).toEqual(["light", "dark"]);
   });
 
   it.each<[string, ThemeMode, ThemeMode]>([
-    ["harbor", "dim", "dark"],
-    ["harbor", "high-contrast", "dark"],
-    ["paper", "high-contrast", "light"],
+    ["stone", "dim", "dark"],
+    ["stone", "high-contrast", "dark"],
+    ["brass-instrument", "high-contrast", "dark"],
     ["brass-instrument", "light", "dark"],
     ["meridian", "high-contrast", "high-contrast"]
   ])("resolves %s with a %s preference to %s, staying in the same scheme when it can", (id, preferred, expected) => {
@@ -137,7 +137,7 @@ describe("theme modes", () => {
 });
 
 describe("Theme Builder edits", () => {
-  const custom = () => createCustomThemeFrom(getTheme("harbor")!, "harbor-custom", "Harbor Custom");
+  const custom = () => createCustomThemeFrom(getTheme("stone")!, "stone-custom", "Stone Custom");
 
   it("adds an optional mode seeded from the dark palette and offers it", () => {
     const theme = withOptionalMode(custom(), "high-contrast");
@@ -277,11 +277,11 @@ describe("ThemeProvider and ThemeSwitcher", () => {
   it("remembers the preferred mode across a theme that lacks it", async () => {
     await render();
     await act(() => api!.setMode("dim"));
-    await act(() => api!.setTheme("harbor"));
+    await act(() => api!.setTheme("stone"));
 
     expect(api!.mode).toBe("dark");
     expect(api!.preferredMode).toBe("dim");
-    // Harbor sets no typography, so Meridian's stack must not linger on <html>.
+    // Stone sets no typography, so Meridian's stack must not linger on <html>.
     expect(document.documentElement.style.getPropertyValue("--font-sans")).toBe("");
 
     await act(() => api!.setTheme("drift"));
@@ -305,7 +305,7 @@ describe("ThemeProvider and ThemeSwitcher", () => {
 
   it("disables the modes the current theme does not define", async () => {
     await render();
-    await act(() => api!.setTheme("harbor"));
+    await act(() => api!.setTheme("stone"));
     await openThemeMenu();
     const [, , dim, highContrast] = modeItems();
 
@@ -324,7 +324,7 @@ describe("ThemeProvider and ThemeSwitcher", () => {
     await act(() => api!.setTheme("atelier"));
     expect(document.documentElement.getAttribute("data-theme-layout")).toBe("editorial");
 
-    await act(() => api!.setTheme("harbor"));
+    await act(() => api!.setTheme("stone"));
     expect(getStudioThemeLayout()).toBe("classic");
   });
 

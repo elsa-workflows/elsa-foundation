@@ -59,32 +59,22 @@ Path to a directory or file containing custom themes. Supports:
 **Type:** `string` (nullable)  
 **Default:** `null` (first theme in list — Meridian)
 
-The theme ID to select on first load. Must match an available theme ID (either built-in or custom).
+The theme ID to select on first load. Must match an available theme ID (either built-in or custom). An ID that no longer exists, such as a retired built-in theme, falls back to the first theme in the list.
 
-The five signature themes offer all four modes (Light, Dark, Dim and High contrast):
+The seven signature themes offer all four modes (Light, Dark, Dim and High contrast):
 - `"meridian"` - Crisp, neutral precision with an indigo accent (the default)
 - `"drift"` - Soft, rounded floating surfaces with a jade accent
 - `"schematic"` - Engineering workbench: squared corners, blueprint neutrals, signal orange
 - `"atelier"` - Warm editorial calm: paper neutrals, serif titles, plum accent
 - `"elsa-cloud"` - The Elsa Cloud console look: near-black surfaces, hot-pink accent, mono eyebrow labels
+- `"signal"` - Instrument panel: hairline borders, tight corners, mono legends, one phosphor-lime accent
+- `"dusk"` - Dim-first violet slate with an amber highlight, for long low-light sessions
 
 Other built-in theme IDs (Light and Dark only, unless noted):
-- `"material-design"` - Material Design (the Elsa Studio 3 look)
 - `"black-glass"` - Dark HUD style
 - `"stone"` - Slate surfaces
-- `"paper"` - Layered paper
 - `"blueprint"` - Architectural draft
-- `"ceramic"` - Matte porcelain
-- `"carbon"` - Technical carbon
-- `"brass-instrument"` - Brass & enamel
-- `"walnut-workshop"` - Walnut inlays
-- `"harbor"` - Crisp blue
-- `"borealis"` - Green-teal
-- `"ember"` - Warm amber
-- `"orchid"` - Violet
-- `"hot-pink"` - High-energy pink
-- `"coral"` - Red-coral
-- `"graphite"` - Neutral
+- `"brass-instrument"` - Brass & enamel (Dark only)
 
 ## Examples
 
@@ -229,8 +219,8 @@ Beyond the required `light` and `dark` palettes, a theme may add:
   Geist, Geist Mono, Manrope, DM Mono, IBM Plex Sans/Mono, Instrument Sans/Serif and JetBrains Mono.
 - `shape` — `radiusSm`, `radius`, `radiusMd`, `radiusLg`, `radiusXl` as `px` or `rem` lengths.
 - `layout` — `classic` (default), `floating`, `workbench` or `editorial`: how the shell and the
-  workflow designer are arranged. The signature themes use Meridian `classic`, Drift `floating`,
-  Schematic `workbench` and Atelier `editorial`; any theme may choose any layout.
+  workflow designer are arranged. The signature themes use Drift `floating`, Schematic `workbench`
+  and Atelier `editorial`; Meridian, Elsa Cloud, Signal and Dusk use `classic`. Any theme may choose any layout.
 
 ```json
 {

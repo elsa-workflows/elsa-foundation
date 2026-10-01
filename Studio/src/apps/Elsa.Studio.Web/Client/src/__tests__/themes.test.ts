@@ -6,57 +6,16 @@ import { applyMaterialVariables } from "../app/components/ThemeProvider";
 import { createCustomThemeFrom, findSelectableTheme, getSelectableThemes, normalizeThemeStore, saveTheme, setBuiltInThemeEnabled, validateThemeDefinition } from "../app/themes/themeStoreApi";
 
 describe("theme presets", () => {
-  it("includes the hot pink theme", () => {
-    expect(getTheme("hot-pink")?.name).toBe("Hot Pink");
-    expect(getThemeNames()).toContainEqual({ id: "hot-pink", name: "Hot Pink" });
-  });
-
-  it("includes the selectable flat Material Design theme with the Elsa 3 palette", () => {
-    const theme = getTheme("material-design");
-
-    expect(theme).toBeDefined();
-    expect(theme).toMatchObject({
-      id: "material-design",
-      name: "Material Design",
-      source: "built-in",
-      enabled: true,
-      published: true
-    });
-    expect(getThemeNames()).toContainEqual({ id: "material-design", name: "Material Design" });
-    expect(findSelectableTheme(normalizeThemeStore(), "material-design").id).toBe("material-design");
-    expect(getSupportedThemeModes(theme!)).toEqual(["light", "dark"]);
-    expect(supportsThemeMode(theme!, "light")).toBe(true);
-    expect(supportsThemeMode(theme!, "dark")).toBe(true);
-    expect(theme?.light).toMatchObject({
-      primary: "#0ea5e9",
-      background: "#ffffff",
-      card: "#f8fafc",
-      sidebar: "#f8fafc",
-      foreground: "#0f172a"
-    });
-    expect(theme?.dark).toMatchObject({
-      primary: "#0ea5e9",
-      background: "#0f172a",
-      card: "#182234",
-      sidebar: "#0f172a"
-    });
-    expect(isMaterialTheme("material-design")).toBe(false);
-  });
-
   it("represents material themes as read-only built-in definitions", () => {
     expect(getThemeNames()).toEqual(expect.arrayContaining([
       { id: "black-glass", name: "Black Glass" },
       { id: "stone", name: "Stone" },
-      { id: "paper", name: "Paper" },
       { id: "blueprint", name: "Blueprint" },
-      { id: "ceramic", name: "Ceramic" },
-      { id: "carbon", name: "Carbon" },
-      { id: "brass-instrument", name: "Brass Instrument" },
-      { id: "walnut-workshop", name: "Walnut Workshop" }
+      { id: "brass-instrument", name: "Brass Instrument" }
     ]));
     expect(getTheme("black-glass")?.source).toBe("built-in");
     expect(getTheme("black-glass")?.modes.dark.material?.cssVariables?.["--studio-material-finish"]).toBe("glass");
-    expect(materialThemeIds).toEqual(["stone", "paper", "blueprint", "ceramic", "carbon", "brass-instrument", "walnut-workshop"]);
+    expect(materialThemeIds).toEqual(["stone", "blueprint", "brass-instrument"]);
     expect(isMaterialTheme("stone")).toBe(true);
     expect(isMaterialTheme("black-glass")).toBe(false);
   });
@@ -80,15 +39,6 @@ describe("theme presets", () => {
     expect(blackGlass?.light.foreground).not.toBe(blackGlass?.dark.foreground);
   });
 
-  it("treats Paper as a light-only material theme", () => {
-    const paper = getTheme("paper");
-
-    expect(paper).toBeDefined();
-    expect(getSupportedThemeModes(paper!)).toEqual(["light"]);
-    expect(supportsThemeMode(paper!, "dark")).toBe(false);
-    expect(resolveThemeMode(paper!, "dark")).toBe("light");
-  });
-
   it("treats Brass Instrument as a dark-only material theme", () => {
     const brass = getTheme("brass-instrument");
 
@@ -96,18 +46,6 @@ describe("theme presets", () => {
     expect(getSupportedThemeModes(brass!)).toEqual(["dark"]);
     expect(supportsThemeMode(brass!, "light")).toBe(false);
     expect(resolveThemeMode(brass!, "light")).toBe("dark");
-  });
-
-  it("treats Walnut Workshop as a light-only material theme", () => {
-    const walnut = getTheme("walnut-workshop");
-
-    expect(walnut).toBeDefined();
-    expect(getSupportedThemeModes(walnut!)).toEqual(["light"]);
-    expect(walnut?.modes.light.material?.textureAssets?.surface).toBe("/studio/assets/walnut-workshop-tile.png");
-    expect(walnut?.modes.light.material?.cssVariables?.["--studio-material-finish"]).toBe("walnut-inlay");
-    expect(walnut?.modes.light.material?.cssVariables?.["--studio-material-depth"]).toBe("0.32");
-    expect(walnut?.modes.dark.background).not.toBe(walnut?.modes.light.background);
-    expect(resolveThemeMode(walnut!, "dark")).toBe("light");
   });
 
   it("duplicates built-ins into custom draft themes", () => {
@@ -138,15 +76,15 @@ describe("theme presets", () => {
   });
 
   it("hides admin-disabled built-in themes from the selectable picker list", () => {
-    const store = normalizeThemeStore({ disabledBuiltInThemeIds: ["hot-pink", "not-a-built-in"] });
-    const hotPink = store.themes.find(theme => theme.id === "hot-pink");
+    const store = normalizeThemeStore({ disabledBuiltInThemeIds: ["blueprint", "not-a-built-in"] });
+    const blueprint = store.themes.find(theme => theme.id === "blueprint");
 
     // The definition stays listed (so the Theme Builder can re-enable it) but is not selectable.
-    expect(hotPink?.enabled).toBe(false);
-    expect(getSelectableThemes(store).some(theme => theme.id === "hot-pink")).toBe(false);
-    expect(findSelectableTheme(store, "hot-pink").id).not.toBe("hot-pink");
+    expect(blueprint?.enabled).toBe(false);
+    expect(getSelectableThemes(store).some(theme => theme.id === "blueprint")).toBe(false);
+    expect(findSelectableTheme(store, "blueprint").id).not.toBe("blueprint");
     // Unknown ids are dropped rather than persisted back.
-    expect(store.disabledBuiltInThemeIds).toEqual(["hot-pink"]);
+    expect(store.disabledBuiltInThemeIds).toEqual(["blueprint"]);
   });
 
   it("sends built-in visibility changes to the visibility endpoint and normalizes the result", async () => {
@@ -155,15 +93,15 @@ describe("theme presets", () => {
       http: {
         putJson: async (url: string, body: unknown) => {
           requested = { url, body };
-          return { themes: [], defaultThemeId: "black-glass", assets: [], disabledBuiltInThemeIds: ["hot-pink"] };
+          return { themes: [], defaultThemeId: "black-glass", assets: [], disabledBuiltInThemeIds: ["blueprint"] };
         }
       }
     };
 
-    const store = await setBuiltInThemeEnabled(context as unknown as StudioEndpointContext, "hot-pink", false);
+    const store = await setBuiltInThemeEnabled(context as unknown as StudioEndpointContext, "blueprint", false);
 
-    expect(requested).toEqual({ url: "/_elsa/theme-store/themes/hot-pink/visibility", body: { enabled: false } });
-    expect(store.themes.find(theme => theme.id === "hot-pink")?.enabled).toBe(false);
+    expect(requested).toEqual({ url: "/_elsa/theme-store/themes/blueprint/visibility", body: { enabled: false } });
+    expect(store.themes.find(theme => theme.id === "blueprint")?.enabled).toBe(false);
     expect(store.themes.filter(theme => theme.enabled).length).toBeGreaterThan(0);
   });
 
@@ -207,22 +145,22 @@ describe("applyMaterialVariables", () => {
   it("delivers a custom theme's texture to the CSS variable end to end", () => {
     const custom = createCustomThemeFrom(builtInThemeDefinitions[0], "custom-texture", "Custom Texture");
     custom.modes.light.material = {
-      textureAssets: { surface: "/studio/assets/paper-vellum-tile.png" },
+      textureAssets: { surface: "/studio/assets/custom-vellum-tile.png" },
       textureSize: 256,
       cssVariables: { "--studio-material-finish": "vellum" }
     };
 
     const root = apply(custom.modes.light.material);
 
-    expect(root.style.getPropertyValue("--studio-material-texture")).toBe('url("/studio/assets/paper-vellum-tile.png")');
+    expect(root.style.getPropertyValue("--studio-material-texture")).toBe('url("/studio/assets/custom-vellum-tile.png")');
     expect(root.style.getPropertyValue("--studio-material-texture-size")).toBe("256px 256px");
     expect(root.style.getPropertyValue("--studio-material-finish")).toBe("vellum");
   });
 
   it("falls back to the first texture asset when no surface key is present", () => {
-    const root = apply({ textureAssets: { grain: "/studio/assets/carbon-weave-tile.png" } });
+    const root = apply({ textureAssets: { grain: "/studio/assets/custom-grain-tile.png" } });
 
-    expect(root.style.getPropertyValue("--studio-material-texture")).toBe('url("/studio/assets/carbon-weave-tile.png")');
+    expect(root.style.getPropertyValue("--studio-material-texture")).toBe('url("/studio/assets/custom-grain-tile.png")');
   });
 
   it("escapes quotes and backslashes in texture urls", () => {

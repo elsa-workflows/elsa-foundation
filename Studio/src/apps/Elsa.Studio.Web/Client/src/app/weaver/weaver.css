@@ -506,10 +506,6 @@ html[data-theme-material] .weaver-scroll {
   background-size: var(--studio-material-content-bg-size);
 }
 
-html[data-theme="paper"] .weaver-surface[data-variant="dock"] {
-  transform: rotate(0.15deg);
-}
-
 html[data-theme="brass-instrument"] .weaver-surface-title,
 html[data-theme="brass-instrument"] .weaver-status {
   letter-spacing: 0.07em;

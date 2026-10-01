@@ -17,49 +17,51 @@ public sealed class ElsaThemeStoreApiTests : IAsyncLifetime
     private HttpClient _client = null!;
 
     [Fact]
-    public async Task MaterialDesignCanBeSetAsTheDefaultBuiltInTheme()
+    public async Task NonSignatureBuiltInThemeCanBeSetAsTheDefault()
     {
-        var response = await _client.PutAsJsonAsync("/_elsa/theme-store/default", new { ThemeId = "material-design" });
+        var response = await _client.PutAsJsonAsync("/_elsa/theme-store/default", new { ThemeId = "stone" });
         response.EnsureSuccessStatusCode();
         var store = await response.Content.ReadFromJsonAsync<ThemeStoreResponse>();
 
         Assert.NotNull(store);
-        Assert.Equal("material-design", store.DefaultThemeId);
+        Assert.Equal("stone", store.DefaultThemeId);
     }
 
     [Fact]
     public async Task BuiltInThemeCanBeDisabledAndReEnabled()
     {
-        var disableResponse = await _client.PutAsJsonAsync("/_elsa/theme-store/themes/hot-pink/visibility", new { Enabled = false });
+        var disableResponse = await _client.PutAsJsonAsync("/_elsa/theme-store/themes/blueprint/visibility", new { Enabled = false });
         disableResponse.EnsureSuccessStatusCode();
         var disabledStore = await disableResponse.Content.ReadFromJsonAsync<ThemeStoreResponse>();
 
         Assert.NotNull(disabledStore);
-        Assert.Contains("hot-pink", disabledStore.DisabledBuiltInThemeIds ?? []);
+        Assert.Contains("blueprint", disabledStore.DisabledBuiltInThemeIds ?? []);
 
-        var enableResponse = await _client.PutAsJsonAsync("/_elsa/theme-store/themes/hot-pink/visibility", new { Enabled = true });
+        var enableResponse = await _client.PutAsJsonAsync("/_elsa/theme-store/themes/blueprint/visibility", new { Enabled = true });
         enableResponse.EnsureSuccessStatusCode();
         var enabledStore = await enableResponse.Content.ReadFromJsonAsync<ThemeStoreResponse>();
 
         Assert.NotNull(enabledStore);
-        Assert.DoesNotContain("hot-pink", enabledStore.DisabledBuiltInThemeIds ?? []);
+        Assert.DoesNotContain("blueprint", enabledStore.DisabledBuiltInThemeIds ?? []);
     }
 
     [Fact]
     public async Task DefaultBuiltInThemeCannotBeDisabled()
     {
-        var defaultResponse = await _client.PutAsJsonAsync("/_elsa/theme-store/default", new { ThemeId = "material-design" });
+        var defaultResponse = await _client.PutAsJsonAsync("/_elsa/theme-store/default", new { ThemeId = "stone" });
         defaultResponse.EnsureSuccessStatusCode();
 
-        var disableResponse = await _client.PutAsJsonAsync("/_elsa/theme-store/themes/material-design/visibility", new { Enabled = false });
+        var disableResponse = await _client.PutAsJsonAsync("/_elsa/theme-store/themes/stone/visibility", new { Enabled = false });
 
         Assert.Equal(HttpStatusCode.BadRequest, disableResponse.StatusCode);
     }
 
-    [Fact]
-    public async Task VisibilityEndpointRejectsNonBuiltInThemeIds()
+    [Theory]
+    [InlineData("some-custom-theme")]
+    [InlineData("hot-pink")] // A retired built-in.
+    public async Task VisibilityEndpointRejectsNonBuiltInThemeIds(string themeId)
     {
-        var response = await _client.PutAsJsonAsync("/_elsa/theme-store/themes/some-custom-theme/visibility", new { Enabled = false });
+        var response = await _client.PutAsJsonAsync($"/_elsa/theme-store/themes/{themeId}/visibility", new { Enabled = false });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -67,10 +69,10 @@ public sealed class ElsaThemeStoreApiTests : IAsyncLifetime
     [Fact]
     public async Task DisabledBuiltInThemeCannotBecomeTheDefault()
     {
-        var disableResponse = await _client.PutAsJsonAsync("/_elsa/theme-store/themes/hot-pink/visibility", new { Enabled = false });
+        var disableResponse = await _client.PutAsJsonAsync("/_elsa/theme-store/themes/blueprint/visibility", new { Enabled = false });
         disableResponse.EnsureSuccessStatusCode();
 
-        var defaultResponse = await _client.PutAsJsonAsync("/_elsa/theme-store/default", new { ThemeId = "hot-pink" });
+        var defaultResponse = await _client.PutAsJsonAsync("/_elsa/theme-store/default", new { ThemeId = "blueprint" });
 
         Assert.Equal(HttpStatusCode.BadRequest, defaultResponse.StatusCode);
     }
@@ -81,6 +83,8 @@ public sealed class ElsaThemeStoreApiTests : IAsyncLifetime
     [InlineData("schematic")]
     [InlineData("atelier")]
     [InlineData("elsa-cloud")]
+    [InlineData("signal")]
+    [InlineData("dusk")]
     public async Task EverySignatureThemeCanBeSetAsTheDefaultBuiltInTheme(string themeId)
     {
         var response = await _client.PutAsJsonAsync("/_elsa/theme-store/default", new { ThemeId = themeId });

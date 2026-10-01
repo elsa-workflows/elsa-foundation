@@ -50,8 +50,8 @@ Optionally supply `--font-display` (title face; defaults to `--font-sans`).
 ### Modes and the `<html>` attributes
 
 Studio offers four modes: `light`, `dark`, `dim` and `high-contrast`. Every theme defines Light
-and Dark; Dim and High contrast are optional per theme (the five signature themes — Meridian,
-Drift, Schematic, Atelier, Elsa Cloud — define all four). ThemeProvider sets two attributes:
+and Dark; Dim and High contrast are optional per theme (the seven signature themes — Meridian,
+Drift, Schematic, Atelier, Elsa Cloud, Signal, Dusk — define all four). ThemeProvider sets two attributes:
 
 | Attribute | Values | Meaning |
 | --- | --- | --- |
@@ -133,15 +133,11 @@ For modules bundled before the `--studio-*` layer existed: `--surface`, `--text`
 
 ## Layer 2 material vocabulary — `--studio-material-*` (STABLE, opt-in)
 
-Material themes (`stone`, `paper`, `blueprint`, `ceramic`, `carbon`, `brass-instrument`) add
+Material themes (`stone`, `blueprint`, `brass-instrument`) add
 textured, layered surface recipes on top of the flat `--studio-*` layer. They are gated on the
 `html[data-theme-material]` attribute, so **flat themes are untouched** (see [Rules](#rules)).
 A module opts into the material look by consuming these tokens **inside a
 `[data-theme-material]` guard**; without the guard the module stays flat.
-
-The built-in `material-design` theme is intentionally not part of this family: it implements
-Google's flat Material Design language and the Elsa Studio 3 palette through the ordinary
-semantic tokens. It does not set `data-theme-material` and must not inherit physical textures.
 
 Each material theme defines the full set below per theme+mode block. If you add a new
 `--studio-material-*` token you MUST define it in **every** material theme block, not as one
@@ -220,8 +216,7 @@ vocabulary. A module that wants the glass idiom under `black-glass` guards on
    `[data-theme-appearance="high-contrast"]` for a High-contrast-only adjustment the tokens
    cannot express, and `[data-theme-layout="…"]` for arrangement (see [Modes and the `<html>` attributes](#modes-and-the-html-attributes)).
 4. **Gate every material treatment on `[data-theme-material]`.** Flat themes (`meridian`,
-   `drift`, `schematic`, `atelier`, `elsa-cloud`, `harbor`, `borealis`, `ember`, `orchid`, `hot-pink`, `coral`,
-   `graphite`) must stay flat. Any rule
+   `drift`, `schematic`, `atelier`, `elsa-cloud`, `signal`, `dusk`) must stay flat. Any rule
    consuming a `--studio-material-*` token belongs inside an `html[data-theme-material] …`
    guard.
 5. **A new token is defined per theme, not once.** Any new `--studio-material-*` /
