@@ -87,10 +87,11 @@ Then open **http://localhost:14000** (Studio); it calls **http://localhost:13000
 Sign in as `admin` / `Password123!`.
 
 Without `Elsa__Persistence__EntityFramework__Migrate__Policy=AutoMigrate` the image's Production settings apply
-`Validate`: the container then exits as it starts, naming the `DataProtection.Keys` module's pending migration, until
-the migrations have been applied out of process with `dotnet elsa persistence apply --modules DataProtection.Keys`
-against the same database file, as a deployment pipeline does (see
-[`docs/docker.md`](../../docs/docker.md#data-protection-keys)).
+`Validate`: on an empty `elsa-data` volume the container then exits as it starts, with
+`EfPendingMigrationsException: EF module 'DataProtection.Keys' has pending migrations`. Either set the policy as above,
+or apply the migrations out of process first, as a deployment pipeline does, with the command the exception names:
+`dotnet elsa persistence apply --host "<host directory>" --modules DataProtection.Keys --provider Sqlite --connection-env ELSA_EF_CONNECTION`,
+where `ELSA_EF_CONNECTION` reaches the same database file (see [`docs/docker.md`](../../docs/docker.md#data-protection-keys)).
 
 ### Pointing Studio at the server backend
 

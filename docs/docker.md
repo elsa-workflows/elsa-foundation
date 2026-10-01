@@ -204,9 +204,11 @@ volumes:
 ```
 
 The keys survive a restart and a recreate of the container for as long as the volume exists; `docker compose down -v`,
-or `docker volume rm elsa-data`, discards them. These stacks migrate as they start: under the image's own
-`Validate` policy the container exits as it starts, naming the `DataProtection.Keys` module's pending migration, until
-`dotnet elsa persistence apply --modules DataProtection.Keys` has created the table in that file.
+or `docker volume rm elsa-data`, discards them. These stacks migrate as they start
+(`Elsa__Persistence__EntityFramework__Migrate__Policy=AutoMigrate`). Under the image's own `Validate` policy a container
+on an empty volume exits as it starts, with `EfPendingMigrationsException: EF module 'DataProtection.Keys' has pending
+migrations`, until the table exists: run `dotnet elsa persistence apply --host "<host directory>" --modules
+DataProtection.Keys --provider Sqlite --connection-env ELSA_EF_CONNECTION` against that file first, or set the policy.
 
 ---
 
