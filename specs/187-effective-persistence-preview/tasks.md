@@ -1,7 +1,7 @@
 # Tasks: Effective persistence preview
 
 **Input**: [plan](plan.md), [spec](spec.md), research, data model and contracts.
-**Status**: Implementation in progress under #2177, following delivered specification #2175 / PR #2178. One coherent implementation issue/PR owns T001–T020; checks below record actual completed work, not delivery. Prior local acceptance and regression gates are retained in the evidence record. Current Copilot findings reopened selection and file-acquisition verification; the disabled-ID correction has focused proof, while the file-race correction and final integrated gates remain active. T020 retains PR, exact-head CI/review and post-merge obligations.
+**Status**: Implementation in progress under #2177, following delivered specification #2175 / PR #2178. One coherent implementation issue/PR owns T001–T020; checks below record actual completed work, not delivery. Prior local acceptance and regression gates are retained in the evidence record. Copilot correctness findings now have integrated selection/file-acquisition fixes and adverse controls. The architecture gate found and removed undocumented friend access. Main was integrated before final regression gates. T020 retains PR, exact-head CI/review and post-merge obligations.
 
 ## Phase 1: Setup
 
