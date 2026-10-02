@@ -86,6 +86,99 @@ public sealed class OidcBearerNormalizationTests
         Assert.Equal(Provider, host.Mappings.LastProvider);
     }
 
+    [Theory]
+    [InlineData("http://issuer.example.test/", false, "https://metadata.example.test/custom.json")]
+    [InlineData("https://issuer.example.test/", false, "http://metadata.example.test/custom.json")]
+    [InlineData("http://127.0.0.1:43128/", true, "https://metadata.example.test/custom.json")]
+    [InlineData("https://issuer.example.test/", true, "http://127.0.0.1:43128/custom.json")]
+    public async Task Opt_in_activation_refuses_http_authority_or_final_metadata_outside_the_local_opt_out(
+        string authority,
+        bool requireHttpsMetadata,
+        string metadataAddress)
+    {
+        var mappings = new TestClaimMappingStore();
+        var normalizer = TestClaimsNormalizer.Sync(_ => Result(new ClaimsPrincipal(
+            new ClaimsIdentity(RequiredNormalizedClaims(), OidcBearerNormalizationEvents.NormalizedAuthenticationType))));
+
+        var exception = await Assert.ThrowsAsync<OptionsValidationException>(async () =>
+        {
+            await using var host = await NormalizationTestHost.StartAsync(
+                mappings: mappings,
+                normalizer: normalizer,
+                configureOidcOptions: options =>
+                {
+                    options.Authority = authority;
+                    options.RequireHttpsMetadata = requireHttpsMetadata;
+                },
+                configureBearerOptions: options => options.MetadataAddress = metadataAddress);
+        });
+
+        Assert.Contains(OidcBearerOptionsValidator.ConfigurationInvalid, exception.Message, StringComparison.Ordinal);
+        Assert.Equal(0, mappings.Calls);
+        Assert.Equal(0, normalizer.Calls);
+    }
+
+    [Fact]
+    public async Task Opt_in_activation_refuses_remote_http_metadata_added_after_owned_postconfigure()
+    {
+        var mappings = new TestClaimMappingStore();
+        var normalizer = TestClaimsNormalizer.Sync(_ => Result(new ClaimsPrincipal(
+            new ClaimsIdentity(RequiredNormalizedClaims(), OidcBearerNormalizationEvents.NormalizedAuthenticationType))));
+
+        var exception = await Assert.ThrowsAsync<OptionsValidationException>(async () =>
+        {
+            await using var host = await NormalizationTestHost.StartAsync(
+                mappings: mappings,
+                normalizer: normalizer,
+                postConfigureBearerOptions: options => options.MetadataAddress = "http://metadata.example.test/late.json");
+        });
+
+        Assert.Contains(OidcBearerOptionsValidator.ConfigurationInvalid, exception.Message, StringComparison.Ordinal);
+        Assert.Equal(0, mappings.Calls);
+        Assert.Equal(0, normalizer.Calls);
+    }
+
+    [Fact]
+    public async Task Loopback_http_authority_and_generated_metadata_are_allowed_when_https_is_not_required()
+    {
+        const string authority = "http://127.0.0.1:43128/realm/";
+        await using var host = await NormalizationTestHost.StartAsync(
+            configureOidcOptions: options =>
+            {
+                options.Authority = authority;
+                options.RequireHttpsMetadata = false;
+            });
+
+        var bearer = host.GetBearerOptions();
+        Assert.Equal(authority, bearer.Authority);
+        Assert.False(bearer.RequireHttpsMetadata);
+        Assert.NotNull(bearer.MetadataAddress);
+        var finalMetadataAddress = new Uri(bearer.MetadataAddress!);
+        Assert.Equal(Uri.UriSchemeHttp, finalMetadataAddress.Scheme);
+        Assert.True(finalMetadataAddress.IsLoopback);
+    }
+
+    [Fact]
+    public async Task Legacy_bearer_options_keep_remote_http_metadata_when_claim_normalization_is_disabled()
+    {
+        const string authority = "http://issuer.example.test/";
+        const string metadataAddress = "http://metadata.example.test/custom.json";
+        await using var host = await NormalizationTestHost.StartAsync(
+            configureOidcOptions: options =>
+            {
+                options.NormalizeBearerClaims = false;
+                options.Authority = authority;
+                options.RequireHttpsMetadata = false;
+            },
+            configureBearerOptions: options => options.MetadataAddress = metadataAddress);
+
+        var bearer = host.GetBearerOptions();
+        Assert.Equal(authority, bearer.Authority);
+        Assert.Equal(metadataAddress, bearer.MetadataAddress);
+        Assert.False(bearer.RequireHttpsMetadata);
+        Assert.Null(bearer.EventsType);
+    }
+
     [Fact]
     public async Task A_second_issuer_cannot_be_normalized_after_discovery_address_changes_on_options_reload()
     {
@@ -109,6 +202,7 @@ public sealed class OidcBearerNormalizationTests
                 options.TokenValidationParameters.IssuerValidator = (issuer, _, _) =>
                     issuer is Issuer or SecondIssuer ? issuer : throw new SecurityTokenInvalidIssuerException();
             });
+        Assert.Equal(firstMetadataAddress, host.GetBearerOptions().MetadataAddress);
 
         using var firstIssuerResponse = await host.SendBearerAsync(host.CreateToken());
         Assert.Equal(HttpStatusCode.OK, firstIssuerResponse.StatusCode);
@@ -1466,13 +1560,17 @@ public sealed class OidcBearerNormalizationTests
 
         public TestClaimMappingStore Mappings { get; }
 
+        public JwtBearerOptions GetBearerOptions() => _host.Services.GetRequiredService<IOptionsMonitor<JwtBearerOptions>>().Get(Scheme);
+
         public static async Task<NormalizationTestHost> StartAsync(
             TestClaimMappingStore? mappings = null,
             Action<JwtBearerEvents>? configureEvents = null,
             TestClaimsNormalizer? normalizer = null,
             Action<HttpContext>? onEndpointReached = null,
             Func<RSA, HttpMessageHandler>? backchannelHandlerFactory = null,
-            Action<JwtBearerOptions>? configureBearerOptions = null)
+            Action<JwtBearerOptions>? configureBearerOptions = null,
+            Action<JwtBearerOptions>? postConfigureBearerOptions = null,
+            Action<OidcAuthenticationOptions>? configureOidcOptions = null)
         {
             mappings ??= new TestClaimMappingStore();
             var rsa = RSA.Create(2048);
@@ -1500,6 +1598,7 @@ public sealed class OidcBearerNormalizationTests
                             options.ProviderId = Provider;
                             options.TenantId = Tenant;
                             options.RequireHttpsMetadata = false;
+                            configureOidcOptions?.Invoke(options);
                         });
                         if (configureEvents is not null)
                             services.Configure<JwtBearerOptions>(Scheme, options => configureEvents(options.Events));
@@ -1512,22 +1611,24 @@ public sealed class OidcBearerNormalizationTests
                             });
                         services.PostConfigure<JwtBearerOptions>(Scheme, options =>
                         {
-                            if (backchannel is not null)
-                                return;
-                            options.ConfigurationManager = null;
-                            options.TokenValidationParameters = new TokenValidationParameters
+                            if (backchannel is null)
                             {
-                                ValidateIssuer = true,
-                                ValidIssuer = Issuer,
-                                ValidateAudience = true,
-                                ValidAudience = Audience,
-                                ValidateLifetime = true,
-                                RequireExpirationTime = true,
-                                RequireSignedTokens = true,
-                                ValidateIssuerSigningKey = true,
-                                IssuerSigningKey = signingKey,
-                                ClockSkew = TimeSpan.Zero
-                            };
+                                options.ConfigurationManager = null;
+                                options.TokenValidationParameters = new TokenValidationParameters
+                                {
+                                    ValidateIssuer = true,
+                                    ValidIssuer = Issuer,
+                                    ValidateAudience = true,
+                                    ValidAudience = Audience,
+                                    ValidateLifetime = true,
+                                    RequireExpirationTime = true,
+                                    RequireSignedTokens = true,
+                                    ValidateIssuerSigningKey = true,
+                                    IssuerSigningKey = signingKey,
+                                    ClockSkew = TimeSpan.Zero
+                                };
+                            }
+                            postConfigureBearerOptions?.Invoke(options);
                         });
                     });
                     webHost.Configure(app =>
@@ -1551,16 +1652,9 @@ public sealed class OidcBearerNormalizationTests
             }
             catch
             {
-                try
-                {
-                    await host.StopAsync();
-                }
-                finally
-                {
-                    host.Dispose();
-                    backchannel?.Dispose();
-                    rsa.Dispose();
-                }
+                host.Dispose();
+                backchannel?.Dispose();
+                rsa.Dispose();
                 throw;
             }
         }

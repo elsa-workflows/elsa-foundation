@@ -37,8 +37,7 @@ public sealed class OidcBearerOptionsValidator(
             string.IsNullOrWhiteSpace(target.JwtBearerScheme) || target.JwtBearerScheme != target.JwtBearerScheme.Trim() ||
             string.Equals(target.JwtBearerScheme, OidcBearerNormalizationEvents.NormalizedAuthenticationType, StringComparison.Ordinal) ||
             string.IsNullOrWhiteSpace(target.Audience ?? target.ClientId) ||
-            !Uri.TryCreate(target.Authority, UriKind.Absolute, out var authority) ||
-            (authority.Scheme != Uri.UriSchemeHttps && (target.RequireHttpsMetadata || authority.Scheme != Uri.UriSchemeHttp)))
+            !IsAllowedMetadataUri(target.Authority, target.RequireHttpsMetadata))
             return ValidateOptionsResult.Fail(ConfigurationInvalid);
         return ValidateOptionsResult.Success;
     }
@@ -47,6 +46,9 @@ public sealed class OidcBearerOptionsValidator(
     {
         if (!registration.NormalizeBearerClaims || !string.Equals(name, registration.JwtBearerScheme, StringComparison.Ordinal))
             return;
+        if (!IsAllowedMetadataUri(target.Authority, target.RequireHttpsMetadata) ||
+            (!string.IsNullOrEmpty(target.MetadataAddress) && !IsAllowedMetadataUri(target.MetadataAddress, target.RequireHttpsMetadata)))
+            throw new OptionsValidationException(name ?? Options.DefaultName, typeof(JwtBearerOptions), [ConfigurationInvalid]);
         var defaults = new JwtBearerEvents();
         if (target.EventsType is not null || target.Events is null || target.Events.GetType() != typeof(JwtBearerEvents) ||
             !Equals(target.Events.OnChallenge, defaults.OnChallenge) || !Equals(target.Events.OnForbidden, defaults.OnForbidden))
@@ -84,6 +86,8 @@ public sealed class OidcBearerOptionsValidator(
             target.ForwardAuthenticate is not null || target.ForwardChallenge is not null || target.ForwardForbid is not null ||
             target.ForwardSignIn is not null || target.ForwardSignOut is not null || target.ForwardDefault is not null || target.ForwardDefaultSelector is not null ||
             target.Authority != registration.Authority || target.Audience != registration.Audience ||
+            !IsAllowedMetadataUri(target.Authority, target.RequireHttpsMetadata) ||
+            (!string.IsNullOrEmpty(target.MetadataAddress) && !IsAllowedMetadataUri(target.MetadataAddress, target.RequireHttpsMetadata)) ||
             validation.ValidAudience != registration.Audience || validation.ValidAudiences?.Any() == true ||
             target.RequireHttpsMetadata != registration.RequireHttpsMetadata || target.IncludeErrorDetails || target.Challenge != "Bearer" ||
             registration.Services.Count(descriptor => descriptor.ServiceType == typeof(IClaimsNormalizer)) != 1 ||
@@ -106,5 +110,14 @@ public sealed class OidcBearerOptionsValidator(
             _metadataFrozen = true;
         }
         return ValidateOptionsResult.Success;
+    }
+
+    private static bool IsAllowedMetadataUri(string? address, bool requireHttpsMetadata)
+    {
+        if (!Uri.TryCreate(address, UriKind.Absolute, out var uri))
+            return false;
+
+        return uri.Scheme == Uri.UriSchemeHttps ||
+               (!requireHttpsMetadata && uri.Scheme == Uri.UriSchemeHttp && uri.IsLoopback);
     }
 }
