@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-02
 
-**Status**: In progress — implementation #2308; specification #2304 published; Worker publication remains separate.
+**Status**: Implemented — [PR #2315](https://github.com/elsa-workflows/elsa-foundation/pull/2315) merged as `b435c4acd4993017d2fc65883fd52c4d441e576f`; [resulting-main qualification](https://github.com/elsa-workflows/elsa-foundation/issues/2308#issuecomment-5958186720) passed. T028's final publication/issue/Project/claim bookkeeping remains tracked separately; Worker profile publication is a separate outcome.
 
 **Input**: [Program #1959](https://github.com/elsa-workflows/elsa-foundation/issues/1959), [profiles epic #1961](https://github.com/elsa-workflows/elsa-foundation/issues/1961), [specification task #2304](https://github.com/elsa-workflows/elsa-foundation/issues/2304), and the [Worker identity no-go](../../docs/reports/runtime-composition/worker-http-identity-boundary.md). This specification enables the missing authentication boundary; it does not publish a Worker profile or certify an external identity-provider deployment.
 

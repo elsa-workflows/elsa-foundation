@@ -39,7 +39,6 @@ No exception is requested. Authoring these documents is not an implementation ga
 ```text
 specs/190-worker-oidc-normalization/
   spec.md, plan.md, research.md, data-model.md, quickstart.md, tasks.md
-  checklists/requirements.md
   contracts/bearer-normalization.md
   contracts/acceptance-proof-matrix.md
 src/essentials/Foundation/Identity/Oidc/
