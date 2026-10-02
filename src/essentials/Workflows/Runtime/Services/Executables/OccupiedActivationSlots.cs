@@ -4,15 +4,14 @@ using Elsa.Workflows.Runtime.Core.Models;
 namespace Elsa.Workflows.Runtime.Services.Executables;
 
 /// <summary>
-/// The shell-start sweep over every slot an interrupted activation can be in (#2193): each slot that names an activation,
-/// of every definition with a live Published activation reference.
+/// The shell-start sweep over every occupied slot: each slot that names an activation, of every definition with a live
+/// Published activation reference.
 /// </summary>
 /// <remarks>
-/// A half-done activation always has a live Published source reference, minted before its slot transition, so these are
-/// all the slots a dying process can have left half done. <see cref="CompleteInterruptedActivationsStartupTask"/> completes
-/// the activations; a feature that keeps its own record of activations, such as Publishing's journal (#2223), sweeps the
-/// same slots to bring that record into line. A failure never stops the sweep or the shell from starting: the caller is
-/// told, and logs it in its own words.
+/// An activation always has a live Published source reference, minted before its switch, so these are all the slots an
+/// activation can occupy. A feature that keeps its own record of activations outside the runtime's commit
+/// (<see cref="IWorkflowActivationSwitch"/>), such as Publishing's journal (#2223), sweeps them to bring that record into
+/// line. A failure never stops the sweep or the shell from starting: the caller is told, and logs it in its own words.
 /// </remarks>
 public sealed class OccupiedActivationSlots(
     IWorkflowExecutableSourceReferenceStore sourceReferenceStore,

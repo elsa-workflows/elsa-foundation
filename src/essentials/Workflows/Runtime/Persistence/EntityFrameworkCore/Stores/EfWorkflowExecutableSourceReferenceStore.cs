@@ -150,8 +150,6 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
             query = query.Where(x => x.DefinitionVersionIdHash == EfRelationalIdentity.Hash(definition) && x.DefinitionVersionId == Encode(definition));
         if (all?.Scope is { } sourceScope)
             query = query.Where(x => x.Scope == sourceScope.ToString());
-        if (all?.DefinitionId is { } definitionId)
-            query = query.Where(x => x.DefinitionIdHash == Hash(definitionId) && x.DefinitionId == Encode(definitionId));
         if (all?.LiveOnly == true)
             query = query.Where(x => !x.IsRetired && (x.ExpiresAtUtcTicks == null || x.ExpiresAtUtcTicks > all.Now!.Value.UtcTicks));
         if (cursor is not null)
@@ -280,6 +278,22 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
         catch (RuntimeArtifactEntityFrameworkPersistenceException) { throw; }
         catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception)) { context.ChangeTracker.Clear(); throw NormalizeProviderFailure(restore ? "restoring" : "retiring", expected.SourceReferenceId, exception); }
         catch { context.ChangeTracker.Clear(); throw; }
+    }
+
+    /// <summary>
+    /// Stages a move of one source reference in the caller's transaction, which <c>EfWorkflowActivationSwitch</c> shares
+    /// with a slot switch (#2230): <paramref name="next"/> says what the reference becomes, or <see langword="null"/> to leave
+    /// it. The row is written at the revision read, so a writer that changed it first makes the caller's commit lose.
+    /// </summary>
+    internal async ValueTask StageMoveAsync(
+        string sourceReferenceId,
+        Func<WorkflowExecutableSourceReference, WorkflowExecutableSourceReference?> next,
+        CancellationToken cancellationToken)
+    {
+        var scope = RequireScope();
+        var row = await RowsOf(scope, sourceReferenceId).SingleOrDefaultAsync(cancellationToken);
+        if (row is not null && next(Read(row, scope, sourceReferenceId)) is { } moved)
+            Copy(row, moved, scope);
     }
 
     public async ValueTask<bool> TryDeleteDoomedAsync(WorkflowExecutableSourceReference expectedDoomedReference, DateTimeOffset now, CancellationToken cancellationToken = default)
@@ -611,7 +625,6 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
             Artifact = artifact,
             Definition = definition,
             FilterScope = all?.Scope?.ToString(),
-            FilterDefinition = all?.DefinitionId,
             all?.LiveOnly,
             NowTicks = all?.Now?.UtcTicks
         });

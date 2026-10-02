@@ -228,6 +228,29 @@ public sealed class EfRecurringTriggerScheduleStore(
     {
         context.ChangeTracker.Clear();
         await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+        switch (await StageSwitchAsync(scope, activationId, replacedActivationId, deleteReplaced: false, cancellationToken))
+        {
+            case ProjectionStaging.Moved:
+                await context.RollbackAndClearAsync(transaction);
+                return EfWriteAttempt<bool>.Retry();
+            case ProjectionStaging.Unchanged:
+                await context.CommitAndClearAsync(transaction, cancellationToken, noChanges: true);
+                return true;
+        }
+        return await context.TryCommitAndClearAsync(transaction, EfRuntimeOperationalStoreSupport.ProjectionSwitches, operation, cancellationToken) is { } conflict
+            ? EfWriteAttempt<bool>.Retry(conflict)
+            : true;
+    }
+
+    /// <summary>
+    /// Stages <see cref="ActivateAsync"/>'s switch in the caller's transaction, which <c>EfWorkflowActivationSwitch</c>
+    /// shares with the slot transition (#2230). It reads both projections and decides only once neither state moved while
+    /// they were read. The caller saves, commits, and reads again on <see cref="ProjectionStaging.Moved"/> or a lost write.
+    /// With <paramref name="deleteReplaced"/> the replaced projection is deleted rather than switched off, as a revert does;
+    /// its schedules' due occurrences are still taken over first.
+    /// </summary>
+    internal async ValueTask<ProjectionStaging> StageSwitchAsync(string scope, string activationId, string? replacedActivationId, bool deleteReplaced, CancellationToken cancellationToken)
+    {
         var candidate = await ActivationState(scope, activationId, cancellationToken);
         var candidateRows = candidate is null ? [] : await RowsForActivation(scope, activationId, cancellationToken);
         var distinct = replacedActivationId is not null && !StringComparer.Ordinal.Equals(activationId, replacedActivationId);
@@ -235,21 +258,17 @@ public sealed class EfRecurringTriggerScheduleStore(
         var replacedRows = replaced is null ? [] : await RowsForActivation(scope, replacedActivationId!, cancellationToken);
         if (await StateMovedAsync(scope, activationId, candidate, cancellationToken) ||
             distinct && await StateMovedAsync(scope, replacedActivationId!, replaced, cancellationToken))
-        {
-            await context.RollbackAndClearAsync(transaction);
-            return EfWriteAttempt<bool>.Retry();
-        }
+            return ProjectionStaging.Moved;
 
         if (candidate is null)
             throw new InvalidOperationException($"Activation '{activationId}' has no prepared recurring-schedule projection.");
-        // The candidate is checked first, so a switch that already happened is a no-op whoever made it (#2193).
+        // The candidate is checked first, so a switch that already happened is a no-op whoever made it.
         if (candidate.IsActive)
         {
             await EnsureActiveProjectionAsync(candidate, candidateRows, scope, activationId, cancellationToken);
             if (replaced is { IsActive: true })
                 throw new InvalidOperationException($"Recurring-schedule activation '{activationId}' is active while replaced activation '{replacedActivationId}' is still active.");
-            await context.CommitAndClearAsync(transaction, cancellationToken, noChanges: true);
-            return true;
+            return ProjectionStaging.Unchanged;
         }
         EnsurePreparedProjection(candidate, candidateRows, scope, activationId);
         if (distinct)
@@ -272,7 +291,12 @@ public sealed class EfRecurringTriggerScheduleStore(
         candidate.IsActive = true;
         candidate.Revision = checked(candidate.Revision + 1);
         UpdateStateContent(candidate, scope);
-        if (replaced is not null)
+        if (replaced is not null && deleteReplaced)
+        {
+            context.RecurringTriggerSchedules.RemoveRange(replacedRows);
+            context.RecurringTriggerScheduleProjectionStates.Remove(replaced.Entity);
+        }
+        else if (replaced is not null)
         {
             foreach (var row in replacedRows)
                 Copy(row, Read(row, scope) with { IsActive = false }, scope, checked(row.Revision + 1));
@@ -280,10 +304,46 @@ public sealed class EfRecurringTriggerScheduleStore(
             replaced.Revision = checked(replaced.Revision + 1);
             UpdateStateContent(replaced, scope);
         }
-        return await context.TryCommitAndClearAsync(transaction, EfRuntimeOperationalStoreSupport.ProjectionSwitches, operation, cancellationToken) is { } conflict
-            ? EfWriteAttempt<bool>.Retry(conflict)
-            : true;
+        return ProjectionStaging.Staged;
     }
+
+    /// <summary>
+    /// Stages the deletion of an activation's projection in the caller's transaction (#2230). Unlike
+    /// <see cref="DeleteByActivationAsync"/>, it reads the state before the rows and again after them, so a switch committed
+    /// meanwhile is read again rather than taken for a corrupt projection; with <paramref name="unlessServing"/> a projection
+    /// that serves is left alone. Every row and the state are deleted at the revisions read, so a switch that commits before
+    /// the caller does makes its commit lose, and the caller reads again.
+    /// </summary>
+    internal async ValueTask<ProjectionStaging> StageDeletionAsync(string scope, string activationId, bool unlessServing, CancellationToken cancellationToken)
+    {
+        var state = await ActivationState(scope, activationId, cancellationToken);
+        var rows = await RowsForActivation(scope, activationId, cancellationToken);
+        if (await StateMovedAsync(scope, activationId, state, cancellationToken))
+            return ProjectionStaging.Moved;
+        if (unlessServing && state is { IsActive: true })
+            return ProjectionStaging.Serves;
+
+        foreach (var row in rows)
+            if (Read(row, scope, Decode(row.ScheduleId)).ActivationId != activationId)
+                throw new InvalidDataException($"Recurring-schedule activation '{activationId}' contains a row with a different activation identity.");
+        if (state is not null)
+        {
+            if (state.IsActive) await EnsureActiveProjectionAsync(state, rows, scope, activationId, cancellationToken);
+            else EnsurePreparedProjection(state, rows, scope, activationId);
+            context.RecurringTriggerScheduleProjectionStates.Remove(state.Entity);
+        }
+        context.RecurringTriggerSchedules.RemoveRange(rows);
+        return state is null && rows.Length == 0 ? ProjectionStaging.Unchanged : ProjectionStaging.Staged;
+    }
+
+    /// <summary>Where the activation's projection stands, read in the caller's transaction (#2230).</summary>
+    internal async ValueTask<WorkflowActivationProjectionState> StageStateAsync(string scope, string activationId, CancellationToken cancellationToken) =>
+        await ActivationState(scope, activationId, cancellationToken) is { } state
+            ? ActivationProjectionStateLifecycle.Read(state.IsActive, state.Revision)
+            : WorkflowActivationProjectionState.Missing;
+
+    /// <summary>The context every staged change writes through; a switch commits only stores that share it.</summary>
+    internal RuntimeDbContext Context => context;
 
     public async ValueTask<WorkflowActivationProjectionState> FindActivationStateAsync(string activationId, CancellationToken cancellationToken = default)
     {
@@ -299,7 +359,8 @@ public sealed class EfRecurringTriggerScheduleStore(
     }
 
     /// <summary>
-    /// No index covers the slot, so this reads the scope's active schedules once; only deactivation calls it. The rows'
+    /// No index covers the slot, so this reads the scope's active schedules once; only deactivation, and the repair of a slot
+    /// left half done, call it. The rows'
     /// activation ids are deduplicated here rather than with a database <c>DISTINCT</c> over a text column.
     /// </summary>
     public async ValueTask<IReadOnlyCollection<string>> ListServingActivationIdsAsync(string slotId, CancellationToken cancellationToken = default)

@@ -91,13 +91,12 @@ The authority transition is one coordinated operation (identical to what the API
    route table, and the recurring pump).
 4. Activate the slot with compare-and-swap on its expected revision, then switch the prepared serving
    projections to the new publication and retire the replaced one.
-5. The runtime `IWorkflowActivationCoordinator` runs steps 3 and 4 and the compensation. If a process dies after
-   the slot transition, the coordinator completes that activation before the slot's next activation, and at the
-   next shell start; `IPublicationActivator.CompleteAsync` then brings the publication records into line, also when a
-   republish of the same version finds them behind (#2223). A failed activation compensates by restoring the previous
-   authority before the candidate is removed. A candidate that shares the winner's activation id, as two nodes
-   reconciling one mounted set do, keeps the winner's projections rather than compensating them away, and reports
-   `AlreadyActive`, or `Activated` when it completed the winner's activation (ADR 0043, Invariant 6; #2251).
+5. The runtime `IWorkflowActivationCoordinator` runs steps 3 and 4: the slot, the serving projections and the replaced
+   publication's source reference switch in one commit of `IWorkflowActivationSwitch`, which describes what a failure,
+   a cancellation or a stopped process leaves (ADR 0043). The publication records are written after that commit, so
+   `IPublicationActivator.CompleteAsync` brings them into line: before every activation, when a republish of the same
+   version finds them behind, and at shell start (#2223). It first calls the coordinator's `EnsureServingAsync`, which
+   repairs a slot a version before #2230 left on its way to serving.
 6. Retire or restore the publication source reference as provenance. Existing executions stay pinned to their
    immutable executable artifact; unpublishing does not delete that artifact.
 

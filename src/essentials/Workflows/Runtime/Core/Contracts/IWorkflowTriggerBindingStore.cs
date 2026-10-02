@@ -54,8 +54,8 @@ public interface IWorkflowTriggerBindingStore
     /// <summary>
     /// Reports where one activation's projection stands: missing, prepared but never served, serving, or switched off
     /// by the activation that replaced it. It must answer for an activation with no bindings. The activation
-    /// coordinator reads it to find an activation whose slot transition committed but whose projection was never
-    /// switched on, and a replaced activation whose reference was never retired, because a process died in between.
+    /// coordinator reads it to check that the activation a slot names serves, which a slot and its projections switched
+    /// in one commit always do (#2230), unless a version before #2230 stopped between its slot transition and its switch.
     /// </summary>
     ValueTask<WorkflowActivationProjectionState> FindActivationStateAsync(
         string activationId,
@@ -64,7 +64,8 @@ public interface IWorkflowTriggerBindingStore
     /// <summary>
     /// Lists, in ordinal order, the activations with at least one active binding minted for <paramref name="slotId"/>,
     /// whatever their source references say. Deactivation reads it to turn off every activation that serves a slot,
-    /// including one whose reference is retired, expired or gone (#2193). An activation with no bindings serves nothing
+    /// including one whose reference is retired, expired or gone (#2193), and so does the repair of a slot left half done
+    /// (<see cref="IWorkflowActivationSwitch.TryRepairAsync"/>). An activation with no bindings serves nothing
     /// through this store and is not listed.
     /// </summary>
     ValueTask<IReadOnlyCollection<string>> ListServingActivationIdsAsync(

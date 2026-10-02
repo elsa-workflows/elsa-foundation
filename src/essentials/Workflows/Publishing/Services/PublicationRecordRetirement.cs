@@ -13,7 +13,7 @@ public static class PublicationRecordRetirement
 {
     /// <summary>
     /// Retires a publication the slot no longer names. A candidate is retired too, with an activation time: a process that
-    /// stopped after its slot transition left it one, and it served once completion switched it on. A lost
+    /// stopped after the runtime's switch left it one, and it served from that switch on. A lost
     /// compare-and-swap is re-read once, because a concurrent completion may just have made the candidate active. A
     /// publication already retired or failed is left as it is.
     /// </summary>

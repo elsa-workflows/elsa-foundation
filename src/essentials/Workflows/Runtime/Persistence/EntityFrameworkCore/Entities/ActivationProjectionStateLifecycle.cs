@@ -32,8 +32,8 @@ public static class ActivationProjectionStateLifecycle
 
     /// <summary>
     /// Refuses to prepare an activation whose projection has served. A retry of an activation whose compensation could
-    /// not delete its projection would otherwise keep a state that reads as replaced, and a completion of the slot would
-    /// then retire the retry's reference (#2193).
+    /// not delete its projection would otherwise keep a state that reads as replaced and switch rows that served before
+    /// back on (#2193); the retry fails loudly instead, and its own discard deletes the projection.
     /// </summary>
     public static void EnsurePreparable(bool isActive, long revision, string projection, string activationId)
     {

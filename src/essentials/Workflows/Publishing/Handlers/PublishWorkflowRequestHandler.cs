@@ -209,7 +209,7 @@ public sealed class PublishWorkflowRequestHandler(
 
     /// <summary>
     /// The publication the slot already names, once its journal record says it serves. A process that stopped after the
-    /// slot transition leaves that record a candidate (#2223), so the publication is completed first, and a republish
+    /// runtime's switch leaves that record a candidate (#2223), so the publication is completed first, and a republish
     /// answers once it is active. One that cannot be completed is refused as a failed activation, never reported as
     /// published.
     /// </summary>

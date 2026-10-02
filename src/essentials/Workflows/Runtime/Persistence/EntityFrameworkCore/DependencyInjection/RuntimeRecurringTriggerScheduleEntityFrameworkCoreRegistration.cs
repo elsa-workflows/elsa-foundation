@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
 
 /// <summary>Registers the opt-in EF Core recurring-start schedule store (R27).</summary>
+/// <remarks>Serving through it takes the switch <see cref="RuntimeEntityFrameworkCoreRegistration.AddRuntimeEntityFrameworkCore"/> composes.</remarks>
 public static class RuntimeRecurringTriggerScheduleEntityFrameworkCoreRegistration
 {
     public static IServiceCollection AddRuntimeRecurringTriggerScheduleEntityFrameworkCore(this IServiceCollection services)

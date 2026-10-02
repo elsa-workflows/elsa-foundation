@@ -20,7 +20,9 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 /// <b>Failure policy:</b> observer exceptions are NOT swallowed. An observer that throws fails the whole
 /// publish, matching the indexer's existing "indexing failure fails the publish" rule — a stale projection is
 /// treated as an unindexed trigger, not tolerated silently. Keep observer work idempotent so a retried publish
-/// converges.
+/// converges. After a commit that cannot be undone, the coordinator logs the failure instead of failing: the repair of
+/// a slot left half done or partly switched by a version before #2230, and a same-activation winner whose answer was
+/// lost (see <see cref="IWorkflowActivationCoordinator.EnsureServingAsync"/>).
 /// </para>
 /// </remarks>
 public interface IWorkflowTriggerIndexObserver

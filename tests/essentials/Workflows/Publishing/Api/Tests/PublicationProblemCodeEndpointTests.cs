@@ -12,6 +12,7 @@ using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Publishing.Core.Requests;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Tests.Fixtures;
 using Elsa.Workflows.Runtime.Services.Executables;
 using Elsa.Workflows.Runtime.Services.Triggers;
 using Microsoft.AspNetCore.Http;
@@ -112,9 +113,8 @@ public sealed class PublicationProblemCodeEndpointTests : IAsyncLifetime
             configureServices: services =>
             {
                 ConfigureServices(services);
-                services.RemoveAll<IWorkflowActivationAuthority>();
-                services.AddSingleton<IWorkflowActivationAuthority>(sp => new RevisionRacingActivationAuthority(
-                    new InMemoryWorkflowActivationAuthority(), DefinitionId, "default", sp.GetRequiredService<TimeProvider>()));
+                services.Decorate((sp, inner) => new RevisionRacingActivationSwitch(
+                    inner, sp.GetRequiredService<IWorkflowActivationAuthority>(), DefinitionId, "default", sp.GetRequiredService<TimeProvider>()));
                 // PublishingDomainSeams registers a canned IPublicationSlotUnpublisher stub for the historical
                 // capture surface; this test needs the real handler so the CAS above can actually race it.
                 services.RemoveAll<IPublicationSlotUnpublisher>();
@@ -216,46 +216,31 @@ public sealed class PublicationProblemCodeEndpointTests : IAsyncLifetime
             ValueTask.FromResult(new ExpressionDraftValidationResult(ExpressionDraftValidationState.Valid, []));
     }
 
-    /// <summary>
-    /// Wraps the real in-memory activation authority so the first <see cref="TryDeactivateAsync"/> call for one
-    /// target slot loses a revision race to a distractor publish from the same owner, simulating a concurrent
-    /// publish that moved the slot between the unpublish handler's own read and its CAS.
-    /// </summary>
-    private sealed class RevisionRacingActivationAuthority(
-        IWorkflowActivationAuthority inner,
+    /// <summary>Moves the slot on, once, just before the deactivation's own switch, as a publish on another node would.</summary>
+    private sealed class RevisionRacingActivationSwitch(
+        IWorkflowActivationSwitch inner,
+        IWorkflowActivationAuthority authority,
         string definitionId,
         string slotName,
-        TimeProvider timeProvider) : IWorkflowActivationAuthority
+        TimeProvider timeProvider) : ForwardingActivationSwitch(inner)
     {
         private int _fired;
 
-        public ValueTask<WorkflowActivationSlot?> FindAsync(string workflowDefinitionId, string targetSlotName, CancellationToken cancellationToken = default) =>
-            inner.FindAsync(workflowDefinitionId, targetSlotName, cancellationToken);
-
-        public ValueTask<IReadOnlyCollection<WorkflowActivationSlot>> ListByDefinitionAsync(string workflowDefinitionId, CancellationToken cancellationToken = default) =>
-            inner.ListByDefinitionAsync(workflowDefinitionId, cancellationToken);
-
-        public ValueTask<WorkflowActivationTransition> TryActivateAsync(WorkflowActivationSlotRequest request, CancellationToken cancellationToken = default) =>
-            inner.TryActivateAsync(request, cancellationToken);
-
-        public async ValueTask<WorkflowActivationTransition> TryDeactivateAsync(
-            string workflowDefinitionId,
-            string targetSlotName,
-            WorkflowActivationSource source,
-            long expectedRevision,
-            DateTimeOffset updatedAt,
+        public override async ValueTask<WorkflowActivationTransition> TryDeactivateAsync(
+            WorkflowDeactivationSlotRequest request,
+            IReadOnlyCollection<string> alsoServing,
             CancellationToken cancellationToken = default)
         {
-            if (StringComparer.Ordinal.Equals(workflowDefinitionId, definitionId) &&
-                StringComparer.Ordinal.Equals(targetSlotName, slotName) &&
+            if (StringComparer.Ordinal.Equals(request.WorkflowDefinitionId, definitionId) &&
+                StringComparer.Ordinal.Equals(request.SlotName, slotName) &&
                 Interlocked.Exchange(ref _fired, 1) == 0)
             {
-                var raced = await inner.TryActivateAsync(new WorkflowActivationSlotRequest(
-                    workflowDefinitionId, targetSlotName, "racing-publication", source, expectedRevision, timeProvider.GetUtcNow()), cancellationToken);
+                var raced = await authority.TryActivateAsync(new WorkflowActivationSlotRequest(
+                    request.WorkflowDefinitionId, request.SlotName, "racing-publication", request.Source, request.ExpectedRevision, timeProvider.GetUtcNow()), cancellationToken);
                 Assert.True(raced.Succeeded, raced.Diagnostic);
             }
 
-            return await inner.TryDeactivateAsync(workflowDefinitionId, targetSlotName, source, expectedRevision, updatedAt, cancellationToken);
+            return await base.TryDeactivateAsync(request, alsoServing, cancellationToken);
         }
     }
 }

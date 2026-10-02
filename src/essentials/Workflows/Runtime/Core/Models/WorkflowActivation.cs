@@ -70,3 +70,22 @@ public sealed record WorkflowActivationSlotRequest(
     long ExpectedRevision,
     DateTimeOffset UpdatedAt,
     WorkflowActivationOwnershipIntent OwnershipIntent = WorkflowActivationOwnershipIntent.RespectExistingOwner);
+
+/// <summary>Asks <see cref="Contracts.IWorkflowActivationSwitch.TryDeactivateAsync"/> to empty a slot at <paramref name="ExpectedRevision"/>.</summary>
+public sealed record WorkflowDeactivationSlotRequest(
+    string WorkflowDefinitionId,
+    string SlotName,
+    WorkflowActivationSource Source,
+    long ExpectedRevision,
+    DateTimeOffset UpdatedAt);
+
+/// <summary>
+/// Asks <see cref="Contracts.IWorkflowActivationSwitch.TryRevertAsync"/> to undo <paramref name="Transition"/>, a
+/// successful transition its caller made: <paramref name="Reference"/> is the source reference of the activation it
+/// switched on, and <paramref name="Source"/> the caller's own source, which owns the slot until the revert.
+/// </summary>
+public sealed record WorkflowActivationRevert(
+    WorkflowActivationTransition Transition,
+    WorkflowExecutableSourceReference Reference,
+    WorkflowActivationSource Source,
+    DateTimeOffset UpdatedAt);

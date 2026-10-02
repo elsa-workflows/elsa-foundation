@@ -8,6 +8,7 @@ using Elsa.Workflows.Runtime.Extensions;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Workflows.Runtime.Services.Recovery;
+using Elsa.Workflows.Runtime.Services.Triggers;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -77,7 +78,8 @@ public sealed class RuntimeEntityFrameworkCoreStandaloneTests
         ("R24", typeof(IDurableTimerStore), typeof(EfDurableTimerStore)),
         ("R26", typeof(IWorkflowTriggerBindingStore), typeof(EfWorkflowTriggerBindingStore)),
         ("R27", typeof(IRecurringTriggerScheduleStore), typeof(EfRecurringTriggerScheduleStore)),
-        ("R28", typeof(IWorkflowActivationAuthority), typeof(EfWorkflowActivationAuthority))
+        ("R28", typeof(IWorkflowActivationAuthority), typeof(EfWorkflowActivationAuthority)),
+        ("R26-R28", typeof(IWorkflowActivationSwitch), typeof(EfWorkflowActivationSwitch))
     ];
 
     public static TheoryData<string> Compositions => ["aggregate only", "runtime root first", "runtime root after"];
@@ -180,6 +182,46 @@ public sealed class RuntimeEntityFrameworkCoreStandaloneTests
         Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(RuntimeDbContext));
         Assert.NotEqual(RuntimeOperationalStateStoreBackend.EntityFramework, RuntimeOperationalStateStoreBackend.Find(services)?.Name);
         Assert.Null(RuntimeCheckpointCommitStoreBackend.Find(services));
+    }
+
+    [Fact]
+    public void The_aggregate_refuses_to_replace_an_explicit_activation_switch_without_partial_mutation()
+    {
+        var services = new ServiceCollection().AddWorkflowRuntime();
+        services.AddScoped<IWorkflowActivationSwitch>(_ => throw new InvalidOperationException("foreign activation switch"));
+        var before = services.ToArray();
+
+        var refusal = Assert.Throws<InvalidOperationException>(() => services.AddRuntimeEntityFrameworkCore(Options()));
+
+        Assert.Contains("explicit workflow activation switch", refusal.Message, StringComparison.Ordinal);
+        Assert.Equal(before, services);
+    }
+
+    [Fact]
+    public async Task Shell_start_accepts_the_aggregates_activation_switch()
+    {
+        await using var provider = Compose("runtime root first").AddTriggerSpineStandIn().BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+
+        await provider.GetRequiredService<WorkflowActivationSwitchCompositionValidator>().InitializeAsync();
+    }
+
+    /// <summary>
+    /// A projection store registered over the aggregate's own leaves the EF switch beside a store it cannot commit with: the
+    /// switch refuses it when constructed, and shell start fails on that refusal rather than the first activation (#2230).
+    /// </summary>
+    [Fact]
+    public async Task The_EF_activation_switch_refuses_a_projection_store_the_aggregate_did_not_select()
+    {
+        var services = Compose("runtime root first").AddTriggerSpineStandIn();
+        services.AddSingleton<IWorkflowTriggerBindingStore, InMemoryWorkflowTriggerBindingStore>();
+        await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+
+        using (var scope = provider.CreateScope())
+            Assert.Contains(
+                nameof(InMemoryWorkflowTriggerBindingStore),
+                Assert.Throws<InvalidOperationException>(() => scope.ServiceProvider.GetRequiredService<IWorkflowActivationSwitch>()).Message,
+                StringComparison.Ordinal);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => provider.GetRequiredService<WorkflowActivationSwitchCompositionValidator>().InitializeAsync());
     }
 
     [Fact]

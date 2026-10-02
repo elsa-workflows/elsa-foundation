@@ -1,9 +1,7 @@
 using CShells.Features;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
-using Elsa.Tasks.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Services.Bookmarks;
-using Elsa.Workflows.Runtime.Services.Executables;
 using Elsa.Workflows.Runtime.Services.Triggers;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -52,11 +50,6 @@ public sealed class WorkflowsRuntimeTriggersFeature : IShellFeature
         services.TryAddSingleton<IWorkflowTriggerBindingStore, InMemoryWorkflowTriggerBindingStore>();
         services.TryAddSingleton<IWorkflowTriggerBindingExtractor, WorkflowTriggerBindingExtractor>();
         services.TryAddScoped<IWorkflowTriggerIndexer, WorkflowTriggerIndexer>();
-
-        // Activation needs this spine, so this is where an activation that a dying process left with its triggers
-        // switched off is completed at shell start (#2193).
-        services.TryAddScoped<OccupiedActivationSlots>();
-        services.TryAddEnumerable(ServiceDescriptor.Scoped<IStartupTask, CompleteInterruptedActivationsStartupTask>());
 
         // Cross-execution bookmark stimulus index, bridged onto the same bookmark state store the runtime
         // already owns so there is no second index document to keep consistent.

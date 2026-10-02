@@ -61,5 +61,7 @@
     <Compile Include="..\..\..\Tests\OverrunningIntentDispatcher.cs" Link="OverrunningIntentDispatcher.cs" />
     <!-- The live-drain contention scenarios intercept the outbox store through the runtime tests' forwarding base. -->
     <Compile Include="..\..\..\Tests\ForwardingOutboxStore.cs" Link="ForwardingOutboxStore.cs" />
+    <!-- #2230: the base of every activation-switch double, shared rather than copied. -->
+    <Compile Include="..\..\..\Tests\Fixtures\ForwardingActivationSwitch.cs" Link="ForwardingActivationSwitch.cs" />
   </ItemGroup>
 </Project>

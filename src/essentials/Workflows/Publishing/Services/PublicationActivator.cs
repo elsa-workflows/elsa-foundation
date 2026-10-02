@@ -19,12 +19,11 @@ namespace Elsa.Workflows.Publishing.Services;
 /// failure vocabulary.
 /// </para>
 /// <para>
-/// The journal follows the slot; it never decides serving. The slot transition commits before the projections switch
-/// and before the journal is written, so a process that stops in between leaves the slot's publication a candidate
-/// and the one it replaced active (#2223). <see cref="CompleteAsync"/> brings the journal back into line once the
-/// runtime has completed the slot's activation. It runs before every activation, on a same-version republish that
-/// finds the journal lagging, and at shell start (<see cref="CompleteInterruptedPublicationsStartupTask"/>). It reads
-/// the slot and the source references, which the runtime owns, and writes only publication records.
+/// The journal follows the slot; it never decides serving. It is written after the runtime's commit
+/// (<see cref="IWorkflowActivationSwitch"/>), so a process that stops in between leaves it lagging the slot (#2223), and
+/// <see cref="CompleteAsync"/> brings it back into line: before every activation, on a same-version republish that finds
+/// the journal lagging, and at shell start (<see cref="CompleteInterruptedPublicationsStartupTask"/>). It reads the slot
+/// and the source references, which the runtime owns, and writes only publication records.
 /// </para>
 /// </remarks>
 public sealed class PublicationActivator(
@@ -54,9 +53,9 @@ public sealed class PublicationActivator(
         WorkflowActivationResult activation;
         try
         {
-            // Complete the publication the slot names, and its journal, before replacing it (#2223). The coordinator
-            // completes the activation itself, but the journal would still hold that publication as a candidate, and
-            // retiring it as the replaced publication would fail.
+            // Bring the publication the slot names into line before replacing it (#2223): the runtime makes sure its
+            // activation serves, and the journal, which may still hold it as a candidate, is updated, because retiring a
+            // candidate as the replaced publication would fail.
             var completion = await CompleteAsync(candidate.WorkflowDefinitionId, candidate.SlotName, cancellationToken);
             if (!completion.Succeeded)
                 return new PublicationActivationResult(
@@ -152,7 +151,7 @@ public sealed class PublicationActivator(
         ArgumentException.ThrowIfNullOrWhiteSpace(slotName);
 
         // The runtime first: the journal may say a publication serves only once its activation does.
-        var completion = await activationCoordinator.CompleteAsync(workflowDefinitionId, slotName, cancellationToken);
+        var completion = await activationCoordinator.EnsureServingAsync(workflowDefinitionId, slotName, cancellationToken);
         var slot = completion.Slot;
         if (!completion.Succeeded)
             return new(false, slot, Failure: MapFailure(completion));
@@ -161,21 +160,7 @@ public sealed class PublicationActivator(
             await publicationStore.FindAsync(publicationId, cancellationToken) is not { } publication)
             return new(true, slot);
 
-        // The runtime names the activation its completion switched off even when it could not retire that one's source
-        // reference, which then reads as live (#2251). Its record is therefore retired on the runtime's report, as
-        // ActivateAsync retires the record its activation replaced, rather than on the reference. The completion that
-        // finally retires a leaked reference reports it too, usually once the slot's own record no longer lags, so this
-        // comes before the lag check.
         var now = timeProvider.GetUtcNow();
-        //
-        // The report can be stale: a completion that was overtaken (compensation handed the slot back to the activation it
-        // reported as replaced) names a predecessor that serves again. The slot is read again, and a report naming the
-        // activation it now serves retires nothing.
-        if (completion.ReplacedActivationId is { } replacedId &&
-            !StringComparer.Ordinal.Equals(replacedId, publicationId) &&
-            !(await activationAuthority.FindAsync(slot.WorkflowDefinitionId, slot.SlotName, cancellationToken) is { } served &&
-              StringComparer.Ordinal.Equals(served.ActiveActivationId, replacedId)))
-            await PublicationRecordRetirement.RetireAsync(publicationStore, await publicationStore.FindAsync(replacedId, cancellationToken), now, cancellationToken);
 
         // A publication the slot names that is already active is the common case and costs one read. One still a
         // candidate, or retired while the slot names it again, lags the slot. Marking it active is the last write, so a
