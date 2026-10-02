@@ -30,9 +30,9 @@ public sealed class OidcBearerActivationGuard(
         cancellationToken.ThrowIfCancellationRequested();
         if (scheme?.HandlerType != typeof(JwtBearerHandler))
             throw Invalid();
-        using var scope = scopes.CreateScope();
         try
         {
+            await using var scope = scopes.CreateAsyncScope();
             var services = scope.ServiceProvider;
             if (services.GetRequiredService<IPersistenceAccessContextAccessor>().Current.RequireScope() != new PersistenceScope(configured.TenantId!))
                 throw Invalid();

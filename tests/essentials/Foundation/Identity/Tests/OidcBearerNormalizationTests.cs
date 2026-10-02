@@ -3,6 +3,8 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Security.Claims;
 using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 using Elsa.Foundation.Identity.Authorization;
 using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Foundation.Identity.Core.Iam;
@@ -36,6 +38,7 @@ public sealed class OidcBearerNormalizationTests
 {
     private const string Scheme = "test-oidc-jwt";
     private const string Issuer = "https://issuer.example.test";
+    private const string SecondIssuer = "https://second-issuer.example.test";
     private const string Audience = "worker-api";
     private const string Provider = "provider-a";
     private const string Tenant = "tenant-a";
@@ -80,6 +83,58 @@ public sealed class OidcBearerNormalizationTests
         Assert.Equal(1, host.Mappings.Calls);
         Assert.Equal(Tenant, host.Mappings.LastTenant);
         Assert.Equal(Provider, host.Mappings.LastProvider);
+    }
+
+    [Fact]
+    public async Task A_second_issuer_cannot_be_normalized_after_discovery_address_changes_on_options_reload()
+    {
+        const string firstMetadataAddress = "https://metadata.example.test/issuer-a/.well-known/openid-configuration";
+        const string secondMetadataAddress = "https://metadata.example.test/issuer-b/.well-known/openid-configuration";
+        const string secondKeyId = "second-test-key";
+        using var secondRsa = RSA.Create(2048);
+        var secondSigningKey = new RsaSecurityKey(secondRsa) { KeyId = secondKeyId };
+        var mappings = new TestClaimMappingStore();
+        var endpointCalls = 0;
+        var metadataAddressVersion = 0;
+        await using var host = await NormalizationTestHost.StartAsync(
+            mappings: mappings,
+            onEndpointReached: _ => Interlocked.Increment(ref endpointCalls),
+            backchannelHandlerFactory: signingRsa => new LocalDiscoveryHandler(
+                new DiscoveryIssuer(Issuer, firstMetadataAddress, "test-key", signingRsa),
+                new DiscoveryIssuer(SecondIssuer, secondMetadataAddress, secondKeyId, secondRsa)),
+            configureBearerOptions: options =>
+            {
+                options.MetadataAddress = Volatile.Read(ref metadataAddressVersion) == 0 ? firstMetadataAddress : secondMetadataAddress;
+                options.TokenValidationParameters.IssuerValidator = (issuer, _, _) =>
+                    issuer is Issuer or SecondIssuer ? issuer : throw new SecurityTokenInvalidIssuerException();
+            });
+
+        using var firstIssuerResponse = await host.SendBearerAsync(host.CreateToken());
+        Assert.Equal(HttpStatusCode.OK, firstIssuerResponse.StatusCode);
+        Assert.Equal(1, mappings.Calls);
+        Assert.Equal(1, endpointCalls);
+
+        var secondIssuerToken = host.CreateToken(SecondIssuer, secondSigningKey);
+        using var refusedBeforeReload = await host.SendBearerAsync(secondIssuerToken);
+        Assert.Equal(HttpStatusCode.Unauthorized, refusedBeforeReload.StatusCode);
+        Assert.Equal(1, mappings.Calls);
+        Assert.Equal(1, endpointCalls);
+
+        Volatile.Write(ref metadataAddressVersion, 1);
+        Assert.True(host.RemoveBearerOptionsFromCache());
+        HttpStatusCode? statusAfterReload = null;
+        var reloadException = await Record.ExceptionAsync(async () =>
+        {
+            using var response = await host.SendBearerAsync(secondIssuerToken);
+            statusAfterReload = response.StatusCode;
+        });
+
+        Assert.True(reloadException is OptionsValidationException,
+            $"Expected options-validation refusal; observed status {(int?)statusAfterReload}, mapping calls {mappings.Calls}, endpoint calls {endpointCalls}.");
+        var exception = Assert.IsType<OptionsValidationException>(reloadException);
+        Assert.Contains(OidcBearerOptionsValidator.ConfigurationInvalid, exception.Message, StringComparison.Ordinal);
+        Assert.Equal(1, mappings.Calls);
+        Assert.Equal(1, endpointCalls);
     }
 
     [Fact]
@@ -1096,7 +1151,7 @@ public sealed class OidcBearerNormalizationTests
                 noResult();
                 break;
             case CallbackDisposition.Exception:
-                throw new InvalidOperationException(Canary);
+                throw new FormatException(Canary);
             default:
                 throw new ArgumentOutOfRangeException(nameof(disposition), disposition, null);
         }
@@ -1313,19 +1368,73 @@ public sealed class OidcBearerNormalizationTests
         public ValueTask SaveAsync(ClaimMappingRule rule, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
     }
 
+    private sealed record DiscoveryIssuer(string Issuer, string MetadataAddress, string KeyId, RSA SigningRsa)
+    {
+        public string JwksAddress => new Uri(new Uri(MetadataAddress), "../jwks").AbsoluteUri;
+    }
+
+    private sealed class LocalDiscoveryHandler(params DiscoveryIssuer[] issuers) : HttpMessageHandler
+    {
+        private readonly IReadOnlyDictionary<string, DiscoveryIssuer> _metadata = issuers.ToDictionary(
+            issuer => new Uri(issuer.MetadataAddress).AbsolutePath, StringComparer.Ordinal);
+        private readonly IReadOnlyDictionary<string, DiscoveryIssuer> _jwks = issuers.ToDictionary(
+            issuer => new Uri(issuer.JwksAddress).AbsolutePath, StringComparer.Ordinal);
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var path = request.RequestUri?.AbsolutePath;
+            if (path is not null && _metadata.TryGetValue(path, out var metadataIssuer))
+                return Task.FromResult(JsonResponse(new Dictionary<string, string>
+                {
+                    ["issuer"] = metadataIssuer.Issuer,
+                    ["jwks_uri"] = metadataIssuer.JwksAddress
+                }));
+
+            if (path is not null && _jwks.TryGetValue(path, out var signingIssuer))
+            {
+                var parameters = signingIssuer.SigningRsa.ExportParameters(false);
+                return Task.FromResult(JsonResponse(new
+                {
+                    keys = new[]
+                    {
+                        new
+                        {
+                            kty = "RSA",
+                            use = "sig",
+                            kid = signingIssuer.KeyId,
+                            alg = SecurityAlgorithms.RsaSha256,
+                            n = Base64UrlEncoder.Encode(parameters.Modulus!),
+                            e = Base64UrlEncoder.Encode(parameters.Exponent!)
+                        }
+                    }
+                }));
+            }
+
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
+        }
+
+        private static HttpResponseMessage JsonResponse<T>(T value) => new(HttpStatusCode.OK)
+        {
+            Content = new StringContent(JsonSerializer.Serialize(value), Encoding.UTF8, "application/json")
+        };
+    }
+
     private sealed class NormalizationTestHost : IAsyncDisposable
     {
         private const string KeyId = "test-key";
         private readonly RSA _rsa;
         private readonly RsaSecurityKey _signingKey;
         private readonly IHost _host;
+        private readonly HttpClient? _backchannel;
 
-        private NormalizationTestHost(IHost host, RSA rsa, RsaSecurityKey signingKey, TestClaimMappingStore mappings)
+        private NormalizationTestHost(IHost host, RSA rsa, RsaSecurityKey signingKey, TestClaimMappingStore mappings, HttpClient? backchannel)
         {
             _host = host;
             _rsa = rsa;
             _signingKey = signingKey;
             Mappings = mappings;
+            _backchannel = backchannel;
             Client = host.GetTestClient();
         }
 
@@ -1337,11 +1446,14 @@ public sealed class OidcBearerNormalizationTests
             TestClaimMappingStore? mappings = null,
             Action<JwtBearerEvents>? configureEvents = null,
             TestClaimsNormalizer? normalizer = null,
-            Action<HttpContext>? onEndpointReached = null)
+            Action<HttpContext>? onEndpointReached = null,
+            Func<RSA, HttpMessageHandler>? backchannelHandlerFactory = null,
+            Action<JwtBearerOptions>? configureBearerOptions = null)
         {
             mappings ??= new TestClaimMappingStore();
             var rsa = RSA.Create(2048);
             var signingKey = new RsaSecurityKey(rsa) { KeyId = KeyId };
+            var backchannel = backchannelHandlerFactory is null ? null : new HttpClient(backchannelHandlerFactory(rsa));
             var host = new HostBuilder()
                 .ConfigureWebHost(webHost =>
                 {
@@ -1367,8 +1479,17 @@ public sealed class OidcBearerNormalizationTests
                         });
                         if (configureEvents is not null)
                             services.Configure<JwtBearerOptions>(Scheme, options => configureEvents(options.Events));
+                        if (backchannel is not null || configureBearerOptions is not null)
+                            services.Configure<JwtBearerOptions>(Scheme, options =>
+                            {
+                                if (backchannel is not null)
+                                    options.Backchannel = backchannel;
+                                configureBearerOptions?.Invoke(options);
+                            });
                         services.PostConfigure<JwtBearerOptions>(Scheme, options =>
                         {
+                            if (backchannel is not null)
+                                return;
                             options.ConfigurationManager = null;
                             options.TokenValidationParameters = new TokenValidationParameters
                             {
@@ -1402,7 +1523,7 @@ public sealed class OidcBearerNormalizationTests
             try
             {
                 await host.StartAsync();
-                return new NormalizationTestHost(host, rsa, signingKey, mappings);
+                return new NormalizationTestHost(host, rsa, signingKey, mappings, backchannel);
             }
             catch
             {
@@ -1413,22 +1534,25 @@ public sealed class OidcBearerNormalizationTests
                 finally
                 {
                     host.Dispose();
+                    backchannel?.Dispose();
                     rsa.Dispose();
                 }
                 throw;
             }
         }
 
-        public string CreateToken(params Claim[] claims)
+        public string CreateToken(params Claim[] claims) => CreateToken(Issuer, _signingKey, claims);
+
+        public string CreateToken(string issuer, RsaSecurityKey signingKey, params Claim[] claims)
         {
             var now = DateTime.UtcNow;
             var token = new JwtSecurityToken(
-                Issuer,
+                issuer,
                 Audience,
                 [new Claim("sub", "worker-1"), .. claims],
                 now.AddMinutes(-1),
                 now.AddMinutes(5),
-                new SigningCredentials(_signingKey, SecurityAlgorithms.RsaSha256));
+                new SigningCredentials(signingKey, SecurityAlgorithms.RsaSha256));
             return new JwtSecurityTokenHandler().WriteToken(token);
         }
 
@@ -1436,6 +1560,9 @@ public sealed class OidcBearerNormalizationTests
 
         public Task<HttpResponseMessage> SendQueryTokenAsync(string token) =>
             SendAsync($"/whoami?token={Uri.EscapeDataString(token)}");
+
+        public bool RemoveBearerOptionsFromCache() =>
+            _host.Services.GetRequiredService<IOptionsMonitorCache<JwtBearerOptions>>().TryRemove(Scheme);
 
         public async Task<HttpResponseMessage> SendAsync(string path, string? token = null)
         {
@@ -1455,6 +1582,7 @@ public sealed class OidcBearerNormalizationTests
             finally
             {
                 _host.Dispose();
+                _backchannel?.Dispose();
                 _rsa.Dispose();
             }
         }

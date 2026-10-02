@@ -27,6 +27,53 @@ public sealed class OidcBearerActivationGuardTests
     }
 
     [Fact]
+    public async Task Activation_resolves_and_asynchronously_disposes_an_async_only_scoped_collaborator()
+    {
+        var fixture = new GuardFixture(useRealDiScope: true);
+        await using var provider = fixture.RealProvider!;
+
+        await fixture.Guard.InitializeAsync(CancellationToken.None);
+
+        var collaborator = fixture.AsyncOnlyCollaborator!;
+        Assert.Equal(1, collaborator.Created);
+        Assert.Equal(1, collaborator.Disposed);
+    }
+
+    [Fact]
+    public async Task Async_disposal_failure_is_sanitized_after_cleanup_is_attempted()
+    {
+        var fixture = new GuardFixture(useRealDiScope: true);
+        await using var provider = fixture.RealProvider!;
+        var collaborator = fixture.AsyncOnlyCollaborator!;
+        collaborator.OnDisposeAsync = () => throw new FormatException("async-dispose-canary");
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => fixture.Guard.InitializeAsync(CancellationToken.None));
+
+        Assert.Equal(OidcBearerOptionsValidator.ConfigurationInvalid, exception.Message);
+        Assert.DoesNotContain("async-dispose-canary", exception.ToString());
+        Assert.Equal(1, collaborator.Created);
+        Assert.Equal(1, collaborator.DisposeAttempts);
+        Assert.Equal(0, collaborator.Disposed);
+    }
+
+    [Fact]
+    public async Task Cancellation_during_async_disposal_propagates_after_cleanup_completes()
+    {
+        var fixture = new GuardFixture(useRealDiScope: true);
+        await using var provider = fixture.RealProvider!;
+        using var abort = new CancellationTokenSource();
+        var collaborator = fixture.AsyncOnlyCollaborator!;
+        collaborator.OnDisposeAsync = abort.Cancel;
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => fixture.Guard.InitializeAsync(abort.Token));
+
+        Assert.True(abort.IsCancellationRequested);
+        Assert.Equal(1, collaborator.Created);
+        Assert.Equal(1, collaborator.DisposeAttempts);
+        Assert.Equal(1, collaborator.Disposed);
+    }
+
+    [Fact]
     public async Task Legacy_activation_does_not_touch_bearer_or_scope_services()
     {
         var fixture = new GuardFixture();
@@ -147,9 +194,11 @@ public sealed class OidcBearerActivationGuardTests
         public MappingStub Mappings { get; } = new();
         public SchemeStub Schemes { get; }
         public ScopeFactoryStub ScopeFactory { get; }
+        public ServiceProvider? RealProvider { get; }
+        public AsyncOnlyCollaboratorTracker? AsyncOnlyCollaborator { get; }
         public OidcBearerActivationGuard Guard { get; }
 
-        public GuardFixture()
+        public GuardFixture(bool useRealDiScope = false)
         {
             var registration = new OidcBearerRegistration(true, Options.JwtBearerScheme, true, null, null, Options.ProviderId, Tenant, true, new ServiceCollection());
             var monitor = new Monitor<OidcAuthenticationOptions>(Options);
@@ -166,7 +215,29 @@ public sealed class OidcBearerActivationGuardTests
             Services[typeof(JwtBearerHandler)] = new JwtBearerHandler(new Monitor<JwtBearerOptions>(Bearer), NullLoggerFactory.Instance, UrlEncoder.Default);
             Schemes = new SchemeStub(new AuthenticationScheme(Options.JwtBearerScheme, null, typeof(JwtBearerHandler)));
             ScopeFactory = new ScopeFactoryStub(new ProviderStub(Services));
-            Guard = new OidcBearerActivationGuard(registration, monitor, new Monitor<JwtBearerOptions>(Bearer), Schemes, ScopeFactory);
+            IServiceScopeFactory guardScopes = ScopeFactory;
+
+            if (useRealDiScope)
+            {
+                var serviceCollection = new ServiceCollection();
+                foreach (var service in Services)
+                {
+                    if (service.Key != typeof(IClaimMappingStore))
+                        serviceCollection.AddSingleton(service.Key, service.Value);
+                }
+
+                var tracker = new AsyncOnlyCollaboratorTracker();
+                AsyncOnlyCollaborator = tracker;
+                serviceCollection.AddScoped<IClaimMappingStore>(_ =>
+                {
+                    tracker.Created++;
+                    return new AsyncOnlyMappingStub(tracker);
+                });
+                RealProvider = serviceCollection.BuildServiceProvider();
+                guardScopes = RealProvider.GetRequiredService<IServiceScopeFactory>();
+            }
+
+            Guard = new OidcBearerActivationGuard(registration, monitor, new Monitor<JwtBearerOptions>(Bearer), Schemes, guardScopes);
         }
     }
 
@@ -180,6 +251,25 @@ public sealed class OidcBearerActivationGuardTests
         public IServiceScope CreateScope() { Created++; OnCreate?.Invoke(); return new ScopeStub(services, () => Disposed++); }
     }
     private sealed class ScopeStub(IServiceProvider services, Action dispose) : IServiceScope { public IServiceProvider ServiceProvider => services; public void Dispose() => dispose(); }
+    private sealed class AsyncOnlyCollaboratorTracker
+    {
+        public int Created { get; set; }
+        public int DisposeAttempts { get; set; }
+        public int Disposed { get; set; }
+        public Action? OnDisposeAsync { get; set; }
+    }
+    private sealed class AsyncOnlyMappingStub(AsyncOnlyCollaboratorTracker tracker) : IClaimMappingStore, IAsyncDisposable
+    {
+        public ValueTask<IReadOnlyList<ClaimMappingRule>> ListForProviderAsync(string tenant, string provider, CancellationToken cancellationToken = default) => throw new InvalidOperationException("must not query at activation");
+        public ValueTask SaveAsync(ClaimMappingRule rule, CancellationToken cancellationToken = default) => throw new InvalidOperationException("must not write at activation");
+        public async ValueTask DisposeAsync()
+        {
+            tracker.DisposeAttempts++;
+            await Task.Yield();
+            tracker.OnDisposeAsync?.Invoke();
+            tracker.Disposed++;
+        }
+    }
     private sealed class Monitor<T>(T value) : IOptionsMonitor<T> { public T CurrentValue => value; public T Get(string? name) => value; public IDisposable? OnChange(Action<T, string?> listener) => null; }
     private sealed class MappingStub : IClaimMappingStore
     {

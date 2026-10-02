@@ -15,6 +15,8 @@ public sealed class OidcBearerOptionsValidator(
     private readonly object _callbacksGate = new();
     private OidcBearerCallbacks? _frozenCallbacks;
     private string? _frozenRawType;
+    private bool _metadataFrozen;
+    private string? _frozenMetadataAddress;
 
     public const string ConfigurationInvalid = "oidc-normalization-configuration-invalid";
     public const string EventsIncompatible = "oidc-normalization-events-incompatible";
@@ -96,9 +98,12 @@ public sealed class OidcBearerOptionsValidator(
         var rawType = validation.AuthenticationType ?? "AuthenticationTypes.Federation";
         lock (_callbacksGate)
         {
-            if (_frozenRawType is not null && _frozenRawType != rawType)
+            if ((_frozenRawType is not null && _frozenRawType != rawType) ||
+                (_metadataFrozen && !string.Equals(_frozenMetadataAddress, target.MetadataAddress, StringComparison.Ordinal)))
                 return ValidateOptionsResult.Fail(ConfigurationInvalid);
             _frozenRawType ??= rawType;
+            _frozenMetadataAddress = target.MetadataAddress;
+            _metadataFrozen = true;
         }
         return ValidateOptionsResult.Success;
     }

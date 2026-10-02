@@ -252,7 +252,8 @@ public sealed class OidcBearerOptionsValidatorTests
     [InlineData("validated")]
     [InlineData("failed")]
     [InlineData("raw-type")]
-    public void Reload_cannot_change_captured_callbacks_or_raw_type(string field)
+    [InlineData("metadata")]
+    public void Reload_cannot_change_captured_callbacks_raw_type_or_discovery_address(string field)
     {
         var (validator, _, configured) = Setup();
         var first = Target(configured);
@@ -268,9 +269,10 @@ public sealed class OidcBearerOptionsValidatorTests
             case "message": changed.Events.OnMessageReceived = _ => Task.CompletedTask; break;
             case "validated": changed.Events.OnTokenValidated = _ => Task.CompletedTask; break;
             case "failed": changed.Events.OnAuthenticationFailed = _ => Task.CompletedTask; break;
+            case "metadata": changed.MetadataAddress = "https://metadata.example.test/changed.json"; break;
             default: changed.TokenValidationParameters.AuthenticationType = "another-raw-type"; break;
         }
-        if (field == "raw-type")
+        if (field is "raw-type" or "metadata")
         {
             validator.PostConfigure(configured.JwtBearerScheme, changed);
             Assert.True(validator.Validate(configured.JwtBearerScheme, changed).Failed);
@@ -283,6 +285,7 @@ public sealed class OidcBearerOptionsValidatorTests
     [InlineData("callback")]
     [InlineData("raw-type")]
     [InlineData("forward")]
+    [InlineData("metadata")]
     [InlineData("namespace")]
     public void Actual_options_monitor_recreation_refuses_changed_trust(string field)
     {
@@ -298,8 +301,16 @@ public sealed class OidcBearerOptionsValidatorTests
             target.TenantId = configured.TenantId;
         });
         var changed = false;
+        const string initialMetadataAddress = "https://metadata.example.test/issuer-a.json";
+        const string changedMetadataAddress = "https://metadata.example.test/issuer-b.json";
+        Microsoft.IdentityModel.Tokens.IssuerValidator hostIssuerValidator = (issuer, _, _) => issuer;
         services.Configure<JwtBearerOptions>(configured.JwtBearerScheme, target =>
         {
+            if (field == "metadata")
+            {
+                target.MetadataAddress = changed ? changedMetadataAddress : initialMetadataAddress;
+                target.TokenValidationParameters.IssuerValidator = hostIssuerValidator;
+            }
             if (!changed) return;
             if (field == "callback") target.Events.OnMessageReceived = _ => Task.CompletedTask;
             if (field == "raw-type") target.TokenValidationParameters.AuthenticationType = "changed-raw";
@@ -311,9 +322,21 @@ public sealed class OidcBearerOptionsValidatorTests
         });
         using var provider = services.BuildServiceProvider();
         var monitor = provider.GetRequiredService<IOptionsMonitor<JwtBearerOptions>>();
-        Assert.Equal(typeof(OidcBearerNormalizationEvents), monitor.Get(configured.JwtBearerScheme).EventsType);
+        var initial = monitor.Get(configured.JwtBearerScheme);
+        Assert.Equal(typeof(OidcBearerNormalizationEvents), initial.EventsType);
+        if (field == "metadata")
+        {
+            Assert.Equal(initialMetadataAddress, initial.MetadataAddress);
+            Assert.Same(hostIssuerValidator, initial.TokenValidationParameters.IssuerValidator);
+        }
         provider.GetRequiredService<IOptionsMonitorCache<JwtBearerOptions>>().TryRemove(configured.JwtBearerScheme);
-        Assert.Equal(typeof(OidcBearerNormalizationEvents), monitor.Get(configured.JwtBearerScheme).EventsType);
+        var unchanged = monitor.Get(configured.JwtBearerScheme);
+        Assert.Equal(typeof(OidcBearerNormalizationEvents), unchanged.EventsType);
+        if (field == "metadata")
+        {
+            Assert.Equal(initialMetadataAddress, unchanged.MetadataAddress);
+            Assert.Same(hostIssuerValidator, unchanged.TokenValidationParameters.IssuerValidator);
+        }
         changed = true;
         if (field == "namespace")
         {
