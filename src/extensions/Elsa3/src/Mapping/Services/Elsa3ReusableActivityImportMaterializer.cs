@@ -92,7 +92,7 @@ public sealed class Elsa3ReusableActivityImportMaterializer(
                 throw new InvalidOperationException($"Import rewrite target '{rewrite.TargetSourceVersionId}' is not the selected reusable version declared by the plan.");
             if (!replacements.TryAdd(rewrite.NodeId, new(
                     rewrite.TargetActivityDefinitionVersionId,
-                    targetSource.Inputs.Select(x => x.Name).ToHashSet(StringComparer.OrdinalIgnoreCase),
+                    targetSource.Inputs.Select(argumentMapper.MapInput).ToArray(),
                     targetSource.Outputs.Select(x => x.Name).ToHashSet(StringComparer.OrdinalIgnoreCase))))
                 throw new InvalidOperationException($"Import plan contains multiple rewrites for node '{rewrite.NodeId}' in source '{owner.SourceVersionId}'.");
         }

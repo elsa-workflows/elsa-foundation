@@ -217,13 +217,14 @@ bite-proofs remove the call.
   `elsa3.imported-activity.structure` and judges each like any other node (entry point 8). A hand-authored state can
   still store such a child: draft save, add-version and submit through the Design API, and a workflow file read by
   file reconciliation or git import, accept a structure of any kind. A follow-up is recorded in T090.
-- **An Elsa 3 binding stored under a key other than the declared one.** The Elsa 3 mapping keeps a property as an
-  input when its name matches a declared input's name ignoring case, and stores the binding under the Elsa 3
-  property's name. The rule, like publication, matches a binding to its input by reference key, ordinally, so a
-  credential literal whose Elsa 3 property name differs from the declared reference key (in case, or because the
-  activity declares a key other than the input's name) is not judged at the import or at git export; publication
-  refuses the node, because the binding matches no declared input. Found in slice 6's review round 2; a follow-up is
-  recorded in T090.
+- **The Elsa 3 upload itself.** The mapping keeps an Elsa 3 property only when its name matches a declared input or
+  output; it stores an input binding under the declared input's reference key, whatever casing the Elsa 3 property
+  name has, so the rule sees it (slice 6's review round 2). A property that matches no declared input or output is
+  dropped from the mapped state, so no stored workflow state holds it and the rule has nothing to judge. The uploaded
+  collection, every property included, is stored verbatim in the import ledger (`Elsa3ImportCollectionRecord.ContentJson`)
+  when it is uploaded, before any analysis or apply, and nothing deletes it: its expiry only refuses later reads (410).
+  The rule never applies to that source document, so a credential literal in an upload stays in the ledger whether the
+  apply is refused or not. Found in slice 6's review round 2; a follow-up is recorded in T090.
 - **A `Secret` binding with a null or malformed payload.** The rule accepts any binding whose expression type is
   `Secret`, so such a binding passes it at save (drafts may be incomplete, and no value is involved). Publication
   refuses it: the compiler's secret-reference parser requires an object payload with a `name`.

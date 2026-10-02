@@ -124,9 +124,12 @@ nested node back through `Nodes` and judges each as the root of its own state. T
 literal, object, value read or expression on an input the installed activity declares a credential refuses the whole
 apply and nothing is committed: one `CredentialLiteralRefusedException`, answered 400 (`elsa3.import.request-invalid`)
 with the messages of every refused binding, which name the rule, the node and the input and never the value, in
-`detail`. As at every entry point, a binding is matched to its input by reference key, so one the mapping stores under
-an Elsa 3 property name that differs from the declared key is not judged (spec 188 credential-literal contract, Known
-gaps), and a node whose activity the catalog does not hold is not judged; publication refuses a version holding either.
+`detail`. The mapping stores each input binding under the declared input's reference key, whatever casing the Elsa 3
+property name has, which is the key the rule matches; two properties that bind one input, or a property that matches
+several declared inputs only ignoring case, refuse the apply with 400. A property that names no declared input or
+output is not mapped. As at every entry point, a node whose activity the catalog does not hold is not judged;
+publication refuses a version holding one. The upload itself is stored verbatim in the import ledger, where the rule
+does not apply (spec 188 credential-literal contract, Known gaps).
 
 ### `IActivityCollectionJsonSource` *(Feature contract — `Elsa3.Activities.Design.Import`)*
 - **Kind:** Source (opens a stream of activity JSON — pull pattern).

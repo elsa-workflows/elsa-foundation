@@ -26,7 +26,8 @@ public sealed class Elsa3ActivityToStateTests
     [Fact]
     public async Task Map_InputArgument_PopulatesInputsOnActivityNode()
     {
-        // A leaf Elsa-3 activity whose "Message" property carries a literal-expression argument.
+        // A leaf Elsa-3 activity whose "Message" property carries a literal-expression argument, stored under the declared
+        // input's reference key (the fake catalog declares "key:message").
         var source = new Elsa3Activity
         {
             Id = "a1",
@@ -49,10 +50,57 @@ public sealed class Elsa3ActivityToStateTests
         var node = await mapper.Map(source, CancellationToken.None);
 
         var input = Assert.Single(node.Inputs);
-        Assert.Equal("Message", input.ReferenceKey);
+        Assert.Equal("key:message", input.ReferenceKey);
         Assert.Equal("Hello world", input.Value.Value);
         Assert.Equal("Literal", input.Value.ExpressionType);
         Assert.Empty(node.Outputs);
+    }
+
+    [Fact]
+    public async Task Map_InputArgument_whose_name_differs_in_case_from_the_declared_input_is_stored_under_the_declared_key()
+    {
+        var mapper = new Elsa3ActivityToState(new FakeActivityDefinitionLookup(inputNames: ["Message"], outputNames: []));
+
+        var node = await mapper.Map(Leaf(("message", Argument("Literal", "Hello world"))), CancellationToken.None);
+
+        var input = Assert.Single(node.Inputs);
+        Assert.Equal("key:message", input.ReferenceKey);
+        Assert.Equal("Hello world", input.Value.Value);
+    }
+
+    [Fact]
+    public async Task Map_two_properties_that_bind_the_same_declared_input_is_refused()
+    {
+        var mapper = new Elsa3ActivityToState(new FakeActivityDefinitionLookup(inputNames: ["Message"], outputNames: []));
+
+        var refusal = await Assert.ThrowsAsync<ArgumentException>(() =>
+            mapper.Map(Leaf(("message", Argument("Literal", "first")), ("Message", Argument("Literal", "second"))), CancellationToken.None).AsTask());
+
+        Assert.Contains("'node-1'", refusal.Message, StringComparison.Ordinal);
+        Assert.Contains("'message' and 'Message'", refusal.Message, StringComparison.Ordinal);
+        Assert.Contains("'key:message'", refusal.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("first", refusal.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Map_property_that_matches_several_declared_inputs_ignoring_case_binds_the_exact_name()
+    {
+        var mapper = new Elsa3ActivityToState(new ReusableActivityImportFixtures.BuiltInActivityLookup(Input("Url", "url-key"), Input("URL", "upper-url-key")));
+
+        var node = await mapper.Map(Leaf(("URL", Argument("Literal", "value"))), CancellationToken.None);
+
+        Assert.Equal("upper-url-key", Assert.Single(node.Inputs).ReferenceKey);
+    }
+
+    [Fact]
+    public async Task Map_property_that_matches_several_declared_inputs_only_ignoring_case_is_refused()
+    {
+        var mapper = new Elsa3ActivityToState(new ReusableActivityImportFixtures.BuiltInActivityLookup(Input("Url", "url-key"), Input("URL", "upper-url-key")));
+
+        var refusal = await Assert.ThrowsAsync<ArgumentException>(() =>
+            mapper.Map(Leaf(("url", Argument("Literal", "value"))), CancellationToken.None).AsTask());
+
+        Assert.Contains("'url' matches more than one declared input: 'Url', 'URL'", refusal.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -179,6 +227,20 @@ public sealed class Elsa3ActivityToStateTests
         Assert.Equal(["node-root", "node-nested"], inventory.StructuralFrames.Select(x => x.Id));
         Assert.Equal("node-nested", Assert.Single(inventory.Nodes, x => x.ActivityNodeId == "node-leaf").StructuralFrameId);
     }
+
+    /// <summary>A leaf Elsa 3 activity, node <c>node-1</c>, carrying <paramref name="properties"/>.</summary>
+    private static Elsa3Activity Leaf(params (string Name, JsonElement Value)[] properties) => new()
+    {
+        Id = "a1",
+        NodeId = "node-1",
+        Name = "Leaf",
+        Type = ActivityType,
+        Version = 1,
+        AdditionalProperties = properties.ToDictionary(property => property.Name, property => property.Value),
+    };
+
+    private static InputDefinition Input(string name, string referenceKey) =>
+        new(referenceKey, name, new TypeReference("String"), null, name, null, IsNullable: true);
 
     private static JsonElement Argument(string expressionType, string expressionValue) =>
         JsonSerializer.SerializeToElement(new
