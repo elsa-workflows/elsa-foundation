@@ -189,19 +189,12 @@ internal sealed partial class ExtensionBuilderPromotionService(
 
     private static bool FeedPackageExists(string feedPath, string packageId, string version)
     {
-        if (!Directory.Exists(feedPath))
-            return false;
-
-        foreach (var packagePath in Directory.EnumerateFiles(feedPath, "*.nupkg", SearchOption.TopDirectoryOnly))
-        {
-            var identity = TryReadPackageIdentity(packagePath);
-            if (identity is not null &&
+        return Directory.Exists(feedPath) && Directory
+            .EnumerateFiles(feedPath, "*.nupkg", SearchOption.TopDirectoryOnly)
+            .Select(TryReadPackageIdentity)
+            .Any(identity => identity is not null &&
                 string.Equals(identity.Value.PackageId, packageId, StringComparison.OrdinalIgnoreCase) &&
-                string.Equals(identity.Value.Version, version, StringComparison.OrdinalIgnoreCase))
-                return true;
-        }
-
-        return false;
+                string.Equals(identity.Value.Version, version, StringComparison.OrdinalIgnoreCase));
     }
 
     private static void DeactivateSupersededPackageVersions(string feedPath, string packageId, string activeVersion, IReadOnlyList<PackagePromotionRecord> promotions)
@@ -225,11 +218,8 @@ internal sealed partial class ExtensionBuilderPromotionService(
             }
         }
 
-        foreach (var path in promotedPaths)
-        {
-            if (File.Exists(path))
-                File.Delete(path);
-        }
+        foreach (var path in promotedPaths.Where(File.Exists))
+            File.Delete(path);
     }
 
     private static (string PackageId, string Version)? TryReadPackageIdentity(string packagePath)
@@ -253,12 +243,12 @@ internal sealed partial class ExtensionBuilderPromotionService(
         var feeds = ReadFeeds(config);
         var feed = feeds.FirstOrDefault(x => !string.IsNullOrWhiteSpace(x.Path));
         var path = feed?.Path ?? "packages";
-        return new(feed?.Name ?? "drop-folder", Path.GetFullPath(Path.IsPathRooted(path) ? path : Path.Combine(environment.ContentRootPath, path)));
+        return new(feed?.Name ?? "drop-folder", Path.GetFullPath(path, environment.ContentRootPath));
     }
 
     private async Task<JsonObject> ReadManagementConfigurationAsync(CancellationToken cancellationToken)
     {
-        var path = Path.Combine(environment.ContentRootPath, ManagementFileName);
+        var path = Path.Join(environment.ContentRootPath, ManagementFileName);
         if (!File.Exists(path))
             return [];
 
@@ -293,7 +283,7 @@ internal sealed partial class ExtensionBuilderPromotionService(
     {
         var safeName = Path.GetFileName(fileName);
         var root = Path.GetFullPath(feedRoot);
-        var path = Path.GetFullPath(Path.Combine(root, safeName));
+        var path = Path.GetFullPath(Path.Join(root, safeName));
         if (!path.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException("The resolved feed package path is outside the feed root.");
         return path;

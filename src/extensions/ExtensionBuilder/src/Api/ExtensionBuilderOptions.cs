@@ -2,7 +2,7 @@ namespace Elsa.ExtensionBuilder.Api;
 
 internal sealed class ExtensionBuilderOptions
 {
-    public string StoragePath { get; set; } = Path.Combine(
+    public string StoragePath { get; set; } = Path.Join(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "Elsa",
         "ExtensionBuilder");

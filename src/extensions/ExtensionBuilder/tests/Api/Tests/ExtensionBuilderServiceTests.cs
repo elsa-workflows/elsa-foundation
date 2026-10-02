@@ -248,8 +248,8 @@ public sealed class ExtensionBuilderServiceTests : IAsyncDisposable
         // Removing the env-var line in GitClient.CreateStartInfo turns this RED.
         var startInfo = GitClient.CreateStartInfo("git", _directory, ["status", "--porcelain"]);
 
-        Assert.True(startInfo.Environment.ContainsKey("GIT_TERMINAL_PROMPT"), "GitClient must set GIT_TERMINAL_PROMPT so git never blocks on an interactive credential prompt.");
-        Assert.Equal("0", startInfo.Environment["GIT_TERMINAL_PROMPT"]);
+        Assert.True(startInfo.Environment.TryGetValue("GIT_TERMINAL_PROMPT", out var terminalPrompt), "GitClient must set GIT_TERMINAL_PROMPT so git never blocks on an interactive credential prompt.");
+        Assert.Equal("0", terminalPrompt);
     }
 
     [Fact]

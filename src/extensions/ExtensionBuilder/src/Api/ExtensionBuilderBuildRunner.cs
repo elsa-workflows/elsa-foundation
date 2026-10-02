@@ -322,7 +322,7 @@ internal sealed partial class ExtensionBuilderBuildRunner(IOptions<ExtensionBuil
         var dotnetRoot = Environment.GetEnvironmentVariable("DOTNET_ROOT");
         if (!string.IsNullOrWhiteSpace(dotnetRoot))
         {
-            var candidate = Path.Combine(dotnetRoot, "dotnet");
+            var candidate = Path.Join(dotnetRoot, "dotnet");
             if (File.Exists(candidate))
                 return candidate;
         }

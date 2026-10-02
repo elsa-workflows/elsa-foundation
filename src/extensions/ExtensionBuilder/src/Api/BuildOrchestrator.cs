@@ -91,6 +91,7 @@ internal sealed partial class BuildOrchestrator(string dotNetExecutable)
         }
         catch (InvalidDataException)
         {
+            // Not a readable package archive: fall back to the identity encoded in the file name below.
         }
 
         var match = PackageIdentityRegex().Match(Path.GetFileNameWithoutExtension(artifactPath));

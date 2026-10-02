@@ -15,7 +15,7 @@ internal sealed class RepositoryInspector(IGitClient git)
 {
     public RepositoryState GetRepositoryState(string repositoryPath)
     {
-        if (!Directory.Exists(Path.Combine(repositoryPath, ".git")))
+        if (!Directory.Exists(Path.Join(repositoryPath, ".git")))
             return new(null, false, "not-connected");
 
         var activeBranch = git.RunOrDefault(repositoryPath, "branch", "--show-current");
