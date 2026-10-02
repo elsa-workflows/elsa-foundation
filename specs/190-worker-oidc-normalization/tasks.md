@@ -43,7 +43,7 @@ All tasks are planned and unchecked. #2304 owns authoring/review only; a subsequ
 **Goal**: Truthful per-request local-rule changes, restart persistence and failures.
 **Independent proof**: Same-token stored-rule removal, fresh host restart, real IAM observations and injected request-stage faults/cancellation.
 
-- [ ] T017 [US3] Add mapping/normalizer exceptions and malformed-output canaries with401/no-ticket assertions in `tests/essentials/Foundation/Identity/Tests/OidcBearerNormalizationTests.cs`; add evaluator/resource operational failure controls without changing Spec151 behavior.
+- [ ] T017 [US3] Add prior callback value-bearing failures/exceptions, mapping/normalizer exceptions and malformed-output canaries with401/no-ticket assertions in `tests/essentials/Foundation/Identity/Tests/OidcBearerNormalizationTests.cs`; add evaluator/resource operational failure controls without changing Spec151 behavior.
 - [ ] T018 [US3] Implement fixed stage failures and RequestAborted forwarding/checks at lookup/normalization/publication in `src/essentials/Foundation/Identity/Oidc/OidcBearerNormalizationEvents.cs`, preserving cancellation through the actual handler's AuthenticationFailed boundary.
 - [ ] T019 [US3] Add actual handler request-abort controls before/after lookup/normalization/publication, including noncooperative collaborators, in `tests/essentials/Foundation/Identity/Tests/OidcBearerNormalizationTests.cs`; no successful ticket after observed cancellation.
 - [ ] T020 [US3] Prove same-token persisted grant removal and provider/tenant isolation in `tests/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/WorkerOidcBearerHostEvidenceTests.cs`, using existing SaveAsync with empty GrantPermissions rather than inventing a delete API.
