@@ -90,7 +90,8 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
             "Elsa.Workbench.NuplaneAssemblyProvider"),
         Entries(
             "unreachable from shell code: Nuplane's dispatcher, which runs on the host's own container, is the only caller of its observers",
-            "Elsa.Foundation.Host.Shells.ShellReloadOnPackagesChanged"),
+            "Elsa.Foundation.Host.Shells.ShellReloadOnPackagesChanged",
+            "Elsa.Workbench.ShellCatalogRefreshOnPackagesChanged"),
         Entries(
             UnreachableFromShells,
         "Nuplane.Abstractions.IActivePackageCatalog", "Nuplane.Abstractions.ICycleFailureContributor", "Nuplane.Abstractions.IDesiredPackageSource", "Nuplane.Abstractions.IDesiredStateContributor", "Nuplane.Abstractions.INuplaneObserver", "Nuplane.Abstractions.IPackageResolver",

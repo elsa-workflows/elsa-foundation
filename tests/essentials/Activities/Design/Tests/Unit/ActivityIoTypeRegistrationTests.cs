@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Runtime.Loader;
 using CShells.Features;
 using Elsa.Activities.Design.Reconciliation.Clr.Services;
 using Elsa.Activities.Design.Tests.ClrFixture;
@@ -32,10 +33,11 @@ public sealed class ActivityIoTypeRegistrationTests
     private static RegisterActivityTypesStartupTask CreateTask(
         IWellKnownTypeRegistry registry,
         IEnumerable<IFeatureAssemblyProvider>? providers = null,
-        Func<IEnumerable<Assembly>>? baseAssemblies = null) =>
+        Func<IEnumerable<Assembly>>? baseAssemblies = null,
+        IServiceProvider? shellServices = null) =>
         baseAssemblies is null
-            ? new(registry, providers ?? [], EmptyServiceProvider, NullLogger<RegisterActivityTypesStartupTask>.Instance)
-            : new(registry, providers ?? [], EmptyServiceProvider, NullLogger<RegisterActivityTypesStartupTask>.Instance, baseAssemblies);
+            ? new(registry, providers ?? [], shellServices ?? EmptyServiceProvider, NullLogger<RegisterActivityTypesStartupTask>.Instance)
+            : new(registry, providers ?? [], shellServices ?? EmptyServiceProvider, NullLogger<RegisterActivityTypesStartupTask>.Instance, baseAssemblies);
 
     // Mirrors WorkflowExecutableCompiler.ResolveInputType: close the authored (alias, kind) into a CLR type via
     // the registry, unknown alias → object.
@@ -109,6 +111,58 @@ public sealed class ActivityIoTypeRegistrationTests
         Assert.Equal(typeof(FixturePayload), payload);
         Assert.True(registry.TryGetType(typeof(FixtureMode).FullName!, out var mode));
         Assert.Equal(typeof(FixtureMode), mode);
+    }
+
+    // A package upgraded in place leaves its previous release loaded, so the AppDomain holds a second assembly that declares
+    // the same activity type, and the same alias, and it may well be enumerated first. Registering it made the new shell
+    // construct the previous release's class: it ignored the inputs the new release added, or failed to construct because
+    // its services are registered under the new release's types.
+    [Fact]
+    public Task ShellFeatureAssembly_WinsOverAPreviousReleaseStillLoadedInTheAppDomain() =>
+        WithPreviousRelease(async (current, previous) =>
+        {
+            var registry = SeedPrimitives(new WellKnownTypeRegistry());
+            var shell = new ServiceCollection()
+                .AddSingleton<IReadOnlyCollection<ShellFeatureDescriptor>>([new ShellFeatureDescriptor("Fixture") { StartupType = typeof(ComplexInputFixtureActivity) }])
+                .BuildServiceProvider();
+
+            await CreateTask(registry, baseAssemblies: () => [previous, current], shellServices: shell).ExecuteAsync(CancellationToken.None);
+
+            AssertCurrentReleaseRegistered(registry);
+        });
+
+    [Fact]
+    public Task ProviderAssembly_WinsOverAPreviousReleaseStillLoadedInTheAppDomain() =>
+        WithPreviousRelease(async (current, previous) =>
+        {
+            var registry = SeedPrimitives(new WellKnownTypeRegistry());
+
+            await CreateTask(registry, providers: [new StubFeatureAssemblyProvider(current)], baseAssemblies: () => [previous, current])
+                .ExecuteAsync(CancellationToken.None);
+
+            AssertCurrentReleaseRegistered(registry);
+        });
+
+    private static async Task WithPreviousRelease(Func<Assembly, Assembly, Task> test)
+    {
+        var current = typeof(ComplexInputFixtureActivity).Assembly;
+        var previousContext = new AssemblyLoadContext("previous-release", isCollectible: true);
+        try
+        {
+            await test(current, previousContext.LoadFromAssemblyPath(current.Location));
+        }
+        finally
+        {
+            previousContext.Unload();
+        }
+    }
+
+    private static void AssertCurrentReleaseRegistered(IWellKnownTypeRegistry registry)
+    {
+        Assert.True(registry.TryGetType(TypeAliasConvention.CanonicalAlias(typeof(ComplexInputFixtureActivity)), out var activity));
+        Assert.Same(typeof(ComplexInputFixtureActivity), activity);
+        Assert.True(registry.TryGetType(typeof(FixturePayload).FullName!, out var payload));
+        Assert.Same(typeof(FixturePayload), payload);
     }
 
     [Fact]

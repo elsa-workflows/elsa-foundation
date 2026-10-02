@@ -85,13 +85,34 @@ public sealed class RegisterActivityTypesStartupTask : IStartupTask
             TryRegister(type);
     }
 
-    // Baseline (runtime-loaded) assemblies unioned with the assemblies surfaced by every registered
-    // IFeatureAssemblyProvider — the modular host's package assemblies. De-duplicated by
-    // assembly identity so an assembly present in both sources is scanned once; the registration itself is
-    // idempotent regardless.
+    // The assemblies of the features this shell was composed from FIRST, then the ones every registered
+    // IFeatureAssemblyProvider surfaces (the modular host's package assemblies), then the baseline (runtime-loaded) ones,
+    // less every earlier release of a shell feature assembly. De-duplicated by assembly identity so an assembly present in
+    // several sources is scanned once; the registration itself is idempotent regardless.
+    //
+    // The order and the exclusion are load-bearing. A package upgraded in place leaves its previous release loaded (a
+    // host-integrated load context is never unloaded, and a collectible one lingers until it is collected), so
+    // AppDomain.GetAssemblies() can hold two assemblies that declare the same activity type, and therefore the same
+    // canonical alias, and the first one registered wins (TryRegister skips an alias that is already mapped). The shell's
+    // own feature descriptors name the release it composes; a provider resolved inside a shell container cannot be relied
+    // on for that (Nuplane's catalog copied into a shell has loaded nothing). Baseline-first registered the previous
+    // release's type: the new shell then constructed the old activity class, which ignored every input the new release
+    // added, or failed to construct because the services it asks for are registered under the new release's types.
     private async Task<IReadOnlyCollection<Assembly>> CollectAssembliesAsync(CancellationToken cancellationToken)
     {
-        var assemblies = new HashSet<Assembly>(_baseAssembliesFactory());
+        var assemblies = new List<Assembly>();
+        var seen = new HashSet<Assembly>();
+
+        var shellFeatureAssemblies = (_serviceProvider.GetService(typeof(IReadOnlyCollection<ShellFeatureDescriptor>)) as IReadOnlyCollection<ShellFeatureDescriptor> ?? [])
+            .Select(descriptor => descriptor.StartupType?.Assembly)
+            .OfType<Assembly>()
+            .ToHashSet();
+        var shellFeatureAssemblyNames = shellFeatureAssemblies
+            .Select(assembly => assembly.GetName().Name)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var assembly in shellFeatureAssemblies)
+            if (seen.Add(assembly))
+                assemblies.Add(assembly);
 
         foreach (var provider in _assemblyProviders)
         {
@@ -108,10 +129,20 @@ public sealed class RegisterActivityTypesStartupTask : IStartupTask
             }
 
             foreach (var assembly in providerAssemblies)
-                assemblies.Add(assembly);
+                if (seen.Add(assembly))
+                    assemblies.Add(assembly);
         }
 
+        // A loaded assembly named like one of the shell's feature assemblies, but not that assembly, is a release the shell
+        // does not compose: none of its types may claim an alias.
+        foreach (var assembly in _baseAssembliesFactory())
+            if (!IsEarlierRelease(assembly) && seen.Add(assembly))
+                assemblies.Add(assembly);
+
         return assemblies;
+
+        bool IsEarlierRelease(Assembly assembly) =>
+            !shellFeatureAssemblies.Contains(assembly) && shellFeatureAssemblyNames.Contains(assembly.GetName().Name ?? "");
     }
 
     private IEnumerable<Type> EnumerateRegistrableTypes(IEnumerable<Assembly> assemblies)

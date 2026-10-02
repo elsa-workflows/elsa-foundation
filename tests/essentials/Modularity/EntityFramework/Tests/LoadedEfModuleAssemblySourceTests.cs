@@ -1,8 +1,11 @@
 using System.Reflection;
 using System.Reflection.Emit;
 using System.Runtime.Loader;
+using CShells;
+using CShells.Lifecycle;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Persistence.Schema;
+using Microsoft.Extensions.Configuration;
 using Xunit;
 
 namespace Elsa.Modularity.EntityFramework.Tests;
@@ -57,6 +60,27 @@ public sealed class LoadedEfModuleAssemblySourceTests : IDisposable
         var refusal = Assert.Throws<InvalidOperationException>(() => EfModuleCatalog.Discover(Generations(loaded)));
         Assert.Contains($"'{_module}'", refusal.Message, StringComparison.Ordinal);
     }
+
+    /// <summary>
+    /// The shell settings preparer reads the same generations, so the shell reload that follows an in-place upgrade is not
+    /// refused for a module declared twice (it was, as <c>configuration-invalid</c>, until the process restarted).
+    /// </summary>
+    [Fact]
+    public async Task The_shell_settings_preparer_reads_only_the_current_generation_so_a_reload_after_an_upgrade_prepares()
+    {
+        var unaware = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new EfPersistenceShellSettingsPreparer(EmptyConfiguration).PrepareAsync(PreparationContext));
+        Assert.Contains("configuration-invalid", unaware.Message, StringComparison.Ordinal);
+
+        var patch = await new EfPersistenceShellSettingsPreparer(EmptyConfiguration, new Replaced(_previous)).PrepareAsync(PreparationContext);
+
+        Assert.Empty(patch.ConfigurationData);
+    }
+
+    private static readonly IConfiguration EmptyConfiguration = new ConfigurationBuilder().Build();
+
+    private static ShellSettingsPreparationContext PreparationContext =>
+        new(new ShellId("default"), new Dictionary<string, string?>(), [], [], [], [], [], [], []);
 
     public void Dispose() => _contexts.ForEach(context => context.Unload());
 

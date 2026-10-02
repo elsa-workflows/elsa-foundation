@@ -2,6 +2,7 @@ using System.Reflection;
 using CShells.Lifecycle;
 using Elsa.Modularity.Core.Contracts;
 using Elsa.Persistence.EntityFramework.Tooling;
+using Elsa.Persistence.Schema;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -42,7 +43,8 @@ public static class ModularityEntityFrameworkServiceCollectionExtensions
         foreach (var old in managementPreparers)
             services.Remove(old);
         services.AddSingleton(composer);
-        services.AddSingleton<IShellSettingsPreparer>(new EfPersistenceShellSettingsPreparer(configuration));
+        services.AddSingleton<IShellSettingsPreparer>(provider =>
+            new EfPersistenceShellSettingsPreparer(configuration, provider.GetService<ISupersededAssemblySource>()));
         services.AddScoped<IFeatureActivationContextPreparer>(provider =>
             new EfPersistenceActivationContextPreparer(
                 configuration,
