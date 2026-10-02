@@ -21,14 +21,15 @@ public interface IWorkflowActivationCoordinator
 
     /// <summary>
     /// Makes sure the activation the slot names serves, and writes nothing when it does. A slot a version before #2230 left
-    /// half done is repaired when it is in the one state <see cref="IWorkflowActivationSwitch.TryRepairAsync"/> repairs,
-    /// and reported as failed otherwise, so nothing builds on it. <see cref="ActivateAsync"/> does the same first.
+    /// on its way to serving is repaired (<see cref="IWorkflowActivationSwitch.TryRepairAsync"/>) and the trigger
+    /// observers are told, as of an activation, without failing on them. Any other slot whose activation does not serve is
+    /// reported as failed, naming how to clear it, so nothing builds on it. <see cref="ActivateAsync"/> does the same first.
     /// </summary>
     /// <returns>
     /// <see cref="WorkflowActivationOutcome.AlreadyActive"/> when the slot's activation serves, repaired or not;
     /// <see cref="WorkflowActivationOutcome.AlreadyInactive"/> for an empty slot; and
     /// <see cref="WorkflowActivationOutcome.Failed"/> at <see cref="WorkflowActivationStep.ProjectionActivation"/> for a
-    /// slot left half done that cannot be repaired, or when whether it serves could not be read.
+    /// slot whose activation does not serve and cannot be repaired, or when whether it serves could not be read.
     /// </returns>
     ValueTask<WorkflowActivationResult> EnsureServingAsync(
         string workflowDefinitionId,

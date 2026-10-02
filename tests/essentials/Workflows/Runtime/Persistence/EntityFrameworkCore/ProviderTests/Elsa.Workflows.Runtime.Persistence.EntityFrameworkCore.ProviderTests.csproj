@@ -33,7 +33,7 @@
     <!-- Injects provider failures into the projection switch scenarios, such as a deadlock wrapped by SQL Server's execution strategy. -->
     <Compile Include="..\..\..\..\..\Persistence\EntityFramework\Tests\ProviderFailures.cs" Link="ProviderFailures.cs" />
     <Compile Include="..\Tests\PauseAfterSwitch.cs" Link="PauseAfterSwitch.cs" />
-    <Compile Include="..\Tests\ForwardingActivationSwitch.cs" Link="ForwardingActivationSwitch.cs" />
+    <Compile Include="..\..\..\Tests\Fixtures\ForwardingActivationSwitch.cs" Link="ForwardingActivationSwitch.cs" />
     <Compile Include="..\Tests\ClaimLeaseOverrunContract.cs" Link="ClaimLeaseOverrunContract.cs" />
     <Compile Include="..\..\..\Tests\OverrunningIntentDispatcher.cs" Link="OverrunningIntentDispatcher.cs" />
     <Compile Include="..\Tests\PublishStimulusStartContract.cs" Link="PublishStimulusStartContract.cs" />

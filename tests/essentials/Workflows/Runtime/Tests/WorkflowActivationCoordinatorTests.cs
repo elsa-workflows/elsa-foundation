@@ -2,7 +2,7 @@ using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
-using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
+using Elsa.Workflows.Runtime.Tests.Fixtures;
 using Elsa.Workflows.Runtime.Services.Executables;
 using Elsa.Testing;
 using Elsa.Workflows.Runtime.Services.Triggers;
@@ -469,8 +469,9 @@ public sealed class WorkflowActivationCoordinatorTests
 
     /// <summary>
     /// A slot a version before #2230 left half done names a prepared activation while the one it replaced still serves.
-    /// The next same-artifact activation, or a check that the slot serves, repairs it in one switch commit: the slot's
-    /// activation serves, the other is switched off and retired, and the slot itself is not written.
+    /// The next same-artifact activation, or a check that the slot serves, repairs it in one switch commit and tells the
+    /// trigger observers, as an activation does: the slot's activation serves, the other is switched off and retired, and
+    /// the slot itself is not written.
     /// </summary>
     [Theory]
     [MemberData(nameof(RepairingCalls))]
@@ -489,8 +490,28 @@ public sealed class WorkflowActivationCoordinatorTests
         Assert.Equal(["activation-2"], await _harness.ServingAsync());
         await _harness.AssertRetiredAsync("activation-1", WorkflowActivationCoordinator.ReplacedRetireReason);
         await _harness.AssertLiveAsync("activation-2");
-        Assert.Contains("switch:repair", _harness.Calls);
+        Assert.Equal(["switch:repair", "observer"], _harness.Calls.Where(entry => entry is "switch:repair" or "observer"));
         Assert.Single(_harness.Logger.Entries, entry => entry.Level == LogLevel.Warning);
+    }
+
+    /// <summary>
+    /// A trigger observer that fails after a repair does not undo it, unlike after an activation: undoing it would leave the
+    /// slot half done again, and the observers converge on their own. The failure is logged.
+    /// </summary>
+    [Fact]
+    public async Task A_repair_stands_when_its_trigger_observers_fail()
+    {
+        var first = await _harness.ActivateAsync("activation-1", "artifact-1");
+        await _harness.LeaveHalfDoneAsync("activation-2", "artifact-2", first.Slot.Revision);
+        _harness.FailAt(WorkflowActivationStep.TriggerObserverNotification);
+        _harness.ResetCalls();
+
+        var result = await _harness.Coordinator.EnsureServingAsync("definition-1", "default");
+
+        Assert.Equal(WorkflowActivationOutcome.AlreadyActive, result.Outcome);
+        Assert.Equal(["activation-2"], await _harness.ServingAsync());
+        Assert.DoesNotContain("switch:revert", _harness.Calls);
+        Assert.Equal(2, _harness.Logger.Entries.Count(entry => entry.Level == LogLevel.Warning));
     }
 
     [Fact]
@@ -508,33 +529,41 @@ public sealed class WorkflowActivationCoordinatorTests
         await _harness.AssertRetiredAsync("activation-2", WorkflowActivationCoordinator.ReplacedRetireReason);
     }
 
-    /// <summary>
-    /// A slot left half done whose activation's projections are no longer all prepared cannot be repaired in place. Nothing
-    /// builds on it: the same-artifact request, a replacement and a check that it serves all fail naming the remedy, and
-    /// nothing is repaired. Deactivating, the remedy, turns every activation serving the slot off.
-    /// </summary>
-    [Fact]
-    public async Task A_slot_left_half_done_that_cannot_be_repaired_is_reported_not_built_on()
+    public static TheoryData<string, string> Owners => new()
     {
-        var first = await _harness.ActivateAsync("activation-1", "artifact-1");
-        var slot = await _harness.LeaveHalfDoneAsync("activation-2", "artifact-2", first.Slot.Revision);
+        { "publishing", "Unpublish the slot" },
+        { "artifact reconciliation", "removing the artifact from its mounted set does not" }
+    };
+
+    /// <summary>
+    /// A slot whose activation is missing from a store, which only a fault or a manual change leaves, cannot be repaired.
+    /// Nothing builds on it: the same-artifact request, a replacement and a check that it serves all fail naming the remedy
+    /// for the slot's owner, and nothing is repaired. Only Publishing deactivates a slot; the artifact reconciler never does.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(Owners))]
+    public async Task A_slot_whose_activation_cannot_be_repaired_is_reported_with_its_owners_remedy(string owner, string remedy)
+    {
+        var source = owner == "publishing" ? WorkflowActivationSource.Publishing : Importer;
+        var first = await _harness.ActivateAsync("activation-1", "artifact-1", source: source);
+        var slot = await _harness.LeaveHalfDoneAsync("activation-2", "artifact-2", first.Slot.Revision, source);
         await _harness.Bindings.DeleteByActivationAsync("activation-2");
         _harness.ResetCalls();
 
-        var same = await _harness.ActivateAsync("activation-2", "artifact-2", slot.Revision);
-        var replacement = await _harness.ActivateAsync("activation-3", "artifact-3", slot.Revision);
-        var ensured = await _harness.Coordinator.EnsureServingAsync("definition-1", "default");
+        WorkflowActivationResult[] results =
+        [
+            await _harness.ActivateAsync("activation-2", "artifact-2", slot.Revision, source),
+            await _harness.ActivateAsync("activation-3", "artifact-3", slot.Revision, source),
+            await _harness.Coordinator.EnsureServingAsync("definition-1", "default")
+        ];
 
-        Assert.All([same, replacement, ensured], result =>
+        Assert.All(results, result =>
         {
             Assert.Equal(WorkflowActivationOutcome.Failed, result.Outcome);
-            Assert.Contains("unpublish the slot", result.Diagnostic, StringComparison.Ordinal);
+            Assert.Contains(remedy, result.Diagnostic, StringComparison.Ordinal);
         });
         Assert.DoesNotContain("switch:repair", _harness.Calls);
         Assert.Equal(["activation-1"], await _harness.ServingAsync());
-
-        Assert.Equal(WorkflowActivationOutcome.Deactivated, (await _harness.DeactivateAsync(slot.Revision)).Outcome);
-        Assert.Empty(await _harness.ServingAsync());
     }
 
     [Fact]
@@ -652,12 +681,12 @@ public sealed class WorkflowActivationCoordinatorTests
         }
 
         /// <summary>What a version before #2230 left when it stopped between its slot transition and its projection switch.</summary>
-        public async Task<WorkflowActivationSlot> LeaveHalfDoneAsync(string activationId, string artifactId, long expectedRevision)
+        public async Task<WorkflowActivationSlot> LeaveHalfDoneAsync(string activationId, string artifactId, long expectedRevision, WorkflowActivationSource? source = null)
         {
             var reference = ActivationReference(activationId, artifactId);
             await References.SaveAsync(reference);
             await Indexer.PrepareActivationAsync(Executable(artifactId), activationId, reference.SlotId!);
-            var transition = await Authority.TryActivateAsync(new("definition-1", "default", activationId, WorkflowActivationSource.Publishing, expectedRevision, Now));
+            var transition = await Authority.TryActivateAsync(new("definition-1", "default", activationId, source ?? WorkflowActivationSource.Publishing, expectedRevision, Now));
             Assert.True(transition.Succeeded);
             return transition.Slot;
         }

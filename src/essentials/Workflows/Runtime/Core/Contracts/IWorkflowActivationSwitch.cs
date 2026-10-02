@@ -93,18 +93,19 @@ public interface IWorkflowActivationSwitch
     ValueTask<bool> TryDiscardAsync(WorkflowExecutableSourceReference reference, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Repairs the one state a version before #2230 could leave a slot in, by committing the slot transition before the
-    /// projection switch and stopping between them: the slot names an activation whose projection is prepared, and has
-    /// never served, in every projection store. In one commit it switches that activation's projections on, deletes the
-    /// projections of each of <paramref name="alsoServing"/> and retires their references as replaced, and makes the
-    /// activation's own reference live again if it was retired as failed. The slot itself is not written: it already says
-    /// what serves, so a caller's expected revision stays valid.
+    /// Repairs a slot a version before #2230 left on its way to serving. That version committed the slot transition before
+    /// the projection switches, one store after the other, so a process that stopped in between left the slot naming an
+    /// activation that is prepared in every projection store, or switched on in some and prepared in the others
+    /// (<c>WorkflowActivationSwitchRules.IsRepairable</c>). In one commit the repair switches
+    /// that activation on where it is prepared, deletes the projections of each of <paramref name="alsoServing"/> and
+    /// retires their references as replaced, and makes the activation's own reference live again if it was retired as
+    /// failed. The slot itself is not written: it already says what serves, so a caller's expected revision stays valid.
     /// </summary>
     /// <param name="slot">The slot as its caller read it; the repair is made only while the slot still stands so.</param>
-    /// <param name="alsoServing">The other activations a projection store lists as serving the slot.</param>
+    /// <param name="alsoServing">The other activations a projection store lists as serving the slot; not the slot's own.</param>
     /// <returns>
     /// <see langword="false"/>, having changed nothing, when the slot has moved since <paramref name="slot"/> was read, or
-    /// the activation it names is not prepared and never served in every projection store.
+    /// the activation it names is not on its way to serving: serving everywhere already, or missing or replaced anywhere.
     /// </returns>
     ValueTask<bool> TryRepairAsync(
         WorkflowActivationSlot slot,

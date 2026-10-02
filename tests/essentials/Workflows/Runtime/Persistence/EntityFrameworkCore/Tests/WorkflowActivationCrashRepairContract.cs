@@ -8,6 +8,7 @@ using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Workflows.Runtime.Services.Executables;
 using Elsa.Workflows.Runtime.Services.Recovery;
 using Elsa.Workflows.Runtime.Services.Triggers;
+using Elsa.Workflows.Runtime.Tests.Fixtures;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Xunit;
@@ -46,11 +47,20 @@ internal static partial class WorkflowActivationCrashRepairContract
         ["a-revert-restores-the-predecessor-with-a-live-reference"] = ARevertRestoresThePredecessorWithALiveReferenceAsync,
         ["a-revert-refused-after-a-later-writer-moved-the-slot-changes-nothing"] = ARevertRefusedAfterALaterWriterMovedTheSlotChangesNothingAsync,
         ["in-flight-activation-and-a-concurrent-check-that-it-serves-agree"] = InFlightActivationAndAConcurrentCheckThatItServesAgreeAsync,
-        ["a-slot-left-half-done-is-repaired-by-the-next-activation-of-its-artifact"] = ASlotLeftHalfDoneIsRepairedByTheNextActivationOfItsArtifactAsync,
-        ["a-slot-left-half-done-is-repaired-by-a-check-that-it-serves"] = ASlotLeftHalfDoneIsRepairedByACheckThatItServesAsync,
-        ["a-replacement-repairs-a-slot-left-half-done-before-it-replaces-it"] = AReplacementRepairsASlotLeftHalfDoneBeforeItReplacesItAsync,
-        ["two-calls-meeting-a-slot-left-half-done-repair-it-once"] = TwoCallsMeetingASlotLeftHalfDoneRepairItOnceAsync,
-        ["a-slot-left-half-done-that-cannot-be-repaired-is-reported-not-built-on"] = ASlotLeftHalfDoneThatCannotBeRepairedIsReportedNotBuiltOnAsync,
+        ["a-slot-left-half-done-is-repaired-by-the-next-activation-of-its-artifact"] = open => RepairedAsync(open, LeftHalfDoneAsync, ActivateItsArtifactAsync),
+        ["a-slot-left-half-done-is-repaired-by-a-check-that-it-serves"] = open => RepairedAsync(open, LeftHalfDoneAsync, CheckThatItServesAsync),
+        ["a-replacement-repairs-a-slot-left-half-done-before-it-replaces-it"] = open => AReplacementRepairsTheSlotBeforeItReplacesItAsync(open, LeftHalfDoneAsync),
+        ["two-calls-meeting-a-slot-left-half-done-repair-it-once"] = open => TwoCallsMeetingTheSlotRepairItOnceAsync(open, LeftHalfDoneAsync),
+        ["a-slot-left-partly-switched-is-repaired-by-the-next-activation-of-its-artifact"] = open => RepairedAsync(open, LeftPartlySwitchedAsync, ActivateItsArtifactAsync),
+        ["a-slot-left-partly-switched-is-repaired-by-a-check-that-it-serves"] = open => RepairedAsync(open, LeftPartlySwitchedAsync, CheckThatItServesAsync),
+        ["a-replacement-repairs-a-slot-left-partly-switched-before-it-replaces-it"] = open => AReplacementRepairsTheSlotBeforeItReplacesItAsync(open, LeftPartlySwitchedAsync),
+        ["two-calls-meeting-a-slot-left-partly-switched-repair-it-once"] = open => TwoCallsMeetingTheSlotRepairItOnceAsync(open, LeftPartlySwitchedAsync),
+        ["a-stale-repair-changes-nothing"] = AStaleRepairChangesNothingAsync,
+        ["a-repair-of-a-slot-naming-another-activation-changes-nothing"] = ARepairOfASlotNamingAnotherActivationChangesNothingAsync,
+        ["a-repair-of-an-activation-missing-from-a-store-changes-nothing"] = ARepairOfAnActivationMissingFromAStoreChangesNothingAsync,
+        ["a-repair-of-a-replaced-activation-changes-nothing"] = ARepairOfAReplacedActivationChangesNothingAsync,
+        ["a-repair-of-a-serving-activation-changes-nothing"] = ARepairOfAServingActivationChangesNothingAsync,
+        ["a-slot-whose-activation-cannot-be-repaired-is-reported-not-built-on"] = ASlotWhoseActivationCannotBeRepairedIsReportedNotBuiltOnAsync,
         ["deactivating-a-slot-left-half-done-turns-off-every-activation-serving-it"] = DeactivatingASlotLeftHalfDoneTurnsOffEveryActivationServingItAsync,
         ["projection-switch-is-a-no-op-once-made"] = ProjectionSwitchIsANoOpOnceMadeAsync,
         ["projection-switch-is-refused-once-the-replaced-activation-is-off"] = ProjectionSwitchIsRefusedOnceTheReplacedActivationIsOffAsync
@@ -75,9 +85,8 @@ internal static partial class WorkflowActivationCrashRepairContract
     }
 
     /// <summary>
-    /// The window #2193 had to repair, closed: a process that stops once its switch commits leaves the slot, the
-    /// projections and the references agreeing, so nothing is left to complete. Activating the same artifact again, and a
-    /// completion, both find it already active.
+    /// A process that stops once its switch commits leaves the slot, the projections and the references agreeing.
+    /// Activating the same artifact again, and a check that the slot serves, both find it already active.
     /// </summary>
     private static async Task ACallThatStopsAfterItsSwitchLeavesTheActivationWholeAsync(Func<ActivationStores> open)
     {
@@ -153,10 +162,9 @@ internal static partial class WorkflowActivationCrashRepairContract
     }
 
     /// <summary>
-    /// The first window of #2230, closed. A call reads the slot before another process activates the same first
-    /// activation and then replaces it. Before #2230 a stale completion could switch that activation back on beside its
-    /// successor, where it served for good. Now nothing switches projections without moving the slot from the revision it
-    /// read, so the stale call is refused, switches nothing, and only the successor serves.
+    /// A call reads the slot before another process activates the same first activation and then replaces it. Nothing
+    /// switches projections without moving the slot from the revision it read, so the stale call is refused, switches
+    /// nothing, and only the successor serves.
     /// </summary>
     private static async Task AStaleCallCannotSwitchAReplacedFirstActivationBackOnAsync(Func<ActivationStores> open)
     {
@@ -175,10 +183,9 @@ internal static partial class WorkflowActivationCrashRepairContract
     }
 
     /// <summary>
-    /// The second window of #2230, closed. An activation fails after its switch, while another process completes the slot
-    /// meanwhile. Before #2230 that completion could retire the predecessor's reference just as the failure handed the slot
-    /// back to it, leaving it serving with a retired reference. Now completion retires nothing, and the revert restores the
-    /// predecessor's reference in the commit that switches it back on.
+    /// An activation fails after its switch, while another process checks that the slot serves meanwhile. The check writes
+    /// nothing, and the revert restores the predecessor's reference in the commit that switches it back on, so the
+    /// predecessor never serves with a retired reference.
     /// </summary>
     private static async Task ARevertRestoresThePredecessorWithALiveReferenceAsync(Func<ActivationStores> open)
     {
@@ -254,23 +261,35 @@ internal static partial class WorkflowActivationCrashRepairContract
     }
 
     /// <summary>
-    /// A version before #2230 committed the slot transition before the projection switch, so a process that stopped in
-    /// between left the slot naming a prepared activation beside the one it replaced, which still serves. The next
-    /// activation of the slot's own artifact repairs it in one commit and finds it already active; the slot itself is not
-    /// written.
+    /// What a version before #2230 left when it stopped before its projection switches: the slot names activation-2,
+    /// prepared in every store, and activation-1, which it replaced, still serves.
     /// </summary>
-    private static Task ASlotLeftHalfDoneIsRepairedByTheNextActivationOfItsArtifactAsync(Func<ActivationStores> open) =>
-        RepairsAHalfDoneSlotAsync(open, node => node.ActivateAsync("activation-2", "artifact-2"));
+    private static Task<WorkflowActivationSlot> LeftHalfDoneAsync(ActivationNode node) => node.LeaveHalfDoneAsync("activation-2", "artifact-2");
 
-    /// <summary>A check that the slot serves, which Publishing makes before it publishes and at shell start, repairs it too.</summary>
-    private static Task ASlotLeftHalfDoneIsRepairedByACheckThatItServesAsync(Func<ActivationStores> open) =>
-        RepairsAHalfDoneSlotAsync(open, node => node.Coordinator.EnsureServingAsync(DefinitionId, SlotName).AsTask());
+    /// <summary>
+    /// What it left when it stopped between the binding switch and the schedule switch: activation-2 serves through the
+    /// bindings and is prepared in the schedules, and activation-1 serves through the schedules alone.
+    /// </summary>
+    private static async Task<WorkflowActivationSlot> LeftPartlySwitchedAsync(ActivationNode node)
+    {
+        var slot = await LeftHalfDoneAsync(node);
+        await node.Stores.Bindings.ActivateAsync("activation-2", "activation-1");
+        return slot;
+    }
 
-    private static async Task RepairsAHalfDoneSlotAsync(Func<ActivationStores> open, Func<ActivationNode, Task<WorkflowActivationResult>> call)
+    /// <summary>
+    /// The next activation of the slot's own artifact, or a check that the slot serves, which Publishing makes before it
+    /// publishes and at shell start, repairs the slot in one commit and finds its activation already active: it serves
+    /// alone, the activation that served in its place is deleted and retired, and the slot itself is not written.
+    /// </summary>
+    private static async Task RepairedAsync(
+        Func<ActivationStores> open,
+        Func<ActivationNode, Task<WorkflowActivationSlot>> leave,
+        Func<ActivationNode, Task<WorkflowActivationResult>> call)
     {
         await ActivateAsync(open, "activation-1", "artifact-1");
         await using var node = Start(open());
-        var slot = await node.LeaveHalfDoneAsync("activation-2", "artifact-2");
+        var slot = await leave(node);
 
         var result = await call(node);
 
@@ -279,15 +298,19 @@ internal static partial class WorkflowActivationCrashRepairContract
         await node.AssertRepairedAsync("activation-2", "activation-1");
     }
 
+    private static Task<WorkflowActivationResult> ActivateItsArtifactAsync(ActivationNode node) => node.ActivateAsync("activation-2", "artifact-2");
+
+    private static Task<WorkflowActivationResult> CheckThatItServesAsync(ActivationNode node) => node.Coordinator.EnsureServingAsync(DefinitionId, SlotName).AsTask();
+
     /// <summary>
-    /// A publish of another artifact to a slot left half done repairs it first, then replaces the slot's activation as it
-    /// would any other: it serves alone, and both earlier activations are switched off and retired.
+    /// A publish of another artifact repairs the slot first, then replaces its activation as it would any other: it serves
+    /// alone, and both earlier activations are switched off and retired.
     /// </summary>
-    private static async Task AReplacementRepairsASlotLeftHalfDoneBeforeItReplacesItAsync(Func<ActivationStores> open)
+    private static async Task AReplacementRepairsTheSlotBeforeItReplacesItAsync(Func<ActivationStores> open, Func<ActivationNode, Task<WorkflowActivationSlot>> leave)
     {
         await ActivateAsync(open, "activation-1", "artifact-1");
         await using var node = Start(open());
-        await node.LeaveHalfDoneAsync("activation-2", "artifact-2");
+        await leave(node);
 
         var result = await node.ActivateAsync("activation-3", "artifact-3");
 
@@ -298,22 +321,22 @@ internal static partial class WorkflowActivationCrashRepairContract
     }
 
     /// <summary>
-    /// Two nodes meet one slot left half done at once, as two nodes starting together do. One has decided to repair it when
-    /// the other repairs it first; its own repair is then refused, having changed nothing, and it finds the slot's activation
-    /// serving. The slot is repaired once, and both report it already active.
+    /// Two nodes meet the slot at once, as two nodes starting together do. One has decided to repair it when the other
+    /// repairs it first; its own repair is then refused, having changed nothing, and it finds the slot's activation serving.
+    /// The slot is repaired once, and both report it already active.
     /// </summary>
-    private static async Task TwoCallsMeetingASlotLeftHalfDoneRepairItOnceAsync(Func<ActivationStores> open)
+    private static async Task TwoCallsMeetingTheSlotRepairItOnceAsync(Func<ActivationStores> open, Func<ActivationNode, Task<WorkflowActivationSlot>> leave)
     {
         await ActivateAsync(open, "activation-1", "artifact-1");
         await using var node = Start(open());
-        await node.LeaveHalfDoneAsync("activation-2", "artifact-2");
+        await leave(node);
         var latch = new Latch();
         var stores = open();
         await using var held = Start(stores with { Switch = new InterceptedSwitch(stores.Switch) { BeforeRepair = latch.PassAsync } });
-        var holding = held.Coordinator.EnsureServingAsync(DefinitionId, SlotName).AsTask();
+        var holding = CheckThatItServesAsync(held);
         Assert.Same(latch.Reached, await Task.WhenAny(holding, latch.Reached));
 
-        Assert.Equal(WorkflowActivationOutcome.AlreadyActive, (await node.ActivateAsync("activation-2", "artifact-2")).Outcome);
+        Assert.Equal(WorkflowActivationOutcome.AlreadyActive, (await ActivateItsArtifactAsync(node)).Outcome);
         latch.Release();
 
         Assert.Equal(WorkflowActivationOutcome.AlreadyActive, (await holding).Outcome);
@@ -322,28 +345,85 @@ internal static partial class WorkflowActivationCrashRepairContract
     }
 
     /// <summary>
-    /// The direction that would look like success: a slot left half done whose activation is no longer prepared in every
-    /// store cannot be repaired in place. Nothing repairs it, builds on it or reports it active: activating the same
-    /// artifact, replacing it, and checking that it serves all fail naming the remedy, and the predecessor keeps serving.
+    /// The switch's own fence, met directly rather than through the coordinator's check: a repair that does not apply to
+    /// the slot as it stands, or to its activation's projections, returns false and changes nothing at all.
     /// </summary>
-    private static async Task ASlotLeftHalfDoneThatCannotBeRepairedIsReportedNotBuiltOnAsync(Func<ActivationStores> open)
+    private static async Task ARepairThatDoesNotApplyChangesNothingAsync(
+        Func<ActivationStores> open,
+        Func<ActivationNode, Task<WorkflowActivationSlot>> leave,
+        Func<WorkflowActivationSlot, WorkflowActivationSlot> asRead,
+        params string[] alsoServing)
     {
         await ActivateAsync(open, "activation-1", "artifact-1");
         await using var node = Start(open());
-        await node.LeaveHalfDoneAsync("activation-2", "artifact-2");
+        var slot = asRead(await leave(node));
+        var before = await node.SnapshotAsync("activation-1", "activation-2", "activation-3");
+
+        Assert.False(await node.Stores.Switch.TryRepairAsync(slot, alsoServing));
+
+        Assert.Equal(before, await node.SnapshotAsync("activation-1", "activation-2", "activation-3"));
+    }
+
+    /// <summary>The slot names activation-2 at a later revision than the repair read.</summary>
+    private static Task AStaleRepairChangesNothingAsync(Func<ActivationStores> open) =>
+        ARepairThatDoesNotApplyChangesNothingAsync(open, LeftHalfDoneAsync, slot => slot with { Revision = slot.Revision - 1 }, "activation-1");
+
+    /// <summary>The repair read the slot naming activation-1, which it no longer names.</summary>
+    private static Task ARepairOfASlotNamingAnotherActivationChangesNothingAsync(Func<ActivationStores> open) =>
+        ARepairThatDoesNotApplyChangesNothingAsync(open, LeftHalfDoneAsync, slot => slot with { ActiveActivationId = "activation-1" });
+
+    /// <summary>Activation-2 is prepared in the bindings and missing from the schedules: a shape no crash leaves.</summary>
+    private static Task ARepairOfAnActivationMissingFromAStoreChangesNothingAsync(Func<ActivationStores> open) =>
+        ARepairThatDoesNotApplyChangesNothingAsync(open, LeftWithoutSchedulesAsync, slot => slot, "activation-1");
+
+    /// <summary>The slot names activation-2 again after activation-3 replaced it, so its projections read as replaced.</summary>
+    private static Task ARepairOfAReplacedActivationChangesNothingAsync(Func<ActivationStores> open) =>
+        ARepairThatDoesNotApplyChangesNothingAsync(open, LeftNamingAReplacedActivationAsync, slot => slot, "activation-3");
+
+    /// <summary>Activation-2 already serves through every store: there is nothing to repair.</summary>
+    private static Task ARepairOfAServingActivationChangesNothingAsync(Func<ActivationStores> open) =>
+        ARepairThatDoesNotApplyChangesNothingAsync(open, ServingAsync, slot => slot);
+
+    private static async Task<WorkflowActivationSlot> LeftWithoutSchedulesAsync(ActivationNode node)
+    {
+        var slot = await LeftHalfDoneAsync(node);
         await node.Stores.Schedules.DeleteByActivationAsync("activation-2");
+        return slot;
+    }
+
+    private static async Task<WorkflowActivationSlot> LeftNamingAReplacedActivationAsync(ActivationNode node)
+    {
+        await ActivateItsArtifactAsync(node);
+        await node.ActivateAsync("activation-3", "artifact-3");
+        var transition = await node.Stores.Authority.TryActivateAsync(new(DefinitionId, SlotName, "activation-2", WorkflowActivationSource.Publishing, (await node.Stores.Authority.FindAsync(DefinitionId, SlotName))!.Revision, Now));
+        Assert.True(transition.Succeeded);
+        return transition.Slot;
+    }
+
+    private static async Task<WorkflowActivationSlot> ServingAsync(ActivationNode node) => (await ActivateItsArtifactAsync(node)).Slot;
+
+    /// <summary>
+    /// The direction that would look like success: a slot whose activation is missing from a store, which only a fault or a
+    /// manual change leaves, cannot be repaired. Nothing repairs it, builds on it or reports it active: activating the same
+    /// artifact, replacing it, and checking that it serves all fail naming the remedy, and the predecessor keeps serving.
+    /// </summary>
+    private static async Task ASlotWhoseActivationCannotBeRepairedIsReportedNotBuiltOnAsync(Func<ActivationStores> open)
+    {
+        await ActivateAsync(open, "activation-1", "artifact-1");
+        await using var node = Start(open());
+        await LeftWithoutSchedulesAsync(node);
 
         WorkflowActivationResult[] results =
         [
-            await node.ActivateAsync("activation-2", "artifact-2"),
+            await ActivateItsArtifactAsync(node),
             await node.ActivateAsync("activation-3", "artifact-3"),
-            await node.Coordinator.EnsureServingAsync(DefinitionId, SlotName)
+            await CheckThatItServesAsync(node)
         ];
 
         Assert.All(results, result =>
         {
             Assert.Equal(WorkflowActivationOutcome.Failed, result.Outcome);
-            Assert.Contains("unpublish the slot", result.Diagnostic, StringComparison.Ordinal);
+            Assert.Contains("Unpublish the slot", result.Diagnostic, StringComparison.Ordinal);
         });
         Assert.Equal("activation-2", await node.SlotActivationAsync());
         await node.AssertServingAsync("activation-1");
@@ -352,7 +432,7 @@ internal static partial class WorkflowActivationCrashRepairContract
     }
 
     /// <summary>
-    /// The remedy for a slot left half done: deactivating it turns off its own activation and every other activation that
+    /// Deactivating a slot whose activation does not serve turns off its own activation and every other activation that
     /// serves the slot, here one whose reference was retired elsewhere so that only the projection stores still name it.
     /// The slot can then be activated cleanly.
     /// </summary>
@@ -617,14 +697,15 @@ internal static partial class WorkflowActivationCrashRepairContract
             var snapshot = new List<object?> { await Stores.Authority.FindAsync(DefinitionId, SlotName) };
             foreach (var activationId in activationIds)
             {
-                var reference = await FindReferenceAsync(activationId);
+                var reference = await Stores.References.FindAsync(WorkflowActivationReferenceIdentity.Create(activationId));
                 snapshot.AddRange(
                 [
                     activationId,
                     await Stores.Bindings.FindActivationStateAsync(activationId),
                     await Stores.Schedules.FindActivationStateAsync(activationId),
-                    reference.DeletedAt,
-                    reference.DeletedReason
+                    reference is null,
+                    reference?.DeletedAt,
+                    reference?.DeletedReason
                 ]);
             }
 

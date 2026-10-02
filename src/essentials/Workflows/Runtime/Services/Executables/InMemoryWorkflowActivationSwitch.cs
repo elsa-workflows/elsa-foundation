@@ -154,32 +154,25 @@ public sealed class InMemoryWorkflowActivationSwitch : IWorkflowActivationSwitch
         IReadOnlyCollection<string> alsoServing,
         CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(slot);
-        ArgumentNullException.ThrowIfNull(alsoServing);
-        var activationId = slot.ActiveActivationId ?? throw new ArgumentException("Only a slot that names an activation can be repaired.", nameof(slot));
+        var plan = RepairPlan(slot, alsoServing);
         cancellationToken.ThrowIfCancellationRequested();
-        var now = _timeProvider.GetUtcNow();
-        var others = alsoServing.Where(other => !StringComparer.Ordinal.Equals(other, activationId)).Distinct(StringComparer.Ordinal).ToArray();
         var repaired = await LockedWithReferenceFirstAsync(
-            WorkflowActivationReferenceIdentity.Create(activationId),
-            current => ResumeFailed(current, activationId),
+            plan.ReferenceId,
+            plan.ResumeOwn,
             () =>
             {
-                if (_authority.Current(slot.WorkflowDefinitionId, slot.SlotName) is not { } current ||
-                    current.Revision != slot.Revision ||
-                    !StringComparer.Ordinal.Equals(current.ActiveActivationId, activationId) ||
-                    _projections.Any(projection => projection.State(activationId) != WorkflowActivationProjectionState.Prepared))
+                if (!plan.AppliesTo(_authority.Current(slot.WorkflowDefinitionId, slot.SlotName), [.. _projections.Select(projection => projection.State(plan.ActivationId))]))
                     return false;
                 foreach (var projection in _projections)
-                    projection.Switch(activationId, null);
-                DeleteProjections(others);
+                    projection.Switch(plan.ActivationId, null);
+                DeleteProjections(plan.ServingInItsPlace);
                 return true;
             },
             committed => committed);
 
         if (repaired)
-            foreach (var other in others)
-                await MoveReferenceAsync(WorkflowActivationReferenceIdentity.Create(other), current => RetireReplaced(current, now));
+            foreach (var (referenceId, retire) in plan.Retirements(_timeProvider.GetUtcNow()))
+                await MoveReferenceAsync(referenceId, retire);
         return repaired;
     }
 

@@ -200,7 +200,7 @@ public sealed class RuntimeEntityFrameworkCoreStandaloneTests
     [Fact]
     public async Task Shell_start_accepts_the_aggregates_activation_switch()
     {
-        await using var provider = WithTriggerSpine(Compose("runtime root first")).BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        await using var provider = Compose("runtime root first").AddTriggerSpineStandIn().BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
 
         await provider.GetRequiredService<WorkflowActivationSwitchCompositionValidator>().InitializeAsync();
     }
@@ -212,7 +212,7 @@ public sealed class RuntimeEntityFrameworkCoreStandaloneTests
     [Fact]
     public async Task The_EF_activation_switch_refuses_a_projection_store_the_aggregate_did_not_select()
     {
-        var services = WithTriggerSpine(Compose("runtime root first"));
+        var services = Compose("runtime root first").AddTriggerSpineStandIn();
         services.AddSingleton<IWorkflowTriggerBindingStore, InMemoryWorkflowTriggerBindingStore>();
         await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
 
@@ -406,10 +406,6 @@ public sealed class RuntimeEntityFrameworkCoreStandaloneTests
             services.AddWorkflowRuntime();
         return services;
     }
-
-    /// <summary>The trigger serving spine the WorkflowsRuntimeTriggers feature composes; without it nothing activates, and shell start checks no switch.</summary>
-    private static IServiceCollection WithTriggerSpine(IServiceCollection services) =>
-        services.AddScoped<IWorkflowTriggerIndexer>(_ => throw new NotSupportedException("Nothing is activated here."));
 
     private static RuntimeEntityFrameworkCoreOptions Options() => new()
     {

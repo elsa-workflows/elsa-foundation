@@ -106,16 +106,7 @@ public sealed partial class WorkflowActivationCoordinator
         WorkflowActivationSlot slot,
         WorkflowActivationSlot slotBeforeTransition)
     {
-        var failures = new List<string>();
-        await CaptureAsync(failures, "Observer notification", () => NotifyTriggerObserversAsync(command.ActivationId, command.Executable.Identity.ArtifactId, CancellationToken.None));
-        if (failures.Count > 0)
-            logger?.LogWarning(
-                "Activation {ActivationId} of definition {DefinitionId} slot {SlotName} serves, but its trigger observers could not be notified: {Failures}",
-                command.ActivationId,
-                slot.WorkflowDefinitionId,
-                slot.SlotName,
-                failures);
-
+        await NotifyServingAsync(slot, command.ActivationId, command.Executable.Identity.ArtifactId);
         var replaced = slotBeforeTransition.ActiveActivationId is { } previous && !StringComparer.Ordinal.Equals(previous, command.ActivationId) ? previous : null;
         return new(true, WorkflowActivationOutcome.Activated, slot, await FindLiveReferenceAsync(slot, CancellationToken.None) ?? reference, replaced);
     }

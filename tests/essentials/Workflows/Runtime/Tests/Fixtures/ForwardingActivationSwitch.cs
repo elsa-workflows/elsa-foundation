@@ -1,7 +1,7 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 
-namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
+namespace Elsa.Workflows.Runtime.Tests.Fixtures;
 
 /// <summary>
 /// Forwards every <see cref="IWorkflowActivationSwitch"/> operation to <c>inner</c>; a test double derives from it and

@@ -217,11 +217,11 @@ public sealed partial class WorkflowActivationCoordinator(
 
     /// <summary>
     /// Checks that the activation <paramref name="slot"/> names serves through every projection store, which a switch's
-    /// commit guarantees unless a version before #2230 stopped between the slot transition and the projection switch. Such
-    /// a slot is repaired when its activation is prepared, and has never served, in every store
-    /// (<see cref="IWorkflowActivationSwitch.TryRepairAsync"/>), and reported otherwise. The slot is read again when the
-    /// activation does not serve: a slot that moved meanwhile was moved by a switch that made its new activation serve, and
-    /// is answered as it now stands. A repair another call made first is read as serving.
+    /// commit guarantees unless a version before #2230 stopped between the slot transition and the projection switches.
+    /// Such a slot is repaired when the activation is on its way to serving (<see cref="IWorkflowActivationSwitch.TryRepairAsync"/>),
+    /// and the trigger observers are told of it as of an activation; any other shape is reported. The slot is read again
+    /// when the activation does not serve: a slot that moved meanwhile was moved by a switch that made its new activation
+    /// serve, and is answered as it now stands. A repair another call made first is read as serving.
     /// </summary>
     /// <returns>The slot as it now stands, and the failure to report when its activation does not serve or that could not be read.</returns>
     private async ValueTask<(WorkflowActivationSlot Slot, WorkflowActivationResult? Unserved)> CheckServingAsync(
@@ -233,23 +233,25 @@ public sealed partial class WorkflowActivationCoordinator(
         {
             for (var repairs = 0; ; repairs++)
             {
-                if (await InEveryStoreAsync(activationId, WorkflowActivationProjectionState.Active, cancellationToken))
+                var states = await ProjectionStatesAsync(activationId, cancellationToken);
+                if (states.All(state => state == WorkflowActivationProjectionState.Active))
                     return (slot, null);
                 var current = await authority.FindAsync(slot.WorkflowDefinitionId, slot.SlotName, cancellationToken) ?? EmptySlot(slot.WorkflowDefinitionId, slot.SlotName);
                 if (current.Revision != slot.Revision)
                     return (current, null);
-                if (repairs > 0 || !await InEveryStoreAsync(activationId, WorkflowActivationProjectionState.Prepared, cancellationToken))
-                    return (current, LeftHalfDone(current));
+                if (repairs > 0 || !WorkflowActivationSwitchRules.IsRepairable(states))
+                    return (current, NotServing(current));
 
                 var others = await ListOtherServingActivationsAsync(current.SlotId, activationId, cancellationToken);
                 if (!await activationSwitch.TryRepairAsync(current, others, cancellationToken))
                     continue;
                 logger?.LogWarning(
-                    "Activation {ActivationId} of definition {DefinitionId} slot {SlotName} was named by the slot but did not serve, because a version before #2230 stopped between its slot transition and its projection switch. It now serves, and activations {ReplacedActivationIds}, which served in its place, are switched off and retired",
+                    "Activation {ActivationId} of definition {DefinitionId} slot {SlotName} was named by the slot but did not serve everywhere, because a version before #2230 stopped between its slot transition and its projection switches. It now serves, and activations {ReplacedActivationIds}, which served in its place, are switched off and retired",
                     activationId,
                     current.WorkflowDefinitionId,
                     current.SlotName,
                     others);
+                await NotifyServingAsync(current, activationId);
                 return (current, null);
             }
         }
@@ -261,34 +263,71 @@ public sealed partial class WorkflowActivationCoordinator(
                 activationId,
                 slot.WorkflowDefinitionId,
                 slot.SlotName);
-            return (slot, HalfDoneFailure(slot, $"whether it serves could not be checked or repaired: {SafeMessage(exception)}"));
+            return (slot, NotServingFailure(slot, $"whether it serves could not be checked or repaired: {SafeMessage(exception)}"));
         }
     }
 
-    private async ValueTask<bool> InEveryStoreAsync(string activationId, WorkflowActivationProjectionState state, CancellationToken cancellationToken) =>
-        await triggerBindingStore!.FindActivationStateAsync(activationId, cancellationToken) == state &&
-        (recurringScheduleStore is null || await recurringScheduleStore.FindActivationStateAsync(activationId, cancellationToken) == state);
+    /// <summary>The activation's projection state in each projection store.</summary>
+    private async ValueTask<WorkflowActivationProjectionState[]> ProjectionStatesAsync(string activationId, CancellationToken cancellationToken) =>
+        recurringScheduleStore is null
+            ? [await triggerBindingStore!.FindActivationStateAsync(activationId, cancellationToken)]
+            : [await triggerBindingStore!.FindActivationStateAsync(activationId, cancellationToken), await recurringScheduleStore.FindActivationStateAsync(activationId, cancellationToken)];
 
     /// <summary>
-    /// The slot names an activation that does not serve and cannot be repaired in place: a version before #2230 left it
-    /// so, and its projections are no longer all prepared. Nothing is built on it; an operator clears it by deactivating
-    /// (unpublishing) the slot, which turns every activation that serves it off, then activating again.
+    /// Tells the trigger observers that an activation serves, as an activation does, but logs rather than fails when they
+    /// cannot be told: the activation already serves, undoing that would serve less, and the observers converge on their
+    /// own. The artifact is read from the activation's reference when the caller does not know it.
     /// </summary>
-    private WorkflowActivationResult LeftHalfDone(WorkflowActivationSlot slot)
+    private async ValueTask NotifyServingAsync(WorkflowActivationSlot slot, string activationId, string? artifactId = null)
     {
-        logger?.LogError(
-            "Activation {ActivationId} of definition {DefinitionId} slot {SlotName} is named by the slot but does not serve, and cannot be repaired in place: a version before #2230 switched the slot and its projections separately and stopped between them, and its projections are no longer all prepared. Unpublish the slot, which turns every activation serving it off, then publish again",
-            slot.ActiveActivationId,
-            slot.WorkflowDefinitionId,
-            slot.SlotName);
-        return HalfDoneFailure(slot, "it does not serve and cannot be repaired in place, because a version before #2230 stopped between its slot transition and its projection switch and its projections are no longer all prepared; unpublish the slot to turn every activation serving it off, then publish again.");
+        try
+        {
+            artifactId ??= (await sourceReferenceStore.FindAsync(WorkflowActivationReferenceIdentity.Create(activationId), CancellationToken.None))?.ArtifactId
+                           ?? throw new InvalidOperationException($"Activation '{activationId}' has no source reference to name its artifact.");
+            await NotifyTriggerObserversAsync(activationId, artifactId, CancellationToken.None);
+        }
+        catch (Exception exception)
+        {
+            logger?.LogWarning(
+                exception,
+                "Activation {ActivationId} of definition {DefinitionId} slot {SlotName} serves, but its trigger observers could not be told; they converge on their own",
+                activationId,
+                slot.WorkflowDefinitionId,
+                slot.SlotName);
+        }
     }
 
-    private static WorkflowActivationResult HalfDoneFailure(WorkflowActivationSlot slot, string reason) => new(
+    /// <summary>
+    /// The slot names an activation that does not serve, and is not on its way to serving: its projection is missing or
+    /// replaced in some store, which only a fault or a manual change leaves. Nothing is built on it; the failure names how
+    /// to clear it.
+    /// </summary>
+    private WorkflowActivationResult NotServing(WorkflowActivationSlot slot)
+    {
+        var remedy = Remedy(slot);
+        logger?.LogError(
+            "Activation {ActivationId} of definition {DefinitionId} slot {SlotName} is named by the slot, but its projection is missing or replaced, which only a fault or a manual change leaves, so it cannot be repaired. {Remedy}",
+            slot.ActiveActivationId,
+            slot.WorkflowDefinitionId,
+            slot.SlotName,
+            remedy);
+        return NotServingFailure(slot, $"its projection is missing or replaced, which only a fault or a manual change leaves. {remedy}");
+    }
+
+    /// <summary>
+    /// How an operator clears a slot whose activation cannot serve. Only Publishing deactivates a slot; the artifact
+    /// reconciler activates and never deactivates, so removing an artifact from a mounted set leaves its slot as it is.
+    /// </summary>
+    private static string Remedy(WorkflowActivationSlot slot) =>
+        slot.Source is not { } owner || owner.IsSameOwnerAs(WorkflowActivationSource.Publishing)
+            ? "Unpublish the slot, which turns every activation serving it off, then publish again."
+            : $"No command clears a slot '{owner.Describe()}' owns, and removing the artifact from its mounted set does not: delete the slot, and the activation's projections and source reference, from the runtime's store, and the next pass activates the artifact again.";
+
+    private static WorkflowActivationResult NotServingFailure(WorkflowActivationSlot slot, string reason) => new(
         false,
         WorkflowActivationOutcome.Failed,
         slot,
-        Diagnostic: Truncate($"Activation '{slot.ActiveActivationId}' of definition '{slot.WorkflowDefinitionId}' slot '{slot.SlotName}' is named by the slot, but {reason}"),
+        Diagnostic: Truncate($"Activation '{slot.ActiveActivationId}' of definition '{slot.WorkflowDefinitionId}' slot '{slot.SlotName}' is named by the slot and does not serve: {reason}"),
         FailedStep: WorkflowActivationStep.ProjectionActivation);
 
     private void GuardComposition(string definitionId, string slotName, string activationId)

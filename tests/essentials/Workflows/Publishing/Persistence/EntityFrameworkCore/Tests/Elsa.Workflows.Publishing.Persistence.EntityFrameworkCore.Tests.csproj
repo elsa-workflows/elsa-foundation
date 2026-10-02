@@ -49,7 +49,7 @@
     <Compile Include="..\..\..\..\Design\Tests\Infrastructure\ReconciliationRaceSupport.cs" Link="ReconciliationRaceSupport.cs" />
     <!-- #2223: the crash double the Runtime crash-repair contract uses, and the base of every switch double, shared rather than copied. -->
     <Compile Include="..\..\..\..\Runtime\Persistence\EntityFrameworkCore\Tests\PauseAfterSwitch.cs" Link="PauseAfterSwitch.cs" />
-    <Compile Include="..\..\..\..\Runtime\Persistence\EntityFrameworkCore\Tests\ForwardingActivationSwitch.cs" Link="ForwardingActivationSwitch.cs" />
+    <Compile Include="..\..\..\..\Runtime\Tests\Fixtures\ForwardingActivationSwitch.cs" Link="ForwardingActivationSwitch.cs" />
   </ItemGroup>
   <ItemGroup>
     <!-- Fails any unordered Skip or Take (EF warning 10102) in this suite. -->

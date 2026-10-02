@@ -54,10 +54,66 @@ public static class WorkflowActivationSwitchRules
     /// </summary>
     public static WorkflowExecutableSourceReference? ResumeFailed(WorkflowExecutableSourceReference current, string activationId) =>
         Restore(current, activationId, WorkflowActivationCoordinator.FailedRetireReason);
+
+    /// <summary>
+    /// Whether an activation whose projection stands as <paramref name="states"/> in the projection stores is one a
+    /// version before #2230 left on its way to serving: prepared in every store, or switched on in some and prepared in
+    /// the others, because it stopped before or between the projection switches. Missing and replaced projections come
+    /// only from a fault or a manual change, and are not repaired.
+    /// </summary>
+    public static bool IsRepairable(IReadOnlyCollection<WorkflowActivationProjectionState> states) =>
+        states.Count > 0 &&
+        states.All(state => state is WorkflowActivationProjectionState.Prepared or WorkflowActivationProjectionState.Active) &&
+        states.Any(state => state == WorkflowActivationProjectionState.Prepared);
+
+    /// <summary>
+    /// What one <see cref="Core.Contracts.IWorkflowActivationSwitch.TryRepairAsync"/> works on, refusing arguments it
+    /// cannot: the slot names an activation, and the activations serving in its place do not include it.
+    /// </summary>
+    public static WorkflowActivationRepairPlan RepairPlan(WorkflowActivationSlot slot, IReadOnlyCollection<string> alsoServing)
+    {
+        ArgumentNullException.ThrowIfNull(slot);
+        ArgumentNullException.ThrowIfNull(alsoServing);
+        var activationId = slot.ActiveActivationId ?? throw new ArgumentException("Only a slot that names an activation can be repaired.", nameof(slot));
+        if (alsoServing.Contains(activationId, StringComparer.Ordinal))
+            throw new ArgumentException("The activations serving in place of the slot's own cannot include it.", nameof(alsoServing));
+        return new(slot, activationId, alsoServing.Distinct(StringComparer.Ordinal).ToArray());
+    }
+
     private static WorkflowExecutableSourceReference? Restore(WorkflowExecutableSourceReference current, string activationId, string retiredFor) =>
         current.DeletedAt is not null &&
         StringComparer.Ordinal.Equals(current.DeletedReason, retiredFor) &&
         StringComparer.Ordinal.Equals(current.ActivationId, activationId)
             ? current with { DeletedAt = null, DeletedReason = null }
             : null;
+}
+
+/// <summary>
+/// One repair of a slot a version before #2230 left on its way to serving (<see cref="WorkflowActivationSwitchRules.RepairPlan"/>):
+/// the slot as its caller read it, the activation it names, and the activations serving in that one's place.
+/// </summary>
+public sealed record WorkflowActivationRepairPlan(WorkflowActivationSlot Slot, string ActivationId, IReadOnlyList<string> ServingInItsPlace)
+{
+    /// <summary>The activation's own source reference.</summary>
+    public string ReferenceId => WorkflowActivationReferenceIdentity.Create(ActivationId);
+
+    /// <summary>
+    /// Whether the repair applies to the slot as it now stands, <paramref name="current"/>, and to the activation's
+    /// projection as it stands in each store: the slot still names it at the revision read, and it is repairable.
+    /// </summary>
+    public bool AppliesTo(WorkflowActivationSlot? current, IReadOnlyCollection<WorkflowActivationProjectionState> states) =>
+        current is not null &&
+        current.Revision == Slot.Revision &&
+        StringComparer.Ordinal.Equals(current.ActiveActivationId, ActivationId) &&
+        WorkflowActivationSwitchRules.IsRepairable(states);
+
+    /// <summary>The activation's own reference, made live again if a call that shares its id discarded it as failed.</summary>
+    public WorkflowExecutableSourceReference? ResumeOwn(WorkflowExecutableSourceReference current) =>
+        WorkflowActivationSwitchRules.ResumeFailed(current, ActivationId);
+
+    /// <summary>The references of the activations serving in its place, each with the rule that retires it as replaced.</summary>
+    public IEnumerable<(string ReferenceId, Func<WorkflowExecutableSourceReference, WorkflowExecutableSourceReference?> Retire)> Retirements(DateTimeOffset now) =>
+        ServingInItsPlace.Select(other => (
+            WorkflowActivationReferenceIdentity.Create(other),
+            (Func<WorkflowExecutableSourceReference, WorkflowExecutableSourceReference?>)(current => WorkflowActivationSwitchRules.RetireReplaced(current, now))));
 }

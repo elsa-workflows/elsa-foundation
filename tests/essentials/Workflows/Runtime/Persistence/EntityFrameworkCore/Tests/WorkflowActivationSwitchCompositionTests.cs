@@ -22,13 +22,7 @@ public sealed class WorkflowActivationSwitchCompositionTests : IDisposable
     private readonly ServiceCollection _services = new();
     private ServiceProvider? _provider;
 
-    public WorkflowActivationSwitchCompositionTests()
-    {
-        _services.AddWorkflowRuntime();
-        // The trigger serving spine the WorkflowsRuntimeTriggers feature composes; without it nothing activates.
-        _services.TryAddSingleton<IWorkflowTriggerBindingStore, InMemoryWorkflowTriggerBindingStore>();
-        _services.AddScoped<IWorkflowTriggerIndexer>(_ => throw new NotSupportedException("Nothing is activated here."));
-    }
+    public WorkflowActivationSwitchCompositionTests() => _services.AddWorkflowRuntime().AddTriggerSpineStandIn();
 
     public static TheoryData<string, string> EfParticipants => new()
     {
@@ -107,4 +101,19 @@ public sealed class WorkflowActivationSwitchCompositionTests : IDisposable
     }
 
     private Task CheckAtShellStartAsync() => Provider.GetRequiredService<WorkflowActivationSwitchCompositionValidator>().InitializeAsync();
+}
+
+/// <summary>
+/// The trigger serving spine the WorkflowsRuntimeTriggers feature composes, standing in for it: an in-memory binding store
+/// unless a backend selected one, and an indexer nothing calls. Without the spine nothing activates, and shell start checks
+/// no switch.
+/// </summary>
+internal static class TriggerSpineStandIn
+{
+    public static IServiceCollection AddTriggerSpineStandIn(this IServiceCollection services)
+    {
+        services.TryAddSingleton<IWorkflowTriggerBindingStore, InMemoryWorkflowTriggerBindingStore>();
+        services.AddScoped<IWorkflowTriggerIndexer>(_ => throw new NotSupportedException("Nothing is activated here."));
+        return services;
+    }
 }

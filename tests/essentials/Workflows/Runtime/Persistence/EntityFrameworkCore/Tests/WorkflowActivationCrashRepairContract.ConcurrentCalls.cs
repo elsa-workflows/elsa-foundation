@@ -10,8 +10,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 /// <summary>
 /// Concurrent calls for one activation (#2251), as two nodes reconciling one mounted set make: they share one activation
 /// id, and with it one source reference and one set of projections. Every interleaving the coordinator can meet is fixed
-/// here with latches, not left to timing, including the two windows that kept the artifact reconciler a
-/// <c>[SingleNodeTask]</c> (#2274), which a switch in one commit closes (#2230).
+/// here with latches, not left to timing.
 /// </summary>
 internal static partial class WorkflowActivationCrashRepairContract
 {
@@ -56,8 +55,8 @@ internal static partial class WorkflowActivationCrashRepairContract
     }
 
     /// <summary>
-    /// The same race against a winner that stopped for good once its switch committed. Before #2230 the loser had to
-    /// complete that activation; now there is nothing to complete, and the loser finds it already active.
+    /// The same race against a winner that stopped for good once its switch committed: the loser finds the activation
+    /// already active.
     /// </summary>
     private static async Task SameActivationLosingToAWinnerThatStoppedKeepsItAsync(Func<ActivationStores> open)
     {
@@ -109,7 +108,7 @@ internal static partial class WorkflowActivationCrashRepairContract
     }
 
     /// <summary>
-    /// The window #2251 narrowed, closed (#2230), in its first order. The loser fails before its switch and discards the
+    /// A discard before the winner's switch. The loser fails before its switch and discards the
     /// shared activation while the winner is still on its way to its own switch. The discard deletes the prepared
     /// projections, so the winner's switch finds nothing to switch on: it fails loudly and moves nothing, rather than
     /// leaving the slot naming an activation that serves nothing. The predecessor keeps serving.
@@ -132,7 +131,7 @@ internal static partial class WorkflowActivationCrashRepairContract
     }
 
     /// <summary>
-    /// The same window in its other order, the one that failed silently before: the loser decided to discard before the
+    /// The other order: the loser decided to discard before the
     /// winner switched, and discards only after. Its discard is refused, because the activation now serves, so the winner's
     /// <see cref="WorkflowActivationOutcome.Activated"/> holds and the loser reports the activation already active.
     /// </summary>
@@ -157,7 +156,7 @@ internal static partial class WorkflowActivationCrashRepairContract
     }
 
     /// <summary>
-    /// The same window one step earlier, in a direction that would look like success: the loser discards the shared
+    /// One step earlier, in a direction that would look like success: the loser discards the shared
     /// activation after the winner minted its reference and before it prepared. There are no projections to delete yet,
     /// so the discard retires the reference, and the winner prepares and switches as if nothing happened. The winner's
     /// switch resumes the reference in the commit that makes the activation serve, so it never serves with a retired
@@ -183,7 +182,7 @@ internal static partial class WorkflowActivationCrashRepairContract
     }
 
     /// <summary>
-    /// The window #2274 pinned as known bad, closed (#2230). The loser is cancelled, as a node shutting down mid-reconcile
+    /// A cancelled loser (#2274). The loser is cancelled, as a node shutting down mid-reconcile
     /// is, while its switch is in flight, and then finds the slot naming its activation. It cannot tell the winner's switch
     /// from its own, so it hands nothing back: its discard is refused because the activation serves. The winner's
     /// activation-2 stays serving, and its <see cref="WorkflowActivationOutcome.Activated"/> holds.

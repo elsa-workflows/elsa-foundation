@@ -158,38 +158,35 @@ public sealed class EfWorkflowActivationSwitch : IWorkflowActivationSwitch
         IReadOnlyCollection<string> alsoServing,
         CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(slot);
-        ArgumentNullException.ThrowIfNull(alsoServing);
-        var activationId = slot.ActiveActivationId ?? throw new ArgumentException("Only a slot that names an activation can be repaired.", nameof(slot));
-        var others = alsoServing.Where(other => !StringComparer.Ordinal.Equals(other, activationId)).Distinct(StringComparer.Ordinal).ToArray();
+        var plan = RepairPlan(slot, alsoServing);
         return RunAsync(
-            $"Repair of activation '{activationId}' of definition '{slot.WorkflowDefinitionId}' slot '{slot.SlotName}'",
+            $"Repair of activation '{plan.ActivationId}' of definition '{slot.WorkflowDefinitionId}' slot '{slot.SlotName}'",
             async scope =>
             {
-                // The slot row is read, not written: every operation that moves the slot off this activation writes its
-                // projection state, which this repair writes too, so the two serialize on that state's revision.
-                if (await _authority.StageFindAsync(slot.WorkflowDefinitionId, slot.SlotName, cancellationToken) is not { } stands ||
-                    stands.Revision != slot.Revision ||
-                    !StringComparer.Ordinal.Equals(stands.ActiveActivationId, activationId) ||
-                    !await PreparedEverywhereAsync(scope, activationId, cancellationToken))
+                // The slot row is read, not written: an operation that moves the slot off this activation writes a
+                // projection state this repair writes too, so the two serialize on that state's revision.
+                if (!plan.AppliesTo(
+                        await _authority.StageFindAsync(slot.WorkflowDefinitionId, slot.SlotName, cancellationToken),
+                        await StageStatesAsync(scope, plan.ActivationId, cancellationToken)))
                     return Step.Discard(false);
-                if (await StageSwitchAsync(scope, activationId, null, deleteReplaced: false, cancellationToken))
+                if (await StageSwitchAsync(scope, plan.ActivationId, null, deleteReplaced: false, cancellationToken))
                     return Step.Moved<bool>();
-                foreach (var other in others)
+                foreach (var other in plan.ServingInItsPlace)
                     if (await StageDeletionAsync(scope, other, unlessServing: false, cancellationToken) == ProjectionStaging.Moved)
                         return Step.Moved<bool>();
-                var now = _timeProvider.GetUtcNow();
-                await _references.StageMoveAsync(WorkflowActivationReferenceIdentity.Create(activationId), current => ResumeFailed(current, activationId), cancellationToken);
-                foreach (var other in others)
-                    await _references.StageMoveAsync(WorkflowActivationReferenceIdentity.Create(other), current => RetireReplaced(current, now), cancellationToken);
+                await _references.StageMoveAsync(plan.ReferenceId, plan.ResumeOwn, cancellationToken);
+                foreach (var (referenceId, retire) in plan.Retirements(_timeProvider.GetUtcNow()))
+                    await _references.StageMoveAsync(referenceId, retire, cancellationToken);
                 return Step.Commit(true);
             },
             cancellationToken);
     }
 
-    private async ValueTask<bool> PreparedEverywhereAsync(string scope, string activationId, CancellationToken cancellationToken) =>
-        await _bindings.StageStateAsync(scope, activationId, cancellationToken) == WorkflowActivationProjectionState.Prepared &&
-        (_schedules is null || await _schedules.StageStateAsync(scope, activationId, cancellationToken) == WorkflowActivationProjectionState.Prepared);
+    /// <summary>The activation's projection state in each store, read in the transaction.</summary>
+    private async ValueTask<WorkflowActivationProjectionState[]> StageStatesAsync(string scope, string activationId, CancellationToken cancellationToken) =>
+        _schedules is null
+            ? [await _bindings.StageStateAsync(scope, activationId, cancellationToken)]
+            : [await _bindings.StageStateAsync(scope, activationId, cancellationToken), await _schedules.StageStateAsync(scope, activationId, cancellationToken)];
 
     /// <summary>Stages a projection switch in both stores; whether a state moved while it was read.</summary>
     private async ValueTask<bool> StageSwitchAsync(string scope, string activationId, string? replacedActivationId, bool deleteReplaced, CancellationToken cancellationToken) =>

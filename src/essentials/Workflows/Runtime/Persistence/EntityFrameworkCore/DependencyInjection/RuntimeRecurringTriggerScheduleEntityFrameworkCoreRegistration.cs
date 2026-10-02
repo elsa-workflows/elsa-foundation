@@ -5,11 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
 
 /// <summary>Registers the opt-in EF Core recurring-start schedule store (R27).</summary>
-/// <remarks>
-/// It serves slots only beside the EF slot authority and trigger-binding store, through the switch that
-/// <see cref="RuntimeEntityFrameworkCoreRegistration.AddRuntimeEntityFrameworkCore"/> composes with them (#2230); on its
-/// own it is a mixed composition that shell start refuses.
-/// </remarks>
+/// <remarks>Serving through it takes the switch <see cref="RuntimeEntityFrameworkCoreRegistration.AddRuntimeEntityFrameworkCore"/> composes.</remarks>
 public static class RuntimeRecurringTriggerScheduleEntityFrameworkCoreRegistration
 {
     public static IServiceCollection AddRuntimeRecurringTriggerScheduleEntityFrameworkCore(this IServiceCollection services)

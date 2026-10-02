@@ -6,11 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
 
 /// <summary>Registers the opt-in EF Core workflow activation-slot authority.</summary>
-/// <remarks>
-/// It serves slots only beside the EF projection stores, through the switch that
-/// <see cref="RuntimeEntityFrameworkCoreRegistration.AddRuntimeEntityFrameworkCore"/> composes with them (#2230); on its
-/// own it is a mixed composition that shell start refuses.
-/// </remarks>
+/// <remarks>Serving through it takes the switch <see cref="RuntimeEntityFrameworkCoreRegistration.AddRuntimeEntityFrameworkCore"/> composes.</remarks>
 public static class RuntimeWorkflowActivationAuthorityEntityFrameworkCoreRegistration
 {
     public static IServiceCollection AddRuntimeWorkflowActivationAuthorityEntityFrameworkCore(this IServiceCollection services)

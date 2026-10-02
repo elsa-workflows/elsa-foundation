@@ -20,6 +20,7 @@ using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 using Elsa.Workflows.Runtime.Services.Executables;
 using Elsa.Workflows.Runtime.Services.Recovery;
 using Elsa.Workflows.Runtime.Services.Triggers;
+using Elsa.Workflows.Runtime.Tests.Fixtures;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -136,8 +137,8 @@ internal static class PublicationJournalConvergence
 
     /// <summary>
     /// The direction that looks like success: the new publication serves and nothing failed, yet its record is a candidate
-    /// and the one it replaced is still active. Publishing the same version again used to find it already published and
-    /// fail to describe it; it now brings the journal into line and answers with it.
+    /// and the one it replaced is still active. Publishing the same version again brings the journal into line and answers
+    /// with it.
     /// </summary>
     private static async Task SameVersionRepublishConvergesAnInterruptedReplacementAsync(JournalDatabases databases)
     {
@@ -328,8 +329,8 @@ internal static class PublicationJournalConvergence
     }
 
     /// <summary>
-    /// Two nodes complete the same lagging slot at once. The runtime has nothing to complete, and every journal transition
-    /// is a compare-and-swap, so the journal settles once.
+    /// Two nodes bring the same lagging slot into line at once. The runtime's check writes nothing, and every journal
+    /// transition is a compare-and-swap, so the journal settles once.
     /// </summary>
     private static async Task TwoNodesCompletingOneSlotConvergeAsync(JournalDatabases databases)
     {
@@ -556,7 +557,7 @@ internal static class PublicationJournalConvergence
 
         public async Task<PublicationCompletionResult> CompleteAsync() => await Activator.CompleteAsync(DefinitionId, SlotName);
 
-        /// <summary>Publishing's shell-start pass; the runtime has nothing to complete at shell start (#2230).</summary>
+        /// <summary>Publishing's shell-start pass.</summary>
         public Task StartShellAsync() => _publishingShellStart.ExecuteAsync(CancellationToken.None);
 
         public async Task<string?> SlotPublicationAsync() =>
