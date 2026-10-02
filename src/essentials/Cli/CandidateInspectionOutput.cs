@@ -26,6 +26,7 @@ public sealed class CandidateInspectionOutput
         ArgumentNullException.ThrowIfNull(capture);
         if (format is not ("text" or "json"))
             throw CliRefusal.Usage("composition-format-invalid", "The output format must be text or json.");
+        capture.VerifyUnchanged();
         var environmentLane = capture.HasEnvironmentInput;
         try
         {
@@ -50,10 +51,12 @@ public sealed class CandidateInspectionOutput
         body["selection"] = CopyFields(source.GetProperty("selection"), SelectionFields);
         body["participants"] = new JsonArray(source.GetProperty("participants").EnumerateArray()
             .Select(row => (JsonNode?)CopyFields(row, ParticipantFields)).ToArray());
-        if (format == "json")
-            return JsonSerializer.Serialize(new { plan = projection, configurationResolution = body }, CompositionPlanCommand.JsonOptions);
-        return CompositionPlanCommand.RenderText(projection) + Environment.NewLine +
-            RenderConfiguration(JsonSerializer.SerializeToElement(body));
+        var rendered = format == "json"
+            ? JsonSerializer.Serialize(new { plan = projection, configurationResolution = body }, CompositionPlanCommand.JsonOptions)
+            : CompositionPlanCommand.RenderText(projection) + Environment.NewLine +
+              RenderConfiguration(JsonSerializer.SerializeToElement(body));
+        capture.VerifyUnchanged();
+        return rendered;
     }
 
     private static JsonObject CopyFields(JsonElement source, IReadOnlyList<string> fields)

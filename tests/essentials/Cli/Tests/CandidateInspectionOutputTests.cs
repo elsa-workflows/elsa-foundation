@@ -130,10 +130,7 @@ public sealed class CandidateInspectionOutputTests
     public void Explicit_environment_output_requires_its_lane_source_and_intent_projection()
     {
         using var fixture = new EnvironmentOutputFixture();
-        var host = CandidateHostResponseFixtures.Success(fixture.Capture.Payload);
-        var resolution = host["configurationResolution"]!.AsObject();
-        resolution["source"] = "captured-workbench-json-explicit-environment-v1";
-        resolution["externalInputs"] = "supplied-intended";
+        var host = EnvironmentResponse(fixture.Capture.Payload);
 
         using var document = JsonDocument.Parse(new CandidateInspectionOutput().Render(fixture.Capture,
             JsonSerializer.SerializeToElement(host), 0, "json"));
@@ -152,6 +149,89 @@ public sealed class CandidateInspectionOutputTests
             JsonSerializer.SerializeToElement(CandidateHostResponseFixtures.Success(fixture.Capture.Payload)), 0, "json"));
 
         Assert.Equal("candidate-response-invalid", refusal.Code);
+        Assert.DoesNotContain(CandidateInspectionFixture.PrivateEnvironmentCanary, refusal.ToString(), StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("text", false)]
+    [InlineData("json", false)]
+    [InlineData("text", true)]
+    [InlineData("json", true)]
+    public void Disposed_environment_capture_refuses_both_response_lanes(string format, bool environmentResponse)
+    {
+        using var fixture = new EnvironmentOutputFixture();
+        var host = environmentResponse ? EnvironmentResponse(fixture.Capture.Payload)
+            : CandidateHostResponseFixtures.Success(fixture.Capture.Payload);
+        fixture.Capture.Dispose();
+
+        var refusal = Assert.Throws<CliRefusal>(() => new CandidateInspectionOutput().Render(fixture.Capture,
+            JsonSerializer.SerializeToElement(host), 0, format));
+
+        Assert.Equal("candidate-capture-invalid", refusal.Code);
+        Assert.Equal(2, refusal.ExitCode);
+        Assert.Empty(refusal.Details);
+        Assert.DoesNotContain(CandidateInspectionFixture.PrivateEnvironmentCanary, refusal.ToString(), StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("text")]
+    [InlineData("json")]
+    public void Environment_input_changed_after_initial_render_verification_refuses_before_return(string format)
+    {
+        var changeAfterRead = false;
+        var reader = new CompositionFileReader(CompositionFileReader.EnsureRegularFile, path =>
+        {
+            var bytes = File.ReadAllBytes(path);
+            if (changeAfterRead && Path.GetFileName(path) == "environment.json")
+            {
+                changeAfterRead = false;
+                // The first verification sees its original bytes; the following publication check must
+                // observe this edit through the real file boundary, rather than return a stale preview.
+                File.AppendAllText(path, " ");
+            }
+            return new MemoryStream(bytes);
+        });
+        using var fixture = new EnvironmentOutputFixture(reader);
+        var host = EnvironmentResponse(fixture.Capture.Payload);
+        changeAfterRead = true;
+
+        var refusal = Assert.Throws<CliRefusal>(() => new CandidateInspectionOutput().Render(fixture.Capture,
+            JsonSerializer.SerializeToElement(host), 0, format));
+
+        Assert.False(changeAfterRead);
+        Assert.Equal("composition-input-changed", refusal.Code);
+        Assert.Equal(ToolExitCode.ResolutionFailure, refusal.ExitCode);
+        Assert.False(fixture.Capture.HasEnvironmentInput);
+        Assert.Empty(refusal.Details);
+        Assert.DoesNotContain(fixture.EnvironmentPath, refusal.ToString(), StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("text")]
+    [InlineData("json")]
+    public void Drift_invalidated_environment_capture_cannot_render_a_file_only_response_after_file_restoration(string format)
+    {
+        using var fixture = new EnvironmentOutputFixture();
+        var host = CandidateHostResponseFixtures.Success(fixture.Capture.Payload);
+        var initial = File.ReadAllBytes(fixture.EnvironmentPath);
+        try
+        {
+            File.WriteAllBytes(fixture.EnvironmentPath, CandidateInspectionFixture.EnvironmentDocument(
+                ("Key", CandidateInspectionFixture.PrivateEnvironmentCanary)));
+            Assert.Throws<CliRefusal>(fixture.Capture.VerifyUnchanged);
+        }
+        finally
+        {
+            File.WriteAllBytes(fixture.EnvironmentPath, initial);
+        }
+
+        var refusal = Assert.Throws<CliRefusal>(() => new CandidateInspectionOutput().Render(fixture.Capture,
+            JsonSerializer.SerializeToElement(host), 0, format));
+
+        Assert.Equal("candidate-capture-invalid", refusal.Code);
+        Assert.Equal(2, refusal.ExitCode);
+        Assert.Empty(refusal.Details);
+        Assert.DoesNotContain(fixture.EnvironmentPath, refusal.ToString(), StringComparison.Ordinal);
         Assert.DoesNotContain(CandidateInspectionFixture.PrivateEnvironmentCanary, refusal.ToString(), StringComparison.Ordinal);
     }
 
@@ -202,6 +282,15 @@ public sealed class CandidateInspectionOutputTests
     private static string Render(OutputFixture fixture, JsonObject host, string format, int exitCode = 0) =>
         new CandidateInspectionOutput().Render(fixture.Capture, JsonSerializer.SerializeToElement(host), exitCode, format);
 
+    private static JsonObject EnvironmentResponse(WorkerCandidatePayload candidate)
+    {
+        var host = CandidateHostResponseFixtures.Success(candidate);
+        var resolution = host["configurationResolution"]!.AsObject();
+        resolution["source"] = "captured-workbench-json-explicit-environment-v1";
+        resolution["externalInputs"] = "supplied-intended";
+        return host;
+    }
+
     private sealed class OutputFixture : IDisposable
     {
         private readonly CompositionBridgeFixture source = new();
@@ -226,18 +315,20 @@ public sealed class CandidateInspectionOutputTests
     {
         private readonly CompositionBridgeFixture source = new();
         public CompositionInspectionCapture Capture { get; }
+        public string EnvironmentPath { get; }
 
-        public EnvironmentOutputFixture()
+        public EnvironmentOutputFixture(CompositionFileReader? reader = null)
         {
             source.WriteAcceptedComposition();
             Directory.CreateDirectory(source.CandidateDirectory);
-            var environmentPath = Path.Join(source.CandidateDirectory, "environment.json");
-            File.WriteAllBytes(environmentPath, CandidateInspectionFixture.EnvironmentDocument(("Key", "value")));
+            EnvironmentPath = Path.Join(source.CandidateDirectory, "environment.json");
+            File.WriteAllBytes(EnvironmentPath, CandidateInspectionFixture.EnvironmentDocument(("Key", "value")));
             var host = new HostLayout(source.HostDirectory, "Example.Host",
                 Path.Join(source.HostDirectory, "Example.Host.runtimeconfig.json"),
                 Path.Join(source.HostDirectory, "Example.Host.deps.json"));
             Capture = CompositionInspectionCapture.OpenWithEnvironmentInput(host, source.HostDirectory,
-                "default", "Production", source.OutputPath, environmentPath, source.CatalogPath, source.ReviewPath);
+                "default", "Production", source.OutputPath, EnvironmentPath, source.CatalogPath, source.ReviewPath,
+                reader: reader);
         }
 
         public void Dispose()
