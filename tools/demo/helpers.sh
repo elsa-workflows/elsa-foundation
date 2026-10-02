@@ -5,9 +5,11 @@
 #
 #   note PORT TEXT      add a note                       notes PORT     list the notes
 #   withtags PORT       GET /demo/notes/with-tags        tag PORT TAG   tag the first note
-#   reload PORT         POST /_module-management/reload  status HOST    persistence status (solo, a or b)
+#   reload PORT         POST /_module-management/reload  status HOST    persistence status (solo, a, b or wb)
 #   waitfor PORT [S]    wait for host PORT to switch     pgconn         point this tab at the demo PostgreSQL
-#   rows HOST           the Notes table: each row's schema version and tags, read from the database itself (solo, a or b)
+#   rows HOST           the Notes table: each row's schema version and tags, read from the database itself (solo, a, b or wb)
+#   wbreload PORT       Act 3: rebuild the Workbench's shell from the packages it installed, and say how it went
+#   addnote PORT VERSION TEXT [TAGS]   Act 3 without the designer: run the Add note activity at that exact version
 
 for _demo_tool in curl jq; do
   command -v "$_demo_tool" >/dev/null 2>&1 || { echo "error: $_demo_tool is not installed (brew install $_demo_tool)" >&2; return 1; }
@@ -49,11 +51,39 @@ reload() {
   rm -f "$body"
 }
 
-# HOST is solo (Sqlite, Act 1) or a or b (PostgreSQL, Act 2: the tab needs pgconn, and the hosts run with --fast-membership, hence
-# the 2 s skew allowance the members are judged with).
+# Act 3. The Workbench rebuilds a shell at POST /_admin/shells/reload/default, with the key of run-workbench.sh's
+# --management-key-env DEMO_KEY. It answers 200 either way, with "success" false and the reason when it refuses, so the answer is
+# shown in a readable form: refused, with the module, the pending migration and the command it names (with a placeholder for the
+# host directory: it is the Workbench's own message), or reloaded, with the shell's generation and the Notes release it serves
+# now. That last one is asked of the host, not assumed: with-tags is 404 on 1.0.0, 409 or 200 on 1.1.0. A reload sent before the
+# host installed 1.1.0 succeeds too, on 1.0.0, and says so.
+wbreload() {
+  local body serving
+  body="$(mktemp)"
+  curl -sS -o "$body" -w 'HTTP %{http_code}\n' -X POST "localhost:$1/_admin/shells/reload/default" -H "X-Elsa-Module-Management-Key: $DEMO_KEY"
+  serving="$(curl -s -o /dev/null -w '%{http_code}' -m 5 "localhost:$1/demo/notes/with-tags" || true)"
+  jq --arg serving "$serving" '
+    def pending: [.error.message // "" | capture("EF module .(?<m>[A-Za-z0-9_.]+). has pending migrations: (?<p>.+?)\\. Apply them out of process with `(?<c>[^`]+)`")] | first;
+    if .success == true then
+      {reloaded: true, generation: .newShell.generation,
+       serving: (if $serving == "404" then "Notes 1.0.0" elif $serving == "409" or $serving == "200" then "Notes 1.1.0" else "with-tags answers HTTP \($serving)" end)}
+    elif .success == false and pending != null then
+      pending as $p | {reloaded: false, error: .error.type, module: $p.m, pendingMigrations: ($p.p | split(", ")), command: $p.c}
+    elif .success == false then {reloaded: false, error: .error.type, message: .error.message}
+    else . end' "$body"
+  rm -f "$body"
+}
+
+# addnote PORT VERSION TEXT [TAGS]: Act 3's fallback, and what the rehearsal drives Act 3 with. See tools/demo/addnote.sh.
+addnote() {
+  bash tools/demo/addnote.sh "$@"
+}
+
+# HOST is solo (Sqlite, Act 1), a or b (PostgreSQL, Act 2: the tab needs pgconn, and the hosts run with --fast-membership, hence
+# the 2 s skew allowance the members are judged with), or wb (the Workbench of Act 3, its own Sqlite file).
 status() {
   case "$1" in
-    solo) bash tools/demo/elsa.sh persistence status --host artifacts/demo/hosts/solo --environment Development --provider Sqlite --modules Samples.Notes --family SamplesNotes ;;
+    solo|wb) bash tools/demo/elsa.sh persistence status --host "artifacts/demo/hosts/$1" --environment Development --provider Sqlite --modules Samples.Notes --family SamplesNotes ;;
     *) bash tools/demo/elsa.sh persistence status --host "artifacts/demo/hosts/$1" --environment Development --provider PostgreSql --modules Samples.Notes,Cluster.Membership --skew-allowance 00:00:02 --family SamplesNotes ;;
   esac
 }
@@ -73,8 +103,8 @@ waitfor() {
   echo " switched: with-tags answers HTTP $code after $((SECONDS - started)) s"
 }
 
-# HOST is solo (the Sqlite file) or a or b (the PostgreSQL container, through docker exec and psql: a and b share one database, so
-# both show the same rows). One line per note, oldest first: the schema version stamped on the row when it was written, and its tags column as
+# HOST is solo (the Sqlite file), a or b (the PostgreSQL container, through docker exec and psql: a and b share one database, so
+# both show the same rows), or wb (the Workbench's own Sqlite file, Act 3). One line per note, oldest first: the schema version stamped on the row when it was written, and its tags column as
 # stored (NULL: written by release 1.0.0, which has no such column to fill; [] or a list: written by 2.0.0). It reads the tables
 # themselves, so it shows what is stored and not what a host answers. A database the AddTags migration has not reached yet has no
 # tags column, and says so. It only reads: the Sqlite file is opened with query_only and a 2 s busy timeout, the PostgreSQL session is
@@ -89,7 +119,8 @@ rows() {
   local table=elsa_samples_notes container="${DEMO_PG_CONTAINER:-elsa-demo-pg}" file=artifacts/demo/notes.db sep=$'\x1f' probe rc tags query out
   command -v column >/dev/null 2>&1 || { echo "error: column is not installed" >&2; return 1; }
   case "$1" in
-    solo)
+    solo|wb)
+      if [ "$1" = wb ]; then file=artifacts/demo/hosts/wb/elsa.db; fi
       command -v sqlite3 >/dev/null 2>&1 || { echo "error: sqlite3 is not installed (brew install sqlite)" >&2; return 1; }
       [ -f "$file" ] || { echo "error: there is no Sqlite database at $file yet" >&2; return 1; }
       probe="$(sqlite3 -cmd '.timeout 2000' -cmd 'pragma query_only=on' "$file" "select count(*) from pragma_table_info('$table') where name = 'TagsJson'" 2>&1)"; rc=$?
@@ -119,7 +150,7 @@ rows() {
       [ "$rc" -eq 0 ] || { echo "error: the PostgreSQL container $container could not be read: $(printf '%s' "$out" | head -1)" >&2; return 1; }
       printf '%s\n' "$out" | column -t -s "$sep"
       ;;
-    *) echo "usage: rows solo|a|b" >&2; return 1 ;;
+    *) echo "usage: rows solo|a|b|wb" >&2; return 1 ;;
   esac
 }
 

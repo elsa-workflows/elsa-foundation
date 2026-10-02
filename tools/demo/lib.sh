@@ -9,9 +9,9 @@ demo_artifacts="$demo_root/artifacts/demo"
 demo_sqlite_file="$demo_artifacts/notes.db"
 demo_sqlite_connection="Data Source=$demo_sqlite_file;Pooling=False"
 
-# Where prepack.sh stages the two releases (staging/1 and staging/2) for publish.sh, where run-host.sh records the process id of
-# each host it starts (pids/NAME.pid) for reset.sh, the resolve-only closure feed, and the folder the runbook tees each host's
-# output into (logs/NAME.log).
+# Where prepack.sh stages the two releases (staging/1 and staging/2) for publish.sh, where run-host.sh, run-workbench.sh and
+# run-studio.sh record the process id of each host they start (pids/NAME.pid) for reset.sh, the resolve-only closure feed, and the
+# folder the runbook tees each host's output into (logs/NAME.log).
 demo_staging="$demo_artifacts/staging"
 demo_pids="$demo_artifacts/pids"
 demo_closure="$demo_artifacts/closure"
@@ -19,6 +19,26 @@ demo_logs="$demo_artifacts/logs"
 
 # The PostgreSQL container of the two-host demo. DEMO_PG_CONTAINER renames it, for a machine where the name is taken.
 demo_pg_container="${DEMO_PG_CONTAINER:-elsa-demo-pg}"
+
+# Act 3: the Workbench build tools/demo/run-workbench.sh copies, and the Elsa Studio checkout tools/demo/run-studio.sh runs
+# (DEMO_STUDIO_DIR, relative to the repository root unless absolute; a sibling checkout by default).
+demo_workbench_build="$demo_root/src/apps/Elsa.Workbench/bin/Release/net10.0"
+demo_studio_dir="${DEMO_STUDIO_DIR:-../elsa-foundation-studio-demo}"
+[[ "$demo_studio_dir" == /* ]] || demo_studio_dir="$demo_root/$demo_studio_dir"
+
+# demo_workbench_connection HOSTDIR: the one Sqlite database a Workbench host of run-workbench.sh keeps everything in. The host is
+# given it, and elsa.sh gives it to the tool for that host directory, so the two cannot disagree.
+demo_workbench_connection() {
+  echo "Data Source=$1/elsa.db;Pooling=False"
+}
+
+# demo_is_workbench_host DIR: succeeds when DIR (relative to the repository root unless absolute) is a host directory that
+# run-workbench.sh made.
+demo_is_workbench_host() {
+  local dir="$1"
+  [[ "$dir" == /* ]] || dir="$demo_root/$dir"
+  [[ -f "$dir/Elsa.Workbench.dll" ]]
+}
 
 demo_fail() {
   echo "error: $*" >&2
@@ -79,11 +99,12 @@ demo_release_version() {
   esac
 }
 
-# demo_staged_package RELEASE: the path where prepack.sh stages that release's package (which need not exist yet).
+# demo_staged_package RELEASE [PACKAGE]: the path where prepack.sh stages that release's package (which need not exist yet):
+# the Notes module, or PACKAGE, which is Elsa.Samples.Nuplane.Notes.Activities for Act 3's Add note activity, released in step.
 demo_staged_package() {
   local version
   version="$(demo_release_version "$1")" || exit 1
-  echo "$demo_staging/$1/Elsa.Samples.Nuplane.Notes.$version.nupkg"
+  echo "$demo_staging/$1/${2:-Elsa.Samples.Nuplane.Notes}.$version.nupkg"
 }
 
 # demo_port_in_use PORT: succeeds when something already listens on 127.0.0.1:PORT.
@@ -93,14 +114,17 @@ demo_port_in_use() {
 
 # demo_host_pid NAME: the process id recorded for host NAME when that process is still a demo host, and nothing otherwise. A
 # recorded id alone is not enough: the number may since have been given to another process, which nothing here may ever signal.
-# A demo host is the host dll started by run-host.sh, whose content root is a folder under artifacts/demo/hosts.
+# A demo host is the host dll started by run-host.sh or run-workbench.sh, whose content root is a folder under
+# artifacts/demo/hosts, or the Studio run-studio.sh started, whose Nuplane state is kept there.
 demo_host_pid() {
   local file="$demo_pids/$1.pid" pid command
   [[ -f "$file" ]] || return 0
   pid="$(<"$file")"
   [[ "$pid" =~ ^[0-9]+$ ]] || return 0
   command="$(ps -ww -p "$pid" -o command= 2>/dev/null || true)"
-  if [[ "$command" == *"Elsa.Foundation.Host.dll"* && "$command" == *"--contentRoot $demo_artifacts/hosts/"* ]]; then
+  if [[ ( "$command" == *"Elsa.Foundation.Host.dll"* || "$command" == *"Elsa.Workbench.dll"* ) &&
+        "$command" == *"--contentRoot $demo_artifacts/hosts/"* ]] ||
+     [[ "$command" == *"Elsa.Studio.Web.dll"* && "$command" == *"--Nuplane:Setup:StateFilePath=$demo_artifacts/hosts/"* ]]; then
     echo "$pid"
   fi
 }

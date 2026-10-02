@@ -17,7 +17,7 @@ docker info >/dev/null && echo docker ok
 docker image inspect postgres:16-alpine >/dev/null && echo image ok
 ```
 
-Expect `demo state is clean`, both `.nupkg` files, `docker ok`, `image ok`. A release missing: `bash tools/demo/prepack.sh` (minutes).
+Expect `demo state is clean`, two `.nupkg` files in each folder (Notes and Notes.Activities), `docker ok`, `image ok`. A release missing: `bash tools/demo/prepack.sh` (minutes).
 
 **Tab awake.** Leave it running; power in, lid open:
 
@@ -76,16 +76,47 @@ pgconn
 bash tools/demo/run-host.sh b --port 5202 --provider PostgreSql --cluster host-b --fast-membership --management-key-env DEMO_KEY 2>&1 | tee artifacts/demo/logs/b.log
 ```
 
-**Tab 2.** All three hosts ready, and the fleet:
+**Tab 3.** Helpers, a bare prompt, no database connection, then prepare the Workbench `wb`:
+
+```bash
+source tools/demo/helpers.sh
+DEMO_PROMPT=$PROMPT DEMO_RPROMPT=$RPROMPT
+PROMPT='$ ' RPROMPT=''
+unset ELSA_EF_CONNECTION
+bash tools/demo/publish.sh 1 --host wb
+bash tools/demo/run-workbench.sh wb --port 5301 --management-key-env DEMO_KEY --prepare-only
+bash tools/demo/elsa.sh persistence apply --restore --host artifacts/demo/hosts/wb --environment Development --provider Sqlite --from-host
+```
+
+Expect two `published` lines, then thirteen modules applied, `Samples.Notes` among them.
+
+**Tab W.** Start `wb`:
+
+```bash
+source tools/demo/helpers.sh
+bash tools/demo/run-workbench.sh wb --port 5301 --management-key-env DEMO_KEY 2>&1 | tee artifacts/demo/logs/wb.log
+```
+
+**Tab Studio.** Start Studio:
+
+```bash
+bash tools/demo/run-studio.sh 2>&1 | tee artifacts/demo/logs/studio.log
+```
+
+**Tab 2.** All four hosts ready, and the fleet:
 
 ```bash
 curl -s -o /dev/null -w '%{http_code}\n' localhost:5101/health/ready
 curl -s -o /dev/null -w '%{http_code}\n' localhost:5201/health/ready
 curl -s -o /dev/null -w '%{http_code}\n' localhost:5202/health/ready
+curl -s -o /dev/null -w '%{http_code}\n' localhost:5301/health/ready
 status a
 ```
 
-Expect `200` three times, then `finalized at 1.0.0` with `host-a` and `host-b` both `Active, live`.
+Expect `200` four times, then `finalized at 1.0.0` with `host-a` and `host-b` both `Active, live`.
+
+**Browser.** Open `http://localhost:5302`, sign in on the Workbench's page with its development admin (`SeedAdminUserName` and
+`SeedAdminPassword` in `artifacts/demo/hosts/wb/shells.json`: read them off screen), open **Workflows**. Leave the tab there.
 
 **Tab P**, beside tab 1. The package board:
 
@@ -254,12 +285,68 @@ Expect `complete from 2.0.0`, and every note at `2.0.0` with `[]`.
 **Act 2 fallback**, if A does not switch: Ctrl-C in tab A, `bash tools/demo/publish.sh 2 --host a` in tab 2 if not done yet, start tab A
 again with its command. B answers `200` as soon as A has left.
 
+## Act 3: the browser (Studio) and tab 3
+
+**Tab P.** Ctrl-C, then:
+
+```bash
+bash tools/demo/board.sh wb --watch
+```
+
+**3.1** In Studio: **Workflows**, **Create**, name `Add note demo`. Palette, **Notes**: drag **Add note**. Text `hello from the designer`. **Run**. Then:
+
+```bash
+rows wb
+```
+
+Expect the note at `1.0.0` with `(no column yet)`.
+
+**3.2** Publish release 1.1.0, both packages:
+
+```bash
+bash tools/demo/publish.sh 2 --host wb
+```
+
+Board: the feed gets `1.1.0`; about ten seconds later `installed` is `1.1.0`, `serving` stays `1.0.0`.
+
+**3.3** Once the board shows it installed:
+
+```bash
+wbreload 5301
+```
+
+Expect `HTTP 200`, `"reloaded": false`, `"module": "Samples.Notes"`, the `..._AddTags` migration. `"reloaded": true` with `"serving": "Notes 1.0.0"`: too early, wait and repeat.
+
+**3.4** Apply, reload:
+
+```bash
+bash tools/demo/elsa.sh persistence apply --host artifacts/demo/hosts/wb --environment Development --provider Sqlite --modules Samples.Notes
+wbreload 5301
+```
+
+Expect `01  Samples.Notes ... 1`, then `"reloaded": true` and `"serving": "Notes 1.1.0"`.
+
+**3.5** In Studio: refresh the page. Select the Add note node, **Version** tab, **Change exact version**. The dialog: `v1.0.0` to `v1.1.0`,
+**Compatible**, **Minor**, "Input 'Tags' was added". Scroll to the bottom, **Apply to this occurrence**. Inputs: Text and Tags.
+Ignore "Recommended v1.0.0 available"; never drag a new node for this.
+
+**3.6** Text `tagged from the designer`, Tags `demo, designer`, **Run**. Then:
+
+```bash
+rows wb
+```
+
+Expect the new note at `2.0.0` with `["demo","designer"]`, the 3.1 note at `2.0.0` with `[]`. A run that faults as dormant: run again.
+
+**Act 3 fallback**, if the designer misbehaves: in tab 3, `addnote 5301 1.0.0 "hello from the API"` instead of 3.1, and
+`addnote 5301 1.1.0 "tagged from the API" "demo, api"` instead of 3.5 and 3.6, each followed by `rows wb`.
+
 ## Afterwards
 
-Ctrl-C in tabs P, S, A, B and awake, then in tab 1:
+Ctrl-C in tabs P, S, A, B, W, Studio and awake, then in tab 1:
 
 ```bash
 bash tools/demo/reset.sh
 ```
 
-Never call `POST /_module-management/reconcile`: it does not answer on this release. `reload` is the only management call.
+Never call `POST /_module-management/reconcile`: it does not answer on this release. `reload` is the only management call (`wbreload` on the Workbench).

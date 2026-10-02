@@ -10,7 +10,8 @@ usage() {
   cat <<'USAGE'
 Usage: bash tools/demo/board.sh HOST... [--watch]
 
-HOST is solo, a or b. For each one the board prints a row for Elsa.Samples.Nuplane.Notes:
+HOST is solo, a, b or wb (the Workbench of Act 3, which serves the Notes module's endpoints too; its Add note activity is
+released in step with Notes, so the Notes row stands for both). For each one the board prints a row for Elsa.Samples.Nuplane.Notes:
 
   in the feed   the Notes versions present as .nupkg files in artifacts/demo/hosts/HOST/feed, or - for none
   installed     the version Nuplane recorded as active in artifacts/demo/hosts/HOST/.nuplane/store-state.json, or - when
@@ -22,7 +23,8 @@ HOST is solo, a or b. For each one the board prints a row for Elsa.Samples.Nupla
   --watch       clear and redraw every second until Ctrl-C, with the time, and mark a cell that just changed (bold and
                 yellow; NO_COLOR keeps it bold and reversed). Nothing is drawn with escape codes unless stdout is a terminal
 
-Ports: DEMO_PORT_SOLO (5101), DEMO_PORT_A (5201), DEMO_PORT_B (5202), the variables tools/demo/rehearse.sh uses.
+Ports: DEMO_PORT_SOLO (5101), DEMO_PORT_A (5201), DEMO_PORT_B (5202), DEMO_PORT_WB (5301), the variables tools/demo/rehearse.sh
+uses.
 The frame is at most 50 columns wide and prints no absolute path.
 USAGE
 }
@@ -31,18 +33,18 @@ hosts=()
 watch=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    solo|a|b) hosts+=("$1"); shift ;;
+    solo|a|b|wb) hosts+=("$1"); shift ;;
     --watch) watch=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) demo_fail "unknown argument '$1' (see --help)." ;;
   esac
 done
-[[ ${#hosts[@]} -gt 0 ]] || demo_fail "Give at least one host, solo, a or b: bash tools/demo/board.sh solo (see --help)."
+[[ ${#hosts[@]} -gt 0 ]] || demo_fail "Give at least one host, solo, a, b or wb: bash tools/demo/board.sh solo (see --help)."
 
 demo_require_python
 cd "$demo_root"
 
-export DEMO_BOARD_PORTS="solo=${DEMO_PORT_SOLO:-5101},a=${DEMO_PORT_A:-5201},b=${DEMO_PORT_B:-5202}"
+export DEMO_BOARD_PORTS="solo=${DEMO_PORT_SOLO:-5101},a=${DEMO_PORT_A:-5201},b=${DEMO_PORT_B:-5202},wb=${DEMO_PORT_WB:-5301}"
 python3 - "$watch" "${hosts[@]}" <<'PY'
 import concurrent.futures, datetime, json, os, re, sys, textwrap, time, urllib.error, urllib.request
 
