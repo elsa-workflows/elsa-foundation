@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text.Json;
 using Elsa.Http.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Activities.Http.Activities;
@@ -297,8 +298,12 @@ public sealed class HttpEndpointTriggerStimulusProvider : IActivityTriggerStimul
         return binding.LiteralValue;
     }
 
-    private static RuntimeInputBinding? FindBinding(ExecutableNode node, string inputName) =>
-        node.InputBindings
+    private static RuntimeInputBinding? FindBinding(ExecutableNode node, string inputName)
+    {
+        var binding = node.InputBindings
             .FirstOrDefault(item => StringComparer.OrdinalIgnoreCase.Equals(item.Key, inputName))
             .Value;
+        SecretBindingDiagnostics.ThrowIfSecretRead(binding, node.ExecutableNodeId, inputName);
+        return binding;
+    }
 }

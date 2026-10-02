@@ -402,6 +402,9 @@ public sealed class ActivityTemplatePlacer(
                 $"Occurrence '{frame.OccurrenceId}' carries authored inputs but its exact template root has no pinned activity contract.");
         }
 
+        // An occurrence inside a reusable activity is authored like any node, so the same secret refusals apply
+        // to it against its template root's activity kind and type.
+        inputBindingCompiler.EnsureSecretBindingsAdmissible(frame.OccurrenceId!, templateRoot.Descriptor, inputStates);
         return inputBindingCompiler.CompileAll(frame.OccurrenceId!, contract.Inputs.Values, inputStates);
     }
 

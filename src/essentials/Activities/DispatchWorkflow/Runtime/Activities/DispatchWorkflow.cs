@@ -20,6 +20,9 @@ namespace Elsa.Activities.DispatchWorkflow.Runtime.Activities;
     ActivityOutcome(DispatchWorkflowOutcomes.Cancelled),
     ActivityOutcome(DispatchWorkflowOutcomes.DispatchFailed)
 ]
+[RefusesSecretBinding(nameof(WorkflowDefinitionId), SecretBindingRefusalReason.FixedAtPublish)]
+[RefusesSecretBinding(nameof(Inputs), SecretBindingRefusalReason.PersistedByActivity)]
+[RefusesSecretBinding(nameof(CorrelationId), SecretBindingRefusalReason.PersistedByActivity)]
 public sealed class DispatchWorkflow(
     IWorkflowExecutableStore executableStore,
     IWorkflowExecutionStateStore workflowExecutionStateStore,

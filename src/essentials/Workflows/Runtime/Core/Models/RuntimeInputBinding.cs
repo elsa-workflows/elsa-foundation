@@ -24,12 +24,13 @@ public sealed class RuntimeInputBinding
         RuntimeExpressionBinding? expression = null,
         IReadOnlyDictionary<string, string>? metadata = null,
         ValueConversionPlan? conversionPlan = null,
-        RuntimeValueConversionRequest? conversionRequest = null)
+        RuntimeValueConversionRequest? conversionRequest = null,
+        RuntimeSecretReference? secret = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(inputKey);
         ArgumentNullException.ThrowIfNull(targetType);
         ArgumentNullException.ThrowIfNull(effectivePolicy);
-        ValidateCanonical(source, literal, workflowRequest, variable, activityResult, expression);
+        ValidateCanonical(source, literal, workflowRequest, variable, activityResult, expression, secret);
 
         InputName = inputKey;
         TargetType = targetType;
@@ -49,6 +50,7 @@ public sealed class RuntimeInputBinding
         Metadata = RuntimeModelMetadata.Snapshot(metadata);
         ConversionPlan = conversionPlan;
         ConversionRequest = conversionRequest;
+        Secret = secret;
     }
 
     public string InputName { get; }
@@ -73,20 +75,29 @@ public sealed class RuntimeInputBinding
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public RuntimeValueConversionRequest? ConversionRequest { get; }
 
+    /// <summary>
+    /// The secret reference of a <see cref="RuntimeInputBindingSource.SecretRead"/> binding. Omitted when null so
+    /// bindings of every other source serialize and hash exactly as before secret reads existed.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeSecretReference? Secret { get; }
+
     private static void ValidateCanonical(
         RuntimeInputBindingSource source,
         ValueEnvelope? literal,
         RuntimeWorkflowRequestReference? workflowRequest,
         RuntimeVariableReference? variable,
         RuntimeActivityResultReference? activityResult,
-        RuntimeExpressionBinding? expression)
+        RuntimeExpressionBinding? expression,
+        RuntimeSecretReference? secret)
     {
         var payloadCount =
             (literal is not null ? 1 : 0) +
             (workflowRequest is not null ? 1 : 0) +
             (variable is not null ? 1 : 0) +
             (activityResult is not null ? 1 : 0) +
-            (expression is not null ? 1 : 0);
+            (expression is not null ? 1 : 0) +
+            (secret is not null ? 1 : 0);
 
         if (payloadCount != 1)
             throw new ArgumentException("A canonical runtime input binding must carry exactly one role-owned source payload.");
@@ -98,6 +109,7 @@ public sealed class RuntimeInputBinding
             RuntimeInputBindingSource.VariableRead => variable is not null,
             RuntimeInputBindingSource.ActivityResult => activityResult is not null,
             RuntimeInputBindingSource.Expression => expression is not null,
+            RuntimeInputBindingSource.SecretRead => secret is not null,
             _ => false
         };
 
@@ -119,7 +131,38 @@ public enum RuntimeInputBindingSource
     Expression,
     WorkflowRequest,
     VariableRead,
-    ActivityResult
+    ActivityResult,
+
+    /// <summary>
+    /// A stored secret, by reference. Only activation may resolve it: the persisted input snapshot records a withheld
+    /// envelope (<see cref="ValuePresence.Withheld"/>) instead of the value.
+    /// </summary>
+    SecretRead
+}
+
+/// <summary>
+/// A reference to a stored secret, as a <see cref="RuntimeInputBindingSource.SecretRead"/> binding carries it. It
+/// mirrors the Secrets module's reference shape without referencing that module, and deliberately has no tenant:
+/// the tenant always comes from the executing workflow instance, never from a binding.
+/// </summary>
+public sealed record RuntimeSecretReference
+{
+    public RuntimeSecretReference(string name, string? typeName = null, string? scope = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+
+        Name = name;
+        TypeName = string.IsNullOrWhiteSpace(typeName) ? null : typeName;
+        Scope = string.IsNullOrWhiteSpace(scope) ? null : scope;
+    }
+
+    public string Name { get; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? TypeName { get; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Scope { get; }
 }
 
 public sealed class RuntimeWorkflowRequestReference

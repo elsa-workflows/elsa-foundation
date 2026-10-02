@@ -14,6 +14,10 @@ namespace Elsa.Activities.Primitives.Activities;
 /// leaving them unset reproduces the previous behaviour exactly — code <c>workflow.fault</c>, the generic
 /// message, and no classification.
 /// </remarks>
+[RefusesSecretBinding("code", SecretBindingRefusalReason.EchoedToOutput)]
+[RefusesSecretBinding("message", SecretBindingRefusalReason.EchoedToOutput)]
+[RefusesSecretBinding("category", SecretBindingRefusalReason.EchoedToOutput)]
+[RefusesSecretBinding("faultType", SecretBindingRefusalReason.EchoedToOutput)]
 public sealed class Fault : Activity<ActivityUnit>
 {
     /// <summary>The fault code used when <see cref="Code"/> is unset.</summary>

@@ -4,6 +4,7 @@ using Elsa.Expressions.Core.Contracts;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.WorkHandlers;
 
@@ -271,6 +272,7 @@ public sealed class WorkflowIntrinsicExecutor(
         CancellationToken cancellationToken)
     {
         var nameBinding = node.InputBindings[WorkflowIntrinsicInputKeys.Name];
+        ThrowIfWithheld(nameBinding);
         if (nameBinding.Source != RuntimeInputBindingSource.Literal || nameBinding.Literal is not { } nameLiteral)
             throw new InvalidOperationException($"SetOutput intrinsic '{node.ExecutableNodeId}' requires a literal output name.");
         var outputName = ReadRequiredString(nameLiteral, WorkflowIntrinsicKind.SetOutput, node.ExecutableNodeId);
@@ -313,6 +315,7 @@ public sealed class WorkflowIntrinsicExecutor(
         CancellationToken cancellationToken)
     {
         var outcomeBinding = node.InputBindings[WorkflowIntrinsicInputKeys.Outcome];
+        ThrowIfWithheld(outcomeBinding);
         if (outcomeBinding.Source != RuntimeInputBindingSource.Literal ||
             outcomeBinding.Literal is not { } literal)
             throw new InvalidOperationException($"Finish intrinsic '{node.ExecutableNodeId}' requires a literal outcome key.");
@@ -481,6 +484,15 @@ public sealed class WorkflowIntrinsicExecutor(
         JsonSerializer.SerializeToElement(ActivityUnit.Value),
         ValueProtectionPolicy.InstanceInline);
 
+    // An intrinsic reads its inputs itself and never reaches activation, the only place a secret is resolved, so a secret
+    // read or a literal standing for a withheld value has nothing for it to read. Checked on the binding, before any
+    // (replaceable) binding resolver is consulted, so no resolver can hand an intrinsic a secret to persist.
+    private static void ThrowIfWithheld(RuntimeInputBinding binding)
+    {
+        if (binding.Source == RuntimeInputBindingSource.SecretRead || binding.Literal?.Presence == ValuePresence.Withheld)
+            throw SecretBindingDiagnostics.WithheldInputNotResolved(binding.InputName);
+    }
+
     private static string ReadRequiredString(ValueEnvelope value, WorkflowIntrinsicKind kind, string nodeId) =>
         ReadOptionalString(value, kind, nodeId) is { } text && !string.IsNullOrWhiteSpace(text)
             ? text
@@ -564,6 +576,7 @@ public sealed class WorkflowIntrinsicExecutor(
         IReadOnlyCollection<ActivityExecutionState> runtimeView,
         CancellationToken cancellationToken)
     {
+        ThrowIfWithheld(binding);
         var durableValues = await durableValueStateStore.ListAllDurableValueStatesAsync(workflowState.WorkflowExecutionId, cancellationToken);
         var projections = RuntimeInputBindingStateProjection.ProjectAll(durableValues);
         var visibleFrames = BuildVisibleFrames(workflowState, intrinsicState, runtimeView);
@@ -610,6 +623,9 @@ public sealed class WorkflowIntrinsicExecutor(
             ?? throw new InvalidOperationException($"Intrinsic '{intrinsicState.Execution.ExecutableNodeId}' resolved '{binding.InputName}' without its source value envelope.");
         if (source.Presence == ValuePresence.Absent)
             throw new InvalidOperationException($"Intrinsic '{intrinsicState.Execution.ExecutableNodeId}' cannot materialize an absent value.");
+        // An intrinsic writes the value itself into workflow state, and a withheld value is not here to write.
+        if (source.Presence == ValuePresence.Withheld)
+            throw SecretBindingDiagnostics.WithheldBindingNotResolved(binding);
         if (source.Policy.Lifecycle == DurableValueLifecycle.None)
             throw new InvalidOperationException($"Intrinsic '{intrinsicState.Execution.ExecutableNodeId}' cannot persist transient source '{binding.InputName}'.");
         var combinedPolicy = ValuePolicyCombiner.Combine(

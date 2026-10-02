@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Activities.Scheduling.Activities;
@@ -17,6 +18,7 @@ internal static class SchedulingNodeInputs
             .FirstOrDefault(item => StringComparer.OrdinalIgnoreCase.Equals(item.Key, inputName))
             .Value;
 
+        SecretBindingDiagnostics.ThrowIfSecretRead(binding, node.ExecutableNodeId, inputName);
         if (binding?.Source != RuntimeInputBindingSource.Literal || binding.LiteralValue is not { } literal)
             return null;
 

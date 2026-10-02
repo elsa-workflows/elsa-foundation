@@ -57,7 +57,8 @@ internal static class ActivityExecutionInspection
                 var input = contract.Inputs[item.Key];
                 var value = item.Value;
                 var type = new RuntimeValueTypeDescriptor("alias", value.Type.Alias, value.Type.Schema);
-                var isSensitive = value.Policy.IsSensitive || input.Policy.IsSensitive;
+                // A withheld value is sensitive whatever its policy says, as container variable evidence renders it.
+                var isSensitive = value.Presence == ValuePresence.Withheld || value.Policy.IsSensitive || input.Policy.IsSensitive;
                 var decision = payloadCapturePolicy.Decide(new RuntimePayloadCaptureRequest(
                     RuntimePayloadCaptureSubject.ActivityInput,
                     workItem.WorkflowExecutionId,
@@ -75,6 +76,9 @@ internal static class ActivityExecutionInspection
                 {
                     ValuePresence.Present when value.InlineValue.HasValue => SerializeCapturedValue(decision, value.InlineValue.Value, input.Name, type),
                     ValuePresence.ExplicitNull => SerializeCapturedValue(decision, null, input.Name, type),
+                    // Includes Withheld: this runs on the invoke and resume paths before activation, so it must render
+                    // a withheld input without throwing and without resolving it: the marker and reference stand in
+                    // for the value.
                     _ => null
                 };
                 return ActivityExecutionInspectionValueSnapshot.FromDecision(
@@ -85,7 +89,7 @@ internal static class ActivityExecutionInspection
                     capturedAt,
                     payload,
                     isSensitive,
-                    decision.Metadata,
+                    ActivityExecutionInspectionValueSnapshot.MarkWithheld(decision.Metadata, value.WithheldValue),
                     inputKey: item.Key);
             })
             .ToArray();

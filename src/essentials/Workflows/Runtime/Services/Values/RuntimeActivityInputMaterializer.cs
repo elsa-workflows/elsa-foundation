@@ -8,6 +8,7 @@ using Elsa.Expressions.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Resolvers;
 
@@ -157,6 +158,12 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         RuntimeInputBindingResolutionContext resolutionContext,
         CancellationToken cancellationToken)
     {
+        // The snapshot is committed at Scheduled to Running, before the activity body runs, so a resolved secret
+        // here would be persisted. Record the reference instead, so only activation can ever see the value.
+        // This does not go through the (replaceable) binding resolver, so no resolver can put a value here.
+        if (binding.Source == RuntimeInputBindingSource.SecretRead)
+            return RuntimeInputBindingResolver.WithholdSecretRead(binding);
+
         var resolved = _inputBindingResolver.Resolve(binding, resolutionContext);
         if (resolved.Source == RuntimeInputBindingSource.Expression)
         {
@@ -198,6 +205,12 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
                 $"VF-ACT-005: Canonical input '{input.Key}' on executable node '{node.ExecutableNodeId}' " +
                 "was resolved without its source protection envelope.");
         }
+
+        // Only a secret read, withheld above, may put a withheld envelope in the snapshot. The binding resolver is
+        // replaceable, so a withheld source it hands back for any other binding is refused here rather than retyped or
+        // rebuilt below without its marker.
+        if (source.Presence == ValuePresence.Withheld)
+            throw SecretBindingDiagnostics.WithheldBindingNotResolved(binding);
 
         if (binding.Source == RuntimeInputBindingSource.Literal && !SameType(source.Type, binding.TargetType) &&
             (binding.ConversionPlan is null || !SameType(source.Type, binding.ConversionPlan.SourceType)))
@@ -494,6 +507,14 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
                 item.Value.Expression,
                 metadata = item.Value.Metadata.OrderBy(metadata => metadata.Key, StringComparer.Ordinal)
             }));
+        // Secret references are appended only when present, so every node without one keeps its fingerprint.
+        var secrets = node.InputBindings
+            .Where(item => item.Value.Secret is not null)
+            .OrderBy(item => item.Key, StringComparer.Ordinal)
+            .Select(item => new { key = item.Key, item.Value.Secret })
+            .ToArray();
+        if (secrets.Length > 0)
+            canonical += JsonSerializer.Serialize(secrets);
         return $"sha256:{Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(canonical))).ToLowerInvariant()}";
     }
 

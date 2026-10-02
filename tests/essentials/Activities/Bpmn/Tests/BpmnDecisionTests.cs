@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Elsa.Activities.Bpmn.Activities;
 using Elsa.Activities.Primitives;
+using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Testing;
 using Elsa.Primitives.Models;
@@ -20,6 +21,14 @@ namespace Elsa.Activities.Bpmn.Tests;
 public sealed class BpmnDecisionTests
 {
     private static readonly IPayloadSerializer Serializer = new JsonPayloadSerializer(new JsonPayloadConverterRegistry());
+
+    [Fact]
+    public void BpmnDecision_declares_its_outcome_as_echoed_to_output() =>
+        // The trimmed outcome becomes both the result and the completion outcome, so it cannot hold a secret.
+        SecretBindingTestSupport.AssertRefusesSecretBinding(
+            typeof(BpmnDecision),
+            nameof(BpmnDecision.Outcome),
+            SecretBindingRefusalReason.EchoedToOutput);
 
     private static ValueTask<BpmnRuntimeFixture> CreateFixtureAsync(params string[] activityExecutionIds) =>
         BpmnRuntimeFixture.CreateAsync(activityExecutionIds, services =>

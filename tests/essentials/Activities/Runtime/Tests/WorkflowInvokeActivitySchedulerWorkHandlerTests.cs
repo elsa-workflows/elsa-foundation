@@ -463,6 +463,32 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
     }
 
     [Fact]
+    public async Task HandleAsync_CheckpointParticipantHandedAWithheldInput_FaultsWithTheWithheldInputCode()
+    {
+        // Publication refuses a secret reference on a checkpoint participant; this is the backstop for an artifact
+        // that skipped publication. The participant must never receive the input (spec 188, T007/T008).
+        var activity = new CheckpointParticipantStructuralActivity();
+        var executable = NewTypedExecutable();
+        var type = new Elsa.Primitives.Models.ValueTypeDescriptor("String");
+        await _executableStore.SaveAsync(executable);
+        await _activityStateStore.SaveAsync(NewRunningState(executable, new Dictionary<string, ValueEnvelope>
+        {
+            ["text"] = ValueEnvelope.Withheld(
+                type,
+                WithheldValue.SecretReference(new RuntimeSecretReference("payments.api-key"), null),
+                ValueProtectionPolicy.InstanceInline)
+        }));
+        await using var provider = NewProvider(new FixedActivityActivator(activity), includeInspection: true);
+
+        await NewHandler(provider).HandleAsync(NewInvokeWorkItem(NewIdentity()));
+
+        var state = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
+        Assert.Equal(ActivityExecutionStatus.Faulted, state!.Status);
+        Assert.Contains("VF-ACT-010: Activity input 'text' was withheld and is not resolved in this host.", state.Fault!.Message, StringComparison.Ordinal);
+        Assert.Empty(activity.EffectiveInputs);
+    }
+
+    [Fact]
     public async Task HandleAsync_CheckpointParticipantEntryAndCompletionChangesCommitAtomically()
     {
         var activity = new CompletingCheckpointParticipantActivity();

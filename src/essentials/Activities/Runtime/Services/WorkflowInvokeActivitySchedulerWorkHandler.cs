@@ -1221,6 +1221,10 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                         throw new InvalidOperationException($"Activity input '{key}' requires an IExternalPayloadStore for checkpoint participation.");
                     result.Add(key, await externalPayloadStore.ReadAsync(externalReference, cancellationToken));
                     break;
+                case ValuePresence.Withheld:
+                    // Publication refuses a secret reference on a checkpoint participant; this is the backstop for an
+                    // artifact that skipped publication. A participant would copy the value into checkpoint state.
+                    throw SecretBindingDiagnostics.WithheldInputNotResolved(key);
                 default:
                     throw new InvalidOperationException($"Activity input '{key}' has an invalid value envelope.");
             }

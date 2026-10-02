@@ -5,6 +5,7 @@ using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Services.Values;
@@ -62,8 +63,13 @@ internal sealed class RuntimePortableExpressionEvaluator(
         var referencedAmbient = ExposesAmbientVariables(expression, resolutionContext)
             ? ResolveReferencedAmbientVariables(expression.Expression, resolutionContext.VisibleVariablesByName)
             : EmptyAmbientVariables;
-        foreach (var envelope in referencedAmbient.Values)
+        foreach (var (name, envelope) in referencedAmbient)
         {
+            // The engine needs the variable's value, and a withheld value is not here to hand it.
+            // A computed access (variables[x], getVariable(x)) references every visible variable, so any withheld one refuses it.
+            if (envelope.Presence == ValuePresence.Withheld)
+                throw SecretBindingDiagnostics.WithheldVariableNotResolved(name);
+
             effectivePolicy = ValuePolicyCombiner.Combine(
                 effectivePolicy,
                 envelope.Policy,
@@ -83,6 +89,12 @@ internal sealed class RuntimePortableExpressionEvaluator(
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
+            throw;
+        }
+        catch (WithheldValueException)
+        {
+            // The fixed VF-ACT-010 refusal names an input or a variable and carries no value, so it is rethrown as it
+            // is: redacting it below would hide why the input failed.
             throw;
         }
         catch (Exception exception)
@@ -217,7 +229,8 @@ internal sealed class RuntimePortableExpressionEvaluator(
     /// Materializes the persistable value of each referenced ambient variable into the name → value snapshot the
     /// isolated engine exposes. Transient (non-durable) variables cannot cross the expression boundary and are
     /// omitted; an absent variable is omitted (it reads as <c>undefined</c>); an explicit null becomes JSON null.
-    /// An externally stored value is dereferenced when a payload reader is available, otherwise omitted.
+    /// An externally stored value is dereferenced when a payload reader is available, otherwise omitted. A withheld
+    /// variable never reaches here: <see cref="EvaluateAsync"/> refuses it first.
     /// </summary>
     private async ValueTask<IReadOnlyDictionary<string, JsonElement>> MaterializeAmbientVariableValuesAsync(
         IReadOnlyDictionary<string, ValueEnvelope> referencedVariables,
@@ -330,7 +343,7 @@ internal sealed class RuntimePortableExpressionEvaluator(
         if (!context.VariableEnvelopes.TryGetValue(address, out var envelope))
             throw NewParameterException(parameterName, nodeId, inputName, $"references unavailable variable '{binding.VariableKey}' in scope '{binding.DeclaringScopeNodeId}'");
         return new PortableExpressionParameter(
-            await ReadPersistableEnvelopeAsync(envelope, parameterName, nodeId, inputName, cancellationToken),
+            await ReadPersistableEnvelopeAsync(envelope, parameterName, nodeId, inputName, cancellationToken, binding.VariableKey),
             envelope.Policy);
     }
 
@@ -367,8 +380,15 @@ internal sealed class RuntimePortableExpressionEvaluator(
         string parameterName,
         string nodeId,
         string inputName,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? variableKey = null)
     {
+        // The parameter needs the value, and a withheld value is not here to read. The input itself is not withheld:
+        // the variable, workflow request member or activity result it reads is.
+        if (envelope.Presence == ValuePresence.Withheld)
+            throw variableKey is null
+                ? SecretBindingDiagnostics.WithheldSourceNotResolved(inputName)
+                : SecretBindingDiagnostics.WithheldVariableNotResolved(variableKey);
         if (envelope.Policy.Lifecycle == DurableValueLifecycle.None)
             throw NewParameterException(parameterName, nodeId, inputName, "is transient and cannot cross the durable expression boundary");
         if (envelope.Presence == ValuePresence.Absent)

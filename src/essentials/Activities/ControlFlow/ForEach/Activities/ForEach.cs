@@ -36,6 +36,7 @@ namespace Elsa.Activities.ForEach.Activities;
 /// expression evaluator. The runtime activity references only the runtime contract surface; the
 /// design-side structure handler references <c>Elsa.Workflows.Design.Core</c> (Elsa §E2.2).
 /// </remarks>
+[RefusesSecretBinding(nameof(Collection), SecretBindingRefusalReason.PersistedByActivity)]
 [ActivityStructure("elsa.foreach.structure", "1.0.0")]
 [ActivityChildSlot("ForEach.Body", "body", "Body", ActivityChildSlotCardinalities.Single)]
 [ActivitySideEffectProfile(SideEffectProfile.ReplaySafe)]

@@ -2,6 +2,7 @@ using System.Text.Json;
 using Elsa.Activities.Bpmn.Exceptions;
 using Elsa.Activities.Bpmn.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using BpmnProcessActivity = Elsa.Activities.Bpmn.Activities.BpmnProcess;
 
@@ -88,6 +89,7 @@ internal static class BpmnStartTriggerNodeInputs
             .FirstOrDefault(item => StringComparer.OrdinalIgnoreCase.Equals(item.Key, CanStartWorkflowInput))
             .Value;
 
+        SecretBindingDiagnostics.ThrowIfSecretRead(binding, node.ExecutableNodeId, CanStartWorkflowInput);
         if (binding?.Source != RuntimeInputBindingSource.Literal || binding.LiteralValue is not { } literal)
             return null;
 

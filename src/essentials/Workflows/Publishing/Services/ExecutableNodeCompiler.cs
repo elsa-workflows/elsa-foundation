@@ -13,6 +13,7 @@ using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Core.Services;
 using Elsa.Workflows.Runtime.Core.Constants;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Publishing.Services;
@@ -30,7 +31,6 @@ public sealed class ExecutableNodeCompiler(
     RuntimeOutputCaptureCompiler outputCaptureCompiler,
     IEnumerable<IOperatorActivitySchedulingCapabilityProvider>? operatorSchedulingCapabilityProviders = null)
 {
-    private static readonly JsonSerializerOptions DescriptorSerializerOptions = new(JsonSerializerDefaults.Web);
     private readonly IReadOnlyCollection<IOperatorActivitySchedulingCapabilityProvider> _operatorSchedulingCapabilityProviders =
         (operatorSchedulingCapabilityProviders ?? []).ToArray();
 
@@ -60,7 +60,7 @@ public sealed class ExecutableNodeCompiler(
             activityVersion.ConsumerKey,
             activityVersion.ConsumerSchemaVersion,
             activityVersion.DescriptorPayload);
-        var clrActivityType = ResolveClrActivityType(descriptor);
+        var clrActivityType = ClrActivityTypeResolver.Resolve(wellKnownTypeRegistry, descriptor);
         var inputDefinitions = activityVersion.Inputs.ToArray();
         var catalogActivityType = activityVersion.Definition?.ActivityTypeKey
             ?? throw new ArgumentException($"Activity version '{activityVersion.Id}' did not include its activity definition.");
@@ -109,7 +109,7 @@ public sealed class ExecutableNodeCompiler(
             activityVersion.ConsumerKey,
             activityVersion.ConsumerSchemaVersion,
             activityVersion.DescriptorPayload);
-        var clrActivityType = ResolveClrActivityType(descriptor);
+        var clrActivityType = ClrActivityTypeResolver.Resolve(wellKnownTypeRegistry, descriptor);
         var inputDefinitions = activityVersion.Inputs.ToArray();
 
         var catalogActivityType = activityVersion.Definition?.ActivityTypeKey
@@ -117,6 +117,7 @@ public sealed class ExecutableNodeCompiler(
         var activityType = clrActivityType is null
             ? catalogActivityType
             : ActivityTypeMetadata.GetDeclaredActivityType(clrActivityType) ?? catalogActivityType;
+        inputBindingCompiler.EnsureSecretBindingsAdmissible(activity.NodeId, descriptor, activity.Inputs);
         var inputBindings = inputBindingCompiler.CompileAll(activity.NodeId, inputDefinitions, activity.Inputs);
         var childSlots = CompileChildSlots(activityType, activity.NodeId, projection.ChildProjections(activity), projection, activityRows, placedActivities, workflowVariables);
         var executionType = clrActivityType is not null && ActivityTypeMetadata.IsTrigger(clrActivityType)
@@ -211,6 +212,12 @@ public sealed class ExecutableNodeCompiler(
             throw new ArgumentException(
                 $"Workflow intrinsic node '{activity.NodeId}' requires exactly these inputs: {string.Join(", ", inputTypes.Keys.Order(StringComparer.Ordinal))}.");
         }
+
+        // An intrinsic writes its value straight into a durable variable or workflow output, so a secret resolved
+        // there would be persisted.
+        var secretInputKey = RuntimeInputBindingCompiler.SecretInputKeys(activity.Inputs).FirstOrDefault();
+        if (secretInputKey is not null)
+            throw SecretBindingDiagnostics.IntrinsicInputRefused(activity.NodeId, secretInputKey);
 
         var bindings = inputTypes.ToDictionary(
             input => input.Key,
@@ -555,16 +562,16 @@ public sealed class ExecutableNodeCompiler(
             ?? throw new ArgumentException($"Activity node '{nodeId}' has a non-object executable structure payload.");
         if (payload["variables"] is { } variablesNode)
         {
-            var authored = variablesNode.Deserialize<IReadOnlyCollection<VariableDefinition>>(DescriptorSerializerOptions)
+            var authored = variablesNode.Deserialize<IReadOnlyCollection<VariableDefinition>>(DescriptorPayloadSerializer.Options)
                 ?? throw new ArgumentException($"Activity node '{nodeId}' has malformed variable declarations.");
             var compiled = authored.Select(variable => CompileVariableDeclaration(nodeId, variable)).ToArray();
-            payload["variables"] = JsonSerializer.SerializeToNode(compiled, DescriptorSerializerOptions);
+            payload["variables"] = JsonSerializer.SerializeToNode(compiled, DescriptorPayloadSerializer.Options);
         }
 
         return new ExecutableActivityStructure(
             structure.Kind,
             structure.SchemaVersion,
-            JsonSerializer.SerializeToElement(payload, DescriptorSerializerOptions));
+            JsonSerializer.SerializeToElement(payload, DescriptorPayloadSerializer.Options));
     }
 
     /// <summary>
@@ -636,6 +643,8 @@ public sealed class ExecutableNodeCompiler(
                 $"VF-ACT-005: Variable '{variable.ReferenceKey}' on activity node '{nodeId}' selects external storage profile '{variable.StorageDriverType}', but canonical variable-frame externalization is not implemented. Publication is refused instead of accepting an unusable declaration.");
         }
         RuntimeInputBinding? initialBinding = null;
+        if (RuntimeInputBindingCompiler.IsSecretBinding(variable.Default))
+            throw SecretBindingDiagnostics.VariableDefaultRefused(nodeId, variable.ReferenceKey);
         if (variable.Default is not null)
         {
             initialBinding = inputBindingCompiler.Compile(
@@ -671,7 +680,7 @@ public sealed class ExecutableNodeCompiler(
         {
             if (precompiledNodeIds?.Contains(node.ExecutableNodeId) == true)
                 continue;
-            var activityType = ResolveClrActivityType(node.Descriptor);
+            var activityType = ClrActivityTypeResolver.Resolve(wellKnownTypeRegistry, node.Descriptor);
             if (activityType is null &&
                 wellKnownTypeRegistry.TryGetTypeOrDefault(node.ActivityType, out var registeredActivityType) &&
                 registeredActivityType != typeof(object))
@@ -708,19 +717,6 @@ public sealed class ExecutableNodeCompiler(
         }
 
         return resumeTargets;
-    }
-
-    private Type? ResolveClrActivityType(RuntimeActivityDescriptor descriptor)
-    {
-        if (!StringComparer.Ordinal.Equals(descriptor.ConsumerKey, WellKnownRuntimeActivityConsumers.ClrActivity))
-            return null;
-
-        var clrDescriptor = descriptor.Payload.Deserialize<ClrActivityDescriptor>(DescriptorSerializerOptions);
-        return clrDescriptor is not null &&
-               wellKnownTypeRegistry.TryGetTypeOrDefault(clrDescriptor.TypeAlias, out var activityType) &&
-               activityType != typeof(object)
-            ? activityType
-            : null;
     }
 
     private static void ValidateResumeTargetSignature(Type activityType, MethodInfo method)

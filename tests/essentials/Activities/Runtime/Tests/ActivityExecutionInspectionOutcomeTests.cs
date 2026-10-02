@@ -101,6 +101,45 @@ public sealed class ActivityExecutionInspectionOutcomeTests
     }
 
     /// <summary>
+    /// The inspection snapshot is built on the invoke path before activation (spec 188, T012), so a withheld secret
+    /// input must render there as a sensitive marker naming its reference, with no value and without throwing. The
+    /// activation that follows refuses the input loudly because this host resolves no secrets. It renders as sensitive
+    /// even when its own policy is not.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task A_withheld_input_renders_as_a_sensitive_marker_with_its_reference_and_no_value(bool policyIsSensitive)
+    {
+        await using var harness = NewHarness();
+        var leaf = NewLeaf(typeof(WriteLine), new Dictionary<string, RuntimeInputBinding>
+        {
+            ["text"] = new(
+                "text",
+                new ValueTypeDescriptor("String"),
+                new ValueProtectionPolicy(DurableValueLifecycle.Instance, DurableValueStorage.Inline, isSensitive: policyIsSensitive, requiresEncryption: policyIsSensitive),
+                RuntimeInputBindingSource.SecretRead,
+                conversionPlan: ValueConversionPlan.Identity(new ValueTypeDescriptor("String"), ValueRepresentation.TextValue),
+                secret: new RuntimeSecretReference("payments.api-key", "text"))
+        });
+
+        var run = await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(leaf));
+
+        var state = run.State(LeafNodeId);
+        Assert.Equal(ActivityExecutionStatus.Faulted, state.Status);
+        Assert.Contains("VF-ACT-010: Activity input 'text' was withheld and is not resolved in this host.", state.Fault!.Message, StringComparison.Ordinal);
+        var projection = await harness.Services.GetRequiredService<IActivityExecutionInspectionStore>()
+            .FindAsync(state.Execution.WorkflowExecutionId, state.Execution.ActivityExecutionId);
+        var input = Assert.Single(
+            projection!.ValueSnapshots,
+            snapshot => snapshot.Subject == ActivityExecutionInspectionValueSubject.ActivityInput && snapshot.InputKey == "text");
+        Assert.True(input.IsSensitive);
+        Assert.Null(input.Payload);
+        Assert.Equal(nameof(WithheldValueKind.SecretReference), input.Metadata[RuntimeMetadataKeys.WithheldKind]);
+        Assert.Equal("payments.api-key", input.Metadata[RuntimeMetadataKeys.SecretReferenceName]);
+    }
+
+    /// <summary>
     /// Asserts the projection agrees with committed state, and reports both sides when it does not — the whole
     /// failure mode is the two disagreeing, so naming only one of them would make a failure unreadable.
     /// </summary>
@@ -133,6 +172,12 @@ public sealed class ActivityExecutionInspectionOutcomeTests
         .Build("actexec-root", "actexec-leaf");
 
     private static ExecutableNode NewLeaf(Type activityType, IReadOnlyDictionary<string, object?> inputs) =>
+        NewLeaf(activityType, inputs.ToDictionary(
+            item => item.Key,
+            item => NewLiteral(item.Key, item.Value),
+            StringComparer.Ordinal));
+
+    private static ExecutableNode NewLeaf(Type activityType, IReadOnlyDictionary<string, RuntimeInputBinding> inputBindings) =>
         new(
             executableNodeId: LeafNodeId,
             authoredActivityId: $"authored-{LeafNodeId}",
@@ -140,10 +185,7 @@ public sealed class ActivityExecutionInspectionOutcomeTests
             activityTypeVersion: "1.0.0",
             descriptorType: "test",
             descriptorPayload: JsonSerializer.SerializeToElement(new { }),
-            inputBindings: inputs.ToDictionary(
-                item => item.Key,
-                item => NewLiteral(item.Key, item.Value),
-                StringComparer.Ordinal),
+            inputBindings: inputBindings,
             metadata: new Dictionary<string, string>());
 
     private static ExecutableNode NewSequenceRoot(ExecutableNode child) =>

@@ -8,10 +8,13 @@ using Elsa.Activities.Testing;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Scheduling;
+using Elsa.Workflows.Runtime.Services.ActivityExecutions;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using BpmnProcessActivity = Elsa.Activities.Bpmn.Activities.BpmnProcess;
 using EventActivity = Elsa.Activities.Primitives.Activities.Event;
 
 namespace Elsa.Activities.Bpmn.Tests;
@@ -311,6 +314,32 @@ public sealed class BpmnMultiInstanceTests
     }
 
     [Fact]
+    public async Task Collection_WithheldVariable_FaultsWithTheWithheldValueCode()
+    {
+        // A withheld collection is neither empty nor stored elsewhere: its items are not here to read. No producer
+        // withholds a variable in this slice, so the host is evaluated directly against the scoped variable read handing
+        // back the withheld envelope a variable frame would hold.
+        await using var fixture = await BpmnRuntimeFixture.CreateAsync(["actexec-bpmn"]);
+        var process = NewCollectionExecutable(fixture, isSequential: true, NewItemCaptureNode(BodyNodeId, "item"), ["a"]).RootActivity;
+        var activity = new BpmnProcessActivity(fixture.Provider.GetRequiredService<BpmnExecutionEngine>());
+        var context = new SimpleActivityExecutionContext(
+            activity,
+            CancellationToken.None,
+            WorkflowExecutionHarness.WorkflowExecutionId,
+            WorkflowExecutionHarness.Identity,
+            NewInvokeWorkItem(),
+            process,
+            NewRunningProcessState(),
+            scopedVariableEnvelopes: new Dictionary<string, ValueEnvelope> { [CollectionVariable] = SecretBindingTestSupport.Withheld("Elsa.Any") });
+
+        var continuation = await activity.ExecuteStructureAsync(context);
+
+        Assert.Equal(RuntimeStructuralContinuationKind.Fault, continuation.Kind);
+        Assert.Equal(SecretBindingDiagnostics.WithheldInputCode, continuation.Fault!.Code);
+        Assert.Equal(SecretBindingDiagnostics.WithheldVariableNotResolved(CollectionVariable).Message, continuation.Fault.Message);
+    }
+
+    [Fact]
     public async Task Collection_SnapshotPersistsOnLoopRecord_AndDrivesSequentialProgression()
     {
         await using var fixture = await CreateFixtureAsync("actexec-bpmn", "actexec-0", "actexec-1", "actexec-2");
@@ -450,6 +479,40 @@ public sealed class BpmnMultiInstanceTests
             sequenceFlows: [BpmnRuntimeFixture.Flow("flow-1", "start", "mi"), BpmnRuntimeFixture.Flow("flow-2", "mi", "end")],
             resumeTargets: resumeTargets,
             variables: [BpmnRuntimeFixture.StringArrayVariable(CollectionVariable, items)]);
+
+    private static ActivityExecutionState NewRunningProcessState() =>
+        new(
+            Execution: new ActivityExecution("actexec-bpmn", WorkflowExecutionHarness.WorkflowExecutionId, BpmnRuntimeFixture.ProcessNodeId, "authored-bpmn", typeof(BpmnProcessActivity).FullName!, "1.0.0"),
+            Status: ActivityExecutionStatus.Running,
+            SubStatus: null,
+            ScheduledAt: DateTimeOffset.UnixEpoch,
+            StartedAt: DateTimeOffset.UnixEpoch,
+            CompletedAt: null,
+            SchedulingActivityExecutionId: null,
+            ParentActivityExecutionId: null,
+            BranchId: null,
+            IterationId: null,
+            CallStackDepth: 0,
+            BookmarkIds: [],
+            IncidentIds: [],
+            FaultCount: 0,
+            AggregateFaultCount: 0,
+            Metadata: new Dictionary<string, string>());
+
+    private static RuntimeSchedulerWorkItem NewInvokeWorkItem() =>
+        new(
+            workItemId: "work-bpmn",
+            workflowExecutionId: WorkflowExecutionHarness.WorkflowExecutionId,
+            commandId: "command-bpmn",
+            commandKind: WorkflowExecutionCommandKind.InvokeActivity,
+            envelopeId: "envelope-bpmn",
+            idempotencyKey: "wfexec-1:bpmn",
+            enqueuedAt: DateTimeOffset.UnixEpoch,
+            recordedAt: DateTimeOffset.UnixEpoch,
+            sequence: 1,
+            payload: null,
+            commandMetadata: new Dictionary<string, string>(),
+            envelopeMetadata: new Dictionary<string, string>());
 
     private static ExecutableNode NewItemCaptureNode(string nodeId, string itemVariable) =>
         new(

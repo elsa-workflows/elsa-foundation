@@ -6,6 +6,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Runtime.Resolvers;
 using Elsa.Workflows.Runtime.Services.Values;
+using Elsa.Workflows.Runtime.Tests.Fixtures;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;
@@ -46,6 +47,20 @@ public sealed class ValueConversionPlanTests
         Assert.Equal(sourceType, converted.Type);
         Assert.Equal(policy, converted.Policy);
         Assert.Equal("raw text", converted.InlineValue!.Value.GetString());
+    }
+
+    [Fact]
+    public void Conversion_refuses_a_withheld_value_with_the_fixed_code()
+    {
+        // The shape a secret read takes: the envelope is typed to the Int32 input, while its plan converts from text.
+        // Conversion reads the value, so it refuses before comparing the envelope's type with the plan's source.
+        var targetType = new ValueTypeDescriptor("Int32");
+        var plan = JsonPlan(targetType, sourceRepresentation: ValueRepresentation.TextValue);
+        var withheld = WithheldValues.Secret(targetType, plan);
+
+        var exception = Assert.Throws<WithheldValueException>(() => new RuntimeValueConversionExecutor().Convert(withheld, plan));
+
+        Assert.Equal(SecretBindingDiagnostics.WithheldValueNotConverted("Int32").Message, exception.Message);
     }
 
     [Fact]
