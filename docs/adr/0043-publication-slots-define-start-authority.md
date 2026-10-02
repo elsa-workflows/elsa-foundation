@@ -23,10 +23,11 @@ stands where that transition left it. A call that stops short of its own switch 
 refused while the activation serves. Candidates that share an activation id, as two nodes reconciling one mounted set do
 (#2251), share its projections, so Invariant 6 holds for the one that loses: it keeps the winner's projections and
 reports `AlreadyActive`. Unpublish empties the slot in one commit with the projections of every activation that serves
-it, whatever the slot's history. A slot that a version before #2230 left half done, naming a prepared activation that
-never served while the one it replaced still serves, is repaired in one commit by the first activation, publish or
-serving check that meets it; a slot left half done any other way is reported, and an operator clears it by unpublishing
-it. Publishing's publication records follow the slot (#2223), outside that commit: `IPublicationActivator.CompleteAsync`
+it, whatever the slot's history. A slot that a version before #2230 left on its way to serving, naming an activation
+prepared in every projection store, or switched on in some and prepared in the others, while the one it replaced still
+serves, is repaired in one commit by the first activation, publish or serving check that meets it, and the trigger
+observers are told. A slot whose activation is missing or replaced, which only a fault or a manual change leaves, is
+reported with how to clear it. Publishing's publication records follow the slot (#2223), outside that commit: `IPublicationActivator.CompleteAsync`
 marks the publication the slot names active once it serves, and retires the publications whose references the runtime
 retired. It runs before every publication, on a same-version republish that finds the record behind, and in its own
 shell-start pass, so Invariant 2 holds in the records eventually too, and the records never decide serving. One
