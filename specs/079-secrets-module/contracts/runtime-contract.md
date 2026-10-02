@@ -5,9 +5,9 @@
 Runtime consumers resolve serialized references only at point of use.
 
 ```csharp
-public interface ISecretResolver
+public interface ISecretValueResolver
 {
-    ValueTask<ResolvedSecret> ResolveAsync(SecretReference reference, CancellationToken cancellationToken = default);
+    ValueTask<ResolvedSecret> ResolveAsync(string tenantId, SecretReference reference, CancellationToken cancellationToken = default);
 }
 ```
 
@@ -90,10 +90,11 @@ Expression descriptor:
 
 - Type: `Secret`
 - Value shape: `SecretReference`
-- Handler dependency: `ISecretResolver`
+- Handler dependency: `ISecretValueResolver`
 
 Rules:
 
 - The expression handler resolves the secret and returns the resolved value converted to the requested return type where possible.
 - The saved workflow input stores the `SecretReference` payload, not the resolved value.
 - The expression descriptor must appear in the expression descriptor API so Studio can offer the syntax.
+- The expression handler described in this section was not built. How a secret reference reaches an activity at run time is specified in [spec 188](../../188-workflow-secret-safety/spec.md), which supersedes this section's mechanism.
