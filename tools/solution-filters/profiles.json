@@ -237,6 +237,19 @@
       "excludeWhenPackageReferencePrefixes": [
         "Testcontainers."
       ]
+    },
+    {
+      "outputPath": "Elsa.Server.Extensions.ExtensionBuilder.slnf",
+      "includeProjectPathPrefixes": [
+        "src/extensions/ExtensionBuilder/"
+      ],
+      "requiredRootPaths": [
+        "src/extensions/ExtensionBuilder/src/Api/Elsa.ExtensionBuilder.Api.csproj",
+        "src/extensions/ExtensionBuilder/tests/Api/Tests/Elsa.ExtensionBuilder.Api.Tests.csproj"
+      ],
+      "excludeWhenPackageReferencePrefixes": [
+        "Testcontainers."
+      ]
     }
   ]
 }

@@ -5,6 +5,7 @@ using CShells.Lifecycle;
 using Elsa.Attention.Core;
 using Elsa.Cluster.Core.Contracts;
 using Elsa.Cluster.Core.Models;
+using Elsa.ExtensionBuilder.Api.Extensions;
 using Elsa.Foundation.Host.ModuleManagement;
 using Elsa.Foundation.Host.Shells;
 using Elsa.Persistence.Schema.SchemaFinalization;
@@ -66,6 +67,9 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
             IntentionallyPerShell + "holds no state; it reads the ISupersededAssemblySource every container shares",
             "Elsa.Modularity.EntityFramework.IEfModuleAssemblySource"),
         Entries(
+            IntentionallyPerShell + "holds no state; each shell's permission catalog aggregates the contributors of its own container, the host's root-registered ones copied in",
+            "Elsa.Foundation.Identity.Core.Authorization.IPermissionContributor"),
+        Entries(
             "unreachable from shell code: a hosted service the host starts once, and a shell container never starts its copy (a disposable one could not be shared in any case)",
             "Elsa.Persistence.EntityFramework.EfModuleMigrator<Elsa.Cluster.EntityFrameworkCore.ClusterMembershipDbContext>",
             "Elsa.Workbench.OpenIddict.OpenIddictIdentityStoreInitializer",
@@ -106,21 +110,37 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
     private static IEnumerable<KeyValuePair<string, string>> Entries(string reason, params string[] types) =>
         types.Select(type => KeyValuePair.Create(type, reason));
 
-    /// <summary>Each host, on the in-process membership it is a cluster of one with, and on the durable EF membership that joins a cluster.</summary>
-    public static TheoryData<string, bool> Hosts => new()
+    /// <summary>The root singletons the optional Extension Builder composes (#2294); the host's build worker drains the queue and only the host's storage holds the state gate.</summary>
+    private static readonly string[] ExtensionBuilderHostOwned =
+    [
+        "Elsa.ExtensionBuilder.Api.ExtensionBuilderBackgroundBuildQueue",
+        "Elsa.ExtensionBuilder.Api.IExtensionBuilderBuildQueue",
+        "Elsa.ExtensionBuilder.Api.IExtensionBuilderStorage",
+        "Elsa.ExtensionBuilder.Api.IExtensionBuilderTemplateCatalog"
+    ];
+
+    /// <summary>
+    /// Each host, on the in-process membership it is a cluster of one with, and on the durable EF membership that joins a cluster;
+    /// the Workbench also with the optional Extension Builder enabled, which composes root singletons of its own.
+    /// </summary>
+    public static TheoryData<string, bool, bool> Hosts => new()
     {
-        { "Elsa.Foundation.Host", false },
-        { "Elsa.Foundation.Host", true },
-        { "Elsa.Workbench", false },
-        { "Elsa.Workbench", true }
+        { "Elsa.Foundation.Host", false, false },
+        { "Elsa.Foundation.Host", true, false },
+        { "Elsa.Workbench", false, false },
+        { "Elsa.Workbench", true, false },
+        { "Elsa.Workbench", false, true }
     };
 
     [Theory]
     [MemberData(nameof(Hosts))]
-    public async Task A_shell_of_the_real_composition_holds_the_hosts_own_instance_of_every_singleton_it_does_not_own(string host, bool durableMembership)
+    public async Task A_shell_of_the_real_composition_holds_the_hosts_own_instance_of_every_singleton_it_does_not_own(string host, bool durableMembership, bool extensionBuilder)
     {
         using var content = ContentRoot.For(host);
-        using var built = BuiltHost.Run(EntryAssembly(host), content.Arguments(durableMembership));
+        string[] arguments = extensionBuilder
+            ? [.. content.Arguments(durableMembership), $"--{ExtensionBuilderServiceCollectionExtensions.EnabledConfigurationKey}", "true"]
+            : content.Arguments(durableMembership);
+        using var built = BuiltHost.Run(EntryAssembly(host), arguments);
         var root = built.Host.Services;
 
         var shell = await root.GetRequiredService<IShellRegistry>().GetOrActivateAsync(ProbeShell);
@@ -141,6 +161,13 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
         // whichever shell is active, are the host's own instances there (#2202).
         if (host == "Elsa.Foundation.Host")
             Assert.All([typeof(ShellActivationTracker), typeof(IAttentionContributor)], type => Assert.Contains(type, compared.Select(service => service.Type)));
+        // The Extension Builder's singletons are internal to its assembly, so they are named here: the comparison must have seen
+        // every one when the switch is on, and none when it is off, which is what makes it optional.
+        var extensionBuilderCompared = compared.Select(service => Describe(service.Type)).Where(type => type.StartsWith("Elsa.ExtensionBuilder.", StringComparison.Ordinal)).ToArray();
+        if (extensionBuilder)
+            Assert.All(ExtensionBuilderHostOwned, type => Assert.Contains(type, extensionBuilderCompared));
+        else
+            Assert.Empty(extensionBuilderCompared);
     }
 
     /// <summary>
@@ -233,7 +260,7 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
         : $"{type.Namespace}.{type.Name}";
 
     private static Assembly EntryAssembly(string host) => host == "Elsa.Workbench"
-        ? typeof(ManagementApiKeyAuthentication).Assembly
+        ? typeof(WorkbenchOpenIddictMigrator).Assembly
         : typeof(ModuleManagementOptions).Assembly;
 
     /// <summary>A content root of the host's own settings and a shell file of its own, so the shell that is activated enables no feature.</summary>

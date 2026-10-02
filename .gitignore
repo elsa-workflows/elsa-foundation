@@ -16,6 +16,10 @@
 *.userosscache
 *.sln.docstates
 *.env
+# Extension Builder workspaces when Elsa:ExtensionBuilder:StoragePath is relative to a content root in the tree,
+# including the runtime-generated scratch projects (guid-named project/snapshot dirs).
+**/extension-builder/*
+**/extension-builder/projects/
 
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs
