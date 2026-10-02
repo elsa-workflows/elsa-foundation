@@ -4,11 +4,13 @@ using Elsa.Activities.Runtime.Core.Abstractions;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Activities.Runtime.Services;
 using Elsa.Activities.Testing;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Services.Values;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -44,6 +46,13 @@ internal static class SecretResolutionTestSupport
     /// <summary>The withheld envelope a secret read leaves in the committed input snapshot.</summary>
     public static ValueEnvelope Withheld(string referenceName = ReferenceName) =>
         ValueEnvelope.Withheld(StringType, WithheldValue.SecretReference(Reference(referenceName), TextPlan), SecretBindingTestSupport.SecretPolicy);
+
+    /// <summary>
+    /// An activator's secret input collaborator for a test that activates no withheld input, composed as a host without
+    /// a resolver composes it: a withheld secret is refused with the missing-resolver activation failure.
+    /// </summary>
+    public static ActivitySecretInputResolver SecretInputResolver() =>
+        new(new CountingPartitionAccessor(WorkflowExecutionPartition.DefaultValue), new SingleInstanceStateStore(null), new RuntimeValueConversionExecutor());
 
     /// <summary>
     /// A harness whose host composes <paramref name="resolver"/> and the recorder the test activities write to. The
@@ -126,6 +135,50 @@ internal static class SecretResolutionTestSupport
         foreach (var value in values)
             Assert.DoesNotContain(Assert.IsType<string>(value), persisted, StringComparison.Ordinal);
     }
+}
+
+/// <summary>Reports one partition and counts its reads.</summary>
+internal sealed class CountingPartitionAccessor(string partition) : IWorkflowExecutionPartitionAccessor
+{
+    public int Reads { get; private set; }
+
+    public WorkflowExecutionPartition Current
+    {
+        get
+        {
+            Reads++;
+            return new(partition);
+        }
+    }
+}
+
+/// <summary>Holds one workflow instance and counts its reads; nothing else is read or written.</summary>
+internal sealed class SingleInstanceStateStore(WorkflowExecutionState? instance) : IWorkflowExecutionStateStore
+{
+    public WorkflowExecutionState? Instance { get; set; } = instance;
+
+    public int Reads { get; private set; }
+
+    public ValueTask<WorkflowExecutionState?> FindAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
+    {
+        Reads++;
+        return ValueTask.FromResult(Instance is { } state && state.WorkflowExecutionId == workflowExecutionId ? state : null);
+    }
+
+    public ValueTask<WorkflowExecutionState> SaveAsync(WorkflowExecutionState state, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException();
+
+    public ValueTask<IReadOnlyCollection<WorkflowExecutionState>> ListAsync(CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException();
+
+    public ValueTask<WorkflowExecutionStatePage> QueryPageAsync(WorkflowExecutionStatePageQuery query, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException();
+
+    public ValueTask<IReadOnlyCollection<string>> ListPinnedExecutableArtifactIdsAsync(CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException();
+
+    public ValueTask<bool> DeleteAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException();
 }
 
 /// <summary>

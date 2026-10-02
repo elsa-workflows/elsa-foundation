@@ -40,7 +40,8 @@ public sealed class ActivationScopeSemanticTests : IAsyncDisposable
             registry.RegisterType(activityType, activityType.FullName!);
         _activator = new ActivityActivator(
             [new ClrActivityActivator(_root.GetRequiredService<IServiceScopeFactory>(), registry, _serializer)],
-            new ActivityInputHydrator());
+            new ActivityInputHydrator(),
+            SecretResolutionTestSupport.SecretInputResolver());
     }
 
     public ValueTask DisposeAsync() => _root.DisposeAsync();

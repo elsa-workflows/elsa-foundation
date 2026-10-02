@@ -21,6 +21,7 @@ internal static class ActivityActivationLeaseDisposer
         }
     }
 
+    /// <summary>Combines <paramref name="primary"/> and <paramref name="disposal"/> into one exception, keeping the classification of <paramref name="primary"/>.</summary>
     public static Exception Combine(Exception primary, Exception disposal) =>
-        new AggregateException("Activity execution and activation disposal both failed.", primary, disposal);
+        new ActivityActivationCleanupException(primary, disposal);
 }

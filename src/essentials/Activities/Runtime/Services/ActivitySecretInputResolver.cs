@@ -20,22 +20,16 @@ public sealed class ActivitySecretInputResolver(
     IRuntimeValueConversionExecutor valueConversionExecutor,
     IRuntimeSecretResolver? secretResolver = null)
 {
-    private readonly IRuntimeSecretResolver? _secretResolver = secretResolver;
-
     /// <summary>
     /// Refuses, before the activity exists, every withheld input of <paramref name="snapshot"/> that this activation
     /// cannot resolve, rather than hydrating null and letting the activity run on a missing value: any withheld input
     /// of a strategy that does not hydrate, which would otherwise pass it on silently, and a value withheld because its
     /// policy requires encryption, which cannot be recovered. Both fault the activity. Only then is a secret reference
     /// in a host that composes no resolver refused, as a missing capability that parks the activity, so an input that
-    /// no composition could resolve is never reported as one that composing the resolver would repair. An activator
-    /// composed without <paramref name="inputResolver"/> resolves nothing, so it refuses as a host without a resolver.
+    /// no composition could resolve is never reported as one that composing the resolver would repair.
     /// </summary>
     /// <returns>The secret inputs left to resolve once the activity is hydrated, or <see langword="null"/> when there are none.</returns>
-    internal static PendingSecretInputs? Prepare(
-        ActivitySecretInputResolver? inputResolver,
-        ActivityInputSnapshot snapshot,
-        bool hydratesInputs)
+    internal PendingSecretInputs? Prepare(ActivityInputSnapshot snapshot, bool hydratesInputs)
     {
         var secrets = new List<SecretInput>();
         foreach (var (key, envelope) in snapshot.Values
@@ -49,10 +43,28 @@ public sealed class ActivitySecretInputResolver(
 
         if (secrets.Count == 0)
             return null;
-        if (inputResolver?._secretResolver is not { } resolver)
+        if (secretResolver is not { } resolver)
             throw new RuntimeSecretResolverNotFoundException(secrets[0].Key);
 
-        return new(inputResolver, resolver, secrets);
+        return new(resolver, secrets);
+    }
+
+    /// <summary>
+    /// Returns a transient copy of <paramref name="snapshot"/> whose secret inputs, as <see cref="Prepare"/> accepted
+    /// them, hold their resolved, converted values. <paramref name="snapshot"/> itself is not changed.
+    /// </summary>
+    internal async ValueTask<ActivityInputSnapshot> ResolveAsync(
+        PendingSecretInputs pending,
+        string workflowExecutionId,
+        ActivityInputSnapshot snapshot,
+        CancellationToken cancellationToken)
+    {
+        var tenantId = await ReadExecutingTenantAsync(workflowExecutionId, pending.Secrets[0].Reference.Name, cancellationToken);
+        var values = new Dictionary<string, ValueEnvelope>(snapshot.Values, StringComparer.Ordinal);
+        foreach (var secret in pending.Secrets)
+            values[secret.Key] = ConvertResolvedSecret(secret, await ResolveReferenceAsync(pending.Resolver, tenantId, secret.Reference, cancellationToken), cancellationToken);
+
+        return ActivityActivator.WithValues(snapshot, values);
     }
 
     /// <summary>
@@ -78,29 +90,34 @@ public sealed class ActivitySecretInputResolver(
     }
 
     /// <summary>
-    /// Resolves one reference. A resolver that throws anything but a cancellation has broken its contract; what it threw
-    /// is dropped rather than wrapped, because its message may carry the value or store-private detail, and the
-    /// activation reports <see cref="RuntimeSecretResolutionException.ResolverFailed"/> instead.
+    /// Resolves one reference. Only a canceled activation is reported as a cancellation, whatever the resolver threw or
+    /// answered. Anything it throws while the activation is live, a cancellation-typed exception from its own timeout
+    /// included, and a null result, break its contract; what it threw is dropped rather than wrapped, because its
+    /// message may carry the value or store-private detail, and the activation reports
+    /// <see cref="RuntimeSecretResolutionException.ResolverFailed"/> instead.
     /// </summary>
-    private static async ValueTask<string> ResolveAsync(
+    private static async ValueTask<string> ResolveReferenceAsync(
         IRuntimeSecretResolver resolver,
         string tenantId,
         RuntimeSecretReference reference,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        RuntimeSecretResolution resolution;
+        RuntimeSecretResolution? resolution;
         try
         {
             resolution = await resolver.ResolveAsync(new RuntimeSecretResolutionRequest(tenantId, reference), cancellationToken);
         }
-        catch (Exception exception) when (exception is not OperationCanceledException)
+        catch
         {
+            cancellationToken.ThrowIfCancellationRequested();
             throw new RuntimeSecretResolutionException(reference.Name, RuntimeSecretResolutionException.ResolverFailed, isRetryable: false);
         }
 
         // A resolver that reports a failure because the activation was canceled has not found the secret unusable.
         cancellationToken.ThrowIfCancellationRequested();
+        if (resolution is null)
+            throw new RuntimeSecretResolutionException(reference.Name, RuntimeSecretResolutionException.ResolverFailed, isRetryable: false);
         if (!resolution.Succeeded)
             throw new RuntimeSecretResolutionException(reference.Name, resolution.FailureCode!, resolution.IsRetryable);
 
@@ -109,12 +126,12 @@ public sealed class ActivitySecretInputResolver(
 
     /// <summary>
     /// Converts the resolved text with the plan pinned at publish, from a fresh inline envelope: the withheld envelope
-    /// itself has no value to convert. A failure, and an envelope that carries no plan, is reported as
-    /// <see cref="RuntimeSecretResolutionException.ConversionFailed"/>; the conversion's own exception is dropped
-    /// rather than wrapped, because its message may describe the value it rejected. Publish pins only plans from text
-    /// that cannot fail on a string, so only an artifact that skipped publish reaches the failure.
+    /// itself has no value to convert. A failure while the activation is live, and an envelope that carries no plan,
+    /// is reported as <see cref="RuntimeSecretResolutionException.ConversionFailed"/>; the conversion's own exception
+    /// is dropped rather than wrapped, because its message may describe the value it rejected. Publish pins only plans
+    /// from text that cannot fail on a string, so only an artifact that skipped publish reaches the failure.
     /// </summary>
-    private ValueEnvelope ConvertResolvedSecret(SecretInput secret, string value)
+    private ValueEnvelope ConvertResolvedSecret(SecretInput secret, string value, CancellationToken cancellationToken)
     {
         var plan = secret.ConversionPlan
             ?? throw new RuntimeSecretResolutionException(secret.Reference.Name, RuntimeSecretResolutionException.ConversionFailed, isRetryable: false);
@@ -124,8 +141,9 @@ public sealed class ActivitySecretInputResolver(
                 ValueEnvelope.Inline(plan.SourceType, JsonSerializer.SerializeToElement(value), secret.Envelope.Policy),
                 plan);
         }
-        catch (Exception exception) when (exception is not OperationCanceledException)
+        catch
         {
+            cancellationToken.ThrowIfCancellationRequested();
             throw new RuntimeSecretResolutionException(secret.Reference.Name, RuntimeSecretResolutionException.ConversionFailed, isRetryable: false);
         }
     }
@@ -137,26 +155,5 @@ public sealed class ActivitySecretInputResolver(
     /// The secret inputs <see cref="Prepare"/> accepted, with the resolver that resolves them. Created only once every
     /// withheld input is a resolvable secret reference and a resolver is composed.
     /// </summary>
-    internal sealed class PendingSecretInputs(
-        ActivitySecretInputResolver owner,
-        IRuntimeSecretResolver resolver,
-        IReadOnlyList<SecretInput> secrets)
-    {
-        /// <summary>
-        /// Returns a transient copy of <paramref name="snapshot"/> whose secret inputs hold their resolved, converted
-        /// values. <paramref name="snapshot"/> itself is not changed.
-        /// </summary>
-        public async ValueTask<ActivityInputSnapshot> ResolveAsync(
-            string workflowExecutionId,
-            ActivityInputSnapshot snapshot,
-            CancellationToken cancellationToken)
-        {
-            var tenantId = await owner.ReadExecutingTenantAsync(workflowExecutionId, secrets[0].Reference.Name, cancellationToken);
-            var values = new Dictionary<string, ValueEnvelope>(snapshot.Values, StringComparer.Ordinal);
-            foreach (var secret in secrets)
-                values[secret.Key] = owner.ConvertResolvedSecret(secret, await ActivitySecretInputResolver.ResolveAsync(resolver, tenantId, secret.Reference, cancellationToken));
-
-            return ActivityActivator.WithValues(snapshot, values);
-        }
-    }
+    internal sealed record PendingSecretInputs(IRuntimeSecretResolver Resolver, IReadOnlyList<SecretInput> Secrets);
 }

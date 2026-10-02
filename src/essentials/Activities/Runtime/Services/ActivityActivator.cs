@@ -14,14 +14,13 @@ namespace Elsa.Activities.Runtime.Services;
 /// a withheld envelope for it; <see cref="ActivitySecretInputResolver"/> resolves the reference for the partition the
 /// execution runs under, converts the text with the plan the envelope carries, and the activity is hydrated from that
 /// transient copy of the snapshot. The request's snapshot is never changed, so nothing the activity was hydrated with
-/// is written back to state. Every activation resolves again; nothing resolved is kept. An activator composed without
-/// an <see cref="ActivitySecretInputResolver"/> resolves nothing and refuses every withheld input.
+/// is written back to state. Every activation resolves again; nothing resolved is kept.
 /// </remarks>
 public sealed class ActivityActivator(
     IEnumerable<IActivityActivationStrategy> strategies,
     ActivityInputHydrator inputHydrator,
-    IExternalPayloadStore? externalPayloadStore = null,
-    ActivitySecretInputResolver? secretInputResolver = null) : IActivityActivator
+    ActivitySecretInputResolver secretInputResolver,
+    IExternalPayloadStore? externalPayloadStore = null) : IActivityActivator
 {
     private readonly IReadOnlyDictionary<string, IReadOnlyCollection<IActivityActivationStrategy>> _strategies =
         strategies
@@ -62,7 +61,7 @@ public sealed class ActivityActivator(
             schemaVersion,
             request.Contract.DescriptorPayload);
         var strategy = matches[0];
-        var secretInputs = ActivitySecretInputResolver.Prepare(secretInputResolver, request.Inputs, strategy.RequiresInputHydration);
+        var secretInputs = secretInputResolver.Prepare(request.Inputs, strategy.RequiresInputHydration);
         var lease = await strategy.ActivateAsync(
             new ActivityActivationStrategyRequest(request.Contract, descriptor),
             cancellationToken);
@@ -74,20 +73,15 @@ public sealed class ActivityActivator(
         {
             var inputs = await DereferenceInputsAsync(request.Inputs, cancellationToken);
             if (secretInputs is not null)
-                inputs = await secretInputs.ResolveAsync(request.WorkflowExecutionId, inputs, cancellationToken);
+                inputs = await secretInputResolver.ResolveAsync(secretInputs, request.WorkflowExecutionId, inputs, cancellationToken);
             inputHydrator.Hydrate(lease.Activity, request.Contract, inputs);
             return lease;
         }
         catch (Exception activationException)
         {
-            try
-            {
-                await lease.DisposeAsync();
-            }
-            catch (Exception disposalException)
-            {
-                throw new ActivityActivationCleanupException(activationException, disposalException);
-            }
+            var disposalException = await ActivityActivationLeaseDisposer.TryDisposeAsync(lease);
+            if (disposalException is not null)
+                throw ActivityActivationLeaseDisposer.Combine(activationException, disposalException);
 
             throw;
         }

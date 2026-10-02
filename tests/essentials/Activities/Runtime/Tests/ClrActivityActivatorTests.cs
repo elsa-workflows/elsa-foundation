@@ -94,18 +94,12 @@ public sealed class ClrActivityActivatorTests : IAsyncDisposable
         Assert.Empty(_resolver.Requests);
     }
 
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task A_secret_reference_in_a_host_without_a_resolver_is_refused_as_a_missing_capability(bool composeSecretInputResolver)
+    [Fact]
+    public async Task A_secret_reference_in_a_host_without_a_resolver_is_refused_as_a_missing_capability()
     {
         // A missing resolver is a composition fault, which parks the activity, not a resolution failure (T031). The
-        // runtime composes the activator's secret input collaborator without a resolver; a hand-built activator may
-        // compose no collaborator at all, and fails closed the same way.
-        var activator = new ActivityActivator(
-            [ClrStrategy(_root)],
-            new ActivityInputHydrator(),
-            secretInputResolver: composeSecretInputResolver ? new ActivitySecretInputResolver(_partition, _instances, _conversions) : null);
+        // runtime composes the activator's secret input collaborator without a resolver.
+        var activator = NoResolverActivator();
 
         var exception = await Assert.ThrowsAsync<RuntimeSecretResolverNotFoundException>(() =>
             activator.ActivateAsync(WithheldRequest(Withheld())).AsTask());
@@ -119,7 +113,7 @@ public sealed class ClrActivityActivatorTests : IAsyncDisposable
     public async Task An_unrecoverable_withheld_input_is_refused_before_a_missing_resolver_is_reported()
     {
         // Composing a resolver would not repair this activation, so it must fault rather than park.
-        var activator = new ActivityActivator([ClrStrategy(_root)], new ActivityInputHydrator());
+        var activator = NoResolverActivator();
         var contract = Contract(typeof(TwoInputActivity), "first", "second");
 
         var exception = await Assert.ThrowsAsync<WithheldValueException>(() => activator.ActivateAsync(Request(contract, new Dictionary<string, ValueEnvelope>
@@ -137,7 +131,7 @@ public sealed class ClrActivityActivatorTests : IAsyncDisposable
         // A strategy that skips hydration (graph activation) never reads the input, so only the activator's own
         // refusal stops a withheld value from passing silently, even with a resolver composed (spec 188, T008).
         var strategy = new NonHydratingStrategy();
-        var activator = new ActivityActivator([strategy], new ActivityInputHydrator(), secretInputResolver: SecretInputResolver(_partition));
+        var activator = new ActivityActivator([strategy], new ActivityInputHydrator(), SecretInputResolver(_partition));
         var contract = Contract(typeof(ServiceBearingActivity), "message");
 
         var exception = await Assert.ThrowsAsync<WithheldValueException>(() => activator.ActivateAsync(WithheldRequest(
@@ -345,11 +339,19 @@ public sealed class ClrActivityActivatorTests : IAsyncDisposable
         Assert.Equal(1, ScopedDependency.DisposeCount);
     }
 
-    [Fact]
-    public async Task A_resolver_that_throws_reports_ResolverFailed_without_what_it_threw()
+    public static TheoryData<Exception> ResolverThrows =>
+    [
+        new InvalidOperationException(ResolverSentinel, new InvalidOperationException(ResolverSentinel)),
+        // A cancellation-typed exception from the resolver's own store or HTTP timeout is not the activation's cancellation.
+        new TaskCanceledException(ResolverSentinel, new InvalidOperationException(ResolverSentinel))
+    ];
+
+    [Theory]
+    [MemberData(nameof(ResolverThrows))]
+    public async Task A_resolver_that_throws_while_the_activation_is_live_reports_ResolverFailed_without_what_it_threw(Exception thrown)
     {
-        // A resolver may only throw a cancellation; anything else may carry the value or store detail in its message.
-        _resolver.Respond = (_, _) => throw new InvalidOperationException(ResolverSentinel, new InvalidOperationException(ResolverSentinel));
+        // A resolver may only throw a cancellation of the activation; anything else may carry the value or store detail.
+        _resolver.Respond = (_, _) => throw thrown;
 
         var exception = await Assert.ThrowsAsync<RuntimeSecretResolutionException>(() =>
             SecretActivator().ActivateAsync(WithheldRequest(Withheld())).AsTask());
@@ -359,14 +361,42 @@ public sealed class ClrActivityActivatorTests : IAsyncDisposable
         Assert.Equal($"Secret '{ReferenceName}' could not be resolved (ResolverFailed).", exception.Message);
         Assert.Null(exception.InnerException);
         Assert.DoesNotContain(ResolverSentinel, exception.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain(thrown.GetType().Name, exception.ToString(), StringComparison.Ordinal);
         Assert.Equal(1, ScopedDependency.DisposeCount);
+    }
+
+    [Fact]
+    public async Task A_resolver_that_returns_null_reports_ResolverFailed()
+    {
+        _resolver.Respond = (_, _) => null!;
+
+        var exception = await Assert.ThrowsAsync<RuntimeSecretResolutionException>(() =>
+            SecretActivator().ActivateAsync(WithheldRequest(Withheld())).AsTask());
+
+        Assert.Equal(ReferenceName, exception.ReferenceName);
+        Assert.Equal(RuntimeSecretResolutionException.ResolverFailed, exception.FailureCode);
+        Assert.False(exception.IsRetryable);
+        Assert.Equal(1, ScopedDependency.DisposeCount);
+    }
+
+    [Fact]
+    public async Task A_cancellation_typed_conversion_failure_while_the_activation_is_live_reports_ConversionFailed()
+    {
+        _conversions.Failure = _ => new OperationCanceledException(ResolverSentinel);
+
+        var exception = await Assert.ThrowsAsync<RuntimeSecretResolutionException>(() =>
+            SecretActivator().ActivateAsync(WithheldRequest(Withheld())).AsTask());
+
+        Assert.Equal(RuntimeSecretResolutionException.ConversionFailed, exception.FailureCode);
+        Assert.Null(exception.InnerException);
+        Assert.DoesNotContain(ResolverSentinel, exception.ToString(), StringComparison.Ordinal);
     }
 
     [Fact]
     public async Task A_classified_resolution_failure_keeps_its_classification_when_lease_disposal_also_fails()
     {
         _resolver.Respond = (_, _) => RuntimeSecretResolution.Failure("StoreUnavailable", isRetryable: true);
-        var activator = new ActivityActivator([new FailingDisposalStrategy()], new ActivityInputHydrator(), secretInputResolver: SecretInputResolver(_partition));
+        var activator = new ActivityActivator([new FailingDisposalStrategy()], new ActivityInputHydrator(), SecretInputResolver(_partition));
 
         var exception = await Assert.ThrowsAnyAsync<AggregateException>(() => activator.ActivateAsync(WithheldRequest(Withheld())).AsTask());
 
@@ -638,11 +668,15 @@ public sealed class ClrActivityActivatorTests : IAsyncDisposable
     private static (IActivityActivator Activator, ActivityContract Contract) Activator(
         IServiceProvider services,
         IExternalPayloadStore? externalPayloadStore = null) =>
-        (new ActivityActivator([ClrStrategy(services)], new ActivityInputHydrator(), externalPayloadStore),
+        (new ActivityActivator([ClrStrategy(services)], new ActivityInputHydrator(), SecretResolutionTestSupport.SecretInputResolver(), externalPayloadStore),
             Contract(typeof(ServiceBearingActivity), "message"));
 
     private ActivityActivator SecretActivator(IWorkflowExecutionPartitionAccessor? partitionAccessor = null) =>
-        new([ClrStrategy(_root)], new ActivityInputHydrator(), secretInputResolver: SecretInputResolver(partitionAccessor ?? _partition));
+        new([ClrStrategy(_root)], new ActivityInputHydrator(), SecretInputResolver(partitionAccessor ?? _partition));
+
+    /// <summary>An activator whose secret input collaborator is composed as a host without a resolver composes it.</summary>
+    private ActivityActivator NoResolverActivator() =>
+        new([ClrStrategy(_root)], new ActivityInputHydrator(), new ActivitySecretInputResolver(_partition, _instances, _conversions));
 
     private ActivitySecretInputResolver SecretInputResolver(IWorkflowExecutionPartitionAccessor partitionAccessor) =>
         new(partitionAccessor, _instances, _conversions, _resolver);
@@ -733,50 +767,6 @@ public sealed class ClrActivityActivatorTests : IAsyncDisposable
                     ValueProtectionPolicy.InstanceInline)
             },
             DateTimeOffset.UtcNow);
-
-    /// <summary>Reports one partition and counts its reads.</summary>
-    private sealed class CountingPartitionAccessor(string partition) : IWorkflowExecutionPartitionAccessor
-    {
-        public int Reads { get; private set; }
-
-        public WorkflowExecutionPartition Current
-        {
-            get
-            {
-                Reads++;
-                return new(partition);
-            }
-        }
-    }
-
-    /// <summary>Holds one workflow instance and counts its reads; nothing else is read or written.</summary>
-    private sealed class SingleInstanceStateStore(WorkflowExecutionState? instance) : IWorkflowExecutionStateStore
-    {
-        public WorkflowExecutionState? Instance { get; set; } = instance;
-
-        public int Reads { get; private set; }
-
-        public ValueTask<WorkflowExecutionState?> FindAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
-        {
-            Reads++;
-            return ValueTask.FromResult(Instance is { } state && state.WorkflowExecutionId == workflowExecutionId ? state : null);
-        }
-
-        public ValueTask<WorkflowExecutionState> SaveAsync(WorkflowExecutionState state, CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
-
-        public ValueTask<IReadOnlyCollection<WorkflowExecutionState>> ListAsync(CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
-
-        public ValueTask<WorkflowExecutionStatePage> QueryPageAsync(WorkflowExecutionStatePageQuery query, CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
-
-        public ValueTask<IReadOnlyCollection<string>> ListPinnedExecutableArtifactIdsAsync(CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
-
-        public ValueTask<bool> DeleteAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
-    }
 
     /// <summary>Records every conversion and delegates to the real executor, or throws the configured failure.</summary>
     private sealed class RecordingConversionExecutor : IRuntimeValueConversionExecutor

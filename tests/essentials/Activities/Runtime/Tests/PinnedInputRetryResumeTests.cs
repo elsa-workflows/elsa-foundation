@@ -98,14 +98,18 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
 
     /// <summary>
     /// A resolver that throws instead of returning a result faults the activity with <c>ResolverFailed</c>, and nothing
-    /// it threw reaches the persisted fault or the incident (spec 188, FR-003).
+    /// it threw reaches the persisted fault or the incident (spec 188, FR-003). A cancellation-typed exception from the
+    /// resolver's own timeout is no exception: the activation's token is live, so it is not the activation's cancellation.
     /// </summary>
-    [Fact]
-    public async Task A_resolver_that_throws_faults_the_activity_with_ResolverFailed_and_persists_nothing_it_threw()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_resolver_that_throws_faults_the_activity_with_ResolverFailed_and_persists_nothing_it_threw(bool cancellationTyped)
     {
         const string nodeId = "node-wait";
         const string sentinel = "resolver-detail-sentinel";
-        var resolver = new FakeRuntimeSecretResolver { Respond = (_, _) => throw new InvalidOperationException(sentinel) };
+        Exception thrown = cancellationTyped ? new TaskCanceledException(sentinel) : new InvalidOperationException(sentinel);
+        var resolver = new FakeRuntimeSecretResolver { Respond = (_, _) => throw thrown };
         await using var harness = SecretResolutionTestSupport.NewHarness(resolver, new SecretValueRecorder(), ["actexec-wait"]);
 
         var faulted = (await harness.RunAsync(SecretResolutionTestSupport.NewWaitingExecutable(nodeId))).State(nodeId);
@@ -115,7 +119,10 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
         Assert.False(faulted.Fault.IsRetryable);
         Assert.Equal($"Secret '{SecretResolutionTestSupport.ReferenceName}' could not be resolved (ResolverFailed).", faulted.Fault.Message);
         var incident = Assert.Single(await harness.Services.GetRequiredService<IIncidentStateStore>().ListAsync(harness.ExecutionId));
-        Assert.DoesNotContain(sentinel, JsonSerializer.Serialize(faulted), StringComparison.Ordinal);
-        Assert.DoesNotContain(sentinel, JsonSerializer.Serialize(incident), StringComparison.Ordinal);
+        foreach (var leak in new[] { sentinel, thrown.GetType().Name })
+        {
+            Assert.DoesNotContain(leak, JsonSerializer.Serialize(faulted), StringComparison.Ordinal);
+            Assert.DoesNotContain(leak, JsonSerializer.Serialize(incident), StringComparison.Ordinal);
+        }
     }
 }

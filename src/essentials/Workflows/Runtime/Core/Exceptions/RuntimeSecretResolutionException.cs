@@ -25,8 +25,8 @@ public sealed class RuntimeSecretResolutionException : Exception, IRuntimeFaultC
     public const string ConversionFailed = "ConversionFailed";
 
     /// <summary>
-    /// The resolver threw instead of returning a result, which breaks its contract. What it threw is dropped, because
-    /// its message may carry the value or store-private detail.
+    /// The resolver threw while the activation was not canceled, or returned null, instead of returning a result, which
+    /// breaks its contract. What it threw is dropped, because its message may carry the value or store-private detail.
     /// </summary>
     public const string ResolverFailed = "ResolverFailed";
 
