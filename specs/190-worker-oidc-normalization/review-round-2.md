@@ -1,0 +1,19 @@
+# PR2315 review round 2
+
+Reviewed head: `76108c6d82bd98099804127c39d4b3566e62403b`. Actual Copilot review5392674893 has no findings and confirms both round1 defects resolved. All hosted checks are terminal and green/nonblocking; Build & test ran Identity446, IAM EF191, Runtime EF835 including the Worker actor, Workbench39 and Architecture635 on Linux, all zero failed/skipped. These are this reviewed head's results, not results for the subsequent test patch/main integration.
+
+## Comment ledger
+
+- [4166430142](https://github.com/elsa-workflows/elsa-foundation/pull/2315#discussion_r4166430142) — **fix**; `github-code-quality[bot]`, `OidcBearerNormalizationTests.cs`:1414. The transport handler must return a usable response rather than disposing before return. The installed-version [IdentityModel8.19.2 HttpDocumentRetriever](https://github.com/AzureAD/azure-activedirectory-identitymodel-extensions-for-dotnet/blob/8.19.2/src/Microsoft.IdentityModel.Protocols/Configuration/HttpDocumentRetriever.cs) reads returned responses without disposing them. Retain all local discovery/JWK/not-found responses in a concurrent collection and dispose them at handler teardown after the host stops; the existing host owns and disposes its backchannel HttpClient. This changes test cleanup only. Planned direct reply: explain that responses remain usable for the caller and are drained/disposed at fixture teardown. The linked public thread is authoritative for posted reply/resolution after publication.
+
+## Independent delivery audit
+
+The bounded audit found no production behavior contradiction or unsupported real-actor claim. It identified one proof gap in FR009/T019: the noncooperative normalizer control discarded the token argument and could pass solely because outgoing HTTP was canceled. Capture and assert the actual supplied token is cancelable and canceled, return an otherwise valid normalized principal, and assert the endpoint is never reached. Mutating only normalizer token forwarding must fail that executed assertion before restored positive validation. This is an acceptance-evidence correction within the existing test, not new production behavior or a new test suite.
+
+All earlier full IAM/Runtime local results retain their recorded older-source qualification; current76108 Linux results above fill that head's full-suite evidence. The subsequent patch and normal integration require their own affected local gate and actual exact-head automated review/check convergence. T027/T028 and Worker profile/program publication remain open.
+
+## Executed focused controls
+
+Before main integration, both affected existing real-handler controls passed2 / failed0 / skipped0 on macOS arm64 / SDK10.0.300 / net10.0: `dotnet test tests/essentials/Foundation/Identity/Tests/Elsa.Foundation.Identity.Tests.csproj --no-restore --filter FullyQualifiedName~Request_abort_during_a_noncooperative_normalizer_prevents_ticket_publication|FullyQualifiedName~A_second_issuer_cannot_be_normalized_after_discovery_address_changes_on_options_reload -v minimal` (shell-quote the filter). Log `/tmp/runtime-2308-review2-preflight.log`.
+
+Replacing only the production NormalizeAsync token argument with CancellationToken.None compiled and failed the executed CanBeCanceled assertion at line416 (1 failed / 0 passed / 0 skipped). The post-await guards remained intact, isolating token forwarding from outgoing HTTP cancellation. Source was restored byte-for-byte to SHA256 `ff191e28870317bcae6332796d3bb3ff0e06ab51d134e40b9b5a10f313f9589f` before final validation. Receipt `/tmp/runtime-2308-review2-mutation-receipt.json`; log `/tmp/runtime-2308-review2-mutation-normalizer-token.log`. Root released the blocked normalizer before assertions, so the adverse control does not strand its collaborator. Final combined restored-source gates remain pending at this commit.

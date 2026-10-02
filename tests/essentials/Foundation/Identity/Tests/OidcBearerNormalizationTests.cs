@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.IdentityModel.Tokens.Jwt;
 using System.Net;
 using System.Net.Http.Headers;
@@ -391,12 +392,17 @@ public sealed class OidcBearerNormalizationTests
         using var requestCancellation = new CancellationTokenSource();
         var normalizationEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var releaseNormalizer = new TaskCompletionSource<ClaimsNormalizationResult>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var normalizer = TestClaimsNormalizer.Async(async (_, _) =>
+        var endpointCalls = 0;
+        var normalizerCancellationToken = CancellationToken.None;
+        var normalizer = TestClaimsNormalizer.Async(async (_, cancellationToken) =>
         {
+            normalizerCancellationToken = cancellationToken;
             normalizationEntered.TrySetResult();
             return await releaseNormalizer.Task;
         });
-        await using var host = await NormalizationTestHost.StartAsync(normalizer: normalizer);
+        await using var host = await NormalizationTestHost.StartAsync(
+            normalizer: normalizer,
+            onEndpointReached: _ => Interlocked.Increment(ref endpointCalls));
         using var request = new HttpRequestMessage(HttpMethod.Get, "/whoami");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", host.CreateToken());
 
@@ -404,10 +410,13 @@ public sealed class OidcBearerNormalizationTests
         await normalizationEntered.Task.WaitAsync(TimeSpan.FromSeconds(10));
         requestCancellation.Cancel();
         releaseNormalizer.TrySetResult(Result(new ClaimsPrincipal(
-            new ClaimsIdentity([new Claim("sub", "worker-1")], "raw"))));
+            new ClaimsIdentity(RequiredNormalizedClaims(), OidcBearerNormalizationEvents.NormalizedAuthenticationType))));
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => responseTask);
+        Assert.True(normalizerCancellationToken.CanBeCanceled);
+        Assert.True(normalizerCancellationToken.IsCancellationRequested);
         Assert.Equal(1, normalizer.Calls);
+        Assert.Equal(0, Volatile.Read(ref endpointCalls));
     }
 
     [Fact]
@@ -1375,6 +1384,7 @@ public sealed class OidcBearerNormalizationTests
 
     private sealed class LocalDiscoveryHandler(params DiscoveryIssuer[] issuers) : HttpMessageHandler
     {
+        private readonly ConcurrentBag<HttpResponseMessage> _responses = [];
         private readonly IReadOnlyDictionary<string, DiscoveryIssuer> _metadata = issuers.ToDictionary(
             issuer => new Uri(issuer.MetadataAddress).AbsolutePath, StringComparer.Ordinal);
         private readonly IReadOnlyDictionary<string, DiscoveryIssuer> _jwks = issuers.ToDictionary(
@@ -1411,13 +1421,27 @@ public sealed class OidcBearerNormalizationTests
                 }));
             }
 
-            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
+            return Task.FromResult(TrackResponse(new HttpResponseMessage(HttpStatusCode.NotFound)));
         }
 
-        private static HttpResponseMessage JsonResponse<T>(T value) => new(HttpStatusCode.OK)
+        private HttpResponseMessage JsonResponse<T>(T value) => TrackResponse(new HttpResponseMessage(HttpStatusCode.OK)
         {
             Content = new StringContent(JsonSerializer.Serialize(value), Encoding.UTF8, "application/json")
-        };
+        });
+
+        private HttpResponseMessage TrackResponse(HttpResponseMessage response)
+        {
+            _responses.Add(response);
+            return response;
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+                while (_responses.TryTake(out var response))
+                    response.Dispose();
+            base.Dispose(disposing);
+        }
     }
 
     private sealed class NormalizationTestHost : IAsyncDisposable
