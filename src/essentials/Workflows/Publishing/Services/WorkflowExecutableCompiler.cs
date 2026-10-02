@@ -334,9 +334,6 @@ public sealed class WorkflowExecutableCompiler(
                 IsRequired: input.IsRequired,
                 DefaultValue: input.Default?.Value,
                 DefaultSyntax: input.Default?.Syntax);
-            // A reusable boundary is activated by its template root, which for a graph template captures its inputs
-            // outside CLR activation; the check covers contract defaults as well as authored inputs.
-            compiler.EnsureSecretBindingsAdmissible(activity.NodeId, boundaryDescriptor, [inputState]);
             result[input.ReferenceKey] = compiler.Compile(activity.NodeId, definition, inputState);
         }
         return result;
@@ -361,7 +358,7 @@ public sealed class WorkflowExecutableCompiler(
             try
             {
                 typeAlias = node.Descriptor.Payload
-                    .Deserialize<ClrActivityDescriptor>(new JsonSerializerOptions(JsonSerializerDefaults.Web))?
+                    .Deserialize<ClrActivityDescriptor>(DescriptorPayloadSerializer.Options)?
                     .TypeAlias;
             }
             catch (JsonException)
