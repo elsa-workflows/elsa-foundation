@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-02
 
-**Status**: Approved — authoring review under #2304; adapter implementation and Worker publication remain pending.
+**Status**: In progress — implementation #2308; specification #2304 published; Worker publication remains separate.
 
 **Input**: [Program #1959](https://github.com/elsa-workflows/elsa-foundation/issues/1959), [profiles epic #1961](https://github.com/elsa-workflows/elsa-foundation/issues/1961), [specification task #2304](https://github.com/elsa-workflows/elsa-foundation/issues/2304), and the [Worker identity no-go](../../docs/reports/runtime-composition/worker-http-identity-boundary.md). This specification enables the missing authentication boundary; it does not publish a Worker profile or certify an external identity-provider deployment.
 

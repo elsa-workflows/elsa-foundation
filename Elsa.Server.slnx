@@ -630,6 +630,9 @@
     <Project Path="tests/essentials/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.Tests.csproj" />
     <Project Path="tests/essentials/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.ProviderTests.csproj" />
   </Folder>
+  <Folder Name="/tests/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Fixtures/">
+    <Project Path="tests/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Fixtures/WorkerOidcHost/WorkerOidcHost.csproj" />
+  </Folder>
   <Folder Name="/tests/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/">
     <Project Path="tests/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj" />
     <Project Path="tests/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.csproj" />

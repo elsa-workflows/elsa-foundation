@@ -20,6 +20,8 @@
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
   <ItemGroup>
+    <!-- Built as a real child host; the tests drive its Kestrel endpoints and private fixture control pipe. -->
+    <ProjectReference Include="..\Fixtures\WorkerOidcHost\WorkerOidcHost.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Workflows\Runtime\Elsa.Workflows.Runtime.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Workflows\Runtime\Persistence\EntityFrameworkCore\Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />

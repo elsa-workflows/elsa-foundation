@@ -226,15 +226,7 @@ The OIDC module registers a `JwtBearer` scheme (for API bearer validation agains
 a `ClientId` is present — an interactive `OpenIdConnect` scheme (for the browser redirect flow).
 See §8 for per-IdP recipes.
 
-> **The claims-normalization / permission-mapping seam still applies — and today you must wire it.**
-> Elsa's authorization reads `elsa.identity.permission` claims (§1). An external IdP emits *its own*
-> claims (roles, groups, scopes), which are meaningless to Elsa's permission catalog until mapped.
-> The `IClaimsNormalizer` + `ClaimMappingRule` seam exists to do exactly this mapping, and the
-> `IPrincipalFactory` provisions/links the external user and runs the normalizer. **However, the Oidc
-> module does not currently invoke that seam** — see the honest gap in §8. Until it does, an external
-> OIDC principal carries the IdP's raw claims and no Elsa permissions, so permission-gated endpoints
-> will deny it. Plan to supply an `OnTokenValidated`/`OnUserInformationReceived` hook (or a claims
-> transformation) that runs `IClaimsNormalizer` / `IPrincipalFactory` for external logins.
+External claims still need mapping into Elsa permissions. For a fixed-host API bearer layout, opt in through `NormalizeBearerClaims`, independent `Audience`, `ProviderId` and `TenantId`. The host supplies a matching ordinary persistence scope and explicit IAM mapping backend; the adapter validates the token, filters internal claims and loads current rules before normalization. It does not provision a local user. Without opt-in, the legacy external path remains unchanged. Interactive login/provisioning still requires its own bridge. See the [owning OIDC README](../../src/essentials/Foundation/Identity/Oidc/README.md) and [canonical contract](../../specs/190-worker-oidc-normalization/contracts/bearer-normalization.md); implementation proof is tracked separately under #2308.
 
 ### (c) Custom token issuer
 
@@ -360,15 +352,19 @@ module configures the standard ASP.NET Core `OpenIdConnect` handler (`ResponseTy
 | Option | Shell setting | Meaning | Default |
 |---|---|---|---|
 | `Authority` | yes | The IdP's issuer / discovery authority (`.well-known/openid-configuration` base). | — (required) |
-| `ClientId` | yes | The OAuth client id registered with the IdP; also the JwtBearer audience, so a bearer token's `aud` must include it. | — (required to enable the interactive handler) |
+| `ClientId` | yes | The interactive OAuth client id; supplies the legacy bearer audience only when Audience is absent. | — (required to enable the interactive handler) |
+| `Audience` | yes | Independent API bearer audience; absent uses ClientId, explicit blank refuses normalization. | absent |
+| `NormalizeBearerClaims` | yes | Enable the guarded fixed-host bearer mapping bridge. | `false` |
 | `ClientSecret` | yes (secret) | Client secret for the confidential code flow. | — |
 | `RequireHttpsMetadata` | yes | Require HTTPS for IdP metadata. Keep `true` in production. | `true` |
 | `IsDefault` | yes | Default-scheme election and the default provider in `bootstrap`. | `true` |
 | `AuthenticationScheme` | no | The interactive OpenIdConnect scheme name. | `Elsa.Identity.Oidc` |
 | `JwtBearerScheme` | no | The API bearer-validation scheme name. | `Elsa.Identity.Oidc.Jwt` |
-| `ProviderId` / `DisplayName` | no | Identity of the provider in `bootstrap`/`capabilities`. | `oidc` / `External OIDC` |
+| `ProviderId` | yes | Static provider namespace for mapping and provider metadata. | `oidc` |
+| `DisplayName` | no | Provider display name. | `External OIDC` |
 | `ChallengePath` | no | The challenge redirect path. | `/_elsa/identity/challenge/oidc` |
-| `TenantId` / `Enabled` | no | Tenant scoping, enablement. | `null` / `true` |
+| `TenantId` | yes | Static mapping tenant; opt-in requires a matching host persistence scope. | `null` |
+| `Enabled` | no | Provider enablement. | `true` |
 
 A key under `FoundationIdentityOidc` that is not a shell setting is silently ignored, not rejected.
 Code-only options are set through `AddFoundationIdentityOidc(configure)` when a host composes the
@@ -431,21 +427,9 @@ yet options on the module** — do not expect them to work from configuration al
    uses ASP.NET Core's defaults (`openid`, `profile`). If your IdP requires additional scopes (e.g.
    an Auth0/Entra API audience/scope, or `email`/`groups`), there is currently no config key for it —
    you would configure the handler yourself via `AddFoundationIdentityOidc(configure)` or a
-   `PostConfigure<OpenIdConnectOptions>`/`PostConfigure<JwtBearerOptions>`. The `JwtBearer` audience
-   is fixed to `ClientId`; setting a separate API audience (common with Auth0/Entra APIs) likewise has
-   no config key today.
+   `PostConfigure<OpenIdConnectOptions>`/`PostConfigure<JwtBearerOptions>`. Use the separate `Audience` setting for an API audience.
 
-2. **No claim-mapping / user-provisioning wiring on the external path.** The IAM plane has a complete
-   claims-normalization and provisioning seam — `IClaimsNormalizer`, `ClaimMappingRule`, and
-   `IPrincipalFactory` (which links the external identity, provisions the user, and runs the
-   normalizer). But the **Oidc module does not invoke it**: `ConfigureOidcOptions` sets `SaveTokens`
-   and standard options and adds **no** `OnTokenValidated` / `OnUserInformationReceived` event that
-   runs the principal factory or normalizer. Consequently an external OIDC login yields a principal
-   with the IdP's **raw** claims and **no** `elsa.identity.permission` claims, so permission-gated
-   endpoints deny it. Integrators using scenario (b) must bridge this themselves today (a claims
-   transformation or an OIDC handler event that calls `IClaimsNormalizer` / `IPrincipalFactory` with
-   the applicable `ClaimMappingRule`s). This is the single biggest external-IdP integration gap; the
-   first-party (ASP.NET Core Identity) path *does* run the normalizer via its principal factory.
+2. **Interactive normalization/provisioning remains host-owned.** The opt-in bearer bridge uses current owned mappings without a local account. It does not normalize interactive OIDC login or call `IPrincipalFactory`; an interactive integration still supplies that provisioning/linking bridge. Default-false bearer behavior stays compatible. Dynamic tenancy, multiple normalized external schemes and deployed IdP interoperability remain separate proof boundaries.
 
 ---
 

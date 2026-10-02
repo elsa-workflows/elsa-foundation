@@ -18,6 +18,12 @@ public sealed class OidcAuthenticationOptions
 
     public string? Authority { get; set; }
 
+    /// <summary>Enables guarded per-request claim normalization. Requires a fixed provider, tenant and host persistence scope.</summary>
+    public bool NormalizeBearerClaims { get; set; }
+
+    /// <summary>Bearer audience. Only absence falls back to ClientId; an explicit blank remains blank.</summary>
+    public string? Audience { get; set; }
+
     public string? ClientId { get; set; }
 
     public string? ClientSecret { get; set; }

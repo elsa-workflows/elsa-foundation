@@ -1,3 +1,4 @@
+using CShells.Lifecycle;
 using Elsa.Foundation.Identity.Core.Authentication;
 using Elsa.Foundation.Identity.Extensions;
 using Microsoft.AspNetCore.Authentication;
@@ -6,6 +7,7 @@ using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Hosting;
 
 namespace Elsa.Foundation.Identity.Oidc.Extensions;
 
@@ -27,8 +29,35 @@ public static class OidcAuthenticationServiceCollectionExtensions
         var options = new OidcAuthenticationOptions();
         configure?.Invoke(options);
 
+        var existingRegistration = services.FirstOrDefault(descriptor => descriptor.ServiceType == typeof(OidcBearerRegistration));
+        if (existingRegistration is not null &&
+            (options.NormalizeBearerClaims || existingRegistration.ImplementationInstance is not OidcBearerRegistration { NormalizeBearerClaims: false }))
+            throw new InvalidOperationException(OidcBearerOptionsValidator.ConfigurationInvalid);
+        if (existingRegistration is null)
+        {
+            var registration = new OidcBearerRegistration(options.NormalizeBearerClaims, options.JwtBearerScheme,
+                options.Enabled, options.Authority, options.Audience ?? options.ClientId, options.ProviderId, options.TenantId,
+                options.RequireHttpsMetadata, services);
+            services.AddSingleton(registration);
+            services.AddSingleton<OidcBearerOptionsValidator>();
+            services.AddSingleton<IValidateOptions<OidcAuthenticationOptions>>(provider => provider.GetRequiredService<OidcBearerOptionsValidator>());
+            services.AddSingleton<IPostConfigureOptions<JwtBearerOptions>>(provider => provider.GetRequiredService<OidcBearerOptionsValidator>());
+            services.AddSingleton<IValidateOptions<JwtBearerOptions>>(provider => provider.GetRequiredService<OidcBearerOptionsValidator>());
+            services.AddSingleton<OidcBearerActivationGuard>();
+            services.AddSingleton<IHostedService>(provider => provider.GetRequiredService<OidcBearerActivationGuard>());
+            services.AddSingleton<IShellInitializer>(provider => provider.GetRequiredService<OidcBearerActivationGuard>());
+        }
+        if (options.NormalizeBearerClaims)
+        {
+            services.AddScoped<OidcBearerNormalizationEvents>();
+            services.AddNormalizedAuthenticationType(OidcBearerNormalizationEvents.NormalizedAuthenticationType);
+        }
         var authentication = services.AddAuthentication()
-            .AddJwtBearer(options.JwtBearerScheme, _ => { });
+            .AddJwtBearer(options.JwtBearerScheme, target =>
+            {
+                if (options.NormalizeBearerClaims)
+                    target.TokenValidationParameters.ValidateIssuerSigningKey = true;
+            });
 
         // The interactive OpenID Connect handler is a remote-authentication request handler that
         // eagerly validates its options (ClientId is required) for EVERY request, regardless of the

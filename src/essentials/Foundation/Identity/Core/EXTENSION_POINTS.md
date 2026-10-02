@@ -103,3 +103,7 @@ hosts should migrate replacements before then.
 - Framework §2.6.2 — replacement contracts for single active implementations.
 - Framework §2.22.1 — per-domain extension-point catalog.
 - Framework §2.23 — registration and implementation unit-test obligations.
+
+## Opt-in external bearer normalization
+
+`Elsa.Foundation.Identity.Oidc` consumes `IClaimMappingStore` and `IClaimsNormalizer` for its default-false fixed-host bearer bridge. The store is explicitly supplied through the existing replacement-contract registration; opt-in activation requires exactly one normalizer descriptor. It filters internal input claims before matching and validates the single output identity, without changing shared normalizer semantics. It does not invoke `IPrincipalFactory` or mutate user/link stores. See the [owning OIDC README](../Oidc/README.md) and [canonical bearer contract](../../../../../specs/190-worker-oidc-normalization/contracts/bearer-normalization.md) for supported callbacks, ordinary persistence-scope agreement and trust enrollment.

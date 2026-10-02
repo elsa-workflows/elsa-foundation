@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
 	<ItemGroup>
 		<PackageReference Include="CShells.Abstractions" />
@@ -11,6 +11,7 @@
 	<ItemGroup>
 		<ProjectReference Include="..\Core\Elsa.Foundation.Identity.Core.csproj" />
 		<ProjectReference Include="..\Elsa.Foundation.Identity.csproj" />
+        <ProjectReference Include="..\..\..\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
 	</ItemGroup>
 
 </Project>
