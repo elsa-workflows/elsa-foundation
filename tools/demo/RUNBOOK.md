@@ -1,5 +1,7 @@
 # Schema rollout demo: the presenter's runbook
 
+On stage, [CHEATSHEET.md](CHEATSHEET.md) has only the commands, in order, with what to expect; this runbook explains them.
+
 The story: a module that keeps its data in a shared database is upgraded to a new release **while the host keeps running**. The
 platform installs the release at runtime, refuses to switch to it until the database is migrated, says exactly what to run,
 and only turns on the feature that needs the new schema once **every host** that shares the database can read it.
