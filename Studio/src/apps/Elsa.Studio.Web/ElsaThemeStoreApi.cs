@@ -429,6 +429,12 @@ internal static class ElsaThemeStoreApi
             ? configResult.DefaultThemeId
             : store.DefaultThemeId;
 
+        // A default naming a retired built-in or a deleted theme is reported as unset, like the retired
+        // disabled-built-in ids below, rather than as a default the client silently falls back from.
+        if (!BuiltInThemeIds.Contains(defaultThemeId)
+            && !customThemes.Any(t => StringComparer.OrdinalIgnoreCase.Equals(t.Id, defaultThemeId)))
+            defaultThemeId = "";
+
         return new ThemeStoreResponse(
             Themes: customThemes.ToArray(),
             DefaultThemeId: defaultThemeId,

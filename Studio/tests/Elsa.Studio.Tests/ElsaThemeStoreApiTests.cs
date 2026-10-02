@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using Elsa.Studio.Web;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -14,6 +15,7 @@ public sealed class ElsaThemeStoreApiTests : IAsyncLifetime
 {
     private readonly string _contentRoot = Path.Combine(Path.GetTempPath(), $"elsa-theme-store-{Guid.NewGuid():N}");
     private WebApplication _app = null!;
+    private readonly ThemeConfiguration _themeConfig = new();
     private HttpClient _client = null!;
 
     [Fact]
@@ -158,6 +160,57 @@ public sealed class ElsaThemeStoreApiTests : IAsyncLifetime
         return (await response.Content.ReadFromJsonAsync<ThemeStoreResponse>())!;
     }
 
+    [Theory]
+    [MemberData(nameof(RetiredThemeIds))]
+    public async Task StoredRetiredDefaultIsReportedAsUnset(string themeId)
+    {
+        await File.WriteAllTextAsync(Path.Combine(_contentRoot, "studio-theme-store.json"), $$"""{"themes":[],"defaultThemeId":"{{themeId}}","assets":[]}""");
+
+        Assert.Equal("", (await GetStoreAsync()).DefaultThemeId);
+    }
+
+    [Theory]
+    [MemberData(nameof(RetiredThemeIds))]
+    public async Task ConfiguredRetiredDefaultIsReportedAsUnset(string themeId)
+    {
+        _themeConfig.DefaultThemeId = themeId;
+
+        Assert.Equal("", (await GetStoreAsync()).DefaultThemeId);
+    }
+
+    [Fact]
+    public async Task ConfiguredBuiltInDefaultIsKept()
+    {
+        _themeConfig.DefaultThemeId = "meridian";
+
+        Assert.Equal("meridian", (await GetStoreAsync()).DefaultThemeId);
+    }
+
+    [Fact]
+    public async Task StoredCustomThemeDefaultIsKept()
+    {
+        var theme = CustomTheme();
+        (await _client.PutAsJsonAsync($"/_elsa/theme-store/themes/{theme.Id}", theme)).EnsureSuccessStatusCode();
+        (await _client.PutAsJsonAsync("/_elsa/theme-store/default", new { ThemeId = theme.Id })).EnsureSuccessStatusCode();
+
+        Assert.Equal(theme.Id, (await GetStoreAsync()).DefaultThemeId);
+    }
+
+    [Fact]
+    public async Task ConfiguredDirectoryThemeDefaultIsKept()
+    {
+        var theme = CustomTheme();
+        var themesFile = Path.Combine(_contentRoot, "themes.json");
+        await File.WriteAllTextAsync(themesFile, JsonSerializer.Serialize(new { themes = new[] { theme } }, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+        _themeConfig.ThemesDirectory = themesFile;
+        _themeConfig.DefaultThemeId = theme.Id;
+
+        Assert.Equal(theme.Id, (await GetStoreAsync()).DefaultThemeId);
+    }
+
+    private async Task<ThemeStoreResponse> GetStoreAsync() =>
+        (await _client.GetFromJsonAsync<ThemeStoreResponse>("/_elsa/theme-store"))!;
+
     private static StudioThemeDefinition CustomTheme() =>
         new("custom-appearance", "Custom Appearance", null, "custom", 1, true, true, new StudioThemeModes(Palette(), Palette()), null);
 
@@ -184,9 +237,8 @@ public sealed class ElsaThemeStoreApiTests : IAsyncLifetime
         builder.Services.AddStudioBridgeAuth(builder.Configuration);
         // The theme-management endpoints resolve ThemeConfigurationService per request; register it and its bound
         // ThemeConfiguration exactly as Program.cs does (no "Themes" section here, so it binds to defaults).
-        var themeConfig = new ThemeConfiguration();
-        builder.Configuration.GetSection("Themes").Bind(themeConfig);
-        builder.Services.AddSingleton(themeConfig);
+        builder.Configuration.GetSection("Themes").Bind(_themeConfig);
+        builder.Services.AddSingleton(_themeConfig);
         builder.Services.AddSingleton<ThemeConfigurationService>();
 
         _app = builder.Build();
