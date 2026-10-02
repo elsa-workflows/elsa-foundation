@@ -114,6 +114,10 @@ running="$(demo_host_pid "$name")"
 
 rsync -a --exclude '.nuplane/' --exclude 'feed/' --exclude 'shells.json' --exclude 'appsettings.Development.json' "$built/" "$host/"
 
+# The runbook starts a host as `run-host.sh ... | tee artifacts/demo/logs/NAME.log`, and tee opens its file as the line starts,
+# before this script runs. The --prepare-only call that precedes every start makes sure the folder is there by then.
+mkdir -p "$demo_logs"
+
 # The two files are written by a JSON encoder from the values above; the connection is in neither. NotesWithTags is listed from
 # the start: release 1.0.0 has no such feature, so the host says it is not available and runs the rest, and the feature
 # appears when release 1.1.0 is installed. The feature's connection is ConnectionStrings:Elsa, which the host reads from
@@ -130,7 +134,10 @@ shells = {"CShells": {"Shells": {"default": {
 }}}}
 
 appsettings = {
+    # The reconciliation logger writes a few lines per catalog read, several times a minute, and buried the host tabs; its
+    # warnings still show.
     "Logging": {"LogLevel": {"Default": "Information", "CShells": "Information", "Nuplane": "Information",
+                             "Nuplane.Observability.ReconciliationLogger": "Warning",
                              "Microsoft.AspNetCore": "Warning", "Microsoft.EntityFrameworkCore.Database.Command": "Warning"}},
     "Nuplane": {
         "Setup": {"Feeds": [
