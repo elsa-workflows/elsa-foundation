@@ -129,6 +129,7 @@ public sealed class ActivationScopeSemanticTests : IAsyncDisposable
             ["Done"],
             new ActivityActivationRequirement(typeof(ClrActivityDescriptor).FullName!, "constructor-injection"));
         return await _activator.ActivateAsync(new ActivityActivationRequest(
+            "workflow-execution-1",
             contract,
             new ActivityInputSnapshot(invocationId, contract.SchemaFingerprint, "bindings", new Dictionary<string, ValueEnvelope>(), DateTimeOffset.UnixEpoch),
             new ActivityAttempt(attemptId, invocationId, ordinal, reason, DateTimeOffset.UnixEpoch),

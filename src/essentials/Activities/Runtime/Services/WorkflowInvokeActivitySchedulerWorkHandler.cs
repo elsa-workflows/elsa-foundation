@@ -186,7 +186,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
             state = activationClaim.State;
             valueFlowAttempt = activationClaim.Attempt;
             activationLease = await serviceProvider.GetRequiredService<IActivityActivator>().ActivateAsync(
-                new ActivityActivationRequest(activityContract, valueFlowSnapshot, valueFlowAttempt, Descriptor: executableNode.Descriptor),
+                new ActivityActivationRequest(workItem.WorkflowExecutionId, activityContract, valueFlowSnapshot, valueFlowAttempt, Descriptor: executableNode.Descriptor),
                 cancellationToken);
             activity = activationLease.Activity;
 

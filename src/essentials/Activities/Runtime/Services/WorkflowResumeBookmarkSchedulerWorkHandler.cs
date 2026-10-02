@@ -242,7 +242,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             // as a blocking incident faults the activity and surfaces a queryable cause, distinct from
             // InputMaterializationFailed and the ActivityResumeFaulted resume-method failure below.
             activationLease = await serviceProvider.GetRequiredService<IActivityActivator>().ActivateAsync(
-                new ActivityActivationRequest(contract, executionState.InputSnapshot!, resumeAttempt, state.PrivateState, triggerDelivery, executableNode.Descriptor),
+                new ActivityActivationRequest(workItem.WorkflowExecutionId, contract, executionState.InputSnapshot!, resumeAttempt, state.PrivateState, triggerDelivery, executableNode.Descriptor),
                 cancellationToken);
             activity = activationLease.Activity;
 

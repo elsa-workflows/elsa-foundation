@@ -10,6 +10,7 @@ using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Resolvers;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
@@ -73,10 +74,68 @@ public sealed class ActivityFaultIncidentRecorderTests
         Assert.Equal("InputMaterializationFailed", state.Fault!.Code);
         Assert.Equal(typeof(InvalidOperationException).FullName, state.Fault.ExceptionType);
         Assert.Equal("boom", state.Fault.Message);
+        Assert.False(state.Fault.IsRetryable);
         var endedAttempt = Assert.Single(state.Attempts!);
         Assert.NotNull(endedAttempt.EndedAt);
         Assert.Equal(Elsa.Workflows.Runtime.Core.Models.ActivityTransitionKind.Fault, endedAttempt.TransitionKind);
         Assert.Equal(Assert.Single(state.IncidentIds), endedAttempt.IncidentId);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task CommitAsync_ReadsRetryabilityAndCodeFromAnyClassifiedException(bool isRetryable)
+    {
+        // A test-only exception type: the recorder reads the classification contract, never a concrete type (spec 188, T032).
+        await new ActivityFaultIncidentRecorder(TimeProvider.System).CommitAsync(NewRequest(new ClassifiedException("StoreUnavailable", isRetryable)));
+
+        var state = CapturedActivityState();
+        Assert.Equal(ActivityExecutionStatus.Faulted, state.Status);
+        Assert.Equal("InputMaterializationFailed", state.SubStatus);
+        Assert.Equal("StoreUnavailable", state.Fault!.Code);
+        Assert.Equal(isRetryable, state.Fault.IsRetryable);
+    }
+
+    [Fact]
+    public async Task CommitAsync_KeepsTheSubStatusAsTheCodeWhenTheClassificationNamesNone()
+    {
+        await new ActivityFaultIncidentRecorder(TimeProvider.System).CommitAsync(NewRequest(new ClassifiedException(failureCode: null, isRetryable: true)));
+
+        var fault = CapturedActivityState().Fault!;
+        Assert.Equal("InputMaterializationFailed", fault.Code);
+        Assert.True(fault.IsRetryable);
+    }
+
+    [Fact]
+    public async Task CommitAsync_RecordsASecretResolutionFailureWithItsReferenceCodeAndClassification()
+    {
+        await new ActivityFaultIncidentRecorder(TimeProvider.System).CommitAsync(
+            NewRequest(new RuntimeSecretResolutionException("payments.api-key", "StoreUnavailable", isRetryable: true)));
+
+        var state = CapturedActivityState();
+        Assert.Equal(ActivityExecutionStatus.Faulted, state.Status);
+        Assert.Equal("StoreUnavailable", state.Fault!.Code);
+        Assert.True(state.Fault.IsRetryable);
+        Assert.Equal(typeof(RuntimeSecretResolutionException).FullName, state.Fault.ExceptionType);
+        Assert.Equal("Secret 'payments.api-key' could not be resolved (StoreUnavailable).", state.Fault.Message);
+        Assert.Equal(state.Fault.Message, CapturedIncident().Message);
+    }
+
+    [Fact]
+    public async Task CommitAsync_ParksTheActivityWithAnActivationFailureIncidentWhenNoSecretResolverIsComposed()
+    {
+        // A host without a secret resolver is missing a module, which must not destroy executability (constitution
+        // §E2.6.1): the activity waits for the deployment to be corrected instead of faulting (spec 188, A06).
+        await new ActivityFaultIncidentRecorder(TimeProvider.System).CommitAsync(NewRequest(new RuntimeSecretResolverNotFoundException("token")));
+
+        var state = CapturedActivityState();
+        Assert.Equal(ActivityExecutionStatus.Waiting, state.Status);
+        Assert.Equal(ActivityActivationFailureHandler.IncidentFailureType, state.SubStatus);
+        Assert.Null(state.Fault);
+        var incident = CapturedIncident();
+        Assert.Equal(ActivityActivationFailureHandler.IncidentFailureType, incident.FailureType);
+        Assert.Equal(IncidentResolutionActionKinds.WaitForIntervention, incident.ResolutionOutcome!.ActionKind);
+        Assert.Equal(nameof(ActivityActivationFailureKind.MissingSecretResolver), incident.Metadata[ActivityActivationFailureHandler.FailureKindMetadataKey]);
     }
 
     [Fact]
@@ -254,6 +313,9 @@ public sealed class ActivityFaultIncidentRecorderTests
             IncidentMetadata: new Dictionary<string, string>());
     }
 
+    private ActivityExecutionState CapturedActivityState() =>
+        Assert.Single(Assert.IsType<RuntimeCheckpointCommit>(_store.Commit).StateChanges.ActivityExecutions).State;
+
     private IncidentState CapturedIncident()
     {
         var commit = Assert.IsType<RuntimeCheckpointCommit>(_store.Commit);
@@ -382,6 +444,14 @@ public sealed class ActivityFaultIncidentRecorderTests
             Commit = commit;
             return ValueTask.FromResult(new RuntimeCheckpointCommitStoreResult([]));
         }
+    }
+
+    private sealed class ClassifiedException(string? failureCode, bool isRetryable)
+        : Exception("classified failure"), IRuntimeFaultClassification
+    {
+        public bool IsRetryable { get; } = isRetryable;
+
+        public string? FailureCode { get; } = failureCode;
     }
 
     private sealed class ScrubbingFaultCapturePolicy : IRuntimeFaultCapturePolicy

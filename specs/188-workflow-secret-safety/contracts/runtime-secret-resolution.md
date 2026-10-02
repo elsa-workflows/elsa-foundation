@@ -1,6 +1,7 @@
 # Contract: runtime secret resolution
 
-Proposed shapes for FR-001 to FR-005. Decisions and alternatives are in [research R1 to R4](../research.md).
+Shapes for FR-001 to FR-005, as shipped in slice 3 (the bridge mapping and feature below are slice 4's). Decisions and
+alternatives are in [research R1 to R4](../research.md).
 
 ## Runtime-owned contract (`Elsa.Workflows.Runtime.Core`)
 
@@ -13,16 +14,22 @@ public interface IRuntimeSecretResolver
     ValueTask<RuntimeSecretResolution> ResolveAsync(RuntimeSecretResolutionRequest request, CancellationToken cancellationToken = default);
 }
 
-public sealed record RuntimeSecretReference(string Name, string? TypeName = null, string? Scope = null);
+public sealed record RuntimeSecretReference(string Name, string? TypeName = null, string? Scope = null);   // slice 2
 
 public sealed record RuntimeSecretResolutionRequest(string TenantId, RuntimeSecretReference Reference);
 
-public sealed record RuntimeSecretResolution
+// A class, not a record: a record's generated ToString would print the value.
+public sealed class RuntimeSecretResolution
 {
-    public bool Succeeded { get; init; }
-    public string? Value { get; init; }          // set only when Succeeded
-    public string? FailureCode { get; init; }    // set only when !Succeeded; a stable code name, never free text
-    public bool IsRetryable { get; init; }       // meaningful only when !Succeeded
+    public bool Succeeded { get; }
+    public string? Value { get; }          // set only when Succeeded
+    public string? FailureCode { get; }    // set only when !Succeeded
+    public bool IsRetryable { get; }       // meaningful only when !Succeeded
+
+    public static RuntimeSecretResolution Success(string value);
+    // Refuses a code that is not a code name (ASCII letters and digits, starting with a letter), so free text that
+    // could carry store detail never reaches a fault message.
+    public static RuntimeSecretResolution Failure(string failureCode, bool isRetryable);
 }
 
 /// Runtime-owned fault classification. The fault recorder reads retryability and code through it, never through a
@@ -35,6 +42,9 @@ public interface IRuntimeFaultClassification
 
 public sealed class RuntimeSecretResolutionException(string referenceName, string failureCode, bool isRetryable)
     : Exception($"Secret '{referenceName}' could not be resolved ({failureCode})."), IRuntimeFaultClassification;
+
+// The host composes no IRuntimeSecretResolver: an activation failure, not a fault.
+public sealed class RuntimeSecretResolverNotFoundException(string inputKey) : Exception;
 ```
 
 Rules:
@@ -69,11 +79,14 @@ member added later fails the test until someone classifies it.
 | Situation | Outcome |
 |---|---|
 | Snapshot has no withheld secret envelopes | Unchanged path, no resolver call, no instance read. |
+| Global or across-scope context | The partition accessor throws; resolver never called. |
 | Instance `TenantId` set and different from the partition | Throw `RuntimeSecretResolutionException(name, "TenantMismatch", false)`; resolver never called. |
+| Instance not found in the partition | Throw `InvalidOperationException`; resolver never called. |
 | Resolver composed, resolution succeeds | Convert with the envelope's plan; hydrate; register value with `IRuntimeSecretMask`; nothing written back. |
 | Resolution fails | Throw `RuntimeSecretResolutionException`; the handler's existing fault boundary records a fault whose `IsRetryable` and code come from `IRuntimeFaultClassification`, also when the exception is masked (the masking wrapper copies both). |
-| Conversion fails | Throw `RuntimeSecretResolutionException(name, "ConversionFailed", false)`. `TypeMismatch` is never used for this case; it means only that the stored secret's type differs from the reference's. A backstop: publish compiles only plans from text that cannot fail on a string (research R11), so this is reached only by an artifact that skipped publish. |
-| No `IRuntimeSecretResolver` composed | Throw the activation failure classified by `ActivityActivationFailureHandler` (new kind, recovery "compose `SecretsWorkflows`"); the activity waits with an incident and is not faulted (§E2.6.1). |
+| Conversion fails, or the envelope carries no plan | Throw `RuntimeSecretResolutionException(name, "ConversionFailed", false)`, without the conversion's exception (its message may describe the value). `TypeMismatch` is never used for this case; it means only that the stored secret's type differs from the reference's. A backstop: publish compiles only plans from text that cannot fail on a string (research R11), so this is reached only by an artifact that skipped publish. |
+| No `IRuntimeSecretResolver` composed | Throw `RuntimeSecretResolverNotFoundException`, which `ActivityActivationFailureHandler` classifies as kind `MissingSecretResolver`, capability `SecretResolver` (key `IRuntimeSecretResolver`), recovery `CorrectDeploymentAndResume`, so composing `SecretsWorkflows` repairs it; the activity waits with an `ArtifactActivationFailed` incident and is not faulted (§E2.6.1). A `VF-ACT-010` refusal of another input in the same snapshot is reported first, because composing a resolver would not repair it. |
+| Activation canceled | The resolver gets the activation's token; a failure it reports after cancellation is treated as the cancellation, never as a resolution failure. |
 | Withheld envelope of kind `PolicyRequiresEncryption` | Throw `VF-ACT-010`: the value was withheld and cannot be recovered. Never hydrate null. A backstop only: publish refuses literal and expression bindings on encryption-required inputs (`VF-ACT-011`). |
 
 Resolution happens only in the activator's hydration branch, which runs for strategies with

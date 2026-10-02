@@ -1,11 +1,13 @@
 using Elsa.Activities.Runtime.Core.Exceptions;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 
 namespace Elsa.Workflows.Runtime.Services.Incidents;
 
 /// <summary>
-/// Classifies unresolved stable Runtime consumers as deployment compatibility incidents. The result is
+/// Classifies a missing activation capability (an unresolved stable Runtime consumer, a durable-value storage driver
+/// or the runtime secret resolver) as a deployment compatibility incident. The result is
 /// intentionally separate from domain retry: installing the required feature/schema is the recovery action,
 /// and replaying ordinary activity failure policy cannot repair the deployment.
 /// </summary>
@@ -20,6 +22,9 @@ public sealed class ActivityActivationFailureHandler
     public const string CapabilityKindMetadataKey = "runtime.activation.capabilityKind";
     public const string StorageDriverKeyMetadataKey = "runtime.activation.storageDriverKey";
     public const string DeploymentCorrectionRecoveryAction = "CorrectDeploymentAndResume";
+
+    /// <summary>The capability key a missing secret resolver is reported under: the runtime contract it must provide.</summary>
+    public const string SecretResolverCapabilityKey = nameof(IRuntimeSecretResolver);
 
     public ActivityActivationFailure? Classify(
         Exception exception,
@@ -43,6 +48,26 @@ public sealed class ActivityActivationFailureHandler
                     [StorageDriverKeyMetadataKey] = storageDriverException.DriverKey,
                     [CapabilityKindMetadataKey] = RuntimeActivationCapabilityKind.DurableValueStorageDriver.ToString(),
                     [FailureKindMetadataKey] = ActivityActivationFailureKind.MissingStorageDriver.ToString()
+                });
+        }
+
+        // A host that cannot resolve secrets at all is missing a module (constitution §E2.6.1): composing a secret
+        // resolver repairs it, whereas faulting the activity would destroy an executable that is otherwise sound.
+        if (exception is RuntimeSecretResolverNotFoundException)
+        {
+            return new(
+                ActivityActivationFailureKind.MissingSecretResolver,
+                RuntimeActivationCapabilityKind.SecretResolver,
+                SecretResolverCapabilityKey,
+                schemaVersion: null,
+                artifactId,
+                executableNodeId,
+                new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    [RetryEligibleMetadataKey] = bool.FalseString.ToLowerInvariant(),
+                    [RecoveryActionMetadataKey] = DeploymentCorrectionRecoveryAction,
+                    [CapabilityKindMetadataKey] = RuntimeActivationCapabilityKind.SecretResolver.ToString(),
+                    [FailureKindMetadataKey] = ActivityActivationFailureKind.MissingSecretResolver.ToString()
                 });
         }
 

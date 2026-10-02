@@ -5,28 +5,43 @@ using Elsa.Activities.Runtime.Core.Abstractions;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Runtime.Services;
+using Elsa.Activities.Testing;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText.Services;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
+using Elsa.Workflows.Runtime.Services.Values;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Elsa.Activities.Runtime.Tests;
 
-public sealed class ClrActivityActivatorTests
+public sealed class ClrActivityActivatorTests : IAsyncDisposable
 {
+    private const string WorkflowExecutionId = "wfexec-1";
+    private const string Partition = "tenant-a";
+    private const string ReferenceName = SecretResolutionTestSupport.ReferenceName;
     private static readonly ValueTypeDescriptor StringType = new("String");
     private static readonly ValueTypeDescriptor Int32Type = new("Int32");
+
+    private readonly ServiceProvider _root = Services().BuildServiceProvider();
+
+    // Secret resolution: the instance runs under partition 'tenant-a' and records no tenant of its own.
+    private readonly FakeRuntimeSecretResolver _resolver = new();
+    private readonly ContextPartitionAccessor _partition = new(PersistenceAccessContext.Scoped(new PersistenceScope(Partition)));
+    private readonly SingleInstanceStateStore _instances = new(Instance(tenantId: null));
+    private readonly RecordingConversionExecutor _conversions = new();
+
+    public ClrActivityActivatorTests() => ScopedDependency.Reset();
+
+    public ValueTask DisposeAsync() => _root.DisposeAsync();
 
     [Fact]
     public async Task Each_attempt_gets_a_fresh_hydrated_activity_and_scoped_service()
     {
-        ScopedDependency.Reset();
-        await using var root = Services().BuildServiceProvider();
-        var (activator, contract) = Activator(root);
+        var (activator, contract) = Activator(_root);
 
         await using var first = await activator.ActivateAsync(Request(contract, "attempt-1", "hello"));
         await using var second = await activator.ActivateAsync(Request(contract, "attempt-2", "hello"));
@@ -46,9 +61,7 @@ public sealed class ClrActivityActivatorTests
     [Fact]
     public async Task Hydration_failure_disposes_the_attempt_scope()
     {
-        ScopedDependency.Reset();
-        await using var root = Services().BuildServiceProvider();
-        var (activator, contract) = Activator(root);
+        var (activator, contract) = Activator(_root);
         var snapshot = new ActivityInputSnapshot(
             "invocation-1",
             contract.SchemaFingerprint,
@@ -56,6 +69,7 @@ public sealed class ClrActivityActivatorTests
             new Dictionary<string, ValueEnvelope>(),
             DateTimeOffset.UtcNow);
         var request = new ActivityActivationRequest(
+            WorkflowExecutionId,
             contract,
             snapshot,
             new ActivityAttempt("attempt-1", "invocation-1", 1, ActivityAttemptReason.Initial, DateTimeOffset.UtcNow),
@@ -65,45 +79,276 @@ public sealed class ClrActivityActivatorTests
         Assert.Equal(1, ScopedDependency.DisposeCount);
     }
 
-    [Theory]
-    [InlineData(WithheldValueKind.SecretReference)]
-    [InlineData(WithheldValueKind.PolicyRequiresEncryption)]
-    public async Task A_withheld_input_is_refused_before_the_activity_is_created(WithheldValueKind kind)
+    [Fact]
+    public async Task A_value_withheld_because_its_policy_requires_encryption_is_refused_before_the_activity_is_created()
     {
-        // No secret resolution is composed here, so hydrating would have to invent a value. The activator refuses
-        // with the fixed code instead, before the strategy opens an attempt scope (spec 188, T008).
-        ScopedDependency.Reset();
-        await using var root = Services().BuildServiceProvider();
-        var (activator, contract) = Activator(root);
-        var withheld = kind == WithheldValueKind.SecretReference
-            ? WithheldValue.SecretReference(new RuntimeSecretReference("payments.api-key"), null)
-            : new WithheldValue(kind);
-
+        // Such a value cannot be recovered, so hydrating would have to invent one; a composed resolver changes nothing
+        // (spec 188, T008, T018).
         var exception = await Assert.ThrowsAsync<WithheldValueException>(() =>
-            activator.ActivateAsync(WithheldRequest(contract, withheld, RuntimeDescriptor(contract))).AsTask());
+            SecretActivator().ActivateAsync(WithheldRequest(new WithheldValue(WithheldValueKind.PolicyRequiresEncryption))).AsTask());
 
         Assert.Equal("VF-ACT-010: Activity input 'message' was withheld and is not resolved in this host.", exception.Message);
         Assert.Equal(0, ScopedDependency.DisposeCount);
+        Assert.Empty(_resolver.Requests);
+    }
+
+    [Fact]
+    public async Task A_secret_reference_in_a_host_without_a_resolver_is_refused_as_a_missing_capability()
+    {
+        // A missing resolver is a composition fault, which parks the activity, not a resolution failure (T031).
+        var activator = new ActivityActivator([ClrStrategy(_root)], new ActivityInputHydrator());
+
+        var exception = await Assert.ThrowsAsync<RuntimeSecretResolverNotFoundException>(() =>
+            activator.ActivateAsync(WithheldRequest(Withheld())).AsTask());
+
+        Assert.Equal("message", exception.InputKey);
+        Assert.Equal(0, ScopedDependency.DisposeCount);
+    }
+
+    [Fact]
+    public async Task An_unrecoverable_withheld_input_is_refused_before_a_missing_resolver_is_reported()
+    {
+        // Composing a resolver would not repair this activation, so it must fault rather than park.
+        var activator = new ActivityActivator([ClrStrategy(_root)], new ActivityInputHydrator());
+        var contract = Contract(typeof(TwoInputActivity), "first", "second");
+
+        var exception = await Assert.ThrowsAsync<WithheldValueException>(() => activator.ActivateAsync(Request(contract, new Dictionary<string, ValueEnvelope>
+        {
+            ["first"] = SecretResolutionTestSupport.Withheld(),
+            ["second"] = ValueEnvelope.Withheld(StringType, new WithheldValue(WithheldValueKind.PolicyRequiresEncryption), SecretBindingTestSupport.SecretPolicy)
+        })).AsTask());
+
+        Assert.Equal("VF-ACT-010: Activity input 'second' was withheld and is not resolved in this host.", exception.Message);
     }
 
     [Fact]
     public async Task A_withheld_input_is_refused_for_a_strategy_that_does_not_hydrate_inputs()
     {
         // A strategy that skips hydration (graph activation) never reads the input, so only the activator's own
-        // refusal stops a withheld value from passing silently (spec 188, T008).
-        await using var root = Services().BuildServiceProvider();
-        var (_, contract) = Activator(root);
+        // refusal stops a withheld value from passing silently, even with a resolver composed (spec 188, T008).
         var strategy = new NonHydratingStrategy();
-        var activator = new ActivityActivator([strategy], new ActivityInputHydrator());
-        var withheld = WithheldValue.SecretReference(new RuntimeSecretReference("payments.api-key"), null);
+        var activator = new ActivityActivator([strategy], new ActivityInputHydrator(), secretResolver: _resolver);
+        var contract = Contract(typeof(ServiceBearingActivity), "message");
 
         var exception = await Assert.ThrowsAsync<WithheldValueException>(() => activator.ActivateAsync(WithheldRequest(
+            Withheld(),
             contract,
-            withheld,
             new RuntimeActivityDescriptor(NonHydratingStrategy.Key, RuntimeActivityDescriptor.InitialSchemaVersion, contract.DescriptorPayload))).AsTask());
 
         Assert.Equal("VF-ACT-010: Activity input 'message' was withheld and is not resolved in this host.", exception.Message);
         Assert.Equal(0, strategy.Activations);
+        Assert.Empty(_resolver.Requests);
+    }
+
+    [Fact]
+    public async Task A_withheld_secret_is_resolved_for_the_partition_converted_with_its_plan_and_hydrated()
+    {
+        var request = WithheldRequest(Withheld());
+
+        await using var lease = await SecretActivator().ActivateAsync(request);
+
+        var resolution = Assert.Single(_resolver.Requests);
+        Assert.Equal(Partition, resolution.TenantId);
+        Assert.Equal(SecretResolutionTestSupport.Reference(), resolution.Reference);
+        var conversion = Assert.Single(_conversions.Conversions);
+        Assert.Same(SecretResolutionTestSupport.TextPlan, conversion.Plan);
+        Assert.Equal(ValuePresence.Present, conversion.Source.Presence);
+        Assert.Equal(FakeRuntimeSecretResolver.ValueOf(ReferenceName), conversion.Source.InlineValue!.Value.GetString());
+        Assert.Equal(FakeRuntimeSecretResolver.ValueOf(ReferenceName), Assert.IsType<ServiceBearingActivity>(lease.Activity).Message);
+    }
+
+    [Fact]
+    public async Task Activation_writes_nothing_back_to_the_request_snapshot()
+    {
+        var request = WithheldRequest(Withheld());
+
+        await using var lease = await SecretActivator().ActivateAsync(request);
+
+        Assert.Equal(FakeRuntimeSecretResolver.ValueOf(ReferenceName), Assert.IsType<ServiceBearingActivity>(lease.Activity).Message);
+        var envelope = Assert.Single(request.Inputs.Values).Value;
+        Assert.Equal(ValuePresence.Withheld, envelope.Presence);
+        Assert.Null(envelope.InlineValue);
+        Assert.DoesNotContain(FakeRuntimeSecretResolver.ValueOf(ReferenceName), JsonSerializer.Serialize(request.Inputs), StringComparison.Ordinal);
+    }
+
+    public static TheoryData<PersistenceAccessContext> ContextsWithoutOnePartition =>
+    [
+        PersistenceAccessContext.Global,
+        PersistenceAccessContext.PrivilegedAcrossScopes(new PersistenceAccessPurpose("maintenance"))
+    ];
+
+    [Theory]
+    [MemberData(nameof(ContextsWithoutOnePartition))]
+    public async Task A_context_without_one_partition_refuses_before_the_resolver_is_called(PersistenceAccessContext context)
+    {
+        _partition.Context = context;
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => SecretActivator().ActivateAsync(WithheldRequest(Withheld())).AsTask());
+
+        Assert.Empty(_resolver.Requests);
+        Assert.Equal(1, ScopedDependency.DisposeCount);
+    }
+
+    [Fact]
+    public async Task An_instance_whose_tenant_differs_from_the_partition_refuses_with_TenantMismatch_before_the_resolver_is_called()
+    {
+        _instances.Instance = Instance(tenantId: "tenant-b");
+
+        var exception = await Assert.ThrowsAsync<RuntimeSecretResolutionException>(() =>
+            SecretActivator().ActivateAsync(WithheldRequest(Withheld())).AsTask());
+
+        Assert.Equal(RuntimeSecretResolutionException.TenantMismatch, exception.FailureCode);
+        Assert.False(exception.IsRetryable);
+        Assert.Equal($"Secret '{ReferenceName}' could not be resolved (TenantMismatch).", exception.Message);
+        Assert.Empty(_resolver.Requests);
+        Assert.Equal(1, ScopedDependency.DisposeCount);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData(Partition)]
+    public async Task An_instance_without_a_differing_tenant_resolves_under_the_partition(string? instanceTenantId)
+    {
+        _instances.Instance = Instance(instanceTenantId);
+
+        await using var lease = await SecretActivator().ActivateAsync(WithheldRequest(Withheld()));
+
+        Assert.Equal(Partition, Assert.Single(_resolver.Requests).TenantId);
+        Assert.Equal(1, _instances.Reads);
+    }
+
+    [Fact]
+    public async Task An_instance_the_partition_cannot_read_refuses_before_the_resolver_is_called()
+    {
+        _instances.Instance = null;
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            SecretActivator().ActivateAsync(WithheldRequest(Withheld())).AsTask());
+
+        Assert.Contains($"Workflow execution '{WorkflowExecutionId}' is not found", exception.Message, StringComparison.Ordinal);
+        Assert.Empty(_resolver.Requests);
+    }
+
+    [Theory]
+    [InlineData(false, true, nameof(IWorkflowExecutionPartitionAccessor))]
+    [InlineData(true, false, nameof(IWorkflowExecutionStateStore))]
+    public async Task A_host_that_cannot_read_the_executing_tenant_refuses_before_the_resolver_is_called(
+        bool composePartitionAccessor,
+        bool composeStateStore,
+        string missingService)
+    {
+        var activator = new ActivityActivator(
+            [ClrStrategy(_root)],
+            new ActivityInputHydrator(),
+            secretResolver: _resolver,
+            partitionAccessor: composePartitionAccessor ? _partition : null,
+            workflowExecutionStateStore: composeStateStore ? _instances : null);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => activator.ActivateAsync(WithheldRequest(Withheld())).AsTask());
+
+        Assert.Contains(missingService, exception.Message, StringComparison.Ordinal);
+        Assert.Empty(_resolver.Requests);
+    }
+
+    [Fact]
+    public async Task A_snapshot_without_withheld_inputs_never_calls_the_resolver_or_reads_the_partition_or_the_instance()
+    {
+        await using var lease = await SecretActivator().ActivateAsync(Request(Contract(typeof(ServiceBearingActivity), "message"), "attempt-1", "hello"));
+
+        Assert.Equal("hello", Assert.IsType<ServiceBearingActivity>(lease.Activity).Message);
+        Assert.Empty(_resolver.Requests);
+        Assert.Equal(0, _partition.Reads);
+        Assert.Equal(0, _instances.Reads);
+    }
+
+    [Fact]
+    public async Task Two_secret_inputs_resolve_independently()
+    {
+        var contract = Contract(typeof(TwoInputActivity), "first", "second");
+
+        await using var lease = await SecretActivator().ActivateAsync(Request(contract, new Dictionary<string, ValueEnvelope>
+        {
+            ["first"] = SecretResolutionTestSupport.Withheld("payments.api-key"),
+            ["second"] = SecretResolutionTestSupport.Withheld("payments.webhook-key")
+        }));
+
+        var activity = Assert.IsType<TwoInputActivity>(lease.Activity);
+        Assert.Equal(FakeRuntimeSecretResolver.ValueOf("payments.api-key"), activity.First);
+        Assert.Equal(FakeRuntimeSecretResolver.ValueOf("payments.webhook-key"), activity.Second);
+        Assert.Equal(["payments.api-key", "payments.webhook-key"], _resolver.Requests.Select(request => request.Reference.Name));
+        Assert.Equal(1, _instances.Reads);
+    }
+
+    [Theory]
+    [InlineData("NotFound", false)]
+    [InlineData("Revoked", false)]
+    [InlineData("StoreUnavailable", true)]
+    public async Task A_failed_resolution_faults_with_the_reference_name_code_and_retryable_flag_and_no_value(string failureCode, bool isRetryable)
+    {
+        _resolver.Respond = (_, _) => RuntimeSecretResolution.Failure(failureCode, isRetryable);
+
+        var exception = await Assert.ThrowsAsync<RuntimeSecretResolutionException>(() =>
+            SecretActivator().ActivateAsync(WithheldRequest(Withheld())).AsTask());
+
+        Assert.Equal(ReferenceName, exception.ReferenceName);
+        Assert.Equal(failureCode, exception.FailureCode);
+        Assert.Equal(isRetryable, exception.IsRetryable);
+        Assert.Equal($"Secret '{ReferenceName}' could not be resolved ({failureCode}).", exception.Message);
+        Assert.Null(exception.InnerException);
+        Assert.Equal(1, ScopedDependency.DisposeCount);
+    }
+
+    [Fact]
+    public async Task A_conversion_failure_reports_ConversionFailed_and_drops_the_conversion_message()
+    {
+        // Publish pins no plan from text that can fail on a string, so only a double reaches this branch (T031).
+        const string conversionDetail = "rejected the resolved text";
+        _conversions.Failure = plan => new RuntimeValueConversionException(plan, conversionDetail);
+
+        var exception = await Assert.ThrowsAsync<RuntimeSecretResolutionException>(() =>
+            SecretActivator().ActivateAsync(WithheldRequest(Withheld())).AsTask());
+
+        Assert.Equal(RuntimeSecretResolutionException.ConversionFailed, exception.FailureCode);
+        Assert.False(exception.IsRetryable);
+        Assert.Equal($"Secret '{ReferenceName}' could not be resolved (ConversionFailed).", exception.Message);
+        Assert.Null(exception.InnerException);
+        Assert.Equal(1, ScopedDependency.DisposeCount);
+    }
+
+    [Fact]
+    public async Task A_secret_withheld_without_a_conversion_plan_reports_ConversionFailed()
+    {
+        var exception = await Assert.ThrowsAsync<RuntimeSecretResolutionException>(() =>
+            SecretActivator().ActivateAsync(WithheldRequest(WithheldValue.SecretReference(SecretResolutionTestSupport.Reference(), conversionPlan: null))).AsTask());
+
+        Assert.Equal(RuntimeSecretResolutionException.ConversionFailed, exception.FailureCode);
+        Assert.Empty(_conversions.Conversions);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task A_canceled_resolution_is_not_reported_as_a_resolution_failure(bool resolverThrows)
+    {
+        // Whether the resolver honors the token or answers with a failure once it is canceled, the activation reports
+        // the cancellation, which no handler records as a fault.
+        using var cancellation = new CancellationTokenSource();
+        var resolverToken = CancellationToken.None;
+        _resolver.Respond = (_, token) =>
+        {
+            resolverToken = token;
+            cancellation.Cancel();
+            if (resolverThrows)
+                token.ThrowIfCancellationRequested();
+            return RuntimeSecretResolution.Failure("StoreUnavailable", isRetryable: true);
+        };
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            SecretActivator().ActivateAsync(WithheldRequest(Withheld()), cancellation.Token).AsTask());
+
+        Assert.Single(_resolver.Requests);
+        Assert.True(resolverToken.IsCancellationRequested, "The resolver must receive the activation's cancellation token.");
+        Assert.Equal(1, ScopedDependency.DisposeCount);
     }
 
     [Fact]
@@ -128,7 +373,7 @@ public sealed class ClrActivityActivatorTests
     {
         var dependency = new ScopedDependency();
         var activity = new ServiceBearingActivity(dependency);
-        var (_, contract) = Activator(Services().BuildServiceProvider());
+        var contract = Contract(typeof(ServiceBearingActivity), "message");
         var snapshot = Snapshot(contract, "hello");
         var hydrator = new ActivityInputHydrator();
 
@@ -321,9 +566,8 @@ public sealed class ClrActivityActivatorTests
     [Fact]
     public async Task External_input_is_dereferenced_only_for_activation()
     {
-        await using var root = Services().BuildServiceProvider();
         var store = new FixedExternalPayloadStore("from-external-store");
-        var (activator, contract) = Activator(root, store);
+        var (activator, contract) = Activator(_root, store);
         var policy = new ValueProtectionPolicy(
             DurableValueLifecycle.Instance,
             DurableValueStorage.External,
@@ -345,6 +589,7 @@ public sealed class ClrActivityActivatorTests
             DateTimeOffset.UtcNow);
 
         await using var lease = await activator.ActivateAsync(new ActivityActivationRequest(
+            WorkflowExecutionId,
             contract,
             persistedSnapshot,
             new ActivityAttempt("attempt-1", "invocation-1", 1, ActivityAttemptReason.Initial, DateTimeOffset.UtcNow),
@@ -356,61 +601,92 @@ public sealed class ClrActivityActivatorTests
         Assert.Equal("payloads/message", Assert.Single(store.Reads).Locator);
     }
 
+    private static readonly JsonPayloadSerializer Serializer = new(new JsonPayloadConverterRegistry());
+
     private static IServiceCollection Services() =>
         new ServiceCollection().AddScoped<ScopedDependency>();
 
     private static (IActivityActivator Activator, ActivityContract Contract) Activator(
         IServiceProvider services,
-        IExternalPayloadStore? externalPayloadStore = null)
+        IExternalPayloadStore? externalPayloadStore = null) =>
+        (new ActivityActivator([ClrStrategy(services)], new ActivityInputHydrator(), externalPayloadStore),
+            Contract(typeof(ServiceBearingActivity), "message"));
+
+    private ActivityActivator SecretActivator() =>
+        new(
+            [ClrStrategy(_root)],
+            new ActivityInputHydrator(),
+            secretResolver: _resolver,
+            partitionAccessor: _partition,
+            workflowExecutionStateStore: _instances,
+            valueConversionExecutor: _conversions);
+
+    private static ClrActivityActivator ClrStrategy(IServiceProvider services)
     {
         var registry = new WellKnownTypeRegistry();
-        var alias = typeof(ServiceBearingActivity).FullName!;
-        registry.RegisterType(typeof(ServiceBearingActivity), alias);
-        var serializer = new JsonPayloadSerializer(new JsonPayloadConverterRegistry());
-        var descriptor = serializer.SerializeToElement(new ClrActivityDescriptor(alias));
-        var contract = new ActivityContract(
-            alias,
+        foreach (var activityType in new[] { typeof(ServiceBearingActivity), typeof(TwoInputActivity) })
+            registry.RegisterType(activityType, activityType.FullName!);
+        return new ClrActivityActivator(services.GetRequiredService<IServiceScopeFactory>(), registry, Serializer);
+    }
+
+    private static ActivityContract Contract(Type activityType, params string[] inputKeys) =>
+        new(
+            activityType.FullName!,
             "1.0.0",
             typeof(ClrActivityDescriptor).FullName!,
-            descriptor,
-            [new ActivityInputContract("message", "Message", StringType, true, false, false, null, ActivityValuePolicy.Default)],
+            Serializer.SerializeToElement(new ClrActivityDescriptor(activityType.FullName!)),
+            inputKeys.Select(key => new ActivityInputContract(key, key, StringType, true, false, false, null, ActivityValuePolicy.Default)),
             new ActivityResultContract(new ValueTypeDescriptor("Unit"), false, ActivityValuePolicy.Default, []),
             ["Done"],
             new ActivityActivationRequirement(typeof(ClrActivityDescriptor).FullName!, "constructor-injection"));
-        var strategy = new ClrActivityActivator(
-            services.GetRequiredService<IServiceScopeFactory>(),
-            registry,
-            serializer);
-        return (new ActivityActivator(
-            [strategy],
-            new ActivityInputHydrator(),
-            externalPayloadStore), contract);
-    }
 
     private static ActivityActivationRequest Request(ActivityContract contract, string attemptId, string message) =>
         new(
+            WorkflowExecutionId,
             contract,
             Snapshot(contract, message),
             new ActivityAttempt(attemptId, "invocation-1", attemptId == "attempt-1" ? 1 : 2, ActivityAttemptReason.Initial, DateTimeOffset.UtcNow),
             Descriptor: RuntimeDescriptor(contract));
 
-    private static ActivityActivationRequest WithheldRequest(
-        ActivityContract contract,
-        WithheldValue withheld,
-        RuntimeActivityDescriptor descriptor) =>
+    private static ActivityActivationRequest Request(ActivityContract contract, IReadOnlyDictionary<string, ValueEnvelope> values) =>
         new(
+            WorkflowExecutionId,
             contract,
-            new ActivityInputSnapshot(
-                "invocation-1",
-                contract.SchemaFingerprint,
-                "bindings",
-                new Dictionary<string, ValueEnvelope>
-                {
-                    ["message"] = ValueEnvelope.Withheld(StringType, withheld, ValueProtectionPolicy.InstanceInline)
-                },
-                DateTimeOffset.UtcNow),
+            new ActivityInputSnapshot("invocation-1", contract.SchemaFingerprint, "bindings", values, DateTimeOffset.UtcNow),
             new ActivityAttempt("attempt-1", "invocation-1", 1, ActivityAttemptReason.Initial, DateTimeOffset.UtcNow),
-            Descriptor: descriptor);
+            Descriptor: RuntimeDescriptor(contract));
+
+    /// <summary>A request whose single input, <c>message</c>, holds <paramref name="withheld"/>.</summary>
+    private static ActivityActivationRequest WithheldRequest(
+        WithheldValue withheld,
+        ActivityContract? contract = null,
+        RuntimeActivityDescriptor? descriptor = null)
+    {
+        contract ??= Contract(typeof(ServiceBearingActivity), "message");
+        var request = Request(contract, new Dictionary<string, ValueEnvelope>
+        {
+            ["message"] = ValueEnvelope.Withheld(StringType, withheld, SecretBindingTestSupport.SecretPolicy)
+        });
+        return descriptor is null ? request : request with { Descriptor = descriptor };
+    }
+
+    private static WithheldValue Withheld() =>
+        WithheldValue.SecretReference(SecretResolutionTestSupport.Reference(), SecretResolutionTestSupport.TextPlan);
+
+    private static WorkflowExecutionState Instance(string? tenantId) =>
+        new(
+            WorkflowExecutionId,
+            new WorkflowExecutableIdentity("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test"),
+            WorkflowExecutionStatus.Running,
+            null,
+            DateTimeOffset.UnixEpoch,
+            null,
+            null,
+            null,
+            null,
+            null,
+            tenantId,
+            new Dictionary<string, string>());
 
     private static RuntimeActivityDescriptor RuntimeDescriptor(ActivityContract contract) =>
         new(
@@ -431,6 +707,71 @@ public sealed class ClrActivityActivatorTests
                     ValueProtectionPolicy.InstanceInline)
             },
             DateTimeOffset.UtcNow);
+
+    /// <summary>
+    /// Mirrors the engine's partition accessor: the partition is the scope of the current persistence context, which a
+    /// global or across-scope context does not have.
+    /// </summary>
+    private sealed class ContextPartitionAccessor(PersistenceAccessContext context) : IWorkflowExecutionPartitionAccessor
+    {
+        public PersistenceAccessContext Context { get; set; } = context;
+
+        public int Reads { get; private set; }
+
+        public WorkflowExecutionPartition Current
+        {
+            get
+            {
+                Reads++;
+                return new(Context.RequireScope().Value);
+            }
+        }
+    }
+
+    /// <summary>Holds one workflow instance and counts its reads; nothing else is read or written.</summary>
+    private sealed class SingleInstanceStateStore(WorkflowExecutionState? instance) : IWorkflowExecutionStateStore
+    {
+        public WorkflowExecutionState? Instance { get; set; } = instance;
+
+        public int Reads { get; private set; }
+
+        public ValueTask<WorkflowExecutionState?> FindAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
+        {
+            Reads++;
+            return ValueTask.FromResult(Instance is { } state && state.WorkflowExecutionId == workflowExecutionId ? state : null);
+        }
+
+        public ValueTask<WorkflowExecutionState> SaveAsync(WorkflowExecutionState state, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public ValueTask<IReadOnlyCollection<WorkflowExecutionState>> ListAsync(CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public ValueTask<WorkflowExecutionStatePage> QueryPageAsync(WorkflowExecutionStatePageQuery query, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public ValueTask<IReadOnlyCollection<string>> ListPinnedExecutableArtifactIdsAsync(CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public ValueTask<bool> DeleteAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+    }
+
+    /// <summary>Records every conversion and delegates to the real executor, or throws the configured failure.</summary>
+    private sealed class RecordingConversionExecutor : IRuntimeValueConversionExecutor
+    {
+        private readonly RuntimeValueConversionExecutor _inner = new();
+
+        public List<(ValueEnvelope Source, ValueConversionPlan Plan)> Conversions { get; } = [];
+
+        public Func<ValueConversionPlan, Exception>? Failure { get; set; }
+
+        public ValueEnvelope Convert(ValueEnvelope source, ValueConversionPlan plan)
+        {
+            Conversions.Add((source, plan));
+            return Failure is null ? _inner.Convert(source, plan) : throw Failure(plan);
+        }
+    }
 
     private sealed class NonHydratingStrategy : IActivityActivationStrategy
     {
@@ -459,6 +800,18 @@ public sealed class ClrActivityActivatorTests
 
         [ActivityInput(Key = "message")]
         public string Message { get; set; } = null!;
+
+        protected override ValueTask<ActivityTransition<ActivityUnit>> ExecuteAsync(ActivityExecutionContext context) =>
+            ValueTask.FromResult(ActivityTransition.Complete(ActivityUnit.Value));
+    }
+
+    private sealed class TwoInputActivity : Activity
+    {
+        [ActivityInput(Key = "first")]
+        public string First { get; set; } = null!;
+
+        [ActivityInput(Key = "second")]
+        public string Second { get; set; } = null!;
 
         protected override ValueTask<ActivityTransition<ActivityUnit>> ExecuteAsync(ActivityExecutionContext context) =>
             ValueTask.FromResult(ActivityTransition.Complete(ActivityUnit.Value));

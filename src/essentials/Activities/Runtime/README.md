@@ -10,6 +10,18 @@ fresh activity in an owned DI scope and `ActivityInputHydrator` assigns its plai
 properties exactly once. The activity returns one closed `ActivityTransition<TResult>`; successful results
 are projected and committed atomically.
 
+A `Secret` binding never puts a value in that snapshot: the materializer records a withheld envelope holding the
+secret reference and its conversion plan from text. `ActivityActivator` resolves it each time it hydrates an activity
+(invoke, bookmark resume, structural parent evaluation, and the re-materialized activation after a child completes)
+through `IRuntimeSecretResolver`, for the partition the execution runs under, and refuses with `TenantMismatch`
+before reading anything when the instance records a different tenant. It converts the resolved text with the envelope's
+plan and hydrates the activity from a transient copy of the snapshot; nothing resolved is written back or kept. A
+failed resolution faults the activity with `RuntimeSecretResolutionException`, which names the reference and the
+failure code and carries no value; the fault records the code and whether it is retryable. A host that composes no
+resolver cannot resolve at all, so the activity waits with an activation-failure incident instead of faulting. A
+value withheld because its policy requires encryption cannot be recovered and is refused with `VF-ACT-010`, as is
+any withheld input of a strategy that does not hydrate inputs.
+
 `RegisterActivityTypesStartupTask` discovers CLR activity types plus their annotated input/result types and
 registers canonical aliases in `IWellKnownTypeRegistry`. `ActivitiesRuntimeFeature` also contributes the
 invoke, parent-completion, and resume scheduler handlers.

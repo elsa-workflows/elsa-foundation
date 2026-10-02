@@ -1,3 +1,6 @@
+using System.Text.Json;
+using Elsa.Activities.Testing;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Xunit;
 
@@ -51,5 +54,43 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
                 Assert.NotNull(attempt.EndedAt);
                 Assert.Equal(Elsa.Workflows.Runtime.Core.Models.ActivityTransitionKind.Complete, attempt.TransitionKind);
             });
+    }
+
+    /// <summary>
+    /// A secret-bound input is resolved at each activation and never restored from persisted state (spec 188, T019):
+    /// invoke delivers the value, the persisted snapshot keeps only the withheld reference, and a value changed while
+    /// the activity was suspended reaches it on resume.
+    /// </summary>
+    [Fact]
+    public async Task A_secret_input_resolves_on_invoke_and_again_on_resume_and_only_its_reference_is_persisted()
+    {
+        const string nodeId = "node-wait";
+        var resolver = new FakeRuntimeSecretResolver { Respond = (_, _) => RuntimeSecretResolution.Success("before-rotation") };
+        var recorder = new SecretValueRecorder();
+        await using var harness = SecretResolutionTestSupport.NewHarness(resolver, recorder, ["actexec-wait"]);
+
+        var suspended = (await harness.RunAsync(SecretResolutionTestSupport.NewWaitingExecutable(nodeId))).State(nodeId);
+
+        Assert.Equal(ActivityExecutionStatus.Suspended, suspended.Status);
+        Assert.Equal(["before-rotation"], recorder.Values);
+        SecretResolutionTestSupport.AssertSnapshotWithheld(suspended);
+
+        resolver.Respond = (_, _) => RuntimeSecretResolution.Success("after-rotation");
+        var resumed = (await harness.ResumeAsync(
+            WorkflowExecutionHarness.Identity,
+            bookmarkId: Assert.Single(suspended.BookmarkIds),
+            activityExecutionId: suspended.InvocationId,
+            executableNodeId: nodeId,
+            resumeTargetId: SecretResolutionTestSupport.WaitResumeTargetId(nodeId),
+            stimulusType: SecretWaitingActivity.StimulusType,
+            stimulusHash: SecretWaitingActivity.StimulusHash,
+            input: JsonSerializer.SerializeToElement(new WaitTrigger(true)))).AssertCompleted(nodeId);
+
+        Assert.Equal([(SecretValueRecorder.Execute, "before-rotation"), (SecretValueRecorder.Resume, "after-rotation")], recorder.Entries);
+        SecretResolutionTestSupport.AssertSnapshotWithheld(resumed);
+        await SecretResolutionTestSupport.AssertNotPersistedAsync(harness, recorder.Values);
+        // The instance records no tenant, so both activations resolve under the partition the execution runs under.
+        Assert.All(resolver.Requests, request => Assert.Equal(WorkflowExecutionPartition.DefaultValue, request.TenantId));
+        Assert.Equal(2, resolver.Requests.Count);
     }
 }

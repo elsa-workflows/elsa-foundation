@@ -45,6 +45,7 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Activities.Runtim
 - **Kind:** Replacement activation boundary.
 - **Signature:** `ActivateAsync(ActivityActivationRequest request, CancellationToken cancellationToken)` returns an async-disposable `ActivityActivationLease`.
 - **Usage:** creates one fresh activity and owned service scope per invocation attempt, then hydrates plain annotated inputs from the committed snapshot. The shipped CLR implementation is `ClrActivityActivator` in `Elsa.Activities.Primitives`.
+- **Secret-bound inputs:** `ActivityActivationRequest` carries the `WorkflowExecutionId` of the executing instance, and every caller sets it. For a strategy that hydrates inputs, `ActivityActivator` resolves each withheld secret reference through `IRuntimeSecretResolver` (`Elsa.Workflows.Runtime.Core`) for the execution's partition, after checking that the instance does not record a different tenant, converts it with the envelope's plan, and hydrates from a transient copy; the request's snapshot is never changed. See that contract's entry in the Workflows.Runtime catalog for the failure codes and the missing-resolver activation failure.
 
 ### `IRuntimeStructuralActivity` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Engine-only structural execution protocol.
