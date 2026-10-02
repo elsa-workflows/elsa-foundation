@@ -92,30 +92,28 @@ export function createStudioEndpointContext(
 
 function StudioSignInStatus({ failed = false, onRetry }: { failed?: boolean; onRetry?: () => void }) {
   return (
-    <div
-      className="studio-shell studio-auth-signing-in"
-      role={failed ? "alert" : "status"}
-      aria-live={failed ? "assertive" : "polite"}
-      aria-busy={failed ? undefined : "true"}
-    >
-      <div className={`studio-auth-card${failed ? " studio-auth-card--error" : ""}`}>
+    <main className="studio-shell studio-auth-signing-in">
+      <div
+        className={`studio-auth-card${failed ? " studio-auth-card--error" : ""}`}
+        role={failed ? "alert" : "status"}
+        aria-live={failed ? "assertive" : "polite"}
+        aria-busy={failed ? undefined : "true"}
+      >
         <span className="studio-auth-brand-mark" aria-hidden="true">
           <img src={elsaLogo} alt="" />
         </span>
-        <span className="studio-auth-copy">
-          <strong>{failed ? "Unable to sign in" : "Elsa Studio"}</strong>
-          <span>
-            {failed
-              ? "The authentication service may be unavailable. Check the backend, then try again."
-              : "Signing in…"}
-          </span>
-        </span>
+        <h1 className="studio-auth-title">{failed ? "Unable to sign in" : "Elsa Studio"}</h1>
+        <p className="studio-auth-copy">
+          {failed
+            ? "The authentication service may be unavailable. Check the backend, then try again."
+            : "Signing in…"}
+        </p>
         {failed ? (
           <button type="button" className="studio-auth-retry" onClick={onRetry}>Try again</button>
         ) : (
-          <span className="studio-auth-spinner" aria-hidden="true" />
+          <span className="studio-auth-progress" aria-hidden="true" />
         )}
       </div>
-    </div>
+    </main>
   );
 }
