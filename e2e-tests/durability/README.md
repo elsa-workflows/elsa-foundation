@@ -9,7 +9,7 @@ composes — the parts the in-process C# crash tests stub out (in-memory store +
 |--------|-------------------|
 | `Test-VariableSurvivesSuspend.ps1` | Set a workflow variable, suspend at an `Event`, resume — the post-wait node reads the SAME variable back. Proves the root variable frame (#972) is materialized from the persisted checkpoint across a suspension. No restart. |
 | `Test-RestartRecovery.ps1` | Set a variable, suspend, then stop and relaunch the **Workbench process owned by this test** against the same isolated SQLite DB. Assert the instance is still suspended with identical state and the pre-suspend node ran exactly once, then attempt to resume it to completion. A precise `KNOWN ISSUE #1761` branch records the current post-restart stimulus miss and runs the full completion assertion automatically once matching works. |
-| `_DurabilityCommon.ps1` | Shared mid-flow `Event` wait and ResumeOnly stimulus helpers. Its older server-lifecycle functions remain for other callers; `Test-RestartRecovery.ps1` does not use them. |
+| `_DurabilityCommon.ps1` | Shared mid-flow `Event` wait and ResumeOnly stimulus helpers. It has no server-lifecycle functions: the older ones stopped whatever listened on a port and were removed (#2329). The owned-server lifecycle lives in `../_ServerLifecycle.ps1`. |
 
 ## Server restart mechanics (important)
 
@@ -17,6 +17,9 @@ composes — the parts the in-process C# crash tests stub out (in-memory store +
 appsettings and `shells.json` into a fresh temporary content root, checks that the legacy fixture has no
 persistence-resource selection, and uses a free loopback port. The same temporary SQLite database is used
 before and after restart. It stops only the process it launched, even if another Workbench is listening elsewhere.
+`-BaseUrl` is the one place the server location is given (there is no `-Port`): pass it to choose the address
+the owned server listens on. If that port is held by another process, the script fails with the port and the
+pid in the message instead of stopping it.
 On success the temporary root is removed; on failure it is retained with server logs for diagnosis.
 
 Requirements / caveats:

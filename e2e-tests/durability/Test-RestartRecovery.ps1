@@ -14,6 +14,8 @@
     By default, the script starts its own already-built Workbench on a free loopback port and a fresh temporary content
     root. It copies the committed Development appsettings and shell configuration, then verifies no root, shell, or
     EF-feature persistence resource is selected. Relative SQLite files therefore stay in that temporary root.
+    -BaseUrl is the one place the server location is given: pass it to choose the address the owned server listens
+    on (the port must be free; a process this script did not start is never stopped).
     Pass -UseExternalServer with -RestartServer:$false to target a separately started server without taking
     ownership of its process. The isolated acceptance path always owns the process it restarts.
 #>
@@ -22,33 +24,14 @@ param(
     [string] $BaseUrl,
     [string] $Username = "admin",
     [string] $Password = "Password123!",
-    [int]    $Port     = 0,
     [switch] $UseExternalServer,
     [switch] $RestartServer = $true
 )
 . "$PSScriptRoot/_DurabilityCommon.ps1"
-
-$script:ServerProject = Join-Path (Resolve-Path "$PSScriptRoot/../..").Path "src/apps/Elsa.Workbench/Elsa.Workbench.csproj"
-$script:OwnedServerProcess = $null
-
-function Get-FreeLoopbackPort {
-    $listener = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, 0)
-    try {
-        $listener.Start()
-        return ([Net.IPEndPoint]$listener.LocalEndpoint).Port
-    } finally {
-        $listener.Stop()
-    }
-}
+. "$PSScriptRoot/../_ServerLifecycle.ps1"
 
 function New-LegacyDurabilityContentRoot {
-    $projectDirectory = Split-Path $script:ServerProject
-    $contentRoot = Join-Path ([IO.Path]::GetTempPath()) "elsa-durability-$([guid]::NewGuid().ToString('N'))"
-    New-Item -Path $contentRoot -ItemType Directory -Force | Out-Null
-    foreach ($fileName in @('appsettings.json', 'appsettings.Development.json', 'shells.json')) {
-        Copy-Item -LiteralPath (Join-Path $projectDirectory $fileName) -Destination $contentRoot
-    }
-    New-Item -Path (Join-Path $contentRoot 'packages') -ItemType Directory -Force | Out-Null
+    $contentRoot = New-ElsaContentRoot -Prefix 'elsa-durability'
 
     foreach ($fileName in @('appsettings.json', 'appsettings.Development.json')) {
         $path = Join-Path $contentRoot $fileName
@@ -95,88 +78,18 @@ function Assert-LegacyDatabasePlacement {
     Write-Host "  [server] legacy SQLite database is isolated at $databasePath"
 }
 
-function Start-OwnedDurabilityServer {
-    param([Parameter(Mandatory)][int] $ServerPort, [Parameter(Mandatory)][string] $ContentRoot, [int] $TimeoutSec = 90)
-
-    $dll = Join-Path (Split-Path $script:ServerProject) 'bin/Debug/net10.0/Elsa.Workbench.dll'
-    if (-not (Test-Path -LiteralPath $dll -PathType Leaf)) { throw "Server DLL not found at $dll; build Elsa.Workbench first." }
-
-    $previousUrls = $env:ASPNETCORE_URLS
-    $previousEnvironment = $env:ASPNETCORE_ENVIRONMENT
-    $configurationOverrides = @{}
-    foreach ($entry in [Environment]::GetEnvironmentVariables([EnvironmentVariableTarget]::Process).GetEnumerator()) {
-        if ($entry.Key -match '^(Elsa__Persistence__|CShells__Shells__.*__Persistence|ConnectionStrings__Elsa$)') {
-            $configurationOverrides[$entry.Key] = [string]$entry.Value
-        }
+# The legacy fixture must see the committed connection string only: no persistence override inherited from the
+# caller's shell may reach the owned server.
+function Get-LegacyFixtureEnvironment {
+    $environment = @{}
+    foreach ($name in [Environment]::GetEnvironmentVariables('Process').Keys) {
+        if ($name -match '^(Elsa__Persistence__|CShells__Shells__.*__Persistence)') { $environment[[string]$name] = $null }
     }
-    $address = "http://127.0.0.1:$ServerPort"
-    $env:ASPNETCORE_URLS = $address
-    $env:ASPNETCORE_ENVIRONMENT = 'Development'
-    try {
-        foreach ($name in $configurationOverrides.Keys) {
-            [Environment]::SetEnvironmentVariable($name, $null, 'Process')
-        }
-        $env:ConnectionStrings__Elsa = 'Data Source=elsa.db'
-        $script:OwnedServerProcess = Start-Process -FilePath 'dotnet' `
-            -ArgumentList @($dll, '--contentRoot', $ContentRoot) `
-            -WorkingDirectory $ContentRoot `
-            -RedirectStandardOutput (Join-Path $ContentRoot 'server.out.log') `
-            -RedirectStandardError (Join-Path $ContentRoot 'server.err.log') `
-            -PassThru
-    } finally {
-        foreach ($name in @([Environment]::GetEnvironmentVariables([EnvironmentVariableTarget]::Process).Keys)) {
-            if ($name -match '^(Elsa__Persistence__|CShells__Shells__.*__Persistence|ConnectionStrings__Elsa$)') {
-                [Environment]::SetEnvironmentVariable([string]$name, $null, 'Process')
-            }
-        }
-        foreach ($name in $configurationOverrides.Keys) {
-            [Environment]::SetEnvironmentVariable([string]$name, $configurationOverrides[$name], 'Process')
-        }
-        $env:ASPNETCORE_URLS = $previousUrls
-        $env:ASPNETCORE_ENVIRONMENT = $previousEnvironment
-    }
-
-    $deadline = (Get-Date).AddSeconds($TimeoutSec)
-    while ((Get-Date) -lt $deadline) {
-        if ($script:OwnedServerProcess.HasExited) {
-            throw "Owned Elsa.Workbench process exited during startup (logs: $ContentRoot/server.out.log and server.err.log)."
-        }
-        try {
-            $response = Invoke-WebRequest "$address/" -TimeoutSec 3 -SkipHttpErrorCheck
-            if ($response.StatusCode -ge 200 -and $response.StatusCode -lt 500) {
-                Write-Host "  [server] owned process $($script:OwnedServerProcess.Id) healthy on $ServerPort"
-                return
-            }
-        } catch {}
-        Start-Sleep -Seconds 1
-    }
-    throw "Owned Elsa.Workbench process did not become healthy on $ServerPort within ${TimeoutSec}s."
+    $environment['ConnectionStrings__Elsa'] = 'Data Source=elsa.db'
+    return $environment
 }
 
-function Stop-OwnedDurabilityServer {
-    param([int] $TimeoutSec = 20)
-
-    $process = $script:OwnedServerProcess
-    if (-not $process) { return }
-    if ($process.HasExited) { $script:OwnedServerProcess = $null; return }
-
-    Write-Host "  [server] stopping owned process $($process.Id)"
-    $process.Kill($true)
-    if (-not $process.WaitForExit($TimeoutSec * 1000)) {
-        throw "Owned Elsa.Workbench process $($process.Id) did not stop within ${TimeoutSec}s."
-    }
-    $script:OwnedServerProcess = $null
-    Start-Sleep -Milliseconds 800
-}
-
-if ($UseExternalServer) {
-    if ($RestartServer) { throw 'External-server mode cannot restart a process it does not own. Pass -RestartServer:$false.' }
-    if ($Port -le 0) { $Port = 5095 }
-    if ([string]::IsNullOrWhiteSpace($BaseUrl)) { $BaseUrl = "http://localhost:$Port" }
-} else {
-    if ($Port -le 0) { $Port = Get-FreeLoopbackPort }
-    $BaseUrl = "http://127.0.0.1:$Port"
-}
+$BaseUrl = Resolve-ElsaServerBaseUrl -BaseUrl $BaseUrl -UseExternalServer:$UseExternalServer -RestartServer:$RestartServer
 
 $ownedContentRoot = $null
 $ownsServer = -not $UseExternalServer
@@ -188,7 +101,7 @@ if ($ownsServer) {
 Write-Host "== Suspension durability ==  -> $BaseUrl  (restart=$RestartServer, external=$UseExternalServer)" -ForegroundColor Cyan
 try {
 if ($ownsServer) {
-    Start-OwnedDurabilityServer -ServerPort $Port -ContentRoot $ownedContentRoot
+    Start-OwnedElsaServer -BaseUrl $BaseUrl -ContentRoot $ownedContentRoot -Environment (Get-LegacyFixtureEnvironment)
 }
 
 $ctx = Connect-Elsa -BaseUrl $BaseUrl -Username $Username -Password $Password
@@ -219,10 +132,7 @@ if ($ownsServer) { Assert-LegacyDatabasePlacement -ContentRoot $ownedContentRoot
 # --- kill + relaunch the server ---
 if ($RestartServer) {
     Write-Host "`n--- restarting the server process ---" -ForegroundColor Cyan
-    if ($ownsServer) {
-        Stop-OwnedDurabilityServer
-        Start-OwnedDurabilityServer -ServerPort $Port -ContentRoot $ownedContentRoot
-    }
+    if ($ownsServer) { Restart-OwnedElsaServer }
     $ctx = Connect-Elsa -BaseUrl $BaseUrl -Username $Username -Password $Password   # fresh session after restart
     Write-Host "--- server back; re-authenticated ---`n" -ForegroundColor Cyan
 } else {
@@ -276,12 +186,5 @@ if ($completed -and $echoed -eq $token -and (Get-NodeRunCount -Instance $inst -N
     throw 'FAIL (resume) - suspended instance did not resume with its original variable and node count.'
 }
 } finally {
-    if ($ownsServer) {
-        try { Stop-OwnedDurabilityServer } catch { Write-Host "  [cleanup] failed to stop the owned server: $_" -ForegroundColor Yellow }
-        if ($success) {
-            Remove-Item -LiteralPath $ownedContentRoot -Recurse -Force
-        } else {
-            Write-Host "  [cleanup] retained isolated content root for diagnosis: $ownedContentRoot" -ForegroundColor Yellow
-        }
-    }
+    if ($ownsServer) { Remove-OwnedElsaServer -ContentRoot $ownedContentRoot -KeepContentRoot:(-not $success) }
 }

@@ -14,8 +14,9 @@ activation, which includes the reconcile pass and publish-on-reconcile); `GET /`
 Unlike other suites, this one needs a feature the stock `shells.json` does not enable (deliberately:
 `JsonWorkflowReconciliation` requires a `SourceId` and a path and fails registration on empty options).
 The suite composes it **via environment variables** — they layer above `shells.json`, and setting the
-section enables the feature — on a server process it manages itself (durability-suite lifecycle:
-the already-built `Elsa.Workbench.dll` is launched directly):
+section enables the feature. It does so on a server process the suite owns (`../_ServerLifecycle.ps1`:
+the already-built `Elsa.Workbench.dll` is launched directly from a temporary content root, on a free loopback
+port unless `-BaseUrl` names one):
 
 ```text
 CShells__Shells__default__Features__JsonWorkflowReconciliation__Options__SourceId
@@ -23,13 +24,14 @@ CShells__Shells__default__Features__JsonWorkflowReconciliation__Options__FolderP
 CShells__Shells__default__Features__JsonWorkflowReconciliation__Options__PublishOnReconcile
 ```
 
-No repo file is edited; cleanup restarts the server without the feature.
+No repo file is edited, and the variables are set for the owned server only, not left in your shell.
 
 ## Caveats
 
-- Manages the server process on port 5095 (stop/start, like `durability/`) — don't run it while
-  another suite is mid-flight.
-- Requires the standard from-source setup (build; the EF modules migrate on shell activation) per
-  [`../README.md`](../README.md).
-- Definition ids/names are timestamped per run; the imported definitions remain in the dev SQLite
-  catalog afterwards (reconciliation never deletes version rows).
+- The suite starts, restarts and stops its own server, and only that process. It never stops a server you
+  started, so it can run while yours is up. If you pass `-BaseUrl` and that port is held by another process,
+  the suite fails with the port and the pid in the message instead of stopping it (issue #2329).
+- Requires a built Workbench (`dotnet build src/apps/Elsa.Workbench/Elsa.Workbench.csproj`); the EF modules
+  migrate on shell activation. See [`../README.md`](../README.md).
+- Definition ids/names are timestamped per run. They land in the SQLite files of the temporary content root,
+  which is removed after a passing run and kept, with the server logs, after a failing one.

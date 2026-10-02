@@ -3,15 +3,14 @@
     Shared helpers for the file-based workflow deployment suite (spec 147).
 .DESCRIPTION
     Adds on top of _ElsaCommon.ps1: definition-file authoring (envelope array with a pinned
-    definitionId and a resolved actver_* id), and a server lifecycle that composes the
-    JsonWorkflowReconciliation feature via environment variables (env vars layer above shells.json,
-    so no repo file is edited). Lifecycle functions follow the durability suite's precedent:
-    the already-built Elsa.Workbench.dll is launched directly, not via `dotnet run`.
+    definitionId and a resolved actver_* id), and the environment that composes the
+    JsonWorkflowReconciliation feature on a server launch (env vars layer above shells.json,
+    so no repo file is edited). The server process itself is owned through ../_ServerLifecycle.ps1:
+    the suite starts its own Workbench and stops only that process.
 #>
 
 . "$PSScriptRoot/../_ElsaCommon.ps1"
-
-$script:ServerProject = (Resolve-Path "$PSScriptRoot/../../src/apps/Elsa.Workbench/Elsa.Workbench.csproj").Path
+. "$PSScriptRoot/../_ServerLifecycle.ps1"
 
 # --- definition-file authoring -------------------------------------------------
 
@@ -51,107 +50,19 @@ function Write-DefinitionFile {
     return $path
 }
 
-# --- server process lifecycle (durability-suite pattern + feature env vars) ----
+# --- feature composition ----------------------------------------------------------
 
-function Get-ServerPid { param([int] $Port = 5095)
-    if (Get-Command Get-NetTCPConnection -ErrorAction SilentlyContinue) {
-        return (Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1).OwningProcess
+# Environment for a server launch (env vars sit above shells.json in precedence; presence of the section
+# enables the feature). With -FolderPath the launch composes JsonWorkflowReconciliation; without it the
+# variables are removed for the child, so a value left in the caller's shell cannot compose it by accident.
+function Get-FileDeploymentEnvironment {
+    param([string] $SourceId, [string] $FolderPath)
+    $options = 'CShells__Shells__default__Features__JsonWorkflowReconciliation__Options__'
+    if (-not $FolderPath) {
+        return @{ "${options}SourceId" = $null; "${options}FolderPath" = $null; "${options}PublishOnReconcile" = $null }
     }
-    if (Get-Command lsof -ErrorAction SilentlyContinue) {
-        return (& lsof '-nP' "-iTCP:$Port" '-sTCP:LISTEN' '-t' 2>$null | Select-Object -First 1)
-    }
-    throw "Cannot identify the process listening on port ${Port}: neither Get-NetTCPConnection nor lsof is available."
-}
-
-function Stop-ElsaServer {
-    param([int] $Port = 5095, [int] $TimeoutSec = 20)
-    $serverPid = Get-ServerPid -Port $Port
-    if (-not $serverPid) { Write-Host "  [server] nothing listening on $Port"; return }
-    Write-Host "  [server] stopping pid $serverPid on port $Port ..."
-    Stop-Process -Id $serverPid -Force -ErrorAction SilentlyContinue
-    $deadline = (Get-Date).AddSeconds($TimeoutSec)
-    while ((Get-ServerPid -Port $Port) -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 300 }
-    Start-Sleep -Milliseconds 800   # let SQLite file handles release
-}
-
-# Environment variable names composing the feature (env vars sit above shells.json in precedence;
-# presence of the section enables the feature).
-$script:FeatureEnvVars = @(
-    'CShells__Shells__default__Features__JsonWorkflowReconciliation__Options__SourceId',
-    'CShells__Shells__default__Features__JsonWorkflowReconciliation__Options__FolderPath',
-    'CShells__Shells__default__Features__JsonWorkflowReconciliation__Options__PublishOnReconcile'
-)
-
-function Clear-FileDeploymentComposition {
-    foreach ($name in $script:FeatureEnvVars) { Remove-Item "Env:$name" -ErrorAction SilentlyContinue }
-}
-
-# Start the server with JsonWorkflowReconciliation composed via env vars. Pass -SourceId/-FolderPath;
-# omit -FolderPath (with -Plain) to start without the feature (cleanup restore).
-function Start-ElsaServer {
-    param(
-        [int] $Port = 5095,
-        [string] $SourceId,
-        [string] $FolderPath,
-        [switch] $Plain,
-        [int] $TimeoutSec = 90
-    )
-    $projDir = Split-Path $script:ServerProject
-    $dll = Join-Path $projDir "bin/Debug/net10.0/Elsa.Workbench.dll"
-    if (-not (Test-Path $dll)) { throw "Server DLL not found at $dll - build the server first (dotnet build)." }
-
-    Clear-FileDeploymentComposition
-    if (-not $Plain) {
-        $env:CShells__Shells__default__Features__JsonWorkflowReconciliation__Options__SourceId = $SourceId
-        $env:CShells__Shells__default__Features__JsonWorkflowReconciliation__Options__FolderPath = $FolderPath
-        $env:CShells__Shells__default__Features__JsonWorkflowReconciliation__Options__PublishOnReconcile = "true"
-        Write-Host "  [server] composing JsonWorkflowReconciliation (SourceId=$SourceId, FolderPath=$FolderPath, PublishOnReconcile=true)"
-    }
-
-    $tmp = [System.IO.Path]::GetTempPath()
-    $out = Join-Path $tmp "elsa-filedeploy-server.out.log"
-    $err = Join-Path $tmp "elsa-filedeploy-server.err.log"
-    $env:ASPNETCORE_URLS = "http://localhost:$Port"
-    $env:ASPNETCORE_ENVIRONMENT = "Development"
-    Write-Host "  [server] starting: dotnet <Elsa.Workbench.dll> (ASPNETCORE_URLS=$env:ASPNETCORE_URLS)"
-    $start = @{
-        FilePath = 'dotnet'
-        ArgumentList = $dll
-        WorkingDirectory = $projDir
-        RedirectStandardOutput = $out
-        RedirectStandardError = $err
-    }
-    if ($env:OS -eq 'Windows_NT') { $start.WindowStyle = 'Hidden' }
-    Start-Process @start | Out-Null
-    # Env vars are inherited by the child at spawn; clear them from this session immediately so a
-    # later plain start (or the developer's own shell use) is not silently composed.
-    Clear-FileDeploymentComposition
-
-    $deadline = (Get-Date).AddSeconds($TimeoutSec)
-    while ((Get-Date) -lt $deadline) {
-        try { if (Invoke-RestMethod "http://localhost:$Port/" -TimeoutSec 3) { return $true } } catch {}
-        Start-Sleep -Seconds 1
-    }
-    throw "Elsa.Workbench did not start listening on port $Port within ${TimeoutSec}s (logs: $out / $err)"
-}
-
-# The deployment gate (spec 147 readiness note): /health/ready turns 200 only after shell activation,
-# which includes the reconcile pass and (opt-in) publish-on-reconcile. '/' is NOT a gate.
-function Wait-ElsaReady {
-    param([string] $BaseUrl = "http://localhost:5095", [int] $TimeoutSec = 120)
-    $deadline = (Get-Date).AddSeconds($TimeoutSec)
-    $last = $null
-    while ((Get-Date) -lt $deadline) {
-        try {
-            $r = Invoke-WebRequest "$BaseUrl/health/ready" -TimeoutSec 5 -UseBasicParsing
-            if ($r.StatusCode -eq 200) { Write-Host "  [ready] /health/ready = 200"; return $true }
-            $last = $r.StatusCode
-        } catch {
-            $last = try { [int]$_.Exception.Response.StatusCode } catch { "unreachable" }
-        }
-        Start-Sleep -Seconds 1
-    }
-    throw "/health/ready did not turn 200 within ${TimeoutSec}s (last: $last) - a failed reconcile pass fails shell activation; check the server logs."
+    Write-Host "  [server] composing JsonWorkflowReconciliation (SourceId=$SourceId, FolderPath=$FolderPath, PublishOnReconcile=true)"
+    return @{ "${options}SourceId" = $SourceId; "${options}FolderPath" = $FolderPath; "${options}PublishOnReconcile" = 'true' }
 }
 
 # --- assertion tally ------------------------------------------------------------
