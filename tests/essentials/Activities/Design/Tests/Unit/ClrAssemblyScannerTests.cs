@@ -133,6 +133,59 @@ public sealed class ClrAssemblyScannerTests
             CatalogVersion(accepting, refusing, typeof(SecretRefusingFixtureActivity).Assembly).Hash);
     }
 
+    [Fact]
+    public void SensitivityDeclaration_IsRead_AndACredentialIsAlsoSensitive()
+    {
+        // Spec 188, T040: the flags reach the catalog only where declared; an undeclared input keeps both null, and a
+        // credential declared without IsSensitive is normalized to sensitive.
+        using var folder = TempAssemblyFolder.WithCopyOf(typeof(SensitivityFixtureActivity).Assembly);
+        var inputs = CreateScanner().Scan(folder.Path)
+            .Single(model => model.ActivityTypeKey == typeof(SensitivityFixtureActivity).FullName)
+            .Inputs.ToDictionary(input => input.ReferenceKey, StringComparer.Ordinal);
+
+        Assert.Equal((true, null), Flags(inputs[nameof(SensitivityFixtureActivity.Note)]));
+        Assert.Equal((true, true), Flags(inputs[nameof(SensitivityFixtureActivity.ApiKey)]));
+        Assert.Equal((null, null), Flags(inputs[nameof(SensitivityFixtureActivity.Label)]));
+        Assert.Equal((null, null), Flags(inputs[nameof(SensitivityFixtureActivity.Echoed)]));
+
+        static (bool? IsSensitive, bool? IsCredential) Flags(InputDefinition input) => (input.IsSensitive, input.IsCredential);
+    }
+
+    public static TheoryData<Type, string> UndeclaredCatalogHashes => new()
+    {
+        // Captured before the sensitivity flags existed (spec 188, slice 5): an activity that declares nothing must keep
+        // its catalog hash, or reconciling an existing catalog throws ActivityVersionHashMismatchException. Both values
+        // were re-derived independently on unmodified main at df02ece3c and matched.
+        { typeof(PlainFixtureActivity), "41ADAB509FABBD50A14009DB8FD9D1BCA14B7C4ED67E86725937D1C6B2ABC87E" },
+        { typeof(ComplexInputFixtureActivity), "2F39C96B99BCE02E81CDA3DF8FBB0CA9E8CA41A1809CD59C38E9B36DDF59A167" }
+    };
+
+    [Theory]
+    [MemberData(nameof(UndeclaredCatalogHashes))]
+    public void UndeclaredInputs_SerializeWithoutSensitivityMembers_AndKeepTheirCatalogHash(Type activityType, string expectedHash)
+    {
+        using var folder = TempAssemblyFolder.WithCopyOf(activityType.Assembly);
+        var model = CreateScanner().Scan(folder.Path).Single(candidate => candidate.ActivityTypeKey == activityType.FullName);
+
+        var json = JsonSerializer.Serialize(model.Inputs);
+        Assert.DoesNotContain(nameof(InputDefinition.IsSensitive), json, StringComparison.Ordinal);
+        Assert.DoesNotContain(nameof(InputDefinition.IsCredential), json, StringComparison.Ordinal);
+        Assert.Equal(expectedHash, CatalogVersion(model, model, activityType.Assembly).Hash);
+    }
+
+    [Theory]
+    [InlineData(typeof(CredentialWithDefaultFixtureActivity), "default value")]
+    [InlineData(typeof(CredentialOnCheckpointParticipantFixtureActivity), "checkpoint participant")]
+    [InlineData(typeof(CredentialRefusingSecretFixtureActivity), "[RefusesSecretBinding]")]
+    [InlineData(typeof(NonStringCredentialFixtureActivity), "'System.Int32' could never be bound")]
+    public void CredentialDeclaration_ThatCouldNeverBeBound_IsRefusedNamingTypeAndInput(Type activityType, string reason)
+    {
+        var exception = Assert.Throws<InvalidOperationException>(() => BuildModelReflectionOnly(activityType));
+
+        Assert.Contains($"'{activityType.FullName}.ApiKey'", exception.Message, StringComparison.Ordinal);
+        Assert.Contains(reason, exception.Message, StringComparison.Ordinal);
+    }
+
     /// <summary>
     /// Creates the catalog version reconciliation would store, taking its identity (type key, descriptor) from
     /// <paramref name="identity"/> and its scanned content (inputs, outputs, facets) from <paramref name="content"/>.
@@ -440,6 +493,29 @@ public sealed class ClrAssemblyScannerTests
         {
             Assert.Equal(expected[i].Label, options[i].GetProperty("label").GetString());
             Assert.Equal(expected[i].RawValue, options[i].GetProperty("value").GetRawText());
+        }
+    }
+
+    /// <summary>
+    /// Builds one fixture type's catalog model the way a scan does, through a reflection-only load of its assembly. The
+    /// invalid credential fixtures are abstract, which keeps them out of every scan of the fixture assembly.
+    /// </summary>
+    private static ActivityVersionReconciliationModel BuildModelReflectionOnly(Type activityType)
+    {
+        var scanner = CreateScanner();
+        var assemblyPath = activityType.Assembly.Location;
+        using var context = new MetadataLoadContext(new PathAssemblyResolver(InvokeBuildResolverPaths(scanner, [assemblyPath])));
+        var assembly = context.LoadFromAssemblyPath(assemblyPath);
+        var method = typeof(ClrAssemblyScanner).GetMethod("BuildModel", BindingFlags.NonPublic | BindingFlags.Instance)
+            ?? throw new MissingMethodException(nameof(ClrAssemblyScanner), "BuildModel");
+
+        try
+        {
+            return (ActivityVersionReconciliationModel)method.Invoke(scanner, [assembly.GetType(activityType.FullName!, throwOnError: true), assembly])!;
+        }
+        catch (TargetInvocationException exception) when (exception.InnerException is not null)
+        {
+            throw exception.InnerException;
         }
     }
 
