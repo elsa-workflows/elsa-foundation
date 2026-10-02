@@ -6,7 +6,7 @@ Input: [spec](spec.md), [plan](plan.md), [contract](contracts/worker-profile.md)
 
 - [X] T001 Refresh issue/PR/Project51/native dependency state; claim whole #2326; record current main/branch and ownership in `specs/191-worker-http-profile/research.md`.
 - [X] T002 Author/review specification, assumptions, contract, plan and checklist using official SpecKit flow in `specs/191-worker-http-profile/`.
-- [ ] T003 Verify shared CLI/PTY helper dependencies, candidate JSON/settings preservation, actual child source ownership and existing ignore/build slots in `tests/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/WorkerOidcHostFixture.cs`; record preflight in `specs/191-worker-http-profile/implementation-evidence.md`.
+- [X] T003 Verify shared CLI/PTY helper dependencies, candidate JSON/settings preservation, actual child source ownership and existing ignore/build slots in `tests/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/WorkerOidcHostFixture.cs`; record preflight in `specs/191-worker-http-profile/implementation-evidence.md`.
 
 ## Phase 2 — Published identity compatibility
 
