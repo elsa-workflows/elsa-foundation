@@ -218,6 +218,9 @@ and setup gotchas (fresh-DB-on-rebuild; opt-in `scheduling`/`DispatchWorkflow` f
    current `main` with a fresh DB, re-run, and reconcile before "fixing" either side. `KNOWN ISSUE #NNNN` trackers
    pass green by design and auto-flip to strict once the bug is fixed.
 3. On Windows use `powershell -NoProfile -ExecutionPolicy Bypass -File <script>` (no `pwsh`).
+4. An e2e script must never stop a process it did not start. Give the server location once, as `-BaseUrl`; a
+   script that restarts a server owns it through `e2e-tests/_ServerLifecycle.ps1` and fails, naming the port and
+   pid, when the port is held by anything else. See "Running these tests" in the README.
 
 ### Glossary lookup
 

@@ -38,18 +38,85 @@ same-target validation, wrong-target refusal, and a split-layout refusal before 
 `diagnostics/Test-OpenTelemetryApiMigration.ps1` remains the separate route/authentication/accepted-OTLP smoke
 against a running Workbench; its empty OTLP payloads do not prove persisted diagnostic data.
 
-`durability/Test-RestartRecovery.ps1` also owns its server by default. Build Workbench first; the script copies
-the committed legacy SQLite configuration to a temporary content root and restarts only its own process. Its
+The three scripts that restart a server also own it: `durability/Test-RestartRecovery.ps1`,
+`runtime-alterations/Test-AlterationReplayAndRestart.ps1` and `file-deployment/Test-FileBasedDeployment.ps1`.
+Build Workbench first; each script copies the committed configuration to a temporary content root, starts the
+built Workbench on a free loopback port, and restarts and stops only that process. They do not use the
+separately started server above. See "Running these tests" below for the rules.
+`Test-RestartRecovery.ps1` additionally checks that the copied configuration is the legacy SQLite one, and its
 post-restart resume currently takes a precise `KNOWN ISSUE #1761` tracker branch for the pre-existing defect;
 see [the issue](https://github.com/elsa-workflows/elsa-foundation/issues/1761) and [the durability suite](durability/README.md).
 
 ## Running these tests — READ THIS (agents included)
 
+> [!WARNING]
+> **No script here may stop a process it did not start.** Until
+> [#2329](https://github.com/elsa-workflows/elsa-foundation/issues/2329) the restart helpers force-killed whatever
+> listened on a port that defaulted to 5095 independently of `-BaseUrl`. On 2026-10-02 a run with
+> `-BaseUrl http://localhost:5295` killed a developer's own Workbench on 5095 that way. These rules keep it fixed:
+>
+> - **`-BaseUrl` is the only place a server location is given.** The port always derives from it. No script has
+>   a separate `-Port`, and nothing falls back to 5095 for a process it is about to stop.
+> - **A script that restarts a server owns that server.** The three restart-style scripts
+>   (`durability/Test-RestartRecovery.ps1`, `runtime-alterations/Test-AlterationReplayAndRestart.ps1`,
+>   `file-deployment/Test-FileBasedDeployment.ps1`) launch the already-built Workbench themselves, keep the
+>   process they launched, and stop only that process. The shared helper is `_ServerLifecycle.ps1`.
+> - **An occupied port is an error, never a takeover.** If the port is held by a process the script did not
+>   start, the script fails with the port and the pid in the message and leaves that process running. There is
+>   deliberately no `-TakeOverPort` switch: no journey needs to replace a running server, because the owned
+>   server runs from its own temporary content root with its own SQLite files. To reuse a port, stop your
+>   server yourself.
+> - **Every other script only sends HTTP requests** to `-BaseUrl` (default `http://localhost:5095`).
+> - **Do not add `Stop-Process`, `kill`, or a port lookup that feeds one, to a script.** Use
+>   `Start-OwnedElsaServer` / `Restart-OwnedElsaServer` / `Remove-OwnedElsaServer`. `Test-ServerLifecycleGuard.ps1`
+>   proves the refusal against a bystander listener and needs no server.
+
+Safe invocations:
+
+```powershell
+# An ordinary script against your own server, on any port. It only sends requests.
+pwsh ./e2e-tests/Test-WorkflowFlow.ps1 -BaseUrl http://localhost:5295
+
+# A restart-style script: no server arguments. It starts, restarts and stops its own Workbench on a free port.
+pwsh ./e2e-tests/runtime-alterations/Test-AlterationReplayAndRestart.ps1
+
+# The same, on a port you choose. The port must be free, otherwise the script fails and names the port and pid.
+pwsh ./e2e-tests/runtime-alterations/Test-AlterationReplayAndRestart.ps1 -BaseUrl http://127.0.0.1:5395
+
+# The weaker no-restart run against a server you started. External mode never stops a process.
+pwsh ./e2e-tests/runtime-alterations/Test-AlterationReplayAndRestart.ps1 -UseExternalServer -RestartServer:$false -BaseUrl http://localhost:5295
+```
+
+`Test-RestartRecovery.ps1` takes the same `-UseExternalServer -RestartServer:$false -BaseUrl <url>` form.
+`Test-FileBasedDeployment.ps1` always owns its server, because restarting with a mounted folder is the journey.
+
+**The whole suite against a server on a non-default port.** Start your server on that port, then pass the same
+`-BaseUrl` to every script that talks to an external server. The scripts that own their server, or need none,
+take no server argument and can run while yours is up:
+
+```powershell
+# Start the server on 5295 instead of the launch profile's 5095 (separate terminal):
+#   dotnet run --project src/apps/Elsa.Workbench/Elsa.Workbench.csproj --no-launch-profile -- --urls http://localhost:5295 --environment Development
+$base = 'http://localhost:5295'
+$selfHosted = 'Test-RestartRecovery.ps1', 'Test-AlterationReplayAndRestart.ps1', 'Test-FileBasedDeployment.ps1',
+              'Test-SharedPersistence.ps1', 'Test-SharedDiagnosticsPersistence.ps1', 'Test-ServerLifecycleGuard.ps1'
+$failed = @()
+Get-ChildItem ./e2e-tests -Recurse -Filter 'Test-*.ps1' | Sort-Object FullName | ForEach-Object {
+    if ($_.Name -in $selfHosted) { pwsh -NoProfile -File $_.FullName }
+    else { pwsh -NoProfile -File $_.FullName -BaseUrl $base }
+    if ($LASTEXITCODE -ne 0) { $failed += $_.Name }
+}
+if ($failed) { "FAILED: $($failed -join ', ')" } else { 'all scripts passed' }
+```
+
+Each script runs in its own process, so one failure does not end the loop. The two `Test-Shared*` journeys need
+Docker. On Windows replace `pwsh -NoProfile -File` with `powershell -NoProfile -ExecutionPolicy Bypass -File`.
+
 - **Windows runner:** use `powershell -NoProfile -ExecutionPolicy Bypass -File <script>`. This machine has **no
   `pwsh`**; the `.EXAMPLE` lines show `pwsh` only as cross-platform shorthand.
 - **Rebuild gotcha:** after rebuilding the server from newer source, **delete the SQLite DBs first**
-  (`elsa.db*`, `elsa-diagnostics.db*` under `src/apps/Elsa.Workbench/`; stop the server /
-  free port 5095 first), then start the server, which migrates the schema from empty. Old rows carry an older
+  (`elsa.db*`, `elsa-diagnostics.db*` under `src/apps/Elsa.Workbench/`; stop your own server
+  yourself first), then start the server, which migrates the schema from empty. Old rows carry an older
   schema version a newer build refuses to read, which surfaces as spurious `500`s on publish.
 - **Opt-in features:** `scheduling/` requires `ActivitiesScheduling` + `WorkflowsRuntimeScheduling` +
   `WorkflowsRuntimeRecurringTriggers` in `shells.json` (enabled by default since #1053); `DispatchWorkflow`/`bpmn`
@@ -120,11 +187,13 @@ The former `get-endpoints` and `write-endpoints` suites (GET / CRUD status-and-s
 | `logging/Test-DiagnosticsSettings.ps1` | read-only `GET runtime/workflows/diagnostics/settings` — the capture policy that governs what value snapshots are captured |
 | `diagnostics/Test-OpenTelemetryApiMigration.ps1` | live Workbench smoke: eight query/SSE plus three OTLP routes in the real shell, authorized query/SSE, and accepted OTLP 204 |
 | `runtime-alterations/Test-AlterationPlans.ps1` | bulk `CancelWorkflow`, root `ModifyVariable`, Sequence `ScheduleActivity` with visible child completion, `RescheduleActivity` with visible supersession, retained-identity `Migrate` smoke path; plus paging, cooperative cancellation, and redacted reads |
-| `runtime-alterations/Test-AlterationReplayAndRestart.ps1` | idempotency replay and restart-safe continuation from a durably captured first target page against the real SQLite server |
+| `runtime-alterations/Test-AlterationReplayAndRestart.ps1` | idempotency replay and restart-safe continuation from a durably captured first target page against a real SQLite server the script owns |
+| `Test-ServerLifecycleGuard.ps1` | no server needed: a restart-style launch refuses a port held by a bystander process, names the port and pid, and leaves the bystander running (#2329) |
 | `_ElsaCommon.ps1`           | shared helpers (dot-sourced): login, activity lookup, submit/publish/execute, structures, observability |
+| `_ServerLifecycle.ps1`      | owned-server lifecycle (dot-sourced by the restart-style scripts): port derived from the base URL, temporary content root, start / restart / stop of the one process the script launched |
 | `_WriteCommon.ps1`          | shared mutation harness (dot-sourced): `Invoke-Write` / `Assert-Write` / `Complete-WriteSuite` for status-and-shape assertions on writes |
 | `workflow-version-override/Test-WorkflowVersionOverride.ps1` | automatic/exact promotion preflight, exact SemVer promotion, immutable version read |
-| `file-deployment/Test-FileBasedDeployment.ps1` | file-based deployment at startup (spec 147): definitions folder composed via env vars (`JsonWorkflowReconciliation` + `PublishOnReconcile`), `/health/ready` gate, imported + published + executable, idempotent restart |
+| `file-deployment/Test-FileBasedDeployment.ps1` | file-based deployment at startup (spec 147) on a server the script owns: definitions folder composed via env vars (`JsonWorkflowReconciliation` + `PublishOnReconcile`), `/health/ready` gate, imported + published + executable, idempotent restart |
 
 **Events note:** Foundation has no classic `PublishEvent` activity. An `Event` activity is a start trigger;
 you publish an event by POSTing a stimulus `{ stimulusType:"Event", stimulusHash:"sha256:"+hex(SHA256(eventName)), mode:"StartOnly" }`

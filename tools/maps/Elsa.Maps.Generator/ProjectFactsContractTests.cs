@@ -1,4 +1,4 @@
-using System.Diagnostics;
+using static Elsa.Maps.Generator.ContractTestRepository;
 
 namespace Elsa.Maps.Generator;
 
@@ -189,33 +189,6 @@ public static class ProjectFactsContractTests
             string.Concat(CentralPins.Where(pin => changes.All(change => change.Id != pin.Id)).Concat(changes)
                 .Select(pin => $"<PackageVersion Include=\"{pin.Id}\" Version=\"{pin.Version}\" />")) +
             "</ItemGroup></Project>");
-
-    private static void WriteProject(string root, string relativeDirectory, string contents)
-    {
-        var directory = Path.Join(root, relativeDirectory);
-        Directory.CreateDirectory(directory);
-        var name = relativeDirectory[(relativeDirectory.LastIndexOf('/') + 1)..];
-        File.WriteAllText(Path.Join(directory, $"{name}.csproj"), contents);
-    }
-
-    private static void GitInit(string root)
-    {
-        RunGit(root, "init", "-q");
-        RunGit(root, "config", "user.email", "test@example.com");
-        RunGit(root, "config", "user.name", "Test");
-    }
-
-    private static void RunGit(string root, params string[] arguments)
-    {
-        var startInfo = new ProcessStartInfo("git") { WorkingDirectory = root, RedirectStandardOutput = true, RedirectStandardError = true };
-        foreach (var argument in arguments)
-            startInfo.ArgumentList.Add(argument);
-
-        using var process = Process.Start(startInfo) ?? throw new InvalidOperationException("Failed to start git.");
-        process.WaitForExit();
-        if (process.ExitCode != 0)
-            throw new InvalidOperationException($"git {string.Join(' ', arguments)} failed: {process.StandardError.ReadToEnd()}");
-    }
 
     private static void AssertPackable(IReadOnlyDictionary<string, ProjectFacts> facts, string project, bool expected, string message)
     {
