@@ -1,6 +1,6 @@
 # Validation guide: Worker OIDC bearer normalization
 
-This is a planned validation guide for the subsequent implementation. New tests named below are not present or executed by the specification leaf. [Contract](contracts/bearer-normalization.md) and [proof matrix](contracts/acceptance-proof-matrix.md) define expected outcomes.
+This guide covers the implemented fixed-context adapter and its existing-suite Worker actor. [Contract](contracts/bearer-normalization.md) and [proof matrix](contracts/acceptance-proof-matrix.md) define expected outcomes; [implementation evidence](implementation-evidence.md) and the linked delivery issue distinguish executed source-qualified proof from the original specification's planned checks.
 
 ## Prerequisites
 
@@ -46,4 +46,4 @@ dotnet run --project tools/maps/Elsa.Maps.Generator -- check
 
 Retained OpenIddict composition controls and Workbench host checks must be included when the final changed integration boundary affects them; inspect actual project locations/CI selection before reporting. Run relevant backend `e2e-tests/` against a rebuilt server with a fresh database if implementation changes runtime/stimulus behavior. This adapter should preserve those behaviors, and its new actor fixture still exercises their real HTTP path.
 
-For this docs-only authoring PR, run structural/cross-reference/diff review and generated-map freshness; CI supplies existing applicable gates. Do not invent new actor passes before code exists. Refresh maps only deliberately, explicitly stage all changed map files including manifest, and review generated findings. PR and resulting-main checks require exact source identity; a later retry does not establish a causal repair of existing incidents.
+For documentation-only changes, run structural/cross-reference/diff review and generated-map freshness; CI supplies existing applicable gates. Documentation edits do not create new actor evidence. Refresh maps only deliberately, explicitly stage all changed map files including manifest, and review generated findings. PR and resulting-main checks require exact source identity; a later retry does not establish a causal repair of existing incidents.
