@@ -956,7 +956,8 @@ public sealed class EfCandidateInspectionTests : IDisposable
         int expectedExitCode,
         bool explicitEnvironment)
     {
-        var featureId = $"SyntheticCandidateParticipant{moduleCount}";
+        // Public capability tests discover all loaded assemblies, so each persisted lane fixture needs its own ID.
+        var featureId = $"SyntheticCandidateParticipant{moduleCount}{(explicitEnvironment ? "Environment" : "File")}";
         var syntheticAssembly = SyntheticEfModules.BuildParticipantFeature(
             $"Elsa.Candidate.Participants.{Guid.NewGuid():N}", featureId, moduleCount);
         var candidate = CreateCandidate([featureId], BuildFiles([featureId], includeResourceConfiguration: false));
