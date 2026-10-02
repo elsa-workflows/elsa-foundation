@@ -218,9 +218,9 @@ public sealed class EfCandidateEnvironmentInspectionOperation
             var version = contractType?.GetField("Version", BindingFlags.Public | BindingFlags.Static);
             var method = hostType?.GetMethod("RunCandidateEnvironmentInspectionAsync",
                 BindingFlags.Public | BindingFlags.Static, [typeof(Stream), typeof(Stream), typeof(CancellationToken)]);
-            if (contractType is null || contractType.Assembly != persistenceAssembly ||
-                version?.DeclaringType != contractType || version?.IsLiteral != true ||
-                version?.FieldType != typeof(int) || version?.GetRawConstantValue() is not 1 ||
+            if (contractType is null || contractType.Assembly != persistenceAssembly || version is null ||
+                version.DeclaringType != contractType || !version.IsLiteral ||
+                version.FieldType != typeof(int) || version.GetRawConstantValue() is not 1 ||
                 method is not { IsPublic: true, IsStatic: true, IsGenericMethod: false, ContainsGenericParameters: false } ||
                 method.DeclaringType != hostType || method.ReturnType != typeof(Task<int>) ||
                 method.GetParameters() is not { Length: 3 } parameters ||

@@ -465,3 +465,23 @@ in the full existing Release architecture project (`runtime-2292-architecture-re
 log: `/tmp/runtime-2292-architecture-review-visibility.log`). These are actual local results for
 the visibility correction; older hosted success is not relabeled as proof of a new pushed head.
 T046 remains open pending final review, exact-head hosted checks and resulting-main evidence.
+
+The visibility correction was pushed as `e309d882497cf14741c34658790bcc9c1dbfc73b`. Root replied
+directly to the finding, resolved its thread and requested a new Copilot review. Maps and solution
+filters passed on that exact head. The superseded `83f83c3e9` CI run was cancelled by the PR
+concurrency policy after the new head started; it is not a passing final-head gate.
+
+The subsequently delivered GitHub code-quality review identified three overlapping constant-condition
+comments on capability version admission. Root made the null check explicit and then uses direct field
+members under short-circuit validation. Missing or malformed version metadata still refuses. The
+full existing Release migrations/host project returned **495 executed/passed, zero failed/skipped**
+(`runtime-2292-migrations-review-nullability.trx`; log:
+`/tmp/runtime-2292-migrations-review-nullability.log`).
+
+Root retained the seven style-only suggestions with individual explanations: distinct anonymous
+envelopes preserve old-lane property omission; successful capture construction transfers snapshot
+ownership; nested process teardown retains cleanup even when probing/disposal throws; and explicit
+parser/copy/capture loops keep early refusal, runtime-state exclusion and per-file admission visible.
+No detach wrapper, LINQ-only churn or additional test/project was introduced. PR #2296 remains the
+notification record for direct replies and final review/hosted evidence; no unreturned final review
+or main result is claimed.
