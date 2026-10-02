@@ -7,6 +7,7 @@ using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Publishing.Exceptions;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Tests.Fixtures;
 using Elsa.Workflows.Runtime.Services.Executables;
 using Elsa.Workflows.Runtime.Services.Triggers;
 using Microsoft.Extensions.DependencyInjection;
@@ -104,11 +105,7 @@ public sealed class PublicationSlotNotFoundEndpointTests : IAsyncLifetime
     [Fact]
     public async Task A_server_fault_whose_diagnostic_mentions_something_unavailable_stays_a_500()
     {
-        await using var host = await StartAsync(services =>
-        {
-            services.RemoveAll<IWorkflowActivationAuthority>();
-            services.AddSingleton<IWorkflowActivationAuthority>(new UnavailableDeactivationAuthority(new InMemoryWorkflowActivationAuthority()));
-        });
+        await using var host = await StartAsync(services => services.Decorate((_, inner) => new UnavailableDeactivationSwitch(inner)));
         var artifactId = await SaveExecutableAsync(host, ActiveDefinitionId);
         await SavePublicationAsync(host, ActiveDefinitionId, ActivePublicationId, artifactId, PublicationStatus.Active);
 
@@ -209,23 +206,11 @@ public sealed class PublicationSlotNotFoundEndpointTests : IAsyncLifetime
     /// Fails every deactivation the way an unreachable authority would. The coordinator folds the message into its
     /// diagnostic, and the unpublish handler folds that into its own failure message.
     /// </summary>
-    private sealed class UnavailableDeactivationAuthority(IWorkflowActivationAuthority inner) : IWorkflowActivationAuthority
+    private sealed class UnavailableDeactivationSwitch(IWorkflowActivationSwitch inner) : ForwardingActivationSwitch(inner)
     {
-        public ValueTask<WorkflowActivationSlot?> FindAsync(string workflowDefinitionId, string slotName, CancellationToken cancellationToken = default) =>
-            inner.FindAsync(workflowDefinitionId, slotName, cancellationToken);
-
-        public ValueTask<IReadOnlyCollection<WorkflowActivationSlot>> ListByDefinitionAsync(string workflowDefinitionId, CancellationToken cancellationToken = default) =>
-            inner.ListByDefinitionAsync(workflowDefinitionId, cancellationToken);
-
-        public ValueTask<WorkflowActivationTransition> TryActivateAsync(WorkflowActivationSlotRequest request, CancellationToken cancellationToken = default) =>
-            inner.TryActivateAsync(request, cancellationToken);
-
-        public ValueTask<WorkflowActivationTransition> TryDeactivateAsync(
-            string workflowDefinitionId,
-            string slotName,
-            WorkflowActivationSource source,
-            long expectedRevision,
-            DateTimeOffset updatedAt,
+        public override ValueTask<WorkflowActivationTransition> TryDeactivateAsync(
+            WorkflowDeactivationSlotRequest request,
+            IReadOnlyCollection<string> alsoServing,
             CancellationToken cancellationToken = default) =>
             throw new InvalidOperationException("The activation authority is unavailable, so the slot does not exist to it right now.");
     }

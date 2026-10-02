@@ -29,20 +29,36 @@ public sealed class InMemoryActivationProjectionStates
 
     /// <summary>
     /// Switches <paramref name="activationId"/> on and <paramref name="replacedActivationId"/> off, with the rules of the
-    /// projection stores' <c>ActivateAsync</c>. The candidate is checked first: once it serves and its replaced activation
-    /// does not, the switch is made and this returns <see langword="false"/>. A candidate that does not serve yet may not
-    /// replace an activation that no longer serves, which fences a late completion.
+    /// projection stores' <c>ActivateAsync</c> (<see cref="NeedsSwitch"/>).
     /// </summary>
     /// <returns><see langword="true"/> when the store must switch its rows.</returns>
     public bool Activate(string activationId, string? replacedActivationId, string projection)
+    {
+        if (!NeedsSwitch(activationId, replacedActivationId, projection))
+            return false;
+
+        _active.Add(activationId);
+        _replaced.Remove(activationId);
+        if (Distinct(activationId, replacedActivationId) && _active.Remove(replacedActivationId!))
+            _replaced.Add(replacedActivationId!);
+        return true;
+    }
+
+    /// <summary>
+    /// Whether the switch is still to be made, refusing one the projection stores refuse; changes nothing. The candidate is
+    /// checked first: once it serves and its replaced activation does not, the switch is made. A candidate that does not
+    /// serve yet may not replace an activation that no longer serves, and a candidate that serves beside its replaced
+    /// activation is refused too.
+    /// </summary>
+    /// <returns><see langword="true"/> when the switch is still to be made; <see langword="false"/> when it is made.</returns>
+    /// <exception cref="InvalidOperationException">The stores refuse the switch.</exception>
+    public bool NeedsSwitch(string activationId, string? replacedActivationId, string projection)
     {
         var candidate = Find(activationId);
         if (candidate == WorkflowActivationProjectionState.Missing)
             throw new InvalidOperationException($"Activation '{activationId}' has no prepared {projection} projection.");
 
-        var replaced = replacedActivationId is null || StringComparer.Ordinal.Equals(replacedActivationId, activationId)
-            ? (WorkflowActivationProjectionState?)null
-            : Find(replacedActivationId);
+        var replaced = Distinct(activationId, replacedActivationId) ? Find(replacedActivationId!) : (WorkflowActivationProjectionState?)null;
         if (candidate == WorkflowActivationProjectionState.Active)
         {
             if (replaced == WorkflowActivationProjectionState.Active)
@@ -52,11 +68,6 @@ public sealed class InMemoryActivationProjectionStates
 
         if (replaced is { } state && state != WorkflowActivationProjectionState.Active)
             throw new InvalidOperationException($"Activation '{activationId}' cannot replace a {projection} projection that is missing or no longer active.");
-
-        _active.Add(activationId);
-        _replaced.Remove(activationId);
-        if (replaced is not null && _active.Remove(replacedActivationId!))
-            _replaced.Add(replacedActivationId!);
         return true;
     }
 
@@ -72,4 +83,7 @@ public sealed class InMemoryActivationProjectionStates
         : _active.Contains(activationId) ? WorkflowActivationProjectionState.Active
         : _replaced.Contains(activationId) ? WorkflowActivationProjectionState.Replaced
         : WorkflowActivationProjectionState.Prepared;
+
+    private static bool Distinct(string activationId, string? replacedActivationId) =>
+        replacedActivationId is not null && !StringComparer.Ordinal.Equals(replacedActivationId, activationId);
 }

@@ -8,6 +8,22 @@ using Microsoft.EntityFrameworkCore.Storage;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 
+/// <summary>What staging a change to an activation projection in the caller's transaction did (#2230).</summary>
+internal enum ProjectionStaging
+{
+    /// <summary>The change is tracked, for the caller to save and commit.</summary>
+    Staged,
+
+    /// <summary>Nothing needed to change: the switch is made, or there is no projection to delete.</summary>
+    Unchanged,
+
+    /// <summary>A projection state moved while it was read; the caller rolls back and reads again.</summary>
+    Moved,
+
+    /// <summary>The projection serves, so a deletion that spares a serving projection left it alone.</summary>
+    Serves
+}
+
 internal static class EfRuntimeOperationalStoreSupport
 {
     /// <summary>

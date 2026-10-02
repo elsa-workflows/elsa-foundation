@@ -6,16 +6,14 @@ using Xunit;
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests;
 
 /// <summary>
-/// Runs <see cref="WorkflowActivationCrashRepairContract"/> on PostgreSQL, where completing an interrupted activation
-/// can race another node that moves the slot on (#2193), and where two completions of one slot can interleave inside a
-/// projection switch (#2265). Each scenario gets its own persistence scope.
+/// Runs <see cref="WorkflowActivationCrashRepairContract"/> on PostgreSQL, including the switches and discards that
+/// another writer interleaves inside their read committed transactions (#2230). Each scenario gets its own persistence
+/// scope.
 /// </summary>
 [Collection(RuntimeBookmarksPostgreSqlFixture.CollectionName)]
 public sealed class RuntimeWorkflowActivationCrashRepairPostgreSqlTests(RuntimeBookmarksPostgreSqlFixture fixture)
 {
     public static TheoryData<string> Scenarios => WorkflowActivationCrashRepairContract.Scenarios;
-
-    public static TheoryData<string> ConcurrentCompletionScenarios => WorkflowActivationCrashRepairContract.ConcurrentCompletionScenarios;
 
     public static TheoryData<string> ConcurrentSwitchScenarios => WorkflowActivationCrashRepairContract.ConcurrentSwitchScenarios;
 
@@ -32,14 +30,8 @@ public sealed class RuntimeWorkflowActivationCrashRepairPostgreSqlTests(RuntimeB
     }
 
     [SkippableTheory]
-    [MemberData(nameof(ConcurrentCompletionScenarios))]
-    public Task PostgreSql_concurrent_completions(string scenario) => RunConcurrentAsync(scenario);
-
-    [SkippableTheory]
     [MemberData(nameof(ConcurrentSwitchScenarios))]
-    public Task PostgreSql_concurrent_switches(string scenario) => RunConcurrentAsync(scenario);
-
-    private async Task RunConcurrentAsync(string scenario)
+    public async Task PostgreSql_concurrent_switches(string scenario)
     {
         Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? "The native provider is unavailable.");
         await using (var context = OpenContext())

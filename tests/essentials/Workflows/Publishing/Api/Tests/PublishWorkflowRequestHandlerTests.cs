@@ -1158,6 +1158,7 @@ public sealed class PublishWorkflowRequestHandlerTests
     private WorkflowActivationCoordinator Coordinator(IWorkflowTriggerBindingExtractor extractor) =>
         new(
             _activationAuthority,
+            new InMemoryWorkflowActivationSwitch(_activationAuthority, _referenceStore, TimeProvider.System, _bindingStore),
             _referenceStore,
             TestRootWriteLeases.Create(_store),
             TimeProvider.System,

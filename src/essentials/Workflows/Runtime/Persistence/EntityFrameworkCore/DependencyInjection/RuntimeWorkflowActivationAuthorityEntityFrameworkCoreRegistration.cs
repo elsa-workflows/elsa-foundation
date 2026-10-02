@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
 
 /// <summary>Registers the opt-in EF Core workflow activation-slot authority.</summary>
+/// <remarks>Serving through it takes the switch <see cref="RuntimeEntityFrameworkCoreRegistration.AddRuntimeEntityFrameworkCore"/> composes.</remarks>
 public static class RuntimeWorkflowActivationAuthorityEntityFrameworkCoreRegistration
 {
     public static IServiceCollection AddRuntimeWorkflowActivationAuthorityEntityFrameworkCore(this IServiceCollection services)

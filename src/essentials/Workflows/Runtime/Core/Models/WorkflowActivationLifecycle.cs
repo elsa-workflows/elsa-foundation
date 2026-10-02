@@ -29,9 +29,7 @@ public enum WorkflowActivationStep
     ProjectionPreparation,
     SlotTransition,
     ProjectionActivation,
-    TriggerObserverNotification,
-    PredecessorReferenceRetirement,
-    ProjectionRemoval
+    TriggerObserverNotification
 }
 
 /// <summary>Where one activation's serving projection stands in a projection store.</summary>

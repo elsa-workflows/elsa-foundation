@@ -135,6 +135,7 @@ internal sealed class WorkflowArtifactExportFixture
         var indexer = new WorkflowTriggerIndexer(extractor, TriggerBindings);
         var coordinator = new WorkflowActivationCoordinator(
             ActivationAuthority,
+            new InMemoryWorkflowActivationSwitch(ActivationAuthority, SourceReferences, TimeProvider.System, TriggerBindings),
             SourceReferences,
             new InProcessRootWriteLeaseManager(),
             TimeProvider.System,

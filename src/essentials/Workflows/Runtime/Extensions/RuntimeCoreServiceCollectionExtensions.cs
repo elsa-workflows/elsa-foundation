@@ -123,8 +123,7 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddSingleton<IWorkflowEngineTracer>(NullWorkflowEngineTracer.Instance);
 
         services.TryAddSingleton<IWorkflowExecutableStore, InMemoryWorkflowExecutableStore>();
-        services.TryAddSingleton<IWorkflowActivationAuthority, InMemoryWorkflowActivationAuthority>();
-        services.TryAddScoped<IWorkflowActivationCoordinator, WorkflowActivationCoordinator>();
+        services.AddWorkflowActivationDefaults();
         services.TryAddScoped<IWorkflowExecutableHasher, WorkflowExecutableHasher>();
         // Burst-scoped reconstructible cache (ADR 0031 item b, spec 111). The accessor is a singleton AsyncLocal (like
         // the live-drain/coalescing accessors); the router pushes a scope per drain gated by the kill switch. The reader
@@ -483,6 +482,22 @@ public static class RuntimeCoreServiceCollectionExtensions
         // TryAdd defaults above must not leave an unowned concrete implementation beside that backend.
         RuntimeActivityExecutionStoreBackend.Find(services)?.EnsureOwnsRegisteredContracts(services);
 
+        return services;
+    }
+
+    /// <summary>
+    /// The provider-neutral activation defaults: the in-memory slot authority, the in-memory switch that commits a slot
+    /// with its serving projections, and the coordinator; and the shell-start check that the switch composes with the
+    /// stores the shell registered (#2230). A durable provider that owns the slot and the projections replaces the
+    /// authority and the switch together. Idempotent.
+    /// </summary>
+    public static IServiceCollection AddWorkflowActivationDefaults(this IServiceCollection services)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        services.TryAddSingleton<IWorkflowActivationAuthority, InMemoryWorkflowActivationAuthority>();
+        services.TryAddScoped<IWorkflowActivationSwitch, InMemoryWorkflowActivationSwitch>();
+        services.TryAddScoped<IWorkflowActivationCoordinator, WorkflowActivationCoordinator>();
+        WorkflowActivationSwitchCompositionValidator.Register(services);
         return services;
     }
 

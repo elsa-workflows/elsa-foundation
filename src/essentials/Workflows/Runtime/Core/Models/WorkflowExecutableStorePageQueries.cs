@@ -37,14 +37,9 @@ public sealed record WorkflowExecutableSourceReferenceDefinitionVersionPageQuery
     public string DefinitionVersionId { get; }
 }
 
-/// <summary>
-/// One finite page of source references, optionally restricted to one reference scope, its live records, and one
-/// workflow definition.
-/// </summary>
+/// <summary>One finite page of source references, optionally restricted to one reference scope and its live records.</summary>
 public sealed record WorkflowExecutableSourceReferencePageQuery : RuntimeStorePageRequest
 {
-    private readonly string? _definitionId;
-
     public WorkflowExecutableSourceReferencePageQuery(
         WorkflowExecutableReferenceScope? scope = null,
         bool liveOnly = false,
@@ -64,21 +59,6 @@ public sealed record WorkflowExecutableSourceReferencePageQuery : RuntimeStorePa
     public WorkflowExecutableReferenceScope? Scope { get; }
     public bool LiveOnly { get; }
     public DateTimeOffset? Now { get; }
-
-    /// <summary>
-    /// Restricts the page to references minted for one workflow definition. The activation coordinator lists one
-    /// slot's activations through it (#2193).
-    /// </summary>
-    public string? DefinitionId
-    {
-        get => _definitionId;
-        init
-        {
-            if (value is not null)
-                ArgumentException.ThrowIfNullOrWhiteSpace(value);
-            _definitionId = value;
-        }
-    }
 }
 
 /// <summary>A finite candidate set used by one source-reference garbage-collection decision.</summary>
