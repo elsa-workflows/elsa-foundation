@@ -1,7 +1,7 @@
 namespace Elsa.Activities.Runtime.Core.Attributes;
 
 /// <summary>
-/// Declares design-time presentation metadata for an activity input property.
+/// Declares design-time presentation metadata, and the sensitivity of the value, for an activity input property.
 /// </summary>
 [AttributeUsage(AttributeTargets.Property, AllowMultiple = false, Inherited = true)]
 public sealed class ActivityInputAttribute : Attribute
@@ -43,4 +43,19 @@ public sealed class ActivityInputAttribute : Attribute
 
     /// <summary>Sibling inputs whose changes invalidate dynamically provided options.</summary>
     public string[]? OptionsProviderDependencies { get; init; }
+
+    /// <summary>
+    /// The input carries data that must not appear in logs, evidence or inspection output. Every binding of the input
+    /// is compiled as sensitive, and an authored binding that marks it not sensitive is refused with <c>VF-ACT-005</c>.
+    /// </summary>
+    public bool IsSensitive { get; init; }
+
+    /// <summary>
+    /// The input carries a credential: it accepts only a secret reference or no binding. Implies
+    /// <see cref="IsSensitive"/>, and every binding of the input requires encryption. CLR activity reconciliation refuses
+    /// the declaration on an input that could never be bound to a secret reference: one with a
+    /// <see cref="DefaultValue"/>, one whose type is not <see cref="string"/>, one the activity type names in
+    /// <see cref="RefusesSecretBindingAttribute"/>, and any input of a checkpoint participant.
+    /// </summary>
+    public bool IsCredential { get; init; }
 }

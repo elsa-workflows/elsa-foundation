@@ -19,12 +19,24 @@ public sealed class ActivityContractCompatibilityTests
         var constructor = Assert.Single(typeof(InputDefinition).GetConstructors());
         var parameters = constructor.GetParameters();
 
-        Assert.Equal(17, parameters.Length);
+        Assert.Equal(19, parameters.Length);
         var nullability = Assert.Single(parameters, parameter => parameter.Name == nameof(InputDefinition.IsNullable));
         Assert.Equal(typeof(bool), nullability.ParameterType);
         Assert.False(nullability.HasDefaultValue);
         Assert.Contains(typeof(InputDefinition).GetMethods(), method =>
-            method.Name == "Deconstruct" && method.GetParameters().Length == 17);
+            method.Name == "Deconstruct" && method.GetParameters().Length == 19);
+
+        // The sensitivity declaration (spec 188) is optional and null when absent, so an undeclared input keeps its hash.
+        var declaration = parameters
+            .Where(parameter => parameter.Name is nameof(InputDefinition.IsSensitive) or nameof(InputDefinition.IsCredential))
+            .ToArray();
+        Assert.Equal(2, declaration.Length);
+        Assert.All(declaration, parameter =>
+        {
+            Assert.Equal(typeof(bool?), parameter.ParameterType);
+            Assert.True(parameter.HasDefaultValue);
+            Assert.Null(parameter.DefaultValue);
+        });
     }
 
     [Fact]

@@ -14,7 +14,9 @@ lifecycle anchored at `Elsa.Activities.Design.Reconciliation`; it owns no catalo
   returns the concatenated `ActivityVersionReconciliationModel[]`. Each model's `Descriptor` is left as
   raw `JsonElement` paired with explicit provider and consumer key/schema identities. Reconciliation
   persists those values opaquely and never resolves a CLR descriptor type. Ordering lets an author stage dependencies
-  (e.g. plain activities first, workflow-backed activities that reference them second).
+  (e.g. plain activities first, workflow-backed activities that reference them second). An entry whose input declares
+  `isCredential` is refused with `InvalidActivityCatalogJsonException` after the reader returns, so a replacement
+  `IJsonActivityCatalogReader` cannot let one through (spec 188, research R5).
 - **Register:** `services.AddScoped<IActivityReconciliationSource, JsonActivityReconciliationSource>()`
   (done by `JsonActivityReconciliationFeature`).
 - **Consumed by:** `CollectActivityVersions` in `Elsa.Activities.Design.Reconciliation`,

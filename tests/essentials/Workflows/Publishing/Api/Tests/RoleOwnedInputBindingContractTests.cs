@@ -364,7 +364,7 @@ public sealed class RoleOwnedInputBindingContractTests
     }
 
     [Fact]
-    public void CompileOmitted_NonNullableValueType_PinsClrDefault()
+    public void CompileAll_UnboundOptionalNonNullableValueType_PinsClrDefault()
     {
         // Issue #925: an omitted optional input whose non-nullable CLR type has a natural default is pinned to it
         // (bool → false) instead of raising VF-ACT-003, so a UI that authors no value can still publish.
@@ -379,7 +379,7 @@ public sealed class RoleOwnedInputBindingContractTests
             IsNullable: false,
             IsRequired: false);
 
-        var binding = compiler.CompileOmitted(input);
+        var binding = compiler.CompileAll("node-omitted", [input], [])[input.ReferenceKey];
 
         Assert.Equal(RuntimeInputBindingSource.Literal, binding.Source);
         Assert.Equal(ValuePresence.Present, binding.Literal!.Presence);
@@ -387,7 +387,7 @@ public sealed class RoleOwnedInputBindingContractTests
     }
 
     [Fact]
-    public void CompileOmitted_NonNullableReferenceType_StillRaisesVfAct003()
+    public void CompileAll_UnboundOptionalNonNullableReferenceType_StillRaisesVfAct003()
     {
         // A non-nullable reference type has no fabricable non-null default, so omission remains a hard contract error.
         var compiler = new RuntimeInputBindingCompiler(TestWellKnownTypeRegistry.Create());
@@ -401,7 +401,7 @@ public sealed class RoleOwnedInputBindingContractTests
             IsNullable: false,
             IsRequired: false);
 
-        var exception = Assert.Throws<ArgumentException>(() => compiler.CompileOmitted(input));
+        var exception = Assert.Throws<ArgumentException>(() => compiler.CompileAll("node-omitted", [input], []));
         Assert.Contains("VF-ACT-003", exception.Message);
     }
 

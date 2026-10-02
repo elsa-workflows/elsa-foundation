@@ -1,8 +1,11 @@
 using Elsa.Activities.Design.Api;
 using Elsa.Activities.Design.Api.Authorization;
+using Elsa.Activities.Design.Api.Contracts;
 using Elsa.Activities.Design.Api.Models;
 using Elsa.Activities.Design.Api.Requests;
 using Elsa.Activities.Design.Core.Models;
+using Elsa.Activities.Design.Persistence.Core.Entities;
+using Elsa.Primitives.Models;
 using Elsa.Api.AspNetCore;
 using Elsa.Foundation.Identity.Authorization;
 using Elsa.Foundation.Identity.Core.Authorization;
@@ -13,6 +16,8 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using System.Reflection;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using Xunit;
 
 namespace Elsa.Activities.Design.Api.Tests;
@@ -21,6 +26,7 @@ namespace Elsa.Activities.Design.Api.Tests;
 public sealed class ActivityAuthoringCatalogTests
 {
     private const string CatalogRoute = "/design/activities/catalog";
+    private const string DeclaredActivityTypeKey = "Acme.Activities.CallService";
 
     [Fact]
     public void Activity_design_owns_one_secured_canonical_authoring_catalog()
@@ -78,17 +84,60 @@ public sealed class ActivityAuthoringCatalogTests
         AssertProperties(provenance, "SourceKind", "SourceId", "FeatureId");
 
         var inputDescriptor = CollectionElementType(descriptor.GetProperty("Inputs")!.PropertyType);
-        AssertProperties(inputDescriptor, "ReferenceKey", "Name", "Type", "CollectionKind", "IsNullable");
+        AssertProperties(inputDescriptor, "ReferenceKey", "Name", "Type", "CollectionKind", "IsNullable", "IsSensitive", "IsCredential");
         Assert.Equal(typeof(bool), inputDescriptor.GetProperty("IsNullable")!.PropertyType);
+        Assert.Equal(typeof(bool), inputDescriptor.GetProperty("IsSensitive")!.PropertyType);
+        Assert.Equal(typeof(bool), inputDescriptor.GetProperty("IsCredential")!.PropertyType);
         var inputConstructor = inputDescriptor.GetConstructors().Single();
-        Assert.Equal(15, inputConstructor.GetParameters().Length);
+        Assert.Equal(17, inputConstructor.GetParameters().Length);
         var nullability = Assert.Single(inputConstructor.GetParameters(), parameter =>
             StringComparer.OrdinalIgnoreCase.Equals(parameter.Name, "IsNullable"));
         Assert.False(nullability.HasDefaultValue);
         Assert.Contains(inputDescriptor.GetMethods(), method =>
-            method.Name == "Deconstruct" && method.GetParameters().Length == 15);
+            method.Name == "Deconstruct" && method.GetParameters().Length == 17);
         var portDescriptor = CollectionElementType(descriptor.GetProperty("Ports")!.PropertyType);
         AssertProperties(portDescriptor, "Name", "ReferenceKey", "Type", "IsBrowsable");
+    }
+
+    [Fact]
+    public async Task Input_sensitivity_is_always_on_the_wire_and_false_where_nothing_is_declared()
+    {
+        // Spec 188, T041: Studio reads the declaration from the catalog. Both flags are written for every input, false
+        // for an undeclared input and for every engine-intrinsic input; a credential input is sensitive too.
+        var definition = new ActivityDefinition { Id = "def-declared", ActivityTypeKey = DeclaredActivityTypeKey, Category = "Acme", DisplayName = "Call Service" };
+        var version = new ActivityDefinitionVersion("1.0.0", definition.Id)
+        {
+            Id = "ver-declared",
+            ConsumerKey = "elsa.clr-activity",
+            Inputs =
+            [
+                Input("note") with { IsSensitive = true },
+                Input("apiKey") with { IsSensitive = true, IsCredential = true },
+                Input("token") with { IsCredential = true },
+                Input("label")
+            ]
+        };
+
+        var view = await CatalogReaderFixture.ListAsync([definition], [version], new NoFeatureAttribution());
+        var activities = JsonNode.Parse(JsonSerializer.Serialize(view, ActivitiesDesignWire.Context.GetTypeInfo(typeof(ActivityAuthoringCatalogView))!))!["activities"]!.AsArray();
+
+        var declared = activities.Single(activity => (string?)activity!["activityTypeKey"] == DeclaredActivityTypeKey)!["inputs"]!.AsArray()
+            .ToDictionary(input => (string)input!["referenceKey"]!, input => Flags(input!), StringComparer.Ordinal);
+        Assert.Equal((true, false), declared["note"]);
+        Assert.Equal((true, true), declared["apiKey"]);
+        Assert.Equal((true, true), declared["token"]);
+        Assert.Equal((false, false), declared["label"]);
+
+        var intrinsicInputs = activities.Where(activity => activity!["intrinsic"] is not null).SelectMany(activity => activity!["inputs"]!.AsArray()).ToArray();
+        Assert.NotEmpty(intrinsicInputs);
+        Assert.All(intrinsicInputs, input => Assert.Equal((false, false), Flags(input!)));
+
+        static (bool IsSensitive, bool IsCredential) Flags(JsonNode input) =>
+            (Assert.IsAssignableFrom<JsonValue>(input["isSensitive"]).GetValue<bool>(),
+                Assert.IsAssignableFrom<JsonValue>(input["isCredential"]).GetValue<bool>());
+
+        static InputDefinition Input(string referenceKey) =>
+            new(referenceKey, referenceKey, new TypeReference("String"), null, referenceKey, null, IsNullable: true);
     }
 
     [Fact]
@@ -155,5 +204,11 @@ public sealed class ActivityAuthoringCatalogTests
 
     private static void AssertProperties(Type type, params string[] names) =>
         Assert.All(names, name => Assert.NotNull(type.GetProperty(name, BindingFlags.Public | BindingFlags.Instance)));
+
+    private sealed class NoFeatureAttribution : IActivityFeatureAttributionResolver
+    {
+        public ValueTask<string?> ResolveProvidingFeatureAsync(string activityTypeKey, CancellationToken cancellationToken) =>
+            ValueTask.FromResult<string?>(null);
+    }
 
 }

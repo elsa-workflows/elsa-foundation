@@ -53,6 +53,11 @@ public sealed record ActivityAuthoringIntrinsicView(
     string? VariableInputKey,
     string? OutputNameInputKey);
 
+/// <summary>
+/// One input of an authoring descriptor. <see cref="IsSensitive"/> and <see cref="IsCredential"/> carry the
+/// activity's sensitivity declaration and are always present: false for an input that declares nothing and for every
+/// engine-intrinsic input. A credential input is sensitive too, and accepts only a secret reference or no binding.
+/// </summary>
 public sealed record ActivityInputDescriptorView(
     string ReferenceKey,
     string Name,
@@ -71,7 +76,9 @@ public sealed record ActivityInputDescriptorView(
     string? UiHint,
     JsonElement? DefaultValue,
     string? DefaultSyntax,
-    JsonElement? UiSpecifications);
+    JsonElement? UiSpecifications,
+    bool IsSensitive,
+    bool IsCredential);
 
 public sealed record ActivityOutputDescriptorView(
     string Name,
