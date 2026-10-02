@@ -16639,6 +16639,70 @@
       ]
     },
     {
+      "path": "tests/essentials/Samples/Nuplane/Notes/Activities/Tests/Elsa.Samples.Nuplane.Notes.Activities.Tests.csproj",
+      "name": "Elsa.Samples.Nuplane.Notes.Activities.Tests",
+      "kind": "test",
+      "domain": "Elsa.Samples",
+      "sub_domain": "Nuplane.Notes.Activities.Tests",
+      "role": "test",
+      "declared_target_framework": null,
+      "packable": false,
+      "package_id": null,
+      "line": null,
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Samples.Nuplane.Notes.Activities",
+          "path": "samples/Elsa.Samples.Nuplane.Notes.Activities/Elsa.Samples.Nuplane.Notes.Activities.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Samples.Nuplane.Notes",
+          "path": "samples/Elsa.Samples.Nuplane.Notes/Elsa.Samples.Nuplane.Notes.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.Design.Core",
+          "path": "src/essentials/Activities/Design/Core/Elsa.Activities.Design.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.Runtime.Core",
+          "path": "src/essentials/Activities/Runtime/Core/Elsa.Activities.Runtime.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Cluster.InProcess",
+          "path": "src/essentials/Cluster/InProcess/Elsa.Cluster.InProcess.csproj"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.EntityFrameworkCore.Sqlite",
+          "version": "10.0.10"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.NET.Test.Sdk",
+          "version": "18.0.0"
+        },
+        {
+          "type": "external",
+          "id": "coverlet.collector",
+          "version": "6.0.2"
+        },
+        {
+          "type": "external",
+          "id": "xunit",
+          "version": "2.9.3"
+        },
+        {
+          "type": "external",
+          "id": "xunit.runner.visualstudio",
+          "version": "3.1.5"
+        }
+      ]
+    },
+    {
       "path": "tests/essentials/Samples/Nuplane/Notes/Tests/Elsa.Samples.Nuplane.Notes.Tests.csproj",
       "name": "Elsa.Samples.Nuplane.Notes.Tests",
       "kind": "test",

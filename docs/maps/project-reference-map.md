@@ -7,8 +7,8 @@ Records direct project references only.
 ## Summary
 
 - Source projects: 141
-- Test projects: 138
-- Direct project references: 1325
+- Test projects: 139
+- Direct project references: 1330
 
 ## Projects
 
@@ -250,6 +250,7 @@ Records direct project references only.
 | [Elsa.Primitives.Hosting.Tests](../../tests/essentials/Primitives/Hosting/Tests/Elsa.Primitives.Hosting.Tests.csproj) | test | Elsa.Primitives | - | false | Elsa.Primitives.Hosting |
 | [Elsa.Primitives.Tests](../../tests/essentials/Primitives/Tests/Elsa.Primitives.Tests.csproj) | test | Elsa.Primitives | - | false | Elsa.Primitives |
 | [Elsa.Samples.Nuplane.Activities.Tests](../../tests/essentials/Samples/Nuplane/Activities/Tests/Elsa.Samples.Nuplane.Activities.Tests.csproj) | test | Elsa.Samples | - | false | Elsa.Activities.Design.Core<br>Elsa.Activities.Runtime.Core<br>Elsa.Samples.Nuplane.Activities |
+| [Elsa.Samples.Nuplane.Notes.Activities.Tests](../../tests/essentials/Samples/Nuplane/Notes/Activities/Tests/Elsa.Samples.Nuplane.Notes.Activities.Tests.csproj) | test | Elsa.Samples | - | false | Elsa.Activities.Design.Core<br>Elsa.Activities.Runtime.Core<br>Elsa.Cluster.InProcess<br>Elsa.Samples.Nuplane.Notes<br>Elsa.Samples.Nuplane.Notes.Activities |
 | [Elsa.Samples.Nuplane.Notes.Tests](../../tests/essentials/Samples/Nuplane/Notes/Tests/Elsa.Samples.Nuplane.Notes.Tests.csproj) | test | Elsa.Samples | - | false | Elsa.Samples.Nuplane.Notes |
 | [Elsa.Secrets.Nuplane.Tests](../../tests/essentials/Secrets/Nuplane/Tests/Elsa.Secrets.Nuplane.Tests.csproj) | test | Elsa.Secrets | - | false | Elsa.Secrets<br>Elsa.Secrets.Nuplane |
 | [Elsa.Secrets.Persistence.EntityFrameworkCore.MySql.Tests](../../tests/essentials/Secrets/Persistence/EntityFrameworkCore/MySql/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.MySql.Tests.csproj) | test | Elsa.Secrets | - | false | Elsa.Secrets<br>Elsa.Secrets.Persistence.EntityFrameworkCore |
@@ -319,7 +320,7 @@ Records direct project references only.
 | Elsa.Persistence | 2 | 8 |
 | Elsa.Pipelines | 1 | 0 |
 | Elsa.Primitives | 2 | 2 |
-| Elsa.Samples | 0 | 2 |
+| Elsa.Samples | 0 | 3 |
 | Elsa.Secrets | 6 | 8 |
 | Elsa.Serialization | 3 | 1 |
 | Elsa.Studio | 3 | 3 |

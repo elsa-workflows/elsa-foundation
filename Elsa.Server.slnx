@@ -48,6 +48,7 @@
   <Folder Name="/samples/">
     <Project Path="samples/Elsa.Samples.Nuplane.Activities/Elsa.Samples.Nuplane.Activities.csproj" />
     <Project Path="samples/Elsa.Samples.Nuplane.Notes/Elsa.Samples.Nuplane.Notes.csproj" />
+    <Project Path="samples/Elsa.Samples.Nuplane.Notes.Activities/Elsa.Samples.Nuplane.Notes.Activities.csproj" />
   </Folder>
   <Folder Name="/solution/">
     <File Path=".gitignore" />
@@ -538,6 +539,9 @@
   </Folder>
   <Folder Name="/tests/essentials/Samples/Nuplane/Notes/">
     <Project Path="tests/essentials/Samples/Nuplane/Notes/Tests/Elsa.Samples.Nuplane.Notes.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/essentials/Samples/Nuplane/Notes/Activities/">
+    <Project Path="tests/essentials/Samples/Nuplane/Notes/Activities/Tests/Elsa.Samples.Nuplane.Notes.Activities.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/essentials/Secrets/">
     <Project Path="tests/essentials/Secrets/Tests/Elsa.Secrets.Tests.csproj" />

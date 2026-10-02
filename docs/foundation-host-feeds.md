@@ -656,9 +656,10 @@ a readiness-gated load balancer never sends one: the node would stay live, not r
 
 The probe itself still activates nothing. Workbench has its own `EagerShellActivationHostedService` and is unchanged.
 
-## Hot reload is a Foundation.Host behavior, not a product one
+## Hot reload after a package change
 
-`Elsa.Foundation.Host` picks up a newly reconciled package without a restart.
+`Elsa.Foundation.Host` picks up a newly reconciled package without a restart. `Elsa.Workbench` refreshes its feature
+catalog when a package arrives and switches at the next shell reload (below).
 `ShellReloadOnPackagesChanged` (`src/apps/Elsa.Foundation.Host/Shells/ShellReloadOnPackagesChanged.cs`)
 is registered as a Nuplane observer in `src/apps/Elsa.Foundation.Host/Program.cs`, and when a
 reconciliation cycle completes — not when packages land on disk, which is before their assemblies are
@@ -722,16 +723,35 @@ through the host's own copy in the deployed directory. A module whose exception 
 recognised by the full name of the interface it implements. Once the command has run, the same `POST` answers `200`
 and the shell's generation advances, with no restart.
 
-`Elsa.Workbench` does not do this. Its `Program.cs` composes Nuplane with no reconciliation observer, and
-registers `NullShellReloader` (`src/apps/Elsa.Workbench/Modularity/NullShellReloader.cs`) as its
-host-level `IShellReloader` — a no-op that reports zero shells reloaded. A package the directory watcher
-or the `/_elsa/module-management` upload and reconcile endpoints bring in is reconciled and loaded, but
-the running shells keep the feature set they were built with; those endpoints answer
-`"RequiresReload": true` to say so. The new package takes effect at the next restart. The one exception
-is a shell that enables the `ModularityApi` feature: it replaces `NullShellReloader` inside that shell
-with a reloader that does reload it, so a feature change applied through that shell's module API also
-refreshes the feature catalog and rebuilds that one shell. That is a side effect of applying feature
-configuration, not a response to reconciliation.
+`Elsa.Workbench` refreshes its feature catalog when a package arrives, and its shells switch at the next shell reload.
+Its observer, `ShellCatalogRefreshOnPackagesChanged` (`src/apps/Elsa.Workbench/Modularity/ShellCatalogRefreshOnPackagesChanged.cs`),
+is the twin of the one above, registered in `src/apps/Elsa.Workbench/Program.cs` after Nuplane's auto-loader so that it
+runs once the cycle's assemblies are loaded. After a cycle that added, updated or removed a package, and once a shell is
+active, it refreshes the CShells runtime feature catalog; a cycle that changed nothing is skipped, and a change it could
+not act on (the refresh failed, or a reload it started left a shell on its previous generation) is tried again at the next
+cycle. The running shells keep the feature set they were built with until a shell is reloaded, which composes the
+refreshed catalog:
+
+- by hand, with `POST /_admin/shells/reload/{name}` or `POST /_admin/shells/reload-all` and the
+  `X-Elsa-Module-Management-Key` header;
+- by the observer itself, after the cycle, when `Elsa:Shells:ReloadOnPackageChange` is `true`. The Workbench's
+  `appsettings.json` sets it to `false`, which is also what the observer assumes when it is unset; on
+  `Elsa.Foundation.Host` it defaults to `true`. A shell whose reload failed keeps its previous generation, and the
+  observer logs it as Foundation.Host's does: at `Warning` for an EF module's refusal, with its command and the
+  Workbench's directory as `--host`, and at `Error` for anything else.
+
+The `/_elsa/module-management` upload and reconcile endpoints answer `"RequiresReload": true` for the same reason: the
+package is reconciled and loaded and the catalog refreshed, but no shell has switched yet. The host-level
+`IShellReloader` is `NullShellReloader` (`src/apps/Elsa.Workbench/Modularity/NullShellReloader.cs`), a no-op that
+reports zero shells reloaded. The one exception is a shell that enables the `ModularityApi` feature: it replaces
+`NullShellReloader` inside that shell with a reloader that does reload it, so a feature change applied through that
+shell's module API also refreshes the feature catalog and rebuilds that one shell. That is a side effect of applying
+feature configuration, not a response to reconciliation.
+
+After an in-place upgrade, the previous release of a package-loaded activity stays loaded, and a reloaded shell registers
+the class of the release it composes under the activity's alias; see
+[Activity versions after an in-place upgrade](../src/essentials/Activities/Runtime/README.md#activity-versions-after-an-in-place-upgrade)
+for what that means for a workflow pinned to an earlier version.
 
 ## Reconciling on demand
 
@@ -740,7 +760,7 @@ header, like `reload`) runs one reconcile cycle now, the same cycle the folder w
 answers once it has finished. A wrong or missing key is answered `401`.
 
 Whether a package the cycle added is live in the running shells when the request returns depends on the hot-reload
-observer, described in the section "Hot reload is a Foundation.Host behavior, not a product one": it reloads the active
+observer, described in the section "Hot reload after a package change": it reloads the active
 shells at the end of the cycle only when `Elsa:Shells:ReloadOnPackageChange` is on (it is by default) and a shell is
 already active. With it off, or before any shell has activated, the package is reconciled and its assemblies are loaded,
 but the shells keep the feature set they were built with until `POST /_module-management/reload` (or a restart). A shell
