@@ -63,7 +63,18 @@ public sealed class RuntimeSecretResolutionTests
     [Fact]
     public void A_resolution_never_prints_its_value()
     {
-        Assert.DoesNotContain(Value, RuntimeSecretResolution.Success(Value).ToString(), StringComparison.Ordinal);
+        var printed = RuntimeSecretResolution.Success(Value).ToString();
+
+        Assert.DoesNotContain(Value, printed, StringComparison.Ordinal);
+        Assert.Equal("RuntimeSecretResolution(Succeeded)", printed);
+    }
+
+    [Fact]
+    public void A_failure_prints_its_code_and_classification()
+    {
+        Assert.Equal(
+            "RuntimeSecretResolution(Failed: StoreUnavailable, IsRetryable: True)",
+            RuntimeSecretResolution.Failure("StoreUnavailable", isRetryable: true).ToString());
     }
 
     [Fact]

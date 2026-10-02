@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json;
 using Elsa.Activities.Primitives;
 using Elsa.Activities.Runtime.Core.Abstractions;
@@ -168,12 +169,13 @@ internal static class SecretResolutionTestSupport
     {
         var states = await harness.Services.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync(harness.ExecutionId);
         var inspectionStore = harness.Services.GetRequiredService<IActivityExecutionInspectionStore>();
-        var persisted = JsonSerializer.Serialize(states);
+        var persisted = new StringBuilder(JsonSerializer.Serialize(states));
         foreach (var state in states)
-            persisted += JsonSerializer.Serialize(await inspectionStore.FindAsync(harness.ExecutionId, state.Execution.ActivityExecutionId));
+            persisted.Append(JsonSerializer.Serialize(await inspectionStore.FindAsync(harness.ExecutionId, state.Execution.ActivityExecutionId)));
+        var persistedText = persisted.ToString();
         Assert.NotEmpty(states);
         foreach (var value in values)
-            Assert.DoesNotContain(Assert.IsType<string>(value), persisted, StringComparison.Ordinal);
+            Assert.DoesNotContain(Assert.IsType<string>(value), persistedText, StringComparison.Ordinal);
     }
 }
 

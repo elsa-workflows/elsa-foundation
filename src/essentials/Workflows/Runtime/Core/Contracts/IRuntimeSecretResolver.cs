@@ -107,4 +107,13 @@ public sealed class RuntimeSecretResolution
 
         return new(succeeded: false, value: null, failureCode, isRetryable);
     }
+
+    /// <summary>
+    /// Prints the outcome only, such as <c>RuntimeSecretResolution(Succeeded)</c> or
+    /// <c>RuntimeSecretResolution(Failed: NotFound, IsRetryable: False)</c>. Never prints <see cref="Value"/>.
+    /// </summary>
+    public override string ToString() =>
+        Succeeded
+            ? $"{nameof(RuntimeSecretResolution)}(Succeeded)"
+            : $"{nameof(RuntimeSecretResolution)}(Failed: {FailureCode}, {nameof(IsRetryable)}: {IsRetryable})";
 }

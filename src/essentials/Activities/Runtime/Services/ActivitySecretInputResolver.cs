@@ -108,7 +108,7 @@ public sealed class ActivitySecretInputResolver(
         {
             resolution = await resolver.ResolveAsync(new RuntimeSecretResolutionRequest(tenantId, reference), cancellationToken);
         }
-        catch
+        catch (Exception)
         {
             cancellationToken.ThrowIfCancellationRequested();
             throw new RuntimeSecretResolutionException(reference.Name, RuntimeSecretResolutionException.ResolverFailed, isRetryable: false);
@@ -141,7 +141,7 @@ public sealed class ActivitySecretInputResolver(
                 ValueEnvelope.Inline(plan.SourceType, JsonSerializer.SerializeToElement(value), secret.Envelope.Policy),
                 plan);
         }
-        catch
+        catch (Exception)
         {
             cancellationToken.ThrowIfCancellationRequested();
             throw new RuntimeSecretResolutionException(secret.Reference.Name, RuntimeSecretResolutionException.ConversionFailed, isRetryable: false);
