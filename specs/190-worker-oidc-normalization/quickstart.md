@@ -12,10 +12,10 @@ The new shared Worker fixture owns an isolated local issuer/discovery/JWK signin
 
 ```bash
 dotnet test tests/essentials/Foundation/Identity/Tests/Elsa.Foundation.Identity.Tests.csproj --filter 'FullyQualifiedName~OidcBearerNormalization|FullyQualifiedName~OidcAuthentication'
-dotnet test tests/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj --filter 'FullyQualifiedName~WorkerOidcBearerHostEvidenceTests'
+dotnet test tests/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj --filter 'FullyQualifiedName~WorkerOidcHostTests'
 ```
 
-Run actual-handler controls as well as direct adapter units. Run independent direct-construction stubbed tests for every branch of each new logic-bearing class, plus direct feature registration/resolution. Verify the named-options/EventType replacement guards, distinct raw/normalized types and all three event success bypasses. Mutation controls must affect production validation/normalization and be restored before the full affected suites.
+Run actual-handler controls as well as direct adapter units. Run independent direct-construction stubbed tests for every branch of each new or modified logic-bearing class, plus direct feature registration/resolution. Verify the named-options/EventType replacement guards, distinct raw/normalized types and all three event success bypasses. Mutation controls must affect production validation/normalization and be restored before the full affected suites.
 
 ## Real actor journey
 

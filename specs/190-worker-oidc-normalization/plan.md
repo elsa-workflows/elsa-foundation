@@ -47,15 +47,15 @@ src/essentials/Foundation/Identity/Oidc/
   ConfigureOidcOptions.cs
   Extensions/OidcAuthenticationServiceCollectionExtensions.cs
   (new) OidcBearerNormalizationEvents.cs
-  (new) OidcBearerNormalizationOptionsValidation.cs
+  (new) OidcBearerOptionsValidator.cs
   (new) README.md; owning ../Core/EXTENSION_POINTS.md
  tests/essentials/Foundation/Identity/Tests/
   OidcAuthenticationRegistrationTests.cs, OidcAuthenticationFeatureTests.cs
   (new) OidcBearerNormalizationTests.cs
  tests/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/
   WorkerHttpFixtureHostEvidenceTests.cs (retained prior evidence)
-  (new) WorkerOidcBearerHostEvidenceTests.cs
-  (new) WorkerOidcBearerHostFixture.cs
+  (new) WorkerOidcHostTests.cs
+  (new) WorkerOidcHostFixture.cs
 ```
 
 New file names are the implementation allocation, not existing classes. Reuse issuer/setup/reset helpers within existing test assemblies; do not clone substantial arrange blocks. Only add test project references needed for the real actor host.
