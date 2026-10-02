@@ -35,6 +35,27 @@ that depends on `Secrets`. The runtime never references a Secrets project; the b
   secondary-domain rule puts the model-owning domain first, so the name is `Elsa.Secrets.Workflows`.
 - Runtime tests can use a fake resolver; phase 1 Connections can add a second implementer without a runtime change.
 
+**One implementation per container (implementation review of slice 4, revised in round 2)**: `IRuntimeSecretResolver`
+is a replacement contract, and framework §2.6.2 requires a conflict to be prevented at registration time or detected
+at startup, never resolved by last-write-wins, and forbids consuming a replacement contract as `IEnumerable<T>`. A
+registration-time refusal alone cannot keep that promise, because a registration sees only what was registered before
+it. So the runtime detects it at startup: `ActivitiesRuntimeFeature` registers `RuntimeSecretResolverCompositionValidator`,
+a shell initializer in `LifecyclePhase.Prepare` that reads the composed service collection and fails shell activation
+with `MultipleRuntimeSecretResolversException`, naming every registration, when it holds more than one, in either
+registration order. It counts registrations and resolves none. The hook follows the repository's startup checks over a
+captured service collection (`ClusterMembershipOptionsValidator` in
+`src/essentials/Cluster/Core/Extensions/ClusterMembershipServiceCollectionExtensions.cs`,
+`ExecutionPlacementStoreRegistrationValidator` in
+`src/essentials/Workflows/Runtime/Distributed/Contracts/ExecutionPlacementStoreBackend.cs`), but runs as a CShells
+shell initializer, as `EfProviderBindingValidator` (`src/essentials/Persistence/EntityFramework/EfProviderBindingValidator.cs`)
+does, because CShells runs a shell's initializers at activation (an initializer that throws aborts it), while the
+CShells assemblies this repository uses never reference `IStartupValidator`, so an options `ValidateOnStart` check
+registered by a shell feature is not run when the shell activates. `ActivitySecretInputResolver` consumes the
+single optional resolver: none parks the activity with `MissingSecretResolver`. `AddSecretsWorkflows` still refuses a
+resolver registered before it, as an early diagnostic. An activation-time check (reading every registered resolver and
+parking the activity) was tried in round 1 and withdrawn: it consumed the contract as `IEnumerable<T>`, and a host with
+a competing resolver started normally and failed late.
+
 **Alternatives considered**:
 
 - `Elsa.Workflows.Runtime` references `Elsa.Secrets.Core` directly. Framework §2.1 allows a cross-`.Core`
@@ -92,12 +113,25 @@ is present, so activations without secrets pay nothing.
   materialization in this design (R3), so it would be a second, unused tenant source that could drift.
 - The HTTP principal's tenant claim: absent on background drains, timers and recovery sweeps.
 
-**Proof (replaces the earlier "assumption to prove")**: T093 runs a two-tenant host and, on every path in R3a that
+**Proof (replaces the earlier "assumption to prove")**: T093 runs two tenants (one host each, see below) and, on every path in R3a that
 resolves a secret (invoke, bookmark resume, structural parent evaluation, child-completion re-materialization and
 operator reschedule), asserts that the tenant passed to the
 resolver equals the instance's `TenantId`. A second case stores an instance whose `TenantId` differs from the
 partition it runs under and asserts the `TenantMismatch` fault, with the resolver never called. Bite-proof: remove
 the mismatch check; the second case goes red.
+
+**Found in slice 4**: the tenant handed to the resolver is the execution partition read at activation, and the
+command's own DI scope, which is bound to the command's partition, is not always the scope activation runs in. The
+scheduler work handlers that activate activities run each work item in a fresh DI scope when the drain hands them no
+ambient services (`RuntimeSchedulerWorkHandlerBase`, `WorkflowStartActivitySchedulerWorkHandler`), and that scope
+carries the host's default persistence scope. So on that background drain path
+`IWorkflowExecutionPartitionAccessor.Current` at activation is the host's persistence scope: on the EF stores another
+partition's work items cannot find their own rows, and on any store an instance recording another tenant is refused with
+`TenantMismatch`, which fails closed. When the dispatch options carry ambient services
+(`pipelineContext.Workspace.AmbientServices`; the synchronous HTTP endpoint passes `context.RequestServices`), the
+handlers activate in those services instead; that path was not verified for several tenants. T026 and T093 therefore
+prove the two-tenant scenario with one host per tenant, whose persistence scope is that tenant, over one secret store;
+T090 lists the follow-up.
 
 ## R3: Resolution point and the withheld snapshot
 
@@ -220,8 +254,9 @@ grep -rn --include='*.cs' "ActivityTransition\.\(Complete\|Fault\)\|Console\.Wri
 grep -rn --include='*.cs' "Suspend(\|ActivityBookmarkRequest(" $(grep -rln --include='*.cs' "\[ActivityInput" src)
 ```
 
-No file under `src/extensions` declares an `[ActivityInput]`. After R11's type rule only single `String` (and
-canonical any-typed) inputs can take a `Secret` binding, so each `String` input was classified:
+No file under `src/extensions` declares an `[ActivityInput]`. After R11's type rule only single `String` inputs of
+the scanned CLR activities can take a `Secret` binding (none of them declares a canonical any alias), so each `String`
+input was classified:
 
 - Returned or copied into a result or fault: `Inline.Expression`, `WriteHttpResponse` `Body` and `ContentType`,
   `BpmnDecision.Outcome`, the four `Fault` inputs. New row IP22, refused.
@@ -258,6 +293,43 @@ canonical any-typed) inputs can take a `Secret` binding, so each `String` input 
   the masking wrapper of R9 copies it from the exception it wraps, so masking can never turn a transient
   `StoreUnavailable` into a permanent fault.
 - A tenant disagreement (R2) is reported with code `TenantMismatch`, permanent.
+- `DefaultSecretValueResolver` reports a failed read of the secret repository or of the payload store as a result,
+  not a throw, with a fixed error and none of the exception's text, classified by whether the condition may clear on
+  its own (implementation review of slice 4, rounds 2 and 3). An outage is `StoreUnavailable`, transient: a
+  `TimeoutException`, `IOException`, `SocketException` or a cancellation the caller did not request in the exception
+  chain (a provider retry strategy wraps the failure it gave up on), or a `DbException` that is an outage. A
+  `DbException` is judged by the provider-neutral signal first: `DbException.IsTransient`, a SQLSTATE in the
+  connection-exception class `08`, or a timeout, I/O or `Win32Exception` (which `SocketException` is) beneath it. Of the
+  providers this repository ships, only Npgsql overrides `IsTransient` (true for a connection failure, whose inner
+  exception is an I/O, socket or timeout failure, and for server states in classes `08`, `53`, `57P` and a few lock and
+  serialization states, `58000` and `58030`; false for `42703` undefined column or `42P01` undefined table). Microsoft.Data.SqlClient,
+  MySql.Data and Microsoft.Data.Sqlite never override it, so for them `IsTransient` is always false. SqlClient attaches
+  a `Win32Exception` carrying the operating system error to a network failure or timeout, and MySql.Data wraps the
+  `SocketException` of a host it cannot reach (and lets a connect `TimeoutException` through unwrapped), so their
+  connection failures stay transient by their inner exception. SQLite has no connection to lose: its outage is another connection holding the database
+  (`SQLITE_BUSY`, `SQLITE_LOCKED`), recognized by `SqliteErrorCode` read by type name, as the EF exception classifier
+  does, so the Secrets module takes no provider dependency. Anything else is `CorruptState`, permanent: any other
+  `DbException` (a missing table or column, `SQLITE_CORRUPT`, `SQLITE_IOERR`), on the EF repository a row whose
+  document does not parse or names another tenant (`InvalidOperationException`, `JsonException`,
+  `NotSupportedException`), a schema version this build cannot read (`EfSchemaVersionSkewException`) and an identity
+  its validation refuses (`ArgumentException`); `SecretsProjectionException`, which the projection audit throws for a
+  damaged row, is an `InvalidOperationException` and classifies the same way. On the payload path, a store the host
+  does not register (the store registry's `InvalidOperationException`) and a payload the value protector refuses
+  (`InvalidOperationException` for an unsupported format or a key id the key ring does not hold, `FormatException`
+  for malformed base64, `AuthenticationTagMismatchException` for a tag that does not match, `ArgumentException` for a
+  nonce of the wrong size) are `CorruptState`. Without a throw, a store that returns no payload (the version lacks the
+  entry the built-in store reads, or the configured value is absent, which no retry supplies) and a payload without a
+  value are `CorruptState`. A name the name validator refuses is `NotFound` before the
+  repository is read, as an empty name already was. A canceled caller still gets the cancellation. `CorruptState` is
+  the Secrets module's one permanent code for a secret it cannot serve, so a schema skew and a damaged row share it
+  here, although ADR 0077 keeps them apart in the store's own exceptions; telling them apart in the result would need
+  a new failure code, which this spec does not add. Known gaps: a server-reported SQL Server condition that may clear
+  but carries no operating system error (for example Azure SQL's 40613, database unavailable, or a 1205 deadlock) is
+  `CorruptState`, and so is a MySql.Data host failure raised without an inner exception (its failover path). An
+  `HttpRequestException` from a remote replacement store is judged only by its inner exception, so a 503, 429 or 408
+  response surfaced with `StatusCode` set and no inner exception is classified permanent (`CorruptState`) although a
+  retry could clear it; phase 3's external stores must classify their own transport failures. An `AggregateException`
+  is read through its first inner exception only.
 - When no `IRuntimeSecretResolver` is composed, the activator raises an activation failure, not a fault: a new
   `ActivityActivationFailureKind` handled by `ActivityActivationFailureHandler`
   (`src/essentials/Workflows/Runtime/Services/Incidents/ActivityActivationFailureHandler.cs`), so the activity
@@ -266,9 +338,9 @@ canonical any-typed) inputs can take a `Secret` binding, so each `String` input 
 
 **Rationale**: Constitution §E2.6.1 separates domain gates, which may deny execution, from missing modules, which
 must not destroy executability. A revoked secret is a domain gate. A host that forgot the bridge is a missing
-module. `DefaultSecretValueResolver` copies a store exception's raw message into `ResolvedSecret.Error` for
-`StoreUnavailable` (verified), which can carry store-private detail such as a connection target, so the error text
-must not reach the fault.
+module. `DefaultSecretValueResolver` used to copy a store exception's raw message into `ResolvedSecret.Error` for
+`StoreUnavailable`, which can carry store-private detail such as a connection target; it now reports a fixed error, and
+the bridge still drops the error text, because a replacement `ISecretValueResolver` can carry such detail.
 
 **Finding to keep visible**: no runtime retry policy reads `IsRetryable` today (the only reader is
 `ActivityFaultProjection`). Spec scenario US2.2 ("existing retry policies may retry") is therefore met by recording
@@ -286,7 +358,8 @@ scanner therefore refuses, naming the type and input, a credential input on a ty
 `IRuntimeActivityCheckpointParticipant` (matched by full name, as the scanner already matches `IActivity`) and a
 credential input that the type names in `[RefusesSecretBinding]` (R12; read for this check only, never written to
 the catalog), and a credential input whose CLR type is not `string` (R11: a `Secret` binding converts only to a
-single string or any-typed input, so a credential of any other type could never be bound). Graph activities and intrinsics have no declaration surface: the only other producer of catalog
+single string or canonical any-typed input, and the scanner declares no CLR input with a canonical any alias, so a
+credential of any other CLR type could never be bound). Graph activities and intrinsics have no declaration surface: the only other producer of catalog
 `InputDefinition`s is the Activities Design API (`AddDefinitionCommandHandler`, `AddVersionCommandHandler`, whose
 commands accept `InputDefinition`s for any consumer), and it refuses an input with `isCredential: true`, because in
 phase 0 a credential is declared only through `[ActivityInput(IsCredential = true)]`. Intrinsic descriptors report
@@ -655,7 +728,18 @@ the default mode `Auto`:
 
 - **Accepted**: a single `String` input (`Identity`), its nullable alias (`NullableCompatibility`), and a single
   canonical any-typed input, alias `Elsa.Any`, `Any` or `JsonNode` (`CanonicalAny`, which accepts a `TextValue`
-  source).
+  source). The any-typed case applies only to inputs whose declared alias is one of those (implementation review,
+  2026-10-02, verified again in round 2). Publish reads an input's type from its catalog version, and the CLR scanner
+  (`ClrAssemblyScanner`) declares a CLR input's alias as `TypeAliasConvention.CanonicalAlias` of its property type:
+  the full CLR type name for `System.Text.Json.Nodes.JsonNode` and `Object` for `object`, and
+  `ValueConversionCompatibility.IsCanonicalAnyTarget` strips only a leading `System.`, so neither matches. Of the
+  inputs the scanner catalogs, only `string` inputs accept a `Secret` binding; publish refuses a scanned `JsonNode` or
+  `object` input with `VF-COER-001`. Graph activities, intrinsics and checkpoint participants are refused earlier
+  (`VF-ACT-012`, R12). The any-typed case is still reachable for a CLR activity: the Activities Design API
+  (`AddVersionCommandHandler`) accepts a version with consumer `elsa.clr-activity` and any declared input types, and
+  publish neither checks them against the CLR type nor refuses a canonical any alias, so such an input compiles with a
+  `CanonicalAny` plan. Activation converts the resolved text with that plan and delivers it
+  (`ClrActivityActivatorTests.A_withheld_secret_on_an_any_typed_input_is_converted_with_its_canonical_any_plan_and_hydrated`).
 - **Refused at publish** (`AutomaticUnsupported`, or `AutomaticCollectionShapeAmbiguous` for collections): every other
   type. That includes the numeric types, `Boolean`, `Char`, `Guid`, the date and time types, `TimeSpan`, enums and
   `Uri`; `Object`, the alias CLR `object` maps to (`TypeAliasConvention`), which is not a canonical any alias;

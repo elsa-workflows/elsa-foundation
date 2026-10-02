@@ -156,6 +156,7 @@
 		<ProjectReference Include="..\..\essentials\Secrets\Api\Elsa.Secrets.Api.csproj" />
 		<ProjectReference Include="..\..\essentials\Secrets\Core\Elsa.Secrets.Core.csproj" />
 		<ProjectReference Include="..\..\essentials\Secrets\Elsa.Secrets.csproj" />
+		<ProjectReference Include="..\..\essentials\Secrets\Workflows\Elsa.Secrets.Workflows.csproj" />
 		<ProjectReference Include="..\..\essentials\Tasks\Core\Elsa.Tasks.Core.csproj" />
 		<ProjectReference Include="..\..\essentials\Tasks\Schedules\Elsa.Tasks.Schedules.csproj" />
 		<ProjectReference Include="..\..\essentials\Tasks\Elsa.Tasks.csproj" />

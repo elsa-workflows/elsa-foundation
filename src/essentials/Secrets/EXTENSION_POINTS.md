@@ -44,7 +44,8 @@ The default `ISecretValueProtector` writes a versioned, key-id-tagged payload (`
 
 ## Runtime Integration
 
-The package contributes the `Secret` expression descriptor. Workflow inputs can store a secret expression value such as:
+The package contributes the `Secret` expression descriptor, which the Studio secret picker authors as a reference such
+as:
 
 ```json
 {
@@ -56,4 +57,34 @@ The package contributes the `Secret` expression descriptor. Workflow inputs can 
 }
 ```
 
-The expression handler resolves the latest active version at execution time and does not persist the resolved value back into workflow state.
+A `Secret` binding is not evaluated as an expression. Publish compiles it into a secret read that carries the reference
+and no value, the persisted activity input holds only that reference, and the workflow runtime resolves it each time the
+activity is activated, through its own `IRuntimeSecretResolver` contract (spec 188).
+
+The bridge [`Elsa.Secrets.Workflows`](Workflows/README.md) (feature `SecretsWorkflows`) implements that contract over
+`ISecretValueResolver`, so replacing `ISecretValueResolver` also changes what workflows resolve:
+
+- The tenant is the one the runtime hands over: the execution partition read at activation, which on the background
+  drain path is the host's persistence scope (spec 188 research R2). No binding, setting or default selects it.
+- The latest active version is read at every activation and never written back into workflow state, so a rotation takes
+  effect at the next activation without republishing.
+- A failure faults the activity with the reference name and the failure code only. `StoreUnavailable` is retryable and
+  every other code is permanent. `ResolvedSecret.Error` never reaches the fault.
+- `DefaultSecretValueResolver` reports `StoreUnavailable`, transient, only for an outage of the payload store
+  (`ISecretStore`) or the metadata repository (`ISecretRepository`): a `TimeoutException`, `IOException`,
+  `SocketException` or a cancellation the caller did not request in the exception chain, or a `DbException` that is an
+  outage (`IsTransient`, a SQLSTATE in class `08`, a timeout, I/O or `Win32Exception` beneath it, or SQLite's
+  `SQLITE_BUSY`/`SQLITE_LOCKED`). Any other failure is `CorruptState`, permanent: any other `DbException` (a missing
+  table or column, a damaged database file), a row the repository cannot serve, a schema version this build cannot
+  read, an identity it refuses, a store the host does not register, and a payload the value protector refuses. A store
+  that returns no payload, or a payload without a value, is `CorruptState`. Each is a result, not a
+  throw, with a fixed error that carries nothing from the exception; a canceled token still propagates as a
+  cancellation. A name `ISecretNameValidator` refuses is `NotFound`, before the repository is read. The full table is
+  in spec 188's `contracts/runtime-secret-resolution.md`.
+- A shell that does not compose `SecretsWorkflows` cannot resolve secrets: a secret-bound activity waits with an
+  activation-failure incident instead of faulting. A shell that composes another `IRuntimeSecretResolver` beside it
+  does not activate: the bridge refuses one registered before it, and the activities runtime's startup check refuses
+  one registered after it, each naming both.
+
+`Elsa.Secrets.Nuplane` (feature `SecretsNuplane`) is the other bridge over `ISecretValueResolver`: it resolves package
+feed credentials for Nuplane.

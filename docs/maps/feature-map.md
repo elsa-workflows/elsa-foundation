@@ -6,7 +6,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 
 ## Summary
 
-- Discovered feature classes: 106
+- Discovered feature classes: 107
 
 ## Features
 
@@ -72,6 +72,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 | SecretsApiFeature | direct IWebShellFeature | Elsa.Secrets.Api | IWebShellFeature | [SecretsApiFeature.cs](../../src/essentials/Secrets/Api/Features/SecretsApiFeature.cs) |
 | SecretsNuplaneFeature | direct IShellFeature | Elsa.Secrets.Nuplane | IShellFeature | [SecretsNuplaneFeature.cs](../../src/essentials/Secrets/Nuplane/Features/SecretsNuplaneFeature.cs) |
 | SecretsEntityFrameworkCoreFeature | direct IShellFeature | Elsa.Secrets.Persistence.EntityFrameworkCore | IShellFeature | [SecretsEntityFrameworkCoreFeature.cs](../../src/essentials/Secrets/Persistence/EntityFrameworkCore/SecretsEntityFrameworkCoreFeature.cs) |
+| SecretsWorkflowsFeature | direct IShellFeature | Elsa.Secrets.Workflows | IShellFeature | [SecretsWorkflowsFeature.cs](../../src/essentials/Secrets/Workflows/Features/SecretsWorkflowsFeature.cs) |
 | NewtonsoftSerializationFeature | direct IShellFeature | Elsa.Serialization.Newtonsoft | IShellFeature | [NewtonsoftSerializationFeature.cs](../../src/essentials/Serialization/Newtonsoft/NewtonsoftSerializationFeature.cs) |
 | SerializationFeature | direct IShellFeature | Elsa.Serialization.SystemText | IShellFeature | [SerializationFeature.cs](../../src/essentials/Serialization/SystemText/SerializationFeature.cs) |
 | StudioPreferencesApiFeature | direct IWebShellFeature | Elsa.Studio.Preferences.Api | IWebShellFeature | [StudioPreferencesApiFeature.cs](../../src/essentials/Studio/Preferences/Api/StudioPreferencesApiFeature.cs) |
