@@ -100,3 +100,19 @@ The pending source63b137fbc gates completed successfully: Workbench **39 / 0 / 0
 During that run, main advanced to `c331197f981fe8e0ee5003daf3b97b1cfe7d3af3` through Secrets bridge PR2309, changing Workbench's default composition and activity-runtime initialization. Root reviewed the overlap and integrated it normally as **`5aa5cb532`**. Conflicts were confined to generated maps; regenerating from combined source preserves both changes. Reviewed findings show the expected peer-owned Secrets source/test project and feature additions, with no package-version multiplicity. All changed maps including manifest/findings were explicitly staged in the merge; the OIDC/Identity/actor source hash above remains unchanged.
 
 The new architecture graph restored successfully (Release and isolated Debug), and regenerated maps and solution filters pass freshness on this combined tree. All five affected suites are being revalidated because the new default Workbench composition and runtime initialization changed; no second run is claimed passed before its terminal receipt. Current logs/receipts use `/tmp/runtime-2308-bridge-<gate>.log` and `/tmp/runtime-2308-bridge-gate-receipts.json`. T026/T027/T028 and publication remain open pending the complete final combined gate, PR review/CI and resulting-main source/package verification.
+
+## Final combined local gate — 2026-10-02
+
+All five existing affected suites completed on combined source **`5aa5cb532`** (main `c331197f981fe8e0ee5003daf3b97b1cfe7d3af3` plus the committed adapter). Subsequent checkpoint/docs commits do not alter the tested production/test source; the 21-file OIDC/Identity/actor SHA256 remains `801e8f29db2508c2e7182e1b68a76b9b4f063cd5903d63976c4a302994fc14ca`. Every result below is terminal; none has skips.
+
+| Existing project | Passed / failed / skipped | Command |
+|---|---|---|
+| Identity | 440 / 0 / 0 | `dotnet test tests/essentials/Foundation/Identity/Tests/Elsa.Foundation.Identity.Tests.csproj -v minimal` |
+| IAM EF | 191 / 0 / 0 | `dotnet test tests/essentials/Foundation/Identity/Persistence/EntityFrameworkCore/Tests/Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Tests.csproj -v minimal` |
+| Runtime EF, including real Worker actor | 835 / 0 / 0 | `dotnet test tests/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj -v minimal` |
+| Workbench / retained first-party hosts | 39 / 0 / 0 | `dotnet test tests/essentials/Workbench/Tests/Elsa.Workbench.Tests.csproj -v minimal` |
+| Architecture | 635 / 0 / 0 | `dotnet test tests/essentials/Architecture/Elsa.Architecture.Tests.csproj -v minimal` |
+
+Platform/toolchain remains macOS arm64 / SDK10.0.300 / net10.0. Actual local terminal receipt file is `/tmp/runtime-2308-bridge-gate-receipts.json`; per-project logs are `/tmp/runtime-2308-bridge-<gate>.log`. Workbench completed in 6m55 and architecture in 1m29 while machine load varied above100; no timing failure or observation timeout was counted as a pass. Newer-main graph restore and maps/solution-filter freshness passed as recorded above. The T026 task-count map was regenerated, reviewed and staged by explicit path; the final maps and solution-filter freshness rechecks exited0 before publication. Root reviewed the complete owned diff, approved contracts, actor evidence and independent findings; diff whitespace is clean.
+
+T001-T026 now have local evidence. T027 remains open until actual exact-head PR review/checks pass, and T028 remains open until resulting-main workflows/source-package identity and public bookkeeping are verified. No Worker profile, external deployed IdP or program completion is certified.
