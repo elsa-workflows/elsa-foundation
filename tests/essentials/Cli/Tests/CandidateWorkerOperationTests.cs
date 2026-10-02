@@ -814,7 +814,7 @@ public sealed class CandidateWorkerOperationTests
             Assert.DoesNotContain(PrivateCanaryRootPrefix, string.Join("\n", refusal.Details));
             var childStillRunning = IsMarkedProcessRunning(started);
             var observedState = childStillRunning && OperatingSystem.IsLinux() && TryReadProcessIdentity(started, out var childIdentity)
-                ? $" Linux PID {childIdentity.Pid}, state {ProcessIdentityReader.ReadLinux(childIdentity.Pid).State}."
+                ? $" Linux PID {childIdentity.Pid}, state {DescribeLinuxProcessState(childIdentity.Pid)}."
                 : string.Empty;
             Assert.False(childStillRunning, "The candidate worker returned while its marked child was still alive." + observedState);
             if (descendant is not null)
@@ -908,13 +908,9 @@ public sealed class CandidateWorkerOperationTests
         {
             return false;
         }
-        catch (FileNotFoundException) when (OperatingSystem.IsLinux())
+        catch (IOException) when (OperatingSystem.IsLinux())
         {
-            return false; // The kernel process entry disappeared.
-        }
-        catch (DirectoryNotFoundException) when (OperatingSystem.IsLinux())
-        {
-            return false;
+            return false; // The kernel process entry disappeared (ENOENT, or ESRCH "No such process" once reaped).
         }
         catch (System.ComponentModel.Win32Exception) when (!OperatingSystem.IsWindows())
         {
@@ -924,6 +920,19 @@ public sealed class CandidateWorkerOperationTests
         }
         // Observer failures must propagate rather than being caught as identity-probe exit races.
         return OperatingSystem.IsWindows() || IsUnixProcessRunning(identity.Pid);
+    }
+
+    // Diagnostics only: a child that exits before this read must not mask the assertion being described.
+    private static string DescribeLinuxProcessState(int pid)
+    {
+        try
+        {
+            return ProcessIdentityReader.ReadLinux(pid).State.ToString();
+        }
+        catch (IOException)
+        {
+            return "exited";
+        }
     }
 
     private static bool IsUnixProcessRunning(int pid)
@@ -976,13 +985,9 @@ public sealed class CandidateWorkerOperationTests
         {
             // The marked child has already exited.
         }
-        catch (FileNotFoundException) when (OperatingSystem.IsLinux())
+        catch (IOException) when (OperatingSystem.IsLinux())
         {
-            // The kernel process entry disappeared during identity observation.
-        }
-        catch (DirectoryNotFoundException) when (OperatingSystem.IsLinux())
-        {
-            // The marked process has already exited.
+            // The kernel process entry disappeared (ENOENT, or ESRCH "No such process" once reaped) during identity observation.
         }
         catch (System.ComponentModel.Win32Exception)
         {
@@ -1013,13 +1018,9 @@ public sealed class CandidateWorkerOperationTests
         {
             // The owned supervisor has already exited.
         }
-        catch (FileNotFoundException) when (OperatingSystem.IsLinux())
+        catch (IOException) when (OperatingSystem.IsLinux())
         {
-            // The kernel process entry disappeared during identity observation.
-        }
-        catch (DirectoryNotFoundException) when (OperatingSystem.IsLinux())
-        {
-            // The marked process has already exited.
+            // The kernel process entry disappeared (ENOENT, or ESRCH "No such process" once reaped) during identity observation.
         }
         catch (System.ComponentModel.Win32Exception)
         {
