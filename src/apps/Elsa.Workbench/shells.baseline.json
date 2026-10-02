@@ -17,6 +17,7 @@
           "ApiCapabilities": {},
           "Secrets": {},
           "SecretsApi": {},
+          "SecretsWorkflows": {},
           "WorkflowsDesignApi": {},
           "WorkflowDesignValidations": {},
           "ActivitiesDesignApi": {},
