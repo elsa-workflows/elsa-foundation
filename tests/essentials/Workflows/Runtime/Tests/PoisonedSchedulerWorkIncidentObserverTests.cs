@@ -1,6 +1,7 @@
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Api.Models;
 using Elsa.Workflows.Runtime.Services.ActivityExecutions;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
 using Elsa.Workflows.Runtime.Services.Executions;
@@ -51,6 +52,77 @@ public sealed class PoisonedSchedulerWorkIncidentObserverTests
         var commit = Assert.Single(_harness.CommitStore.ListCommits()).Commit;
         Assert.Equal(RuntimeCheckpointNames.IncidentRecorded, commit.Checkpoint.Name);
         Assert.Equal(incident.IncidentId, Assert.Single(commit.StateChanges.Incidents).StateId);
+    }
+
+    [Fact]
+    public async Task OnDrainedAsync_WithTypedInputFailure_ProjectsAssociatedFailedInputWithoutChangingActivityLifecycle()
+    {
+        var activity = await _harness.SaveActivity();
+        await _harness.RecordPoison(
+            RuntimeSchedulerPoisonDisposition.Poisoned,
+            innerFault: new RuntimeFaultInfo(
+                "Elsa.Workflows.Runtime.Services.Values.RedactedPortableExpressionException",
+                "Portable expression input fault was redacted (System.InvalidOperationException)."),
+            metadata: new Dictionary<string, string>
+            {
+                [RuntimeMetadataKeys.ActivityExecutionId] = "activity-1",
+                [RuntimeMetadataKeys.ExecutableNodeId] = "node-1",
+                [RuntimeMetadataKeys.InputKey] = "text",
+                [RuntimeMetadataKeys.InputFailureCode] = "ExpressionEvaluationFailed",
+                [RuntimeMetadataKeys.ExpressionLanguage] = "JavaScript",
+                [RuntimeMetadataKeys.InputEvaluationPhase] = "Evaluation"
+            });
+
+        await _harness.Observer.OnDrainedAsync(_harness.Envelope, _harness.FaultedDrainResult);
+
+        var incident = await _harness.IncidentStore.FindAsync("wfexec-1", PoisonedSchedulerWorkIncidentObserver.IncidentId("workitem-1"));
+        Assert.NotNull(incident);
+        Assert.Equal("activity-1", incident!.ActivityExecutionId);
+        Assert.Equal("node-1", incident.ExecutableNodeId);
+        Assert.Equal("activity-1", incident.Metadata[RuntimeMetadataKeys.ActivityExecutionId]);
+        Assert.Equal("text", incident.Metadata[RuntimeMetadataKeys.InputKey]);
+
+        var persistedActivity = await _harness.ActivityStore.FindAsync("wfexec-1", "activity-1");
+        Assert.NotNull(persistedActivity);
+        Assert.Equal(ActivityExecutionStatus.Scheduled, persistedActivity!.Status);
+        Assert.Null(persistedActivity.StartedAt);
+        Assert.Null(persistedActivity.CompletedAt);
+        Assert.Null(persistedActivity.InputSnapshot);
+        Assert.Null(persistedActivity.Attempts);
+        Assert.Contains(incident.IncidentId, persistedActivity.IncidentIds);
+
+        var commit = Assert.Single(_harness.CommitStore.ListCommits()).Commit;
+        Assert.Equal("activity-1", Assert.Single(commit.Checkpoint.ActivityExecutionIds));
+        Assert.Equal(ActivityExecutionStatus.Scheduled, Assert.Single(commit.StateChanges.ActivityExecutions).State.Status);
+
+        var projection = await _harness.InspectionStore.FindAsync("wfexec-1", "activity-1");
+        Assert.NotNull(projection);
+        var failure = Assert.Single(projection!.ValueSnapshots);
+        Assert.Equal(ActivityExecutionInspectionValueSubject.ActivityInput, failure.Subject);
+        Assert.Equal("text", failure.InputKey);
+        Assert.Equal(incident.IncidentId, failure.EvaluationId);
+        Assert.Equal("Evaluation", failure.Phase);
+        Assert.Equal(RuntimePayloadCaptureMode.MetadataOnly, failure.CaptureMode);
+        Assert.True(failure.IsSensitive);
+        Assert.Null(failure.Payload);
+        Assert.Equal("ExpressionEvaluationFailed", failure.Failure!.Code);
+        Assert.Equal("Portable expression input fault was redacted (System.InvalidOperationException).", failure.Failure.Message);
+        Assert.Equal(incident.IncidentId, failure.Failure.IncidentId);
+
+        var visibleView = ActivityExecutionInspectionView.From(projection, canInspectSensitiveValues: true);
+        var visibleFailure = Assert.Single(visibleView.ValueSnapshots);
+        Assert.Equal("captureFailed", visibleFailure.CaptureState);
+        Assert.Equal("Portable expression input fault was redacted (System.InvalidOperationException).", visibleFailure.Failure!.Message);
+
+        var withheldView = ActivityExecutionInspectionView.From(projection, canInspectSensitiveValues: false);
+        var withheldFailure = Assert.Single(withheldView.ValueSnapshots);
+        Assert.Equal("unavailable", withheldFailure.CaptureState);
+        Assert.Null(withheldFailure.Failure);
+
+        var successfulNoValue = failure with { EvaluationId = "successful-evaluation", Failure = null };
+        var successfulView = ActivityExecutionInspectionValueSnapshotView.From(successfulNoValue, canInspectSensitiveValues: false);
+        Assert.Equal("metadataOnly", successfulView.CaptureState);
+        Assert.Null(successfulView.Failure);
     }
 
     [Fact]
@@ -197,6 +269,8 @@ public sealed class PoisonedSchedulerWorkIncidentObserverTests
         public InMemoryWorkflowSchedulerPoisonStore PoisonStore { get; } = new();
         public InMemoryIncidentStateStore IncidentStore { get; } = new();
         public InMemoryWorkflowExecutionStateStore WorkflowStore { get; } = new();
+        public InMemoryActivityExecutionStateStore ActivityStore { get; } = new();
+        public InMemoryActivityExecutionInspectionStore InspectionStore { get; } = new();
         public InMemoryRuntimeCheckpointCommitStore CommitStore { get; }
         public PoisonedSchedulerWorkIncidentObserver Observer { get; }
         public BlockingIncidentWorkflowFaultObserver FaultObserver { get; }
@@ -207,24 +281,29 @@ public sealed class PoisonedSchedulerWorkIncidentObserverTests
         public Harness(DateTimeOffset now, IIncidentStateStore? commitIncidentStore = null)
         {
             _now = now;
-            var activityStore = new InMemoryActivityExecutionStateStore();
-            var inspectionStore = new InMemoryActivityExecutionInspectionStore();
             CommitStore = new InMemoryRuntimeCheckpointCommitStore(
                 WorkflowStore,
-                activityExecutionStateStore: activityStore,
+                activityExecutionStateStore: ActivityStore,
                 // Separate store for the commit-time incident write so a test can make persistence throw while the
                 // observer's own dedupe lookup (against IncidentStore) still succeeds.
                 incidentStateStore: commitIncidentStore ?? IncidentStore,
-                activityExecutionInspectionWriter: inspectionStore,
+                activityExecutionInspectionWriter: InspectionStore,
                 rootWriteLeaseManager: PassThroughWorkflowExecutableRootWriteLeaseManager.Instance);
             var committer = new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(), CommitStore, new AsyncLocalRuntimeExecutionOwnershipContextAccessor(), [], []);
             var timeProvider = new FakeTimeProvider(now);
-            Observer = new PoisonedSchedulerWorkIncidentObserver(PoisonStore, IncidentStore, committer, timeProvider);
+            var inspectionAccumulator = new RuntimeActivityExecutionInspectionAccumulator(InspectionStore);
+            Observer = new PoisonedSchedulerWorkIncidentObserver(
+                PoisonStore,
+                IncidentStore,
+                committer,
+                timeProvider,
+                activityExecutionStateStore: ActivityStore,
+                inspectionAccumulator: inspectionAccumulator);
             FaultObserver = new BlockingIncidentWorkflowFaultObserver(
                 IncidentStore,
                 WorkflowStore,
-                activityStore,
-                new RuntimeActivityExecutionInspectionAccumulator(inspectionStore),
+                ActivityStore,
+                inspectionAccumulator,
                 committer,
                 timeProvider);
             Envelope = NewEnvelope();
@@ -247,7 +326,8 @@ public sealed class PoisonedSchedulerWorkIncidentObserverTests
             RuntimeSchedulerPoisonDisposition disposition,
             DateTimeOffset? nextRetryAt = null,
             string workItemId = "workitem-1",
-            RuntimeFaultInfo? innerFault = null) =>
+            RuntimeFaultInfo? innerFault = null,
+            IReadOnlyDictionary<string, string>? metadata = null) =>
             PoisonStore.RecordAsync(new RuntimeSchedulerPoisonRecord(
                 workflowExecutionId: "wfexec-1",
                 workItemId: workItemId,
@@ -259,6 +339,7 @@ public sealed class PoisonedSchedulerWorkIncidentObserverTests
                 firstFailedAt: _now,
                 lastFailedAt: _now,
                 nextRetryAt: nextRetryAt,
+                metadata: metadata,
                 innerFault: innerFault));
 
         public ValueTask<WorkflowExecutionState> SaveWorkflow(WorkflowExecutionStatus status) =>
@@ -275,6 +356,27 @@ public sealed class PoisonedSchedulerWorkIncidentObserverTests
                 ParentWorkflowExecutionId: null,
                 TenantId: null,
                 SystemMetadata: new Dictionary<string, string>()));
+
+        public ValueTask<ActivityExecutionState> SaveActivity() =>
+            ActivityStore.SaveAsync(new ActivityExecutionState(
+                Execution: new ActivityExecution("activity-1", "wfexec-1", "node-1", "authored-1", "Elsa.WriteLine", "1.0"),
+                Status: ActivityExecutionStatus.Scheduled,
+                SubStatus: null,
+                ExecutionSequence: 1,
+                ScheduledAt: _now,
+                StartedAt: null,
+                CompletedAt: null,
+                SchedulingActivityExecutionId: null,
+                ParentActivityExecutionId: null,
+                BranchId: null,
+                IterationId: null,
+                Provenance: ActivitySchedulingProvenance.Empty,
+                CallStackDepth: null,
+                BookmarkIds: [],
+                IncidentIds: [],
+                FaultCount: 0,
+                AggregateFaultCount: 0,
+                Metadata: new Dictionary<string, string>()));
 
         private WorkflowExecutionCommandEnvelope NewEnvelope()
         {

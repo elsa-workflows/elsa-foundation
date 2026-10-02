@@ -1,9 +1,11 @@
 using System.Text.Json;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Executions;
 using Elsa.Workflows.Runtime.Services.Incidents;
 using Elsa.Workflows.Runtime.Services.Scheduler;
+using Elsa.Workflows.Runtime.Services.Values;
 using Elsa.Workflows.Runtime.Services.WorkHandlers;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
@@ -104,6 +106,96 @@ public sealed class WorkflowSchedulerPoisonDrainTests
         Assert.NotNull(record.InnerFault);
         Assert.Equal(typeof(ArgumentException).FullName, record.InnerFault!.ExceptionType);
         Assert.Equal("GW-PHYSICAL-037: projected column overflow.", record.InnerFault.Message);
+    }
+
+    [Fact]
+    public async Task DrainAsync_PortableExpressionFailure_PersistsActivityAddressAndTypedFailureMetadata()
+    {
+        var fixture = NewAssociatedWorkDrain(
+            new AlwaysFaultingSchedulerWorkHandler(_ => NewExpressionFailure("qaMissingVariable is not defined.")),
+            new NoopRuntimeDomainRetryPolicy());
+        await fixture.Queue.EnqueueAsync(NewStartActivityWorkItem(1));
+
+        var result = await fixture.Drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1"));
+
+        Assert.True(result.StoppedOnFault);
+        var record = Assert.Single(await fixture.PoisonStore.ListAsync("wfexec-1"));
+        Assert.Equal("activity-1", record.Metadata[RuntimeMetadataKeys.ActivityExecutionId]);
+        Assert.Equal("node-1", record.Metadata[RuntimeMetadataKeys.ExecutableNodeId]);
+        Assert.Equal("text", record.Metadata[RuntimeMetadataKeys.InputKey]);
+        Assert.Equal("ExpressionEvaluationFailed", record.Metadata[RuntimeMetadataKeys.InputFailureCode]);
+        Assert.Equal("JavaScript", record.Metadata[RuntimeMetadataKeys.ExpressionLanguage]);
+        Assert.Equal("Evaluation", record.Metadata[RuntimeMetadataKeys.InputEvaluationPhase]);
+        Assert.Equal("qaMissingVariable is not defined.", record.InnerFault!.Message);
+    }
+
+    [Fact]
+    public async Task DrainAsync_LaterGenericFailure_KeepsPayloadAddressAndDropsStaleInputFailureMetadata()
+    {
+        var failureCount = 0;
+        var handler = new AlwaysFaultingSchedulerWorkHandler(_ => ++failureCount == 1
+            ? NewExpressionFailure("qaMissingVariable is not defined.")
+            : new InvalidOperationException("storage unavailable"));
+        var fixture = NewAssociatedWorkDrain(
+            handler,
+            new StubRetryPolicy(new RuntimeDomainRetryDecision(RuntimeDomainRetryMode.RetryNow, null, "retry")));
+
+        await fixture.Queue.EnqueueAsync(NewStartActivityWorkItem(1));
+        await fixture.Drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1", maxWorkItems: 1));
+        await fixture.Drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1", maxWorkItems: 1));
+
+        var record = Assert.Single(await fixture.PoisonStore.ListAsync("wfexec-1"));
+        Assert.Equal(RuntimeSchedulerPoisonDisposition.Poisoned, record.Disposition);
+        Assert.Equal("activity-1", record.Metadata[RuntimeMetadataKeys.ActivityExecutionId]);
+        Assert.Equal("node-1", record.Metadata[RuntimeMetadataKeys.ExecutableNodeId]);
+        Assert.False(record.Metadata.ContainsKey(RuntimeMetadataKeys.InputFailureCode));
+        Assert.False(record.Metadata.ContainsKey(RuntimeMetadataKeys.InputKey));
+        Assert.False(record.Metadata.ContainsKey(RuntimeMetadataKeys.ExpressionLanguage));
+        Assert.False(record.Metadata.ContainsKey(RuntimeMetadataKeys.InputEvaluationPhase));
+        Assert.Equal("RetryNow", record.Metadata[RuntimeMetadataKeys.SchedulerPoisonRetryMode]);
+        Assert.Equal("retry", record.Metadata[RuntimeMetadataKeys.SchedulerPoisonRetryReason]);
+    }
+
+    [Theory]
+    [InlineData(WorkflowExecutionCommandKind.ScheduleActivity)]
+    [InlineData(WorkflowExecutionCommandKind.CompleteActivity)]
+    [InlineData(WorkflowExecutionCommandKind.ResumeBookmark)]
+    [InlineData(WorkflowExecutionCommandKind.CreateBookmark)]
+    [InlineData(WorkflowExecutionCommandKind.StartActivity)]
+    [InlineData(WorkflowExecutionCommandKind.InvokeActivity)]
+    [InlineData(WorkflowExecutionCommandKind.NotifyParentActivity)]
+    [InlineData(WorkflowExecutionCommandKind.RetryActivityBoundary)]
+    [InlineData(WorkflowExecutionCommandKind.CancelActivityScope)]
+    public async Task DrainAsync_ActivityCommandPoison_PreservesPayloadAddress(WorkflowExecutionCommandKind commandKind)
+    {
+        var fixture = NewAssociatedWorkDrain(
+            new AlwaysFaultingSchedulerWorkHandler(),
+            new NoopRuntimeDomainRetryPolicy());
+        await fixture.Queue.EnqueueAsync(NewWorkItem(1, commandKind, NewActivityAddressPayload()));
+
+        await fixture.Drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1"));
+
+        var record = Assert.Single(await fixture.PoisonStore.ListAsync("wfexec-1"));
+        Assert.Equal("activity-1", record.Metadata[RuntimeMetadataKeys.ActivityExecutionId]);
+        Assert.Equal("node-1", record.Metadata[RuntimeMetadataKeys.ExecutableNodeId]);
+    }
+
+    [Fact]
+    public async Task DrainAsync_WorkflowCommandPoison_DoesNotInferActivityFromArbitraryPayloadFields()
+    {
+        var fixture = NewAssociatedWorkDrain(
+            new AlwaysFaultingSchedulerWorkHandler(),
+            new NoopRuntimeDomainRetryPolicy());
+        await fixture.Queue.EnqueueAsync(NewWorkItem(
+            1,
+            WorkflowExecutionCommandKind.RunSchedulerWork,
+            NewActivityAddressPayload()));
+
+        await fixture.Drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1"));
+
+        var record = Assert.Single(await fixture.PoisonStore.ListAsync("wfexec-1"));
+        Assert.False(record.Metadata.ContainsKey(RuntimeMetadataKeys.ActivityExecutionId));
+        Assert.False(record.Metadata.ContainsKey(RuntimeMetadataKeys.ExecutableNodeId));
     }
 
     [Fact]
@@ -241,21 +333,69 @@ public sealed class WorkflowSchedulerPoisonDrainTests
             poisonStore: poisonStore,
             retryPolicy: retryPolicy);
 
-    private RuntimeSchedulerWorkItem NewWorkItem(int index)
+    private RuntimeSchedulerWorkItem NewWorkItem(
+        int index,
+        WorkflowExecutionCommandKind commandKind = WorkflowExecutionCommandKind.RunSchedulerWork,
+        JsonElement? payload = null)
     {
         using var document = JsonDocument.Parse($$"""{"workItemId":"work-{{index}}"}""");
         return new(
             workItemId: $"work-{index}",
             workflowExecutionId: "wfexec-1",
             commandId: $"command-{index}",
-            commandKind: WorkflowExecutionCommandKind.RunSchedulerWork,
+            commandKind: commandKind,
             envelopeId: $"envelope-{index}",
             idempotencyKey: $"wfexec-1:command-{index}:{Guid.NewGuid():N}",
             enqueuedAt: _now,
             recordedAt: _now,
             sequence: index,
-            payload: document.RootElement.Clone());
+            payload: payload ?? document.RootElement.Clone());
     }
+
+    private AssociatedWorkDrainFixture NewAssociatedWorkDrain(
+        IWorkflowSchedulerWorkHandler handler,
+        IRuntimeDomainRetryPolicy retryPolicy)
+    {
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var poisonStore = new InMemoryWorkflowSchedulerPoisonStore();
+        var drainer = TestSchedulerDrainer.Create(
+            queue,
+            [handler, new NoopWorkflowSchedulerWorkHandler()],
+            new FakeTimeProvider(_now),
+            poisonStore: poisonStore,
+            retryPolicy: retryPolicy);
+        return new(queue, poisonStore, drainer);
+    }
+
+    private RuntimeSchedulerWorkItem NewStartActivityWorkItem(int index)
+    {
+        var executable = new WorkflowExecutableIdentity("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test");
+        var payload = JsonSerializer.SerializeToElement(new RuntimeStartActivityCommandPayload(
+            executable,
+            executableNodeId: "node-1",
+            activityExecutionId: "activity-1",
+            reason: RuntimeStartActivityCommandPayload.ScheduledActivityReason));
+        return NewWorkItem(index, WorkflowExecutionCommandKind.StartActivity, payload);
+    }
+
+    private static JsonElement NewActivityAddressPayload()
+    {
+        using var document = JsonDocument.Parse("""{"activityExecutionId":"activity-1","executableNodeId":"node-1"}""");
+        return document.RootElement.Clone();
+    }
+
+    private static ExpressionInputFailureException NewExpressionFailure(string rootCause) => new(
+        ExpressionInputFailureException.ExpressionEvaluationFailed,
+        inputKey: "text",
+        expressionLanguage: "JavaScript",
+        phase: ExpressionInputFailureException.EvaluationPhaseName,
+        message: "Input 'text' on executable node 'node-1' failed to evaluate its portable 'JavaScript' expression.",
+        innerException: new InvalidOperationException(rootCause));
+
+    private sealed record AssociatedWorkDrainFixture(
+        InMemoryWorkflowSchedulerWorkQueue Queue,
+        InMemoryWorkflowSchedulerPoisonStore PoisonStore,
+        WorkflowSchedulerDrainer Drainer);
 
     private sealed class AlwaysFaultingSchedulerWorkHandler(Func<RuntimeSchedulerWorkItem, Exception>? exceptionFactory = null) : IWorkflowSchedulerWorkHandler
     {

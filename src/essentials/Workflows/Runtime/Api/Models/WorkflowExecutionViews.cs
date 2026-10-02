@@ -387,7 +387,7 @@ public sealed record ActivityExecutionInspectionValueSnapshotView(
             snapshot.Name,
             snapshot.Subject.ToString(),
             snapshot.CaptureMode.ToString(),
-            DetermineCaptureState(snapshot),
+            DetermineCaptureState(snapshot, canInspectSensitiveValues),
             snapshot.Type,
             snapshot.CapturedAt,
             null,
@@ -402,9 +402,9 @@ public sealed record ActivityExecutionInspectionValueSnapshotView(
             DetermineAccessState(snapshot, canInspectSensitiveValues, canResolveValuePayloads),
             canInspectSensitiveValues ? snapshot.Failure : null);
 
-    private static string DetermineCaptureState(ActivityExecutionInspectionValueSnapshot snapshot) =>
+    private static string DetermineCaptureState(ActivityExecutionInspectionValueSnapshot snapshot, bool canInspectSensitiveValues) =>
         snapshot.Failure is not null
-            ? "captureFailed"
+            ? (snapshot.IsSensitive && !canInspectSensitiveValues ? "unavailable" : "captureFailed")
             : snapshot.CaptureMode switch
         {
             RuntimePayloadCaptureMode.None => "notCaptured",

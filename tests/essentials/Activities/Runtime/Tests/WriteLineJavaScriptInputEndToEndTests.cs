@@ -9,7 +9,10 @@ using Elsa.Expressions.JavaScript.Jint;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.SystemText;
 using Elsa.Tasks.Core;
+using Elsa.Workflows.Runtime.Api.Models;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -40,6 +43,48 @@ public sealed class WriteLineJavaScriptInputEndToEndTests
         run.AssertWorkflowCompleted();
         var state = run.AssertCompleted("node-wl");
         Assert.Equal("a 1", state.InputSnapshot!.Values["text"].InlineValue!.Value.GetString());
+    }
+
+    [Fact]
+    public async Task WriteLine_with_undefined_javascript_input_records_associated_failed_input_without_a_snapshot()
+    {
+        await using var harness = NewHarness("wl-failed-input");
+
+        var run = await harness.RunAsync(
+            WorkflowExecutionHarness.NewExecutable(WriteLineNode("node-wl", "qaMissingVariable")));
+
+        var activity = run.State("node-wl");
+        Assert.Equal(ActivityExecutionStatus.Scheduled, activity.Status);
+        Assert.Null(activity.InputSnapshot);
+        Assert.Null(activity.Attempts);
+        Assert.Equal(WorkflowExecutionStatus.Running, run.WorkflowState!.Status);
+        Assert.Null(run.WorkflowState.CompletedAt);
+
+        var incident = Assert.Single(await harness.Services.GetRequiredService<IIncidentStateStore>()
+            .ListAsync(run.WorkflowState.WorkflowExecutionId));
+        Assert.Equal(IncidentStatus.Blocking, incident.Status);
+        Assert.Equal(IncidentResolutionActionKinds.WaitForIntervention, incident.ResolutionOutcome!.ActionKind);
+        Assert.Equal(activity.Execution.ActivityExecutionId, incident.ActivityExecutionId);
+        Assert.Equal("node-wl", incident.ExecutableNodeId);
+        Assert.Equal("text", incident.Metadata[RuntimeMetadataKeys.InputKey]);
+        Assert.Equal("ExpressionEvaluationFailed", incident.Metadata[RuntimeMetadataKeys.InputFailureCode]);
+        Assert.Equal("JavaScript", incident.Metadata[RuntimeMetadataKeys.ExpressionLanguage]);
+        Assert.Equal("Evaluation", incident.Metadata[RuntimeMetadataKeys.InputEvaluationPhase]);
+        Assert.Contains(incident.IncidentId, activity.IncidentIds);
+
+        var inspection = await harness.Services.GetRequiredService<IActivityExecutionInspectionStore>()
+            .FindAsync(run.WorkflowState.WorkflowExecutionId, activity.Execution.ActivityExecutionId);
+        Assert.NotNull(inspection);
+        var failure = Assert.Single(inspection!.ValueSnapshots);
+        Assert.Equal(ActivityExecutionInspectionValueSubject.ActivityInput, failure.Subject);
+        Assert.Equal("text", failure.InputKey);
+        Assert.Equal(incident.IncidentId, failure.Failure!.IncidentId);
+        Assert.Null(failure.Payload);
+
+        var inspectionView = ActivityExecutionInspectionView.From(inspection, canInspectSensitiveValues: false);
+        var failureView = Assert.Single(inspectionView.ValueSnapshots);
+        Assert.Equal("captureFailed", failureView.CaptureState);
+        Assert.Equal("qaMissingVariable is not defined.", failureView.Failure!.Message);
     }
 
     private static WorkflowExecutionHarness NewHarness(params string[] ids)

@@ -2,6 +2,7 @@ using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
+using Elsa.Workflows.Runtime.Services.Values;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -35,12 +36,33 @@ public sealed class PoisonedSchedulerWorkIncidentObserver : IWorkflowSchedulerDr
     private readonly RuntimeCheckpointCommitter _checkpointCommitter;
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<PoisonedSchedulerWorkIncidentObserver> _logger;
+    private readonly IActivityExecutionStateStore? _activityExecutionStateStore;
+    private readonly IRuntimeActivityExecutionInspectionAccumulator? _inspectionAccumulator;
 
     public PoisonedSchedulerWorkIncidentObserver(
         IWorkflowSchedulerPoisonStore poisonStore,
         IIncidentStateStore incidentStateStore,
         RuntimeCheckpointCommitter checkpointCommitter,
         TimeProvider timeProvider,
+        ILogger<PoisonedSchedulerWorkIncidentObserver>? logger = null)
+        : this(
+            poisonStore,
+            incidentStateStore,
+            checkpointCommitter,
+            timeProvider,
+            activityExecutionStateStore: null,
+            inspectionAccumulator: null,
+            logger: logger)
+    {
+    }
+
+    public PoisonedSchedulerWorkIncidentObserver(
+        IWorkflowSchedulerPoisonStore poisonStore,
+        IIncidentStateStore incidentStateStore,
+        RuntimeCheckpointCommitter checkpointCommitter,
+        TimeProvider timeProvider,
+        IActivityExecutionStateStore? activityExecutionStateStore,
+        IRuntimeActivityExecutionInspectionAccumulator? inspectionAccumulator,
         ILogger<PoisonedSchedulerWorkIncidentObserver>? logger = null)
     {
         ArgumentNullException.ThrowIfNull(poisonStore);
@@ -53,6 +75,8 @@ public sealed class PoisonedSchedulerWorkIncidentObserver : IWorkflowSchedulerDr
         _checkpointCommitter = checkpointCommitter;
         _timeProvider = timeProvider;
         _logger = logger ?? NullLogger<PoisonedSchedulerWorkIncidentObserver>.Instance;
+        _activityExecutionStateStore = activityExecutionStateStore;
+        _inspectionAccumulator = inspectionAccumulator;
     }
 
     /// <summary>
@@ -136,11 +160,13 @@ public sealed class PoisonedSchedulerWorkIncidentObserver : IWorkflowSchedulerDr
     {
         var occurredAt = _timeProvider.GetUtcNow();
         var metadata = NewMetadata(incidentId, record);
+        var activityExecutionId = ValueOrNull(metadata, RuntimeMetadataKeys.ActivityExecutionId);
+        var executableNodeId = ValueOrNull(metadata, RuntimeMetadataKeys.ExecutableNodeId);
         var incident = new IncidentState(
             incidentId: incidentId,
             workflowExecutionId: workflowExecutionId,
-            activityExecutionId: null,
-            executableNodeId: null,
+            activityExecutionId: activityExecutionId,
+            executableNodeId: executableNodeId,
             severity: IncidentSeverity.Critical,
             status: IncidentStatus.Blocking,
             resolutionOutcome: new IncidentResolutionOutcome(
@@ -159,19 +185,75 @@ public sealed class PoisonedSchedulerWorkIncidentObserver : IWorkflowSchedulerDr
         // Fold the work-item id into a fixed-length fingerprint so these ledger ids stay bounded too (#923); the
         // pair (workflowExecutionId, work-item fingerprint) keeps them deterministic and unique per poison record.
         var workItemFingerprint = RuntimeChainId.Fingerprint(record.WorkItemId);
+        var checkpointId = $"checkpoint:{workflowExecutionId}:scheduler-poison:{workItemFingerprint}";
+        var activityStateChanges = new List<RuntimeStateChange<ActivityExecutionState>>();
+        var activityInspectionChanges = new List<RuntimeStateChange<ActivityExecutionInspectionProjection>>();
+        var checkpointActivityExecutionIds = new List<string>();
+        if (activityExecutionId is not null && _activityExecutionStateStore is not null)
+        {
+            try
+            {
+                var activityState = await _activityExecutionStateStore.FindAsync(workflowExecutionId, activityExecutionId, cancellationToken);
+                if (activityState is not null &&
+                    (executableNodeId is null || StringComparer.Ordinal.Equals(activityState.Execution.ExecutableNodeId, executableNodeId)))
+                {
+                    var associatedState = activityState.IncidentIds.Contains(incidentId, StringComparer.Ordinal)
+                        ? activityState
+                        : activityState with { IncidentIds = activityState.IncidentIds.Append(incidentId).ToArray() };
+                    var inputFailure = BuildInputFailureSnapshot(incident, occurredAt);
+                    var projection = _inspectionAccumulator is null
+                        ? null
+                        : await _inspectionAccumulator.BuildProjectionAsync(
+                            associatedState,
+                            checkpointId,
+                            occurredAt,
+                            incidents: [ActivityExecutionIncidentSummary.From(incident)],
+                            valueSnapshots: inputFailure is null ? [] : [inputFailure],
+                            metadata: metadata,
+                            cancellationToken: cancellationToken);
+
+                    checkpointActivityExecutionIds.Add(activityExecutionId);
+                    activityStateChanges.Add(new RuntimeStateChange<ActivityExecutionState>(
+                        StateId: activityExecutionId,
+                        Operation: RuntimeStateChangeOperation.Upsert,
+                        State: associatedState,
+                        Metadata: metadata));
+                    if (projection is not null)
+                        activityInspectionChanges.Add(new RuntimeStateChange<ActivityExecutionInspectionProjection>(
+                            StateId: activityExecutionId,
+                            Operation: RuntimeStateChangeOperation.Upsert,
+                            State: projection,
+                            Metadata: metadata));
+                }
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception exception)
+            {
+                // An optional activity-side read projection must not prevent the durable poison incident itself from
+                // being committed. The incident retains its payload-derived address if that projection is unavailable.
+                _logger.LogWarning(
+                    exception,
+                    "Failed to associate poisoned scheduler work item {WorkItemId} with activity execution {ActivityExecutionId}; recording the incident without an activity projection.",
+                    record.WorkItemId,
+                    activityExecutionId);
+            }
+        }
         var commit = new RuntimeCheckpointCommit(
             CommitId: $"commit:{workflowExecutionId}:scheduler-poison:{workItemFingerprint}",
             Checkpoint: new RuntimeCheckpoint(
-                CheckpointId: $"checkpoint:{workflowExecutionId}:scheduler-poison:{workItemFingerprint}",
+                CheckpointId: checkpointId,
                 Name: RuntimeCheckpointNames.IncidentRecorded,
                 WorkflowExecutionId: workflowExecutionId,
                 OccurredAt: occurredAt,
-                ActivityExecutionIds: [],
+                ActivityExecutionIds: checkpointActivityExecutionIds,
                 Metadata: metadata),
             StateChanges: new RuntimeCheckpointStateChangeSet(
                 workflowExecution: null,
                 scheduler: null,
-                activityExecutions: [],
+                activityExecutions: activityStateChanges,
                 bookmarks: [],
                 durableValues: [],
                 incidents:
@@ -183,7 +265,7 @@ public sealed class PoisonedSchedulerWorkIncidentObserver : IWorkflowSchedulerDr
                         Metadata: metadata)
                 ],
                 operational: [],
-                activityExecutionInspections: []),
+                activityExecutionInspections: activityInspectionChanges),
             PostCommitIntents: [],
             Metadata: metadata);
 
@@ -211,4 +293,53 @@ public sealed class PoisonedSchedulerWorkIncidentObserver : IWorkflowSchedulerDr
         }
         return metadata;
     }
+
+    private static ActivityExecutionInspectionValueSnapshot? BuildInputFailureSnapshot(
+        IncidentState incident,
+        DateTimeOffset capturedAt)
+    {
+        if (!incident.Metadata.TryGetValue(RuntimeMetadataKeys.InputFailureCode, out var failureCode) ||
+            failureCode is not (ExpressionInputFailureException.ExpressionEvaluationFailed or ExpressionInputFailureException.InputMaterializationFailed) ||
+            !incident.Metadata.TryGetValue(RuntimeMetadataKeys.InputKey, out var inputKey) ||
+            string.IsNullOrWhiteSpace(inputKey))
+            return null;
+
+        var phase = incident.Metadata.GetValueOrDefault(RuntimeMetadataKeys.InputEvaluationPhase);
+        var language = incident.Metadata.GetValueOrDefault(RuntimeMetadataKeys.ExpressionLanguage);
+        var snapshotMetadata = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            [RuntimeMetadataKeys.IncidentId] = incident.IncidentId,
+            [RuntimeMetadataKeys.InputFailureCode] = failureCode
+        };
+        if (!string.IsNullOrWhiteSpace(language))
+            snapshotMetadata[RuntimeMetadataKeys.ExpressionLanguage] = language;
+        if (!string.IsNullOrWhiteSpace(phase))
+            snapshotMetadata[RuntimeMetadataKeys.InputEvaluationPhase] = phase;
+
+        var message = incident.Metadata.GetValueOrDefault(RuntimeMetadataKeys.FaultInnerMessage);
+        if (string.IsNullOrWhiteSpace(message))
+            message = "Input evaluation failed before a value snapshot was committed.";
+
+        return new ActivityExecutionInspectionValueSnapshot(
+            Name: inputKey,
+            Subject: ActivityExecutionInspectionValueSubject.ActivityInput,
+            CaptureMode: RuntimePayloadCaptureMode.MetadataOnly,
+            Type: null,
+            CapturedAt: capturedAt,
+            Payload: null,
+            CaptureReason: "Input evaluation failed before a value snapshot was committed.",
+            IsSensitive: IsProtectedFailure(incident),
+            Metadata: snapshotMetadata,
+            InputKey: inputKey,
+            EvaluationId: incident.IncidentId,
+            Phase: phase,
+            Failure: new RuntimeInputEvaluationFailure(failureCode, message, incident.IncidentId));
+    }
+
+    private static bool IsProtectedFailure(IncidentState incident) =>
+        !incident.Metadata.TryGetValue(RuntimeMetadataKeys.FaultInnerType, out var innerType) ||
+        StringComparer.Ordinal.Equals(innerType, typeof(RedactedPortableExpressionException).FullName);
+
+    private static string? ValueOrNull(IReadOnlyDictionary<string, string> metadata, string key) =>
+        metadata.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value) ? value : null;
 }

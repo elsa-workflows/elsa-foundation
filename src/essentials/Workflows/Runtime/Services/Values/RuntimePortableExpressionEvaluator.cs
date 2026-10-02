@@ -76,16 +76,14 @@ internal sealed class RuntimePortableExpressionEvaluator(
                 $"Ambient variable read on portable expression input '{inputName}' on executable node '{nodeId}'");
         }
 
+        PortableExpressionParameters parameters;
+        IReadOnlyDictionary<string, JsonElement>? ambientVariables;
         try
         {
-            var parameters = await MaterializeParametersAsync(expression, resolutionContext, nodeId, inputName, cancellationToken);
-            var ambientVariables = referencedAmbient.Count == 0
+            parameters = await MaterializeParametersAsync(expression, resolutionContext, nodeId, inputName, cancellationToken);
+            ambientVariables = referencedAmbient.Count == 0
                 ? null
                 : await MaterializeAmbientVariableValuesAsync(referencedAmbient, cancellationToken);
-            var request = new ExpressionEvaluationRequest(definition, parameters.Values, ambientVariables, cancellationToken);
-            return new PortableExpressionEvaluation(
-                await portableEvaluator.EvaluateAsync(request),
-                effectivePolicy);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -99,14 +97,61 @@ internal sealed class RuntimePortableExpressionEvaluator(
         }
         catch (Exception exception)
         {
-            var message = $"Input '{inputName}' on executable node '{nodeId}' failed to materialize or evaluate its portable '{expression.Language}' expression with fingerprint '{definition.Fingerprint}'.";
-            if (effectivePolicy.IsSensitive ||
-                effectivePolicy.RequiresEncryption ||
-                !string.IsNullOrWhiteSpace(effectivePolicy.RedactionMode))
-                throw new InvalidOperationException(message, new RedactedPortableExpressionException(exception.GetType()));
-
-            throw new InvalidOperationException(message, exception);
+            throw NewInputFailure(
+                ExpressionInputFailureException.InputMaterializationFailed,
+                ExpressionInputFailureException.MaterializationPhase,
+                definition,
+                expression,
+                inputName,
+                nodeId,
+                effectivePolicy,
+                exception);
         }
+
+        var request = new ExpressionEvaluationRequest(definition, parameters.Values, ambientVariables, cancellationToken);
+        try
+        {
+            return new PortableExpressionEvaluation(await portableEvaluator.EvaluateAsync(request), effectivePolicy);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (WithheldValueException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            throw NewInputFailure(
+                ExpressionInputFailureException.ExpressionEvaluationFailed,
+                ExpressionInputFailureException.EvaluationPhaseName,
+                definition,
+                expression,
+                inputName,
+                nodeId,
+                effectivePolicy,
+                exception);
+        }
+    }
+
+    private static ExpressionInputFailureException NewInputFailure(
+        string code,
+        string phase,
+        ExpressionDefinition definition,
+        RuntimeExpressionBinding expression,
+        string inputName,
+        string nodeId,
+        ValueProtectionPolicy effectivePolicy,
+        Exception exception)
+    {
+        var message = $"Input '{inputName}' on executable node '{nodeId}' failed to materialize or evaluate its portable '{expression.Language}' expression with fingerprint '{definition.Fingerprint}'.";
+        var cause = effectivePolicy.IsSensitive ||
+                    effectivePolicy.RequiresEncryption ||
+                    !string.IsNullOrWhiteSpace(effectivePolicy.RedactionMode)
+            ? new RedactedPortableExpressionException(exception.GetType())
+            : exception;
+        return new ExpressionInputFailureException(code, inputName, expression.Language, phase, message, cause);
     }
 
     private static ValueProtectionPolicy? DetermineDependencyPolicy(

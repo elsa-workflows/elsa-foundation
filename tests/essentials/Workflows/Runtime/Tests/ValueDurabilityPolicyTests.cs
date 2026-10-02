@@ -653,8 +653,49 @@ public sealed class ValueDurabilityPolicyTests
                     Now)
                 .AsTask());
 
+        var inputFailure = Assert.IsType<ExpressionInputFailureException>(exception);
+        Assert.Equal(ExpressionInputFailureException.ExpressionEvaluationFailed, inputFailure.InputFailureCode);
+        Assert.Equal("message", inputFailure.InputKey);
+        Assert.Equal("test", inputFailure.ExpressionLanguage);
+        Assert.Equal(ExpressionInputFailureException.EvaluationPhaseName, inputFailure.EvaluationPhase);
         Assert.Contains("portable 'test' expression", exception.Message, StringComparison.Ordinal);
         Assert.Contains("fingerprint 'sha256:", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Portable_expression_parameter_materialization_failure_reports_its_phase()
+    {
+        var expression = new RuntimeExpressionBinding(
+            "test",
+            "value",
+            parameters: new Dictionary<string, ExpressionParameterBinding>
+            {
+                ["value"] = new WorkflowRequestExpressionParameterBinding("missing")
+            });
+        var binding = new RuntimeInputBinding(
+            "message",
+            StringType,
+            ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.Expression,
+            expression: expression);
+
+        var exception = await Assert.ThrowsAsync<ExpressionInputFailureException>(() =>
+            new RuntimeActivityInputMaterializer(
+                    new RuntimeInputBindingResolver(),
+                    new StringTypeRegistry(),
+                    new EchoPortableEvaluator(),
+                    externalPayloadStore: null)
+                .MaterializeSnapshotAsync(
+                    NewTypedNode(binding, ActivityValuePolicy.Default),
+                    "invocation-1",
+                    NewResolutionContext(),
+                    Now)
+                .AsTask());
+
+        Assert.Equal(ExpressionInputFailureException.InputMaterializationFailed, exception.InputFailureCode);
+        Assert.Equal("message", exception.InputKey);
+        Assert.Equal("test", exception.ExpressionLanguage);
+        Assert.Equal(ExpressionInputFailureException.MaterializationPhase, exception.EvaluationPhase);
     }
 
     [Fact]
@@ -693,6 +734,9 @@ public sealed class ValueDurabilityPolicyTests
                 .MaterializeSnapshotAsync(NewTypedNode(binding, ActivityValuePolicy.Default), "invocation-1", context, Now)
                 .AsTask());
 
+        var inputFailure = Assert.IsType<ExpressionInputFailureException>(exception);
+        Assert.Equal(ExpressionInputFailureException.ExpressionEvaluationFailed, inputFailure.InputFailureCode);
+        Assert.Equal("message", inputFailure.InputKey);
         Assert.NotNull(exception.InnerException);
         Assert.Contains(typeof(InvalidOperationException).FullName!, exception.InnerException!.Message, StringComparison.Ordinal);
         Assert.DoesNotContain(secret, exception.ToString(), StringComparison.Ordinal);
