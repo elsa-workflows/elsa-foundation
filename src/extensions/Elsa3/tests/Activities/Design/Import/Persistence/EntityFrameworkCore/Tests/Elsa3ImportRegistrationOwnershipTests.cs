@@ -149,5 +149,7 @@ public sealed class Elsa3ImportRegistrationOwnershipTests
         public ValueTask<bool> TryCreateCollectionAsync(ReusableActivityImportCollectionHandle collection, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public ValueTask<ReusableActivityImportCollectionHandle?> FindCollectionAsync(string handle, ReusableActivityImportAccessScope accessScope, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public ValueTask<ReusableActivityImportReceipt?> FindReceiptAsync(string idempotencyKey, ReusableActivityImportAccessScope accessScope, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<bool> DeleteCollectionAsync(string handle, ReusableActivityImportAccessScope accessScope, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<int> DeleteExpiredCollectionsAsync(DateTimeOffset expiresAtOrBefore, int maxCount, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 }

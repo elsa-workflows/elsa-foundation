@@ -1,5 +1,6 @@
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText.Services;
+using Elsa.Tasks.Core;
 using Elsa3.Activities.Design.Import;
 using Elsa3.Activities.Design.Import.Contracts;
 using Elsa3.Activities.Design.Import.Models;
@@ -52,10 +53,18 @@ public sealed class ReusableActivityImportRegistrationTests
         Assert.IsType<ReusableActivityCollectionImporter>(scope.ServiceProvider.GetRequiredService<IReusableActivityCollectionImporter>());
         Assert.IsType<StubOperationStore>(scope.ServiceProvider.GetRequiredService<IReusableActivityImportOperationStore>());
         Assert.IsType<ReusableActivityImportOperationService>(scope.ServiceProvider.GetRequiredService<IReusableActivityImportOperationService>());
+        // The sweep that deletes expired uploads is a recurring task, run by the Tasks feature the import depends on.
+        Assert.Single(provider.GetServices<IRecurringTask>().OfType<ExpiredImportCollectionSweepTask>());
+        Assert.Contains("Tasks", ImportFeatureDependencies());
     }
 
     [Fact]
     public void Generic_import_feature_does_not_select_a_concrete_persistence_provider()
+    {
+        Assert.DoesNotContain("Elsa3ImportActivitiesEntityFrameworkCore", ImportFeatureDependencies());
+    }
+
+    private static string?[] ImportFeatureDependencies()
     {
         var featureAttribute = typeof(Elsa3ImportActivitiesFeature)
             .GetCustomAttributes(inherit: false)
@@ -63,9 +72,7 @@ public sealed class ReusableActivityImportRegistrationTests
         var dependencies = (IEnumerable<object>?)featureAttribute.GetType()
             .GetProperty("DependsOn")
             ?.GetValue(featureAttribute) ?? [];
-
-        Assert.DoesNotContain(dependencies, x =>
-            StringComparer.Ordinal.Equals(x?.ToString(), "Elsa3ImportActivitiesEntityFrameworkCore"));
+        return dependencies.Select(x => x?.ToString()).ToArray();
     }
 
     [Fact]
@@ -113,6 +120,8 @@ public sealed class ReusableActivityImportRegistrationTests
         public ValueTask<bool> TryCreateCollectionAsync(ReusableActivityImportCollectionHandle collection, CancellationToken cancellationToken = default) => ValueTask.FromResult(true);
         public ValueTask<ReusableActivityImportCollectionHandle?> FindCollectionAsync(string handle, ReusableActivityImportAccessScope accessScope, CancellationToken cancellationToken = default) => ValueTask.FromResult<ReusableActivityImportCollectionHandle?>(null);
         public ValueTask<ReusableActivityImportReceipt?> FindReceiptAsync(string idempotencyKey, ReusableActivityImportAccessScope accessScope, CancellationToken cancellationToken = default) => ValueTask.FromResult<ReusableActivityImportReceipt?>(null);
+        public ValueTask<bool> DeleteCollectionAsync(string handle, ReusableActivityImportAccessScope accessScope, CancellationToken cancellationToken = default) => ValueTask.FromResult(false);
+        public ValueTask<int> DeleteExpiredCollectionsAsync(DateTimeOffset expiresAtOrBefore, int maxCount, CancellationToken cancellationToken = default) => ValueTask.FromResult(0);
     }
 
 }

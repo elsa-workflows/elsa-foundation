@@ -63,7 +63,8 @@ public sealed class EfReusableActivityImportBehaviorTests : IAsyncLifetime
         await cancellation.CancelAsync();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
             await service.UploadAsync(Json(Workflow("b", "b-v1", 1, true, Leaf("root"))), null, Scope, cancellation.Token));
-        Assert.Equal(1, (await Db.CountAsync()).Collections);
+        // The expired read deleted the first upload, and the cancelled upload stored nothing.
+        Assert.Equal(0, (await Db.CountAsync()).Collections);
     }
 
     [Fact]
@@ -147,12 +148,17 @@ public sealed class EfReusableActivityImportBehaviorTests : IAsyncLifetime
     public async Task Later_valid_subset_reuses_the_definition_and_existing_versions_while_adding_new_versions(bool repeatFirstVersion)
     {
         var service = Db.Service(access);
-        var (upload, planId) = await UploadAsync(service, Scope,
+        Elsa3WorkflowDefinition[] export =
+        [
             Workflow("a", "a-v1", 1, true, Leaf("root-v1")),
-            Workflow("a", "a-v2", 2, true, Leaf("root-v2")));
+            Workflow("a", "a-v2", 2, true, Leaf("root-v2"))
+        ];
+        var (upload, planId) = await UploadAsync(service, Scope, export);
 
         var first = await service.ApplyAsync(upload.CollectionHandle, planId, ["a-v1"], "subset-v1", Scope);
-        var later = await service.ApplyAsync(upload.CollectionHandle, planId, repeatFirstVersion ? ["a-v1", "a-v2"] : ["a-v2"],
+        // The first apply consumed its upload, so a later subset of the same export is uploaded again.
+        var (laterUpload, laterPlanId) = await UploadAsync(service, Scope, export);
+        var later = await service.ApplyAsync(laterUpload.CollectionHandle, laterPlanId, repeatFirstVersion ? ["a-v1", "a-v2"] : ["a-v2"],
             repeatFirstVersion ? "subset-v1-v2" : "subset-v2", Scope);
 
         Assert.Equal(ReusableActivityImportResourceDisposition.Created, Assert.Single(first.Sources).ActivityDefinitionDisposition);
@@ -194,15 +200,19 @@ public sealed class EfReusableActivityImportBehaviorTests : IAsyncLifetime
     [Fact]
     public async Task Later_subset_projection_failure_rolls_back_the_head_version_and_receipt_atomically()
     {
-        var (upload, planId) = await UploadAsync(Db.Service(access), Scope,
+        Elsa3WorkflowDefinition[] export =
+        [
             Workflow("atomic", "atomic-v1", 1, true, Leaf("root-v1")),
-            Workflow("atomic", "atomic-v2", 2, true, Leaf("root-v2")));
+            Workflow("atomic", "atomic-v2", 2, true, Leaf("root-v2"))
+        ];
+        var (upload, planId) = await UploadAsync(Db.Service(access), Scope, export);
         var first = await Db.Service(access).ApplyAsync(upload.CollectionHandle, planId, ["atomic-v1"], "atomic-first", Scope);
         var v1 = Assert.Single(first.Sources).ActivityDefinitionVersionId;
         var failing = Db.Service(access, command: Db.Command(access, activitiesInterceptors: [new SaveFailureInterceptor<ActivityManagementProjectionSnapshot>()]));
+        var (laterUpload, laterPlanId) = await UploadAsync(failing, Scope, export);
 
         await Assert.ThrowsAsync<ReusableActivityImportPersistenceException>(async () =>
-            await failing.ApplyAsync(upload.CollectionHandle, planId, ["atomic-v2"], "atomic-second", Scope));
+            await failing.ApplyAsync(laterUpload.CollectionHandle, laterPlanId, ["atomic-v2"], "atomic-second", Scope));
 
         var counts = await Db.CountAsync();
         Assert.Equal((1, 1, 1, 2), (counts.ActivityVersions, counts.WorkflowVersions, counts.Receipts, counts.Bindings));
@@ -390,7 +400,8 @@ public sealed class EfReusableActivityImportBehaviorTests : IAsyncLifetime
         Assert.Equal(ReusableActivityImportResourceDisposition.Reused, sourceB.ActivityDefinitionDisposition);
         Assert.Equal(ReusableActivityImportResourceDisposition.Reused, sourceB.ActivityVersionDisposition);
         var counts = await Db.CountAsync();
-        Assert.Equal((2, 2, 2, 1, 1, 1, 1), (counts.Collections, counts.Receipts, counts.Bindings, counts.ActivityDefinitions, counts.ActivityVersions, counts.WorkflowDefinitions, counts.WorkflowVersions));
+        // Each user's apply consumed that user's own upload.
+        Assert.Equal((0, 2, 2, 1, 1, 1, 1), (counts.Collections, counts.Receipts, counts.Bindings, counts.ActivityDefinitions, counts.ActivityVersions, counts.WorkflowDefinitions, counts.WorkflowVersions));
     }
 
     [Fact]

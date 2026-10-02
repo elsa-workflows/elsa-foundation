@@ -5,6 +5,8 @@ using Elsa.Events.Core.Extensions;
 using Elsa.Foundation.Identity.Extensions;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Primitives.Exceptions;
+using Elsa.Tasks.Core;
+using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa3.Activities.Design.Import.Authorization;
 using Elsa3.Activities.Design.Import.Contracts;
 using Elsa3.Activities.Design.Import.Endpoints;
@@ -25,7 +27,8 @@ namespace Elsa3.Activities.Design.Import;
     name: "Elsa3ImportJsonActivities",
     DisplayName = "Elsa 3 Import Activities",
     Description = "Imports Elsa 3 JSON workflow activities into the design reconciliation pipeline.",
-    DependsOn = new object[] { "Elsa3Mapping" }
+    // The Tasks feature runs the recurring sweep that deletes expired collection uploads.
+    DependsOn = new object[] { "Elsa3Mapping", "Tasks" }
 )]
 public class Elsa3ImportActivitiesFeature : IWebShellFeature
 {
@@ -57,8 +60,14 @@ public class Elsa3ImportActivitiesFeature : IWebShellFeature
             options.DefaultPageSize = ImportOptions.DefaultPageSize;
             options.MaximumPageSize = ImportOptions.MaximumPageSize;
             options.CollectionLifetime = ImportOptions.CollectionLifetime;
+            options.ExpiredCollectionSweepInterval = ImportOptions.ExpiredCollectionSweepInterval;
+            options.ExpiredCollectionSweepBatchSize = ImportOptions.ExpiredCollectionSweepBatchSize;
         });
         services.TryAddScoped<IReusableActivityImportOperationService, ReusableActivityImportOperationService>();
+        // An upload nobody applies or reads again is deleted by time. Persistence core is shared host
+        // infrastructure: it gives the sweep one operation scope per persistence scope.
+        services.AddPersistenceCore();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IRecurringTask, ExpiredImportCollectionSweepTask>());
 
         services.AddEventHandlersFrom(GetType().Assembly);
         services.AddDynamicEndpointApiExplorerRefresh();

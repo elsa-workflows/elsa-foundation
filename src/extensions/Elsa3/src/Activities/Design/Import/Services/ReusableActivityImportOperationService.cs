@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text.Json;
+using Elsa.Primitives.Exceptions;
 using Elsa3.Activities.Design.Import.Contracts;
 using Elsa3.Activities.Design.Import.Models;
 using Elsa3.Models;
@@ -14,8 +15,19 @@ public sealed class ReusableActivityImportOptions
     public int DefaultPageSize { get; set; } = 100;
     public int MaximumPageSize { get; set; } = 500;
     public TimeSpan CollectionLifetime { get; set; } = TimeSpan.FromHours(24);
+
+    /// <summary>How often the recurring sweep deletes collection uploads whose lifetime has run out.</summary>
+    public TimeSpan ExpiredCollectionSweepInterval { get; set; } = TimeSpan.FromMinutes(15);
+
+    /// <summary>The most expired collection uploads one sweep deletes in one persistence scope.</summary>
+    public int ExpiredCollectionSweepBatchSize { get; set; } = 100;
 }
 
+/// <summary>
+/// The Elsa 3 import's operation service. It owns the retention of an upload: the stored collection holds the
+/// uploaded document verbatim, literal credentials included, so it lives until its apply is decided or its lifetime
+/// runs out, whichever comes first, and is then deleted from the import ledger. The store only removes rows.
+/// </summary>
 public sealed class ReusableActivityImportOperationService(
     IReusableActivityImportOperationStore store,
     IReusableActivityCollectionImporter importer,
@@ -221,6 +233,8 @@ public sealed class ReusableActivityImportOperationService(
     {
         ValidateAccessScope(accessScope);
         ValidateIdempotencyKey(idempotencyKey);
+        // Checked here, before the upload is loaded: a malformed request is not a refusal of the upload's content.
+        ArgumentException.ThrowIfNullOrWhiteSpace(planId);
         ArgumentNullException.ThrowIfNull(selectedSourceVersionIds);
         var selected = selectedSourceVersionIds.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
         var selectionFingerprint = SelectionFingerprint(collectionHandle, planId, selected, accessScope);
@@ -231,18 +245,33 @@ public sealed class ReusableActivityImportOperationService(
                 !StringComparer.Ordinal.Equals(prior.PlanId, planId) ||
                 !StringComparer.Ordinal.Equals(prior.SelectionFingerprint, selectionFingerprint))
                 throw new ReusableActivityImportIdempotencyConflictException(idempotencyKey);
+            // The apply this receipt records consumed its upload. Repeating the delete covers an apply that
+            // committed and stopped before its delete ran.
+            await DiscardCollectionAsync(collectionHandle, accessScope);
             return prior with { Status = ReusableActivityImportReceiptStatus.AlreadyImported };
         }
 
         var collection = await LoadCollectionAsync(collectionHandle, accessScope, cancellationToken);
-        var result = await importer.ApplyAsync(
-            new(planId, collection.Collection, selected, accessScope, idempotencyKey),
-            cancellationToken);
-        return result.Receipt
-               ?? throw new ReusableActivityImportPersistenceException(
-                   "apply",
-                   idempotencyKey,
-                   new InvalidOperationException("The atomic import adapter did not return a durable receipt."));
+        ReusableActivityImportApplyResult result;
+        try
+        {
+            result = await importer.ApplyAsync(
+                new(planId, collection.Collection, selected, accessScope, idempotencyKey),
+                cancellationToken);
+        }
+        catch (Exception exception) when (!LeavesUploadUsable(exception))
+        {
+            await DiscardCollectionAsync(collectionHandle, accessScope);
+            throw;
+        }
+
+        var receipt = result.Receipt
+                      ?? throw new ReusableActivityImportPersistenceException(
+                          "apply",
+                          idempotencyKey,
+                          new InvalidOperationException("The atomic import adapter did not return a durable receipt."));
+        await DiscardCollectionAsync(collectionHandle, accessScope);
+        return receipt;
     }
 
     /// <inheritdoc />
@@ -267,9 +296,35 @@ public sealed class ReusableActivityImportOperationService(
         var collection = await store.FindCollectionAsync(handle, accessScope, cancellationToken)
                          ?? throw new ReusableActivityImportNotFoundException("The Elsa 3 import collection was not found.");
         if (collection.ExpiresAt <= timeProvider.GetUtcNow())
+        {
+            await DiscardCollectionAsync(handle, accessScope);
             throw new ReusableActivityImportExpiredException(handle);
+        }
         return collection;
     }
+
+    /// <summary>
+    /// Deletes a decided or expired upload from the ledger. It does not take the caller's cancellation token: a
+    /// commit that became durable is reported as applied whatever the caller cancelled since, and the upload that
+    /// commit consumed is deleted on the same terms.
+    /// </summary>
+    private ValueTask<bool> DiscardCollectionAsync(string handle, ReusableActivityImportAccessScope accessScope) =>
+        store.DeleteCollectionAsync(handle, accessScope, CancellationToken.None);
+
+    /// <summary>
+    /// True for the apply outcomes the caller can continue from with the same upload: a corrected plan or selection,
+    /// a resolved identity collision, or a repeat after a persistence failure, a schema write refusal or a
+    /// cancellation. A persistence failure includes a commit whose outcome is unknown, where the repeat needs the
+    /// collection again. Every other outcome refuses the upload's content, such as a mapped literal on an input
+    /// declared a credential (spec 188, FR-008), and that upload is deleted. Unknown outcomes fall on the deleting
+    /// side on purpose: deleting an upload costs its owner a new upload, keeping one may keep a credential at rest.
+    /// </summary>
+    private static bool LeavesUploadUsable(Exception exception) => exception is
+        OperationCanceledException or
+        ReusableActivityImportValidationException or
+        ReusableActivityImportCollisionException or
+        ReusableActivityImportPersistenceException or
+        SchemaWriteRefusedException;
 
     private void ValidatePage(int offset, int limit)
     {
@@ -324,14 +379,16 @@ public sealed class ReusableActivityImportOperationService(
             throw new ArgumentOutOfRangeException(nameof(idempotencyKey), "Idempotency keys cannot exceed 200 characters.");
     }
 
-    private static ReusableActivityImportOptions ValidateOptions(ReusableActivityImportOptions options)
+    internal static ReusableActivityImportOptions ValidateOptions(ReusableActivityImportOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
         if (options.MaximumUploadBytes <= 0 ||
             options.MaximumSourceVersions <= 0 ||
             options.DefaultPageSize <= 0 ||
             options.MaximumPageSize < options.DefaultPageSize ||
-            options.CollectionLifetime <= TimeSpan.Zero)
+            options.CollectionLifetime <= TimeSpan.Zero ||
+            options.ExpiredCollectionSweepInterval <= TimeSpan.Zero ||
+            options.ExpiredCollectionSweepBatchSize <= 0)
             throw new InvalidOperationException("Elsa 3 import bounds must all be positive and the maximum page size must cover the default.");
         return options;
     }

@@ -23,6 +23,9 @@
     <ProjectReference Include="..\..\..\..\..\..\essentials\Events\Core\Elsa.Events.Core.csproj" />
     <ProjectReference Include="..\..\..\Models\Elsa3.Models.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\essentials\Serialization\Core\Elsa.Serialization.Core.csproj" />
+    <!-- The recurring sweep that deletes expired collection uploads, visiting every persistence scope. -->
+    <ProjectReference Include="..\..\..\..\..\..\essentials\Tasks\Schedules\Elsa.Tasks.Schedules.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\essentials\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\essentials\Workflows\Design\Persistence\Core\Elsa.Workflows.Design.Persistence.Core.csproj" />
   </ItemGroup>
 
