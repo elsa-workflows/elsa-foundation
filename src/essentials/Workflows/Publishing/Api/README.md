@@ -68,10 +68,10 @@ send `ExpectedPublicationId` when protecting against a stale Studio view. A `409
 authority state and preflight again; it must not assume that a candidate became active.
 
 Publishing the version a slot already serves is answered with that publication, not created again. When a crash left
-that publication's record behind the slot (#2223), the republish first completes the slot's activation and its record. If
-the activation cannot be completed (for example because several other activations still serve the slot), the republish
-returns `409` with the completion's failure code, `projection_activation_failed`, and changes nothing; it is never
-reported as published.
+that publication's record behind the slot (#2223), the republish first brings the record into line, once the runtime has
+made sure the slot's activation serves; it repairs a slot an earlier version left half done where it can. Where it
+cannot, the republish returns `409` with `projection_activation_failed` and changes nothing; it is never reported as
+published.
 
 Both preflight responses carry `targetSlotOwner` (`{ sourceKind, sourceId }`) when the resolved slot is live under an
 activation source other than publishing, such as an imported or mounted artifact, and `null` when the slot is empty,
@@ -154,7 +154,7 @@ at every raise and map site (issue #1699).
 | `slot_revision_conflict`          | 409    | The slot's optimistic revision changed between preflight and activation (or between read and unpublish). Re-run preflight against the current slot and retry. |
 | `activation_compensation_failed`  | 409    | Activation failed and its best-effort compensation did not converge. The slot may be in a partially-switched state; check operational diagnostics before retrying. |
 | `projection_preparation_failed`   | 409    | Preparing the serving projection (trigger bindings, recurring schedules) failed before activation. Retry once the underlying failure is resolved. |
-| `projection_activation_failed`    | 409    | Activating the serving projection, or notifying its trigger observers, failed. This includes completing a slot's interrupted activation, which a publish or a same-version republish does first. Retry once the underlying failure is resolved. |
+| `projection_activation_failed`    | 409    | A trigger observer failed after the slot moved, so the activation was reverted; or the slot names a publication that an earlier version left half done and that cannot be repaired in place, which a publish or a same-version republish checks first. Retry once the observer's failure is resolved; unpublish a slot left half done, then publish again. |
 | `publication_activation_failed`   | 409    | Activation failed for a reason not covered by the codes above. See the response `detail` and server logs. |
 | `trigger_conflict`                | 409    | Preflight found one or more authoritative trigger conflicts with another active publication. Resolve the conflicting triggers, or target a different slot, before retrying. |
 | `publication_snapshot_stale`      | 409    | The supplied preflight/review token is stale, expired, or no longer matches the requested action, slot, or expected publication. Re-run preflight to obtain a current token. |

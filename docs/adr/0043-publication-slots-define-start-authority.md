@@ -10,18 +10,23 @@ own or persist a parallel publication-slot authority.
 Convergence amendment (2026-10-01, #2193; revised for #2230). **Status: proposed, awaiting owner acceptance.** The
 durable projection intents described under "Projection intent makes cross-store activation durable" were never wired
 into the coordinator-based activation path, and their reconciler was removed. Projections follow the slot through
-`IWorkflowActivationCoordinator` instead. Since #2230 the coordinator moves a slot through `IWorkflowActivationSwitch`,
-which commits the slot compare-and-swap, the switch of the trigger and recurring projections, and the retirement of the
-replaced activation's source reference as one commit of the backend that owns them: one `RuntimeDbContext`
-transaction, or the in-memory stores' locks held together. A process that dies at any point therefore leaves the slot
-and what serves agreeing, and Invariant 3 holds immediately, across a crash too. Nothing is left to complete: the
-completion pass #2193 added is gone, and `CompleteAsync` only reports whether the slot's activation serves, failing for
-a slot that a version before #2230 left half done, which an operator clears by unpublishing it. The slot and its serving
-projections must therefore come from one backend; a composition that places them in different backends has no switch
-and is refused. Once a switch commits, the activation stands: a cancellation does not undo it, and only a trigger
-observer's failure reverts it, in one commit that undoes the caller's own transition and nothing a later writer made.
-Unpublish empties the slot in one commit with the projections of every activation that serves it, whatever the slot's
-history. Publishing's publication records follow the slot (#2223), outside that commit: `IPublicationActivator.CompleteAsync`
+`IWorkflowActivationCoordinator` instead, which moves a slot only through `IWorkflowActivationSwitch`. Each switch
+operation is one commit of the backend that owns the slot and its serving projections: one `RuntimeDbContext`
+transaction, or the in-memory stores' locks held together. Activation moves the slot by compare-and-swap, switches the
+trigger and recurring projections over, and retires the replaced activation's source reference; a refusal, or a
+projection that cannot switch, writes nothing. A process that dies at any point therefore leaves the slot and what
+serves agreeing, and Invariant 3 holds immediately, across a crash too. The slot and its serving projections must come
+from one backend; shell start refuses a composition that places them in different backends, because no switch could
+commit them together. The commit is the point of no return: a cancellation after it does not undo it, and only a trigger
+observer's failure reverts it, in one commit that undoes the caller's own transition and only while the slot still
+stands where that transition left it. A call that stops short of its own switch discards its activation, which is
+refused while the activation serves. Candidates that share an activation id, as two nodes reconciling one mounted set do
+(#2251), share its projections, so Invariant 6 holds for the one that loses: it keeps the winner's projections and
+reports `AlreadyActive`. Unpublish empties the slot in one commit with the projections of every activation that serves
+it, whatever the slot's history. A slot that a version before #2230 left half done, naming a prepared activation that
+never served while the one it replaced still serves, is repaired in one commit by the first activation, publish or
+serving check that meets it; a slot left half done any other way is reported, and an operator clears it by unpublishing
+it. Publishing's publication records follow the slot (#2223), outside that commit: `IPublicationActivator.CompleteAsync`
 marks the publication the slot names active once it serves, and retires the publications whose references the runtime
 retired. It runs before every publication, on a same-version republish that finds the record behind, and in its own
 shell-start pass, so Invariant 2 holds in the records eventually too, and the records never decide serving. One
@@ -29,15 +34,10 @@ transition there is not a clearing of a retirement: a publication a failed repla
 `Retired` while the slot names it again, and completion marks that record `Active` once it serves. This is a controlled
 lifecycle transition, not the restoration the Decision section forbids: it applies only to the record the slot itself
 names, only while the slot names it, and it never revives a record the slot does not name, so Restore keeps its own
-authority transition. A completion that finds the slot moved on after the mark retires the record again. Invariant 6
-holds for a losing candidate that shares the winner's activation id, as two nodes reconciling one mounted set do
-(#2251): it discards the shared activation only while it does not serve, so it keeps the winner's projections and
-reports `AlreadyActive`. A candidate the coordinator answers `AlreadyActive` for through another publication's
-activation (a same-version publish that lost a race) is never journaled active, because no source reference was minted
-for it: it is recorded `Failed`, and the request is answered with the publication the slot names once that record is
-`Active` (#2252). The two races this amendment named before #2230, a stale completion switching a replaced first
-activation back on and a completion's retire racing a compensation's restore, are gone with the completion that made
-them.
+authority transition. A completion that finds the slot moved on after the mark retires the record again. A candidate the
+coordinator answers `AlreadyActive` for through another publication's activation (a same-version publish that lost a
+race) is never journaled active, because no source reference was minted for it: it is recorded `Failed`, and the
+request is answered with the publication the slot names once that record is `Active` (#2252).
 
 Related decisions: ADR 0038 (content-addressed executable identity), ADR 0039 (layout on source
 references), and ADR 0040 (reference- and execution-derived artifact lifetime).
@@ -219,6 +219,12 @@ artifact for as long as their execution record is retained.
   (#2230) asks less than that: the slot and its own serving projections commit together within the one
   backend that owns them, and a composition that splits them across backends is refused. The HTTP
   route table and other observer-fed caches stay outside that commit and converge on their own.
+- **Let serving read the slot, so a projection serves only the activation the slot names** (#2230). Rejected
+  for the convergence amendment. Every trigger lookup, recurring-schedule claim and route-convergence check
+  would read the slot as well, and the in-memory projection stores would depend on the slot authority. It
+  would also close only the window between the slot and its projections, leaving open the windows between
+  them and the source references and between a failed call's compensation and a concurrent call, which the
+  one-commit switch closes as well.
 
 ## Consequences
 

@@ -81,12 +81,11 @@ artifact identity as an authority exemption. Trigger extraction/cardinality belo
 and compensation. A losing or failed candidate cannot make the old publication invisible.
 
 Publishing has no projection seam of its own. `PublicationActivator` hands each candidate to Runtime's
-`IWorkflowActivationCoordinator`, which prepares the trigger bindings and recurring schedules, switches them over in
-the commit that moves the slot and retires the replaced publication's source reference
-([#2230](https://github.com/elsa-workflows/elsa-foundation/issues/2230)), notifies observers, and compensates a failed
-step ([Workflows Runtime extension points](../Runtime/EXTENSION_POINTS.md)). A process that dies at any point leaves the
-slot and what serves agreeing, so the runtime has nothing to complete. Unpublish turns off every activation that serves
-the slot, whatever the slot's history, and retires the
+`IWorkflowActivationCoordinator`, which moves the slot, its serving projections and the replaced publication's source
+reference in one commit; `IWorkflowActivationSwitch` in the
+[Workflows Runtime extension points](../Runtime/EXTENSION_POINTS.md) points to what that commit guarantees
+([#2230](https://github.com/elsa-workflows/elsa-foundation/issues/2230)). Unpublish turns off every activation that
+serves the slot, whatever the slot's history, and retires the
 slot's publication record and every other `Active` record of the slot from the status it is in, a `Candidate` included. Derived
 projection notifications occur only after the durable serving set reaches its final state; Runtime HTTP consumes the
 neutral `IWorkflowTriggerIndexObserver` seam and performs a full refresh when authority changes.
@@ -95,9 +94,9 @@ The publication journal follows the slot the same way
 ([elsa-workflows/elsa-foundation#2223](https://github.com/elsa-workflows/elsa-foundation/issues/2223)). The
 runtime's switch commits before the journal is written, so a process that dies in between leaves the slot's publication
 serving but a `Candidate`, and the one it replaced `Active` with its source reference retired.
-`IPublicationActivator.CompleteAsync(definition, slot)` first asks the coordinator whether the slot's activation serves;
-since #2230 the coordinator completes nothing, and it fails for a slot that a version before #2230 left half done. Once
-the publication serves (the slot still names it at the revision completion read, and its source reference is
+`IPublicationActivator.CompleteAsync(definition, slot)` first has the coordinator make sure the slot's activation serves
+(`IWorkflowActivationCoordinator.EnsureServingAsync`, which repairs a slot an earlier version left half done where it
+can, and fails where it cannot). Once the publication serves (the slot still names it at the revision completion read, and its source reference is
 live), it retires every other `Active` publication of the slot whose source reference the runtime has retired, then
 marks the slot's publication `Active` with an activation time; a `Retired` publication the slot names again, after a
 failed replacement handed the slot back, is marked `Active` the same way, and retired again if the slot has moved
@@ -125,14 +124,6 @@ gets from the handler's early return (`WasCreated` false), and what the caller a
 that record cannot be confirmed active, or another source owns the slot (`slot_owner_conflict`), the candidate is failed
 and the result is a failure. Implementers of `IPublicationActivator` keep this: a successful result's `Publication` may
 therefore be a record other than the candidate, and the publish handler reads the view from it.
-
-One residual: when a completion publishing did not run, such as the runtime's own shell-start pass, switched the
-replaced activation off, and its source reference still could not be retired when the slot's publication was marked
-`Active` (a reference-store failure the Runtime catalog's operator recovery describes), that replaced publication stays
-`Active` in the journal. Nothing reported it to publishing, and nothing lags afterwards to send completion back to it.
-A later completion publishing runs that retires the reference reports it, and retires the record then. It serves
-nothing, and slot views and the publish-on-reconcile check read the publication the slot names, so it shows only in the
-slot's record history.
 
 ## Persistence-provider checklist
 
