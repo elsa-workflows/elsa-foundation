@@ -219,7 +219,11 @@ builder.Services.AddNuplane(nuplaneConfiguration, nuplane =>
     nuplane.UseBasePath(builder.Environment.ContentRootPath);
     nuplane.AddDirectoryFeedsFromConfiguration(nuplaneConfiguration);
     nuplane.AutoloadPackages(nuplaneConfiguration.GetSection("Loading"));
+    // Registered after AutoloadPackages: Nuplane calls its observers in registration order, so the new assemblies are
+    // loaded before the catalog is refreshed (HostOwnedServicesAreSharedWithShellsTests pins the order).
+    nuplane.OnPackagesChanged<ShellCatalogRefreshOnPackagesChanged>();
 });
+builder.Services.AddSingleton<ShellCatalogRefreshOnPackagesChanged>();
 builder.Services.AddSingleton<NuplaneAssemblyProvider>();
 // Nuplane registers its trigger ingress, reconcile coordinator and admin operations by type or by factory, so every shell
 // container CShells builds from copies of these registrations would hold second instances of them, and a reconcile enqueued
