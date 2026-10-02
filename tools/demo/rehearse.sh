@@ -222,8 +222,13 @@ expect_board() {
 # (an extended regex: NULL, \[\], ...), the header line left out. The column is padded by two spaces at least, which is what tells
 # it from a note whose text ends in a version.
 notes_in() { printf '%s\n' "$1" | tail -n +2 | grep -cE "[ ]{2}$2 +$3\$" || true; }
-# note_count OUTPUT: how many notes rows printed.
-note_count() { echo $(($(line_count "$1") - 1)); }
+# note_count OUTPUT: how many notes rows printed, the header and the (no notes yet) line of an empty table left out.
+note_count() { echo $(($(line_count "$1") - 1 - $(printf '%s\n' "$1" | grep -cF '(no notes yet)' || true))); }
+# expect_empty_rows HOST: rows prints the header and (no notes yet) for a table that has no row yet, as at the start of an act.
+expect_empty_rows() {
+  stage rows "$1"
+  expect_eq "rows on $1 with no note yet" "$(printf 'note  schema  tags\n(no notes yet)')" "$out"
+}
 
 # wait_until DESCRIPTION SECONDS COMMAND...: polls once a second.
 wait_until() {
@@ -358,6 +363,7 @@ fi
 
 if [[ " $acts " == *" 1 "* ]]; then
   step "Act 1.1 v1 running: add and list notes"
+  expect_empty_rows solo
   stage note "$port_solo" "hello from release 1.0.0"
   expect_match "the note comes back with its id, text and time" "$out" '^\{"id":"[^"]+","text":"hello from release 1.0.0","createdAt":"[^"]+"\}$'
   stage note "$port_solo" "a second note"
@@ -460,6 +466,7 @@ fi
 
 if [[ " $acts " == *" 2 "* ]]; then
   step "Act 2.1 both hosts on 1.0.0"
+  expect_empty_rows a
   board a b
   expect_board a "1.0.0" "1.0.0" "1.0.0"
   expect_board b "1.0.0" "1.0.0" "1.0.0"
@@ -591,6 +598,7 @@ fi
 if [[ " $acts " == *" 3 "* ]]; then
   pinned="Add note pinned to 1.0.0"
   step "Act 3.1 a workflow with Add note 1.0.0 runs; its row is stamped 1.0.0"
+  expect_empty_rows wb
   board wb
   expect_board wb "1.0.0" "1.0.0" "1.0.0"
   stage addnote "$port_wb" 1.0.0 "written by Add note 1.0.0"

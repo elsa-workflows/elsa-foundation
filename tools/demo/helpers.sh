@@ -109,10 +109,20 @@ waitfor() {
 # themselves, so it shows what is stored and not what a host answers. A database the AddTags migration has not reached yet has no
 # tags column, and says so. It only reads: the Sqlite file is opened with query_only and a 2 s busy timeout, the PostgreSQL session is
 # read-only. (The Sqlite file is in WAL mode, which a read-only open cannot serve without its -shm file: the query only selects.)
+# A table with no rows yet prints the header and the line (no notes yet), whatever the host: a run started from the designer takes
+# several seconds to store its note, and sqlite prints no header at all for an empty result.
 # The columns are separated by a control character, so a note that contains a | keeps its columns. A probe that fails (no container, no
 # database, no file) is reported once, and rows returns 1, instead of pretending the column is missing.
 _rows_pg() {
   docker exec -e PGOPTIONS=-cdefault_transaction_read_only=on "${DEMO_PG_CONTAINER:-elsa-demo-pg}" psql -U postgres -d elsa -X "$@" 2>&1
+}
+
+# _rows_print OUTPUT SEPARATOR: the query's output as a table; the header alone (or nothing) is an empty table.
+_rows_print() {
+  local out="$1" sep="$2"
+  [ -n "$out" ] || out="note${sep}schema${sep}tags"
+  printf '%s\n' "$out" | column -t -s "$sep"
+  case "$out" in *$'\n'*) ;; *) echo "(no notes yet)" ;; esac
 }
 
 rows() {
@@ -130,7 +140,7 @@ rows() {
       query="select Text as note, SchemaVersion as schema, $tags as tags from $table order by CreatedAt"
       out="$(sqlite3 -cmd '.timeout 2000' -cmd 'pragma query_only=on' -header -separator "$sep" "$file" "$query" 2>&1)"; rc=$?
       [ "$rc" -eq 0 ] || { echo "error: the Sqlite database $file could not be read: $out" >&2; return 1; }
-      printf '%s\n' "$out" | column -t -s "$sep"
+      _rows_print "$out" "$sep"
       ;;
     a|b)
       command -v docker >/dev/null 2>&1 || { echo "error: docker is not installed" >&2; return 1; }
@@ -148,7 +158,7 @@ rows() {
       query="select \"Text\" as note, \"SchemaVersion\" as schema, $tags as tags from $table order by \"CreatedAt\""
       out="$(_rows_pg -q -A -F "$sep" -P footer=off -c "$query")"; rc=$?
       [ "$rc" -eq 0 ] || { echo "error: the PostgreSQL container $container could not be read: $(printf '%s' "$out" | head -1)" >&2; return 1; }
-      printf '%s\n' "$out" | column -t -s "$sep"
+      _rows_print "$out" "$sep"
       ;;
     *) echo "usage: rows solo|a|b|wb" >&2; return 1 ;;
   esac

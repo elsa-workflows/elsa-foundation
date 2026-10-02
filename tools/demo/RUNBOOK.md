@@ -311,12 +311,14 @@ In tab **Studio** (after S8, so the logs folder exists):
 bash tools/demo/run-studio.sh 2>&1 | tee artifacts/demo/logs/studio.log
 ```
 
-- **Expect:** `studio: http://localhost:5302`, `workbench: http://localhost:5301`, then the host's own `Now listening on: http://localhost:5302`. It runs the Studio checkout `../elsa-foundation-studio-demo` (`DEMO_STUDIO_DIR` names another). When the checkout was built in another folder and moved, a line `assets: ...` says that a re-based copy of its asset manifest is used: expected, and harmless.
+- **Expect:** `studio: http://localhost:5302`, `workbench: http://localhost:5301`, then the host's own `Now listening on: http://localhost:5302`. It runs the Studio checkout `../elsa-foundation-studio-demo` (`DEMO_STUDIO_DIR` names another). The checkout at `/Users/sipke/Projects/Elsa/elsa-foundation-studio-demo` is built in place, on Studio main `86a99789`, which contains the designer fix (PR #547), so no `assets: ...` line should appear. `run-studio.sh` still carries a workaround for a checkout that was built in another folder and then moved (it runs a re-based copy of the static web asset manifest, kept under `artifacts/demo/hosts/studio`, and says so in an `assets: ...` line): it is now a no-op safety net, and the line, if it ever appears, is harmless. To rebuild the checkout after pulling Studio, run `dotnet build -c Release src/apps/Elsa.Studio.Web` in it (`pnpm install && pnpm build` first only when the front end changed), never on stage.
 - **If it goes wrong:** `There is no Studio checkout` or `is not built`: the message gives the build commands. Never run them on stage.
 
 In the browser, open a new tab on `http://localhost:5302`. Studio sends you to the Workbench's sign-in page (`localhost:5301/_elsa/identity/login`) and, once signed in, back to Studio. Sign in with the Workbench's **development admin**: the
 user name and the password are the values of `SeedAdminUserName` and `SeedAdminPassword` in `artifacts/demo/hosts/wb/shells.json`, under the feature `FoundationIdentityAspNetCoreIdentityEntityFrameworkCore` (the Workbench's own development seed, copied from `src/apps/Elsa.Workbench/shells.json`).
-Read them in an editor, off screen; never print that file on the screen, the password is in it. Sign in now, before the audience arrives, so nothing is typed on stage but the demo. Then open **Workflows**, and leave the tab there.
+Read them in an editor, off screen; never print that file on the screen, the password is in it. Sign in now, before the audience arrives: the sign-in page shows nothing sensitive, but it is a wasted minute on stage, and nothing is then typed but the demo. Then open **Workflows**, and leave the tab there.
+
+Then look at the bottom of the Studio page. Its bottom panel (**Console** / **Structured Logs**) may be open, and it shows the Studio checkout's absolute path, with your user name. Collapse it with the chevron at the panel's right edge before the audience sees the screen.
 
 - **Expect:** back on Studio, signed in; **Workflows** lists no workflow. The session lasts through the shell reloads of Act 3 (checked: the same sign-in and the same token still work after a reload), so you do not sign in again on stage.
 - **If it goes wrong:** the sign-in page does not appear, or the browser console shows a CORS error: the Workbench was started for another Studio port (`run-workbench.sh --studio-port`, default `DEMO_PORT_STUDIO`, else 5302); stop it (Ctrl-C in tab W) and start it again with the S8 command.
@@ -758,7 +760,7 @@ rows wb
 - **Audience sees:** the activity and its one input, the run, and the Workbench's Notes table: the note, stamped `1.0.0`, and no tags column yet.
 - **Say:** "Version 1 of the activity has one input, Text. The note it wrote is stamped with schema version 1.0.0, as on the first host."
 - **Expect:** `rows wb` prints the header `note schema tags` and `hello from the designer  1.0.0  (no column yet)`.
-- **Time:** a minute in Studio; `rows` is instant. To save the minute, create the workflow at the end of setup (steps 1 and 2) and start here at **Run**.
+- **Time:** a minute in Studio; `rows` is instant. To save the minute, create the workflow at the end of setup (steps 1 and 2) and start here at **Run**. A run started from the designer takes a few seconds to store its note: if `rows wb` prints only the header and `(no notes yet)`, say that the run is still writing and repeat `rows wb` until the note is there.
 - **If it goes wrong:** no **Notes** category in the palette: the Workbench did not load release 1 (the board says `-` or nothing under installed; the log in tab W says why), or the page was opened before the host was ready (refresh it). The run fails, or the
   designer misbehaves: the Act 3 fallback below.
 
@@ -864,8 +866,8 @@ rows wb
   tagged from the designer  2.0.0   ["demo","designer"]
   ```
 
-  By the time you are back from the designer the host has rewritten the first row; if it still reads `1.0.0` and `NULL`, run `rows wb` again in a few seconds.
-- **Time:** the run a second or two; the old row is rewritten within seconds of the reload, long before 3.6.
+  By the time you are back from the designer the host has rewritten the first row; if it still reads `1.0.0` and `NULL`, run `rows wb` again in a few seconds. The new note takes a few seconds to be stored after **Run**: if it is not there yet, repeat `rows wb`.
+- **Time:** the run a second or two, its note a few seconds more; the old row is rewritten within seconds of the reload, long before 3.6.
 - **If it goes wrong:** the run faults with a reason that names a dormant feature: the reload was a second ago and 2.0.0 is not finalized yet; run again. Anything else: the fallback.
 
 > **Recap, if there is time:** "That was questions one and three again, from the designer. A running host took a new version of a module and of an activity, held it back until the database was ready, and switched without a restart. Two versions of the activity live side by side, and a workflow moves to the new one when someone decides it should."
@@ -977,5 +979,5 @@ the end of every run, so a new one shows up there. No personal path or name is o
 prompt of tabs 1 and 2 is a bare `$ ` (S4), and `rehearse.sh` fails when anything it runs for the audience prints the repository path or a home folder (the package board and `show-package.sh` print relative paths only, and are covered by it). The one command that does print the absolute path of the
 checkout, with the user name, is `elsa.sh persistence apply --restore`, which is setup and stays off screen. The tab and window titles and the browser's history are yours to check.
 
-Act 3 adds three things to check. Tab **Studio** prints the Studio checkout's absolute path (`Content root path: ...`): it stays off screen like the host tabs. The Workbench's refusal names its command with a placeholder, `--host "<host directory>"`, so `wbreload` shows no path at all. And the
+Act 3 adds four things to check. Studio's bottom panel (**Console** / **Structured Logs**) can be open and shows the Studio checkout's absolute path with your user name: collapse it with the chevron at the panel's right edge (S9). Tab **Studio** prints the Studio checkout's absolute path (`Content root path: ...`): it stays off screen like the host tabs. The Workbench's refusal names its command with a placeholder, `--host "<host directory>"`, so `wbreload` shows no path at all. And the
 development admin's password is in `artifacts/demo/hosts/wb/shells.json`: never open that file on screen, and sign in before the audience arrives (S9). The browser's address bar shows only `localhost:5302` (and `localhost:5301` on the sign-in page).

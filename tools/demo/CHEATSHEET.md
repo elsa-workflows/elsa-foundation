@@ -117,6 +117,8 @@ Expect `200` four times, then `finalized at 1.0.0` with `host-a` and `host-b` bo
 
 **Browser.** Open `http://localhost:5302`, sign in on the Workbench's page with its development admin (`SeedAdminUserName` and
 `SeedAdminPassword` in `artifacts/demo/hosts/wb/shells.json`: read them off screen), open **Workflows**. Leave the tab there.
+Sign in before the audience arrives. Collapse Studio's bottom panel (Console / Structured Logs, chevron at its right edge): it shows
+the checkout's absolute path with your user name.
 
 **Tab P**, beside tab 1. The package board:
 
@@ -299,7 +301,7 @@ bash tools/demo/board.sh wb --watch
 rows wb
 ```
 
-Expect the note at `1.0.0` with `(no column yet)`.
+Expect the note at `1.0.0` with `(no column yet)`. A designer run takes a few seconds to store its note: on `(no notes yet)`, repeat `rows wb`.
 
 **3.2** Publish release 1.1.0, both packages:
 
@@ -336,7 +338,7 @@ Ignore "Recommended v1.0.0 available"; never drag a new node for this.
 rows wb
 ```
 
-Expect the new note at `2.0.0` with `["demo","designer"]`, the 3.1 note at `2.0.0` with `[]`. A run that faults as dormant: run again.
+Expect the new note at `2.0.0` with `["demo","designer"]`, the 3.1 note at `2.0.0` with `[]`. A designer run takes a few seconds to store its note: if it is not there yet, repeat `rows wb`. A run that faults as dormant: run again.
 
 **Act 3 fallback**, if the designer misbehaves: in tab 3, `addnote 5301 1.0.0 "hello from the API"` instead of 3.1, and
 `addnote 5301 1.1.0 "tagged from the API" "demo, api"` instead of 3.5 and 3.6, each followed by `rows wb`.
