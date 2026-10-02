@@ -546,6 +546,16 @@ reload 5202
 - **Time:** about 10 s for B to install, 2 s for the refusal, 3 to 15 s for the apply, 2 s for the reload.
 - **If it goes wrong:** as in 1.4 and 1.5. The apply lists two modules because the database has two; this is right.
 
+**Optional: Claude operates this step.** After the publish, an AI agent can do the rest of 2.2 while you narrate: it reads the refusal, applies the migration the host names, reloads, and confirms that host B's new feature
+is dormant until host A is upgraded. It shows that a host which says exactly what it needs can be operated by a pipeline or an agent.
+
+- **Before the audience:** start a Claude Code session in the repository root, with a permission mode that runs shell commands without asking, and have it read [OPERATOR.md](OPERATOR.md): "Read tools/demo/OPERATOR.md and reply with one word: ready."
+- **On stage**, once the board shows `b` installed `1.1.0`, type in that session: "Host B refuses to switch to the new release. Find out why and fix it."
+- **Audience sees:** five commands with a sentence before and after each: `reload 5202` (409, the pending migration), the apply, `reload 5202` (200), `withtags 5202` (409, `schema-version-not-finalized`) and `status b` (`waits for: host-a`). It stops there and does not touch host A.
+- **Say:** "Claude was given a one-page brief with this demo's house rules. The diagnosis comes from the host's own answer."
+- **Time:** one to two minutes (a dry run took about two, the brief included).
+- **If it goes wrong:** it needs the network. If it stalls for half a minute, run the three commands above yourself: applying twice does no harm. Then go on with 2.3, whose first command it has already shown.
+
 ### 2.3 `with-tags` on host B is refused: 409
 
 ```bash
