@@ -19669,6 +19669,11 @@
         },
         {
           "type": "internal",
+          "id": "dotnet-elsa",
+          "path": "src/essentials/Cli/Elsa.Cli.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Events",
           "path": "src/essentials/Events/Elsa.Events.csproj"
         },

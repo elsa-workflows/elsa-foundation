@@ -1,6 +1,6 @@
 # Worker profile implementation evidence
 
-This is a chronological ledger. Earlier pending statements describe their checkpoint, not current qualification. The latest [hosted acceptance](#corrected-source-full-hosted-affected-suite-acceptance) proves all affected suites at196ac; final filter/maps, PR review and resulting-main qualification remain open.
+This is a chronological ledger. Earlier pending statements describe their checkpoint, not current qualification. The latest [hosted acceptance](#corrected-source-full-hosted-affected-suite-acceptance) proves all affected suites at196ac; generator facts, filters and maps (including final delivery metadata) are verified; current-head PR review/CI and resulting-main qualification remain open.
 
 ## Specification/preflight checkpoint
 
@@ -116,3 +116,17 @@ Local driver31612 was deliberately superseded after the actual same-head canonic
 Commitcc106250e records the actual196ac hosted proof and T015/T016. Root then merged current mainc0482de27884da502bdd9f0ca0afa1a992d6e976 normally as3e0bac412198a5a3c230e0717e82afa84e9b7ef0. Upstream adds Elsa3 collection retention and explicit Secrets feature key settings; it changes neighboring test dependency locks but no Worker, profile-catalog, planner or CLI command implementation. Final exact-head canonical PR gates must validate this combined source rather than treating the earlier196ac proof as current-head acceptance.
 
 The delivery patch proposes Spec191's Implemented lifecycle in the implementation PR and removes its completed requirements checklist per the lifecycle contract. That source declaration is effective as shipped behavior only when this delivery merges; issue/Project remain In Progress, no PR has yet opened, and no resulting-main proof is claimed. Final facts/filter/map refresh/check and exact-head reviews remain pending.
+
+## Current-main generator and integration gates
+
+At publication source86f6292690092bbab8bd362ecfbb48c019a50b94, generator `project-facts-self-test` and `feature-facts-self-test` each exited0 through the ordinary wrapper (165s and198s including queue/build). The following `solution-filters-check` exited1: only Elsa.Server.Workflows.Runtime.slnf was stale. Driver44358 stopped normally on that real failure; map generation was not attempted.
+
+Normal `solution-filters` then exited0 and changed only that filter, adding the production CLI and CLI Worker project closures and removing no project. Root compared those two additions to the actual Runtime EF test→CLI→Worker references. The recheck exited0. Authorized generator `all` exited0, and `check` exited0 with actual message 'Generated maps still describe the tree.' Driver93990 is terminal0. Commands/results are retained in `/tmp/runtime2326-publication-map-gates-result.json` and `/tmp/runtime2326-publication-refresh-gates-result.json`.
+
+Root reviewed every changed output and both generated findings reports. One added direct project reference and cross-domain edge describe the test→CLI dependency, with unchanged source/test/feature counts141/139/107. The test map adds only WorkerProfileCandidate.cs; Spec190 records its already-completed28th task and Spec191 records17 done/3 open. The manifest records1334 references and222 specs. No package-version split or new runtime→design signal appears; v2 findings remain unchanged (four unindexed extension catalogs and ten design→runtime signals retain their existing context). All changed map paths, the findings report and manifest must be staged explicitly.
+
+Independent compatibility review of integrated mainc048 at86f found the Worker/catalog/CLI and actor source unchanged from qualified196ac. Elsa3's new expiry sweep/Tasks dependency configures only the unselected import feature; Secrets' new key settings configure only the unselected Secrets feature. This review is source evidence, not a current-main runtime pass. Final canonical PRCI still owns merged-source restore/build and neighboring behavior.
+
+Root caught a relative link in the proposed status text that would resolve incorrectly from the generated map. The status now uses an absolute public delivery-issue link. A final canonical `maps`/`check` runner33070 regenerates and checks that documentation-only correction; no test behavior changes. T018 remains unchecked until the final current-head affected gates are accepted, with T019 review and T020 main publication also open.
+
+Runner33070 is terminal0. Canonical `maps` and final `check` both exited0 after the status-link correction; final output confirms 'Generated maps still describe the tree.' Root reviewed the corrected absolute delivery link and final ten-path diff, retaining all generated counts, closures, prior test sources and old catalog identity. The unchanged generator reads spec/plan/tasks, not the evidence ledger, so this result-only ledger update does not alter generated inputs. Final result `/tmp/runtime2326-final-map-link-result.json`; no final-map pass is inferred from the earlier run. The final delivery outputs are committed explicitly; current-head PRCI and resulting-main gates remain unclaimed.
