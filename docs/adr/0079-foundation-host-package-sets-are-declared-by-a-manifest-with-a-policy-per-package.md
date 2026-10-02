@@ -80,7 +80,7 @@ listed under "Left to the owning issues", never decided silently.
 
 Index: D1 delivery (#2253, #2261); D2 customer input (#2257, #2361); D3 runtime manifest (#2257, #2258);
 D4 policies (#2258, #2259); D5 locks (#2259, #2354, #2254); D6 features (#2360); D7 removal (#2359, #2323);
-D8 memory (#2362); D9 floating versions (#2363); D10 test feed (#2255); D11 Studio (#2260).
+D8 memory (#2362); D9 floating versions (#2363); D10 test feed (#2255); D11 Studio locks and toggles (#2260).
 
 ### D1 — Delivery is a versioned package image, copied into an `emptyDir` per pod ([#2253](https://github.com/elsa-workflows/elsa-foundation/issues/2253), [#2261](https://github.com/elsa-workflows/elsa-foundation/issues/2261))
 
@@ -187,10 +187,12 @@ Credentials are exercised against a **local authenticated NuGet test feed**, in 
 and in the demo. Nuplane supports HTTP Basic auth only, so the local feed exercises the same path Azure Artifacts
 uses with a PAT.
 
-### D11 — Studio shows, and does not propose ([#2260](https://github.com/elsa-workflows/elsa-foundation/issues/2260))
+### D11 — Studio shows locks, toggles only unlocked features, and does not propose manifest changes ([#2260](https://github.com/elsa-workflows/elsa-foundation/issues/2260))
 
-Studio shows locked and pending packages and features read-only. Proposing manifest changes from Studio is out of
-scope. The work lives in `elsa-foundation-studio`.
+Studio shows locked and pending packages and features read-only. Through D6's writable cluster-wide API
+([#2360](https://github.com/elsa-workflows/elsa-foundation/issues/2360)), Studio can toggle features of unlocked
+packages. It hides or disables every action the backend would refuse. Proposing manifest changes from Studio is out
+of scope. The work lives in `elsa-foundation-studio`.
 
 ## Left to the owning issues
 
