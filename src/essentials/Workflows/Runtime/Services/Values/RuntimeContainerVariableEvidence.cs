@@ -35,6 +35,7 @@ public static class RuntimeContainerVariableEvidence
             .Select(variable =>
             {
                 var type = TypeDescriptorFor(variable.Value);
+                var isWithheld = variable.Withheld is not null;
                 var decision = payloadCapturePolicy.Decide(new RuntimePayloadCaptureRequest(
                     RuntimePayloadCaptureSubject.ContainerVariable,
                     workflowExecutionId,
@@ -42,6 +43,7 @@ public static class RuntimeContainerVariableEvidence
                     activityExecutionId: activityExecutionId,
                     valueName: variable.Name,
                     type: type,
+                    isSensitive: isWithheld,
                     metadata: new Dictionary<string, string>
                     {
                         [RuntimeMetadataKeys.ExecutableNodeId] = containerNode.ExecutableNodeId,
@@ -54,9 +56,11 @@ public static class RuntimeContainerVariableEvidence
                     decision,
                     type,
                     capturedAt,
-                    SerializeCapturedValue(decision, variable.Value, variable.Name, type),
-                    isSensitive: false,
-                    metadata: decision.Metadata);
+                    // A withheld variable has no value to capture, whatever the policy allows, and serializing its
+                    // absent value would record a JSON null as if it were one: the marker stands in for it instead.
+                    isWithheld ? null : SerializeCapturedValue(decision, variable.Value, variable.Name, type),
+                    isSensitive: isWithheld,
+                    metadata: ActivityExecutionInspectionValueSnapshot.MarkWithheld(decision.Metadata, variable.Withheld));
             })
             .ToArray();
     }

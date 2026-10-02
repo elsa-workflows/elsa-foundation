@@ -4,6 +4,7 @@ using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Core.Models;
 using Elsa.Expressions.JavaScript;
 using Elsa.Expressions.JavaScript.Jint;
+using Elsa.Activities.Testing;
 using Elsa.Primitives.Models;
 using Elsa.Tasks.Core;
 using Elsa.Workflows.Runtime.Core.Constants;
@@ -192,20 +193,18 @@ public sealed class SetVariableDurabilityExecutionTests
         Assert.Equal("Aborted", completed.Completion!.OutcomeKey);
     }
 
-    [Fact]
-    public async Task Set_intrinsic_refuses_a_withheld_value_with_the_fixed_code_and_writes_nothing()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Set_intrinsic_refuses_a_secret_read_with_the_fixed_code_and_writes_nothing(bool resolverResolvesSecrets)
     {
-        // Publication refuses a secret on an intrinsic, so only an artifact that skipped publication carries one; the
-        // resolver withholds it, and the intrinsic has no value to write.
-        var node = NewVariableWriteNode(WorkflowIntrinsicKind.Set, new RuntimeInputBinding(
-            WorkflowIntrinsicInputKeys.Value,
-            StringType,
-            new ValueProtectionPolicy(DurableValueLifecycle.Instance, DurableValueStorage.Inline, isSensitive: true, requiresEncryption: true),
-            RuntimeInputBindingSource.SecretRead,
-            secret: new RuntimeSecretReference("payments.api-key")));
-        await using var harness = await CreateHarnessAsync(node);
+        // Publication refuses a secret on an intrinsic, so only an artifact that skipped publication carries one. The
+        // binding resolver is replaceable, and one that resolved secrets must still never hand an intrinsic a secret to
+        // write into a variable: the secret read is refused on its binding, before any resolver is consulted.
+        var node = NewVariableWriteNode(WorkflowIntrinsicKind.Set, SecretBindingTestSupport.SecretRead(WorkflowIntrinsicInputKeys.Value));
+        await using var harness = await CreateHarnessAsync(node, resolver: resolverResolvesSecrets ? new SecretResolvingResolver() : null);
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => harness.Handler.HandleAsync(harness.WorkItem).AsTask());
+        var exception = await Assert.ThrowsAsync<WithheldValueException>(() => harness.Handler.HandleAsync(harness.WorkItem).AsTask());
 
         Assert.Equal(SecretBindingDiagnostics.WithheldInputNotResolved(WorkflowIntrinsicInputKeys.Value).Message, exception.Message);
         Assert.Empty(harness.CommitStore.ListCommits());
@@ -214,19 +213,23 @@ public sealed class SetVariableDurabilityExecutionTests
     }
 
     [Theory]
-    [InlineData(WorkflowIntrinsicKind.SetOutput, WorkflowIntrinsicInputKeys.Name)]
-    [InlineData(WorkflowIntrinsicKind.Finish, WorkflowIntrinsicInputKeys.Outcome)]
-    public async Task Intrinsic_literal_read_refuses_a_secret_read_with_the_fixed_code(WorkflowIntrinsicKind intrinsicKind, string inputKey)
+    [InlineData(WorkflowIntrinsicKind.SetOutput, WorkflowIntrinsicInputKeys.Name, false)]
+    [InlineData(WorkflowIntrinsicKind.SetOutput, WorkflowIntrinsicInputKeys.Name, true)]
+    [InlineData(WorkflowIntrinsicKind.Finish, WorkflowIntrinsicInputKeys.Outcome, false)]
+    [InlineData(WorkflowIntrinsicKind.Finish, WorkflowIntrinsicInputKeys.Outcome, true)]
+    public async Task Intrinsic_literal_read_refuses_a_withheld_input_with_the_fixed_code(
+        WorkflowIntrinsicKind intrinsicKind,
+        string inputKey,
+        bool withheldLiteral)
     {
-        // The output name and the outcome key are read as literals, and a secret read has no literal to read.
-        await using var harness = await CreateHarnessAsync(NewEffectNode(intrinsicKind, "accepted", new RuntimeInputBinding(
-            inputKey,
-            StringType,
-            new ValueProtectionPolicy(DurableValueLifecycle.Instance, DurableValueStorage.Inline, isSensitive: true, requiresEncryption: true),
-            RuntimeInputBindingSource.SecretRead,
-            secret: new RuntimeSecretReference("payments.api-key"))));
+        // The output name and the outcome key are read as literals: a secret read has no literal to read, and a literal
+        // that stands for a withheld value carries none.
+        var binding = withheldLiteral
+            ? SecretBindingTestSupport.WithheldLiteral(inputKey)
+            : SecretBindingTestSupport.SecretRead(inputKey);
+        await using var harness = await CreateHarnessAsync(NewEffectNode(intrinsicKind, "accepted", binding));
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => harness.Handler.HandleAsync(harness.WorkItem).AsTask());
+        var exception = await Assert.ThrowsAsync<WithheldValueException>(() => harness.Handler.HandleAsync(harness.WorkItem).AsTask());
 
         Assert.Equal(SecretBindingDiagnostics.WithheldInputNotResolved(inputKey).Message, exception.Message);
         Assert.Empty(harness.CommitStore.ListCommits());
@@ -402,7 +405,8 @@ public sealed class SetVariableDurabilityExecutionTests
     private static async Task<Harness> CreateHarnessAsync(
         ExecutableNode node,
         IPortableExpressionEvaluator? portableExpressionEvaluator = null,
-        IReadOnlyCollection<RuntimeVariableDeclaration>? workflowVariables = null)
+        IReadOnlyCollection<RuntimeVariableDeclaration>? workflowVariables = null,
+        IRuntimeInputBindingResolver? resolver = null)
     {
         var identity = new WorkflowExecutableIdentity("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test");
         var executable = new WorkflowExecutable(
@@ -428,7 +432,7 @@ public sealed class SetVariableDurabilityExecutionTests
         var executor = new WorkflowIntrinsicExecutor(
             workflowStore,
             activityStore,
-            new RuntimeInputBindingResolver(),
+            resolver ?? new RuntimeInputBindingResolver(),
             new InMemoryDurableValueStateStore(),
             new RuntimeActivityExecutionInspectionAccumulator(inspectionStore),
             new FakeTimeProvider(Now),
@@ -549,5 +553,19 @@ public sealed class SetVariableDurabilityExecutionTests
             Func<CancellationToken, ValueTask> write,
             CancellationToken cancellationToken = default) =>
             await write(cancellationToken);
+    }
+
+    /// <summary>The shipped resolver, except that it resolves a secret read to a value, as a replacement could.</summary>
+    private sealed class SecretResolvingResolver : IRuntimeInputBindingResolver
+    {
+        private readonly RuntimeInputBindingResolver _inner = new();
+
+        public RuntimeResolvedInput Resolve(RuntimeInputBinding binding, RuntimeInputBindingResolutionContext context) =>
+            binding.Source == RuntimeInputBindingSource.SecretRead
+                ? new(binding.InputName, binding.Source, null)
+                {
+                    Envelope = ValueEnvelope.Inline(binding.TargetType, JsonSerializer.SerializeToElement("resolved-secret"), binding.EffectivePolicy)
+                }
+                : _inner.Resolve(binding, context);
     }
 }

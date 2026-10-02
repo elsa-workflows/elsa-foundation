@@ -19,7 +19,7 @@ public sealed class RuntimeInputBindingResolver : IRuntimeInputBindingResolver
         {
             RuntimeInputBindingSource.Literal => new RuntimeResolvedInput(binding.InputName, binding.Source, null)
             {
-                Envelope = binding.Literal
+                Envelope = RequireReadable(binding.Literal!, binding)
             },
             RuntimeInputBindingSource.Expression => new RuntimeResolvedInput(binding.InputName, binding.Source, binding.Expression),
             RuntimeInputBindingSource.WorkflowRequest => ResolveWorkflowRequest(binding, context),
@@ -44,12 +44,22 @@ public sealed class RuntimeInputBindingResolver : IRuntimeInputBindingResolver
             WithheldValue.SecretReference(binding.Secret!, binding.ConversionPlan),
             binding.EffectivePolicy);
 
+    /// <summary>
+    /// Every source this resolver reads passes here first. A withheld envelope has no value to hand on: passed through,
+    /// it would be retyped under this binding's type with a marker whose plan belongs to another binding, or projected as
+    /// if it were null. So only a secret read's own reference ever resolves to a withheld envelope.
+    /// </summary>
+    private static ValueEnvelope RequireReadable(ValueEnvelope source, RuntimeInputBinding binding) =>
+        source.Presence == ValuePresence.Withheld
+            ? throw SecretBindingDiagnostics.WithheldBindingNotResolved(binding)
+            : source;
+
     private static RuntimeResolvedInput ResolveWorkflowRequest(RuntimeInputBinding binding, RuntimeInputBindingResolutionContext context)
     {
         var reference = binding.WorkflowRequest!;
         if (!context.WorkflowInputEnvelopes.TryGetValue(reference.MemberKey, out var envelope))
             throw new InvalidOperationException($"Workflow request member '{reference.MemberKey}' for input '{binding.InputName}' is unavailable.");
-        return ResolveWorkflowRequestEnvelope(binding, reference, envelope);
+        return ResolveWorkflowRequestEnvelope(binding, reference, RequireReadable(envelope, binding));
     }
 
     private static RuntimeResolvedInput ResolveVariable(RuntimeInputBinding binding, RuntimeInputBindingResolutionContext context)
@@ -60,7 +70,7 @@ public sealed class RuntimeInputBindingResolver : IRuntimeInputBindingResolver
         {
             return new RuntimeResolvedInput(binding.InputName, binding.Source, null)
             {
-                Envelope = Retype(envelope, binding.ConversionPlan?.SourceType ?? binding.TargetType)
+                Envelope = Retype(RequireReadable(envelope, binding), binding.ConversionPlan?.SourceType ?? binding.TargetType)
             };
         }
 
@@ -82,7 +92,7 @@ public sealed class RuntimeInputBindingResolver : IRuntimeInputBindingResolver
             };
         }
 
-        var result = resolution.Completion.Result;
+        var result = RequireReadable(resolution.Completion.Result, binding);
         if (StringComparer.Ordinal.Equals(reference.ProjectionKey, "$result"))
         {
             return new RuntimeResolvedInput(binding.InputName, binding.Source, null)
@@ -100,9 +110,6 @@ public sealed class RuntimeInputBindingResolver : IRuntimeInputBindingResolver
             projection.Policy,
             $"Result projection '{projection.Key}' on producer node '{reference.ProducerExecutableNodeId}'");
 
-        // A projection reads into the value, and a withheld value is not here to read.
-        if (result.Presence == ValuePresence.Withheld)
-            throw SecretBindingDiagnostics.WithheldInputNotResolved(binding.InputName);
         if (result.Presence == ValuePresence.ExplicitNull)
         {
             var projectedNull = ValueEnvelope.Null(binding.ConversionPlan?.SourceType ?? binding.TargetType, projectedPolicy);

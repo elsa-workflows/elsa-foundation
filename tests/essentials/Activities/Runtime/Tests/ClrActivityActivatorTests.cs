@@ -10,6 +10,7 @@ using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText.Services;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -78,7 +79,7 @@ public sealed class ClrActivityActivatorTests
             ? WithheldValue.SecretReference(new RuntimeSecretReference("payments.api-key"), null)
             : new WithheldValue(kind);
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        var exception = await Assert.ThrowsAsync<WithheldValueException>(() =>
             activator.ActivateAsync(WithheldRequest(contract, withheld, RuntimeDescriptor(contract))).AsTask());
 
         Assert.Equal("VF-ACT-010: Activity input 'message' was withheld and is not resolved in this host.", exception.Message);
@@ -96,7 +97,7 @@ public sealed class ClrActivityActivatorTests
         var activator = new ActivityActivator([strategy], new ActivityInputHydrator());
         var withheld = WithheldValue.SecretReference(new RuntimeSecretReference("payments.api-key"), null);
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => activator.ActivateAsync(WithheldRequest(
+        var exception = await Assert.ThrowsAsync<WithheldValueException>(() => activator.ActivateAsync(WithheldRequest(
             contract,
             withheld,
             new RuntimeActivityDescriptor(NonHydratingStrategy.Key, RuntimeActivityDescriptor.InitialSchemaVersion, contract.DescriptorPayload))).AsTask());

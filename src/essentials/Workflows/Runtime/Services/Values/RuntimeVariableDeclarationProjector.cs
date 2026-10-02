@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Services.Values;
@@ -73,6 +74,10 @@ public sealed class RuntimeVariableDeclarationProjector
             return ValueEnvelope.Absent(declaration.Type, declaration.Policy);
         if (declaration.InitialBinding is not { Source: RuntimeInputBindingSource.Literal, Literal: { } literal })
             throw new InvalidOperationException($"Variable '{declaration.VariableKey}' uses a non-literal initial binding that must be materialized before frame activation.");
+        // Publication refuses a secret as a variable's initial value; a withheld literal here comes from an artifact that
+        // skipped it. Its marker belongs to that literal's binding, so it is refused rather than retyped into the frame.
+        if (literal.Presence == ValuePresence.Withheld)
+            throw SecretBindingDiagnostics.WithheldVariableNotResolved(declaration.Name);
         return new ValueEnvelope(
             declaration.Type,
             literal.Presence,

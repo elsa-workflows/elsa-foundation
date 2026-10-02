@@ -8,6 +8,7 @@ using Elsa.Expressions.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Resolvers;
 
@@ -204,6 +205,12 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
                 $"VF-ACT-005: Canonical input '{input.Key}' on executable node '{node.ExecutableNodeId}' " +
                 "was resolved without its source protection envelope.");
         }
+
+        // Only a secret read, withheld above, may put a withheld envelope in the snapshot. The binding resolver is
+        // replaceable, so a withheld source it hands back for any other binding is refused here rather than retyped or
+        // rebuilt below without its marker.
+        if (source.Presence == ValuePresence.Withheld)
+            throw SecretBindingDiagnostics.WithheldBindingNotResolved(binding);
 
         if (binding.Source == RuntimeInputBindingSource.Literal && !SameType(source.Type, binding.TargetType) &&
             (binding.ConversionPlan is null || !SameType(source.Type, binding.ConversionPlan.SourceType)))

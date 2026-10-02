@@ -9,6 +9,7 @@ using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Resolvers;
 using Elsa.Workflows.Runtime.Services.Values;
+using Elsa.Workflows.Runtime.Tests.Fixtures;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;
@@ -343,7 +344,7 @@ public sealed class CanonicalRuntimeInputBindingResolverTests
     [Fact]
     public async Task Materialization_refuses_an_expression_that_reads_a_withheld_ambient_variable()
     {
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        var exception = await Assert.ThrowsAsync<WithheldValueException>(() =>
             MaterializeJavaScriptAsync("variables.token", WithheldTokenInScope).AsTask());
 
         Assert.Equal(SecretBindingDiagnostics.WithheldVariableNotResolved("token").Message, exception.Message);
@@ -363,64 +364,111 @@ public sealed class CanonicalRuntimeInputBindingResolverTests
     public async Task Materialization_refuses_a_computed_variable_access_while_a_withheld_variable_is_in_scope(string script)
     {
         // The computed access never names the withheld variable, but could read it, so it is refused (fail closed).
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        var exception = await Assert.ThrowsAsync<WithheldValueException>(() =>
             MaterializeJavaScriptAsync(script, WithheldTokenInScope).AsTask());
 
         Assert.Equal(SecretBindingDiagnostics.WithheldVariableNotResolved("token").Message, exception.Message);
     }
 
-    [Fact]
-    public async Task Materialization_refuses_an_expression_parameter_bound_to_a_withheld_variable()
+    [Theory]
+    [InlineData("variable")]
+    [InlineData("request")]
+    [InlineData("result")]
+    public async Task Materialization_refuses_an_expression_parameter_that_reads_a_withheld_value(string source)
     {
-        // Sensitive, so the evaluation wrapper would redact any other failure; the fixed code must survive it.
-        var binding = new RuntimeInputBinding(
-            "customer-id",
-            StringType,
-            ValueProtectionPolicy.InstanceInline,
+        // Sensitive, so the evaluation wrapper would redact any other failure; the fixed code must survive it. The input
+        // is not withheld itself, so the message names what it reads.
+        var producer = CompletedProducer(WithheldToken);
+        var consumer = RunningConsumer(producer.InvocationId);
+        var (parameter, context, expected) = source switch
+        {
+            "variable" => ((ExpressionParameterBinding)new VariableExpressionParameterBinding("scope:root", "token"),
+                NewContext(variableEnvelopes: WithheldTokenAtRootScope),
+                SecretBindingDiagnostics.WithheldVariableNotResolved("token")),
+            "request" => (new WorkflowRequestExpressionParameterBinding("customer"),
+                NewContext(workflowInputEnvelopes: WithheldCustomerRequest),
+                SecretBindingDiagnostics.WithheldSourceNotResolved("customer-id")),
+            "result" => (new ActivityResultExpressionParameterBinding("producer", "$result"),
+                NewContext(consumer: consumer, runtimeView: [producer, consumer]),
+                SecretBindingDiagnostics.WithheldSourceNotResolved("customer-id")),
+            _ => throw new ArgumentOutOfRangeException(nameof(source), source, null)
+        };
+        var binding = CustomerIdBinding(
             RuntimeInputBindingSource.Expression,
             expression: new RuntimeExpressionBinding(
                 "Test",
                 "token",
-                parameters: new Dictionary<string, ExpressionParameterBinding>
-                {
-                    ["token"] = new VariableExpressionParameterBinding("scope:root", "token")
-                }));
-        var context = NewContext(variableEnvelopes: new Dictionary<RuntimeVariableValueAddress, ValueEnvelope>
-        {
-            [new RuntimeVariableValueAddress("scope:root", "token")] = WithheldToken
-        });
+                parameters: new Dictionary<string, ExpressionParameterBinding> { ["token"] = parameter }));
         var materializer = new RuntimeActivityInputMaterializer(
             _resolver,
             new TestTypeRegistry(),
             new ConstantPortableExpressionEvaluator("evaluated"));
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => materializer.MaterializeSnapshotAsync(
+        var exception = await Assert.ThrowsAsync<WithheldValueException>(() => materializer.MaterializeSnapshotAsync(
             NewConsumerNode(binding),
             "consumer",
             context,
             DateTimeOffset.UnixEpoch).AsTask());
 
-        Assert.Equal(SecretBindingDiagnostics.WithheldVariableNotResolved("token").Message, exception.Message);
+        Assert.Equal(expected.Message, exception.Message);
+    }
+
+    [Theory]
+    [InlineData("literal")]
+    [InlineData("variable")]
+    [InlineData("request")]
+    [InlineData("request path")]
+    [InlineData("result")]
+    [InlineData("result projection")]
+    public void Resolve_refuses_a_withheld_source_with_the_fixed_code(string source)
+    {
+        // Only a secret read's own reference resolves to a withheld envelope. Any other source that is withheld would be
+        // retyped under this binding with a marker that belongs elsewhere, or projected as if it were null.
+        var producer = CompletedProducer(WithheldToken);
+        var consumer = RunningConsumer(producer.InvocationId);
+        var resultContext = NewContext(consumer: consumer, runtimeView: [producer, consumer], executable: NewProducerExecutable());
+        var requestContext = NewContext(workflowInputEnvelopes: WithheldCustomerRequest);
+        var (binding, context, expected) = source switch
+        {
+            "literal" => (CustomerIdBinding(RuntimeInputBindingSource.Literal, literal: WithheldToken),
+                NewContext(),
+                SecretBindingDiagnostics.WithheldInputNotResolved("customer-id")),
+            "variable" => (CustomerIdBinding(RuntimeInputBindingSource.VariableRead, variable: new RuntimeVariableReference("token", "scope:root")),
+                NewContext(variableEnvelopes: WithheldTokenAtRootScope),
+                SecretBindingDiagnostics.WithheldVariableNotResolved("token")),
+            "request" => (CustomerIdBinding(RuntimeInputBindingSource.WorkflowRequest, workflowRequest: new RuntimeWorkflowRequestReference("customer")),
+                requestContext,
+                SecretBindingDiagnostics.WithheldSourceNotResolved("customer-id")),
+            "request path" => (CustomerIdBinding(RuntimeInputBindingSource.WorkflowRequest, workflowRequest: new RuntimeWorkflowRequestReference("customer", "customer.id")),
+                requestContext,
+                SecretBindingDiagnostics.WithheldSourceNotResolved("customer-id")),
+            "result" => (CustomerIdBinding(RuntimeInputBindingSource.ActivityResult, activityResult: new RuntimeActivityResultReference("producer", "$result", "scope:root")),
+                resultContext,
+                SecretBindingDiagnostics.WithheldSourceNotResolved("customer-id")),
+            "result projection" => (CustomerIdBinding(RuntimeInputBindingSource.ActivityResult, activityResult: new RuntimeActivityResultReference("producer", "customer-id", "scope:root")),
+                resultContext,
+                SecretBindingDiagnostics.WithheldSourceNotResolved("customer-id")),
+            _ => throw new ArgumentOutOfRangeException(nameof(source), source, null)
+        };
+
+        var exception = Assert.Throws<WithheldValueException>(() => _resolver.Resolve(binding, context));
+
+        Assert.Equal(expected.Message, exception.Message);
     }
 
     [Fact]
-    public void Resolve_refuses_to_project_from_a_withheld_activity_result()
+    public async Task Materialization_refuses_a_withheld_source_that_a_replaced_resolver_hands_back()
     {
-        var producer = CompletedProducer(WithheldToken);
-        var consumer = RunningConsumer(producer.InvocationId);
-        var binding = new RuntimeInputBinding(
-            "customer-id",
-            StringType,
-            ValueProtectionPolicy.InstanceInline,
-            RuntimeInputBindingSource.ActivityResult,
-            activityResult: new RuntimeActivityResultReference("producer", "customer-id", "scope:root"));
+        // The binding resolver is replaceable. Whatever one hands back for a binding that is not a secret read, a
+        // withheld envelope is refused rather than rebuilt into the snapshot without its marker.
+        var binding = CustomerIdBinding(RuntimeInputBindingSource.VariableRead, variable: new RuntimeVariableReference("token", "scope:root"));
 
-        var exception = Assert.Throws<InvalidOperationException>(() => _resolver.Resolve(binding, NewContext(
-            consumer: consumer,
-            runtimeView: [producer, consumer],
-            executable: NewProducerExecutable())));
+        var exception = await Assert.ThrowsAsync<WithheldValueException>(() =>
+            new RuntimeActivityInputMaterializer(new WithheldHandingResolver())
+                .MaterializeSnapshotAsync(NewConsumerNode(binding), "consumer", NewContext(), DateTimeOffset.UnixEpoch)
+                .AsTask());
 
-        Assert.Equal(SecretBindingDiagnostics.WithheldInputNotResolved("customer-id").Message, exception.Message);
+        Assert.Equal(SecretBindingDiagnostics.WithheldVariableNotResolved("token").Message, exception.Message);
     }
 
     [Fact]
@@ -552,10 +600,13 @@ public sealed class CanonicalRuntimeInputBindingResolverTests
         Assert.True(resolved.Envelope.Policy.RequiresEncryption);
     }
 
-    private static readonly ValueEnvelope WithheldToken = ValueEnvelope.Withheld(
-        StringType,
-        WithheldValue.SecretReference(new RuntimeSecretReference("payments.api-key"), conversionPlan: null),
-        new ValueProtectionPolicy(DurableValueLifecycle.Instance, DurableValueStorage.Inline, isSensitive: true, requiresEncryption: true));
+    private static readonly ValueEnvelope WithheldToken = WithheldValues.Secret(StringType);
+
+    private static readonly IReadOnlyDictionary<RuntimeVariableValueAddress, ValueEnvelope> WithheldTokenAtRootScope =
+        new Dictionary<RuntimeVariableValueAddress, ValueEnvelope> { [new RuntimeVariableValueAddress("scope:root", "token")] = WithheldToken };
+
+    private static readonly IReadOnlyDictionary<string, ValueEnvelope> WithheldCustomerRequest =
+        new Dictionary<string, ValueEnvelope> { ["customer"] = WithheldToken };
 
     private static readonly IReadOnlyDictionary<string, ValueEnvelope> WithheldTokenInScope = new Dictionary<string, ValueEnvelope>
     {
@@ -581,6 +632,15 @@ public sealed class CanonicalRuntimeInputBindingResolverTests
             new RuntimeInputBindingResolutionContext("workflow-1", "consumer", visibleVariablesByName: visibleVariables),
             DateTimeOffset.UnixEpoch);
     }
+
+    private static RuntimeInputBinding CustomerIdBinding(
+        RuntimeInputBindingSource source,
+        ValueEnvelope? literal = null,
+        RuntimeWorkflowRequestReference? workflowRequest = null,
+        RuntimeVariableReference? variable = null,
+        RuntimeActivityResultReference? activityResult = null,
+        RuntimeExpressionBinding? expression = null) =>
+        new("customer-id", StringType, ValueProtectionPolicy.InstanceInline, source, literal, workflowRequest, variable, activityResult, expression);
 
     private static RuntimeInputBindingResolutionContext NewContext(
         IReadOnlyDictionary<string, object?>? workflowInputs = null,
@@ -743,6 +803,13 @@ public sealed class CanonicalRuntimeInputBindingResolverTests
             0,
             0,
             new Dictionary<string, string>());
+
+    /// <summary>A replaced resolver that hands back a withheld envelope whatever the binding reads.</summary>
+    private sealed class WithheldHandingResolver : IRuntimeInputBindingResolver
+    {
+        public RuntimeResolvedInput Resolve(RuntimeInputBinding binding, RuntimeInputBindingResolutionContext context) =>
+            new(binding.InputName, binding.Source, null) { Envelope = WithheldToken };
+    }
 
     private sealed class ConstantPortableExpressionEvaluator(string value) : IPortableExpressionEvaluator
     {

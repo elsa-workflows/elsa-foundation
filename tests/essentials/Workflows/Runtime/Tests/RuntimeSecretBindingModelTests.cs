@@ -2,10 +2,12 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Elsa.Primitives.Models;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Resolvers;
 using Elsa.Workflows.Runtime.Services.Executables;
 using Elsa.Workflows.Runtime.Services.Values;
+using Elsa.Workflows.Runtime.Tests.Fixtures;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;
@@ -27,6 +29,9 @@ public sealed class RuntimeSecretBindingModelTests
     private static readonly RuntimeSecretReference Reference = new("payments.api-key", "text");
     private static readonly ValueConversionPlan IdentityPlan = ValueConversionPlan.Identity(StringType, ValueRepresentation.TextValue);
     private static readonly ValueProtectionPolicy SecretPolicy = new(DurableValueLifecycle.Instance, DurableValueStorage.Inline, isSensitive: true, requiresEncryption: true);
+
+    private static RuntimeInputBinding WithheldLiteral(string inputKey) =>
+        new(inputKey, StringType, SecretPolicy, RuntimeInputBindingSource.Literal, literal: WithheldValues.Secret(StringType));
 
     [Fact]
     public void A_secret_read_binding_carries_exactly_its_secret_payload()
@@ -196,6 +201,29 @@ public sealed class RuntimeSecretBindingModelTests
         Assert.Null(envelope.InlineValue);
         Assert.Equal(Reference, envelope.WithheldValue!.Secret);
         Assert.Equal(SecretPolicy, envelope.Policy);
+    }
+
+    [Fact]
+    public void A_variable_initial_value_that_stands_for_a_withheld_value_is_refused_with_the_fixed_code()
+    {
+        // Publication refuses a secret as a variable's initial value, so only an artifact that skipped it carries one. The
+        // marker belongs to the literal's binding, so it is refused rather than retyped into the variable frame.
+        var declaration = new RuntimeVariableDeclaration("token", "Token", StringType, SecretPolicy, WithheldLiteral("token"));
+
+        var exception = Assert.Throws<WithheldValueException>(() => new RuntimeVariableDeclarationProjector().ProjectInitialValues([declaration]));
+
+        Assert.Equal(SecretBindingDiagnostics.WithheldVariableNotResolved("Token").Message, exception.Message);
+    }
+
+    [Fact]
+    public void The_literal_reader_backstop_refuses_a_literal_that_stands_for_a_withheld_value()
+    {
+        // A withheld literal has no value to read, and every publish-time literal reader would otherwise take it for an
+        // unauthored input and apply its default.
+        var exception = Assert.Throws<WithheldValueException>(() =>
+            SecretBindingDiagnostics.ThrowIfSecretRead(WithheldLiteral("path"), "node-1", "path"));
+
+        Assert.Equal(SecretBindingDiagnostics.WithheldInputNotResolved("path").Message, exception.Message);
     }
 
     [Fact]

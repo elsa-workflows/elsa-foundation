@@ -6,6 +6,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Runtime.Resolvers;
 using Elsa.Workflows.Runtime.Services.Values;
+using Elsa.Workflows.Runtime.Tests.Fixtures;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;
@@ -55,13 +56,9 @@ public sealed class ValueConversionPlanTests
         // Conversion reads the value, so it refuses before comparing the envelope's type with the plan's source.
         var targetType = new ValueTypeDescriptor("Int32");
         var plan = JsonPlan(targetType, sourceRepresentation: ValueRepresentation.TextValue);
-        var policy = new ValueProtectionPolicy(DurableValueLifecycle.Instance, DurableValueStorage.Inline, isSensitive: true, requiresEncryption: true);
-        var withheld = ValueEnvelope.Withheld(
-            targetType,
-            WithheldValue.SecretReference(new RuntimeSecretReference("payments.retry-limit"), plan),
-            policy);
+        var withheld = WithheldValues.Secret(targetType, plan);
 
-        var exception = Assert.Throws<InvalidOperationException>(() => new RuntimeValueConversionExecutor().Convert(withheld, plan));
+        var exception = Assert.Throws<WithheldValueException>(() => new RuntimeValueConversionExecutor().Convert(withheld, plan));
 
         Assert.Equal(SecretBindingDiagnostics.WithheldValueNotConverted("Int32").Message, exception.Message);
     }

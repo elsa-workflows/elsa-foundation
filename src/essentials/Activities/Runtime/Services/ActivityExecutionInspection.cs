@@ -88,23 +88,10 @@ internal static class ActivityExecutionInspection
                     capturedAt,
                     payload,
                     isSensitive,
-                    value.WithheldValue is { } withheld ? WithWithheldMarker(decision.Metadata, withheld) : decision.Metadata,
+                    ActivityExecutionInspectionValueSnapshot.MarkWithheld(decision.Metadata, value.WithheldValue),
                     inputKey: item.Key);
             })
             .ToArray();
-
-    private static IReadOnlyDictionary<string, string> WithWithheldMarker(
-        IReadOnlyDictionary<string, string> metadata,
-        WithheldValue withheld)
-    {
-        var marked = new Dictionary<string, string>(metadata, StringComparer.Ordinal)
-        {
-            [RuntimeMetadataKeys.WithheldKind] = withheld.Kind.ToString()
-        };
-        if (withheld.Secret is { } secret)
-            marked[RuntimeMetadataKeys.SecretReferenceName] = secret.Name;
-        return marked;
-    }
 
     public static IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> BuildOutputValueSnapshots(
         IRuntimePayloadCapturePolicy payloadCapturePolicy,

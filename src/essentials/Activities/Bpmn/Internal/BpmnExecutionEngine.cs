@@ -7,6 +7,7 @@ using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using static Elsa.Activities.Bpmn.Internal.BpmnStateMutator;
 
@@ -1212,9 +1213,9 @@ public sealed class BpmnExecutionEngine(
     /// <summary>
     /// Reads a collection-mode host's collection variable once at loop start (spec 123 D2), returning the
     /// per-instance item snapshot (in array order) or a deterministic fault: unreadable (variable not visible —
-    /// defensive, unreachable post-validation), non-array present value, or an externally-stored (non-inline)
-    /// payload (stated cut). A null/absent collection resolves to an empty snapshot, which the caller routes as
-    /// an immediate <c>N == 0</c> completion.
+    /// defensive, unreachable post-validation), non-array present value, an externally-stored (non-inline)
+    /// payload (stated cut), or a withheld value (<c>VF-ACT-010</c>). A null/absent collection resolves to an empty
+    /// snapshot, which the caller routes as an immediate <c>N == 0</c> completion.
     /// </summary>
     private static (BpmnExecutionState State, IReadOnlyList<JsonElement>? Items, ActivityFault? Fault) ResolveCollectionInstances(
         IRuntimeActivityExecutionContext context,
@@ -1233,6 +1234,14 @@ public sealed class BpmnExecutionEngine(
         // null / absent → an empty loop (N == 0): complete immediately and route outbound (spec 123 D2).
         if (envelope.Presence is ValuePresence.Absent or ValuePresence.ExplicitNull)
             return (state, [], null);
+
+        // A withheld value is neither empty nor stored elsewhere: it is not here to read, so the loop has no items.
+        if (envelope.Presence == ValuePresence.Withheld)
+        {
+            var message = SecretBindingDiagnostics.WithheldVariableNotResolved(variableName).Message;
+            state = BpmnDiagnosticAccumulator.Add(state, BpmnDiagnosticKind.Faulted, element.ElementId, null, null, message);
+            return (state, null, new ActivityFault(SecretBindingDiagnostics.WithheldInputCode, message));
+        }
 
         // A present value stored externally is a stated cut — resolving it needs machinery beyond the inline read.
         if (envelope.InlineValue is not { } inline)

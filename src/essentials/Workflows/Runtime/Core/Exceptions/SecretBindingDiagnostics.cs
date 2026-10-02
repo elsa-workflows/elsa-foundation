@@ -4,27 +4,54 @@ using Elsa.Workflows.Runtime.Core.Models;
 namespace Elsa.Workflows.Runtime.Core.Exceptions;
 
 /// <summary>
-/// The fixed diagnostics for secret bindings. Every message names the node, the input and the reason, and never a
-/// value or a reference payload, so publication, literal readers and activation refuse a secret the same way.
+/// The fixed diagnostics for secret bindings and withheld values, so publication, literal readers, value resolution
+/// and activation refuse a secret the same way. No message carries a value or a reference payload. A
+/// <see cref="SecretBindingRefusedCode"/> refusal names the node, the input and the reason; a
+/// <see cref="WithheldInputCode"/> refusal names the input, the variable or the conversion target that met a withheld
+/// value.
 /// </summary>
 public static class SecretBindingDiagnostics
 {
-    /// <summary>A withheld input reached a reader that needs its value and cannot resolve it.</summary>
+    /// <summary>
+    /// A withheld value reached a reader that needs it and cannot resolve it: an input's own value, a variable, a value an
+    /// input reads, or a conversion. The refusal is thrown as a <see cref="WithheldValueException"/>; a reader that
+    /// reports deterministic faults instead of throwing records a fault with this code and the same message.
+    /// </summary>
     public const string WithheldInputCode = "VF-ACT-010";
 
     /// <summary>A secret reference is bound where the value would be persisted or must be known at publish time.</summary>
     public const string SecretBindingRefusedCode = "VF-ACT-012";
 
-    public static InvalidOperationException WithheldInputNotResolved(string inputKey) =>
+    /// <summary>The input's own value was withheld: a secret read, or a literal that stands for a withheld value.</summary>
+    public static WithheldValueException WithheldInputNotResolved(string inputKey) =>
         new($"{WithheldInputCode}: Activity input '{inputKey}' was withheld and is not resolved in this host.");
 
+    /// <summary>
+    /// The input is not withheld itself, but the value it reads is: a workflow request member or an activity result.
+    /// </summary>
+    public static WithheldValueException WithheldSourceNotResolved(string inputKey) =>
+        new($"{WithheldInputCode}: Activity input '{inputKey}' reads a withheld value that is not resolved in this host.");
+
     /// <summary>A withheld variable value reached a reader that needs its value and cannot resolve it.</summary>
-    public static InvalidOperationException WithheldVariableNotResolved(string variableName) =>
+    public static WithheldValueException WithheldVariableNotResolved(string variableName) =>
         new($"{WithheldInputCode}: Variable '{variableName}' holds a withheld value that is not resolved in this host.");
 
     /// <summary>A withheld value reached value conversion, which reads the value and cannot resolve it.</summary>
-    public static InvalidOperationException WithheldValueNotConverted(string targetTypeAlias) =>
+    public static WithheldValueException WithheldValueNotConverted(string targetTypeAlias) =>
         new($"{WithheldInputCode}: A withheld value cannot be converted to '{targetTypeAlias}': it is not resolved in this host.");
+
+    /// <summary>
+    /// A withheld value reached the reader of <paramref name="binding"/>, worded for what the binding reads: the variable
+    /// for a variable read, the value it reads for a workflow request member or an activity result, and otherwise the
+    /// input's own value.
+    /// </summary>
+    public static WithheldValueException WithheldBindingNotResolved(RuntimeInputBinding binding) =>
+        binding.Source switch
+        {
+            RuntimeInputBindingSource.VariableRead => WithheldVariableNotResolved(binding.Variable!.VariableKey),
+            RuntimeInputBindingSource.WorkflowRequest or RuntimeInputBindingSource.ActivityResult => WithheldSourceNotResolved(binding.InputName),
+            _ => WithheldInputNotResolved(binding.InputName)
+        };
 
     /// <summary>The input is named by the activity's <see cref="RefusesSecretBindingAttribute"/>.</summary>
     public static ArgumentException SecretBindingRefused(string nodeId, string inputKey, SecretBindingRefusalReason reason) =>
@@ -64,11 +91,14 @@ public static class SecretBindingDiagnostics
 
     /// <summary>
     /// The backstop every publish-time literal reader applies before reading a binding: a secret reference has no
-    /// literal to read, so it is refused by name instead of being treated as unauthored or as a generic non-literal.
+    /// literal to read, so it is refused by name instead of being treated as unauthored or as a generic non-literal. A
+    /// literal that stands for a withheld value has none either; it reads as no literal at all, so it is refused too.
     /// </summary>
     public static void ThrowIfSecretRead(RuntimeInputBinding? binding, string nodeId, string inputKey)
     {
         if (binding?.Source == RuntimeInputBindingSource.SecretRead)
             throw SecretBindingRefused(nodeId, inputKey, SecretBindingRefusalReason.FixedAtPublish);
+        if (binding?.Literal?.Presence == ValuePresence.Withheld)
+            throw WithheldInputNotResolved(inputKey);
     }
 }

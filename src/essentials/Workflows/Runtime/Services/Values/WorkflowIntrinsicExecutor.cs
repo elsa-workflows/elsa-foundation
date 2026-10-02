@@ -484,7 +484,9 @@ public sealed class WorkflowIntrinsicExecutor(
         JsonSerializer.SerializeToElement(ActivityUnit.Value),
         ValueProtectionPolicy.InstanceInline);
 
-    // A literal read needs the value, and a secret read is withheld until activation, which intrinsics never reach.
+    // An intrinsic reads its inputs itself and never reaches activation, the only place a secret is resolved, so a secret
+    // read or a literal standing for a withheld value has nothing for it to read. Checked on the binding, before any
+    // (replaceable) binding resolver is consulted, so no resolver can hand an intrinsic a secret to persist.
     private static void ThrowIfWithheld(RuntimeInputBinding binding)
     {
         if (binding.Source == RuntimeInputBindingSource.SecretRead || binding.Literal?.Presence == ValuePresence.Withheld)
@@ -574,6 +576,7 @@ public sealed class WorkflowIntrinsicExecutor(
         IReadOnlyCollection<ActivityExecutionState> runtimeView,
         CancellationToken cancellationToken)
     {
+        ThrowIfWithheld(binding);
         var durableValues = await durableValueStateStore.ListAllDurableValueStatesAsync(workflowState.WorkflowExecutionId, cancellationToken);
         var projections = RuntimeInputBindingStateProjection.ProjectAll(durableValues);
         var visibleFrames = BuildVisibleFrames(workflowState, intrinsicState, runtimeView);
@@ -622,7 +625,7 @@ public sealed class WorkflowIntrinsicExecutor(
             throw new InvalidOperationException($"Intrinsic '{intrinsicState.Execution.ExecutableNodeId}' cannot materialize an absent value.");
         // An intrinsic writes the value itself into workflow state, and a withheld value is not here to write.
         if (source.Presence == ValuePresence.Withheld)
-            throw SecretBindingDiagnostics.WithheldInputNotResolved(binding.InputName);
+            throw SecretBindingDiagnostics.WithheldBindingNotResolved(binding);
         if (source.Policy.Lifecycle == DurableValueLifecycle.None)
             throw new InvalidOperationException($"Intrinsic '{intrinsicState.Execution.ExecutableNodeId}' cannot persist transient source '{binding.InputName}'.");
         var combinedPolicy = ValuePolicyCombiner.Combine(

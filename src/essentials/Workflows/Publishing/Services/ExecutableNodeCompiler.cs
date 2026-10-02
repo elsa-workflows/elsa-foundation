@@ -31,7 +31,6 @@ public sealed class ExecutableNodeCompiler(
     RuntimeOutputCaptureCompiler outputCaptureCompiler,
     IEnumerable<IOperatorActivitySchedulingCapabilityProvider>? operatorSchedulingCapabilityProviders = null)
 {
-    internal static readonly JsonSerializerOptions DescriptorSerializerOptions = new(JsonSerializerDefaults.Web);
     private readonly IReadOnlyCollection<IOperatorActivitySchedulingCapabilityProvider> _operatorSchedulingCapabilityProviders =
         (operatorSchedulingCapabilityProviders ?? []).ToArray();
 
@@ -563,16 +562,16 @@ public sealed class ExecutableNodeCompiler(
             ?? throw new ArgumentException($"Activity node '{nodeId}' has a non-object executable structure payload.");
         if (payload["variables"] is { } variablesNode)
         {
-            var authored = variablesNode.Deserialize<IReadOnlyCollection<VariableDefinition>>(DescriptorSerializerOptions)
+            var authored = variablesNode.Deserialize<IReadOnlyCollection<VariableDefinition>>(ClrActivityTypeResolver.DescriptorSerializerOptions)
                 ?? throw new ArgumentException($"Activity node '{nodeId}' has malformed variable declarations.");
             var compiled = authored.Select(variable => CompileVariableDeclaration(nodeId, variable)).ToArray();
-            payload["variables"] = JsonSerializer.SerializeToNode(compiled, DescriptorSerializerOptions);
+            payload["variables"] = JsonSerializer.SerializeToNode(compiled, ClrActivityTypeResolver.DescriptorSerializerOptions);
         }
 
         return new ExecutableActivityStructure(
             structure.Kind,
             structure.SchemaVersion,
-            JsonSerializer.SerializeToElement(payload, DescriptorSerializerOptions));
+            JsonSerializer.SerializeToElement(payload, ClrActivityTypeResolver.DescriptorSerializerOptions));
     }
 
     /// <summary>

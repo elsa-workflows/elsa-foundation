@@ -234,12 +234,18 @@ public sealed class RuntimeContainerScopeService(
             return [];
 
         var declarations = _declarations.ProjectDeclarations(containerNode);
-        return declarations.Select(item => new RuntimeScopedVariableValue(
-                item.Value.Name,
-                item.Key,
-                frame.Values.TryGetValue(item.Key, out var value) ? Materialize(item.Value.Name, value) : null))
+        return declarations.Select(item => frame.Values.TryGetValue(item.Key, out var value)
+                ? ToScopedVariableValue(item.Value.Name, item.Key, value)
+                : new RuntimeScopedVariableValue(item.Value.Name, item.Key, null))
             .ToArray();
     }
+
+    // This feeds completed-scope evidence, which must render a withheld variable rather than fail the container's
+    // completion: the marker stands in for the value, and nothing is read from it.
+    private static RuntimeScopedVariableValue ToScopedVariableValue(string name, string referenceKey, ValueEnvelope value) =>
+        value.WithheldValue is { } withheld
+            ? new RuntimeScopedVariableValue(name, referenceKey, null, withheld)
+            : new RuntimeScopedVariableValue(name, referenceKey, Materialize(name, value));
 
     /// <summary>
     /// Projects the visible lexical frame chain into the name-keyed read view used by transitional

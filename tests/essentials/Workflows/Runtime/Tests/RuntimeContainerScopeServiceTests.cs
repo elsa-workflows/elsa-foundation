@@ -2,12 +2,14 @@ using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Primitives.Models;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.ActivityExecutions;
 using Elsa.Workflows.Runtime.Services.Executions;
 using Elsa.Workflows.Runtime.Services.Values;
+using Elsa.Workflows.Runtime.Tests.Fixtures;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;
@@ -241,20 +243,54 @@ public sealed class RuntimeContainerScopeServiceTests
     [Fact]
     public void The_visible_value_view_refuses_a_withheld_variable_with_the_fixed_code()
     {
-        var withheld = ValueEnvelope.Withheld(
-            StringType,
-            WithheldValue.SecretReference(new RuntimeSecretReference("payments.api-key"), conversionPlan: null),
-            ValueProtectionPolicy.InstanceInline);
         var root = new VariableFrameFactory().CreateRoot(
             WorkflowExecutionId,
             "workflow",
-            new Dictionary<string, ValueEnvelope> { ["g"] = withheld });
+            new Dictionary<string, ValueEnvelope> { ["g"] = WithheldValues.Secret(StringType) });
 
-        var exception = Assert.Throws<InvalidOperationException>(() => Service().ProjectVisibleVariables(
+        var exception = Assert.Throws<WithheldValueException>(() => Service().ProjectVisibleVariables(
             Executable(DeclNode("root", []), Declaration("g", "Token")),
             new RuntimeVisibleVariableFrames([root])));
 
         Assert.Equal(SecretBindingDiagnostics.WithheldVariableNotResolved("Token").Message, exception.Message);
+    }
+
+    [Fact]
+    public void Container_variable_evidence_renders_a_withheld_variable_as_a_marker_without_a_value()
+    {
+        // Evidence is captured as the container completes, so it must render a withheld variable rather than fail the
+        // completion, and a policy that captures every payload must still capture nothing from it.
+        var factory = new VariableFrameFactory();
+        var root = factory.CreateRoot(WorkflowExecutionId, "workflow", Values(("r", "root")));
+        var containerNode = DeclNode("container", [], ("token", "Token"), ("plain", "Plain"));
+        var containerState = State("container-exec", "container") with
+        {
+            VariableFrame = factory.CreateContainer("container", "container-exec", root, new Dictionary<string, ValueEnvelope>
+            {
+                ["token"] = WithheldValues.Secret(StringType),
+                ["plain"] = ValueEnvelope.Inline(StringType, JsonSerializer.SerializeToElement("visible"), ValueProtectionPolicy.InstanceInline)
+            })
+        };
+
+        var snapshots = RuntimeContainerVariableEvidence.Capture(
+            new CaptureEveryPayloadPolicy(),
+            Service(),
+            containerNode,
+            containerState,
+            WorkflowExecutionId,
+            containerState.InvocationId,
+            "work-1",
+            DateTimeOffset.UnixEpoch);
+
+        var token = Assert.Single(snapshots, snapshot => snapshot.Name == "Token");
+        Assert.Null(token.Payload);
+        Assert.True(token.IsSensitive);
+        Assert.Equal(nameof(WithheldValueKind.SecretReference), token.Metadata[RuntimeMetadataKeys.WithheldKind]);
+        Assert.Equal(WithheldValues.Reference.Name, token.Metadata[RuntimeMetadataKeys.SecretReferenceName]);
+        // The positive control: the same policy does capture an ordinary variable's value.
+        var plain = Assert.Single(snapshots, snapshot => snapshot.Name == "Plain");
+        Assert.Equal("visible", plain.Payload!.Value.GetString());
+        Assert.False(plain.Metadata.ContainsKey(RuntimeMetadataKeys.WithheldKind));
     }
 
     [Fact]
@@ -336,6 +372,12 @@ public sealed class RuntimeContainerScopeServiceTests
         new(key, name, StringType, ValueProtectionPolicy.InstanceInline,
             new RuntimeInputBinding(key, StringType, ValueProtectionPolicy.InstanceInline, RuntimeInputBindingSource.Literal,
                 literal: ValueEnvelope.Inline(StringType, JsonSerializer.SerializeToElement("seed"), ValueProtectionPolicy.InstanceInline)));
+
+    private sealed class CaptureEveryPayloadPolicy : IRuntimePayloadCapturePolicy
+    {
+        public RuntimePayloadCaptureDecision Decide(RuntimePayloadCaptureRequest request) =>
+            new(RuntimePayloadCaptureMode.Payload, "Test policy captures every payload.");
+    }
 
     private sealed class MarkerReaderActivity : IActivity, IRuntimeScopedVariableReader
     {

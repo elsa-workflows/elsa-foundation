@@ -14,14 +14,31 @@ namespace Elsa.Activities.Testing;
 // Twin: SecretBindingCompilerFixture in Elsa.Workflows.Publishing.Api.Tests, which does not reference this project.
 public static class SecretBindingTestSupport
 {
+    /// <summary>The protection a compiled secret read carries at least.</summary>
+    public static readonly ValueProtectionPolicy SecretPolicy =
+        new(DurableValueLifecycle.Instance, DurableValueStorage.Inline, isSensitive: true, requiresEncryption: true);
+
+    public static readonly RuntimeSecretReference Reference = new("payments.api-key");
+
     /// <summary>A compiled secret read on <paramref name="inputKey"/>, as it reaches a reader that skips publication.</summary>
     public static RuntimeInputBinding SecretRead(string inputKey, string typeAlias = "String") =>
         new(
             inputKey,
             new ValueTypeDescriptor(typeAlias),
-            new ValueProtectionPolicy(DurableValueLifecycle.Instance, DurableValueStorage.Inline, isSensitive: true, requiresEncryption: true),
+            SecretPolicy,
             RuntimeInputBindingSource.SecretRead,
-            secret: new RuntimeSecretReference("payments.api-key"));
+            secret: Reference);
+
+    /// <summary>The withheld envelope a secret read leaves in runtime state in place of its value.</summary>
+    public static ValueEnvelope Withheld(string typeAlias = "String") =>
+        ValueEnvelope.Withheld(new ValueTypeDescriptor(typeAlias), WithheldValue.SecretReference(Reference, conversionPlan: null), SecretPolicy);
+
+    /// <summary>
+    /// A literal binding on <paramref name="inputKey"/> that stands for a withheld value: no publication produces one,
+    /// so only a hand-built or imported artifact carries it.
+    /// </summary>
+    public static RuntimeInputBinding WithheldLiteral(string inputKey, string typeAlias = "String") =>
+        new(inputKey, new ValueTypeDescriptor(typeAlias), SecretPolicy, RuntimeInputBindingSource.Literal, literal: Withheld(typeAlias));
 
     /// <summary>Asserts the activity type declares that <paramref name="inputKey"/> refuses a secret reference for <paramref name="reason"/>.</summary>
     public static void AssertRefusesSecretBinding(Type activityType, string inputKey, SecretBindingRefusalReason reason) =>
