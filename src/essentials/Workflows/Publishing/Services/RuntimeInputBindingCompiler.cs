@@ -111,16 +111,6 @@ public sealed class RuntimeInputBindingCompiler(
         CompileBound(nodeId, inputDefinition, value, DeclaredPolicy(inputDefinition), conversion: null);
 
     /// <summary>
-    /// Preserves an omitted optional argument as a canonical absent literal. Only nullable CLR targets
-    /// can represent omission; non-nullable inputs require an authored binding or pinned default.
-    /// </summary>
-    public RuntimeInputBinding CompileOmitted(InputDefinition inputDefinition)
-    {
-        ArgumentNullException.ThrowIfNull(inputDefinition);
-        return CompileOmitted(inputDefinition, ValuePolicyCombiner.ToProtectionPolicy(DeclaredPolicy(inputDefinition)));
-    }
-
-    /// <summary>
     /// The effective policy of an activity input (spec 188, FR-007): its storage policy with the activity's
     /// sensitivity declaration applied, combined with the author's per-binding choice when the input is bound
     /// (<paramref name="state"/> is null for an unbound input). Publication pins this same policy into the activity's

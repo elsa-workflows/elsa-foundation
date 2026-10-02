@@ -60,15 +60,30 @@ public sealed class EncryptionRequiredBindingTests
         }
     }
 
-    public static TheoryData<InputShape, string, bool, bool> EmptyBindings
+    private static readonly string[] EmptyBindingKinds = ["EmptyLiteral", "NullLiteral", "JsonNullLiteral", "NullValue"];
+
+    public static TheoryData<InputShape, string> EmptyBindingsOnOptionalInput
     {
         get
         {
-            var data = new TheoryData<InputShape, string, bool, bool>();
+            var data = new TheoryData<InputShape, string>();
             foreach (var shape in Enum.GetValues<InputShape>())
-            foreach (var binding in new[] { "EmptyLiteral", "NullLiteral", "JsonNullLiteral", "NullValue" })
-            foreach (var (isRequired, hasDefault) in new[] { (false, false), (true, false), (false, true) })
-                data.Add(shape, binding, isRequired, hasDefault);
+            foreach (var binding in EmptyBindingKinds)
+                data.Add(shape, binding);
+            return data;
+        }
+    }
+
+    /// <summary>The rows are (shape, binding, isRequired); the input without a requirement declares a default instead.</summary>
+    public static TheoryData<InputShape, string, bool> EmptyBindingsOnRefusedInput
+    {
+        get
+        {
+            var data = new TheoryData<InputShape, string, bool>();
+            foreach (var shape in Enum.GetValues<InputShape>())
+            foreach (var binding in EmptyBindingKinds)
+            foreach (var isRequired in new[] { true, false })
+                data.Add(shape, binding, isRequired);
             return data;
         }
     }
@@ -86,20 +101,23 @@ public sealed class EncryptionRequiredBindingTests
     }
 
     [Theory]
-    [MemberData(nameof(EmptyBindings))]
-    public void A_binding_that_carries_no_value_compiles_as_an_unbound_input(InputShape shape, string binding, bool isRequired, bool hasDefault)
+    [MemberData(nameof(EmptyBindingsOnOptionalInput))]
+    public void A_binding_that_carries_no_value_on_an_optional_input_without_a_default_compiles_as_absent(InputShape shape, string binding)
     {
-        if (!isRequired && !hasDefault)
-        {
-            var compiled = CompileAll(shape, hasDefault, isRequired, Authored(binding));
-            var unbound = CompileAll(shape, hasDefault, isRequired);
+        var compiled = CompileAll(shape, hasDefault: false, isRequired: false, Authored(binding));
+        var unbound = CompileAll(shape, hasDefault: false, isRequired: false);
 
-            Assert.Equal(RuntimeInputBindingSource.Literal, compiled.Source);
-            Assert.Equal(ValuePresence.Absent, compiled.Literal!.Presence);
-            Assert.Null(compiled.Literal.InlineValue);
-            Assert.Equal(PolicyOf(unbound), PolicyOf(compiled));
-            return;
-        }
+        Assert.Equal(RuntimeInputBindingSource.Literal, compiled.Source);
+        Assert.Equal(ValuePresence.Absent, compiled.Literal!.Presence);
+        Assert.Null(compiled.Literal.InlineValue);
+        Assert.Equal(PolicyOf(unbound), PolicyOf(compiled));
+    }
+
+    [Theory]
+    [MemberData(nameof(EmptyBindingsOnRefusedInput))]
+    public void A_binding_that_carries_no_value_on_a_required_or_defaulted_input_gets_the_unbound_diagnostic(InputShape shape, string binding, bool isRequired)
+    {
+        var hasDefault = !isRequired;
 
         // A required input is reported missing and a declared default stays refused, exactly as when nothing is authored.
         var expected = isRequired

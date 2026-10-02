@@ -9,7 +9,7 @@ namespace Elsa.Activities.Design.Api.Handlers;
 /// shared <see cref="CredentialInputDeclaration"/> check raised as an <see cref="ActivityAuthoringException"/>. A
 /// sensitive declaration is accepted.
 /// </summary>
-internal static class CredentialInputDeclarations
+internal static class ActivityAuthoringCredentialGuard
 {
     /// <summary>Throws before anything is stored when any input declares <c>isCredential: true</c>, naming the first one.</summary>
     public static void Refuse(IEnumerable<InputDefinition>? inputs)
