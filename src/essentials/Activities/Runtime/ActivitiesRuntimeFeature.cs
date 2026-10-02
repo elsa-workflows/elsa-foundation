@@ -29,6 +29,7 @@ public class ActivitiesRuntimeFeature : IShellFeature
     {
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton<ActivityInputHydrator>();
+        services.TryAddScoped<ActivitySecretInputResolver>();
         services.TryAddScoped<IActivityActivator, ActivityActivator>();
         services.TryAddScoped<IRuntimeActivityInputMaterializer, RuntimeActivityInputMaterializer>();
         services.TryAddSingleton<ActivityCompletionProjector>();

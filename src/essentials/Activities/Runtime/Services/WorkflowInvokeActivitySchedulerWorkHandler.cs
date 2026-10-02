@@ -186,7 +186,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
             state = activationClaim.State;
             valueFlowAttempt = activationClaim.Attempt;
             activationLease = await serviceProvider.GetRequiredService<IActivityActivator>().ActivateAsync(
-                new ActivityActivationRequest(activityContract, valueFlowSnapshot, valueFlowAttempt, Descriptor: executableNode.Descriptor),
+                new ActivityActivationRequest(workItem.WorkflowExecutionId, activityContract, valueFlowSnapshot, valueFlowAttempt, Descriptor: executableNode.Descriptor),
                 cancellationToken);
             activity = activationLease.Activity;
 
@@ -222,19 +222,18 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
         }
         catch (OperationCanceledException cancellationException) when (cancellationToken.IsCancellationRequested)
         {
-            var disposalException = await ActivityActivationLeaseDisposer.TryDisposeAsync(activationLease);
-            activationLease = null;
-            if (disposalException is not null)
-                throw new AggregateException("Activity activation cancellation and disposal both failed.", cancellationException, disposalException);
+            if (await ActivityActivationLeaseDisposer.DisposeAfterCancellationAsync(activationLease, cancellationException, "Activity activation cancellation and disposal both failed.") is { } cleanupFailure)
+                throw cleanupFailure;
             throw;
         }
         catch (Exception exception)
         {
             var disposalException = await ActivityActivationLeaseDisposer.TryDisposeAsync(activationLease);
             activationLease = null;
+            // The arm above takes the activation's cancellation, so this failure is never it.
             var fault = disposalException is null
                 ? exception
-                : ActivityActivationLeaseDisposer.Combine(exception, disposalException);
+                : ActivityActivationLeaseDisposer.CombineActivationFailure(exception, disposalException, canceled: false);
             var subStatus = disposalException is null ? "ActivityConstructionFailed" : "ActivityDisposalFailed";
             await RecordFaultAsync(activityFaultIncidentRecorder, activityExecutionStateStore, checkpointCommitter, workItem, invokePayload, state, fault, subStatus, valueSnapshots, cancellationToken);
             return;
@@ -456,10 +455,8 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
         {
             workflowDispatchStaging?.Reset(workItem.WorkflowExecutionId, invokePayload.ActivityExecutionId);
             publishStimulusStaging?.Reset(workItem.WorkflowExecutionId, invokePayload.ActivityExecutionId);
-            var disposalException = await ActivityActivationLeaseDisposer.TryDisposeAsync(activationLease);
-            activationLease = null;
-            if (disposalException is not null)
-                throw new AggregateException("Activity execution cancellation and disposal both failed.", cancellationException, disposalException);
+            if (await ActivityActivationLeaseDisposer.DisposeAfterCancellationAsync(activationLease, cancellationException, "Activity execution cancellation and disposal both failed.") is { } cleanupFailure)
+                throw cleanupFailure;
             throw;
         }
         catch (Exception exception)
@@ -470,7 +467,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
             activationLease = null;
             var fault = disposalException is null
                 ? exception
-                : ActivityActivationLeaseDisposer.Combine(exception, disposalException);
+                : ActivityActivationLeaseDisposer.CombineExecutionFailure(exception, disposalException);
             var subStatus = disposalException is null ? "ActivityFaulted" : "ActivityDisposalFailed";
             await RecordFaultAsync(activityFaultIncidentRecorder, activityExecutionStateStore, checkpointCommitter, workItem, invokePayload, state, fault, subStatus, valueSnapshots, cancellationToken);
             return;

@@ -130,8 +130,9 @@ It returns without doing anything when any of these hold:
 - the workflow is missing or already terminal;
 - no blocking incident has a null `ResolutionOutcome` (so anything the strategy observer already
   decided is left alone, including a deliberate `ContinueWithIncidents`);
-- every remaining blocking incident is an `ArtifactActivationFailed` incident. A missing consumer or
-  schema is a deployment problem, so the run is kept recoverable while deployment is corrected.
+- every remaining blocking incident is an `ArtifactActivationFailed` incident. A missing consumer,
+  schema, durable-value storage driver or runtime secret resolver is a deployment problem, so the run is
+  kept recoverable while deployment is corrected.
 
 When it does fault the workflow, it also walks each incident activity's ancestor chain and marks the
 non-terminal ancestors `Faulted` with sub-status `BlockingIncident`, so an enclosing container does not

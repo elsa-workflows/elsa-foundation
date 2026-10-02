@@ -202,6 +202,9 @@ public sealed class ActivityFaultIncidentRecorder
         }
 
         var state = EndOpenAttempt(request.State, incidentId, completedAt);
+        // The classification is read through the contract, never a concrete exception type, so an exception that
+        // wraps another keeps its classification by implementing the contract as well.
+        var classification = request.Exception as IRuntimeFaultClassification;
         return RuntimeContainerScopeService.CloseOwnedFrames(state with
         {
             Status = ActivityExecutionStatus.Faulted,
@@ -211,11 +214,11 @@ public sealed class ActivityFaultIncidentRecorder
             FaultCount = state.FaultCount + 1,
             AggregateFaultCount = state.AggregateFaultCount + 1,
             Fault = state.Fault ?? new NormalizedActivityFault(
-                request.SubStatus,
+                string.IsNullOrWhiteSpace(classification?.FailureCode) ? request.SubStatus : classification.FailureCode,
                 faultInfo.ExceptionType,
                 faultInfo.Message,
                 faultInfo.StackTrace,
-                isRetryable: false),
+                isRetryable: classification?.IsRetryable ?? false),
             Metadata = metadata
         });
     }

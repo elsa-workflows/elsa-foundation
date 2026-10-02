@@ -6,6 +6,7 @@ using Elsa.Activities.Testing;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -99,6 +100,25 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandlerTests
         Assert.Equal(2, probe.Disposals);
     }
 
+    [Fact]
+    public async Task ChildCompletionCallbackAndDisposalFailures_KeepTheClassificationOfTheCallbackFailure()
+    {
+        // The combined fault reads retryability and code through the classification contract, which the combine keeps.
+        await using var harness = WorkflowExecutionHarness.Create()
+            .WithProbeLeaf()
+            .ConfigureServices(services => services.AddSingleton(new CallbackDisposalProbe()))
+            .Build("actexec-parent", "actexec-child");
+
+        var run = await harness.RunAsync(NewExecutable(typeof(ClassifiedCallbackAndDisposalFailingStructuralActivity)));
+
+        var parent = run.State("node-parent");
+        Assert.Equal(ActivityExecutionStatus.Faulted, parent.Status);
+        Assert.Equal("ActivityDisposalFailed", parent.SubStatus);
+        Assert.Equal(ClassifiedCallbackAndDisposalFailingStructuralActivity.FailureCode, parent.Fault!.Code);
+        Assert.True(parent.Fault.IsRetryable);
+        Assert.Contains("Activity execution and activation disposal both failed", parent.Fault.Message, StringComparison.Ordinal);
+    }
+
     private static WorkflowExecutable NewExecutable() =>
         NewExecutable(typeof(UndeclaredOutcomeStructuralActivity));
 
@@ -166,6 +186,16 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandlerTests
     {
         public ValueTask<RuntimeStructuralContinuation> OnChildCompletedAsync(ActivityChildCompletedContext context) =>
             throw new InvalidOperationException("callback execution failed");
+    }
+
+    public sealed class ClassifiedCallbackAndDisposalFailingStructuralActivity(CallbackDisposalProbe probe) :
+        CallbackDisposalFailingStructuralActivity(probe),
+        IRuntimeActivityChildCompletionHandler
+    {
+        public const string FailureCode = "StoreUnavailable";
+
+        public ValueTask<RuntimeStructuralContinuation> OnChildCompletedAsync(ActivityChildCompletedContext context) =>
+            throw new RuntimeSecretResolutionException("payments.api-key", FailureCode, isRetryable: true);
     }
 
     public abstract class CallbackDisposalFailingStructuralActivity : StructuralActivity,
