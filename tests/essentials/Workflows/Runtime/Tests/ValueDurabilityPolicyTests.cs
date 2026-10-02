@@ -9,6 +9,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Resolvers;
 using Elsa.Workflows.Runtime.Services.Values;
+using Elsa.Workflows.Runtime.Tests.Fixtures;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -20,6 +21,7 @@ public sealed class ValueDurabilityPolicyTests
     private static readonly ValueTypeDescriptor AnyType = new("Elsa.Any");
     private static readonly ValueTypeDescriptor CustomerType = new("Acme.Customer");
     private static readonly DateTimeOffset Now = new(2026, 7, 16, 10, 0, 0, TimeSpan.Zero);
+    private const string InputRole = "Input 'apiKey' on activity node 'node-1'";
 
     [Fact]
     public async Task Snapshot_materialization_preserves_external_sensitive_encrypted_and_redacted_policy_without_argument_wrappers()
@@ -697,6 +699,80 @@ public sealed class ValueDurabilityPolicyTests
         Assert.Contains("fingerprint 'sha256:", exception.Message, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// The effective-policy table of spec 188 (FR-007): an input's declaration (none, sensitive, credential) combined with
+    /// the author's per-binding choice (none, or an explicit true or false). The secret-binding row is publication's
+    /// minimum, tested where the compiler applies it.
+    /// </summary>
+    public static TheoryData<bool, bool, bool?, bool, bool> EffectiveInputPolicyRows => new()
+    {
+        // declared sensitive, declared credential, authored IsSensitive -> effective IsSensitive, RequiresEncryption
+        { false, false, null, false, false },
+        { false, false, false, false, false },
+        { false, false, true, true, false },
+        { true, false, null, true, false },
+        { true, false, true, true, false },
+        { false, true, null, true, true },
+        { false, true, true, true, true },
+        { true, true, null, true, true }
+    };
+
+    [Theory]
+    [MemberData(nameof(EffectiveInputPolicyRows))]
+    public void An_input_binding_takes_the_stricter_of_its_declaration_and_the_authored_choice(
+        bool declaredSensitive,
+        bool declaredCredential,
+        bool? authoredIsSensitive,
+        bool isSensitive,
+        bool requiresEncryption)
+    {
+        var effective = EffectiveInputPolicy(declaredSensitive, declaredCredential, authoredIsSensitive);
+
+        Assert.Equal(isSensitive, effective.IsSensitive);
+        Assert.Equal(requiresEncryption, effective.RequiresEncryption);
+    }
+
+    [Theory]
+    [InlineData(false, false, false, false)]
+    [InlineData(true, false, true, false)]
+    [InlineData(false, true, true, true)]
+    public void An_unbound_input_takes_its_declared_policy(bool declaredSensitive, bool declaredCredential, bool isSensitive, bool requiresEncryption)
+    {
+        var declared = ValuePolicyCombiner.ApplyInputDeclaration(ValuePolicyCombiner.FromAuthoredStorage(null), declaredSensitive, declaredCredential);
+
+        Assert.Equal(isSensitive, declared.IsSensitive);
+        Assert.Equal(requiresEncryption, declared.RequiresEncryption);
+    }
+
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public void An_authored_binding_cannot_mark_a_declared_sensitive_input_not_sensitive(bool declaredSensitive, bool declaredCredential)
+    {
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            EffectiveInputPolicy(declaredSensitive, declaredCredential, authoredIsSensitive: false));
+
+        Assert.Equal(
+            $"VF-ACT-005: {InputRole} is declared sensitive, so its binding cannot mark it not sensitive.",
+            exception.Message);
+    }
+
+    [Fact]
+    public void A_declaration_never_weakens_the_owner_policy()
+    {
+        var owner = new ActivityValuePolicy(IsPersistable: true, IsSensitive: true, RequiresEncryption: true, RedactionMode: "Full");
+
+        Assert.Equal(owner, ValuePolicyCombiner.ApplyInputDeclaration(owner, isSensitive: false, isCredential: false));
+    }
+
+    private static ActivityValuePolicy EffectiveInputPolicy(bool declaredSensitive, bool declaredCredential, bool? authoredIsSensitive) =>
+        ValuePolicyCombiner.CombineAuthoredInput(
+            ValuePolicyCombiner.ApplyInputDeclaration(ValuePolicyCombiner.FromAuthoredStorage(null), declaredSensitive, declaredCredential),
+            authoredStorageProfile: null,
+            authoredIsSensitive,
+            InputRole);
+
     private static RuntimeActivityInputMaterializer NewMaterializer() =>
         new(new RuntimeInputBindingResolver());
 
@@ -839,26 +915,6 @@ public sealed class ValueDurabilityPolicyTests
     {
         public ValueTask<JsonElement> EvaluateAsync(ExpressionEvaluationRequest request) =>
             ValueTask.FromException<JsonElement>(new InvalidOperationException(secret));
-    }
-
-    private sealed class StringTypeRegistry : IWellKnownTypeRegistry
-    {
-        public void RegisterType(Type type, string alias) => throw new NotSupportedException();
-        public bool TryGetAlias(Type type, out string alias)
-        {
-            alias = "String";
-            return type == typeof(string);
-        }
-
-        public bool TryGetType(string alias, out Type type) => TryGetTypeOrDefault(alias, out type);
-        public IEnumerable<Type> ListTypes() => [typeof(string)];
-        public string GetAliasOrDefault(Type type) => type == typeof(string) ? "String" : type.FullName!;
-        public Type GetTypeOrDefault(string alias) => TryGetTypeOrDefault(alias, out var type) ? type : typeof(object);
-        public bool TryGetTypeOrDefault(string alias, out Type type)
-        {
-            type = typeof(string);
-            return StringComparer.Ordinal.Equals(alias, "String");
-        }
     }
 
     private sealed class CustomerTypeRegistry : IWellKnownTypeRegistry

@@ -62,7 +62,10 @@ descriptors (`IntrinsicAuthoringDescriptorProvider`) report `false` for both.
 
 One helper on `ValuePolicyCombiner` computes the owner policy from the declaration and combines the authored
 minimum. `ExecutableNodeCompiler.CompileActivityPolicy` and `RuntimeInputBindingCompiler.Compile` both call it, so
-the two compile paths cannot disagree.
+the two compile paths cannot disagree. As built (slice 5): `ValuePolicyCombiner.ApplyInputDeclaration` and
+`ValuePolicyCombiner.CombineAuthoredInput` (the downgrade refusal), composed for a catalog input by one function,
+`RuntimeInputBindingCompiler.EffectivePolicy`, which both the binding compiler and `ExecutableNodeCompiler.BuildActivityContract`
+call.
 
 ## Pinned contract (`Elsa.Activities.Runtime.Core.Models.ActivityInputContract`)
 

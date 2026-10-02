@@ -309,7 +309,8 @@ public sealed class ExecutableNodeCompiler(
                 input.IsNullable,
                 input.DefaultValue.HasValue,
                 input.DefaultValue,
-                CompileActivityPolicy(input.StorageDriverType, state, $"Input '{input.ReferenceKey}' on activity node '{activity.NodeId}'"));
+                RuntimeInputBindingCompiler.EffectivePolicy(activity.NodeId, input, state),
+                isCredential: input.IsCredential == true);
         });
         var outputDefinitions = activityVersion.Outputs.ToDictionary(output => output.ReferenceKey, StringComparer.Ordinal);
         var outputStates = activity.Outputs.ToDictionary(output => output.ReferenceKey, StringComparer.Ordinal);
@@ -371,31 +372,6 @@ public sealed class ExecutableNodeCompiler(
         ValueTypeDescriptor sourceType) =>
         outputDefinition?.SourceRepresentation ??
         (attribute.HasSourceRepresentation ? attribute.SourceRepresentation : ValueRepresentationDefaults.Infer(sourceType));
-
-    private static ActivityInputAttribute? FindActivityInputAttribute(PropertyInfo property)
-    {
-        for (var declaringType = property.DeclaringType; declaringType is not null; declaringType = declaringType.BaseType)
-        {
-            var declaredProperty = declaringType.GetProperty(
-                property.Name,
-                BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly);
-            var attribute = declaredProperty?.GetCustomAttribute<ActivityInputAttribute>(inherit: false);
-            if (attribute is not null)
-                return attribute;
-        }
-
-        return null;
-    }
-
-    private static bool IsNullable(PropertyInfo property, NullabilityInfoContext nullabilityContext)
-    {
-        if (property.PropertyType.IsValueType)
-            return Nullable.GetUnderlyingType(property.PropertyType) is not null;
-
-        // Assemblies without nullable-reference metadata retain the permissive CLR interpretation.
-        // Only an explicit NotNull annotation may tighten a legacy catalog input at publication.
-        return nullabilityContext.Create(property).WriteState is not NullabilityState.NotNull;
-    }
 
     private static ActivityValuePolicy CompileActivityPolicy(
         string? ownerStorageProfile,

@@ -2,6 +2,8 @@ using Elsa.Activities.Runtime.Core.Abstractions;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Activities.Design.Tests.ClrFixture;
 
@@ -292,3 +294,71 @@ public sealed class SecretAcceptingFixtureActivity : Activity<SecretFixtureResul
 }
 
 public sealed record SecretFixtureResult([property: Output] string Result);
+
+/// <summary>
+/// Declares a sensitive input, a credential input and an undeclared input (spec 188, T039). The type names another input
+/// in <c>[RefusesSecretBinding]</c>, which leaves its credential input bindable: the scanner refuses a credential
+/// declaration only on the input the attribute names.
+/// </summary>
+[RefusesSecretBinding(nameof(Echoed), SecretBindingRefusalReason.EchoedToOutput)]
+public sealed class SensitivityFixtureActivity : Activity<SecretFixtureResult>
+{
+    [ActivityInput(Key = nameof(Note), IsSensitive = true)]
+    public string? Note { get; set; }
+
+    [ActivityInput(Key = nameof(ApiKey), IsCredential = true)]
+    public string? ApiKey { get; set; }
+
+    [ActivityInput(Key = nameof(Label))]
+    public string? Label { get; set; }
+
+    [ActivityInput(Key = nameof(Echoed))]
+    public string? Echoed { get; set; }
+
+    protected override ValueTask<ActivityTransition<SecretFixtureResult>> ExecuteAsync(ActivityExecutionContext context) =>
+        ValueTask.FromResult(ActivityTransition.Complete(new SecretFixtureResult(string.Empty)));
+}
+
+// The four credential declarations below could never be bound to a secret reference, so the scanner refuses each. They
+// are abstract, which keeps them out of every scan of this assembly; a test builds each one's catalog model directly.
+
+/// <summary>A credential input that declares a default value, which would be a literal credential in the catalog.</summary>
+public abstract class CredentialWithDefaultFixtureActivity : FixtureActivity
+{
+    [ActivityInput(Key = nameof(ApiKey), IsCredential = true, DefaultValue = "catalog-default")]
+    public string? ApiKey { get; set; }
+}
+
+/// <summary>A credential input on a checkpoint participant, which reads its inputs outside activation.</summary>
+public abstract class CredentialOnCheckpointParticipantFixtureActivity : FixtureActivity, IRuntimeActivityCheckpointParticipant
+{
+    [ActivityInput(Key = nameof(ApiKey), IsCredential = true)]
+    public string? ApiKey { get; set; }
+
+    public abstract ValueTask<IReadOnlyCollection<RuntimeStateChange<DurableValueState>>> PrepareEntryCheckpointAsync(
+        IRuntimeActivityExecutionContext context,
+        IReadOnlyDictionary<string, object?> effectiveInputs,
+        DateTimeOffset capturedAt,
+        CancellationToken cancellationToken = default);
+
+    public abstract ValueTask<RuntimeActivityCompletionCheckpointPreparation> PrepareCompletionCheckpointAsync(
+        IRuntimeActivityExecutionContext context,
+        IReadOnlyCollection<DurableValueState> persistedValues,
+        DateTimeOffset capturedAt,
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>A credential input the activity type names in <c>[RefusesSecretBinding]</c>.</summary>
+[RefusesSecretBinding(nameof(ApiKey), SecretBindingRefusalReason.PersistedByActivity)]
+public abstract class CredentialRefusingSecretFixtureActivity : FixtureActivity
+{
+    [ActivityInput(Key = nameof(ApiKey), IsCredential = true)]
+    public string? ApiKey { get; set; }
+}
+
+/// <summary>A credential input of a CLR type other than <see cref="string"/>, which a secret reference cannot convert to.</summary>
+public abstract class NonStringCredentialFixtureActivity : FixtureActivity
+{
+    [ActivityInput(Key = nameof(ApiKey), IsCredential = true)]
+    public int ApiKey { get; set; }
+}

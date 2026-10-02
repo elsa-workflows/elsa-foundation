@@ -1,5 +1,7 @@
 using System.Reflection;
+using System.Text.Json;
 using System.Text.Json.Nodes;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -9,8 +11,9 @@ using Xunit;
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 
 /// <summary>
-/// A secret read binding and the withheld envelope that stands in for its value, round-tripped through the options
-/// the EF stores persist runtime artifacts with (spec 188, T004): enums by name, strings framed as UTF-16.
+/// A secret read binding, the withheld envelope that stands in for its value (spec 188, T004) and a pinned credential
+/// input declaration (slice 5), round-tripped through the options the EF stores persist runtime artifacts with: enums by
+/// name, strings framed as UTF-16.
 /// </summary>
 public sealed class RuntimeArtifactJsonSecretBindingTests
 {
@@ -68,6 +71,37 @@ public sealed class RuntimeArtifactJsonSecretBindingTests
         Assert.Equal(Reference, roundTripped.WithheldValue.Secret);
         Assert.Equal(IdentityPlan.Fingerprint, roundTripped.WithheldValue.ConversionPlan!.Fingerprint);
         Assert.Equal(json, Invoke<string>("Serialize", typeof(ValueEnvelope), roundTripped));
+    }
+
+    [Fact]
+    public void A_pinned_credential_flag_round_trips_and_is_left_out_where_nothing_is_declared()
+    {
+        // Spec 188, slice 5: the pinned contract carries the credential declaration explicitly, written only where set,
+        // so a contract whose inputs declare none keeps its persisted shape.
+        var contract = new ActivityContract(
+            "test.activity",
+            "1.0.0",
+            "test",
+            JsonSerializer.SerializeToElement(new { type = "test" }),
+            [
+                new ActivityInputContract("apiKey", "ApiKey", StringType, false, true, false, null, ActivityValuePolicy.Default with { IsSensitive = true, RequiresEncryption = true }, isCredential: true),
+                new ActivityInputContract("label", "Label", StringType, false, true, false, null, ActivityValuePolicy.Default)
+            ],
+            new ActivityResultContract(new ValueTypeDescriptor("Elsa.Unit"), true, ActivityValuePolicy.Default, []),
+            ["Done"],
+            new ActivityActivationRequirement("test", "test.activity"));
+
+        var json = Invoke<string>("Serialize", typeof(ActivityContract), contract);
+        var inputs = JsonNode.Parse(json)!["inputs"]!.AsObject();
+
+        Assert.True(inputs[EfRelationalIdentity.Encode("apiKey")]!["isCredential"]!.GetValue<bool>());
+        Assert.False(inputs[EfRelationalIdentity.Encode("label")]!.AsObject().ContainsKey("isCredential"));
+
+        var roundTripped = Invoke<ActivityContract>("Deserialize", typeof(ActivityContract), json);
+        Assert.True(roundTripped.Inputs["apiKey"].IsCredential);
+        Assert.False(roundTripped.Inputs["label"].IsCredential);
+        Assert.Equal(contract.SchemaFingerprint, roundTripped.SchemaFingerprint);
+        Assert.Equal(json, Invoke<string>("Serialize", typeof(ActivityContract), roundTripped));
     }
 
     // RuntimeArtifactJson is internal to the EF persistence assembly; this project reaches it by reflection, as

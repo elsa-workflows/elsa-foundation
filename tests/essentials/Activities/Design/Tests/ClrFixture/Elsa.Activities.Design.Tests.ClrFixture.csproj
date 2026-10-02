@@ -10,6 +10,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\..\..\src\essentials\Activities\Runtime\Core\Elsa.Activities.Runtime.Core.csproj" />
+    <!-- IRuntimeActivityCheckpointParticipant, for the credential-on-a-checkpoint-participant fixture (spec 188, T039). -->
+    <ProjectReference Include="..\..\..\..\..\..\src\essentials\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
   </ItemGroup>
 
 </Project>

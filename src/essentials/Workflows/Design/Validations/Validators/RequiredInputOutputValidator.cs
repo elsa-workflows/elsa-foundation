@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Validations.Core.Contracts;
@@ -58,7 +57,7 @@ public sealed class RequiredInputOutputValidator(
                 continue;
 
             var providedInputKeys = node.Inputs
-                .Where(IsBound)
+                .Where(state => state.IsBound())
                 .Select(a => a.ReferenceKey)
                 .ToHashSet(StringComparer.Ordinal);
 
@@ -76,21 +75,5 @@ public sealed class RequiredInputOutputValidator(
         }
 
         return errors;
-    }
-
-    private static bool IsBound(ArgumentState state)
-    {
-        if (state.Value is null)
-            return false;
-
-        return state.Value.Value switch
-        {
-            null => false,
-            JsonElement { ValueKind: JsonValueKind.Undefined } => false,
-            JsonElement { ValueKind: JsonValueKind.Null } => false,
-            string value => !string.IsNullOrEmpty(value),
-            JsonElement { ValueKind: JsonValueKind.String } value => !string.IsNullOrEmpty(value.GetString()),
-            _ => true
-        };
     }
 }

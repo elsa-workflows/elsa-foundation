@@ -34,7 +34,11 @@ identity from), and validation lives in the feature — not in a property getter
 
 - **`JsonActivityReconciliationSource`** — `IActivityReconciliationSource` with `SourceKind => "Json"`.
   Its `Read` reads either the single `FilePath` or every `Files` entry in ascending `Order` and returns
-  the concatenated models. `SourceId` is the configured `JsonReconciliationOptions.SourceId`.
+  the concatenated models. `SourceId` is the configured `JsonReconciliationOptions.SourceId`. An entry
+  may declare an input `isSensitive`, but an entry whose input declares `isCredential` fails the read with
+  `InvalidActivityCatalogJsonException`, naming the file, the activity and the input, because nothing here can check
+  that the input could be bound to a secret reference; CLR reconciliation checks that for
+  `[ActivityInput(IsCredential = true)]`.
 - **`JsonActivityCatalogReader`** (`IJsonActivityCatalogReader`) — reads the file text and deserializes
   it into `ActivityVersionReconciliationModel[]` via the shared `IPayloadSerializer` (so casing/naming
   conventions match the rest of the system). A missing or malformed file raises a domain-scoped

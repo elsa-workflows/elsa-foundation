@@ -1,6 +1,8 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Expressions.Core.Contracts;
+using Elsa.Expressions.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -13,6 +15,7 @@ using Elsa.Workflows.Runtime.Services.Executions;
 using Elsa.Workflows.Runtime.Services.Scheduler;
 using Elsa.Workflows.Runtime.Services.Values;
 using Elsa.Workflows.Runtime.Services.WorkHandlers;
+using Elsa.Workflows.Runtime.Tests.Fixtures;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using Microsoft.Extensions.Time.Testing;
@@ -29,7 +32,10 @@ public sealed class RuntimeStartActivityStateTests : IDisposable
     private readonly InMemoryDurableValueStateStore _durableValueStateStore = new();
     private readonly InMemoryWorkflowExecutionStateStore _workflowStateStore = new();
     private readonly ServiceProvider _serviceProvider = new ServiceCollection()
-        .AddScoped<IRuntimeActivityInputMaterializer>(_ => new RuntimeActivityInputMaterializer(new SecretReadRefusingResolver()))
+        .AddScoped<IRuntimeActivityInputMaterializer>(_ => new RuntimeActivityInputMaterializer(
+            new SecretReadRefusingResolver(),
+            new StringTypeRegistry(),
+            new FixedTextEvaluator()))
         .BuildServiceProvider();
 
     [Fact]
@@ -120,6 +126,37 @@ public sealed class RuntimeStartActivityStateTests : IDisposable
         Assert.Null(persisted["InlineValue"]);
         Assert.Null(persisted["ExternalReference"]);
         Assert.Equal("payments.api-key", persisted["withheld"]!["Secret"]!["Name"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task HandleAsync_MaterializesASensitiveExpressionInputAsAPresentValueWithItsPolicy()
+    {
+        // Spec 188, T104: an input the activity declares sensitive, but not a credential, may take an expression. Its
+        // effective policy is sensitive and does not require encryption, so its value is present, not withheld.
+        var policy = new ValueProtectionPolicy(DurableValueLifecycle.Instance, DurableValueStorage.Inline, isSensitive: true, requiresEncryption: false);
+        var executable = NewExecutable(
+            InputContract("note", "Note", ActivityValuePolicy.Default with { IsSensitive = true }),
+            new Dictionary<string, RuntimeInputBinding>
+            {
+                ["note"] = new(
+                    "note",
+                    StringType,
+                    policy,
+                    RuntimeInputBindingSource.Expression,
+                    expression: new RuntimeExpressionBinding("JavaScript", "readNote()", new RuntimeValueTypeDescriptor("alias", "String", null)))
+            });
+        await _executableStore.SaveAsync(executable);
+        await SaveWorkflowStateAsync(executable.Identity);
+        await _activityStateStore.SaveAsync(NewScheduledState());
+
+        await NewHandler().HandleAsync(NewStartWorkItem(executable.Identity));
+
+        var envelope = (await _activityStateStore.FindAsync("wfexec-1", "actexec-1"))!.InputSnapshot!.Values["note"];
+        Assert.Equal(ValuePresence.Present, envelope.Presence);
+        Assert.Null(envelope.WithheldValue);
+        Assert.Equal(FixedTextEvaluator.Text, envelope.InlineValue!.Value.GetString());
+        Assert.True(envelope.Policy.IsSensitive);
+        Assert.False(envelope.Policy.RequiresEncryption);
     }
 
     [Fact]
@@ -436,12 +473,14 @@ public sealed class RuntimeStartActivityStateTests : IDisposable
             ["Done"],
             new ActivityActivationRequirement("test", "test/activity"));
 
-    private static ActivityContract SecretInputContract()
+    private static ActivityContract SecretInputContract() => InputContract("apiKey", "ApiKey", ActivityValuePolicy.Default);
+
+    private static ActivityContract InputContract(string key, string name, ActivityValuePolicy policy)
     {
         using var document = JsonDocument.Parse("""{"type":"test"}""");
         return EmptyContract(
             document.RootElement,
-            [new ActivityInputContract("apiKey", "ApiKey", StringType, true, false, false, null, ActivityValuePolicy.Default)]);
+            [new ActivityInputContract(key, name, StringType, true, false, false, null, policy)]);
     }
 
     private static ActivityInputSnapshot EmptySnapshot()
@@ -457,6 +496,15 @@ public sealed class RuntimeStartActivityStateTests : IDisposable
 
     private static WorkflowExecutableIdentity NewIdentity() =>
         new("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test");
+
+    /// <summary>Evaluates every expression to the same text, standing in for a script engine.</summary>
+    private sealed class FixedTextEvaluator : IPortableExpressionEvaluator
+    {
+        public const string Text = "evaluated note";
+
+        public ValueTask<JsonElement> EvaluateAsync(ExpressionEvaluationRequest request) =>
+            ValueTask.FromResult(JsonSerializer.SerializeToElement(Text));
+    }
 
     /// <summary>
     /// The shipped resolver, except that it throws when asked to resolve a secret read. The binding resolver is

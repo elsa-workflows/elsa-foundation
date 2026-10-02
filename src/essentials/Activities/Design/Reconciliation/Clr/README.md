@@ -49,6 +49,12 @@ the two values derived from assembly/type identity:
   `ReferenceKey`);
 - the `[Required]` attribute on an input property → `IsRequired`; output requiredness comes from
   `[Output(IsRequired = ...)]`;
+- `[ActivityInput(IsSensitive = true)]` and `[ActivityInput(IsCredential = true)]` → the input's `IsSensitive` and
+  `IsCredential`, `true` when declared and null otherwise, so an input that declares nothing keeps its catalog hash; a
+  credential is recorded as sensitive too. A credential declaration that could never be bound to a secret reference
+  fails the scan, naming the type and the input: one with a `DefaultValue`, one on a property that is not a `string`,
+  one on an input the type names in `[RefusesSecretBinding]` (read for this check only, never written to the catalog),
+  and any on a type implementing `IRuntimeActivityCheckpointParticipant` (matched by name);
 - the resolved semver (above);
 - the resolved category, derived from the declaring assembly's name (above).
 

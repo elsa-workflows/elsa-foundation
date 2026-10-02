@@ -199,8 +199,9 @@ public sealed class ActivitiesDesignApiContractCompatibilityTests
         // accidental constructor/property/method drift even when the type list still compiles.
         // It moved once when the contracts left the Api.Core assembly: a constructed generic type's
         // FullName embeds its arguments' assembly-qualified names, so the strings changed while the
-        // JSON wire shape did not.
-        Assert.Equal("ab75d4e023e453ab54c0c577340190644cbdedc610e7b31b57b63404f0bb4285", PublicShapeHash(ContractTypes));
+        // JSON wire shape did not. It moved again when ActivityInputDescriptorView gained IsSensitive and IsCredential
+        // (spec 188, slice 5).
+        Assert.Equal("65a2e201710a9485fd2db5898d629568818a06fc95feca44fc87448ff3332847", PublicShapeHash(ContractTypes));
     }
 
     [Fact]

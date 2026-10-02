@@ -23,6 +23,7 @@ public sealed class AddDefinitionCommandHandler(
 
     public async Task<ActivityDefinitionVersionDetailsView> Handle(AddDefinition command, CancellationToken cancellationToken)
     {
+        ActivityAuthoringCredentialGuard.Refuse(command.Inputs);
         var definition = definitionFactory.Create(command.ActivityTypeKey, command.Category, command.DisplayName, command.Description);
         var version = versionFactory.Create(
             definition,

@@ -32,6 +32,8 @@ The default catalog returns addable activities. `availability=all` is the diagno
 
 Catalog items and version details carry a `provenance` object (`sourceKind`, `sourceId`, `featureId`) identifying the reconciliation source that contributed the definition version and — for CLR-provided activities — the shell feature that provides the activity type (issue #1164). `featureId` is resolved best-effort at read time (`activityTypeKey` → well-known type registry → assembly → runtime feature catalog) and is `null` for non-CLR rows or when attribution is unavailable; a non-null `featureId` may name a feature that is not enabled in the current composition, which is the "enable feature X to use this activity" signal for headless clients. Built-in engine intrinsics have no provenance.
 
+Each catalog input carries `isSensitive` and `isCredential`, the activity's sensitivity declaration, always present and `false` for an input that declares nothing and for every engine-intrinsic input; a credential input is sensitive too. The legacy `AddDefinition` and `AddVersion` commands accept an input declared sensitive but refuse one declared a credential (400, `activity.request.invalid`), before anything is stored, because nothing here can check that the input could be bound to a secret reference; CLR reconciliation checks that for `[ActivityInput(IsCredential = true)]`.
+
 ## Extension points
 
 See [EXTENSION_POINTS.md](EXTENSION_POINTS.md) and the [reconciliation extension catalog](../Reconciliation/EXTENSION_POINTS.md).

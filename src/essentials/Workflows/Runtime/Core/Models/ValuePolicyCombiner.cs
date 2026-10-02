@@ -23,6 +23,42 @@ public static class ValuePolicyCombiner
             Storage: string.IsNullOrWhiteSpace(storageProfile) ? ActivityValueStorage.Inline : ActivityValueStorage.External,
             StorageProfile: NullIfWhiteSpace(storageProfile));
 
+    /// <summary>
+    /// Applies an activity input's sensitivity declaration (spec 188, FR-007) to its owner policy: a sensitive
+    /// declaration sets <see cref="ActivityValuePolicy.IsSensitive"/>, and a credential declaration sets it and
+    /// <see cref="ActivityValuePolicy.RequiresEncryption"/>. The declaration only strengthens the owner policy.
+    /// </summary>
+    public static ActivityValuePolicy ApplyInputDeclaration(ActivityValuePolicy owner, bool isSensitive, bool isCredential)
+    {
+        ArgumentNullException.ThrowIfNull(owner);
+        return owner with
+        {
+            IsSensitive = owner.IsSensitive || isSensitive || isCredential,
+            RequiresEncryption = owner.RequiresEncryption || isCredential
+        };
+    }
+
+    /// <summary>
+    /// The effective policy of an authored input binding: the stricter of the input's owner policy and the author's
+    /// per-binding choice. A null <paramref name="authoredIsSensitive"/> keeps the owner's sensitivity and true
+    /// strengthens it. An explicit false on an input whose owner policy is sensitive is a downgrade and is refused with
+    /// <c>VF-ACT-005</c>, because <see cref="Combine(ActivityValuePolicy, ActivityValuePolicy, string)"/> would otherwise
+    /// ignore it silently.
+    /// </summary>
+    public static ActivityValuePolicy CombineAuthoredInput(
+        ActivityValuePolicy owner,
+        string? authoredStorageProfile,
+        bool? authoredIsSensitive,
+        string valueRole)
+    {
+        ArgumentNullException.ThrowIfNull(owner);
+        ArgumentException.ThrowIfNullOrWhiteSpace(valueRole);
+        if (authoredIsSensitive == false && owner.IsSensitive)
+            throw new InvalidOperationException($"VF-ACT-005: {valueRole} is declared sensitive, so its binding cannot mark it not sensitive.");
+
+        return Combine(owner, FromAuthoredStorage(authoredStorageProfile, authoredIsSensitive == true), valueRole);
+    }
+
     public static ActivityValuePolicy Combine(
         ActivityValuePolicy owner,
         ActivityValuePolicy minimum,
