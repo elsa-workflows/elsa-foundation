@@ -110,3 +110,11 @@ Existing [connection-guard #1902](https://github.com/elsa-workflows/elsa-foundat
 ## Removal or Completion Conditions
 
 Complete this program when the linked epic outcomes have verified delivery evidence: shared persistence and overrides, reviewed profiles/groups, consistent developer tooling, evaluated builder UX, and supported composition evolution. Reassess or pause it explicitly if product scope changes; classification or research completion alone does not complete the program.
+
+## Active Worker profile delivery
+
+Worker identity adapter #2308 and its canonical closeout PR2325 are delivered, closed / Project51 Done, with [all six exact e703 main gates and final claim release](https://github.com/elsa-workflows/elsa-foundation/issues/2308#issuecomment-5959522498). Original provider failures/retries remain recorded; no unrelated regression is causally repaired by a later green run.
+
+[Worker profile task #2326](https://github.com/elsa-workflows/elsa-foundation/issues/2326), [Spec191](../../specs/191-worker-http-profile/spec.md), is the sole active delivery leaf under #1961. It owns immutable worker-http@1, old-pin preservation and real CLI-generated candidate consumption in the existing fresh-process actor. Publication and actor evidence are not complete yet. The earlier no-ready-successor note is a historical checkpoint superseded by this claim.
+
+Authoring remains required; its Publishing/Runtime API owner choice is pending. Six actual UX participants, portable unknown settings/export, production builder and recoverable apply remain open. Program1959 is not complete.
