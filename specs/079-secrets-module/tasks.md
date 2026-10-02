@@ -91,7 +91,7 @@
 
 ### Implementation for User Story 2
 
-- [x] T033 [US2] Implement `DefaultSecretResolver` in `src/essentials/Secrets/Services/DefaultSecretResolver.cs`
+- [x] T033 [US2] Implement `DefaultSecretValueResolver` in `src/essentials/Secrets/Services/DefaultSecretValueResolver.cs`
 - [x] T034 [US2] Implement `SecretExpressionDescriptor` and `SecretExpressionHandler` in `src/essentials/Secrets/Expressions/SecretExpressionDescriptor.cs` and `src/essentials/Secrets/Expressions/SecretExpressionHandler.cs`
 - [x] T035 [US2] Register the Secret expression descriptor through `src/essentials/Secrets/Extensions/SecretsServiceCollectionExtensions.cs`
 - [x] T036 [US2] Add expression and reference JSON coverage to `tests/Elsa/Secrets/Tests/SecretReferenceSerializationTests.cs`
@@ -138,7 +138,7 @@
 ### Implementation for User Story 4
 
 - [x] T047 [US4] Add permission constants in `src/essentials/Secrets/Core/Permissions/SecretsPermissions.cs`
-- [x] T048 [US4] Emit audit records from `src/essentials/Secrets/Services/DefaultSecretManager.cs` and `src/essentials/Secrets/Services/DefaultSecretResolver.cs`
+- [x] T048 [US4] Emit audit records from `src/essentials/Secrets/Services/DefaultSecretManager.cs` and `src/essentials/Secrets/Services/DefaultSecretValueResolver.cs`
 - [x] T049 [US4] Annotate or structure API endpoints in `src/essentials/Secrets/Api/Endpoints/Secrets/*.cs` for later permission enforcement while preserving local anonymous development behavior
 
 **Checkpoint**: User Story 4 is independently testable through safe audit records and permission constants.
