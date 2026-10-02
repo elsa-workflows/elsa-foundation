@@ -3,24 +3,28 @@
     File-based workflow deployment at startup (spec 147 / #1157): mounted definition files are
     imported AND published — executable — when /health/ready turns 200, with zero API calls.
 .DESCRIPTION
-    Phase A (id resolution): against the normally-running server, resolves the WriteLine activity's
+    Phase A (id resolution): starts its own plain server, resolves the WriteLine activity's
     actver_* id and authors a definition file (pinned definitionId) into a temp folder.
-    Phase B: restarts the server with JsonWorkflowReconciliation composed via env vars
+    Phase B: relaunches that server with JsonWorkflowReconciliation composed via env vars
     (SourceId + FolderPath + PublishOnReconcile=true), waits on /health/ready, then asserts:
     definition imported, active activation in the runtime slot, executable executes to completion.
     Phase C (idempotency, SC-002): restarts again with the folder unchanged and asserts the same
     active publication (no republish) and no duplicate definition.
-    Cleanup restarts the server without the feature. Requires the server running from source
-    (see ../README.md) and manages the server process like the durability suite.
+    The script owns its server: an already-built Workbench on a free loopback port with a fresh temporary
+    content root, stopped again at the end. -BaseUrl is the one place the server location is given: pass it
+    to choose the address the owned server listens on (the port must be free; a process this script did
+    not start is never stopped). Build Elsa.Workbench first (see ../README.md).
 #>
 [CmdletBinding()]
 param(
-    [string] $BaseUrl = "http://localhost:5095",
+    [string] $BaseUrl,
     [string] $Username = "admin",
     [string] $Password = "Password123!"
 )
 
 . "$PSScriptRoot/_FileDeploymentCommon.ps1"
+
+$BaseUrl = Resolve-ElsaServerBaseUrl -BaseUrl $BaseUrl
 
 Write-Host "== E2E: file-based workflow deployment (spec 147) ==  -> $BaseUrl" -ForegroundColor Cyan
 
@@ -29,13 +33,13 @@ $definitionId = "wfdef-filedeploy-$stamp"
 $workflowName = "e2e-file-deploy-$stamp"
 $defsFolder = Join-Path ([System.IO.Path]::GetTempPath()) "elsa-filedeploy-defs-$stamp"
 New-Item -ItemType Directory -Force $defsFolder | Out-Null
+$contentRoot = $null
+$completed = $false
 
 try {
     # --- Phase A: resolve the activity id and author the definition file -----------------
-    if (-not (Get-ServerPid)) {
-        Write-Host "  [server] nothing on 5095 - starting a plain server for phase A"
-        Start-ElsaServer -Plain | Out-Null
-    }
+    $contentRoot = New-ElsaContentRoot -Prefix 'elsa-filedeploy'
+    Start-OwnedElsaServer -BaseUrl $BaseUrl -ContentRoot $contentRoot -Environment (Get-FileDeploymentEnvironment)
     $ctx = Connect-Elsa -BaseUrl $BaseUrl -Username $Username -Password $Password
     $writeLineId = $null
     Invoke-Step "resolve WriteLine actver id" {
@@ -46,9 +50,11 @@ try {
         -Name $workflowName -ActivityVersionId $script:writeLineId | Out-Null
 
     # --- Phase B: deploy from files at startup --------------------------------------------
-    Stop-ElsaServer
-    Start-ElsaServer -SourceId "e2e-mounted-definitions" -FolderPath $defsFolder | Out-Null
-    Wait-ElsaReady -BaseUrl $BaseUrl | Out-Null
+    # Start-OwnedElsaServer returns once /health/ready is 200: the deployment gate (spec 147), which
+    # includes the reconcile pass and publish-on-reconcile. A failed pass fails shell activation.
+    Stop-OwnedElsaServer
+    Start-OwnedElsaServer -BaseUrl $BaseUrl -ContentRoot $contentRoot `
+        -Environment (Get-FileDeploymentEnvironment -SourceId "e2e-mounted-definitions" -FolderPath $defsFolder)
     $ctx = Connect-Elsa -BaseUrl $BaseUrl -Username $Username -Password $Password
 
     $definition = $null
@@ -89,9 +95,7 @@ try {
     }
 
     # --- Phase C: restart with unchanged files — idempotent (SC-002) ----------------------
-    Stop-ElsaServer
-    Start-ElsaServer -SourceId "e2e-mounted-definitions" -FolderPath $defsFolder | Out-Null
-    Wait-ElsaReady -BaseUrl $BaseUrl | Out-Null
+    Restart-OwnedElsaServer
     $ctx = Connect-Elsa -BaseUrl $BaseUrl -Username $Username -Password $Password
 
     Invoke-Step "slots after restart" {
@@ -105,13 +109,12 @@ try {
         $script:matching = @($list.items | Where-Object { $_.name -eq $workflowName })
     }
     Assert-That "restart did not duplicate the definition" ($script:matching.Count -eq 1) "count = $($script:matching.Count)"
+    $completed = $true
 }
 finally {
-    # Restore the developer's normal server (no feature composition) and drop the temp folder.
+    # Stop the owned server and drop the temp folders; a failed run keeps the content root and its logs.
     Write-Host ""
-    Write-Host "  [cleanup] restoring plain server ..." -ForegroundColor DarkGray
-    try { Stop-ElsaServer } catch {}
-    try { Start-ElsaServer -Plain | Out-Null } catch { Write-Host "  [cleanup] plain restart failed: $_" -ForegroundColor Yellow }
+    Remove-OwnedElsaServer -ContentRoot $contentRoot -KeepContentRoot:(-not $completed -or $script:FPass -ne $script:FTotal)
     try { Remove-Item -Recurse -Force $defsFolder -ErrorAction SilentlyContinue } catch {}
 }
 
