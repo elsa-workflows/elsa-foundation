@@ -30,6 +30,8 @@ public class ActivitiesRuntimeFeature : IShellFeature
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton<ActivityInputHydrator>();
         services.TryAddScoped<ActivitySecretInputResolver>();
+        // IRuntimeSecretResolver is a replacement contract: more than one composed fails shell activation.
+        RuntimeSecretResolverCompositionValidator.Register(services);
         services.TryAddScoped<IActivityActivator, ActivityActivator>();
         services.TryAddScoped<IRuntimeActivityInputMaterializer, RuntimeActivityInputMaterializer>();
         services.TryAddSingleton<ActivityCompletionProjector>();

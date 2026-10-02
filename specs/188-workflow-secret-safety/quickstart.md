@@ -14,9 +14,11 @@ introduces the code they exercise ([delivery slices](tasks.md#delivery-slices));
   through their result. A third-party or future activity that echoes a string input is not refused in phase 0 unless
   its author marks that input as refusing secret references. When two activities need the same secret, bind the secret reference on each input; each binding
   resolves on its own when its activity runs.
-- A secret reference fits only a single text or any-typed input. Publish refuses it on a number, date, list,
-  `Object`, `JsonElement` or `JsonObject` input (`VF-COER-001`), and on inputs an activity echoes or persists, such as `Inline`'s expression or
-  `WriteHttpResponse`'s body (`VF-ACT-012`).
+- A secret reference fits only a single text input, or a single input declared with a canonical any alias (`Elsa.Any`,
+  `Any` or `JsonNode`). Activities cataloged from CLR types, the built-ins included, declare no such alias, so on
+  them only `string` inputs take one; an `object` or `JsonNode` property does not. Publish refuses it on a number, date, list, `Object`,
+  `JsonElement` or `JsonObject` input (`VF-COER-001`), and on inputs an activity echoes or persists, such as `Inline`'s
+  expression or `WriteHttpResponse`'s body (`VF-ACT-012`).
 
 ## Working rules for every slice
 
@@ -94,8 +96,9 @@ dotnet test tests/essentials/Secrets/Tests/Elsa.Secrets.Tests.csproj
 dotnet test tests/essentials/Architecture/Elsa.Architecture.Tests.csproj
 ```
 
-Journey: create a secret through `ISecretManager` under two tenants with the same name, run each tenant's instance,
-rotate, revoke and delete, and check each run's outcome against [the resolution contract](contracts/runtime-secret-resolution.md).
+Journey: create a secret through `ISecretManager` under two tenants with the same name, run each tenant's instance
+on its own host over one secret store, rotate, revoke and delete, and check each run's outcome against
+[the resolution contract](contracts/runtime-secret-resolution.md).
 
 ### Slice 5: input sensitivity declaration and effective policy
 

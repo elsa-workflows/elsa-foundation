@@ -1591,6 +1591,14 @@
           "Microsoft.EntityFrameworkCore.Relational": "[10.0.10, )"
         }
       },
+      "elsa.secrets.workflows": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.30-preview.159, )",
+          "Elsa.Secrets.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
+        }
+      },
       "elsa.serialization.core": {
         "type": "Project",
         "dependencies": {
@@ -1733,6 +1741,7 @@
           "Elsa.Secrets.Api": "[4.0.0-dev, )",
           "Elsa.Secrets.Core": "[4.0.0-dev, )",
           "Elsa.Secrets.Persistence.EntityFrameworkCore": "[4.0.0-dev, )",
+          "Elsa.Secrets.Workflows": "[4.0.0-dev, )",
           "Elsa.Serialization.Newtonsoft": "[4.0.0-dev, )",
           "Elsa.Serialization.SystemText": "[4.0.0-dev, )",
           "Elsa.Studio.Preferences.Api": "[4.0.0-dev, )",
