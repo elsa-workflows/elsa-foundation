@@ -325,3 +325,125 @@ are not substituted for actual producer-size evidence. A bounded actual-producer
 developed using the existing persisted synthetic feature helper and the normal host
 composition/reconciliation/preparation path; no production hook, payload padding, new project or
 runtime host enrollment is introduced. No result from that pending control is claimed here.
+
+
+## Actual producer byte boundary and final release preflight
+
+Root integrated the producer fixture and shared synthetic-feature setup through `7d71e2c71`.
+The normal explicit host discovery/composition/reconciliation/preparation path produces an actual
+4,194,304-byte successful response; appending one ASCII byte to the single observed disabled ID
+exceeds the limit. The fixture uses admitted `+` identities and the production JSON encoder's six-byte
+escape cost, not payload padding or a production hook. Selected file and serialized request ceilings
+are independently asserted, and neither run creates database or temporary artifacts.
+
+The root Release selection at `7d71e2c71` returned **seven executed/passed, zero failed/skipped**:
+one producer-boundary case and six both-lane combined participant/finding cases. Actual TRX:
+`runtime-2292-producer-row-release.trx`; log: `/tmp/runtime-2292-producer-row-release.log`.
+This supersedes the pending producer-proof state above, without changing the separate scope of
+transport whitespace controls or the historical failed Workbench attempts.
+
+For causal evidence, root temporarily removed only the new lane's real response-length guard.
+`runtime-2292-producer-guard-mutation.trx` records **one executed/failed, zero passed/skipped**:
+`Assert.Throws` failed because the oversized response no longer threw. Root restored the production
+source byte-identically in `finally` and rebuilt the same selection;
+`runtime-2292-producer-guard-restored.trx` records **one executed/passed, zero failed/skipped**.
+Logs: `/tmp/runtime-2292-producer-guard-mutation.log` and
+`/tmp/runtime-2292-producer-guard-restored.log`. Instrumented source/output is not used for delivery.
+
+Final source candidate `ad84c6840` also clarifies the calibration comment and removes a new nullable
+warning by checking the coalesced case-collision identity before invoking its callback. Bounded
+independent source review found no remaining must-fix. Admission and selection reconciliation occur
+before shared preparation; the successful public-label fence occurs **after** shared
+`InspectComposition`/`Prepare` and **before** serialization. Old signatures and closed-lane semantics
+are preserved through additive/shared refactoring; their source is not claimed byte-unchanged.
+
+At `ad84c6840`, the actual Foundation Host Release build returned **12 warnings, zero errors**
+(`/tmp/runtime-2292-foundation-release.log`), and the actual Workbench Release rebuild returned
+**80 warnings, zero errors** (`/tmp/runtime-2292-workbench-final-release.log`). These are build
+prerequisites, not suite or acceptance results. Final affected projects, provider regression,
+architecture/maps, full matrix/diff review and exact-head/resulting-main delivery gates remain open.
+
+
+## Full-suite discovery exposed a synthetic fixture collision
+
+On `ad84c6840`, the full Release CLI project returned **1,045 executed/passed, zero failed/skipped**
+(`runtime-2292-cli-final-release.trx`; log: `/tmp/runtime-2292-cli-final-release.log`). The
+`CandidateInspectionTests` class accounts for 32 passed cases within that total, including actual
+Workbench explicit/file-only invocation, repeatability, recovery, successful-child final drift and
+actual unenrolled Foundation Host. This is a macOS run; Windows return guards do not establish a
+Windows actor journey. The full planning project returned **118 executed/passed, zero failed/skipped**
+(`runtime-2292-planning-final-release.trx`; log: `/tmp/runtime-2292-planning-final-release.log`).
+
+The first full Release migrations project did **not** pass: **495 executed, 489 passed, six failed,
+zero skipped** (`runtime-2292-migrations-final-release.trx`; log:
+`/tmp/runtime-2292-migrations-final-release.log`). All six failures were public `EfToolingHost`
+capability calls reaching the shared host-discovery refusal. Focused injected-closure tests had not
+exposed the process-wide assembly interaction.
+
+Root and an independent read-only audit found that the two lane variants at module counts 1,022 and
+1,023 emitted separate persisted assemblies with identical shell feature IDs. The public host scans
+all loaded contexts and correctly rejects duplicate discovered IDs. Root's bounded causal control
+removed only the two added explicit-lane InlineData rows: the complete candidate class then returned
+**104 executed/passed, zero failed/skipped** (`runtime-2292-row-pollution-control.trx`; log:
+`/tmp/runtime-2292-row-pollution-control.log`). The original test source was restored byte-identically
+in `finally`. That reduced-case run is causal evidence, not final coverage.
+
+The permanent repair gives each row fixture a lane-specific feature ID and retains all six InlineData
+cases, the actual public capability calls and the production duplicate-discovery guard. Its restored
+class and full-suite results must be collected separately; no passing migrations gate is claimed yet.
+
+
+The repaired complete candidate class returned **106 executed/passed, zero failed/skipped** with all
+six lane-specific row fixtures restored (`runtime-2292-row-isolation-restored.trx`; log:
+`/tmp/runtime-2292-row-isolation-restored.log`). Root committed the two-line fixture repair as
+`be33523af`. The full Release migrations project on that head then returned **495 executed/passed,
+zero failed/skipped** (`runtime-2292-migrations-restored-release.trx`; log:
+`/tmp/runtime-2292-migrations-restored-release.log`). The actual TRX includes all six combined-row
+cases and the exact/one-over producer response case, each passed. The earlier six failures remain
+recorded above; this restored pass follows the diagnosed identity repair rather than a green retry
+without a cause. CLI and planning source/dependency graphs are unchanged by that EF-test-only delta;
+their `ad84c6840` full Release results retain their exact tested head.
+
+
+The full Release architecture project at `be33523af` returned **634 executed/passed, zero failed/skipped**
+(`runtime-2292-architecture-final-release.trx`; log: `/tmp/runtime-2292-architecture-final-release.log`).
+The existing ordinary Release and isolated Debug evaluated restore graphs were present; no project or
+dependency file changed, so the full guard used those graphs without a redundant whole-solution restore.
+No architecture gate or source inventory was bypassed. The separate native provider regression is
+running with the existing `ELSA_REQUIRE_NATIVE_PROVIDER_MATRIX=1` control; no provider result is
+claimed before its actual terminal report. Final maps/diff review and hosted delivery remain open.
+
+
+The separate existing Release CLI/provider acceptance project at `be33523af` returned **15
+executed/passed, zero failed/skipped** with `ELSA_REQUIRE_NATIVE_PROVIDER_MATRIX=1`
+(`runtime-2292-provider-final-release.trx`; log: `/tmp/runtime-2292-provider-final-release.log`).
+Actual TRX includes all three PostgreSQL, SQL Server and MySQL legs: offline scripting, real raw
+application twice, then a real Workbench host starting with `Migrate:Policy=Validate`. This is separate
+real database/provider regression evidence; configuration-only candidate inspection did not access a
+database. No project, provider, workflow cadence or provider matrix was added.
+
+
+## Local acceptance and delivery handoff
+
+The final maps check initially reported only the spec task-count snapshot stale
+(`/tmp/runtime-2292-maps-final-check.log`). Root used the already-authorized narrow `maps` layer
+refresh; only `docs/maps/spec-status-map.md` changed to 45 complete / one open. The manifest and both
+findings reports were inspected and remain byte-identical, with no new findings. The restored check
+returned **exit 0**, `Generated maps still describe the tree`
+(`/tmp/runtime-2292-maps-final-restored.log`). All changed maps are staged by explicit path.
+
+Root reviewed the full leaf diff and its incremental source reviews against the frozen contract,
+including the final nullable-safe collision callback and lane-specific synthetic identity repair.
+All three P1 outcomes have local evidence: actual Workbench supported-input projection and ambient
+exclusion; selection divergence with edit/accept/fresh-capture recovery; and closed old-lane
+compatibility with enrollment, privacy, drift and owned-process controls. Admission/reconciliation,
+bounded raw parsing and serialization, independently correlated response validation and final input
+rechecks are covered by the existing CLI and host projects. The FR/SC assignments in the proof matrix
+remain separate from the actual TRX and source-review records above.
+
+T001–T045 are complete locally. T046 remains open: ready PR review, exact-head hosted CI/maps and
+resulting-main gates have not yet run for this implementation. Spec189 remains Approved. The
+configuration-only inspection evidence is separate from real provider/database regression, actual
+Workbench actor evidence is macOS-scoped, and injected process failure controls and the actual-child
+final-drift seam are not relabeled as a whole-command cancellation/drift injection or a Windows run.
+The full program and six-real-participant builder evaluation remain incomplete.

@@ -1,6 +1,6 @@
-# Planned validation journey
+# Validation journey
 
-This feature is not implemented by the planning artifacts. The commands below define implementation validation; no feature acceptance journey has run during authoring. Local architecture and maps checks ran separately as authoring gates and do not execute this future proof matrix. Use the [proof matrix](contracts/acceptance-proof-matrix.md) for the complete case assignment.
+The commands below reproduce the implementation validation for #2292. Actual results, tested heads, causal controls and remaining delivery gates are recorded in [implementation-evidence.md](implementation-evidence.md). This guide and the [proof matrix](contracts/acceptance-proof-matrix.md) define the required journeys; their presence alone is not evidence that a command passed.
 
 ## Prerequisites
 
@@ -26,13 +26,13 @@ Create a private file such as `environment-input.json` in the temporary fixture 
 }
 ```
 
-The first run should use the actual Workbench closure and the public CLI wrapper. A fixture host may be used afterward for controlled refusal cases, but it cannot replace the actual Workbench enrollment proof.
+Use the actual Workbench closure and the public CLI wrapper. A fixture host may be used afterward for controlled refusal cases, but it cannot replace the actual Workbench enrollment proof.
 
 Declare the resource and connection names in the captured source before selecting them or supplying their private values. A syntactically valid name introduced only by the private overlay must not become a public target identity. The automated Workbench fixture retains all four real JSON layers, trims feature selections in both shell layers, and imports/accepts the four intended requested IDs; host-implied dependencies are inspected separately.
 
 ## Public command journey
 
-Run the planned command with a built Workbench output directory and a separate source directory:
+Run the command with a built Workbench output directory and a separate source directory:
 
 ```text
 dotnet elsa composition inspect \
@@ -76,7 +76,7 @@ The old command must retain candidate-v1/file-only behavior. A host without the 
 
 This journey proves an achievable external-toggle recovery. It must not assume that `composition accept` silently observes or authorizes an environment change.
 
-## Planned automated commands
+## Automated commands
 
 Run the existing affected projects after implementation, using the repository's normal build-slot wrapper and recording discovered/selected cases:
 
@@ -106,4 +106,4 @@ Execute the rows in [acceptance-proof-matrix.md](contracts/acceptance-proof-matr
 - cancellation during stdin write, response read, after capture before launch, and bounded child cleanup;
 - private canaries inspected across public output, logs, diagnostics, child process arguments, generated/public artifacts, and fingerprints while allowing only finite existing CLI location and assembly-loader/deps/package-root metadata needed for file checks/loading. Private values, raw configuration, private input paths, and private-input-derived fingerprints remain absent.
 
-The expected outcome for each refusal row is a fixed refusal with no partial public result, no side effect, and owned cleanup. Frozen-root reload and post-copy caller mutation are the stability controls and must remain unchanged, not refusals. This quickstart records planned validation only; it does not mark any row passed.
+The expected outcome for each refusal row is a fixed refusal with no partial public result, no side effect, and owned cleanup. Frozen-root reload and post-copy caller mutation are the stability controls and must remain unchanged, not refusals. Use the canonical implementation evidence for actual outcomes and remaining gates; this quickstart does not independently mark a row passed.
