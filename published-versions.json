@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "8a2ebc67e075646811393945a593232f62f41afd",
+  "last_publish_commit": "b435c4acd4993017d2fc65883fd52c4d441e576f",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -324,8 +324,8 @@
     },
     {
       "package_id": "Elsa.Foundation.Identity.Oidc",
-      "version": "4.0.4-preview",
-      "commit": "12645190b855f6833f9e4decfa4150b47b04c302"
+      "version": "4.0.5-preview",
+      "commit": "b435c4acd4993017d2fc65883fd52c4d441e576f"
     },
     {
       "package_id": "Elsa.Foundation.Identity.OpenIddict",
