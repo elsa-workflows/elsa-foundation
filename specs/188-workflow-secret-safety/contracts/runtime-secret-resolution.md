@@ -8,7 +8,9 @@ alternatives are in [research R1 to R4](../research.md).
 
 ```csharp
 /// A replacement contract (framework constitution §2.6.2): at most one implementation per container. Declared by
-/// [RuntimeSecretResolverReplacementContract]; the runtime registers none, and the registering feature (slice 4) refuses a second.
+/// [RuntimeSecretResolverReplacementContract]; the runtime registers none, a host that composes more than one fails
+/// shell activation (the activities runtime's startup check), and the registering feature (slice 4) refuses one
+/// registered before it.
 [RuntimeSecretResolverReplacementContract]
 public interface IRuntimeSecretResolver
 {
@@ -48,12 +50,20 @@ public sealed class RuntimeSecretResolutionException(string referenceName, strin
 
 // The host composes no IRuntimeSecretResolver: an activation failure, not a fault.
 public sealed class RuntimeSecretResolverNotFoundException(string inputKey) : Exception;
+
+// The host composes more than one IRuntimeSecretResolver: thrown at shell activation, naming every registration.
+public sealed class MultipleRuntimeSecretResolversException(IReadOnlyList<string> implementations) : Exception;
 ```
 
 Rules:
 
-- `TenantId` is the partition the execution runs under, read from `IWorkflowExecutionPartitionAccessor.Current` at
-  activation; that partition is the scope the instance's own rows are stored under. The instance's recorded tenant,
+- `TenantId` is the execution partition read from `IWorkflowExecutionPartitionAccessor.Current` at activation; that
+  partition is the scope the instance's own rows are stored under. Activation runs in the scheduler work handler's DI
+  scope. On the background drain path, where the drain hands the handler no ambient services, that is a fresh scope
+  carrying the host's persistence scope, so the partition read there is the host's, and the two-tenant scenario is
+  proven with one host per tenant. When the dispatch options carry ambient services (the synchronous HTTP endpoint
+  passes its request services), the handler activates in those; that path was not verified for several tenants
+  (research R2, found in slice 4). The instance's recorded tenant,
   when present, must match it (next rule). No binding, request payload, setting or default selects it. A global or
   across-scope access context throws from `RequireScope()` before resolution.
 - Fail closed on tenant disagreement: when the executing instance's `WorkflowExecutionState.TenantId` is set and
@@ -79,10 +89,37 @@ Rules:
 | `StoreUnavailable` | `StoreUnavailable` | true |
 | `NotFound`, `Inactive`, `Expired`, `Revoked`, `Deleted`, `TypeMismatch`, `ScopeMismatch`, `Unauthorized`, `CorruptState` | same name | false |
 | `None` on a failed result (defensive) | `CorruptState` | false |
+| An undefined value, or a member added later that has no mapping arm | `CorruptState` | false |
+| A success without a value, or no result at all | `CorruptState` | false |
 
-`ResolvedSecret.Error` is discarded: `DefaultSecretValueResolver` copies store exception text into it for
-`StoreUnavailable`, which can carry store-private detail. Every enum member must appear in the mapping test, so a new
-member added later fails the test until someone classifies it.
+The mapping has one arm per member. The compiler does not catch a member added later: it falls to the last arm,
+permanent `CorruptState`, never classified under its own name, and the mapping test fails until someone gives it an
+arm, because every enum member must have an expected row there.
+
+## Default resolver classification (`Elsa.Secrets`, `DefaultSecretValueResolver`)
+
+`DefaultSecretValueResolver` reports `StoreUnavailable` only for a condition that may clear on its own, and a permanent
+code for one that will not (research R4). A failure to read the metadata repository (`ISecretRepository`) or the
+payload store (`ISecretStore`) is a result, not a throw, with a fixed error (`Secret metadata could not be read.` or
+`Secret metadata is unusable.`; `Secret payload could not be read.` or `Secret payload is unusable.`) that carries
+nothing from the exception. A canceled token propagates as a cancellation. Process-level failures (out of memory, stack
+overflow, access violation, invalid program) are not caught.
+
+| Condition | Code | Transient |
+|---|---|---|
+| A name `ISecretNameValidator` refuses; the repository is not read | `NotFound` | no |
+| A `TimeoutException`, `IOException` or `SocketException`, or a cancellation the caller did not request (a provider timeout), in the exception chain above any `DbException` | `StoreUnavailable` | yes |
+| The first `DbException` in the chain is an outage: the provider calls it transient (`DbException.IsTransient`; Npgsql does for a connection failure and server states such as `08`, `53` and `57P`), its SQLSTATE is in the connection-exception class `08`, it carries a `TimeoutException`, `IOException`, `Win32Exception` (a `SocketException` is one) or a transient `DbException` beneath it (how SQL Server and MySQL report a connection that could not be made), or it is SQLite's `SQLITE_BUSY` or `SQLITE_LOCKED` | `StoreUnavailable` | yes |
+| Any other `DbException`: a table or column the database does not have, a damaged database file | `CorruptState` | no |
+| Anything else the repository throws: a row whose document does not parse or names another tenant, a schema version this build cannot read, an identity its validation refuses | `CorruptState` | no |
+| The secret names a store the host does not register | `CorruptState` | no |
+| A payload the value protector refuses: an unsupported format, a key id the key ring does not hold, malformed base64, an authentication tag that does not match, a nonce of the wrong size | `CorruptState` | no |
+| Anything else a payload store throws that is not an outage | `CorruptState` | no |
+| The store returns no payload: the version lacks the entry the store reads, or the configured value is absent, which no retry supplies | `CorruptState` | no |
+| The store returns a payload without a value | `CorruptState` | no |
+
+`ResolvedSecret.Error` is discarded by the bridge anyway, because a replacement `ISecretValueResolver` can put
+store-private detail in it.
 
 ## Activation behavior (`ActivityActivator`)
 
@@ -118,6 +155,19 @@ schedules a fresh execution of that graph boundary, which cannot carry a `Secret
 hydration branch (graph activities, checkpoint participants, intrinsics), inputs an activity copies into its own
 persisted state or returns in its result or fault, and inputs read at publish cannot carry a `Secret` binding: publish refuses it with `VF-ACT-012`. The full path list is [research R3a](../research.md).
 
+## One resolver per host (framework §2.6.2)
+
+`IRuntimeSecretResolver` is a replacement contract, so a second registration is a composition conflict, detected at
+startup rather than chosen by registration order. `ActivitiesRuntimeFeature` registers a shell initializer
+(`RuntimeSecretResolverCompositionValidator`, `LifecyclePhase.Prepare`) that reads the composed service collection
+once every feature has registered and, when it holds more than one non-keyed `IRuntimeSecretResolver` registration,
+fails shell activation with `MultipleRuntimeSecretResolversException`, naming every registration (its implementation
+type, the type of a registered instance, or "a factory registration") in registration order, whichever order they were
+registered in. It counts descriptors and resolves none, so it is detection, not a contribution-style consumer of the
+contract. Activation consumes the single optional resolver; a host without one starts, and a secret-bound activity
+then parks with the missing-resolver activation failure (above). A plain host that composes the runtime without CShells
+runs the check only if it runs the registered shell initializers, as the test hosts do.
+
 ## Publish-time refusals owned by this contract
 
 | Code | Refused |
@@ -132,6 +182,8 @@ persisted state or returns in its result or fault, and inputs read at publish ca
 public class SecretsWorkflowsFeature : IShellFeature   // public, not sealed; ConfigureServices virtual (§2.5)
 ```
 
-Registers `IRuntimeSecretResolver -> SecretValueRuntimeResolver` (scoped, because `ISecretValueResolver` is scoped).
-Enabled in every Workbench and compose shells file that enables `Secrets`. The exact runtime dependency name is
-verified when the slice is implemented (`ActivitiesRuntime` registers the activator).
+Registers `IRuntimeSecretResolver -> SecretValueRuntimeResolver` (scoped, because `ISecretValueResolver` is scoped), and
+throws, naming both, when another `IRuntimeSecretResolver` is already registered, as an early diagnostic. One registered
+after it fails shell activation (below). Enabled in every Workbench and compose
+shells file that enables `Secrets`. Both dependency names were verified in slice 4: a CShells shell that enables only
+`SecretsWorkflows` activates `Secrets` and `ActivitiesRuntime` (`ActivitiesRuntime` registers the activator).

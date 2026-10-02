@@ -19,7 +19,9 @@ before reading anything when the instance records a different tenant. It convert
 plan and hydrates the activity from a transient copy of the snapshot; nothing resolved is written back or kept. A
 failed resolution faults the activity with `RuntimeSecretResolutionException`, which names the reference and the
 failure code and carries no value; the fault records the code and whether it is retryable. A host that composes no
-resolver cannot resolve at all, so the activity waits with an activation-failure incident instead of faulting. A
+resolver cannot resolve at all, so the activity waits with an activation-failure incident instead of faulting; a host
+that composes more than one does not start, because `ActivitiesRuntimeFeature`'s startup check fails its shell
+activation. A
 value withheld because its policy requires encryption cannot be recovered and is refused with `VF-ACT-010`, as is
 any withheld input of a strategy that does not hydrate inputs.
 

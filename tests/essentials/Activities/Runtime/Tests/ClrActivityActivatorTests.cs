@@ -164,6 +164,34 @@ public sealed class ClrActivityActivatorTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task A_withheld_secret_on_an_any_typed_input_is_converted_with_its_canonical_any_plan_and_hydrated()
+    {
+        // An input whose catalog version declares a canonical any alias is compiled with a CanonicalAny plan from text
+        // (research R11). Activation converts the resolved text with that plan, and the text reaches the activity
+        // (spec 188, User Story 1, scenario 1).
+        var anyType = new ValueTypeDescriptor("Elsa.Any");
+        var plan = new ValueConversionPlan(
+            ValueConversionPlan.CurrentSchemaVersion,
+            ValueRepresentation.TextValue,
+            StringType,
+            anyType,
+            ValueConversionMode.Auto,
+            ValueConversionOperation.CanonicalAny,
+            profile: null,
+            limits: null,
+            options: null);
+        var request = Request(Contract(typeof(ServiceBearingActivity), anyType, "message"), new Dictionary<string, ValueEnvelope>
+        {
+            ["message"] = ValueEnvelope.Withheld(anyType, WithheldValue.SecretReference(SecretResolutionTestSupport.Reference(), plan), SecretBindingTestSupport.SecretPolicy)
+        });
+
+        await using var lease = await SecretActivator().ActivateAsync(request);
+
+        Assert.Same(plan, Assert.Single(_conversions.Conversions).Plan);
+        Assert.Equal(FakeRuntimeSecretResolver.ValueOf(ReferenceName), Assert.IsType<ServiceBearingActivity>(lease.Activity).Message);
+    }
+
+    [Fact]
     public async Task Activation_writes_nothing_back_to_the_request_snapshot()
     {
         var request = WithheldRequest(Withheld());
@@ -813,13 +841,15 @@ public sealed class ClrActivityActivatorTests : IAsyncDisposable
         return new ClrActivityActivator(services.GetRequiredService<IServiceScopeFactory>(), registry, Serializer);
     }
 
-    private static ActivityContract Contract(Type activityType, params string[] inputKeys) =>
+    private static ActivityContract Contract(Type activityType, params string[] inputKeys) => Contract(activityType, StringType, inputKeys);
+
+    private static ActivityContract Contract(Type activityType, ValueTypeDescriptor inputType, params string[] inputKeys) =>
         new(
             activityType.FullName!,
             "1.0.0",
             typeof(ClrActivityDescriptor).FullName!,
             Serializer.SerializeToElement(new ClrActivityDescriptor(activityType.FullName!)),
-            inputKeys.Select(key => new ActivityInputContract(key, key, StringType, true, false, false, null, ActivityValuePolicy.Default)),
+            inputKeys.Select(key => new ActivityInputContract(key, key, inputType, true, false, false, null, ActivityValuePolicy.Default)),
             new ActivityResultContract(new ValueTypeDescriptor("Unit"), false, ActivityValuePolicy.Default, []),
             ["Done"],
             new ActivityActivationRequirement(typeof(ClrActivityDescriptor).FullName!, "constructor-injection"));

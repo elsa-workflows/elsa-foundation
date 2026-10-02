@@ -84,6 +84,7 @@
       "src/essentials/Secrets/Core/Elsa.Secrets.Core.csproj",
       "src/essentials/Secrets/Elsa.Secrets.csproj",
       "src/essentials/Secrets/Persistence/EntityFrameworkCore/Elsa.Secrets.Persistence.EntityFrameworkCore.csproj",
+      "src/essentials/Secrets/Workflows/Elsa.Secrets.Workflows.csproj",
       "src/essentials/Serialization/Core/Elsa.Serialization.Core.csproj",
       "src/essentials/Serialization/Newtonsoft/Elsa.Serialization.Newtonsoft.csproj",
       "src/essentials/Serialization/SystemText/Elsa.Serialization.SystemText.csproj",
