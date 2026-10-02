@@ -395,6 +395,30 @@ public sealed class ClrActivityActivatorTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task A_fatal_exception_from_the_resolver_propagates_instead_of_being_mapped()
+    {
+        var fatal = new OutOfMemoryException(ResolverSentinel);
+        _resolver.Respond = (_, _) => throw fatal;
+
+        var thrown = await Assert.ThrowsAsync<OutOfMemoryException>(() =>
+            SecretActivator().ActivateAsync(WithheldRequest(Withheld())).AsTask());
+
+        Assert.Same(fatal, thrown);
+    }
+
+    [Fact]
+    public async Task A_fatal_exception_from_the_conversion_propagates_instead_of_being_mapped()
+    {
+        var fatal = new OutOfMemoryException(ResolverSentinel);
+        _conversions.Failure = _ => fatal;
+
+        var thrown = await Assert.ThrowsAsync<OutOfMemoryException>(() =>
+            SecretActivator().ActivateAsync(WithheldRequest(Withheld())).AsTask());
+
+        Assert.Same(fatal, thrown);
+    }
+
+    [Fact]
     public async Task A_classified_resolution_failure_keeps_its_classification_when_lease_disposal_also_fails()
     {
         _resolver.Respond = (_, _) => RuntimeSecretResolution.Failure("StoreUnavailable", isRetryable: true);

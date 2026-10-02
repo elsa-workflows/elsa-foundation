@@ -108,7 +108,7 @@ public sealed class ActivitySecretInputResolver(
         {
             resolution = await resolver.ResolveAsync(new RuntimeSecretResolutionRequest(tenantId, reference), cancellationToken);
         }
-        catch (Exception)
+        catch (Exception exception) when (!IsFatal(exception))
         {
             cancellationToken.ThrowIfCancellationRequested();
             throw new RuntimeSecretResolutionException(reference.Name, RuntimeSecretResolutionException.ResolverFailed, isRetryable: false);
@@ -141,12 +141,18 @@ public sealed class ActivitySecretInputResolver(
                 ValueEnvelope.Inline(plan.SourceType, JsonSerializer.SerializeToElement(value), secret.Envelope.Policy),
                 plan);
         }
-        catch (Exception)
+        catch (Exception exception) when (!IsFatal(exception))
         {
+            // Every non-fatal exception is mapped, never narrowed by type: a conversion exception's message can carry the
+            // resolved value (a format error quoting its input), and it is dropped here rather than classified.
             cancellationToken.ThrowIfCancellationRequested();
             throw new RuntimeSecretResolutionException(secret.Reference.Name, RuntimeSecretResolutionException.ConversionFailed, isRetryable: false);
         }
     }
+
+    /// <summary>Process-level failures that are never mapped to a secret resolution failure.</summary>
+    private static bool IsFatal(Exception exception) =>
+        exception is OutOfMemoryException or StackOverflowException or AccessViolationException or InvalidProgramException;
 
     /// <summary>One withheld secret input, as <see cref="Prepare"/> accepted it.</summary>
     internal sealed record SecretInput(string Key, ValueEnvelope Envelope, RuntimeSecretReference Reference, ValueConversionPlan? ConversionPlan);
