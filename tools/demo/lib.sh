@@ -10,10 +10,12 @@ demo_sqlite_file="$demo_artifacts/notes.db"
 demo_sqlite_connection="Data Source=$demo_sqlite_file;Pooling=False"
 
 # Where prepack.sh stages the two releases (staging/1 and staging/2) for publish.sh, where run-host.sh records the process id of
-# each host it starts (pids/NAME.pid) for reset.sh, and the resolve-only closure feed.
+# each host it starts (pids/NAME.pid) for reset.sh, the resolve-only closure feed, and the folder the runbook tees each host's
+# output into (logs/NAME.log).
 demo_staging="$demo_artifacts/staging"
 demo_pids="$demo_artifacts/pids"
 demo_closure="$demo_artifacts/closure"
+demo_logs="$demo_artifacts/logs"
 
 # The PostgreSQL container of the two-host demo. DEMO_PG_CONTAINER renames it, for a machine where the name is taken.
 demo_pg_container="${DEMO_PG_CONTAINER:-elsa-demo-pg}"
