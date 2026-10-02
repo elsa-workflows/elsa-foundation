@@ -5,7 +5,7 @@ references no Design project.
 
 `ActivitiesPrimitivesFeature` registers `ClrActivityActivator` as `IActivityActivator`. For each invocation
 attempt the activator resolves the canonical type alias from `ClrActivityDescriptor`, creates an owned DI
-scope, uses `ActivatorUtilities` so activity authors can use constructor injection, constructs a fresh CLR
+scope bound to the partition of the scope it activates in, uses `ActivatorUtilities` so activity authors can use constructor injection, constructs a fresh CLR
 instance, and hydrates its plain `[ActivityInput]` properties from the committed input snapshot. The
 activation lease disposes both the activity and its scope.
 

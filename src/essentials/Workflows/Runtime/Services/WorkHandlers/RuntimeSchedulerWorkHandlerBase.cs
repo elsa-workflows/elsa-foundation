@@ -1,4 +1,5 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -8,8 +9,10 @@ namespace Elsa.Workflows.Runtime.Services.WorkHandlers;
 /// Dispatch scaffold shared by the payload-typed scheduler work handlers: deserialize the work item's
 /// payload once, then run the handler body either against the pipeline's ambient services (staged
 /// explicitly by the dispatcher, replacing an earlier AsyncLocal service locator) or against a fresh
-/// scope for direct no-pipeline dispatch. Derivations own payload deserialization, <see cref="CanHandle"/>,
-/// and the body; commit semantics stay entirely theirs.
+/// scope. A fresh scope is bound to the partition the dispatcher staged, so the body works in the partition
+/// the work item belongs to; direct no-pipeline dispatch knows no partition and its scope carries the host's.
+/// Derivations own payload deserialization, <see cref="CanHandle"/>, and the body; commit semantics stay
+/// entirely theirs.
 /// </summary>
 public abstract class RuntimeSchedulerWorkHandlerBase<TPayload> : IWorkflowSchedulerWorkHandler, IRuntimePipelineWorkHandler
 {
@@ -29,18 +32,19 @@ public abstract class RuntimeSchedulerWorkHandlerBase<TPayload> : IWorkflowSched
 
     public abstract bool CanHandle(RuntimeSchedulerWorkItem workItem);
 
-    /// <summary>Direct (no-pipeline) dispatch: runs against a fresh scope.</summary>
+    /// <summary>Direct (no-pipeline) dispatch: runs against a fresh scope that carries the host's persistence scope.</summary>
     public async ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(workItem);
         cancellationToken.ThrowIfCancellationRequested();
 
-        await ExecuteAsync(workItem, ambientServices: null, cancellationToken);
+        await ExecuteAsync(workItem, ambientServices: null, persistenceScope: null, cancellationToken);
     }
 
     /// <summary>
     /// Pipeline dispatch (Move 2): run in the Invoke slot reading the drain's ambient services from
-    /// the workspace (staged explicitly by the dispatcher) instead of an AsyncLocal service locator.
+    /// the workspace (staged explicitly by the dispatcher) instead of an AsyncLocal service locator, or, when the
+    /// drain carried none, against a fresh scope bound to the partition the dispatcher staged.
     /// </summary>
     public async ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, IRuntimePipelineContext pipelineContext, CancellationToken cancellationToken = default)
     {
@@ -48,7 +52,7 @@ public abstract class RuntimeSchedulerWorkHandlerBase<TPayload> : IWorkflowSched
         ArgumentNullException.ThrowIfNull(pipelineContext);
         cancellationToken.ThrowIfCancellationRequested();
 
-        await ExecuteAsync(workItem, pipelineContext.Workspace.AmbientServices, cancellationToken);
+        await ExecuteAsync(workItem, pipelineContext.Workspace.AmbientServices, pipelineContext.Workspace.PersistenceScope, cancellationToken);
     }
 
     /// <summary>Deserializes and validates the work item's payload; thrown validation errors never open a scope.</summary>
@@ -60,7 +64,11 @@ public abstract class RuntimeSchedulerWorkHandlerBase<TPayload> : IWorkflowSched
         IServiceProvider serviceProvider,
         CancellationToken cancellationToken);
 
-    private async ValueTask ExecuteAsync(RuntimeSchedulerWorkItem workItem, IServiceProvider? ambientServices, CancellationToken cancellationToken)
+    private async ValueTask ExecuteAsync(
+        RuntimeSchedulerWorkItem workItem,
+        IServiceProvider? ambientServices,
+        PersistenceScope? persistenceScope,
+        CancellationToken cancellationToken)
     {
         var payload = DeserializePayload(workItem);
         if (ambientServices is { } provider)
@@ -69,7 +77,7 @@ public abstract class RuntimeSchedulerWorkHandlerBase<TPayload> : IWorkflowSched
             return;
         }
 
-        await using var scope = _serviceScopeFactory.CreateAsyncScope();
+        await using var scope = await _serviceScopeFactory.CreateAsyncScopeAsync(persistenceScope);
         await HandleWithServicesAsync(workItem, payload, scope.ServiceProvider, cancellationToken);
     }
 }

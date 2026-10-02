@@ -116,8 +116,7 @@ public sealed class RuntimeCheckpointSlotDecompositionTests : RuntimePipelineTes
         // run. The terminal guard turns that misconfiguration into a hard error instead of a success-that-did-nothing.
         await using var provider = BuildWorkflowOnlyProvider();
         var workflowPlan = new WorkflowRuntimePipelineBuilder().Remove<RuntimeWorkflowInvokeMiddleware>().BuildPlan();
-        var dispatcher = new RuntimeExecutionPipelineDispatcher(
-            new RuntimeSchedulerPipelineSelector(),
+        var dispatcher = NewDispatcher(
             new RuntimeWorkflowExecutionPipeline(workflowPlan, provider),
             new PassThroughActivityPipeline());
         var handler = NewCancelHandler(
@@ -128,6 +127,22 @@ public sealed class RuntimeCheckpointSlotDecompositionTests : RuntimePipelineTes
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(
             () => dispatcher.DispatchAsync(NewCancelWorkItem(), handler).AsTask());
         Assert.Contains(RuntimeWorkflowPipelineSlots.Invoke, exception.Message);
+    }
+
+    [Fact]
+    public async Task Dispatch_StagesThePartitionOfItsScopeOnTheWorkflowWorkspace()
+    {
+        // #2341: a handler that creates its own scope binds it to this partition, so it has to be the dispatching scope's.
+        await using var provider = BuildWorkflowOnlyProvider();
+        var dispatcher = NewDispatcher(
+            new RuntimeWorkflowExecutionPipeline(new WorkflowRuntimePipelineBuilder().BuildPlan(), provider),
+            new PassThroughActivityPipeline(),
+            persistenceScope: "tenant-alpha");
+        var handler = new WorkspaceCapturingHandler();
+
+        await dispatcher.DispatchAsync(NewCancelWorkItem(), handler);
+
+        Assert.Equal(new PersistenceScope("tenant-alpha"), handler.ObservedPersistenceScope);
     }
 
     private async Task<WorkflowCancelSchedulerWorkHandler> NewSeededCancelHandler(InMemoryRuntimeCheckpointCommitStore checkpointStore)

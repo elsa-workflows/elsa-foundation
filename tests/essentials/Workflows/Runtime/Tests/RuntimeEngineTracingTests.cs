@@ -136,8 +136,7 @@ public sealed class RuntimeEngineTracingTests : RuntimePipelineTestSupport
     {
         queue = new InMemoryWorkflowSchedulerWorkQueue();
         handler = new StagingHandler();
-        var dispatcher = new RuntimeExecutionPipelineDispatcher(
-            new RuntimeSchedulerPipelineSelector(),
+        var dispatcher = NewDispatcher(
             new RuntimeWorkflowExecutionPipeline(new WorkflowRuntimePipelineBuilder().BuildPlan(), provider),
             new RuntimeActivityExecutionPipeline(new ActivityRuntimePipelineBuilder().BuildPlan(), provider));
 

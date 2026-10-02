@@ -1,5 +1,6 @@
 using System.Text.Json;
 using CShells.Lifecycle;
+using Elsa.Activities.Primitives.Activities;
 using Elsa.Activities.Runtime.Contracts;
 using Elsa.Activities.Runtime.Core.Abstractions;
 using Elsa.Activities.Runtime.Core.Models;
@@ -19,13 +20,16 @@ using Xunit;
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 
 /// <summary>
-/// One host, two partitions, drained by the background scheduler path (no ambient services): a run started under a
-/// partition other than the host's default persistence scope must execute in that partition.
+/// One host serving two partitions on the background drain path, where the drain hands the work handlers no ambient
+/// services: a run executes in the partition it was started under, not in the host's own persistence scope (#2341).
+/// Each test exercises one place that creates a scope of its own for a work item.
 /// </summary>
 public sealed class SchedulerWorkHandlerPartitionScopeTests : IDisposable
 {
     private const string TenantPartition = "tenant-alpha";
     private const string ExecutionId = "wfexec-partition-scope";
+    private const string SourceReferenceId = "source-partition-scope";
+    private const string ActivityExecutionId = "actexec-partition-scope";
     private const string NodeId = "node-leaf";
     private const string Activation = "activation";
     private const string ActivityServices = "activity services";
@@ -33,27 +37,60 @@ public sealed class SchedulerWorkHandlerPartitionScopeTests : IDisposable
     private const string HierarchySigningKey = "scheduler-partition-scope-hierarchy-signing-key-32";
     private readonly string _databasePath = Path.Join(Path.GetTempPath(), $"elsa-runtime-partition-scope-{Guid.NewGuid():N}.db");
 
+    /// <summary>The host's own scope, as the control, and a partition that is not the host's.</summary>
+    public static TheoryData<string> Partitions => [PersistenceScope.DefaultValue, TenantPartition];
+
+    /// <summary>The invoke handler reads the activity execution the start-activity handler wrote (<c>RuntimeSchedulerWorkHandlerBase</c>).</summary>
     [Theory]
-    [InlineData(PersistenceScope.DefaultValue)]
-    [InlineData(TenantPartition)]
-    public async Task A_run_completes_in_the_partition_it_was_started_under_on_the_ef_stores(string partition)
+    [MemberData(nameof(Partitions))]
+    public async Task A_clr_activity_completes_in_the_partition_its_run_was_started_under(string partition)
     {
-        await using var harness = await StartSqliteHostAsync();
-        var executable = WorkflowExecutionHarness.NewExecutable(WorkflowExecutionHarness.NewProbeNode(NodeId));
-        var reference = await harness.PublishAsync(executable, "source-partition-scope");
-        await CopyPublicationIntoAsync(harness, partition, reference);
+        await using var harness = await StartOnSqliteAsync(partition, WorkflowExecutionHarness.NewExecutable(WorkflowExecutionHarness.NewProbeNode(NodeId)));
 
-        await StartAsync(harness, reference, ExecutionId, partition);
-
-        await using var scope = await harness.Services.GetRequiredService<IPersistenceOperationScopeFactory>().CreateAsync(new PersistenceScope(partition));
-        var state = await scope.ServiceProvider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(ExecutionId);
-        Assert.Equal(WorkflowExecutionStatus.Completed, state?.Status);
+        Assert.Equal(WorkflowExecutionStatus.Completed, await StatusAsync(harness, partition));
     }
 
+    /// <summary>The intrinsic executor is resolved from the scope the start-activity handler creates.</summary>
     [Theory]
-    [InlineData(PersistenceScope.DefaultValue)]
-    [InlineData(TenantPartition)]
-    public async Task An_activity_observes_the_partition_its_run_was_started_under_on_the_in_memory_stores(string partition)
+    [MemberData(nameof(Partitions))]
+    public async Task An_intrinsic_node_completes_in_the_partition_its_run_was_started_under(string partition)
+    {
+        await using var harness = await StartOnSqliteAsync(partition, WorkflowExecutionHarness.NewExecutable(SetOutputNode()));
+
+        Assert.Equal(WorkflowExecutionStatus.Completed, await StatusAsync(harness, partition));
+    }
+
+    /// <summary>The resume handler reads the bookmark and the suspended activity from the scope it creates.</summary>
+    [Theory]
+    [MemberData(nameof(Partitions))]
+    public async Task A_bookmark_resumes_in_the_partition_its_run_was_started_under(string partition)
+    {
+        await using var harness = await StartOnSqliteAsync(partition, RuntimeEntityFrameworkCoreEndToEndTests.NewEventExecutable());
+        Assert.Equal(WorkflowExecutionStatus.Running, await StatusAsync(harness, partition));
+
+        await using (var scope = await CreateScopeAsync(harness, partition))
+        {
+            var bookmark = Assert.Single(await scope.ServiceProvider.GetRequiredService<IBookmarkStateStore>().ListAllBookmarkStatesAsync(ExecutionId));
+            var resumed = await scope.ServiceProvider.GetRequiredService<IBookmarkResumeDispatcher>().DispatchAsync(
+                new BookmarkResumeDispatchRequest(
+                    workflowExecutionId: ExecutionId,
+                    stimulusType: bookmark.StimulusType,
+                    stimulusHash: bookmark.StimulusHash,
+                    input: JsonSerializer.SerializeToElement(new EventReceived(RuntimeEntityFrameworkCoreEndToEndTests.EventName))));
+            Assert.Equal(BookmarkResumeDispatchStatus.Dispatched, resumed.Status);
+        }
+
+        Assert.Equal(WorkflowExecutionStatus.Completed, await StatusAsync(harness, partition));
+    }
+
+    /// <summary>
+    /// The partition activation reads, which is the one a secret-bound input is resolved under, and the partition the
+    /// services injected into the activity read (<c>ClrActivityActivator</c>). On the in-memory stores, which do not
+    /// keep partitions apart, so the run completes either way and only the partition read can differ.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(Partitions))]
+    public async Task Activation_and_the_activity_read_the_partition_the_run_was_started_under(string partition)
     {
         var recorder = new PartitionRecorder();
         await using var harness = WorkflowExecutionHarness.Create()
@@ -61,12 +98,12 @@ public sealed class SchedulerWorkHandlerPartitionScopeTests : IDisposable
                 .AddSingleton(recorder)
                 .AddScoped<ActivityActivator>()
                 .Replace(ServiceDescriptor.Scoped<IActivityActivator, PartitionRecordingActivator>()))
-            .Build("actexec-partition-scope");
+            .Build(ActivityExecutionId);
         var reference = await harness.PublishAsync(
             WorkflowExecutionHarness.NewExecutable(ClrNode(typeof(PartitionRecordingActivity))),
-            "source-partition-scope");
+            SourceReferenceId);
 
-        await StartAsync(harness, reference, ExecutionId, partition);
+        await StartAsync(harness, reference, partition);
 
         Assert.Equal([(Activation, partition), (ActivityServices, partition)], recorder.Observed);
     }
@@ -78,7 +115,11 @@ public sealed class SchedulerWorkHandlerPartitionScopeTests : IDisposable
             File.Delete(file);
     }
 
-    private async Task<WorkflowExecutionHarness> StartSqliteHostAsync()
+    /// <summary>
+    /// Builds a host on the EF stores over one SQLite file, whose own persistence scope is the default one, publishes
+    /// <paramref name="executable"/> into <paramref name="partition"/> and starts it there.
+    /// </summary>
+    private async Task<WorkflowExecutionHarness> StartOnSqliteAsync(string partition, WorkflowExecutable executable)
     {
         var harness = WorkflowExecutionHarness.Create()
             .ConfigureServices(services => services
@@ -90,12 +131,25 @@ public sealed class SchedulerWorkHandlerPartitionScopeTests : IDisposable
                     HierarchyCursorSigningKey = HierarchySigningKey
                 })
                 .AddEfModuleMigrations<RuntimeDbContext>("Sqlite"))
-            .Build("actexec-partition-scope");
+            .Build(ActivityExecutionId);
 
         foreach (var initializer in harness.Services.GetServices<IShellInitializer>())
             await initializer.InitializeAsync();
         harness.InitializeActivityTypes();
+
+        var reference = await harness.PublishAsync(executable, SourceReferenceId);
+        await CopyPublicationIntoAsync(harness, partition, reference);
+        await StartAsync(harness, reference, partition);
         return harness;
+    }
+
+    private static ValueTask<PersistenceOperationScope> CreateScopeAsync(WorkflowExecutionHarness harness, string partition) =>
+        harness.Services.GetRequiredService<IPersistenceOperationScopeFactory>().CreateAsync(new PersistenceScope(partition));
+
+    private static async Task<WorkflowExecutionStatus?> StatusAsync(WorkflowExecutionHarness harness, string partition)
+    {
+        await using var scope = await CreateScopeAsync(harness, partition);
+        return (await scope.ServiceProvider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(ExecutionId))?.Status;
     }
 
     /// <summary>Copies into <paramref name="partition"/> what <see cref="WorkflowExecutionHarness.PublishAsync"/> published into the host's default scope.</summary>
@@ -104,12 +158,11 @@ public sealed class SchedulerWorkHandlerPartitionScopeTests : IDisposable
         if (partition == PersistenceScope.DefaultValue)
             return;
 
-        var scopes = harness.Services.GetRequiredService<IPersistenceOperationScopeFactory>();
         WorkflowExecutable? published;
-        await using (var source = await scopes.CreateAsync(new PersistenceScope(PersistenceScope.DefaultValue)))
+        await using (var source = await CreateScopeAsync(harness, PersistenceScope.DefaultValue))
             published = await source.ServiceProvider.GetRequiredService<IWorkflowExecutableStore>().FindAsync(reference.ArtifactId);
 
-        await using var target = await scopes.CreateAsync(new PersistenceScope(partition));
+        await using var target = await CreateScopeAsync(harness, partition);
         await target.ServiceProvider.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(Assert.IsType<WorkflowExecutable>(published));
         await target.ServiceProvider.GetRequiredService<IWorkflowExecutableSourceReferenceStore>().SaveAsync(reference);
     }
@@ -118,20 +171,16 @@ public sealed class SchedulerWorkHandlerPartitionScopeTests : IDisposable
     /// Starts through the production start dispatcher with no ambient services, so the in-process actor drains on the
     /// background path, and requires the drain to have run without a fault.
     /// </summary>
-    private static async Task StartAsync(
-        WorkflowExecutionHarness harness,
-        WorkflowExecutableSourceReference reference,
-        string workflowExecutionId,
-        string partition)
+    private static async Task StartAsync(WorkflowExecutionHarness harness, WorkflowExecutableSourceReference reference, string partition)
     {
         const string requestedBy = "scheduler-partition-scope-tests";
-        await using var scope = await harness.Services.GetRequiredService<IPersistenceOperationScopeFactory>().CreateAsync(new PersistenceScope(partition));
+        await using var scope = await CreateScopeAsync(harness, partition);
         var start = await scope.ServiceProvider.GetRequiredService<IWorkflowStartDispatcher>().DispatchAsync(
             new WorkflowExecutionStartDispatchRequest(
                 artifactId: reference.ArtifactId,
                 requestedBy: requestedBy,
-                workflowExecutionId: workflowExecutionId,
-                idempotencyKey: $"start:{workflowExecutionId}",
+                workflowExecutionId: ExecutionId,
+                idempotencyKey: $"start:{ExecutionId}",
                 metadata: null,
                 variables: null,
                 inputs: null,
@@ -148,6 +197,23 @@ public sealed class SchedulerWorkHandlerPartitionScopeTests : IDisposable
 
         Assert.True(start.CommandDispatch.Status == WorkflowExecutionCommandDispatchStatus.Accepted, $"{start.CommandDispatch.Status}: {start.CommandDispatch.Reason}");
     }
+
+    /// <summary>A root the runtime executes itself rather than activating a CLR activity for.</summary>
+    private static ExecutableNode SetOutputNode() =>
+        new(
+            executableNodeId: NodeId,
+            authoredActivityId: $"authored-{NodeId}",
+            activityType: "elsa.intrinsic.set-output",
+            activityTypeVersion: "1.0.0",
+            descriptorType: "intrinsic",
+            descriptorPayload: JsonSerializer.SerializeToElement(new { kind = "SetOutput", schemaVersion = "1.0.0" }),
+            inputBindings: new Dictionary<string, RuntimeInputBinding>
+            {
+                [WorkflowIntrinsicInputKeys.Name] = RuntimeEntityFrameworkCoreEndToEndTests.Literal(WorkflowIntrinsicInputKeys.Name, "String", "result"),
+                [WorkflowIntrinsicInputKeys.Value] = RuntimeEntityFrameworkCoreEndToEndTests.Literal(WorkflowIntrinsicInputKeys.Value, "String", "done")
+            },
+            metadata: new Dictionary<string, string>(),
+            intrinsicKind: WorkflowIntrinsicKind.SetOutput);
 
     private static ExecutableNode ClrNode(Type activityType) =>
         new(
