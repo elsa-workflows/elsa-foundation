@@ -35,8 +35,11 @@ public sealed class CredentialInputBindingTests
         { "name only", Json(new { name = "reference-name" }) },
         { "name, type and scope", Json(new { name = "reference-name", typeName = "text", scope = "billing" }) },
         { "null type and scope", Json(new { name = "reference-name", typeName = (string?)null, scope = (string?)null }) },
+        { "name with surrounding whitespace", Json(new { name = "  reference-name  " }) },
+        { "CLR object, not a JSON element", new { name = "reference-name", typeName = "text" } },
         { "no payload", null },
         { "JSON null payload", Json<object?>(null) },
+        { "JSON undefined payload", default(JsonElement) },
         { "empty string payload", Json(string.Empty) }
     };
 
@@ -44,7 +47,11 @@ public sealed class CredentialInputBindingTests
     public static TheoryData<string, object?> RefusedSecretPayloads => new()
     {
         { "text", Json("value") },
+        { "whitespace-only text", Json("   ") },
+        { "JSON text holding a reference", Json("""{"name":"reference-name"}""") },
         { "number", Json(42) },
+        { "boolean", Json(true) },
+        { "CLR object without a name, not a JSON element", new { typeName = "text" } },
         { "array", Json(new[] { "value" }) },
         { "object without a name", Json(new { typeName = "text" }) },
         { "blank name", Json(new { name = "   " }) },

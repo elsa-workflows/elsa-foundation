@@ -4,10 +4,10 @@ namespace Elsa.Workflows.Design.Validations.Core.Exceptions;
 
 /// <summary>
 /// A workflow definition state binds a literal, an object, a value read, an expression or a malformed secret reference
-/// to an input its activity declares a credential (spec 188, FR-008). Thrown by <see cref="WorkflowStateAdmission.AdmitAsync"/> before its caller
-/// writes, so nothing is stored, by the Elsa 3 collection import before it commits, with every refused binding of the
-/// apply, and by publication before an input is compiled. It carries one finding per refused binding; neither the
-/// findings nor the message carry the bound value.
+/// to an input its activity declares a credential (spec 188, FR-008). Thrown by
+/// <see cref="WorkflowStateAdmission.AdmitAsync"/> before its caller writes, so nothing is stored, by the Elsa 3
+/// collection import before it commits, with every refused binding of the apply, and by publication before an input is
+/// compiled. It carries one finding per refused binding; neither the findings nor the message carry the bound value.
 /// </summary>
 /// <remarks>
 /// It is an <see cref="ArgumentException"/>, because the refused content is the caller's: publication reports it as one

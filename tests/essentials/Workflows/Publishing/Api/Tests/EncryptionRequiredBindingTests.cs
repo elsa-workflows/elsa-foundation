@@ -53,31 +53,22 @@ public sealed class EncryptionRequiredBindingTests
 
     private static readonly string[] RefusedBindingKinds = ["Literal", "Object", "Variable", "WorkflowRequest", "JavaScript", "Default"];
 
-    public static TheoryData<InputShape, string> RefusedBindingsOnCredentialInputs
-    {
-        get
-        {
-            var data = new TheoryData<InputShape, string>();
-            foreach (var shape in new[] { InputShape.CatalogCredential, InputShape.PinnedCredential })
-            foreach (var binding in RefusedBindingKinds)
-                data.Add(shape, binding);
-            return data;
-        }
-    }
+    private static readonly InputShape[] CredentialShapes = [InputShape.CatalogCredential, InputShape.PinnedCredential];
+
+    public static TheoryData<InputShape, string> RefusedBindingsOnCredentialInputs => OnCredentialShapes(RefusedBindingKinds);
 
     public static TheoryData<string> RefusedBindingsOnEncryptionRequiredInputs => new(RefusedBindingKinds);
 
     /// <summary>A <c>Secret</c> binding whose bound payload is not a well-formed reference, on each credential shape.</summary>
-    public static TheoryData<InputShape, string> MalformedSecretsOnCredentialInputs
+    public static TheoryData<InputShape, string> MalformedSecretsOnCredentialInputs => OnCredentialShapes(["SecretText", "SecretWithExtraMember"]);
+
+    private static TheoryData<InputShape, string> OnCredentialShapes(string[] bindings)
     {
-        get
-        {
-            var data = new TheoryData<InputShape, string>();
-            foreach (var shape in new[] { InputShape.CatalogCredential, InputShape.PinnedCredential })
-            foreach (var binding in new[] { "SecretText", "SecretWithExtraMember" })
-                data.Add(shape, binding);
-            return data;
-        }
+        var data = new TheoryData<InputShape, string>();
+        foreach (var shape in CredentialShapes)
+        foreach (var binding in bindings)
+            data.Add(shape, binding);
+        return data;
     }
 
     private static readonly string[] EmptyBindingKinds = ["EmptyLiteral", "NullLiteral", "JsonNullLiteral", "NullValue"];

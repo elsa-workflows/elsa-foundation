@@ -63,7 +63,7 @@ rejected.
 | 5 | Submit (Definitions/Submit) | Design API admission before `ISubmitWorkflowDefinitionCommand` | same as row 1 | 400 |
 | 6 | File-based reconciliation import (and git import, which feeds it) | `WorkflowsVersionReconciler.ReconcileVersion`, per item, before any catalog mutation for that item | that item only is refused; see "Per-item behavior" below | n/a |
 | 7 | Git export | `GitWorkflowExporter`, per version not yet committed, before writing its file | that version file only is skipped; see "Per-item behavior" below | n/a |
-| 8 | Elsa 3 collection import (`POST migration/elsa3/reusable-activities/collections/{collectionHandle}/apply`; admitted in slice 6's review) | `ReusableActivityCollectionImporter.ApplyAsync`, the import's application-layer service, after mapping and before its commit port (`IReusableActivityImportCommand`) runs: every activity node of each imported workflow version's state and of each reusable activity's mapped body (from which the materializer builds that activity version's descriptor payload), the root and every node nested under it, up to `Elsa3ImportedActivityStructure.MaxNestingDepth` (14) containers below the root; the mapping refuses deeper nesting with a 400 naming the limit, because every serializer the stored state passes through keeps the default JSON nesting limit of 64 (review round 3). The mapping nests children under `elsa3.imported-activity.structure`, which no handler projects, so the import enumerates them itself (`Elsa3ImportedActivityStructure.Nodes`) and judges each node through `ICredentialLiteralValidator` (review round 2) | the apply is all or nothing, so the whole apply is refused with one `CredentialLiteralRefusedException` naming every refused binding: no workflow or activity is committed, and the uploaded collection, which the import ledger stored at upload, stays there (T090) | 400 through the import's existing problem ladder (`elsa3.import.request-invalid`, its `ArgumentException` arm), the findings' messages in `detail`; that problem body has no `errors` map |
+| 8 | Elsa 3 collection import (`POST migration/elsa3/reusable-activities/collections/{collectionHandle}/apply`; admitted in slice 6's review) | `ReusableActivityCollectionImporter.ApplyAsync`, the import's application-layer service, after mapping and before its commit port (`IReusableActivityImportCommand`) runs: every activity node of each imported workflow version's state and of each reusable activity's mapped body (from which the materializer builds that activity version's descriptor payload), the root and every node nested under it, up to `Elsa3ImportedActivityStructure.MaxNestingDepth` (14) containers below the root; the mapping refuses deeper nesting with a 400 naming the limit (review round 3). The limit follows from the default JSON nesting limit of 64 that the structure payload, the stored state and a reusable activity's descriptor payload keep; it does not remove every serialization failure: a binding value nested deeply in itself can still exceed 64 within the limit and fail the apply with a 500, nothing committed (Known gaps). The mapping nests children under `elsa3.imported-activity.structure`, which no handler projects, so the import enumerates them itself (`Elsa3ImportedActivityStructure.Nodes`) and judges each node through `ICredentialLiteralValidator` (review round 2) | the apply is all or nothing, so the whole apply is refused with one `CredentialLiteralRefusedException` naming every refused binding: no workflow or activity is committed, and the uploaded collection, which the import ledger stored at upload, stays there (T090) | 400 through the import's existing problem ladder (`elsa3.import.request-invalid`, its `ArgumentException` arm), the findings' messages in `detail`; that problem body has no `errors` map |
 
 Each refusal carries the rule identifier, the activity (node) id and the input name. Entry point 8 is not one of
 FR-008's seven: it was found in slice 6 and admitted in its review, as file reconciliation is (spec FR-008 note).
@@ -257,3 +257,29 @@ bite-proofs remove the call.
 - **Nesting beyond `MaxRecursionDepth`.** The validator walks the activity tree as the other validators do, to the
   configured depth (default 100); a credential literal nested deeper is not judged by the admission paths and is
   refused at publication, whose walk has no depth bound (for the children registered handlers project; see above).
+- **A deeply nested binding value at the Elsa 3 import.** The import refuses an activity more than 14 containers below
+  its workflow's root, but the limit counts containers, not the JSON depth of a binding's value. An activity at depth
+  `d` sits `2 + 4d` levels down in the stored state and its binding's value three levels further, so at or below 14
+  containers a value that is itself deeply nested (an object literal several levels deep) can still exceed the default
+  JSON nesting limit of 64. Serializing the mapped state or the descriptor payload then throws, and the apply fails
+  closed with a 500 (`elsa3.import.unexpected`): nothing is committed, and no value reaches the response (by reading:
+  `JsonException` is not one of the import's 400 arms). The upload stays in the import ledger as for any refusal.
+
+## Changes outside the credential-literal rule (slice 6)
+
+Three behavior changes made for this rule reach beyond it. Elsa 4 is unreleased, so no migration is owed for any of
+them.
+
+- **Publication refuses a malformed secret reference on any input.** `RuntimeInputBindingCompiler` now reads every
+  `Secret` binding through `SecretReferencePayload`, so a payload with a member other than `name`, `typeName` and
+  `scope`, or with a member twice, is refused at publish on a credential input and on any other input alike. Before,
+  the compiler ignored unknown members (review round 3).
+- **The Elsa 3 mapping stores an input under its declared key and refuses ambiguous bindings.** A property matched to
+  a declared input is stored under that input's `ReferenceKey`, not the Elsa 3 property name, and two properties that
+  bind one input, or a property that matches several declared inputs only ignoring case, refuse the mapping (400).
+  Before, the binding kept the Elsa 3 name, so an input whose declared key differed from the property name could not
+  be published (review round 2).
+- **The Elsa 3 mapping refuses nesting deeper than 14 containers.** Some deeper shapes imported before: measured, a
+  tree 15 containers deep whose deepest activity binds nothing went through the mapping and the reusable descriptor
+  payload, and the mapping's own payload write held to 16. Such a tree is now refused with a 400 naming the limit, and a
+  deeper one that used to fail with a 500 is refused the same way (review round 3).

@@ -12,7 +12,7 @@ applied only as a reviewed dependency-closed mutation; Runtime never consumes th
 - **Kind:** Design mapping strategy.
 - **Purpose:** converts a reviewed collection plan into Activity/Workflow Design mutations.
 - **Default implementation:** `Elsa3ReusableActivityImportMaterializer` from `Elsa3.Mapping`.
-- **Invariant:** exact planned reference rewrites only; recursive composition is never replaced by separate-workflow execution.
+- **Invariant:** exact planned reference rewrites only; recursive composition is never replaced by separate-workflow execution. A replacement must also build each reusable activity version's `DescriptorPayload` from the `Body` it returns beside it, because the importer judges the credential-literal rule on `Body` (see Mapped bodies).
 - **Mapped bodies:** each `ImportedReusableActivity` carries its mapped workflow state as `Body`, so the importer can admit it before the commit. The importer judges `Body`, not the version's `DescriptorPayload` (the graph manifest format belongs to the graph activity module, which the import does not reference), so an implementation must build the descriptor payload from that `Body` and put no activity input into it that the body does not hold; a payload built otherwise is stored unjudged. The default implementation builds the payload's `rootActivity` from the body's root in the same call (`ReusableActivityCollectionCredentialLiteralTests` pins it).
 
 ### `IReusableActivityImportCommand`
@@ -118,8 +118,9 @@ through the credential-literal rule, `ICredentialLiteralValidator`, registered b
 `Elsa3ImportJsonActivities` depends: the nodes of each imported workflow version's state and of each reusable
 activity's `Body` (from which the materializer builds that activity version's descriptor payload), the root and every
 node nested under it, up to `Elsa3ImportedActivityStructure.MaxNestingDepth` (14) containers below the root. The mapping
-refuses deeper nesting with 400 naming the limit, because every serializer the stored state passes through keeps the
-default JSON nesting limit of 64. The mapping nests child activities under `elsa3.imported-activity.structure`, which
+refuses deeper nesting with 400 naming the limit: the structure payload, the stored workflow state and a reusable
+activity's descriptor payload keep the default JSON nesting limit of 64. A binding value that is itself deeply nested
+can still exceed that limit within 14 containers, and the apply then fails with a 500 before anything is committed. The mapping nests child activities under `elsa3.imported-activity.structure`, which
 no structure handler projects, so the rule's own tree walk sees only each root. `Elsa3ImportedActivityStructure`
 (`Models`) is the one definition of that shape: the mapping writes it through `Create`, and the importer reads every
 nested node back through `Nodes` and judges each as the root of its own state. The apply is all or nothing, so a

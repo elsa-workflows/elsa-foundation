@@ -459,11 +459,11 @@ public sealed class RuntimeInputBindingCompiler(
     // The messages name the node, the input and the defect, never the authored payload.
     private static RuntimeSecretReference ParseSecretReference(string nodeId, InputDefinition inputDefinition, ArgumentValue value)
     {
-        var reference = SecretReferencePayload.Read(value.Value);
-        return reference.IsWellFormed
-            ? new RuntimeSecretReference(reference.Name!, reference.TypeName, reference.Scope)
+        var reading = SecretReferencePayload.Read(value.Value);
+        return reading.Reference is { } reference
+            ? new RuntimeSecretReference(reference.Name, reference.TypeName, reference.Scope)
             : throw new ArgumentException(
-                $"Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' uses expression type '{SecretExpressionType}' but {reference.Defect}.");
+                $"Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' uses expression type '{SecretExpressionType}' but {reading.Defect}.");
     }
 
     /// <summary>

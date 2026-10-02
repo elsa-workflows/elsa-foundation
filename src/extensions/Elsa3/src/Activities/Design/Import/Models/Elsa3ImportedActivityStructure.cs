@@ -28,10 +28,12 @@ public static class Elsa3ImportedActivityStructure
 
     /// <summary>
     /// The deepest an activity may sit below its workflow's root, counted in containers (the root is at depth 0); the
-    /// mapping refuses a deeper one. Every serializer the import's output passes through (this payload, the stored workflow
-    /// state, a reusable activity's descriptor payload, publication's readers) keeps the System.Text.Json default nesting
-    /// limit of 64. An activity at depth <c>d</c> sits <c>2 + 4d</c> levels down in a stored state and its binding's value
-    /// three levels further, so at 14 a binding with a text, number or flat object value still fits; at 15 it does not.
+    /// mapping refuses a deeper one. This payload, the stored workflow state (as the design stores' payload serializer
+    /// writes and reads it) and a reusable activity's descriptor payload all keep the System.Text.Json default nesting limit
+    /// of 64, and the import's boundary test proves those three at this depth. An activity at depth <c>d</c> sits
+    /// <c>2 + 4d</c> levels down in a stored state and its binding's value three levels further, so at 14 a binding with a
+    /// text, number or flat object value still fits; at 15 it does not. A binding value that is itself deeply nested can
+    /// exceed the limit at any depth: the apply then fails with a 500 before anything is committed.
     /// </summary>
     public const int MaxNestingDepth = 14;
 
