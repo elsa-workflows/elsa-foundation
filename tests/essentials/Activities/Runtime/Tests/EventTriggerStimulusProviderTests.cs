@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Elsa.Activities.Primitives.Activities;
+using Elsa.Activities.Testing;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Expressions.Core.Models;
@@ -75,6 +76,19 @@ public sealed class EventTriggerStimulusProviderTests
         var node = EventNode(eventName: null, eventNameBinding: ExpressionBinding(nameof(Event.EventName)));
 
         Assert.Throws<ArgumentException>(() => _provider.Describe(node));
+    }
+
+    [Theory]
+    [InlineData(nameof(Event.EventName))]
+    [InlineData(nameof(Event.CorrelationId))]
+    [InlineData(nameof(Event.CanStartWorkflow))]
+    public void Describe_RefusesASecretReadWithTheFixedPublishCode(string inputName)
+    {
+        // Publication refuses the binding first (the Event type declares these inputs); this backstop keeps an
+        // artifact that skipped publication from reading a secret as unauthored or as a generic non-literal.
+        var node = EventNode(eventName: "order-shipped", secretRead: SecretBindingTestSupport.SecretRead(inputName));
+
+        SecretBindingTestSupport.AssertReaderRefusesSecretRead(() => _provider.Describe(node), "node-event", inputName);
     }
 
     [Fact]
@@ -249,7 +263,8 @@ public sealed class EventTriggerStimulusProviderTests
         string? correlationId = null,
         string activityType = "Elsa.Event",
         RuntimeInputBinding? eventNameBinding = null,
-        bool? canStartWorkflow = null)
+        bool? canStartWorkflow = null,
+        RuntimeInputBinding? secretRead = null)
     {
         using var document = JsonDocument.Parse("""{"type":"test"}""");
         var bindings = new Dictionary<string, RuntimeInputBinding>(StringComparer.OrdinalIgnoreCase);
@@ -261,6 +276,8 @@ public sealed class EventTriggerStimulusProviderTests
             bindings[nameof(Event.CorrelationId)] = LiteralBinding(nameof(Event.CorrelationId), correlationId);
         if (canStartWorkflow is not null)
             bindings[nameof(Event.CanStartWorkflow)] = LiteralBinding(nameof(Event.CanStartWorkflow), canStartWorkflow);
+        if (secretRead is not null)
+            bindings[secretRead.InputName] = secretRead;
 
         return new ExecutableNode(
             executableNodeId: "node-event",

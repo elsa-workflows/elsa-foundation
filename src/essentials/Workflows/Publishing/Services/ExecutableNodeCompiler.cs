@@ -13,6 +13,7 @@ using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Core.Services;
 using Elsa.Workflows.Runtime.Core.Constants;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Publishing.Services;
@@ -117,6 +118,7 @@ public sealed class ExecutableNodeCompiler(
         var activityType = clrActivityType is null
             ? catalogActivityType
             : ActivityTypeMetadata.GetDeclaredActivityType(clrActivityType) ?? catalogActivityType;
+        inputBindingCompiler.EnsureSecretBindingsAdmissible(activity.NodeId, descriptor, activity.Inputs);
         var inputBindings = inputBindingCompiler.CompileAll(activity.NodeId, inputDefinitions, activity.Inputs);
         var childSlots = CompileChildSlots(activityType, activity.NodeId, projection.ChildProjections(activity), projection, activityRows, placedActivities, workflowVariables);
         var executionType = clrActivityType is not null && ActivityTypeMetadata.IsTrigger(clrActivityType)
@@ -211,6 +213,15 @@ public sealed class ExecutableNodeCompiler(
             throw new ArgumentException(
                 $"Workflow intrinsic node '{activity.NodeId}' requires exactly these inputs: {string.Join(", ", inputTypes.Keys.Order(StringComparer.Ordinal))}.");
         }
+
+        // An intrinsic writes its value straight into a durable variable or workflow output, so a secret resolved
+        // there would be persisted.
+        var secretInput = activity.Inputs.FirstOrDefault(input => RuntimeInputBindingCompiler.IsSecretBinding(input.Value));
+        if (secretInput is not null)
+            throw SecretBindingDiagnostics.SecretBindingRefused(
+                activity.NodeId,
+                secretInput.ReferenceKey,
+                "workflow intrinsics write their values into persisted workflow state");
 
         var bindings = inputTypes.ToDictionary(
             input => input.Key,
@@ -636,6 +647,8 @@ public sealed class ExecutableNodeCompiler(
                 $"VF-ACT-005: Variable '{variable.ReferenceKey}' on activity node '{nodeId}' selects external storage profile '{variable.StorageDriverType}', but canonical variable-frame externalization is not implemented. Publication is refused instead of accepting an unusable declaration.");
         }
         RuntimeInputBinding? initialBinding = null;
+        if (RuntimeInputBindingCompiler.IsSecretBinding(variable.Default))
+            throw SecretBindingDiagnostics.VariableDefaultRefused(nodeId, variable.ReferenceKey);
         if (variable.Default is not null)
         {
             initialBinding = inputBindingCompiler.Compile(
@@ -710,18 +723,8 @@ public sealed class ExecutableNodeCompiler(
         return resumeTargets;
     }
 
-    private Type? ResolveClrActivityType(RuntimeActivityDescriptor descriptor)
-    {
-        if (!StringComparer.Ordinal.Equals(descriptor.ConsumerKey, WellKnownRuntimeActivityConsumers.ClrActivity))
-            return null;
-
-        var clrDescriptor = descriptor.Payload.Deserialize<ClrActivityDescriptor>(DescriptorSerializerOptions);
-        return clrDescriptor is not null &&
-               wellKnownTypeRegistry.TryGetTypeOrDefault(clrDescriptor.TypeAlias, out var activityType) &&
-               activityType != typeof(object)
-            ? activityType
-            : null;
-    }
+    private Type? ResolveClrActivityType(RuntimeActivityDescriptor descriptor) =>
+        ClrActivityTypeResolver.Resolve(wellKnownTypeRegistry, descriptor);
 
     private static void ValidateResumeTargetSignature(Type activityType, MethodInfo method)
     {

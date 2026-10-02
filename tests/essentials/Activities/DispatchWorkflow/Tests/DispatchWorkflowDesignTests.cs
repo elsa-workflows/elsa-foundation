@@ -8,7 +8,9 @@ using Elsa.Activities.DispatchWorkflow.Runtime.Models;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
+using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Activities.Testing;
 using Elsa.Expressions.Core.Models;
 using Elsa.Events;
 using Elsa.Events.Core.Contracts;
@@ -30,6 +32,7 @@ using Elsa.Workflows.Runtime.Services.Values;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using Microsoft.Extensions.Time.Testing;
+using DispatchWorkflowActivity = Elsa.Activities.DispatchWorkflow.Runtime.Activities.DispatchWorkflow;
 
 namespace Elsa.Activities.DispatchWorkflow.Tests;
 
@@ -223,6 +226,45 @@ public sealed class DispatchWorkflowDesignTests
 
         Assert.Contains("exactly one", exception.Message, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public async Task Pin_contribution_refuses_a_secret_read_target_with_the_fixed_publish_code()
+    {
+        // Publication refuses the binding first (DispatchWorkflow declares the input); this backstop keeps an artifact
+        // that skipped publication from reading a secret as a generic non-literal target (spec 188, T099).
+        var node = DispatchNode("dispatch-node", "child-definition");
+        var bindings = node.InputBindings.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        bindings["WorkflowDefinitionId"] = SecretBindingTestSupport.SecretRead("WorkflowDefinitionId");
+        var secretTarget = new ExecutableNode(
+            node.ExecutableNodeId, node.AuthoredActivityId, node.ActivityType, node.ActivityTypeVersion, node.Descriptor,
+            bindings, node.OutputCaptures, node.Metadata, node.ChildSlots, node.Structure);
+
+        await SecretBindingTestSupport.AssertReaderRefusesSecretReadAsync(
+            () => GetPinContributionAsync(secretTarget, Contract()),
+            "dispatch-node",
+            "WorkflowDefinitionId");
+    }
+
+    [Fact]
+    public async Task Pin_contribution_refuses_secret_read_inputs_instead_of_marking_the_pin_incomplete()
+    {
+        var node = DispatchNodeWithInputs(
+            "dispatch-node",
+            "child-definition",
+            SecretBindingTestSupport.SecretRead("Inputs", ValueType(typeof(IReadOnlyDictionary<string, JsonElement>)).Alias));
+
+        await SecretBindingTestSupport.AssertReaderRefusesSecretReadAsync(
+            () => GetPinContributionAsync(node, Contract()),
+            "dispatch-node",
+            "Inputs");
+    }
+
+    [Theory]
+    [InlineData(nameof(DispatchWorkflowActivity.WorkflowDefinitionId), SecretBindingRefusalReason.FixedAtPublish)]
+    [InlineData(nameof(DispatchWorkflowActivity.Inputs), SecretBindingRefusalReason.PersistedByActivity)]
+    [InlineData(nameof(DispatchWorkflowActivity.CorrelationId), SecretBindingRefusalReason.PersistedByActivity)]
+    public void DispatchWorkflow_declares_the_inputs_it_pins_or_persists_as_refusing_secret_bindings(string inputKey, SecretBindingRefusalReason reason) =>
+        SecretBindingTestSupport.AssertRefusesSecretBinding(typeof(DispatchWorkflowActivity), inputKey, reason);
 
     [Fact]
     public async Task Pin_contribution_rejects_missing_stale_and_unpublished_targets()

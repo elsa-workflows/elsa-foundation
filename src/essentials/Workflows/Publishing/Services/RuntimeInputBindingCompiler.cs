@@ -1,13 +1,19 @@
 using System.Globalization;
+using System.Reflection;
 using System.Text.Json;
 using Elsa.Activities.Design.Core.Models;
+using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Expressions.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Core.Models;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using ArgumentValue = Elsa.Expressions.Core.Models.ArgumentValue;
+using RuntimeActivityDescriptor = Elsa.Activities.Runtime.Core.Models.RuntimeActivityDescriptor;
 using RuntimeActivityInputContract = Elsa.Activities.Runtime.Core.Models.ActivityInputContract;
+using WellKnownRuntimeActivityConsumers = Elsa.Activities.Runtime.Core.Models.WellKnownRuntimeActivityConsumers;
 
 namespace Elsa.Workflows.Publishing.Services;
 
@@ -29,6 +35,22 @@ public sealed class RuntimeInputBindingCompiler(
     private const string ActivityResultExpressionType = "ActivityResult";
     private const string DefaultExpressionType = "Default";
     private const string ReferenceKeyMetadataKey = "referenceKey";
+
+    /// <summary>
+    /// The authored expression type of a secret reference. It duplicates the Secrets module's
+    /// <c>SecretExpressionTypes.Secret</c> on purpose, so publishing takes no dependency on Secrets; a test pins the two.
+    /// </summary>
+    public const string SecretExpressionType = "Secret";
+
+    // A resolved secret is text: the conversion plan of a secret read starts from a text value.
+    private static readonly ValueTypeDescriptor SecretSourceType = new("String");
+
+    // A secret read is always sensitive and requires encryption, whatever the input declares.
+    private static readonly ValueProtectionPolicy SecretPolicyMinimum = new(
+        DurableValueLifecycle.None,
+        DurableValueStorage.None,
+        isSensitive: true,
+        requiresEncryption: true);
 
     private readonly ValueConversionPlanResolver resolvedConversionPlanResolver = conversionPlanResolver ?? new(wellKnownTypeRegistry: wellKnownTypeRegistry);
 
@@ -251,7 +273,113 @@ public sealed class RuntimeInputBindingCompiler(
         if (string.Equals(value.ExpressionType, DefaultExpressionType, StringComparison.OrdinalIgnoreCase))
             return CompileDefaultInput(nodeId, inputDefinition, effectivePolicy);
 
+        if (IsSecretBinding(value))
+            return CompileSecretInput(nodeId, inputDefinition, value, effectivePolicy, conversion);
+
         return CompileExpressionInput(nodeId, inputDefinition, value, effectivePolicy);
+    }
+
+    /// <summary>True when the authored value is a secret reference.</summary>
+    public static bool IsSecretBinding(ArgumentValue? value) =>
+        string.Equals(value?.ExpressionType, SecretExpressionType, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Refuses (<c>VF-ACT-012</c>) a secret reference on a node that would read the value anywhere but CLR
+    /// activation, or on an input the activity type declares it persists, returns or reads at publish. Runs before
+    /// any input of the node is compiled, so the refusal wins over a conversion-plan refusal of the same input.
+    /// </summary>
+    public void EnsureSecretBindingsAdmissible(
+        string nodeId,
+        RuntimeActivityDescriptor descriptor,
+        IEnumerable<ArgumentState> inputStates)
+    {
+        ArgumentNullException.ThrowIfNull(descriptor);
+        ArgumentNullException.ThrowIfNull(inputStates);
+        var secretInputKeys = inputStates
+            .Where(state => IsSecretBinding(state.Value))
+            .Select(state => state.ReferenceKey)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        if (secretInputKeys.Length == 0)
+            return;
+
+        var firstKey = secretInputKeys[0];
+        if (!StringComparer.Ordinal.Equals(descriptor.ConsumerKey, WellKnownRuntimeActivityConsumers.ClrActivity))
+            throw SecretBindingDiagnostics.SecretBindingRefused(
+                nodeId,
+                firstKey,
+                $"activity consumer '{descriptor.ConsumerKey}' does not resolve inputs when the activity runs");
+
+        var activityType = ClrActivityTypeResolver.Resolve(wellKnownTypeRegistry, descriptor)
+            ?? throw SecretBindingDiagnostics.SecretBindingRefused(
+                nodeId,
+                firstKey,
+                "the activity type is not available to check whether the input accepts one");
+        if (typeof(IRuntimeActivityCheckpointParticipant).IsAssignableFrom(activityType))
+            throw SecretBindingDiagnostics.SecretBindingRefused(
+                nodeId,
+                firstKey,
+                "the activity reads its inputs into checkpoint state outside activation");
+
+        var refusals = activityType.GetCustomAttributes<RefusesSecretBindingAttribute>(inherit: true)
+            .GroupBy(attribute => attribute.InputKey, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.First().Reason, StringComparer.Ordinal);
+        var valueOutcomesInputKey = activityType.GetCustomAttribute<ActivityValueOutcomesAttribute>(inherit: true)?.InputKey;
+        foreach (var inputKey in secretInputKeys)
+        {
+            if (refusals.TryGetValue(inputKey, out var reason))
+                throw SecretBindingDiagnostics.SecretBindingRefused(nodeId, inputKey, reason);
+            if (StringComparer.Ordinal.Equals(inputKey, valueOutcomesInputKey))
+                throw SecretBindingDiagnostics.SecretBindingRefused(nodeId, inputKey, "its value derives the activity's outcome ports at publish");
+        }
+    }
+
+    /// <summary>
+    /// Compiles a secret reference into a <see cref="RuntimeInputBindingSource.SecretRead"/> binding. Nothing is
+    /// resolved here. The conversion plan is resolved from a text value to the input's type with the same resolver the
+    /// literal paths use, so an input that cannot hold text is refused with its <c>VF-COER-001</c>, for every secret
+    /// type and in every host.
+    /// </summary>
+    private RuntimeInputBinding CompileSecretInput(
+        string nodeId,
+        InputDefinition inputDefinition,
+        ArgumentValue value,
+        ValueProtectionPolicy effectivePolicy,
+        AuthoredValueConversionRequest? conversion)
+    {
+        var reference = ParseSecretReference(nodeId, inputDefinition, value);
+        var targetType = ToValueTypeDescriptor(inputDefinition);
+        var conversionPlan = resolvedConversionPlanResolver.Resolve(
+            SecretSourceType,
+            ValueRepresentation.TextValue,
+            targetType,
+            AuthoredValueConversionMapper.Mode(conversion),
+            AuthoredValueConversionMapper.Profile(conversion),
+            AuthoredValueConversionMapper.Limits(conversion),
+            AuthoredValueConversionMapper.Options(conversion),
+            InputBindingContext(nodeId, inputDefinition));
+
+        return new RuntimeInputBinding(
+            inputKey: inputDefinition.ReferenceKey,
+            targetType: targetType,
+            effectivePolicy: ValuePolicyCombiner.Combine(
+                effectivePolicy,
+                SecretPolicyMinimum,
+                $"Input '{inputDefinition.ReferenceKey}' on activity node '{nodeId}'"),
+            source: RuntimeInputBindingSource.SecretRead,
+            metadata: BuildInputMetadata(inputDefinition),
+            conversionPlan: conversionPlan,
+            secret: reference);
+    }
+
+    // The messages name the node, the input and the missing member, never the authored payload.
+    private static RuntimeSecretReference ParseSecretReference(string nodeId, InputDefinition inputDefinition, ArgumentValue value)
+    {
+        var payload = RequireObjectPayload(nodeId, inputDefinition, value, SecretExpressionType);
+        return new RuntimeSecretReference(
+            RequireStringProperty(nodeId, inputDefinition, payload, SecretExpressionType, "name"),
+            ReadOptionalTextProperty(nodeId, inputDefinition, payload, SecretExpressionType, "typeName"),
+            ReadOptionalTextProperty(nodeId, inputDefinition, payload, SecretExpressionType, "scope"));
     }
 
     /// <summary>
@@ -622,6 +750,22 @@ public sealed class RuntimeInputBindingCompiler(
 
         throw new ArgumentException(
             $"Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' uses expression type '{expressionType}' but carries no '{propertyName}'.");
+    }
+
+    private static string? ReadOptionalTextProperty(
+        string nodeId,
+        InputDefinition inputDefinition,
+        JsonElement payload,
+        string expressionType,
+        string propertyName)
+    {
+        if (!payload.TryGetProperty(propertyName, out var property) || property.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+            return null;
+        if (property.ValueKind != JsonValueKind.String)
+            throw new ArgumentException(
+                $"Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' uses expression type '{expressionType}' but carries a non-text '{propertyName}'.");
+
+        return property.GetString();
     }
 
     private static string? ReadOptionalStringProperty(JsonElement payload, string propertyName) =>

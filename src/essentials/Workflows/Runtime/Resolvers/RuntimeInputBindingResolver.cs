@@ -24,9 +24,24 @@ public sealed class RuntimeInputBindingResolver : IRuntimeInputBindingResolver
             RuntimeInputBindingSource.WorkflowRequest => ResolveWorkflowRequest(binding, context),
             RuntimeInputBindingSource.VariableRead => ResolveVariable(binding, context),
             RuntimeInputBindingSource.ActivityResult => ResolveActivityResult(binding, context),
+            // Passes the reference through and reads no value: only activation may resolve a secret.
+            RuntimeInputBindingSource.SecretRead => new RuntimeResolvedInput(binding.InputName, binding.Source, null)
+            {
+                Envelope = WithholdSecretRead(binding)
+            },
             _ => throw new ArgumentOutOfRangeException(nameof(binding), binding.Source, "Unsupported runtime input binding source.")
         };
     }
+
+    /// <summary>
+    /// The withheld envelope that stands in for a secret read: the reference and the conversion plan from text, under
+    /// the binding's own policy, and no value.
+    /// </summary>
+    internal static ValueEnvelope WithholdSecretRead(RuntimeInputBinding binding) =>
+        ValueEnvelope.Withheld(
+            binding.TargetType,
+            WithheldValue.SecretReference(binding.Secret!, binding.ConversionPlan),
+            binding.EffectivePolicy);
 
     private static RuntimeResolvedInput ResolveWorkflowRequest(RuntimeInputBinding binding, RuntimeInputBindingResolutionContext context)
     {

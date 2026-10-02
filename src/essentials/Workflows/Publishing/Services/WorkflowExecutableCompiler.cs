@@ -159,7 +159,7 @@ public sealed class WorkflowExecutableCompiler(
                 placedStorageDriverRequirements.UnionWith(template.StorageDriverRequirements);
                 var sourceReference = await sourceReferences.FindAsync(publication.SourceReferenceId, cancellationToken)
                                       ?? throw new ArgumentException($"Published activity version '{publication.DefinitionVersionId}' has no Source Reference '{publication.SourceReferenceId}'.");
-                var bindings = CompileBoundaryInputs(activity, publication.Contract, inputBindingCompiler);
+                var bindings = CompileBoundaryInputs(activity, publication.Contract, template.Root.Descriptor, inputBindingCompiler);
                 var outputCaptures = outputCaptureCompiler.CompileBoundaryOutputs(
                     activity.NodeId,
                     publication.Contract.Outputs,
@@ -281,6 +281,7 @@ public sealed class WorkflowExecutableCompiler(
     private static IReadOnlyDictionary<string, RuntimeInputBinding> CompileBoundaryInputs(
         Elsa.Workflows.Design.Core.Models.ActivityNode activity,
         Elsa.Activities.Design.Core.Models.ActivityContract contract,
+        RuntimeActivityDescriptor boundaryDescriptor,
         RuntimeInputBindingCompiler compiler)
     {
         var definitions = contract.Inputs.ToDictionary(x => x.ReferenceKey, StringComparer.Ordinal);
@@ -323,6 +324,9 @@ public sealed class WorkflowExecutableCompiler(
                 IsRequired: input.IsRequired,
                 DefaultValue: input.Default?.Value,
                 DefaultSyntax: input.Default?.Syntax);
+            // A reusable boundary is activated by its template root, which for a graph template captures its inputs
+            // outside CLR activation; the check covers contract defaults as well as authored inputs.
+            compiler.EnsureSecretBindingsAdmissible(activity.NodeId, boundaryDescriptor, [inputState]);
             result[input.ReferenceKey] = compiler.Compile(activity.NodeId, definition, inputState);
         }
         return result;

@@ -64,6 +64,39 @@ public sealed class ClrActivityActivatorTests
         Assert.Equal(1, ScopedDependency.DisposeCount);
     }
 
+    [Theory]
+    [InlineData(WithheldValueKind.SecretReference)]
+    [InlineData(WithheldValueKind.PolicyRequiresEncryption)]
+    public async Task A_withheld_input_is_refused_before_the_activity_is_created(WithheldValueKind kind)
+    {
+        // No secret resolution is composed here, so hydrating would have to invent a value. The activator refuses
+        // with the fixed code instead, before the strategy opens an attempt scope (spec 188, T008).
+        ScopedDependency.Reset();
+        await using var root = Services().BuildServiceProvider();
+        var (activator, contract) = Activator(root);
+        var withheld = kind == WithheldValueKind.SecretReference
+            ? WithheldValue.SecretReference(new RuntimeSecretReference("payments.api-key"), null)
+            : new WithheldValue(kind);
+        var request = new ActivityActivationRequest(
+            contract,
+            new ActivityInputSnapshot(
+                "invocation-1",
+                contract.SchemaFingerprint,
+                "bindings",
+                new Dictionary<string, ValueEnvelope>
+                {
+                    ["message"] = ValueEnvelope.Withheld(StringType, withheld, ValueProtectionPolicy.InstanceInline)
+                },
+                DateTimeOffset.UtcNow),
+            new ActivityAttempt("attempt-1", "invocation-1", 1, ActivityAttemptReason.Initial, DateTimeOffset.UtcNow),
+            Descriptor: RuntimeDescriptor(contract));
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => activator.ActivateAsync(request).AsTask());
+
+        Assert.Equal("VF-ACT-010: Activity input 'message' was withheld and is not resolved in this host.", exception.Message);
+        Assert.Equal(0, ScopedDependency.DisposeCount);
+    }
+
     [Fact]
     public async Task ActivationLease_WhenActivityAndScopeDisposalFail_AttemptsBothAndAggregatesFailures()
     {

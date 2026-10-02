@@ -29,6 +29,7 @@ namespace Elsa.Activities.Scheduling.Activities;
 /// named follow-up shared with the other start triggers ("activity trigger start-input delivery").
 /// </para>
 /// </remarks>
+[RefusesSecretBinding(nameof(Interval), SecretBindingRefusalReason.FixedAtPublish)]
 [TriggerActivity]
 public sealed class Timer : Activity<TimerResult>
 {

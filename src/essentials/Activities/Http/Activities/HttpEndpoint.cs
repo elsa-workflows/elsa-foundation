@@ -12,6 +12,14 @@ namespace Elsa.Activities.Http.Activities;
 /// Receives an HTTP start trigger or suspends with typed HTTP trigger registrations for a mid-flow request.
 /// Workflow data is hydrated into plain properties and each attempt returns one closed transition.
 /// </summary>
+[RefusesSecretBinding(nameof(Path), SecretBindingRefusalReason.FixedAtPublish)]
+[RefusesSecretBinding(nameof(SupportedMethods), SecretBindingRefusalReason.FixedAtPublish)]
+[RefusesSecretBinding(nameof(CanStartWorkflow), SecretBindingRefusalReason.FixedAtPublish)]
+[RefusesSecretBinding(nameof(Authorize), SecretBindingRefusalReason.FixedAtPublish)]
+[RefusesSecretBinding(nameof(Policy), SecretBindingRefusalReason.FixedAtPublish)]
+[RefusesSecretBinding(nameof(RequestTimeout), SecretBindingRefusalReason.FixedAtPublish)]
+[RefusesSecretBinding(nameof(RequestSizeLimit), SecretBindingRefusalReason.FixedAtPublish)]
+[RefusesSecretBinding(nameof(ResponseMode), SecretBindingRefusalReason.FixedAtPublish)]
 [TriggerActivity]
 public sealed class HttpEndpoint :
     StatefulTriggerActivity<HttpEndpointResult, HttpEndpointState, HttpRequestModel>

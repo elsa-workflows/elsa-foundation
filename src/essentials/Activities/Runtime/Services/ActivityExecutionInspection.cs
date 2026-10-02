@@ -75,6 +75,9 @@ internal static class ActivityExecutionInspection
                 {
                     ValuePresence.Present when value.InlineValue.HasValue => SerializeCapturedValue(decision, value.InlineValue.Value, input.Name, type),
                     ValuePresence.ExplicitNull => SerializeCapturedValue(decision, null, input.Name, type),
+                    // Runs on the invoke and resume paths before activation, so it must render a withheld input
+                    // without throwing and without resolving it: the marker and reference stand in for the value.
+                    ValuePresence.Withheld => null,
                     _ => null
                 };
                 return ActivityExecutionInspectionValueSnapshot.FromDecision(
@@ -85,10 +88,23 @@ internal static class ActivityExecutionInspection
                     capturedAt,
                     payload,
                     isSensitive,
-                    decision.Metadata,
+                    value.WithheldValue is { } withheld ? WithWithheldMarker(decision.Metadata, withheld) : decision.Metadata,
                     inputKey: item.Key);
             })
             .ToArray();
+
+    private static IReadOnlyDictionary<string, string> WithWithheldMarker(
+        IReadOnlyDictionary<string, string> metadata,
+        WithheldValue withheld)
+    {
+        var marked = new Dictionary<string, string>(metadata, StringComparer.Ordinal)
+        {
+            [RuntimeMetadataKeys.WithheldKind] = withheld.Kind.ToString()
+        };
+        if (withheld.Secret is { } secret)
+            marked[RuntimeMetadataKeys.SecretReferenceName] = secret.Name;
+        return marked;
+    }
 
     public static IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> BuildOutputValueSnapshots(
         IRuntimePayloadCapturePolicy payloadCapturePolicy,

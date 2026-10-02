@@ -23,6 +23,7 @@ namespace Elsa.Activities.Bpmn.Activities;
 /// faults the composite deterministically (surfacing a composite incident); error boundary events
 /// replace this rule in the events tier. The faulted leaf keeps its own blocking incident regardless.
 /// </remarks>
+[RefusesSecretBinding(nameof(CanStartWorkflow), SecretBindingRefusalReason.FixedAtPublish)]
 [TriggerActivity]
 [ActivityStructure("elsa.bpmn.structure", "1.0.0", Mode = "bpmn", SupportsScopedVariables = true)]
 [ActivityChildSlot("Bpmn.Activities", "activities", "Activities", ActivityChildSlotCardinalities.Many)]

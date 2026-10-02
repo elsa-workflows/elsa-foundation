@@ -2,6 +2,7 @@ using System.Reflection;
 using System.Text.Json;
 using Elsa.Activities.Http.Activities;
 using Elsa.Activities.Primitives.Activities;
+using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Reconciliation.Clr.Services;
 using Elsa.Activities.Design.Core.Reconciliation.Models;
@@ -106,32 +107,60 @@ public sealed class ClrAssemblyScannerTests
     {
         using var folder = TempAssemblyFolder.WithCopyOf(activityType.Assembly);
         var model = CreateScanner().Scan(folder.Path).Single(candidate => candidate.ActivityTypeKey == activityType.FullName);
-        var identityGenerator = new GuidIdentityGenerator();
-        var definition = new ActivityDefinitionFactory(identityGenerator).Create(
-            model.ActivityTypeKey,
-            model.Category ?? string.Empty,
-            model.DisplayName,
-            model.Description,
-            "stable-definition-id");
-        var descriptorPayload = JsonSerializer.SerializeToElement(model.Descriptor, model.Descriptor.GetType());
-        var version = new ActivityDefinitionVersionFactory(identityGenerator, new DefaultActivityDefinitionHasher()).Create(
-            definition,
-            model.Version,
-            model.ProviderKey,
-            model.ProviderSchemaVersion,
-            model.ConsumerKey,
-            model.ConsumerSchemaVersion,
-            descriptorPayload,
-            "CLR",
-            activityType.Assembly.GetName().Name!,
-            model.Inputs,
-            model.Outputs,
-            model.DesignFacets,
-            model.ExecutionType,
-            "stable-version-id");
+        var version = CatalogVersion(model, model, activityType.Assembly);
 
         Assert.Equal(ActivityExecutionType.Action, version.ExecutionType);
         Assert.True(expectedHash == version.Hash, $"Expected hash '{expectedHash}', actual hash '{version.Hash}'.");
+    }
+
+    [Fact]
+    public void RefusesSecretBinding_DoesNotReachTheCatalogOrItsHash()
+    {
+        // Spec 188, T099: publication reads [RefusesSecretBinding] by reflection; the scanner never writes it, so
+        // annotating a built-in changes no catalog hash. The two fixtures differ only by the declarations.
+        using var folder = TempAssemblyFolder.WithCopyOf(typeof(SecretRefusingFixtureActivity).Assembly);
+        var models = CreateScanner().Scan(folder.Path);
+        var refusing = models.Single(model => model.ActivityTypeKey == typeof(SecretRefusingFixtureActivity).FullName);
+        var accepting = models.Single(model => model.ActivityTypeKey == typeof(SecretAcceptingFixtureActivity).FullName);
+
+        Assert.Equal(JsonSerializer.Serialize(accepting.Inputs), JsonSerializer.Serialize(refusing.Inputs));
+        Assert.Equal(JsonSerializer.Serialize(accepting.DesignFacets), JsonSerializer.Serialize(refusing.DesignFacets));
+        Assert.Equal(
+            CatalogVersion(accepting, accepting, typeof(SecretAcceptingFixtureActivity).Assembly).Hash,
+            CatalogVersion(accepting, refusing, typeof(SecretRefusingFixtureActivity).Assembly).Hash);
+    }
+
+    /// <summary>
+    /// Creates the catalog version reconciliation would store, taking its identity (type key, descriptor) from
+    /// <paramref name="identity"/> and its scanned content (inputs, outputs, facets) from <paramref name="content"/>.
+    /// </summary>
+    private static IActivityDefinitionVersion CatalogVersion(
+        ActivityVersionReconciliationModel identity,
+        ActivityVersionReconciliationModel content,
+        Assembly assembly)
+    {
+        var identityGenerator = new GuidIdentityGenerator();
+        var definition = new ActivityDefinitionFactory(identityGenerator).Create(
+            identity.ActivityTypeKey,
+            identity.Category ?? string.Empty,
+            identity.DisplayName,
+            identity.Description,
+            "stable-definition-id");
+        return new ActivityDefinitionVersionFactory(identityGenerator, new DefaultActivityDefinitionHasher()).Create(
+            definition,
+            identity.Version,
+            identity.ProviderKey,
+            identity.ProviderSchemaVersion,
+            identity.ConsumerKey,
+            identity.ConsumerSchemaVersion,
+            JsonSerializer.SerializeToElement(identity.Descriptor, identity.Descriptor.GetType()),
+            "CLR",
+            assembly.GetName().Name!,
+            content.Inputs,
+            content.Outputs,
+            content.DesignFacets,
+            content.ExecutionType,
+            "stable-version-id");
     }
 
     [Fact]

@@ -227,6 +227,62 @@ public sealed class PublishWorkflowTriggerIndexingTests
             await _scheduleStore.FindAsync(RecurringTriggerSchedule.BuildId(invalidExecutable.Identity.ArtifactId, "trigger-node")));
     }
 
+    public static TheoryData<IActivityTriggerStimulusProvider, string, string> SecretReadBackstops => new()
+    {
+        { new HttpEndpointTriggerStimulusProvider(), HttpEndpoint.ActivityType, nameof(HttpEndpoint.Path) },
+        { new HttpEndpointTriggerStimulusProvider(), HttpEndpoint.ActivityType, nameof(HttpEndpoint.SupportedMethods) },
+        { new HttpEndpointTriggerStimulusProvider(), HttpEndpoint.ActivityType, nameof(HttpEndpoint.CanStartWorkflow) },
+        { new HttpEndpointTriggerStimulusProvider(), HttpEndpoint.ActivityType, nameof(HttpEndpoint.Authorize) },
+        { new HttpEndpointTriggerStimulusProvider(), HttpEndpoint.ActivityType, nameof(HttpEndpoint.Policy) },
+        { new HttpEndpointTriggerStimulusProvider(), HttpEndpoint.ActivityType, nameof(HttpEndpoint.RequestTimeout) },
+        { new HttpEndpointTriggerStimulusProvider(), HttpEndpoint.ActivityType, nameof(HttpEndpoint.RequestSizeLimit) },
+        { new HttpEndpointTriggerStimulusProvider(), HttpEndpoint.ActivityType, nameof(HttpEndpoint.ResponseMode) },
+        { new CronTriggerStimulusProvider(), Cron.ActivityType, nameof(Cron.Expression) },
+        { new TimerTriggerStimulusProvider(), Timer.ActivityType, nameof(Timer.Interval) }
+    };
+
+    /// <summary>
+    /// Publication refuses a secret reference on these inputs before any reader runs (their activities declare them);
+    /// this backstop keeps an artifact that skipped publication from reading a secret as unauthored or as a generic
+    /// non-literal (spec 188, T099).
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(SecretReadBackstops))]
+    public void A_publish_time_literal_reader_refuses_a_secret_read_with_the_fixed_code(
+        IActivityTriggerStimulusProvider provider,
+        string activityType,
+        string inputName)
+    {
+        var bindings = new Dictionary<string, RuntimeInputBinding>(StringComparer.OrdinalIgnoreCase)
+        {
+            [nameof(HttpEndpoint.CanStartWorkflow)] = LiteralBinding(nameof(HttpEndpoint.CanStartWorkflow), "Boolean", true),
+            [nameof(HttpEndpoint.Path)] = LiteralBinding(nameof(HttpEndpoint.Path), "String", "orders")
+        };
+        bindings[inputName] = SecretBindingCompilerFixture.SecretReadBinding(inputName);
+        var node = new ExecutableNode(
+            executableNodeId: "trigger-node",
+            authoredActivityId: "trigger-node",
+            activityType: activityType,
+            activityTypeVersion: "1.0.0",
+            descriptorType: "test",
+            descriptorPayload: JsonSerializer.SerializeToElement(new { }),
+            inputBindings: bindings,
+            metadata: new Dictionary<string, string>());
+
+        SecretBindingCompilerFixture.AssertReaderRefusesSecretRead(() => provider.Describe(node), "trigger-node", inputName);
+    }
+
+    private static RuntimeInputBinding LiteralBinding(string name, string typeAlias, object value)
+    {
+        var type = new ValueTypeDescriptor(typeAlias);
+        return new RuntimeInputBinding(
+            name,
+            type,
+            ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.Literal,
+            literal: ValueEnvelope.Inline(type, JsonSerializer.SerializeToElement(value), ValueProtectionPolicy.InstanceInline));
+    }
+
     private static async Task AssertInvalidPublicationAsync(FirstPartyScenario scenario, Func<Task> publish)
     {
         if (scenario.IsRecurring)

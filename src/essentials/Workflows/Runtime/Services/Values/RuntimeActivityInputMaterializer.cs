@@ -157,6 +157,12 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         RuntimeInputBindingResolutionContext resolutionContext,
         CancellationToken cancellationToken)
     {
+        // The snapshot is committed at Scheduled to Running, before the activity body runs, so a resolved secret
+        // here would be persisted. Record the reference instead, so only activation can ever see the value.
+        // This does not go through the (replaceable) binding resolver, so no resolver can put a value here.
+        if (binding.Source == RuntimeInputBindingSource.SecretRead)
+            return RuntimeInputBindingResolver.WithholdSecretRead(binding);
+
         var resolved = _inputBindingResolver.Resolve(binding, resolutionContext);
         if (resolved.Source == RuntimeInputBindingSource.Expression)
         {
@@ -494,6 +500,14 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
                 item.Value.Expression,
                 metadata = item.Value.Metadata.OrderBy(metadata => metadata.Key, StringComparer.Ordinal)
             }));
+        // Secret references are appended only when present, so every node without one keeps its fingerprint.
+        var secrets = node.InputBindings
+            .Where(item => item.Value.Secret is not null)
+            .OrderBy(item => item.Key, StringComparer.Ordinal)
+            .Select(item => new { key = item.Key, item.Value.Secret })
+            .ToArray();
+        if (secrets.Length > 0)
+            canonical += JsonSerializer.Serialize(secrets);
         return $"sha256:{Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(canonical))).ToLowerInvariant()}";
     }
 

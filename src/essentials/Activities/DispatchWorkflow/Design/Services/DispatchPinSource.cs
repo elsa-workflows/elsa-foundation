@@ -4,6 +4,7 @@ using Elsa.Activities.DispatchWorkflow.Runtime.Models;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Activities.DispatchWorkflow.Design.Services;
@@ -16,6 +17,8 @@ public sealed class DispatchPinSource(
     TimeProvider timeProvider) : IExecutableCompilationSource, IExecutableNodeMetadataSource
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    private const string WorkflowDefinitionIdInput = "WorkflowDefinitionId";
+    private const string InputsInput = "Inputs";
 
     public async ValueTask<IReadOnlyCollection<ExecutableNodeMetadataContribution>> GetMetadataAsync(
         ExecutableNodeMetadataContext context,
@@ -116,7 +119,9 @@ public sealed class DispatchPinSource(
 
     private static string ReadDefinitionId(ExecutableNode node)
     {
-        if (!node.InputBindings.TryGetValue("WorkflowDefinitionId", out var binding) ||
+        node.InputBindings.TryGetValue(WorkflowDefinitionIdInput, out var binding);
+        SecretBindingDiagnostics.ThrowIfSecretRead(binding, node.ExecutableNodeId, WorkflowDefinitionIdInput);
+        if (binding is null ||
             binding.Source != RuntimeInputBindingSource.Literal ||
             binding.LiteralValue is not { ValueKind: JsonValueKind.String } literal ||
             string.IsNullOrWhiteSpace(literal.GetString()))
@@ -128,8 +133,10 @@ public sealed class DispatchPinSource(
     private static (IReadOnlyCollection<KeyValuePair<string, JsonElement>> Inputs, bool IsComplete) ReadInputs(
         ExecutableNode node)
     {
-        if (!node.InputBindings.TryGetValue("Inputs", out var binding))
+        if (!node.InputBindings.TryGetValue(InputsInput, out var binding))
             return ([], true);
+
+        SecretBindingDiagnostics.ThrowIfSecretRead(binding, node.ExecutableNodeId, InputsInput);
 
         if (binding.Source != RuntimeInputBindingSource.Literal)
             return ([], false);

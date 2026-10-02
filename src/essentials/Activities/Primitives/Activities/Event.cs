@@ -28,6 +28,9 @@ namespace Elsa.Activities.Primitives.Activities;
 /// router against waiting bookmarks.
 /// </para>
 /// </remarks>
+[RefusesSecretBinding(nameof(EventName), SecretBindingRefusalReason.FixedAtPublish)]
+[RefusesSecretBinding(nameof(CorrelationId), SecretBindingRefusalReason.FixedAtPublish)]
+[RefusesSecretBinding(nameof(CanStartWorkflow), SecretBindingRefusalReason.FixedAtPublish)]
 [TriggerActivity]
 public sealed class Event : StatefulTriggerActivity<EventResult, EventWaitState, EventReceived>
 {

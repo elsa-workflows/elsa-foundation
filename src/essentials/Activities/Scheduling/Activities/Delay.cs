@@ -17,6 +17,7 @@ namespace Elsa.Activities.Scheduling.Activities;
 /// retry idempotent, while the activity state and trigger registration are committed atomically by the
 /// runtime after this method returns.
 /// </remarks>
+[RefusesSecretBinding("Duration", SecretBindingRefusalReason.PersistedByActivity)]
 [ActivityOutcome("Done")]
 public sealed class Delay(IDurableTimerScheduler scheduler, TimeProvider timeProvider) :
     StatefulActivity<ActivityUnit, DelayState, DurableTimerElapsed>

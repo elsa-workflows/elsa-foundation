@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
@@ -81,6 +82,44 @@ public sealed class RuntimeStartActivityStateTests : IDisposable
         var pending = Assert.Single(await checkpointWriter.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(_now, limit: 10, workflowExecutionId: "wfexec-1")));
         var invokeWork = pending.Intent.Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>()!;
         Assert.Equal(WorkflowExecutionCommandKind.InvokeActivity, invokeWork.CommandKind);
+    }
+
+    [Fact]
+    public async Task HandleAsync_MaterializesASecretReadAsAWithheldReferenceAndPersistsNoValue()
+    {
+        var reference = new RuntimeSecretReference("payments.api-key", "text");
+        var plan = ValueConversionPlan.Identity(StringType, ValueRepresentation.TextValue);
+        var executable = NewExecutable(SecretInputContract(), new Dictionary<string, RuntimeInputBinding>
+        {
+            ["apiKey"] = new(
+                "apiKey",
+                StringType,
+                new ValueProtectionPolicy(DurableValueLifecycle.Instance, DurableValueStorage.Inline, isSensitive: true, requiresEncryption: true),
+                RuntimeInputBindingSource.SecretRead,
+                conversionPlan: plan,
+                secret: reference)
+        });
+        await _executableStore.SaveAsync(executable);
+        await SaveWorkflowStateAsync(executable.Identity);
+        await _activityStateStore.SaveAsync(NewScheduledState());
+
+        await NewHandler().HandleAsync(NewStartWorkItem(executable.Identity));
+
+        var snapshot = (await _activityStateStore.FindAsync("wfexec-1", "actexec-1"))!.InputSnapshot!;
+        var envelope = snapshot.Values["apiKey"];
+        Assert.Equal(ValuePresence.Withheld, envelope.Presence);
+        Assert.Null(envelope.InlineValue);
+        Assert.Null(envelope.ExternalReference);
+        Assert.True(envelope.Policy.IsSensitive);
+        Assert.True(envelope.Policy.RequiresEncryption);
+        Assert.Equal(WithheldValueKind.SecretReference, envelope.WithheldValue!.Kind);
+        Assert.Equal(reference, envelope.WithheldValue.Secret);
+        Assert.Equal(plan.Fingerprint, envelope.WithheldValue.ConversionPlan!.Fingerprint);
+
+        var persisted = JsonNode.Parse(JsonSerializer.Serialize(snapshot))!["Values"]!["apiKey"]!.AsObject();
+        Assert.Null(persisted["InlineValue"]);
+        Assert.Null(persisted["ExternalReference"]);
+        Assert.Equal("payments.api-key", persisted["withheld"]!["Secret"]!["Name"]!.GetValue<string>());
     }
 
     [Fact]
@@ -337,10 +376,14 @@ public sealed class RuntimeStartActivityStateTests : IDisposable
             AggregateFaultCount: 0,
             Metadata: new Dictionary<string, string> { ["runtime.scheduleReason"] = "test" });
 
-    private static WorkflowExecutable NewExecutable()
+    private static readonly ValueTypeDescriptor StringType = new("String");
+
+    private static WorkflowExecutable NewExecutable(
+        ActivityContract? contract = null,
+        IReadOnlyDictionary<string, RuntimeInputBinding>? inputBindings = null)
     {
         using var document = JsonDocument.Parse("""{"type":"test"}""");
-        var start = NewNode("node-start", document.RootElement);
+        var start = NewNode("node-start", document.RootElement, contract, inputBindings);
         var other = NewNode("node-other", document.RootElement);
 
         return new(
@@ -367,27 +410,39 @@ public sealed class RuntimeStartActivityStateTests : IDisposable
                 new ExecutableChildSlot("children", children)
             ]);
 
-    private static ExecutableNode NewNode(string nodeId, JsonElement descriptorPayload) =>
+    private static ExecutableNode NewNode(
+        string nodeId,
+        JsonElement descriptorPayload,
+        ActivityContract? contract = null,
+        IReadOnlyDictionary<string, RuntimeInputBinding>? inputBindings = null) =>
         new(
             executableNodeId: nodeId,
             authoredActivityId: $"authored-{nodeId}",
             activityType: "test/activity",
             activityTypeVersion: "1.0.0",
             descriptor: new RuntimeActivityDescriptor("test", RuntimeActivityDescriptor.InitialSchemaVersion, descriptorPayload.Clone()),
-            inputBindings: new Dictionary<string, RuntimeInputBinding>(),
+            inputBindings: inputBindings ?? new Dictionary<string, RuntimeInputBinding>(),
             metadata: new Dictionary<string, string>(),
-            activityContract: EmptyContract(descriptorPayload));
+            activityContract: contract ?? EmptyContract(descriptorPayload));
 
-    private static ActivityContract EmptyContract(JsonElement descriptorPayload) =>
+    private static ActivityContract EmptyContract(JsonElement descriptorPayload, IEnumerable<ActivityInputContract>? inputs = null) =>
         new(
             "test/activity",
             "1.0.0",
             "test",
             descriptorPayload,
-            [],
+            inputs ?? [],
             new ActivityResultContract(new ValueTypeDescriptor("Elsa.Unit"), true, ActivityValuePolicy.Default, []),
             ["Done"],
             new ActivityActivationRequirement("test", "test/activity"));
+
+    private static ActivityContract SecretInputContract()
+    {
+        using var document = JsonDocument.Parse("""{"type":"test"}""");
+        return EmptyContract(
+            document.RootElement,
+            [new ActivityInputContract("apiKey", "ApiKey", StringType, true, false, false, null, ActivityValuePolicy.Default)]);
+    }
 
     private static ActivityInputSnapshot EmptySnapshot()
     {

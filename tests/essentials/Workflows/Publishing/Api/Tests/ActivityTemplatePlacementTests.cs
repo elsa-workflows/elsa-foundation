@@ -87,6 +87,52 @@ public sealed class ActivityTemplatePlacementTests
     }
 
     [Fact]
+    public async Task Placement_refuses_a_secret_reference_authored_in_an_occurrence_overlay()
+    {
+        // Spec 188: an occurrence inside a reusable activity is authored like any workflow node, so it gets the same
+        // secret refusals against its template root. This root's consumer does not resolve inputs at CLR activation,
+        // and the input is text, so only this refusal stands in the way.
+        var overlay = new ExecutableActivityTemplateOccurrenceOverlay(
+            "1",
+            Json("""[{"referenceKey":"condition","value":{"value":{"name":"payments.api-key"},"expressionType":"Secret"}}]"""),
+            null);
+        var graphTemplate = Template(
+            "template-graph",
+            "hash-graph",
+            Node("graph-root"),
+            [new("definition-sequence", "version-sequence", "1.0.0", "template-sequence", "hash-sequence", "sequence", ActivityInvocationOrigin.Empty, null, "activity-graph", 0, overlay)]);
+        var sequenceTemplate = Template(
+            "template-sequence",
+            "hash-sequence",
+            new ExecutableNode(
+                "source-owned-root", "source-owned-root", "type.sequence", "1", new("sequence", "1", Json("{}")),
+                new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, RuntimeOutputCapture>(),
+                new Dictionary<string, string>(), activityContract: RuntimeContractWithCondition("String")));
+        var graphPublication = Publication("definition-graph", "version-graph", "type.graph", graphTemplate);
+        var sequencePublication = Publication("definition-sequence", "version-sequence", "type.sequence", sequenceTemplate);
+        var references = new[] { Reference(graphPublication, ExecutableLayoutSidecar.Empty), Reference(sequencePublication, ExecutableLayoutSidecar.Empty) };
+        var placer = CreatePlacer(
+            new PublicationStore([graphPublication, sequencePublication]),
+            new TemplateReader([graphTemplate, sequenceTemplate]),
+            new SourceReader(references),
+            new Sha256ActivityPlacementHasher());
+
+        var exception = await Assert.ThrowsAsync<ArgumentException>(() => placer.PlaceAsync(new(
+            graphPublication,
+            graphTemplate,
+            references[0],
+            new ActivityInvocationOrigin([new(ActivityInvocationOriginSegmentKind.WorkflowRoot, "workflow-version")]),
+            graphPublication.ActivityTypeKey,
+            new Dictionary<string, RuntimeInputBinding>(),
+            new Dictionary<string, RuntimeOutputCapture>())).AsTask());
+
+        Assert.Equal(
+            Elsa.Workflows.Runtime.Core.Exceptions.SecretBindingDiagnostics.SecretBindingRefused(
+                "sequence", "condition", "activity consumer 'sequence' does not resolve inputs when the activity runs").Message,
+            exception.Message);
+    }
+
+    [Fact]
     public async Task Placement_preserves_nested_multi_slot_structure_and_exact_catalog_identity()
     {
         var fixture = Fixture.Create();
@@ -412,7 +458,7 @@ public sealed class ActivityTemplatePlacementTests
         id, hash, root, new Dictionary<string, WorkflowExecutableResumeTarget>(), directDependencies ?? [], [], [], "fingerprint",
         new Dictionary<string, string>(), DateTimeOffset.UnixEpoch);
 
-    private static Elsa.Activities.Runtime.Core.Models.ActivityContract RuntimeContractWithCondition() => new(
+    private static Elsa.Activities.Runtime.Core.Models.ActivityContract RuntimeContractWithCondition(string conditionTypeAlias = "Boolean") => new(
         "type.sequence",
         "1",
         "sequence",
@@ -420,7 +466,7 @@ public sealed class ActivityTemplatePlacementTests
         [new Elsa.Activities.Runtime.Core.Models.ActivityInputContract(
             "condition",
             "Condition",
-            new ValueTypeDescriptor("Boolean"),
+            new ValueTypeDescriptor(conditionTypeAlias),
             isRequired: true,
             isNullable: false,
             hasDefault: false,
