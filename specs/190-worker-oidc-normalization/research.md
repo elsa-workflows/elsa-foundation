@@ -55,3 +55,11 @@ The rule store already has explicit replacement guards. IClaimsNormalizer is unm
 - Interactive normalization and IdP interoperability: separate real interactive/deployed-provider journeys.
 - Worker profile publication: only after adapter actor proof and exact profile membership/prerequisite review.
 - Builder human study, unknown-setting export and Authoring API scope: existing program gates; this leaf cannot answer them.
+
+## R7 — Host-owned static persistence scope
+
+**Decision**: The host initializes the actual shell request persistence context with an ordinary scope equal to configured TenantId, before default registrations/store resolution. Existing `AddPersistenceCore(defaultScope: tenant)` or an equivalent fixed host-owned accessor provides it. The adapter checks the existing Runtime.Core accessor at activation and before mapping lookup; absent/conflicting/global/privileged/across-scope contexts refuse before store invocation. It never rebinds or overwrites existing context. OIDC consumes these Core contracts, not EF implementation types.
+
+**Rationale**: [EfClaimMappingStore](../../src/essentials/Foundation/Identity/Persistence/EntityFrameworkCore/Stores/EfClaimMappingStore.cs) calls Prepare/EnsureTenant before reading. [IdentityEntityFrameworkAccessGuard](../../src/essentials/Foundation/Identity/Persistence/EntityFrameworkCore/IdentityEntityFrameworkAccessGuard.cs) requires ambient scope agreement, while [AddPersistenceCore](../../src/essentials/Workflows/Runtime/Core/Extensions/PersistenceCoreServiceCollectionExtensions.cs) defaults to `default`. Merely passing `tenant-a` to ListForProviderAsync would fail with untouched defaults. [PersistenceAccessContext](../../src/essentials/Workflows/Runtime/Core/Models/PersistenceAccessContext.cs) distinguishes ordinary, privileged/global/across-scope access. Test a nondefault tenant and conflicting context with real IAM queries; do not conceal the gap with tenant=`default`.
+
+**Alternatives**: Automatically overwrite/rebind context could replace an authoritative partition and is rejected. Inferring it from token claims crosses the authority boundary. A new tenant resolver or generic persistence abstraction is unnecessary for this fixed-host layout. A future dynamic host requires a separate trusted context contract.
