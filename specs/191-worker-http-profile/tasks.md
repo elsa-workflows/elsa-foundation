@@ -10,15 +10,15 @@ Input: [spec](spec.md), [plan](plan.md), [contract](contracts/worker-profile.md)
 
 ## Phase 2 — Published identity compatibility
 
-- [ ] T004 Preserve old resource bytes and add direct exact-v1/v2/fallback regression assertions in `tests/essentials/Modularity/Planning/Tests/FoundationSelectionCatalogTests.cs`.
+- [X] T004 Preserve old resource bytes and add direct exact-v1/v2/fallback regression assertions in `tests/essentials/Modularity/Planning/Tests/FoundationSelectionCatalogTests.cs`.
 
 ## Phase 3 — US1 stable starting selection
 
 **Independent test**: Exact19 members/reasons, old pins and unchanged definitions, no readiness inference.
 
-- [ ] T005 [US1] Publish reviewed `worker-http@1` in `src/essentials/Modularity/Planning/Catalogs/foundation-selection-catalog-v3.json` with computed canonical digests and unchanged existing definitions.
-- [ ] T006 [US1] Retain exact v1/v2/v3 pin loading and current fallback in `src/essentials/Modularity/Planning/Catalog/FoundationSelectionCatalog.cs` and register the new embedded resource in `src/essentials/Modularity/Planning/Elsa.Modularity.Planning.csproj`.
-- [ ] T007 [US1] Update current-catalog assumptions and test Worker selection/explanations/unverified findings in `tests/essentials/Modularity/Planning/Tests/FoundationSelectionCatalogTests.cs` and `tests/essentials/Cli/Tests/CompositionInitCliTests.cs`; retain Embedded assertions by ID.
+- [X] T005 [US1] Publish reviewed `worker-http@1` in `src/essentials/Modularity/Planning/Catalogs/foundation-selection-catalog-v3.json` with computed canonical digests and unchanged existing definitions.
+- [X] T006 [US1] Retain exact v1/v2/v3 pin loading and current fallback in `src/essentials/Modularity/Planning/Catalog/FoundationSelectionCatalog.cs` and register the new embedded resource in `src/essentials/Modularity/Planning/Elsa.Modularity.Planning.csproj`.
+- [X] T007 [US1] Update current-catalog assumptions and test Worker selection/explanations/unverified findings in `tests/essentials/Modularity/Planning/Tests/FoundationSelectionCatalogTests.cs` and `tests/essentials/Cli/Tests/CompositionInitCliTests.cs`; retain Embedded assertions by ID.
 
 ## Phase 4 — US2 generated candidate to useful worker
 
@@ -41,7 +41,7 @@ Input: [spec](spec.md), [plan](plan.md), [contract](contracts/worker-profile.md)
 ## Phase 6 — Integration and publication
 
 - [ ] T016 Document exact selection, host-owned prerequisites, real CLI flow and bounded actor evidence in `docs/reference/worker-http-profile.md`; link canonical contracts rather than duplicate architecture meanings.
-- [ ] T017 Synchronize completed Spec190 T028 from its final public closure in `specs/190-worker-oidc-normalization/tasks.md`, `specs/190-worker-oidc-normalization/implementation-evidence.md` and the active Worker successor in `docs/program-goals/feature-composition-readiness.md`.
+- [X] T017 Synchronize completed Spec190 T028 from its final public closure in `specs/190-worker-oidc-normalization/tasks.md`, `specs/190-worker-oidc-normalization/implementation-evidence.md` and the active Worker successor in `docs/program-goals/feature-composition-readiness.md`.
 - [ ] T018 Run final restored full Planning/CLI/Runtime EF suites serially plus affected retained checks, architecture and filter freshness; deliberately refresh/check maps/review findings/stage changed outputs explicitly; record commands/source/platform/counts/skips in `specs/191-worker-http-profile/implementation-evidence.md`.
 - [ ] T019 Root review the full integrated delta and proof; open one gated PR with #2326; obtain actual exact-head review, resolve/reply findings and applicable hosted checks; record evidence in `specs/191-worker-http-profile/implementation-evidence.md` and public issue/PR comments.
 - [ ] T020 Verify required resulting-main workflows/source-package/image identity, synchronize issue/Project/parent and release claim; mark lifecycle only from completed proof in `specs/191-worker-http-profile/implementation-evidence.md` and `docs/program-goals/feature-composition-readiness.md`.
