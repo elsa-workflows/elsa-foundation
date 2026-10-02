@@ -6,6 +6,7 @@ using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore;
 using Elsa.Foundation.Identity.OpenIddict;
 using Elsa.Modularity.Nuplane.Services;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
+using Elsa.Secrets.Features;
 using Elsa.Secrets.Persistence.EntityFrameworkCore;
 using Elsa.Workbench;
 using Elsa.Workflows.Design.Reconciliation.Git;
@@ -37,7 +38,9 @@ public sealed class SecretFeatureSettingTests
         { typeof(GitHubCopilotAgentFeature), nameof(GitHubCopilotAgentFeature.RuntimeConnectionToken) },
         { typeof(OpenTelemetryFeature), nameof(OpenTelemetryFeature.ApiKey) },
         { typeof(WorkflowsDesignGitReconciliationFeature), nameof(WorkflowsDesignGitReconciliationFeature.Token) },
-        { typeof(SecretsEntityFrameworkCoreFeature), nameof(SecretsEntityFrameworkCoreFeature.ConnectionString) }
+        { typeof(SecretsEntityFrameworkCoreFeature), nameof(SecretsEntityFrameworkCoreFeature.ConnectionString) },
+        { typeof(SecretsFeature), nameof(SecretsFeature.EncryptionKey) },
+        { typeof(SecretsFeature), nameof(SecretsFeature.Keys) }
     };
 
     [Theory]
