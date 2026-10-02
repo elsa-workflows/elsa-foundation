@@ -1,3 +1,4 @@
+using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Core.Reconciliation;
 using Elsa.Activities.Design.Core.Reconciliation.Models;
 using Elsa.Activities.Design.Reconciliation.Json.Contracts;
@@ -19,8 +20,9 @@ namespace Elsa.Activities.Design.Reconciliation.Json.Services;
 /// configuration and simply read whichever was supplied. An entry whose input declares <c>isCredential</c> is refused
 /// (spec 188, research R5): in phase 0 the credential declaration is reserved for
 /// <c>[ActivityInput(IsCredential = true)]</c> on a CLR activity, which CLR reconciliation checks can be bound to a
-/// secret reference, and a JSON entry has no such check. The refusal is made here rather than in the replaceable <see cref="IJsonActivityCatalogReader"/>, so a
-/// replacement reader cannot skip it.
+/// secret reference, and a JSON entry has no such check. The refusal, the shared
+/// <see cref="CredentialInputDeclaration"/> check, is made here rather than in the replaceable
+/// <see cref="IJsonActivityCatalogReader"/>, so a replacement reader cannot skip it.
 /// </remarks>
 public sealed class JsonActivityReconciliationSource(
     IJsonActivityCatalogReader reader,
@@ -50,12 +52,12 @@ public sealed class JsonActivityReconciliationSource(
     {
         foreach (var model in models)
         {
-            var credential = (model.Inputs ?? []).FirstOrDefault(input => input.IsCredential == true);
+            var credential = CredentialInputDeclaration.FindDeclared(model.Inputs);
             if (credential is not null)
             {
                 throw new InvalidActivityCatalogJsonException(
                     filePath,
-                    $"input '{credential.ReferenceKey}' of activity '{model.ActivityTypeKey}' declares isCredential, which a JSON activity catalog cannot declare. Declare a credential input with [ActivityInput(IsCredential = true)] on a CLR activity.");
+                    $"activity '{model.ActivityTypeKey}': {CredentialInputDeclaration.RefusalMessage(credential.ReferenceKey, "a JSON activity catalog")}");
             }
         }
     }

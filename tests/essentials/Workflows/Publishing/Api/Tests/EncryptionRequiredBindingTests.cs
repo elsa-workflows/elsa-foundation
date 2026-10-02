@@ -19,8 +19,10 @@ namespace Elsa.Workflows.Publishing.Api.Tests;
 /// secret reference or no binding, because no other value reaches the activity without being persisted first. It is
 /// decided through both <c>CompileAll</c> overloads: the catalog overload, where only a credential declaration makes an
 /// input require encryption, and the pinned-contract overload, where a contract's policy can require encryption on an
-/// input that is not a credential. A non-credential sensitive input does not require encryption and takes a literal or an
-/// expression (T104). Slice 6 places the credential rule ahead of this one for credential inputs (T060).
+/// input that is not a credential. A binding that carries no value, such as an empty or null literal, leaves the input
+/// unbound and compiles exactly as an unbound input does (spec 188 edge case). A non-credential sensitive input does not
+/// require encryption and takes a literal or an expression (T104). Slice 6 places the credential rule ahead of this one
+/// for credential inputs (T060).
 /// </summary>
 public sealed class EncryptionRequiredBindingTests
 {
@@ -52,8 +54,21 @@ public sealed class EncryptionRequiredBindingTests
         {
             var data = new TheoryData<InputShape, string>();
             foreach (var shape in Enum.GetValues<InputShape>())
-            foreach (var binding in new[] { "Literal", "EmptyLiteral", "Object", "Variable", "WorkflowRequest", "JavaScript", "Default" })
+            foreach (var binding in new[] { "Literal", "Object", "Variable", "WorkflowRequest", "JavaScript", "Default" })
                 data.Add(shape, binding);
+            return data;
+        }
+    }
+
+    public static TheoryData<InputShape, string, bool, bool> EmptyBindings
+    {
+        get
+        {
+            var data = new TheoryData<InputShape, string, bool, bool>();
+            foreach (var shape in Enum.GetValues<InputShape>())
+            foreach (var binding in new[] { "EmptyLiteral", "NullLiteral", "JsonNullLiteral", "NullValue" })
+            foreach (var (isRequired, hasDefault) in new[] { (false, false), (true, false), (false, true) })
+                data.Add(shape, binding, isRequired, hasDefault);
             return data;
         }
     }
@@ -71,12 +86,55 @@ public sealed class EncryptionRequiredBindingTests
     }
 
     [Theory]
+    [MemberData(nameof(EmptyBindings))]
+    public void A_binding_that_carries_no_value_compiles_as_an_unbound_input(InputShape shape, string binding, bool isRequired, bool hasDefault)
+    {
+        if (!isRequired && !hasDefault)
+        {
+            var compiled = CompileAll(shape, hasDefault, isRequired, Authored(binding));
+            var unbound = CompileAll(shape, hasDefault, isRequired);
+
+            Assert.Equal(RuntimeInputBindingSource.Literal, compiled.Source);
+            Assert.Equal(ValuePresence.Absent, compiled.Literal!.Presence);
+            Assert.Null(compiled.Literal.InlineValue);
+            Assert.Equal(PolicyOf(unbound), PolicyOf(compiled));
+            return;
+        }
+
+        // A required input is reported missing and a declared default stays refused, exactly as when nothing is authored.
+        var expected = isRequired
+            ? $"VF-ACT-003: Activity node '{NodeId}' omits required input '{InputKey}'"
+            : SecretBindingDiagnostics.EncryptionRequiredDefaultRefused(NodeId, InputKey).Message;
+        var authoredException = Assert.Throws<ArgumentException>(() => CompileAll(shape, hasDefault, isRequired, Authored(binding)));
+        var unboundException = Assert.Throws<ArgumentException>(() => CompileAll(shape, hasDefault, isRequired));
+
+        Assert.StartsWith(expected, authoredException.Message, StringComparison.Ordinal);
+        Assert.Equal(unboundException.Message, authoredException.Message);
+    }
+
+    [Fact]
+    public async Task Publication_accepts_an_empty_literal_on_a_declared_credential_input()
+    {
+        var executable = await CompileAsync(
+            Node(typeof(DeclaredInputsActivity), State(nameof(DeclaredInputsActivity.ApiKey), "EmptyLiteral")),
+            [typeof(DeclaredInputsActivity)]);
+
+        var binding = executable.RootActivity.InputBindings[nameof(DeclaredInputsActivity.ApiKey)];
+        Assert.Equal(RuntimeInputBindingSource.Literal, binding.Source);
+        Assert.Equal(ValuePresence.Absent, binding.Literal!.Presence);
+    }
+
+    [Theory]
     [MemberData(nameof(Shapes))]
     public void An_unbound_input_whose_contract_declares_a_default_is_refused_because_the_default_is_a_literal(InputShape shape)
     {
         var exception = Assert.Throws<ArgumentException>(() => CompileAll(shape, hasDefault: true));
 
         Assert.Equal(SecretBindingDiagnostics.EncryptionRequiredDefaultRefused(NodeId, InputKey).Message, exception.Message);
+        // The input was left unbound, so the message names the default as the fault and its removal as the fix.
+        Assert.Contains("declared default is a literal value", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("Remove the default", exception.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("no binding", exception.Message, StringComparison.Ordinal);
         Assert.DoesNotContain(Sentinel, exception.ToString(), StringComparison.Ordinal);
     }
 
@@ -162,21 +220,24 @@ public sealed class EncryptionRequiredBindingTests
             exception.Message);
     }
 
-    private RuntimeInputBinding CompileAll(InputShape shape, bool hasDefault, params WorkflowArgumentState[] states)
+    private RuntimeInputBinding CompileAll(InputShape shape, bool hasDefault, params WorkflowArgumentState[] states) =>
+        CompileAll(shape, hasDefault, isRequired: false, states);
+
+    private RuntimeInputBinding CompileAll(InputShape shape, bool hasDefault, bool isRequired, params WorkflowArgumentState[] states)
     {
         var bindings = shape switch
         {
             InputShape.CatalogCredential => _compiler.CompileAll(
                 NodeId,
-                [Input() with { IsSensitive = true, IsCredential = true, DefaultValue = hasDefault ? JsonSerializer.SerializeToElement(Sentinel) : null }],
+                [Input() with { IsSensitive = true, IsCredential = true, IsRequired = isRequired, DefaultValue = hasDefault ? JsonSerializer.SerializeToElement(Sentinel) : null }],
                 states),
             InputShape.PinnedCredential => _compiler.CompileAll(
                 NodeId,
-                [Contract(new ActivityValuePolicy(true, IsSensitive: true, RequiresEncryption: true), isCredential: true, hasDefault)],
+                [Contract(new ActivityValuePolicy(true, IsSensitive: true, RequiresEncryption: true), isCredential: true, hasDefault, isRequired)],
                 states),
             _ => _compiler.CompileAll(
                 NodeId,
-                [Contract(new ActivityValuePolicy(true, IsSensitive: false, RequiresEncryption: true), isCredential: false, hasDefault)],
+                [Contract(new ActivityValuePolicy(true, IsSensitive: false, RequiresEncryption: true), isCredential: false, hasDefault, isRequired)],
                 states)
         };
         return Assert.Single(bindings).Value;
@@ -191,15 +252,18 @@ public sealed class EncryptionRequiredBindingTests
         Assert.Single(_compiler.CompileAll(NodeId, [contract], [state])).Value
     ];
 
+    private static (DurableValueLifecycle, DurableValueStorage, bool, bool) PolicyOf(RuntimeInputBinding binding) =>
+        (binding.EffectivePolicy.Lifecycle, binding.EffectivePolicy.Storage, binding.EffectivePolicy.IsSensitive, binding.EffectivePolicy.RequiresEncryption);
+
     private static InputDefinition Input() =>
         new(InputKey, "ApiKey", new TypeReference("String"), null, "ApiKey", null, IsNullable: true);
 
-    private static RuntimeActivityInputContract Contract(ActivityValuePolicy policy, bool isCredential, bool hasDefault) =>
+    private static RuntimeActivityInputContract Contract(ActivityValuePolicy policy, bool isCredential, bool hasDefault, bool isRequired = false) =>
         new(
             InputKey,
             "ApiKey",
             StringType,
-            isRequired: false,
+            isRequired,
             isNullable: true,
             hasDefault,
             hasDefault ? JsonSerializer.SerializeToElement(Sentinel) : null,
@@ -211,6 +275,9 @@ public sealed class EncryptionRequiredBindingTests
     private static WorkflowArgumentState State(string inputKey, string binding) =>
         new(inputKey, binding switch
         {
+            "NullValue" => null!,
+            "NullLiteral" => new ArgumentValue(null, "Literal"),
+            "JsonNullLiteral" => new ArgumentValue(JsonSerializer.SerializeToElement<object?>(null), "Literal"),
             "Literal" => new ArgumentValue(JsonSerializer.SerializeToElement(Sentinel), "Literal"),
             "EmptyLiteral" => new ArgumentValue(JsonSerializer.SerializeToElement(string.Empty), "Literal"),
             "Object" => new ArgumentValue(JsonSerializer.SerializeToElement(new { note = Sentinel }), "Object"),

@@ -373,31 +373,6 @@ public sealed class ExecutableNodeCompiler(
         outputDefinition?.SourceRepresentation ??
         (attribute.HasSourceRepresentation ? attribute.SourceRepresentation : ValueRepresentationDefaults.Infer(sourceType));
 
-    private static ActivityInputAttribute? FindActivityInputAttribute(PropertyInfo property)
-    {
-        for (var declaringType = property.DeclaringType; declaringType is not null; declaringType = declaringType.BaseType)
-        {
-            var declaredProperty = declaringType.GetProperty(
-                property.Name,
-                BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly);
-            var attribute = declaredProperty?.GetCustomAttribute<ActivityInputAttribute>(inherit: false);
-            if (attribute is not null)
-                return attribute;
-        }
-
-        return null;
-    }
-
-    private static bool IsNullable(PropertyInfo property, NullabilityInfoContext nullabilityContext)
-    {
-        if (property.PropertyType.IsValueType)
-            return Nullable.GetUnderlyingType(property.PropertyType) is not null;
-
-        // Assemblies without nullable-reference metadata retain the permissive CLR interpretation.
-        // Only an explicit NotNull annotation may tighten a legacy catalog input at publication.
-        return nullabilityContext.Create(property).WriteState is not NullabilityState.NotNull;
-    }
-
     private static ActivityValuePolicy CompileActivityPolicy(
         string? ownerStorageProfile,
         ArgumentState? authored,

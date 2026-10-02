@@ -101,7 +101,7 @@ public sealed class JsonReconciliationTests : IDisposable
             () => JsonSourceFromFilePath("json-catalog", file).Read(CancellationToken.None).AsTask());
 
         Assert.Equal(file, exception.FilePath);
-        Assert.Contains("input 'apiKey' of activity 'Acme.Activities.SendEmail' declares isCredential", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("activity 'Acme.Activities.SendEmail': Input 'apiKey' declares isCredential", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]

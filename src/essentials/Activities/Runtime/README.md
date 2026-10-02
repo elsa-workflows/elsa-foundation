@@ -56,7 +56,8 @@ an explicit `ActivityInputContract.IsCredential` flag, which nothing infers from
 An input whose effective policy requires encryption accepts only a secret reference or no binding: no other value
 can reach the activity without the input snapshot persisting it first. Publication refuses a literal, an object, a
 variable or other value read, an expression, and the declared default of an unbound input on such an input with
-`VF-ACT-011`, naming the node and the input and never the value. A sensitive input that is not a credential does not
+`VF-ACT-011`, naming the node and the input and never the value. A binding that carries no value (an empty or null
+literal) leaves the input unbound and compiles as an unbound input does. A sensitive input that is not a credential does not
 require encryption, so it takes a literal or an expression, and its value is materialized like any other, marked
 sensitive.
 

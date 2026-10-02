@@ -66,17 +66,21 @@ public static class SecretBindingDiagnostics
     /// carries neither the bound value nor the expression text.
     /// </summary>
     public static ArgumentException EncryptionRequiredBindingRefused(string nodeId, string inputKey) =>
-        EncryptionRequired(nodeId, inputKey, string.Empty);
+        EncryptionRequired(nodeId, inputKey, "so it accepts only a secret reference or no binding.");
 
     /// <summary>
     /// The input's effective policy requires encryption, it is not bound, and its contract declares a default, which
-    /// would be compiled as a literal. The message does not carry the default.
+    /// would be compiled as a literal. The correction belongs to the activity author: remove the default. The message
+    /// does not carry the default.
     /// </summary>
     public static ArgumentException EncryptionRequiredDefaultRefused(string nodeId, string inputKey) =>
-        EncryptionRequired(nodeId, inputKey, ", and its declared default is a literal");
+        EncryptionRequired(
+            nodeId,
+            inputKey,
+            "but its declared default is a literal value, which cannot be used on such an input. Remove the default from the activity's input declaration.");
 
     private static ArgumentException EncryptionRequired(string nodeId, string inputKey, string detail) =>
-        new($"{EncryptionRequiredBindingCode}: Activity node '{nodeId}' input '{inputKey}' requires encryption, so it accepts only a secret reference or no binding{detail}.");
+        new($"{EncryptionRequiredBindingCode}: Activity node '{nodeId}' input '{inputKey}' requires encryption, {detail}");
 
     /// <summary>The input is named by the activity's <see cref="RefusesSecretBindingAttribute"/>.</summary>
     public static ArgumentException SecretBindingRefused(string nodeId, string inputKey, SecretBindingRefusalReason reason) =>

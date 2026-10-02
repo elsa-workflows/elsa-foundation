@@ -154,7 +154,8 @@ public sealed class ClrAssemblyScannerTests
     public static TheoryData<Type, string> UndeclaredCatalogHashes => new()
     {
         // Captured before the sensitivity flags existed (spec 188, slice 5): an activity that declares nothing must keep
-        // its catalog hash, or reconciling an existing catalog throws ActivityVersionHashMismatchException.
+        // its catalog hash, or reconciling an existing catalog throws ActivityVersionHashMismatchException. Both values
+        // were re-derived independently on unmodified main at df02ece3c and matched.
         { typeof(PlainFixtureActivity), "41ADAB509FABBD50A14009DB8FD9D1BCA14B7C4ED67E86725937D1C6B2ABC87E" },
         { typeof(ComplexInputFixtureActivity), "2F39C96B99BCE02E81CDA3DF8FBB0CA9E8CA41A1809CD59C38E9B36DDF59A167" }
     };

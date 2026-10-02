@@ -192,7 +192,8 @@ public sealed class WorkflowExecutableCompilerTests
     public async Task An_undeclared_input_keeps_its_contract_fingerprint_and_artifact_hash()
     {
         // Captured before the sensitivity declaration existed (spec 188, slice 5): neither the contract fingerprint nor
-        // the artifact hash of a node whose inputs declare nothing may move.
+        // the artifact hash of a node whose inputs declare nothing may move. All three values were re-derived
+        // independently on unmodified main at df02ece3c and matched.
         var unbound = await SecretBindingCompilerFixture.CompileAsync(SecretBindingCompilerFixture.Node(typeof(TestWriteLineActivity)), [typeof(TestWriteLineActivity)]);
         var literal = await SecretBindingCompilerFixture.CompileAsync(
             SecretBindingCompilerFixture.Node(typeof(TestWriteLineActivity), new WorkflowArgumentState("Text", new ArgumentValue(JsonSerializer.SerializeToElement("hello"), "Literal"), null, null, null, null)),
