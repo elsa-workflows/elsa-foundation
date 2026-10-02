@@ -65,9 +65,15 @@ public sealed class WorkflowInstanceListService(
             query = query with { Cursor = cursor };
         }
 
-        var page = authorization.TenantScope == "all-tenants" && incidentHealth is null
-            ? await workflowExecutionStateStore.QueryPageAsync(query, cancellationToken)
-            : await QueryAuthorizedPageAsync(query, incidentHealth, cancellationToken);
+        query.Validate();
+        WorkflowExecutionStatePage page;
+        if (authorization is AllowAllActivityExecutionInspectionAuthorizationContext && incidentHealth is null)
+            page = await workflowExecutionStateStore.QueryPageAsync(query, cancellationToken);
+        else if (authorization is AllowAllActivityExecutionInspectionAuthorizationContext && query.CorrelationId is null &&
+                 incidentHealth is not null && workflowExecutionStateStore is IWorkflowHealthQuery healthQuery)
+            page = await healthQuery.QueryHealthPageAsync(query, Enum.Parse<IncidentHealth>(incidentHealth, ignoreCase: true), cancellationToken);
+        else
+            page = await QueryAuthorizedPageAsync(query, incidentHealth, cancellationToken);
         // Every store in a request resolves the same scoped persistence context, so the per-row reads are issued one
         // at a time. Overlapping them - across rows or within a row - starts a second operation on that one context,
         // which relational providers reject, so the page is composed sequentially rather than fanned out.
@@ -100,27 +106,36 @@ public sealed class WorkflowInstanceListService(
         // before canonical keyset paging so unauthorized/nonmatching runs never enter items, counts or cursors.
         var authorizedStore = new InMemoryWorkflowExecutionStateStore();
         var requiresSensitiveValues = query.CorrelationId is not null;
-        foreach (var state in await workflowExecutionStateStore.ListAsync(cancellationToken))
+        string? candidateCursor = null;
+        do
         {
-            if (!await authorization.CanInspectStructureAsync(state, cancellationToken) ||
-                (requiresSensitiveValues && !await authorization.CanInspectSensitiveValuesAsync(state, cancellationToken)))
-                continue;
-
-            if (incidentHealth is not null)
+            var candidateQuery = query with { PageSize = PagedMaxTake, Cursor = candidateCursor };
+            var candidates = incidentHealth is not null && workflowExecutionStateStore is IWorkflowHealthQuery healthQuery
+                ? await healthQuery.QueryHealthPageAsync(candidateQuery, Enum.Parse<IncidentHealth>(incidentHealth, ignoreCase: true), cancellationToken)
+                : await workflowExecutionStateStore.QueryPageAsync(candidateQuery, cancellationToken);
+            foreach (var state in candidates.Items)
             {
-                var health = await incidentStateStore.CountHealthAsync(state.WorkflowExecutionId, cancellationToken);
-                var matches = incidentHealth switch
-                {
-                    "active" => health.Active > 0,
-                    "blocking" => health.Blocking > 0,
-                    "none" => health.Active == 0,
-                    _ => false
-                };
-                if (!matches)
+                if (!await authorization.CanInspectStructureAsync(state, cancellationToken) ||
+                    (requiresSensitiveValues && !await authorization.CanInspectSensitiveValuesAsync(state, cancellationToken)))
                     continue;
+
+                if (incidentHealth is not null)
+                {
+                    var health = await incidentStateStore.CountHealthAsync(state.WorkflowExecutionId, cancellationToken);
+                    var matches = incidentHealth switch
+                    {
+                        "active" => health.Active > 0,
+                        "blocking" => health.Blocking > 0,
+                        "none" => health.Active == 0,
+                        _ => false
+                    };
+                    if (!matches)
+                        continue;
+                }
+                await authorizedStore.SaveAsync(state, cancellationToken);
             }
-            await authorizedStore.SaveAsync(state, cancellationToken);
-        }
+            candidateCursor = candidates.NextCursor;
+        } while (candidateCursor is not null);
 
         return await authorizedStore.QueryPageAsync(query, cancellationToken);
     }

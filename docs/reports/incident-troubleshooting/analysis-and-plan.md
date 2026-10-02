@@ -1,6 +1,6 @@
 # Elsa Studio incident troubleshooting: QA and proposed plan
 
-Review draft, 2 October 2026. No application code changes, publishing, issue creation, or recovery actions performed.
+Archived before-state assessment, 2 October 2026. The user subsequently authorized program delivery; see [current acceptance evidence](acceptance.md). This paragraph describes the original QA pass: No application code changes, publishing, issue creation, or recovery actions performed.
 
 The undefined-variable scenario reproduces. An incident is recorded, but the experience does not reliably tell the operator which activity needs attention or explain why a run still looks healthy. The first implementation priority should be trustworthy incident association; visual treatment and navigation should consume that evidence.
 

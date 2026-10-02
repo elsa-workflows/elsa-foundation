@@ -644,7 +644,7 @@ public sealed class ValueDurabilityPolicyTests
             ValueProtectionPolicy.InstanceInline,
             RuntimeInputBindingSource.Expression,
             expression: expression);
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        var exception = await Assert.ThrowsAsync<ExpressionInputFailureException>(() =>
             new RuntimeActivityInputMaterializer(new RuntimeInputBindingResolver(), new StringTypeRegistry(), new ThrowingPortableEvaluator(), externalPayloadStore: null)
                 .MaterializeSnapshotAsync(
                     NewTypedNode(binding, ActivityValuePolicy.Default),
@@ -653,11 +653,10 @@ public sealed class ValueDurabilityPolicyTests
                     Now)
                 .AsTask());
 
-        var inputFailure = Assert.IsType<ExpressionInputFailureException>(exception);
-        Assert.Equal(ExpressionInputFailureException.ExpressionEvaluationFailed, inputFailure.InputFailureCode);
-        Assert.Equal("message", inputFailure.InputKey);
-        Assert.Equal("test", inputFailure.ExpressionLanguage);
-        Assert.Equal(ExpressionInputFailureException.EvaluationPhaseName, inputFailure.EvaluationPhase);
+        Assert.Equal(ExpressionInputFailureException.ExpressionEvaluationFailed, exception.InputFailureCode);
+        Assert.Equal("message", exception.InputKey);
+        Assert.Equal("test", exception.ExpressionLanguage);
+        Assert.Equal(ExpressionInputFailureException.EvaluationPhaseName, exception.EvaluationPhase);
         Assert.Contains("portable 'test' expression", exception.Message, StringComparison.Ordinal);
         Assert.Contains("fingerprint 'sha256:", exception.Message, StringComparison.Ordinal);
     }
@@ -725,7 +724,7 @@ public sealed class ValueDurabilityPolicyTests
             ["secret"] = ValueEnvelope.Inline(StringType, JsonSerializer.SerializeToElement(secret), sensitivePolicy)
         });
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        var exception = await Assert.ThrowsAsync<ExpressionInputFailureException>(() =>
             new RuntimeActivityInputMaterializer(
                     new RuntimeInputBindingResolver(),
                     new StringTypeRegistry(),
@@ -734,9 +733,8 @@ public sealed class ValueDurabilityPolicyTests
                 .MaterializeSnapshotAsync(NewTypedNode(binding, ActivityValuePolicy.Default), "invocation-1", context, Now)
                 .AsTask());
 
-        var inputFailure = Assert.IsType<ExpressionInputFailureException>(exception);
-        Assert.Equal(ExpressionInputFailureException.ExpressionEvaluationFailed, inputFailure.InputFailureCode);
-        Assert.Equal("message", inputFailure.InputKey);
+        Assert.Equal(ExpressionInputFailureException.ExpressionEvaluationFailed, exception.InputFailureCode);
+        Assert.Equal("message", exception.InputKey);
         Assert.NotNull(exception.InnerException);
         Assert.Contains(typeof(InvalidOperationException).FullName!, exception.InnerException!.Message, StringComparison.Ordinal);
         Assert.DoesNotContain(secret, exception.ToString(), StringComparison.Ordinal);

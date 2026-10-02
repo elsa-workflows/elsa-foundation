@@ -56,7 +56,7 @@ Independent check: root cause and input lead summary; full evidence remains avai
 
 ## Dependencies and parallel execution
 
-T001–T004 precede product writers. Backend T005/T006 and T009–T011 are independent concerns but one backend worker integrates shared API model changes. Studio T007/T008, T012–T017 uses the approved additive contract; final verification waits for backend implementation. One Studio writer owns shared view files. Root owns T018–T023 integration/QA and reviews worker output.
+T001–T004 precede product writers. Backend T005/T006 and T009–T011 are independent concerns but the root and backend evidence worker reconcile shared API model changes. Studio T007/T008, T012–T017 uses the approved additive contract; final verification waits for backend implementation. One Studio writer owns shared view files. Root owns T018–T023 integration/QA and reviews worker output.
 
 Within each story, write targeted regression before implementation and prove its failure; where host build queue prevents an initial run, use targeted revert/mutation proof later and record the limitation. No copied implementation-only tests. Each story is independently testable with approved fixtures, while complete delivery requires real-host proof.
 
@@ -64,4 +64,4 @@ First useful increment: associated failed input and visible health. Continue thr
 
 ## Issue ownership
 
-Backend evidence [#2338](https://github.com/elsa-workflows/elsa-foundation/issues/2338) owns T009–T011; backend health [#2339](https://github.com/elsa-workflows/elsa-foundation/issues/2339) owns T005–T006. One backend worker handles both in order. Studio [#550](https://github.com/elsa-workflows/elsa-foundation-studio/issues/550) owns T007–T008/T012–T017. Root integration/QA [#2340](https://github.com/elsa-workflows/elsa-foundation/issues/2340) owns T018–T023.
+Backend evidence [#2338](https://github.com/elsa-workflows/elsa-foundation/issues/2338) owns T009–T011; backend health [#2339](https://github.com/elsa-workflows/elsa-foundation/issues/2339) owns T005–T006. Root owns health; the backend worker owns causal evidence. Studio [#550](https://github.com/elsa-workflows/elsa-foundation-studio/issues/550) owns T007–T008/T012–T017. Root integration/QA [#2340](https://github.com/elsa-workflows/elsa-foundation/issues/2340) owns T018–T023.

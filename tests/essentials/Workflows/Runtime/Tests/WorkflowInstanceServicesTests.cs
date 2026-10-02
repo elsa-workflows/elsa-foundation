@@ -349,6 +349,63 @@ public sealed class WorkflowInstanceServicesTests
     }
 
     [Fact]
+    public async Task ListWorkflowInstances_DispatchesHealthPagingToCapableProviderAndPreservesCursor()
+    {
+        await _workflowStore.SaveAsync(Workflow("wf-1", WorkflowExecutionStatus.Running, "definition-1"));
+        await _incidentStore.SaveAsync(HealthIncident("wf-1", IncidentStatus.Blocking));
+        var store = new HealthQueryWorkflowExecutionStateStore(_workflowStore);
+        var handler = NewListInstanceHandler(store);
+        var request = new ListWorkflowInstances(null, "definition-1", null, 1, IncidentHealth: "blocking");
+        var first = await handler.ListAsync(request, CancellationToken.None);
+        Assert.Equal(42, first.TotalCount);
+        Assert.Equal("health.blocking.provider-next", first.NextCursor);
+        Assert.Equal(IncidentHealth.Blocking, store.LastHealth);
+        Assert.Equal("definition-1", store.LastQuery!.DefinitionId);
+        Assert.False(store.QueryPageCalled);
+        await handler.ListAsync(request with { Cursor = first.NextCursor }, CancellationToken.None);
+        Assert.Equal("provider-next", store.LastQuery.Cursor);
+    }
+
+    [Theory]
+    [InlineData(false, "secret-correlation")]
+    [InlineData(true, null)]
+    public async Task ListWorkflowInstances_HealthProviderCannotBypassInspectionAuthorization(bool constrainedScope, string? correlation)
+    {
+        await _workflowStore.SaveAsync(Workflow("allowed", WorkflowExecutionStatus.Running, "definition-1", "secret-correlation"));
+        await _incidentStore.SaveAsync(HealthIncident("allowed", IncidentStatus.Blocking));
+        var store = new HealthQueryWorkflowExecutionStateStore(_workflowStore);
+        var handler = new WorkflowInstanceListService(store, _activityStore, _incidentStore,
+            constrainedScope ? new RestrictedInspectionContext() : AllowAll);
+        var result = await handler.ListAsync(new ListWorkflowInstances(null, null, correlation, 1, IncidentHealth: "blocking"), CancellationToken.None);
+        Assert.Equal(1, result.TotalCount);
+        Assert.Equal(IncidentHealth.Blocking, store.LastHealth);
+        Assert.Equal(100, store.LastQuery!.PageSize);
+    }
+
+    [Fact]
+    public async Task ListWorkflowInstances_HealthFallbackTraversesBoundedFilteredPagesBeyondFirstProviderPage()
+    {
+        for (var index = 0; index < 150; index++)
+        {
+            var id = $"wf-{index:D3}";
+            await _workflowStore.SaveAsync(Workflow(id, WorkflowExecutionStatus.Running, "definition-1", updatedAt: Now(-1)));
+            if (index is 1 or 101 or 149)
+                await _incidentStore.SaveAsync(HealthIncident(id, IncidentStatus.Blocking));
+        }
+        var store = new BoundedQueryOnlyWorkflowExecutionStateStore(_workflowStore);
+        var handler = NewListInstanceHandler(store);
+        var request = new ListWorkflowInstances(null, "definition-1", null, 1, IncidentHealth: "blocking");
+        var first = await handler.ListAsync(request, CancellationToken.None);
+        Assert.Equal(3, first.TotalCount);
+        Assert.Equal("wf-001", Assert.Single(first.Items).WorkflowExecutionId);
+        var second = await handler.ListAsync(request with { Cursor = first.NextCursor }, CancellationToken.None);
+        Assert.Equal(3, second.TotalCount);
+        Assert.Equal("wf-101", Assert.Single(second.Items).WorkflowExecutionId);
+        Assert.True(store.PageQueryCount > 1);
+        Assert.InRange(store.MaxPageSize, 1, 100);
+    }
+
+    [Fact]
     public async Task ListWorkflowInstances_HealthCursorCannotBeReusedWithDifferentHealth()
     {
         foreach (var id in new[] { "wf-a", "wf-b" })
@@ -393,9 +450,25 @@ public sealed class WorkflowInstanceServicesTests
         }
     }
 
-    private sealed class RestrictedInspectionContext : IActivityInspectionContextAsync
+    [Fact]
+    public async Task ListWorkflowInstances_AllTenantLabelDoesNotBypassStructureAuthorization()
     {
-        public string TenantScope => "tenant-a";
+        await _workflowStore.SaveAsync(Workflow("foreign", WorkflowExecutionStatus.Running, "definition-1"));
+        await _incidentStore.SaveAsync(HealthIncident("foreign", IncidentStatus.Blocking));
+        var store = new HealthQueryWorkflowExecutionStateStore(_workflowStore);
+        var handler = new WorkflowInstanceListService(store, _activityStore, _incidentStore, new RestrictedInspectionContext("all-tenants"));
+        foreach (var health in new string?[] { null, "blocking" })
+        {
+            var result = await handler.ListAsync(new ListWorkflowInstances(null, null, null, 1, IncidentHealth: health), CancellationToken.None);
+            Assert.Empty(result.Items);
+            Assert.Equal(0, result.TotalCount);
+            Assert.Null(result.NextCursor);
+        }
+    }
+
+    private sealed class RestrictedInspectionContext(string tenantScope = "tenant-a") : IActivityInspectionContextAsync
+    {
+        public string TenantScope => tenantScope;
         public string AuditSubject => "operator";
         public string RequestCorrelationId => "request";
         public ValueTask<string> GetAuthorizationProfileAsync(CancellationToken cancellationToken = default) => ValueTask.FromResult("test");
@@ -419,7 +492,7 @@ public sealed class WorkflowInstanceServicesTests
     {
         var terminal = status is IncidentStatus.Resolved or IncidentStatus.Suppressed;
         return new IncidentState("incident-" + workflowExecutionId, workflowExecutionId, null, null, IncidentSeverity.Error,
-            status, terminal ? new IncidentResolutionOutcome("Resolved", Now(-1), null, null, null) : null,
+            status, terminal ? new IncidentResolutionOutcome("Resolved", Now(-1), null, "test", null) : null,
             "test", "safe test incident", Now(-2), terminal ? Now(-1) : null);
     }
 
@@ -584,13 +657,17 @@ public sealed class WorkflowInstanceServicesTests
                     "slot-default")
         };
 
-    private sealed class BoundedQueryOnlyWorkflowExecutionStateStore(IWorkflowExecutionStateStore inner) : IWorkflowExecutionStateStore
+    private class BoundedQueryOnlyWorkflowExecutionStateStore(IWorkflowExecutionStateStore inner) : IWorkflowExecutionStateStore
     {
         public bool QueryPageCalled { get; private set; }
+        public int PageQueryCount { get; private set; }
+        public int MaxPageSize { get; private set; }
 
         public ValueTask<WorkflowExecutionStatePage> QueryPageAsync(WorkflowExecutionStatePageQuery query, CancellationToken cancellationToken = default)
         {
             QueryPageCalled = true;
+            PageQueryCount++;
+            MaxPageSize = Math.Max(MaxPageSize, query.PageSize);
             return inner.QueryPageAsync(query, cancellationToken);
         }
 
@@ -608,6 +685,23 @@ public sealed class WorkflowInstanceServicesTests
 
         public ValueTask<bool> DeleteAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
             inner.DeleteAsync(workflowExecutionId, cancellationToken);
+    }
+
+    private sealed class HealthQueryWorkflowExecutionStateStore(IWorkflowExecutionStateStore inner)
+        : BoundedQueryOnlyWorkflowExecutionStateStore(inner), IWorkflowHealthQuery
+    {
+        public IncidentHealth? LastHealth { get; private set; }
+        public WorkflowExecutionStatePageQuery? LastQuery { get; private set; }
+
+        public async ValueTask<WorkflowExecutionStatePage> QueryHealthPageAsync(WorkflowExecutionStatePageQuery query, IncidentHealth health, CancellationToken cancellationToken = default)
+        {
+            LastHealth = health;
+            LastQuery = query;
+            var state = await inner.FindAsync("wf-1", cancellationToken);
+            return state is not null
+                ? new WorkflowExecutionStatePage([state], query.Cursor is null ? "provider-next" : null, query.Cursor is null, 42)
+                : await inner.QueryPageAsync(query, cancellationToken);
+        }
     }
 
     private sealed class CountOnlyActivityExecutionStateStore(IActivityExecutionStateStore inner) : IActivityExecutionStateStore

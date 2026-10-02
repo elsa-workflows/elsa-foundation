@@ -81,10 +81,14 @@ public sealed class WriteLineJavaScriptInputEndToEndTests
         Assert.Equal(incident.IncidentId, failure.Failure!.IncidentId);
         Assert.Null(failure.Payload);
 
-        var inspectionView = ActivityExecutionInspectionView.From(inspection, canInspectSensitiveValues: false);
+        var inspectionView = ActivityExecutionInspectionView.From(inspection, canInspectSensitiveValues: true);
         var failureView = Assert.Single(inspectionView.ValueSnapshots);
         Assert.Equal("captureFailed", failureView.CaptureState);
         Assert.Equal("qaMissingVariable is not defined.", failureView.Failure!.Message);
+        var hiddenView = ActivityExecutionInspectionView.From(inspection, canInspectSensitiveValues: false);
+        var hiddenFailure = Assert.Single(hiddenView.ValueSnapshots);
+        Assert.Equal("captureFailed", hiddenFailure.CaptureState);
+        Assert.Null(hiddenFailure.Failure);
     }
 
     private static WorkflowExecutionHarness NewHarness(params string[] ids)

@@ -83,6 +83,10 @@ total count and cursor page; invalid values and cursors from a different health 
 without current counts cannot establish current health from their historical total.
 
 Incident stores provide aggregate health counts; EF reads its existing status projection without loading fault
-or captured-value content. Health-filtered queries use the existing authorization-safe materialization fallback
-before canonical keyset paging. Hosts with large histories may provide a future joined query implementation;
-this change does not silently limit filtering to the first page. Unfiltered all-tenant queries retain provider paging.
+or captured-value content. EF implements the optional `IWorkflowHealthQuery` capability with a same-scope incident
+predicate before its database count and keyset page. The explicit allow-all development adapter can return
+that page directly when no sensitive correlation filter is present. Production and custom inspection contexts
+authorize candidates before composing the visible count and cursor page; EF first narrows those candidates by
+health. This authorization path still scans all matching provider pages and retains authorized matches in
+memory. Other providers apply health while traversing bounded candidate pages; no path limits filtering to
+the first page. A tenant-scope label alone never grants inspection access.

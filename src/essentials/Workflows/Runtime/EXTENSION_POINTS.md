@@ -99,6 +99,12 @@ adapters validate and translate the selected context at their own persistence bo
 - **Usage:** workflow-execution records are durable executable-retention roots. Completion or fault does not release an artifact; only deletion of the retained execution does. Providers must answer the distinct-root query without materializing every full workflow-execution document and must keep the projection consistent with save/delete.
 - **Default implementation:** `InMemoryWorkflowExecutionStateStore`; durable persistence providers such as the opt-in `RuntimeWorkflowExecutionEntityFrameworkCoreFeature` replace it. EF providers retain an authoritative lossless document plus indexed history, alteration-capture, authority and pinned-artifact projections; `IWorkflowRuntimeAttentionQuery` remains a separate cross-store contract.
 
+### `IWorkflowHealthQuery` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Optional provider capability implemented by the selected workflow-execution state store.
+- **Signature:** `QueryHealthPageAsync(WorkflowExecutionStatePageQuery, IncidentHealth, CancellationToken)`.
+- **Usage:** apply current Active, Blocking or None incident health in the same persistence scope before counting and keyset paging. Cursors must bind to health, ordinary filters and scope. The API uses these pages as candidates and still applies request inspection authorization; only its explicit allow-all development adapter can return the provider page directly. Providers without the capability retain bounded candidate traversal and authorization-safe health filtering.
+- **Default implementation:** `EfWorkflowExecutionStateStore`, using existing incident status and workflow identity projections without fault/value content or a schema change.
+
 ### `IWorkflowExecutableReferenceGarbageCollector` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one collector owns physical executable-artifact reclamation for a runtime composition).
 - **Signature:** `SweepAsync(CancellationToken cancellationToken = default)`.
