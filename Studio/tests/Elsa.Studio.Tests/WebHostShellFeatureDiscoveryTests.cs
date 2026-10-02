@@ -4,6 +4,7 @@ using CShells.Features;
 using Elsa.Studio.Web;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyModel;
 using Nuplane.Loading;
 
 namespace Elsa.Studio.Tests;
@@ -15,12 +16,14 @@ public sealed class WebHostShellFeatureDiscoveryTests : IAsyncLifetime
     private static readonly string[] PackageLoadedFeatures = ["WeatherForecastSample"];
 
     private HashSet<string> _enabled = null!;
+    private HashSet<string> _shipped = null!;
     private HashSet<string> _discovered = null!;
 
     public async Task InitializeAsync()
     {
         _enabled = await ReadEnabledFeaturesAsync();
-        _discovered = await DiscoverFeatureIdsAsync();
+        _shipped = await DiscoverFeatureIdsAsync(shells => shells.WithAssemblies(LoadWebHostProjectAssemblies()));
+        _discovered = await DiscoverFeatureIdsAsync(shells => shells.WithStudioFeatureAssemblies());
     }
 
     public Task DisposeAsync() => Task.CompletedTask;
@@ -36,12 +39,21 @@ public sealed class WebHostShellFeatureDiscoveryTests : IAsyncLifetime
         Assert.Empty(undiscoverable);
     }
 
+    // Covers opt-in features too (e.g. ExtensionBuilderStudio), which the host ships but leaves out of shells.json.
+    [Fact]
+    public void EveryFeatureTheWebHostShips_IsDiscoverable()
+    {
+        Assert.NotEmpty(_shipped);
+        Assert.Empty(_shipped.Except(_discovered, StringComparer.OrdinalIgnoreCase));
+    }
+
     [Fact]
     public void PackageLoadedFeatures_AreEnabledButNotInBox()
     {
         Assert.All(PackageLoadedFeatures, feature =>
         {
             Assert.Contains(feature, _enabled);
+            Assert.DoesNotContain(feature, _shipped);
             Assert.DoesNotContain(feature, _discovered);
         });
     }
@@ -55,14 +67,28 @@ public sealed class WebHostShellFeatureDiscoveryTests : IAsyncLifetime
         return snapshot.Features.Keys.ToHashSet(StringComparer.OrdinalIgnoreCase);
     }
 
-    // Uses the host's own assembly registration, with no Nuplane packages installed, so the result matches a fresh start.
-    private static async Task<HashSet<string>> DiscoverFeatureIdsAsync()
+    // The Web host's deps.json (copied beside the tests by Mvc.Testing) lists the projects the host is built from, so this
+    // follows its ProjectReferences rather than the typeof(...) entries in StudioFeatureAssemblies that it is checked against.
+    private static Assembly[] LoadWebHostProjectAssemblies()
+    {
+        using var stream = File.OpenRead(Path.Join(AppContext.BaseDirectory, "Elsa.Studio.Web.deps.json"));
+        using var reader = new DependencyContextJsonReader();
+        var context = reader.Read(stream);
+        return context.RuntimeLibraries
+            .Where(library => library.Type == "project")
+            .SelectMany(library => library.GetDefaultAssemblyNames(context))
+            .Select(Assembly.Load)
+            .ToArray();
+    }
+
+    // Runs CShells discovery with no Nuplane packages installed, so the result matches a fresh start.
+    private static async Task<HashSet<string>> DiscoverFeatureIdsAsync(Action<CShellsBuilder> configure)
     {
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddSingleton<IPackageAssemblyCatalog, EmptyPackageAssemblyCatalog>();
         services.AddSingleton<StudioNuplaneAssemblyProvider>();
-        services.AddCShells(shells => shells.WithStudioFeatureAssemblies());
+        services.AddCShells(configure);
         await using var provider = services.BuildServiceProvider();
 
         var snapshot = await provider.GetRequiredService<IRuntimeFeatureCatalog>().GetSnapshotAsync();
