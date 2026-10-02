@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-for (const theme of ["light", "black-glass"] as const) {
+for (const theme of ["light", "dark"] as const) {
   test(`Expression Type options remain reachable in a constrained inspector (${theme})`, async ({ page }) => {
     await page.setViewportSize({ width: 900, height: 600 });
     await page.goto(`/?theme=${theme}`);

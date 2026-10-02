@@ -5,7 +5,7 @@ test.setTimeout(60_000);
 
 test("Activity Definition graph authoring shares the designer without workflow lifecycle UI", async ({ page }) => {
   const requests = await mockGraphAuthoring(page);
-  await page.goto("/?mode=activity-definition-graph-authoring&theme=black-glass");
+  await page.goto("/?mode=activity-definition-graph-authoring&theme=dark");
 
   await expect(page.getByRole("heading", { name: "Browser graph activity" })).toBeVisible();
   await expect(page.getByLabel("Activity Graph designer")).toBeVisible();

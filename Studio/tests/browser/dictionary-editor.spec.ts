@@ -45,7 +45,7 @@ test("dictionary entries support responsive inline and expanded editing", async 
 
 test("dictionary rows stack in a narrow inspector", async ({ page }) => {
   await page.setViewportSize({ width: 420, height: 760 });
-  await page.goto("/?theme=black-glass&mode=dictionary");
+  await page.goto("/?theme=dark&mode=dictionary");
 
   const row = page.locator(".wf-dictionary-row").first();
   const key = row.locator(".wf-dictionary-cell.key");

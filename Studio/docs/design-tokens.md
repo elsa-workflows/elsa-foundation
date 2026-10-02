@@ -149,15 +149,17 @@ For modules bundled before the `--studio-*` layer existed: `--surface`, `--text`
 
 ## Layer 2 material vocabulary — `--studio-material-*` (STABLE, opt-in)
 
-Material themes (`stone`, `blueprint`, `brass-instrument`) add
-textured, layered surface recipes on top of the flat `--studio-*` layer. They are gated on the
-`html[data-theme-material]` attribute, so **flat themes are untouched** (see [Rules](#rules)).
-A module opts into the material look by consuming these tokens **inside a
+A material theme adds textured, layered surface recipes on top of the flat `--studio-*` layer.
+They are gated on the `html[data-theme-material]` attribute, so **flat themes are untouched** (see
+[Rules](#rules)). A module opts into the material look by consuming these tokens **inside a
 `[data-theme-material]` guard**; without the guard the module stays flat.
 
-Each material theme defines the full set below per theme+mode block. If you add a new
-`--studio-material-*` token you MUST define it in **every** material theme block, not as one
-hardcoded value.
+No built-in theme is a material theme any more (Stone, Blueprint and Brass Instrument were the
+last; see [Removed in the next major version](#removed-in-the-next-major-version)), so Studio's own
+shell never sets `data-theme-material`. The vocabulary stays for hosts and themes that supply their
+own recipes: the shared `html[data-theme-material]` block in `tokens.css` defines a neutral, flat
+fallback for every token below, and a material theme overrides the rungs it restyles. If you add a
+new `--studio-material-*` token you MUST give it a fallback in that shared block.
 
 ### The surface-role ladder
 
@@ -192,25 +194,6 @@ Edges/shadows/interaction: `--studio-material-edge`, `--studio-material-edge-str
 Texture/grid: `--studio-material-texture`, `--studio-material-texture-size`,
 `--studio-material-grid-size`, `--studio-material-radius`.
 
-## Layer 2 glass vocabulary — `--studio-glass-*` (STABLE, `black-glass` only)
-
-`black-glass` is not a `[data-theme-material]` theme; it uses a parallel translucent-glass
-vocabulary. A module that wants the glass idiom under `black-glass` guards on
-`html[data-theme="black-glass"]` (the one place a module MAY key on `[data-theme]` — see
-[Rules](#rules)) and consumes:
-
-- surfaces: `--studio-glass-bg`, `-bg-strong`, `-bg-soft`;
-- specular light: `--studio-glass-sheen` (a soft diagonal top-light band composed into the
-  `-bg`/`-bg-strong` stacks so panels catch a reflection) and `--studio-glass-accent-glow`
-  (the blue outer-halo layer factored out of `-glow` so panels can compose their own halo);
-- dense tiers (the glass analogue of row/well): `--studio-glass-row-bg`,
-  `--studio-glass-well-bg`, `--studio-glass-well-shadow`;
-- edges/glow: `--studio-glass-edge`, `-edge-strong`, `--studio-glass-glow`, `-glow-strong`;
-- texture/grid: `--studio-glass-texture`, `-texture-size`, `--studio-glass-grid`;
-- blueprint backdrop: `--studio-blueprint-bg`, `-bg-size` (deep midnight-navy gradient in
-  dark mode / crisp ice-blue in light, layered with ambient light pools, a faint blue grid,
-  and the glass texture).
-
 ## Rules
 
 1. **No raw colour literals in module CSS.** Never write a hex / `rgb()` / `rgba()` / `hsl()`
@@ -224,21 +207,20 @@ vocabulary. A module that wants the glass idiom under `black-glass` guards on
    `--secrets-*`, … aliases are private to that module. Depend on `--studio-*` (or your own
    private alias onto it), never on `--wf-panel` etc.
 3. **No `[data-theme="…"]` selectors in module CSS.** Modules are theme-agnostic: they get
-   per-theme behaviour through the tokens, which the host redefines per theme. The **only**
-   permitted exception is `html[data-theme="black-glass"]` for opting into the
-   `--studio-glass-*` idiom, since glass is a parallel vocabulary rather than a token remap.
+   per-theme behaviour through the tokens, which the host redefines per theme. There are no
+   exceptions.
    This rule is about `data-theme` (which theme). The mode and layout attributes are not theme
    selectors and stay allowed: `[data-theme-mode="dark"]` for the colour scheme,
    `[data-theme-appearance="high-contrast"]` for a High-contrast-only adjustment the tokens
    cannot express, and `[data-theme-layout="…"]` for arrangement (see [Modes and the `<html>` attributes](#modes-and-the-html-attributes)).
-4. **Gate every material treatment on `[data-theme-material]`.** Flat themes (`meridian`,
-   `drift`, `schematic`, `atelier`, `elsa-cloud`, `signal`, `dusk`) must stay flat. Any rule
+4. **Gate every material treatment on `[data-theme-material]`.** Flat themes — every built-in:
+   `meridian`, `drift`, `schematic`, `atelier`, `elsa-cloud`, `signal`, `dusk` — must stay flat. Any rule
    consuming a `--studio-material-*` token belongs inside an `html[data-theme-material] …`
    guard.
-5. **A new token is defined per theme, not once.** Any new `--studio-material-*` /
-   `--studio-glass-*` token must be added to **every** material (or glass) theme block with a
-   theme-appropriate recipe — never a single hardcoded value that leaks one theme's look into
-   all of them.
+5. **A new material token gets a neutral fallback, and recipes stay per theme.** Any new
+   `--studio-material-*` token is defined in the shared `html[data-theme-material]` block as an
+   alias onto the flat `--studio-*` layer; a material theme then supplies its own recipe — never
+   a single hardcoded look that leaks one theme into all of them.
 
 ## The module-private alias-block pattern
 
@@ -258,12 +240,36 @@ rule 1.) `Elsa.Studio.Secrets` follows the same shape with `--studio-*`-first fa
 
 - **STABLE** — everything documented above: the `--studio-*` semantic tokens (surfaces,
   text, accent, status, type/radius), the compatibility aliases, the `--studio-material-*`
-  vocabulary including the surface-role ladder (shell < panel < card < row < well), and the
-  `--studio-glass-*` variant. Modules may depend on these. Breaking changes ship only in a
-  major version with a migration note.
+  vocabulary including the surface-role ladder (shell < panel < card < row < well). Modules may
+  depend on these. Breaking changes ship only in a major version with a migration note.
 - **INTERNAL** — layer-1 primitive names, the per-theme recipe *values*, the texture asset
   paths, and every module-private namespace (`--wf-*`, `--otel-*`, …). These may change at any
   time; do not depend on them across module boundaries.
+
+## Removed in the next major version
+
+**The glass vocabulary and the Black Glass theme.** Black Glass was the only theme that defined
+`--studio-glass-*` and `--studio-blueprint-bg*`, and `html[data-theme="black-glass"]` was the only
+`[data-theme]` selector module CSS was allowed. The theme is retired, so all three go together:
+
+| Removed | Use instead |
+| --- | --- |
+| `--studio-glass-bg`, `-bg-strong`, `-bg-soft` | `--studio-surface`, `--studio-surface-raised`, `--studio-surface-muted` |
+| `--studio-glass-row-bg`, `--studio-glass-well-bg` | `--studio-surface`, `--studio-surface-muted` |
+| `--studio-glass-edge`, `-edge-strong` | `--studio-border`, and `color-mix()` of `--studio-accent` over it for emphasis |
+| `--studio-glass-glow`, `-glow-strong`, `-accent-glow`, `--studio-glass-well-shadow` | `--studio-shadow-sm` |
+| `--studio-glass-sheen`, `-grid`, `-texture`, `-texture-size`, `--studio-blueprint-bg`, `-bg-size` | no replacement — drop the layer, or paint over `--studio-bg` |
+| `html[data-theme="black-glass"] …` rules in module CSS | delete them (Rule 3 has no exception now); the base, token-driven rules already apply |
+
+Nothing sets `data-theme="black-glass"` any more, so a module that still carries such rules keeps
+rendering correctly through its base rules: the guarded rules simply never match, and a
+`var(--studio-glass-*)` outside a guard resolves to nothing — give it a fallback or replace it.
+This is a breaking change to the published `@elsa-workflows/studio-ui/tokens.css` and ships with
+the next major version of that package.
+
+**The Stone, Blueprint and Brass Instrument recipes.** Their per-theme `--studio-material-*` values
+were INTERNAL and are gone with the themes, along with the texture tiles under `/studio/assets/`.
+The `--studio-material-*` token *names* are unchanged and now resolve to neutral fallbacks.
 
 ## Enforcement
 

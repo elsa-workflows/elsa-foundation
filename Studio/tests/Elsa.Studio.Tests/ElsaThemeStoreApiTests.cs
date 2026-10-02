@@ -17,41 +17,22 @@ public sealed class ElsaThemeStoreApiTests : IAsyncLifetime
     private HttpClient _client = null!;
 
     [Fact]
-    public async Task NonSignatureBuiltInThemeCanBeSetAsTheDefault()
-    {
-        var response = await _client.PutAsJsonAsync("/_elsa/theme-store/default", new { ThemeId = "stone" });
-        response.EnsureSuccessStatusCode();
-        var store = await response.Content.ReadFromJsonAsync<ThemeStoreResponse>();
-
-        Assert.NotNull(store);
-        Assert.Equal("stone", store.DefaultThemeId);
-    }
-
-    [Fact]
     public async Task BuiltInThemeCanBeDisabledAndReEnabled()
     {
-        var disableResponse = await _client.PutAsJsonAsync("/_elsa/theme-store/themes/blueprint/visibility", new { Enabled = false });
-        disableResponse.EnsureSuccessStatusCode();
-        var disabledStore = await disableResponse.Content.ReadFromJsonAsync<ThemeStoreResponse>();
+        var disabledStore = await SetVisibilityAsync("drift", enabled: false);
+        Assert.Contains("drift", disabledStore.DisabledBuiltInThemeIds ?? []);
 
-        Assert.NotNull(disabledStore);
-        Assert.Contains("blueprint", disabledStore.DisabledBuiltInThemeIds ?? []);
-
-        var enableResponse = await _client.PutAsJsonAsync("/_elsa/theme-store/themes/blueprint/visibility", new { Enabled = true });
-        enableResponse.EnsureSuccessStatusCode();
-        var enabledStore = await enableResponse.Content.ReadFromJsonAsync<ThemeStoreResponse>();
-
-        Assert.NotNull(enabledStore);
-        Assert.DoesNotContain("blueprint", enabledStore.DisabledBuiltInThemeIds ?? []);
+        var enabledStore = await SetVisibilityAsync("drift", enabled: true);
+        Assert.DoesNotContain("drift", enabledStore.DisabledBuiltInThemeIds ?? []);
     }
 
     [Fact]
     public async Task DefaultBuiltInThemeCannotBeDisabled()
     {
-        var defaultResponse = await _client.PutAsJsonAsync("/_elsa/theme-store/default", new { ThemeId = "stone" });
+        var defaultResponse = await _client.PutAsJsonAsync("/_elsa/theme-store/default", new { ThemeId = "drift" });
         defaultResponse.EnsureSuccessStatusCode();
 
-        var disableResponse = await _client.PutAsJsonAsync("/_elsa/theme-store/themes/stone/visibility", new { Enabled = false });
+        var disableResponse = await _client.PutAsJsonAsync("/_elsa/theme-store/themes/drift/visibility", new { Enabled = false });
 
         Assert.Equal(HttpStatusCode.BadRequest, disableResponse.StatusCode);
     }
@@ -59,6 +40,7 @@ public sealed class ElsaThemeStoreApiTests : IAsyncLifetime
     [Theory]
     [InlineData("some-custom-theme")]
     [InlineData("hot-pink")] // A retired built-in.
+    [MemberData(nameof(RetiredThemeIds))]
     public async Task VisibilityEndpointRejectsNonBuiltInThemeIds(string themeId)
     {
         var response = await _client.PutAsJsonAsync($"/_elsa/theme-store/themes/{themeId}/visibility", new { Enabled = false });
@@ -66,13 +48,41 @@ public sealed class ElsaThemeStoreApiTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
+    [Theory]
+    [MemberData(nameof(RetiredThemeIds))]
+    public async Task RetiredBuiltInThemeCannotBecomeTheDefault(string themeId)
+    {
+        var response = await _client.PutAsJsonAsync("/_elsa/theme-store/default", new { ThemeId = themeId });
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task StoreThatStillNamesRetiredThemesLoadsAndSaves()
+    {
+        await File.WriteAllTextAsync(
+            Path.Join(_contentRoot, "studio-theme-store.json"),
+            """{ "themes": [], "defaultThemeId": "black-glass", "assets": [], "disabledBuiltInThemeIds": ["stone", "drift", "brass-instrument"] }""");
+
+        var loaded = await _client.GetFromJsonAsync<ThemeStoreResponse>("/_elsa/theme-store");
+
+        // Retired ids drop out of the hidden list; the client resolves the unknown default to the first built-in.
+        Assert.Equal(["drift"], loaded?.DisabledBuiltInThemeIds ?? []);
+
+        var saved = await SetVisibilityAsync("signal", enabled: false);
+        Assert.Equal(["drift", "signal"], saved.DisabledBuiltInThemeIds ?? []);
+
+        var defaultResponse = await _client.PutAsJsonAsync("/_elsa/theme-store/default", new { ThemeId = "atelier" });
+        defaultResponse.EnsureSuccessStatusCode();
+        Assert.Equal("atelier", (await defaultResponse.Content.ReadFromJsonAsync<ThemeStoreResponse>())?.DefaultThemeId);
+    }
+
     [Fact]
     public async Task DisabledBuiltInThemeCannotBecomeTheDefault()
     {
-        var disableResponse = await _client.PutAsJsonAsync("/_elsa/theme-store/themes/blueprint/visibility", new { Enabled = false });
-        disableResponse.EnsureSuccessStatusCode();
+        await SetVisibilityAsync("drift", enabled: false);
 
-        var defaultResponse = await _client.PutAsJsonAsync("/_elsa/theme-store/default", new { ThemeId = "blueprint" });
+        var defaultResponse = await _client.PutAsJsonAsync("/_elsa/theme-store/default", new { ThemeId = "drift" });
 
         Assert.Equal(HttpStatusCode.BadRequest, defaultResponse.StatusCode);
     }
@@ -139,6 +149,15 @@ public sealed class ElsaThemeStoreApiTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
+    public static TheoryData<string> RetiredThemeIds => ["black-glass", "stone", "blueprint", "brass-instrument"];
+
+    private async Task<ThemeStoreResponse> SetVisibilityAsync(string themeId, bool enabled)
+    {
+        var response = await _client.PutAsJsonAsync($"/_elsa/theme-store/themes/{themeId}/visibility", new { Enabled = enabled });
+        response.EnsureSuccessStatusCode();
+        return (await response.Content.ReadFromJsonAsync<ThemeStoreResponse>())!;
+    }
+
     private static StudioThemeDefinition CustomTheme() =>
         new("custom-appearance", "Custom Appearance", null, "custom", 1, true, true, new StudioThemeModes(Palette(), Palette()), null);
 
@@ -173,6 +192,7 @@ public sealed class ElsaThemeStoreApiTests : IAsyncLifetime
         _app = builder.Build();
         _app.UseAuthentication();
         _app.UseAuthorization();
+        _app.MapElsaThemeStoreCoreApi(StudioBridgeAuth.PolicyName);
         _app.MapElsaThemeManagementApi(StudioBridgeAuth.PolicyName);
 
         await _app.StartAsync();

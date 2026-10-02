@@ -1,55 +1,30 @@
 import { describe, expect, it } from "vitest";
 import type { StudioEndpointContext } from "../sdk";
-import { builtInThemeDefinitions, getSupportedThemeModes, getTheme, getThemeNames, isMaterialTheme, materialThemeIds, resolveThemeMode, supportsThemeMode } from "../app/themes/presets";
+import { builtInThemeDefinitions, getTheme, getThemeNames, isMaterialTheme, materialThemeIds } from "../app/themes/presets";
 import type { ThemeMaterialMode } from "../app/themes/presets";
 import { applyMaterialVariables } from "../app/components/ThemeProvider";
 import { createCustomThemeFrom, findSelectableTheme, getSelectableThemes, normalizeThemeStore, saveTheme, setBuiltInThemeEnabled, validateThemeDefinition } from "../app/themes/themeStoreApi";
 
+const retiredThemeIds = ["black-glass", "stone", "blueprint", "brass-instrument"] as const;
+
 describe("theme presets", () => {
-  it("represents material themes as read-only built-in definitions", () => {
-    expect(getThemeNames()).toEqual(expect.arrayContaining([
-      { id: "black-glass", name: "Black Glass" },
-      { id: "stone", name: "Stone" },
-      { id: "blueprint", name: "Blueprint" },
-      { id: "brass-instrument", name: "Brass Instrument" }
-    ]));
-    expect(getTheme("black-glass")?.source).toBe("built-in");
-    expect(getTheme("black-glass")?.modes.dark.material?.cssVariables?.["--studio-material-finish"]).toBe("glass");
-    expect(materialThemeIds).toEqual(["stone", "blueprint", "brass-instrument"]);
-    expect(isMaterialTheme("stone")).toBe(true);
-    expect(isMaterialTheme("black-glass")).toBe(false);
+  it("keeps every built-in a read-only definition", () => {
+    expect(getThemeNames()).toEqual(builtInThemeDefinitions.map(({ id, name }) => ({ id, name })));
+    expect(builtInThemeDefinitions.every(theme => theme.source === "built-in")).toBe(true);
   });
 
-  it("keeps material theme modes visually distinct", () => {
-    for (const themeId of materialThemeIds) {
-      const theme = getTheme(themeId);
-      if (!theme || !supportsThemeMode(theme, "dark")) {
-        continue;
-      }
-
-      expect(theme?.light.background, themeId).not.toBe(theme?.dark.background);
-      expect(theme?.light.card, themeId).not.toBe(theme?.dark.card);
-      expect(theme?.light.foreground, themeId).not.toBe(theme?.dark.foreground);
-      expect(theme?.modes.light.material?.textureAssets?.surface, themeId).not.toBe(theme?.modes.dark.material?.textureAssets?.surface);
-    }
-
-    const blackGlass = getTheme("black-glass");
-
-    expect(blackGlass?.light.background).not.toBe(blackGlass?.dark.background);
-    expect(blackGlass?.light.foreground).not.toBe(blackGlass?.dark.foreground);
+  it("registers no built-in material theme", () => {
+    expect(materialThemeIds).toEqual([]);
+    expect(builtInThemeDefinitions.some(theme => isMaterialTheme(theme.id))).toBe(false);
   });
 
-  it("treats Brass Instrument as a dark-only material theme", () => {
-    const brass = getTheme("brass-instrument");
-
-    expect(brass).toBeDefined();
-    expect(getSupportedThemeModes(brass!)).toEqual(["dark"]);
-    expect(supportsThemeMode(brass!, "light")).toBe(false);
-    expect(resolveThemeMode(brass!, "light")).toBe("dark");
+  it.each(retiredThemeIds)("no longer ships the retired %s theme", themeId => {
+    expect(getTheme(themeId)).toBeUndefined();
+    expect(isMaterialTheme(themeId)).toBe(false);
   });
 
   it("duplicates built-ins into custom draft themes", () => {
-    const copy = createCustomThemeFrom(builtInThemeDefinitions[0], "black-glass-copy", "Black Glass Copy");
+    const copy = createCustomThemeFrom(builtInThemeDefinitions[0], "meridian-copy", "Meridian Copy");
 
     expect(copy.source).toBe("custom");
     expect(copy.published).toBe(false);
@@ -76,15 +51,43 @@ describe("theme presets", () => {
   });
 
   it("hides admin-disabled built-in themes from the selectable picker list", () => {
-    const store = normalizeThemeStore({ disabledBuiltInThemeIds: ["blueprint", "not-a-built-in"] });
-    const blueprint = store.themes.find(theme => theme.id === "blueprint");
+    const store = normalizeThemeStore({ disabledBuiltInThemeIds: ["drift", "not-a-built-in", ...retiredThemeIds] });
+    const drift = store.themes.find(theme => theme.id === "drift");
 
     // The definition stays listed (so the Theme Builder can re-enable it) but is not selectable.
-    expect(blueprint?.enabled).toBe(false);
-    expect(getSelectableThemes(store).some(theme => theme.id === "blueprint")).toBe(false);
-    expect(findSelectableTheme(store, "blueprint").id).not.toBe("blueprint");
-    // Unknown ids are dropped rather than persisted back.
-    expect(store.disabledBuiltInThemeIds).toEqual(["blueprint"]);
+    expect(drift?.enabled).toBe(false);
+    expect(getSelectableThemes(store).some(theme => theme.id === "drift")).toBe(false);
+    expect(findSelectableTheme(store, "drift").id).not.toBe("drift");
+    // Unknown and retired ids are dropped rather than persisted back.
+    expect(store.disabledBuiltInThemeIds).toEqual(["drift"]);
+  });
+
+  it.each(retiredThemeIds)("lands a user whose stored theme is the retired %s on the default theme", themeId => {
+    expect(findSelectableTheme(normalizeThemeStore(), themeId).id).toBe("meridian");
+    expect(findSelectableTheme(normalizeThemeStore({ defaultThemeId: "atelier" }), themeId).id).toBe("atelier");
+  });
+
+  it.each(retiredThemeIds)("falls back to the first built-in when the store default is the retired %s", themeId => {
+    const store = normalizeThemeStore({ defaultThemeId: themeId });
+
+    expect(store.defaultThemeId).toBe("meridian");
+    expect(store.themes.some(theme => theme.id === themeId)).toBe(false);
+    expect(findSelectableTheme(store, null).id).toBe("meridian");
+  });
+
+  it("keeps a custom copy of a retired material theme valid, textures and all", () => {
+    const copy = createCustomThemeFrom(builtInThemeDefinitions[0], "stone-copy", "Stone Copy");
+    copy.modes.dark.material = {
+      textureAssets: { surface: "/studio/assets/stone-slate-tile.png" },
+      textureSize: 390,
+      cssVariables: { "--studio-material-finish": "slate", "--studio-material-depth": "0.78" }
+    };
+    const store = normalizeThemeStore({ themes: [{ ...copy, enabled: true, published: true }] });
+
+    expect(validateThemeDefinition(copy).valid).toBe(true);
+    expect(findSelectableTheme(store, "stone-copy").modes.dark.material).toEqual(copy.modes.dark.material);
+    // A custom id never switches the material treatment on, so the missing tile is never requested.
+    expect(isMaterialTheme("stone-copy")).toBe(false);
   });
 
   it("sends built-in visibility changes to the visibility endpoint and normalizes the result", async () => {
@@ -93,15 +96,15 @@ describe("theme presets", () => {
       http: {
         putJson: async (url: string, body: unknown) => {
           requested = { url, body };
-          return { themes: [], defaultThemeId: "black-glass", assets: [], disabledBuiltInThemeIds: ["blueprint"] };
+          return { themes: [], defaultThemeId: "meridian", assets: [], disabledBuiltInThemeIds: ["drift"] };
         }
       }
     };
 
-    const store = await setBuiltInThemeEnabled(context as unknown as StudioEndpointContext, "blueprint", false);
+    const store = await setBuiltInThemeEnabled(context as unknown as StudioEndpointContext, "drift", false);
 
-    expect(requested).toEqual({ url: "/_elsa/theme-store/themes/blueprint/visibility", body: { enabled: false } });
-    expect(store.themes.find(theme => theme.id === "blueprint")?.enabled).toBe(false);
+    expect(requested).toEqual({ url: "/_elsa/theme-store/themes/drift/visibility", body: { enabled: false } });
+    expect(store.themes.find(theme => theme.id === "drift")?.enabled).toBe(false);
     expect(store.themes.filter(theme => theme.enabled).length).toBeGreaterThan(0);
   });
 
@@ -109,15 +112,15 @@ describe("theme presets", () => {
     const custom = createCustomThemeFrom(builtInThemeDefinitions[0], "custom-theme", "Custom Theme");
     const context = {
       http: {
-        putJson: async () => ({ themes: [custom], defaultThemeId: "black-glass", assets: [] })
+        putJson: async () => ({ themes: [custom], defaultThemeId: "schematic", assets: [] })
       }
     };
 
     const store = await saveTheme(context as unknown as StudioEndpointContext, custom);
 
-    expect(store.themes.some(theme => theme.id === "black-glass")).toBe(true);
+    expect(store.themes.some(theme => theme.id === "schematic")).toBe(true);
     expect(store.themes.some(theme => theme.id === "custom-theme")).toBe(true);
-    expect(store.defaultThemeId).toBe("black-glass");
+    expect(store.defaultThemeId).toBe("schematic");
   });
 });
 
@@ -129,17 +132,17 @@ describe("applyMaterialVariables", () => {
   }
 
   it("drives the CSS --studio-material-texture the recipes actually read", () => {
-    // The recipes in tokens.css read a single `--studio-material-texture`; the preset's
+    // Material recipes read a single `--studio-material-texture`; the theme's
     // primary (`surface`) asset must reach it, not just the per-name alias.
     const root = apply({
-      textureAssets: { surface: "/studio/assets/stone-slate-tile.png" },
+      textureAssets: { surface: "/studio/assets/custom-slate-tile.png" },
       textureSize: 390
     });
 
-    expect(root.style.getPropertyValue("--studio-material-texture")).toBe('url("/studio/assets/stone-slate-tile.png")');
+    expect(root.style.getPropertyValue("--studio-material-texture")).toBe('url("/studio/assets/custom-slate-tile.png")');
     expect(root.style.getPropertyValue("--studio-material-texture-size")).toBe("390px 390px");
     // Legacy per-name alias remains for backwards compatibility.
-    expect(root.style.getPropertyValue("--studio-material-surface-texture")).toBe('url("/studio/assets/stone-slate-tile.png")');
+    expect(root.style.getPropertyValue("--studio-material-surface-texture")).toBe('url("/studio/assets/custom-slate-tile.png")');
   });
 
   it("delivers a custom theme's texture to the CSS variable end to end", () => {
@@ -196,9 +199,9 @@ describe("material cssVariables validation", () => {
     ["a color-mix function", "color-mix(in srgb, #65d8ff 16%, transparent)"],
     ["an oklch color", "oklch(0.78 0.13 230)"],
     ["a gradient stack", "radial-gradient(circle at 72% 18%, #1b79ff 13%, transparent 28rem), linear-gradient(135deg, #07111b 0%, #03070c 58%)"],
-    ["a same-origin absolute url", "url(/studio/assets/stone-slate-tile.png)"],
-    ["a quoted same-origin url", 'url("/studio/assets/stone-slate-tile.png")'],
-    ["a bundler-relative url", "url(../../assets/materials/stone-slate-tile.png)"]
+    ["a same-origin absolute url", "url(/studio/assets/custom-slate-tile.png)"],
+    ["a quoted same-origin url", 'url("/studio/assets/custom-slate-tile.png")'],
+    ["a bundler-relative url", "url(../../assets/materials/custom-slate-tile.png)"]
   ])("accepts %s", (_label, value) => {
     expect(issuesFor({ "--studio-material-surface": value })).toEqual([]);
   });

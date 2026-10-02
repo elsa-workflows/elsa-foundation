@@ -237,7 +237,7 @@ export function applyMaterialVariables(root: HTMLElement, material: ThemeMateria
     root.style.setProperty(variableName, cssUrl(value));
   }
 
-  // The material CSS recipes (tokens.css) read a single `--studio-material-texture` (and
+  // Material CSS recipes read a single `--studio-material-texture` (and
   // `--studio-material-texture-size`) for every surface layer. Drive them from the theme's
   // primary texture asset (by convention the `surface` key, else the first asset) so a
   // preset- or store-supplied texture actually renders instead of only populating the

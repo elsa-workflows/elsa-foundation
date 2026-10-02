@@ -22,11 +22,8 @@
  *      `:root { … }` fallback block carrying the LIGHT-THEME snapshot values.
  *
  * The alias layer (`tokens.css`) already carries the per-theme, attribute-gated blocks
- * (`html[data-theme="…"]`, `html[data-theme-material]`, per-mode overrides) that define the
- * material recipes, so those reach the published package unchanged — external consumers can
- * render every material theme by setting `data-theme`/`data-theme-material` on <html>. The
- * only non-portable detail is the texture `url()`s, which reference bundler-relative asset
- * paths; those are rewritten to a documented, overridable same-origin base (see below).
+ * (`html[data-theme="…"]`, per-mode overrides) and the shared `html[data-theme-material]`
+ * block with its neutral material fallbacks, so those reach the published package unchanged.
  *
  * ORDERING IS DELIBERATE: in the host, `tokens.css` is `@import`ed at the TOP of
  * `styles.css`, so the host's layer-1 `:root` block comes after the alias layer in the
@@ -88,20 +85,7 @@ function collectReferencedNames(css) {
   return names;
 }
 
-// External consumers serve texture tiles from `/studio/assets/`, but the in-repo alias
-// layer references them via bundler-relative paths (`../../assets/materials/<file>.png`)
-// that only resolve inside the host Vite build. Rewrite each such url() to a same-origin
-// absolute path under a documented, overridable base so the emitted material theme blocks
-// render standalone. Consumers who host the tiles elsewhere override MATERIAL_ASSET_BASE.
-const MATERIAL_ASSET_BASE = process.env.STUDIO_UI_MATERIAL_ASSET_BASE ?? "/studio/assets";
-const MATERIAL_ASSET_URL_RE = /url\(\s*(['"]?)(?:\.\.?\/)+assets\/materials\/([^)'"]+?)\1\s*\)/gi;
-
-function rewriteMaterialAssetUrls(css) {
-  const base = MATERIAL_ASSET_BASE.replace(/\/+$/, "");
-  return css.replace(MATERIAL_ASSET_URL_RE, (_match, quote, file) => `url(${quote}${base}/${file}${quote})`);
-}
-
-const aliasLayer = rewriteMaterialAssetUrls(readFileSync(ALIAS_LAYER_PATH, "utf8"));
+const aliasLayer = readFileSync(ALIAS_LAYER_PATH, "utf8");
 const hostStyles = readFileSync(HOST_STYLES_PATH, "utf8");
 
 const aliasDefined = collectDefinedNames(aliasLayer);
@@ -202,5 +186,5 @@ writeFileSync(OUT_PATH, output, "utf8");
 const themeBlockCount = (output.match(/html\[data-theme/g) ?? []).length;
 console.log(
   `[build-tokens] Wrote ${OUT_PATH} (alias layer + ${themeBlockCount} theme/material blocks + ` +
-    `${resolved.length} layer-1 snapshot values; texture urls rebased to ${MATERIAL_ASSET_BASE}).`
+    `${resolved.length} layer-1 snapshot values).`
 );

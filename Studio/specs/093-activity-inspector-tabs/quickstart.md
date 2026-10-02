@@ -59,7 +59,7 @@ Verify:
 
 ## Visual review
 
-Capture the browser fixture in the repository's light and black-glass themes at:
+Capture the browser fixture in its light and dark (`?theme=dark`, Meridian dark) variants at:
 
 - A normal desktop Inspector width.
 - The minimum expanded Inspector width.

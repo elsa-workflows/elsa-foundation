@@ -60,6 +60,7 @@ import type {
   ActivityDefinitionDraftView,
   ActivityDefinitionVersionView
 } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/activityDefinitionTypes";
+import { getTheme, themeTokenNames } from "../../src/apps/Elsa.Studio.Web/Client/src/app/themes/presets";
 import "../../src/apps/Elsa.Studio.Web/Client/src/app/ui/tokens.css";
 import "../../src/essentials/Elsa.Studio.Workflows/Client/src/styles.css";
 import "./fixture.css";
@@ -1496,9 +1497,17 @@ function browserVersion(
   };
 }
 
-const theme = searchParams.get("theme");
-document.documentElement.dataset.theme = theme === "black-glass" ? "black-glass" : "meridian";
-document.documentElement.dataset.themeMode = theme === "black-glass" ? "dark" : "light";
+// `?theme=dark` is the second visual variant the specs cover. The fixture has no ThemeProvider, so it
+// writes Meridian's dark palette onto <html> itself, the way the provider does at runtime.
+const darkVariant = searchParams.get("theme") === "dark";
+document.documentElement.dataset.theme = "meridian";
+document.documentElement.dataset.themeMode = darkVariant ? "dark" : "light";
+if (darkVariant) {
+  const palette = getTheme("meridian")!.dark;
+  for (const token of themeTokenNames) {
+    document.documentElement.style.setProperty(`--${token.replace(/([A-Z])/g, "-$1").toLowerCase()}`, palette[token]);
+  }
+}
 createRoot(document.getElementById("root")!).render(
   publicationReviewFixture
     ? <PublicationReviewFixture />

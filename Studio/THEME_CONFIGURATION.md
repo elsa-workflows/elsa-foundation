@@ -50,7 +50,7 @@ Path to a directory or file containing custom themes. Supports:
 **Type:** `string`  
 **Default:** `"AddToBuiltIns"`  
 **Values:**
-- `"BuiltInsOnly"` - Use built-in themes (21 built-in themes)
+- `"BuiltInsOnly"` - Use built-in themes (7 built-in themes)
 - `"DirectoryOnly"` - Use only themes from the directory
 - `"AddToBuiltIns"` - Merge directory themes with built-ins (default)
 
@@ -70,11 +70,11 @@ The seven signature themes offer all four modes (Light, Dark, Dim and High contr
 - `"signal"` - Instrument panel: hairline borders, tight corners, mono legends, one phosphor-lime accent
 - `"dusk"` - Dim-first violet slate with an amber highlight, for long low-light sessions
 
-Other built-in theme IDs (Light and Dark only, unless noted):
-- `"black-glass"` - Dark HUD style
-- `"stone"` - Slate surfaces
-- `"blueprint"` - Architectural draft
-- `"brass-instrument"` - Brass & enamel (Dark only)
+These seven are the only built-in themes. Retired IDs — most recently `"black-glass"`, `"stone"`,
+`"blueprint"` and `"brass-instrument"` — are treated like any unknown ID: a configured or persisted
+default falls back to Meridian, a user who had one selected lands on the default theme, and a
+hidden-theme entry for one is dropped. Custom themes duplicated from them earlier keep working
+with their own palette.
 
 ## Examples
 

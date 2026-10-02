@@ -63,7 +63,7 @@ test("activity Inspector tabs keep fixed context, scroll independently, and surv
   await expect(outputs).toHaveAttribute("aria-selected", "true");
 });
 
-for (const theme of ["light", "black-glass"] as const) {
+for (const theme of ["light", "dark"] as const) {
   test(`activity Inspector tabs fit normal and minimum widths in ${theme}`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width: 1000, height: 760 });
     await page.goto(`/?theme=${theme}&mode=activity-inspector-tabs`);

@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 test("keeps the publication decision calm and actions visible at constrained height", async ({ page }) => {
   await page.setViewportSize({ width: 1100, height: 620 });
-  await page.goto("/?mode=publication-review&theme=black-glass");
+  await page.goto("/?mode=publication-review&theme=dark");
 
   const dialog = page.getByRole("dialog", { name: "Review and publish" });
   await expect(dialog).toContainText("Publication channel");
@@ -50,7 +50,7 @@ test("offers exact version editing only when the server advertises support", asy
 
 test("success and retained-promotion recovery keep their actions in the fixed footer", async ({ page }) => {
   await page.setViewportSize({ width: 900, height: 520 });
-  await page.goto("/?mode=publication-review&theme=black-glass");
+  await page.goto("/?mode=publication-review&theme=dark");
   await page.getByRole("button", { name: "Publish" }).click();
 
   const success = page.getByRole("dialog", { name: "Publication complete" });
@@ -58,7 +58,7 @@ test("success and retained-promotion recovery keep their actions in the fixed fo
   await expect(success.getByRole("button", { name: "Close" })).toBeVisible();
   await expect(success.getByRole("button", { name: "Open published executable" })).toBeVisible();
 
-  await page.goto("/?mode=publication-review&outcome=recovery&theme=black-glass");
+  await page.goto("/?mode=publication-review&outcome=recovery&theme=dark");
   await page.getByRole("button", { name: "Publish" }).click();
   const recovery = page.getByRole("dialog", { name: "Publication needs attention" });
   await expect(recovery).toContainText("version was retained, but the channel was not activated");

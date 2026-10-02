@@ -29,11 +29,7 @@ internal static class ElsaThemeStoreApi
         "atelier",
         "elsa-cloud",
         "signal",
-        "dusk",
-        "black-glass",
-        "stone",
-        "blueprint",
-        "brass-instrument"
+        "dusk"
     };
     private static readonly HashSet<string> AllowedAssetContentTypes = new(StringComparer.OrdinalIgnoreCase)
     {

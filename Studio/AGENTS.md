@@ -20,7 +20,7 @@ Before domain-sensitive exploration, follow `docs/agents/domain.md`: read the ro
 
 Module CSS styles against the `--studio-*` token contract, never raw colour literals or
 another module's private namespace. The versioned contract — the stable tokens, the
-`--studio-material-*` surface-role ladder, the `--studio-glass-*` variant, and the module
+`--studio-material-*` surface-role ladder, and the module
 rules — is `docs/design-tokens.md`. It is enforced by `elsa/no-raw-color-literal`
 (`pnpm lint:css`, wired into `pnpm lint`).
 
