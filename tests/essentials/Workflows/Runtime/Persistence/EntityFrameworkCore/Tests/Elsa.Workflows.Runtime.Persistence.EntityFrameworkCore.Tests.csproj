@@ -33,6 +33,8 @@
     <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Locking\FileSystem\Elsa.Locking.FileSystem.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Modularity\EntityFramework\Elsa.Modularity.EntityFramework.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Modularity\Planning\Elsa.Modularity.Planning.csproj" />
+    <!-- Reuse the real CLI process/PTy helpers for the Worker profile candidate lifecycle. -->
+    <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Cli\Elsa.Cli.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Primitives\Hosting\Elsa.Primitives.Hosting.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Serialization\SystemText\Elsa.Serialization.SystemText.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Mediator\Elsa.Mediator.csproj" />
@@ -50,6 +52,8 @@
     <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Activities\Sequence\Elsa.Activities.Sequence.csproj" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="..\..\..\..\..\Cli\Tests\DotnetElsa.cs" Link="Cli\DotnetElsa.cs" />
+    <Compile Include="..\..\..\..\..\Cli\Tests\PseudoTerminalCli.cs" Link="Cli\PseudoTerminalCli.cs" />
     <!-- Fails any unordered Skip or Take (EF warning 10102) in this suite. -->
     <Compile Include="..\..\..\..\..\Persistence\EntityFramework\Tests\UnorderedRowLimitGuard.cs" Link="UnorderedRowLimitGuard.cs" />
     <Compile Include="..\..\..\..\..\Persistence\EntityFramework\Tests\TemporarySqliteDatabase.cs" Link="TemporarySqliteDatabase.cs" />

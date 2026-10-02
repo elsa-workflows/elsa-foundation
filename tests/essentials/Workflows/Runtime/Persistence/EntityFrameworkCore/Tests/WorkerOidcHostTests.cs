@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Security.Claims;
 using System.Text.Json;
+using Elsa.Api.Capabilities.Authorization;
 using Elsa.Activities.Primitives.Activities;
 using Elsa.Workflows.Runtime.Api.Authorization;
 using Xunit;
@@ -14,38 +15,16 @@ public sealed class WorkerOidcHostTests
     private const string ExecutePath = "/runtime/workflows/executables/{0}/execute";
     private const string ExecutePermission = WorkflowRuntimePermissions.WorkflowRuntimeExecute;
 
-    private static readonly string[] ExpectedFeatures =
-    [
-        "ActivitiesControlFlow",
-        "ActivitiesPrimitives",
-        "ActivitiesRuntime",
-        "ActivitiesSequence",
-        "ApiCapabilities",
-        "Events",
-        "Expressions",
-        "FileSystemDistributedLocking",
-        "FoundationIdentityAbstractions",
-        "FoundationIdentityOidc",
-        "IdentityIamEntityFrameworkCore",
-        "Mediator",
-        "Primitives",
-        "Serialization",
-        "Tasks",
-        "WorkflowsRuntimeApi",
-        "WorkflowsRuntimeEntityFrameworkCore",
-        "WorkflowsRuntimeResumption",
-        "WorkflowsRuntimeTriggers"
-    ];
-
     [Fact]
     public async Task Real_shell_activation_refuses_a_scope_that_disagrees_with_the_configured_tenant()
     {
         await using var fixture = await WorkerOidcHostFixture.CreateAsync();
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => fixture.StartHostAsync("different-static-tenant"));
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            fixture.StartHostAsync(persistenceScope: "different-static-tenant"));
         Assert.Contains("host-start-failed, activate,", exception.Message, StringComparison.Ordinal);
         // A refused child must be reaped; the same fixture can then activate its ordinary configured scope.
         var valid = await fixture.StartHostAsync();
-        AssertWorkerComposition(valid.Ready.Data);
+        AssertWorkerComposition(valid.Ready.Data, fixture.PrimaryCandidate);
         await AssertNoMappingReadOrRuntimeEffectAsync(valid);
         await AssertNoUserOrExternalIdentityRowsAsync(valid);
     }
@@ -55,10 +34,11 @@ public sealed class WorkerOidcHostTests
     {
         await using var fixture = await WorkerOidcHostFixture.CreateAsync();
         Assert.NotEqual(Path.GetFullPath(fixture.IamDatabasePath), Path.GetFullPath(fixture.RuntimeDatabasePath));
-        var first = await fixture.StartHostAsync();
+        var candidate = fixture.PrimaryCandidate;
+        var first = await fixture.StartHostAsync(candidate);
         var ready = first.Ready.Data;
 
-        AssertWorkerComposition(ready);
+        AssertWorkerComposition(ready, candidate);
         var executable = await first.ControlAsync("seed-executable", new { prefix = "worker-oidc" });
         var artifactId = executable.GetProperty("artifactId").GetString()!;
         Assert.Equal("worker-oidc-event-artifact", artifactId);
@@ -198,11 +178,11 @@ public sealed class WorkerOidcHostTests
         Assert.Equal(0, first.ExitCode);
 
         // The issuer/key and exact token above stay in this parent process while the actor host is a new OS process.
-        var second = await fixture.StartHostAsync();
+        var second = await fixture.StartHostAsync(candidate);
         var secondIdentity = (second.ProcessId, second.ProcessStartUtcTicks);
         Assert.NotEqual(firstIdentity, secondIdentity);
         Assert.Equal(firstArtifactSha256, second.ArtifactSha256);
-        AssertWorkerComposition(second.Ready.Data);
+        AssertWorkerComposition(second.Ready.Data, candidate);
 
         var reloaded = await SnapshotAsync(second, executionId);
         Assert.Equal("Completed", reloaded.GetProperty("workflowStatus").GetString());
@@ -226,11 +206,72 @@ public sealed class WorkerOidcHostTests
         await AssertNoUserOrExternalIdentityRowsAsync(second);
     }
 
-    private static void AssertWorkerComposition(JsonElement ready)
+    [Fact]
+    public async Task Edited_candidate_controls_feature_removal_and_capabilities_audience()
     {
-        Assert.Equal("worker-oidc-runtime", ready.GetProperty("shell").GetString());
+        await using var fixture = await WorkerOidcHostFixture.CreateAsync();
+        var candidate = await fixture.CreateControlCandidateAsync();
+        var primary = fixture.PrimaryCandidate;
+        Assert.Equal(primary.CatalogId, candidate.CatalogId);
+        Assert.Equal(primary.CatalogVersion, candidate.CatalogVersion);
+        Assert.Equal(primary.CatalogDigest, candidate.CatalogDigest);
+        Assert.Equal(primary.ProfileId, candidate.ProfileId);
+        Assert.Equal(primary.ProfileVersion, candidate.ProfileVersion);
+        Assert.Equal(primary.ProfileDigest, candidate.ProfileDigest);
+        Assert.Equal(18, candidate.FeatureIds.Length);
+        Assert.DoesNotContain("ActivitiesControlFlow", candidate.FeatureIds);
+        Assert.Contains("Events", candidate.FeatureIds);
+        Assert.Contains("inventory-unverified", candidate.Findings);
+        Assert.Contains("persistence-unverified", candidate.Findings);
+        Assert.Contains("candidate-re-resolution", candidate.Findings);
+        Assert.Equal(WorkerProfileCandidate.ControlAudience, candidate.Audience);
+
+        var host = await fixture.StartHostAsync(candidate);
+        AssertWorkerComposition(host.Ready.Data, candidate);
+        await SaveRuleAsync(
+            host,
+            "worker-capabilities-read",
+            WorkerOidcHostFixture.TenantId,
+            WorkerOidcHostFixture.ProviderId,
+            ApiCapabilitiesPermissions.Read);
+
+        using var oldAudienceRequest = new HttpRequestMessage(HttpMethod.Get, "/capabilities");
+        oldAudienceRequest.Headers.Authorization = new AuthenticationHeaderValue(
+            "Bearer", fixture.CreateToken(audience: WorkerOidcHostFixture.Audience));
+        await ResetMappingReadsAsync(host);
+        using (var response = await host.Client.SendAsync(oldAudienceRequest))
+            Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        await AssertNoMappingReadOrRuntimeEffectAsync(host);
+        await AssertNoUserOrExternalIdentityRowsAsync(host);
+
+        using var candidateAudienceRequest = new HttpRequestMessage(HttpMethod.Get, "/capabilities");
+        candidateAudienceRequest.Headers.Authorization = new AuthenticationHeaderValue(
+            "Bearer", fixture.CreateToken(audience: candidate.Audience));
+        await ResetMappingReadsAsync(host);
+        using (var response = await host.Client.SendAsync(candidateAudienceRequest))
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(1, await MappingReadCountAsync(host));
+        await AssertNoRuntimeRowsAsync(host);
+        await AssertNoUserOrExternalIdentityRowsAsync(host);
+    }
+
+    private static void AssertWorkerComposition(JsonElement ready, WorkerProfileCandidate candidate)
+    {
+        Assert.Equal(candidate.ShellId, ready.GetProperty("shell").GetString());
+        Assert.Equal(candidate.Environment, ready.GetProperty("environment").GetString());
+        Assert.True(ready.GetProperty("candidateAppsettingsOverlayLoaded").GetBoolean());
+        Assert.True(ready.GetProperty("candidateShellOverlayLoaded").GetBoolean());
+        var consumedHashes = ready.GetProperty("candidateFileHashes");
+        Assert.Equal(candidate.ConsumedFileHashes.Keys.Order(StringComparer.Ordinal),
+            consumedHashes.EnumerateObject().Select(property => property.Name).Order(StringComparer.Ordinal));
+        foreach (var (name, hash) in candidate.ConsumedFileHashes)
+            Assert.Equal(hash, consumedHashes.GetProperty(name).GetString());
         Assert.Equal(WorkerOidcHostFixture.TenantId, ready.GetProperty("tenantId").GetString());
         Assert.Equal(WorkerOidcHostFixture.ProviderId, ready.GetProperty("providerId").GetString());
+        Assert.Equal(WorkerProfileCandidate.HashAudience(candidate.Audience), ready.GetProperty("oidcAudienceSha256").GetString());
+        Assert.True(ready.GetProperty("oidcAuthorityConfigured").GetBoolean());
+        Assert.False(ready.GetProperty("oidcClientIdConfigured").GetBoolean());
+        Assert.False(ready.GetProperty("oidcRequireHttpsMetadata").GetBoolean());
         Assert.True(ready.GetProperty("normalizationEnabled").GetBoolean());
         Assert.True(ready.GetProperty("audienceConfigured").GetBoolean());
         Assert.Equal(WorkerOidcHostFixture.JwtBearerScheme, ready.GetProperty("jwtBearerScheme").GetString());
@@ -242,7 +283,7 @@ public sealed class WorkerOidcHostTests
         Assert.Equal("Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerHandler", ready.GetProperty("bearerHandlerType").GetString());
         Assert.Equal("Elsa.Foundation.Identity.Oidc.OidcBearerNormalizationEvents", ready.GetProperty("bearerEventsType").GetString());
         Assert.False(ready.GetProperty("interactiveOidcSchemePresent").GetBoolean());
-        Assert.Equal(ExpectedFeatures, ready.GetProperty("enabledFeatures").EnumerateArray()
+        Assert.Equal(candidate.FeatureIds, ready.GetProperty("enabledFeatures").EnumerateArray()
             .Select(value => value.GetString()!)
             .OrderBy(value => value, StringComparer.Ordinal));
 
