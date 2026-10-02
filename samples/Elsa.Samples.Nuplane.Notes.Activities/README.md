@@ -23,8 +23,9 @@ stays on the version it pins until it is moved to the new one.
 Drop release 1.1.0 of both packages into a running Workbench's feed. The Workbench installs them, refreshes its feature
 catalog, and switches at the next shell reload: `POST /_admin/shells/reload/{name}`, or by itself when
 `Elsa:Shells:ReloadOnPackageChange` is `true` (see [Hot reload](../../docs/foundation-host-feeds.md#hot-reload-after-a-package-change)).
-While the module's `AddTags` migration is pending, a host whose policy is `Validate` refuses that reload with the
-`dotnet elsa persistence apply` command to run, and keeps serving release 1.0.0.
+While the module's `AddTags` migration is pending, a host whose policy is `Validate` refuses that reload, naming the
+pending migration and the `dotnet elsa persistence apply` command that applies it, and its shell keeps serving release
+1.0.0 until a reload after the apply.
 
 A node pinned to version `1.0.0` keeps running after the upgrade, but on release 1.1.0's class: the activity's alias is its
 CLR type name, and one type is registered per alias (see
