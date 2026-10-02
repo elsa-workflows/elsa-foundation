@@ -67,6 +67,19 @@ public sealed class EncryptionRequiredBindingTests
 
     public static TheoryData<string> RefusedBindingsOnEncryptionRequiredInputs => new(RefusedBindingKinds);
 
+    /// <summary>A <c>Secret</c> binding whose bound payload is not a well-formed reference, on each credential shape.</summary>
+    public static TheoryData<InputShape, string> MalformedSecretsOnCredentialInputs
+    {
+        get
+        {
+            var data = new TheoryData<InputShape, string>();
+            foreach (var shape in new[] { InputShape.CatalogCredential, InputShape.PinnedCredential })
+            foreach (var binding in new[] { "SecretText", "SecretWithExtraMember" })
+                data.Add(shape, binding);
+            return data;
+        }
+    }
+
     private static readonly string[] EmptyBindingKinds = ["EmptyLiteral", "NullLiteral", "JsonNullLiteral", "NullValue"];
 
     public static TheoryData<InputShape, string> EmptyBindingsOnOptionalInput
@@ -99,6 +112,7 @@ public sealed class EncryptionRequiredBindingTests
 
     [Theory]
     [MemberData(nameof(RefusedBindingsOnCredentialInputs))]
+    [MemberData(nameof(MalformedSecretsOnCredentialInputs))]
     public void On_a_credential_input_the_credential_literal_rule_refuses_anything_but_a_secret_reference(InputShape shape, string binding)
     {
         var exception = Assert.Throws<CredentialLiteralRefusedException>(() => CompileAll(shape, hasDefault: false, Authored(binding)));
@@ -182,6 +196,15 @@ public sealed class EncryptionRequiredBindingTests
         Assert.Equal(RuntimeInputBindingSource.SecretRead, binding.Source);
         Assert.True(binding.EffectivePolicy.IsSensitive);
         Assert.True(binding.EffectivePolicy.RequiresEncryption);
+    }
+
+    [Theory]
+    [MemberData(nameof(Shapes))]
+    public void An_unpicked_secret_passes_the_credential_rule_and_is_refused_by_the_reference_parser(InputShape shape)
+    {
+        var exception = Assert.Throws<ArgumentException>(() => CompileAll(shape, hasDefault: false, Authored("UnpickedSecret")));
+
+        Assert.Contains("uses expression type 'Secret' but carries no object reference payload", exception.Message, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -322,6 +345,9 @@ public sealed class EncryptionRequiredBindingTests
             "WorkflowRequest" => new ArgumentValue(JsonSerializer.SerializeToElement(new { memberKey = "token" }), "WorkflowRequest"),
             "JavaScript" => new ArgumentValue(JsonSerializer.SerializeToElement($"'{Sentinel}'"), "JavaScript"),
             "Default" => new ArgumentValue(null, "Default"),
+            "SecretText" => new ArgumentValue(JsonSerializer.SerializeToElement(Sentinel), "Secret"),
+            "SecretWithExtraMember" => new ArgumentValue(JsonSerializer.SerializeToElement(new { name = "payments.api-key", note = Sentinel }), "Secret"),
+            "UnpickedSecret" => new ArgumentValue(null, "Secret"),
             _ => throw new ArgumentOutOfRangeException(nameof(binding), binding, null)
         }, null, null, null, null);
 }

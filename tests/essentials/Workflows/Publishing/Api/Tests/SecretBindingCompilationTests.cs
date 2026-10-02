@@ -92,6 +92,22 @@ public sealed class SecretBindingCompilationTests
     }
 
     [Theory]
+    [InlineData("{\"name\":\"payments.api-key\",\"note\":\"extra-member-sentinel\"}")]
+    [InlineData("{\"name\":\"payments.api-key\",\"name\":\"extra-member-sentinel\"}")]
+    public void A_secret_payload_with_a_member_outside_the_reference_or_a_member_twice_is_refused_without_echoing_it(string payload)
+    {
+        // Publication reads every secret reference through SecretReferencePayload, the definition the credential-literal
+        // rule applies at save, so an extra member is refused here on any input, credential or not.
+        var exception = Assert.Throws<ArgumentException>(() => _compiler.Compile(
+            "node-1",
+            Input("String"),
+            new WorkflowArgumentState(InputKey, new ArgumentValue(JsonDocument.Parse(payload).RootElement.Clone(), "Secret"), null, null, null, null)));
+
+        Assert.Contains("carries a member other than one 'name', 'typeName' and 'scope'", exception.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("extra-member-sentinel", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
     [MemberData(nameof(TextTargets))]
     public void A_text_or_any_typed_input_accepts_a_secret_with_a_plan_from_text(string alias, CollectionKind collectionKind, string? typeName)
     {

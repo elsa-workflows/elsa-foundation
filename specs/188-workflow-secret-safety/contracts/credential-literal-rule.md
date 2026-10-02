@@ -21,10 +21,18 @@ credential flag is always read explicitly; `RequiresEncryption` is never used to
 |---|---|
 | no `ArgumentState`, or `Value` null | yes (unbound) |
 | `Value.Value` null, empty string, JSON null, JSON undefined, JSON empty string | yes (unbound; same definition as `RequiredInputOutputValidator`) |
-| `ExpressionType == "Secret"` (ordinal, ignore case, as the compiler already compares types) | yes |
+| `ExpressionType == "Secret"` (ordinal, ignore case, as the compiler already compares types) with a well-formed secret reference: a JSON object with a non-blank text `name`, an optional text `typeName` and an optional text `scope` (a null member reads as absent), no other member and no member twice, member names compared ordinally (`SecretReferencePayload`, `Elsa.Workflows.Design.Core`) | yes |
+| `Secret` whose payload carries no value (null, JSON null or undefined, empty string: the syntax was chosen and nothing picked) | yes (no value is involved; publication refuses it, because there is no reference to compile) |
+| `Secret` with any other payload: text, a number, an array, an object without a `name` or with a blank or non-text one, a non-text `typeName` or `scope`, any other member, a member twice (review round 3: the rule accepted every `Secret` binding before) | no |
 | `Literal`, `Object`, `Default` (a `Default` request carries no value of its own but binds the declared default, a literal, so it is refused even with a null value, as publication treats it) | no |
 | `Variable`, `WorkflowRequest`, `ActivityResult` | no |
 | any text expression (`JavaScript`, `Liquid`, ...) | no |
+
+A member outside `name`, `typeName` and `scope` is refused rather than ignored: a stored definition would carry it, and
+an extra member is a place a value could ride. These are exactly the members the secret reference models declare
+(`Elsa.Secrets.Core.Models.SecretReference`, `RuntimeSecretReference`) and the Studio secret picker writes
+(`{ name, typeName, scope? }`). `SecretReferencePayload` is the one definition of a well-formed reference: publication
+reads every secret reference through it, on any input, so a payload the rule refuses at save is refused at publish too.
 
 Inputs that are not credentials are unaffected by this rule, including sensitive ones (FR-009). A non-credential
 input whose effective policy requires encryption is governed by the separate publish rule `VF-ACT-011`
@@ -225,9 +233,10 @@ bite-proofs remove the call.
   when it is uploaded, before any analysis or apply, and nothing deletes it: its expiry only refuses later reads (410).
   The rule never applies to that source document, so a credential literal in an upload stays in the ledger whether the
   apply is refused or not. Found in slice 6's review round 2; a follow-up is recorded in T090.
-- **A `Secret` binding with a null or malformed payload.** The rule accepts any binding whose expression type is
-  `Secret`, so such a binding passes it at save (drafts may be incomplete, and no value is involved). Publication
-  refuses it: the compiler's secret-reference parser requires an object payload with a `name`.
+- **A `Secret` binding with no payload.** A `Secret` binding whose payload carries no value (the syntax chosen and
+  nothing picked yet) passes the rule at save, because drafts may be incomplete and no value is involved. Publication
+  refuses it: the secret-reference reader finds no object reference payload. Every other malformed payload under the
+  `Secret` type is refused by the rule itself, at every entry point (review round 3).
 - **Publish reports expression diagnostics first.** Publication validates expressions before it compiles, so an
   invalid JavaScript binding on a credential input is answered with the expression-validation problem (422), not the
   rule's refusal; a valid one reaches the compiler and is refused by the rule.

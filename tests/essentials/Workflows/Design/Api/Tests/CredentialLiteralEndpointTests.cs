@@ -26,21 +26,12 @@ public sealed class CredentialLiteralEndpointTests
 
     [Theory]
     [MemberData(nameof(Routes))]
-    public async Task A_credential_literal_is_answered_with_400_keyed_by_the_input_path_and_no_command_runs(string route)
-    {
-        await using var host = await AuthorizationHost.StartAsync();
+    public Task A_credential_literal_is_answered_with_400_keyed_by_the_input_path_and_no_command_runs(string route) =>
+        AssertRefusedAsync(route, State(ActivityVersionId, Bind(CredentialKey, "Literal")));
 
-        using var response = await SendAsync(host, route, State(ActivityVersionId, Bind(CredentialKey, "Literal")));
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        var body = await response.Content.ReadAsStringAsync();
-        Assert.DoesNotContain(Literal, body, StringComparison.Ordinal);
-        var errors = JsonDocument.Parse(body).RootElement.GetProperty("errors").EnumerateObject().ToArray();
-        var error = Assert.Single(errors);
-        Assert.Equal($"{NodeId}/inputs/{CredentialKey}", error.Name);
-        Assert.StartsWith("Inputs/CredentialLiteral", Assert.Single(error.Value.EnumerateArray()).GetString(), StringComparison.Ordinal);
-        Assert.Empty(host.Domain.StateWrites);
-    }
+    [Fact]
+    public Task A_text_payload_under_the_secret_type_is_answered_with_400_and_no_command_runs() =>
+        AssertRefusedAsync("DefinitionsAdd", State(ActivityVersionId, Bind(CredentialKey, "SecretText")));
 
     [Theory]
     [MemberData(nameof(Routes))]
@@ -81,6 +72,26 @@ public sealed class CredentialLiteralEndpointTests
         Assert.Equal(2, errors.EnumerateObject().Count());
         Assert.Equal(finding.Message, Assert.Single(errors.GetProperty(finding.Path).EnumerateArray()).GetString());
         Assert.Equal(refusal.Message, Assert.Single(errors.GetProperty("generalErrors").EnumerateArray()).GetString());
+    }
+
+    /// <summary>
+    /// Sends <paramref name="state"/> to <paramref name="route"/> and asserts the refusal's problem body: 400, one error
+    /// keyed by the credential input's path whose message starts with the rule id, the bound value nowhere, no command run.
+    /// </summary>
+    private static async Task AssertRefusedAsync(string route, WorkflowDefinitionState state)
+    {
+        await using var host = await AuthorizationHost.StartAsync();
+
+        using var response = await SendAsync(host, route, state);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.DoesNotContain(Literal, body, StringComparison.Ordinal);
+        var errors = JsonDocument.Parse(body).RootElement.GetProperty("errors").EnumerateObject().ToArray();
+        var error = Assert.Single(errors);
+        Assert.Equal($"{NodeId}/inputs/{CredentialKey}", error.Name);
+        Assert.StartsWith("Inputs/CredentialLiteral", Assert.Single(error.Value.EnumerateArray()).GetString(), StringComparison.Ordinal);
+        Assert.Empty(host.Domain.StateWrites);
     }
 
     private static async Task AssertReachesTheCommandAsync(string route, WorkflowDefinitionState state)

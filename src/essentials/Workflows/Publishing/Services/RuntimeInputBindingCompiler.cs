@@ -455,17 +455,15 @@ public sealed class RuntimeInputBindingCompiler(
             secret: reference);
     }
 
-    // The messages name the node, the input and the missing member, never the authored payload.
+    // Read through the one definition of a well-formed reference, which the credential-literal rule applies at save.
+    // The messages name the node, the input and the defect, never the authored payload.
     private static RuntimeSecretReference ParseSecretReference(string nodeId, InputDefinition inputDefinition, ArgumentValue value)
     {
-        var payload = RequireObjectPayload(nodeId, inputDefinition, value, SecretExpressionType);
-        return new RuntimeSecretReference(
-            RequireStringProperty(nodeId, inputDefinition, payload, SecretExpressionType, "name"),
-            ReadOptionalStringProperty(payload, "typeName", NonText),
-            ReadOptionalStringProperty(payload, "scope", NonText));
-
-        ArgumentException NonText(string propertyName) => new(
-            $"Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' uses expression type '{SecretExpressionType}' but carries a non-text '{propertyName}'.");
+        var reference = SecretReferencePayload.Read(value.Value);
+        return reference.IsWellFormed
+            ? new RuntimeSecretReference(reference.Name!, reference.TypeName, reference.Scope)
+            : throw new ArgumentException(
+                $"Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' uses expression type '{SecretExpressionType}' but {reference.Defect}.");
     }
 
     /// <summary>
@@ -838,21 +836,11 @@ public sealed class RuntimeInputBindingCompiler(
             $"Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' uses expression type '{expressionType}' but carries no '{propertyName}'.");
     }
 
-    /// <summary>
-    /// Reads an optional string property: a missing or null property reads as null. Any other non-string value reads
-    /// as null too, unless <paramref name="nonText"/> is given, in which case its exception is thrown.
-    /// </summary>
-    private static string? ReadOptionalStringProperty(JsonElement payload, string propertyName, Func<string, ArgumentException>? nonText = null)
-    {
-        if (!payload.TryGetProperty(propertyName, out var property) || property.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
-            return null;
-        if (property.ValueKind == JsonValueKind.String)
-            return property.GetString();
-
-        if (nonText is not null)
-            throw nonText(propertyName);
-        return null;
-    }
+    /// <summary>Reads an optional string property: a missing, null or non-string property reads as null.</summary>
+    private static string? ReadOptionalStringProperty(JsonElement payload, string propertyName) =>
+        payload.TryGetProperty(propertyName, out var property) && property.ValueKind == JsonValueKind.String
+            ? property.GetString()
+            : null;
 
     private static string InputRole(string nodeId, string inputKey) => $"Input '{inputKey}' on activity node '{nodeId}'";
 

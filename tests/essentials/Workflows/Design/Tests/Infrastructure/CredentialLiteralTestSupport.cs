@@ -48,14 +48,19 @@ internal static partial class CredentialLiteralTestSupport
 
     /// <summary>
     /// A binding of <paramref name="inputKey"/>: <c>Literal</c> carries <paramref name="literal"/>, or <see cref="Literal"/>
-    /// when it is null; <c>Secret</c> is a secret reference; <c>EmptyLiteral</c> an empty string; the rest are the other
-    /// authored kinds.
+    /// when it is null; <c>Secret</c> is a secret reference; <c>SecretText</c> the literal as the payload of a
+    /// <c>Secret</c> binding; <c>SecretWithExtraMember</c> a reference with the literal in a member outside the reference;
+    /// <c>UnpickedSecret</c> a <c>Secret</c> binding with no payload; <c>EmptyLiteral</c> an empty string; the rest are
+    /// the other authored kinds.
     /// </summary>
     public static ArgumentState Bind(string inputKey, string binding, string? literal = null) =>
         new(inputKey, binding switch
         {
             "Literal" => new ArgumentValue(JsonSerializer.SerializeToElement(literal ?? Literal), "Literal"),
             "Secret" => new ArgumentValue(JsonSerializer.SerializeToElement(new { name = "payments-reference" }), "Secret"),
+            "SecretText" => new ArgumentValue(JsonSerializer.SerializeToElement(literal ?? Literal), "Secret"),
+            "SecretWithExtraMember" => new ArgumentValue(JsonSerializer.SerializeToElement(new { name = "payments-reference", note = literal ?? Literal }), "Secret"),
+            "UnpickedSecret" => new ArgumentValue(null, "Secret"),
             "EmptyLiteral" => new ArgumentValue(JsonSerializer.SerializeToElement(string.Empty), "Literal"),
             "Object" => new ArgumentValue(JsonSerializer.SerializeToElement(new { note = Literal }), "Object"),
             "Variable" => new ArgumentValue(JsonSerializer.SerializeToElement("variable-reference"), "Variable"),

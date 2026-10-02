@@ -39,6 +39,8 @@ public sealed class CredentialLiteralValidatorTests
     [InlineData("Object")]
     [InlineData("Variable")]
     [InlineData("JavaScript")]
+    [InlineData("SecretText")]
+    [InlineData("SecretWithExtraMember")]
     public async Task Any_other_value_or_expression_on_a_credential_input_is_reported(string binding)
     {
         var finding = Assert.Single(await _validator.Validate(CredentialBoundAs(binding), CancellationToken.None));
@@ -49,8 +51,9 @@ public sealed class CredentialLiteralValidatorTests
 
     [Theory]
     [InlineData("Secret")]
+    [InlineData("UnpickedSecret")]
     [InlineData("EmptyLiteral")]
-    public async Task A_secret_reference_or_an_empty_literal_on_a_credential_input_is_accepted(string binding) =>
+    public async Task A_secret_reference_an_unpicked_secret_or_an_empty_literal_on_a_credential_input_is_accepted(string binding) =>
         Assert.Empty(await _validator.Validate(CredentialBoundAs(binding), CancellationToken.None));
 
     [Theory]

@@ -56,8 +56,10 @@ catalog-consulting validator.
 
 An input the activity declares a credential (`[ActivityInput(IsCredential = true)]`, read from the catalog's
 `InputDefinition.IsCredential`) accepts only a secret reference or no binding. A literal, an object, a request for
-the declared default, a value read and any expression are refused with the rule id `Inputs/CredentialLiteral`; an
-empty or null literal leaves the input unbound and is accepted. The acceptance predicate is
+the declared default, a value read, any expression, and a `Secret` binding whose payload is not a well-formed reference
+(`SecretReferencePayload`: an object with a non-blank text `name`, optional text `typeName` and `scope`, and no other
+member) are refused with the rule id `Inputs/CredentialLiteral`; an empty or null literal leaves the input unbound and
+is accepted, and so does a `Secret` binding with no payload (publication refuses that one). The acceptance predicate is
 `CredentialInputBinding.IsAccepted` in `Elsa.Workflows.Design.Core`, and each refusal is a
 `CredentialLiteralFinding`: path `{NodeId}/inputs/{ReferenceKey}`, a message that starts with the rule id and names
 the input and the activity node, and never the bound value.

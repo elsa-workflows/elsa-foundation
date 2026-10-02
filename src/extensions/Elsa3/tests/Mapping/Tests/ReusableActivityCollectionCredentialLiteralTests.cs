@@ -93,6 +93,18 @@ public sealed class ReusableActivityCollectionCredentialLiteralTests : IAsyncDis
         Assert.Null(_command.Mutation);
     }
 
+    [Fact]
+    public async Task A_text_payload_under_the_secret_type_refuses_the_apply_and_commits_nothing()
+    {
+        // The mapping passes the Elsa 3 expression type through, so an upload can name the Secret type over a text value.
+        var refusal = await Assert.ThrowsAsync<CredentialLiteralRefusedException>(() =>
+            ApplyAsync(Source("source", reusable: false, depth: 1, NodeId, Argument(CredentialInput, "Secret", Literal))));
+
+        Assert.Equal($"{NodeId}/inputs/{CredentialInput}", Assert.Single(refusal.Findings).Path);
+        Assert.Null(_command.Mutation);
+        Assert.DoesNotContain(Literal, (await RenderAsync(refusal)).Body, StringComparison.Ordinal);
+    }
+
     [Theory]
     [MemberData(nameof(SourcesAndDepths))]
     public async Task Two_spellings_of_the_credential_input_refuse_the_apply_with_400_rather_than_keep_one(bool reusable, int depth)
