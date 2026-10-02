@@ -116,9 +116,7 @@ public sealed class RegisterActivityTypesStartupTask : IStartupTask
         var shellFeatureAssemblyNames = shellFeatureAssemblies
             .Select(assembly => assembly.GetName().Name)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        foreach (var assembly in shellFeatureAssemblies)
-            if (seen.Add(assembly))
-                assemblies.Add(assembly);
+        AddNew(shellFeatureAssemblies);
 
         foreach (var provider in _assemblyProviders)
         {
@@ -134,18 +132,16 @@ public sealed class RegisterActivityTypesStartupTask : IStartupTask
                 continue;
             }
 
-            foreach (var assembly in providerAssemblies)
-                if (seen.Add(assembly))
-                    assemblies.Add(assembly);
+            AddNew(providerAssemblies);
         }
 
         // A loaded assembly named like one of the shell's feature assemblies, but not that assembly, is a release the shell
         // does not compose: none of its types may claim an alias.
-        foreach (var assembly in _baseAssembliesFactory())
-            if (!IsEarlierRelease(assembly) && seen.Add(assembly))
-                assemblies.Add(assembly);
+        AddNew(_baseAssembliesFactory().Where(assembly => !IsEarlierRelease(assembly)));
 
         return assemblies;
+
+        void AddNew(IEnumerable<Assembly> source) => assemblies.AddRange(source.Where(seen.Add));
 
         bool IsEarlierRelease(Assembly assembly) =>
             !shellFeatureAssemblies.Contains(assembly) && shellFeatureAssemblyNames.Contains(assembly.GetName().Name ?? "");
