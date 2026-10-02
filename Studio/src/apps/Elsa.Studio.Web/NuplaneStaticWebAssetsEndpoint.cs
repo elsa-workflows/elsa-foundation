@@ -20,10 +20,15 @@ internal static class NuplaneStaticWebAssetsEndpoint
         [FromRoute] string assetPath,
         [FromServices] INuplaneAdminOperations nuplaneAdmin,
         [FromServices] IWebHostEnvironment environment,
+        HttpResponse response,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(packageId) || string.IsNullOrWhiteSpace(assetPath))
             return Results.NotFound();
+
+        // Before the lookups on purpose: a 404 is heuristically cacheable too, and an asset missing now may exist after
+        // the next rebuild or package install.
+        StudioAssetCaching.ApplyRevalidation(response);
 
         var staticWebAsset = environment.WebRootFileProvider.GetFileInfo($"_content/{packageId}/{assetPath}");
         if (staticWebAsset.Exists)

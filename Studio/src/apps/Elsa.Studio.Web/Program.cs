@@ -103,7 +103,7 @@ app.UseAuthorization();
 app.MapGet("/studio-runtime.js", () =>
     Results.Content(StudioRuntimeScript.Render(configuration), "application/javascript"));
 
-app.UseStaticFiles();
+app.UseStudioStaticFiles();
 
 app.MapElsaModuleManagementApi();
 app.MapStudioBackendManagementBridge();
@@ -115,6 +115,6 @@ app.MapNuplaneStaticWebAssets();
 // Unknown API routes must remain real 404 responses. Letting the SPA fallback answer them with index.html and 200
 // turns an optional API capability into a JSON parse failure and obscures ordinary endpoint mistakes in the browser.
 app.MapFallback("/_elsa/{**path}", () => Results.NotFound());
-app.MapFallbackToFile("studio/index.html");
+app.MapStudioFallback();
 
 app.Run();
