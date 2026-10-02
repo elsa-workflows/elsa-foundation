@@ -28,7 +28,9 @@
   margin: 0;
   border: 1px solid color-mix(in srgb, var(--wf-danger) 45%, var(--wf-border));
   border-radius: var(--wf-radius);
-  background: color-mix(in srgb, var(--wf-danger) 8%, var(--wf-panel));
+  background:
+    linear-gradient(color-mix(in srgb, var(--wf-danger) 8%, transparent) 0 0),
+    var(--wf-panel);
   color: var(--wf-danger);
   line-height: 1.45;
   padding: 9px 10px;

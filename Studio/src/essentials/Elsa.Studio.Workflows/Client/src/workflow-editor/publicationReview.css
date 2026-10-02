@@ -50,7 +50,9 @@
 
 .wf-publication-status[data-phase="success"] {
   border-color: color-mix(in srgb, var(--wf-success) 45%, var(--wf-border));
-  background: color-mix(in srgb, var(--wf-success) 10%, var(--wf-panel));
+  background:
+    linear-gradient(color-mix(in srgb, var(--wf-success) 10%, transparent) 0 0),
+    var(--wf-panel);
   color: var(--wf-success);
 }
 
@@ -58,7 +60,9 @@
 .wf-publication-status[data-phase="savedFailure"],
 .wf-publication-status[data-phase="partialFailure"] {
   border-color: color-mix(in srgb, var(--wf-danger) 45%, var(--wf-border));
-  background: color-mix(in srgb, var(--wf-danger) 8%, var(--wf-panel));
+  background:
+    linear-gradient(color-mix(in srgb, var(--wf-danger) 8%, transparent) 0 0),
+    var(--wf-panel);
   color: var(--wf-danger);
 }
 
@@ -219,7 +223,9 @@
   height: 34px;
   place-items: center;
   border-radius: 50%;
-  background: color-mix(in srgb, var(--wf-success) 12%, var(--wf-panel));
+  background:
+    linear-gradient(color-mix(in srgb, var(--wf-success) 12%, transparent) 0 0),
+    var(--wf-panel);
   color: var(--wf-success);
   font-size: 20px;
   font-weight: 700;
@@ -242,7 +248,9 @@
 .wf-publication-recovery {
   border: 1px solid color-mix(in srgb, var(--wf-danger) 45%, var(--wf-border));
   border-radius: var(--wf-radius);
-  background: color-mix(in srgb, var(--wf-danger) 8%, var(--wf-panel));
+  background:
+    linear-gradient(color-mix(in srgb, var(--wf-danger) 8%, transparent) 0 0),
+    var(--wf-panel);
   color: var(--wf-danger);
   line-height: 1.45;
   padding: 10px 12px;

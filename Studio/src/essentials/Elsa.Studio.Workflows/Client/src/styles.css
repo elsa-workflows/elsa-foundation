@@ -16,6 +16,14 @@
      Inputs blend the two into a subtly recessed "well" that stays distinct from the panel in both themes. */
   --wf-surface: var(--card, #ffffff);
   --wf-bg: var(--background, #ffffff);
+  /* Flat colour of the panel tiers. Material themes remap --wf-panel / -muted to surface
+     recipes that may be gradient or texture stacks, and a gradient is not a <color>: inside
+     color-mix(), as a gradient stop or as a border colour it invalidates the whole declaration.
+     Anything that needs a colour (fades, stops, borders) reads these; tinted fills layer a flat
+     wash over the surface instead, e.g.
+     `linear-gradient(color-mix(in srgb, X 10%, transparent) 0 0), var(--wf-panel)`. */
+  --wf-panel-tone: var(--wf-panel);
+  --wf-panel-muted-tone: var(--wf-panel-muted);
   /* Dense-row + recessed-well tiers. On flat themes rows sit flush on the panel and wells
      are the recessed input tone; material themes remap these to grain/well recipes so dense
      lists render as one container slab + flat hairline rows (not a raised slab per row). */
@@ -109,7 +117,7 @@
   --xy-minimap-node-stroke-color: var(--wf-border-strong);
 
   --xy-background-pattern-color: var(--wf-border-strong);
-  --xy-attribution-background-color: color-mix(in srgb, var(--wf-panel) 70%, transparent);
+  --xy-attribution-background-color: color-mix(in srgb, var(--wf-panel-tone) 70%, transparent);
 
   color: var(--wf-text);
 }
@@ -1988,7 +1996,7 @@
   gap: 3px;
   border: 1px dashed var(--wf-border-strong);
   border-radius: var(--wf-radius);
-  background: color-mix(in srgb, var(--wf-panel-muted) 72%, transparent);
+  background: color-mix(in srgb, var(--wf-panel-muted-tone) 72%, transparent);
   padding: 8px;
 }
 
@@ -2133,7 +2141,9 @@
   align-items: center;
   border: 1px solid color-mix(in srgb, var(--wf-danger) 36%, var(--wf-border));
   border-radius: 999px;
-  background: color-mix(in srgb, var(--wf-danger) 10%, var(--wf-panel));
+  background:
+    linear-gradient(color-mix(in srgb, var(--wf-danger) 10%, transparent) 0 0),
+    var(--wf-panel);
   color: var(--wf-text);
   font-weight: 750;
   line-height: 1;
@@ -2171,7 +2181,9 @@
 
 .wf-status-badge[data-status="suspended"] {
   border-color: color-mix(in srgb, var(--wf-warning) 35%, var(--wf-border));
-  background: color-mix(in srgb, var(--wf-warning) 14%, var(--wf-panel));
+  background:
+    linear-gradient(color-mix(in srgb, var(--wf-warning) 14%, transparent) 0 0),
+    var(--wf-panel);
   color: var(--wf-warning-text);
 }
 
@@ -2185,7 +2197,11 @@
 }
 
 .wf-grid-row[aria-selected="true"] {
-  background: color-mix(in srgb, var(--wf-accent) 14%, var(--wf-panel));
+  background:
+    linear-gradient(color-mix(in srgb, var(--wf-accent) 14%, transparent) 0 0),
+    var(--wf-panel);
+  /* The row's --wf-row-bg-size list is laid out for the row recipe, not this panel stack. */
+  background-size: auto;
 }
 
 .wf-row-select {
@@ -2551,7 +2567,9 @@
 
 .wf-root-card:hover {
   border-color: color-mix(in srgb, var(--wf-accent) 32%, var(--wf-border));
-  background: color-mix(in srgb, var(--wf-accent) 6%, var(--wf-panel-muted));
+  background:
+    linear-gradient(color-mix(in srgb, var(--wf-accent) 6%, transparent) 0 0),
+    var(--wf-panel-muted);
 }
 
 .wf-root-card[data-checked] {
@@ -2677,7 +2695,9 @@
 
 .wf-editor-actions .wf-test-run-status[data-state="rejected"] .wf-test-run-trigger {
   border-color: color-mix(in srgb, var(--wf-warning) 40%, var(--wf-border));
-  background: color-mix(in srgb, var(--wf-warning) 12%, var(--wf-panel));
+  background:
+    linear-gradient(color-mix(in srgb, var(--wf-warning) 12%, transparent) 0 0),
+    var(--wf-panel);
   color: var(--wf-warning-text);
 }
 
@@ -3445,7 +3465,7 @@
   border: 1px solid color-mix(in srgb, var(--wf-border-strong) 82%, transparent);
   border-radius: var(--wf-radius-xl);
   background:
-    linear-gradient(180deg, color-mix(in srgb, var(--wf-panel) 96%, white) 0%, var(--wf-panel) 100%);
+    linear-gradient(180deg, color-mix(in srgb, var(--wf-panel-tone) 96%, white) 0%, var(--wf-panel-tone) 100%);
   box-shadow:
     var(--wf-shadow-node),
     inset 0 1px 0 color-mix(in srgb, white 42%, transparent);
@@ -3493,13 +3513,17 @@
   justify-content: center;
   border: 1px solid color-mix(in srgb, var(--wf-accent) 24%, var(--wf-border));
   border-radius: var(--wf-radius-md);
-  background: color-mix(in srgb, var(--wf-accent) 11%, var(--wf-panel));
+  background:
+    linear-gradient(color-mix(in srgb, var(--wf-accent) 11%, transparent) 0 0),
+    var(--wf-panel);
   color: var(--wf-accent);
 }
 
 .wf-node[data-icon="terminal"] .wf-node-icon {
   border-color: color-mix(in srgb, var(--wf-activity-terminal) 34%, var(--wf-border));
-  background: color-mix(in srgb, var(--wf-activity-terminal) 12%, var(--wf-panel));
+  background:
+    linear-gradient(color-mix(in srgb, var(--wf-activity-terminal) 12%, transparent) 0 0),
+    var(--wf-panel);
   color: var(--wf-activity-terminal);
 }
 
@@ -3507,13 +3531,17 @@
 .wf-node[data-icon="sequence"] .wf-node-icon,
 .wf-node[data-icon="reusable"] .wf-node-icon {
   border-color: color-mix(in srgb, var(--wf-activity-composite) 34%, var(--wf-border));
-  background: color-mix(in srgb, var(--wf-activity-composite) 12%, var(--wf-panel));
+  background:
+    linear-gradient(color-mix(in srgb, var(--wf-activity-composite) 12%, transparent) 0 0),
+    var(--wf-panel);
   color: var(--wf-activity-composite);
 }
 
 .wf-node[data-icon="runtime"] .wf-node-icon {
   border-color: color-mix(in srgb, var(--wf-activity-runtime) 35%, var(--wf-border));
-  background: color-mix(in srgb, var(--wf-activity-runtime) 12%, var(--wf-panel));
+  background:
+    linear-gradient(color-mix(in srgb, var(--wf-activity-runtime) 12%, transparent) 0 0),
+    var(--wf-panel);
   color: var(--wf-activity-runtime);
 }
 
@@ -3639,7 +3667,7 @@
   white-space: nowrap;
   border: 1px solid var(--wf-border);
   border-radius: 999px;
-  background: color-mix(in srgb, var(--wf-panel-muted) 82%, transparent);
+  background: color-mix(in srgb, var(--wf-panel-muted-tone) 82%, transparent);
   color: var(--wf-muted-text);
   font-size: 10px;
   font-weight: var(--wf-label-weight, 600);
@@ -3716,7 +3744,7 @@ button.wf-node-slot-badge:focus-visible {
 .wf-node .react-flow__handle {
   width: 10px;
   height: 10px;
-  border: 2px solid var(--wf-panel);
+  border: 2px solid var(--wf-panel-tone);
   background: var(--wf-accent);
   opacity: 0.82;
 }
@@ -3733,7 +3761,7 @@ button.wf-node-slot-badge:focus-visible {
   transform: translateY(-50%);
   border: 1px solid var(--wf-border);
   border-radius: 999px;
-  background: color-mix(in srgb, var(--wf-panel) 96%, transparent);
+  background: color-mix(in srgb, var(--wf-panel-tone) 96%, transparent);
   color: var(--wf-muted-text);
   font-size: 10px;
   font-weight: var(--wf-label-weight, 600);
@@ -4251,7 +4279,9 @@ button.wf-node-slot-badge:focus-visible {
 
 .wf-runtime-card[data-state="rejected"] {
   border-color: color-mix(in srgb, var(--wf-warning) 34%, var(--wf-border));
-  background: color-mix(in srgb, var(--wf-warning) 9%, var(--wf-panel));
+  background:
+    linear-gradient(color-mix(in srgb, var(--wf-warning) 9%, transparent) 0 0),
+    var(--wf-panel);
 }
 
 .wf-runtime-card header {
@@ -4587,7 +4617,9 @@ button.wf-reference-select {
 /* Scope chips: Published keeps the default accent chip tone; test runs get the warning tint their
    expiring nature suggests. */
 .wf-reference-scope-testrun {
-  background: color-mix(in srgb, var(--wf-warning) 14%, var(--wf-panel));
+  background:
+    linear-gradient(color-mix(in srgb, var(--wf-warning) 14%, transparent) 0 0),
+    var(--wf-panel);
   color: var(--wf-warning-text);
 }
 
@@ -4707,7 +4739,9 @@ button.wf-reference-select {
   min-width: 0;
   border: 1px solid var(--wf-border);
   border-radius: var(--wf-radius);
-  background: color-mix(in srgb, var(--wf-bg) 58%, var(--wf-surface));
+  background:
+    linear-gradient(color-mix(in srgb, var(--wf-bg) 58%, transparent) 0 0),
+    var(--wf-surface);
   color: var(--wf-text);
   font: inherit;
   font-size: 12px;
@@ -4783,7 +4817,9 @@ button.wf-reference-select {
   gap: 10px;
   border: 1px solid var(--wf-border);
   border-radius: var(--wf-radius);
-  background: color-mix(in srgb, var(--wf-bg) 58%, var(--wf-surface));
+  background:
+    linear-gradient(color-mix(in srgb, var(--wf-bg) 58%, transparent) 0 0),
+    var(--wf-surface);
   color: var(--wf-text);
   font: inherit;
   font-size: 12px;
@@ -4807,7 +4843,9 @@ button.wf-reference-select {
   border-color: transparent;
   border-left-color: var(--wf-border);
   border-radius: 0 4px 4px 0;
-  background: color-mix(in srgb, var(--wf-surface) 78%, var(--wf-bg));
+  background:
+    linear-gradient(color-mix(in srgb, var(--wf-bg) 22%, transparent) 0 0),
+    var(--wf-surface);
   color: var(--wf-muted-text);
   font-size: 11px;
   font-weight: var(--wf-label-weight, 600);
@@ -4879,7 +4917,9 @@ button.wf-reference-select {
   border: 1px solid transparent;
   border-left-color: var(--wf-border);
   border-radius: 0 4px 4px 0;
-  background: color-mix(in srgb, var(--wf-surface) 78%, var(--wf-bg));
+  background:
+    linear-gradient(color-mix(in srgb, var(--wf-bg) 22%, transparent) 0 0),
+    var(--wf-surface);
   color: var(--wf-muted-text);
   cursor: pointer;
   padding: 0;
@@ -5044,7 +5084,9 @@ button.wf-reference-select {
   min-height: 280px;
   border: 1px solid var(--wf-border);
   border-radius: var(--wf-radius);
-  background: color-mix(in srgb, var(--wf-bg) 58%, var(--wf-surface));
+  background:
+    linear-gradient(color-mix(in srgb, var(--wf-bg) 58%, transparent) 0 0),
+    var(--wf-surface);
   color: var(--wf-text);
   outline: none;
   padding: 10px;
@@ -5225,7 +5267,9 @@ button.wf-reference-select {
 }
 
 .wf-dictionary-row.invalid {
-  background: color-mix(in srgb, var(--wf-danger) 6%, var(--wf-row));
+  background:
+    linear-gradient(color-mix(in srgb, var(--wf-danger) 6%, transparent) 0 0),
+    var(--wf-row);
 }
 
 .wf-dictionary-cell {
@@ -5326,7 +5370,9 @@ button.wf-reference-select {
   gap: 7px;
   border: 1px solid color-mix(in srgb, var(--wf-danger) 34%, var(--wf-border));
   border-radius: var(--wf-radius);
-  background: color-mix(in srgb, var(--wf-danger) 8%, var(--wf-panel));
+  background:
+    linear-gradient(color-mix(in srgb, var(--wf-danger) 8%, transparent) 0 0),
+    var(--wf-panel);
   padding: 9px;
 }
 
@@ -5467,7 +5513,9 @@ button.wf-reference-select {
   gap: 8px;
   border: 1px solid color-mix(in srgb, var(--wf-warning) 55%, var(--wf-border));
   border-radius: var(--wf-radius);
-  background: color-mix(in srgb, var(--wf-warning) 9%, var(--wf-panel-muted));
+  background:
+    linear-gradient(color-mix(in srgb, var(--wf-warning) 9%, transparent) 0 0),
+    var(--wf-panel-muted);
   padding: 9px;
 }
 
@@ -5732,7 +5780,9 @@ button.wf-reference-select {
   align-items: center;
   gap: 6px;
   border: 1px solid color-mix(in srgb, var(--wf-accent) 38%, var(--wf-border));
-  background: color-mix(in srgb, var(--wf-accent) 8%, var(--wf-surface));
+  background:
+    linear-gradient(color-mix(in srgb, var(--wf-accent) 8%, transparent) 0 0),
+    var(--wf-surface);
   color: var(--wf-text);
 }
 
@@ -5767,7 +5817,9 @@ button.wf-reference-select {
   gap: 10px;
   padding: 12px;
   border: 1px solid color-mix(in srgb, var(--wf-accent) 30%, var(--wf-border));
-  background: color-mix(in srgb, var(--wf-accent) 5%, var(--wf-surface));
+  background:
+    linear-gradient(color-mix(in srgb, var(--wf-accent) 5%, transparent) 0 0),
+    var(--wf-surface);
   border-radius: var(--wf-radius);
 }
 
@@ -5924,9 +5976,9 @@ button.wf-reference-select {
   border-radius: var(--wf-radius-sm);
   background: linear-gradient(
     90deg,
-    var(--wf-panel-muted) 25%,
-    color-mix(in srgb, var(--wf-muted-text) 14%, var(--wf-panel-muted)) 37%,
-    var(--wf-panel-muted) 63%
+    var(--wf-panel-muted-tone) 25%,
+    color-mix(in srgb, var(--wf-muted-text) 14%, var(--wf-panel-muted-tone)) 37%,
+    var(--wf-panel-muted-tone) 63%
   );
   background-size: 200% 100%;
   opacity: 0;
@@ -5967,7 +6019,9 @@ button.wf-reference-select {
   height: 48px;
   margin-bottom: 8px;
   border-radius: var(--wf-radius-md);
-  background: color-mix(in srgb, var(--wf-muted-text) 12%, var(--wf-panel));
+  background:
+    linear-gradient(color-mix(in srgb, var(--wf-muted-text) 12%, transparent) 0 0),
+    var(--wf-panel);
   color: var(--wf-muted-text);
 }
 
@@ -6107,7 +6161,9 @@ button.wf-reference-select {
   margin: 8px 0;
   padding: 8px 10px;
   border: 1px solid color-mix(in srgb, var(--wf-warning) 50%, transparent);
-  background: color-mix(in srgb, var(--wf-warning) 14%, var(--wf-panel));
+  background:
+    linear-gradient(color-mix(in srgb, var(--wf-warning) 14%, transparent) 0 0),
+    var(--wf-panel);
   border-radius: var(--wf-radius);
   color: var(--wf-warning-text);
   font-size: 12px;
@@ -6229,7 +6285,9 @@ button.wf-reference-select {
 }
 
 .wf-validation-repair:hover {
-  background: color-mix(in srgb, var(--wf-warning) 14%, var(--wf-panel));
+  background:
+    linear-gradient(color-mix(in srgb, var(--wf-warning) 14%, transparent) 0 0),
+    var(--wf-panel);
 }
 
 html[data-theme-material] .wf-page,
@@ -6239,6 +6297,8 @@ html[data-theme-material] .wf-tokens {
   --wf-panel-muted: var(--studio-material-panel-bg-soft);
   --wf-canvas: var(--studio-bg);
   --wf-surface: var(--studio-material-panel-bg);
+  --wf-panel-tone: var(--studio-surface-raised);
+  --wf-panel-muted-tone: var(--studio-surface-muted);
   --wf-bg: var(--studio-bg);
   /* Dense rows use the flat row tier (grain, no bevel/shadow); inputs use the recessed well. */
   --wf-row: var(--studio-material-row-bg);
@@ -6330,8 +6390,10 @@ html[data-theme-material] .wf-instance-incident[data-severity="warning"] {
 html[data-theme-material] .wf-instance-incident[data-severity="error"],
 html[data-theme-material] .wf-instance-incident[data-severity="critical"] {
   border-color: color-mix(in srgb, var(--wf-danger) 50%, var(--studio-material-edge));
-  background: color-mix(in srgb, var(--wf-danger) 12%, var(--studio-material-panel-bg));
-  background-size: var(--studio-material-panel-bg-size);
+  background:
+    linear-gradient(color-mix(in srgb, var(--wf-danger) 12%, transparent) 0 0),
+    var(--studio-material-panel-bg);
+  background-size: auto, var(--studio-material-panel-bg-size);
 }
 
 html[data-theme-material] .wf-node {
@@ -6354,7 +6416,9 @@ html[data-theme-material] .wf-node-port-label,
 html[data-theme-material] .wf-chip,
 html[data-theme-material] .wf-status {
   border-color: color-mix(in srgb, var(--wf-accent) 44%, var(--studio-material-edge));
-  background: color-mix(in srgb, var(--wf-accent) 14%, var(--studio-material-panel-bg-soft));
+  background:
+    linear-gradient(color-mix(in srgb, var(--wf-accent) 14%, transparent) 0 0),
+    var(--studio-material-panel-bg-soft);
   box-shadow: var(--studio-material-inset-low);
 }
 
