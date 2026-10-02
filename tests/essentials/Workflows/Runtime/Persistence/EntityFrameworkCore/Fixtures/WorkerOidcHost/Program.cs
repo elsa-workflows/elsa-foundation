@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Data.Common;
 using System.Security.Cryptography;
 using System.Text.Json;
@@ -228,7 +229,8 @@ internal static class Program
             new RequestControlledAccessContextAccessor(
                 (IPersistenceAccessContextAccessor)originalAccessorFactory(services),
                 services.GetRequiredService<IHttpContextAccessor>(),
-                input.PersistenceScope));
+                input.PersistenceScope,
+                mappingReads));
 
         // This observes real EF commands without replacing the IAM mapping store used by the OIDC adapter.
         builder.Services.ConfigureDbContext<IdentityIamSqliteDbContext>(options => options.AddInterceptors(mappingReads));
@@ -527,7 +529,9 @@ internal static class Program
             externalIdentityCount = await iam.ExternalIdentities.CountAsync(),
             persistenceScope = access.Scope?.Value,
             persistenceAccessPolicy = access.AccessPolicy.ToString(),
-            persistenceAcrossScopes = access.AcrossScopes
+            persistenceAcrossScopes = access.AcrossScopes,
+            persistenceAccessCategories = mappingReads.PersistenceAccessCategories,
+            mappingReadCategories = mappingReads.MappingReadCategories
         };
     }
 
@@ -591,18 +595,20 @@ internal static class Program
     private sealed class RequestControlledAccessContextAccessor(
         IPersistenceAccessContextAccessor initialized,
         IHttpContextAccessor httpContextAccessor,
-        string tenantId) : IPersistenceAccessContextAccessor
+        string tenantId,
+        MappingReadCounter observations) : IPersistenceAccessContextAccessor
     {
         public PersistenceAccessContext Current
         {
             get
             {
                 var httpContext = httpContextAccessor.HttpContext;
+                var probe = httpContext?.Request.Headers["X-Worker-Persistence-Probe"].ToString();
+                var category = observations.ObservePersistenceAccessCategory(probe, httpContext is not null);
                 if (httpContext is null && FixturePersistenceControl.Value is { } fixtureControl)
                     return fixtureControl;
 
-                var probe = httpContext?.Request.Headers["X-Worker-Persistence-Probe"].ToString();
-                return probe switch
+                return category switch
                 {
                     "mismatch" => PersistenceAccessContext.Scoped(new PersistenceScope($"{tenantId}-other")),
                     "global" => PersistenceAccessContext.Global,
@@ -618,11 +624,42 @@ internal static class Program
 
     private sealed class MappingReadCounter : DbCommandInterceptor
     {
+        private readonly ConcurrentQueue<string> _persistenceAccessCategories = new();
+        private readonly ConcurrentQueue<string> _mappingReadCategories = new();
+        private readonly AsyncLocal<string?> _currentPersistenceAccessCategory = new();
         private int _count;
 
         public int Count => Volatile.Read(ref _count);
 
-        public void Reset() => Interlocked.Exchange(ref _count, 0);
+        public string[] PersistenceAccessCategories => _persistenceAccessCategories.ToArray();
+
+        public string[] MappingReadCategories => _mappingReadCategories.ToArray();
+
+        public void Reset()
+        {
+            Interlocked.Exchange(ref _count, 0);
+            _persistenceAccessCategories.Clear();
+            _mappingReadCategories.Clear();
+            _currentPersistenceAccessCategory.Value = null;
+        }
+
+        public string ObservePersistenceAccessCategory(string? probe, bool hasRequest)
+        {
+            var category = !hasRequest
+                ? "no-request"
+                : probe switch
+                {
+                    "mismatch" => "mismatch",
+                    "global" => "global",
+                    "privileged" => "privileged",
+                    "across" => "across",
+                    _ => "ordinary"
+                };
+
+            _currentPersistenceAccessCategory.Value = category;
+            _persistenceAccessCategories.Enqueue(category);
+            return category;
+        }
 
         public override InterceptionResult<DbDataReader> ReaderExecuting(
             DbCommand command,
@@ -648,7 +685,10 @@ internal static class Program
             var sql = command.CommandText.TrimStart();
             if (sql.StartsWith("SELECT", StringComparison.OrdinalIgnoreCase) &&
                 sql.Contains(IdentityIamEfModule.ClaimMappingTableName, StringComparison.OrdinalIgnoreCase))
+            {
                 Interlocked.Increment(ref _count);
+                _mappingReadCategories.Enqueue(_currentPersistenceAccessCategory.Value ?? "no-request");
+            }
         }
     }
 }

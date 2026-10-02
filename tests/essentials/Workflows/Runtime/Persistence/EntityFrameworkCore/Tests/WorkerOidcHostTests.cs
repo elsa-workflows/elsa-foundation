@@ -73,8 +73,7 @@ public sealed class WorkerOidcHostTests
         {
             await ResetMappingReadsAsync(first);
             using var response = await PostExecuteAsync(first, artifactId, token, probe);
-            Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
-            await AssertNoMappingReadOrRuntimeEffectAsync(first);
+            await AssertNoMappingReadOrRuntimeEffectAsync(first, probe, response.StatusCode);
             await AssertNoUserOrExternalIdentityRowsAsync(first);
         }
 
@@ -329,13 +328,34 @@ public sealed class WorkerOidcHostTests
     private static async Task<int> MappingReadCountAsync(WorkerOidcHostProcess host) =>
         (await SnapshotAsync(host)).GetProperty("mappingReadCount").GetInt32();
 
-    private static async Task AssertNoMappingReadOrRuntimeEffectAsync(WorkerOidcHostProcess host)
+    private static async Task AssertNoMappingReadOrRuntimeEffectAsync(
+        WorkerOidcHostProcess host,
+        string? expectedProbe = null,
+        HttpStatusCode? actualStatusCode = null)
     {
         var snapshot = await SnapshotAsync(host);
-        Assert.Equal(0, snapshot.GetProperty("mappingReadCount").GetInt32());
-        Assert.Equal(0, snapshot.GetProperty("workflowExecutionStateRows").GetInt32());
-        Assert.Equal(0, snapshot.GetProperty("activityExecutionStateRows").GetInt32());
-        Assert.Equal(0, snapshot.GetProperty("bookmarkRows").GetInt32());
+        var accessCategories = snapshot.GetProperty("persistenceAccessCategories")
+            .EnumerateArray()
+            .Select(value => value.GetString()!)
+            .ToArray();
+        var mappingReadCategories = snapshot.GetProperty("mappingReadCategories")
+            .EnumerateArray()
+            .Select(value => value.GetString()!)
+            .ToArray();
+        var diagnostic = $"Probe '{expectedProbe ?? "none"}', response '{actualStatusCode?.ToString() ?? "not asserted"}', " +
+                         $"access categories [{string.Join(", ", accessCategories)}], " +
+                         $"mapping-read categories [{string.Join(", ", mappingReadCategories)}].";
+
+        if (expectedProbe is not null)
+            Assert.True(accessCategories.Contains(expectedProbe, StringComparer.Ordinal), $"Expected the probe to be observed. {diagnostic}");
+        if (actualStatusCode is not null)
+            Assert.True(actualStatusCode == HttpStatusCode.Unauthorized, $"Expected an unauthorized response. {diagnostic}");
+
+        foreach (var property in new[] { "mappingReadCount", "workflowExecutionStateRows", "activityExecutionStateRows", "bookmarkRows" })
+        {
+            var count = snapshot.GetProperty(property).GetInt32();
+            Assert.True(count == 0, $"Expected zero {property}, observed {count}. {diagnostic}");
+        }
         Assert.Equal(WorkerOidcHostFixture.TenantId, snapshot.GetProperty("persistenceScope").GetString());
         Assert.Equal("Ordinary", snapshot.GetProperty("persistenceAccessPolicy").GetString());
         Assert.False(snapshot.GetProperty("persistenceAcrossScopes").GetBoolean());

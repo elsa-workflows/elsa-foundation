@@ -80,15 +80,25 @@ public sealed class WorkflowsRuntimeTracingFeatureTests
         new WorkflowsRuntimeTracingFeature().ConfigureServices(services);
         using var provider = services.BuildServiceProvider();
 
+        var workflowExecutionId = Guid.NewGuid().ToString("N");
         var recorded = new List<Activity>();
-        using var listener = RecordEngineSpans(recorded);
+        using var listener = RecordEngineSpans(recorded, workflowExecutionId);
 
         var tracer = provider.GetRequiredService<IWorkflowEngineTracer>();
-        tracer.StartDrainCycle(new("wfexec-1"))?.Dispose();
+        tracer.StartDrainCycle(new(workflowExecutionId))?.Dispose();
+
+        // A different source can share the public name, so isolate this test's span by its execution id.
+        using (var sameNameSource = new ActivitySource(WorkflowEngineTelemetry.ActivitySourceName))
+        using (var unrelatedSpan = sameNameSource.StartActivity(WorkflowEngineTelemetry.DrainSpanName))
+        {
+            Assert.NotNull(unrelatedSpan);
+            unrelatedSpan!.SetTag(WorkflowEngineTelemetry.WorkflowExecutionIdTag, Guid.NewGuid().ToString("N"));
+        }
 
         var activity = Assert.Single(recorded);
         Assert.Equal(WorkflowEngineTelemetry.ActivitySourceName, activity.Source.Name);
         Assert.Equal(WorkflowEngineTelemetry.DrainSpanName, activity.OperationName);
+        Assert.Equal(workflowExecutionId, activity.GetTagItem(WorkflowEngineTelemetry.WorkflowExecutionIdTag));
     }
 
     [Fact]
@@ -104,34 +114,40 @@ public sealed class WorkflowsRuntimeTracingFeatureTests
 
         var committer = provider.GetRequiredService<RuntimeCheckpointCommitter>();
 
+        var workflowExecutionId = Guid.NewGuid().ToString("N");
         var recorded = new List<Activity>();
-        using var listener = RecordEngineSpans(recorded);
+        using var listener = RecordEngineSpans(recorded, workflowExecutionId);
 
-        await committer.CommitAsync(NewMinimalCommit());
+        await committer.CommitAsync(NewMinimalCommit(workflowExecutionId));
 
         Assert.Contains(recorded, activity => activity.OperationName == WorkflowEngineTelemetry.CheckpointCommitSpanName);
+        Assert.All(recorded, activity => Assert.Equal(workflowExecutionId, activity.GetTagItem(WorkflowEngineTelemetry.WorkflowExecutionIdTag)));
     }
 
-    /// <summary>Attaches a listener that records every stopped engine-source span into <paramref name="recorded"/>.</summary>
-    private static ActivityListener RecordEngineSpans(List<Activity> recorded)
+    /// <summary>Attaches a listener that records stopped engine-source spans for this execution into <paramref name="recorded"/>.</summary>
+    private static ActivityListener RecordEngineSpans(List<Activity> recorded, string workflowExecutionId)
     {
         var listener = new ActivityListener
         {
             ShouldListenTo = source => source.Name == WorkflowEngineTelemetry.ActivitySourceName,
             Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
-            ActivityStopped = recorded.Add
+            ActivityStopped = activity =>
+            {
+                if (Equals(activity.GetTagItem(WorkflowEngineTelemetry.WorkflowExecutionIdTag), workflowExecutionId))
+                    recorded.Add(activity);
+            }
         };
         ActivitySource.AddActivityListener(listener);
         return listener;
     }
 
-    private static RuntimeCheckpointCommit NewMinimalCommit() =>
+    private static RuntimeCheckpointCommit NewMinimalCommit(string workflowExecutionId) =>
         new(
             CommitId: "commit-1",
             Checkpoint: new RuntimeCheckpoint(
                 CheckpointId: "cp-1",
                 Name: "test.checkpoint",
-                WorkflowExecutionId: "wfexec-1",
+                WorkflowExecutionId: workflowExecutionId,
                 OccurredAt: DateTimeOffset.UnixEpoch,
                 ActivityExecutionIds: [],
                 Metadata: new Dictionary<string, string>()),
