@@ -259,3 +259,36 @@ public sealed class PlainFixtureActivity : Activity<PlainFixtureResult>
 
 public sealed record PlainFixtureResult(
     [property: Output(Key = "length", Path = "length")] int Length);
+
+/// <summary>
+/// Declares that two of its inputs refuse a secret reference. <see cref="SecretAcceptingFixtureActivity"/> is the same
+/// activity without the declarations: the scanner must reconcile both to the same catalog content (spec 188, T099).
+/// </summary>
+[RefusesSecretBinding(nameof(Persisted), SecretBindingRefusalReason.PersistedByActivity)]
+[RefusesSecretBinding(nameof(Echoed), SecretBindingRefusalReason.EchoedToOutput)]
+public sealed class SecretRefusingFixtureActivity : Activity<SecretFixtureResult>
+{
+    [ActivityInput(Key = nameof(Persisted))]
+    public string? Persisted { get; set; }
+
+    [ActivityInput(Key = nameof(Echoed))]
+    public string? Echoed { get; set; }
+
+    protected override ValueTask<ActivityTransition<SecretFixtureResult>> ExecuteAsync(ActivityExecutionContext context) =>
+        ValueTask.FromResult(ActivityTransition.Complete(new SecretFixtureResult(string.Empty)));
+}
+
+/// <summary><see cref="SecretRefusingFixtureActivity"/> without its secret binding declarations.</summary>
+public sealed class SecretAcceptingFixtureActivity : Activity<SecretFixtureResult>
+{
+    [ActivityInput(Key = nameof(Persisted))]
+    public string? Persisted { get; set; }
+
+    [ActivityInput(Key = nameof(Echoed))]
+    public string? Echoed { get; set; }
+
+    protected override ValueTask<ActivityTransition<SecretFixtureResult>> ExecuteAsync(ActivityExecutionContext context) =>
+        ValueTask.FromResult(ActivityTransition.Complete(new SecretFixtureResult(string.Empty)));
+}
+
+public sealed record SecretFixtureResult([property: Output] string Result);

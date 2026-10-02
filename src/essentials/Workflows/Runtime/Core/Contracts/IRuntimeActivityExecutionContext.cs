@@ -66,6 +66,9 @@ public interface IRuntimeActivityExecutionContext : IActivityExecutionContext
     /// when the name resolves to no visible declared variable, and <b>always</b> when the seam was not populated
     /// (a non-marker activity, or a handler path that did not populate it) — it never throws on an unpopulated
     /// seam, parallel to <see cref="GetLiveChildActivities"/> returning empty.
+    /// The envelope is returned as committed, including a <see cref="ValuePresence.Withheld"/> one, which carries no
+    /// value: a reader that needs the value refuses it with <c>VF-ACT-010</c>
+    /// (<c>SecretBindingDiagnostics.WithheldVariableNotResolved</c>) and never reads it as null or absent.
     /// </remarks>
     bool TryReadScopedVariableValue(string variableName, out ValueEnvelope? envelope);
 

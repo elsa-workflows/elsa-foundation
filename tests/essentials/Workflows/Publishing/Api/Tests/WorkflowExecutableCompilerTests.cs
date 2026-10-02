@@ -300,9 +300,95 @@ public sealed class WorkflowExecutableCompilerTests
     {
         // #930 (part 2): a value authored on a placed design-owned reusable activity for one of its public
         // contract inputs must lower to a literal boundary binding that reaches the published executable.
+        var compiler = PlacedReusableCompiler(new WorkflowArgumentState(
+            "value",
+            new ArgumentValue(JsonSerializer.SerializeToElement(42), "Literal"),
+            null, null, null, null));
+
+        var executable = await compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+
+        var binding = executable.RootActivity.InputBindings["value"];
+        Assert.Equal(RuntimeInputBindingSource.Literal, binding.Source);
+        Assert.Equal(42, binding.LiteralValue!.Value.GetInt32());
+    }
+
+    [Fact]
+    public async Task Placed_reusable_activity_refuses_a_secret_reference_on_its_boundary_input()
+    {
+        // Spec 188: a reusable boundary is activated by its template root, which here is not a CLR activity, so it
+        // captures its inputs outside CLR activation. The input is text, so only this refusal stands in the way.
+        var compiler = PlacedReusableCompiler(
+            new WorkflowArgumentState(
+                "value",
+                new ArgumentValue(JsonSerializer.SerializeToElement(new { name = "payments.api-key" }), "Secret"),
+                null, null, null, null),
+            valueTypeAlias: "String");
+
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(
+            () => compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow)).AsTask());
+
+        Assert.Equal(
+            Elsa.Workflows.Runtime.Core.Exceptions.SecretBindingDiagnostics.NonClrConsumerRefused(
+                "use-greet", "value", "test.boundary").Message,
+            exception.Message);
+    }
+
+    [Fact]
+    public async Task Placed_reusable_activity_refuses_a_secret_reference_before_an_earlier_input_fails_conversion()
+    {
+        // Spec 188: the secret refusal runs once for the whole boundary before any input is compiled, so it wins over
+        // the conversion refusal of an input that sorts before the secret one.
+        var compiler = PlacedReusableCompiler(
+            SecretInput("value"),
+            "String",
+            ("Int32", new WorkflowArgumentState(
+                "aaa",
+                new ArgumentValue(JsonSerializer.SerializeToElement("not-a-number"), "Literal"),
+                null, null, null, null)));
+
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(
+            () => compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow)).AsTask());
+
+        Assert.Equal(
+            Elsa.Workflows.Runtime.Core.Exceptions.SecretBindingDiagnostics.NonClrConsumerRefused(
+                "use-greet", "value", "test.boundary").Message,
+            exception.Message);
+    }
+
+    [Fact]
+    public async Task Placed_reusable_activity_refusal_names_the_ordinally_first_secret_input()
+    {
+        var compiler = PlacedReusableCompiler(SecretInput("value"), "String", ("String", SecretInput("beta")));
+
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(
+            () => compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow)).AsTask());
+
+        Assert.Equal(
+            Elsa.Workflows.Runtime.Core.Exceptions.SecretBindingDiagnostics.NonClrConsumerRefused(
+                "use-greet", "beta", "test.boundary").Message,
+            exception.Message);
+    }
+
+    private static WorkflowArgumentState SecretInput(string referenceKey) => new(
+        referenceKey,
+        new ArgumentValue(JsonSerializer.SerializeToElement(new { name = "payments.api-key" }), "Secret"),
+        null, null, null, null);
+
+    /// <summary>
+    /// A workflow that places one design-owned reusable activity whose boundary has a contract input <c>value</c>
+    /// (Int32 unless <paramref name="valueTypeAlias"/> says otherwise), authored as <paramref name="authoredInput"/>, plus
+    /// one contract input per <paramref name="extraInputs"/> entry, authored as its state and typed by its alias.
+    /// </summary>
+    private WorkflowExecutableCompiler PlacedReusableCompiler(
+        WorkflowArgumentState authoredInput,
+        string valueTypeAlias = "Int32",
+        params (string TypeAlias, WorkflowArgumentState State)[] extraInputs)
+    {
         var contract = new DesignActivityContract("1", [new DesignActivityInputContract(
-            "value", "Value", new TypeReference("Int32"), true,
-            false, null, "elsa.json")], [new ActivityOutputContract(
+            "value", "Value", new TypeReference(valueTypeAlias), true,
+            false, null, "elsa.json"), ..extraInputs.Select(extra => new DesignActivityInputContract(
+            extra.State.ReferenceKey, extra.State.ReferenceKey, new TypeReference(extra.TypeAlias), true,
+            false, null, "elsa.json"))], [new ActivityOutputContract(
             "result", "Result", new TypeReference("Int32"), true, false, "elsa.json")], []);
         var root = new ExecutableNode(
             "local-root", "local-root", "test.boundary", "1",
@@ -312,7 +398,7 @@ public sealed class WorkflowExecutableCompilerTests
                 "local-child", "local-child", "test.child", "1",
                 new("test.child", "1", JsonSerializer.SerializeToElement(new { plan = 2 })),
                 new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, RuntimeOutputCapture>(), new Dictionary<string, string>())])],
-            activityContract: BoundaryRuntimeContract(hasValueInput: true));
+            activityContract: BoundaryRuntimeContract(hasValueInput: true, valueTypeAlias));
         var template = new ExecutableActivityTemplate(
             "template-greet", "hash-greet", root, new Dictionary<string, WorkflowExecutableResumeTarget>(),
             [], [], [], "fingerprint", new Dictionary<string, string>(), DateTimeOffset.UnixEpoch);
@@ -346,13 +432,9 @@ public sealed class WorkflowExecutableCompilerTests
             "result",
             new ArgumentValue(JsonSerializer.SerializeToElement(new { referenceKey = "caller-result", declaringScopeId = "workflow" }), "Variable"),
             null, null, null, null);
-        var authoredInput = new WorkflowArgumentState(
-            "value",
-            new ArgumentValue(JsonSerializer.SerializeToElement(42), "Literal"),
-            null, null, null, null);
-        var compiler = TestCompiler.Create(
+        return TestCompiler.Create(
             new FakeVersionStore(WorkflowVersion(
-                new ActivityNode("use-greet", publication.DefinitionVersionId, [authoredInput], [outputTarget]),
+                new ActivityNode("use-greet", publication.DefinitionVersionId, [authoredInput, ..extraInputs.Select(extra => extra.State)], [outputTarget]),
                 variables: [new("caller-result", "CallerResult", new TypeReference("Int32"), null, null)])),
             new FakeActivityVersionStore([]),
             _activityStructureService,
@@ -361,12 +443,6 @@ public sealed class WorkflowExecutableCompilerTests
             new ReusableTemplateReader(template),
             new ReusableSourceReader(sourceReference),
             new WorkflowExecutablePlacementSidecarContext());
-
-        var executable = await compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow));
-
-        var binding = executable.RootActivity.InputBindings["value"];
-        Assert.Equal(RuntimeInputBindingSource.Literal, binding.Source);
-        Assert.Equal(42, binding.LiteralValue!.Value.GetInt32());
     }
 
     [Fact]
@@ -2284,7 +2360,7 @@ public sealed class WorkflowExecutableCompilerTests
         RuntimeRequirements = []
     };
 
-    private static Elsa.Activities.Runtime.Core.Models.ActivityContract BoundaryRuntimeContract(bool hasValueInput)
+    private static Elsa.Activities.Runtime.Core.Models.ActivityContract BoundaryRuntimeContract(bool hasValueInput, string valueTypeAlias = "Int32")
     {
         var descriptor = JsonSerializer.SerializeToElement(new { plan = 1 });
         var valueType = new ValueTypeDescriptor("Object");
@@ -2294,7 +2370,7 @@ public sealed class WorkflowExecutableCompilerTests
                 new Elsa.Activities.Runtime.Core.Models.ActivityInputContract(
                     "value",
                     "Value",
-                    new ValueTypeDescriptor("Int32"),
+                    new ValueTypeDescriptor(valueTypeAlias),
                     isRequired: true,
                     isNullable: false,
                     hasDefault: false,

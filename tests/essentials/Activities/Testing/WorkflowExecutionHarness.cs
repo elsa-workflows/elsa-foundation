@@ -695,6 +695,9 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
                 key, type, ValueProtectionPolicy.InstanceInline, binding.Source, variable: binding.Variable, metadata: binding.Metadata),
             RuntimeInputBindingSource.ActivityResult => new RuntimeInputBinding(
                 key, type, ValueProtectionPolicy.InstanceInline, binding.Source, activityResult: binding.ActivityResult, metadata: binding.Metadata),
+            // A secret read keeps its own policy: it is what makes the withheld input render as sensitive.
+            RuntimeInputBindingSource.SecretRead => new RuntimeInputBinding(
+                key, type, binding.EffectivePolicy, binding.Source, metadata: binding.Metadata, conversionPlan: binding.ConversionPlan, secret: binding.Secret),
             _ => throw new InvalidOperationException(
                 $"Test executable input '{key}' on node '{node.ExecutableNodeId}' still uses legacy binding source '{binding.Source}'.")
         };

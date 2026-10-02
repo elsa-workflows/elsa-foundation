@@ -10,6 +10,7 @@ using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText.Services;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -62,6 +63,47 @@ public sealed class ClrActivityActivatorTests
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => activator.ActivateAsync(request).AsTask());
         Assert.Equal(1, ScopedDependency.DisposeCount);
+    }
+
+    [Theory]
+    [InlineData(WithheldValueKind.SecretReference)]
+    [InlineData(WithheldValueKind.PolicyRequiresEncryption)]
+    public async Task A_withheld_input_is_refused_before_the_activity_is_created(WithheldValueKind kind)
+    {
+        // No secret resolution is composed here, so hydrating would have to invent a value. The activator refuses
+        // with the fixed code instead, before the strategy opens an attempt scope (spec 188, T008).
+        ScopedDependency.Reset();
+        await using var root = Services().BuildServiceProvider();
+        var (activator, contract) = Activator(root);
+        var withheld = kind == WithheldValueKind.SecretReference
+            ? WithheldValue.SecretReference(new RuntimeSecretReference("payments.api-key"), null)
+            : new WithheldValue(kind);
+
+        var exception = await Assert.ThrowsAsync<WithheldValueException>(() =>
+            activator.ActivateAsync(WithheldRequest(contract, withheld, RuntimeDescriptor(contract))).AsTask());
+
+        Assert.Equal("VF-ACT-010: Activity input 'message' was withheld and is not resolved in this host.", exception.Message);
+        Assert.Equal(0, ScopedDependency.DisposeCount);
+    }
+
+    [Fact]
+    public async Task A_withheld_input_is_refused_for_a_strategy_that_does_not_hydrate_inputs()
+    {
+        // A strategy that skips hydration (graph activation) never reads the input, so only the activator's own
+        // refusal stops a withheld value from passing silently (spec 188, T008).
+        await using var root = Services().BuildServiceProvider();
+        var (_, contract) = Activator(root);
+        var strategy = new NonHydratingStrategy();
+        var activator = new ActivityActivator([strategy], new ActivityInputHydrator());
+        var withheld = WithheldValue.SecretReference(new RuntimeSecretReference("payments.api-key"), null);
+
+        var exception = await Assert.ThrowsAsync<WithheldValueException>(() => activator.ActivateAsync(WithheldRequest(
+            contract,
+            withheld,
+            new RuntimeActivityDescriptor(NonHydratingStrategy.Key, RuntimeActivityDescriptor.InitialSchemaVersion, contract.DescriptorPayload))).AsTask());
+
+        Assert.Equal("VF-ACT-010: Activity input 'message' was withheld and is not resolved in this host.", exception.Message);
+        Assert.Equal(0, strategy.Activations);
     }
 
     [Fact]
@@ -352,6 +394,24 @@ public sealed class ClrActivityActivatorTests
             new ActivityAttempt(attemptId, "invocation-1", attemptId == "attempt-1" ? 1 : 2, ActivityAttemptReason.Initial, DateTimeOffset.UtcNow),
             Descriptor: RuntimeDescriptor(contract));
 
+    private static ActivityActivationRequest WithheldRequest(
+        ActivityContract contract,
+        WithheldValue withheld,
+        RuntimeActivityDescriptor descriptor) =>
+        new(
+            contract,
+            new ActivityInputSnapshot(
+                "invocation-1",
+                contract.SchemaFingerprint,
+                "bindings",
+                new Dictionary<string, ValueEnvelope>
+                {
+                    ["message"] = ValueEnvelope.Withheld(StringType, withheld, ValueProtectionPolicy.InstanceInline)
+                },
+                DateTimeOffset.UtcNow),
+            new ActivityAttempt("attempt-1", "invocation-1", 1, ActivityAttemptReason.Initial, DateTimeOffset.UtcNow),
+            Descriptor: descriptor);
+
     private static RuntimeActivityDescriptor RuntimeDescriptor(ActivityContract contract) =>
         new(
             WellKnownRuntimeActivityConsumers.ClrActivity,
@@ -371,6 +431,27 @@ public sealed class ClrActivityActivatorTests
                     ValueProtectionPolicy.InstanceInline)
             },
             DateTimeOffset.UtcNow);
+
+    private sealed class NonHydratingStrategy : IActivityActivationStrategy
+    {
+        public const string Key = "test.non-hydrating";
+
+        public int Activations { get; private set; }
+
+        public string ConsumerKey => Key;
+
+        public IReadOnlyCollection<string> SupportedSchemaVersions { get; } = [RuntimeActivityDescriptor.InitialSchemaVersion];
+
+        public bool RequiresInputHydration => false;
+
+        public ValueTask<ActivityActivationLease> ActivateAsync(
+            ActivityActivationStrategyRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            Activations++;
+            return ValueTask.FromResult(new ActivityActivationLease(new OptionalInitializerActivity()));
+        }
+    }
 
     private sealed class ServiceBearingActivity(ScopedDependency dependency) : Activity
     {

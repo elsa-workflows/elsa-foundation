@@ -44,6 +44,9 @@ namespace Elsa.Activities.For.Activities;
 /// activity module.
 /// </para>
 /// </remarks>
+[RefusesSecretBinding(nameof(Start), SecretBindingRefusalReason.PersistedByActivity)]
+[RefusesSecretBinding(nameof(End), SecretBindingRefusalReason.PersistedByActivity)]
+[RefusesSecretBinding(nameof(Step), SecretBindingRefusalReason.PersistedByActivity)]
 [ActivityStructure("elsa.for.structure", "1.0.0")]
 [ActivityChildSlot("For.Body", "body", "Body", ActivityChildSlotCardinalities.Single)]
 [ActivitySideEffectProfile(SideEffectProfile.ReplaySafe)]

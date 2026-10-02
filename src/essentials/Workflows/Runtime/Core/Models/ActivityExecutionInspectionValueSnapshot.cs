@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Workflows.Runtime.Core.Constants;
 
 namespace Elsa.Workflows.Runtime.Core.Models;
 
@@ -49,6 +50,27 @@ public sealed record ActivityExecutionInspectionValueSnapshot(
             Sequence: sequence,
             Failure: failure,
             EvidenceId: null);
+
+    /// <summary>
+    /// Adds the withheld marker to a snapshot's metadata: the <see cref="WithheldValueKind"/> and, for a secret
+    /// reference, its name. A reference name is not a value. Returns <paramref name="metadata"/> unchanged when nothing
+    /// was withheld.
+    /// </summary>
+    public static IReadOnlyDictionary<string, string> MarkWithheld(
+        IReadOnlyDictionary<string, string> metadata,
+        WithheldValue? withheld)
+    {
+        if (withheld is null)
+            return metadata;
+
+        var marked = new Dictionary<string, string>(metadata, StringComparer.Ordinal)
+        {
+            [RuntimeMetadataKeys.WithheldKind] = withheld.Kind.ToString()
+        };
+        if (withheld.Secret is { } secret)
+            marked[RuntimeMetadataKeys.SecretReferenceName] = secret.Name;
+        return marked;
+    }
 }
 
 public sealed record RuntimeInputEvaluationFailure(string Code, string Message, string? IncidentId = null);

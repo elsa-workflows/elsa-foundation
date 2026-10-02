@@ -104,6 +104,7 @@ public sealed class WorkflowExecutableHasher : IWorkflowExecutableHasher
             RuntimeInputBindingSource.ActivityResult =>
                 $"result:{input.Value.ActivityResult?.ProducerScopeId}:{input.Value.ActivityResult?.ProducerExecutableNodeId}:{input.Value.ActivityResult?.ProjectionKey}:{input.Value.ActivityResult?.IsOptional}",
             RuntimeInputBindingSource.Expression => FormatExpression(input.Value.Expression),
+            RuntimeInputBindingSource.SecretRead => FormatSecret(input.Value.Secret),
             _ => CanonicalJson(input.Value.LiteralValue)
         };
 
@@ -118,14 +119,25 @@ public sealed class WorkflowExecutableHasher : IWorkflowExecutableHasher
             : string.Join(',', envelope.ExternalReference.Metadata
                 .OrderBy(item => item.Key, StringComparer.Ordinal)
                 .Select(item => $"{item.Key}={item.Value}"));
-        var payload = envelope.InlineValue.HasValue
-            ? CanonicalJson(envelope.InlineValue)
-            : envelope.ExternalReference is null
-                ? string.Empty
-                : $"{envelope.ExternalReference.StorageProfile}:{envelope.ExternalReference.Locator}[{externalMetadata}]";
+        var payload = envelope.WithheldValue is { } withheld
+            ? FormatWithheld(withheld)
+            : envelope.InlineValue.HasValue
+                ? CanonicalJson(envelope.InlineValue)
+                : envelope.ExternalReference is null
+                    ? string.Empty
+                    : $"{envelope.ExternalReference.StorageProfile}:{envelope.ExternalReference.Locator}[{externalMetadata}]";
 
         return $"{envelope.Presence}:{FormatType(envelope.Type)}:{FormatPolicy(envelope.Policy)}:{payload}";
     }
+
+    // A withheld envelope has no value; its marker's kind and reference are what stand in for it, so two envelopes
+    // that withhold different secrets hash apart. Only a withheld envelope carries a marker, so no other hash moves.
+    private static string FormatWithheld(WithheldValue withheld) =>
+        $"withheld:{withheld.Kind}:{FormatSecret(withheld.Secret)}";
+
+    // A secret read hashes by reference: the binding holds no value, and the reference is what changes behavior.
+    private static string FormatSecret(RuntimeSecretReference? secret) =>
+        secret is null ? string.Empty : $"secret:{secret.Name}:{secret.TypeName}:{secret.Scope}";
 
     private static string FormatExpression(RuntimeExpressionBinding? expression)
     {
@@ -332,8 +344,19 @@ public sealed class WorkflowExecutableHasher : IWorkflowExecutableHasher
                 writer.WriteString("expression", binding.Expression?.Expression);
                 writer.WriteEndObject();
             }
+            else if (binding.Source == RuntimeInputBindingSource.SecretRead)
+            {
+                // Written only for secret reads, so the payload of every other binding is unchanged.
+                writer.WriteStartObject();
+                writer.WriteString("secretName", binding.Secret?.Name);
+                writer.WriteString("secretTypeName", binding.Secret?.TypeName);
+                writer.WriteString("secretScope", binding.Secret?.Scope);
+                writer.WriteEndObject();
+            }
             else if (binding.LiteralValue is { } literalValue)
                 WriteCanonicalJson(writer, literalValue);
+            else if (binding.Literal?.WithheldValue is { } withheld)
+                writer.WriteStringValue(FormatWithheld(withheld));
             else
                 writer.WriteNullValue();
 

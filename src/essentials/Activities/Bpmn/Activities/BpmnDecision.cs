@@ -17,6 +17,7 @@ namespace Elsa.Activities.Bpmn.Activities;
 /// matches no conditional flow — gateway routing then falls through to the default flow (or faults
 /// deterministically when none is declared), so a misconfigured decision never routes silently.
 /// </remarks>
+[RefusesSecretBinding(nameof(Outcome), SecretBindingRefusalReason.EchoedToOutput)]
 public sealed class BpmnDecision : Activity<BpmnDecisionResult>
 {
     /// <summary>The outcome name to complete with; conditional sequence flows match against it.</summary>

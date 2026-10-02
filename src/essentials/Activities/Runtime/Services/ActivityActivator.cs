@@ -2,6 +2,7 @@ using Elsa.Activities.Runtime.Contracts;
 using Elsa.Activities.Runtime.Core.Exceptions;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Activities.Runtime.Services;
@@ -27,6 +28,8 @@ public sealed class ActivityActivator(
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
+        // Every strategy, hydrating or not: a strategy that skips hydration would otherwise pass the input silently.
+        RefuseWithheldInputs(request.Inputs);
 
         var consumerKey = request.Descriptor?.ConsumerKey ?? request.Contract.DescriptorKind;
         var schemaVersion = request.Descriptor?.SchemaVersion ?? "1";
@@ -81,6 +84,19 @@ public sealed class ActivityActivator(
             }
 
             throw;
+        }
+    }
+
+    /// <summary>
+    /// Activation does not resolve withheld values, so a withheld input has no value to hydrate. Refuse it before the
+    /// activity exists rather than hydrating null and letting the activity run on a missing value.
+    /// </summary>
+    private static void RefuseWithheldInputs(ActivityInputSnapshot snapshot)
+    {
+        foreach (var (key, value) in snapshot.Values.OrderBy(item => item.Key, StringComparer.Ordinal))
+        {
+            if (value.Presence == ValuePresence.Withheld)
+                throw SecretBindingDiagnostics.WithheldInputNotResolved(key);
         }
     }
 

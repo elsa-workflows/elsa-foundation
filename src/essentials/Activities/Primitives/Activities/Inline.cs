@@ -18,6 +18,7 @@ namespace Elsa.Activities.Primitives.Activities;
 /// materialized value in the invocation snapshot, and hydrates this transient activity exactly once.
 /// The result type is <see cref="object"/> so any expression-produced value flows through unchanged.
 /// </remarks>
+[RefusesSecretBinding(nameof(Expression), SecretBindingRefusalReason.EchoedToOutput)]
 public sealed class Inline : Activity<object?>
 {
     /// <summary>The already-materialized inline expression/code value.</summary>

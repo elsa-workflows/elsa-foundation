@@ -212,6 +212,15 @@ public static class RuntimeMetadataKeys
     /// <summary>Compatibility metadata used when a role-owned envelope is projected from legacy durable-value state.</summary>
     public const string RetentionPolicy = "runtime.retentionPolicy";
 
+    /// <summary>
+    /// Inspection metadata marking a value snapshot whose envelope was withheld; the value is the
+    /// <c>WithheldValueKind</c> name. A withheld snapshot never carries a payload.
+    /// </summary>
+    public const string WithheldKind = "runtime.withheldKind";
+
+    /// <summary>Inspection metadata naming the secret reference behind a withheld input. A name is not a value.</summary>
+    public const string SecretReferenceName = "runtime.secretReferenceName";
+
     public const string ParentActivityExecutionId = "runtime.parentActivityExecutionId";
 
     /// <summary>

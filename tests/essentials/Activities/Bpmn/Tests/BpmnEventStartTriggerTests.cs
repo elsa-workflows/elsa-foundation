@@ -2,7 +2,9 @@ using System.Text.Json;
 using Elsa.Activities.Bpmn.Internal;
 using Elsa.Activities.Bpmn.Models;
 using Elsa.Activities.Primitives.Activities;
+using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Scheduling.Activities;
+using Elsa.Activities.Testing;
 using Elsa.Expressions.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
@@ -97,6 +99,29 @@ public sealed class BpmnEventStartTriggerTests
         var binding = Assert.Single(new WorkflowTriggerBindingExtractor([_stimulusProvider]).Extract(executable));
         Assert.Equal(BpmnMessageStartStimulus.Hash("order-placed"), binding.StimulusHash);
     }
+
+    [Fact]
+    public void Describe_RefusesASecretReadCanStartWorkflowWithTheFixedPublishCode()
+    {
+        // Publication refuses the binding first (BpmnProcess declares the input); this backstop keeps an artifact that
+        // skipped publication from reading a secret as an unauthored CanStartWorkflow (spec 188, T099).
+        var node = TriggerNode(
+            [MessageStart("msg-start", "order-placed"), End("end")],
+            [Flow("f1", "msg-start", "end")],
+            secretRead: SecretBindingTestSupport.SecretRead(nameof(BpmnProcessActivity.CanStartWorkflow), "Boolean"));
+
+        SecretBindingTestSupport.AssertReaderRefusesSecretRead(
+            () => _stimulusProvider.Describe(node),
+            BpmnRuntimeFixture.ProcessNodeId,
+            nameof(BpmnProcessActivity.CanStartWorkflow));
+    }
+
+    [Fact]
+    public void BpmnProcess_declares_CanStartWorkflow_as_fixed_at_publish() =>
+        SecretBindingTestSupport.AssertRefusesSecretBinding(
+            typeof(BpmnProcessActivity),
+            nameof(BpmnProcessActivity.CanStartWorkflow),
+            SecretBindingRefusalReason.FixedAtPublish);
 
     [Fact]
     public void Extract_FailsPublish_WhenTwoStartsShareEventName()
@@ -222,11 +247,14 @@ public sealed class BpmnEventStartTriggerTests
     private static ExecutableNode TriggerNode(
         IReadOnlyCollection<BpmnElement> elements,
         IReadOnlyCollection<BpmnSequenceFlow> flows,
-        bool? canStartWorkflow = null)
+        bool? canStartWorkflow = null,
+        RuntimeInputBinding? secretRead = null)
     {
         var bindings = new Dictionary<string, RuntimeInputBinding>(StringComparer.OrdinalIgnoreCase);
         if (canStartWorkflow is { } value)
             bindings[nameof(BpmnProcessActivity.CanStartWorkflow)] = LiteralBinding(nameof(BpmnProcessActivity.CanStartWorkflow), value);
+        if (secretRead is not null)
+            bindings[secretRead.InputName] = secretRead;
 
         return new ExecutableNode(
             executableNodeId: BpmnRuntimeFixture.ProcessNodeId,

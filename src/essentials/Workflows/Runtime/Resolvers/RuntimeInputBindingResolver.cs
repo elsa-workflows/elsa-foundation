@@ -1,4 +1,5 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Primitives.Models;
@@ -18,22 +19,47 @@ public sealed class RuntimeInputBindingResolver : IRuntimeInputBindingResolver
         {
             RuntimeInputBindingSource.Literal => new RuntimeResolvedInput(binding.InputName, binding.Source, null)
             {
-                Envelope = binding.Literal
+                Envelope = RequireReadable(binding.Literal!, binding)
             },
             RuntimeInputBindingSource.Expression => new RuntimeResolvedInput(binding.InputName, binding.Source, binding.Expression),
             RuntimeInputBindingSource.WorkflowRequest => ResolveWorkflowRequest(binding, context),
             RuntimeInputBindingSource.VariableRead => ResolveVariable(binding, context),
             RuntimeInputBindingSource.ActivityResult => ResolveActivityResult(binding, context),
+            // Passes the reference through and reads no value: only activation may resolve a secret.
+            RuntimeInputBindingSource.SecretRead => new RuntimeResolvedInput(binding.InputName, binding.Source, null)
+            {
+                Envelope = WithholdSecretRead(binding)
+            },
             _ => throw new ArgumentOutOfRangeException(nameof(binding), binding.Source, "Unsupported runtime input binding source.")
         };
     }
+
+    /// <summary>
+    /// The withheld envelope that stands in for a secret read: the reference and the conversion plan from text, under
+    /// the binding's own policy, and no value.
+    /// </summary>
+    internal static ValueEnvelope WithholdSecretRead(RuntimeInputBinding binding) =>
+        ValueEnvelope.Withheld(
+            binding.TargetType,
+            WithheldValue.SecretReference(binding.Secret!, binding.ConversionPlan),
+            binding.EffectivePolicy);
+
+    /// <summary>
+    /// Every source this resolver reads passes here first. A withheld envelope has no value to hand on: passed through,
+    /// it would be retyped under this binding's type with a marker whose plan belongs to another binding, or projected as
+    /// if it were null. So only a secret read's own reference ever resolves to a withheld envelope.
+    /// </summary>
+    private static ValueEnvelope RequireReadable(ValueEnvelope source, RuntimeInputBinding binding) =>
+        source.Presence == ValuePresence.Withheld
+            ? throw SecretBindingDiagnostics.WithheldBindingNotResolved(binding)
+            : source;
 
     private static RuntimeResolvedInput ResolveWorkflowRequest(RuntimeInputBinding binding, RuntimeInputBindingResolutionContext context)
     {
         var reference = binding.WorkflowRequest!;
         if (!context.WorkflowInputEnvelopes.TryGetValue(reference.MemberKey, out var envelope))
             throw new InvalidOperationException($"Workflow request member '{reference.MemberKey}' for input '{binding.InputName}' is unavailable.");
-        return ResolveWorkflowRequestEnvelope(binding, reference, envelope);
+        return ResolveWorkflowRequestEnvelope(binding, reference, RequireReadable(envelope, binding));
     }
 
     private static RuntimeResolvedInput ResolveVariable(RuntimeInputBinding binding, RuntimeInputBindingResolutionContext context)
@@ -44,7 +70,7 @@ public sealed class RuntimeInputBindingResolver : IRuntimeInputBindingResolver
         {
             return new RuntimeResolvedInput(binding.InputName, binding.Source, null)
             {
-                Envelope = Retype(envelope, binding.ConversionPlan?.SourceType ?? binding.TargetType)
+                Envelope = Retype(RequireReadable(envelope, binding), binding.ConversionPlan?.SourceType ?? binding.TargetType)
             };
         }
 
@@ -66,7 +92,7 @@ public sealed class RuntimeInputBindingResolver : IRuntimeInputBindingResolver
             };
         }
 
-        var result = resolution.Completion.Result;
+        var result = RequireReadable(resolution.Completion.Result, binding);
         if (StringComparer.Ordinal.Equals(reference.ProjectionKey, "$result"))
         {
             return new RuntimeResolvedInput(binding.InputName, binding.Source, null)

@@ -159,7 +159,7 @@ public sealed class WorkflowExecutableCompiler(
                 placedStorageDriverRequirements.UnionWith(template.StorageDriverRequirements);
                 var sourceReference = await sourceReferences.FindAsync(publication.SourceReferenceId, cancellationToken)
                                       ?? throw new ArgumentException($"Published activity version '{publication.DefinitionVersionId}' has no Source Reference '{publication.SourceReferenceId}'.");
-                var bindings = CompileBoundaryInputs(activity, publication.Contract, inputBindingCompiler);
+                var bindings = CompileBoundaryInputs(activity, publication.Contract, template.Root.Descriptor, inputBindingCompiler);
                 var outputCaptures = outputCaptureCompiler.CompileBoundaryOutputs(
                     activity.NodeId,
                     publication.Contract.Outputs,
@@ -281,6 +281,7 @@ public sealed class WorkflowExecutableCompiler(
     private static IReadOnlyDictionary<string, RuntimeInputBinding> CompileBoundaryInputs(
         Elsa.Workflows.Design.Core.Models.ActivityNode activity,
         Elsa.Activities.Design.Core.Models.ActivityContract contract,
+        RuntimeActivityDescriptor boundaryDescriptor,
         RuntimeInputBindingCompiler compiler)
     {
         var definitions = contract.Inputs.ToDictionary(x => x.ReferenceKey, StringComparer.Ordinal);
@@ -293,7 +294,7 @@ public sealed class WorkflowExecutableCompiler(
                 throw new ArgumentException($"Activity node '{activity.NodeId}' input '{input.ReferenceKey}' does not match the published activity contract.");
 
         var authoredByKey = authored.ToDictionary(x => x.ReferenceKey, StringComparer.Ordinal);
-        var result = new Dictionary<string, RuntimeInputBinding>(StringComparer.OrdinalIgnoreCase);
+        var inputStates = new List<(Elsa.Activities.Design.Core.Models.ActivityInputContract Input, ArgumentState State)>();
         foreach (var input in contract.Inputs.OrderBy(x => x.ReferenceKey, StringComparer.Ordinal))
         {
             ArgumentState? inputState = authoredByKey.TryGetValue(input.ReferenceKey, out var state)
@@ -308,6 +309,16 @@ public sealed class WorkflowExecutableCompiler(
                 continue;
             }
 
+            inputStates.Add((input, inputState));
+        }
+
+        // A reusable boundary is activated by its template root, which for a graph template captures its inputs
+        // outside CLR activation; the check covers contract defaults as well as authored inputs, and runs once for the
+        // whole node before any input is compiled.
+        compiler.EnsureSecretBindingsAdmissible(activity.NodeId, boundaryDescriptor, inputStates.Select(x => x.State));
+        var result = new Dictionary<string, RuntimeInputBinding>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (input, inputState) in inputStates)
+        {
             var definition = new InputDefinition(
                 input.ReferenceKey,
                 input.Name,
@@ -347,7 +358,7 @@ public sealed class WorkflowExecutableCompiler(
             try
             {
                 typeAlias = node.Descriptor.Payload
-                    .Deserialize<ClrActivityDescriptor>(new JsonSerializerOptions(JsonSerializerDefaults.Web))?
+                    .Deserialize<ClrActivityDescriptor>(DescriptorPayloadSerializer.Options)?
                     .TypeAlias;
             }
             catch (JsonException)
