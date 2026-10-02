@@ -4,6 +4,7 @@ using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Design.Persistence.EntityFrameworkCore;
 using Elsa3.Activities.Design.Import.Models;
 using Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.Tests.Support;
+using Elsa3.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Xunit;
@@ -115,38 +116,54 @@ internal static class Elsa3ImportNativeSmoke
         // One atomic import across the ledger, Activities Design, and Workflows Design.
         var scope = new ReusableActivityImportAccessScope("tenant-a", "user-a");
         var service = db.Service(access, clock);
-        var upload = await service.UploadAsync(Json(
+        Elsa3WorkflowDefinition[] export =
+        [
             Workflow("a", "a-v1", 1, true, Leaf("root-v1")),
             Workflow("a", "a-v2", 2, true, Leaf("root-v2")),
-            Workflow("consumer", "consumer-v1", 1, false, Reference("consumer-to-a", "a-v1"))), null, scope);
+            Workflow("consumer", "consumer-v1", 1, false, Reference("consumer-to-a", "a-v1"))
+        ];
+        var upload = await service.UploadAsync(Json(export), null, scope);
         var planId = (await service.AnalyzeAsync(upload.CollectionHandle, 0, 10, scope)).PlanId;
         var applied = await service.ApplyAsync(upload.CollectionHandle, planId, ["a-v1", "consumer-v1"], "native-first", scope);
         Assert.Equal(ReusableActivityImportReceiptStatus.Applied, applied.Status);
         var afterFirst = await db.CountAsync();
-        Assert.Equal((1, 3, 1, 1, 1, 2, 2), (afterFirst.Receipts, afterFirst.Bindings, afterFirst.ActivityDefinitions, afterFirst.ActivityVersions, afterFirst.Authoring, afterFirst.WorkflowDefinitions, afterFirst.WorkflowVersions));
+        // The apply consumed its upload; the two ledger CRUD rows above are what is left.
+        Assert.Equal((2, 1, 3, 1, 1, 1, 2, 2), (afterFirst.Collections, afterFirst.Receipts, afterFirst.Bindings, afterFirst.ActivityDefinitions, afterFirst.ActivityVersions, afterFirst.Authoring, afterFirst.WorkflowDefinitions, afterFirst.WorkflowVersions));
 
         // Restart: fresh contexts replay the durable receipt.
         Assert.Equal(ReusableActivityImportReceiptStatus.AlreadyImported,
             (await db.Service(access, clock).ApplyAsync(upload.CollectionHandle, planId, ["a-v1", "consumer-v1"], "native-first", scope)).Status);
 
-        // Rollback: a failure after the Design writes of a later import leaves nothing partial.
+        // A later import of the same export uploads it again.
+        var laterUpload = await service.UploadAsync(Json(export), null, scope);
+        var laterPlanId = (await service.AnalyzeAsync(laterUpload.CollectionHandle, 0, 10, scope)).PlanId;
+        var beforeLater = await db.CountAsync();
+
+        // Rollback: a failure after the Design writes of a later import leaves nothing partial, and keeps the upload.
         var failing = db.Service(access, clock, db.Command(access, clock, activitiesInterceptors: [new SaveFailureInterceptor<ActivityManagementProjectionSnapshot>()]));
         await Assert.ThrowsAsync<ReusableActivityImportPersistenceException>(async () =>
-            await failing.ApplyAsync(upload.CollectionHandle, planId, ["a-v2"], "native-rolled-back", scope));
-        Assert.Equal(afterFirst, await db.CountAsync());
+            await failing.ApplyAsync(laterUpload.CollectionHandle, laterPlanId, ["a-v2"], "native-rolled-back", scope));
+        Assert.Equal(beforeLater, await db.CountAsync());
         var lostCommit = db.Service(access, clock, db.Command(access, clock, importInterceptors: [new CommitFailureInterceptor(afterCommit: false)]));
         await Assert.ThrowsAsync<ReusableActivityImportPersistenceException>(async () =>
-            await lostCommit.ApplyAsync(upload.CollectionHandle, planId, ["a-v2"], "native-rolled-back", scope));
-        Assert.Equal(afterFirst, await db.CountAsync());
+            await lostCommit.ApplyAsync(laterUpload.CollectionHandle, laterPlanId, ["a-v2"], "native-rolled-back", scope));
+        Assert.Equal(beforeLater, await db.CountAsync());
 
         // The later import reuses the definition created by the first, on this provider's stored precision.
-        var later = await db.Service(access, clock).ApplyAsync(upload.CollectionHandle, planId, ["a-v2"], "native-rolled-back", scope);
+        var later = await db.Service(access, clock).ApplyAsync(laterUpload.CollectionHandle, laterPlanId, ["a-v2"], "native-rolled-back", scope);
         var v2 = Assert.Single(later.Sources);
         Assert.Equal(ReusableActivityImportResourceDisposition.Reused, v2.ActivityDefinitionDisposition);
         Assert.Equal(ReusableActivityImportResourceDisposition.Created, v2.ActivityVersionDisposition);
         await using var readback = db.Activities();
         Assert.Equal(v2.ActivityDefinitionVersionId, (await readback.ActivityDefinitionAuthoringStates.AsNoTracking().SingleAsync()).HeadVersionId);
         var afterLater = await db.CountAsync();
-        Assert.Equal((2, 2, 1), (afterLater.Receipts, afterLater.ActivityVersions, afterLater.ActivityDefinitions));
+        Assert.Equal((2, 2, 2, 1), (afterLater.Collections, afterLater.Receipts, afterLater.ActivityVersions, afterLater.ActivityDefinitions));
+
+        // Ledger deletes on this provider: one upload by its exact identity, the other by the expiry sweep.
+        Assert.False(await store.DeleteCollectionAsync("NATIVE-HANDLE", upper));
+        Assert.True(await store.DeleteCollectionAsync("native-handle", upper));
+        Assert.Equal(0, await store.DeleteExpiredCollectionsAsync(collection.ExpiresAt.AddTicks(-1), 10));
+        Assert.Equal(1, await store.DeleteExpiredCollectionsAsync(collection.ExpiresAt, 10));
+        Assert.Equal(0, (await db.CountAsync()).Collections);
     }
 }
