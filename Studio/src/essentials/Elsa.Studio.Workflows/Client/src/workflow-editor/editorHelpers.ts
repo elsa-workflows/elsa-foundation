@@ -413,11 +413,17 @@ export function indexActivityDescriptors(descriptors: StudioActivityDescriptor[]
   return index;
 }
 
+// The descriptor of the exact catalog version a node is pinned to comes first: the catalog lists every version of an
+// activity, and the type-keyed index keeps only the first one it meets, so a node pinned to a newer version was
+// inspected with an older version's inputs (an input that version added was not shown at all).
 export function resolveActivityDescriptor(
   activity: ActivityNode,
   catalogByVersion: Map<string, ActivityCatalogItem>,
-  descriptorsByType: Map<string, StudioActivityDescriptor>
+  descriptorsByType: Map<string, StudioActivityDescriptor>,
+  descriptorsByVersion?: Map<string, StudioActivityDescriptor>
 ) {
+  const exact = descriptorsByVersion?.get(activity.activityVersionId);
+  if (exact) return exact;
   const catalogItem = catalogByVersion.get(activity.activityVersionId);
   return descriptorsByType.get(normalizeDescriptorKey(catalogItem?.activityTypeKey)) ??
     descriptorsByType.get(normalizeDescriptorKey(shortTypeName(catalogItem?.activityTypeKey))) ??

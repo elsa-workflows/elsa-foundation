@@ -13,6 +13,7 @@ import { useScopedVariableAnalysis } from "../api/workflowDesign";
 import { findBpmnElement } from "../bpmn/bpmnAdapter";
 import { supportsScopedVariables } from "../scopedVariables";
 import { indexActivityDescriptors, resolveActivityDescriptor } from "./editorHelpers";
+import { toActivityDescriptor } from "./useWorkflowEditorData";
 import type { WorkflowNodeAvailabilityLookup } from "./editorTypes";
 
 interface WorkflowScopeParams {
@@ -45,6 +46,10 @@ export function useWorkflowScope({
     [availabilityDiagnostics]
   );
   const descriptorsByType = useMemo(() => indexActivityDescriptors(activityDescriptors), [activityDescriptors]);
+  const descriptorsByVersion = useMemo(
+    () => new Map(catalog.map(activity => [activity.activityVersionId, toActivityDescriptor(activity)])),
+    [catalog]
+  );
   const scopeOwner = useMemo(() => resolveScopeOwner(root, frames, catalogByVersion), [root, frames, catalogByVersion]);
   const designerSupport = getActivityDesignerSupport(scopeOwner, scopeOwner ? catalogByVersion.get(scopeOwner.activityVersionId) : undefined);
   const isUnsupportedDesigner = !!scopeOwner && designerSupport === "unsupported";
@@ -67,8 +72,8 @@ export function useWorkflowScope({
     return scope?.slot.activities.find(activity => activity.nodeId === selectedNodeId) ?? null;
   }, [isUnsupportedDesigner, scope, scopeOwner, selectedBpmnElement, selectedNodeId]);
   const selectedDescriptor = useMemo(
-    () => selectedNode ? resolveActivityDescriptor(selectedNode, catalogByVersion, descriptorsByType) : null,
-    [catalogByVersion, descriptorsByType, selectedNode]
+    () => selectedNode ? resolveActivityDescriptor(selectedNode, catalogByVersion, descriptorsByType, descriptorsByVersion) : null,
+    [catalogByVersion, descriptorsByType, descriptorsByVersion, selectedNode]
   );
   const selectedSlots = useMemo(() => selectedNode ? getChildSlots(selectedNode, catalogByVersion) : [], [catalogByVersion, selectedNode]);
   // With nothing selected the inspector shows the scope OWNER — the container whose canvas is
@@ -77,8 +82,8 @@ export function useWorkflowScope({
   const inspectedNode = selectedNode ?? scopeOwner;
   const inspectedIsScopeOwner = !selectedNode && !!scopeOwner;
   const inspectedDescriptor = useMemo(
-    () => inspectedNode ? resolveActivityDescriptor(inspectedNode, catalogByVersion, descriptorsByType) : null,
-    [catalogByVersion, descriptorsByType, inspectedNode]
+    () => inspectedNode ? resolveActivityDescriptor(inspectedNode, catalogByVersion, descriptorsByType, descriptorsByVersion) : null,
+    [catalogByVersion, descriptorsByType, descriptorsByVersion, inspectedNode]
   );
   const inspectedNodeAvailability = useMemo(
     () => inspectedNode
