@@ -268,19 +268,18 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         }
         catch (OperationCanceledException cancellationException) when (cancellationToken.IsCancellationRequested)
         {
-            var disposalException = await ActivityActivationLeaseDisposer.TryDisposeAfterCancellationAsync(activationLease, cancellationException);
-            activationLease = null;
-            if (disposalException is not null)
-                throw new AggregateException("Activity activation cancellation and disposal both failed.", cancellationException, disposalException);
+            if (await ActivityActivationLeaseDisposer.DisposeAfterCancellationAsync(activationLease, cancellationException, "Activity activation cancellation and disposal both failed.") is { } cleanupFailure)
+                throw cleanupFailure;
             throw;
         }
         catch (Exception exception)
         {
             var disposalException = await ActivityActivationLeaseDisposer.TryDisposeAsync(activationLease);
             activationLease = null;
+            // The arm above takes the activation's cancellation, so this failure is never it.
             var fault = disposalException is null
                 ? exception
-                : ActivityActivationLeaseDisposer.CombineActivationFailure(exception, disposalException, cancellationToken);
+                : ActivityActivationLeaseDisposer.CombineActivationFailure(exception, disposalException, canceled: false);
             var subStatus = disposalException is null ? "ActivityResumeConstructionFailed" : "ActivityDisposalFailed";
             await RecordFaultAsync(serviceProvider, activityFaultIncidentRecorder, checkpointCommitter, workItem, resumePayload, executionState, fault, subStatus, valueSnapshots, cancellationToken);
             return;
@@ -343,10 +342,8 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         }
         catch (OperationCanceledException cancellationException) when (cancellationToken.IsCancellationRequested)
         {
-            var disposalException = await ActivityActivationLeaseDisposer.TryDisposeAsync(activationLease);
-            activationLease = null;
-            if (disposalException is not null)
-                throw new AggregateException("Activity resume cancellation and disposal both failed.", cancellationException, disposalException);
+            if (await ActivityActivationLeaseDisposer.DisposeAfterCancellationAsync(activationLease, cancellationException, "Activity resume cancellation and disposal both failed.") is { } cleanupFailure)
+                throw cleanupFailure;
             throw;
         }
         catch (Exception exception)

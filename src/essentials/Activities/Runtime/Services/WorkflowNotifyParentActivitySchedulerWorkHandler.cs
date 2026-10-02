@@ -209,10 +209,8 @@ public sealed class WorkflowNotifyParentActivitySchedulerWorkHandler : RuntimeSc
         }
         catch (OperationCanceledException cancellationException) when (cancellationToken.IsCancellationRequested)
         {
-            var disposalException = await ActivityActivationLeaseDisposer.TryDisposeAfterCancellationAsync(activationLease, cancellationException);
-            activationLease = null;
-            if (disposalException is not null)
-                throw new AggregateException("Structural notification callback cancellation and activation disposal both failed.", cancellationException, disposalException);
+            if (await ActivityActivationLeaseDisposer.DisposeAfterCancellationAsync(activationLease, cancellationException, "Structural notification callback cancellation and activation disposal both failed.") is { } cleanupFailure)
+                throw cleanupFailure;
             throw;
         }
         catch (Exception exception)

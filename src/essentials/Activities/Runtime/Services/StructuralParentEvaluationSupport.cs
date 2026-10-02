@@ -77,9 +77,10 @@ internal static class StructuralParentEvaluationSupport
         }
         catch (Exception exception)
         {
+            var canceled = cancellationToken.IsCancellationRequested;
             var disposalException = await ActivityActivationLeaseDisposer.TryDisposeAsync(activationLease);
             if (disposalException is not null)
-                throw ActivityActivationLeaseDisposer.CombineActivationFailure(exception, disposalException, cancellationToken);
+                throw ActivityActivationLeaseDisposer.CombineActivationFailure(exception, disposalException, canceled);
             throw;
         }
 

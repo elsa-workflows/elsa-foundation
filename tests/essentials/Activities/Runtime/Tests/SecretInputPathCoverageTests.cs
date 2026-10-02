@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Elsa.Activities.Runtime.Contracts;
+using Elsa.Activities.Runtime.Services;
 using Elsa.Activities.Testing;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -9,6 +10,7 @@ using Elsa.Workflows.Runtime.Core.Models.Alterations;
 using Elsa.Workflows.Runtime.Services.Alterations;
 using Elsa.Workflows.Runtime.Services.Alterations.Handlers;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
+using Elsa.Workflows.Runtime.Services.Values;
 using Elsa.Workflows.Runtime.Services.WorkHandlers;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -21,12 +23,18 @@ namespace Elsa.Activities.Runtime.Tests;
 /// (IP10), whose successor is invoked through the real scheduler work handlers. Each path that activates a CLR activity
 /// resolves the reference again, and none persists a value. Invoke and
 /// bookmark resume (IP3, IP4) are covered by <see cref="ClrActivityActivatorTests"/> and
-/// <see cref="WorkflowInvokeActivitySchedulerWorkHandlerTests"/>.
+/// <see cref="WorkflowInvokeActivitySchedulerWorkHandlerTests"/>. On the bookmark resume, structural parent evaluation
+/// and re-materialization paths, an activation canceled while its lease disposal fails stays a cancellation, as the
+/// invoke path's does.
 /// </summary>
 public sealed class SecretInputPathCoverageTests
 {
     private const string ParentNodeId = "node-parent";
     private const string WaitNodeId = "node-wait";
+    private const string ChildNodeId = "node-child";
+    private const string ParentExecutionId = "actexec-parent";
+    private const string ChildExecutionId = "actexec-child";
+    private const string DisposalMessage = "Activity disposal failed.";
     private readonly FakeRuntimeSecretResolver _resolver = new();
     private readonly SecretValueRecorder _recorder = new();
 
@@ -170,6 +178,146 @@ public sealed class SecretInputPathCoverageTests
         await SecretResolutionTestSupport.AssertNotPersistedAsync(harness, _recorder.Values);
     }
 
+    [Fact]
+    public async Task A_resume_canceled_while_resolving_a_secret_whose_lease_disposal_fails_records_no_fault()
+    {
+        await using var harness = NewHarness(["actexec-wait"]);
+        var suspended = (await harness.RunAsync(SecretResolutionTestSupport.NewWaitingExecutable(WaitNodeId))).State(WaitNodeId);
+        using var cancellation = ArmCanceledResolutionWithFailingDisposal();
+
+        var exception = await Assert.ThrowsAsync<AggregateException>(() => Handler<WorkflowResumeBookmarkSchedulerWorkHandler>(harness).HandleAsync(
+            WorkItem(WorkflowExecutionCommandKind.ResumeBookmark, new RuntimeResumeBookmarkCommandPayload(
+                WorkflowExecutionHarness.Identity,
+                Assert.Single(suspended.BookmarkIds),
+                suspended.InvocationId,
+                WaitNodeId,
+                SecretResolutionTestSupport.WaitResumeTargetId(WaitNodeId),
+                SecretWaitingActivity.StimulusType,
+                SecretWaitingActivity.StimulusHash,
+                JsonSerializer.SerializeToElement(new WaitTrigger(true)),
+                RuntimeResumeBookmarkCommandPayload.StimulusMatchedReason)),
+            cancellation.Token).AsTask());
+
+        SecretResolutionTestSupport.AssertCanceledWithDisposalFailure(
+            exception, "Activity activation cancellation and disposal both failed.", cancellation.Token, DisposalMessage);
+        // The resume claim was committed before the activation, which leaves the activity running.
+        await AssertNoFaultRecordedAsync(harness, suspended.InvocationId, ActivityExecutionStatus.Running);
+    }
+
+    [Fact]
+    public async Task A_parent_completion_canceled_while_resolving_a_secret_whose_lease_disposal_fails_records_no_fault()
+    {
+        await using var harness = await RunDeferredParentAsync(typeof(SecretReadingParentActivity));
+        using var cancellation = ArmCanceledResolutionWithFailingDisposal();
+
+        var exception = await Assert.ThrowsAsync<AggregateException>(() => HandleParentCompletionAsync(harness, cancellation.Token));
+
+        SecretResolutionTestSupport.AssertCanceledWithDisposalFailure(
+            exception, "Structural callback cancellation and activation disposal both failed.", cancellation.Token, DisposalMessage);
+        await AssertNoFaultRecordedAsync(harness, ParentExecutionId, ActivityExecutionStatus.Running);
+    }
+
+    [Fact]
+    public async Task A_parent_notification_canceled_while_resolving_a_secret_whose_lease_disposal_fails_records_no_fault()
+    {
+        await using var harness = await RunDeferredParentAsync(typeof(SecretReadingParentActivity));
+        var child = await FindStateAsync(harness, ChildExecutionId);
+        using var cancellation = ArmCanceledResolutionWithFailingDisposal();
+
+        var exception = await Assert.ThrowsAsync<AggregateException>(() => Handler<WorkflowNotifyParentActivitySchedulerWorkHandler>(harness).HandleAsync(
+            WorkItem(WorkflowExecutionCommandKind.NotifyParentActivity, new RuntimeNotifyParentCommandPayload(
+                WorkflowExecutionHarness.Identity,
+                ParentNodeId,
+                ParentExecutionId,
+                null,
+                null,
+                ChildExecutionId,
+                ChildNodeId,
+                child.IterationId,
+                "escalate",
+                null,
+                RuntimeNotifyParentCommandPayload.NotifyParentReason)),
+            cancellation.Token).AsTask());
+
+        SecretResolutionTestSupport.AssertCanceledWithDisposalFailure(
+            exception, "Structural notification callback cancellation and activation disposal both failed.", cancellation.Token, DisposalMessage);
+        await AssertNoFaultRecordedAsync(harness, ParentExecutionId, ActivityExecutionStatus.Running);
+    }
+
+    [Fact]
+    public async Task A_rematerialization_canceled_while_its_lease_disposal_fails_records_no_fault()
+    {
+        // The first activation succeeds; the re-materialization of the inputs observes the cancellation, and disposing
+        // the first activation's lease fails.
+        var materialization = new CancelingInputMaterializer();
+        await using var harness = await RunDeferredParentAsync(typeof(SecretRematerializingParentActivity), services =>
+        {
+            services.AddScoped<RuntimeActivityInputMaterializer>();
+            services.AddScoped<IRuntimeActivityInputMaterializer>(provider =>
+                materialization.Wrap(provider.GetRequiredService<RuntimeActivityInputMaterializer>()));
+        });
+        using var cancellation = materialization.Arm();
+        _recorder.DisposalFailure = new InvalidOperationException(DisposalMessage);
+
+        var exception = await Assert.ThrowsAsync<AggregateException>(() => HandleParentCompletionAsync(harness, cancellation.Token));
+
+        SecretResolutionTestSupport.AssertCanceledWithDisposalFailure(
+            exception, "Structural callback cancellation and activation disposal both failed.", cancellation.Token, DisposalMessage);
+        await AssertNoFaultRecordedAsync(harness, ParentExecutionId, ActivityExecutionStatus.Running);
+    }
+
+    /// <summary>
+    /// Runs a structural parent of <paramref name="parentType"/> with a secret-bound input over a waiting child, so the
+    /// run stops with the parent deferred, its evaluation still to come.
+    /// </summary>
+    private async Task<WorkflowExecutionHarness> RunDeferredParentAsync(Type parentType, Action<IServiceCollection>? configure = null)
+    {
+        var harness = NewHarness([ParentExecutionId, ChildExecutionId], configure);
+        var run = await harness.RunAsync(StructuralExecutionTestSupport.NewExecutable(
+            SecretResolutionTestSupport.NewSecretNode(ParentNodeId, parentType, StructuralExecutionTestSupport.NewWaitingNode(ChildNodeId)),
+            waitingNodeIds: [ChildNodeId]));
+        Assert.Equal(ActivityExecutionStatus.Running, run.State(ParentNodeId).Status);
+        Assert.Equal(ActivityExecutionStatus.Suspended, run.State(ChildNodeId).Status);
+        return harness;
+    }
+
+    /// <summary>Arms the next secret resolution to cancel the returned source, and the test activities' disposal to fail.</summary>
+    private CancellationTokenSource ArmCanceledResolutionWithFailingDisposal()
+    {
+        _recorder.DisposalFailure = new InvalidOperationException(DisposalMessage);
+        return SecretResolutionTestSupport.CancelOnNextResolution(_resolver);
+    }
+
+    private static Task HandleParentCompletionAsync(WorkflowExecutionHarness harness, CancellationToken cancellationToken) =>
+        Handler<WorkflowParentActivityCompletionSchedulerWorkHandler>(harness).HandleAsync(
+            WorkItem(WorkflowExecutionCommandKind.CompleteActivity, new RuntimeCompleteActivityCommandPayload(
+                WorkflowExecutionHarness.Identity,
+                ParentNodeId,
+                ParentExecutionId,
+                null,
+                null,
+                [ActivityOutcomes.Done],
+                RuntimeCompleteActivityCommandPayload.ParentCompletionEvaluationReason,
+                SchedulerCompletionKind.ParentCompletionEvaluation,
+                ChildExecutionId)),
+            cancellationToken).AsTask();
+
+    private static THandler Handler<THandler>(WorkflowExecutionHarness harness) where THandler : IWorkflowSchedulerWorkHandler =>
+        harness.Services.GetServices<IWorkflowSchedulerWorkHandler>().OfType<THandler>().Single();
+
+    private static async Task<ActivityExecutionState> FindStateAsync(WorkflowExecutionHarness harness, string activityExecutionId) =>
+        (await harness.Services.GetRequiredService<IActivityExecutionStateStore>().FindAsync(harness.ExecutionId, activityExecutionId))!;
+
+    /// <summary>Asserts the canceled work left <paramref name="activityExecutionId"/> without a fault or an incident.</summary>
+    private static async Task AssertNoFaultRecordedAsync(WorkflowExecutionHarness harness, string activityExecutionId, ActivityExecutionStatus status)
+    {
+        var state = await FindStateAsync(harness, activityExecutionId);
+        Assert.Equal(status, state.Status);
+        Assert.Null(state.Fault);
+        Assert.Empty(state.IncidentIds);
+        Assert.Empty(await harness.Services.GetRequiredService<IIncidentStateStore>().ListAsync(harness.ExecutionId));
+    }
+
     /// <summary>
     /// Runs <paramref name="workItem"/> and then every item it queues through the registered scheduler work handlers,
     /// choosing a handler as the scheduler drainer does: a specific handler before a fallback one.
@@ -247,20 +395,23 @@ public sealed class SecretInputPathCoverageTests
     }
 
     private static RuntimeSchedulerWorkItem RetryWorkItem(string boundaryId, string retryId, WorkflowExecutableIdentity identity) =>
+        WorkItem(WorkflowExecutionCommandKind.RetryActivityBoundary, new RetryActivityBoundaryCommand(boundaryId, retryId, identity, "policy-retry"), boundaryId);
+
+    private static RuntimeSchedulerWorkItem WorkItem(WorkflowExecutionCommandKind kind, object payload, string? executionScopeId = null) =>
         new(
-            "work-retry",
+            $"work-{kind}",
             WorkflowExecutionHarness.WorkflowExecutionId,
-            "command-retry",
-            WorkflowExecutionCommandKind.RetryActivityBoundary,
+            $"command-{kind}",
+            kind,
             "envelope",
-            "key-retry",
+            $"key-{kind}",
             WorkflowExecutionHarness.Timestamp,
             WorkflowExecutionHarness.Timestamp,
             1,
-            JsonSerializer.SerializeToElement(new RetryActivityBoundaryCommand(boundaryId, retryId, identity, "policy-retry")),
+            JsonSerializer.SerializeToElement(payload),
             new Dictionary<string, string>(),
             new Dictionary<string, string>(),
-            boundaryId);
+            executionScopeId);
 
     /// <summary>An activator that records every request and refuses it: the path under test must not activate anything.</summary>
     private sealed class RecordingActivityActivator : IActivityActivator
@@ -281,6 +432,37 @@ public sealed class SecretInputPathCoverageTests
             lock (_requests)
                 _requests.Add(request);
             throw new InvalidOperationException("This path must not activate an activity.");
+        }
+    }
+
+    /// <summary>
+    /// Wraps the input materializer; once armed, the next materialization cancels the returned source and observes the
+    /// cancellation, as a re-materialization canceled mid-way does.
+    /// </summary>
+    private sealed class CancelingInputMaterializer
+    {
+        private CancellationTokenSource? _cancellation;
+
+        public CancellationTokenSource Arm() => _cancellation = new CancellationTokenSource();
+
+        public IRuntimeActivityInputMaterializer Wrap(IRuntimeActivityInputMaterializer inner) => new Wrapper(this, inner);
+
+        private sealed class Wrapper(CancelingInputMaterializer owner, IRuntimeActivityInputMaterializer inner) : IRuntimeActivityInputMaterializer
+        {
+            public ValueTask<ActivityInputSnapshot> MaterializeSnapshotAsync(
+                ExecutableNode node,
+                string invocationId,
+                RuntimeInputBindingResolutionContext resolutionContext,
+                DateTimeOffset materializedAt,
+                CancellationToken cancellationToken = default)
+            {
+                if (owner._cancellation is not { } cancellation)
+                    return inner.MaterializeSnapshotAsync(node, invocationId, resolutionContext, materializedAt, cancellationToken);
+
+                cancellation.Cancel();
+                cancellationToken.ThrowIfCancellationRequested();
+                throw new InvalidOperationException("The materialization was not handed the activation's token.");
+            }
         }
     }
 

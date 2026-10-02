@@ -61,6 +61,40 @@ internal static class SecretResolutionTestSupport
             valueConversionExecutor ?? new RuntimeValueConversionExecutor());
 
     /// <summary>
+    /// Arms <paramref name="resolver"/> so that its next resolution cancels the returned source and observes the
+    /// cancellation, as an activation canceled while it resolves a secret does. The test hands the source's token to
+    /// the work handler under test.
+    /// </summary>
+    public static CancellationTokenSource CancelOnNextResolution(FakeRuntimeSecretResolver resolver)
+    {
+        var cancellation = new CancellationTokenSource();
+        resolver.Respond = (_, token) =>
+        {
+            cancellation.Cancel();
+            token.ThrowIfCancellationRequested();
+            return RuntimeSecretResolution.Failure("StoreUnavailable", isRetryable: true);
+        };
+        return cancellation;
+    }
+
+    /// <summary>
+    /// Asserts a work handler let the activation's cancellation for <paramref name="cancellationToken"/> escape with the
+    /// failure of disposing the activation lease, under <paramref name="message"/>, instead of recording a fault.
+    /// </summary>
+    public static void AssertCanceledWithDisposalFailure(
+        AggregateException exception,
+        string message,
+        CancellationToken cancellationToken,
+        string disposalMessage)
+    {
+        Assert.StartsWith(message, exception.Message, StringComparison.Ordinal);
+        Assert.Collection(
+            exception.InnerExceptions,
+            inner => Assert.Equal(cancellationToken, Assert.IsAssignableFrom<OperationCanceledException>(inner).CancellationToken),
+            inner => Assert.Equal(disposalMessage, inner.Message));
+    }
+
+    /// <summary>
     /// A harness whose host composes <paramref name="resolver"/> and the recorder the test activities write to. The
     /// workflow runs under the default partition, and its instance records no tenant.
     /// </summary>
@@ -225,7 +259,8 @@ public sealed class FakeRuntimeSecretResolver : IRuntimeSecretResolver
 
 /// <summary>
 /// Collects the values the test activities were hydrated with, in the order they ran, each with the step that read it:
-/// <see cref="Execute"/>, <see cref="Resume"/>, <see cref="ChildNotified"/> or <see cref="ChildCompleted"/>.
+/// <see cref="Execute"/>, <see cref="Resume"/>, <see cref="ChildNotified"/> or <see cref="ChildCompleted"/>. Once
+/// <see cref="DisposalFailure"/> is set, the test activities throw it when their activation lease disposes them.
 /// </summary>
 public sealed class SecretValueRecorder
 {
@@ -247,6 +282,14 @@ public sealed class SecretValueRecorder
 
     public IReadOnlyList<string?> Values => Entries.Select(entry => entry.Value).ToArray();
 
+    public Exception? DisposalFailure { get; set; }
+
+    public void ThrowIfDisposalFails()
+    {
+        if (DisposalFailure is { } failure)
+            throw failure;
+    }
+
     public void Add(string step, string? value)
     {
         lock (_entries)
@@ -255,7 +298,7 @@ public sealed class SecretValueRecorder
 }
 
 /// <summary>A leaf that records its secret-bound input, suspends, and records the input again when it is resumed.</summary>
-public sealed class SecretWaitingActivity(SecretValueRecorder recorder) : StatefulActivity<ActivityUnit, WaitState, WaitTrigger>
+public sealed class SecretWaitingActivity(SecretValueRecorder recorder) : StatefulActivity<ActivityUnit, WaitState, WaitTrigger>, IDisposable
 {
     public const string ResumeTargetKey = "wait";
     public const string StimulusType = "TestSecretWait";
@@ -277,6 +320,8 @@ public sealed class SecretWaitingActivity(SecretValueRecorder recorder) : Statef
         recorder.Add(SecretValueRecorder.Resume, Token);
         return ValueTask.FromResult(Complete(ActivityUnit.Value, ActivityOutcomes.Done));
     }
+
+    public void Dispose() => recorder.ThrowIfDisposalFails();
 }
 
 /// <summary>
@@ -286,7 +331,8 @@ public sealed class SecretWaitingActivity(SecretValueRecorder recorder) : Statef
 public sealed class SecretReadingParentActivity(SecretValueRecorder recorder) : StructuralActivity,
     IRuntimeStructuralActivity,
     IRuntimeActivityChildCompletionHandler,
-    IRuntimeActivityChildNotificationHandler
+    IRuntimeActivityChildNotificationHandler,
+    IDisposable
 {
     [ActivityInput(Key = SecretResolutionTestSupport.InputKey)]
     public string Token { get; set; } = null!;
@@ -310,6 +356,8 @@ public sealed class SecretReadingParentActivity(SecretValueRecorder recorder) : 
         recorder.Add(SecretValueRecorder.ChildCompleted, Token);
         return ValueTask.FromResult(RuntimeStructuralContinuation.Complete());
     }
+
+    public void Dispose() => recorder.ThrowIfDisposalFails();
 }
 
 /// <summary>
@@ -320,7 +368,8 @@ public sealed class SecretReadingParentActivity(SecretValueRecorder recorder) : 
 public sealed class SecretRematerializingParentActivity(SecretValueRecorder recorder) : StructuralActivity,
     IRuntimeStructuralActivity,
     IRuntimeActivityChildCompletionHandler,
-    IRuntimeRematerializeInputsOnChildCompletion
+    IRuntimeRematerializeInputsOnChildCompletion,
+    IDisposable
 {
     [ActivityInput(Key = SecretResolutionTestSupport.InputKey)]
     public string Token { get; set; } = null!;
@@ -338,4 +387,6 @@ public sealed class SecretRematerializingParentActivity(SecretValueRecorder reco
         recorder.Add(SecretValueRecorder.ChildCompleted, Token);
         return ValueTask.FromResult(RuntimeStructuralContinuation.Complete());
     }
+
+    public void Dispose() => recorder.ThrowIfDisposalFails();
 }

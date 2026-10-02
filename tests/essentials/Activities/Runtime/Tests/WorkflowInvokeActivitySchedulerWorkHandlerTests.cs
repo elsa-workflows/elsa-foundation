@@ -257,16 +257,8 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
     {
         // The activation's cancellation is not a resolution failure or a fault, even when disposing the lease fails too.
         // The disposal failure leaves the handler as one from its own lease does during a cancellation.
-        using var cancellation = new CancellationTokenSource();
-        var resolver = new FakeRuntimeSecretResolver
-        {
-            Respond = (_, token) =>
-            {
-                cancellation.Cancel();
-                token.ThrowIfCancellationRequested();
-                return RuntimeSecretResolution.Failure("StoreUnavailable", isRetryable: true);
-            }
-        };
+        var resolver = new FakeRuntimeSecretResolver();
+        using var cancellation = SecretResolutionTestSupport.CancelOnNextResolution(resolver);
         var scope = new ThrowingAsyncDisposable();
         var activator = new ActivityActivator(
             [new FixedLeaseStrategy(new ActivityActivationLease(new CountingActivity(), scope))],
@@ -287,11 +279,8 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
         var exception = await Assert.ThrowsAsync<AggregateException>(() =>
             NewHandler(provider).HandleAsync(NewInvokeWorkItem(NewIdentity()), cancellation.Token).AsTask());
 
-        Assert.StartsWith("Activity activation cancellation and disposal both failed.", exception.Message, StringComparison.Ordinal);
-        Assert.Collection(
-            exception.InnerExceptions,
-            inner => Assert.Equal(cancellation.Token, Assert.IsAssignableFrom<OperationCanceledException>(inner).CancellationToken),
-            inner => Assert.Equal("Scope disposal failed.", inner.Message));
+        SecretResolutionTestSupport.AssertCanceledWithDisposalFailure(
+            exception, "Activity activation cancellation and disposal both failed.", cancellation.Token, "Scope disposal failed.");
         Assert.Single(resolver.Requests);
         Assert.True(scope.DisposeAttempted);
         var state = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");

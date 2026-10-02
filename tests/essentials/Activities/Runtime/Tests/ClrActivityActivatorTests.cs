@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Text.Json;
 using Elsa.Activities.Primitives.Activation;
 using Elsa.Activities.Runtime.Contracts;
@@ -25,6 +26,7 @@ public sealed class ClrActivityActivatorTests : IAsyncDisposable
     private const string Partition = "tenant-a";
     private const string ReferenceName = SecretResolutionTestSupport.ReferenceName;
     private const string ResolverSentinel = "resolver-detail-sentinel";
+    private const string CleanupMessage = "Cancellation cleanup failed.";
     private static readonly ValueTypeDescriptor StringType = new("String");
     private static readonly ValueTypeDescriptor Int32Type = new("Int32");
 
@@ -417,22 +419,75 @@ public sealed class ClrActivityActivatorTests : IAsyncDisposable
     {
         // A handler recognizes the activation's cancellation only as an OperationCanceledException for its token; a
         // combined cleanup failure would be recorded as a fault (contracts/runtime-secret-resolution.md).
-        using var cancellation = new CancellationTokenSource();
-        _resolver.Respond = (_, token) =>
-        {
-            cancellation.Cancel();
-            token.ThrowIfCancellationRequested();
-            return RuntimeSecretResolution.Failure("StoreUnavailable", isRetryable: true);
-        };
-        var activator = new ActivityActivator([new FailingDisposalStrategy()], new ActivityInputHydrator(), ResolvingSecretInputResolver(_partition));
+        using var cancellation = SecretResolutionTestSupport.CancelOnNextResolution(_resolver);
 
-        var exception = await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
-            activator.ActivateAsync(WithheldRequest(Withheld()), cancellation.Token).AsTask());
+        var exception = await CanceledActivationWithFailingDisposalAsync(cancellation.Token);
 
         Assert.Equal(cancellation.Token, exception.CancellationToken);
         Assert.Equal("Activity activation was canceled, and disposing its activation lease failed.", exception.Message);
         Assert.IsNotAssignableFrom<IRuntimeFaultClassification>(exception);
         Assert.IsAssignableFrom<OperationCanceledException>(exception.InnerException);
+    }
+
+    [Fact]
+    public async Task A_failure_that_is_not_the_activations_cancellation_stays_a_fault_when_the_token_is_canceled_during_lease_disposal()
+    {
+        // Whether a failure is the activation's cancellation is decided when it is caught, before the lease is disposed:
+        // a store's own operation-canceled failure while the token is live stays a failure, even when the token is
+        // canceled while the lease is disposed.
+        using var cancellation = new CancellationTokenSource();
+        var contract = Contract(typeof(ServiceBearingActivity), "message");
+        var activator = new ActivityActivator(
+            [new FailingDisposalStrategy(onDispose: cancellation.Cancel)],
+            new ActivityInputHydrator(),
+            SecretResolutionTestSupport.NoResolverSecretInputResolver(),
+            new FixedExternalPayloadStore("unused", new OperationCanceledException("The store timed out.")));
+
+        var exception = await Assert.ThrowsAnyAsync<AggregateException>(() =>
+            activator.ActivateAsync(ExternalInputRequest(contract), cancellation.Token).AsTask());
+
+        Assert.True(cancellation.IsCancellationRequested);
+        Assert.StartsWith("Activity activation and activation disposal both failed.", exception.Message, StringComparison.Ordinal);
+        Assert.IsAssignableFrom<IRuntimeFaultClassification>(exception);
+        Assert.Collection(
+            exception.InnerExceptions,
+            inner => Assert.Equal("The store timed out.", inner.Message),
+            inner => Assert.Equal("Scope disposal failed.", inner.Message));
+    }
+
+    [Fact]
+    public async Task Cancellation_cleanup_keeps_the_carried_disposal_failure_and_the_leases_own()
+    {
+        using var cancellation = SecretResolutionTestSupport.CancelOnNextResolution(_resolver);
+        var carried = await CanceledActivationWithFailingDisposalAsync(cancellation.Token);
+
+        var failure = await DisposeAfterCancellationAsync(new ActivityActivationLease(new ThrowingDisposableActivity()), carried);
+
+        Assert.StartsWith(CleanupMessage, Assert.IsType<AggregateException>(failure).Message, StringComparison.Ordinal);
+        Assert.Collection(
+            ((AggregateException)failure).InnerExceptions,
+            inner => Assert.Same(carried, inner),
+            inner => Assert.Equal("Activity disposal failed.", inner.Message),
+            inner => Assert.Equal("Scope disposal failed.", inner.Message));
+    }
+
+    [Fact]
+    public async Task Cancellation_cleanup_reports_the_leases_disposal_failure_with_the_cancellation()
+    {
+        var cancellation = new OperationCanceledException();
+
+        var failure = await DisposeAfterCancellationAsync(new ActivityActivationLease(new ThrowingDisposableActivity()), cancellation);
+
+        Assert.Collection(
+            Assert.IsType<AggregateException>(failure).InnerExceptions,
+            inner => Assert.Same(cancellation, inner),
+            inner => Assert.Equal("Activity disposal failed.", inner.Message));
+    }
+
+    [Fact]
+    public async Task Cancellation_cleanup_reports_nothing_when_no_disposal_failed()
+    {
+        Assert.Null(await DisposeAfterCancellationAsync(new ActivityActivationLease(new OptionalInitializerActivity()), new OperationCanceledException()));
     }
 
     [Fact]
@@ -652,32 +707,10 @@ public sealed class ClrActivityActivatorTests : IAsyncDisposable
     {
         var store = new FixedExternalPayloadStore("from-external-store");
         var (activator, contract) = Activator(_root, store);
-        var policy = new ValueProtectionPolicy(
-            DurableValueLifecycle.Instance,
-            DurableValueStorage.External,
-            isSensitive: true,
-            requiresEncryption: true,
-            redactionMode: "Full",
-            retentionPolicy: "P30D");
-        var persistedSnapshot = new ActivityInputSnapshot(
-            "invocation-1",
-            contract.SchemaFingerprint,
-            "bindings",
-            new Dictionary<string, ValueEnvelope>
-            {
-                ["message"] = ValueEnvelope.External(
-                    StringType,
-                    new DurableValueExternalReference("encrypted", "payloads/message", new Dictionary<string, string>()),
-                    policy)
-            },
-            DateTimeOffset.UtcNow);
+        var request = ExternalInputRequest(contract);
+        var persistedSnapshot = request.Inputs;
 
-        await using var lease = await activator.ActivateAsync(new ActivityActivationRequest(
-            WorkflowExecutionId,
-            contract,
-            persistedSnapshot,
-            new ActivityAttempt("attempt-1", "invocation-1", 1, ActivityAttemptReason.Initial, DateTimeOffset.UtcNow),
-            Descriptor: RuntimeDescriptor(contract)));
+        await using var lease = await activator.ActivateAsync(request);
 
         Assert.Equal("from-external-store", Assert.IsType<ServiceBearingActivity>(lease.Activity).Message);
         Assert.NotNull(persistedSnapshot.Values["message"].ExternalReference);
@@ -686,6 +719,47 @@ public sealed class ClrActivityActivatorTests : IAsyncDisposable
     }
 
     private static readonly JsonPayloadSerializer Serializer = new(new JsonPayloadConverterRegistry());
+
+    /// <summary>A request whose single input, <c>message</c>, is stored externally.</summary>
+    private static ActivityActivationRequest ExternalInputRequest(ActivityContract contract)
+    {
+        var policy = new ValueProtectionPolicy(
+            DurableValueLifecycle.Instance,
+            DurableValueStorage.External,
+            isSensitive: true,
+            requiresEncryption: true,
+            redactionMode: "Full",
+            retentionPolicy: "P30D");
+        return Request(contract, new Dictionary<string, ValueEnvelope>
+        {
+            ["message"] = ValueEnvelope.External(
+                StringType,
+                new DurableValueExternalReference("encrypted", "payloads/message", new Dictionary<string, string>()),
+                policy)
+        });
+    }
+
+    /// <summary>
+    /// Activates a withheld secret whose resolution <paramref name="cancellationToken"/>'s source cancels (see
+    /// <see cref="SecretResolutionTestSupport.CancelOnNextResolution"/>) through a lease that fails to dispose, and
+    /// returns the cancellation the activator throws.
+    /// </summary>
+    private async Task<OperationCanceledException> CanceledActivationWithFailingDisposalAsync(CancellationToken cancellationToken)
+    {
+        var activator = new ActivityActivator([new FailingDisposalStrategy()], new ActivityInputHydrator(), ResolvingSecretInputResolver(_partition));
+        return await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            activator.ActivateAsync(WithheldRequest(Withheld()), cancellationToken).AsTask());
+    }
+
+    /// <summary>
+    /// The handlers' cancellation cleanup, <c>ActivityActivationLeaseDisposer.DisposeAfterCancellationAsync</c>. It is
+    /// internal to the runtime, and constitution section 2.23.3 allows no InternalsVisibleTo, so it is invoked by name.
+    /// </summary>
+    private static ValueTask<Exception?> DisposeAfterCancellationAsync(ActivityActivationLease lease, OperationCanceledException cancellation) =>
+        (ValueTask<Exception?>)typeof(ActivityActivator).Assembly
+            .GetType("Elsa.Activities.Runtime.Services.ActivityActivationLeaseDisposer", throwOnError: true)!
+            .GetMethod("DisposeAfterCancellationAsync", BindingFlags.Public | BindingFlags.Static)!
+            .Invoke(null, [lease, cancellation, CleanupMessage])!;
 
     private static IServiceCollection Services() =>
         new ServiceCollection().AddScoped<ScopedDependency>();
@@ -810,8 +884,8 @@ public sealed class ClrActivityActivatorTests : IAsyncDisposable
         }
     }
 
-    /// <summary>A hydrating CLR strategy whose lease fails to dispose its scope.</summary>
-    private sealed class FailingDisposalStrategy : IActivityActivationStrategy
+    /// <summary>A hydrating CLR strategy whose lease fails to dispose its scope, after running <paramref name="onDispose"/>.</summary>
+    private sealed class FailingDisposalStrategy(Action? onDispose = null) : IActivityActivationStrategy
     {
         public string ConsumerKey => WellKnownRuntimeActivityConsumers.ClrActivity;
 
@@ -822,7 +896,7 @@ public sealed class ClrActivityActivatorTests : IAsyncDisposable
         public ValueTask<ActivityActivationLease> ActivateAsync(
             ActivityActivationStrategyRequest request,
             CancellationToken cancellationToken = default) =>
-            ValueTask.FromResult(new ActivityActivationLease(new OptionalInitializerActivity(), new ThrowingAsyncDisposableScope()));
+            ValueTask.FromResult(new ActivityActivationLease(new OptionalInitializerActivity(), new ThrowingAsyncDisposableScope(onDispose)));
     }
 
     private sealed class NonHydratingStrategy : IActivityActivationStrategy
@@ -935,13 +1009,14 @@ public sealed class ClrActivityActivatorTests : IAsyncDisposable
         }
     }
 
-    private sealed class ThrowingAsyncDisposableScope : IAsyncDisposable
+    private sealed class ThrowingAsyncDisposableScope(Action? onDispose = null) : IAsyncDisposable
     {
         public bool DisposeAttempted { get; private set; }
 
         public ValueTask DisposeAsync()
         {
             DisposeAttempted = true;
+            onDispose?.Invoke();
             return ValueTask.FromException(new InvalidOperationException("Scope disposal failed."));
         }
     }
@@ -954,7 +1029,8 @@ public sealed class ClrActivityActivatorTests : IAsyncDisposable
         public void Dispose() => Interlocked.Increment(ref _disposeCount);
     }
 
-    private sealed class FixedExternalPayloadStore(string value) : IExternalPayloadStore
+    /// <summary>Reads <paramref name="value"/> for every reference, or throws <paramref name="failure"/> when one is given.</summary>
+    private sealed class FixedExternalPayloadStore(string value, Exception? failure = null) : IExternalPayloadStore
     {
         public List<DurableValueExternalReference> Reads { get; } = [];
 
@@ -968,7 +1044,7 @@ public sealed class ClrActivityActivatorTests : IAsyncDisposable
             CancellationToken cancellationToken = default)
         {
             Reads.Add(reference);
-            return ValueTask.FromResult(JsonSerializer.SerializeToElement(value));
+            return failure is null ? ValueTask.FromResult(JsonSerializer.SerializeToElement(value)) : ValueTask.FromException<JsonElement>(failure);
         }
     }
 }
