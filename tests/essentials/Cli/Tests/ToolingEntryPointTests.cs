@@ -569,6 +569,7 @@ public sealed class ToolingEntryPointTests : IDisposable
         // Use a host assembly not shared by the other loader controls so its default-context identity does
         // not make the location assertions order-dependent when the test class is run in parallel.
         var source = HostLayout.Resolve(DotnetElsa.Host("MinimalHost"));
+        var physicallyLoaded = HostClosure.LoadHostAssemblyForInspection(source.Directory, source.Name);
         using var directory = new TempDirectory("elsa-cli-inspection-alias-");
         var alias = Path.Join(directory.Path, "host-parent");
         Directory.CreateSymbolicLink(alias, Path.GetDirectoryName(source.Directory)!);
@@ -577,6 +578,7 @@ public sealed class ToolingEntryPointTests : IDisposable
         {
             var assembly = HostClosure.LoadHostAssemblyForInspection(selectedDirectory, source.Name);
 
+            Assert.Same(physicallyLoaded, assembly);
             Assert.Equal(source.Name, assembly.GetName().Name);
             Assert.Equal($"{source.Name}.dll", Path.GetFileName(assembly.Location));
         }
