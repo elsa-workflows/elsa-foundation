@@ -186,6 +186,7 @@ public sealed class RuntimeCheckpointSlotDecompositionTests : RuntimePipelineTes
         services.AddSingleton<IRuntimeExecutionOwnershipContextAccessor, AsyncLocalRuntimeExecutionOwnershipContextAccessor>();
         services.AddSingleton<RuntimeCheckpointCommitter>();
         services.AddSingleton<RuntimeWorkflowLoadStateMiddleware>();
+        services.AddSingleton<RuntimeWorkflowInvokeMiddleware>();
         services.AddSingleton<RuntimeWorkflowSchedulingMiddleware>();
         services.AddSingleton<RuntimeWorkflowCheckpointMiddleware>();
         services.AddSingleton<RuntimeWorkflowPostCommitMiddleware>();
