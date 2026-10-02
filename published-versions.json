@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "fc8973e300b84b7be1691ecff89128898ea4436c",
+  "last_publish_commit": "c331197f981fe8e0ee5003daf3b97b1cfe7d3af3",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -89,8 +89,8 @@
     },
     {
       "package_id": "Elsa.Activities.Runtime",
-      "version": "4.0.6-preview",
-      "commit": "fc8973e300b84b7be1691ecff89128898ea4436c"
+      "version": "4.0.7-preview",
+      "commit": "c331197f981fe8e0ee5003daf3b97b1cfe7d3af3"
     },
     {
       "package_id": "Elsa.Activities.Runtime.Core",
@@ -439,8 +439,8 @@
     },
     {
       "package_id": "Elsa.Secrets",
-      "version": "4.0.3-preview",
-      "commit": "12645190b855f6833f9e4decfa4150b47b04c302"
+      "version": "4.0.4-preview",
+      "commit": "c331197f981fe8e0ee5003daf3b97b1cfe7d3af3"
     },
     {
       "package_id": "Elsa.Secrets.Api",
@@ -461,6 +461,11 @@
       "package_id": "Elsa.Secrets.Persistence.EntityFrameworkCore",
       "version": "4.0.10-preview",
       "commit": "12645190b855f6833f9e4decfa4150b47b04c302"
+    },
+    {
+      "package_id": "Elsa.Secrets.Workflows",
+      "version": "4.0.0-preview",
+      "commit": "c331197f981fe8e0ee5003daf3b97b1cfe7d3af3"
     },
     {
       "package_id": "Elsa.Serialization.Core",
@@ -609,8 +614,8 @@
     },
     {
       "package_id": "Elsa.Workflows.Runtime.Core",
-      "version": "4.0.15-preview",
-      "commit": "fc8973e300b84b7be1691ecff89128898ea4436c"
+      "version": "4.0.16-preview",
+      "commit": "c331197f981fe8e0ee5003daf3b97b1cfe7d3af3"
     },
     {
       "package_id": "Elsa.Workflows.Runtime.Distributed",
