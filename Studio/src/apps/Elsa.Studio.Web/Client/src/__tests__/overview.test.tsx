@@ -2,8 +2,9 @@ import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { Diagnostics, getNavigationSection, getStudioNavigation, getTopLevelNavigationItems, isDashboardPath } from "../app/App";
-import type { ElsaStudioModuleApi, StudioBackendManagementStatus, StudioDiagnosticsWidgetContribution, StudioDiagnosticsWidgetProps } from "../sdk";
+import { Diagnostics, getNavigationSection, getStudioNavigation, getTopLevelNavigationItems, isDashboardPath, ShellFrame } from "../app/App";
+import { ThemeProvider } from "../app/components/ThemeProvider";
+import type { ElsaStudioModuleApi, StudioBackendManagementStatus, StudioDiagnosticsWidgetContribution, StudioDiagnosticsWidgetProps, StudioNavigationContribution } from "../sdk";
 import { withQueryClient } from "./queryTestUtils";
 
 afterEach(() => {
@@ -112,6 +113,16 @@ describe("navigation sections", () => {
     expect(navigation.map(item => item.id)).toContain("weather");
   });
 
+  it("ships no Extension Builder entry among the built-in navigation items", () => {
+    // Extension Builder is an optional module (#535): a default Studio has no nav item for it, and a host without the
+    // module infers nothing special for its path.
+    const builtIn = getStudioNavigation([], { includeThemeBuilder: true });
+
+    expect(builtIn.map(item => item.id)).not.toContain("extension-builder");
+    expect(builtIn.map(item => item.path)).not.toContain("/extension-builder");
+    expect(getNavigationSection({ id: "extension-builder", path: "/extension-builder" })).toBe("workspace");
+  });
+
   it("resolves the legacy Overview path as Dashboard", () => {
     expect(isDashboardPath("/overview")).toBe(true);
   });
@@ -119,10 +130,35 @@ describe("navigation sections", () => {
   it("groups module and feature management under Settings", () => {
     expect(getNavigationSection({ id: "dashboard", path: "/dashboard" })).toBe("workspace");
     expect(getNavigationSection({ id: "weather", path: "/weather" })).toBe("workspace");
-    expect(getNavigationSection({ id: "extension-builder", path: "/extension-builder" })).toBe("settings");
     expect(getNavigationSection({ id: "modules", path: "/modules" })).toBe("settings");
     expect(getNavigationSection({ id: "package-feeds", path: "/package-feeds" })).toBe("settings");
     expect(getNavigationSection({ id: "feature-management", path: "/features" })).toBe("settings");
+  });
+
+  it("honours a contribution's declared section over the host's path inference", () => {
+    expect(getNavigationSection({ id: "tools", path: "/tools", section: "settings" })).toBe("settings");
+    expect(getNavigationSection({ id: "modules", path: "/modules", section: "workspace" })).toBe("workspace");
+  });
+
+  it("lists a contribution under its declared section and renders its own icon", async () => {
+    const navigation: StudioNavigationContribution[] = [
+      { id: "dashboard", label: "Dashboard", path: "/dashboard" },
+      { id: "tools", label: "Tools", path: "/tools", section: "settings", icon: ({ size }) => <svg data-testid="tools-icon" width={size} /> }
+    ];
+    const { container, unmount } = await renderComponent(
+      <ThemeProvider>
+        <ShellFrame navigation={navigation} panels={[]} path="/dashboard" title="Dashboard" backendBaseUrl="https://backend.example/" onNavigate={() => {}}>
+          <div>content</div>
+        </ShellFrame>
+      </ThemeProvider>
+    );
+
+    const settings = container.querySelector('nav.nav-section[aria-label="Settings"]');
+    expect(settings?.textContent).toContain("Tools");
+    expect(container.querySelector('nav.nav-section[aria-label="Workspace"]')?.textContent).not.toContain("Tools");
+    expect(settings?.querySelector('[data-testid="tools-icon"]')?.getAttribute("width")).toBe("18");
+
+    await unmount();
   });
 
   it("keeps child navigation items out of top-level sections", () => {

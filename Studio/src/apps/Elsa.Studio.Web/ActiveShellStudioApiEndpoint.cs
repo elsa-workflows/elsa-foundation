@@ -40,9 +40,7 @@ internal static class ActiveShellStudioApiEndpoint
 
     private static async Task<IServiceProvider> GetActiveShellServiceProviderAsync(IShellRegistry shellRegistry, CancellationToken cancellationToken)
     {
-        var shell = shellRegistry.GetActive(ShellConstants.DefaultShellName)
-            ?? await shellRegistry.GetOrActivateAsync(ShellConstants.DefaultShellName, cancellationToken);
-
+        var shell = await shellRegistry.GetOrActivateDefaultShellAsync(cancellationToken);
         return shell.ServiceProvider;
     }
 }

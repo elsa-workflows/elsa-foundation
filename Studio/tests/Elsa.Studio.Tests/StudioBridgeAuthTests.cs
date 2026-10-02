@@ -1,5 +1,7 @@
 using System.Net;
 using System.Text.Json;
+using Elsa.Studio.Api.Extensions;
+using Elsa.Studio.Api.Options;
 using Elsa.Studio.Web;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -29,12 +31,18 @@ public sealed class StudioBridgeAuthTests : IAsyncDisposable
 
     // Bearers the stub backend recognizes, each mapped to the permission set the backend session reports for it. These
     // exercise the permission policies (#249): a session with no host-control permissions, a read-only holder, a
-    // manage holder (which must satisfy read too), and Extension Builder read/manage holders.
+    // manage holder (which must satisfy read too), and the read/manage holders of a Studio module's own permission
+    // family, gated through the public RequireStudioBridgePermission seam (#535).
     private const string NoPermissionBearer = "user-without-permissions";
     private const string ModuleReadBearer = "user-module-read";
     private const string ModuleManageBearer = "user-module-manage";
-    private const string ExtensionBuilderReadBearer = "user-extension-builder-read";
-    private const string ExtensionBuilderManageBearer = "user-extension-builder-manage";
+    private const string ToolReadBearer = "user-tool-read";
+    private const string ToolManageBearer = "user-tool-manage";
+
+    // A Studio module's own permission family (e.g. the optional Extension Builder module's extension-builder.read/
+    // .manage), declared inline through RequireStudioBridgePermission rather than as a host-named policy.
+    private const string ToolReadPermission = "tool.read";
+    private const string ToolManagePermission = "tool.manage";
 
     // A path under the query-token prefix (a browser WebSocket/SSE handshake) stands in for the console-stream hub,
     // and a plain REST probe that is not under it.
@@ -43,8 +51,8 @@ public sealed class StudioBridgeAuthTests : IAsyncDisposable
     // The routes the gated host maps behind each policy, so the permission tests can hit a real endpoint per surface.
     private const string ReadRoute = "/module-management-read";
     private const string ManageRoute = "/module-management-manage";
-    private const string ExtensionBuilderReadRoute = "/extension-builder-read";
-    private const string ExtensionBuilderManageRoute = "/extension-builder-manage";
+    private const string ToolReadRoute = "/tool-read";
+    private const string ToolManageRoute = "/tool-manage";
 
     private static readonly IReadOnlyDictionary<string, string[]> BearerPermissions = new Dictionary<string, string[]>
     {
@@ -52,8 +60,8 @@ public sealed class StudioBridgeAuthTests : IAsyncDisposable
         [NoPermissionBearer] = [],
         [ModuleReadBearer] = [StudioBridgeAuth.ModuleManagementReadPermission],
         [ModuleManageBearer] = [StudioBridgeAuth.ModuleManagementManagePermission],
-        [ExtensionBuilderReadBearer] = [StudioBridgeAuth.ExtensionBuilderReadPermission],
-        [ExtensionBuilderManageBearer] = [StudioBridgeAuth.ExtensionBuilderManagePermission]
+        [ToolReadBearer] = [ToolReadPermission],
+        [ToolManageBearer] = [ToolManagePermission]
     };
 
     private WebApplication? _app;
@@ -148,8 +156,9 @@ public sealed class StudioBridgeAuthTests : IAsyncDisposable
 
     // Every gated surface keyed by (method, route, bearer, expected). A read surface returns 401 for no bearer ("not
     // signed in") but 403 for a live session missing the permission ("Studio denied you"); manage implies read, so a
-    // manage-only holder passes the read surface. A mutation surface forbids a read-only holder. Extension Builder is
-    // independently gated (#256): a module-management holder does not satisfy it, and its manage implies its read.
+    // manage-only holder passes the read surface. A mutation surface forbids a read-only holder. A module's inline
+    // RequireStudioBridgePermission policy is gated by exactly the same rules and independently of the host's
+    // module-management family: a module-management holder does not satisfy it, and its manage implies its read.
     public static TheoryData<string, string, string?, HttpStatusCode> PermissionMatrixCases => new()
     {
         { "GET", ReadRoute, null, HttpStatusCode.Unauthorized },
@@ -159,18 +168,21 @@ public sealed class StudioBridgeAuthTests : IAsyncDisposable
         { "POST", ManageRoute, NoPermissionBearer, HttpStatusCode.Forbidden },
         { "POST", ManageRoute, ModuleReadBearer, HttpStatusCode.Forbidden },
         { "POST", ManageRoute, ModuleManageBearer, HttpStatusCode.OK },
-        { "GET", ExtensionBuilderReadRoute, ModuleManageBearer, HttpStatusCode.Forbidden },
-        { "GET", ExtensionBuilderReadRoute, ExtensionBuilderReadBearer, HttpStatusCode.OK },
-        { "GET", ExtensionBuilderReadRoute, ExtensionBuilderManageBearer, HttpStatusCode.OK },
-        { "POST", ExtensionBuilderManageRoute, ExtensionBuilderReadBearer, HttpStatusCode.Forbidden },
-        { "POST", ExtensionBuilderManageRoute, ExtensionBuilderManageBearer, HttpStatusCode.OK }
+        { "GET", ToolReadRoute, null, HttpStatusCode.Unauthorized },
+        { "GET", ToolReadRoute, NoPermissionBearer, HttpStatusCode.Forbidden },
+        { "GET", ToolReadRoute, ModuleManageBearer, HttpStatusCode.Forbidden },
+        { "GET", ToolReadRoute, ToolReadBearer, HttpStatusCode.OK },
+        { "GET", ToolReadRoute, ToolManageBearer, HttpStatusCode.OK },
+        { "POST", ToolManageRoute, null, HttpStatusCode.Unauthorized },
+        { "POST", ToolManageRoute, ToolReadBearer, HttpStatusCode.Forbidden },
+        { "POST", ToolManageRoute, ToolManageBearer, HttpStatusCode.OK }
     };
 
     [Theory]
     [InlineData("GET", ReadRoute)]
     [InlineData("POST", ManageRoute)]
-    [InlineData("GET", ExtensionBuilderReadRoute)]
-    [InlineData("POST", ExtensionBuilderManageRoute)]
+    [InlineData("GET", ToolReadRoute)]
+    [InlineData("POST", ToolManageRoute)]
     public async Task PermissionSurfacesAllowAnonymouslyWhenAuthDisabled(string method, string route)
     {
         // Demo/auth-disabled posture: every permission surface allows anonymously, exactly like the base gate, so the
@@ -180,6 +192,23 @@ public sealed class StudioBridgeAuthTests : IAsyncDisposable
         var response = await client.SendAsync(new HttpRequestMessage(new HttpMethod(method), route));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Theory]
+    [InlineData(true, ToolManageBearer)]
+    [InlineData(false, null)]
+    public async Task PermissionSurfacesFailClosedWithoutTheHostPermissionHandler(bool authEnabled, string? bearer)
+    {
+        // The requirement is only a declaration; the host's handler is what decides it. A host that drops the handler
+        // must forbid every permission surface — even the demo posture and even a holder of the right key — rather
+        // than let an undecided requirement pass. The base authenticated-user gate still holds, so this is 403, not 401.
+        var client = await StartGatedHostAsync(authEnabled, registerPermissionHandler: false);
+        if (bearer is not null)
+            client.DefaultRequestHeaders.Authorization = new("Bearer", bearer);
+
+        var response = await client.PostAsync(ToolManageRoute, content: null);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
     // ---- Bearer-introspection cache -----------------------------------------------------------------------------
@@ -376,7 +405,8 @@ public sealed class StudioBridgeAuthTests : IAsyncDisposable
         string? backendServerBaseUrl = null,
         int? sessionCacheSeconds = null,
         int? sessionCacheMaxEntries = null,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null,
+        bool registerPermissionHandler = true)
     {
         var settings = new Dictionary<string, string?>
         {
@@ -395,6 +425,12 @@ public sealed class StudioBridgeAuthTests : IAsyncDisposable
         if (timeProvider is not null)
             builder.Services.AddSingleton(timeProvider);
         builder.Services.AddStudioBridgeAuth(builder.Configuration, HubPath);
+        // Models a host that wires the bridge scheme but not the handler deciding StudioBridgePermissionRequirement.
+        if (!registerPermissionHandler)
+        {
+            foreach (var handler in builder.Services.Where(descriptor => descriptor.ImplementationInstance is StudioBridgePermissionHandler).ToArray())
+                builder.Services.Remove(handler);
+        }
 
         // Route the bearer-introspection client through a stub backend session endpoint that recognizes the known
         // bearers and reflects their permission sets, so the tests assert real gate behaviour (including the permission
@@ -416,16 +452,17 @@ public sealed class StudioBridgeAuthTests : IAsyncDisposable
             .RequireAuthorization(StudioBridgeAuth.PolicyName);
         app.MapPost(HubPath, () => Results.Ok())
             .RequireAuthorization(StudioBridgeAuth.PolicyName);
-        // One probe per permission policy (#249, #256): the read/manage surfaces of both permission families, so a
-        // single host exercises the whole permission matrix against the real policies.
+        // One probe per permission policy (#249, #535): the read/manage surfaces of the host's named module-management
+        // family and of a module's inline RequireStudioBridgePermission family, so a single host exercises the whole
+        // permission matrix against the real policies.
         app.MapGet(ReadRoute, () => Results.Ok())
             .RequireAuthorization(StudioBridgeAuth.ModuleManagementReadPolicyName);
         app.MapPost(ManageRoute, () => Results.Ok())
             .RequireAuthorization(StudioBridgeAuth.ModuleManagementManagePolicyName);
-        app.MapGet(ExtensionBuilderReadRoute, () => Results.Ok())
-            .RequireAuthorization(StudioBridgeAuth.ExtensionBuilderReadPolicyName);
-        app.MapPost(ExtensionBuilderManageRoute, () => Results.Ok())
-            .RequireAuthorization(StudioBridgeAuth.ExtensionBuilderManagePolicyName);
+        app.MapGet(ToolReadRoute, () => Results.Ok())
+            .RequireStudioBridgePermission(ToolReadPermission, ToolManagePermission);
+        app.MapPost(ToolManageRoute, () => Results.Ok())
+            .RequireStudioBridgePermission(ToolManagePermission);
 
         await app.StartAsync();
         _app = app;

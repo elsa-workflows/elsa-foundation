@@ -16,6 +16,7 @@
     <Project Path="src/extensions/Elsa.Studio.Attention/Elsa.Studio.Attention.csproj" />
     <Project Path="src/extensions/Elsa.Studio.ExpressionEditors.JavaScript/Elsa.Studio.ExpressionEditors.JavaScript.csproj" />
     <Project Path="src/extensions/Elsa.Studio.ExpressionEditors.Liquid/Elsa.Studio.ExpressionEditors.Liquid.csproj" />
+    <Project Path="src/extensions/Elsa.Studio.ExtensionBuilder/Elsa.Studio.ExtensionBuilder.csproj" />
     <Project Path="src/extensions/Elsa.Studio.FeatureManagement/Elsa.Studio.FeatureManagement.csproj" />
     <Project Path="src/extensions/Elsa.Studio.Samples.WeatherForecast/Elsa.Studio.Samples.WeatherForecast.csproj" />
     <Project Path="src/extensions/Elsa.Studio.Secrets/Elsa.Studio.Secrets.csproj" />

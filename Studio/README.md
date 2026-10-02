@@ -14,6 +14,7 @@ The host is composed from independently enabled Studio capabilities:
 - `Elsa.Studio.Workflows.Dashboard` contributes workflow portfolio and run-health widgets.
 - `Elsa.Studio.Samples.WeatherForecast` contributes a frontend route and deterministic sample endpoint.
 - `Elsa.Studio.ConsoleStream` demonstrates a backend-scoped console stream module.
+- `Elsa.Studio.ExtensionBuilder` is an optional module: the Extension Builder page plus its bridge relay to the backend's `/_elsa/extension-builder` surface. It is not part of the default composition (see below).
 
 The shell UX is adapted from [`elsa-workflows/elsa-foundation-designer`](https://github.com/elsa-workflows/elsa-foundation-designer) main at `2a04fdb`, without importing its Next.js runtime or product feature modules.
 
@@ -57,6 +58,32 @@ Features ship in:
 | `AttentionStudio` | `Elsa.Studio.Attention` | `IShellFeature` |
 | `WorkflowsDashboardStudio` | `Elsa.Studio.Workflows.Dashboard` | `IShellFeature` |
 | `WeatherForecastSample` | `Elsa.Studio.Samples.WeatherForecast` | `IWebShellFeature` |
+| `ExtensionBuilderStudio` | `Elsa.Studio.ExtensionBuilder` | `IWebShellFeature` (opt-in, not in the default `shells.json`) |
+
+### Opting into Extension Builder
+
+Extension Builder is not enabled by default: a default Studio has no Extension Builder navigation item, route or
+bridge endpoints. To enable it, add its feature key to the Default shell in `src/apps/Elsa.Studio.Web/shells.json`
+(or the mounted copy in a deployment):
+
+```json
+{
+  "CShells": {
+    "Shells": {
+      "Default": {
+        "Features": {
+          "ExtensionBuilderStudio": {}
+        }
+      }
+    }
+  }
+}
+```
+
+The page relays every operation through the Studio management bridge (`/_elsa/studio/backend-management/extension-builder/*`),
+so the host needs `Studio:BackendServerBaseUrl` (or `Studio:BackendBaseUrl`) and `Studio:BackendModuleManagementApiKey`
+configured, and the backend must expose the Extension Builder surface. Against a backend without it, the page shows its
+explicit "backend management unavailable" state.
 
 ## Build
 

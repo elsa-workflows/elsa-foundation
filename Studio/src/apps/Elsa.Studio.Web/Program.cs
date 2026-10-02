@@ -6,6 +6,7 @@ using Elsa.Studio.ConsoleStream;
 using Elsa.Studio.ConsoleStream.Extensions;
 using Elsa.Studio.Diagnostics.OpenTelemetry;
 using Elsa.Studio.Diagnostics.StructuredLogs;
+using Elsa.Studio.ExtensionBuilder;
 using Elsa.Studio.FeatureManagement;
 using Elsa.Studio.Dashboard;
 using Elsa.Studio.Attention;
@@ -61,6 +62,7 @@ builder.Services.AddCShellsAspNetCore(shells =>
             typeof(ConsoleStreamStudioFeature).Assembly,
             typeof(DiagnosticsOpenTelemetryStudioFeature).Assembly,
             typeof(DiagnosticsStructuredLogsStudioFeature).Assembly,
+            typeof(ExtensionBuilderStudioFeature).Assembly,
             typeof(FeatureManagementStudioFeature).Assembly,
             typeof(DashboardStudioFeature).Assembly,
             typeof(AttentionStudioFeature).Assembly,
@@ -95,6 +97,10 @@ builder.Services.AddStudioBackendManagementBridge(configuration);
 
 var app = builder.Build();
 
+// The default shell must be active before routing runs so shell-mapped endpoints are matched — and gated by the
+// authorization middleware below — on the first request after a cold start too (see StudioShellActivation).
+app.UseStudioDefaultShellActivation();
+app.UseRouting();
 app.UseAuthentication();
 app.UseAuthorization();
 

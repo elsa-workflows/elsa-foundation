@@ -18,8 +18,7 @@ describe("useHostControlAccess", () => {
 
     expect(access).toEqual({
       canReadModuleManagement: true,
-      canManageModuleManagement: true,
-      canReadExtensionBuilder: true
+      canManageModuleManagement: true
     });
   });
 
@@ -28,7 +27,6 @@ describe("useHostControlAccess", () => {
 
     expect(access.canReadModuleManagement).toBe(true);
     expect(access.canManageModuleManagement).toBe(true);
-    expect(access.canReadExtensionBuilder).toBe(true);
   });
 
   it("denies every host-control action for an authenticated session with no host-control permissions", () => {
@@ -36,17 +34,15 @@ describe("useHostControlAccess", () => {
 
     expect(access).toEqual({
       canReadModuleManagement: false,
-      canManageModuleManagement: false,
-      canReadExtensionBuilder: false
+      canManageModuleManagement: false
     });
   });
 
-  it("grants module read (not manage, not extension builder) to a module-management.read holder", () => {
+  it("grants module read (not manage) to a module-management.read holder", () => {
     const access = readAccess(session("authenticated", ["module-management.read"]));
 
     expect(access.canReadModuleManagement).toBe(true);
     expect(access.canManageModuleManagement).toBe(false);
-    expect(access.canReadExtensionBuilder).toBe(false);
   });
 
   it("treats module-management.manage as satisfying read too", () => {
@@ -56,13 +52,12 @@ describe("useHostControlAccess", () => {
     expect(access.canManageModuleManagement).toBe(true);
   });
 
-  it("gates extension builder independently of module-management permissions", () => {
-    const moduleOnly = readAccess(session("authenticated", ["module-management.manage"]));
-    const ebReader = readAccess(session("authenticated", ["extension-builder.read"]));
+  it("holds an authenticated user to the host-control permission family only", () => {
+    // A permission from another feature's family (e.g. an optional module's own keys) grants nothing here.
+    const otherFamily = readAccess(session("authenticated", ["other-feature.read", "other-feature.manage"]));
 
-    expect(moduleOnly.canReadExtensionBuilder).toBe(false);
-    expect(ebReader.canReadExtensionBuilder).toBe(true);
-    expect(ebReader.canReadModuleManagement).toBe(false);
+    expect(otherFamily.canReadModuleManagement).toBe(false);
+    expect(otherFamily.canManageModuleManagement).toBe(false);
   });
 });
 

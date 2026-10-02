@@ -374,6 +374,34 @@ importers:
         specifier: workspace:*
         version: link:../../../essentials/Elsa.Studio.CodeEditor/Client
 
+  src/extensions/Elsa.Studio.ExtensionBuilder/Client:
+    dependencies:
+      '@elsa-workflows/studio-code-editor':
+        specifier: workspace:*
+        version: link:../../../essentials/Elsa.Studio.CodeEditor/Client
+      '@elsa-workflows/studio-sdk':
+        specifier: workspace:*
+        version: link:../../../apps/Elsa.Studio.Web/StudioSdk
+      '@elsa-workflows/studio-ui':
+        specifier: workspace:*
+        version: link:../../../apps/Elsa.Studio.Web/StudioUi
+      lucide-react:
+        specifier: ^0.468.0
+        version: 0.468.0(react@19.2.7)
+      react:
+        specifier: ^18.0.0 || ^19.0.0
+        version: 19.2.7
+      react-dom:
+        specifier: ^18.0.0 || ^19.0.0
+        version: 19.2.7(react@19.2.7)
+    devDependencies:
+      '@types/react':
+        specifier: ^19.2.17
+        version: 19.2.17
+      '@types/react-dom':
+        specifier: ^19.2.3
+        version: 19.2.3(@types/react@19.2.17)
+
   src/extensions/Elsa.Studio.FeatureManagement/Client:
     dependencies:
       '@elsa-workflows/studio-ui':

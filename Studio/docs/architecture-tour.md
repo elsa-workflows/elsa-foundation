@@ -68,6 +68,8 @@ The module API exposes two endpoint contexts:
 
 Workflow, Secrets, and other Elsa-domain modules normally call their backend APIs through `api.backend`. Studio administration calls Studio-owned endpoints through `api.host`. Privileged backend host-control operations go through [`StudioBackendManagementBridge`](../src/apps/Elsa.Studio.Web/StudioBackendManagementBridge.cs) or its related relays: the browser sends only the user credential, and Studio attaches the server-side management key on the Studio-to-backend call. The management key is never emitted in `/studio-runtime.js`.
 
+A module can relay its own backend surface under the same bridge: the shared pieces — `StudioBackendManagementOptions`, the bridge route group, the fail-closed `StudioBackendReadClient` probe and the `RequireStudioBridgePermission` authorization seam — are public in [`Elsa.Studio.Api`](../src/essentials/Elsa.Studio.Api), and the optional [Extension Builder module](../src/extensions/Elsa.Studio.ExtensionBuilder/StudioExtensionBuilderBridge.cs) is the reference: its shell feature maps the relay under `/_elsa/studio/backend-management/extension-builder`, so a Studio without the feature has none of those routes.
+
 Feature-owned APIs remain responsible for mapping and protecting their own server endpoints. Choosing `api.host` or `api.backend` establishes the destination and transport context; it is not an authorization decision.
 
 ## Authentication and authorization

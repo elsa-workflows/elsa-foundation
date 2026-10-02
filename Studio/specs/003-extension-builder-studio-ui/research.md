@@ -2,6 +2,13 @@
 
 ## Decision: Implement as a built-in Studio Web route
 
+> **Superseded by [#535](https://github.com/elsa-workflows/elsa-foundation-studio/issues/535)** (2026-10). The backend
+> dropped its Extension Builder module (elsa-foundation#1635), so shipping the page in every Studio was no longer
+> justified. Extension Builder is now the optional `Elsa.Studio.ExtensionBuilder` extension (`src/extensions`),
+> registered through `api.navigation.add` / `api.routes.add` like any other module and enabled per shell with the
+> `ExtensionBuilderStudio` feature key; the host carries no Extension Builder special case. The rationale below is kept
+> for history.
+
 **Rationale**: `src/apps/Elsa.Studio.Web/Client/src/app/App.tsx` already owns built-in routes for Modules and Package feeds while external modules contribute through `api.navigation.add` and `api.routes.add`. Extension Builder is a first-party trusted-team surface tightly coupled to backend capability discovery and should sit beside these operational screens.
 
 **Alternatives considered**: A separate module package would exercise contribution loading but add build/package overhead and duplicate routing seams for a feature that must ship with the host. A standalone shell would violate the constitution and fragment navigation.

@@ -42,6 +42,7 @@
     <ProjectReference Include="..\..\extensions\Elsa.Studio.Attention\Elsa.Studio.Attention.csproj" />
     <ProjectReference Include="..\..\extensions\Elsa.Studio.ExpressionEditors.JavaScript\Elsa.Studio.ExpressionEditors.JavaScript.csproj" />
     <ProjectReference Include="..\..\extensions\Elsa.Studio.ExpressionEditors.Liquid\Elsa.Studio.ExpressionEditors.Liquid.csproj" />
+    <ProjectReference Include="..\..\extensions\Elsa.Studio.ExtensionBuilder\Elsa.Studio.ExtensionBuilder.csproj" />
     <ProjectReference Include="..\..\extensions\Elsa.Studio.FeatureManagement\Elsa.Studio.FeatureManagement.csproj" />
     <ProjectReference Include="..\..\extensions\Elsa.Studio.Secrets\Elsa.Studio.Secrets.csproj" />
     <ProjectReference Include="..\..\extensions\Elsa.Studio.Weaver.Core\Elsa.Studio.Weaver.Core.csproj" />

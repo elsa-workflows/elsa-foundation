@@ -27,6 +27,7 @@
     <ProjectReference Include="..\..\src\extensions\Elsa.Studio.Diagnostics.StructuredLogs\Elsa.Studio.Diagnostics.StructuredLogs.csproj" />
     <ProjectReference Include="..\..\src\extensions\Elsa.Studio.ExpressionEditors.JavaScript\Elsa.Studio.ExpressionEditors.JavaScript.csproj" />
     <ProjectReference Include="..\..\src\extensions\Elsa.Studio.ExpressionEditors.Liquid\Elsa.Studio.ExpressionEditors.Liquid.csproj" />
+    <ProjectReference Include="..\..\src\extensions\Elsa.Studio.ExtensionBuilder\Elsa.Studio.ExtensionBuilder.csproj" />
     <ProjectReference Include="..\..\src\extensions\Elsa.Studio.FeatureManagement\Elsa.Studio.FeatureManagement.csproj" />
     <ProjectReference Include="..\..\src\extensions\Elsa.Studio.Secrets\Elsa.Studio.Secrets.csproj" />
     <ProjectReference Include="..\..\src\extensions\Elsa.Studio.Weaver.Core\Elsa.Studio.Weaver.Core.csproj" />

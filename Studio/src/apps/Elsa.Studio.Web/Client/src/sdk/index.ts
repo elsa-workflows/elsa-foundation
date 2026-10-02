@@ -93,44 +93,6 @@ export interface StudioBackendManagementStatus {
 export const studioBackendManagementStatusPath = "/_elsa/studio/backend-management/status";
 
 /**
- * Backend Extension Builder capability flags as reported by the Studio management bridge (ADR 0037). Mirrors the
- * backend's capability contract but is a Studio-owned DTO ("host capabilities"). Server enforcement on the backend
- * remains authoritative regardless of what the browser is shown.
- */
-export interface StudioExtensionBuilderCapabilities {
-  canCreateWorkspace: boolean;
-  canEditFiles: boolean;
-  canBuild: boolean;
-  canPromote: boolean;
-  canRollback: boolean;
-}
-
-/**
- * The Studio management bridge's answer for the backend Extension Builder capabilities read. `status` carries the same
- * explicit envelope as {@link StudioBackendManagementStatus} so the frontend branches on state, not on an HTTP failure;
- * `capabilities` is present only when `status` is `"available"`. The browser reads this from the Studio origin
- * (`api.host`) instead of probing the backend Extension Builder capabilities endpoint directly, so the backend host
- * management key never reaches the browser and the SPA never issues doomed backend requests.
- */
-export interface StudioExtensionBuilderCapabilitiesResult {
-  status: StudioBackendManagementStatusKind;
-  detail: string;
-  capabilities?: StudioExtensionBuilderCapabilities | null;
-  backendBaseUrl?: string | null;
-  checkedAt: string;
-}
-
-/** The Studio-owned bridge route the browser reads backend Extension Builder capabilities from (served by the Studio host). */
-export const studioExtensionBuilderCapabilitiesPath = "/_elsa/studio/backend-management/extension-builder/capabilities";
-
-/**
- * The Studio-owned bridge route group the browser reaches every backend Extension Builder endpoint through
- * (ADR 0037, #256). Each backend route suffix is preserved verbatim under this root — same methods, query params, and
- * payload bodies — with Studio attaching the server-side management key on the Studio→backend relay.
- */
-export const studioExtensionBuilderBridgeRoot = "/_elsa/studio/backend-management/extension-builder";
-
-/**
  * The camelCase error body the Studio management bridge returns for infrastructure failures: 503, or 504 for a relay
  * timeout — never for backend domain logic (400/404/409 bodies relay verbatim). `management` carries the bridge's
  * backend-management status (unconfigured/unauthorized/unreachable/degraded) when the failure could be attributed,
@@ -219,6 +181,9 @@ export interface StudioRouteContribution {
   component: ComponentType<StudioRouteComponentProps>;
 }
 
+/** The sidebar sections the Studio host groups navigation into. */
+export type StudioNavigationSection = "workspace" | "settings";
+
 export interface StudioNavigationContribution {
   id: string;
   label: string;
@@ -227,6 +192,13 @@ export interface StudioNavigationContribution {
   order?: number;
   iconColor?: string;
   parentId?: string;
+  /**
+   * The sidebar section the item is listed under. When omitted the host infers it: its own settings-style paths
+   * (modules, feeds, features, themes) land under Settings and everything else under Workspace.
+   */
+  section?: StudioNavigationSection;
+  /** The icon rendered in the item's navigation tile. When omitted the host picks one from the item id. */
+  icon?: ComponentType<{ size?: number }>;
 }
 
 export type StudioDashboardWidgetSize = "small" | "medium" | "wide" | "full";

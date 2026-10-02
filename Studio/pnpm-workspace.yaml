@@ -8,6 +8,7 @@ packages:
   - "src/essentials/Elsa.Studio.CodeEditor/Client"
   - "src/extensions/Elsa.Studio.ExpressionEditors.JavaScript/Client"
   - "src/extensions/Elsa.Studio.ExpressionEditors.Liquid/Client"
+  - "src/extensions/Elsa.Studio.ExtensionBuilder/Client"
   - "src/extensions/Elsa.Studio.FeatureManagement/Client"
   - "src/extensions/Elsa.Studio.Secrets/Client"
   - "src/extensions/Elsa.Studio.Weaver.Workflows/Client"

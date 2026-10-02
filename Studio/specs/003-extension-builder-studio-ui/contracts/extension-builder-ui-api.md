@@ -4,6 +4,11 @@ Endpoint root: `/_elsa/extension-builder`
 
 The Studio UI consumes these backend operations through `extensionBuilderApi.ts`. The backend remains authoritative for authorization, validation, build execution, promotion, feed mutation, runtime reconciliation, and rollback.
 
+> **Transport (ADR 0037, #256, #535)**: the browser never calls these backend paths directly. `extensionBuilderApi.ts`
+> (in `src/extensions/Elsa.Studio.ExtensionBuilder/Client`) issues each operation against the Studio-owned bridge root
+> `/_elsa/studio/backend-management/extension-builder` with the same path suffix, and the module's shell feature relays it
+> to the backend root with the server-side management key. Only the allowlisted operations below relay.
+
 ## Capabilities
 
 | Operation | Method/path | Response |

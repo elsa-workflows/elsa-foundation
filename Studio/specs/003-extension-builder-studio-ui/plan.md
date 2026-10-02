@@ -2,6 +2,13 @@
 
 **Branch**: `sfmskywalker-extension-builder-studio-ui` | **Date**: 2026-06-23 | **Spec**: `specs/003-extension-builder-studio-ui/spec.md`
 
+> **Superseded in part by [#535](https://github.com/elsa-workflows/elsa-foundation-studio/issues/535)** (2026-10): Extension Builder is
+> now an optional Studio module in `src/extensions/Elsa.Studio.ExtensionBuilder` (shell feature `ExtensionBuilderStudio`,
+> not enabled by default) rather than a built-in route of `Elsa.Studio.Web`. The browser reaches the backend
+> `/_elsa/extension-builder` contract only through the Studio management bridge
+> (`/_elsa/studio/backend-management/extension-builder/*`), which the module's feature maps. The structure below
+> describes the original built-in implementation; the current layout is in the "Current layout" note after it.
+
 **Input**: Feature specification from `/specs/003-extension-builder-studio-ui/spec.md`
 
 **Note**: This template is filled in by the `/speckit-plan` command. See `.specify/templates/plan-template.md` for the execution workflow.
@@ -88,6 +95,25 @@ src/apps/Elsa.Studio.Web/Client/
 ```
 
 **Structure Decision**: Use the existing Studio Web client as the single implementation surface. Add a first-party built-in route/page beside module-management and package-feeds, with a typed API client colocated under `src/app/modules`.
+
+**Current layout (since #535)**: the built-in decision above is superseded. The code lives in its own extension and
+is registered through the module registry (`api.navigation.add` / `api.routes.add`), with no special case in `App.tsx`:
+
+```text
+src/extensions/Elsa.Studio.ExtensionBuilder/
+├── Elsa.Studio.ExtensionBuilder.csproj
+├── ExtensionBuilderStudioFeature.cs          # ExtensionBuilderStudio shell feature (services + endpoint mapping)
+├── ExtensionBuilderPermissions.cs            # extension-builder.read / .manage keys
+├── StudioExtensionBuilderBridge.cs           # relay allowlist + relay client (moved from Elsa.Studio.Web)
+├── StudioExtensionBuilderCapabilities.cs     # capabilities read (moved from the host bridge)
+└── Client/
+    ├── src/module.tsx                        # register(api): nav item + route
+    ├── src/extensionBuilderApi.ts            # bridge-root constants + typed client
+    ├── src/extension-builder/                # page, workbench, hooks
+    ├── src/styles.css                        # module CSS (moved out of the host stylesheet)
+    └── src/__tests__/{extension-builder,module}.test.tsx
+tests/Elsa.Studio.Tests/ExtensionBuilder/     # bridge, capabilities and optionality tests
+```
 
 ## Complexity Tracking
 

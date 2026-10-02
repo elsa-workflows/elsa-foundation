@@ -1,10 +1,6 @@
 import { useContext, useMemo } from "react";
 import { AuthContext } from "../auth/AuthContext";
-import {
-  hostControlPermissions,
-  moduleManagementReadKeys,
-  extensionBuilderReadKeys
-} from "./hostControlPermissions";
+import { hostControlPermissions, moduleManagementReadKeys } from "./hostControlPermissions";
 
 // Whether the signed-in user may perform each host-control action, from their session permissions. Used to PROACTIVELY
 // hide/disable affordances the user can't use; the server-side bridge gate remains the authority (#249, ADR 0037).
@@ -17,7 +13,6 @@ import {
 export interface HostControlAccess {
   canReadModuleManagement: boolean;
   canManageModuleManagement: boolean;
-  canReadExtensionBuilder: boolean;
 }
 
 export function useHostControlAccess(): HostControlAccess {
@@ -31,8 +26,7 @@ export function useHostControlAccess(): HostControlAccess {
 
     return {
       canReadModuleManagement: !enforced || hasAny(moduleManagementReadKeys),
-      canManageModuleManagement: !enforced || permissions.has(hostControlPermissions.moduleManagementManage),
-      canReadExtensionBuilder: !enforced || hasAny(extensionBuilderReadKeys)
+      canManageModuleManagement: !enforced || permissions.has(hostControlPermissions.moduleManagementManage)
     };
   }, [auth]);
 }

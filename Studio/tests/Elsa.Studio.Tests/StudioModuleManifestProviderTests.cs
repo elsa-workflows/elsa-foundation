@@ -1,4 +1,3 @@
-using System.Reflection;
 using CShells;
 using CShells.Features;
 using Elsa.Studio.Api.Contracts;
@@ -12,6 +11,7 @@ using Elsa.Studio.Diagnostics.OpenTelemetry;
 using Elsa.Studio.Diagnostics.StructuredLogs;
 using Elsa.Studio.ExpressionEditors.JavaScript;
 using Elsa.Studio.ExpressionEditors.Liquid;
+using Elsa.Studio.ExtensionBuilder;
 using Elsa.Studio.FeatureManagement;
 using Elsa.Studio.Attention;
 using Elsa.Studio.Dashboard;
@@ -35,6 +35,7 @@ public sealed class StudioModuleManifestProviderTests
         "Elsa.Studio.Diagnostics.StructuredLogs",
         "Elsa.Studio.ExpressionEditors.JavaScript",
         "Elsa.Studio.ExpressionEditors.Liquid",
+        "Elsa.Studio.ExtensionBuilder",
         "Elsa.Studio.FeatureManagement",
         "Elsa.Studio.Workflows",
         "Elsa.Studio.Dashboard",
@@ -71,6 +72,10 @@ public sealed class StudioModuleManifestProviderTests
             AssetPath: "/_content/Elsa.Studio.ExpressionEditors.Liquid/studio/modules/expression-editors/liquid/",
             ShellFeatureName: "LiquidExpressionEditorStudio",
             Capabilities: ["expression-editors", "liquid"]),
+        new("Elsa.Studio.ExtensionBuilder", "Extension Builder",
+            AssetPath: "/_content/Elsa.Studio.ExtensionBuilder/studio/modules/extension-builder/",
+            ShellFeatureName: "ExtensionBuilderStudio",
+            Capabilities: ["navigation", "routes", "http"]),
         new("Elsa.Studio.Diagnostics.StructuredLogs", "Structured logs",
             AssetPath: "/_content/Elsa.Studio.Diagnostics.StructuredLogs/studio/modules/structured-logs/",
             Capabilities: ["navigation", "routes", "panels", "http", "sse", "diagnostics"]),
@@ -285,6 +290,7 @@ public sealed class StudioModuleManifestProviderTests
             typeof(DiagnosticsStructuredLogsStudioFeature),
             typeof(JavaScriptExpressionEditorStudioFeature),
             typeof(LiquidExpressionEditorStudioFeature),
+            typeof(ExtensionBuilderStudioFeature),
             typeof(FeatureManagementStudioFeature),
             typeof(WeaverWorkflowsStudioFeature),
             typeof(WorkflowsStudioFeature),
@@ -321,45 +327,6 @@ public sealed class StudioModuleManifestProviderTests
         string? AssetPath = null,
         string? ShellFeatureName = null,
         string? Version = null);
-
-    /// <summary>
-    /// Returns a snapshot whose feature descriptors carry the <see cref="ShellFeatureDescriptor.StartupType"/>
-    /// of each supplied type so that <see cref="Elsa.Studio.Api.Services.StudioModuleManifestProvider"/>
-    /// can reflect <c>[StudioModule]</c> attributes from them.
-    /// </summary>
-    private sealed class FakeRuntimeFeatureCatalog : IRuntimeFeatureCatalog
-    {
-        private readonly RuntimeFeatureCatalogSnapshot _snapshot;
-
-        public FakeRuntimeFeatureCatalog(params Type[] featureTypes)
-        {
-            var descriptors = featureTypes
-                .Select(type =>
-                {
-                    // Extract the feature name from the [ShellFeature] attribute if present, otherwise use the type name.
-                    var shellFeatureAttr = type.GetCustomAttributesData()
-                        .FirstOrDefault(a => a.AttributeType.Name == "ShellFeatureAttribute");
-
-                    var featureName = shellFeatureAttr?.ConstructorArguments.FirstOrDefault().Value as string ?? type.Name;
-
-                    return new ShellFeatureDescriptor { Id = featureName, StartupType = type };
-                })
-                .ToArray();
-
-            _snapshot = new RuntimeFeatureCatalogSnapshot(
-                1,
-                Array.Empty<Assembly>(),
-                descriptors,
-                new Dictionary<string, ShellFeatureDescriptor>(),
-                DateTimeOffset.UtcNow);
-        }
-
-        public Task<RuntimeFeatureCatalogSnapshot> GetSnapshotAsync(CancellationToken cancellationToken = default) =>
-            Task.FromResult(_snapshot);
-
-        public Task<RuntimeFeatureCatalogSnapshot> RefreshAsync(CancellationToken cancellationToken = default) =>
-            Task.FromResult(_snapshot);
-    }
 
     /// <summary>
     /// Web host environment whose web root serves the supplied directory-path → file-names map,

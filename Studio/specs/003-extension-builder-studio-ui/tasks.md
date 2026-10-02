@@ -8,6 +8,12 @@
 
 **Organization**: Tasks are grouped by user story so each story is independently implementable and testable.
 
+> **File locations (since #535)**: the paths below are the original built-in locations under
+> `src/apps/Elsa.Studio.Web/Client`. The code has since moved to the optional extension
+> `src/extensions/Elsa.Studio.ExtensionBuilder` (`Client/src/extension-builder/`, `Client/src/extensionBuilderApi.ts`,
+> `Client/src/styles.css`, `Client/src/__tests__/extension-builder.test.tsx`), and the `App.tsx` navigation/route wiring
+> (T001, T008) is replaced by the module's `register(api)`.
+
 ## Format: `[ID] [P?] [Story] Description`
 
 - **[P]**: Can run in parallel (different files, no dependencies)

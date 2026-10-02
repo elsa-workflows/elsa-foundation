@@ -26,7 +26,7 @@ export default defineConfig({
     },
     environment: "jsdom",
     setupFiles: [resolve(__dirname, "../../../../vitest.setup.ts")],
-    // Full-page jsdom renders (extension builder, module management) normally finish in well
+    // Full-page jsdom renders (module management, theme builder) normally finish in well
     // under a second, but parallel workers on a loaded machine can slow them 10x+ past the
     // default 5s. Individual tests never legitimately take this long; this only delays failure
     // detection for genuinely hung tests.
