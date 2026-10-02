@@ -656,6 +656,28 @@ a readiness-gated load balancer never sends one: the node would stay live, not r
 
 The probe itself still activates nothing. Workbench has its own `EagerShellActivationHostedService` and is unchanged.
 
+### A shell whose startup checks refuse it
+
+Both hosts compose `AddShellStartupValidation()` on the host container. A shell then runs, as the first step of its
+activation, every options validator registered with `ValidateOnStart` in its own container: the ones its features
+registered, and the host's own, which CShells copies into every shell and which run there against the options the shell's
+container resolves. A failing check fails the activation with the `OptionsValidationException` it raised. It runs first in
+the `Prepare` phase, below the order of every initializer the shipped features register, so before a provider binding is
+checked or a migration runs.
+
+With eager activation on, the host records that as a fault, not a refusal: it is retried on the doubling delay and
+`/health/ready` reports `activation-failed`. A retry cannot change a composition error, so the exception in the host log
+is what to act on.
+
+Without that call nothing runs a shell's startup checks. The generic host runs them for its own container alone, and
+CShells runs only shell initializers when a shell activates. A check a shell feature registers with `ValidateOnStart`
+would then run at the first use of its options, often a request, or never, when it validates a marker options type
+that nothing resolves (#2331). Two consequences:
+
+- **A host of your own** that builds shells from Elsa features composes `AddShellStartupValidation()` too.
+- **A feature whose check must hold in any host**, whether or not that host composes the call, registers a shell
+  initializer for it instead, as `EfProviderBindingValidator` does.
+
 ## Hot reload after a package change
 
 `Elsa.Foundation.Host` picks up a newly reconciled package without a restart. `Elsa.Workbench` refreshes its feature

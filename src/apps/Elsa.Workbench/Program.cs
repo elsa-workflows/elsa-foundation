@@ -257,6 +257,9 @@ builder.Services.AddConfiguredClusterMembership(configuration);
 // membership is; the Elsa:DataProtection section names it and enables its shared key store (#2191).
 builder.Services.AddConfiguredDataProtection(configuration);
 builder.Services.AddDynamicEndpointApiExplorerRefresh();
+// A shell runs the ValidateOnStart checks of its own container as it activates, and a failing one refuses the
+// activation: the generic host runs them for the host container alone, and CShells runs none (#2331).
+builder.Services.AddShellStartupValidation();
 
 builder.Services.AddCShellsAspNetCore(shells =>
 {

@@ -24,6 +24,7 @@
       "src/essentials/Caching/Core/Elsa.Caching.Core.csproj",
       "src/essentials/Cluster/Core/Elsa.Cluster.Core.csproj",
       "src/essentials/Cluster/InProcess/Elsa.Cluster.InProcess.csproj",
+      "src/essentials/Cluster/Readability/Elsa.Cluster.Readability.csproj",
       "src/essentials/Events/Core/Elsa.Events.Core.csproj",
       "src/essentials/Events/Elsa.Events.csproj",
       "src/essentials/Events/Strategies/Elsa.Events.Strategies.csproj",
