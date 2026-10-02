@@ -7,35 +7,37 @@ the ledger is now Runtime-owned as `IWorkflowActivationAuthority`. Publishing ow
 and publication records and reaches the ledger through `IWorkflowActivationCoordinator`; it does not
 own or persist a parallel publication-slot authority.
 
-Convergence amendment (2026-10-01, #2193). **Status: proposed, awaiting owner acceptance.** The durable
-projection intents described under "Projection intent makes cross-store activation durable" were never wired into the
-coordinator-based activation path, and their reconciler was removed. Projections converge toward the slot through
-`IWorkflowActivationCoordinator` instead. The slot transition commits before the projections switch, so a process
-that dies in between leaves the slot naming an activation that serves nothing while the one it replaced keeps
-serving. The coordinator completes that activation before the slot's next activation, and a shell-start pass
-completes it on every node. Both re-run the idempotent projection switch, observer notification and predecessor
-retirement. Unpublish completes nothing: it turns off every activation that serves the slot. Invariant 3 is
-therefore eventual across a crash, not immediate. Publishing's publication records follow the slot the same way
-(#2223): `IPublicationActivator.CompleteAsync` completes the slot's activation through the coordinator and, once it
-serves, marks its publication active and retires the publication it replaced. It runs before every publication, on a
-same-version republish that finds the record behind, and in its own shell-start pass, so Invariant 2 holds in the
-records eventually too, and the records never decide serving. One transition there is not a clearing of a
-retirement: a publication a failed replacement handed the slot back to is `Retired` while the slot names it again,
-and completion marks that record `Active` once it serves. This is a controlled lifecycle transition, not the
-restoration the Decision section forbids: it applies only to the record the slot itself names, only while the slot
-names it, and it never revives a record the slot does not name, so Restore keeps its own authority transition. A
-completion that finds the slot moved on after the mark retires the record again. Invariant 6 holds for a losing
-candidate that shares the winner's activation id, as two nodes reconciling one mounted set do (#2251): the winner's
-projections are its own, so it keeps them rather than compensating them away, and reports `AlreadyActive`, or
-`Activated` when it completed the winner's activation. Once a completion has switched an activation on, a source
-reference it cannot retire does not fail it: it reports the activation `Activated` and names the one it replaced, and
-publishing retires the replaced record on that report, not on the reference (#2251). A candidate the coordinator
-answers `AlreadyActive` for through another publication's activation (a same-version publish that lost a race) is
-never journaled active, because no source reference was minted for it: it is recorded `Failed`, and the request is
-answered with the publication the slot names once that record is `Active` (#2252). Two races remain until the slot and the projections
-switch in one transaction (#2230). In the first, a stale completion of a first activation can switch it back on
-beside its successor; that double serving does not heal itself, and only unpublishing the slot clears it. In the
-second, a completion's retire can leave an activation that compensation restored serving with a retired reference.
+Convergence amendment (2026-10-01, #2193; revised for #2230). **Status: proposed, awaiting owner acceptance.** The
+durable projection intents described under "Projection intent makes cross-store activation durable" were never wired
+into the coordinator-based activation path, and their reconciler was removed. Projections follow the slot through
+`IWorkflowActivationCoordinator` instead. Since #2230 the coordinator moves a slot through `IWorkflowActivationSwitch`,
+which commits the slot compare-and-swap, the switch of the trigger and recurring projections, and the retirement of the
+replaced activation's source reference as one commit of the backend that owns them: one `RuntimeDbContext`
+transaction, or the in-memory stores' locks held together. A process that dies at any point therefore leaves the slot
+and what serves agreeing, and Invariant 3 holds immediately, across a crash too. Nothing is left to complete: the
+completion pass #2193 added is gone, and `CompleteAsync` only reports whether the slot's activation serves, failing for
+a slot that a version before #2230 left half done, which an operator clears by unpublishing it. The slot and its serving
+projections must therefore come from one backend; a composition that places them in different backends has no switch
+and is refused. Once a switch commits, the activation stands: a cancellation does not undo it, and only a trigger
+observer's failure reverts it, in one commit that undoes the caller's own transition and nothing a later writer made.
+Unpublish empties the slot in one commit with the projections of every activation that serves it, whatever the slot's
+history. Publishing's publication records follow the slot (#2223), outside that commit: `IPublicationActivator.CompleteAsync`
+marks the publication the slot names active once it serves, and retires the publications whose references the runtime
+retired. It runs before every publication, on a same-version republish that finds the record behind, and in its own
+shell-start pass, so Invariant 2 holds in the records eventually too, and the records never decide serving. One
+transition there is not a clearing of a retirement: a publication a failed replacement handed the slot back to is
+`Retired` while the slot names it again, and completion marks that record `Active` once it serves. This is a controlled
+lifecycle transition, not the restoration the Decision section forbids: it applies only to the record the slot itself
+names, only while the slot names it, and it never revives a record the slot does not name, so Restore keeps its own
+authority transition. A completion that finds the slot moved on after the mark retires the record again. Invariant 6
+holds for a losing candidate that shares the winner's activation id, as two nodes reconciling one mounted set do
+(#2251): it discards the shared activation only while it does not serve, so it keeps the winner's projections and
+reports `AlreadyActive`. A candidate the coordinator answers `AlreadyActive` for through another publication's
+activation (a same-version publish that lost a race) is never journaled active, because no source reference was minted
+for it: it is recorded `Failed`, and the request is answered with the publication the slot names once that record is
+`Active` (#2252). The two races this amendment named before #2230, a stale completion switching a replaced first
+activation back on and a completion's retire racing a compensation's restore, are gone with the completion that made
+them.
 
 Related decisions: ADR 0038 (content-addressed executable identity), ADR 0039 (layout on source
 references), and ADR 0040 (reference- and execution-derived artifact lifetime).
@@ -153,7 +155,8 @@ retirement timestamp.
 ### Projection intent makes cross-store activation durable
 
 *Superseded in mechanism by the proposed 2026-10-01 convergence amendment above; the requirement that projections
-converge toward the slot and never override it stands.*
+converge toward the slot and never override it stands, and since #2230 the final compare-and-swap and the visibility
+switch are one commit.*
 
 When the Runtime activation authority and every serving projection cannot share a transaction, Publishing records
 durable `PublicationProjectionIntent` entries. An intent identifies the publication, projection kind,
@@ -188,9 +191,8 @@ artifact for as long as their execution record is retained.
 
 1. A `(WorkflowDefinitionId, SlotName)` pair identifies exactly one slot.
 2. A slot selects zero or one active publication, and a publication is active in at most one slot.
-3. Only the selected active publication contributes new-start routing projections. Across a process crash
-   between the slot transition and the projection switch this holds eventually, not immediately, apart from the
-   race the proposed convergence amendment names, which can leave two activations serving until #2230 closes it.
+3. Only the selected active publication contributes new-start routing projections. The slot transition and the
+   projection switch commit together (#2230), so this holds immediately, across a process crash too.
 4. Ordinary publishing replaces `default`; intentional coexistence uses explicit named slots.
 5. An Exclusive stimulus has at most one authoritative claimant per shell; FanOut claims may coexist.
 6. A failed or losing candidate leaves prior slot authority and serving behavior unchanged.
@@ -213,7 +215,10 @@ artifact for as long as their execution record is retained.
   support deterministic fan-out.
 - **Require a distributed transaction across all projections.** Rejected as a universal requirement
   because supported providers may span transactional boundaries; durable intent and reconciliation
-  preserve the invariant without imposing one storage technology.
+  preserve the invariant without imposing one storage technology. The proposed convergence amendment
+  (#2230) asks less than that: the slot and its own serving projections commit together within the one
+  backend that owns them, and a composition that splits them across backends is refused. The HTTP
+  route table and other observer-fed caches stay outside that commit and converge on their own.
 
 ## Consequences
 
