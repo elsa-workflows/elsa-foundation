@@ -22,9 +22,9 @@ namespace Elsa.Workflows.Runtime.Reconciliation.Startup;
 /// reconciles. A pass that runs after another finds the artifacts both mount already active.
 /// </para>
 /// <para>
-/// <b>Why the passes still take turns</b> (#2274). A slot and its projections switch in one commit (#2230), which closed
-/// the silent windows of concurrent passes over one mounted set, but two loud-but-wrong cases remain, so this stays a
-/// <c>[SingleNodeTask]</c>. The README's "Why the passes take turns" describes them.
+/// <b>Why the passes still take turns</b> (#2274). Concurrent passes over one mounted set can no longer leave a slot
+/// wrong without a word, but three loud-but-wrong cases remain, so this stays a <c>[SingleNodeTask]</c>. The README's
+/// "Why the passes take turns" describes them.
 /// </para>
 /// <para>
 /// Re-reconciliation needs no new trigger: this is an <see cref="IStartupTask"/>, so a shell reload replays it

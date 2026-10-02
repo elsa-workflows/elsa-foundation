@@ -19,12 +19,11 @@ namespace Elsa.Workflows.Publishing.Services;
 /// failure vocabulary.
 /// </para>
 /// <para>
-/// The journal follows the slot; it never decides serving. The runtime's switch commits the slot, the projections and
-/// the replaced publication's source reference together (#2230), before the journal is written, so a process that stops
-/// in between leaves the slot's publication serving but a candidate, and the one it replaced active (#2223).
-/// <see cref="CompleteAsync"/> brings the journal back into line. It runs before every activation, on a same-version
-/// republish that finds the journal lagging, and at shell start (<see cref="CompleteInterruptedPublicationsStartupTask"/>).
-/// It reads the slot and the source references, which the runtime owns, and writes only publication records.
+/// The journal follows the slot; it never decides serving. It is written after the runtime's commit
+/// (<see cref="IWorkflowActivationSwitch"/>), so a process that stops in between leaves it lagging the slot (#2223), and
+/// <see cref="CompleteAsync"/> brings it back into line: before every activation, on a same-version republish that finds
+/// the journal lagging, and at shell start (<see cref="CompleteInterruptedPublicationsStartupTask"/>). It reads the slot
+/// and the source references, which the runtime owns, and writes only publication records.
 /// </para>
 /// </remarks>
 public sealed class PublicationActivator(
@@ -54,9 +53,9 @@ public sealed class PublicationActivator(
         WorkflowActivationResult activation;
         try
         {
-            // Complete the publication the slot names, and its journal, before replacing it (#2223). The coordinator
-            // completes the activation itself, but the journal would still hold that publication as a candidate, and
-            // retiring it as the replaced publication would fail.
+            // Bring the publication the slot names into line before replacing it (#2223): the runtime makes sure its
+            // activation serves, and the journal, which may still hold it as a candidate, is updated, because retiring a
+            // candidate as the replaced publication would fail.
             var completion = await CompleteAsync(candidate.WorkflowDefinitionId, candidate.SlotName, cancellationToken);
             if (!completion.Succeeded)
                 return new PublicationActivationResult(
@@ -151,10 +150,8 @@ public sealed class PublicationActivator(
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowDefinitionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(slotName);
 
-        // The runtime first: the journal may say a publication serves only once its activation does. The slot and its
-        // projections switch in one commit (#2230), so the runtime has nothing to complete; it fails for a slot that a
-        // version before #2230 left naming a publication that does not serve.
-        var completion = await activationCoordinator.CompleteAsync(workflowDefinitionId, slotName, cancellationToken);
+        // The runtime first: the journal may say a publication serves only once its activation does.
+        var completion = await activationCoordinator.EnsureServingAsync(workflowDefinitionId, slotName, cancellationToken);
         var slot = completion.Slot;
         if (!completion.Succeeded)
             return new(false, slot, Failure: MapFailure(completion));

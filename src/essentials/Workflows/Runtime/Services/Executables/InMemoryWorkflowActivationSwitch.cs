@@ -15,8 +15,8 @@ namespace Elsa.Workflows.Runtime.Services.Executables;
 /// Source references are moved through their store, by compare-and-swap, after the locked step or before it, in an order
 /// that keeps every state between the two safe: an activation never serves with a retired reference. A replaced
 /// activation's reference is retired once it no longer serves; a reverted one's, or a candidate's that a discard retired,
-/// is restored before it serves again, and retired again if the switch is refused; a discarded or reverted candidate's is
-/// retired once nothing can switch it on.
+/// is restored before it serves again, and put back exactly as it was if the switch is refused; a discarded or reverted
+/// candidate's is retired once nothing can switch it on.
 /// Once the locked step is made, the switch is made, so those moves use <see cref="CancellationToken.None"/>.
 /// </para>
 /// <para>
@@ -26,8 +26,6 @@ namespace Elsa.Workflows.Runtime.Services.Executables;
 /// </remarks>
 public sealed class InMemoryWorkflowActivationSwitch : IWorkflowActivationSwitch
 {
-    private const int MaximumReferenceAttempts = 16;
-
     private readonly InMemoryWorkflowActivationAuthority _authority;
     private readonly IWorkflowExecutableSourceReferenceStore _references;
     private readonly TimeProvider _timeProvider;
@@ -53,7 +51,6 @@ public sealed class InMemoryWorkflowActivationSwitch : IWorkflowActivationSwitch
         var transition = await LockedWithReferenceFirstAsync(
             WorkflowActivationReferenceIdentity.Create(request.ActivationId),
             current => ResumeFailed(current, request.ActivationId),
-            current => current.DeletedAt is null ? current.Retire(request.UpdatedAt, WorkflowActivationCoordinator.FailedRetireReason) : null,
             () =>
             {
                 var planned = _authority.PlanActivation(request);
@@ -83,7 +80,6 @@ public sealed class InMemoryWorkflowActivationSwitch : IWorkflowActivationSwitch
         var reverted = await LockedWithReferenceFirstAsync(
             replaced is null ? null : WorkflowActivationReferenceIdentity.Create(replaced),
             current => RestoreReplaced(current, replaced!),
-            current => RetireReplaced(current, revert.UpdatedAt),
             () =>
             {
                 var planned = replaced is null
@@ -131,10 +127,7 @@ public sealed class InMemoryWorkflowActivationSwitch : IWorkflowActivationSwitch
             var planned = _authority.PlanDeactivation(request);
             if (!planned.Succeeded)
                 return planned;
-            string?[] serving = [planned.ReplacedActivationId, .. alsoServing];
-            foreach (var projection in _projections)
-            foreach (var activationId in serving.OfType<string>())
-                projection.Delete(activationId);
+            DeleteProjections([planned.ReplacedActivationId, .. alsoServing]);
             return _authority.Commit(planned);
         }));
     }
@@ -145,16 +138,57 @@ public sealed class InMemoryWorkflowActivationSwitch : IWorkflowActivationSwitch
         var activationId = reference.ActivationId ?? throw new ArgumentException("Only an activation's source reference can be discarded.", nameof(reference));
         var discarded = Locked(() =>
         {
-            if (_projections.Any(projection => projection.Serves(activationId)))
+            if (_projections.Any(projection => projection.State(activationId) == WorkflowActivationProjectionState.Active))
                 return false;
-            foreach (var projection in _projections)
-                projection.Delete(activationId);
+            DeleteProjections([activationId]);
             return true;
         });
 
         if (discarded)
             await MoveReferenceAsync(reference.SourceReferenceId, current => RetireFailed(current, reference, _timeProvider.GetUtcNow()));
         return discarded;
+    }
+
+    public async ValueTask<bool> TryRepairAsync(
+        WorkflowActivationSlot slot,
+        IReadOnlyCollection<string> alsoServing,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(slot);
+        ArgumentNullException.ThrowIfNull(alsoServing);
+        var activationId = slot.ActiveActivationId ?? throw new ArgumentException("Only a slot that names an activation can be repaired.", nameof(slot));
+        cancellationToken.ThrowIfCancellationRequested();
+        var now = _timeProvider.GetUtcNow();
+        var others = alsoServing.Where(other => !StringComparer.Ordinal.Equals(other, activationId)).Distinct(StringComparer.Ordinal).ToArray();
+        var repaired = await LockedWithReferenceFirstAsync(
+            WorkflowActivationReferenceIdentity.Create(activationId),
+            current => ResumeFailed(current, activationId),
+            () =>
+            {
+                if (_authority.Current(slot.WorkflowDefinitionId, slot.SlotName) is not { } current ||
+                    current.Revision != slot.Revision ||
+                    !StringComparer.Ordinal.Equals(current.ActiveActivationId, activationId) ||
+                    _projections.Any(projection => projection.State(activationId) != WorkflowActivationProjectionState.Prepared))
+                    return false;
+                foreach (var projection in _projections)
+                    projection.Switch(activationId, null);
+                DeleteProjections(others);
+                return true;
+            },
+            committed => committed);
+
+        if (repaired)
+            foreach (var other in others)
+                await MoveReferenceAsync(WorkflowActivationReferenceIdentity.Create(other), current => RetireReplaced(current, now));
+        return repaired;
+    }
+
+    /// <summary>Deletes each named activation's projections from every store; the caller holds the locks.</summary>
+    private void DeleteProjections(IEnumerable<string?> activationIds)
+    {
+        foreach (var projection in _projections)
+        foreach (var activationId in activationIds.OfType<string>())
+            projection.Delete(activationId);
     }
 
     /// <summary>
@@ -181,18 +215,18 @@ public sealed class InMemoryWorkflowActivationSwitch : IWorkflowActivationSwitch
     }
 
     /// <summary>
-    /// Moves the reference <paramref name="sourceReferenceId"/> names as <paramref name="before"/> says, so it is live before
-    /// the activation it belongs to serves, then runs <paramref name="step"/> under the locks, and moves the reference as
-    /// <paramref name="undo"/> says when the step did not commit: a refused or failed switch changes nothing.
+    /// Makes the reference <paramref name="sourceReferenceId"/> names live as <paramref name="before"/> says, so it is live
+    /// before the activation it belongs to serves, then runs <paramref name="step"/> under the locks. When the step did not
+    /// commit, the reference is put back exactly as it was, unless another writer has moved it since: a refused or failed
+    /// switch changes nothing.
     /// </summary>
     private async ValueTask<T> LockedWithReferenceFirstAsync<T>(
         string? sourceReferenceId,
         Func<WorkflowExecutableSourceReference, WorkflowExecutableSourceReference?> before,
-        Func<WorkflowExecutableSourceReference, WorkflowExecutableSourceReference?> undo,
         Func<T> step,
         Func<T, bool> committed)
     {
-        var moved = sourceReferenceId is not null && await MoveReferenceAsync(sourceReferenceId, before);
+        var original = sourceReferenceId is null ? null : await MoveReferenceAsync(sourceReferenceId, before);
         var done = false;
         try
         {
@@ -202,26 +236,27 @@ public sealed class InMemoryWorkflowActivationSwitch : IWorkflowActivationSwitch
         }
         finally
         {
-            if (moved && !done)
-                await MoveReferenceAsync(sourceReferenceId!, undo);
+            if (original is not null && !done)
+                await MoveReferenceAsync(sourceReferenceId!, current => current.DeletedAt is null ? original : null);
         }
     }
 
     /// <summary>
     /// Moves a reference as <paramref name="next"/> says, by compare-and-swap, reading it again when another writer changed
-    /// it first, as the EF switch's transaction does; whether it moved. Nothing to move is not a failure.
+    /// it first, as the EF switch's transaction does. Nothing to move is not a failure.
     /// </summary>
-    private async ValueTask<bool> MoveReferenceAsync(string sourceReferenceId, Func<WorkflowExecutableSourceReference, WorkflowExecutableSourceReference?> next)
+    /// <returns>The reference as it was before the move, or <see langword="null"/> when nothing moved.</returns>
+    private async ValueTask<WorkflowExecutableSourceReference?> MoveReferenceAsync(string sourceReferenceId, Func<WorkflowExecutableSourceReference, WorkflowExecutableSourceReference?> next)
     {
-        for (var attempt = 0; attempt < MaximumReferenceAttempts; attempt++)
+        for (var attempt = 0; attempt < MaximumAttempts; attempt++)
         {
             if (await _references.FindAsync(sourceReferenceId, CancellationToken.None) is not { } current || next(current) is not { } moved)
-                return false;
+                return null;
             var swapped = current.DeletedAt is null
                 ? await _references.TryRetireAsync(current, moved, CancellationToken.None)
                 : await _references.TryRestoreAsync(current, moved, CancellationToken.None);
             if (swapped)
-                return true;
+                return current;
         }
 
         throw new InvalidOperationException($"Source reference '{sourceReferenceId}' changed concurrently; retry the operation.");

@@ -123,10 +123,10 @@ public sealed class InMemoryRecurringTriggerScheduleStore(TimeProvider? timeProv
 
     object IInMemoryActivationProjection.SyncRoot => _syncRoot;
 
-    bool IInMemoryActivationProjection.Serves(string activationId) => _activations.Serves(activationId);
+    WorkflowActivationProjectionState IInMemoryActivationProjection.State(string activationId) => _activations.Find(activationId);
 
     void IInMemoryActivationProjection.CheckSwitch(string activationId, string? replacedActivationId) =>
-        _activations.CheckActivation(activationId, replacedActivationId, ProjectionName);
+        _activations.NeedsSwitch(activationId, replacedActivationId, ProjectionName);
 
     void IInMemoryActivationProjection.Delete(string activationId) => Delete(activationId);
 

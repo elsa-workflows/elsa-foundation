@@ -62,9 +62,9 @@ public interface IPublicationActivator
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Completes the activation the slot names through <c>IWorkflowActivationCoordinator.CompleteAsync</c>, then brings
-    /// the publication journal into line with the slot (#2223). A process that stops after the slot transition leaves
-    /// the slot's publication a <see cref="PublicationStatus.Candidate"/> and the one it replaced
+    /// Makes sure the activation the slot names serves (<c>IWorkflowActivationCoordinator.EnsureServingAsync</c>), then
+    /// brings the publication journal into line with the slot (#2223). A process that stops after the runtime's commit
+    /// leaves the slot's publication a <see cref="PublicationStatus.Candidate"/> and the one it replaced
     /// <see cref="PublicationStatus.Active"/>.
     /// </summary>
     /// <remarks>

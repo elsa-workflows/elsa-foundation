@@ -255,6 +255,12 @@ public sealed class EfWorkflowTriggerBindingStore(
         return state is null && rows.Length == 0 ? ProjectionStaging.Unchanged : ProjectionStaging.Staged;
     }
 
+    /// <summary>Where the activation's projection stands, read in the caller's transaction (#2230).</summary>
+    internal async ValueTask<WorkflowActivationProjectionState> StageStateAsync(string scope, string activationId, CancellationToken cancellationToken) =>
+        await context.WorkflowTriggerBindingProjectionStates.SingleOrDefaultAsync(x => x.Id == ProjectionId(scope, activationId), cancellationToken) is { } state
+            ? ActivationProjectionStateLifecycle.Read(state.IsActive, state.Revision)
+            : WorkflowActivationProjectionState.Missing;
+
     /// <summary>The context every staged change writes through; a switch commits only stores that share it.</summary>
     internal RuntimeDbContext Context => context;
 
@@ -287,7 +293,8 @@ public sealed class EfWorkflowTriggerBindingStore(
     }
 
     /// <summary>
-    /// No index covers the slot, so this reads the scope's active bindings once; only deactivation calls it. The rows'
+    /// No index covers the slot, so this reads the scope's active bindings once; only deactivation, and the repair of a slot
+    /// left half done, call it. The rows'
     /// activation ids are deduplicated here rather than with a database <c>DISTINCT</c> over a text column.
     /// </summary>
     public async ValueTask<IReadOnlyCollection<string>> ListServingActivationIdsAsync(string slotId, CancellationToken cancellationToken = default)

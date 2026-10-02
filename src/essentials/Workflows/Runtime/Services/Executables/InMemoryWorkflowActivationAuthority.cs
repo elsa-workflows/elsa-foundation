@@ -76,6 +76,10 @@ public sealed class InMemoryWorkflowActivationAuthority : IWorkflowActivationAut
         return new WorkflowActivationTransition(true, next, current.ActiveActivationId, ReplacedSource: current.Source);
     }
 
+    /// <summary>The slot as it stands, or <see langword="null"/> when it was never written. The caller holds <see cref="Gate"/>.</summary>
+    internal WorkflowActivationSlot? Current(string workflowDefinitionId, string slotName) =>
+        slots.GetValueOrDefault(SlotId(workflowDefinitionId, slotName, CancellationToken.None));
+
     /// <summary>Records a transition a plan allowed, and returns it; a refusal changes nothing. The caller holds <see cref="Gate"/>.</summary>
     internal WorkflowActivationTransition Commit(WorkflowActivationTransition transition)
     {

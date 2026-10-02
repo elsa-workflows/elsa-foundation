@@ -2,6 +2,7 @@ using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 using Elsa.Workflows.Runtime.Services.Executables;
 using Elsa.Testing;
 using Elsa.Workflows.Runtime.Services.Triggers;
@@ -464,26 +465,72 @@ public sealed class WorkflowActivationCoordinatorTests
         Assert.Equal("activation-stray", error.Fields["ActivationId"]);
     }
 
+    public static TheoryData<string> RepairingCalls => ["same-artifact activation", "ensure serving"];
+
     /// <summary>
-    /// A slot a version before #2230 left half done names an activation that does not serve. Nothing builds on it: the
-    /// same-artifact request, a replacement and a completion all fail naming the remedy, rather than reporting it active.
-    /// Deactivating, the remedy, turns every activation serving the slot off.
+    /// A slot a version before #2230 left half done names a prepared activation while the one it replaced still serves.
+    /// The next same-artifact activation, or a check that the slot serves, repairs it in one switch commit: the slot's
+    /// activation serves, the other is switched off and retired, and the slot itself is not written.
     /// </summary>
+    [Theory]
+    [MemberData(nameof(RepairingCalls))]
+    public async Task A_slot_left_half_done_is_repaired_by_the_next_call_that_meets_it(string call)
+    {
+        var first = await _harness.ActivateAsync("activation-1", "artifact-1");
+        var slot = await _harness.LeaveHalfDoneAsync("activation-2", "artifact-2", first.Slot.Revision);
+        _harness.ResetCalls();
+
+        var result = call == "ensure serving"
+            ? await _harness.Coordinator.EnsureServingAsync("definition-1", "default")
+            : await _harness.ActivateAsync("activation-2", "artifact-2", slot.Revision);
+
+        Assert.Equal(WorkflowActivationOutcome.AlreadyActive, result.Outcome);
+        Assert.Equal(slot, result.Slot);
+        Assert.Equal(["activation-2"], await _harness.ServingAsync());
+        await _harness.AssertRetiredAsync("activation-1", WorkflowActivationCoordinator.ReplacedRetireReason);
+        await _harness.AssertLiveAsync("activation-2");
+        Assert.Contains("switch:repair", _harness.Calls);
+        Assert.Single(_harness.Logger.Entries, entry => entry.Level == LogLevel.Warning);
+    }
+
     [Fact]
-    public async Task A_slot_left_half_done_before_the_switch_is_reported_not_built_on()
+    public async Task A_replacement_repairs_a_slot_left_half_done_before_it_replaces_the_slots_activation()
     {
         var first = await _harness.ActivateAsync("activation-1", "artifact-1");
         var slot = await _harness.LeaveHalfDoneAsync("activation-2", "artifact-2", first.Slot.Revision);
 
+        var replacement = await _harness.ActivateAsync("activation-3", "artifact-3", slot.Revision);
+
+        Assert.Equal(WorkflowActivationOutcome.Activated, replacement.Outcome);
+        Assert.Equal("activation-2", replacement.ReplacedActivationId);
+        Assert.Equal(["activation-3"], await _harness.ServingAsync());
+        await _harness.AssertRetiredAsync("activation-1", WorkflowActivationCoordinator.ReplacedRetireReason);
+        await _harness.AssertRetiredAsync("activation-2", WorkflowActivationCoordinator.ReplacedRetireReason);
+    }
+
+    /// <summary>
+    /// A slot left half done whose activation's projections are no longer all prepared cannot be repaired in place. Nothing
+    /// builds on it: the same-artifact request, a replacement and a check that it serves all fail naming the remedy, and
+    /// nothing is repaired. Deactivating, the remedy, turns every activation serving the slot off.
+    /// </summary>
+    [Fact]
+    public async Task A_slot_left_half_done_that_cannot_be_repaired_is_reported_not_built_on()
+    {
+        var first = await _harness.ActivateAsync("activation-1", "artifact-1");
+        var slot = await _harness.LeaveHalfDoneAsync("activation-2", "artifact-2", first.Slot.Revision);
+        await _harness.Bindings.DeleteByActivationAsync("activation-2");
+        _harness.ResetCalls();
+
         var same = await _harness.ActivateAsync("activation-2", "artifact-2", slot.Revision);
         var replacement = await _harness.ActivateAsync("activation-3", "artifact-3", slot.Revision);
-        var completion = await _harness.Coordinator.CompleteAsync("definition-1", "default");
+        var ensured = await _harness.Coordinator.EnsureServingAsync("definition-1", "default");
 
-        Assert.All([same, replacement, completion], result =>
+        Assert.All([same, replacement, ensured], result =>
         {
             Assert.Equal(WorkflowActivationOutcome.Failed, result.Outcome);
             Assert.Contains("unpublish the slot", result.Diagnostic, StringComparison.Ordinal);
         });
+        Assert.DoesNotContain("switch:repair", _harness.Calls);
         Assert.Equal(["activation-1"], await _harness.ServingAsync());
 
         Assert.Equal(WorkflowActivationOutcome.Deactivated, (await _harness.DeactivateAsync(slot.Revision)).Outcome);
@@ -491,14 +538,16 @@ public sealed class WorkflowActivationCoordinatorTests
     }
 
     [Fact]
-    public async Task Completion_reports_a_serving_activation_already_active()
+    public async Task Ensuring_a_serving_activation_serves_reports_it_already_active_and_writes_nothing()
     {
         await _harness.ActivateAsync("activation-1", "artifact-1");
+        _harness.ResetCalls();
 
-        var completion = await _harness.Coordinator.CompleteAsync("definition-1", "default");
+        var ensured = await _harness.Coordinator.EnsureServingAsync("definition-1", "default");
 
-        Assert.Equal(WorkflowActivationOutcome.AlreadyActive, completion.Outcome);
-        Assert.Null(completion.ReplacedActivationId);
+        Assert.Equal(WorkflowActivationOutcome.AlreadyActive, ensured.Outcome);
+        Assert.Null(ensured.ReplacedActivationId);
+        Assert.DoesNotContain(_harness.Calls, call => call.StartsWith("switch:", StringComparison.Ordinal));
     }
 
     private sealed class Harness
@@ -654,7 +703,7 @@ public sealed class WorkflowActivationCoordinatorTests
     }
 
     /// <summary>The in-memory switch, recording each operation and failing or cancelling where a test asks.</summary>
-    private sealed class RecordingSwitch(IWorkflowActivationSwitch inner, List<string> calls) : IWorkflowActivationSwitch
+    private sealed class RecordingSwitch(IWorkflowActivationSwitch inner, List<string> calls) : ForwardingActivationSwitch(inner)
     {
         public Exception? ThrowOnActivate { get; set; }
         public Exception? ThrowAfterActivate { get; set; }
@@ -665,13 +714,13 @@ public sealed class WorkflowActivationCoordinatorTests
         public CancellationTokenSource? CancelBeforeDeactivate { get; set; }
         public CancellationTokenSource? CancelAfterDeactivate { get; set; }
 
-        public async ValueTask<WorkflowActivationTransition> TryActivateAsync(WorkflowActivationSlotRequest request, CancellationToken cancellationToken = default)
+        public override async ValueTask<WorkflowActivationTransition> TryActivateAsync(WorkflowActivationSlotRequest request, CancellationToken cancellationToken = default)
         {
             calls.Add("switch:activate");
             if (Take(ThrowOnActivate, value => ThrowOnActivate = value) is { } failure)
                 throw failure;
             Cancel(CancelBeforeActivate, value => CancelBeforeActivate = value, cancellationToken);
-            var transition = await inner.TryActivateAsync(request, cancellationToken);
+            var transition = await base.TryActivateAsync(request, cancellationToken);
             if (Take(ThrowAfterActivate, value => ThrowAfterActivate = value) is { } committedFailure)
                 throw committedFailure;
             if (Take(CancelAfterActivate, value => CancelAfterActivate = value) is { } cancellation)
@@ -679,27 +728,33 @@ public sealed class WorkflowActivationCoordinatorTests
             return transition;
         }
 
-        public ValueTask<bool> TryRevertAsync(WorkflowActivationRevert revert, CancellationToken cancellationToken = default)
+        public override ValueTask<bool> TryRevertAsync(WorkflowActivationRevert revert, CancellationToken cancellationToken = default)
         {
             calls.Add("switch:revert");
-            return RefuseRevert ? ValueTask.FromResult(false) : inner.TryRevertAsync(revert, cancellationToken);
+            return RefuseRevert ? ValueTask.FromResult(false) : base.TryRevertAsync(revert, cancellationToken);
         }
 
-        public async ValueTask<WorkflowActivationTransition> TryDeactivateAsync(WorkflowDeactivationSlotRequest request, IReadOnlyCollection<string> alsoServing, CancellationToken cancellationToken = default)
+        public override async ValueTask<WorkflowActivationTransition> TryDeactivateAsync(WorkflowDeactivationSlotRequest request, IReadOnlyCollection<string> alsoServing, CancellationToken cancellationToken = default)
         {
             calls.Add("switch:deactivate");
             if (Take(ThrowOnDeactivate, value => ThrowOnDeactivate = value) is { } failure)
                 throw failure;
             Cancel(CancelBeforeDeactivate, value => CancelBeforeDeactivate = value, cancellationToken);
-            var transition = await inner.TryDeactivateAsync(request, alsoServing, cancellationToken);
+            var transition = await base.TryDeactivateAsync(request, alsoServing, cancellationToken);
             Cancel(CancelAfterDeactivate, value => CancelAfterDeactivate = value, cancellationToken);
             return transition;
         }
 
-        public ValueTask<bool> TryDiscardAsync(WorkflowExecutableSourceReference reference, CancellationToken cancellationToken = default)
+        public override ValueTask<bool> TryDiscardAsync(WorkflowExecutableSourceReference reference, CancellationToken cancellationToken = default)
         {
             calls.Add("switch:discard");
-            return inner.TryDiscardAsync(reference, cancellationToken);
+            return base.TryDiscardAsync(reference, cancellationToken);
+        }
+
+        public override ValueTask<bool> TryRepairAsync(WorkflowActivationSlot slot, IReadOnlyCollection<string> alsoServing, CancellationToken cancellationToken = default)
+        {
+            calls.Add("switch:repair");
+            return base.TryRepairAsync(slot, alsoServing, cancellationToken);
         }
 
         private static T? Take<T>(T? value, Action<T?> clear) where T : class

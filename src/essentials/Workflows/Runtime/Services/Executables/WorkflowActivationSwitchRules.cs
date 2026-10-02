@@ -10,6 +10,13 @@ namespace Elsa.Workflows.Runtime.Services.Executables;
 /// </summary>
 public static class WorkflowActivationSwitchRules
 {
+    /// <summary>
+    /// How many times a switch reads again after a concurrent writer moved what it read, before it fails with "changed
+    /// concurrently" having committed nothing: the EF switch's transactions and the in-memory switch's reference
+    /// compare-and-swaps alike.
+    /// </summary>
+    public const int MaximumAttempts = 16;
+
     /// <summary>The activation a successful transition switched off: the one it replaced, unless that is the one it names.</summary>
     public static string? ReplacedActivation(WorkflowActivationTransition transition) =>
         transition is { Succeeded: true, ReplacedActivationId: { } replaced } &&
@@ -47,7 +54,6 @@ public static class WorkflowActivationSwitchRules
     /// </summary>
     public static WorkflowExecutableSourceReference? ResumeFailed(WorkflowExecutableSourceReference current, string activationId) =>
         Restore(current, activationId, WorkflowActivationCoordinator.FailedRetireReason);
-
     private static WorkflowExecutableSourceReference? Restore(WorkflowExecutableSourceReference current, string activationId, string retiredFor) =>
         current.DeletedAt is not null &&
         StringComparer.Ordinal.Equals(current.DeletedReason, retiredFor) &&

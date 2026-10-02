@@ -64,7 +64,8 @@ public interface IWorkflowTriggerBindingStore
     /// <summary>
     /// Lists, in ordinal order, the activations with at least one active binding minted for <paramref name="slotId"/>,
     /// whatever their source references say. Deactivation reads it to turn off every activation that serves a slot,
-    /// including one whose reference is retired, expired or gone (#2193). An activation with no bindings serves nothing
+    /// including one whose reference is retired, expired or gone (#2193), and so does the repair of a slot left half done
+    /// (<see cref="IWorkflowActivationSwitch.TryRepairAsync"/>). An activation with no bindings serves nothing
     /// through this store and is not listed.
     /// </summary>
     ValueTask<IReadOnlyCollection<string>> ListServingActivationIdsAsync(

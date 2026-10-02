@@ -8,16 +8,15 @@ namespace Elsa.Workflows.Publishing.Services;
 
 /// <summary>
 /// At shell start, brings the publication journal of every slot publishing owns into line with the slot (#2223): a
-/// process that stopped after the runtime's switch left the slot's publication serving but a candidate, and the one it
+/// process that stopped after the runtime's commit left the slot's publication serving but a candidate, and the one it
 /// replaced active.
 /// </summary>
 /// <remarks>
 /// <para>
 /// A workflow published from the designer is published again only when someone does, so without this pass its journal
 /// would stay behind until then. The pass visits every occupied slot (<see cref="OccupiedActivationSlots"/>) and calls
-/// <see cref="IPublicationActivator.CompleteAsync"/> for each one publishing owns, which checks with the runtime that the
-/// slot's activation serves first. The runtime has nothing to complete itself, because the slot and its projections
-/// switch in one commit (#2230). Failures are logged and never stop the shell from starting.
+/// <see cref="IPublicationActivator.CompleteAsync"/> for each one publishing owns, which first makes sure through the
+/// runtime that the slot's activation serves. Failures are logged and never stop the shell from starting.
 /// </para>
 /// <para>
 /// <b>Ordered after the startup reconcilers</b> (<c>[Order(5)]</c>): the design-side reconcilers and export (orders 1 to

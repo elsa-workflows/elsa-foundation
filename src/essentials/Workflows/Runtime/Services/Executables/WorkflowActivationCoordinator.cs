@@ -7,17 +7,9 @@ namespace Elsa.Workflows.Runtime.Services.Executables;
 
 /// <summary>
 /// Owns the runtime activation lifecycle: source-reference minting, projection preparation, the slot switch, observer
-/// notification, and compensation. The slot transition, the projection switch and the replaced activation's reference
-/// retirement are one commit of the <see cref="IWorkflowActivationSwitch"/> (#2230), so nothing is ever left half done;
-/// a call that stops short of its own switch discards its activation unless that activation serves, because a call that
-/// shares its activation id switched it on with the slot (#2251; <c>WorkflowActivationCoordinator.SameActivation.cs</c>).
+/// notification, and compensation. Every slot move is one commit of <see cref="IWorkflowActivationSwitch"/>, which
+/// describes what each step leaves behind.
 /// </summary>
-/// <remarks>
-/// Once a call's switch commits, the activation stands: a cancellation or a process that stops after it leaves it
-/// activated. Only a trigger observer's failure, which fails the activation by contract, reverts it, and only through
-/// <see cref="IWorkflowActivationSwitch.TryRevertAsync"/>, which undoes this call's own transition and nothing a later
-/// writer made.
-/// </remarks>
 public sealed partial class WorkflowActivationCoordinator(
     IWorkflowActivationAuthority authority,
     IWorkflowActivationSwitch activationSwitch,
@@ -59,10 +51,10 @@ public sealed partial class WorkflowActivationCoordinator(
         GuardComposition(definitionId, command.SlotName, command.ActivationId);
 
         // A same-artifact request is answered from the slot, and a replacement replaces its activation, only once that
-        // activation serves; a slot that a version before #2230 left half done is reported instead.
+        // activation serves; a slot that a version before #2230 left half done is repaired or reported first.
         if (await authority.FindAsync(definitionId, command.SlotName, cancellationToken) is { ActiveActivationId: not null } occupied)
         {
-            var (current, unserved) = await VerifyServingAsync(occupied, cancellationToken);
+            var (current, unserved) = await CheckServingAsync(occupied, cancellationToken);
             if (unserved is not null)
                 return unserved;
             if (TryResolveSameArtifactNoOp(command, await FindLiveReferenceAsync(current, cancellationToken), current) is { } noOp)
@@ -203,11 +195,7 @@ public sealed partial class WorkflowActivationCoordinator(
         return serving;
     }
 
-    /// <summary>
-    /// Since #2230 there is nothing to complete: the slot transition and the projection switch are one commit. This reports
-    /// whether the activation the slot names serves, and fails loudly for a slot that a version before #2230 left half done.
-    /// </summary>
-    public async ValueTask<WorkflowActivationResult> CompleteAsync(
+    public async ValueTask<WorkflowActivationResult> EnsureServingAsync(
         string workflowDefinitionId,
         string slotName,
         CancellationToken cancellationToken = default)
@@ -220,7 +208,7 @@ public sealed partial class WorkflowActivationCoordinator(
             return new(true, WorkflowActivationOutcome.AlreadyInactive, slot ?? EmptySlot(workflowDefinitionId, slotName));
 
         GuardComposition(workflowDefinitionId, slotName, activationId);
-        var (current, unserved) = await VerifyServingAsync(slot, cancellationToken);
+        var (current, unserved) = await CheckServingAsync(slot, cancellationToken);
         return unserved ?? new(
             true,
             current.ActiveActivationId is null ? WorkflowActivationOutcome.AlreadyInactive : WorkflowActivationOutcome.AlreadyActive,
@@ -228,53 +216,72 @@ public sealed partial class WorkflowActivationCoordinator(
     }
 
     /// <summary>
-    /// Checks that the activation <paramref name="slot"/> names serves through every projection store. A switch commits a
-    /// slot transition with its projection switch (#2230), so it does, unless a version before #2230 stopped between the
-    /// two. The slot is read again when the activation does not serve: a slot that moved meanwhile was moved by a switch
-    /// that made its new activation serve, and is answered as it now stands.
+    /// Checks that the activation <paramref name="slot"/> names serves through every projection store, which a switch's
+    /// commit guarantees unless a version before #2230 stopped between the slot transition and the projection switch. Such
+    /// a slot is repaired when its activation is prepared, and has never served, in every store
+    /// (<see cref="IWorkflowActivationSwitch.TryRepairAsync"/>), and reported otherwise. The slot is read again when the
+    /// activation does not serve: a slot that moved meanwhile was moved by a switch that made its new activation serve, and
+    /// is answered as it now stands. A repair another call made first is read as serving.
     /// </summary>
     /// <returns>The slot as it now stands, and the failure to report when its activation does not serve or that could not be read.</returns>
-    private async ValueTask<(WorkflowActivationSlot Slot, WorkflowActivationResult? Unserved)> VerifyServingAsync(
+    private async ValueTask<(WorkflowActivationSlot Slot, WorkflowActivationResult? Unserved)> CheckServingAsync(
         WorkflowActivationSlot slot,
         CancellationToken cancellationToken)
     {
+        var activationId = slot.ActiveActivationId!;
         try
         {
-            if (await ServesAsync(slot.ActiveActivationId!, cancellationToken))
-                return (slot, null);
-            var current = await authority.FindAsync(slot.WorkflowDefinitionId, slot.SlotName, cancellationToken) ?? EmptySlot(slot.WorkflowDefinitionId, slot.SlotName);
-            return (current, current.Revision == slot.Revision ? LeftHalfDone(current) : null);
+            for (var repairs = 0; ; repairs++)
+            {
+                if (await InEveryStoreAsync(activationId, WorkflowActivationProjectionState.Active, cancellationToken))
+                    return (slot, null);
+                var current = await authority.FindAsync(slot.WorkflowDefinitionId, slot.SlotName, cancellationToken) ?? EmptySlot(slot.WorkflowDefinitionId, slot.SlotName);
+                if (current.Revision != slot.Revision)
+                    return (current, null);
+                if (repairs > 0 || !await InEveryStoreAsync(activationId, WorkflowActivationProjectionState.Prepared, cancellationToken))
+                    return (current, LeftHalfDone(current));
+
+                var others = await ListOtherServingActivationsAsync(current.SlotId, activationId, cancellationToken);
+                if (!await activationSwitch.TryRepairAsync(current, others, cancellationToken))
+                    continue;
+                logger?.LogWarning(
+                    "Activation {ActivationId} of definition {DefinitionId} slot {SlotName} was named by the slot but did not serve, because a version before #2230 stopped between its slot transition and its projection switch. It now serves, and activations {ReplacedActivationIds}, which served in its place, are switched off and retired",
+                    activationId,
+                    current.WorkflowDefinitionId,
+                    current.SlotName,
+                    others);
+                return (current, null);
+            }
         }
         catch (Exception exception) when (NotRequestedCancellation(exception, cancellationToken))
         {
             logger?.LogError(
                 exception,
-                "Whether activation {ActivationId} of definition {DefinitionId} slot {SlotName} serves could not be read",
-                slot.ActiveActivationId,
+                "Whether activation {ActivationId} of definition {DefinitionId} slot {SlotName} serves could not be checked or repaired",
+                activationId,
                 slot.WorkflowDefinitionId,
                 slot.SlotName);
-            return (slot, HalfDoneFailure(slot, $"whether it serves could not be read: {SafeMessage(exception)}"));
+            return (slot, HalfDoneFailure(slot, $"whether it serves could not be checked or repaired: {SafeMessage(exception)}"));
         }
     }
 
-    private async ValueTask<bool> ServesAsync(string activationId, CancellationToken cancellationToken) =>
-        await triggerBindingStore!.FindActivationStateAsync(activationId, cancellationToken) == WorkflowActivationProjectionState.Active &&
-        (recurringScheduleStore is null ||
-         await recurringScheduleStore.FindActivationStateAsync(activationId, cancellationToken) == WorkflowActivationProjectionState.Active);
+    private async ValueTask<bool> InEveryStoreAsync(string activationId, WorkflowActivationProjectionState state, CancellationToken cancellationToken) =>
+        await triggerBindingStore!.FindActivationStateAsync(activationId, cancellationToken) == state &&
+        (recurringScheduleStore is null || await recurringScheduleStore.FindActivationStateAsync(activationId, cancellationToken) == state);
 
     /// <summary>
-    /// The slot names an activation that does not serve. Only a version before #2230, which committed the slot transition
-    /// before the projection switch, could leave it so; nothing is built on it, and an operator clears it by deactivating
+    /// The slot names an activation that does not serve and cannot be repaired in place: a version before #2230 left it
+    /// so, and its projections are no longer all prepared. Nothing is built on it; an operator clears it by deactivating
     /// (unpublishing) the slot, which turns every activation that serves it off, then activating again.
     /// </summary>
     private WorkflowActivationResult LeftHalfDone(WorkflowActivationSlot slot)
     {
         logger?.LogError(
-            "Activation {ActivationId} of definition {DefinitionId} slot {SlotName} is named by the slot but does not serve: a version before #2230 switched the slot and its projections separately and stopped between them. Unpublish the slot, which turns every activation serving it off, then publish again",
+            "Activation {ActivationId} of definition {DefinitionId} slot {SlotName} is named by the slot but does not serve, and cannot be repaired in place: a version before #2230 switched the slot and its projections separately and stopped between them, and its projections are no longer all prepared. Unpublish the slot, which turns every activation serving it off, then publish again",
             slot.ActiveActivationId,
             slot.WorkflowDefinitionId,
             slot.SlotName);
-        return HalfDoneFailure(slot, "it does not serve, because a version before #2230 stopped between its slot transition and its projection switch; unpublish the slot to turn every activation serving it off, then publish again.");
+        return HalfDoneFailure(slot, "it does not serve and cannot be repaired in place, because a version before #2230 stopped between its slot transition and its projection switch and its projections are no longer all prepared; unpublish the slot to turn every activation serving it off, then publish again.");
     }
 
     private static WorkflowActivationResult HalfDoneFailure(WorkflowActivationSlot slot, string reason) => new(

@@ -154,6 +154,14 @@ public sealed class EfWorkflowActivationAuthority(
         }, scope, rowId);
     }
 
+    /// <summary>The slot as it stands, read in the caller's unit of work, or <see langword="null"/> when it was never written.</summary>
+    internal async ValueTask<WorkflowActivationSlot?> StageFindAsync(string workflowDefinitionId, string slotName, CancellationToken cancellationToken)
+    {
+        var scope = RequireScope();
+        var (row, current) = await ReadForWriteAsync(scope, RowId(scope, workflowDefinitionId, slotName), workflowDefinitionId, slotName, default, cancellationToken);
+        return row is null ? null : current;
+    }
+
     /// <summary>The context every staged transition writes through; a switch commits only stores that share it.</summary>
     internal RuntimeDbContext Context => context;
 

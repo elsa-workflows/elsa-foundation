@@ -1,3 +1,5 @@
+using Elsa.Workflows.Runtime.Core.Models;
+
 namespace Elsa.Workflows.Runtime.Services.Triggers;
 
 /// <summary>
@@ -9,7 +11,8 @@ internal interface IInMemoryActivationProjection
 {
     object SyncRoot { get; }
 
-    bool Serves(string activationId);
+    /// <summary>Where the activation's projection stands in the store.</summary>
+    WorkflowActivationProjectionState State(string activationId);
 
     /// <summary>Throws as the store's <c>ActivateAsync</c> would refuse the switch, and changes nothing.</summary>
     void CheckSwitch(string activationId, string? replacedActivationId);

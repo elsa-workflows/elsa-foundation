@@ -1,6 +1,7 @@
 using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Services.Executables;
 using static Elsa.Workflows.Runtime.Services.Executables.WorkflowActivationSwitchRules;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
@@ -17,8 +18,8 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 /// and decides again on what it reads. A discard that read an activation as prepared therefore cannot delete it once a
 /// switch has made it serve, and a switch cannot switch on a projection a discard has deleted. A projection state that
 /// moved while it was read is read again too (<see cref="ProjectionStaging.Moved"/>). Lost writes, unique-key races and
-/// deadlocks are retried within <see cref="EfWriteRetry.DefaultMaxAttempts"/> attempts; then the operation fails with
-/// "changed concurrently", having committed nothing.
+/// deadlocks are retried within <see cref="WorkflowActivationSwitchRules.MaximumAttempts"/> attempts; then the operation
+/// fails with "changed concurrently", having committed nothing.
 /// </para>
 /// <para>
 /// It is composed only over the EF slot authority and EF projection and reference stores that share its context, which
@@ -28,7 +29,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 public sealed class EfWorkflowActivationSwitch : IWorkflowActivationSwitch
 {
     private static readonly EfWriteRetry Commits = new(
-        EfWriteRetry.DefaultMaxAttempts,
+        MaximumAttempts,
         exception => EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.Concurrency | EfWriteConflict.UniqueKey | EfWriteConflict.Transient));
 
     private readonly RuntimeDbContext _context;
@@ -151,6 +152,44 @@ public sealed class EfWorkflowActivationSwitch : IWorkflowActivationSwitch
             },
             cancellationToken);
     }
+
+    public ValueTask<bool> TryRepairAsync(
+        WorkflowActivationSlot slot,
+        IReadOnlyCollection<string> alsoServing,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(slot);
+        ArgumentNullException.ThrowIfNull(alsoServing);
+        var activationId = slot.ActiveActivationId ?? throw new ArgumentException("Only a slot that names an activation can be repaired.", nameof(slot));
+        var others = alsoServing.Where(other => !StringComparer.Ordinal.Equals(other, activationId)).Distinct(StringComparer.Ordinal).ToArray();
+        return RunAsync(
+            $"Repair of activation '{activationId}' of definition '{slot.WorkflowDefinitionId}' slot '{slot.SlotName}'",
+            async scope =>
+            {
+                // The slot row is read, not written: every operation that moves the slot off this activation writes its
+                // projection state, which this repair writes too, so the two serialize on that state's revision.
+                if (await _authority.StageFindAsync(slot.WorkflowDefinitionId, slot.SlotName, cancellationToken) is not { } stands ||
+                    stands.Revision != slot.Revision ||
+                    !StringComparer.Ordinal.Equals(stands.ActiveActivationId, activationId) ||
+                    !await PreparedEverywhereAsync(scope, activationId, cancellationToken))
+                    return Step.Discard(false);
+                if (await StageSwitchAsync(scope, activationId, null, deleteReplaced: false, cancellationToken))
+                    return Step.Moved<bool>();
+                foreach (var other in others)
+                    if (await StageDeletionAsync(scope, other, unlessServing: false, cancellationToken) == ProjectionStaging.Moved)
+                        return Step.Moved<bool>();
+                var now = _timeProvider.GetUtcNow();
+                await _references.StageMoveAsync(WorkflowActivationReferenceIdentity.Create(activationId), current => ResumeFailed(current, activationId), cancellationToken);
+                foreach (var other in others)
+                    await _references.StageMoveAsync(WorkflowActivationReferenceIdentity.Create(other), current => RetireReplaced(current, now), cancellationToken);
+                return Step.Commit(true);
+            },
+            cancellationToken);
+    }
+
+    private async ValueTask<bool> PreparedEverywhereAsync(string scope, string activationId, CancellationToken cancellationToken) =>
+        await _bindings.StageStateAsync(scope, activationId, cancellationToken) == WorkflowActivationProjectionState.Prepared &&
+        (_schedules is null || await _schedules.StageStateAsync(scope, activationId, cancellationToken) == WorkflowActivationProjectionState.Prepared);
 
     /// <summary>Stages a projection switch in both stores; whether a state moved while it was read.</summary>
     private async ValueTask<bool> StageSwitchAsync(string scope, string activationId, string? replacedActivationId, bool deleteReplaced, CancellationToken cancellationToken) =>

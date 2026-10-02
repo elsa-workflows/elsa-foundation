@@ -3,23 +3,42 @@ using Elsa.Workflows.Runtime.Core.Models;
 namespace Elsa.Workflows.Runtime.Core.Contracts;
 
 /// <summary>
-/// Moves an activation slot and switches its serving projections in one commit (#2230): the slot, the trigger bindings
-/// and recurring schedules of the activations it names, and their source references never disagree, whoever reads them
-/// and wherever a process stops.
+/// Moves an activation slot and switches its serving projections in one commit (#2230). This is where the activation
+/// commit is described; the coordinator, the stores and Publishing refer here.
 /// </summary>
 /// <remarks>
 /// <para>
-/// The property every operation keeps: the activation a slot names serves through every projection store, and no other
-/// activation minted for that slot does. An operation is one commit. It writes nothing when the slot is not where the
-/// caller expects it, and nothing when a projection cannot be switched, so a refusal or a failure leaves everything as
-/// it was, and a process that stops after it leaves everything as it committed.
+/// <b>Invariant.</b> The activation a slot names serves through every projection store, no other activation of that slot
+/// serves, the activation it replaced has a retired source reference, and no activation serves with a retired reference.
+/// Every operation keeps it by being one commit. It writes nothing when the slot is not where its caller expects it, or
+/// when a projection cannot be switched, so a refusal or a failure leaves everything as it was, and a process that stops
+/// after it leaves everything as it committed.
 /// </para>
 /// <para>
-/// One backend owns every store an operation writes, so a switch is composed with the slot authority and the projection
-/// stores of that backend and refuses any other: <c>EfWorkflowActivationSwitch</c> commits them in one
-/// <c>RuntimeDbContext</c> transaction, and <c>InMemoryWorkflowActivationSwitch</c> holds the in-memory stores' locks
-/// together. There is no switch for a mixed composition, such as EF slots beside in-memory projections, because nothing
-/// could commit them together.
+/// <b>Mechanism.</b> <c>EfWorkflowActivationSwitch</c> makes each operation one transaction of the shared
+/// <c>RuntimeDbContext</c>, in which every row it writes carries its revision as a concurrency token, so two operations
+/// that write one slot or one activation's projection serialize: the one that commits second reads everything again.
+/// <c>InMemoryWorkflowActivationSwitch</c> holds the slot authority's lock and each projection store's together.
+/// </para>
+/// <para>
+/// <b>Cancellation.</b> The commit is the point of no return. A cancelled operation that has not committed changes
+/// nothing; one cancelled as it commits may have committed, so its caller reads what it did rather than assume either;
+/// and a commit stands whatever its caller observes afterwards.
+/// </para>
+/// <para>
+/// <b>Revert and discard.</b> Nothing infers which transition is whose. Only the caller that made a transition reverts it,
+/// and only while the slot still stands where it left it (<see cref="TryRevertAsync"/>). A caller that stopped short of its
+/// own switch discards its activation (<see cref="TryDiscardAsync"/>), which is refused while the activation serves: calls
+/// that share an activation id, such as two nodes reconciling one mounted set, share its source reference and projections,
+/// and the one whose switch committed owns them (#2251). A discard that commits first leaves a concurrent switch of the
+/// same activation nothing to switch on, so that switch fails loudly and leaves the slot as it was, unless its caller
+/// prepared again after the discard; a discard that would commit after the switch is refused, and its caller answers as
+/// the slot stands. Neither leaves the slot naming an activation that serves nothing, and neither hands a slot back.
+/// </para>
+/// <para>
+/// <b>Composition.</b> One backend owns every store an operation writes, so a switch is composed with the slot authority
+/// and the projection stores of its backend and refuses any other when it is constructed. Shell start constructs it once
+/// and fails on that refusal, so a mixed composition, such as EF slots beside in-memory projections, never starts.
 /// </para>
 /// <para>
 /// Only <see cref="IWorkflowActivationCoordinator"/> calls it. The slot authority's own transitions and the projection
@@ -32,7 +51,7 @@ public interface IWorkflowActivationSwitch
     /// Moves the slot to <paramref name="request"/>'s activation by compare-and-swap, and in the same commit switches that
     /// activation's prepared projections on, switches the projections of the activation the slot named off, and retires
     /// that activation's source reference as replaced. The activation's own reference is made live again if a call sharing
-    /// its activation id discarded it as failed meanwhile, so an activation never serves with a retired reference.
+    /// its activation id discarded it as failed meanwhile.
     /// </summary>
     /// <returns>
     /// The transition, naming the activation it replaced; or a refusal, which changed nothing, when the slot is not at the
@@ -72,4 +91,23 @@ public interface IWorkflowActivationSwitch
     /// <param name="reference">The activation's source reference as its caller minted or resumed it; a reference with another identity is not retired.</param>
     /// <returns><see langword="false"/>, having changed nothing, when the activation serves.</returns>
     ValueTask<bool> TryDiscardAsync(WorkflowExecutableSourceReference reference, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Repairs the one state a version before #2230 could leave a slot in, by committing the slot transition before the
+    /// projection switch and stopping between them: the slot names an activation whose projection is prepared, and has
+    /// never served, in every projection store. In one commit it switches that activation's projections on, deletes the
+    /// projections of each of <paramref name="alsoServing"/> and retires their references as replaced, and makes the
+    /// activation's own reference live again if it was retired as failed. The slot itself is not written: it already says
+    /// what serves, so a caller's expected revision stays valid.
+    /// </summary>
+    /// <param name="slot">The slot as its caller read it; the repair is made only while the slot still stands so.</param>
+    /// <param name="alsoServing">The other activations a projection store lists as serving the slot.</param>
+    /// <returns>
+    /// <see langword="false"/>, having changed nothing, when the slot has moved since <paramref name="slot"/> was read, or
+    /// the activation it names is not prepared and never served in every projection store.
+    /// </returns>
+    ValueTask<bool> TryRepairAsync(
+        WorkflowActivationSlot slot,
+        IReadOnlyCollection<string> alsoServing,
+        CancellationToken cancellationToken = default);
 }

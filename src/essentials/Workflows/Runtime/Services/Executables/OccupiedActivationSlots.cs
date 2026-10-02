@@ -9,10 +9,9 @@ namespace Elsa.Workflows.Runtime.Services.Executables;
 /// </summary>
 /// <remarks>
 /// An activation always has a live Published source reference, minted before its switch, so these are all the slots an
-/// activation can occupy. The runtime has nothing to complete in them, because a slot and its projections switch in one
-/// commit (#2230); a feature that keeps its own record of activations outside that commit, such as Publishing's journal
-/// (#2223), sweeps them to bring that record into line with a process that stopped after the switch. A failure never stops
-/// the sweep or the shell from starting: the caller is told, and logs it in its own words.
+/// activation can occupy. A feature that keeps its own record of activations outside the runtime's commit
+/// (<see cref="IWorkflowActivationSwitch"/>), such as Publishing's journal (#2223), sweeps them to bring that record into
+/// line. A failure never stops the sweep or the shell from starting: the caller is told, and logs it in its own words.
 /// </remarks>
 public sealed class OccupiedActivationSlots(
     IWorkflowExecutableSourceReferenceStore sourceReferenceStore,

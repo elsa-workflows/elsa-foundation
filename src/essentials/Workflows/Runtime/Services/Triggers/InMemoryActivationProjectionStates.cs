@@ -29,12 +29,12 @@ public sealed class InMemoryActivationProjectionStates
 
     /// <summary>
     /// Switches <paramref name="activationId"/> on and <paramref name="replacedActivationId"/> off, with the rules of the
-    /// projection stores' <c>ActivateAsync</c> (<see cref="CheckActivation"/>).
+    /// projection stores' <c>ActivateAsync</c> (<see cref="NeedsSwitch"/>).
     /// </summary>
     /// <returns><see langword="true"/> when the store must switch its rows.</returns>
     public bool Activate(string activationId, string? replacedActivationId, string projection)
     {
-        if (!CheckActivation(activationId, replacedActivationId, projection))
+        if (!NeedsSwitch(activationId, replacedActivationId, projection))
             return false;
 
         _active.Add(activationId);
@@ -45,12 +45,14 @@ public sealed class InMemoryActivationProjectionStates
     }
 
     /// <summary>
-    /// Refuses a switch the projection stores refuse, and changes nothing. The candidate is checked first: once it serves
-    /// and its replaced activation does not, the switch is made. A candidate that does not serve yet may not replace an
-    /// activation that no longer serves, and a candidate that serves beside its replaced activation is refused too.
+    /// Whether the switch is still to be made, refusing one the projection stores refuse; changes nothing. The candidate is
+    /// checked first: once it serves and its replaced activation does not, the switch is made. A candidate that does not
+    /// serve yet may not replace an activation that no longer serves, and a candidate that serves beside its replaced
+    /// activation is refused too.
     /// </summary>
     /// <returns><see langword="true"/> when the switch is still to be made; <see langword="false"/> when it is made.</returns>
-    public bool CheckActivation(string activationId, string? replacedActivationId, string projection)
+    /// <exception cref="InvalidOperationException">The stores refuse the switch.</exception>
+    public bool NeedsSwitch(string activationId, string? replacedActivationId, string projection)
     {
         var candidate = Find(activationId);
         if (candidate == WorkflowActivationProjectionState.Missing)
@@ -75,8 +77,6 @@ public sealed class InMemoryActivationProjectionStates
         _active.Remove(activationId);
         _replaced.Remove(activationId);
     }
-
-    public bool Serves(string activationId) => Find(activationId) == WorkflowActivationProjectionState.Active;
 
     public WorkflowActivationProjectionState Find(string activationId) =>
         !_prepared.Contains(activationId) ? WorkflowActivationProjectionState.Missing

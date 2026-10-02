@@ -12,6 +12,7 @@ using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Publishing.Core.Requests;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 using Elsa.Workflows.Runtime.Services.Executables;
 using Elsa.Workflows.Runtime.Services.Triggers;
 using Microsoft.AspNetCore.Http;
@@ -215,11 +216,6 @@ public sealed class PublicationProblemCodeEndpointTests : IAsyncLifetime
             ValueTask.FromResult(new ExpressionDraftValidationResult(ExpressionDraftValidationState.Valid, []));
     }
 
-    /// <summary>
-    /// Wraps the real in-memory activation authority so the first <see cref="TryDeactivateAsync"/> call for one
-    /// target slot loses a revision race to a distractor publish from the same owner, simulating a concurrent
-    /// publish that moved the slot between the unpublish handler's own read and its CAS.
-    /// </summary>
     /// <summary>Moves the slot on, once, just before the deactivation's own switch, as a publish on another node would.</summary>
     private sealed class RevisionRacingActivationSwitch(
         IWorkflowActivationSwitch inner,

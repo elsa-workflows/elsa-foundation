@@ -20,4 +20,9 @@
     <ProjectReference Include="..\..\..\Testing\Elsa.Testing.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- #2230: the base of every activation-switch double, shared rather than copied. -->
+    <Compile Include="..\Persistence\EntityFrameworkCore\Tests\ForwardingActivationSwitch.cs" Link="ForwardingActivationSwitch.cs" />
+  </ItemGroup>
+
 </Project>
