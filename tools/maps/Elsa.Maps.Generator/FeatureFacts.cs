@@ -32,14 +32,22 @@ public static partial class FeatureScanner
     [GeneratedRegex(@"^\s*public\s+(?<type>.+)\s+(?<name>[A-Za-z0-9_]+)\s*\{\s*get;\s*set;\s*\}", RegexOptions.Compiled)]
     private static partial Regex AutoPropertyPattern { get; }
 
-    /// <summary>The whitespace-insensitive signal probes the shell version applied to each feature file.</summary>
-    private static readonly (string Label, Regex Pattern)[] OptionSignalProbes =
+    /// <summary>
+    /// The whitespace-insensitive signal probes applied to each feature file. A probe reads the whole file text unless
+    /// it is marked <c>OptionNamesOnly</c>, in which case it reads only the names of the file's public option properties.
+    /// </summary>
+    /// <remarks>
+    /// The sensitive-value probe is restricted to option names because its words are common in code that configures
+    /// nothing: <c>ActivitySecretInputResolver</c>, <c>TryAddKeyedSingleton</c> and <c>CancellationToken</c> all matched
+    /// it over the whole file, and flagged features that expose no sensitive option (#2328).
+    /// </remarks>
+    private static readonly (string Label, Regex Pattern, bool OptionNamesOnly)[] OptionSignalProbes =
     [
-        ("code default", BuildProbe(@"Path\.GetTempPath|DefaultConnectionString|TimeSpan\.From|=\s*true|=\s*false|=\s*100|=\s*string\.Empty")),
-        ("filesystem path signal", BuildProbe("FolderPath|Directory|FilePath|LocalCacheDirectory|LocksFolderPath")),
-        ("sensitive or deployment-specific value signal", BuildProbe("ConnectionString|Secret|Password|Token|Key")),
-        ("type-name selection signal", BuildProbe(@"Type\s*\{|TypeName|Type\s*=|GetLoadedType")),
-        ("validation/requiredness guard in code", BuildProbe("FeatureConfigurationException|requires exactly one|requires a non-empty|must specify|not configured"))
+        ("code default", BuildProbe(@"Path\.GetTempPath|DefaultConnectionString|TimeSpan\.From|=\s*true|=\s*false|=\s*100|=\s*string\.Empty"), false),
+        ("filesystem path signal", BuildProbe("FolderPath|Directory|FilePath|LocalCacheDirectory|LocksFolderPath"), false),
+        ("sensitive or deployment-specific value signal", BuildProbe("ConnectionString|Secret|Password|Token|Key"), true),
+        ("type-name selection signal", BuildProbe(@"Type\s*\{|TypeName|Type\s*=|GetLoadedType"), false),
+        ("validation/requiredness guard in code", BuildProbe("FeatureConfigurationException|requires exactly one|requires a non-empty|must specify|not configured"), false)
     ];
 
     private static Regex BuildProbe(string pattern) => new(pattern, RegexOptions.IgnoreCase | RegexOptions.Compiled);
@@ -66,8 +74,12 @@ public static partial class FeatureScanner
         if (owner is null) yield break;
 
         var lines = text.Split('\n');
-        var properties = ReadProperties(lines);
-        var signals = ReadOptionSignals(text);
+        var options = ReadOptions(lines);
+        var properties = options.Select(option => $"{option.Name}: {option.Type}")
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        var signals = ReadOptionSignals(text, options.Select(option => option.Name));
 
         // [ShellFeature(...)] may wrap across lines, so accumulate its argument text until the closing ")]".
         var attribute = string.Empty;
@@ -136,18 +148,21 @@ public static partial class FeatureScanner
         return positional.Success ? positional.Groups["id"].Value : "-";
     }
 
-    private static IReadOnlyList<string> ReadProperties(IEnumerable<string> lines) =>
+    /// <summary>The public settable auto-properties declared in the file: the options a shell can configure.</summary>
+    private static IReadOnlyList<(string Name, string Type)> ReadOptions(IEnumerable<string> lines) =>
         lines.Select(line => AutoPropertyPattern.Match(line.TrimEnd('\r')))
             .Where(match => match.Success)
-            .Select(match => $"{match.Groups["name"].Value}: {match.Groups["type"].Value.TrimEnd()}")
-            .Distinct(StringComparer.Ordinal)
-            .Order(StringComparer.Ordinal)
+            .Select(match => (match.Groups["name"].Value, match.Groups["type"].Value.TrimEnd()))
             .ToArray();
 
-    private static IReadOnlyList<string> ReadOptionSignals(string text)
+    private static IReadOnlyList<string> ReadOptionSignals(string text, IEnumerable<string> optionNames)
     {
         var flattened = text.Replace('\n', ' ');
-        return OptionSignalProbes.Where(probe => probe.Pattern.IsMatch(flattened)).Select(probe => probe.Label).ToArray();
-    }
+        var names = string.Join(' ', optionNames);
 
+        return OptionSignalProbes
+            .Where(probe => probe.Pattern.IsMatch(probe.OptionNamesOnly ? names : flattened))
+            .Select(probe => probe.Label)
+            .ToArray();
+    }
 }

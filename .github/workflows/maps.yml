@@ -76,6 +76,9 @@ jobs:
       - name: Exercise project facts contract
         run: dotnet run --project tools/maps/Elsa.Maps.Generator -c Release --no-build -- project-facts-self-test
 
+      - name: Exercise feature facts contract
+        run: dotnet run --project tools/maps/Elsa.Maps.Generator -c Release --no-build -- feature-facts-self-test
+
       - name: Explain how to refresh
         if: failure()
         run: |
