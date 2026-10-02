@@ -151,3 +151,23 @@ Review-fix gate commands and actual terminal results:
 Root reviewed the integrated production/test diff, approved contract, decisive mutation logs and independent source findings. Diff whitespace is clean; generated maps remain byte-identical and need no refresh. There is no new dependency, package-version, test-project, provider-suite or CI change in this review patch. The repository ledger routes reply/resolution status to each linked GitHub thread after fix publication; those public threads and the issue gate record are authoritative for subsequent exact-head review/check convergence.
 
 Before review-fix publication, main advanced to `df02ece3c68cc80b486de86d914e12633c583f71` through package-upgrade PR2316. It changes Workbench package observers, activity type registration, and EF shell preparation, and adds peer-owned sample/source/test projects. The review-fix local gate above is on c331 plus the patch, not a combined-df02 gate. Root inspected that overlap; normal integration and affected host/map/architecture revalidation are required before publishing the final combined head.
+
+### Final combined-df02 local gate
+
+The ordinary integration commit `a110a031f949d9714a17f484439b51aad2ff80bf` includes review-fix `af6e71144` and main `df02ece3c68cc80b486de86d914e12633c583f71`. All merge conflicts were generated maps; `all` regenerated them from combined source. Root reviewed findings (141 source projects,139 test projects,107 features, no package-version multiplicity) and explicitly staged every changed map/manifest plus findings. The extra sample test project is peer-owned PR2316; this adapter adds no suite/cadence. Release and isolated Debug graph restore passed for288 projects without lock drift. Logs: `/tmp/runtime-2308-review1-main-map-refresh.log` and `/tmp/runtime-2308-review1-main-restore.log`.
+
+Because main changed activity registration, EF shell preparation and Workbench package observers, root rebuilt the focused controls/actual actor and re-ran retained Workbench plus architecture against this combined source. Terminal receipts: `/tmp/runtime-2308-review1-main-gate-receipts.json`; logs `/tmp/runtime-2308-review1-main-<gate>.log`.
+
+| Gate | Actual result |
+|---|---|
+| focused | Passed!  - Failed:     0, Passed:   107, Skipped:     0, Total:   107, Duration: 1 s - Elsa.Foundation.Identity.Tests.dll (net10.0) |
+| identity | Passed!  - Failed:     0, Passed:   446, Skipped:     0, Total:   446, Duration: 43 s - Elsa.Foundation.Identity.Tests.dll (net10.0) |
+| actor | Passed!  - Failed:     0, Passed:     2, Skipped:     0, Total:     2, Duration: 30 s - Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll (net10.0) |
+| workbench | Passed!  - Failed:     0, Passed:    39, Skipped:     0, Total:    39, Duration: 5 m 37 s - Elsa.Workbench.Tests.dll (net10.0) |
+| architecture | Passed!  - Failed:     0, Passed:   635, Skipped:     0, Total:   635, Duration: 1 m 14 s - Elsa.Architecture.Tests.dll (net10.0) |
+| maps | Exit0; freshness confirmed |
+| filters | Exit0; freshness confirmed |
+
+Every executed test result has zero failures/skips. Workbench took5m37 and architecture1m14 of test execution under shared-machine load; elapsed receipts include queued build-slot time. The21-file OIDC/Identity/actor projection remains `31f1de71307e538faf7368652874717d3a0c974d8938c02a43359ea65b4cc7ef`; this does not substitute for the actual combined-source host tests above. Root reviewed merged source, owned patch, independent findings and diff whitespace. Subsequent evidence-only commit does not alter tested production/test source.
+
+The fix publication head still requires actual exact-head Copilot review/CI, direct replies and resolution of every handled comment, and normal merge followed by resulting-main source/package/workflow proof. Those live outcomes are recorded on PR2315 and issue2308, not inferred from older green heads or this local gate. T027/T028 and Worker profile/program publication remain open.
