@@ -303,6 +303,51 @@ public sealed class CandidateInspectionTests
     }
 
     [Fact]
+    public async Task Explicit_environment_input_accepts_an_aliased_installed_host_parent_through_the_public_command()
+    {
+        if (OperatingSystem.IsWindows())
+            return;
+        using var fixture = new CandidateInspectionFixture();
+        await PrepareWorkbenchAcceptedAsync(fixture);
+        var environmentPath = fixture.WriteEnvironmentInput(
+            ("UnrelatedBlank", ""),
+            ("Elsa__Persistence__DefaultResource", CandidateInspectionFixture.OverlayEnvironmentResource),
+            ("ConnectionStrings__OverlayConnection", CandidateInspectionFixture.PrivateEnvironmentCanary));
+
+        var installedHostParent = Path.GetDirectoryName(fixture.WorkbenchHostDirectory)!;
+        var aliasedParent = Path.Join(fixture.InputDirectory, "installed-host-parent-alias");
+        var aliasedHostDirectory = Path.Join(aliasedParent, Path.GetFileName(fixture.WorkbenchHostDirectory));
+        Directory.CreateSymbolicLink(aliasedParent, installedHostParent);
+        try
+        {
+            // The installed host parent is aliased, its host leaf remains a regular directory, and the
+            // captured Workbench source stays in fixture.SourceDirectory as a separate regular directory.
+            var run = DotnetElsa.Run(fixture.SentinelEnvironment, fixture.InspectionArguments(
+                "json", hostDirectory: aliasedHostDirectory, environmentInputPath: environmentPath));
+
+            AssertExpectedExit(run, ToolExitCode.Success, "aliased Workbench environment inspection");
+            AssertWorkbenchResolution(run.Output, externalInputs: "supplied-intended",
+                expectedResource: CandidateInspectionFixture.OverlayEnvironmentResource,
+                expectedConnection: CandidateInspectionFixture.OverlayEnvironmentConnection);
+            Assert.DoesNotContain(CandidateInspectionFixture.PrivateEnvironmentCanary, run.Text, StringComparison.Ordinal);
+            Assert.DoesNotContain(environmentPath, run.Text, StringComparison.Ordinal);
+            Assert.DoesNotContain(fixture.DatabasePath, run.Text, StringComparison.Ordinal);
+            Assert.DoesNotContain(fixture.ContextMarkerPath, run.Text, StringComparison.Ordinal);
+            Assert.DoesNotContain(fixture.ActionMarkerPath, run.Text, StringComparison.Ordinal);
+            Assert.False(File.Exists(fixture.DatabasePath));
+            Assert.False(File.Exists(fixture.ContextMarkerPath));
+            Assert.False(File.Exists(fixture.ActionMarkerPath));
+            Assert.False(Directory.Exists(fixture.CandidateOutputDirectory));
+            fixture.AssertSourcesUnchanged();
+            fixture.AssertInputsUnchanged();
+        }
+        finally
+        {
+            Directory.Delete(aliasedParent);
+        }
+    }
+
+    [Fact]
     public async Task Actual_workbench_environment_child_refuses_private_file_drift_before_final_render()
     {
         if (OperatingSystem.IsWindows())
