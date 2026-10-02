@@ -2,8 +2,10 @@
 
 **Feature Branch**: `143-expression-code-intelligence`
 **Created**: 2026-07-28
-**Status**: Implemented
+**Status**: Implemented baseline; active Program #2310 extension approved 2026-10-02
 **Input**: Provide a safe, language-neutral, design-time-only Foundation contract that lets Studio give JavaScript and Liquid expressions contextual code intelligence and semantic diagnostics, without evaluating user code or exposing runtime values.
+
+**Program continuation**: Foundation Program #2310 retains every baseline contract and extends the providers with real-host persisted-workflow proof, runtime-compatible JavaScript grammar/API metadata, effective Liquid filter/tag metadata, richer known-shape help and diagnostics, and installed-text-syntax conformance. Studio presentation remains owned by Studio spec `094-expression-code-intelligence`.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -108,6 +110,14 @@ A Studio or other authorized client discovers the additive expression-tooling ca
 - **FR-020**: Diagnostics MUST have stable code, severity, source range/path, document revision, and sanitized message/documentation fields; source text, source prefixes, values, and symbol names MUST NOT enter telemetry.
 - **FR-021**: Existing expression descriptor APIs and editing behavior MUST remain compatible for clients that do not discover the new capability.
 - **FR-022**: The implementation MUST add conformance tests for provider routing, cancellation, outcome states, authorization/host-policy filtering, revision staleness, JavaScript/Liquid behavior, and full-draft operation gates.
+- **FR-023**: A normal Foundation host MUST prove capability discovery, persisted location-scoped context, completion, hover and validation for JavaScript and Liquid through the real composed endpoint path rather than only injected endpoint fixtures.
+- **FR-024**: Foundation JavaScript tooling metadata and diagnostics MUST describe only the expression grammar and globals available to the configured runtime; browser, DOM, Node, TypeScript, JSX and statement-only capabilities MUST remain absent unless the runtime explicitly adds them. Studio spec 094 owns local parser acceptance and editor suggestions against this runtime boundary.
+- **FR-025**: Liquid tooling MUST derive filters and tags from the same effective binding-pure profile used by runtime evaluation rather than from an unrelated default parser/catalog instance.
+- **FR-026**: Liquid assistance MUST distinguish interpolation, filter, tag and plain-template cursor contexts while remaining metadata-only and non-evaluating.
+- **FR-027**: Provider diagnostics MAY reject a member, callable or argument only when the supplied context/catalog proves it invalid; unknown dynamic shapes MUST not be converted into false errors.
+- **FR-028**: Provider descriptors MUST let clients distinguish a composed supported text syntax from missing, unauthorized, incompatible and supported-empty tooling without changing reference or structured Expression Types.
+- **FR-029**: JavaScript and Liquid signatures MUST preserve overload, parameter, return-shape and concise documentation metadata needed by clients to present active-parameter help.
+- **FR-030**: Conformance tests MUST prove independently composed providers, effective runtime metadata, stale/canceled responses, permission filtering and the absence of expression evaluation or runtime-value access.
 
 ### Key Entities
 
@@ -128,6 +138,10 @@ A Studio or other authorized client discovers the additive expression-tooling ca
 - **SC-005**: 100% of JavaScript and Liquid provider conformance cases return language-specific results or an explicit non-success outcome; none silently fall back to generic text semantics.
 - **SC-006**: 100% of full-draft gate tests prove invalid expressions block test run and publication, while an unavailable validator warns-and-confirms for test run and fails closed for publication.
 - **SC-007**: Existing descriptor-list and ordinary draft-editing tests remain green for hosts and clients that do not compose expression tooling.
+- **SC-008**: A rebuilt normal-host test passes the complete persisted-draft capability-discovery, context, completion, hover and validation lifecycle for both JavaScript and Liquid with real workflow inputs, variables and activity outputs.
+- **SC-009**: Foundation JavaScript provider conformance cases advertise zero tested runtime-unsupported grammar constructs or browser/Node globals; coordinated Studio spec 094 cases prove the local editor consumes the same boundary.
+- **SC-010**: Liquid conformance cases advertise zero filters or tags that the same runtime profile cannot execute and omit every runtime-disabled capability.
+- **SC-011**: Known-shape diagnostic tests report all seeded provable mistakes and zero seeded unknown-dynamic-shape false positives.
 
 ## Assumptions
 

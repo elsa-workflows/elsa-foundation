@@ -1,0 +1,51 @@
+# Decision log: Studio expression developer experience
+
+## 2026-10-02 — Retain the existing editor and module boundaries
+
+**Decision:** Keep CodeMirror behind Studio's engine-neutral editor contract. Workflows continues to own authoring scope; each Expression Module owns syntax and language projection; Foundation providers own runtime-compatible metadata and authoritative diagnostics.
+
+**Rationale:** The baseline already implements the required extension points and session model. Current gaps are composition, runtime parity, assistance depth and presentation, not a missing editor engine.
+
+**Consequences:** Improvements extend Studio spec 094, Foundation spec 143 and ADRs 0002/0006. Monaco replacement is out of scope.
+
+**Revisit:** Only if a future accepted requirement cannot reasonably be delivered behind the current editor contract.
+
+## 2026-10-02 — Treat normal-host proof as the first milestone
+
+**Decision:** Verify one real persisted workflow through rebuilt matching Studio and Foundation hosts before deepening language services.
+
+**Rationale:** Studio #546 fixed a real discovery defect that component fixtures could not expose. Producer and consumer correctness must be proven together.
+
+**Consequences:** Historical fixture results remain useful regression evidence but do not close milestone 1.
+
+**Revisit:** No planned revisit.
+
+## 2026-10-02 — Make installed text-syntax readiness explicit
+
+**Decision:** Resolve runtime Expression Type, Studio editor Contribution and Foundation tooling provider as separate capabilities and show exact degraded states. Specialized non-text editors remain distinct.
+
+**Rationale:** Installation of one layer does not prove the other layers are present or compatible.
+
+**Consequences:** Conformance covers independent composition, missing adapters/providers, permissions and version incompatibility.
+
+**Revisit:** When a new text Expression Type adopts the contract.
+
+## 2026-10-02 — Runtime profiles own language metadata
+
+**Decision:** JavaScript grammar/globals and Liquid filters/tags come from immutable metadata owned by their runtime modules. Authoring never receives runtime values or evaluation contexts.
+
+**Rationale:** The editor must not advertise syntax or callable capabilities the same host cannot execute.
+
+**Consequences:** Default Fluid catalogs and broad browser-side JavaScript grammar are insufficient authorities.
+
+**Revisit:** When a runtime profile deliberately expands its supported syntax or extensions.
+
+## 2026-10-02 — Defer deeper JavaScript language-service adoption
+
+**Decision:** Merge baseline local completions and align runtime grammar now. Evaluate a worker-based deeper service in a bounded spike before adopting a dependency.
+
+**Rationale:** The spike can test inference quality, runtime declaration control, load cost and accessibility without blocking baseline proof.
+
+**Consequences:** Milestone 3 may adopt or reject the service based on evidence; either outcome must still meet the product acceptance criteria.
+
+**Revisit:** Before milestone 3 implementation begins.

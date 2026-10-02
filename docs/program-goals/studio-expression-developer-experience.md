@@ -27,6 +27,10 @@ The incoming lead progressively elaborates these milestones into one cross-repos
 
 ## Canonical surfaces
 
+- [Product requirements](studio-expression-developer-experience/prd.md).
+- [Decision log](studio-expression-developer-experience/decision-log.md).
+- [Repository responsibility map](studio-expression-developer-experience/repository-responsibility-map.md).
+- [Executable milestone validation](studio-expression-developer-experience/milestone-validation.md).
 - [Assessment and staged delivery plan](../reports/studio-expression-editing/assessment.md).
 - [Independent source-audit findings](../reports/studio-expression-editing/source-audit.md).
 - [Fresh-session implementation handoff](../reports/studio-expression-editing/implementation-handoff.md).
@@ -41,3 +45,7 @@ The user approved the complete assessment plan and requested a fresh implementat
 The initial browser evidence is fixture evidence only. Full persisted-workflow integration remains unverified; the local backend stopped during the assessment. Revalidate current refs, composition and service availability before implementation and before claiming a gate.
 
 Complete only after real Studio/backend user journeys demonstrate every scoped milestone, applicable review/build/test/architecture/map gates pass, and the issue/project records contain the actual evidence. Do not substitute closed issue counts, synthetic fixtures or historical results for this outcome. Route any justified scope change through the program issue and owner decision where material.
+
+## Readiness checkpoint — 2026-10-02
+
+The requirements-interrogation gate passes for milestone 1. The product outcome, actors, repository boundaries, security posture, compatibility constraints, acceptance journey and validation strategy are fixed by the approved assessment, Studio ADRs 0002/0006, Studio spec 094 and Foundation spec 143. Discovery found no competing implementation. Studio #546 and #545 are merged prerequisites, not work to duplicate. The deeper JavaScript language-service technology remains safely deferred behind a bounded spike before milestone 3 because baseline integration, grammar conformance and local/runtime completion merging do not depend on it.
