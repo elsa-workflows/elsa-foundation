@@ -75,9 +75,9 @@ internal static class ActivityExecutionInspection
                 {
                     ValuePresence.Present when value.InlineValue.HasValue => SerializeCapturedValue(decision, value.InlineValue.Value, input.Name, type),
                     ValuePresence.ExplicitNull => SerializeCapturedValue(decision, null, input.Name, type),
-                    // Runs on the invoke and resume paths before activation, so it must render a withheld input
-                    // without throwing and without resolving it: the marker and reference stand in for the value.
-                    ValuePresence.Withheld => null,
+                    // Includes Withheld: this runs on the invoke and resume paths before activation, so it must render
+                    // a withheld input without throwing and without resolving it: the marker and reference stand in
+                    // for the value.
                     _ => null
                 };
                 return ActivityExecutionInspectionValueSnapshot.FromDecision(

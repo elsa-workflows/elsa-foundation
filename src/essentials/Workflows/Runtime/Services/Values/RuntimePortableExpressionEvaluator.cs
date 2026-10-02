@@ -5,6 +5,7 @@ using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Services.Values;
@@ -62,8 +63,13 @@ internal sealed class RuntimePortableExpressionEvaluator(
         var referencedAmbient = ExposesAmbientVariables(expression, resolutionContext)
             ? ResolveReferencedAmbientVariables(expression.Expression, resolutionContext.VisibleVariablesByName)
             : EmptyAmbientVariables;
-        foreach (var envelope in referencedAmbient.Values)
+        foreach (var (name, envelope) in referencedAmbient)
         {
+            // The engine needs the variable's value, and a withheld value is not here to hand it. Refused before the
+            // evaluation wrapper below, which would redact the fixed code away for a sensitive value.
+            if (envelope.Presence == ValuePresence.Withheld)
+                throw SecretBindingDiagnostics.WithheldInputNotResolved(name);
+
             effectivePolicy = ValuePolicyCombiner.Combine(
                 effectivePolicy,
                 envelope.Policy,
@@ -217,7 +223,8 @@ internal sealed class RuntimePortableExpressionEvaluator(
     /// Materializes the persistable value of each referenced ambient variable into the name → value snapshot the
     /// isolated engine exposes. Transient (non-durable) variables cannot cross the expression boundary and are
     /// omitted; an absent variable is omitted (it reads as <c>undefined</c>); an explicit null becomes JSON null.
-    /// An externally stored value is dereferenced when a payload reader is available, otherwise omitted.
+    /// An externally stored value is dereferenced when a payload reader is available, otherwise omitted. A withheld
+    /// variable never reaches here: <see cref="EvaluateAsync"/> refuses it first.
     /// </summary>
     private async ValueTask<IReadOnlyDictionary<string, JsonElement>> MaterializeAmbientVariableValuesAsync(
         IReadOnlyDictionary<string, ValueEnvelope> referencedVariables,

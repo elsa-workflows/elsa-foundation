@@ -127,8 +127,8 @@ public sealed class ActivityTemplatePlacementTests
             new Dictionary<string, RuntimeOutputCapture>())).AsTask());
 
         Assert.Equal(
-            Elsa.Workflows.Runtime.Core.Exceptions.SecretBindingDiagnostics.SecretBindingRefused(
-                "sequence", "condition", "activity consumer 'sequence' does not resolve inputs when the activity runs").Message,
+            Elsa.Workflows.Runtime.Core.Exceptions.SecretBindingDiagnostics.NonClrConsumerRefused(
+                "sequence", "condition", "sequence").Message,
             exception.Message);
     }
 

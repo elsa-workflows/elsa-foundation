@@ -4,6 +4,7 @@ using Elsa.Expressions.Core.Contracts;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.WorkHandlers;
 
@@ -610,6 +611,9 @@ public sealed class WorkflowIntrinsicExecutor(
             ?? throw new InvalidOperationException($"Intrinsic '{intrinsicState.Execution.ExecutableNodeId}' resolved '{binding.InputName}' without its source value envelope.");
         if (source.Presence == ValuePresence.Absent)
             throw new InvalidOperationException($"Intrinsic '{intrinsicState.Execution.ExecutableNodeId}' cannot materialize an absent value.");
+        // An intrinsic writes the value itself into workflow state, and a withheld value is not here to write.
+        if (source.Presence == ValuePresence.Withheld)
+            throw SecretBindingDiagnostics.WithheldInputNotResolved(binding.InputName);
         if (source.Policy.Lifecycle == DurableValueLifecycle.None)
             throw new InvalidOperationException($"Intrinsic '{intrinsicState.Execution.ExecutableNodeId}' cannot persist transient source '{binding.InputName}'.");
         var combinedPolicy = ValuePolicyCombiner.Combine(

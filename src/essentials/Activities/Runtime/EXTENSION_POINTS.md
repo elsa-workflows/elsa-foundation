@@ -35,6 +35,12 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Activities.Runtim
 - **Usage:** CLR reconciliation records the activity version as `Trigger`; publish-time compilation also reads the marker from the CLR construction descriptor so legacy catalog rows authored before the marker was persisted still compile into routable trigger nodes.
 - **Related runtime seam:** `IActivityTriggerStimulusProvider` in `Elsa.Workflows.Runtime.Core`; a marked activity must have a provider contributed by its owning feature.
 
+### `RefusesSecretBindingAttribute` *(Core — `Elsa.Activities.Runtime.Core`)*
+- **Kind:** Declaration surface (activity author contract).
+- **Signature:** `[RefusesSecretBinding("InputKey", SecretBindingRefusalReason.PersistedByActivity | FixedAtPublish | EchoedToOutput)]` on an activity class, once per input (`AllowMultiple`, inherited).
+- **Usage:** an activity author must apply it to every input whose value the activity copies into its own persisted state (`PersistedByActivity`), that a publish-time reader needs as a literal (`FixedAtPublish`), or that the activity returns in its result or copies into a fault (`EchoedToOutput`). Publication refuses a secret reference on such an input with `VF-ACT-012`, naming the node, the input and the reason. The marker is read by reflection over the activity's CLR type at publish and is never written into the activity catalog, so adding it changes no catalog hash.
+- **Related runtime seam:** `SecretBindingDiagnostics` in `Elsa.Workflows.Runtime.Core` owns the `VF-ACT-012` message for each `SecretBindingRefusalReason`.
+
 ### `IActivityActivator` *(Activities Runtime — `Elsa.Activities.Runtime`)*
 - **Kind:** Replacement activation boundary.
 - **Signature:** `ActivateAsync(ActivityActivationRequest request, CancellationToken cancellationToken)` returns an async-disposable `ActivityActivationLease`.

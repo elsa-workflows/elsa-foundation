@@ -18,8 +18,9 @@ public static class SecretBindingDiagnostics
     public static InvalidOperationException WithheldInputNotResolved(string inputKey) =>
         new($"{WithheldInputCode}: Activity input '{inputKey}' was withheld and is not resolved in this host.");
 
+    /// <summary>The input is named by the activity's <see cref="RefusesSecretBindingAttribute"/>.</summary>
     public static ArgumentException SecretBindingRefused(string nodeId, string inputKey, SecretBindingRefusalReason reason) =>
-        SecretBindingRefused(nodeId, inputKey, reason switch
+        Refused(nodeId, inputKey, reason switch
         {
             SecretBindingRefusalReason.PersistedByActivity => "the activity copies its value into its own persisted state",
             SecretBindingRefusalReason.FixedAtPublish => "its value is read when the workflow is published",
@@ -27,7 +28,27 @@ public static class SecretBindingDiagnostics
             _ => throw new ArgumentOutOfRangeException(nameof(reason), reason, "Unknown secret binding refusal reason.")
         });
 
-    public static ArgumentException SecretBindingRefused(string nodeId, string inputKey, string reason) =>
+    /// <summary>The node is a workflow intrinsic, which writes its value into a variable or workflow output.</summary>
+    public static ArgumentException IntrinsicInputRefused(string nodeId, string inputKey) =>
+        Refused(nodeId, inputKey, "workflow intrinsics write their values into persisted workflow state");
+
+    /// <summary>The node's activity consumer is not CLR activation, so nothing would resolve the reference.</summary>
+    public static ArgumentException NonClrConsumerRefused(string nodeId, string inputKey, string consumerKey) =>
+        Refused(nodeId, inputKey, $"activity consumer '{consumerKey}' does not resolve inputs when the activity runs");
+
+    /// <summary>The CLR activity type cannot be resolved, so its refusals cannot be read.</summary>
+    public static ArgumentException UnresolvedActivityTypeRefused(string nodeId, string inputKey) =>
+        Refused(nodeId, inputKey, "the activity type is not available to check whether the input accepts one");
+
+    /// <summary>The activity is a checkpoint participant, which reads its inputs outside activation.</summary>
+    public static ArgumentException CheckpointParticipantRefused(string nodeId, string inputKey) =>
+        Refused(nodeId, inputKey, "the activity reads its inputs into checkpoint state outside activation");
+
+    /// <summary>The input is the activity's value-outcomes input, which derives its outcome ports at publish.</summary>
+    public static ArgumentException ValueOutcomesInputRefused(string nodeId, string inputKey) =>
+        Refused(nodeId, inputKey, "its value derives the activity's outcome ports at publish");
+
+    private static ArgumentException Refused(string nodeId, string inputKey, string reason) =>
         new($"{SecretBindingRefusedCode}: Activity node '{nodeId}' input '{inputKey}' cannot take a secret reference: {reason}.");
 
     public static ArgumentException VariableDefaultRefused(string nodeId, string variableKey) =>

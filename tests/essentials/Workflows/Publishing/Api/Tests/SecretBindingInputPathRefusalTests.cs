@@ -94,7 +94,7 @@ public sealed class SecretBindingInputPathRefusalTests
             [typeof(SendHttpRequest)]);
 
         Assert.Equal(
-            SecretBindingDiagnostics.SecretBindingRefused(NodeId, nameof(SendHttpRequest.ExpectedStatusCodes), "its value derives the activity's outcome ports at publish").Message,
+            SecretBindingDiagnostics.ValueOutcomesInputRefused(NodeId, nameof(SendHttpRequest.ExpectedStatusCodes)).Message,
             exception.Message);
     }
 

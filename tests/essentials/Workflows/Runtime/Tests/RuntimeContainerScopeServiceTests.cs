@@ -3,6 +3,7 @@ using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.ActivityExecutions;
 using Elsa.Workflows.Runtime.Services.Executions;
@@ -235,6 +236,25 @@ public sealed class RuntimeContainerScopeServiceTests
         // Root, iteration, and container are all visible; the shadowed name resolves to the innermost (container) value.
         Assert.Equal("apple", envelopes["item"].InlineValue!.Value.GetString());
         Assert.Equal("container-value", envelopes["Shadowed"].InlineValue!.Value.GetString());
+    }
+
+    [Fact]
+    public void The_visible_value_view_refuses_a_withheld_variable_with_the_fixed_code()
+    {
+        var withheld = ValueEnvelope.Withheld(
+            StringType,
+            WithheldValue.SecretReference(new RuntimeSecretReference("payments.api-key"), conversionPlan: null),
+            ValueProtectionPolicy.InstanceInline);
+        var root = new VariableFrameFactory().CreateRoot(
+            WorkflowExecutionId,
+            "workflow",
+            new Dictionary<string, ValueEnvelope> { ["g"] = withheld });
+
+        var exception = Assert.Throws<InvalidOperationException>(() => Service().ProjectVisibleVariables(
+            Executable(DeclNode("root", []), Declaration("g", "Token")),
+            new RuntimeVisibleVariableFrames([root])));
+
+        Assert.Equal(SecretBindingDiagnostics.WithheldInputNotResolved("Token").Message, exception.Message);
     }
 
     [Fact]

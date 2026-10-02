@@ -11,6 +11,7 @@ namespace Elsa.Activities.Testing;
 /// Shared arrangements and assertions for the secret binding refusals (spec 188, slice 2): a compiled secret read as
 /// a hand-built or imported artifact would carry it, and the declarations and backstops that must refuse it.
 /// </summary>
+// Twin: SecretBindingCompilerFixture in Elsa.Workflows.Publishing.Api.Tests, which does not reference this project.
 public static class SecretBindingTestSupport
 {
     /// <summary>A compiled secret read on <paramref name="inputKey"/>, as it reaches a reader that skips publication.</summary>

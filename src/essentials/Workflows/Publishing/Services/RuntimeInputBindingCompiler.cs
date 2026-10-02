@@ -37,8 +37,8 @@ public sealed class RuntimeInputBindingCompiler(
     private const string ReferenceKeyMetadataKey = "referenceKey";
 
     /// <summary>
-    /// The authored expression type of a secret reference. It duplicates the Secrets module's
-    /// <c>SecretExpressionTypes.Secret</c> on purpose, so publishing takes no dependency on Secrets; a test pins the two.
+    /// The authored expression type of a secret reference. It duplicates the Secrets module's expression type name
+    /// on purpose, so this project needs no reference to that module.
     /// </summary>
     public const string SecretExpressionType = "Secret";
 
@@ -295,31 +295,18 @@ public sealed class RuntimeInputBindingCompiler(
     {
         ArgumentNullException.ThrowIfNull(descriptor);
         ArgumentNullException.ThrowIfNull(inputStates);
-        var secretInputKeys = inputStates
-            .Where(state => IsSecretBinding(state.Value))
-            .Select(state => state.ReferenceKey)
-            .Order(StringComparer.Ordinal)
-            .ToArray();
+        var secretInputKeys = SecretInputKeys(inputStates);
         if (secretInputKeys.Length == 0)
             return;
 
         var firstKey = secretInputKeys[0];
         if (!StringComparer.Ordinal.Equals(descriptor.ConsumerKey, WellKnownRuntimeActivityConsumers.ClrActivity))
-            throw SecretBindingDiagnostics.SecretBindingRefused(
-                nodeId,
-                firstKey,
-                $"activity consumer '{descriptor.ConsumerKey}' does not resolve inputs when the activity runs");
+            throw SecretBindingDiagnostics.NonClrConsumerRefused(nodeId, firstKey, descriptor.ConsumerKey);
 
         var activityType = ClrActivityTypeResolver.Resolve(wellKnownTypeRegistry, descriptor)
-            ?? throw SecretBindingDiagnostics.SecretBindingRefused(
-                nodeId,
-                firstKey,
-                "the activity type is not available to check whether the input accepts one");
+            ?? throw SecretBindingDiagnostics.UnresolvedActivityTypeRefused(nodeId, firstKey);
         if (typeof(IRuntimeActivityCheckpointParticipant).IsAssignableFrom(activityType))
-            throw SecretBindingDiagnostics.SecretBindingRefused(
-                nodeId,
-                firstKey,
-                "the activity reads its inputs into checkpoint state outside activation");
+            throw SecretBindingDiagnostics.CheckpointParticipantRefused(nodeId, firstKey);
 
         var refusals = activityType.GetCustomAttributes<RefusesSecretBindingAttribute>(inherit: true)
             .GroupBy(attribute => attribute.InputKey, StringComparer.Ordinal)
@@ -330,9 +317,20 @@ public sealed class RuntimeInputBindingCompiler(
             if (refusals.TryGetValue(inputKey, out var reason))
                 throw SecretBindingDiagnostics.SecretBindingRefused(nodeId, inputKey, reason);
             if (StringComparer.Ordinal.Equals(inputKey, valueOutcomesInputKey))
-                throw SecretBindingDiagnostics.SecretBindingRefused(nodeId, inputKey, "its value derives the activity's outcome ports at publish");
+                throw SecretBindingDiagnostics.ValueOutcomesInputRefused(nodeId, inputKey);
         }
     }
+
+    /// <summary>
+    /// The keys of the inputs bound to a secret reference, in ordinal order, so a refusal names the same input
+    /// whatever order the inputs were authored in.
+    /// </summary>
+    public static string[] SecretInputKeys(IEnumerable<ArgumentState> inputStates) =>
+        inputStates
+            .Where(state => IsSecretBinding(state.Value))
+            .Select(state => state.ReferenceKey)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
 
     /// <summary>
     /// Compiles a secret reference into a <see cref="RuntimeInputBindingSource.SecretRead"/> binding. Nothing is

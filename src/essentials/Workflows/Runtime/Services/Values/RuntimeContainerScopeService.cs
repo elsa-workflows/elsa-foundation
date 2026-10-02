@@ -1,5 +1,6 @@
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Services.Values;
@@ -236,7 +237,7 @@ public sealed class RuntimeContainerScopeService(
         return declarations.Select(item => new RuntimeScopedVariableValue(
                 item.Value.Name,
                 item.Key,
-                frame.Values.TryGetValue(item.Key, out var value) ? Materialize(value) : null))
+                frame.Values.TryGetValue(item.Key, out var value) ? Materialize(item.Value.Name, value) : null))
             .ToArray();
     }
 
@@ -254,7 +255,7 @@ public sealed class RuntimeContainerScopeService(
         // Frames run root → innermost, so a later (inner) write of a shadowed name overwrites the outer one:
         // innermost scope wins.
         foreach (var (name, envelope) in EnumerateVisibleVariables(executable, visibleFrames.Frames, lenient: false))
-            result[name] = Materialize(envelope);
+            result[name] = Materialize(name, envelope);
         return result;
     }
 
@@ -367,10 +368,12 @@ public sealed class RuntimeContainerScopeService(
         return ProjectVisibleVariableEnvelopes(executable, visible);
     }
 
-    private static object? Materialize(ValueEnvelope envelope) => envelope.Presence switch
+    private static object? Materialize(string name, ValueEnvelope envelope) => envelope.Presence switch
     {
         ValuePresence.Absent or ValuePresence.ExplicitNull => null,
         ValuePresence.Present when envelope.InlineValue is { } inline => inline.Clone(),
+        // The read view hands out values, and a withheld value is not here to hand out.
+        ValuePresence.Withheld => throw SecretBindingDiagnostics.WithheldInputNotResolved(name),
         _ => envelope.ExternalReference
     };
 

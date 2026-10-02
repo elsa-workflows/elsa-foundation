@@ -216,12 +216,9 @@ public sealed class ExecutableNodeCompiler(
 
         // An intrinsic writes its value straight into a durable variable or workflow output, so a secret resolved
         // there would be persisted.
-        var secretInput = activity.Inputs.FirstOrDefault(input => RuntimeInputBindingCompiler.IsSecretBinding(input.Value));
-        if (secretInput is not null)
-            throw SecretBindingDiagnostics.SecretBindingRefused(
-                activity.NodeId,
-                secretInput.ReferenceKey,
-                "workflow intrinsics write their values into persisted workflow state");
+        var secretInputKey = RuntimeInputBindingCompiler.SecretInputKeys(activity.Inputs).FirstOrDefault();
+        if (secretInputKey is not null)
+            throw SecretBindingDiagnostics.IntrinsicInputRefused(activity.NodeId, secretInputKey);
 
         var bindings = inputTypes.ToDictionary(
             input => input.Key,

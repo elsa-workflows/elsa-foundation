@@ -29,7 +29,7 @@ public sealed class RuntimeStartActivityStateTests : IDisposable
     private readonly InMemoryDurableValueStateStore _durableValueStateStore = new();
     private readonly InMemoryWorkflowExecutionStateStore _workflowStateStore = new();
     private readonly ServiceProvider _serviceProvider = new ServiceCollection()
-        .AddScoped<IRuntimeActivityInputMaterializer>(_ => new RuntimeActivityInputMaterializer(new RuntimeInputBindingResolver()))
+        .AddScoped<IRuntimeActivityInputMaterializer>(_ => new RuntimeActivityInputMaterializer(new SecretReadRefusingResolver()))
         .BuildServiceProvider();
 
     [Fact]
@@ -457,4 +457,18 @@ public sealed class RuntimeStartActivityStateTests : IDisposable
 
     private static WorkflowExecutableIdentity NewIdentity() =>
         new("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test");
+
+    /// <summary>
+    /// The shipped resolver, except that it throws when asked to resolve a secret read. The binding resolver is
+    /// replaceable, so the materializer must withhold a secret read without consulting it at all.
+    /// </summary>
+    private sealed class SecretReadRefusingResolver : IRuntimeInputBindingResolver
+    {
+        private readonly RuntimeInputBindingResolver _inner = new();
+
+        public RuntimeResolvedInput Resolve(RuntimeInputBinding binding, RuntimeInputBindingResolutionContext context) =>
+            binding.Source == RuntimeInputBindingSource.SecretRead
+                ? throw new InvalidOperationException($"The materializer asked the binding resolver to resolve secret read '{binding.InputName}'.")
+                : _inner.Resolve(binding, context);
+    }
 }

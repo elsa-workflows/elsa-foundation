@@ -8,6 +8,7 @@ using Elsa.Primitives.Models;
 using Elsa.Tasks.Core;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Resolvers;
 using Elsa.Workflows.Runtime.Services.ActivityExecutions;
@@ -191,7 +192,28 @@ public sealed class SetVariableDurabilityExecutionTests
         Assert.Equal("Aborted", completed.Completion!.OutcomeKey);
     }
 
-    private static ExecutableNode NewVariableWriteNode(WorkflowIntrinsicKind intrinsicKind)
+    [Fact]
+    public async Task Set_intrinsic_refuses_a_withheld_value_with_the_fixed_code_and_writes_nothing()
+    {
+        // Publication refuses a secret on an intrinsic, so only an artifact that skipped publication carries one; the
+        // resolver withholds it, and the intrinsic has no value to write.
+        var node = NewVariableWriteNode(WorkflowIntrinsicKind.Set, new RuntimeInputBinding(
+            WorkflowIntrinsicInputKeys.Value,
+            StringType,
+            new ValueProtectionPolicy(DurableValueLifecycle.Instance, DurableValueStorage.Inline, isSensitive: true, requiresEncryption: true),
+            RuntimeInputBindingSource.SecretRead,
+            secret: new RuntimeSecretReference("payments.api-key")));
+        await using var harness = await CreateHarnessAsync(node);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => harness.Handler.HandleAsync(harness.WorkItem).AsTask());
+
+        Assert.Equal(SecretBindingDiagnostics.WithheldInputNotResolved(WorkflowIntrinsicInputKeys.Value).Message, exception.Message);
+        Assert.Empty(harness.CommitStore.ListCommits());
+        var workflow = await harness.WorkflowStore.FindAsync("wfexec-1");
+        Assert.Equal("initial", workflow!.RootVariableFrame!.Values["greeting"].InlineValue!.Value.GetString());
+    }
+
+    private static ExecutableNode NewVariableWriteNode(WorkflowIntrinsicKind intrinsicKind, RuntimeInputBinding? value = null)
     {
         using var descriptor = JsonDocument.Parse("{}" );
         return new ExecutableNode(
@@ -203,7 +225,7 @@ public sealed class SetVariableDurabilityExecutionTests
             descriptor.RootElement,
             new Dictionary<string, RuntimeInputBinding>
             {
-                ["value"] = new(
+                ["value"] = value ?? new(
                     "value",
                     StringType,
                     ValueProtectionPolicy.InstanceInline,

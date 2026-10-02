@@ -49,6 +49,25 @@ public sealed class ValueConversionPlanTests
     }
 
     [Fact]
+    public void A_withheld_value_passes_through_conversion_with_its_marker_intact()
+    {
+        var type = new ValueTypeDescriptor("Int32");
+        var nullableType = new ValueTypeDescriptor("Int32?");
+        var policy = new ValueProtectionPolicy(DurableValueLifecycle.Instance, DurableValueStorage.Inline, isSensitive: true, requiresEncryption: true);
+        var marker = WithheldValue.SecretReference(new RuntimeSecretReference("payments.api-key"), conversionPlan: null);
+
+        var converted = new RuntimeValueConversionExecutor().Convert(
+            ValueEnvelope.Withheld(type, marker, policy),
+            Plan(type, nullableType, ValueRepresentation.TypedValue, ValueConversionOperation.NullableCompatibility));
+
+        Assert.Equal(ValuePresence.Withheld, converted.Presence);
+        Assert.Equal(nullableType, converted.Type);
+        Assert.Equal(policy, converted.Policy);
+        Assert.Same(marker, converted.WithheldValue);
+        Assert.Null(converted.InlineValue);
+    }
+
+    [Fact]
     public void Nullable_compatibility_preserves_an_explicit_null()
     {
         var type = new ValueTypeDescriptor("Int32");

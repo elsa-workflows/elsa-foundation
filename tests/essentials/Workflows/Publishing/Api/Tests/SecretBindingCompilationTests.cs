@@ -154,7 +154,7 @@ public sealed class SecretBindingCompilationTests
         var exception = await AssertRefusedAsync(setNode, [], variables: [variable]);
 
         Assert.Equal(
-            SecretBindingDiagnostics.SecretBindingRefused("set-1", WorkflowIntrinsicInputKeys.Value, "workflow intrinsics write their values into persisted workflow state").Message,
+            SecretBindingDiagnostics.IntrinsicInputRefused("set-1", WorkflowIntrinsicInputKeys.Value).Message,
             exception.Message);
     }
 
@@ -170,7 +170,7 @@ public sealed class SecretBindingCompilationTests
         var exception = await AssertRefusedAsync(new ActivityNode(NodeId, "test.graph", [Secret("Text")], []), [], [graphVersion]);
 
         Assert.Equal(
-            SecretBindingDiagnostics.SecretBindingRefused(NodeId, "Text", $"activity consumer '{WellKnownRuntimeActivityConsumers.GraphActivity}' does not resolve inputs when the activity runs").Message,
+            SecretBindingDiagnostics.NonClrConsumerRefused(NodeId, "Text", WellKnownRuntimeActivityConsumers.GraphActivity).Message,
             exception.Message);
     }
 
@@ -182,8 +182,46 @@ public sealed class SecretBindingCompilationTests
             [typeof(CheckpointParticipantActivity)]);
 
         Assert.Equal(
-            SecretBindingDiagnostics.SecretBindingRefused(NodeId, nameof(CheckpointParticipantActivity.Text), "the activity reads its inputs into checkpoint state outside activation").Message,
+            SecretBindingDiagnostics.CheckpointParticipantRefused(NodeId, nameof(CheckpointParticipantActivity.Text)).Message,
             exception.Message);
+    }
+
+    [Fact]
+    public void A_clr_activity_whose_type_cannot_be_resolved_refuses_a_secret_reference()
+    {
+        // The refusals an activity declares live on its CLR type; with no type to read them from, the input cannot be
+        // shown to accept a secret, so the reference is refused rather than admitted.
+        var descriptor = new RuntimeActivityDescriptor(
+            WellKnownRuntimeActivityConsumers.ClrActivity,
+            RuntimeActivityDescriptor.InitialSchemaVersion,
+            JsonSerializer.SerializeToElement(new ClrActivityDescriptor("Test.Unregistered.Activity")));
+
+        var exception = Assert.Throws<ArgumentException>(() =>
+            _compiler.EnsureSecretBindingsAdmissible("node-1", descriptor, [Secret(InputKey)]));
+
+        Assert.Equal(
+            $"VF-ACT-012: Activity node 'node-1' input '{InputKey}' cannot take a secret reference: the activity type is not available to check whether the input accepts one.",
+            exception.Message);
+    }
+
+    [Fact]
+    public async Task An_intrinsic_refusal_names_the_ordinally_first_secret_input_whatever_the_authored_order()
+    {
+        var setOutput = new ActivityNode(
+            "output-1",
+            "$intrinsic",
+            [
+                new WorkflowArgumentState(WorkflowIntrinsicInputKeys.Value, SecretValue(), null, null, null, null),
+                new WorkflowArgumentState(WorkflowIntrinsicInputKeys.Name, SecretValue(), null, null, null, null)
+            ],
+            [])
+        {
+            Intrinsic = new AuthoredWorkflowIntrinsic(AuthoredWorkflowIntrinsicKind.SetOutput, new TypeReference("String"))
+        };
+
+        var exception = await AssertRefusedAsync(setOutput, []);
+
+        Assert.Equal(SecretBindingDiagnostics.IntrinsicInputRefused("output-1", WorkflowIntrinsicInputKeys.Name).Message, exception.Message);
     }
 
     private static InputDefinition Input(string alias, CollectionKind collectionKind = CollectionKind.Single) =>

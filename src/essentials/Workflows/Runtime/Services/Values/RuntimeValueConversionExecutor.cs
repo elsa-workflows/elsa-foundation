@@ -27,6 +27,11 @@ public sealed class RuntimeValueConversionExecutor(IWellKnownTypeRegistry? wellK
         if (!ValueConversionCompatibility.SameType(source.Type, plan.SourceType))
             throw Reject(plan, $"runtime source contract '{source.Type.Alias} ({source.Type.CollectionKind})' does not match the pinned source contract");
 
+        // A withheld value has nothing to convert here. It passes through with its marker, whose own plan converts
+        // the value once something resolves it.
+        if (source.Presence == ValuePresence.Withheld)
+            return source.Retype(plan.TargetType);
+
         if (source.Presence != ValuePresence.Present)
             return new ValueEnvelope(plan.TargetType, source.Presence, null, null, source.Policy);
 

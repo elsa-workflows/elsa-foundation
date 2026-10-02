@@ -119,7 +119,7 @@ public sealed class DispatchPinSource(
 
     private static string ReadDefinitionId(ExecutableNode node)
     {
-        node.InputBindings.TryGetValue(WorkflowDefinitionIdInput, out var binding);
+        var binding = node.InputBindings.GetValueOrDefault(WorkflowDefinitionIdInput);
         SecretBindingDiagnostics.ThrowIfSecretRead(binding, node.ExecutableNodeId, WorkflowDefinitionIdInput);
         if (binding is null ||
             binding.Source != RuntimeInputBindingSource.Literal ||

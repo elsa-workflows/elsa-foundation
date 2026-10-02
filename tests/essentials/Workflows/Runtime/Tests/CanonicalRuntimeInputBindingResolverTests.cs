@@ -5,6 +5,7 @@ using Elsa.Expressions.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Resolvers;
 using Elsa.Workflows.Runtime.Services.Values;
@@ -337,6 +338,37 @@ public sealed class CanonicalRuntimeInputBindingResolverTests
 
         Assert.Equal("Grace", snapshot.Values["customer-id"].InlineValue!.Value.GetProperty("name").GetString());
         Assert.Equal("parameter", snapshot.Values["customer-id"].InlineValue!.Value.GetProperty("tags")[0].GetString());
+    }
+
+    [Fact]
+    public async Task Materialization_refuses_an_expression_that_reads_a_withheld_ambient_variable()
+    {
+        var binding = new RuntimeInputBinding(
+            "customer-id",
+            StringType,
+            ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.Expression,
+            expression: new RuntimeExpressionBinding("JavaScript", "variables.token"));
+        var withheld = ValueEnvelope.Withheld(
+            StringType,
+            WithheldValue.SecretReference(new RuntimeSecretReference("payments.api-key"), conversionPlan: null),
+            new ValueProtectionPolicy(DurableValueLifecycle.Instance, DurableValueStorage.Inline, isSensitive: true, requiresEncryption: true));
+        var context = new RuntimeInputBindingResolutionContext(
+            "workflow-1",
+            "consumer",
+            visibleVariablesByName: new Dictionary<string, ValueEnvelope> { ["token"] = withheld });
+        var materializer = new RuntimeActivityInputMaterializer(
+            _resolver,
+            new TestTypeRegistry(),
+            new ConstantPortableExpressionEvaluator("read as undefined"));
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => materializer.MaterializeSnapshotAsync(
+            NewConsumerNode(binding),
+            "consumer",
+            context,
+            DateTimeOffset.UnixEpoch).AsTask());
+
+        Assert.Equal(SecretBindingDiagnostics.WithheldInputNotResolved("token").Message, exception.Message);
     }
 
     [Fact]

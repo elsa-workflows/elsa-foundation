@@ -24,6 +24,7 @@ namespace Elsa.Workflows.Publishing.Api.Tests;
 /// are exercised where publication applies them. Activity versions are reflected from CLR activity types the way the
 /// catalog scanner declares them: one input per <c>[ActivityInput]</c>, keyed and typed as the activity declares.
 /// </summary>
+// Twin: SecretBindingTestSupport in Elsa.Activities.Testing, which this project does not reference.
 internal static class SecretBindingCompilerFixture
 {
     public const string NodeId = "secret-node";

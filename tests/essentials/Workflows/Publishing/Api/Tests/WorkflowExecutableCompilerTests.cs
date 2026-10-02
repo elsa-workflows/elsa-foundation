@@ -328,8 +328,8 @@ public sealed class WorkflowExecutableCompilerTests
             () => compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow)).AsTask());
 
         Assert.Equal(
-            Elsa.Workflows.Runtime.Core.Exceptions.SecretBindingDiagnostics.SecretBindingRefused(
-                "use-greet", "value", "activity consumer 'test.boundary' does not resolve inputs when the activity runs").Message,
+            Elsa.Workflows.Runtime.Core.Exceptions.SecretBindingDiagnostics.NonClrConsumerRefused(
+                "use-greet", "value", "test.boundary").Message,
             exception.Message);
     }
 
