@@ -4,6 +4,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Workflows.Runtime.Services.Executables;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Elsa.Persistence.EntityFramework;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
@@ -18,8 +19,14 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjec
 /// <para>
 /// Either every participant is selected or none is: the transition token stays private to the synchronous
 /// composition, and both service descriptors and provider-owned registration snapshots are restored when any
-/// participant rejects the transition. The individual participant extensions remain useful for opt-in, mixed
-/// compositions that do not use the checkpoint writer.
+/// participant rejects the transition.
+/// </para>
+/// <para>
+/// The slot authority, the trigger-binding store and the recurring-schedule store serve slots only through the
+/// activation switch this aggregate composes with them, which commits them together (#2230). Selecting any of them
+/// through its own extension leaves the in-memory switch beside an EF store, a mixed composition that shell start refuses
+/// (<see cref="WorkflowActivationSwitchCompositionValidator"/>); their extensions exist for the aggregate and for tests
+/// of one store. The other participants' extensions compose on their own.
 /// </para>
 /// </remarks>
 public static class RuntimeEntityFrameworkCoreRegistration
@@ -169,7 +176,8 @@ public static class RuntimeEntityFrameworkCoreRegistration
     /// <summary>
     /// The slot authority, both projection stores and the source-reference store are EF over the one shared context by now,
     /// so a slot and its serving projections switch in one transaction of it (#2230). The in-memory switch the Runtime
-    /// composes by default could not commit them, so it is replaced; a switch registered by anyone else is refused.
+    /// composes by default could not commit them, so it is replaced; a switch registered by anyone else is refused. The
+    /// switch stamps retirements with the host's clock, which the Runtime composition root registers too.
     /// </summary>
     private static void UseEntityFrameworkActivationSwitch(IServiceCollection services)
     {
@@ -181,6 +189,7 @@ public static class RuntimeEntityFrameworkCoreRegistration
 
         foreach (var descriptor in switches)
             services.Remove(descriptor);
+        services.TryAddSingleton(TimeProvider.System);
         services.AddScoped<IWorkflowActivationSwitch, EfWorkflowActivationSwitch>();
     }
 }

@@ -15,6 +15,7 @@ using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Events;
 using Elsa.Workflows.Publishing.Core.Services;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Extensions;
 using Elsa.Workflows.Runtime.Services.Executables;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -85,9 +86,7 @@ public class WorkflowsPublishingFeature : IShellFeature
         // Runtime owns activation authority, lifecycle coordination, and serving projections. The runtime core
         // feature normally supplies these services; keep provider-neutral fallbacks here for engine-only
         // compositions that do not mount the complete runtime feature.
-        services.TryAddSingleton<IWorkflowActivationAuthority, InMemoryWorkflowActivationAuthority>();
-        services.TryAddScoped<IWorkflowActivationSwitch, InMemoryWorkflowActivationSwitch>();
-        services.TryAddScoped<IWorkflowActivationCoordinator, WorkflowActivationCoordinator>();
+        services.AddWorkflowActivationDefaults();
         // Publishing operations consume provider-overridable stores. Durable providers register those stores as
         // scoped services, so their aggregators must share the request scope instead of capturing it globally.
         services.TryAddScoped<IPublicationActivator, PublicationActivator>();
