@@ -53,7 +53,7 @@ public sealed class CandidateWorkerOperation
 }
 
 /// <summary>Contains the additive explicit-environment lane without widening legacy candidate refusals.</summary>
-internal sealed class CandidateEnvironmentWorkerOperation
+public sealed class CandidateEnvironmentWorkerOperation
 {
     private readonly Func<CandidateEnvironmentWorkerRequestV2, CancellationToken, Task<WorkerResponse>> runHost;
 

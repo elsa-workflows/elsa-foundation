@@ -447,3 +447,21 @@ configuration-only inspection evidence is separate from real provider/database r
 Workbench actor evidence is macOS-scoped, and injected process failure controls and the actual-child
 final-drift seam are not relabeled as a whole-command cancellation/drift injection or a Windows run.
 The full program and six-real-participant builder evaluation remain incomplete.
+
+## PR #2296 review round 1
+
+Copilot reviewed exact head `83f83c3e9fdea90cb561dca3a07349ae24854de6` and identified one
+valid finding in [the worker operation](https://github.com/elsa-workflows/elsa-foundation/pull/2296#discussion_r4161750129).
+Framework §2.23.3 requires logic-bearing implementations to be public sealed. The new
+`CandidateEnvironmentWorkerOperation` is an operation wrapper, not the reflective host API
+negotiation covered by the existing Worker InternalsVisibleTo exception. Its request, response,
+constructor and operation method were already public. Root changed only the class visibility
+from internal sealed to public sealed; no behavior or protocol changed.
+
+The corrected working tree returned **1,045 executed/passed, zero failed/skipped** in the full
+existing Release CLI project (`runtime-2292-cli-review-visibility.trx`; log:
+`/tmp/runtime-2292-cli-review-visibility.log`) and **634 executed/passed, zero failed/skipped**
+in the full existing Release architecture project (`runtime-2292-architecture-review-visibility.trx`;
+log: `/tmp/runtime-2292-architecture-review-visibility.log`). These are actual local results for
+the visibility correction; older hosted success is not relabeled as proof of a new pushed head.
+T046 remains open pending final review, exact-head hosted checks and resulting-main evidence.
