@@ -36,7 +36,7 @@ What the code does today, which is what this ADR has to work with:
 - **Nuplane is pinned at `0.0.11-preview.94`** (`Directory.Packages.props`). A feed is a directory of `.nupkg`
   files or a remote NuGet V3 index, both declared under `Nuplane:Setup:Feeds`
   ([Elsa.Foundation.Host package feeds](../foundation-host-feeds.md), "The two feed shapes"). The host's shipped
-  `appsettings.json` declares one directory feed, `packages`, with `AutomaticReconciliation` on and a one-minute
+  `appsettings.json` declares one directory feed (`local-packages`, path `packages`), with `AutomaticReconciliation` on and a one-minute
   `PollInterval`. Nuplane also models a **desired manifest** (`Nuplane:Convergence:Manifest`, entries of
   `{ Id, Version, SourceHint, Sha512 }`). Its source is always registered but runs only when
   `Manifest:Enabled` is true and `Manifest:Path` is set, and it projects each entry to a request with
@@ -78,19 +78,9 @@ What the code does today, which is what this ADR has to work with:
 Every decision below is the owner's, with the issue that carries it out. Where a detail is left to an issue, it is
 listed under "Left to the owning issues", never decided silently.
 
-| # | Topic | Decision | Issues |
-|---|---|---|---|
-| D1 | Delivery | A versioned OCI package image, copied by an init container into an `emptyDir` that Nuplane reads as a directory feed; a missing package falls back to the feed | #2253 |
-| D2 | Customer input | A packages-only csproj with Central Package Management; policy as `PackageReference` metadata | #2257, #2361 |
-| D3 | Runtime manifest | CI writes it from the csproj and publishes it as a ConfigMap; pods re-read it every cycle | #2257, #2258 |
-| D4 | Policies | `locked`, `hot-reload` and `restart`, per package | #2258, #2259 |
-| D5 | Locks | Enforced by the host now; a compiled-in flavour is decided after the start-up measurement | #2259, #2354, #2254 |
-| D6 | Features | A writable cluster-wide API over the shared database, for unlocked packages only; the manifest wins | #2360 |
-| D7 | Removal | A package that leaves the manifest stops its workflows | #2359, #2323 |
-| D8 | Memory | Retired generations are unloaded upstream in Nuplane; an Attention item is the fallback | #2362 |
-| D9 | Floating versions | Fixed upstream; hot reload never relies on them | #2363 |
-| D10 | Test feed | A local authenticated test feed, used everywhere | #2255 |
-| D11 | Studio | Shows locked and pending packages only | #2260 |
+Index: D1 delivery (#2253, #2261); D2 customer input (#2257, #2361); D3 runtime manifest (#2257, #2258);
+D4 policies (#2258, #2259); D5 locks (#2259, #2354, #2254); D6 features (#2360); D7 removal (#2359, #2323);
+D8 memory (#2362); D9 floating versions (#2363); D10 test feed (#2255); D11 Studio (#2260).
 
 ### D1 — Delivery is a versioned package image, copied into an `emptyDir` per pod ([#2253](https://github.com/elsa-workflows/elsa-foundation/issues/2253), [#2261](https://github.com/elsa-workflows/elsa-foundation/issues/2261))
 
@@ -103,7 +93,8 @@ secret (#2255; the docs' "Feed credentials").
 
 The fallback matters more than its name suggests. The init container runs once, when the pod starts, so a
 **hot-reload version that arrives after the pod started cannot be in its `emptyDir`**. It comes from the feed
-through that same fallback. A restart-policy or locked change arrives with a new image tag and a rolled pod.
+through that same fallback, which relies on #2253 proving it for manifest-sourced requests (see the Context and
+"Left to the owning issues"). A restart-policy or locked change arrives with a new image tag and a rolled pod.
 
 ### D2 — The customer maintains a packages-only csproj ([#2257](https://github.com/elsa-workflows/elsa-foundation/issues/2257), [#2361](https://github.com/elsa-workflows/elsa-foundation/issues/2361))
 
