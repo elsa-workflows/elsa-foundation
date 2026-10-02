@@ -36,11 +36,11 @@ Input: [spec](spec.md), [plan](plan.md), [contract](contracts/worker-profile.md)
 
 - [X] T013 [US3] Derive a same-pin explicit ControlFlow removal and alternate source Audience, accept/generate fresh secondary candidate, then assert exact18 actual selection/hashes in `tests/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/WorkerOidcHostTests.cs`.
 - [X] T014 [US3] Use actual IAM capabilities-read grant and signed old/new tokens against production `/capabilities`, asserting401/zero reads versus200/one read and zero runtime rows in `tests/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/WorkerOidcHostTests.cs`.
-- [ ] T015 [US3] Execute static-selection and stale-audience bypass mutations, restore byte-identical behavior and rerun the decisive actor in `tests/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/WorkerOidcHostTests.cs`; record fail/restored/source evidence in `specs/191-worker-http-profile/implementation-evidence.md`.
+- [X] T015 [US3] Execute static-selection and stale-audience bypass mutations, restore byte-identical behavior and rerun the decisive actor in `tests/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/WorkerOidcHostTests.cs`; record fail/restored/source evidence in `specs/191-worker-http-profile/implementation-evidence.md`.
 
 ## Phase 6 — Integration and publication
 
-- [ ] T016 Document exact selection, host-owned prerequisites, real CLI flow and bounded actor evidence in `docs/reference/worker-http-profile.md`; link canonical contracts rather than duplicate architecture meanings.
+- [X] T016 Document exact selection, host-owned prerequisites, real CLI flow and bounded actor evidence in `docs/reference/worker-http-profile.md`; link canonical contracts rather than duplicate architecture meanings.
 - [X] T017 Synchronize completed Spec190 T028 from its final public closure in `specs/190-worker-oidc-normalization/tasks.md`, `specs/190-worker-oidc-normalization/implementation-evidence.md` and the active Worker successor in `docs/program-goals/feature-composition-readiness.md`.
 - [ ] T018 Run final restored full Planning/CLI/Runtime EF suites serially plus affected retained checks, architecture and filter freshness; deliberately refresh/check maps/review findings/stage changed outputs explicitly; record commands/source/platform/counts/skips in `specs/191-worker-http-profile/implementation-evidence.md`.
 - [ ] T019 Root review the full integrated delta and proof; open one gated PR with #2326; obtain actual exact-head review, resolve/reply findings and applicable hosted checks; record evidence in `specs/191-worker-http-profile/implementation-evidence.md` and public issue/PR comments.

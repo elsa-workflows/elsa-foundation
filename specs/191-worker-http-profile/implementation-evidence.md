@@ -1,5 +1,7 @@
 # Worker profile implementation evidence
 
+This is a chronological ledger. Earlier pending statements describe their checkpoint, not current qualification. The latest [hosted acceptance](#corrected-source-full-hosted-affected-suite-acceptance) proves all affected suites at196ac; final filter/maps, PR review and resulting-main qualification remain open.
+
 ## Specification/preflight checkpoint
 
 Baseline e7032680dc48e2077631e01e2c961093b0c5ef4d; branch codex/2326-worker-http-profile. #2326 is the sole active delivery leaf, native parent1961 and completed prerequisite2308; issue/Project51 synchronized. SpecKit specify→setup-plan→setup-tasks→check-prerequisites ran successfully; checklist has zero incomplete entries. Optional auto-commit hooks are disabled by the Git extension configuration, and agent-context extension hooks are disabled; root updated the required managed AGENTS plan pointer. Mandatory feature branch hook executed once. .NET bin/obj and .env ignore preflight passed. Independent source audit and root contract review approved scope.
@@ -83,3 +85,28 @@ One failure is a confirmed catalog-growth integration defect: EmbeddedFixtureHos
 The other6 failures are3 Worker child-start timeouts (the scope-refusal test received TimeoutException instead of its expected InvalidOperationException),2 DispatchWorkflow parent-terminal wait timeouts and1 PublishStimulus routing timeout. Machine load rose above700 on8cores, but cause is not established and these failures are not dismissed. The previous focused3-actor pass and both decisive mutations remain separate historical evidence. All full runtime and CLI acceptance still requires an actual successful complete run.
 
 The isolated actor worktree was restored physically even though the app reported an owner-registration error; Git verified a clean264e05cafe snapshot before the worker created its correction branch from5ed8. The running integration checkout and assemblies stayed unchanged through the terminal gate. No build or tests were delegated.
+
+## Corrected source: full hosted affected-suite acceptance
+
+Canonical [CI run37072951795](https://github.com/elsa-workflows/elsa-foundation/actions/runs/37072951795), dispatched on `codex/2326-worker-http-profile`, checked out exact source `196ac77088c5a51830f0f4ed98c19e2fb4538b6f`. Root downloaded and inspected the completed [Build & test job111056390502](https://github.com/elsa-workflows/elsa-foundation/actions/runs/37072951795/job/111056390502) log. The unchanged canonical workflow builds the full solution and runs `dotnet test Elsa.Server.test.slnf -c Release --no-build -p:WarningsNotAsErrors=NU1603` on Ubuntu, with no test-name filter. Actual Release/net10.0 results:
+
+| Full test assembly | Passed | Failed | Skipped | Total | Test duration |
+|---|---:|---:|---:|---:|---|
+| CLI | 1075 | 0 | 0 | 1075 | 5m16s |
+| Runtime EF | 853 | 0 | 0 | 853 | 3m15s |
+| Modularity Planning | 120 | 0 | 0 | 120 | 729ms |
+| Architecture | 635 | 0 | 0 | 635 | 2m38s |
+
+The Runtime EF full assembly includes all three Unix Worker actors and the corrected Embedded selector; no cases were skipped in these four assemblies. The test project is included in the generated container-free filter, and its Unix PTY facts execute on this Ubuntu runner. This completes the final restored actor requirement of T015 after both decisive temporary mutations and byte-identical restoration. Both temporary child overrides remain absent from delivered source. Safe local acceptance ledger: `/tmp/runtime2326-hosted-acceptance-ledger.json`; downloaded job log: `/tmp/runtime2326-ci-build-test.log`.
+
+Earlier failed local runs remain historical failures. This fresh hosted complete-suite pass is acceptance evidence for corrected source; it does not establish machine contention as the cause of the local timing failures. Other assemblies have their own existing skips, so the zero-skip claim applies only to the four rows above.
+
+The provider matrix remains a separate gate. Manual canonical dispatch intentionally selected all22 legs;21 passed and the required-native-provider SQLServer database-locking leg failed1 of12 tests, with11 passed and0 skipped. `A_single_node_task_waits_for_the_other_node_and_then_runs_one_at_a_time` timed out at the outer60s wait after releasing the first task. The log does not identify which task remained pending. Independent read-only source review found the direct locking/task/provider-test path unchanged against baseline and integrated main, with no catalog/profile path; that does not explain or dismiss the failure. One bounded failed-job rerun is planned after the workflow is terminal, retaining the original result. Dedicated architecture/core-only jobs were still running at this checkpoint. Local corrected driver31612 is still queued at its initial scoped build; no local facts/filter/maps pass is inferred from hosted tests. T018–T020, publication, PR review and resulting-main qualification remain incomplete.
+
+The first workflow attempt is now terminal/failure, solely from locking and its dependent aggregate. The dedicated Architecture job111061670798 also passed635/635, failed0/skipped0 (59s); core-only job111061670759 succeeded with its existing one EF test skip preserved. Root issued `gh run rerun37072951795 --failed` once; exit0. Attempt2 retains source196ac and locking job111064043197 is authoritatively queued. No retry pass is claimed. A fresh independent full integration review is underway. These documentation updates remain uncommitted while the live local driver pins HEAD196ac; no executable source changed.
+
+The bounded retry completed successfully on the same196ac source: required-native-provider locking job111064043197 ran12/12, failed0/skipped0,20s. Root inspected its actual downloaded log, including `ELSA_LOCKING_DATABASE_REQUIRE_NATIVE_PROVIDERS=1`. Attempt2 and the dependent EF aggregate are green. The original11/1 failure remains unresolved history; retry success is not a causal repair claim.
+
+Final independent read-only integration review of exact196ac against both e703 and main43258 found no remaining code defect in catalog consumers, generated-buffer hashing/loading, candidate-driven activation, auth controls or cleanup. Its only finding was that committed evidence/T015 lagged the just-completed hosted proof; this update synchronizes that ledger and T015 without checking incomplete T018–T020. Root reviewed the selector, sole configuration activation path and actor evidence boundaries.
+
+Local driver31612 was deliberately superseded after the actual same-head canonical full build/tests and provider retry passed. It had executed no build/test: its sole owned wrapper was still queued, with no child launched. Root validated the exact owned PIDs, sent SIGTERM to driver49083 and wrapper49265, and reaped session31612 at exit143. No foreign process was touched, no queue bypass occurred and this is neither a test failure nor a local pass. The remaining local plan contains only generator facts/filter/map generation/check through the ordinary wrapper after integrating current main; hosted Architecture635 supplies the architecture gate.
