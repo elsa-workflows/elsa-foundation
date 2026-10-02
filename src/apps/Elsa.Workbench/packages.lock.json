@@ -1631,6 +1631,14 @@
           "Microsoft.EntityFrameworkCore.Relational": "[10.0.10, )"
         }
       },
+      "elsa.secrets.workflows": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.30-preview.159, )",
+          "Elsa.Secrets.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
+        }
+      },
       "elsa.serialization.core": {
         "type": "Project",
         "dependencies": {

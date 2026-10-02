@@ -460,6 +460,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Secrets.Workflows",
+          "path": "src/essentials/Secrets/Workflows/Elsa.Secrets.Workflows.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Serialization.Newtonsoft",
           "path": "src/essentials/Serialization/Newtonsoft/Elsa.Serialization.Newtonsoft.csproj"
         },
@@ -6041,6 +6046,70 @@
         {
           "type": "pinned-transitive",
           "id": "Microsoft.Extensions.Logging",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Logging.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Options",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Primitives",
+          "version": "10.0.10"
+        }
+      ]
+    },
+    {
+      "path": "src/essentials/Secrets/Workflows/Elsa.Secrets.Workflows.csproj",
+      "name": "Elsa.Secrets.Workflows",
+      "kind": "source",
+      "domain": "Elsa.Secrets",
+      "sub_domain": "Workflows",
+      "role": "feature/implementation",
+      "declared_target_framework": null,
+      "packable": true,
+      "package_id": "Elsa.Secrets.Workflows",
+      "line": "B",
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Secrets.Core",
+          "path": "src/essentials/Secrets/Core/Elsa.Secrets.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Runtime.Core",
+          "path": "src/essentials/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj"
+        },
+        {
+          "type": "external",
+          "id": "CShells.Abstractions",
+          "version": "0.0.30-preview.159"
+        },
+        {
+          "type": "external",
+          "id": "Elsa.Specifications.PackageManifest.Generator",
+          "version": "0.0.1-preview.8"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration.Abstractions",
           "version": "10.0.10"
         },
         {
@@ -17021,6 +17090,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Secrets.Persistence.EntityFrameworkCore",
+          "path": "src/essentials/Secrets/Persistence/EntityFrameworkCore/Elsa.Secrets.Persistence.EntityFrameworkCore.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Workflows.Runtime",
           "path": "src/essentials/Workflows/Runtime/Elsa.Workflows.Runtime.csproj"
         },
@@ -17066,8 +17140,102 @@
         },
         {
           "type": "external",
+          "id": "Microsoft.Data.Sqlite",
+          "version": "10.0.10"
+        },
+        {
+          "type": "external",
           "id": "Microsoft.Extensions.TimeProvider.Testing",
           "version": "10.8.0"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.NET.Test.Sdk",
+          "version": "18.0.0"
+        },
+        {
+          "type": "external",
+          "id": "coverlet.collector",
+          "version": "6.0.2"
+        },
+        {
+          "type": "external",
+          "id": "xunit",
+          "version": "2.9.3"
+        },
+        {
+          "type": "external",
+          "id": "xunit.runner.visualstudio",
+          "version": "3.1.5"
+        }
+      ]
+    },
+    {
+      "path": "tests/essentials/Secrets/Workflows/Tests/Elsa.Secrets.Workflows.Tests.csproj",
+      "name": "Elsa.Secrets.Workflows.Tests",
+      "kind": "test",
+      "domain": "Elsa.Secrets",
+      "sub_domain": "Workflows.Tests",
+      "role": "test",
+      "declared_target_framework": null,
+      "packable": false,
+      "package_id": null,
+      "line": null,
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.Runtime",
+          "path": "src/essentials/Activities/Runtime/Elsa.Activities.Runtime.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Secrets.Core",
+          "path": "src/essentials/Secrets/Core/Elsa.Secrets.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Secrets",
+          "path": "src/essentials/Secrets/Elsa.Secrets.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Secrets.Workflows",
+          "path": "src/essentials/Secrets/Workflows/Elsa.Secrets.Workflows.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Publishing",
+          "path": "src/essentials/Workflows/Publishing/Elsa.Workflows.Publishing.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Runtime",
+          "path": "src/essentials/Workflows/Runtime/Elsa.Workflows.Runtime.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore",
+          "path": "src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.Testing",
+          "path": "tests/essentials/Activities/Testing/Elsa.Activities.Testing.csproj"
+        },
+        {
+          "type": "external",
+          "id": "CShells",
+          "version": "0.0.30-preview.159"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.EntityFrameworkCore.Sqlite",
+          "version": "10.0.10"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.Extensions.DependencyInjection",
+          "version": "10.0.10"
         },
         {
           "type": "external",

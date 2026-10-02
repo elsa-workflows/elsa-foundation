@@ -123,6 +123,7 @@
           "Primitives": {},
           "Secrets": {},
           "SecretsApi": {},
+          "SecretsWorkflows": {},
           "SecretsEntityFrameworkCore": {
             "Provider": "PostgreSql"
           },

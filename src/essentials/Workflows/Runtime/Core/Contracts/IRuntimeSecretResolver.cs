@@ -17,10 +17,12 @@ public sealed class RuntimeSecretResolverReplacementContractAttribute : Attribut
 /// <para>
 /// This is a <b>replacement contract</b> (framework constitution §2.6.2), declared by
 /// <see cref="RuntimeSecretResolverReplacementContractAttribute"/>: at most one implementation is meaningful per
-/// container. The runtime registers none and does not itself detect a second registration; the feature that registers
-/// the implementation (the Secrets bridge, spec 188 slice 4) must refuse one. A host that composes none cannot resolve
-/// secrets at all, which activation reports as a missing capability that parks the activity, not as a resolution
-/// failure.
+/// container. The runtime registers none. A host that composes more than one does not start: the activities runtime's
+/// startup check fails shell activation with <see cref="Exceptions.MultipleRuntimeSecretResolversException"/>, naming
+/// every registration, whatever order they were registered in. The feature that registers an implementation (the Secrets
+/// bridge, spec 188 slice 4) also refuses one registered before it, as an early diagnostic. A host that composes none
+/// cannot resolve secrets at all, which activation reports as a missing capability that parks the activity, not as a
+/// resolution failure.
 /// </para>
 /// <para>
 /// The tenant is the partition the execution runs under (<see cref="IWorkflowExecutionPartitionAccessor"/>), which is
