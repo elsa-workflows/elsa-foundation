@@ -227,7 +227,8 @@ public sealed class WorkerOidcHostTests
         Assert.Equal(WorkerProfileCandidate.ControlAudience, candidate.Audience);
 
         var host = await fixture.StartHostAsync(candidate);
-        AssertWorkerComposition(host.Ready.Data, candidate);
+        // Let the paired real requests detect a stale Audience before checking the options receipt.
+        AssertWorkerComposition(host.Ready.Data, candidate, deferAudienceCheck: true);
         await SaveRuleAsync(
             host,
             "worker-capabilities-read",
@@ -253,9 +254,14 @@ public sealed class WorkerOidcHostTests
         Assert.Equal(1, await MappingReadCountAsync(host));
         await AssertNoRuntimeRowsAsync(host);
         await AssertNoUserOrExternalIdentityRowsAsync(host);
+        Assert.Equal(WorkerProfileCandidate.HashAudience(candidate.Audience),
+            host.Ready.Data.GetProperty("oidcAudienceSha256").GetString());
     }
 
-    private static void AssertWorkerComposition(JsonElement ready, WorkerProfileCandidate candidate)
+    private static void AssertWorkerComposition(
+        JsonElement ready,
+        WorkerProfileCandidate candidate,
+        bool deferAudienceCheck = false)
     {
         Assert.Equal(candidate.ShellId, ready.GetProperty("shell").GetString());
         Assert.Equal(candidate.Environment, ready.GetProperty("environment").GetString());
@@ -268,7 +274,8 @@ public sealed class WorkerOidcHostTests
             Assert.Equal(hash, consumedHashes.GetProperty(name).GetString());
         Assert.Equal(WorkerOidcHostFixture.TenantId, ready.GetProperty("tenantId").GetString());
         Assert.Equal(WorkerOidcHostFixture.ProviderId, ready.GetProperty("providerId").GetString());
-        Assert.Equal(WorkerProfileCandidate.HashAudience(candidate.Audience), ready.GetProperty("oidcAudienceSha256").GetString());
+        if (!deferAudienceCheck)
+            Assert.Equal(WorkerProfileCandidate.HashAudience(candidate.Audience), ready.GetProperty("oidcAudienceSha256").GetString());
         Assert.True(ready.GetProperty("oidcAuthorityConfigured").GetBoolean());
         Assert.False(ready.GetProperty("oidcClientIdConfigured").GetBoolean());
         Assert.False(ready.GetProperty("oidcRequireHttpsMetadata").GetBoolean());

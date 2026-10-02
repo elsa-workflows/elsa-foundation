@@ -333,14 +333,14 @@ internal static class Program
             runtimeConnectionName = runtimeOptions.ConnectionName,
             runtimeDatabaseProvider = runtime.Database.ProviderName,
             runtimeUsesExpectedDatabase = SameDatabase(runtimeConnection,
-                GetConnectionDataSource(app.Configuration.GetConnectionString(runtimeOptions.ConnectionName))),
+                GetConnectionDataSource(app.Configuration, runtimeOptions.ConnectionName)),
             runtimeMigrationsApplied = runtimeAppliedMigrations.Any(),
             runtimeMigrationsPending = runtimePendingMigrations.Any(),
             iamProvider = iamOptions.Provider,
             iamConnectionName = iamOptions.ConnectionName,
             iamDatabaseProvider = iam.Database.ProviderName,
             iamUsesExpectedDatabase = SameDatabase(iamConnection,
-                GetConnectionDataSource(app.Configuration.GetConnectionString(iamOptions.ConnectionName))),
+                GetConnectionDataSource(app.Configuration, iamOptions.ConnectionName)),
             iamMigrationsApplied = iamAppliedMigrations.Any(),
             iamMigrationsPending = iamPendingMigrations.Any(),
             databasesAreDistinct = !string.Equals(Path.GetFullPath(runtimeConnection), Path.GetFullPath(iamConnection), StringComparison.Ordinal),
@@ -513,8 +513,11 @@ internal static class Program
         }
     }
 
-    private static string GetConnectionDataSource(string? connectionString)
+    private static string GetConnectionDataSource(IConfiguration configuration, string? connectionName)
     {
+        var connectionString = string.IsNullOrWhiteSpace(connectionName)
+            ? null
+            : configuration.GetConnectionString(connectionName);
         if (string.IsNullOrWhiteSpace(connectionString))
             return string.Empty;
         var values = new DbConnectionStringBuilder { ConnectionString = connectionString };

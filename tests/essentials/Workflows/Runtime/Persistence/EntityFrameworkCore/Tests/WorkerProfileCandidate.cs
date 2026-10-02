@@ -9,15 +9,25 @@ using Xunit;
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 
 /// <summary>Produces the worker actor's source and candidate through the same CLI workflow an operator uses.</summary>
-internal sealed class WorkerProfileCandidate
+internal sealed record WorkerProfileCandidate(
+    string SourceDirectory,
+    string CandidateDirectory,
+    string AuthoredPath,
+    string ShellId,
+    string Environment,
+    string Audience,
+    string[] FeatureIds,
+    (string CatalogId, string CatalogVersion, string CatalogDigest, string ProfileId, string ProfileVersion, string ProfileDigest) Identity,
+    IReadOnlyDictionary<string, string> ConsumedFileHashes,
+    string[] Findings)
 {
     public const string DefaultShellId = "worker-oidc-runtime";
     public const string CandidateEnvironment = "Development";
     public const string DefaultProfileId = "worker-http";
     public const string DefaultProfileVersion = "1";
     public const string ControlAudience = "worker-api-candidate";
-    private const string CatalogDigest = "6563d77f116b7aefb2a67425f28b72cab736297d4e46df964bf9fb507cf91c3c";
-    private const string ProfileDigest = "e46f8092771171ad63b0ca81bf307f5ad7ad7a9ca4929d311bfac6af3cf8fa1";
+    private const string ExpectedCatalogDigest = "6563d77f116b7aefb2a67425f28b72cab736297d4e46df964bf9fb507cf91c3c";
+    private const string ExpectedProfileDigest = "e46f8092771171ad63b0ca81bf307f5ad7ad7a9ca4929dd311bfac6af3cf8fa1";
 
     private static readonly string[] s_workerFeatures =
     [
@@ -44,50 +54,12 @@ internal sealed class WorkerProfileCandidate
 
     private static readonly JsonSerializerOptions s_json = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
-    private WorkerProfileCandidate(
-        string sourceDirectory,
-        string candidateDirectory,
-        string authoredPath,
-        string shellId,
-        string environment,
-        string audience,
-        string[] featureIds,
-        (string CatalogId, string CatalogVersion, string CatalogDigest, string ProfileId, string ProfileVersion, string ProfileDigest) identity,
-        IReadOnlyDictionary<string, string> consumedFileHashes,
-        string[] findings)
-    {
-        SourceDirectory = sourceDirectory;
-        CandidateDirectory = candidateDirectory;
-        AuthoredPath = authoredPath;
-        ShellId = shellId;
-        Environment = environment;
-        Audience = audience;
-        FeatureIds = featureIds;
-        CatalogId = identity.CatalogId;
-        CatalogVersion = identity.CatalogVersion;
-        CatalogDigest = identity.CatalogDigest;
-        ProfileId = identity.ProfileId;
-        ProfileVersion = identity.ProfileVersion;
-        ProfileDigest = identity.ProfileDigest;
-        ConsumedFileHashes = consumedFileHashes;
-        Findings = findings;
-    }
-
-    public string SourceDirectory { get; }
-    public string CandidateDirectory { get; }
-    public string AuthoredPath { get; }
-    public string ShellId { get; }
-    public string Environment { get; }
-    public string Audience { get; }
-    public string[] FeatureIds { get; }
-    public string CatalogId { get; }
-    public string CatalogVersion { get; }
-    public string CatalogDigest { get; }
-    public string ProfileId { get; }
-    public string ProfileVersion { get; }
-    public string ProfileDigest { get; }
-    public IReadOnlyDictionary<string, string> ConsumedFileHashes { get; }
-    public string[] Findings { get; }
+    public string CatalogId => Identity.CatalogId;
+    public string CatalogVersion => Identity.CatalogVersion;
+    public string CatalogDigest => Identity.CatalogDigest;
+    public string ProfileId => Identity.ProfileId;
+    public string ProfileVersion => Identity.ProfileVersion;
+    public string ProfileDigest => Identity.ProfileDigest;
 
     public static Task<WorkerProfileCandidate> CreatePrimaryAsync(
         string root,
@@ -218,10 +190,10 @@ internal sealed class WorkerProfileCandidate
         var acceptedIdentity = ReadIdentity(acceptedNode);
         Assert.Equal("elsa-foundation", identity.CatalogId);
         Assert.Equal("3", identity.CatalogVersion);
-        Assert.Equal(CatalogDigest, identity.CatalogDigest);
+        Assert.Equal(ExpectedCatalogDigest, identity.CatalogDigest);
         Assert.Equal(DefaultProfileId, identity.ProfileId);
         Assert.Equal(DefaultProfileVersion, identity.ProfileVersion);
-        Assert.Equal(ProfileDigest, identity.ProfileDigest);
+        Assert.Equal(ExpectedProfileDigest, identity.ProfileDigest);
         Assert.Equal(identity, acceptedIdentity);
         var plannedCatalog = acceptedPlanDocument.RootElement.GetProperty("catalog");
         Assert.Equal(identity.CatalogId, plannedCatalog.GetProperty("id").GetString());
