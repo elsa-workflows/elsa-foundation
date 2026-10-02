@@ -85,4 +85,4 @@ Final trust validation must run for ordinary hosts and actual shell activation. 
 
 ## Integration and release
 
-One root-owned integration leaf. The specification PR references #2304, leaves Status Draft until its authoring acceptance is reviewed, and does not check implementation tasks or claim adapter behavior. After specification publication passes its gates, create one coherent adapter implementation issue with native parent1961 and prerequisite2304, using these tasks/proofs. Do not create one GitHub issue per task or presume that passing the adapter certifies profile publication.
+One root-owned integration leaf. The specification PR references #2304, marks the specification Approved after authoring review under the canonical spec lifecycle, and does not check implementation tasks or claim adapter behavior. After specification publication passes its gates, create one coherent adapter implementation issue with native parent1961 and prerequisite2304, using these tasks/proofs. Do not create one GitHub issue per task or presume that passing the adapter certifies profile publication.

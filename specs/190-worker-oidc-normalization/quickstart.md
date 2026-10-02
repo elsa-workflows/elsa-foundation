@@ -8,6 +8,12 @@ Use the repository SDK/build-slot wrapper. Check `uptime` before diagnosing timi
 
 The new shared Worker fixture owns an isolated local issuer/discovery/JWK signing key, short-lived test tokens, explicit IAM SQLite target, named Runtime SQLite target, writable single-host lock directory and host signing prerequisites. It starts actual HTTP hosts, initializes the actual shell ordinary persistence context to the configured nondefault tenant before store resolution (existing AddPersistenceCore(defaultScope: tenant) or equivalent fixed host-owned accessor), provisions each owned schema through the existing module mechanism, seeds persisted artifacts/mappings through supported store contracts, and resets mutable state per scenario. Use idiomatic async teardown for servers/temp databases/keys; avoid tracing raw tokens or retaining request artifacts. A fresh host instance/process for restart must reopen the same databases rather than reuse an in-memory service provider.
 
+## Reusable host entrypoints
+
+Register the fixed host `AddPersistenceCore(configuredTenant)` before `AddCShells` captures root descriptors. The existing [shell activation host](../../tests/essentials/Foundation/Identity/Tests/ShellActivationHost.cs) documents inheritance into the shell provider; later parameterless persistence registrations use TryAdd and must preserve that scope. Seed mappings through the activated shell's `IClaimMappingStore`, not a direct DbContext bypass. Use explicit IAM Provider/ConnectionName with `ConnectionStrings:Iam` for its separate file, alongside the named Runtime resource; IAM is outside automatic resource enrollment.
+
+The existing [Worker HTTP fixture](../../tests/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/WorkerHttpFixtureHostEvidenceTests.cs) supplies real execute/stimulus and runtime-store setup. Replace its fabricated root authentication seam with shell-owned Foundation Identity/OIDC middleware; do not layer real JWT proof over its fake handler. The [shared persistence restart control](../../tests/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/SharedPersistenceCompositionTests.cs) demonstrates disposing one host and reopening the same SQLite file; extend cleanup and reopening to the explicit IAM file. This source preflight identifies reusable entrypoints, not an executed OIDC actor result.
+
 ## Focused developer loop after implementation
 
 ```bash
