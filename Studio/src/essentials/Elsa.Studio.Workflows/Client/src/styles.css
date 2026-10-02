@@ -4733,6 +4733,7 @@ button.wf-reference-select {
 
 .wf-property-row input[type="text"],
 .wf-property-row input[type="number"],
+.wf-property-row input[type="password"],
 .wf-property-row select,
 .wf-property-row textarea {
   width: 100%;
@@ -4760,6 +4761,7 @@ button.wf-reference-select {
 
 .wf-property-row input[type="text"]:focus,
 .wf-property-row input[type="number"]:focus,
+.wf-property-row input[type="password"]:focus,
 .wf-property-row select:focus,
 .wf-property-row textarea:focus {
   border-color: var(--wf-accent);

@@ -80,3 +80,54 @@ describe("formatActivitySummary", () => {
     expect(formatActivitySummary(wireNode, catalog([textInput]))).toBe('"From wire"');
   });
 });
+
+describe("formatActivitySummary for masked and secret-only inputs", () => {
+  const storedValue = "stored-value-words";
+  const sensitiveInput = { ...textInput, isSensitive: true };
+  const secretOnlyInput = { ...textInput, isSensitive: true, isCredential: true };
+  const wireNode = (expressionType: string, value: unknown) => node({ inputs: [{ referenceKey: "text", value: { value, expressionType } }] });
+
+  it.each([
+    ["sensitive", sensitiveInput],
+    ["password-hinted", { ...textInput, uiHint: "password" }]
+  ])("never shows the value or expression source of a %s input", (_label, input) => {
+    expect(formatActivitySummary(node({ text: wrapped("Literal", storedValue) }), catalog([input]))).toBe("Protected value");
+    expect(formatActivitySummary(node({ text: wrapped("JavaScript", storedValue) }), catalog([input]))).toBe("Protected value");
+    expect(formatActivitySummary(wireNode("Literal", storedValue), catalog([input]))).toBe("Protected value");
+    expect(formatActivitySummary(wireNode("Liquid", storedValue), catalog([input]))).toBe("Protected value");
+  });
+
+  it("never shows a literal stored on a secret-only input", () => {
+    expect(formatActivitySummary(node({ text: wrapped("Literal", storedValue) }), catalog([secretOnlyInput]))).toBeUndefined();
+    expect(formatActivitySummary(wireNode("Literal", storedValue), catalog([secretOnlyInput]))).toBe("Protected value");
+  });
+
+  it("names a Secret Reference held as JSON text on a wire-shaped node, and falls back to the kind when nothing is authored", () => {
+    expect(formatActivitySummary(wireNode("Secret", '{"name":"tokens"}'), catalog([secretOnlyInput]))).toContain("tokens");
+    expect(formatActivitySummary(node({ text: wrapped("Literal", "   ") }), catalog([sensitiveInput]))).toBeUndefined();
+  });
+
+  it.each([
+    ["a sensitive", sensitiveInput],
+    ["a secret-only", secretOnlyInput]
+  ])("shows only the name of a Secret Reference that carries another field, on %s input", (_label, input) => {
+    const carrying = { name: "tokens", rawValue: "extra-field-words" };
+
+    expect(formatActivitySummary(wireNode("Secret", JSON.stringify(carrying)), catalog([input]))).toBe("tokens");
+    expect(formatActivitySummary(node({ text: wrapped("Secret", carrying) }), catalog([input]))).toBeUndefined();
+  });
+
+  it("does not summarize a Secret Reference held as an object on the editor's node", () => {
+    expect(formatActivitySummary(node({ text: wrapped("Secret", { name: "tokens" }) }), catalog([secretOnlyInput]))).toBeUndefined();
+  });
+
+  // The backend accepts a malformed Secret payload at save and refuses it only at publish.
+  it.each([
+    ["a plain string on a wire-shaped node", wireNode("Secret", storedValue)],
+    ["a plain string on the editor's node", node({ text: wrapped("Secret", storedValue) })],
+    ["JSON text with a blank name", wireNode("Secret", '{"name":"  "}')]
+  ])("protects %s under the Secret syntax, which names no secret", (_label, activity) => {
+    expect(formatActivitySummary(activity, catalog([secretOnlyInput]))).toBe("Protected value");
+    expect(formatActivitySummary(activity, catalog([sensitiveInput]))).toBe("Protected value");
+  });
+});

@@ -31,4 +31,13 @@ describe("activity descriptor resolution", () => {
     expect(resolve("add-note-1.1.0")?.inputs).toEqual([text, tags]);
     expect(resolve("add-note-1.0.0")?.inputs).toEqual([text]);
   });
+
+  // The activity-declared sensitivity flags reach editors only if the catalog mapping carries them through.
+  it("carries the activity-declared sensitivity flags from the catalog onto the descriptor inputs", () => {
+    const authorization = { referenceKey: "Authorization", name: "Authorization", type: "String", isSensitive: true, isCredential: true };
+    const descriptor = toActivityDescriptor(version("send-1.0.0", "1.0.0", [text, authorization]));
+
+    expect(descriptor.inputs[0].isCredential).toBeUndefined();
+    expect(descriptor.inputs[1]).toMatchObject({ isSensitive: true, isCredential: true });
+  });
 });

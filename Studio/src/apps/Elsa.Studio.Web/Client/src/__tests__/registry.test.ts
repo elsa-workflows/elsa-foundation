@@ -235,6 +235,34 @@ describe("studio registry", () => {
     }), context)?.id).toBe("studio.property.dropdown");
   });
 
+  it("resolves the masked password editor ahead of the single-line editor for a password hint or a sensitive text input", () => {
+    const api = createStudioRegistry({
+      hostVersion: "1.0.0",
+      sdkVersion: "1.0.0",
+      ...createEndpointContext("https://studio.example/")
+    });
+    const context: StudioActivityPropertyEditorContext = { activity: {}, expressionDescriptors: [] };
+    registerBuiltInPropertyEditors(api);
+    const resolved = (descriptor: StudioActivityInputDescriptor, scope: StudioActivityPropertyEditorContext["scope"] = "element") =>
+      resolveEditor(api.propertyEditors.list(), descriptor, { ...context, scope })?.id;
+
+    expect(resolved(input({ uiHint: "password" }))).toBe("studio.property.password");
+    expect(resolved(input({ uiHint: "Password" }))).toBe("studio.property.password");
+    expect(resolved(input({ isSensitive: true }))).toBe("studio.property.password");
+    // Masking wins over a hint that would otherwise show the value in the clear.
+    expect(resolved(input({ isSensitive: true, uiHint: "multiline" }))).toBe("studio.property.password");
+    expect(resolved(input({ isSensitive: true, uiHint: "singleline" }))).toBe("studio.property.password");
+
+    // A password hint claims a secret-only input too; sensitivity alone does not (the Workflows panel renders the
+    // secret picker for that input and mounts no property editor). A non-text type keeps its typed editor, and a
+    // collection keeps its repeater.
+    expect(resolved(input({ uiHint: "password", isCredential: true }))).toBe("studio.property.password");
+    expect(resolved(input({ isSensitive: true, isCredential: true }))).toBe("studio.property.singleline");
+    expect(resolved(input({ uiHint: "password", typeName: "System.Int32" }))).toBe("studio.property.number");
+    expect(resolved(input({ isSensitive: false, isCredential: false }))).toBe("studio.property.singleline");
+    expect(resolved(input({ typeName: "System.Collections.Generic.ICollection`1", isSensitive: true }), "collection")).toBeUndefined();
+  });
+
   it("tracks expression editor contributions through the public SDK registry", () => {
     const api = createStudioRegistry({
       hostVersion: "1.0.0",

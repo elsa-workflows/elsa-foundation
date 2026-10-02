@@ -30,6 +30,7 @@ import type { ActivityNode, VisibleVariableView, WorkflowDefinitionState } from 
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import type { ScopedVariableAnalysisStatus } from "./api/workflowDesign";
 import {
+  acceptsOnlySecretReference,
   formatTypeName,
   getInputPropertyName,
   getLiteralEditorValue,
@@ -38,14 +39,15 @@ import {
   describeDictionaryForInput,
   getLiteralDefaultValue,
   isRepeaterOptOut,
-  planExpressionModeTransition,
   readWrappedInput,
+  secretSyntax,
   withConversion,
   withLiteralValue,
   withExpression,
   writeInputValue,
   type WrappedActivityInputValue
 } from "./activityProperties";
+import { clearSecretOnlyInput, isMaskedInput, planInputSyntaxTransition, showsMaskedValue } from "./maskedInput";
 import {
   builtInConversionProfiles,
   conversionModeDescriptors,
@@ -76,6 +78,8 @@ const inlineSyntaxEditorIds = new Set([
   "studio.property.checkbox"
 ]);
 const inlineTextTypeNames = new Set(["string", "system.string", "text", "uri", "system.uri"]);
+// The built-in masked editor: the only editor a masked literal is given.
+const maskedPropertyEditorId = "studio.property.password";
 export interface ActivityPropertiesPanelProps {
   context?: StudioEndpointContext;
   draftId?: string;
@@ -396,6 +400,13 @@ function PropertyRow({
   onChange
 }: PropertyRowProps) {
   const readOnly = input.isReadOnly === true;
+  // A secret-only input offers the secret picker and nothing else: no other syntax, no literal or expanded
+  // editor and no conversion control, so no control on the row can write anything but a Secret Reference
+  // or a clear (elsa-foundation spec 188, workflow secret safety).
+  const secretOnly = acceptsOnlySecretReference(input);
+  const syntaxDescriptors = secretOnly
+    ? expressionDescriptors.filter(descriptor => descriptor.type === secretSyntax)
+    : expressionDescriptors;
   const dynamicOptions = useActivityInputOptions(endpointContext, workflowState, activity, activityDescriptor, input);
   const provider = readOptionsProvider(input);
   const effectiveInput = provider ? {
@@ -403,15 +414,21 @@ function PropertyRow({
     uiSpecifications: { ...input.uiSpecifications, options: dynamicOptions.options }
   } : input;
   const editorDisabled = readOnly || (!!provider && dynamicOptions.status !== "ready");
-  const context: StudioActivityPropertyEditorContext = { activity, expressionDescriptors, readOnly: editorDisabled };
+  const context: StudioActivityPropertyEditorContext = { activity, activityId: activity.nodeId, expressionDescriptors, readOnly: editorDisabled };
   const editor = resolveEditor(editors, effectiveInput, context);
   const EditorComponent = editor?.component;
   const wrapped = input.isWrapped !== false ? readWrappedInput(activity, input) : null;
-  const syntax = wrapped?.expression.type ?? "Literal";
+  const syntax = wrapped?.expression.type ?? (secretOnly ? secretSyntax : "Literal");
   const expressionDescriptor = expressionDescriptors.find(descriptor => descriptor.type === syntax);
   const editingMode = expressionDescriptor?.editingMode;
+  // A masked input shows what it stores only under author code or a reference (showsMaskedValue); under any other
+  // syntax, Literal and Object included, its value is masked. This flag is read, from the row's current state, by
+  // the value editor, canExpandEditor (and through it the expanded editor) and the inline expression context, and
+  // it blanks the expression documents; a new surface that renders the row's value must read it too. Secret-only
+  // inputs, a subset of masked inputs, take their own branch below, and their documents carry nothing either.
+  const valueMasked = !secretOnly && isMaskedInput(input) && !showsMaskedValue(editingMode);
   const value = getLiteralEditorValue(activity, input);
-  const expressionSource = value == null ? "" : String(value);
+  const expressionSource = valueMasked || secretOnly || value == null ? "" : String(value);
   const documentVersions = useRef(new Map<string, { source: string; version: number }>());
   const propertyKey = input.referenceKey?.trim() || input.name;
   const toolingPropertyKey = `${activity.nodeId}\u001f${propertyKey}`;
@@ -476,7 +493,7 @@ function PropertyRow({
     authoringContext: targetSyntax === syntax ? toolingSnapshot.authoringContext : undefined,
     validation: targetSyntax === syntax ? toolingSnapshot.validation : undefined
   });
-  const inlineExpressionContext: StudioExpressionEditorContext | null = wrapped ? makeExpressionContext(syntax) : null;
+  const inlineExpressionContext: StudioExpressionEditorContext | null = wrapped && !valueMasked ? makeExpressionContext(syntax) : null;
   const currentRequiresAdmission = editingMode === "structured" || editingMode === "reference";
   const admittedExpressionEditor = inlineExpressionContext && currentRequiresAdmission
     ? resolveAdmittedExpressionEditor(expressionEditors, inlineExpressionContext)
@@ -506,13 +523,15 @@ function PropertyRow({
   ));
   const useDictionarySyntaxPicker = Boolean(wrapped && dictionaryType != null);
   const useToggleLayout = editor?.id === "studio.property.checkbox" && editingMode === "literal";
-  const canExpandEditor = Boolean(wrapped && (
+  const canExpandEditor = Boolean(wrapped && !secretOnly && !valueMasked && (
     dictionaryType != null ||
     editingMode === "text" ||
     (!isCollectionEditor && editingMode === "structured" && !!inlineExpressionEditor?.surfaces.expanded) ||
     (!isCollectionEditor && editingMode === "literal" && isExpandableTextInput(input, editor?.id))
   ));
-  const [expanded, setExpanded] = useState(false);
+  const [expandRequested, setExpandRequested] = useState(false);
+  // The expanded editor is open only while the row may expand, whatever opened it and whatever changed since.
+  const expanded = expandRequested && canExpandEditor;
   const [focusRequested, setFocusRequested] = useState(false);
   const [conversionOpen, setConversionOpen] = useState(false);
   const [pendingTransition, setPendingTransition] = useState<{
@@ -533,6 +552,19 @@ function PropertyRow({
     : "";
   const latestProperty = useRef({ activity, input, onChange });
   latestProperty.current = { activity, input, onChange };
+
+  // A change that leaves the row unexpandable has already closed the expanded editor (`expanded`). Drop the request
+  // so it does not reopen by itself, and bring focus back to the row only when focus went with the editor: focus
+  // the author moved elsewhere, such as onto another activity, stays put. Focus moves here rather than in an
+  // animation frame because dropping the request re-runs this effect, whose cleanup would cancel the frame; the
+  // field focus below still runs later and wins.
+  useEffect(() => {
+    if (!expandRequested || canExpandEditor) return;
+    setExpandRequested(false);
+    const focused = document.activeElement;
+    if (focused && focused !== document.body && !rowRef.current?.contains(focused)) return;
+    rowRef.current?.querySelector<HTMLButtonElement>(".wf-syntax-picker-trigger")?.focus();
+  }, [canExpandEditor, expandRequested]);
 
   useEffect(() => {
     if (!focusRequested) return;
@@ -570,6 +602,11 @@ function PropertyRow({
     const currentWrapped = current.input.isWrapped !== false
       ? readWrappedInput(current.activity, current.input)
       : null;
+    const cleared = clearSecretOnlyInput(current.activity, current.input, nextValue);
+    if (cleared) {
+      current.onChange(cleared);
+      return;
+    }
     const next = currentWrapped ? withLiteralValue(currentWrapped, nextValue) : nextValue;
     current.onChange(writeInputValue(current.activity, current.input, next));
   }, []);
@@ -611,7 +648,7 @@ function PropertyRow({
   };
 
   const closeExpanded = () => {
-    setExpanded(false);
+    setExpandRequested(false);
     requestAnimationFrame(() => rowRef.current?.querySelector<HTMLButtonElement>(
       ".wf-dictionary-open-expanded, .wf-property-expand-row, .wf-expression-expand-button"
     )?.focus());
@@ -621,15 +658,15 @@ function PropertyRow({
     if (!wrapped || nextSyntax === syntax) return;
     const nextDescriptor = expressionDescriptors.find(descriptor => descriptor.type === nextSyntax);
     if (!nextDescriptor || getUnavailableReason(nextDescriptor)) return;
-    const transition = planExpressionModeTransition(
+    const transition = planInputSyntaxTransition(
+      input,
       editingMode ?? "structured",
       nextDescriptor.editingMode,
-      input.typeName,
       value,
       getTargetDefaultValue(nextDescriptor)
     );
     if (transition.requiresConfirmation) {
-      setExpanded(false);
+      setExpandRequested(false);
       setPendingTransition({ descriptor: nextDescriptor, nextValue: transition.nextValue });
       return;
     }
@@ -660,7 +697,7 @@ function PropertyRow({
       editors={editors}
       context={context}
       disabled={editorDisabled}
-      onOpenExpanded={() => setExpanded(true)}
+      onOpenExpanded={() => setExpandRequested(true)}
       onChange={setRaw}
     />
   ) : null;
@@ -672,14 +709,28 @@ function PropertyRow({
       disabled={editingMode === "structured" ? editorDisabled : readOnly}
       initialFocus={focusRequested && !expanded}
       context={inlineExpressionContext}
-      onExpand={() => {
+      onExpand={secretOnly ? undefined : () => {
         activateTooling();
-        setExpanded(true);
+        setExpandRequested(true);
       }}
       onChange={setRaw}
     />
   ) : null;
-  const valueEditor = editingMode === "text" && inlineExpressionContext ? (
+  // A secret-only input never falls back to a text or literal editor: without a secret picker it shows the
+  // same unavailable state any syntax without an editor shows.
+  const valueEditor = secretOnly ? (
+    contributedExpressionEditor ?? <UnavailableExpressionEditor syntax={syntax} />
+  ) : valueMasked ? (
+    // Only the masked editor, for a single value in a known literal mode: any other editor would show the value and
+    // the masked editor cannot edit a dictionary or a list, so everything else says the value is masked.
+    editingMode === "literal" && editor?.id === maskedPropertyEditorId && !dictionaryType && !collectionType
+      ? renderEditor(EditorComponent, effectiveInput, value, editorDisabled, context, setRaw)
+      : (
+        <p className="wf-expression-editor-hint" role="status">
+          This value is masked. It is preserved and read-only here.
+        </p>
+      )
+  ) : editingMode === "text" && inlineExpressionContext ? (
     contributedExpressionEditor ?? (
       <GenericTextExpressionEditor
         descriptor={effectiveInput}
@@ -704,7 +755,7 @@ function PropertyRow({
         <label>{input.displayName || input.name}</label>
         <div className="wf-property-row-header-meta">
           <span>{formatTypeName(input.typeName)}</span>
-          {wrapped ? (
+          {wrapped && !secretOnly ? (
             <button
               ref={conversionToggleRef}
               type="button"
@@ -725,7 +776,7 @@ function PropertyRow({
         <SyntaxPicker
           label={`${input.displayName || input.name} expression syntax`}
           value={syntax}
-          descriptors={expressionDescriptors}
+          descriptors={syntaxDescriptors}
           getUnavailableReason={getUnavailableReason}
           disabled={readOnly}
           onChange={setSyntax}
@@ -740,7 +791,7 @@ function PropertyRow({
           <SyntaxPicker
             label={`${input.displayName || input.name} expression syntax`}
             value={syntax}
-            descriptors={expressionDescriptors}
+            descriptors={syntaxDescriptors}
             getUnavailableReason={getUnavailableReason}
             disabled={readOnly}
             variant="inline"
@@ -752,7 +803,7 @@ function PropertyRow({
               className="wf-expression-expand-button"
               aria-label={`Open expanded ${input.displayName || input.name} editor`}
               title="Open expanded editor"
-              onClick={() => setExpanded(true)}
+              onClick={() => setExpandRequested(true)}
             >
               <Maximize2 size={13} />
             </button>
@@ -764,7 +815,7 @@ function PropertyRow({
             <SyntaxPicker
               label={`${input.displayName || input.name} expression syntax`}
               value={syntax}
-              descriptors={expressionDescriptors}
+              descriptors={syntaxDescriptors}
               getUnavailableReason={getUnavailableReason}
               disabled={readOnly}
               variant="inline"
@@ -780,7 +831,7 @@ function PropertyRow({
           {renderExpressionDiagnostics(inlineDiagnostics)}
         </>
       )}
-      {wrapped && (conversionOpen || conversionAuthored) ? (
+      {wrapped && !secretOnly && (conversionOpen || conversionAuthored) ? (
         <div id={conversionRegionId} className="wf-conversion-region">
           {conversionOpen ? (
             <div
@@ -851,7 +902,7 @@ function PropertyRow({
           type="button"
           className="wf-property-expand-row"
           aria-label={`Open expanded ${input.displayName || input.name} editor`}
-          onClick={() => setExpanded(true)}
+          onClick={() => setExpandRequested(true)}
         >
           <Maximize2 size={13} /> Open expanded editor
         </button>

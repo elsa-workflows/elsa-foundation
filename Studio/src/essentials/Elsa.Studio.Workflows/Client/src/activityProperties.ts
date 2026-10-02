@@ -19,6 +19,18 @@ export interface WrappedActivityInputValue {
   argumentExtras?: Record<string, unknown>;
 }
 
+/** The expression syntax whose value is a Secret Reference. */
+export const secretSyntax = "Secret";
+
+/**
+ * Whether the input is secret-only: the activity declares that it accepts only a Secret Reference (the
+ * backend's `isCredential`). Such an input is authored with the secret picker alone: it has no literal
+ * entry, and emptying it unbinds it (`clearSecretOnlyInput`) rather than leaving an empty value behind.
+ */
+export function acceptsOnlySecretReference(descriptor: StudioActivityInputDescriptor) {
+  return descriptor.isCredential === true;
+}
+
 export function camelize(value: string) {
   const trimmed = value.trim();
   return trimmed ? trimmed.charAt(0).toLowerCase() + trimmed.slice(1) : value;
@@ -235,26 +247,36 @@ function asStructuredValue(value: unknown): unknown {
   }
 }
 
+// A secret-only input shows only the secret picker. Anything authored under another syntax (possible only
+// from before the rule) is not read as text: the picker starts empty and the stored value stays untouched
+// on the node until the author picks a Secret.
+function secretOnlyExpression(expression: ActivityExpression): ActivityExpression {
+  return expression.type === secretSyntax ? expression : { type: secretSyntax, value: null };
+}
+
 export function readWrappedInputValue(value: unknown, descriptor: StudioActivityInputDescriptor): WrappedActivityInputValue {
+  const secretOnly = acceptsOnlySecretReference(descriptor);
   if (isWrappedInputValue(value)) {
+    const authored = {
+      type: value.expression.type || descriptor.defaultSyntax || "Literal",
+      value: value.expression.value
+    };
     return {
       typeName: value.typeName || descriptor.typeName,
-      expression: resolveAuthoredExpression({
-        type: value.expression.type || descriptor.defaultSyntax || "Literal",
-        value: value.expression.value
-      }, descriptor),
+      expression: secretOnly ? secretOnlyExpression(authored) : resolveAuthoredExpression(authored, descriptor),
       ...(value.memoryReference ? { memoryReference: value.memoryReference } : {}),
       ...(value.conversion != null ? { conversion: value.conversion } : {}),
       ...(value.argumentExtras ? { argumentExtras: value.argumentExtras } : {})
     };
   }
 
+  const fallback = {
+    type: descriptor.defaultSyntax || "Literal",
+    value: value ?? descriptor.defaultValue ?? ""
+  };
   return {
     typeName: descriptor.typeName,
-    expression: {
-      type: descriptor.defaultSyntax || "Literal",
-      value: value ?? descriptor.defaultValue ?? ""
-    }
+    expression: secretOnly ? secretOnlyExpression(fallback) : fallback
   };
 }
 

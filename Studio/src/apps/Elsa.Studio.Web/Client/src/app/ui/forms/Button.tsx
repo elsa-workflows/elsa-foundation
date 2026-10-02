@@ -18,7 +18,7 @@ export function StudioButton({
 }: {
   variant?: StudioButtonVariant;
   size?: StudioButtonSize;
-} & React.ButtonHTMLAttributes<HTMLButtonElement>) {
+} & React.ComponentPropsWithRef<"button">) {
   return (
     <button
       type={type}

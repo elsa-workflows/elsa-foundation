@@ -174,6 +174,16 @@ button {
   cursor: not-allowed;
 }
 
+/* Stored value of the masked password editor: shown as a state, never as text. */
+.studio-property-secret-value {
+  display: flex;
+  min-height: 32px;
+  align-items: center;
+  gap: var(--spacing-sm);
+  color: var(--studio-text-muted);
+  font-size: var(--studio-label-size);
+}
+
 .studio-property-error {
   margin: var(--spacing-xs) 0 0;
   color: var(--studio-danger-fg);

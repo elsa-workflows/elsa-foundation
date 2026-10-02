@@ -45,6 +45,10 @@ declare module "@elsa-workflows/studio-sdk" {
     typeName: string;
     uiHint?: string | null;
     defaultSyntax?: string | null;
+    /** Activity-declared: the value must not be shown or logged. Absent on older backends. */
+    isSensitive?: boolean | null;
+    /** Activity-declared: accepts only a Secret Reference. Implies isSensitive. Absent on older backends. */
+    isCredential?: boolean | null;
   }
 
   export interface StudioExpressionDescriptor {
@@ -55,6 +59,8 @@ declare module "@elsa-workflows/studio-sdk" {
 
   export interface StudioActivityPropertyEditorContext {
     activity: unknown;
+    /** The node id of the activity being edited, so an editor can tell one activity from the next. Absent on older hosts. */
+    activityId?: string | null;
     expressionDescriptors: StudioExpressionDescriptor[];
     readOnly?: boolean;
   }

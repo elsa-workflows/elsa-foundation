@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { StudioActivityInputDescriptor } from "@elsa-workflows/studio-sdk";
 import {
+  acceptsOnlySecretReference,
   camelize,
   conflictsWithStructuredEditor,
   defaultCollectionItem,
@@ -20,6 +21,8 @@ import {
   withLiteralValue,
   withSyntax
 } from "../activityProperties";
+import { canonicalizeStateForWire, expandStateFromWire } from "../activityInputWire";
+import { clearSecretOnlyInput, isMaskedInput, planInputSyntaxTransition, showsMaskedValue } from "../maskedInput";
 import { updateActivity } from "../workflowAdapter";
 import type { ActivityNode } from "../workflowTypes";
 
@@ -200,6 +203,52 @@ describe("expression mode transitions", () => {
       requiresConfirmation: true,
       nextValue: "target-default"
     });
+  });
+});
+
+describe("masked inputs", () => {
+  type Mode = "literal" | "text" | "structured" | "reference";
+  const stored = "stored-value-words";
+  const sensitive = { isSensitive: true };
+
+  it.each([
+    ["a password hint", true, { uiHint: "password" }],
+    ["a password hint in another casing", true, { uiHint: "Password" }],
+    ["a sensitive declaration", true, sensitive],
+    ["a secret-only declaration", true, { isCredential: true }],
+    ["no hint or declaration", false, { isSensitive: false, isCredential: false }]
+  ] as Array<[string, boolean, Partial<StudioActivityInputDescriptor>]>)("treats an input with %s as masked: %s", (_label, masked, declared) => {
+    expect(isMaskedInput({ ...textDescriptor, ...declared })).toBe(masked);
+  });
+
+  it.each([
+    ["a masked literal into a text syntax from the target's default, asking first", sensitive, "literal", "text", stored, { requiresConfirmation: true, nextValue: "target-default" }],
+    ["an empty masked literal into a text syntax without asking", sensitive, "literal", "text", "", { requiresConfirmation: false, nextValue: "target-default" }],
+    ["an ordinary literal into a text syntax by carrying it", {}, "literal", "text", stored, { requiresConfirmation: false, nextValue: stored }],
+    ["a masked literal between literal syntaxes by carrying it", sensitive, "literal", "literal", stored, { requiresConfirmation: false, nextValue: stored }],
+    ["masked source between text syntaxes by carrying it", sensitive, "text", "text", stored, { requiresConfirmation: false, nextValue: stored }],
+    ["masked source into Literal by carrying it", sensitive, "text", "literal", stored, { requiresConfirmation: false, nextValue: stored }],
+    ["a masked literal into Object from the target's default, asking first", sensitive, "literal", "structured", stored, { requiresConfirmation: true, nextValue: "target-default" }],
+    ["a masked Object value into Literal from the target's default, asking first", sensitive, "structured", "literal", { token: stored }, { requiresConfirmation: true, nextValue: "target-default" }],
+    ["a masked Object value, as JSON text from the wire, into a text syntax from the target's default, asking first", sensitive, "structured", "text", `{"token":"${stored}"}`, { requiresConfirmation: true, nextValue: "target-default" }],
+    ["an empty masked Object value into a text syntax without asking", sensitive, "structured", "text", {}, { requiresConfirmation: false, nextValue: "target-default" }],
+    ["a masked Object value into a reference from the target's default, asking first", sensitive, "structured", "reference", `{"token":"${stored}"}`, { requiresConfirmation: true, nextValue: "target-default" }],
+    ["masked source into Object from the target's default, asking first", sensitive, "text", "structured", stored, { requiresConfirmation: true, nextValue: "target-default" }]
+  ] as Array<[string, Partial<StudioActivityInputDescriptor>, Mode, Mode, unknown, object]>)("plans %s", (_label, declared, source, target, value, expected) => {
+    expect(planInputSyntaxTransition({ ...textDescriptor, ...declared }, source, target, value, "target-default")).toEqual(expected);
+  });
+
+  // An allow-list: a mode added later, like one without a descriptor, masks what it stores.
+  it.each([
+    ["text", true],
+    ["reference", true],
+    ["literal", false],
+    ["structured", false],
+    [undefined, false],
+    // An editing mode added after this was written.
+    ["tabular" as Mode, false]
+  ] as Array<[Mode | undefined, boolean]>)("shows a masked input's stored value under the %s editing mode: %s", (mode, shown) => {
+    expect(showsMaskedValue(mode)).toBe(shown);
   });
 });
 
@@ -477,6 +526,97 @@ describe("Object-to-Literal demotion on read", () => {
   it("does not disturb computed expressions, whose values are strings", () => {
     const node = { ...activity("http"), supportedMethods: { typeName: "", expression: { type: "JavaScript", value: "getVerbs()" } } };
     expect(readWrappedInput(node, listInput).expression).toEqual({ type: "JavaScript", value: "getVerbs()" });
+  });
+});
+
+describe("secret-only input values", () => {
+  const secretOnly: StudioActivityInputDescriptor = {
+    name: "Authorization",
+    referenceKey: "authorization",
+    typeName: "System.String",
+    isWrapped: true,
+    isSensitive: true,
+    isCredential: true,
+    defaultSyntax: "Literal"
+  };
+  const nodeWith = (value: unknown): ActivityNode => ({ ...activity("http"), ...(value === undefined ? {} : { authorization: value }) });
+  const wire = (node: ActivityNode) => canonicalizeStateForWire({ rootActivity: node } as never).rootActivity!;
+
+  it("recognizes only an explicit secret-only declaration", () => {
+    expect(acceptsOnlySecretReference(secretOnly)).toBe(true);
+    expect(acceptsOnlySecretReference({ ...secretOnly, isCredential: false })).toBe(false);
+    expect(acceptsOnlySecretReference({ ...secretOnly, isCredential: null })).toBe(false);
+    expect(acceptsOnlySecretReference({ ...secretOnly, isCredential: undefined, isSensitive: true })).toBe(false);
+  });
+
+  it("defaults an unauthored input to the Secret syntax ahead of the descriptor's default syntax", () => {
+    expect(readWrappedInput(nodeWith(undefined), secretOnly)).toEqual({
+      typeName: "System.String",
+      expression: { type: "Secret", value: null }
+    });
+    expect(readWrappedInput(nodeWith(undefined), { ...secretOnly, isCredential: false }).expression.type).toBe("Literal");
+  });
+
+  it("reads a value authored under another syntax as an empty Secret without exposing it, keeping the binding's extras", () => {
+    const stored = {
+      typeName: "System.String",
+      expression: { type: "Literal", value: "plain-old-words" },
+      argumentExtras: { isSensitive: true }
+    };
+
+    const read = readWrappedInput(nodeWith(stored), secretOnly);
+
+    expect(read.expression).toEqual({ type: "Secret", value: null });
+    expect(read.argumentExtras).toEqual({ isSensitive: true });
+    expect(JSON.stringify(read)).not.toContain("plain-old-words");
+  });
+
+  it("keeps an authored Secret Reference", () => {
+    const reference = { name: "tokens", typeName: "text" };
+
+    expect(readWrappedInput(nodeWith({ typeName: "System.String", expression: { type: "Secret", value: reference } }), secretOnly).expression)
+      .toEqual({ type: "Secret", value: reference });
+  });
+
+  it("leaves reading an input that is not secret-only unchanged", () => {
+    const plain = { ...secretOnly, isCredential: false, isSensitive: true };
+
+    expect(readWrappedInput(nodeWith({ typeName: "System.String", expression: { type: "Literal", value: "hello" } }), plain).expression)
+      .toEqual({ type: "Literal", value: "hello" });
+  });
+
+  it("serializes a picked reference as a Secret binding that keeps the binding's extras, and an input without a binding as unbound", () => {
+    const stored = nodeWith({
+      typeName: "System.String",
+      expression: { type: "Literal", value: "plain-old-words" },
+      argumentExtras: { isSensitive: true }
+    });
+    const picked = writeInputValue(stored, secretOnly, withLiteralValue(readWrappedInput(stored, secretOnly), { name: "tokens" }));
+
+    expect(wire(picked).inputs).toEqual([
+      { isSensitive: true, referenceKey: "authorization", value: { value: '{"name":"tokens"}', expressionType: "Secret" } }
+    ]);
+
+    const unbound = clearSecretOnlyInput(picked, secretOnly, null)!;
+    expect(unbound).not.toHaveProperty("authorization");
+    expect(wire(unbound).inputs).toEqual([]);
+  });
+
+  it("unbinds a secret-only input only when it is cleared", () => {
+    const bound = nodeWith({ typeName: "System.String", expression: { type: "Secret", value: { name: "tokens" } } });
+
+    expect(clearSecretOnlyInput(bound, secretOnly, null)).toEqual(activity("http"));
+    expect(clearSecretOnlyInput(bound, secretOnly, "")).toEqual(activity("http"));
+    expect(clearSecretOnlyInput(bound, secretOnly, { name: "tokens" })).toBeNull();
+    expect(clearSecretOnlyInput(bound, { ...secretOnly, isCredential: false }, null)).toBeNull();
+  });
+
+  it("round-trips a Secret binding through the wire", () => {
+    const state = { rootActivity: { ...activity("http"), inputs: [{ referenceKey: "authorization", value: { value: { name: "tokens" }, expressionType: "Secret" } }] } };
+
+    const expanded = expandStateFromWire(state as never).rootActivity!;
+
+    expect(readWrappedInput(expanded, secretOnly).expression).toEqual({ type: "Secret", value: { name: "tokens" } });
   });
 });
 

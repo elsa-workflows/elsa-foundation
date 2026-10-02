@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import {
   readActivityInputOptionsProvider,
   type ElsaStudioModuleApi,
@@ -7,6 +7,7 @@ import {
   type StudioActivityPropertyEditorContribution,
   type StudioActivityPropertyEditorProps
 } from "../sdk";
+import { StudioButton } from "./ui/forms/Button";
 
 const textLikeTypes = new Set(["string", "system.string", "text"]);
 
@@ -67,6 +68,17 @@ export const builtInPropertyEditors: StudioActivityPropertyEditorContribution[] 
     // input that rejects non-numeric text inline rather than letting it reach the server as a literal.
     supports: (descriptor, context) => isElementScope(context) && !hasOptionSource(descriptor) && isNumericDescriptor(descriptor),
     component: NumericEditor
+  },
+  {
+    id: "studio.property.password",
+    order: 135,
+    // Ahead of multiline and singleline so a hint that would show the text in the clear never wins over
+    // masking. Sensitivity alone does not claim a secret-only input, a password hint does: the Workflows
+    // properties panel gives a secret-only input the secret picker (or its unavailable state) and mounts no
+    // property editor for it, so this only decides what anything else that resolves an editor for one gets.
+    supports: (descriptor, context) => isElementScope(context) && isTextDescriptor(descriptor)
+      && (hasUiHint(descriptor, "password") || (descriptor.isSensitive === true && descriptor.isCredential !== true)),
+    component: PasswordEditor
   },
   {
     id: "studio.property.multiline",
@@ -170,6 +182,97 @@ function SinglelineEditor({ descriptor, value, disabled, onChange }: StudioActiv
       disabled={disabled}
       placeholder={stringValue(descriptor.defaultValue) || (enumHint ? formatSimpleTypeName(descriptor.typeName) : "")}
       onChange={event => onChange(event.target.value)}
+    />
+  );
+}
+
+// Local replace/draft state belongs to one input of one activity: the properties panel reuses a row when
+// another activity of the same type is selected, so a half-typed value must not follow the selection.
+function PasswordEditor(props: StudioActivityPropertyEditorProps) {
+  return <PasswordField key={`${props.context.activityId ?? ""}\u001f${props.descriptor.name}`} {...props} />;
+}
+
+// Masks while typing and never renders a stored value. The field only ever shows what was typed in this
+// session; a stored value is represented as "Value set" with a Replace action, and nothing is emitted until
+// the author types, so reopening an activity and saving cannot overwrite or erase what is stored.
+function PasswordField({ descriptor, value, disabled, onChange }: StudioActivityPropertyEditorProps) {
+  const [replacing, setReplacing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [storedValue, setStoredValue] = useState(value);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const replaceRef = useRef<HTMLButtonElement>(null);
+  const focusTarget = useRef<"field" | "replace" | null>(null);
+  const name = accessibleName(descriptor);
+  const hasStoredValue = value != null && String(value) !== "";
+
+  // A stored value that changes from outside (another activity without an id, an undo) discards the draft;
+  // the parent feeding back what was just typed does not.
+  if (value !== storedValue) {
+    setStoredValue(value);
+    if (value !== draft) {
+      setReplacing(false);
+      setDraft("");
+    }
+  }
+
+  useEffect(() => {
+    const target = focusTarget.current;
+    focusTarget.current = null;
+    if (target === "field") inputRef.current?.focus();
+    if (target === "replace") replaceRef.current?.focus();
+  }, [replacing]);
+
+  // Leaving a replacement before typing anything goes back to "Value set": the stored value is untouched.
+  const restoreValueSet = (refocusReplace: boolean) => {
+    if (refocusReplace) focusTarget.current = "replace";
+    setReplacing(false);
+  };
+  const canRestore = replacing && hasStoredValue && draft === "";
+
+  if (!replacing && hasStoredValue) {
+    return (
+      <div className="studio-property-secret-value">
+        <span>Value set</span>
+        <StudioButton
+          ref={replaceRef}
+          size="sm"
+          aria-label={`Replace ${name}`}
+          disabled={disabled}
+          onClick={() => {
+            focusTarget.current = "field";
+            setReplacing(true);
+          }}
+        >
+          Replace
+        </StudioButton>
+      </div>
+    );
+  }
+
+  return (
+    <input
+      ref={inputRef}
+      type="password"
+      aria-label={name}
+      value={draft}
+      disabled={disabled}
+      spellCheck={false}
+      autoComplete="new-password"
+      onBlur={() => {
+        if (canRestore) restoreValueSet(false);
+      }}
+      onKeyDown={event => {
+        if (event.key !== "Escape" || !canRestore) return;
+        event.preventDefault();
+        event.stopPropagation();
+        restoreValueSet(true);
+      }}
+      onChange={event => {
+        // Keep the field mounted once typing starts, even though the typed value now counts as stored.
+        setReplacing(true);
+        setDraft(event.target.value);
+        onChange(event.target.value);
+      }}
     />
   );
 }

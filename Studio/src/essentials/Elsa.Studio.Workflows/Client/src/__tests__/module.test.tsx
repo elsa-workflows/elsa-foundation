@@ -1113,6 +1113,48 @@ describe("workflows module", () => {
     await unmount();
   });
 
+  it("keeps a sensitive input's stored value out of the canvas node subtitle and its tooltip", async () => {
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    const storedValue = "stored-value-words";
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/activities")) return response({ activities: [
+        activity({
+          activityVersionId: "send-v1",
+          activityTypeKey: "Elsa.Activities.Send",
+          category: "Primitives",
+          displayName: "Send",
+          inputs: [{ name: "Token", referenceKey: "token", typeName: "System.String", isWrapped: true, isSensitive: true }]
+        })
+      ] });
+      if (url.includes("/definitions/definition-1")) return response({
+        definition: definition(),
+        draft: draftWithFlowchartRoot([{
+          nodeId: "send-1",
+          activityVersionId: "send-v1",
+          inputs: [{ referenceKey: "token", value: { value: storedValue, expressionType: "Literal" } }],
+          outputs: [],
+          structure: null
+        }]),
+        versions: []
+      });
+      return response({ items: [definition()] });
+    }));
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions?definition=definition-1");
+
+    await waitForCanvasNode(container, "Send");
+    const subtitle = container.querySelector(".wf-canvas .react-flow__node[data-id='send-1'] .wf-node-copy small");
+    expect(subtitle?.textContent).toBe("Protected value");
+    expect(subtitle?.getAttribute("title")).toBe("Protected value — Primitives · Action");
+    expect(container.querySelector(".wf-canvas")?.innerHTML).not.toContain(storedValue);
+
+    await unmount();
+  });
+
   it("renders descriptor-driven properties and saves wrapped input edits", async () => {
     vi.stubGlobal("ResizeObserver", class {
       observe() {}

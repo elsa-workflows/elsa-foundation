@@ -14,6 +14,10 @@ declare module "@elsa-workflows/studio-sdk" {
     defaultSyntax?: string | null;
     isReadOnly?: boolean | null;
     referenceKey?: string | null;
+    /** Activity-declared: the value must not be shown or logged. Absent on older backends. */
+    isSensitive?: boolean | null;
+    /** Activity-declared: accepts only a Secret Reference. Implies isSensitive. Absent on older backends. */
+    isCredential?: boolean | null;
   }
 
   export interface StudioExpressionDescriptor {

@@ -1,7 +1,7 @@
 import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
-import type { StudioEndpointContext, StudioExpressionEditorContribution } from "@elsa-workflows/studio-sdk";
+import type { StudioActivityInputDescriptor, StudioEndpointContext, StudioExpressionEditorContribution } from "@elsa-workflows/studio-sdk";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { getActivityExecutionDescendants, getActivityExecutionInspection, getActivityExecutionLayout } from "../api/runtime";
 import { getActivityExecutionValuePayload } from "../api/activityExecutionValuePayload";
@@ -742,6 +742,117 @@ describe("WorkflowActivityExecutionDetails", () => {
 
     await waitFor(() => expect(container.textContent).toContain("Allowed runtime evidence"));
     expect(container.textContent).toContain("Authored source is hidden by source permissions.");
+  });
+
+  describe("a declared sensitive or secret-only input", () => {
+    const authoredSource = "variables.storedWords";
+    const sourceBinding = { inputKey: "token-key", inputName: "Token", source: "Expression", expression: { language: "JavaScript", expression: authoredSource } };
+    const withheldBindingNote = "The compiled binding of a masked input is not shown.";
+
+    const renderDeclaredInput = (
+      declared: Partial<StudioActivityInputDescriptor>,
+      authored: { expressionType: string; value: unknown; isSensitive?: boolean },
+      inputBindings: ExecutableGraphNodeFacts["inputBindings"] = [],
+      expressionEditors: StudioExpressionEditorContribution[] = []
+    ) => {
+      vi.mocked(getActivityExecutionInspection).mockResolvedValue(inspection([]));
+      return render(
+        <WorkflowActivityExecutionDetails
+          context={context}
+          activity={activity}
+          expressionEditors={expressionEditors}
+          activityCatalog={[{ ...catalog[0]!, inputs: [{ referenceKey: "token-key", name: "Token", typeName: "System.String", ...declared }] }]}
+          executableNodeFacts={{
+            executableNodeId: "node-1",
+            authoredActivityId: "write-line",
+            activityType: activity.activityType,
+            activityTypeVersion: activity.activityTypeVersion,
+            structureKind: null,
+            available: true,
+            outputCaptures: [],
+            authoredInputsAccess: "visible",
+            authoredInputs: [{ executableNodeId: "node-1", inputKey: "token-key", ...authored }],
+            inputBindings
+          }}
+        />
+      );
+    };
+
+    it.each([
+      ["sensitive", "JavaScript", { isSensitive: true }],
+      ["sensitive", "Literal", { isSensitive: true }],
+      ["password-hinted", "Literal", { uiHint: "password" }],
+      ["secret-only", "JavaScript", { isCredential: true }],
+      // Only the exact Secret syntax names a Secret Reference; a casing variant is just another source.
+      ["sensitive", "secret", { isSensitive: true }],
+      ["secret-only", "SECRET", { isCredential: true }],
+      // Under the exact Secret syntax only a reference names a secret; a plain string names none.
+      ["sensitive", "Secret", { isSensitive: true }],
+      ["secret-only", "Secret", { isCredential: true }]
+    ])("keeps the authored %s source hidden under %s when the backend did not flag the record", async (_label, expressionType, declared) => {
+      const container = renderDeclaredInput(declared, { expressionType, value: authoredSource }, [sourceBinding]);
+
+      await waitFor(() => expect(container.textContent).toContain("Protected source"));
+      expect(container.textContent).toContain("Authored source is protected because this input is sensitive.");
+      expect(container.innerHTML).not.toContain(authoredSource);
+    });
+
+    it.each([
+      ["an object", { name: "api-tokens" }],
+      ["JSON text", '{"name":"api-tokens"}']
+    ])("names the Secret Reference a secret-only input is bound to, held as %s", async (_shape, value) => {
+      const container = renderDeclaredInput({ isSensitive: true, isCredential: true }, { expressionType: "Secret", value });
+
+      await waitFor(() => expect(container.textContent).toContain("api-tokens"));
+      expect(container.textContent).not.toContain("Protected source");
+      // Nothing is withheld when there is no compiled binding.
+      expect(container.textContent).not.toContain(withheldBindingNote);
+    });
+
+    const extraField = "extra-field-words";
+    const carrying = { name: "api-tokens", rawValue: extraField };
+    const compiledCarrying = { inputKey: "token-key", inputName: "Token", source: "SecretRead", reference: carrying };
+
+    it.each([
+      ["sensitive", "an object", { isSensitive: true }, carrying],
+      ["sensitive", "JSON text", { isSensitive: true }, JSON.stringify(carrying)],
+      ["secret-only", "an object", { isCredential: true }, carrying],
+      ["secret-only", "JSON text", { isCredential: true }, JSON.stringify(carrying)]
+    ])("shows only the name of a Secret Reference that carries another field, on a %s input held as %s", async (_kind, _shape, declared, value) => {
+      const container = renderDeclaredInput(declared, { expressionType: "Secret", value }, [compiledCarrying]);
+
+      await waitFor(() => expect(container.textContent).toContain("api-tokens"));
+      expect(container.innerHTML).not.toContain(extraField);
+      expect(container.textContent).toContain(withheldBindingNote);
+    });
+
+    // Prints everything the masked row hands it, as a source renderer for the Secret syntax from any module could.
+    const secretSourceRenderer: StudioExpressionEditorContribution = {
+      id: "test.secret-source",
+      supports: context => context.syntax === "Secret",
+      surfaces: {},
+      sourceRenderer: {
+        compact: ({ context }) => <output>{String(context.value)} {JSON.stringify(context)}</output>,
+        expanded: ({ context }) => <output>Secret source: {String(context.value)} {JSON.stringify(context)}</output>
+      }
+    };
+
+    it.each([
+      ["an object", carrying],
+      ["JSON text", JSON.stringify(carrying)]
+    ])("hands a source renderer only the name of a masked input's Secret Reference held as %s", async (_shape, value) => {
+      const container = renderDeclaredInput({ isSensitive: true }, { expressionType: "Secret", value }, [], [secretSourceRenderer]);
+
+      await waitFor(() => expect(container.textContent).toContain("Secret source: api-tokens"));
+      expect(container.innerHTML).not.toContain(extraField);
+    });
+
+    it("keeps a Secret Reference hidden when the backend flagged the record", async () => {
+      const container = renderDeclaredInput({ isCredential: true }, { expressionType: "Secret", value: { name: "api-tokens" }, isSensitive: true });
+
+      await waitFor(() => expect(container.textContent).toContain("Protected source"));
+      expect(container.innerHTML).not.toContain("api-tokens");
+    });
   });
 
   it("shows an empty state when no input snapshots exist", async () => {
