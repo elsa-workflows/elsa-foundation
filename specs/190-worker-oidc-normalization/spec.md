@@ -23,7 +23,7 @@ An operator configures one external token issuer, API audience, provider and ten
 1. **Given** an anonymous request, tampered token, wrong issuer or wrong audience, **when** execution is requested, **then** authentication fails with401 and no workflow is started.
 2. **Given** a valid token without a legitimate execution grant, **when** execution is requested, **then** the caller is authenticated but denied with403.
 3. **Given** a valid token containing forged Elsa normalization, tenant, provider, role or permission claims, **when** it is normalized without a legitimate mapping, **then** the internal claims are removed before rule evaluation and cannot self-authorize; the request is denied with403.
-4. **Given** a legitimate mapping in the configured provider/tenant namespace, **when** the caller executes, suspends and resumes through the actual HTTP stimulus path, **then** the workflow completes and its state survives a fresh host restart.
+4. **Given** a legitimate mapping in the configured provider/tenant namespace, **when** the caller executes, suspends and resumes through the actual HTTP stimulus path, **then** the workflow completes and its state survives a fresh OS-process restart.
 5. **Given** a token naming another provider or tenant, **when** mappings are loaded, **then** only the host-configured namespace is used. The token cannot choose a mapping namespace.
 
 ### User Story 2 - Compose authentication explicitly without changing existing hosts (Priority: P1)
@@ -48,11 +48,11 @@ An operator changes durable mapping rules and understands the difference between
 
 **Why this priority**: A grant that remains cached indefinitely or a backend failure disguised as permission denial would make the secured Worker misleading to operate.
 
-**Independent Test**: Use the same valid token before and after a persisted rule update, restart the host, and inject mapping, normalization, evaluator and cancellation failures at their actual request boundaries.
+**Independent Test**: Use the same valid token before and after a persisted rule update, restart the host in a new OS process, and inject mapping, normalization, evaluator and cancellation failures at their actual request boundaries.
 
 **Acceptance Scenarios**:
 
-1. **Given** an execution grant is removed from a stored rule, **when** the same valid token is used on a later request, **then** the request is denied403 without refreshing the token. Rules and their update survive a fresh host restart.
+1. **Given** an execution grant is removed from a stored rule, **when** the same valid token is used on a later request, **then** the request is denied403 without refreshing the token. Rules and their update survive a fresh OS-process restart.
 2. **Given** rules for another provider or tenant, **when** they are added or changed, **then** the configured namespace's grants are unchanged.
 3. **Given** a request-time mapping-store or normalization failure, **when** authentication runs, **then** no successful ticket or partial normalized principal is published and the request returns401 with no raw peer exception detail.
 4. **Given** an authorization backend failure after successful normalization, **when** permission evaluation runs, **then** the existing operational failure propagates rather than being reported as403 or permitting another grant source to authorize.
@@ -106,7 +106,7 @@ An operator changes durable mapping rules and understands the difference between
 
 - **SC-001**: Every anonymous or invalid-token control returns401, every valid-but-ungranted control returns403, and the legitimately mapped caller completes the persisted execute/suspend/resume journey.
 - **SC-002**: Zero forged internal claims or cross-namespace rules create an execution grant in the defined adverse matrix.
-- **SC-003**: Removing a stored grant denies the next request using the same token; the updated rule and workflow state remain observable after a fresh host restart, with zero bearer-request user/link records created.
+- **SC-003**: Removing a stored grant denies the next request using the same token; the updated rule and workflow state remain observable after a fresh OS-process restart, with zero bearer-request user/link records created.
 - **SC-004**: Both developer configuration entry points yield the same configured trust boundary; all retained legacy/default/first-party compatibility controls pass.
 - **SC-005**: Every injected configuration, authentication, authorization and cancellation failure follows its defined outcome without a successful partial ticket or newly emitted sensitive value.
 - **SC-006**: A controlled removal of each selected validation/normalization guard makes its adverse acceptance control fail; restoring the production guard restores the pass. The evidence labels local-issuer proof separately from external deployment interoperability.

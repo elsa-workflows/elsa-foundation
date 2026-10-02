@@ -13,7 +13,7 @@ Extend the existing `Elsa.Foundation.Identity.Oidc` module with default-false `N
 **Language/Version**: C# / repository .NET10 target.
 **Primary Dependencies**: Existing CShells metadata/binding; Foundation Identity/Core; ASP.NET Core JwtBearer/OIDC/options; existing Runtime.Core persistence-access contracts for scope agreement (no EF dependency in OIDC). No new identity platform or package family.
 **Storage**: Existing `IClaimMappingStore`; first real acceptance uses `EfClaimMappingStore` with explicitly configured IAM SQLite target and host-owned migrations. Runtime state uses existing named SQLite resource resolution independently.
-**Testing**: Existing Identity tests for registration/trust/callback contracts; Runtime EF tests for one real local issuer/HTTP/database journey; existing IAM tests and Architecture gates for regression. No new test project or provider matrix.
+**Testing**: Existing Identity tests for registration/trust/callback contracts; Runtime EF tests for one real local issuer/HTTP/database journey; existing IAM tests and Architecture gates for regression. One non-test, non-packable host executable supports fresh-process proof; assertions stay in the existing Runtime EF test project. No new test project or provider matrix.
 **Target Platform**: One from-source single-host Worker on supported .NET host platforms. Actual execution evidence names its platform; local issuer is not deployed IdP interoperability.
 **Project Type**: Additive modular host authentication adapter inside the existing OIDC owner package.
 **Performance Goals**: None added; retired performance measurement is not restored by this unit.
@@ -56,9 +56,12 @@ src/essentials/Foundation/Identity/Oidc/
   WorkerHttpFixtureHostEvidenceTests.cs (retained prior evidence)
   (new) WorkerOidcHostTests.cs
   (new) WorkerOidcHostFixture.cs
+ tests/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Fixtures/WorkerOidcHost/
+  (new) WorkerOidcHost.csproj (executable, IsTestProject=false, IsPackable=false)
+  (new) Program.cs (real Kestrel/shell composition; fixture-only control channel)
 ```
 
-New file names are the implementation allocation, not existing classes. Reuse issuer/setup/reset helpers within existing test assemblies; do not clone substantial arrange blocks. Only add test project references needed for the real actor host.
+New file names are the implementation allocation, not existing classes. Reuse issuer/setup/reset helpers within existing test assemblies; do not clone substantial arrange blocks. Only add test project references needed for the real actor host. The Runtime EF test project builds the fixture executable with a build-only ProjectReference (ReferenceOutputAssembly=false), following existing CLI fixture practice; include it in the solution/build-filter graph. It introduces no test discovery entry, provider suite, production package or CI job.
 
 ## Phase 0 — Research decisions
 
@@ -74,12 +77,18 @@ The real Worker acceptance selects `FoundationIdentityAbstractions`, `Foundation
 
 Final trust validation must run for ordinary hosts and actual shell activation. Use the existing Identity activation pattern (`IHostedService` plus `IShellInitializer`) rather than assume root-only ValidateOnStart runs for shell services. Resolve the selected scheme/options during that gate, before request serving; validate both supported entry points in the acceptance host.
 
+## Fresh-process actor ownership
+
+The parent WorkerOidcHostFixture owns the local issuer, signing key, test tokens, isolated files, child lifetime and safe receipts. The fixture executable starts real Kestrel with the actual declarative shell, registers the nondefault static AddPersistenceCore scope before AddCShells, and resolves the real OIDC/IAM/Runtime services. Setup, persisted rule updates and store observations use a fixture-only private control channel into those activated stores; authenticated actor calls use the mounted production HTTP endpoints. No fabricated authentication handler or test substitute for Runtime endpoints is permitted. Keep sensitive startup/control inputs out of command-line arguments and retained output; emit bounded readiness/outcome receipts, and use deterministic async teardown with bounded exit and termination of owned children. Reuse existing process/cleanup helpers only where their ownership and output policy fit; do not clone unrelated Workbench setup.
+
+For FR-011 and SC-003, terminate and await the first child process, then launch a distinct child from the same built artifact and reopen the same IAM and Runtime database files. Retain the parent issuer/key and exact still-valid token across that transition. Observe child process identities/exits, reloaded rules and completed workflow state, and reassert403 for the revoked grant through the second process. A disposed/recreated service provider or TestServer in the parent process is only a supplementary control. No product host-root configuration seam is added solely for this test.
+
 ## Implementation sequence
 
 1. Add settings/audience fallback and focused legacy/bearer-only registration controls.
 2. Install opt-in events and final named-options validation, bind the distinct exact trust type, enforce input filtering and output validation with cancellation/failure controls.
 3. Prove all success-short-circuit hooks and replacement/registration ordering through the real handler; do not stop at direct event invocation.
-4. Build one explicit IAM plus named Runtime SQLite host with isolated real issuer/discovery/signing key, then execute the actor and durable-rule/restart/no-user-write journey.
+4. Build one explicit IAM plus named Runtime SQLite host with isolated real issuer/discovery/signing key, then execute the actor and durable-rule/fresh-process/no-user-write journey using the non-test fixture executable.
 5. Run restored adverse mutations, affected suites, architecture/maps and diff review. Publish exact-head evidence and verify resulting-main gates before claiming adapter delivery.
 6. Only then consider a separate Worker profile publication leaf with exact membership/prerequisite evidence.
 
