@@ -1,7 +1,7 @@
 import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   allThemeModes,
   builtInThemeDefinitions,
@@ -217,10 +217,11 @@ describe("ThemeProvider and ThemeSwitcher", () => {
   let root: Root;
   let api: ReturnType<typeof useTheme> | undefined;
 
+  const contextServing = (getJson: () => Promise<unknown>) => ({ http: { getJson } }) as unknown as StudioEndpointContext;
+  const storeWithDefault = (defaultThemeId: string) =>
+    contextServing(async () => ({ themes: [twoModeTheme()], defaultThemeId, assets: [] }));
   // The store adds the two-mode custom theme to the built-ins, so the provider can switch to it.
-  const storeContext = {
-    http: { getJson: async () => ({ themes: [twoModeTheme()], defaultThemeId: "meridian", assets: [] }) }
-  } as unknown as StudioEndpointContext;
+  const storeContext = storeWithDefault("meridian");
 
   function Probe() {
     api = useTheme();
@@ -238,9 +239,9 @@ describe("ThemeProvider and ThemeSwitcher", () => {
     }
   }
 
-  async function render() {
+  async function render(context = storeContext) {
     await act(() => root.render(
-      <ThemeProvider storeContext={storeContext}>
+      <ThemeProvider storeContext={context}>
         <Probe />
         <ThemeSwitcher />
         <ShellFrame navigation={[]} panels={[]} path="/" title="Dashboard" backendBaseUrl="https://backend.example/" onNavigate={() => {}}>
@@ -286,6 +287,43 @@ describe("ThemeProvider and ThemeSwitcher", () => {
       document.documentElement.removeAttribute(attribute);
     }
     api = undefined;
+  });
+
+  describe("restoring the stored theme", () => {
+    /** Renders against the store and waits until it has loaded and the theme has settled on <html> and in storage. */
+    async function expectSettledTheme(storedThemeId: string, expectedThemeId: string) {
+      localStorage.setItem("elsa-studio-theme", storedThemeId);
+      // The store default deliberately differs from the first built-in (Meridian), so a fallback proves which one won.
+      await render(storeWithDefault("atelier"));
+      await vi.waitFor(() => {
+        expect(api!.availableThemes.some(theme => theme.id === "two-mode")).toBe(true);
+        expect(document.documentElement.getAttribute("data-theme")).toBe(expectedThemeId);
+        expect(localStorage.getItem("elsa-studio-theme")).toBe(expectedThemeId);
+      });
+    }
+
+    it("restores a stored custom theme once the store loads", async () => {
+      await expectSettledTheme("two-mode", "two-mode");
+    });
+
+    it("restores a stored built-in theme", async () => {
+      await expectSettledTheme("drift", "drift");
+    });
+
+    it("falls back to the store default for a stored id the store no longer offers", async () => {
+      await expectSettledTheme("retired-theme", "atelier");
+    });
+
+    it("keeps the stored custom theme id when the store cannot be fetched", async () => {
+      localStorage.setItem("elsa-studio-theme", "two-mode");
+      const getJson = vi.fn(() => Promise.reject(new Error("offline")));
+      await render(contextServing(getJson));
+      await vi.waitFor(() => expect(getJson).toHaveBeenCalled());
+      await act(() => {});
+
+      expect(document.documentElement.getAttribute("data-theme")).toBe("meridian");
+      expect(localStorage.getItem("elsa-studio-theme")).toBe("two-mode");
+    });
   });
 
   it("renders Meridian by default and applies its typography and shape", async () => {

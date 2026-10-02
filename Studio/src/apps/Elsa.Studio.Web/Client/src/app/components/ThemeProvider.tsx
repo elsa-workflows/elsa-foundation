@@ -53,20 +53,26 @@ export function ThemeProvider({
   children: React.ReactNode;
   storeContext?: StudioEndpointContext;
 }) {
-  const [store, setStore] = useState<ThemeStoreResponse>(() => normalizeThemeStore());
+  const [builtInStore] = useState(normalizeThemeStore);
+  // Until the store loads, a stored custom theme id cannot resolve yet, so the fallback theme shown
+  // meanwhile must not overwrite it in localStorage. A store that failed to load never counts as loaded.
+  const [loadedStore, setLoadedStore] = useState<ThemeStoreResponse>();
+  const store = loadedStore ?? builtInStore;
+  const storeLoaded = loadedStore !== undefined;
   const [currentTheme, setCurrentTheme] = useState<Theme>(builtInThemeDefinitions[0]);
   // The preferred mode survives theme switches: picking High contrast, visiting a light/dark-only
   // theme, and coming back restores High contrast rather than whatever that theme fell back to.
   const [preferredMode, setPreferredMode] = useState<ThemeMode>("light");
   const [navModePreference, setNavModePreferenceState] = useState<NavModePreference>("theme");
   const [mounted, setMounted] = useState(false);
-  const [persistThemeSelection, setPersistThemeSelection] = useState(true);
+  const [persistThemeSelection, setPersistThemeSelection] = useState(false);
   const supportedModes = getSupportedThemeModes(currentTheme);
   const activeMode = resolveThemeMode(currentTheme, preferredMode);
   const navMode = resolveNavMode(currentTheme.layout, navModePreference);
 
-  // Initialize from localStorage on mount, falling back to the OS contrast and colour-scheme
-  // preferences while the user has never chosen a mode. Once chosen, the stored mode always wins.
+  // Initialize from localStorage on mount and again whenever the store changes, falling back to the
+  // OS contrast and colour-scheme preferences while the user has never chosen a mode. Once chosen,
+  // the stored mode always wins. The stored theme id is only written back once the store has loaded.
   useEffect(() => {
     const savedThemeId = getStoredPreference("elsa-studio-theme");
     const savedMode = getStoredPreference("elsa-studio-theme-mode");
@@ -76,18 +82,17 @@ export function ThemeProvider({
     setPreferredMode(isThemeMode(savedMode) ? savedMode : getSystemPreferredMode());
     setNavModePreferenceState(isNavModePreference(savedNavMode) ? savedNavMode : "theme");
     setCurrentTheme(nextTheme);
-    setPersistThemeSelection(true);
+    setPersistThemeSelection(storeLoaded);
     setMounted(true);
-  }, [store]);
+  }, [store, storeLoaded]);
 
   useEffect(() => {
     let disposed = false;
 
     async function loadThemes() {
-      const nextStore = storeContext ? await getThemeStore(storeContext) : normalizeThemeStore();
+      const nextStore = await loadThemeStore(storeContext);
       if (!disposed) {
-        setStore(nextStore);
-        setCurrentTheme(current => findSelectableTheme(nextStore, current.id));
+        setLoadedStore(current => nextStore ?? current);
       }
     }
 
@@ -162,9 +167,8 @@ export function ThemeProvider({
   };
 
   const refreshThemes = async () => {
-    const nextStore = storeContext ? await getThemeStore(storeContext) : normalizeThemeStore();
-    setStore(nextStore);
-    setCurrentTheme(current => findSelectableTheme(nextStore, current.id));
+    const nextStore = await loadThemeStore(storeContext);
+    setLoadedStore(current => nextStore ?? current);
   };
 
   return (
@@ -189,6 +193,11 @@ export function ThemeProvider({
       {children}
     </ThemeContext.Provider>
   );
+}
+
+/** Fetches the theme store, or returns the built-ins without a store context. Undefined means the fetch failed. */
+function loadThemeStore(storeContext: StudioEndpointContext | undefined) {
+  return storeContext ? getThemeStore(storeContext) : Promise.resolve(normalizeThemeStore());
 }
 
 function getSystemPreferredMode(): ThemeMode {

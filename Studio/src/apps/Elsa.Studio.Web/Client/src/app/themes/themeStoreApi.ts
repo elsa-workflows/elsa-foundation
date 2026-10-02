@@ -167,11 +167,12 @@ export async function fetchThemeStore(context: StudioEndpointContext): Promise<T
   return normalizeThemeStore(response);
 }
 
-export async function getThemeStore(context: StudioEndpointContext): Promise<ThemeStoreResponse> {
+/** The theme store, or undefined when it could not be fetched — distinct from a store holding only the built-ins. */
+export async function getThemeStore(context: StudioEndpointContext): Promise<ThemeStoreResponse | undefined> {
   try {
     return await fetchThemeStore(context);
   } catch {
-    return normalizeThemeStore();
+    return undefined;
   }
 }
 
