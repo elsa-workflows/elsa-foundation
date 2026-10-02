@@ -136,17 +136,4 @@ public sealed class ShellLifecycleHandOffTests : IAsyncDisposable
     /// <summary>The old generation's terminators ran, so its placement pump was stopped before these assertions.</summary>
     private static void AssertTerminated(DrainResult drained) =>
         Assert.Contains(drained.TerminatorResults, result => result.TerminatorTypeName == nameof(Elsa.Tasks.Services.StopShellTasksTerminator) && result.Completed);
-
-    /// <summary>The placement pump takes no single-node lock; the task executor only needs one to exist.</summary>
-    private sealed class NoLocks : IDistributedLockProvider
-    {
-        public IDistributedSynchronizationHandle? TryAcquireLock(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
-
-        public ValueTask<IDistributedSynchronizationHandle?> TryAcquireLockAsync(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
-
-        public ValueTask<IDistributedSynchronizationHandle> AcquireLockAsync(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
-    }
 }
