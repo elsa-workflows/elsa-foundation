@@ -28,20 +28,37 @@ namespace Elsa.Activities.Runtime.Tasks;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Source of types: the union of (a) the runtime-loaded assemblies (framework activities — composed into the
-/// host) and (b) the assemblies surfaced by every registered <see cref="IFeatureAssemblyProvider"/>. The
-/// provider set is the same authoritative source the modular feature catalog uses, so it covers
-/// dynamically-loaded package activities whose assemblies are loaded into the
-/// runtime on a shell (re)load but are not guaranteed to appear in <see cref="AppDomain.CurrentDomain"/>. This
-/// task re-runs on every shell (re)build (it is an <see cref="IStartupTask"/>, replayed by the shell-tasks
-/// initializer), so when an activity package becomes available both the activity type and its
+/// Source of types, in this order: (a) the assemblies of the features this shell was composed from, which its own
+/// <see cref="ShellFeatureDescriptor"/>s name, so they name the release of each package the shell composes; (b) the
+/// assemblies surfaced by every registered <see cref="IFeatureAssemblyProvider"/>, the same authoritative source the modular
+/// feature catalog uses, which covers dynamically-loaded package activities that are not guaranteed to appear in
+/// <see cref="AppDomain.CurrentDomain"/>; (c) the runtime-loaded assemblies (framework activities, composed into the host),
+/// less every other loaded assembly with the simple name of a shell feature assembly: an earlier release of that package,
+/// which the shell does not compose. This task re-runs on every shell (re)build (it is an <see cref="IStartupTask"/>,
+/// replayed by the shell-tasks initializer), so when an activity package becomes available both the activity type and its
 /// I/O element types are picked up the next time the shell composes.
+/// </para>
+/// <para>
+/// The order and the exclusion decide which class an alias resolves to after a package is upgraded in place. Its previous
+/// release stays loaded (a host-integrated load context is never unloaded, a collectible one lingers until it is collected),
+/// so the AppDomain can hold two assemblies that declare the same activity type, and so the same alias, and the first one
+/// registered wins. The shell's own features come first so that the release the shell composes claims each alias; a
+/// provider resolved inside a shell container cannot be relied on for that (Nuplane's catalog copied into a shell has loaded
+/// nothing). The exclusion keeps the earlier release from claiming an alias the new release no longer declares, such as an
+/// activity or an I/O type it removed. Registering the earlier class made the new shell construct it: it ignored every input
+/// the new release added, or failed to construct because its services are registered under the new release's types.
+/// </para>
+/// <para>
+/// One CLR type is registered per alias, and the alias carries no version, so every node bound to an activity runs the
+/// class of the release the shell composes, the newest one after an upgrade, whichever catalog version the node pins
+/// (spec 004 leaves loading several versions of one CLR type out of scope). A release must therefore stay input-compatible
+/// with the versions workflows are pinned to.
 /// </para>
 /// <para>
 /// Idempotent and fail-fast-tolerant: <see cref="IWellKnownTypeRegistry.RegisterType"/> throws on a genuine
 /// duplicate-alias conflict, but the identical (type, alias) pair is a no-op. This pass only registers a type
 /// whose canonical alias is not already mapped to a different type, so re-running it (or overlapping with the
-/// primitive seed, or the same assembly appearing in both sources) never throws.
+/// primitive seed, or the same assembly appearing in several sources) never throws.
 /// </para>
 /// </remarks>
 public sealed class RegisterActivityTypesStartupTask : IStartupTask
@@ -85,19 +102,8 @@ public sealed class RegisterActivityTypesStartupTask : IStartupTask
             TryRegister(type);
     }
 
-    // The assemblies of the features this shell was composed from FIRST, then the ones every registered
-    // IFeatureAssemblyProvider surfaces (the modular host's package assemblies), then the baseline (runtime-loaded) ones,
-    // less every earlier release of a shell feature assembly. De-duplicated by assembly identity so an assembly present in
-    // several sources is scanned once; the registration itself is idempotent regardless.
-    //
-    // The order and the exclusion are load-bearing. A package upgraded in place leaves its previous release loaded (a
-    // host-integrated load context is never unloaded, and a collectible one lingers until it is collected), so
-    // AppDomain.GetAssemblies() can hold two assemblies that declare the same activity type, and therefore the same
-    // canonical alias, and the first one registered wins (TryRegister skips an alias that is already mapped). The shell's
-    // own feature descriptors name the release it composes; a provider resolved inside a shell container cannot be relied
-    // on for that (Nuplane's catalog copied into a shell has loaded nothing). Baseline-first registered the previous
-    // release's type: the new shell then constructed the old activity class, which ignored every input the new release
-    // added, or failed to construct because the services it asks for are registered under the new release's types.
+    // The shell's own feature assemblies first, then the providers', then the baseline less every earlier release of a
+    // shell feature assembly, each assembly once. The order and the exclusion are load-bearing: see the remarks.
     private async Task<IReadOnlyCollection<Assembly>> CollectAssembliesAsync(CancellationToken cancellationToken)
     {
         var assemblies = new List<Assembly>();

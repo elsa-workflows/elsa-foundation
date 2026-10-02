@@ -49,6 +49,14 @@ bash tools/demo/show-change.sh
 One project builds both releases: `DemoVersion=1` (the default) is 1.0.0 and `DemoVersion=2` is 1.1.0. Each builds into folders
 of its own, so a build of one never overwrites the other.
 
+## The Add note activity
+
+The workflow half of this sample is a package of its own,
+[Elsa.Samples.Nuplane.Notes.Activities](../Elsa.Samples.Nuplane.Notes.Activities/README.md): an "Add note" activity released
+with the module, 1.0.0 with a text and 1.1.0 with optional tags too, which a workflow host such as `Elsa.Workbench` loads beside
+it. Keeping it out of this package lets this one load on a host that composes no workflow modules, `Elsa.Foundation.Host` among
+them. Its README shows what an in-place upgrade does to a workflow pinned to the activity's first version.
+
 ## Build, pack, feed layout
 
 Release 1.0.0 into `artifacts/demo/hosts/a/feed`, then release 1.1.0 into the same feed, then release 1.1.0 into the feed of host b only:

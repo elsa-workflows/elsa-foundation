@@ -219,7 +219,8 @@ builder.Services.AddNuplane(nuplaneConfiguration, nuplane =>
     nuplane.UseBasePath(builder.Environment.ContentRootPath);
     nuplane.AddDirectoryFeedsFromConfiguration(nuplaneConfiguration);
     nuplane.AutoloadPackages(nuplaneConfiguration.GetSection("Loading"));
-    // Registered after AutoloadPackages so the new assemblies are loaded before the catalog is refreshed.
+    // Registered after AutoloadPackages: Nuplane calls its observers in registration order, so the new assemblies are
+    // loaded before the catalog is refreshed (HostOwnedServicesAreSharedWithShellsTests pins the order).
     nuplane.OnPackagesChanged<ShellCatalogRefreshOnPackagesChanged>();
 });
 builder.Services.AddSingleton<ShellCatalogRefreshOnPackagesChanged>();

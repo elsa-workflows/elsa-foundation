@@ -1,8 +1,10 @@
 using System.Reflection;
+using System.Reflection.Emit;
 using System.Runtime.Loader;
 using CShells.Features;
 using Elsa.Activities.Design.Reconciliation.Clr.Services;
 using Elsa.Activities.Design.Tests.ClrFixture;
+using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Tasks;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
@@ -122,11 +124,8 @@ public sealed class ActivityIoTypeRegistrationTests
         WithPreviousRelease(async (current, previous) =>
         {
             var registry = SeedPrimitives(new WellKnownTypeRegistry());
-            var shell = new ServiceCollection()
-                .AddSingleton<IReadOnlyCollection<ShellFeatureDescriptor>>([new ShellFeatureDescriptor("Fixture") { StartupType = typeof(ComplexInputFixtureActivity) }])
-                .BuildServiceProvider();
 
-            await CreateTask(registry, baseAssemblies: () => [previous, current], shellServices: shell).ExecuteAsync(CancellationToken.None);
+            await CreateTask(registry, baseAssemblies: () => [previous, current], shellServices: ShellComposing(current)).ExecuteAsync(CancellationToken.None);
 
             AssertCurrentReleaseRegistered(registry);
         });
@@ -143,18 +142,88 @@ public sealed class ActivityIoTypeRegistrationTests
             AssertCurrentReleaseRegistered(registry);
         });
 
-    private static async Task WithPreviousRelease(Func<Assembly, Assembly, Task> test)
+    // The order alone keeps a previous release from claiming an alias the current release declares too. Only the exclusion
+    // keeps it from claiming one the current release no longer declares, such as an activity the upgrade removed: nothing
+    // registered first stands in its way. The previous release here declares exactly such an activity.
+    [Fact]
+    public Task PreviousReleaseOfAShellFeatureAssembly_ClaimsNoAlias_NotEvenOneTheCurrentReleaseNoLongerDeclares() =>
+        WithPreviousRelease(async (current, previous) =>
+        {
+            var registry = SeedPrimitives(new WellKnownTypeRegistry());
+
+            await CreateTask(registry, baseAssemblies: () => [previous, current], shellServices: ShellComposing(current)).ExecuteAsync(CancellationToken.None);
+
+            Assert.False(registry.TryGetType(RemovedActivityName, out _));
+            AssertCurrentReleaseRegistered(registry);
+        }, PreviousReleaseDeclaringARemovedActivity);
+
+    // The other direction: with no shell feature naming the package, the same assembly is scanned like any other loaded one,
+    // so the activity above is registrable and the previous test fails without the exclusion.
+    [Fact]
+    public Task PreviousRelease_IsScannedLikeAnyLoadedAssembly_WhenNoShellFeatureNamesItsPackage() =>
+        WithPreviousRelease(async (current, previous) =>
+        {
+            var registry = SeedPrimitives(new WellKnownTypeRegistry());
+
+            await CreateTask(registry, baseAssemblies: () => [previous, current]).ExecuteAsync(CancellationToken.None);
+
+            Assert.True(registry.TryGetType(RemovedActivityName, out var removed));
+            Assert.Same(previous, removed.Assembly);
+        }, PreviousReleaseDeclaringARemovedActivity);
+
+    private const string RemovedActivityName = "Elsa.Activities.Design.Tests.ClrFixture.RemovedFixtureActivity";
+
+    /// <summary>A shell composed of one feature whose class lives in <paramref name="release"/>, as the shell's descriptors name it.</summary>
+    private static ServiceProvider ShellComposing(Assembly release) => new ServiceCollection()
+        .AddSingleton<IReadOnlyCollection<ShellFeatureDescriptor>>([new ShellFeatureDescriptor("Fixture") { StartupType = release.GetType(typeof(ComplexInputFixtureActivity).FullName!, throwOnError: true) }])
+        .BuildServiceProvider();
+
+    /// <summary>
+    /// Runs <paramref name="test"/> with the fixture assembly as the current release and, as the previous one, what
+    /// <paramref name="loadPrevious"/> loads into a collectible context of its own: by default a second copy of the same file.
+    /// </summary>
+    private static async Task WithPreviousRelease(Func<Assembly, Assembly, Task> test, Func<AssemblyLoadContext, Assembly>? loadPrevious = null)
     {
         var current = typeof(ComplexInputFixtureActivity).Assembly;
         var previousContext = new AssemblyLoadContext("previous-release", isCollectible: true);
         try
         {
-            await test(current, previousContext.LoadFromAssemblyPath(current.Location));
+            await test(current, (loadPrevious ?? (context => context.LoadFromAssemblyPath(current.Location)))(previousContext));
         }
         finally
         {
             previousContext.Unload();
         }
+    }
+
+    /// <summary>
+    /// An assembly named like the fixture assembly that declares one activity, <see cref="RemovedActivityName"/>, which the
+    /// fixture assembly does not: a previous release that had an activity the current one removed. It is loaded from an image,
+    /// not built in memory, because the registration pass skips dynamic assemblies.
+    /// </summary>
+    private static Assembly PreviousReleaseDeclaringARemovedActivity(AssemblyLoadContext context)
+    {
+        var name = typeof(ComplexInputFixtureActivity).Assembly.GetName().Name!;
+        var builder = new PersistedAssemblyBuilder(new AssemblyName(name), typeof(object).Assembly);
+        var activity = builder.DefineDynamicModule(name)
+            .DefineType(RemovedActivityName, TypeAttributes.Public | TypeAttributes.Sealed, typeof(object), [typeof(IActivity)]);
+        activity.DefineDefaultConstructor(MethodAttributes.Public);
+        var contract = typeof(IActivity).GetMethod(nameof(IActivity.ExecuteAsync))!;
+        var execute = activity.DefineMethod(
+            contract.Name,
+            MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.Final | MethodAttributes.HideBySig | MethodAttributes.NewSlot,
+            contract.ReturnType,
+            [.. contract.GetParameters().Select(parameter => parameter.ParameterType)]);
+        var body = execute.GetILGenerator();
+        body.Emit(OpCodes.Newobj, typeof(NotSupportedException).GetConstructor(Type.EmptyTypes)!);
+        body.Emit(OpCodes.Throw);
+        activity.DefineMethodOverride(execute, contract);
+        activity.CreateType();
+
+        using var image = new MemoryStream();
+        builder.Save(image);
+        image.Position = 0;
+        return context.LoadFromStream(image);
     }
 
     private static void AssertCurrentReleaseRegistered(IWellKnownTypeRegistry registry)

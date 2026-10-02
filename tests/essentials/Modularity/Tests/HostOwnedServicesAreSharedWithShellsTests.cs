@@ -19,6 +19,7 @@ using Microsoft.AspNetCore.DataProtection.KeyManagement;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
+using Nuplane.Abstractions;
 using Nuplane.Reconciliation;
 using Xunit;
 
@@ -227,6 +228,27 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
         Assert.True(
             hosted.IndexOf(typeof(OpenIddictIdentityStoreInitializer)) < hosted.IndexOf(typeof(WorkbenchOpenIddictMigrator)),
             "The migration policy starts before the vendor initializer, which would then migrate the store itself.");
+    }
+
+    /// <summary>
+    /// Nuplane calls its observers in the order they were registered, and the Workbench's catalog refresh reads what Nuplane's
+    /// auto-loader loaded in the same reconcile, so Workbench's own entry point registers the refresh after the auto-loader.
+    /// Registered before it, the refresh would run ahead of the load and rebuild the catalog without the package that arrived.
+    /// </summary>
+    [Fact]
+    public void Workbench_registers_its_catalog_refresh_after_the_package_auto_loader()
+    {
+        const string AutoLoader = "Nuplane.Loading.PackageAutoLoadingObserver";
+        using var content = ContentRoot.For("Elsa.Workbench");
+        using var built = BuiltHost.Run(EntryAssembly("Elsa.Workbench"), content.Arguments(durableMembership: false));
+
+        var observers = built.Host.Services.GetServices<INuplaneObserver>().Select(observer => observer.GetType().FullName).ToList();
+
+        Assert.Contains(AutoLoader, observers);
+        Assert.Contains(typeof(ShellCatalogRefreshOnPackagesChanged).FullName, observers);
+        Assert.True(
+            observers.IndexOf(AutoLoader) < observers.IndexOf(typeof(ShellCatalogRefreshOnPackagesChanged).FullName),
+            "The catalog refresh is called before the auto-loader, so it refreshes before the new assemblies are loaded.");
     }
 
     /// <summary>
