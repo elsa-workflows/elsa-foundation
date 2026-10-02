@@ -1,0 +1,57 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The workflow-designer half of the schema-rollout demo: an "Add note" activity that writes through the Notes module's
+    NoteStore. It ships in lockstep with Elsa.Samples.Nuplane.Notes: DemoVersion=1 (the default) is release 1.0.0, whose
+    activity has a Text input, and DemoVersion=2 is release 1.1.0, whose activity also has a Tags input stored in the
+    column release 1.1.0 of Notes adds. As in the Notes project, V1/ and V2/ hold everything that differs, and the
+    DemoVersion global property also selects the Notes release this package depends on.
+
+    It is a package of its own, not a part of Elsa.Samples.Nuplane.Notes, so the Notes package keeps loading on a host that
+    composes no workflow modules (Elsa.Foundation.Host in Acts 1 and 2 of the demo): its activity types reference the
+    activity contracts, which only a workflow host carries.
+  -->
+  <PropertyGroup>
+    <DemoVersion Condition="'$(DemoVersion)' == ''">1</DemoVersion>
+    <Version Condition="'$(DemoVersion)' == '2'">1.1.0</Version>
+    <Version Condition="'$(DemoVersion)' != '2'">1.0.0</Version>
+    <BaseOutputPath>bin/v$(DemoVersion)/</BaseOutputPath>
+    <IntermediateOutputPath>obj/v$(DemoVersion)/$(Configuration)/</IntermediateOutputPath>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <PackageId>Elsa.Samples.Nuplane.Notes.Activities</PackageId>
+    <Authors>Elsa Workflows</Authors>
+    <Description>Sample Nuplane-loaded workflow activity for the schema-rollout demo: "Add note" writes a note through the Notes module, and in release 1.1.0 also its tags.</Description>
+    <PackageTags>elsa;cshells;nuplane;sample;activities;schema-rollout</PackageTags>
+    <NoWarn>$(NoWarn);NU5104;NU5128</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="V2/**" Condition="'$(DemoVersion)' != '2'" />
+    <Compile Remove="V1/**" Condition="'$(DemoVersion)' == '2'" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CShells.Abstractions" GeneratePathProperty="true" />
+    <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
+  </ItemGroup>
+
+  <Target Name="AddCShellsAbstractionsToPackageManifestReferences" BeforeTargets="GenerateElsaPackageManifest">
+    <ItemGroup>
+      <ReferencePath Include="$(TargetDir)*.dll" Condition="'$(TargetDir)' != '' and Exists('$(TargetDir)')" />
+      <ReferencePath Include="$(PkgCShells_Abstractions)/lib/$(TargetFramework)/CShells.Abstractions.dll" Condition="'$(PkgCShells_Abstractions)' != '' and Exists('$(PkgCShells_Abstractions)/lib/$(TargetFramework)/CShells.Abstractions.dll')" />
+    </ItemGroup>
+  </Target>
+
+  <ItemGroup>
+    <!-- The Notes release of the same DemoVersion: a dependency of the package, acquired from the same feed. -->
+    <ProjectReference Include="..\Elsa.Samples.Nuplane.Notes\Elsa.Samples.Nuplane.Notes.csproj" />
+    <!-- The activity contracts are the workflow host's own, shared with every package it loads. -->
+    <ProjectReference Include="..\..\src\essentials\Activities\Design\Core\Elsa.Activities.Design.Core.csproj" PrivateAssets="all" />
+    <ProjectReference Include="..\..\src\essentials\Activities\Runtime\Core\Elsa.Activities.Runtime.Core.csproj" PrivateAssets="all" />
+    <ProjectReference Include="..\..\src\essentials\Primitives\Primitives\Elsa.Primitives.csproj" PrivateAssets="all" />
+  </ItemGroup>
+
+</Project>
