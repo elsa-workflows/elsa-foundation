@@ -25,6 +25,10 @@ public sealed class WorkflowInstanceListService(
             : (PagedDefaultTake, PagedMaxTake);
         var take = Math.Clamp(request.Take ?? defaultTake, 1, maxTake);
 
+        var incidentHealth = EmptyToNull(request.IncidentHealth)?.Trim().ToLowerInvariant();
+        if (incidentHealth is not (null or "active" or "blocking" or "none"))
+            throw new ArgumentException($"The incident health filter '{request.IncidentHealth}' is invalid.", nameof(request.IncidentHealth));
+
         var hasValidStatus = TryParseStatus(request.Status, out var status);
 
         WorkflowRunKind? runKind = null;
@@ -48,12 +52,22 @@ public sealed class WorkflowInstanceListService(
             CorrelationId: EmptyToNull(request.CorrelationId),
             WorkflowExecutionId: EmptyToNull(request.WorkflowExecutionId),
             ArtifactId: EmptyToNull(request.ArtifactId));
+        var cursorPrefix = incidentHealth is null ? null : $"health.{incidentHealth}.";
         if (!string.IsNullOrWhiteSpace(request.Cursor))
-            query = query with { Cursor = request.Cursor };
+        {
+            var cursor = request.Cursor;
+            if (cursorPrefix is not null)
+            {
+                if (!cursor.StartsWith(cursorPrefix, StringComparison.Ordinal))
+                    throw new ArgumentException("The workflow history cursor does not belong to this incident health query.", "cursor");
+                cursor = cursor[cursorPrefix.Length..];
+            }
+            query = query with { Cursor = cursor };
+        }
 
-        var page = authorization.TenantScope == "all-tenants"
+        var page = authorization.TenantScope == "all-tenants" && incidentHealth is null
             ? await workflowExecutionStateStore.QueryPageAsync(query, cancellationToken)
-            : await QueryAuthorizedPageAsync(query, cancellationToken);
+            : await QueryAuthorizedPageAsync(query, incidentHealth, cancellationToken);
         // Every store in a request resolves the same scoped persistence context, so the per-row reads are issued one
         // at a time. Overlapping them - across rows or within a row - starts a second operation on that one context,
         // which relational providers reject, so the page is composed sequentially rather than fanned out.
@@ -62,14 +76,14 @@ public sealed class WorkflowInstanceListService(
         {
             var state = page.Items[index];
             var activityCount = await activityExecutionStateStore.CountAsync(state.WorkflowExecutionId, cancellationToken);
-            var incidentCount = await incidentStateStore.CountAsync(state.WorkflowExecutionId, cancellationToken);
+            var health = await incidentStateStore.CountHealthAsync(state.WorkflowExecutionId, cancellationToken);
             var canInspectSensitiveValues = await authorization.CanInspectSensitiveValuesAsync(state, cancellationToken);
-            items[index] = WorkflowInstanceSummaryView.From(state, activityCount, incidentCount, canInspectSensitiveValues);
+            items[index] = WorkflowInstanceSummaryView.From(state, activityCount, health.Total, canInspectSensitiveValues, health);
         }
 
         return new(
             items,
-            page.NextCursor,
+            page.NextCursor is null ? null : cursorPrefix + page.NextCursor,
             page.HasNext,
             items.Length,
             page.TotalCount >= int.MaxValue ? int.MaxValue : (int)page.TotalCount);
@@ -79,12 +93,11 @@ public sealed class WorkflowInstanceListService(
 
     private async ValueTask<WorkflowExecutionStatePage> QueryAuthorizedPageAsync(
         WorkflowExecutionStatePageQuery query,
+        string? incidentHealth,
         CancellationToken cancellationToken)
     {
-        // The provider-neutral page query can express one concrete tenant but not the authorization rule used by
-        // inspection (a caller's tenant plus tenant-less executions). Materialize only for that constrained case,
-        // filter before counting/cursoring, and then reuse the canonical in-memory keyset implementation. This keeps
-        // unauthorized rows out of items, cursors, and TotalCount instead of trading disclosure safety for paging.
+        // Health and inspection authorization are not predicates in the provider-neutral page query. Apply both
+        // before canonical keyset paging so unauthorized/nonmatching runs never enter items, counts or cursors.
         var authorizedStore = new InMemoryWorkflowExecutionStateStore();
         var requiresSensitiveValues = query.CorrelationId is not null;
         foreach (var state in await workflowExecutionStateStore.ListAsync(cancellationToken))
@@ -93,6 +106,19 @@ public sealed class WorkflowInstanceListService(
                 (requiresSensitiveValues && !await authorization.CanInspectSensitiveValuesAsync(state, cancellationToken)))
                 continue;
 
+            if (incidentHealth is not null)
+            {
+                var health = await incidentStateStore.CountHealthAsync(state.WorkflowExecutionId, cancellationToken);
+                var matches = incidentHealth switch
+                {
+                    "active" => health.Active > 0,
+                    "blocking" => health.Blocking > 0,
+                    "none" => health.Active == 0,
+                    _ => false
+                };
+                if (!matches)
+                    continue;
+            }
             await authorizedStore.SaveAsync(state, cancellationToken);
         }
 

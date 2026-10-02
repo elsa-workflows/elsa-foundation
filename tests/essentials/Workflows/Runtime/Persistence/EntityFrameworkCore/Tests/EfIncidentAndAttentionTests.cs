@@ -47,6 +47,32 @@ public sealed class EfIncidentAndAttentionTests
     }
 
     [Fact]
+    public async Task Incident_health_counts_current_statuses_without_reading_content_and_preserves_scope_after_restart()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using (var tenantA = database.Open("tenant-a"))
+        {
+            foreach (var status in Enum.GetValues<IncidentStatus>())
+            {
+                var terminal = status is IncidentStatus.Resolved or IncidentStatus.Suppressed;
+                await tenantA.Incidents.TryAddAsync(Incident(status.ToString(), "workflow", status, Now,
+                    terminal ? Now.AddMinutes(1) : null,
+                    terminal ? new IncidentResolutionOutcome("resolve", Now.AddMinutes(1), null, "operator") : null));
+            }
+            // Aggregate reads use the indexed projection, not exception/value JSON materialization.
+            await tenantA.Context.IncidentStates.ExecuteUpdateAsync(update => update.SetProperty(row => row.ContentJson, "unreadable"));
+        }
+        await using (var tenantB = database.Open("tenant-b"))
+            await tenantB.Incidents.TryAddAsync(Incident("foreign", "workflow", IncidentStatus.Blocking, Now));
+        await using var restarted = database.Open("tenant-a");
+        Assert.Equal(new IncidentHealthCounts(4, 2, 1), await restarted.Incidents.CountHealthAsync("workflow"));
+        Assert.Equal(new IncidentHealthCounts(0, 0, 0), await restarted.Incidents.CountHealthAsync("missing"));
+        using var cancelled = new CancellationTokenSource();
+        cancelled.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => restarted.Incidents.CountHealthAsync("workflow", cancelled.Token).AsTask());
+    }
+
+    [Fact]
     public async Task Incident_create_only_is_safe_under_concurrent_replay()
     {
         await using var database = await TestDatabase.CreateAsync();

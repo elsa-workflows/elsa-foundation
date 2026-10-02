@@ -300,6 +300,129 @@ public sealed class WorkflowInstanceServicesTests
         Assert.Contains("TestRnu", exception.Message, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData("active", 2, "wf-blocking", "wf-open")]
+    [InlineData("blocking", 1, "wf-blocking", null)]
+    [InlineData("none", 3, "wf-healthy", "wf-resolved")]
+    public async Task ListWorkflowInstances_FiltersCurrentHealthBeforeCountsAndCursorPaging(
+        string health, int total, string firstId, string? secondId)
+    {
+        var statuses = new (string Id, IncidentStatus? Status)[]
+        {
+            ("wf-blocking", IncidentStatus.Blocking), ("wf-open", IncidentStatus.Open),
+            ("wf-healthy", null), ("wf-resolved", IncidentStatus.Resolved), ("wf-suppressed", IncidentStatus.Suppressed)
+        };
+        foreach (var (id, status) in statuses)
+        {
+            await _workflowStore.SaveAsync(Workflow(id, WorkflowExecutionStatus.Running, "definition-1", updatedAt: Now(-1)));
+            if (status is { } value)
+                await _incidentStore.SaveAsync(HealthIncident(id, value));
+        }
+        var handler = NewListInstanceHandler();
+        var request = new ListWorkflowInstances("Running", "definition-1", null, 1, IncidentHealth: health);
+        var first = await handler.ListAsync(request, CancellationToken.None);
+        var item = Assert.Single(first.Items);
+        Assert.Equal(total, first.TotalCount);
+        Assert.Equal(firstId, item.WorkflowExecutionId);
+        Assert.Equal("Running", item.Status);
+        Assert.Equal(health == "none" ? 0 : 1, item.ActiveIncidentCount);
+        Assert.Equal(health == "blocking" || firstId == "wf-blocking" ? 1 : 0, item.BlockingIncidentCount);
+        Assert.Equal(total > 1, first.HasNext);
+        if (secondId is not null)
+        {
+            var second = await handler.ListAsync(request with { Cursor = first.NextCursor }, CancellationToken.None);
+            var secondItem = Assert.Single(second.Items);
+            Assert.Equal(secondId, secondItem.WorkflowExecutionId);
+            Assert.Equal(total, second.TotalCount);
+            if (health == "none")
+            {
+                Assert.Equal(1, secondItem.IncidentCount);
+                Assert.Equal(0, secondItem.ActiveIncidentCount);
+                var third = await handler.ListAsync(request with { Cursor = second.NextCursor }, CancellationToken.None);
+                var thirdItem = Assert.Single(third.Items);
+                Assert.Equal("wf-suppressed", thirdItem.WorkflowExecutionId);
+                Assert.Equal(1, thirdItem.IncidentCount);
+                Assert.Equal(0, thirdItem.ActiveIncidentCount);
+                Assert.False(third.HasNext);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task ListWorkflowInstances_HealthCursorCannotBeReusedWithDifferentHealth()
+    {
+        foreach (var id in new[] { "wf-a", "wf-b" })
+        {
+            await _workflowStore.SaveAsync(Workflow(id, WorkflowExecutionStatus.Running, "definition-1"));
+            await _incidentStore.SaveAsync(HealthIncident(id, IncidentStatus.Blocking));
+        }
+        var handler = NewListInstanceHandler();
+        var request = new ListWorkflowInstances(null, null, null, 1, IncidentHealth: "active");
+        var first = await handler.ListAsync(request, CancellationToken.None);
+        foreach (var health in new string?[] { "blocking", "none", null })
+        {
+            var exception = await Assert.ThrowsAsync<ArgumentException>(() => handler.ListAsync(
+                request with { IncidentHealth = health, Cursor = first.NextCursor }, CancellationToken.None));
+            Assert.Equal("cursor", exception.ParamName);
+        }
+    }
+
+    [Theory]
+    [InlineData(null, 2)]
+    [InlineData("secret-correlation", 1)]
+    public async Task ListWorkflowInstances_HealthCountsAndPagesExcludeUnauthorizedRuns(string? correlation, int expected)
+    {
+        foreach (var id in new[] { "allowed", "structure-only", "foreign" })
+        {
+            await _workflowStore.SaveAsync(Workflow(id, WorkflowExecutionStatus.Running, "definition-1", "secret-correlation"));
+            await _incidentStore.SaveAsync(HealthIncident(id, IncidentStatus.Blocking));
+        }
+        var handler = new WorkflowInstanceListService(_workflowStore, _activityStore, _incidentStore, new RestrictedInspectionContext());
+        var request = new ListWorkflowInstances(null, null, correlation, 1, IncidentHealth: "blocking");
+        var first = await handler.ListAsync(request, CancellationToken.None);
+        Assert.Equal(expected, first.TotalCount);
+        Assert.Equal("allowed", Assert.Single(first.Items).WorkflowExecutionId);
+        Assert.Equal(expected > 1, first.HasNext);
+        if (first.HasNext)
+        {
+            var second = await handler.ListAsync(request with { Cursor = first.NextCursor }, CancellationToken.None);
+            var item = Assert.Single(second.Items);
+            Assert.Equal("structure-only", item.WorkflowExecutionId);
+            Assert.Null(item.CorrelationId);
+            Assert.False(second.HasNext);
+        }
+    }
+
+    private sealed class RestrictedInspectionContext : IActivityInspectionContextAsync
+    {
+        public string TenantScope => "tenant-a";
+        public string AuditSubject => "operator";
+        public string RequestCorrelationId => "request";
+        public ValueTask<string> GetAuthorizationProfileAsync(CancellationToken cancellationToken = default) => ValueTask.FromResult("test");
+        public ValueTask<bool> CanInspectStructureAsync(WorkflowExecutionState state, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(state.WorkflowExecutionId != "foreign");
+        public ValueTask<bool> CanInspectSensitiveValuesAsync(WorkflowExecutionState state, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(state.WorkflowExecutionId == "allowed");
+        public ValueTask<bool> CanResolveSensitiveValuePayloadsAsync(WorkflowExecutionState state, CancellationToken cancellationToken = default) =>
+            CanInspectSensitiveValuesAsync(state, cancellationToken);
+    }
+
+    [Fact]
+    public async Task ListWorkflowInstances_RejectsUnknownIncidentHealth()
+    {
+        var exception = await Assert.ThrowsAsync<ArgumentException>(() => NewListInstanceHandler()
+            .ListAsync(new ListWorkflowInstances(null, null, null, 10, IncidentHealth: "faulted"), CancellationToken.None));
+        Assert.Equal("IncidentHealth", exception.ParamName);
+    }
+
+    private static IncidentState HealthIncident(string workflowExecutionId, IncidentStatus status)
+    {
+        var terminal = status is IncidentStatus.Resolved or IncidentStatus.Suppressed;
+        return new IncidentState("incident-" + workflowExecutionId, workflowExecutionId, null, null, IncidentSeverity.Error,
+            status, terminal ? new IncidentResolutionOutcome("Resolved", Now(-1), null, null, null) : null,
+            "test", "safe test incident", Now(-2), terminal ? Now(-1) : null);
+    }
+
     [Fact]
     public async Task GetWorkflowInstance_ReturnsActivitiesAndIncidents()
     {
@@ -529,11 +652,14 @@ public sealed class WorkflowInstanceServicesTests
         public ValueTask<IReadOnlyCollection<IncidentState>> ListBlockingAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
             inner.ListBlockingAsync(workflowExecutionId, cancellationToken);
 
-        public async ValueTask<int> CountAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
+        public async ValueTask<IncidentHealthCounts> CountHealthAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
         {
             CountCalled = true;
-            return await inner.CountAsync(workflowExecutionId, cancellationToken);
+            return await inner.CountHealthAsync(workflowExecutionId, cancellationToken);
         }
+
+        public ValueTask<int> CountAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
+            inner.CountAsync(workflowExecutionId, cancellationToken);
     }
 
     /// <summary>

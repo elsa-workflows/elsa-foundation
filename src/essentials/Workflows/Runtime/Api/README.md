@@ -28,14 +28,14 @@ CShells__Shells__default__Features__WorkflowsRuntimeApi__WorkflowAlterationPaylo
 | Executables | `GET /runtime/workflows/executables`, `GET /runtime/workflows/executables/{artifactId}`, `GET /runtime/workflows/executables/{artifactId}/provenance` |
 | Execution | `POST /runtime/workflows/executables/{artifactId}/execute`, `POST /runtime/workflows/stimuli` |
 | Activation slots | `GET /runtime/workflows/activation-slots/{definitionId}`, `GET /runtime/workflows/activation-slots/{definitionId}/{slotName}` |
-| Instances | `GET /runtime/workflows/instances`, `GET /runtime/workflows/instances/{workflowExecutionId}`, `GET .../incidents`, `GET .../activity-executions/{activityExecutionId}` |
+| Instances | `GET /runtime/workflows/instances`, `GET /runtime/workflows/instances/page`, `GET /runtime/workflows/instances/{workflowExecutionId}`, `GET .../incidents`, `GET .../activity-executions/{activityExecutionId}` |
 | Detached dispatches | `GET /runtime/workflows/dispatches?parentWorkflowExecutionId=...|childWorkflowExecutionId=...|status=...`, `GET /runtime/workflows/dispatches/{dispatchId}` |
 | Diagnostics | `GET/PUT /runtime/workflows/diagnostics/settings` |
 | Alteration plans | `POST /runtime/workflows/alteration-plans`, `GET /runtime/workflows/alteration-plans/{planId}`, `GET /runtime/workflows/alteration-plans/{planId}/jobs/page`, `GET /runtime/workflows/alteration-plans/{planId}/jobs/{jobId}`, `POST /runtime/workflows/alteration-plans/{planId}/cancel` |
 
 Executable, provenance, instance, and diagnostics reads use `workflow-runtime.read`; execution/stimulus operations use `workflow-runtime.execute`; diagnostics mutation uses `workflow-runtime.manage`. The shared wildcard permission remains supported. Foundation Identity policy authorization and the host's ASP.NET Core authentication middleware establish the principal and challenges; the module mapper emits the RFC 7807 error contract.
 
-`POST .../execute` and `POST .../stimuli` are **synchronous to quiescence**: the in-process actor drains the run inline (ADR 0031 sticky single-writer drain) before the response is written, so the workflow has already reached completion, a fault, or its first durable suspension by the time the caller responds. The response is not an async hand-off acknowledgement — it returns `200 OK` and the body's `commandDispatchStatus` reflects the actual drain outcome (`Accepted`, `AcceptedButFaulted`, `Duplicate`, or `Deferred`). A `Rejected` dispatch returns `409 Conflict`. `AcceptedButFaulted` still returns `200` with a body: the drain completed but the workflow ended the turn faulted, which callers detect from `commandDispatchStatus`, not the HTTP code. `GET .../instances/{workflowExecutionId}` remains the polling surface for later state.
+`POST .../execute` and `POST .../stimuli` are **synchronous to quiescence**: the in-process actor drains the run inline (ADR 0031 sticky single-writer drain) before the response is written, so the workflow has already reached completion, a fault, or its first durable suspension by the time the caller responds. The response is not an async hand-off acknowledgement — it returns `200 OK` and the body's `commandDispatchStatus` reflects the actual drain outcome (`Accepted`, `AcceptedButFaulted`, `Duplicate`, or `Deferred`). A `Rejected` dispatch returns `409 Conflict`. `AcceptedButFaulted` still returns `200` with a body: the drain completed but the drain encountered a failure; a `WaitForIntervention` policy can preserve a Running workflow with a blocking incident, which callers detect from `commandDispatchStatus`, not the HTTP code. `GET .../instances/{workflowExecutionId}` remains the polling surface for later state.
 
 `POST .../stimuli` accepts an optional `idempotencyKey` for its start path. With a key, each matching workflow is started under an execution id derived from the key and the workflow's artifact (#2195), so a repeated call never starts it twice: reusing a key for the same artifact is answered `SkippedDuplicate` **permanently**, on every node and after restarts, and a caller that wants a second start sends a new key. Without a key, a repeated call may start a second instance.
 
@@ -70,3 +70,19 @@ handler CLR identities.
 ## Extension points
 
 See [EXTENSION_POINTS.md](EXTENSION_POINTS.md) for the API-facing stores and inspector seam, and the [Runtime domain catalog](../EXTENSION_POINTS.md) for the full engine and persistence surface.
+
+## Incident health
+
+Instance summaries preserve historical `incidentCount` and add current `activeIncidentCount` (Open or Blocking)
+and `blockingIncidentCount`. A Running instance with blocking incidents needs intervention; lifecycle and health
+remain separate. Resolved and Suppressed incidents remain historical evidence without an active alarm.
+
+The `workflow-instances-health-filter` capability points to the paged instance route. Clients should request
+`incidentHealth=active|blocking|none` only when that relation is advertised. The filter applies before the authorized
+total count and cursor page; invalid values and cursors from a different health query are rejected. Older hosts
+without current counts cannot establish current health from their historical total.
+
+Incident stores provide aggregate health counts; EF reads its existing status projection without loading fault
+or captured-value content. Health-filtered queries use the existing authorization-safe materialization fallback
+before canonical keyset paging. Hosts with large histories may provide a future joined query implementation;
+this change does not silently limit filtering to the first page. Unfiltered all-tenant queries retain provider paging.

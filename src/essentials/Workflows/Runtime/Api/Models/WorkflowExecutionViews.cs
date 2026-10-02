@@ -37,13 +37,16 @@ public sealed record WorkflowInstanceSummaryView(
     string? SlotId = null,
     string? SourceKind = null,
     string? SourceId = null,
-    string? SourceVersion = null)
+    string? SourceVersion = null,
+    int? ActiveIncidentCount = null,
+    int? BlockingIncidentCount = null)
 {
     public static WorkflowInstanceSummaryView From(
         WorkflowExecutionState state,
         long activityCount = 0,
         int incidentCount = 0,
-        bool canInspectSensitiveValues = false) =>
+        bool canInspectSensitiveValues = false,
+        IncidentHealthCounts? incidentHealth = null) =>
         new(
             state.WorkflowExecutionId,
             state.PinnedExecutable.ArtifactId,
@@ -68,7 +71,9 @@ public sealed record WorkflowInstanceSummaryView(
             state.PinnedSource?.SlotId,
             state.PinnedSource?.SourceKind,
             state.PinnedSource?.SourceId,
-            state.PinnedSource?.SourceVersion);
+            state.PinnedSource?.SourceVersion,
+            incidentHealth?.Active,
+            incidentHealth?.Blocking);
 }
 
 /// <summary>

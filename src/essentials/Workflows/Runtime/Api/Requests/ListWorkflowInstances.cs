@@ -13,7 +13,8 @@ public sealed record ListWorkflowInstances(
     string? ArtifactId = null,
     DateTimeOffset? From = null,
     DateTimeOffset? To = null,
-    string? RunKind = null)
+    string? RunKind = null,
+    string? IncidentHealth = null)
     : IRequest<WorkflowInstanceListView>
 {
     internal WorkflowInstanceListPagingContract PagingContract { get; private init; } = WorkflowInstanceListPagingContract.Paged;
