@@ -2,7 +2,8 @@
 # Runs tools/demo/RUNBOOK.md end to end without anyone at the keyboard: Act 1 on Sqlite (one host, upgraded in place) and Act 2 on
 # PostgreSQL (two hosts sharing a database, each upgraded in place). What the presenter types is what runs here: the helpers
 # (note, withtags, reload, tag, status, waitfor, rows, pgconn's connection) come from tools/demo/helpers.sh, the file the runbook
-# sources, and the status codes and output lines the runbook promises are asserted on their output. The timing of every step is
+# sources, and the status codes and output lines the runbook promises are asserted on their output, the cells of the package board
+# (board.sh, the runbook's tab P) among them. The timing of every step is
 # printed at the end; the hosts and the container are removed on exit, and the host logs are kept in artifacts/demo-rehearsal.
 # Not rehearsed: prepack.sh, which takes minutes and which this script only requires to have run.
 set -euo pipefail
@@ -188,6 +189,20 @@ no_tags_on() {
   expect_eq "no note carries a tag" 0 "$(printf '%s\n' "$1" | tail -n +2 | grep -vc '"tags":\[\]' || true)"
 }
 
+# board HOST...: the package board of those hosts, once, as the presenter's tab P shows it.
+board() { stage bash tools/demo/board.sh "$@"; }
+# expect_board HOST FEED INSTALLED SERVING: the board's row for HOST in $out. A cell is a literal (its dots are literal), or ? for a
+# cell the step does not pin down. The cells are separated by two spaces or more, and none holds that.
+expect_board() {
+  local pattern="" cell
+  for cell in "${@:2:3}"; do
+    [[ "$cell" == "?" ]] && cell=".+" || cell="${cell//./[.]}"
+    pattern="${pattern:+$pattern \| }$cell"
+  done
+  expect_match "board row of $1: in the feed | installed | serving" \
+    "$(printf '%s\n' "$out" | grep -E "^$1 " | sed -E 's/^[^ ]+ +//; s/ +$//; s/  +/ | /g')" "^$pattern\$"
+}
+
 # notes_in OUTPUT SCHEMA TAGS: how many of the notes that rows printed carry that schema version (a literal) and that tags value
 # (an extended regex: NULL, \[\], ...), the header line left out. The column is padded by two spaces at least, which is what tells
 # it from a note whose text ends in a version.
@@ -223,7 +238,12 @@ publish_and_wait_for_refusal() {
   before="$(refusals "$name")"
   stage bash tools/demo/publish.sh "$release" --host "$name"
   expect_has "the publish line" "$out" "published Elsa.Samples.Nuplane.Notes.$(demo_release_version "$release").nupkg to artifacts/demo/hosts/$name/feed"
+  board "$name"
+  expect_board "$name" "1.0.0, 1.1.0" "?" "?"
   wait_until "host $name installed the release and refused the reload" 180 refused_again "$name" "$before"
+  board "$name"
+  expect_board "$name" "1.0.0, 1.1.0" "1.1.0" "1.0.0"
+  expect_has "the board says the release is held back" "$out" "1.1.0 installed, not switched"
 }
 
 # ------------------------------------------------------------------------------------------------------------------- start
@@ -298,6 +318,8 @@ if [[ " $acts " == *" 1 "* ]]; then
   stage rows solo
   expect_match "rows lists the columns" "$out" '^note +schema +tags$'
   expect_eq "both notes are stamped 1.0.0, before the tags column exists" 2 "$(notes_in "$out" '1\.0\.0' '\(no column yet\)')"
+  board solo
+  expect_board solo "1.0.0" "1.0.0" "1.0.0"
 
   step "Act 1.2 show the change"
   stage bash tools/demo/show-change.sh
@@ -307,6 +329,12 @@ if [[ " $acts " == *" 1 "* ]]; then
   expect_has "the migration is in the change" "$full_change" "AddTags"
   expect_has "the last heading" "$full_change" "==== The package version ===="
   expect_has "the package version is shown" "$full_change" "<Version Condition=\"'\$(DemoVersion)' == '2'\">1.1.0</Version>"
+
+  step "Act 1.2b open the package"
+  stage bash tools/demo/show-package.sh 2
+  expect_has "the package id and version" "$out" "Elsa.Samples.Nuplane.Notes 1.1.0"
+  expect_has "the module's declaration is in it" "$out" "nuplane.json"
+  expect_has "the module's package manifest is in it" "$out" "elsa-package.json"
 
   if [[ "$fallback" -eq 0 ]]; then
     step "Act 1.3-4 publish 1.1.0; the host installs it; /reload is refused (409)"
@@ -358,6 +386,9 @@ if [[ " $acts " == *" 1 "* ]]; then
     reloaded_at="$(now)"
   fi
   wait_until "with-tags answers 200 on solo" 60 with_tags_ok "$port_solo"
+  board solo
+  expect_board solo "1.0.0, 1.1.0" "1.1.0" "1.1.0"
+  expect_has "the board says the tags are live" "$out" "tags live"
   measure "with-tags on solo answered 200 $(elapsed "$reloaded_at") s after the shell was re-composed"
   stage withtags "$port_solo"
   expect_eq "with-tags answers" "HTTP 200" "$(first_line "$out")"
@@ -376,6 +407,9 @@ fi
 
 if [[ " $acts " == *" 2 "* ]]; then
   step "Act 2.1 both hosts on 1.0.0"
+  board a b
+  expect_board a "1.0.0" "1.0.0" "1.0.0"
+  expect_board b "1.0.0" "1.0.0" "1.0.0"
   stage note "$port_a" "written on host A"
   stage note "$port_b" "written on host B"
   stage notes "$port_a"
@@ -402,6 +436,9 @@ if [[ " $acts " == *" 2 "* ]]; then
   expect_eq "reload of b succeeds" "HTTP 200" "$(first_line "$out")"
   expect_has "four features" "$out" '"features": 4'
   expect_has "one shell reloaded" "$out" '"reloaded": 1'
+  board a b
+  expect_board a "1.0.0" "1.0.0" "1.0.0"
+  expect_board b "1.0.0, 1.1.0" "1.1.0" "1.1.0"
 
   step "Act 2.3 with-tags on b: 409 until every host can read 2.0.0"
   stage withtags "$port_b"
@@ -410,6 +447,10 @@ if [[ " $acts " == *" 2 "* ]]; then
   expect_has "the feature" "$out" '"feature":"NotesWithTags"'
   expect_has "the reason" "$out" "every host can read version '2.0.0' of schema family 'SamplesNotes'"
   expect_has "nothing was saved" "$out" "The request was refused whole, and nothing it carried was saved."
+  board a b
+  expect_board a "1.0.0" "1.0.0" "1.0.0"
+  expect_board b "1.0.0, 1.1.0" "1.1.0" "1.1.0"
+  expect_has "the board says b's tags are dormant until every host reads 2.0.0" "$out" "tags dormant: not every host reads 2.0.0 yet"
   stage note "$port_a" "written by A on release 1.0.0"
   expect_has "a keeps writing" "$out" '"text":"written by A on release 1.0.0"'
   stage note "$port_b" "written by B on release 1.1.0"
@@ -442,11 +483,17 @@ if [[ " $acts " == *" 2 "* ]]; then
   no_refusal="$(grep -c "was refused" "$logs/a.log" || true)"
   [[ "$no_refusal" -eq 0 ]] || fail "host a refused the reload $no_refusal time(s), though its database was already migrated"
   ok "host a was not refused (its database was migrated by b's apply)"
+  board a
+  expect_board a "1.0.0, 1.1.0" "1.1.0" "1.1.0"
 
   step "Act 2.6 the version finalizes: both answer 200, status says finalized at 2.0.0"
   wait_until "with-tags answers 200 on b" 120 with_tags_ok "$port_b"
   wait_until "with-tags answers 200 on a" 120 with_tags_ok "$port_a"
   measure "2.0.0 finalized $(elapsed "$published_at") s after the publish to a (both hosts kept running)"
+  board a b
+  expect_board a "1.0.0, 1.1.0" "1.1.0" "1.1.0"
+  expect_board b "1.0.0, 1.1.0" "1.1.0" "1.1.0"
+  expect_eq "the board says the tags are live on both hosts" 2 "$(printf '%s\n' "$out" | grep -c 'tags live' || true)"
   # Not asserted, only reported: how far the host's backfill has come at the moment both hosts answer, which is a race by design.
   snapshot="$(rows a)"
   measure "rows at the moment both hosts answer 200: $(notes_in "$snapshot" '2\.0\.0' '\[\]') of 4 notes at 2.0.0 already, $(notes_in "$snapshot" '1\.0\.0' 'NULL') still at 1.0.0"
