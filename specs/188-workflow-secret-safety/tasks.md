@@ -20,8 +20,8 @@ mutation named in [the acceptance matrix](contracts/acceptance-proof-matrix.md).
 ## Phase 1: Setup
 
 - [ ] T001 At the start of every slice: read the slice issue's comments and the open PRs that reference it, post the claim (worktree and exact scope) per `docs/agents/issue-tracker.md`, branch from current `main`, and re-check for competing work before pushing. Push to `origin`, never to `main`; open the PR ready for review.
-- [ ] T002 [P] Correct `ISecretResolver` to `ISecretValueResolver` and `src/Elsa/Secrets` to `src/essentials/Secrets` in `specs/079-secrets-module/plan.md`, `specs/079-secrets-module/research.md` and `specs/079-secrets-module/tasks.md` (FR-018).
-- [ ] T003 [P] In `specs/079-secrets-module/contracts/runtime-contract.md`, rename the interface to `ISecretValueResolver` with its real signature `ResolveAsync(string tenantId, SecretReference reference, CancellationToken)`, and add one line to the "Secret Expression" section pointing to `specs/188-workflow-secret-safety/` for the runtime mechanism (FR-018).
+- [x] T002 [P] Correct `ISecretResolver` to `ISecretValueResolver` and `src/Elsa/Secrets` to `src/essentials/Secrets` in `specs/079-secrets-module/plan.md`, `specs/079-secrets-module/research.md` and `specs/079-secrets-module/tasks.md` (FR-018).
+- [x] T003 [P] In `specs/079-secrets-module/contracts/runtime-contract.md`, rename the interface to `ISecretValueResolver` with its real signature `ResolveAsync(string tenantId, SecretReference reference, CancellationToken)`, and add one line to the "Secret Expression" section pointing to `specs/188-workflow-secret-safety/` for the runtime mechanism (FR-018).
 
 ## Phase 2: Foundational (runtime value model; blocks US1, US2 and US4)
 

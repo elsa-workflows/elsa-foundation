@@ -69,12 +69,12 @@ specs/079-secrets-module/
 
 ```text
 elsa-foundation/
-├── src/Elsa/Secrets/Core/
+├── src/essentials/Secrets/Core/
 │   ├── Contracts/
 │   ├── Models/
 │   ├── Events/
 │   └── Elsa.Secrets.Core.csproj
-├── src/Elsa/Secrets/
+├── src/essentials/Secrets/
 │   ├── Extensions/
 │   ├── Expressions/
 │   ├── Services/
@@ -82,13 +82,13 @@ elsa-foundation/
 │   ├── Types/
 │   ├── Features/
 │   └── Elsa.Secrets.csproj
-├── src/Elsa/Secrets/Api/
+├── src/essentials/Secrets/Api/
 │   ├── Constants/
 │   ├── Endpoints/Secrets/
 │   ├── Requests/
 │   ├── Features/
 │   └── Elsa.Secrets.Api.csproj
-├── src/Elsa/Secrets/Persistence/Groundwork/
+├── src/essentials/Secrets/Persistence/Groundwork/
 │   ├── DependencyInjection/
 │   ├── Stores/
 │   ├── SecretsStorageManifest.cs
@@ -145,7 +145,7 @@ Resolved decisions:
 | Framework §2.1 three-layer separation | PASS | Data model and contracts split Core, implementation, API, persistence, and Studio concerns. |
 | Framework §2.20 provider decomposition | PASS | Groundwork persistence implements `ISecretRepository`; Core remains provider-neutral. |
 | Framework §2.23 unit tests | PASS with work required | Tasks must include direct service tests, feature registration tests, endpoint tests, persistence tests, and Studio tests. |
-| Elsa §E2.2 Workflows Design/Runtime split | PASS | Studio authoring uses picker references; runtime expression handler uses `ISecretResolver` only. |
+| Elsa §E2.2 Workflows Design/Runtime split | PASS | Studio authoring uses picker references; runtime expression handler uses `ISecretValueResolver` only. |
 | Elsa §E2.6 artifact-only runtime | PASS | Workflow artifacts store `SecretReference` values; runtime resolution uses configured Secrets features. |
 
 Post-design gate status: **PASS**. No justified violations.

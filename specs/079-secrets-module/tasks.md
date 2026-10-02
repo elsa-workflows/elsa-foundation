@@ -18,7 +18,7 @@
 
 **Purpose**: Create project shells and solution references.
 
-- [x] T001 Add backend Secrets projects to `src/Elsa/Secrets/Core/Elsa.Secrets.Core.csproj`, `src/Elsa/Secrets/Elsa.Secrets.csproj`, `src/Elsa/Secrets/Api/Elsa.Secrets.Api.csproj`, and `src/Elsa/Secrets/Persistence/Groundwork/Elsa.Secrets.Persistence.Groundwork.csproj`
+- [x] T001 Add backend Secrets projects to `src/essentials/Secrets/Core/Elsa.Secrets.Core.csproj`, `src/essentials/Secrets/Elsa.Secrets.csproj`, `src/essentials/Secrets/Api/Elsa.Secrets.Api.csproj`, and `src/essentials/Secrets/Persistence/Groundwork/Elsa.Secrets.Persistence.Groundwork.csproj`
 - [x] T002 Add backend test project in `tests/Elsa/Secrets/Tests/Elsa.Secrets.Tests.csproj`
 - [x] T003 Add backend project and test project entries to `Elsa.Server.slnx`
 - [x] T004 Add Studio Secrets project shell in `/Users/sipke/Projects/Elsa/elsa-foundation-studio/src/Elsa.Studio.Secrets/Elsa.Studio.Secrets.csproj`
@@ -33,18 +33,18 @@
 
 **CRITICAL**: No user story work can begin until this phase is complete.
 
-- [x] T007 [P] Add core secret status, capability, descriptor, reference, request, response, and query models in `src/Elsa/Secrets/Core/Models/SecretModels.cs`
-- [x] T008 [P] Add secret aggregate models in `src/Elsa/Secrets/Core/Models/Secret.cs`, `src/Elsa/Secrets/Core/Models/SecretVersion.cs`, and `src/Elsa/Secrets/Core/Models/SecretPayload.cs`
-- [x] T009 [P] Add core contracts in `src/Elsa/Secrets/Core/Contracts/ISecretManager.cs`, `ISecretResolver.cs`, `ISecretRepository.cs`, `ISecretStore.cs`, `ISecretStoreRegistry.cs`, `ISecretTypeProvider.cs`, `ISecretTypeRegistry.cs`, `ISecretNameValidator.cs`, `ISecretValueProtector.cs`, and `ISecretAuditSink.cs`
-- [x] T010 [P] Add safe result and audit event models in `src/Elsa/Secrets/Core/Models/SecretResolution.cs` and `src/Elsa/Secrets/Core/Events/SecretOperationAuditRecord.cs`
+- [x] T007 [P] Add core secret status, capability, descriptor, reference, request, response, and query models in `src/essentials/Secrets/Core/Models/SecretModels.cs`
+- [x] T008 [P] Add secret aggregate models in `src/essentials/Secrets/Core/Models/Secret.cs`, `src/essentials/Secrets/Core/Models/SecretVersion.cs`, and `src/essentials/Secrets/Core/Models/SecretPayload.cs`
+- [x] T009 [P] Add core contracts in `src/essentials/Secrets/Core/Contracts/ISecretManager.cs`, `ISecretValueResolver.cs`, `ISecretRepository.cs`, `ISecretStore.cs`, `ISecretStoreRegistry.cs`, `ISecretTypeProvider.cs`, `ISecretTypeRegistry.cs`, `ISecretNameValidator.cs`, `ISecretValueProtector.cs`, and `ISecretAuditSink.cs`
+- [x] T010 [P] Add safe result and audit event models in `src/essentials/Secrets/Core/Models/SecretResolution.cs` and `src/essentials/Secrets/Core/Events/SecretOperationAuditRecord.cs`
 - [x] T011 Add service registration tests for core and default feature services in `tests/Elsa/Secrets/Tests/SecretsFeatureRegistrationTests.cs`
 - [x] T012 Add implementation tests for name normalization and duplicate handling in `tests/Elsa/Secrets/Tests/SecretNameValidatorTests.cs`
-- [x] T013 Add default services and extensions in `src/Elsa/Secrets/Services/DefaultSecretNameValidator.cs`, `DefaultSecretValueProtector.cs`, `SecretStoreRegistry.cs`, `SecretTypeRegistry.cs`, `NullSecretAuditSink.cs`, and `src/Elsa/Secrets/Extensions/SecretsServiceCollectionExtensions.cs`
-- [x] T014 Add `SecretsFeature` shell feature in `src/Elsa/Secrets/Features/SecretsFeature.cs`
+- [x] T013 Add default services and extensions in `src/essentials/Secrets/Services/DefaultSecretNameValidator.cs`, `DefaultSecretValueProtector.cs`, `SecretStoreRegistry.cs`, `SecretTypeRegistry.cs`, `NullSecretAuditSink.cs`, and `src/essentials/Secrets/Extensions/SecretsServiceCollectionExtensions.cs`
+- [x] T014 Add `SecretsFeature` shell feature in `src/essentials/Secrets/Features/SecretsFeature.cs`
 - [x] T015 Add built-in type provider tests in `tests/Elsa/Secrets/Tests/SecretTypeProviderTests.cs`
-- [x] T016 Add built-in type providers in `src/Elsa/Secrets/Types/TextSecretTypeProvider.cs`, `RsaKeySecretTypeProvider.cs`, and `X509CertificateSecretTypeProvider.cs`
+- [x] T016 Add built-in type providers in `src/essentials/Secrets/Types/TextSecretTypeProvider.cs`, `RsaKeySecretTypeProvider.cs`, and `X509CertificateSecretTypeProvider.cs`
 - [x] T017 Add in-memory repository test fixture in `tests/Elsa/Secrets/Tests/SecretTestFixture.cs`
-- [x] T018 Add in-memory repository in `src/Elsa/Secrets/Services/InMemorySecretRepository.cs`
+- [x] T018 Add in-memory repository in `src/essentials/Secrets/Services/InMemorySecretRepository.cs`
 
 **Checkpoint**: Core package and default service registration compile and foundational tests fail/pass as implementation is added.
 
@@ -65,13 +65,13 @@
 
 ### Implementation for User Story 1
 
-- [x] T023 [US1] Implement `DefaultSecretManager` lifecycle behavior in `src/Elsa/Secrets/Services/DefaultSecretManager.cs`
-- [x] T024 [US1] Implement metadata mapper in `src/Elsa/Secrets/Services/SecretModelMapper.cs`
-- [x] T025 [US1] Implement stores in `src/Elsa/Secrets/Stores/EncryptedSecretStore.cs` and `src/Elsa/Secrets/Stores/ConfigurationSecretStore.cs`
-- [x] T026 [US1] Add API request models in `src/Elsa/Secrets/Api/Requests/*.cs`
-- [ ] T027 [US1] Add API handlers in `src/Elsa/Secrets/Api/Handlers/SecretRequestHandlers.cs`
-- [x] T028 [US1] Add API endpoints in `src/Elsa/Secrets/Api/Endpoints/Secrets/List.cs`, `Get.cs`, `Create.cs`, `Update.cs`, `Rotate.cs`, `Revoke.cs`, `Delete.cs`, `Test.cs`, `Descriptors.cs`, and `Picker.cs`
-- [x] T029 [US1] Add route constants and API feature registration in `src/Elsa/Secrets/Api/Constants/RouteConstants.cs` and `src/Elsa/Secrets/Api/Features/SecretsApiFeature.cs`
+- [x] T023 [US1] Implement `DefaultSecretManager` lifecycle behavior in `src/essentials/Secrets/Services/DefaultSecretManager.cs`
+- [x] T024 [US1] Implement metadata mapper in `src/essentials/Secrets/Services/SecretModelMapper.cs`
+- [x] T025 [US1] Implement stores in `src/essentials/Secrets/Stores/EncryptedSecretStore.cs` and `src/essentials/Secrets/Stores/ConfigurationSecretStore.cs`
+- [x] T026 [US1] Add API request models in `src/essentials/Secrets/Api/Requests/*.cs`
+- [ ] T027 [US1] Add API handlers in `src/essentials/Secrets/Api/Handlers/SecretRequestHandlers.cs`
+- [x] T028 [US1] Add API endpoints in `src/essentials/Secrets/Api/Endpoints/Secrets/List.cs`, `Get.cs`, `Create.cs`, `Update.cs`, `Rotate.cs`, `Revoke.cs`, `Delete.cs`, `Test.cs`, `Descriptors.cs`, and `Picker.cs`
+- [x] T029 [US1] Add route constants and API feature registration in `src/essentials/Secrets/Api/Constants/RouteConstants.cs` and `src/essentials/Secrets/Api/Features/SecretsApiFeature.cs`
 
 **Checkpoint**: User Story 1 is fully functional through backend services and API tests.
 
@@ -91,9 +91,9 @@
 
 ### Implementation for User Story 2
 
-- [x] T033 [US2] Implement `DefaultSecretResolver` in `src/Elsa/Secrets/Services/DefaultSecretResolver.cs`
-- [x] T034 [US2] Implement `SecretExpressionDescriptor` and `SecretExpressionHandler` in `src/Elsa/Secrets/Expressions/SecretExpressionDescriptor.cs` and `src/Elsa/Secrets/Expressions/SecretExpressionHandler.cs`
-- [x] T035 [US2] Register the Secret expression descriptor through `src/Elsa/Secrets/Extensions/SecretsServiceCollectionExtensions.cs`
+- [x] T033 [US2] Implement `DefaultSecretResolver` in `src/essentials/Secrets/Services/DefaultSecretResolver.cs`
+- [x] T034 [US2] Implement `SecretExpressionDescriptor` and `SecretExpressionHandler` in `src/essentials/Secrets/Expressions/SecretExpressionDescriptor.cs` and `src/essentials/Secrets/Expressions/SecretExpressionHandler.cs`
+- [x] T035 [US2] Register the Secret expression descriptor through `src/essentials/Secrets/Extensions/SecretsServiceCollectionExtensions.cs`
 - [x] T036 [US2] Add expression and reference JSON coverage to `tests/Elsa/Secrets/Tests/SecretReferenceSerializationTests.cs`
 
 **Checkpoint**: User Story 2 is independently testable through expression evaluation and serialized reference checks.
@@ -114,11 +114,11 @@
 
 ### Implementation for User Story 3
 
-- [x] T040 [US3] Extend manager validation in `src/Elsa/Secrets/Services/DefaultSecretManager.cs` to enforce store/type capabilities before writes
-- [x] T041 [US3] Add Groundwork storage manifest in `src/Elsa/Secrets/Persistence/Groundwork/SecretsStorageManifest.cs`
-- [x] T042 [US3] Add Groundwork JSON settings in `src/Elsa/Secrets/Persistence/Groundwork/SecretsGroundworkJson.cs`
-- [x] T043 [US3] Implement Groundwork repository in `src/Elsa/Secrets/Persistence/Groundwork/Stores/GroundworkSecretRepository.cs`
-- [x] T044 [US3] Add Groundwork registration and feature in `src/Elsa/Secrets/Persistence/Groundwork/DependencyInjection/GroundworkSecretsStoreRegistration.cs` and `src/Elsa/Secrets/Persistence/Groundwork/SecretsGroundworkPersistenceFeature.cs`
+- [x] T040 [US3] Extend manager validation in `src/essentials/Secrets/Services/DefaultSecretManager.cs` to enforce store/type capabilities before writes
+- [x] T041 [US3] Add Groundwork storage manifest in `src/essentials/Secrets/Persistence/Groundwork/SecretsStorageManifest.cs`
+- [x] T042 [US3] Add Groundwork JSON settings in `src/essentials/Secrets/Persistence/Groundwork/SecretsGroundworkJson.cs`
+- [x] T043 [US3] Implement Groundwork repository in `src/essentials/Secrets/Persistence/Groundwork/Stores/GroundworkSecretRepository.cs`
+- [x] T044 [US3] Add Groundwork registration and feature in `src/essentials/Secrets/Persistence/Groundwork/DependencyInjection/GroundworkSecretsStoreRegistration.cs` and `src/essentials/Secrets/Persistence/Groundwork/SecretsGroundworkPersistenceFeature.cs`
 
 **Checkpoint**: User Story 3 is independently testable through descriptors, compatibility checks, and durable repository tests.
 
@@ -137,9 +137,9 @@
 
 ### Implementation for User Story 4
 
-- [x] T047 [US4] Add permission constants in `src/Elsa/Secrets/Core/Permissions/SecretsPermissions.cs`
-- [x] T048 [US4] Emit audit records from `src/Elsa/Secrets/Services/DefaultSecretManager.cs` and `src/Elsa/Secrets/Services/DefaultSecretResolver.cs`
-- [x] T049 [US4] Annotate or structure API endpoints in `src/Elsa/Secrets/Api/Endpoints/Secrets/*.cs` for later permission enforcement while preserving local anonymous development behavior
+- [x] T047 [US4] Add permission constants in `src/essentials/Secrets/Core/Permissions/SecretsPermissions.cs`
+- [x] T048 [US4] Emit audit records from `src/essentials/Secrets/Services/DefaultSecretManager.cs` and `src/essentials/Secrets/Services/DefaultSecretResolver.cs`
+- [x] T049 [US4] Annotate or structure API endpoints in `src/essentials/Secrets/Api/Endpoints/Secrets/*.cs` for later permission enforcement while preserving local anonymous development behavior
 
 **Checkpoint**: User Story 4 is independently testable through safe audit records and permission constants.
 
@@ -179,7 +179,7 @@
 
 - [x] T062 Add backend host feature references and local shell composition entries in `src/Apps/Elsa.Server/Elsa.Server.csproj` and `src/Apps/Elsa.Server/appsettings*.json` or shell configuration files as appropriate
 - [x] T063 Add Studio host references/shell composition entries in `/Users/sipke/Projects/Elsa/elsa-foundation-studio/src/Elsa.Studio.Web/Elsa.Studio.Web.csproj` and `/Users/sipke/Projects/Elsa/elsa-foundation-studio/src/Elsa.Studio.Web/shells.json` without overwriting unrelated local changes
-- [x] T064 Add extension-point documentation in `src/Elsa/Secrets/Core/EXTENSION_POINTS.md` and `src/Elsa/Secrets/EXTENSION_POINTS.md`
+- [x] T064 Add extension-point documentation in `src/essentials/Secrets/Core/EXTENSION_POINTS.md` and `src/essentials/Secrets/EXTENSION_POINTS.md`
 - [x] T065 Refresh generated maps with `bash tools/maps/generate-extension-point-map.sh` and `bash tools/maps/generate-feature-dependency-map.sh`
 - [x] T066 Run backend validation with `dotnet build Elsa.Server.slnx` and `dotnet test tests/Elsa/Secrets/Tests/Elsa.Secrets.Tests.csproj`
 - [x] T067 Run Studio validation with `dotnet test /Users/sipke/Projects/Elsa/elsa-foundation-studio/tests/Elsa.Studio.Tests/Elsa.Studio.Tests.csproj`, `pnpm --dir /Users/sipke/Projects/Elsa/elsa-foundation-studio --filter @elsa-workflows/studio-secrets test`, and `pnpm --dir /Users/sipke/Projects/Elsa/elsa-foundation-studio --filter @elsa-workflows/studio-secrets build`

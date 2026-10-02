@@ -56,7 +56,7 @@
 
 ## Decision: Add a Secret expression descriptor and handler
 
-**Rationale**: Workflow inputs already use expression wrappers. A `Secret` expression lets Studio persist a secret reference in the same authoring shape as other expressions, while runtime materialization resolves the value at point of use through `ISecretResolver`.
+**Rationale**: Workflow inputs already use expression wrappers. A `Secret` expression lets Studio persist a secret reference in the same authoring shape as other expressions, while runtime materialization resolves the value at point of use through `ISecretValueResolver`.
 
 **Alternatives considered**:
 

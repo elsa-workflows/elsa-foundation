@@ -5,9 +5,9 @@
 Runtime consumers resolve serialized references only at point of use.
 
 ```csharp
-public interface ISecretResolver
+public interface ISecretValueResolver
 {
-    ValueTask<ResolvedSecret> ResolveAsync(SecretReference reference, CancellationToken cancellationToken = default);
+    ValueTask<ResolvedSecret> ResolveAsync(string tenantId, SecretReference reference, CancellationToken cancellationToken = default);
 }
 ```
 
@@ -90,7 +90,7 @@ Expression descriptor:
 
 - Type: `Secret`
 - Value shape: `SecretReference`
-- Handler dependency: `ISecretResolver`
+- Handler dependency: `ISecretValueResolver`
 
 Rules:
 
