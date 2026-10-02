@@ -1,47 +1,60 @@
 #!/usr/bin/env bash
-# Runs tools/demo/RUNBOOK.md end to end without anyone at the keyboard: Act 1 on Sqlite (one host, upgraded in place) and Act 2 on
-# PostgreSQL (two hosts sharing a database, each upgraded in place). What the presenter types is what runs here: the helpers
-# (note, withtags, reload, tag, status, waitfor, rows, pgconn's connection) come from tools/demo/helpers.sh, the file the runbook
-# sources, and the status codes and output lines the runbook promises are asserted on their output, the cells of the package board
-# (board.sh, the runbook's tab P) among them. The timing of every step is
+# Runs tools/demo/RUNBOOK.md end to end without anyone at the keyboard: Act 1 on Sqlite (one host, upgraded in place), Act 2 on
+# PostgreSQL (two hosts sharing a database, each upgraded in place) and Act 3 on the Workbench (the Add note activity upgraded in
+# place, the designer's part driven through the API calls Studio makes). What the presenter types is what runs here: the helpers
+# (note, withtags, reload, tag, status, waitfor, rows, pgconn's connection, wbreload, addnote) come from tools/demo/helpers.sh, the
+# file the runbook sources, and the status codes and output lines the runbook promises are asserted on their output, the cells of
+# the package board (board.sh, the runbook's tab P) among them. The timing of every step is
 # printed at the end; the hosts and the container are removed on exit, and the host logs are kept in artifacts/demo-rehearsal.
-# Not rehearsed: prepack.sh, which takes minutes and which this script only requires to have run.
+# Not rehearsed: prepack.sh, which takes minutes and which this script only requires to have run, and Studio's own screens.
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 usage() {
   cat <<'USAGE'
-Usage: bash tools/demo/rehearse.sh [--act 1|2] [--fallback] [--keep]
+Usage: bash tools/demo/rehearse.sh [--act 1|2|3] [--no-act3] [--fallback] [--keep]
 
-Needs the releases staged (bash tools/demo/prepack.sh), curl, jq and python3, and Docker with the cached postgres:16-alpine image
-for Act 2. It starts with tools/demo/reset.sh, so it stops any demo host of this checkout, and it ends the same way.
+Needs the releases staged (bash tools/demo/prepack.sh), curl, jq, python3 and sqlite3, Docker with the cached postgres:16-alpine
+image for Act 2, and the Workbench build and the Add note packages prepack.sh makes for Act 3. It starts with tools/demo/reset.sh,
+so it stops any demo host of this checkout, and it ends the same way.
 
-  --act 1|2   rehearse one act only
+  --act 1|2|3 rehearse one act only
+  --no-act3   Acts 1 and 2 only (for a prepack.sh --no-act3)
   --fallback  Act 1 by the fallback route of the runbook: stop the host, publish 1.1.0, start it again
   --keep      do not clean up on exit: the hosts keep running and the container stays, for looking around (stop them with reset.sh)
 
-Ports: DEMO_PORT_SOLO (5101), DEMO_PORT_A (5201), DEMO_PORT_B (5202); the container: DEMO_PG_CONTAINER. The container's own
-port is a free one that Docker picks.
+Act 3 needs no Studio: what the presenter does in the designer (create the workflow, run it, change the node's exact version,
+run it with tags) is done with tools/demo/addnote.sh, the runbook's fallback, which makes the calls Studio makes.
+
+Ports: DEMO_PORT_SOLO (5101), DEMO_PORT_A (5201), DEMO_PORT_B (5202), DEMO_PORT_WB (5301); the container: DEMO_PG_CONTAINER. The
+container's own port is a free one that Docker picks.
 The exit status is 0 only when every assertion held.
 USAGE
 }
 
-acts="1 2"
+acts="1 2 3"
 keep=0
 fallback=0
+no_act3=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --act) [[ "${2:-}" == "1" || "${2:-}" == "2" ]] || demo_fail "--act is 1 or 2, not '${2:-}' (see --help)."; acts="$2"; shift 2 ;;
+    --act) [[ "${2:-}" =~ ^[123]$ ]] || demo_fail "--act is 1, 2 or 3, not '${2:-}' (see --help)."; acts="$2"; shift 2 ;;
+    --no-act3) no_act3=1; shift ;;
     --keep) keep=1; shift ;;
     --fallback) fallback=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) demo_fail "unknown argument '$1' (see --help)." ;;
   esac
 done
+if [[ "$no_act3" -eq 1 ]]; then
+  [[ "$acts" != "3" ]] || demo_fail "--act 3 and --no-act3 leave nothing to rehearse (see --help)."
+  acts="${acts/ 3/}"
+fi
 
 demo_require curl jq
 demo_require_python
 [[ " $acts " != *" 2 "* ]] || demo_require docker
+[[ " $acts " != *" 3 "* ]] || demo_require sqlite3
 cd "$demo_root"
 
 # The database of Act 1 is the default Sqlite file, so nothing here may point ELSA_EF_CONNECTION anywhere else; Act 2 sets it
@@ -53,12 +66,14 @@ source tools/demo/helpers.sh
 port_solo="${DEMO_PORT_SOLO:-5101}"
 port_a="${DEMO_PORT_A:-5201}"
 port_b="${DEMO_PORT_B:-5202}"
+port_wb="${DEMO_PORT_WB:-5301}"
 logs="$demo_root/artifacts/demo-rehearsal"
 
 sqlite_target=(--environment Development --provider Sqlite --modules Samples.Notes)
 solo_dir="artifacts/demo/hosts/solo"
 a_dir="artifacts/demo/hosts/a"
 b_dir="artifacts/demo/hosts/b"
+wb_dir="artifacts/demo/hosts/wb"
 pg_target=(--environment Development --provider PostgreSql --modules "Samples.Notes,Cluster.Membership")
 
 # ---------------------------------------------------------------------------------------------------------------- reporting
@@ -207,8 +222,13 @@ expect_board() {
 # (an extended regex: NULL, \[\], ...), the header line left out. The column is padded by two spaces at least, which is what tells
 # it from a note whose text ends in a version.
 notes_in() { printf '%s\n' "$1" | tail -n +2 | grep -cE "[ ]{2}$2 +$3\$" || true; }
-# note_count OUTPUT: how many notes rows printed.
-note_count() { echo $(($(line_count "$1") - 1)); }
+# note_count OUTPUT: how many notes rows printed, the header and the (no notes yet) line of an empty table left out.
+note_count() { echo $(($(line_count "$1") - 1 - $(printf '%s\n' "$1" | grep -cF '(no notes yet)' || true))); }
+# expect_empty_rows HOST: rows prints the header and (no notes yet) for a table that has no row yet, as at the start of an act.
+expect_empty_rows() {
+  stage rows "$1"
+  expect_eq "rows on $1 with no note yet" "$(printf 'note  schema  tags\n(no notes yet)')" "$out"
+}
 
 # wait_until DESCRIPTION SECONDS COMMAND...: polls once a second.
 wait_until() {
@@ -222,14 +242,17 @@ wait_until() {
   ok "$description (after $waited s)"
 }
 
-# start_host NAME PORT [run-host.sh arguments]: the host runs in the background, its output in its own log.
-start_host() {
-  local name="$1" port="$2"
-  shift 2
-  echo "  \$ bash tools/demo/run-host.sh $name --port $port $*   (log: ${logs#"$demo_root"/}/$name.log)"
-  bash tools/demo/run-host.sh "$name" --port "$port" --management-key-env DEMO_KEY "$@" >"$logs/$name.log" 2>&1 &
+# launch RUNNER NAME PORT [runner arguments]: the host runs in the background, its output in its own log.
+launch() {
+  local runner="$1" name="$2" port="$3"
+  shift 3
+  echo "  \$ bash tools/demo/$runner $name --port $port $*   (log: ${logs#"$demo_root"/}/$name.log)"
+  bash "tools/demo/$runner" "$name" --port "$port" --management-key-env DEMO_KEY "$@" >"$logs/$name.log" 2>&1 &
   echo "$!" >"$logs/$name.job"
 }
+# start_host NAME PORT [run-host.sh arguments]; start_workbench NAME PORT [run-workbench.sh arguments]
+start_host() { launch run-host.sh "$@"; }
+start_workbench() { launch run-workbench.sh "$@"; }
 wait_ready() { wait_until "host $1 ready" 300 ready "$1" "$2"; }
 
 # publish_and_wait_for_refusal RELEASE HOST: the demo's copy into the feed, then the wait for the host to have installed it and refused the shell.
@@ -253,6 +276,15 @@ step "Clean state"
 for release in 1 2; do
   [[ -f "$(demo_staged_package "$release")" ]] || demo_fail "The releases are not staged. Run: bash tools/demo/prepack.sh"
 done
+if [[ " $acts " == *" 3 "* ]]; then
+  # Act 3 is part of the full run, so its absence is a failure here, never a quiet skip that would read as a pass.
+  [[ -f "$demo_workbench_build/Elsa.Workbench.dll" ]] ||
+    demo_fail "Act 3 needs the Workbench build, which prepack.sh --no-act3 skips. Run bash tools/demo/prepack.sh, or rehearse with --no-act3."
+  for release in 1 2; do
+    [[ -f "$(demo_staged_package "$release" Elsa.Samples.Nuplane.Notes.Activities)" ]] ||
+      demo_fail "Act 3 needs the Add note packages, which prepack.sh --no-act3 skips. Run bash tools/demo/prepack.sh, or rehearse with --no-act3."
+  done
+fi
 run bash tools/demo/reset.sh
 rm -rf "$logs"
 mkdir -p "$logs"
@@ -260,6 +292,9 @@ mkdir -p "$logs"
 for port in "$port_solo" "$port_a" "$port_b"; do
   ! demo_port_in_use "$port" || fail "port $port is in use; set DEMO_PORT_SOLO, DEMO_PORT_A and DEMO_PORT_B"
 done
+if [[ " $acts " == *" 3 "* ]]; then
+  ! demo_port_in_use "$port_wb" || fail "port $port_wb is in use; set DEMO_PORT_WB"
+fi
 if [[ " $acts " == *" 2 "* ]]; then
   docker info >/dev/null 2>&1 || fail "the Docker daemon does not answer (docker info); start Docker"
   docker image inspect postgres:16-alpine >/dev/null 2>&1 || fail "the image postgres:16-alpine is not cached, and nothing is pulled: docker pull postgres:16-alpine while online"
@@ -304,10 +339,31 @@ if [[ " $acts " == *" 2 "* ]]; then
   wait_ready b "$port_b"
 fi
 
+if [[ " $acts " == *" 3 "* ]]; then
+  step "Setup: host wb (Workbench, Sqlite): publish release 1, restore, apply every module"
+  run bash tools/demo/publish.sh 1 --host wb
+  expect_has "the Notes package is published" "$out" "published Elsa.Samples.Nuplane.Notes.1.0.0.nupkg to $wb_dir/feed"
+  expect_has "the Add note package is published with it" "$out" "published Elsa.Samples.Nuplane.Notes.Activities.1.0.0.nupkg to $wb_dir/feed"
+  run bash tools/demo/run-workbench.sh wb --port "$port_wb" --management-key-env DEMO_KEY --prepare-only
+  run bash tools/demo/elsa.sh persistence apply --restore --host "$wb_dir" --environment Development --provider Sqlite --from-host
+  expect_match "the restore installed the packages" "$out" '^restore: [0-9]+ package\(s\) installed under '
+  expect_match "the Notes module is applied" "$out" '^[0-9]+ +Samples\.Notes +NotesSqliteDbContext +__EFMigrationsHistory_ElsaSamplesNotes +1 *$'
+  expect_match "the Workbench's own modules are applied" "$out" '^[0-9]+ +Workflows\.Runtime +RuntimeSqliteDbContext +.*[ ][1-9][0-9]* *$'
+  expect_eq "every module had migrations to apply, on a fresh database" 0 "$(printf '%s\n' "$out" | grep -cE '^[0-9]+ +[A-Za-z.]+ +[A-Za-z]+DbContext +.*[ ]0 *$' || true)"
+
+  step "Setup: host wb started (Validate, on the database just migrated)"
+  start_workbench wb "$port_wb"
+  wait_ready wb "$port_wb"
+  if [[ ! -f "$demo_studio_dir/src/apps/Elsa.Studio.Web/bin/Release/net10.0/Elsa.Studio.Web.dll" ]]; then
+    echo "    note: no built Studio checkout at ${DEMO_STUDIO_DIR:-../elsa-foundation-studio-demo}; the rehearsal does not need one, the presentation does (tools/demo/run-studio.sh)"
+  fi
+fi
+
 # ------------------------------------------------------------------------------------------------------------------------ Act 1
 
 if [[ " $acts " == *" 1 "* ]]; then
   step "Act 1.1 v1 running: add and list notes"
+  expect_empty_rows solo
   stage note "$port_solo" "hello from release 1.0.0"
   expect_match "the note comes back with its id, text and time" "$out" '^\{"id":"[^"]+","text":"hello from release 1.0.0","createdAt":"[^"]+"\}$'
   stage note "$port_solo" "a second note"
@@ -410,6 +466,7 @@ fi
 
 if [[ " $acts " == *" 2 "* ]]; then
   step "Act 2.1 both hosts on 1.0.0"
+  expect_empty_rows a
   board a b
   expect_board a "1.0.0" "1.0.0" "1.0.0"
   expect_board b "1.0.0" "1.0.0" "1.0.0"
@@ -532,6 +589,87 @@ if [[ " $acts " == *" 2 "* ]]; then
   expect_eq "six notes are stored" 6 "$(note_count "$out")"
   expect_eq "every note is stamped 2.0.0, with a tag list" 6 "$(notes_in "$out" '2\.0\.0' '\[\]')"
   expect_eq "no note is left at 1.0.0" 0 "$(notes_in "$out" '1\.0\.0' '.+')"
+fi
+
+# ------------------------------------------------------------------------------------------------------------------------ Act 3
+# The designer's part is what addnote does: the calls Studio makes when the presenter creates the workflow and runs it (3.1), and
+# when they change the node's exact version, apply it to the occurrence and run it with tags (3.5).
+
+if [[ " $acts " == *" 3 "* ]]; then
+  pinned="Add note pinned to 1.0.0"
+  step "Act 3.1 a workflow with Add note 1.0.0 runs; its row is stamped 1.0.0"
+  expect_empty_rows wb
+  board wb
+  expect_board wb "1.0.0" "1.0.0" "1.0.0"
+  stage addnote "$port_wb" 1.0.0 "written by Add note 1.0.0"
+  expect_has "the workflow is created with its node pinned to 1.0.0" "$out" 'workflow "Add note (API)": created, its Add note node pinned to 1.0.0'
+  expect_has "the run completes" "$out" "run: Completed"
+  # A second workflow, made with 1.0.0 and never changed: after the upgrade it still runs (the runbook's known quirk).
+  run addnote "$port_wb" 1.0.0 "written by a workflow pinned to 1.0.0" --workflow "$pinned"
+  expect_has "a second workflow pinned to 1.0.0 runs too" "$out" "run: Completed"
+  stage rows wb
+  expect_match "rows lists the columns" "$out" '^note +schema +tags$'
+  expect_eq "both notes are stamped 1.0.0, before the tags column exists" 2 "$(notes_in "$out" '1\.0\.0' '\(no column yet\)')"
+
+  step "Act 3.2 publish release 2 (Notes and Add note 1.1.0); the Workbench installs it"
+  stage bash tools/demo/publish.sh 2 --host wb
+  expect_has "the Notes package is published" "$out" "published Elsa.Samples.Nuplane.Notes.1.1.0.nupkg to $wb_dir/feed"
+  expect_has "the Add note package is published with it" "$out" "published Elsa.Samples.Nuplane.Notes.Activities.1.1.0.nupkg to $wb_dir/feed"
+  published_at="$(now)"
+  board wb
+  expect_board wb "1.0.0, 1.1.0" "?" "1.0.0"
+  # The Workbench refreshes its feature catalog once the new assemblies are loaded; a reload before that rebuilds the old shell.
+  wb_refreshed() { sed -n '/Loaded package Elsa.Samples.Nuplane.Notes.Activities@1.1.0/,$p' "$logs/wb.log" | grep -q "Refreshed runtime feature catalog"; }
+  wait_until "host wb installed release 2 and refreshed its feature catalog" 180 wb_refreshed
+  measure "wb installed release 2 and refreshed its catalog $(elapsed "$published_at") s after the publish"
+  board wb
+  expect_board wb "1.0.0, 1.1.0" "1.1.0" "1.0.0"
+  expect_has "the board says the release is held back" "$out" "1.1.0 installed, not switched"
+
+  step "Act 3.3 wbreload is refused: the migration is pending"
+  stage wbreload "$port_wb"
+  expect_eq "the Workbench answers" "HTTP 200" "$(first_line "$out")"
+  expect_has "it did not reload" "$out" '"reloaded": false'
+  expect_has "the reason" "$out" '"error": "EfPendingMigrationsException"'
+  expect_has "the refusal names the module" "$out" '"module": "Samples.Notes"'
+  expect_match "the refusal names the migration" "$out" '^ +"[0-9]+_AddTags"$'
+  expect_has "the refusal names the command" "$out" '--modules Samples.Notes --provider Sqlite --connection-env ELSA_EF_CONNECTION'
+  board wb
+  expect_board wb "1.0.0, 1.1.0" "1.1.0" "1.0.0"
+
+  step "Act 3.4 dotnet elsa persistence apply; wbreload succeeds"
+  stage bash tools/demo/elsa.sh persistence apply --host "$wb_dir" "${sqlite_target[@]}"
+  expect_has "the provider line" "$out" "provider: Sqlite   schema: (none)"
+  expect_match "the module's row" "$out" '^01 +Samples\.Notes +NotesSqliteDbContext +__EFMigrationsHistory_ElsaSamplesNotes +1 *$'
+  stage wbreload "$port_wb"
+  expect_eq "the Workbench answers" "HTTP 200" "$(first_line "$out")"
+  expect_has "it reloaded" "$out" '"reloaded": true'
+  expect_has "the new shell serves Notes 1.1.0" "$out" '"serving": "Notes 1.1.0"'
+  reloaded_at="$(now)"
+  wait_until "with-tags answers 200 on wb (2.0.0 finalized)" 60 with_tags_ok "$port_wb"
+  measure "with-tags on wb answered 200 $(elapsed "$reloaded_at") s after the reload"
+  board wb
+  expect_board wb "1.0.0, 1.1.0" "1.1.0" "1.1.0"
+  expect_has "the board says the tags are live" "$out" "tags live"
+  # Not shown on stage: in the time the presenter spends in the designer (3.5) the host rewrites the rows of release 1.
+  all_wb_rewritten() { local snapshot; snapshot="$(rows wb)"; [[ "$(notes_in "$snapshot" '2\.0\.0' '.+')" -eq "$(note_count "$snapshot")" ]]; }
+  wait_until "the rows of release 1 are rewritten to 2.0.0" 120 all_wb_rewritten
+  measure "the rows of release 1 were at 2.0.0 $(elapsed "$reloaded_at") s after the reload"
+
+  step "Act 3.5 change the node's exact version to 1.1.0 and run it with tags"
+  stage addnote "$port_wb" 1.1.0 "written by Add note 1.1.0" "demo, designer"
+  expect_has "the node's exact version is changed" "$out" 'workflow "Add note (API)": its Add note node changed from exact version 1.0.0 to 1.1.0'
+  expect_has "both inputs are set" "$out" 'inputs: Text "written by Add note 1.1.0", Tags "demo, designer"'
+  expect_has "the run completes" "$out" "run: Completed"
+  stage rows wb
+  expect_match "the new note is stamped 2.0.0 with its tags" "$out" '^written by Add note 1\.1\.0 +2\.0\.0 +\["demo","designer"\]$'
+  run addnote "$port_wb" 1.0.0 "written by a workflow still pinned to 1.0.0" --workflow "$pinned"
+  expect_has "a workflow still pinned to 1.0.0 keeps running" "$out" "run: Completed"
+  expect_has "and it was not changed" "$out" "its Add note node is pinned to 1.0.0"
+  stage rows wb
+  expect_eq "four notes are stored" 4 "$(note_count "$out")"
+  expect_eq "no note is left at 1.0.0" 0 "$(notes_in "$out" '1\.0\.0' '.+')"
+  expect_match "the 1.0.0 note reads as untagged" "$out" '^written by Add note 1\.0\.0 +2\.0\.0 +\[\]$'
 fi
 
 step "Screen hygiene"

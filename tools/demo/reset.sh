@@ -8,9 +8,10 @@ usage() {
   cat <<'USAGE'
 Usage: bash tools/demo/reset.sh [--all]
 
-Stops every demo host recorded in artifacts/demo/pids (by process id, and only a process that is still a demo host; nothing is
-ever stopped by name), removes the PostgreSQL container (elsa-demo-pg, or DEMO_PG_CONTAINER) and everything under artifacts/demo
-except the staged releases and the closure feed, which prepack.sh spent minutes making.
+Stops every demo host recorded in artifacts/demo/pids, the Workbench and Studio of Act 3 included (by process id, and only a
+process that is still a demo host; nothing is ever stopped by name), removes the PostgreSQL container (elsa-demo-pg, or
+DEMO_PG_CONTAINER) and everything under artifacts/demo except the staged releases and the closure feed, which prepack.sh spent
+minutes making.
   --all   remove the staged releases and the closure feed as well; run tools/demo/prepack.sh again afterwards
 
 It exits 1 when Docker could not be asked about the container (a daemon that is not running): everything else is still cleaned.
