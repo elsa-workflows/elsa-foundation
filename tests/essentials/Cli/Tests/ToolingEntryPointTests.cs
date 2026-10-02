@@ -561,6 +561,33 @@ public sealed class ToolingEntryPointTests : IDisposable
     }
 
     [Fact]
+    public void Inspection_host_loader_accepts_a_parent_directory_alias_for_the_selected_host()
+    {
+        if (OperatingSystem.IsWindows())
+            return;
+
+        // Use a host assembly not shared by the other loader controls so its default-context identity does
+        // not make the location assertions order-dependent when the test class is run in parallel.
+        var source = HostLayout.Resolve(DotnetElsa.Host("MinimalHost"));
+        using var directory = new TempDirectory("elsa-cli-inspection-alias-");
+        var alias = Path.Join(directory.Path, "host-parent");
+        Directory.CreateSymbolicLink(alias, Path.GetDirectoryName(source.Directory)!);
+        var selectedDirectory = Path.Join(alias, Path.GetFileName(source.Directory));
+        try
+        {
+            var assembly = HostClosure.LoadHostAssemblyForInspection(selectedDirectory, source.Name);
+
+            Assert.Equal(source.Name, assembly.GetName().Name);
+            Assert.Equal($"{source.Name}.dll", Path.GetFileName(assembly.Location));
+        }
+        finally
+        {
+            // Do not let the disposable test directory traverse an alias into the compiled host output.
+            Directory.Delete(alias);
+        }
+    }
+
+    [Fact]
     public void Inspection_host_loader_refuses_a_dll_whose_actual_name_differs_from_the_selected_name()
     {
         using var directory = new TempDirectory("elsa-cli-inspection-host-");

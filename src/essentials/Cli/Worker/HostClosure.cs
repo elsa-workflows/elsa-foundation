@@ -81,7 +81,7 @@ public static class HostClosure
         {
             var host = AssemblyLoadContext.Default.LoadFromAssemblyPath(expected);
             if (!StringComparer.Ordinal.Equals(host.GetName().Name, hostName) ||
-                verifyLocation && !StringComparer.Ordinal.Equals(Path.GetFullPath(host.Location), expected))
+                verifyLocation && !SameHostAssemblyPath(host.Location, hostDirectory, hostName))
                 throw WorkerRefusal.Resolution("host-composition-unavailable",
                     "The selected host assembly does not match its validated layout.");
 
@@ -96,6 +96,36 @@ public static class HostClosure
             throw WorkerRefusal.Resolution("host-composition-unavailable",
                 "The selected host assembly could not be loaded for configuration inspection.");
         }
+    }
+
+    private static bool SameHostAssemblyPath(string assemblyLocation, string hostDirectory, string hostName)
+    {
+        if (string.IsNullOrWhiteSpace(assemblyLocation))
+            return false;
+
+        // Resolve both sides because Assembly.Location can preserve an alias supplied to
+        // LoadFromAssemblyPath (for example a temporary parent symlink on macOS).
+        var actual = Path.GetFullPath(assemblyLocation);
+        var actualDirectory = Path.GetDirectoryName(actual);
+        if (actualDirectory is null)
+            return false;
+
+        var actualPhysical = Path.Join(ResolvePhysicalDirectory(actualDirectory), Path.GetFileName(actual));
+        var expected = Path.Join(ResolvePhysicalDirectory(hostDirectory), $"{hostName}.dll");
+        return string.Equals(actualPhysical, expected,
+            OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+    }
+
+    private static string ResolvePhysicalDirectory(string path)
+    {
+        var root = Path.GetPathRoot(path)!;
+        var resolved = root;
+        foreach (var segment in path[root.Length..].Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries))
+        {
+            resolved = Path.Join(resolved, segment);
+            resolved = new DirectoryInfo(resolved).ResolveLinkTarget(returnFinalTarget: true)?.FullName ?? resolved;
+        }
+        return resolved;
     }
 
     /// <summary>
