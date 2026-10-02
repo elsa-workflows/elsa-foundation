@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "c331197f981fe8e0ee5003daf3b97b1cfe7d3af3",
+  "last_publish_commit": "df02ece3c68cc80b486de86d914e12633c583f71",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -89,8 +89,8 @@
     },
     {
       "package_id": "Elsa.Activities.Runtime",
-      "version": "4.0.7-preview",
-      "commit": "c331197f981fe8e0ee5003daf3b97b1cfe7d3af3"
+      "version": "4.0.8-preview",
+      "commit": "df02ece3c68cc80b486de86d914e12633c583f71"
     },
     {
       "package_id": "Elsa.Activities.Runtime.Core",
@@ -399,8 +399,8 @@
     },
     {
       "package_id": "Elsa.Modularity.EntityFramework",
-      "version": "4.0.5-preview",
-      "commit": "12645190b855f6833f9e4decfa4150b47b04c302"
+      "version": "4.0.6-preview",
+      "commit": "df02ece3c68cc80b486de86d914e12633c583f71"
     },
     {
       "package_id": "Elsa.Modularity.Nuplane",
