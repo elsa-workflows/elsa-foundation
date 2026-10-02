@@ -27,18 +27,18 @@ it, whatever the slot's history. A slot that a version before #2230 left on its 
 prepared in every projection store, or switched on in some and prepared in the others, while the one it replaced still
 serves, is repaired in one commit by the first activation, publish or serving check that meets it, and the trigger
 observers are told. A slot whose activation is missing or replaced, which only a fault or a manual change leaves, is
-reported with how to clear it. Publishing's publication records follow the slot (#2223), outside that commit: `IPublicationActivator.CompleteAsync`
-marks the publication the slot names active once it serves, and retires the publications whose references the runtime
-retired. It runs before every publication, on a same-version republish that finds the record behind, and in its own
-shell-start pass, so Invariant 2 holds in the records eventually too, and the records never decide serving. One
-transition there is not a clearing of a retirement: a publication a failed replacement handed the slot back to is
-`Retired` while the slot names it again, and completion marks that record `Active` once it serves. This is a controlled
-lifecycle transition, not the restoration the Decision section forbids: it applies only to the record the slot itself
-names, only while the slot names it, and it never revives a record the slot does not name, so Restore keeps its own
-authority transition. A completion that finds the slot moved on after the mark retires the record again. A candidate the
-coordinator answers `AlreadyActive` for through another publication's activation (a same-version publish that lost a
-race) is never journaled active, because no source reference was minted for it: it is recorded `Failed`, and the
-request is answered with the publication the slot names once that record is `Active` (#2252).
+reported with how to clear it. Publishing's publication records follow the slot (#2223), outside that commit:
+`IPublicationActivator.CompleteAsync` marks the publication the slot names active once it serves, and retires the
+publications whose references the runtime retired. It runs before every publication, on a same-version republish that
+finds the record behind, and in its own shell-start pass, so Invariant 2 holds in the records eventually too, and the
+records never decide serving. One transition there is not a clearing of a retirement: a publication a failed replacement
+handed the slot back to is `Retired` while the slot names it again, and completion marks that record `Active` once it
+serves. This is a controlled lifecycle transition, not the restoration the Decision section forbids: it applies only to
+the record the slot itself names, only while the slot names it, and it never revives a record the slot does not name, so
+Restore keeps its own authority transition. A completion that finds the slot moved on after the mark retires the record
+again. A candidate the coordinator answers `AlreadyActive` for through another publication's activation (a same-version
+publish that lost a race) is never journaled active, because no source reference was minted for it: it is recorded
+`Failed`, and the request is answered with the publication the slot names once that record is `Active` (#2252).
 
 Related decisions: ADR 0038 (content-addressed executable identity), ADR 0039 (layout on source
 references), and ADR 0040 (reference- and execution-derived artifact lifetime).

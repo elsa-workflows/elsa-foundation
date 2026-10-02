@@ -53,13 +53,14 @@ operation:
    starts, the HTTP route table, or the recurring pump.
 4. Activate the slot with compare-and-swap using its expected revision, then switch the prepared serving
    projections to the new publication and retire the replaced projection.
-5. The runtime `IWorkflowActivationCoordinator` runs steps 3 and 4 and the compensation. The slot and the
-   projection stores share no transaction: if a process dies after the slot transition, the coordinator completes
-   that activation before the slot's next activation, and at the next shell start, and the publication records
-   follow it; a same-version republish after such a crash answers once its record is active (#2223). Unpublish
-   turns off every activation that serves the slot, whatever its history. A failed activation compensates by
-   restoring the previous authority before the candidate is removed; observers refresh only from the final serving
-   state.
+5. The runtime `IWorkflowActivationCoordinator` runs steps 3 and 4: the slot, the serving projections and the replaced
+   publication's source reference switch in one `IWorkflowActivationSwitch` commit, so a failure, a cancellation or a
+   stopped process leaves the slot and its projections agreeing (ADR 0043). `EnsureServingAsync` repairs a slot a
+   version before #2230 left half done. The publication records are written after that commit and follow the slot
+   through `IPublicationActivator.CompleteAsync` (#2223); a same-version republish after such a crash answers once its
+   record is active. Unpublish turns off every activation that serves the slot, whatever its history. Observers
+   refresh only from the final serving state. The engine's
+   [README](../README.md) and [extension points](../EXTENSION_POINTS.md) describe the flow in full.
 6. Retire or restore the publication source reference as provenance. Existing executions remain pinned to their
    immutable executable artifact; unpublishing does not delete that artifact.
 
@@ -70,8 +71,8 @@ authority state and preflight again; it must not assume that a candidate became 
 Publishing the version a slot already serves is answered with that publication, not created again. When a crash left
 that publication's record behind the slot (#2223), the republish first brings the record into line, once the runtime has
 made sure the slot's activation serves; it repairs a slot an earlier version left half done where it can. Where it
-cannot, the republish returns `409` with `projection_activation_failed` and changes nothing; it is never reported as
-published.
+cannot (the slot's activation has its projection missing or replaced, which only a fault or a manual change leaves), the
+republish returns `409` with `projection_activation_failed` and changes nothing; it is never reported as published.
 
 Both preflight responses carry `targetSlotOwner` (`{ sourceKind, sourceId }`) when the resolved slot is live under an
 activation source other than publishing, such as an imported or mounted artifact, and `null` when the slot is empty,
@@ -154,7 +155,7 @@ at every raise and map site (issue #1699).
 | `slot_revision_conflict`          | 409    | The slot's optimistic revision changed between preflight and activation (or between read and unpublish). Re-run preflight against the current slot and retry. |
 | `activation_compensation_failed`  | 409    | Activation failed and its best-effort compensation did not converge. The slot may be in a partially-switched state; check operational diagnostics before retrying. |
 | `projection_preparation_failed`   | 409    | Preparing the serving projection (trigger bindings, recurring schedules) failed before activation. Retry once the underlying failure is resolved. |
-| `projection_activation_failed`    | 409    | A trigger observer failed after the slot moved, so the activation was reverted; or the slot names a publication that an earlier version left half done and that cannot be repaired in place, which a publish or a same-version republish checks first. Retry once the observer's failure is resolved; unpublish a slot left half done, then publish again. |
+| `projection_activation_failed`    | 409    | A trigger observer failed after the slot moved, so the activation was reverted; or the slot names an activation whose projection is missing or replaced, which only a fault or a manual change leaves and which cannot be repaired in place; a publish or a same-version republish checks this first. Retry once the observer's failure is resolved; for a slot Publishing owns, unpublish it, then publish again (a slot another source owns is cleared as the diagnostic describes). |
 | `publication_activation_failed`   | 409    | Activation failed for a reason not covered by the codes above. See the response `detail` and server logs. |
 | `trigger_conflict`                | 409    | Preflight found one or more authoritative trigger conflicts with another active publication. Resolve the conflicting triggers, or target a different slot, before retrying. |
 | `publication_snapshot_stale`      | 409    | The supplied preflight/review token is stale, expired, or no longer matches the requested action, slot, or expected publication. Re-run preflight to obtain a current token. |

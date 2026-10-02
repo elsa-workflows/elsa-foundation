@@ -96,7 +96,8 @@ runtime's switch commits before the journal is written, so a process that dies i
 serving but a `Candidate`, and the one it replaced `Active` with its source reference retired.
 `IPublicationActivator.CompleteAsync(definition, slot)` first has the coordinator make sure the slot's activation serves
 (`IWorkflowActivationCoordinator.EnsureServingAsync`, which repairs a slot an earlier version left half done where it
-can, and fails where it cannot). Once the publication serves (the slot still names it at the revision completion read, and its source reference is
+can, and fails where it cannot: a slot whose activation's projection is missing or replaced, which only a fault or a manual
+change leaves, is reported with how to clear it, which for a slot Publishing owns is to unpublish, then publish again). Once the publication serves (the slot still names it at the revision completion read, and its source reference is
 live), it retires every other `Active` publication of the slot whose source reference the runtime has retired, then
 marks the slot's publication `Active` with an activation time; a `Retired` publication the slot names again, after a
 failed replacement handed the slot back, is marked `Active` the same way, and retired again if the slot has moved
