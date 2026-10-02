@@ -1,6 +1,6 @@
 # Implementation evidence: explicit private environment inputs
 
-Implementation owner: [#2292](https://github.com/elsa-workflows/elsa-foundation/issues/2292), under #1962 / #1959. Authoring #2277 and its causal delivery dependency #2282 are complete. This records incremental local evidence, not a production capability or delivery pass.
+Implementation owner: [#2292](https://github.com/elsa-workflows/elsa-foundation/issues/2292), under #1962 / #1959. Authoring #2277 and its causal delivery dependency #2282 are complete. The [final delivery audit](#final-delivery-audit-t046) records the merged implementation, exact-head review and successful descendant-main integration evidence. Earlier sections are chronological checkpoints with their original source, outcome and limits; their pending statements are historical.
 
 ## Setup checkpoint
 
@@ -563,3 +563,102 @@ The complete existing Release CLI project, rebuilt after restoring the final gua
 The complete existing Release architecture guard returned **634 executed/passed, zero failed/skipped** (`runtime-2292-architecture-output-lifecycle-restored.trx`; `/tmp/runtime-2292-architecture-output-lifecycle-restored.log`). Independent read-only lifecycle review agreed with the two verification boundaries and retained the serial command publication check; no strict concurrent filesystem/disposal atomicity was claimed.
 
 Final generated-map check returned exit 0, `Generated maps still describe the tree` (`/tmp/runtime-2292-maps-output-lifecycle-restored.log`). Manifest, spec-status map and both findings reports remain byte-identical. Root reviewed the complete delta; the bounded independent review of the actual integrated guard/tests found no must-fix. It confirmed lane choice follows capture verification and final verification precedes preview return, while retaining the stated verification-boundary limits. No generated refresh/staging is needed.
+
+
+## Final delivery audit (T046)
+
+[PR #2296](https://github.com/elsa-workflows/elsa-foundation/pull/2296) merged normally on
+2026-10-02 as `6de16bc7d4fa6be41e97706e519bace4df971f57`. Its tree
+`a8ccf27dafb13da8122e0520f058903bc40ba440` is identical to reviewed implementation head
+`f529a5029d3bb3187ff4a2e6211c63c20f8e3717`. The implementation PR set the specification to
+Implemented under the canonical lifecycle. This documentation audit completes the delivery record;
+it introduces no behavior change.
+
+### Final implementation review and actor proof
+
+The [final PR gate](https://github.com/elsa-workflows/elsa-foundation/pull/2296#issuecomment-5944342317)
+records all 45 checks terminal: 44 successful and the conditional red-main alert skipped. CI36952915055,
+Maps36952914867, filters36952914878, Code Quality36952910939 and Docker36952915526 passed on f529.
+Copilot review5387595612 on that head reported no findings, but was COMMENTED rather than an approval.
+Root and independent integrated review found no must-fix; actual inline threads were resolved and
+handled summaries received explicit replies. No human approval or absent Greptile result is claimed.
+
+Root's [requirement audit](https://github.com/elsa-workflows/elsa-foundation/issues/2292#issuecomment-5944441242)
+covered US1-US3, FR001-FR017 and SC001-SC007 against the actual source and acceptance matrix. It found
+no implementation must-fix within the reviewed contract. The final restored local CLI TRX contains
+**33 passing CandidateInspectionTests**, including the public installed-Workbench parent-alias
+journey. Earlier 32-case counts predate that addition. Actual operator proof ran on macOS; the final
+hosted CLI ran on Ubuntu. Neither is Windows journey evidence.
+
+The unchanged-loader alias failure, six unchanged-renderer lifecycle failures, producer/overlay
+mutation controls, and two failed final-publication-guard mutation controls remain recorded above.
+The final source was restored before the full suites and publication. Controlled worker cancellation
+and cleanup proof does not become a general sandbox or whole-command atomicity claim.
+
+### Original merge outcomes retained
+
+On original merge6de, Maps36954712951, filters36954712968, Packages36954713030 and
+Code Quality36954712644 succeeded. [CI36954713214](https://github.com/elsa-workflows/elsa-foundation/actions/runs/36954713214)
+failed in Build & test: `EfSchemaBackfillTests.After_a_withdrawal_several_workers_racing_for_the_claim_give_one_upgrader`
+threw `ObjectDisposedException` for `SQLitePCL.sqlite3` through collation/connection opening,
+finalization lookup and backfill compare-and-set. The EF assembly reported 699 passed, one failed and
+one existing opt-in stress skip. CLI1,074 and migrations495 passed separately; these do not erase the
+failure. Backfill/finalization and the named scenario/test sources are unchanged from the earlier
+failing3decc main. [#2293](https://github.com/elsa-workflows/elsa-foundation/issues/2293) and
+[#2185](https://github.com/elsa-workflows/elsa-foundation/issues/2185) retain the unexplained native-handle
+incident. A later green run establishes no causal repair.
+
+Original [Docker36955236869](https://github.com/elsa-workflows/elsa-foundation/actions/runs/36955236869)
+was cancelled when newer main superseded it. Its versions job successfully bound6de source to
+Packages36954713030, but partial successful image jobs are not a successful complete workflow.
+[Docker36956045261](https://github.com/elsa-workflows/elsa-foundation/actions/runs/36956045261) later
+refused requested95d source from Packages36955627960 because main had moved to4ec. This was the source
+identity guard acting correctly, not a code repair or successful image build.
+
+### Successful descendant-main integration gate
+
+Root fetched and verified that integration main `4ec6b7610bd547aaf77446f20414a0c744d91dba` contains
+merge6de. Peer PRs #2295/#2297 changed the Workbench assembly closure and demo logging. Root and
+independent read-only review found no Spec189 source must-fix; earlier f529 proof was insufficient to
+establish that changed closure's behavior, so the fresh current-main results below were inspected.
+
+| Workflow on exact integration main4ec | Actual result |
+|---|---|
+| [CI36956012909](https://github.com/elsa-workflows/elsa-foundation/actions/runs/36956012909) | Success; Build & test, EF container result, Architecture guards and Core-only build & test passed; conditional red-main alert skipped |
+| [Maps36956012446](https://github.com/elsa-workflows/elsa-foundation/actions/runs/36956012446) | Success |
+| [Solution filters36956012710](https://github.com/elsa-workflows/elsa-foundation/actions/runs/36956012710) | Success |
+| [Packages36956012659](https://github.com/elsa-workflows/elsa-foundation/actions/runs/36956012659) | Success |
+| [Code Quality36956011985](https://github.com/elsa-workflows/elsa-foundation/actions/runs/36956011985) | Success |
+| [Docker36956187357](https://github.com/elsa-workflows/elsa-foundation/actions/runs/36956187357) | Success; actual versions job110679535301 requested exact4ec source and downloaded the computation artifact from Packages36956012659 after the source guard passed |
+
+Root retrieved the actual job logs, rather than inferring acceptance from workflow labels:
+
+| Existing test surface on integration main4ec | Passed | Failed | Skipped |
+|---|---:|---:|---:|
+| CLI, Build & test job110679000181 | 1,074 | 0 | 0 |
+| Modularity Planning, same job | 118 | 0 | 0 |
+| EF migrations/host, same job | 495 | 0 | 0 |
+| Architecture, dedicated job110685074093 | 634 | 0 | 0 |
+| Native database CLI acceptance, job110680725456 | 15 | 0 | 0 |
+| Workbench, Build & test job110679000181 | 37 | 0 | 0 |
+| Extension Builder API, same job | 78 | 0 | 0 |
+| EF, Build & test and Core-only job110685074175, each | 700 | 0 | 1 existing opt-in stress case |
+
+The fresh complete CLI run covers the public Workbench overlay, compatibility, ambient exclusion,
+reconciliation/recovery, drift, enrollment and alias journeys against the rebuilt4ec installed
+closure. The fixture excludes runtime-owned `.nuplane` state. Native database
+acceptance is a separate regression surface; it does not mean configuration-only inspection accessed
+a database. Full CI had unrelated existing skips; those are not acceptance passes.
+
+### Delivery boundary
+
+T001-T046 are complete for this bounded specification. [#2292's checkpoint](https://github.com/elsa-workflows/elsa-foundation/issues/2292#issuecomment-5944847324)
+records the canonical audit claim; the issue and linked audit PR carry its publication gates and
+final closure.
+No new project, suite, provider matrix, cadence or production API was added by this audit.
+
+Explicit intended-input inspection is not a deployed-host receipt or proof that a saved candidate is
+active. Broader profiles, portable unknown-setting export, production builder, real-user study and
+full operational evolution remain in program #1959. The Authoring API-scope and portable-export
+product choices and six real study participants remain unresolved. The native-handle incident is
+still owned by #2293/#2185.

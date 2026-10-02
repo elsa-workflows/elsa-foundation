@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-01
 
-**Status**: Implemented — ships with the #2292 implementation merge through PR #2296; final hosted and resulting-main delivery evidence remains tracked by T046
+**Status**: Implemented — merged through [PR #2296](https://github.com/elsa-workflows/elsa-foundation/pull/2296) as `6de16bc7d4fa6be41e97706e519bace4df971f57`; [T046 delivery evidence](../../specs/189-explicit-environment-inputs/implementation-evidence.md#final-delivery-audit-t046) records the original failures and successful descendant-main integration gate
 
 **Input**: User description: Define a bounded first lane for explicitly supplied, private intended environment inputs during composition inspection while preserving candidate v1 and file-only compatibility.
 
