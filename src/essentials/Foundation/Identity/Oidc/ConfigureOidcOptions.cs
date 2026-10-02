@@ -4,7 +4,7 @@ using Microsoft.Extensions.Options;
 
 namespace Elsa.Foundation.Identity.Oidc;
 
-internal sealed class ConfigureOidcOptions(IOptions<OidcAuthenticationOptions> options) :
+public sealed class ConfigureOidcOptions(IOptions<OidcAuthenticationOptions> options) :
     IConfigureNamedOptions<OpenIdConnectOptions>
 {
     public void Configure(string? name, OpenIdConnectOptions target)
@@ -23,7 +23,7 @@ internal sealed class ConfigureOidcOptions(IOptions<OidcAuthenticationOptions> o
     public void Configure(OpenIdConnectOptions options) => Configure(Options.DefaultName, options);
 }
 
-internal sealed class ConfigureOidcJwtBearerOptions(IOptions<OidcAuthenticationOptions> options) : IConfigureNamedOptions<JwtBearerOptions>
+public sealed class ConfigureOidcJwtBearerOptions(IOptions<OidcAuthenticationOptions> options) : IConfigureNamedOptions<JwtBearerOptions>
 {
     public void Configure(string? name, JwtBearerOptions target)
     {
@@ -31,7 +31,7 @@ internal sealed class ConfigureOidcJwtBearerOptions(IOptions<OidcAuthenticationO
             return;
 
         target.Authority = options.Value.Authority;
-        target.Audience = options.Value.ClientId;
+        target.Audience = options.Value.Audience ?? options.Value.ClientId;
         target.RequireHttpsMetadata = options.Value.RequireHttpsMetadata;
     }
 

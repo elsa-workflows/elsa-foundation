@@ -1,0 +1,27 @@
+# PR2315 review round 5 — ordinal trusted-type membership
+
+Reviewed head: `a229e84803f9a09b2bb7b2663d25ca413e754919`. Actual Copilot review **5394331957**, run37033830544, includes a previously missed medium finding in its overview body. Its headline Findings: None does not negate that actionable body. All other hosted gates are green on this head; they do not qualify the upcoming patch.
+
+## Disposition
+
+- [Review5394331957](https://github.com/elsa-workflows/elsa-foundation/pull/2315#pullrequestreview-5394331957), "Use ordinal comparisons for normalized type membership checks" — **fix**. The host's IReadOnlySet may use case-insensitive equality, while the existing NormalizedPrincipalValidator enumerates values with ordinal equality. Require the exact owned normalized type and check raw scheme/type collisions with explicit StringComparer.Ordinal. Preserve a canonical owned type alongside nonmatching raw case aliases. There is no inline comment or resolvable thread for this overview-only item; the public review-linked fix reply is its disposition record.
+
+Root confirmed the existing permission validator's source, made the bounded three-call change and requested regression/agreement controls in the existing Identity test project. The acceptance matrix now includes the already-executed configured-URI controls/mutation and the ordinal-membership rule. No new suite, authorization model, host platform or transport subsystem.
+
+## Earlier-source gate reconciliation
+
+On a229, local macOS arm64/SDK10.0.300/net10.0 Identity passed453/0/0, and the existing actual Worker actor passed2/0/0 after rebuilding. Both exact exec sessions exited0 and were reaped. Five critical source files match the published Git blobs; receipt `/tmp/runtime-2308-review4-restored-gate-receipt.json`. Logs `/tmp/runtime-2308-review4-identity-restored.log` and `/tmp/runtime-2308-review4-worker-actor.log`.
+
+Hosted Linux x64/SDK10.0.401 Build & test110922576352 passed Identity453, IAM EF191, Runtime1949, Runtime EF836, Workbench39 and Architecture635 with zero failures/skips in those assemblies. CI37032510062 and dedicated Architecture/Core-only, Maps37032509497, filters37032509466, CodeQuality37032505462 and Docker37032510923 are terminal green. The synthetic checkout9015032 has the same tree `3682ad4164c59d5d13c844a01f3303003dd1227e` as a229. Log `/tmp/runtime-2308-pra229-build-linux.log`. Other broad CI assemblies retain their unrelated opt-in skips. Previous0229 mapping-read failure remains unexplained; no causal repair claim is made.
+
+## Executed correction controls
+
+The negative control supplies a case-insensitive trusted set containing only a lowercase alias, but validates the adapter's canonical normalized authentication type. The positive control includes the canonical owned type and lowercase raw scheme/type aliases, accepts the normalized principal and rejects both canonical raw principals through the actual permission validator. Existing exact raw-enrollment refusals remain intact. Root corrected and reviewed the delegated test input before running it; independent read-only review found no blocking source or contract issue.
+
+On macOS arm64 / SDK10.0.300 / net10.0, the existing activation-guard class passed **26/0/0**. Removing only the three explicit ordinal comparer arguments compiled and failed **both** new controls: wrong-case enrollment unexpectedly activated, and the valid canonical enrollment with raw case aliases falsely refused. Actual mutation result **0 passed / 2 failed / 0 skipped**, exit1; `/tmp/runtime-2308-review5-mutation.log`. Source was byte-restored, SHA256 `0a41bc6c7369cb3196a9971bf03c61c7b9a13c491a1b9eae1578afe5ef50db2f`; receipt `/tmp/runtime-2308-review5-mutation-receipt.json`.
+
+Rebuilt restored-source gates passed: full existing Identity **455/0/0**, and actual fresh-process Worker actor **2/0/0**, both terminal exit0. Commands respectively: `dotnet test tests/essentials/Foundation/Identity/Tests/Elsa.Foundation.Identity.Tests.csproj --no-restore -v minimal`; `dotnet test tests/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj --no-restore --filter FullyQualifiedName~WorkerOidcHostTests -v minimal`. Logs `/tmp/runtime-2308-review5-identity-restored.log` and `/tmp/runtime-2308-review5-worker-actor.log`. These are affected local results, not a full Runtime EF or Linux-hosted result.
+
+Architecture passed **635/0/0**, terminal exit0; command `dotnet test tests/essentials/Architecture/Elsa.Architecture.Tests.csproj --no-restore -v minimal`, log `/tmp/runtime-2308-review5-architecture.log`. Maps `dotnet run --project tools/maps/Elsa.Maps.Generator -- check` passed exit0 with byte-identical generated output. Root reviewed the bounded integrated diff, actual permission-side agreement, mutation/restoration and independent review. The machine-wide build-slot wrapper was respected; no parallel heavy local gates.
+
+Solution-filter freshness also passed exit0: `dotnet run --project tools/maps/Elsa.Maps.Generator -- solution-filters-check`, log `/tmp/runtime-2308-review5-filters.log`. Publication, actual new-head review/checks and resulting-main source/package qualification remain pending at this checkpoint. T027/T028 remain unchecked; Worker profile publication is separate. The public issue/PR records are authoritative for later hosted and delivery outcomes.

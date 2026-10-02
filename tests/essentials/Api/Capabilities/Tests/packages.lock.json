@@ -236,6 +236,14 @@
           "xunit.extensibility.core": "[2.9.3]"
         }
       },
+      "elsa.activities.runtime.core": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Events.Core": "[4.0.0-dev, )",
+          "Elsa.Expressions.Core": "[4.0.0-dev, )",
+          "Elsa.Primitives": "[4.0.0-dev, )"
+        }
+      },
       "elsa.api.aspnetcore": {
         "type": "Project",
         "dependencies": {
@@ -261,6 +269,12 @@
           "Elsa.Pipelines.Core": "[4.0.0-dev, )"
         }
       },
+      "elsa.expressions.core": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Primitives": "[4.0.0-dev, )"
+        }
+      },
       "elsa.foundation.identity": {
         "type": "Project",
         "dependencies": {
@@ -279,6 +293,7 @@
           "CShells.Abstractions": "[0.0.30-preview.159, )",
           "Elsa.Foundation.Identity": "[4.0.0-dev, )",
           "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )",
           "Microsoft.AspNetCore.Authentication.JwtBearer": "[10.0.10, )",
           "Microsoft.AspNetCore.Authentication.OpenIdConnect": "[10.0.10, )"
         }
@@ -289,10 +304,26 @@
       "elsa.primitives": {
         "type": "Project"
       },
+      "elsa.serialization.core": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Events.Core": "[4.0.0-dev, )",
+          "Elsa.Primitives": "[4.0.0-dev, )"
+        }
+      },
       "elsa.testing": {
         "type": "Project",
         "dependencies": {
           "Elsa.Primitives": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.workflows.runtime.core": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )",
+          "Elsa.Expressions.Core": "[4.0.0-dev, )",
+          "Elsa.Primitives": "[4.0.0-dev, )",
+          "Elsa.Serialization.Core": "[4.0.0-dev, )"
         }
       },
       "CShells.Abstractions": {

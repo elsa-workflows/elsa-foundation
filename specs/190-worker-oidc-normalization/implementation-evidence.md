@@ -1,0 +1,205 @@
+# Worker OIDC implementation evidence
+
+Implementation owner: [Task #2308](https://github.com/elsa-workflows/elsa-foundation/issues/2308), prerequisite [#2304](https://github.com/elsa-workflows/elsa-foundation/issues/2304). This is an implementation in progress, not a delivered adapter or Worker profile.
+
+## T001 source and fixture preflight
+
+- Baseline: clean `codex/2308-worker-bearer-normalization` at `c79a00272b7ae73d273d2b6306e62f1eb57fab84`, verified on 2026-10-02. Whole-leaf [claim](https://github.com/elsa-workflows/elsa-foundation/issues/2308#issuecomment-5947888362); fresh issue comments and open PRs show no competing adapter implementation. Project51 is In Progress / Ready for implementation.
+- Platform: macOS Darwin arm64; installed SDK `10.0.300`; repository target `net10.0`; JwtBearer package `10.0.10`. No global.json is present. Builds use the shared-machine slot wrapper and remain scoped/serial.
+- Spec Kit prerequisite check selected Spec190 and found research/data-model/contracts/quickstart/tasks. Requirements checklist: 12 complete, 0 incomplete. Optional before-implement commit hook skipped because the tree was clean. Existing .gitignore/.dockerignore cover build output, test receipts and temporary database files; no new ignore boilerplate needed.
+- Installed-version source ordering checked against [JwtBearerHandler v10.0.10](https://github.com/dotnet/aspnetcore/blob/v10.0.10/src/Security/Authentication/JwtBearer/src/JwtBearerHandler.cs): MessageReceived may return before validation; TokenValidated and AuthenticationFailed may return successful results; handler creates the ticket after TokenValidated. All three boundaries therefore need guarded result admission. Cancellation thrown in validation reaches AuthenticationFailed; the adapter must preserve active cancellation. [Base events](https://github.com/dotnet/aspnetcore/blob/v10.0.10/src/Security/Authentication/JwtBearer/src/JwtBearerEvents.cs) supply ordinary no-op delegates; actual default delegate equality will be tested, not assumed reference identity.
+- Source fixture preflight: existing WorkerHttpFixtureHostEvidenceTests exercises Runtime HTTP/SQLite using fabricated authentication and is retained as a regression control, not external-token evidence. ShellActivationHost registers root scope before CShells; AddPersistenceCore uses TryAdd and preserves that ordinary scope. IAM EF has an explicit provider/connection/schema and does not inherit a generic Runtime resource. Existing WorkbenchProcess lacks the nondefault scope seam; the approved non-test WorkerOidcHost executable remains necessary for actual fresh-process proof. No new actor has run yet.
+- Root owns production wiring, integration and QA; supporting workers receive disjoint fixture/test allocations and do not run concurrent builds or commit shared changes. The fixed root runtime cannot be switched through available tools; delegates use GPT-6 Luna Extra High as prescribed.
+
+## Execution evidence
+
+The checkpoints below certify local implementation behavior on the recorded source. Delivery, exact-head CI/review and resulting-main verification remain open; earlier preflight limitations are historical.
+
+## Scoped Identity checkpoint — 2026-10-02
+
+Command: `dotnet test tests/essentials/Foundation/Identity/Tests/Elsa.Foundation.Identity.Tests.csproj --filter 'FullyQualifiedName~Oidc' -v minimal --blame-hang --blame-hang-timeout 60s`. Actual terminal result: **154 passed, 0 failed, 0 skipped**, net10.0 on macOS arm64. Log: `/tmp/runtime-2308-identity-focused-reviewed.log`. Baseline remains c79 with the in-progress working-tree source; this is not exact-head CI or final publication evidence.
+
+This completes T002/T003/T004/T006/T013/T014: shared real RSA/handler controls and canaries, opt-in settings/public feature, independently constructed named configurators, opt-in direct feature/provider service resolution, actual declarative valid/blank/absent Audience binding, legacy audience/default compatibility. Positive controls use the selected actual JwtBearer scheme; no signature validator is replaced. A C# feature/provider test and a genuine activated CShells test supply the same required configuration fields and guarded events.
+
+Root review also found and fixed scheme forwarding and callback reload gaps. Final options reject all forwarding, preserve an unchanged callback/type recreation, and reject changed callback/raw-type/namespace configuration through actual options monitors. This does not yet check all T005/T007-T009/T015/T017-T019/T022 obligations: final-publication cancellation, independent every-branch audit, restored mutations and full affected suites remain required.
+
+Earlier integration attempts are retained as failures: test drafts used readonly Result/Ticket APIs and omitted imports; those were corrected without weakening cases. A genuine DI cycle (OIDC validator depending on its own validated IOptions) stalled the scoped run; source inspection identified it, owned process handles were terminated, and the validator now depends only on the registration snapshot. The first executing run passed137/149 with12 failures from test-scheme/shell-name mismatches; the corrected harness then passed148/149. Its remaining new mixed-layout assertion assumed a provider could overwrite an elected default; the test now explicitly selects host first-party defaults before both registration orders and proves they remain authoritative. Existing test objectives and legacy fixtures remain intact.
+
+The real Runtime EF actor is separately compiling/executing. No HTTP/database/fresh-process actor result is certified by this Identity checkpoint.
+
+Identity checkpoint source-file-set SHA-256 (OIDC root/registration and Identity OIDC test files): `85f5a484a970363f5551c60c9ec01fd74336f73e537689907a539beacbb36444`. Final integrated checks will run again after all changes and mutations are restored.
+
+## Real Worker actor checkpoint
+
+On 2026-10-02, command `dotnet test tests/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj --filter 'FullyQualifiedName~WorkerOidcHostTests' -v minimal` passed **2, failed 0, skipped 0** on the T001 platform/toolchain. Local log: `/tmp/runtime-2308-worker-actor-activation.log`. Working-source OIDC + child executable + parent fixture/test file-set SHA256: `5c08ca69b5161660cc3c624144ccec74c127690fd8bf5ed2ff5a9b0663655312`. This is local actor evidence, not final integrated delivery or CI.
+
+- Actual Kestrel/CShells feature closure, real local discovery/JWK RSA signature/issuer/lifetime/API audience, shell-owned stock JWT middleware and distinct normalized trust type; 19 exact effective features, actual Runtime execute/stimulus routes. The shell uses ordinary nondefault static persistence context, explicit IAM SQLite and a separate named Runtime SQLite resource; real migrations/stores/physical targets are asserted. No fabricated authentication handler is used.
+- Anonymous, tampered, wrong issuer/audience, expired and not-yet-valid controls return401 with zero observed actual EF mapping SELECTs and zero runtime effects. Hostile mismatched/global/privileged/across-scope HTTP contexts refuse before lookup; cross-provider/tenant grants, valid unmapped and forged internal claims cannot authorize.
+- Owned persisted external-claim grant authorizes execute; exact sole event activity becomes Suspended with one persisted bookmark. Workflow status remains Running, as `WorkflowCheckpointSchedulerWorkHandler.BuildWorkflowStartedStateChange` records; the initial expectation of workflow Suspended was a fixture error, not an adapter regression. Real HTTP stimulus with the same valid token resumes/completes; database state records Completed, completed activity and zero bookmarks.
+- Persisting the same rule with empty GrantPermissions makes the next request using the exact same valid token403. First child exits0 and is awaited before a distinct process identity starts from the same parent-selected/child-verified SHA256 executable, configuration and IAM/Runtime files; issuer/key/token remain in the parent. New child reloads the empty grant and completed state, then denies403 again. Actual user/external-identity row counts remain zero.
+- A separate real-child negative control supplies a static persistence scope disagreeing with configured tenant. Actual shell activation refuses at activate, the child is reaped, and a subsequent correct child activates with zero mapping/runtime/user/link rows.
+
+Earlier compile attempts exposed missing imports and invalid collection syntax; repaired. The first executing actor stopped at the incorrect workflow-status assertion; the corrected actor passed1/1, then the added actual activation refusal control passed with it2/2. No earlier failed run is counted as successful evidence. Restored mutations, full affected suites, architecture/maps, exact-head review/CI and resulting-main source/package proof remain open.
+
+## Independent review and trust boundary
+
+A read-only production reviewer identified forwarding, callback-recreation, classification and malformed-admission gaps; root integrated final forwarding refusals, frozen ordinary callback/raw-type intent, separate fixed configuration/scope classifications and protected output admission. Direct final-postconfigure callback replacement, service lifetimes and actual handler descriptors have independent controls.
+
+The reviewer also flagged replacement token handlers/validation delegates. The approved [bearer contract](contracts/bearer-normalization.md) explicitly leaves those as trusted host code rather than sandboxing them. A draft blanket refusal was discarded because it would widen the approved compatibility boundary. The final implementation preserves host validation contributions, with a direct retained-host-validator control and explicit README limitation. Real acceptance uses the stock handler/validator with local discovery/JWKs. The signature mutation below demonstrates that the actor actually detects loss of that cryptographic verification; no whole-host protection against arbitrary trusted code is claimed.
+
+The completed focused Identity baseline after direct branch/admission controls passed **201, failed0, skipped0** (`/tmp/runtime-2308-identity-direct-final-baseline.log`). Earlier added-test compilation exposed private public-Theory enum parameters and an incorrect AuthenticationFailedContext constructor; root corrected both. No compile failure is reported as a test result. Full restored suites below will include the final additional handler-lifetime refusal.
+
+## Production mutation controls
+
+Five bounded mutations changed production source, never an assertion or fake fixture. Each selected executed test failed and each source file was restored byte-for-byte before the next mutation. Identity baseline201/201 and real actor baseline2/2 passed before the controls. Final restored affected gates remain separately recorded below.
+
+| Mutation | Executed adverse evidence | Restoration/source |
+|---|---|---|
+| Cryptographic signature verification bypass | Temporary SignatureValidator parses the token and key-validation delegate accepts that parsed token. The actual Worker actor fails the tampered-token401 assertion: Unauthorized expected, Forbidden observed (`WorkerOidcHostTests.cs`, invalid-token loop). One failed, zero passed/skipped. This proves the invalid signature reached authentication/mapping rather than signature refusal. | Registration-extension SHA256 `eaf6ab33f8ac3cc7b77c802d7f36cd280103464d13de67fae09d621010d2580c` restored exactly; `/tmp/runtime-2308-mutation-signature.log`. |
+| Normalization call replaced with raw filtered result | Actual signed-JWT positive request fails; one failed, zero passed/skipped. | Events SHA256 `ff191e28870317bcae6332796d3bb3ff0e06ab51d134e40b9b5a10f313f9589f` restored exactly; `/tmp/runtime-2308-mutation-normalization.log`. |
+| Successful callback result fence removed | All three actual-handler bypass controls fail; three failed, zero passed/skipped. | Same events SHA256 restored; `/tmp/runtime-2308-mutation-success-fence.log`. |
+| Output admission predicate disabled | Direct malformed identity/type/marker/namespace control fails; one failed, zero passed/skipped. | Same events SHA256 restored; `/tmp/runtime-2308-mutation-output-admission.log`. |
+| Final pre-publication cancellation check removed | Deterministic direct cancellation during output admission publishes the guarded output instead of throwing/retaining original principal; the control fails. One failed, zero passed/skipped. | Same events SHA256 restored; `/tmp/runtime-2308-mutation-publication-abort.log`. |
+
+An earlier signature-delegate experiment failed a valid-token positive control, so it did not establish the decisive bad-signature boundary and is not counted above. The revised signature/key-validation bypass produced the specific bad-token assertion failure. Receipt files `/tmp/runtime-2308-mutation-receipts.json` and `/tmp/runtime-2308-mutation-signature.json` retain the commands/filters/source hashes/restoration/results; the revised signature receipt is authoritative for that row.
+
+## Restored local gates and legacy registration review
+
+All five production mutations were restored before the complete affected gates. Commands use `dotnet test <project> -v minimal` on the T001 macOS arm64 / SDK10.0.300 / net10.0 baseline c79 plus this working-tree implementation. No gate below has skipped tests.
+
+| Existing project | Passed / failed / skipped | Local log |
+|---|---|---|
+| Foundation Identity | 431 / 0 / 0 | `/tmp/runtime-2308-full-identity.log` |
+| IAM EF persistence | 191 / 0 / 0 | `/tmp/runtime-2308-full-iam.log` |
+| Runtime EF persistence, including real Worker actor | 835 / 0 / 0 | `/tmp/runtime-2308-full-runtime.log` |
+| Workbench, including retained first-party host checks | 39 / 0 / 0 | `/tmp/runtime-2308-full-workbench.log` |
+| Architecture | 635 / 0 / 0 | `/tmp/runtime-2308-full-architecture.log` |
+
+The exact project paths/commands and terminal results are retained in `/tmp/runtime-2308-full-gate-receipts.json`. Identity includes existing PermissionAuthorizationSemanticsTests operational resource/evaluator propagation and cancellation checks (Spec151), plus new value-bearing callback/mapping/normalizer/malformed-output canaries. These distinguish authentication401, ordinary policy403, operational failures and active cancellation without changing the shared permission evaluator.
+
+Final root compatibility review narrowed duplicate refusal to normalization opt-in. Default-false distinct named bearer registrations retain their legacy behavior and share one inert guard. One legacy success and two mixed-mode refusal rows were added. After this change, the entire Identity project passed **434 / 0 / 0** (`/tmp/runtime-2308-full-identity-legacy-reviewed.log`), and the actual Worker actor filter passed **2 / 0 / 0** (`/tmp/runtime-2308-worker-actor-legacy-reviewed.log`). The other full gates precede this isolated registration change; their scope is not mislabeled as a later exact-head run.
+
+Generated maps were deliberately refreshed with `dotnet run --project tools/maps/Elsa.Maps.Generator -- all`, and generated findings reviewed. Every changed map including manifest and the findings report was explicitly staged. Solution filters were refreshed with the same project's `solution-filters` command. The new WorkerOidcHost executable is IsTestProject=false/IsPackable=false; test-map path counting does not create a new test suite or CI job. Freshness checks and revalidation after integration of newer main remain pending.
+
+## Integrated source checkpoint
+
+Normal merge `18a1d4985` incorporates current main `fc8973e300b84b7be1691ecff89128898ea4436c` without conflicts or replacing its secrets-activation changes. Source commit **`63b137fbca18c723beddd598b6300935f3fa4968`** additionally consolidates the real-handler callback refusal setup into nine Fail/NoResult/Exception cases across all three events. That table passed **9 / 0 / 0** (`/tmp/runtime-2308-callback-table-reviewed.log`), closing the reviewer-noted T017 actual-handler proof gap without adding repeated arrange blocks. The independent read-only review found no production bypass against the approved contract; root reviewed the findings, actor source and complete owned diff. Review did not substitute for execution.
+
+The OIDC/Identity/actor source file-set SHA256 is **`801e8f29db2508c2e7182e1b68a76b9b4f063cd5903d63976c4a302994fc14ca`**: 21 sorted relative paths, each encoded as UTF-8 path, NUL, file bytes, NUL; OIDC .cs excluding bin/obj, Identity *Oidc*.cs, child Program.cs/csproj and parent fixture/tests. All these source files are committed at the stated source commit.
+
+Integrated full existing-project results already terminal on this source and the T001 platform/toolchain: Identity **440 / 0 / 0**, IAM EF **191 / 0 / 0**, Runtime EF **835 / 0 / 0**, including the actual Worker actor. Workbench and architecture are still running and are not reported passed by this checkpoint. Commands are the exact earlier full-project paths with `dotnet test <project> -v minimal`; current terminal receipts are `/tmp/runtime-2308-integrated-gate-receipts.json`, with individual `/tmp/runtime-2308-integrated-<gate>.log` files.
+
+`dotnet run --project tools/maps/Elsa.Maps.Generator -- all`, `check` and `solution-filters-check` each exited0 on the integrated tree. Findings review found only the expected Spec190 task-count snapshot update after the prior staged refresh; merged maps describe both changes. T026 remains open until the integrated architecture run completes. Workbench tests remain live while shared-machine load has exceeded200; no observation timeout is treated as process termination or failure and no unrelated process is stopped.
+
+The newer baseline main CI [36987123862](https://github.com/elsa-workflows/elsa-foundation/actions/runs/36987123862) failed its core-only test leg in `EfSchemaBackfillTests.Content_addressed_rows_are_never_rewritten_and_while_any_is_below_the_target_the_family_is_never_complete` with ObjectDisposedException / SQLitePCL.sqlite3. [#2293](https://github.com/elsa-workflows/elsa-foundation/issues/2293) remains open; its latest alert records this exact main source. The other six source workflows, including nightly, are green on that baseline, but this adapter claims no causal repair of the SQLite incident and still requires its own PR and resulting-main gates.
+
+### First integrated gate completed
+
+The pending source63b137fbc gates completed successfully: Workbench **39 / 0 / 0** (8m12 under high shared-machine load) and Architecture **635 / 0 / 0**. Thus all five integrated full suites passed, alongside maps and solution-filter freshness. Commands/terminal results are in `/tmp/runtime-2308-integrated-gate-receipts.json`; no skipped evidence is counted as passed.
+
+During that run, main advanced to `c331197f981fe8e0ee5003daf3b97b1cfe7d3af3` through Secrets bridge PR2309, changing Workbench's default composition and activity-runtime initialization. Root reviewed the overlap and integrated it normally as **`5aa5cb532`**. Conflicts were confined to generated maps; regenerating from combined source preserves both changes. Reviewed findings show the expected peer-owned Secrets source/test project and feature additions, with no package-version multiplicity. All changed maps including manifest/findings were explicitly staged in the merge; the OIDC/Identity/actor source hash above remains unchanged.
+
+The new architecture graph restored successfully (Release and isolated Debug), and regenerated maps and solution filters pass freshness on this combined tree. All five affected suites are being revalidated because the new default Workbench composition and runtime initialization changed; no second run is claimed passed before its terminal receipt. Current logs/receipts use `/tmp/runtime-2308-bridge-<gate>.log` and `/tmp/runtime-2308-bridge-gate-receipts.json`. T026/T027/T028 and publication remain open pending the complete final combined gate, PR review/CI and resulting-main source/package verification.
+
+## Final combined local gate — 2026-10-02
+
+All five existing affected suites completed on combined source **`5aa5cb532`** (main `c331197f981fe8e0ee5003daf3b97b1cfe7d3af3` plus the committed adapter). Subsequent checkpoint/docs commits do not alter the tested production/test source; the 21-file OIDC/Identity/actor SHA256 remains `801e8f29db2508c2e7182e1b68a76b9b4f063cd5903d63976c4a302994fc14ca`. Every result below is terminal; none has skips.
+
+| Existing project | Passed / failed / skipped | Command |
+|---|---|---|
+| Identity | 440 / 0 / 0 | `dotnet test tests/essentials/Foundation/Identity/Tests/Elsa.Foundation.Identity.Tests.csproj -v minimal` |
+| IAM EF | 191 / 0 / 0 | `dotnet test tests/essentials/Foundation/Identity/Persistence/EntityFrameworkCore/Tests/Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Tests.csproj -v minimal` |
+| Runtime EF, including real Worker actor | 835 / 0 / 0 | `dotnet test tests/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj -v minimal` |
+| Workbench / retained first-party hosts | 39 / 0 / 0 | `dotnet test tests/essentials/Workbench/Tests/Elsa.Workbench.Tests.csproj -v minimal` |
+| Architecture | 635 / 0 / 0 | `dotnet test tests/essentials/Architecture/Elsa.Architecture.Tests.csproj -v minimal` |
+
+Platform/toolchain remains macOS arm64 / SDK10.0.300 / net10.0. Actual local terminal receipt file is `/tmp/runtime-2308-bridge-gate-receipts.json`; per-project logs are `/tmp/runtime-2308-bridge-<gate>.log`. Workbench completed in 6m55 and architecture in 1m29 while machine load varied above100; no timing failure or observation timeout was counted as a pass. Newer-main graph restore and maps/solution-filter freshness passed as recorded above. The T026 task-count map was regenerated, reviewed and staged by explicit path; the final maps and solution-filter freshness rechecks exited0 before publication. Root reviewed the complete owned diff, approved contracts, actor evidence and independent findings; diff whitespace is clean.
+
+T001-T026 now have local evidence. T027 remains open until actual exact-head PR review/checks pass, and T028 remains open until resulting-main workflows/source-package identity and public bookkeeping are verified. No Worker profile, external deployed IdP or program completion is certified.
+
+## Review round 1 — discovery reload and async cleanup
+
+Actual Copilot review5391935827 on published head `26dc39845c0545d89690a9c120c876894e16525b` found two valid defects ([discovery address](https://github.com/elsa-workflows/elsa-foundation/pull/2315#discussion_r4165827519), [async scope](https://github.com/elsa-workflows/elsa-foundation/pull/2315#discussion_r4165827587)). Root classifications for all12 Copilot/CodeQuality comments are in [review-round-1.md](review-round-1.md). The ten explanations preserve the approved arbitrary-failure sanitization and observed-token cancellation contract; the nullable app diagnostic is not reachable because construction returns a nonnullable built app or throws.
+
+The final selected bearer validation now freezes its first accepted effective MetadataAddress, including null, under the existing trust lock. Initial custom discovery and trusted host validation delegates remain supported; unchanged options recreation remains valid. Activation uses an async scope inside the existing failure guard, so cleanup failures are sanitized and the final token check follows completed disposal. Independent read-only review confirmed those boundaries and reviewed the three real-DI cleanup controls and two-issuer handler regression; it found no remaining concrete defect in scope. Worker output is source review, not an executed-test result.
+
+Focused compiled preflight passed **107 / 0 / 0** on macOS arm64 / SDK10.0.300 / net10.0 (`dotnet test tests/essentials/Foundation/Identity/Tests/Elsa.Foundation.Identity.Tests.csproj --no-restore --filter 'FullyQualifiedName~A_second_issuer_cannot_be_normalized_after_discovery_address_changes_on_options_reload|FullyQualifiedName~OidcBearerActivationGuardTests|FullyQualifiedName~OidcBearerOptionsValidatorTests' -v minimal`). Log: `/tmp/runtime-2308-review1-preflight.log`. The two issuers use distinct RSA keys and discovery/JWK documents through the stock handler/ConfigurationManager and an owned local backchannel. A retained trusted IssuerValidator permits both issuer names, isolating discovery/key-source reload; it does not bypass signature verification. The first issuer succeeds, the second fails before reload, and changed discovery must refuse before another mapping query or endpoint call. Separate prior actor evidence proves default issuer validation.
+
+| Bounded production mutation | Executed adverse result | Restoration |
+|---|---|---|
+| Remove MetadataAddress freeze | 1 failing test; second issuer returns HTTP200, mapping calls2 and endpoint calls2, rather than options-validation refusal | Validator bytes restored; SHA256 `d40386743a8e08c897e5df8292ef11735952cdcbf32f595599083bb6576e5854` |
+| Revert async scope to synchronous disposal | 1 failing valid-startup control; async-only scoped collaborator cannot complete cleanup | Guard bytes restored; SHA256 `333c62a945029810d70cc78d32b5b069e91f14748dbf42e4131ed97de5eb7067` |
+| Move async disposal outside failure/cancellation guard | 2 failing tests; FormatException canary escapes and cancellation during disposal returns without an exception | Same guard bytes restored exactly |
+
+Each mutation compiled and failed an executed assertion; compilation failure is not counted as proof. Receipts: `/tmp/runtime-2308-review1-mutation-receipts.json`; logs `/tmp/runtime-2308-review1-mutation-{metadata-reload,async-disposal,disposal-boundary}.log`. All sources were restored byte-for-byte before final validation. The same canonical21-file source projection now hashes to `31f1de71307e538faf7368652874717d3a0c974d8938c02a43359ea65b4cc7ef`; applying that projection to published26dc reproduces the earlier `801e8f29db2508c2e7182e1b68a76b9b4f063cd5903d63976c4a302994fc14ca`. Exact paths are retained in `/tmp/runtime-2308-review1-source-identity.json`.
+
+Published26dc CI [37007283707](https://github.com/elsa-workflows/elsa-foundation/actions/runs/37007283707) is terminal and green. Its Linux Build & test job110838427612 ran full Identity440, Runtime EF835 (including the fresh-process Worker actor), Workbench39 and Architecture635 with zero failures/skips. The separate EF container runtime job110838562628 ran ProviderTests179; it is not the actor job. Those are older-head results, not verification of the review fixes. Baseline mainc331 now has green CI/Maps/filters/Packages/CodeQuality/Docker; separately tracked #2293 remains open and no causal SQLite repair is claimed.
+
+Final restored-source validation completed serially through the shared build-slot wrapper: focused107, full existing Identity446, actual Worker actor2 and Architecture635 all passed with zero failures/skips; maps and solution-filter freshness exited0. These controls rebuild restored source before the full Identity no-build run, so mutated binaries cannot supply the positive result. Receipts/logs use `/tmp/runtime-2308-review1-gate-receipts.json` and `/tmp/runtime-2308-review1-<gate>.log`. No new test project/provider matrix/cadence is added, and unchanged IAM/Runtime/Workbench full regressions are left to the new exact-head CI after the affected local controls. T027 remains open for actual new-head Copilot/check convergence; T028 and Worker profile/program publication remain open.
+
+Review-fix gate commands and actual terminal results:
+
+| Gate | Command | Result |
+|---|---|---|
+| focused | `dotnet test tests/essentials/Foundation/Identity/Tests/Elsa.Foundation.Identity.Tests.csproj --no-restore --filter FullyQualifiedName~A_second_issuer_cannot_be_normalized_after_discovery_address_changes_on_options_reload|FullyQualifiedName~OidcBearerActivationGuardTests|FullyQualifiedName~OidcBearerOptionsValidatorTests -v minimal` | Passed!  - Failed:     0, Passed:   107, Skipped:     0, Total:   107, Duration: 2 s - Elsa.Foundation.Identity.Tests.dll (net10.0) |
+| identity | `dotnet test tests/essentials/Foundation/Identity/Tests/Elsa.Foundation.Identity.Tests.csproj --no-build --no-restore -v minimal` | Passed!  - Failed:     0, Passed:   446, Skipped:     0, Total:   446, Duration: 27 s - Elsa.Foundation.Identity.Tests.dll (net10.0) |
+| actor | `dotnet test tests/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj --no-restore --filter FullyQualifiedName~WorkerOidcHostTests -v minimal` | Passed!  - Failed:     0, Passed:     2, Skipped:     0, Total:     2, Duration: 36 s - Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll (net10.0) |
+| architecture | `dotnet test tests/essentials/Architecture/Elsa.Architecture.Tests.csproj --no-restore -v minimal` | Passed!  - Failed:     0, Passed:   635, Skipped:     0, Total:   635, Duration: 2 m 30 s - Elsa.Architecture.Tests.dll (net10.0) |
+| maps | `dotnet run --project tools/maps/Elsa.Maps.Generator -- check` | Exit0; freshness confirmed |
+| filters | `dotnet run --project tools/maps/Elsa.Maps.Generator -- solution-filters-check` | Exit0; freshness confirmed |
+
+Root reviewed the integrated production/test diff, approved contract, decisive mutation logs and independent source findings. Diff whitespace is clean; generated maps remain byte-identical and need no refresh. There is no new dependency, package-version, test-project, provider-suite or CI change in this review patch. The repository ledger routes reply/resolution status to each linked GitHub thread after fix publication; those public threads and the issue gate record are authoritative for subsequent exact-head review/check convergence.
+
+Before review-fix publication, main advanced to `df02ece3c68cc80b486de86d914e12633c583f71` through package-upgrade PR2316. It changes Workbench package observers, activity type registration, and EF shell preparation, and adds peer-owned sample/source/test projects. The review-fix local gate above is on c331 plus the patch, not a combined-df02 gate. Root inspected that overlap; normal integration and affected host/map/architecture revalidation are required before publishing the final combined head.
+
+### Final combined-df02 local gate
+
+The ordinary integration commit `a110a031f949d9714a17f484439b51aad2ff80bf` includes review-fix `af6e71144` and main `df02ece3c68cc80b486de86d914e12633c583f71`. All merge conflicts were generated maps; `all` regenerated them from combined source. Root reviewed findings (141 source projects,139 test projects,107 features, no package-version multiplicity) and explicitly staged every changed map/manifest plus findings. The extra sample test project is peer-owned PR2316; this adapter adds no suite/cadence. Release and isolated Debug graph restore passed for288 projects without lock drift. Logs: `/tmp/runtime-2308-review1-main-map-refresh.log` and `/tmp/runtime-2308-review1-main-restore.log`.
+
+Because main changed activity registration, EF shell preparation and Workbench package observers, root rebuilt the focused controls/actual actor and re-ran retained Workbench plus architecture against this combined source. Terminal receipts: `/tmp/runtime-2308-review1-main-gate-receipts.json`; logs `/tmp/runtime-2308-review1-main-<gate>.log`.
+
+| Gate | Actual result |
+|---|---|
+| focused | Passed!  - Failed:     0, Passed:   107, Skipped:     0, Total:   107, Duration: 1 s - Elsa.Foundation.Identity.Tests.dll (net10.0) |
+| identity | Passed!  - Failed:     0, Passed:   446, Skipped:     0, Total:   446, Duration: 43 s - Elsa.Foundation.Identity.Tests.dll (net10.0) |
+| actor | Passed!  - Failed:     0, Passed:     2, Skipped:     0, Total:     2, Duration: 30 s - Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll (net10.0) |
+| workbench | Passed!  - Failed:     0, Passed:    39, Skipped:     0, Total:    39, Duration: 5 m 37 s - Elsa.Workbench.Tests.dll (net10.0) |
+| architecture | Passed!  - Failed:     0, Passed:   635, Skipped:     0, Total:   635, Duration: 1 m 14 s - Elsa.Architecture.Tests.dll (net10.0) |
+| maps | Exit0; freshness confirmed |
+| filters | Exit0; freshness confirmed |
+
+Every executed test result has zero failures/skips. Workbench took5m37 and architecture1m14 of test execution under shared-machine load; elapsed receipts include queued build-slot time. The21-file OIDC/Identity/actor projection remains `31f1de71307e538faf7368652874717d3a0c974d8938c02a43359ea65b4cc7ef`; this does not substitute for the actual combined-source host tests above. Root reviewed merged source, owned patch, independent findings and diff whitespace. Subsequent evidence-only commit does not alter tested production/test source.
+
+The fix publication head still requires actual exact-head Copilot review/CI, direct replies and resolution of every handled comment, and normal merge followed by resulting-main source/package/workflow proof. Those live outcomes are recorded on PR2315 and issue2308, not inferred from older green heads or this local gate. T027/T028 and Worker profile/program publication remain open.
+
+## Review round 2 — acceptance token proof and fixture cleanup
+
+See [round2 ledger](review-round-2.md) for the actual Copilot clean review5392674893 and CodeQuality4166430142 classification on earlier published76108. That head's terminal Linux CI37015327110 ran full Identity446, IAM EF191, Runtime EF835 including Worker actor, Workbench39 and Architecture635, all zero failed/skipped. Those results are retained as earlier-head evidence.
+
+Fix commit `4b5f584f2` captures/asserts the actual token supplied to the noncooperative normalizer, releases a valid normalized identity after request abort, and checks zero endpoint calls. Replacing only that production argument with CancellationToken.None compiled and failed the executed CanBeCanceled assertion (1 failed/0 passed/0 skipped); the source was byte-restored to `ff191e28870317bcae6332796d3bb3ff0e06ab51d134e40b9b5a10f313f9589f` before final gates. The positive preflight2 passed. Local discovery/JWK responses remain usable for their caller and are retained/drained on handler teardown; the host stops before the owning backchannel is disposed. Independent read-only review found no substantive lifetime/ordering defect; root reviewed and integrated both changes. No production behavior, test suite, provider matrix or cadence changes belong to this patch.
+
+Ordinary merge `79aa6953bacfc91c4b3d9d0b3f8c37a3a76737e0` includes main `8b84cdc56de0d20aca64ba0740a17f6898be1207`: PR2317 extracts the existing activity-assembly filtering helper, PR2318 updates demo tools. No merge conflict or lock drift occurred. Root inspected overlap and rebuilt affected actor/retained-host/architecture paths from this combined source. Local platform is macOS arm64 / SDK10.0.300 / net10.0. Terminal receipts `/tmp/runtime-2308-review2-main-gate-receipts.json`, logs `/tmp/runtime-2308-review2-main-<gate>.log`.
+
+| Gate | Exact command | Actual result |
+|---|---|---|
+| identity | `dotnet test tests/essentials/Foundation/Identity/Tests/Elsa.Foundation.Identity.Tests.csproj --no-restore -v minimal` | Passed!  - Failed:     0, Passed:   446, Skipped:     0, Total:   446, Duration: 6 s - Elsa.Foundation.Identity.Tests.dll (net10.0) |
+| actor | `dotnet test tests/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj --no-restore --filter FullyQualifiedName~WorkerOidcHostTests -v minimal` | Passed!  - Failed:     0, Passed:     2, Skipped:     0, Total:     2, Duration: 9 s - Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll (net10.0) |
+| workbench | `dotnet test tests/essentials/Workbench/Tests/Elsa.Workbench.Tests.csproj --no-restore -v minimal` | Passed!  - Failed:     0, Passed:    39, Skipped:     0, Total:    39, Duration: 4 m 25 s - Elsa.Workbench.Tests.dll (net10.0) |
+| architecture | `dotnet test tests/essentials/Architecture/Elsa.Architecture.Tests.csproj --no-restore -v minimal` | Passed!  - Failed:     0, Passed:   635, Skipped:     0, Total:   635, Duration: 1 m 12 s - Elsa.Architecture.Tests.dll (net10.0) |
+| maps | `dotnet run --project tools/maps/Elsa.Maps.Generator -- check` | Exit0; freshness confirmed |
+| filters | `dotnet run --project tools/maps/Elsa.Maps.Generator -- solution-filters-check` | Exit0; freshness confirmed |
+
+Filters containing `|` must be shell-quoted when rerunning the focused/mutation commands in the ledger. All final executed tests have zero failures/skips; the Identity gate rebuilt restored production source rather than reusing mutant binaries. Workbench took4m25 of test execution; architecture1m12. Elapsed receipts include build/queue time. The canonical21-file OIDC/Identity/actor source projection is SHA256 `6c6110ecf1322d9ebede9cbe724bb2e95588af364b5ca32eeb9372b9b7a31548`; it identifies owned source, not the unchanged full IAM/Runtime suites. Those remain for actual new-head Linux CI, rather than being inferred from earlier local runs. Maps/filters freshness is green and maps remain byte-identical. Root reviewed the owned diff, contracts, independent delivery audit, mutation evidence and combined-main boundaries; whitespace is clean.
+
+The subsequent evidence-only commit preserves this tested production/test tree. Publication still requires direct reply/resolution of CodeQuality4166430142, actual new-head Copilot/check convergence and normal merge, then resulting-main workflow/source-package proof. Public PR2315/issue2308 records are authoritative for those live outcomes. T027/T028 and Worker profile/program publication remain open.
+
+## Review round 3 — failed gate, test isolation, and safe scope observations
+
+[Round3 ledger](review-round-3.md) records actual current0229 Copilot/CodeQuality reviews, the failed Linux CI37019576266, the two distinct failure investigations, normal main integration874b640b9, and executed controls. Runtime1949 passed after the tracing correction; removing its filter failed the executed assertion, and byte-restored tracing6 passed. The stronger Worker actor2 passed in an isolated Linux arm64 SDK10.0.401 Release snapshot. Combined maps/filters are fresh. These tests do not explain the earlier one-read CI failure or substitute for new-head Linux x64 full CI. No OIDC production behavior or test-suite/cadence change was made. T027/T028, resulting-main proof, and Worker profile publication remain open.
+## Review round 4 — configured discovery transport restriction
+
+Actual Copilot review5393698368 on published365a reported remote HTTP Authority acceptance in opt-in normalization. Root integrated the shared Authority/final MetadataAddress HTTPS-or-explicit-loopback predicate, preserved normalization-disabled legacy behavior and documented the configured-endpoint transport limits. The [review ledger](review-round-4.md) retains the initial failed fixture cleanup, rebuilt preflight8/0/0, three executed mutation failures and byte restoration, independent source review and its registration-order diagnostic caveat. Full restored affected gates, actual new-head review/CI and resulting-main qualification remain pending at the publication checkpoint; their public issue/PR evidence is authoritative for subsequent completion. Earlier-head green CI does not certify this patch.
+
+## Review round 5 — trusted-type comparer agreement
+
+Actual a229 Copilot review5394331957 includes an actionable ordinal-membership finding in its overview body despite the headline Findings: None. Root aligned the three activation checks with the existing permission validator, corrected/reviewed the delegated test input and integrated independent read-only review. The [round5 ledger](review-round-5.md) records earlier a229 terminal hosted gates, new class26/0/0, both executed mutation failures with byte restoration, rebuilt full Identity455/0/0, actual fresh-process Worker2/0/0, architecture635/0/0 and maps/solution-filter freshness exit0. The FR003 configured-URI crosswalk is synchronized in the same coherent patch. No new suite/provider matrix/cadence or permission model. Publication/review/CI and resulting-main proof remain pending at this checkpoint; live issue/PR records own later delivery evidence. T027/T028 and Worker publication remain open.
