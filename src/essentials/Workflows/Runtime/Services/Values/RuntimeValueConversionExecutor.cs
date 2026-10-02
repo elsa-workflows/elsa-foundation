@@ -23,14 +23,14 @@ public sealed class RuntimeValueConversionExecutor(IWellKnownTypeRegistry? wellK
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(plan);
 
+        // Conversion reads the value, and a withheld value is not here to read. Only activation converts it, with the
+        // plan its marker carries, so it is refused here rather than retyped away from that plan.
+        if (source.Presence == ValuePresence.Withheld)
+            throw SecretBindingDiagnostics.WithheldValueNotConverted(plan.TargetType.Alias);
+
         ValidatePlan(plan);
         if (!ValueConversionCompatibility.SameType(source.Type, plan.SourceType))
             throw Reject(plan, $"runtime source contract '{source.Type.Alias} ({source.Type.CollectionKind})' does not match the pinned source contract");
-
-        // A withheld value has nothing to convert here. It passes through with its marker, whose own plan converts
-        // the value once something resolves it.
-        if (source.Presence == ValuePresence.Withheld)
-            return source.Retype(plan.TargetType);
 
         if (source.Presence != ValuePresence.Present)
             return new ValueEnvelope(plan.TargetType, source.Presence, null, null, source.Policy);

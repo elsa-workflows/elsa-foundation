@@ -12,14 +12,12 @@ namespace Elsa.Workflows.Publishing.Services;
 /// </summary>
 internal static class ClrActivityTypeResolver
 {
-    private static readonly JsonSerializerOptions DescriptorSerializerOptions = new(JsonSerializerDefaults.Web);
-
     public static Type? Resolve(IWellKnownTypeRegistry wellKnownTypeRegistry, RuntimeActivityDescriptor descriptor)
     {
         if (!StringComparer.Ordinal.Equals(descriptor.ConsumerKey, WellKnownRuntimeActivityConsumers.ClrActivity))
             return null;
 
-        var clrDescriptor = descriptor.Payload.Deserialize<ClrActivityDescriptor>(DescriptorSerializerOptions);
+        var clrDescriptor = descriptor.Payload.Deserialize<ClrActivityDescriptor>(ExecutableNodeCompiler.DescriptorSerializerOptions);
         return clrDescriptor is not null &&
                wellKnownTypeRegistry.TryGetTypeOrDefault(clrDescriptor.TypeAlias, out var activityType) &&
                activityType != typeof(object)

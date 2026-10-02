@@ -373,7 +373,7 @@ public sealed class RuntimeContainerScopeService(
         ValuePresence.Absent or ValuePresence.ExplicitNull => null,
         ValuePresence.Present when envelope.InlineValue is { } inline => inline.Clone(),
         // The read view hands out values, and a withheld value is not here to hand out.
-        ValuePresence.Withheld => throw SecretBindingDiagnostics.WithheldInputNotResolved(name),
+        ValuePresence.Withheld => throw SecretBindingDiagnostics.WithheldVariableNotResolved(name),
         _ => envelope.ExternalReference
     };
 

@@ -31,7 +31,7 @@ public sealed class ExecutableNodeCompiler(
     RuntimeOutputCaptureCompiler outputCaptureCompiler,
     IEnumerable<IOperatorActivitySchedulingCapabilityProvider>? operatorSchedulingCapabilityProviders = null)
 {
-    private static readonly JsonSerializerOptions DescriptorSerializerOptions = new(JsonSerializerDefaults.Web);
+    internal static readonly JsonSerializerOptions DescriptorSerializerOptions = new(JsonSerializerDefaults.Web);
     private readonly IReadOnlyCollection<IOperatorActivitySchedulingCapabilityProvider> _operatorSchedulingCapabilityProviders =
         (operatorSchedulingCapabilityProviders ?? []).ToArray();
 
@@ -61,7 +61,7 @@ public sealed class ExecutableNodeCompiler(
             activityVersion.ConsumerKey,
             activityVersion.ConsumerSchemaVersion,
             activityVersion.DescriptorPayload);
-        var clrActivityType = ResolveClrActivityType(descriptor);
+        var clrActivityType = ClrActivityTypeResolver.Resolve(wellKnownTypeRegistry, descriptor);
         var inputDefinitions = activityVersion.Inputs.ToArray();
         var catalogActivityType = activityVersion.Definition?.ActivityTypeKey
             ?? throw new ArgumentException($"Activity version '{activityVersion.Id}' did not include its activity definition.");
@@ -110,7 +110,7 @@ public sealed class ExecutableNodeCompiler(
             activityVersion.ConsumerKey,
             activityVersion.ConsumerSchemaVersion,
             activityVersion.DescriptorPayload);
-        var clrActivityType = ResolveClrActivityType(descriptor);
+        var clrActivityType = ClrActivityTypeResolver.Resolve(wellKnownTypeRegistry, descriptor);
         var inputDefinitions = activityVersion.Inputs.ToArray();
 
         var catalogActivityType = activityVersion.Definition?.ActivityTypeKey
@@ -681,7 +681,7 @@ public sealed class ExecutableNodeCompiler(
         {
             if (precompiledNodeIds?.Contains(node.ExecutableNodeId) == true)
                 continue;
-            var activityType = ResolveClrActivityType(node.Descriptor);
+            var activityType = ClrActivityTypeResolver.Resolve(wellKnownTypeRegistry, node.Descriptor);
             if (activityType is null &&
                 wellKnownTypeRegistry.TryGetTypeOrDefault(node.ActivityType, out var registeredActivityType) &&
                 registeredActivityType != typeof(object))
@@ -719,9 +719,6 @@ public sealed class ExecutableNodeCompiler(
 
         return resumeTargets;
     }
-
-    private Type? ResolveClrActivityType(RuntimeActivityDescriptor descriptor) =>
-        ClrActivityTypeResolver.Resolve(wellKnownTypeRegistry, descriptor);
 
     private static void ValidateResumeTargetSignature(Type activityType, MethodInfo method)
     {

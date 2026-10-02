@@ -67,8 +67,9 @@ internal sealed class RuntimePortableExpressionEvaluator(
         {
             // The engine needs the variable's value, and a withheld value is not here to hand it. Refused before the
             // evaluation wrapper below, which would redact the fixed code away for a sensitive value.
+            // A computed access (variables[x], getVariable(x)) references every visible variable, so any withheld one refuses it.
             if (envelope.Presence == ValuePresence.Withheld)
-                throw SecretBindingDiagnostics.WithheldInputNotResolved(name);
+                throw SecretBindingDiagnostics.WithheldVariableNotResolved(name);
 
             effectivePolicy = ValuePolicyCombiner.Combine(
                 effectivePolicy,
@@ -88,6 +89,10 @@ internal sealed class RuntimePortableExpressionEvaluator(
                 effectivePolicy);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (InvalidOperationException exception) when (exception.Data.Contains(WithheldRefusalMarker))
         {
             throw;
         }
@@ -184,6 +189,15 @@ internal sealed class RuntimePortableExpressionEvaluator(
         }
 
         return new PortableExpressionParameters(values, dependencyPolicy);
+    }
+
+    // A private key, so no evaluator or engine exception can claim to be a withheld refusal and escape redaction.
+    private static readonly object WithheldRefusalMarker = new();
+
+    private static InvalidOperationException MarkWithheldRefusal(InvalidOperationException exception)
+    {
+        exception.Data[WithheldRefusalMarker] = true;
+        return exception;
     }
 
     private static readonly IReadOnlyDictionary<string, ValueEnvelope> EmptyAmbientVariables =
@@ -337,7 +351,7 @@ internal sealed class RuntimePortableExpressionEvaluator(
         if (!context.VariableEnvelopes.TryGetValue(address, out var envelope))
             throw NewParameterException(parameterName, nodeId, inputName, $"references unavailable variable '{binding.VariableKey}' in scope '{binding.DeclaringScopeNodeId}'");
         return new PortableExpressionParameter(
-            await ReadPersistableEnvelopeAsync(envelope, parameterName, nodeId, inputName, cancellationToken),
+            await ReadPersistableEnvelopeAsync(envelope, parameterName, nodeId, inputName, cancellationToken, binding.VariableKey),
             envelope.Policy);
     }
 
@@ -374,8 +388,15 @@ internal sealed class RuntimePortableExpressionEvaluator(
         string parameterName,
         string nodeId,
         string inputName,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? variableKey = null)
     {
+        // The parameter needs the value, and a withheld value is not here to read. Marked so the evaluation wrapper
+        // rethrows it as is instead of redacting the fixed code away.
+        if (envelope.Presence == ValuePresence.Withheld)
+            throw MarkWithheldRefusal(variableKey is null
+                ? SecretBindingDiagnostics.WithheldInputNotResolved(inputName)
+                : SecretBindingDiagnostics.WithheldVariableNotResolved(variableKey));
         if (envelope.Policy.Lifecycle == DurableValueLifecycle.None)
             throw NewParameterException(parameterName, nodeId, inputName, "is transient and cannot cross the durable expression boundary");
         if (envelope.Presence == ValuePresence.Absent)

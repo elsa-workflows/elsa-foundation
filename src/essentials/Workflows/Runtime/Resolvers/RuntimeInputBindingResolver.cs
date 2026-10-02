@@ -1,4 +1,5 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Primitives.Models;
@@ -99,6 +100,9 @@ public sealed class RuntimeInputBindingResolver : IRuntimeInputBindingResolver
             projection.Policy,
             $"Result projection '{projection.Key}' on producer node '{reference.ProducerExecutableNodeId}'");
 
+        // A projection reads into the value, and a withheld value is not here to read.
+        if (result.Presence == ValuePresence.Withheld)
+            throw SecretBindingDiagnostics.WithheldInputNotResolved(binding.InputName);
         if (result.Presence == ValuePresence.ExplicitNull)
         {
             var projectedNull = ValueEnvelope.Null(binding.ConversionPlan?.SourceType ?? binding.TargetType, projectedPolicy);

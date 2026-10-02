@@ -272,6 +272,7 @@ public sealed class WorkflowIntrinsicExecutor(
         CancellationToken cancellationToken)
     {
         var nameBinding = node.InputBindings[WorkflowIntrinsicInputKeys.Name];
+        ThrowIfWithheld(nameBinding);
         if (nameBinding.Source != RuntimeInputBindingSource.Literal || nameBinding.Literal is not { } nameLiteral)
             throw new InvalidOperationException($"SetOutput intrinsic '{node.ExecutableNodeId}' requires a literal output name.");
         var outputName = ReadRequiredString(nameLiteral, WorkflowIntrinsicKind.SetOutput, node.ExecutableNodeId);
@@ -314,6 +315,7 @@ public sealed class WorkflowIntrinsicExecutor(
         CancellationToken cancellationToken)
     {
         var outcomeBinding = node.InputBindings[WorkflowIntrinsicInputKeys.Outcome];
+        ThrowIfWithheld(outcomeBinding);
         if (outcomeBinding.Source != RuntimeInputBindingSource.Literal ||
             outcomeBinding.Literal is not { } literal)
             throw new InvalidOperationException($"Finish intrinsic '{node.ExecutableNodeId}' requires a literal outcome key.");
@@ -481,6 +483,13 @@ public sealed class WorkflowIntrinsicExecutor(
         new ValueTypeDescriptor("Elsa.Activities.Runtime.Core.Models.ActivityUnit"),
         JsonSerializer.SerializeToElement(ActivityUnit.Value),
         ValueProtectionPolicy.InstanceInline);
+
+    // A literal read needs the value, and a secret read is withheld until activation, which intrinsics never reach.
+    private static void ThrowIfWithheld(RuntimeInputBinding binding)
+    {
+        if (binding.Source == RuntimeInputBindingSource.SecretRead || binding.Literal?.Presence == ValuePresence.Withheld)
+            throw SecretBindingDiagnostics.WithheldInputNotResolved(binding.InputName);
+    }
 
     private static string ReadRequiredString(ValueEnvelope value, WorkflowIntrinsicKind kind, string nodeId) =>
         ReadOptionalString(value, kind, nodeId) is { } text && !string.IsNullOrWhiteSpace(text)

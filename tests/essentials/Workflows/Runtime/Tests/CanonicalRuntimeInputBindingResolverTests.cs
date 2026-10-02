@@ -343,24 +343,56 @@ public sealed class CanonicalRuntimeInputBindingResolverTests
     [Fact]
     public async Task Materialization_refuses_an_expression_that_reads_a_withheld_ambient_variable()
     {
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            MaterializeJavaScriptAsync("variables.token", WithheldTokenInScope).AsTask());
+
+        Assert.Equal(SecretBindingDiagnostics.WithheldVariableNotResolved("token").Message, exception.Message);
+    }
+
+    [Fact]
+    public async Task Materialization_evaluates_an_expression_that_names_only_other_variables_beside_a_withheld_one()
+    {
+        var snapshot = await MaterializeJavaScriptAsync("variables.region", WithheldTokenInScope);
+
+        Assert.Equal("evaluated", snapshot.Values["customer-id"].InlineValue!.Value.GetString());
+    }
+
+    [Theory]
+    [InlineData("variables[name]")]
+    [InlineData("getVariable(name)")]
+    public async Task Materialization_refuses_a_computed_variable_access_while_a_withheld_variable_is_in_scope(string script)
+    {
+        // The computed access never names the withheld variable, but could read it, so it is refused (fail closed).
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            MaterializeJavaScriptAsync(script, WithheldTokenInScope).AsTask());
+
+        Assert.Equal(SecretBindingDiagnostics.WithheldVariableNotResolved("token").Message, exception.Message);
+    }
+
+    [Fact]
+    public async Task Materialization_refuses_an_expression_parameter_bound_to_a_withheld_variable()
+    {
+        // Sensitive, so the evaluation wrapper would redact any other failure; the fixed code must survive it.
         var binding = new RuntimeInputBinding(
             "customer-id",
             StringType,
             ValueProtectionPolicy.InstanceInline,
             RuntimeInputBindingSource.Expression,
-            expression: new RuntimeExpressionBinding("JavaScript", "variables.token"));
-        var withheld = ValueEnvelope.Withheld(
-            StringType,
-            WithheldValue.SecretReference(new RuntimeSecretReference("payments.api-key"), conversionPlan: null),
-            new ValueProtectionPolicy(DurableValueLifecycle.Instance, DurableValueStorage.Inline, isSensitive: true, requiresEncryption: true));
-        var context = new RuntimeInputBindingResolutionContext(
-            "workflow-1",
-            "consumer",
-            visibleVariablesByName: new Dictionary<string, ValueEnvelope> { ["token"] = withheld });
+            expression: new RuntimeExpressionBinding(
+                "Test",
+                "token",
+                parameters: new Dictionary<string, ExpressionParameterBinding>
+                {
+                    ["token"] = new VariableExpressionParameterBinding("scope:root", "token")
+                }));
+        var context = NewContext(variableEnvelopes: new Dictionary<RuntimeVariableValueAddress, ValueEnvelope>
+        {
+            [new RuntimeVariableValueAddress("scope:root", "token")] = WithheldToken
+        });
         var materializer = new RuntimeActivityInputMaterializer(
             _resolver,
             new TestTypeRegistry(),
-            new ConstantPortableExpressionEvaluator("read as undefined"));
+            new ConstantPortableExpressionEvaluator("evaluated"));
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => materializer.MaterializeSnapshotAsync(
             NewConsumerNode(binding),
@@ -368,7 +400,27 @@ public sealed class CanonicalRuntimeInputBindingResolverTests
             context,
             DateTimeOffset.UnixEpoch).AsTask());
 
-        Assert.Equal(SecretBindingDiagnostics.WithheldInputNotResolved("token").Message, exception.Message);
+        Assert.Equal(SecretBindingDiagnostics.WithheldVariableNotResolved("token").Message, exception.Message);
+    }
+
+    [Fact]
+    public void Resolve_refuses_to_project_from_a_withheld_activity_result()
+    {
+        var producer = CompletedProducer(WithheldToken);
+        var consumer = RunningConsumer(producer.InvocationId);
+        var binding = new RuntimeInputBinding(
+            "customer-id",
+            StringType,
+            ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.ActivityResult,
+            activityResult: new RuntimeActivityResultReference("producer", "customer-id", "scope:root"));
+
+        var exception = Assert.Throws<InvalidOperationException>(() => _resolver.Resolve(binding, NewContext(
+            consumer: consumer,
+            runtimeView: [producer, consumer],
+            executable: NewProducerExecutable())));
+
+        Assert.Equal(SecretBindingDiagnostics.WithheldInputNotResolved("customer-id").Message, exception.Message);
     }
 
     [Fact]
@@ -498,6 +550,36 @@ public sealed class CanonicalRuntimeInputBindingResolverTests
         Assert.Equal("results/producer-1", resolved.Envelope.ExternalReference!.Locator);
         Assert.True(resolved.Envelope.Policy.IsSensitive);
         Assert.True(resolved.Envelope.Policy.RequiresEncryption);
+    }
+
+    private static readonly ValueEnvelope WithheldToken = ValueEnvelope.Withheld(
+        StringType,
+        WithheldValue.SecretReference(new RuntimeSecretReference("payments.api-key"), conversionPlan: null),
+        new ValueProtectionPolicy(DurableValueLifecycle.Instance, DurableValueStorage.Inline, isSensitive: true, requiresEncryption: true));
+
+    private static readonly IReadOnlyDictionary<string, ValueEnvelope> WithheldTokenInScope = new Dictionary<string, ValueEnvelope>
+    {
+        ["token"] = WithheldToken,
+        ["region"] = ValueEnvelope.Inline(StringType, JsonSerializer.SerializeToElement("eu"), ValueProtectionPolicy.InstanceInline)
+    };
+
+    private ValueTask<ActivityInputSnapshot> MaterializeJavaScriptAsync(string script, IReadOnlyDictionary<string, ValueEnvelope> visibleVariables)
+    {
+        var binding = new RuntimeInputBinding(
+            "customer-id",
+            StringType,
+            ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.Expression,
+            expression: new RuntimeExpressionBinding("JavaScript", script));
+        var materializer = new RuntimeActivityInputMaterializer(
+            _resolver,
+            new TestTypeRegistry(),
+            new ConstantPortableExpressionEvaluator("evaluated"));
+        return materializer.MaterializeSnapshotAsync(
+            NewConsumerNode(binding),
+            "consumer",
+            new RuntimeInputBindingResolutionContext("workflow-1", "consumer", visibleVariablesByName: visibleVariables),
+            DateTimeOffset.UnixEpoch);
     }
 
     private static RuntimeInputBindingResolutionContext NewContext(

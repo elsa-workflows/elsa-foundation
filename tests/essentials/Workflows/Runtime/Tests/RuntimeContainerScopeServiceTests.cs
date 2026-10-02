@@ -254,7 +254,7 @@ public sealed class RuntimeContainerScopeServiceTests
             Executable(DeclNode("root", []), Declaration("g", "Token")),
             new RuntimeVisibleVariableFrames([root])));
 
-        Assert.Equal(SecretBindingDiagnostics.WithheldInputNotResolved("Token").Message, exception.Message);
+        Assert.Equal(SecretBindingDiagnostics.WithheldVariableNotResolved("Token").Message, exception.Message);
     }
 
     [Fact]

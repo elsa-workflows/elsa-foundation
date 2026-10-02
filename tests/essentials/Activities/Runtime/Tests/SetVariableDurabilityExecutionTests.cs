@@ -213,6 +213,25 @@ public sealed class SetVariableDurabilityExecutionTests
         Assert.Equal("initial", workflow!.RootVariableFrame!.Values["greeting"].InlineValue!.Value.GetString());
     }
 
+    [Theory]
+    [InlineData(WorkflowIntrinsicKind.SetOutput, WorkflowIntrinsicInputKeys.Name)]
+    [InlineData(WorkflowIntrinsicKind.Finish, WorkflowIntrinsicInputKeys.Outcome)]
+    public async Task Intrinsic_literal_read_refuses_a_secret_read_with_the_fixed_code(WorkflowIntrinsicKind intrinsicKind, string inputKey)
+    {
+        // The output name and the outcome key are read as literals, and a secret read has no literal to read.
+        await using var harness = await CreateHarnessAsync(NewEffectNode(intrinsicKind, "accepted", new RuntimeInputBinding(
+            inputKey,
+            StringType,
+            new ValueProtectionPolicy(DurableValueLifecycle.Instance, DurableValueStorage.Inline, isSensitive: true, requiresEncryption: true),
+            RuntimeInputBindingSource.SecretRead,
+            secret: new RuntimeSecretReference("payments.api-key"))));
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => harness.Handler.HandleAsync(harness.WorkItem).AsTask());
+
+        Assert.Equal(SecretBindingDiagnostics.WithheldInputNotResolved(inputKey).Message, exception.Message);
+        Assert.Empty(harness.CommitStore.ListCommits());
+    }
+
     private static ExecutableNode NewVariableWriteNode(WorkflowIntrinsicKind intrinsicKind, RuntimeInputBinding? value = null)
     {
         using var descriptor = JsonDocument.Parse("{}" );
@@ -346,7 +365,7 @@ public sealed class SetVariableDurabilityExecutionTests
             intrinsicKind: intrinsicKind);
     }
 
-    private static ExecutableNode NewEffectNode(WorkflowIntrinsicKind intrinsicKind, string value)
+    private static ExecutableNode NewEffectNode(WorkflowIntrinsicKind intrinsicKind, string value, RuntimeInputBinding? replacement = null)
     {
         using var descriptor = JsonDocument.Parse("{}");
         var bindings = new Dictionary<string, RuntimeInputBinding>(StringComparer.Ordinal);
@@ -358,6 +377,8 @@ public sealed class SetVariableDurabilityExecutionTests
                 bindings[WorkflowIntrinsicInputKeys.Name] = LiteralBinding(WorkflowIntrinsicInputKeys.Name, "result");
             bindings[WorkflowIntrinsicInputKeys.Value] = LiteralBinding(WorkflowIntrinsicInputKeys.Value, value);
         }
+        if (replacement is not null)
+            bindings[replacement.InputName] = replacement;
 
         return new ExecutableNode(
             $"node-{intrinsicKind.ToString().ToLowerInvariant()}",

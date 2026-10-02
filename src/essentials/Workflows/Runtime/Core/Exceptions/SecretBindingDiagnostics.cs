@@ -18,6 +18,14 @@ public static class SecretBindingDiagnostics
     public static InvalidOperationException WithheldInputNotResolved(string inputKey) =>
         new($"{WithheldInputCode}: Activity input '{inputKey}' was withheld and is not resolved in this host.");
 
+    /// <summary>A withheld variable value reached a reader that needs its value and cannot resolve it.</summary>
+    public static InvalidOperationException WithheldVariableNotResolved(string variableName) =>
+        new($"{WithheldInputCode}: Variable '{variableName}' holds a withheld value that is not resolved in this host.");
+
+    /// <summary>A withheld value reached value conversion, which reads the value and cannot resolve it.</summary>
+    public static InvalidOperationException WithheldValueNotConverted(string targetTypeAlias) =>
+        new($"{WithheldInputCode}: A withheld value cannot be converted to '{targetTypeAlias}': it is not resolved in this host.");
+
     /// <summary>The input is named by the activity's <see cref="RefusesSecretBindingAttribute"/>.</summary>
     public static ArgumentException SecretBindingRefused(string nodeId, string inputKey, SecretBindingRefusalReason reason) =>
         Refused(nodeId, inputKey, reason switch

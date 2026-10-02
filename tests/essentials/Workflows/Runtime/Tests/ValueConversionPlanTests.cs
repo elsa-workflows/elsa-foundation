@@ -49,22 +49,21 @@ public sealed class ValueConversionPlanTests
     }
 
     [Fact]
-    public void A_withheld_value_passes_through_conversion_with_its_marker_intact()
+    public void Conversion_refuses_a_withheld_value_with_the_fixed_code()
     {
-        var type = new ValueTypeDescriptor("Int32");
-        var nullableType = new ValueTypeDescriptor("Int32?");
+        // The shape a secret read takes: the envelope is typed to the Int32 input, while its plan converts from text.
+        // Conversion reads the value, so it refuses before comparing the envelope's type with the plan's source.
+        var targetType = new ValueTypeDescriptor("Int32");
+        var plan = JsonPlan(targetType, sourceRepresentation: ValueRepresentation.TextValue);
         var policy = new ValueProtectionPolicy(DurableValueLifecycle.Instance, DurableValueStorage.Inline, isSensitive: true, requiresEncryption: true);
-        var marker = WithheldValue.SecretReference(new RuntimeSecretReference("payments.api-key"), conversionPlan: null);
+        var withheld = ValueEnvelope.Withheld(
+            targetType,
+            WithheldValue.SecretReference(new RuntimeSecretReference("payments.retry-limit"), plan),
+            policy);
 
-        var converted = new RuntimeValueConversionExecutor().Convert(
-            ValueEnvelope.Withheld(type, marker, policy),
-            Plan(type, nullableType, ValueRepresentation.TypedValue, ValueConversionOperation.NullableCompatibility));
+        var exception = Assert.Throws<InvalidOperationException>(() => new RuntimeValueConversionExecutor().Convert(withheld, plan));
 
-        Assert.Equal(ValuePresence.Withheld, converted.Presence);
-        Assert.Equal(nullableType, converted.Type);
-        Assert.Equal(policy, converted.Policy);
-        Assert.Same(marker, converted.WithheldValue);
-        Assert.Null(converted.InlineValue);
+        Assert.Equal(SecretBindingDiagnostics.WithheldValueNotConverted("Int32").Message, exception.Message);
     }
 
     [Fact]

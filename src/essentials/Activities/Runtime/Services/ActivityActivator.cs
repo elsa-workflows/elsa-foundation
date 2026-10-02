@@ -28,6 +28,8 @@ public sealed class ActivityActivator(
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
+        // Every strategy, hydrating or not: a strategy that skips hydration would otherwise pass the input silently.
+        RefuseWithheldInputs(request.Inputs);
 
         var consumerKey = request.Descriptor?.ConsumerKey ?? request.Contract.DescriptorKind;
         var schemaVersion = request.Descriptor?.SchemaVersion ?? "1";
@@ -54,9 +56,6 @@ public sealed class ActivityActivator(
             schemaVersion,
             request.Contract.DescriptorPayload);
         var strategy = matches[0];
-        if (strategy.RequiresInputHydration)
-            RefuseWithheldInputs(request.Inputs);
-
         var lease = await strategy.ActivateAsync(
             new ActivityActivationStrategyRequest(request.Contract, descriptor),
             cancellationToken);

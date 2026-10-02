@@ -16,7 +16,8 @@ namespace Elsa.Workflows.Runtime.Tests;
 /// </summary>
 public sealed class RuntimeSecretBindingModelTests
 {
-    // The persisted runtime JSON shape: web casing with enums written by name, as the EF stores write artifacts.
+    // Web casing with enums written by name. Not the EF stores' options, which also frame strings as UTF-16: the
+    // persisted shape is proved against those in RuntimeArtifactJsonSecretBindingTests (EF persistence tests).
     private static readonly JsonSerializerOptions ArtifactJsonOptions = new(JsonSerializerDefaults.Web)
     {
         Converters = { new JsonStringEnumConverter() }

@@ -376,8 +376,11 @@ public sealed class RuntimeInputBindingCompiler(
         var payload = RequireObjectPayload(nodeId, inputDefinition, value, SecretExpressionType);
         return new RuntimeSecretReference(
             RequireStringProperty(nodeId, inputDefinition, payload, SecretExpressionType, "name"),
-            ReadOptionalTextProperty(nodeId, inputDefinition, payload, SecretExpressionType, "typeName"),
-            ReadOptionalTextProperty(nodeId, inputDefinition, payload, SecretExpressionType, "scope"));
+            ReadOptionalStringProperty(payload, "typeName", NonText),
+            ReadOptionalStringProperty(payload, "scope", NonText));
+
+        ArgumentException NonText(string propertyName) => new(
+            $"Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' uses expression type '{SecretExpressionType}' but carries a non-text '{propertyName}'.");
     }
 
     /// <summary>
@@ -750,26 +753,21 @@ public sealed class RuntimeInputBindingCompiler(
             $"Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' uses expression type '{expressionType}' but carries no '{propertyName}'.");
     }
 
-    private static string? ReadOptionalTextProperty(
-        string nodeId,
-        InputDefinition inputDefinition,
-        JsonElement payload,
-        string expressionType,
-        string propertyName)
+    /// <summary>
+    /// Reads an optional string property: a missing or null property reads as null. Any other non-string value reads
+    /// as null too, unless <paramref name="nonText"/> is given, in which case its exception is thrown.
+    /// </summary>
+    private static string? ReadOptionalStringProperty(JsonElement payload, string propertyName, Func<string, ArgumentException>? nonText = null)
     {
         if (!payload.TryGetProperty(propertyName, out var property) || property.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
             return null;
-        if (property.ValueKind != JsonValueKind.String)
-            throw new ArgumentException(
-                $"Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' uses expression type '{expressionType}' but carries a non-text '{propertyName}'.");
+        if (property.ValueKind == JsonValueKind.String)
+            return property.GetString();
 
-        return property.GetString();
+        if (nonText is not null)
+            throw nonText(propertyName);
+        return null;
     }
-
-    private static string? ReadOptionalStringProperty(JsonElement payload, string propertyName) =>
-        payload.TryGetProperty(propertyName, out var property) && property.ValueKind == JsonValueKind.String
-            ? property.GetString()
-            : null;
 
     private static ValueConversionBindingContext InputBindingContext(string nodeId, InputDefinition inputDefinition) =>
         new(nodeId, inputDefinition.ReferenceKey, ValueConversionBindingKind.Input);
