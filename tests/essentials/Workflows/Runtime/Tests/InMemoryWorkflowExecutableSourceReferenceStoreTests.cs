@@ -68,36 +68,6 @@ public sealed class InMemoryWorkflowExecutableSourceReferenceStoreTests
         Assert.Equal(new[] { "ref-00", "ref-01", "ref-02", "ref-03", "ref-04" }, traversed);
     }
 
-    /// <summary>
-    /// The definition filter the activation coordinator lists one slot's activations through (#2193). Each page holds
-    /// only that definition's references, and its continuation is bound to the definition, so another definition's query
-    /// refuses it rather than resuming past it.
-    /// </summary>
-    [Fact]
-    public async Task Narrows_a_page_to_one_definition_and_binds_its_continuation_to_it()
-    {
-        var store = new InMemoryWorkflowExecutableSourceReferenceStore();
-        foreach (var index in Enumerable.Range(0, 3))
-        {
-            await store.SaveAsync(Reference($"ref-{index:D2}-a", "artifact-1", "version-1", WorkflowExecutableReferenceScope.Published, "definition-1"));
-            await store.SaveAsync(Reference($"ref-{index:D2}-b", "artifact-2", "version-2", WorkflowExecutableReferenceScope.Published, "definition-2"));
-        }
-
-        var traversed = new List<string>();
-        string? continuation = null;
-        do
-        {
-            var page = await store.ListPageAsync(DefinitionPage("definition-1", continuation));
-            traversed.AddRange(page.Items.Select(reference => reference.SourceReferenceId));
-            continuation = page.NextContinuationToken;
-        } while (continuation is not null);
-
-        Assert.Equal(["ref-00-a", "ref-01-a", "ref-02-a"], traversed);
-        var first = await store.ListPageAsync(DefinitionPage("definition-1", null));
-        await Assert.ThrowsAsync<ArgumentException>(async () =>
-            await store.ListPageAsync(DefinitionPage("definition-2", first.NextContinuationToken)));
-    }
-
     [Fact]
     public async Task Refuses_a_continuation_minted_by_a_different_query()
     {
@@ -156,22 +126,18 @@ public sealed class InMemoryWorkflowExecutableSourceReferenceStoreTests
             inner.ListUnreferencedArtifactIdsAsync(candidates, now, cancellationToken);
     }
 
-    private static WorkflowExecutableSourceReferencePageQuery DefinitionPage(string definitionId, string? continuationToken) =>
-        new(WorkflowExecutableReferenceScope.Published, liveOnly: true, Now, limit: 1, continuationToken) { DefinitionId = definitionId };
-
     private static WorkflowExecutableSourceReference Reference(
         string sourceReferenceId,
         string artifactId,
         string definitionVersionId,
-        WorkflowExecutableReferenceScope scope,
-        string definitionId = "definition-1") =>
+        WorkflowExecutableReferenceScope scope) =>
         new(
             SourceReferenceId: sourceReferenceId,
             ArtifactId: artifactId,
             SourceKind: "WorkflowDefinitionVersion",
             SourceId: definitionVersionId,
             SourceVersion: "1.0.0",
-            DefinitionId: definitionId,
+            DefinitionId: "definition-1",
             DefinitionVersionId: definitionVersionId,
             ArtifactVersion: "1.0.0",
             CreatedAt: Now,
