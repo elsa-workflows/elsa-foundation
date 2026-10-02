@@ -111,6 +111,9 @@ internal static class ReusableActivityImportFixtures
         return services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
     }
 
+    /// <summary>The payload serializer the design stores write workflow state with.</summary>
+    public static IPayloadSerializer PayloadSerializer() => new JsonPayloadSerializer(new JsonPayloadConverterRegistry());
+
     private static WellKnownTypeRegistry TypeRegistry()
     {
         var registry = new WellKnownTypeRegistry();

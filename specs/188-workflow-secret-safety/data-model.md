@@ -64,7 +64,7 @@ not secret material. It is also why the canary scanner searches encoded forms.
 
 ```text
 authored    ArgumentValue { expressionType: "Secret", value: {name, typeName?, scope?} }
-   | credential-literal rule (7 entry points): accepted
+   | credential-literal rule (8 admitted entry points as built: FR-008's 7 and the Elsa 3 collection import): accepted
 published   RuntimeInputBinding { source: SecretRead, secret, conversionPlan, policy >= {sensitive, encrypt} }
    | Scheduled -> Running: materializer, no resolution
 persisted   ValueEnvelope { presence: Withheld, withheld: { kind: SecretReference, secret } }

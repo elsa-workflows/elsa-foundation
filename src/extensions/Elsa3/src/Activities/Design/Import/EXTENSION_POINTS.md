@@ -13,7 +13,7 @@ applied only as a reviewed dependency-closed mutation; Runtime never consumes th
 - **Purpose:** converts a reviewed collection plan into Activity/Workflow Design mutations.
 - **Default implementation:** `Elsa3ReusableActivityImportMaterializer` from `Elsa3.Mapping`.
 - **Invariant:** exact planned reference rewrites only; recursive composition is never replaced by separate-workflow execution.
-- **Mapped bodies:** each `ImportedReusableActivity` carries its mapped workflow state as `Body` (the state its descriptor payload holds), so the importer can admit it before the commit.
+- **Mapped bodies:** each `ImportedReusableActivity` carries its mapped workflow state as `Body`, so the importer can admit it before the commit. The importer judges `Body`, not the version's `DescriptorPayload` (the graph manifest format belongs to the graph activity module, which the import does not reference), so an implementation must build the descriptor payload from that `Body` and put no activity input into it that the body does not hold; a payload built otherwise is stored unjudged. The default implementation builds the payload's `rootActivity` from the body's root in the same call (`ReusableActivityCollectionCredentialLiteralTests` pins it).
 
 ### `IReusableActivityImportCommand`
 
@@ -117,14 +117,17 @@ The rule bounds that time; it does not encrypt the column, and it does not reach
 through the credential-literal rule, `ICredentialLiteralValidator`, registered by `WorkflowDesignValidations`, on which
 `Elsa3ImportJsonActivities` depends: the nodes of each imported workflow version's state and of each reusable
 activity's `Body` (from which the materializer builds that activity version's descriptor payload), the root and every
-node nested under it at any depth. The mapping nests child activities under `elsa3.imported-activity.structure`, which
+node nested under it, up to `Elsa3ImportedActivityStructure.MaxNestingDepth` (14) containers below the root. The mapping
+refuses deeper nesting with 400 naming the limit, because every serializer the stored state passes through keeps the
+default JSON nesting limit of 64. The mapping nests child activities under `elsa3.imported-activity.structure`, which
 no structure handler projects, so the rule's own tree walk sees only each root. `Elsa3ImportedActivityStructure`
 (`Models`) is the one definition of that shape: the mapping writes it through `Create`, and the importer reads every
 nested node back through `Nodes` and judges each as the root of its own state. The apply is all or nothing, so a
-literal, object, value read or expression on an input the installed activity declares a credential refuses the whole
-apply and nothing is committed: one `CredentialLiteralRefusedException`, answered 400 (`elsa3.import.request-invalid`)
-with the messages of every refused binding, which name the rule, the node and the input and never the value, in
-`detail`. The mapping stores each input binding under the declared input's reference key, whatever casing the Elsa 3
+literal, object, value read, expression or malformed secret reference on an input the installed activity declares a
+credential refuses the whole apply and no workflow or activity is committed: one `CredentialLiteralRefusedException`,
+answered 400 (`elsa3.import.request-invalid`) with the messages of every refused binding in `detail`. Each message names
+the rule, the node, the input and the Elsa 3 workflow it was found in (`CredentialLiteralFinding.Located`), never the
+value. The mapping stores each input binding under the declared input's reference key, whatever casing the Elsa 3
 property name has, which is the key the rule matches; two properties that bind one input, or a property that matches
 several declared inputs only ignoring case, refuse the apply with 400. A property that names no declared input or
 output is not mapped. As at every entry point, a node whose activity the catalog does not hold is not judged;

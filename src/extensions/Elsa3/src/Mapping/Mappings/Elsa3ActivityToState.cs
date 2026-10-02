@@ -24,17 +24,20 @@ public sealed class Elsa3ActivityToState(IActivityDefinitionLookup activityLooku
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(replacements);
         var mapped = new Dictionary<Elsa3Activity, ActivityNode>(ReferenceEqualityComparer.Instance);
-        var stack = new Stack<(Elsa3Activity Activity, bool ChildrenVisited)>();
-        stack.Push((source, false));
+        var stack = new Stack<(Elsa3Activity Activity, int Depth, bool ChildrenVisited)>();
+        stack.Push((source, 0, false));
         while (stack.TryPop(out var frame))
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (!frame.ChildrenVisited)
             {
-                stack.Push((frame.Activity, true));
+                stack.Push((frame.Activity, frame.Depth, true));
                 var children = frame.Activity.Activities ?? [];
+                if (children.Count > 0 && frame.Depth >= Elsa3ImportedActivityStructure.MaxNestingDepth)
+                    throw new ArgumentException(
+                        $"Elsa 3 activity '{frame.Activity.NodeId}' nests activities more than {Elsa3ImportedActivityStructure.MaxNestingDepth} containers below the workflow root, the deepest the import supports.");
                 for (var index = children.Count - 1; index >= 0; index--)
-                    stack.Push((children[index], false));
+                    stack.Push((children[index], frame.Depth + 1, false));
                 continue;
             }
 

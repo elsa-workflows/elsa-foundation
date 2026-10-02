@@ -63,7 +63,7 @@ rejected.
 | 5 | Submit (Definitions/Submit) | Design API admission before `ISubmitWorkflowDefinitionCommand` | same as row 1 | 400 |
 | 6 | File-based reconciliation import (and git import, which feeds it) | `WorkflowsVersionReconciler.ReconcileVersion`, per item, before any catalog mutation for that item | that item only is refused; see "Per-item behavior" below | n/a |
 | 7 | Git export | `GitWorkflowExporter`, per version not yet committed, before writing its file | that version file only is skipped; see "Per-item behavior" below | n/a |
-| 8 | Elsa 3 collection import (`POST migration/elsa3/reusable-activities/collections/{collectionHandle}/apply`; admitted in slice 6's review) | `ReusableActivityCollectionImporter.ApplyAsync`, the import's application-layer service, after mapping and before its commit port (`IReusableActivityImportCommand`) runs: every activity node of each imported workflow version's state and of each reusable activity's mapped body (from which the materializer builds that activity version's descriptor payload), the root and every node nested under it at any depth. The mapping nests children under `elsa3.imported-activity.structure`, which no handler projects, so the import enumerates them itself (`Elsa3ImportedActivityStructure.Nodes`) and judges each node through `ICredentialLiteralValidator` (review round 2) | the apply is all or nothing, so the whole apply is refused with one `CredentialLiteralRefusedException` naming every refused binding, and nothing is committed | 400 through the import's existing problem ladder (`elsa3.import.request-invalid`, its `ArgumentException` arm), the findings' messages in `detail`; that problem body has no `errors` map |
+| 8 | Elsa 3 collection import (`POST migration/elsa3/reusable-activities/collections/{collectionHandle}/apply`; admitted in slice 6's review) | `ReusableActivityCollectionImporter.ApplyAsync`, the import's application-layer service, after mapping and before its commit port (`IReusableActivityImportCommand`) runs: every activity node of each imported workflow version's state and of each reusable activity's mapped body (from which the materializer builds that activity version's descriptor payload), the root and every node nested under it, up to `Elsa3ImportedActivityStructure.MaxNestingDepth` (14) containers below the root; the mapping refuses deeper nesting with a 400 naming the limit, because every serializer the stored state passes through keeps the default JSON nesting limit of 64 (review round 3). The mapping nests children under `elsa3.imported-activity.structure`, which no handler projects, so the import enumerates them itself (`Elsa3ImportedActivityStructure.Nodes`) and judges each node through `ICredentialLiteralValidator` (review round 2) | the apply is all or nothing, so the whole apply is refused with one `CredentialLiteralRefusedException` naming every refused binding: no workflow or activity is committed, and the uploaded collection, which the import ledger stored at upload, stays there (T090) | 400 through the import's existing problem ladder (`elsa3.import.request-invalid`, its `ArgumentException` arm), the findings' messages in `detail`; that problem body has no `errors` map |
 
 Each refusal carries the rule identifier, the activity (node) id and the input name. Entry point 8 is not one of
 FR-008's seven: it was found in slice 6 and admitted in its review, as file reconciliation is (spec FR-008 note).
@@ -217,14 +217,25 @@ bite-proofs remove the call.
   `ExecutableNodeCompiler.EnsureDeclaredStructureHasHandler` refuses the parent node, the one carrying the structure,
   only when its activity's catalog design facets declare that structure kind (the feature providing the activity is
   missing from the shell). Otherwise the
-  compiler treats the structure as opaque (spec 071 FR-008): it compiles none of its children into executable nodes,
+  executable compiler treats the structure as opaque (spec 071 FR-008): it compiles none of its children into executable nodes,
   so none is judged, and it carries the payload, the children's bindings included, into the compiled executable; the
-  definition is stored and exported with them. Once a handler for the kind is installed, the walk and
+  definition is stored and exported with them. Opaque is not universal across publication: reusable-template
+  placement (`ActivityTemplatePlacer.RewriteStructure`) remaps a placed occurrence's structure through
+  `IActivityStructureService.RemapExecutableStructure` whenever that occurrence has child occurrences, and
+  `DefaultActivityStructureService.RemapExecutableStructure` throws `NotSupportedException` for a kind with no handler
+  when it is handed node ids to remap (verified by reading). The graph provider derives child occurrences only from
+  children a registered handler projects (`GraphActivityProvider`, `ProjectChildren`), so whether placement can reach an
+  unhandled kind with child occurrences was not established. Once a handler for the kind is installed, the walk and
   the compiler reach the children and the rule applies to them. Since slice 6's review round 2 the Elsa 3 collection
   import does not depend on that walk: it enumerates the children its mapping nests under
   `elsa3.imported-activity.structure` and judges each like any other node (entry point 8). A hand-authored state can
   still store such a child: draft save, add-version and submit through the Design API, and a workflow file read by
   file reconciliation or git import, accept a structure of any kind. A follow-up is recorded in T090.
+- **A replacement Elsa 3 materializer.** The import judges each reusable activity's mapped `Body`, not the activity
+  version's stored `DescriptorPayload`: the graph manifest format belongs to the graph activity module, whose parser
+  the import does not reference. The default materializer builds the payload's `rootActivity` from that body in the
+  same call (pinned by `ReusableActivityCollectionCredentialLiteralTests`); a replacement
+  `IReusableActivityImportMaterializer` must do the same, as its contract states, or its payload is stored unjudged.
 - **The Elsa 3 upload itself.** The mapping keeps an Elsa 3 property only when its name matches a declared input or
   output; it stores an input binding under the declared input's reference key, whatever casing the Elsa 3 property
   name has, so the rule sees it (slice 6's review round 2). A property that matches no declared input or output is

@@ -1,5 +1,3 @@
-using Elsa.Serialization.Core;
-using Elsa.Serialization.SystemText.Services;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa3.Activities.Design.Import.Contracts;
 using Elsa3.Activities.Design.Import.Models;
@@ -132,8 +130,6 @@ public sealed class ReusableActivityCollectionApplyTests
         var consumer = ReusableActivityImportFixtures.Workflow("consumer", "consumer-v1", 1, false, ReusableActivityImportFixtures.Reference("consumer-to-b", targetVersionId: "b-v1"));
         return ReusableActivityImportFixtures.Collection(a, b, consumer);
     }
-
-    private static IPayloadSerializer Serializer() => new JsonPayloadSerializer(new JsonPayloadConverterRegistry());
 
     private sealed class FailingCommand : IReusableActivityImportCommand
     {

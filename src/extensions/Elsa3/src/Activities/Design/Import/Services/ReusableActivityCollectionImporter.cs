@@ -15,13 +15,14 @@ namespace Elsa3.Activities.Design.Import.Services;
 /// <remarks>
 /// <para>
 /// The nodes judged are those of each imported workflow version's state and of each reusable activity's mapped body,
-/// from which the materializer builds that activity version's descriptor payload: the root and every node nested under
-/// it at any depth. The mapping nests child activities under <see cref="Elsa3ImportedActivityStructure.Kind"/>, which no
+/// from which <see cref="IReusableActivityImportMaterializer"/> must build that activity version's descriptor payload: the root and every node nested under
+/// it, which the mapping limits to <see cref="Elsa3ImportedActivityStructure.MaxNestingDepth"/> containers. The mapping nests child activities under <see cref="Elsa3ImportedActivityStructure.Kind"/>, which no
 /// structure handler projects, so the rule's own tree walk does not reach them; the import enumerates them through
 /// <see cref="Elsa3ImportedActivityStructure.Nodes"/> and judges each through <see cref="ICredentialLiteralValidator"/>.
 /// </para>
 /// <para>
-/// The apply is all or nothing, so a refused binding refuses the whole apply before anything is committed: one
+/// The apply is all or nothing, so a refused binding refuses the whole apply before any workflow or activity is committed
+/// (the uploaded collection is already in the import ledger, which stored it at upload): one
 /// <see cref="CredentialLiteralRefusedException"/> names the rule, and the node and the input of every refused binding,
 /// never the value. As everywhere the rule runs, a binding is matched to its input by reference key, and a node whose
 /// activity version the catalog does not hold is not judged.
@@ -147,7 +148,8 @@ public sealed class ReusableActivityCollectionImporter(
 
     /// <summary>
     /// Judges every activity node the commit would store, nested ones included, and throws one
-    /// <see cref="CredentialLiteralRefusedException"/> naming every refused binding when any node holds one.
+    /// <see cref="CredentialLiteralRefusedException"/> naming every refused binding when any node holds one, each finding
+    /// located in the Elsa 3 workflow it came from, because node ids repeat across a collection.
     /// </summary>
     /// <remarks>
     /// The rule judges each binding against its own node's activity declaration, so a node judged as the root of an
@@ -155,12 +157,21 @@ public sealed class ReusableActivityCollectionImporter(
     /// </remarks>
     private async Task AdmitAsync(ReusableActivityImportMutation mutation, CancellationToken cancellationToken)
     {
-        var roots = mutation.Workflows.Select(workflow => workflow.Version.State.RootActivity)
-            .Concat(mutation.Activities.Select(activity => activity.Body.RootActivity))
-            .OfType<ActivityNode>();
+        var workflowRoots = mutation.Workflows.Select(workflow => (
+            Root: workflow.Version.State.RootActivity,
+            Location: $"Elsa 3 workflow '{workflow.SourceDefinitionId}' version '{workflow.SourceVersionId}'"));
+        var activityRoots = mutation.Activities.Select(activity => (
+            Root: activity.Body.RootActivity,
+            Location: $"the reusable activity imported from Elsa 3 workflow version '{activity.Version.SourceId}'"));
+        var nodes = workflowRoots.Concat(activityRoots)
+            .Where(root => root.Root is not null)
+            .SelectMany(root => Elsa3ImportedActivityStructure.Nodes(root.Root!).Select(node => (Node: node, root.Location)));
         var findings = new List<ValidationError>();
-        foreach (var node in roots.SelectMany(Elsa3ImportedActivityStructure.Nodes))
-            findings.AddRange(await credentialLiterals.Validate(new WorkflowDefinitionState([], node, [], [], null), cancellationToken));
+        foreach (var (node, location) in nodes)
+        {
+            var nodeFindings = await credentialLiterals.Validate(new WorkflowDefinitionState([], node, [], [], null), cancellationToken);
+            findings.AddRange(nodeFindings.Select(finding => CredentialLiteralFinding.Located(finding, location)));
+        }
 
         if (findings.Count > 0)
             throw new CredentialLiteralRefusedException(findings);

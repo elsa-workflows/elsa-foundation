@@ -11,7 +11,7 @@ using static Elsa.Workflows.Design.Tests.Unit.BaselineValidatorTests.ValidatorTe
 namespace Elsa.Workflows.Design.Tests.Unit.BaselineValidatorTests;
 
 /// <summary>
-/// The credential-literal validator (spec 188, FR-008): it finds a refused binding at any depth, skips what it cannot
+/// The credential-literal validator (spec 188, FR-008): it finds a refused binding on a nested node, skips what it cannot
 /// judge (intrinsics and activity versions the catalog does not hold), reports the contract's path, type and message
 /// without the bound value, and returns the same findings through each way it is reached.
 /// </summary>

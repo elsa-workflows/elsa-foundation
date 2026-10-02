@@ -1798,9 +1798,9 @@ public sealed class EfWorkflowDesignPersistenceTests
         /// </summary>
         public Task StoreStateSourceDirectlyAsync(string? stateSource) =>
             Db.Database.ExecuteSqlRawAsync(
-                $"UPDATE {WorkflowsDesignEfModule.DraftTable} SET StateSource = @stateSource WHERE Id = @draftId",
-                new SqliteParameter("@stateSource", (object?)stateSource ?? DBNull.Value),
-                new SqliteParameter("@draftId", DraftId));
+                $"UPDATE {WorkflowsDesignEfModule.DraftTable} SET StateSource = {{0}} WHERE Id = {{1}}",
+                stateSource!,
+                DraftId);
 
         public async Task<(int Versions, int Layouts)> CountVersionRowsAsync() =>
             (await Db.Versions.CountAsync(), await Db.VersionLayouts.CountAsync());

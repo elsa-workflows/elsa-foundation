@@ -28,6 +28,14 @@ public interface IReusableActivityCollectionAnalyzer
 /// into provider-neutral Activity/Workflow Design mutations without giving persistence an Elsa 3
 /// mapping dependency.
 /// </summary>
+/// <remarks>
+/// The importer judges the credential-literal rule (spec 188, FR-008) on each workflow version's state and on each
+/// reusable activity's <see cref="ImportedReusableActivity.Body"/>, not on the activity version's descriptor payload,
+/// whose graph format the graph activity module owns. An implementation must therefore build every descriptor payload
+/// from the <see cref="ImportedReusableActivity.Body"/> it returns beside it, and put no activity input into the payload
+/// that the body does not hold; otherwise the payload is stored unjudged. The default implementation builds the payload's
+/// <c>rootActivity</c> from the body's root in the same call.
+/// </remarks>
 public interface IReusableActivityImportMaterializer
 {
     ValueTask<ReusableActivityImportMutation> MaterializeAsync(
