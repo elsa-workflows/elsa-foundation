@@ -71,13 +71,19 @@ public enum ActivityActivationFailureKind
     MissingConsumer,
     UnsupportedSchema,
     InvalidDescriptor,
-    MissingStorageDriver
+    MissingStorageDriver,
+
+    /// <summary>An input takes a secret reference, but the host composes no runtime secret resolver.</summary>
+    MissingSecretResolver
 }
 
 public enum RuntimeActivationCapabilityKind
 {
     ActivityConsumer,
-    DurableValueStorageDriver
+    DurableValueStorageDriver,
+
+    /// <summary>The runtime secret resolver that activation reads secret-bound inputs through.</summary>
+    SecretResolver
 }
 
 /// <summary>Safe Runtime evidence describing why one executable node could not be activated.</summary>

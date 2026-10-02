@@ -38,6 +38,7 @@ The Secrets module stores, versions, rotates, and audits secrets, and Studio let
 - Q (raised in plan review round 3, 2026-10-01): Can a secret reference bind an input that the activity returns in its result or copies into a fault it reports? → A: No. Publish refuses it with `VF-ACT-012`, like an input the activity copies into its own persisted state (for example `Inline`'s expression and `WriteHttpResponse`'s body).
 - Q (raised in plan review round 3, 2026-10-01): What does promote do when the draft changes between its credential check and the promotion? → A: It refuses with a conflict. Promote turns into a version exactly the draft content it checked.
 - Q (raised in plan review round 4, 2026-10-01): Which input types can be declared credentials? → A: In phase 0 only `string`-typed inputs. A credential declaration on an input of any other CLR type is refused when the activity is cataloged.
+- Q (raised in implementation review, 2026-10-02): Can an instance whose recorded tenant differs from its execution scope reach resolution on every store? → A: Only on a store that can hold such a row. `TenantMismatch` is the activation-time guard for those stores; the EF workflow execution store refuses the row earlier, on save and on read, so on EF the mismatch surfaces as that store's refusal and never as a `TenantMismatch` fault.
 
 ## User Scenarios & Testing
 
@@ -137,7 +138,7 @@ Studio knows which inputs an activity declares as credentials or sensitive, so i
 - **FR-002**: Resolution MUST happen on every execution and every resumption. A resolved value MUST NOT be restored from persisted state.
 - **FR-003**: Resolution failures MUST fault the activity with the reference name and the resolver's failure code, and no value or store-private detail. `StoreUnavailable` MUST be classified transient. All other codes MUST be classified permanent. A host that does not compose the secret resolution bridge cannot resolve at all; this is a composition fault, not a resolution failure, and MUST park the activity with an activation-failure incident (constitution §E2.6.1).
 - **FR-004**: The resolved value is text and MUST be converted to the input's declared type using the existing input conversion rules. Publish MUST refuse a `Secret` binding on every input those rules have no conversion plan from text for (`VF-COER-001`), so every input that accepts one converts text with a plan that cannot fail on a string.
-- **FR-005**: The tenant of the executing instance MUST be available wherever activity inputs are resolved. A binding MUST NOT be able to select a tenant. If the instance's tenant is known and differs from the execution scope, resolution MUST refuse with a `TenantMismatch` fault before any secret is read.
+- **FR-005**: The tenant of the executing instance MUST be available wherever activity inputs are resolved. A binding MUST NOT be able to select a tenant. If the instance's tenant is known and differs from the execution scope, resolution MUST refuse with a `TenantMismatch` fault before any secret is read; a store that refuses to keep or return such an instance (the EF stores) refuses it earlier instead.
 
 **Declaring and guarding sensitive inputs**
 

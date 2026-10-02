@@ -2,7 +2,6 @@ using Elsa.Activities.Runtime.Contracts;
 using Elsa.Activities.Runtime.Core.Exceptions;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
-using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Activities.Runtime.Services;
@@ -10,9 +9,17 @@ namespace Elsa.Activities.Runtime.Services;
 /// <summary>
 /// Selects one installed activation strategy by stable Runtime consumer and descriptor schema.
 /// </summary>
+/// <remarks>
+/// A hydrating strategy's activation is the only place a secret-bound input is resolved. The committed snapshot holds
+/// a withheld envelope for it; <see cref="ActivitySecretInputResolver"/> resolves the reference for the partition the
+/// execution runs under, converts the text with the plan the envelope carries, and the activity is hydrated from that
+/// transient copy of the snapshot. The request's snapshot is never changed, so nothing the activity was hydrated with
+/// is written back to state. Every activation resolves again; nothing resolved is kept.
+/// </remarks>
 public sealed class ActivityActivator(
     IEnumerable<IActivityActivationStrategy> strategies,
     ActivityInputHydrator inputHydrator,
+    ActivitySecretInputResolver secretInputResolver,
     IExternalPayloadStore? externalPayloadStore = null) : IActivityActivator
 {
     private readonly IReadOnlyDictionary<string, IReadOnlyCollection<IActivityActivationStrategy>> _strategies =
@@ -28,8 +35,6 @@ public sealed class ActivityActivator(
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
-        // Every strategy, hydrating or not: a strategy that skips hydration would otherwise pass the input silently.
-        RefuseWithheldInputs(request.Inputs);
 
         var consumerKey = request.Descriptor?.ConsumerKey ?? request.Contract.DescriptorKind;
         var schemaVersion = request.Descriptor?.SchemaVersion ?? "1";
@@ -56,6 +61,7 @@ public sealed class ActivityActivator(
             schemaVersion,
             request.Contract.DescriptorPayload);
         var strategy = matches[0];
+        var secretInputs = secretInputResolver.Prepare(request.Inputs, strategy.RequiresInputHydration);
         var lease = await strategy.ActivateAsync(
             new ActivityActivationStrategyRequest(request.Contract, descriptor),
             cancellationToken);
@@ -66,37 +72,19 @@ public sealed class ActivityActivator(
         try
         {
             var inputs = await DereferenceInputsAsync(request.Inputs, cancellationToken);
+            if (secretInputs is not null)
+                inputs = await secretInputResolver.ResolveAsync(secretInputs, request.WorkflowExecutionId, inputs, cancellationToken);
             inputHydrator.Hydrate(lease.Activity, request.Contract, inputs);
             return lease;
         }
         catch (Exception activationException)
         {
-            try
-            {
-                await lease.DisposeAsync();
-            }
-            catch (Exception disposalException)
-            {
-                throw new AggregateException(
-                    "Activity input hydration and activation cleanup both failed.",
-                    activationException,
-                    disposalException);
-            }
+            var canceled = cancellationToken.IsCancellationRequested;
+            var disposalException = await ActivityActivationLeaseDisposer.TryDisposeAsync(lease);
+            if (disposalException is not null)
+                throw ActivityActivationLeaseDisposer.CombineActivationFailure(activationException, disposalException, canceled);
 
             throw;
-        }
-    }
-
-    /// <summary>
-    /// Activation does not resolve withheld values, so a withheld input has no value to hydrate. Refuse it before the
-    /// activity exists rather than hydrating null and letting the activity run on a missing value.
-    /// </summary>
-    private static void RefuseWithheldInputs(ActivityInputSnapshot snapshot)
-    {
-        foreach (var (key, value) in snapshot.Values.OrderBy(item => item.Key, StringComparer.Ordinal))
-        {
-            if (value.Presence == ValuePresence.Withheld)
-                throw SecretBindingDiagnostics.WithheldInputNotResolved(key);
         }
     }
 
@@ -123,11 +111,14 @@ public sealed class ActivityActivator(
             values.Add(key, ValueEnvelope.Inline(value.Type, payload, value.Policy));
         }
 
-        return new ActivityInputSnapshot(
+        return WithValues(snapshot, values);
+    }
+
+    internal static ActivityInputSnapshot WithValues(ActivityInputSnapshot snapshot, IReadOnlyDictionary<string, ValueEnvelope> values) =>
+        new(
             snapshot.InvocationId,
             snapshot.ContractFingerprint,
             snapshot.BindingFingerprint,
             values,
             snapshot.MaterializedAt);
-    }
 }

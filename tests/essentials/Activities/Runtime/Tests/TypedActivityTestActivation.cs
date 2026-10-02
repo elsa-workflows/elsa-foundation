@@ -79,6 +79,7 @@ internal static class TypedActivityTestActivation
             envelopes,
             DateTimeOffset.UtcNow);
         var request = new ActivityActivationRequest(
+            "workflow-execution-1",
             contract,
             snapshot,
             new ActivityAttempt("attempt-1", "invocation-1", 1, ActivityAttemptReason.Initial, DateTimeOffset.UtcNow),
@@ -90,7 +91,7 @@ internal static class TypedActivityTestActivation
             services.GetRequiredService<IServiceScopeFactory>(),
             registry,
             serializer);
-        var activator = new ActivityActivator([strategy], new ActivityInputHydrator());
+        var activator = new ActivityActivator([strategy], new ActivityInputHydrator(), SecretResolutionTestSupport.NoResolverSecretInputResolver());
         return await activator.ActivateAsync(request);
     }
 

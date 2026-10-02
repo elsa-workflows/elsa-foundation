@@ -6,7 +6,9 @@ using Elsa.Activities.Testing;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Services.Incidents;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using SequenceActivity = Elsa.Activities.Sequence.Activities.Sequence;
@@ -102,9 +104,9 @@ public sealed class ActivityExecutionInspectionOutcomeTests
 
     /// <summary>
     /// The inspection snapshot is built on the invoke path before activation (spec 188, T012), so a withheld secret
-    /// input must render there as a sensitive marker naming its reference, with no value and without throwing. The
-    /// activation that follows refuses the input loudly because this host resolves no secrets. It renders as sensitive
-    /// even when its own policy is not.
+    /// input must render there as a sensitive marker naming its reference, with no value and without throwing. It
+    /// renders as sensitive even when its own policy is not. This host composes no secret resolver, so the activation
+    /// that follows parks the activity with an activation-failure incident instead of faulting it (T020, A06).
     /// </summary>
     [Theory]
     [InlineData(true)]
@@ -126,8 +128,13 @@ public sealed class ActivityExecutionInspectionOutcomeTests
         var run = await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(leaf));
 
         var state = run.State(LeafNodeId);
-        Assert.Equal(ActivityExecutionStatus.Faulted, state.Status);
-        Assert.Contains("VF-ACT-010: Activity input 'text' was withheld and is not resolved in this host.", state.Fault!.Message, StringComparison.Ordinal);
+        Assert.Equal(ActivityExecutionStatus.Waiting, state.Status);
+        Assert.Equal(ActivityActivationFailureHandler.IncidentFailureType, state.SubStatus);
+        Assert.Null(state.Fault);
+        var incident = Assert.Single(await harness.Services.GetRequiredService<IIncidentStateStore>().ListBlockingAsync(state.Execution.WorkflowExecutionId));
+        Assert.Equal(ActivityActivationFailureHandler.IncidentFailureType, incident.FailureType);
+        Assert.Equal(new RuntimeSecretResolverNotFoundException("text").Message, incident.Message);
+        Assert.NotEqual(WorkflowExecutionStatus.Faulted, run.WorkflowState!.Status);
         var projection = await harness.Services.GetRequiredService<IActivityExecutionInspectionStore>()
             .FindAsync(state.Execution.WorkflowExecutionId, state.Execution.ActivityExecutionId);
         var input = Assert.Single(
