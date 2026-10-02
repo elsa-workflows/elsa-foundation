@@ -1,0 +1,109 @@
+using System.Net;
+using System.Text;
+using System.Text.Json;
+using Elsa.Workflows.Design.Api.Projections;
+using Elsa.Workflows.Design.Api.Tests.Support;
+using Elsa.Workflows.Design.Core.Models;
+using Elsa.Workflows.Design.Persistence.Core.Exceptions;
+using Xunit;
+using static Elsa.Workflows.Design.Api.Tests.Support.CredentialActivityCatalog;
+using AuthorizationHost = Elsa.Workflows.Design.Api.Tests.WorkflowsDesignApiContractTests.AuthorizationHost;
+
+namespace Elsa.Workflows.Design.Api.Tests;
+
+/// <summary>
+/// Spec 188, FR-008 over HTTP, at every Design API route that writes workflow state (Definitions/Update has no route; it
+/// is a mediator command, proven by direct call in <c>CredentialLiteralStorageTests</c>). A literal on a credential input
+/// is answered with 400 and the contract's problem body: <c>errors</c> keyed by <c>{nodeId}/inputs/{referenceKey}</c>,
+/// each message starting with the rule id, and the value nowhere; the route's command never runs. A secret reference and
+/// a literal on a sensitive input that is not a credential reach the command. A promotion whose draft changed after
+/// admission answers 409.
+/// </summary>
+public sealed class CredentialLiteralEndpointTests
+{
+    public static TheoryData<string> Routes => new() { "DefinitionsAdd", "DraftsReplace", "VersionsAdd", "DefinitionsSubmit", "DraftsPromote" };
+
+    public static TheoryData<string, string> AcceptedBindings
+    {
+        get
+        {
+            var data = new TheoryData<string, string>();
+            foreach (var route in Routes)
+            foreach (var binding in new[] { "Secret", "SensitiveLiteral" })
+                data.Add(route, binding);
+            return data;
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(Routes))]
+    public async Task A_credential_literal_is_answered_with_400_keyed_by_the_input_path_and_no_command_runs(string route)
+    {
+        await using var host = await AuthorizationHost.StartAsync();
+
+        using var response = await SendAsync(host, route, State(ActivityVersionId, Bind(CredentialKey, "Literal")));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.DoesNotContain(Literal, body, StringComparison.Ordinal);
+        var errors = JsonDocument.Parse(body).RootElement.GetProperty("errors").EnumerateObject().ToArray();
+        var error = Assert.Single(errors);
+        Assert.Equal($"{NodeId}/inputs/{CredentialKey}", error.Name);
+        Assert.StartsWith("Inputs/CredentialLiteral", Assert.Single(error.Value.EnumerateArray()).GetString(), StringComparison.Ordinal);
+        Assert.Empty(host.Domain.StateWrites);
+    }
+
+    [Theory]
+    [MemberData(nameof(AcceptedBindings))]
+    public async Task An_accepted_binding_reaches_the_command(string route, string binding)
+    {
+        await using var host = await AuthorizationHost.StartAsync();
+        var state = binding == "Secret"
+            ? State(ActivityVersionId, Bind(CredentialKey, "Secret"))
+            : State(ActivityVersionId, Bind(SensitiveKey, "Literal"));
+
+        using var response = await SendAsync(host, route, state);
+
+        Assert.True(response.IsSuccessStatusCode, $"{route} answered {(int)response.StatusCode}.");
+        Assert.Single(host.Domain.StateWrites);
+    }
+
+    [Fact]
+    public async Task A_promotion_whose_draft_changed_after_admission_is_answered_with_409()
+    {
+        await using var host = await AuthorizationHost.StartAsync();
+        host.Domain.PromoteFailure = new WorkflowDraftChangedException("route-draft");
+
+        using var response = await SendAsync(host, "DraftsPromote", State(ActivityVersionId, Bind(CredentialKey, "Secret")));
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Contains("changed after it was read for promotion", await response.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Sends <paramref name="state"/> to <paramref name="route"/>. Promote carries no state: the route reads the draft, so
+    /// the draft store serves <paramref name="state"/> instead.
+    /// </summary>
+    private static async Task<HttpResponseMessage> SendAsync(AuthorizationHost host, string route, WorkflowDefinitionState state)
+    {
+        var view = state.ToStateView();
+        var (method, path, body) = route switch
+        {
+            "DefinitionsAdd" => (HttpMethod.Post, "/design/workflows/definitions", (object)new { name = "Definition", initialState = view }),
+            "DraftsReplace" => (HttpMethod.Put, "/design/workflows/drafts/route-draft", new { state = view }),
+            "VersionsAdd" => (HttpMethod.Post, "/design/workflows/versions/ingest", new { definitionId = "sample-definition", state = view }),
+            "DefinitionsSubmit" => (HttpMethod.Post, "/design/workflows/definitions/submit", new { name = "Submitted", state = view }),
+            "DraftsPromote" => (HttpMethod.Post, "/design/workflows/drafts/route-draft/promote", new { }),
+            _ => throw new ArgumentOutOfRangeException(nameof(route), route, null)
+        };
+        if (route == "DraftsPromote")
+            host.Domain.DraftState = state;
+
+        using var request = new HttpRequestMessage(method, path)
+        {
+            Content = new StringContent(JsonSerializer.Serialize(body, JsonSerializerOptions.Web), Encoding.UTF8, "application/json")
+        };
+        request.Headers.TryAddWithoutValidation(AuthorizationHost.IdentityHeader, "trusted-manage");
+        return await host.Client.SendAsync(request);
+    }
+}

@@ -32,7 +32,9 @@ namespace Elsa.Workflows.Design.Api;
     name: "WorkflowsDesignApi",
     DisplayName = "Workflows Design API",
     Description = "Contains endpoints to manage data in the Workflows Design Domain",
-    DependsOn = new object[] { "ApiCapabilities" }
+    // Every endpoint that writes workflow state admits it through the credential-literal rule (spec 188, FR-008),
+    // which WorkflowDesignValidations registers; a host without it fails at composition instead of skipping the rule.
+    DependsOn = new object[] { "ApiCapabilities", "WorkflowDesignValidations" }
 )]
 public class WorkflowsDesignApiFeature : IWebShellFeature
 {
@@ -51,7 +53,7 @@ public class WorkflowsDesignApiFeature : IWebShellFeature
         services.AddEventHandlersFrom(assembly);
         services.AddCommandHandlersFrom(assembly);
         services.AddRequestHandlersFrom(assembly);
-        // These services back the authoring API and must not depend on the optional validation feature.
+        // These services back the authoring API, which registers them itself rather than relying on the validation feature.
         services.AddScopedVariableAuthoring();
         services.TryAddScoped<Endpoints.Definitions.IWorkflowDefinitionDetailsReader, Endpoints.Definitions.WorkflowDefinitionDetailsReader>();
         services.TryAddScoped<Endpoints.Versions.IWorkflowVersionDetailsReader, Endpoints.Versions.WorkflowVersionDetailsReader>();

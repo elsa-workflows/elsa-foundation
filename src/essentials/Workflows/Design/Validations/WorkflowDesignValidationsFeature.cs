@@ -68,6 +68,13 @@ public class WorkflowDesignValidationsFeature : IShellFeature
         services.TryAddSingleton<IExpressionDescriptorRegistry>(new EmptyExpressionDescriptorRegistry());
         services.AddScoped<IExpressionDraftSemanticValidator, ExpressionDraftSemanticValidator>();
         services.AddScoped<IDraftValidator, ExpressionDraftValidator>();
+
+        // The credential-literal rule (spec 188, FR-008): one validator, which every entry point reaches as
+        // ICredentialLiteralValidator, also contributed to DraftValidating so the validation panel reports it.
+        services.AddScoped<CredentialLiteralValidator>();
+        services.AddScoped<ICredentialLiteralValidator>(sp => sp.GetRequiredService<CredentialLiteralValidator>());
+        services.AddScoped<IDraftValidator>(sp => sp.GetRequiredService<CredentialLiteralValidator>());
+        CredentialLiteralValidatorCompositionCheck.Register(services);
     }
 
     private sealed class UnavailableExpressionToolingProviderResolver : IExpressionToolingProviderResolver

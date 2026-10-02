@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using Elsa.Events.Core.Contracts;
 using Elsa.Workflows.Design.Core.Contracts;
+using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Core.Reconciliation;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
@@ -9,6 +10,8 @@ using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Reconciliation.Contracts;
 using Elsa.Workflows.Design.Reconciliation.Models;
+using Elsa.Workflows.Design.Validations.Core.Contracts;
+using Elsa.Workflows.Design.Validations.Core.Models;
 
 namespace Elsa.Workflows.Design.Tests.Infrastructure;
 
@@ -31,6 +34,21 @@ internal sealed class HandlingPublisher<TEvent>(IEventHandler<TEvent> handler) :
 {
     public Task Publish(IEvent @event, CancellationToken cancellationToken = default) =>
         @event is TEvent handled ? handler.Handle(handled, cancellationToken) : Task.CompletedTask;
+}
+
+/// <summary>
+/// The credential-literal rule (spec 188) of the passes these races run. Their states hold no activity, so the rule
+/// has nothing to judge and this validator finds nothing, as the real one would; it refuses to judge a state that does
+/// hold one, which needs the real validator. The rule itself is tested where it is judged.
+/// </summary>
+internal sealed class NothingToJudgeValidator : ICredentialLiteralValidator
+{
+    public static NothingToJudgeValidator Instance { get; } = new();
+
+    public ValueTask<IReadOnlyList<ValidationError>> Validate(WorkflowDefinitionState state, CancellationToken cancellationToken) =>
+        state.RootActivity is null
+            ? ValueTask.FromResult<IReadOnlyList<ValidationError>>([])
+            : throw new InvalidOperationException("These races reconcile states without activities; a state with one needs the real validator.");
 }
 
 /// <summary>A reconciliation source that lists the same entries on every read.</summary>

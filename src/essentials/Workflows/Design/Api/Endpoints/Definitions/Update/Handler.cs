@@ -6,6 +6,8 @@ using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
+using Elsa.Workflows.Design.Validations.Core;
+using Elsa.Workflows.Design.Validations.Core.Contracts;
 using Elsa.Workflows.Design.Api.Endpoints.Definitions.Get;
 
 namespace Elsa.Workflows.Design.Api.Endpoints.Definitions.Update;
@@ -20,7 +22,8 @@ namespace Elsa.Workflows.Design.Api.Endpoints.Definitions.Update;
 public sealed class Handler(
     IWorkflowDefinitionDraftStore draftStore,
     IUpdateDraftCommand updateDraftCommand,
-    IWorkflowDefinitionDetailsReader reader)
+    IWorkflowDefinitionDetailsReader reader,
+    ICredentialLiteralValidator credentialLiterals)
     : ICommandHandler<UpdateDefinition, WorkflowDefinitionDetailsView>
 {
     public async Task<WorkflowDefinitionDetailsView> Handle(UpdateDefinition command, CancellationToken cancellationToken)
@@ -36,11 +39,13 @@ public sealed class Handler(
             : ActivityPresentationRecord.NormalizeCollection(
                 command.ActivityPresentation.Select(x => x.ToRecord()));
 
+        var state = command.State.ToState();
+        await credentialLiterals.AdmitAsync(state, cancellationToken);
         await updateDraftCommand.Execute(
             DesignOperationKey.CreateOrGenerate(command.OperationKey),
             new UpdateDraftRequest(
                 draft.Id,
-                command.State.ToState(),
+                state,
                 layout,
                 activityPresentation),
             cancellationToken);

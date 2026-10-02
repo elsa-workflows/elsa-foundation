@@ -10,6 +10,7 @@ using Elsa.Workflows.Design.Api.Endpoints.Definitions.Update;
 using UpdateHandler = Elsa.Workflows.Design.Api.Endpoints.Definitions.Update.Handler;
 using Elsa.Workflows.Design.Api.Endpoints.Definitions.Get;
 using Elsa.Workflows.Design.Api.Endpoints.Definitions;
+using Elsa.Workflows.Design.Api.Tests.Support;
 
 namespace Elsa.Workflows.Design.Api.Tests.Unit;
 
@@ -32,7 +33,7 @@ public sealed class UpdateDefinitionCommandHandlerTests
         });
         var updateCommand = new RecordingUpdateDraftCommand();
         var sender = new StubDetailsReader(DetailsFor("def-1"));
-        var handler = new UpdateHandler(draftStore, updateCommand, sender);
+        var handler = new UpdateHandler(draftStore, updateCommand, sender, CredentialActivityCatalog.Validator());
 
         var state = new WorkflowDefinitionStateView();
         var result = await handler.Handle(new UpdateDefinition("update-1", "def-1", state), CancellationToken.None);
@@ -51,7 +52,7 @@ public sealed class UpdateDefinitionCommandHandlerTests
             new WorkflowDefinitionDraft { Id = "draft-1", WorkflowDefinitionId = "def-1" },
             storedLayout);
         var updateCommand = new RecordingUpdateDraftCommand();
-        var handler = new UpdateHandler(draftStore, updateCommand, new StubDetailsReader(DetailsFor("def-1")));
+        var handler = new UpdateHandler(draftStore, updateCommand, new StubDetailsReader(DetailsFor("def-1")), CredentialActivityCatalog.Validator());
 
         await handler.Handle(new UpdateDefinition("update-2", "def-1", new WorkflowDefinitionStateView(), Layout: null), CancellationToken.None);
 
@@ -65,7 +66,7 @@ public sealed class UpdateDefinitionCommandHandlerTests
             new WorkflowDefinitionDraft { Id = "draft-1", WorkflowDefinitionId = "def-1" },
             new DesignMetadataRecord[] { new("stored", 0, 0) });
         var updateCommand = new RecordingUpdateDraftCommand();
-        var handler = new UpdateHandler(draftStore, updateCommand, new StubDetailsReader(DetailsFor("def-1")));
+        var handler = new UpdateHandler(draftStore, updateCommand, new StubDetailsReader(DetailsFor("def-1")), CredentialActivityCatalog.Validator());
 
         var layout = new WorkflowDefinitionLayoutRecordView[] { new("incoming", 5, 6, null, null, null) };
         await handler.Handle(new UpdateDefinition("update-3", "def-1", new WorkflowDefinitionStateView(), layout), CancellationToken.None);
@@ -81,7 +82,8 @@ public sealed class UpdateDefinitionCommandHandlerTests
         var handler = new UpdateHandler(
             new StubDraftStore(draft: null),
             new RecordingUpdateDraftCommand(),
-            new StubDetailsReader(DetailsFor("def-1")));
+            new StubDetailsReader(DetailsFor("def-1")),
+            CredentialActivityCatalog.Validator());
 
         await Assert.ThrowsAsync<ArgumentException>(
             () => handler.Handle(new UpdateDefinition("update-missing", "missing", new WorkflowDefinitionStateView()), CancellationToken.None));

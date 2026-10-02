@@ -29,6 +29,7 @@ using DeletePermanentlyHandler = Elsa.Workflows.Design.Api.Endpoints.Definitions
 using Elsa.Workflows.Design.Api.Endpoints.Definitions.Restore;
 using RestoreHandler = Elsa.Workflows.Design.Api.Endpoints.Definitions.Restore.Endpoint;
 using Microsoft.Extensions.Time.Testing;
+using Elsa.Workflows.Design.Api.Tests.Support;
 
 namespace Elsa.Workflows.Design.Api.Tests.Unit;
 
@@ -60,7 +61,7 @@ public sealed class WorkflowLifecycleHandlerTests
         var desired = new WorkflowDefinitionStateView(
             RootActivity: new ActivityNode("root", "activity-version-1", [], []));
 
-        var replaced = await new ReplaceDraftEndpoint(drafts, update).HandleAsync(
+        var replaced = await new ReplaceDraftEndpoint(drafts, update, CredentialActivityCatalog.Validator()).HandleAsync(
             new ReplaceDraft("replace-1", "draft-1", desired, Layout: null),
             CancellationToken.None);
         var read = await new GetDraftEndpoint(drafts).HandleAsync(new GetDraft("draft-1"), CancellationToken.None);
@@ -115,14 +116,23 @@ public sealed class WorkflowLifecycleHandlerTests
         {
             EntityNotFoundException.ForEntity(typeof(WorkflowDefinitionDraft), "draft-1"),
             new WorkflowDefinitionVersionConflictException("definition-1", "1.0.0"),
-            new WorkflowPromotionOperationConflictException("promotion retry conflict")
+            new WorkflowPromotionOperationConflictException("promotion retry conflict"),
+            new WorkflowDraftChangedException("draft-1")
         };
 
+        var drafts = new MutableDraftStore(new WorkflowDefinitionDraft
+        {
+            Id = "draft-1",
+            WorkflowDefinitionId = "definition-1",
+            State = WorkflowDefinitionState.Empty
+        }, []);
         foreach (var failure in failures)
         {
             var actual = await Record.ExceptionAsync(() => new PromoteDraftEndpoint(
+                    drafts,
                     new ThrowingPromoteDraftCommand(failure),
-                    new NeverVersionReader()).HandleAsync(
+                    new NeverVersionReader(),
+                    CredentialActivityCatalog.Validator()).HandleAsync(
                     new PromoteDraft("operation-1", "draft-1", "1.0.0"),
                     CancellationToken.None));
 
@@ -359,12 +369,8 @@ public sealed class WorkflowLifecycleHandlerTests
         public Task<string> Execute(
             DesignOperationKey operationKey,
             string draftId,
-            CancellationToken cancellationToken = default) => Task.FromException<string>(failure);
-
-        public Task<string> Execute(
-            DesignOperationKey operationKey,
-            string draftId,
             string? requestedVersion,
+            string expectedStateHash,
             CancellationToken cancellationToken = default) => Task.FromException<string>(failure);
     }
 

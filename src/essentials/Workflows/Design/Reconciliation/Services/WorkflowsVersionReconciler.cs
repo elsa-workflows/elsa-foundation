@@ -10,6 +10,8 @@ using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Core.Reconciliation;
 using Elsa.Workflows.Design.Reconciliation.Options;
+using Elsa.Workflows.Design.Validations.Core.Contracts;
+using Elsa.Workflows.Design.Validations.Core.Models;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -24,6 +26,12 @@ namespace Elsa.Workflows.Design.Reconciliation.Services;
 /// case is <em>surfaced</em> by recomputing and comparing the canonical serialization of the incoming
 /// and stored state (logged now; a dedicated hash-mismatch throw arrives with the persisted hash).
 /// </summary>
+/// <remarks>
+/// Each item passes the credential-literal rule (spec 188, FR-008), <see cref="ICredentialLiteralValidator"/>, before
+/// anything is written for it. A refused item is treated like an outdated one: nothing is materialized for it, its claim
+/// does not reach <see cref="WorkflowVersionsReconciled"/>, and the pass logs a value-free warning and goes on, so a
+/// refusal never fails the pass or keeps the host from becoming ready.
+/// </remarks>
 public sealed class WorkflowsVersionReconciler(
     ILogger<WorkflowsVersionReconciler> logger,
     IInlineEventPublisher eventPublisher,
@@ -34,6 +42,7 @@ public sealed class WorkflowsVersionReconciler(
     IMaterializeWorkflowDefinitionVersionCommand materializeVersionCommand,
     ISaveWorkflowDefinitionCommand saveDefinitionCommand,
     IPayloadSerializer payloadSerializer,
+    ICredentialLiteralValidator credentialLiterals,
     TimeProvider? timeProvider = null
 )
     : IWorkflowVersionReconciler
@@ -82,8 +91,8 @@ public sealed class WorkflowsVersionReconciler(
     /// <summary>
     /// Reconciles one contributed version. Returns <c>true</c> when the version is authoritative for its
     /// definition — materialized here, or already present and verified as the current version — and
-    /// <c>false</c> when it was skipped as outdated (FR-008a). The caller uses that to decide whether the
-    /// version's provenance claim reaches <see cref="WorkflowVersionsReconciled"/>.
+    /// <c>false</c> when it was skipped as outdated (FR-008a) or refused by the credential-literal rule. The caller
+    /// uses that to decide whether the version's provenance claim reaches <see cref="WorkflowVersionsReconciled"/>.
     /// </summary>
     private async Task<bool> ReconcileVersion(IWorkflowDefinitionVersion version, CancellationToken cancellationToken)
     {
@@ -98,6 +107,15 @@ public sealed class WorkflowsVersionReconciler(
         if (latestVersion is not null && string.CompareOrdinal(candidateSortKey, latestVersion.SemVerSortKey) < 0)
         {
             LogSkipOutdated(definitionId, version.Version);
+            return false;
+        }
+
+        // Spec 188, FR-008: judged before anything is written for the item, so a refused item leaves no definition
+        // record, metadata update or version row behind.
+        var refusals = await credentialLiterals.Validate(version.State, cancellationToken);
+        if (refusals.Count > 0)
+        {
+            LogRefused(definitionId, version.Version, refusals);
             return false;
         }
 
@@ -269,6 +287,15 @@ public sealed class WorkflowsVersionReconciler(
     {
         if (logger.IsEnabled(LogLevel.Information))
             logger.LogInformation("Skipping outdated workflow definition '{def}' v{v}", definitionId, version);
+    }
+
+    private void LogRefused(string definitionId, string version, IReadOnlyList<ValidationError> refusals)
+    {
+        // Each finding names the rule, the node and the input; none carries the bound value.
+        foreach (var refusal in refusals)
+            logger.LogWarning(
+                "Skipping workflow definition '{def}' v{v}: {refusal}",
+                definitionId, version, refusal.Message);
     }
 
     private void LogIgnoredSoftDeleteOnUnownedDefinition(string definitionId, bool incomingDeleted)

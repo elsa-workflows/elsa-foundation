@@ -25,27 +25,29 @@ namespace Elsa.Workflows.Design.Persistence.Core.Contracts;
 /// after a promotion completes are not part of the promoted Version — they exist on the Draft
 /// only and require a new (higher) Version to be included.
 /// </para>
+/// <para>
+/// <b>Content precondition (spec 188, research R7).</b> The caller passes the
+/// <see cref="WorkflowDraftStateHash"/> of the draft it read and checked. Inside the promotion lock, before anything is
+/// written, the implementation MUST compare it with the hash of the draft it reads there and throw
+/// <see cref="WorkflowDraftChangedException"/> when they differ, so a promotion writes exactly the content its caller
+/// saw. The hash is required, and it is not part of the request an operation key identifies: a replay of an
+/// already-succeeded promotion returns the original version id and writes nothing, whatever hash it carries.
+/// </para>
 /// </remarks>
 public interface IPromoteDraftToVersionCommand
 {
     /// <summary>
-    /// Promotes the supplied Draft to a new Version. Returns the new Version's id. Throws
-    /// <see cref="DraftHasValidationErrorsException"/> when the Draft has unresolved
-    /// validation errors.
-    /// </summary>
-    Task<string> Execute(
-        DesignOperationKey operationKey,
-        string draftId,
-        CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Promotes the supplied Draft with an optional exact semantic-version request. An omitted
-    /// request retains the automatic next-major policy; a supplied request is checked for semantic
-    /// validity, forward precedence, and identity availability inside the promotion lock.
+    /// Promotes the supplied Draft to a new Version and returns the new Version's id. An omitted
+    /// <paramref name="requestedVersion"/> retains the automatic next-major policy; a supplied request is checked for
+    /// semantic validity, forward precedence, and identity availability inside the promotion lock. Throws
+    /// <see cref="ArgumentException"/> for a null or blank <paramref name="expectedStateHash"/> before reading or
+    /// writing anything, <see cref="WorkflowDraftChangedException"/> when the draft no longer has that content, and
+    /// <see cref="DraftHasValidationErrorsException"/> when the Draft has unresolved validation errors.
     /// </summary>
     Task<string> Execute(
         DesignOperationKey operationKey,
         string draftId,
         string? requestedVersion,
+        string expectedStateHash,
         CancellationToken cancellationToken = default);
 }

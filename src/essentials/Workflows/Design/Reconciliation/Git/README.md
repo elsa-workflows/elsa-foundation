@@ -15,6 +15,13 @@ runtime read path. v1 is **single-writer**.
   not from files on disk: what HEAD's tree holds, which tags HEAD's history carries, and whether HEAD is
   ahead of the remote ([#2197](https://github.com/elsa-workflows/elsa-foundation/issues/2197)). A pass
   that stopped after a write, after a commit, or at a failed push is completed by the next one.
+- **Credential literals are never exported** (spec 188, FR-008). Before writing a version file, the exporter
+  judges the version's state with the credential-literal rule (`ICredentialLiteralValidator`, registered by
+  `WorkflowDesignValidations`, on which this feature depends). A version that binds a literal, an object, a value
+  read or an expression to an input its activity declares a credential gets no directory, file, commit or tag; the
+  pass logs one warning per refused binding, naming the rule, the definition, the version, the node and the input,
+  never the value, exports everything else, and does not fail. Inbound, the reconciler refuses such a version the
+  same way (see the [reconciliation README](../README.md)).
 
 ## On-disk layout
 

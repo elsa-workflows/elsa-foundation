@@ -6,6 +6,7 @@ using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Services;
 using Xunit;
 using Elsa.Workflows.Design.Api.Endpoints.Definitions.Add;
+using Elsa.Workflows.Design.Api.Tests.Support;
 
 namespace Elsa.Workflows.Design.Api.Tests.Unit;
 
@@ -19,7 +20,8 @@ public sealed class AddDefinitionCommandHandlerTests
         var handler = new Endpoint(
             new WorkflowDefinitionFactory(identities),
             new WorkflowDefinitionDraftFactory(identities),
-            persistence);
+            persistence,
+            CredentialActivityCatalog.Validator());
         var layout = new WorkflowDefinitionLayoutRecordView("node-1", 10, 20, 100, 80, null);
 
         var result = await handler.HandleAsync(

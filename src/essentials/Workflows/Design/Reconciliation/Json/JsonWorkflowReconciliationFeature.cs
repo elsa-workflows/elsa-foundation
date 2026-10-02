@@ -30,7 +30,9 @@ namespace Elsa.Workflows.Design.Reconciliation.Json;
 [ShellFeature(
     name: "JsonWorkflowReconciliation",
     DisplayName = "Workflow Design JSON Reconciliation",
-    Description = "Reconciliation source that reads workflow definitions from JSON files."
+    Description = "Reconciliation source that reads workflow definitions from JSON files.",
+    // The reconciler admits each item through the credential-literal rule (spec 188, FR-008).
+    DependsOn = new object[] { "WorkflowDesignValidations" }
 )]
 public class JsonWorkflowReconciliationFeature : WorkflowsDesignReconciliationFeature
 {

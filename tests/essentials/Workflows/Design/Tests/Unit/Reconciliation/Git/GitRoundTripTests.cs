@@ -3,6 +3,7 @@ using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Reconciliation.Git.Options;
 using Elsa.Workflows.Design.Reconciliation.Git.Services;
+using Elsa.Workflows.Design.Tests.Infrastructure;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
@@ -33,7 +34,9 @@ public sealed class GitRoundTripTests : GitIntegrationTest
         var writerWorkspace = GitTestSupport.Workspace(_git, writerOpts);
         var defs = new InMemoryDefinitionStore().With(new WorkflowDefinition { Id = "wf-r", Name = "R" });
         var versions = new InMemoryVersionStore().With(new WorkflowDefinitionVersion("wf-r", "1.0.0") { State = WorkflowDefinitionState.Empty });
-        var exporter = new GitWorkflowExporter(writerWorkspace, _git, new FakePayloadSerializer(), defs, versions, writerOpts, NullLogger<GitWorkflowExporter>.Instance);
+        var exporter = new GitWorkflowExporter(
+            writerWorkspace, _git, new FakePayloadSerializer(), defs, versions, writerOpts,
+            CredentialLiteralTestSupport.Validator(CredentialLiteralTestSupport.Catalog()), NullLogger<GitWorkflowExporter>.Instance);
 
         await exporter.ExportAsync(CancellationToken.None);
 

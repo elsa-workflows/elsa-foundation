@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Threading.Channels;
+using CShells;
 using Elsa.Events.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Primitives.Contracts;
@@ -17,6 +18,9 @@ using Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Commands;
 using Elsa.Workflows.Design.Core.Reconciliation;
 using Elsa.Workflows.Design.Reconciliation.Options;
 using Elsa.Workflows.Design.Reconciliation.Services;
+using Elsa.Tasks.Services;
+using Elsa.Workflows.Design.Tests.Infrastructure;
+using Elsa.Workflows.Design.Validations.Core.Contracts;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -495,6 +499,61 @@ public sealed class WorkflowsVersionReconcilerTests
         Assert.Equal(expectedAttempts - 1, clock.TimersStepped);
     }
 
+    [Fact]
+    public async Task A_refused_item_is_left_out_of_the_pass_with_a_value_free_warning_while_the_others_are_reconciled()
+    {
+        // Spec 188, FR-008: one refused item for a new definition, one for an existing definition whose metadata the
+        // item would change, and one valid item. The pass completes; nothing at all is written for either refused item.
+        var refusedNew = BuildIncomingVersion("wf-refused-new", "1.0.0", state: CredentialLiteralTestSupport.CredentialBoundAs("Literal"));
+        var refusedExisting = BuildIncomingVersion("wf-refused-existing", "2.0.0", name: "Renamed", state: CredentialLiteralTestSupport.CredentialBoundAs("Literal"));
+        var valid = BuildIncomingVersion("wf-valid", "1.0.0", state: CredentialLiteralTestSupport.CredentialBoundAs("Secret"));
+        var sender = new CapturingSender
+        {
+            ToContribute = [refusedNew, refusedExisting, valid],
+            ToContributeClaims = [NewClaim("wf-refused-new", "1.0.0"), NewClaim("wf-refused-existing", "2.0.0"), NewClaim("wf-valid", "1.0.0")]
+        };
+        var defs = new StubDefinitionStore().With(new WorkflowDefinition { Id = "wf-refused-existing", Name = "Original" });
+        var addDef = new SpyMaterializeDefinitionCommand();
+        var addVer = new SpyMaterializeVersionCommand();
+        var saveDef = new SpySaveDefinitionCommand();
+        var log = new RecordingLogger<WorkflowsVersionReconciler>();
+        var reconciler = NewReconciler(sender, defs, new StubVersionStore(), addDef, addVer, DuplicateHandling.Skip, saveDef, log);
+
+        Assert.Null(await Record.ExceptionAsync(() => reconciler.Reconcile(CancellationToken.None)));
+
+        Assert.Equal(["wf-valid"], addDef.Added.Select(definition => definition.Id));
+        Assert.Equal(["wf-valid"], addVer.Added.Select(version => version.DefinitionId));
+        Assert.Empty(saveDef.Saved);
+        var completed = Assert.Single(sender.Published.OfType<WorkflowVersionsReconciled>());
+        Assert.Equal(["wf-valid"], completed.Claims.Select(claim => claim.DefinitionId));
+        var warnings = log.Warnings.ToArray();
+        Assert.Equal(2, warnings.Length);
+        Assert.All(warnings, warning =>
+        {
+            Assert.Contains("Inputs/CredentialLiteral", warning.Message, StringComparison.Ordinal);
+            Assert.Contains($"'{CredentialLiteralTestSupport.NodeId}'", warning.Message, StringComparison.Ordinal);
+            Assert.Contains($"'{CredentialLiteralTestSupport.CredentialName}'", warning.Message, StringComparison.Ordinal);
+            Assert.DoesNotContain(CredentialLiteralTestSupport.Literal, warning.Message, StringComparison.Ordinal);
+        });
+        Assert.Contains(warnings, warning => warning.Message.Contains("'wf-refused-new' v1.0.0", StringComparison.Ordinal));
+        Assert.Contains(warnings, warning => warning.Message.Contains("'wf-refused-existing' v2.0.0", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task The_reconcile_startup_task_completes_when_an_item_is_refused()
+    {
+        var refused = BuildIncomingVersion("wf-refused", "1.0.0", state: CredentialLiteralTestSupport.CredentialBoundAs("Literal"));
+        var sender = new CapturingSender { ToContribute = [refused] };
+        var reconciler = NewReconciler(
+            sender, new StubDefinitionStore(), new StubVersionStore(),
+            new SpyMaterializeDefinitionCommand(), new SpyMaterializeVersionCommand(), DuplicateHandling.Skip);
+        var executor = new TaskExecutor(new InMemoryDistributedLockProvider(), NullLogger<TaskExecutor>.Instance, new ShellSettings("default"));
+
+        Assert.Null(await Record.ExceptionAsync(() =>
+            executor.ExecuteTaskAsync(new WorkflowsVersionReconcilerStartupTask(reconciler), CancellationToken.None)));
+        Assert.Single(sender.Published.OfType<WorkflowVersionsReconciled>());
+    }
+
     private static WorkflowVersionSourceClaim NewClaim(string definitionId, string version, string sourceId = "src-1") =>
         new(definitionId, version, SemVer.ToSortKey(version), sourceId, "Json", PublishRequested: true, Deleted: false);
 
@@ -508,7 +567,8 @@ public sealed class WorkflowsVersionReconcilerTests
         ISaveWorkflowDefinitionCommand? saveDef = null,
         ILogger<WorkflowsVersionReconciler>? logger = null,
         IPayloadSerializer? serializer = null,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null,
+        ICredentialLiteralValidator? credentialLiterals = null)
     {
         var options = Microsoft.Extensions.Options.Options.Create(new WorkflowVersionReconcilerOptions { DuplicateHandling = duplicateHandling });
         return new WorkflowsVersionReconciler(
@@ -521,6 +581,7 @@ public sealed class WorkflowsVersionReconcilerTests
             addVer,
             saveDef ?? new SpySaveDefinitionCommand(),
             serializer ?? new FakePayloadSerializer(),
+            credentialLiterals ?? CredentialLiteralTestSupport.Validator(CredentialLiteralTestSupport.Catalog()),
             timeProvider);
     }
 

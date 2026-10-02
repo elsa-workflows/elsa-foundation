@@ -7324,6 +7324,11 @@
           "path": "src/essentials/Workflows/Design/Persistence/Core/Elsa.Workflows.Design.Persistence.Core.csproj"
         },
         {
+          "type": "internal",
+          "id": "Elsa.Workflows.Design.Validations.Core",
+          "path": "src/essentials/Workflows/Design/Validations/Core/Elsa.Workflows.Design.Validations.Core.csproj"
+        },
+        {
           "type": "external",
           "id": "CShells.Abstractions",
           "version": "0.0.30-preview.159"
@@ -7401,6 +7406,11 @@
           "type": "internal",
           "id": "Elsa.Workflows.Design.Reconciliation",
           "path": "src/essentials/Workflows/Design/Reconciliation/Elsa.Workflows.Design.Reconciliation.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Design.Validations.Core",
+          "path": "src/essentials/Workflows/Design/Validations/Core/Elsa.Workflows.Design.Validations.Core.csproj"
         },
         {
           "type": "external",
@@ -18296,6 +18306,11 @@
           "type": "internal",
           "id": "Elsa.Workflows.Design.Persistence.Core",
           "path": "src/essentials/Workflows/Design/Persistence/Core/Elsa.Workflows.Design.Persistence.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Design.Validations",
+          "path": "src/essentials/Workflows/Design/Validations/Elsa.Workflows.Design.Validations.csproj"
         },
         {
           "type": "internal",

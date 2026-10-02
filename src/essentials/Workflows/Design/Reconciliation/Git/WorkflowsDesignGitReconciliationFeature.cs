@@ -27,7 +27,9 @@ namespace Elsa.Workflows.Design.Reconciliation.Git;
 [ShellFeature(
     name: "WorkflowsDesignGitReconciliation",
     DisplayName = "Workflow Design Git Reconciliation",
-    Description = "Reconciles workflow-definition versions from a git repository into the catalog, and (Writer role) exports the catalog's versions back to git."
+    Description = "Reconciles workflow-definition versions from a git repository into the catalog, and (Writer role) exports the catalog's versions back to git.",
+    // The reconciler admits each item, and the exporter each version, through the credential-literal rule (spec 188, FR-008).
+    DependsOn = new object[] { "WorkflowDesignValidations" }
 )]
 public class WorkflowsDesignGitReconciliationFeature : WorkflowsDesignReconciliationFeature
 {

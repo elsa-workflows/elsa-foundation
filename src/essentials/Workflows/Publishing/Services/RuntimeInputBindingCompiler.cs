@@ -7,6 +7,8 @@ using Elsa.Expressions.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Core.Models;
+using Elsa.Workflows.Design.Validations.Core.Exceptions;
+using Elsa.Workflows.Design.Validations.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -55,6 +57,11 @@ public sealed class RuntimeInputBindingCompiler(
 
     private readonly ValueConversionPlanResolver resolvedConversionPlanResolver = conversionPlanResolver ?? new(wellKnownTypeRegistry: wellKnownTypeRegistry);
 
+    /// <summary>
+    /// Compiles every input of a node against its catalog input definitions. The credential-literal rule (spec 188,
+    /// FR-008) is applied to the whole node first, so its refusal wins over <c>VF-ACT-011</c> and over any other input's
+    /// compile error.
+    /// </summary>
     public IReadOnlyDictionary<string, RuntimeInputBinding> CompileAll(
         string nodeId,
         IEnumerable<InputDefinition> inputDefinitions,
@@ -63,6 +70,8 @@ public sealed class RuntimeInputBindingCompiler(
         var definitions = inputDefinitions.ToArray();
         var states = inputStates.ToArray();
         var definitionsByKey = definitions.ToDictionary(x => x.ReferenceKey, StringComparer.Ordinal);
+        EnsureNoCredentialLiterals(nodeId, states, key =>
+            definitionsByKey.TryGetValue(key, out var definition) && definition.IsCredential == true ? definition.Name : null);
         var bindings = new Dictionary<string, RuntimeInputBinding>(StringComparer.Ordinal);
         foreach (var state in states)
         {
@@ -78,6 +87,11 @@ public sealed class RuntimeInputBindingCompiler(
         return bindings;
     }
 
+    /// <summary>
+    /// Compiles every input of a node against its pinned activity input contracts. The credential-literal rule (spec 188,
+    /// FR-008) reads each contract's explicit <c>IsCredential</c> flag and is applied to the whole node first, as in the
+    /// catalog overload.
+    /// </summary>
     public IReadOnlyDictionary<string, RuntimeInputBinding> CompileAll(
         string nodeId,
         IEnumerable<RuntimeActivityInputContract> inputContracts,
@@ -86,6 +100,8 @@ public sealed class RuntimeInputBindingCompiler(
         var contracts = inputContracts.ToArray();
         var states = inputStates.ToArray();
         var contractsByKey = contracts.ToDictionary(x => x.Key, StringComparer.Ordinal);
+        EnsureNoCredentialLiterals(nodeId, states, key =>
+            contractsByKey.TryGetValue(key, out var contract) && contract.IsCredential ? contract.Name : null);
         var bindings = new Dictionary<string, RuntimeInputBinding>(StringComparer.Ordinal);
         foreach (var state in states)
         {
@@ -99,6 +115,23 @@ public sealed class RuntimeInputBindingCompiler(
             AddBinding(bindings, CompileUnbound(nodeId, ToInputDefinition(contract), DeclaredPolicy(contract)), nodeId, contract.Key);
 
         return bindings;
+    }
+
+    /// <summary>
+    /// Refuses (<see cref="CredentialLiteralRefusedException"/>) every binding of the node that the credential-literal
+    /// rule refuses, in ordinal order of the input key. <paramref name="credentialInputName"/> returns the name of the
+    /// input with that key when it is declared a credential, and null otherwise.
+    /// </summary>
+    private static void EnsureNoCredentialLiterals(string nodeId, IEnumerable<ArgumentState> states, Func<string, string?> credentialInputName)
+    {
+        var findings = states
+            .Select(state => (State: state, Name: credentialInputName(state.ReferenceKey)))
+            .Where(input => input.Name is not null && !CredentialInputBinding.IsAccepted(isCredential: true, input.State))
+            .OrderBy(input => input.State.ReferenceKey, StringComparer.Ordinal)
+            .Select(input => CredentialLiteralFinding.For(nodeId, input.State.ReferenceKey, input.Name!))
+            .ToArray();
+        if (findings.Length > 0)
+            throw new CredentialLiteralRefusedException(findings);
     }
 
     public RuntimeInputBinding Compile(string nodeId, InputDefinition inputDefinition, ArgumentState state)

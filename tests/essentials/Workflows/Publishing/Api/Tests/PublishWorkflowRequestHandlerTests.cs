@@ -19,6 +19,7 @@ using Elsa.Workflows.Design.Core.Services;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Validations.Core.Contracts;
+using Elsa.Workflows.Design.Validations.Core.Exceptions;
 using Elsa.Workflows.Publishing.Api;
 using Elsa.Workflows.Publishing.Api.Requests;
 using Elsa.Workflows.Publishing.Core.Contracts;
@@ -89,6 +90,60 @@ public sealed class PublishWorkflowRequestHandlerTests
 
         var result = await Handler(workflowVersion, layout, _writeLineActivity)
             .Handle(new PublishWorkflow(workflowVersion.Id, PreflightToken: issued.PreflightToken), CancellationToken.None);
+
+        Assert.True(result.WasCreated);
+        Assert.NotNull(await _store.FindAsync(result.ArtifactId));
+    }
+
+    [Theory]
+    [InlineData("Literal")]
+    [InlineData("Variable")]
+    [InlineData("JavaScript")]
+    public async Task A_literal_or_expression_on_a_credential_input_is_refused_and_nothing_is_published(string expressionType)
+    {
+        // T054 (spec 188, FR-008, FR-009): the credential rule refuses the binding, ahead of VF-ACT-011.
+        var workflowVersion = WorkflowVersion(Node("write-one", new WorkflowArgumentState("Text", new ArgumentValue("typed-in", expressionType), null, null, null, null)));
+
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() =>
+            Handler(workflowVersion, CredentialWriteLineActivity()).Handle(new PublishWorkflow(workflowVersion.Id), CancellationToken.None));
+
+        Assert.StartsWith("Inputs/CredentialLiteral: input 'Text' on activity 'write-one'", exception.Message, StringComparison.Ordinal);
+        Assert.IsType<CredentialLiteralRefusedException>(exception.InnerException);
+        Assert.Empty(await _store.ListAllAsync());
+        Assert.Empty(await _publicationStore.ListBySlotAsync(DefaultSlotId));
+    }
+
+    [Fact]
+    public async Task An_activity_the_catalog_does_not_hold_is_refused_at_publish_and_once_installed_its_credential_literal_is_refused()
+    {
+        // T112 (spec 188, FR-008 edge case, research R7 residual): the version holds a literal on the input the activity
+        // declares a credential once installed, stored as add-version stores it, where nothing could judge the node.
+        var workflowVersion = WorkflowVersion(SequenceNode("sequence", [Node("send", new WorkflowArgumentState("Text", new ArgumentValue("typed-in", "Literal"), null, null, null, null))]));
+
+        var uninstalled = await Record.ExceptionAsync(() =>
+            Handler(workflowVersion, _sequenceActivity).Handle(new PublishWorkflow(workflowVersion.Id), CancellationToken.None));
+
+        Assert.NotNull(uninstalled);
+        Assert.Contains("activity-write-line", uninstalled.Message, StringComparison.Ordinal);
+        Assert.Empty(await _store.ListAllAsync());
+        Assert.Empty(await _publicationStore.ListBySlotAsync(DefaultSlotId));
+
+        // The activity is installed with a catalog version of the same id that declares the input a credential (written
+        // into the catalog directly: the Activities Design API refuses isCredential, T103).
+        var installed = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() =>
+            Handler(workflowVersion, _sequenceActivity, CredentialWriteLineActivity()).Handle(new PublishWorkflow(workflowVersion.Id), CancellationToken.None));
+
+        Assert.StartsWith("Inputs/CredentialLiteral: input 'Text' on activity 'send'", installed.Message, StringComparison.Ordinal);
+        Assert.Empty(await _store.ListAllAsync());
+        Assert.Empty(await _publicationStore.ListBySlotAsync(DefaultSlotId));
+    }
+
+    [Fact]
+    public async Task A_secret_reference_on_a_credential_input_is_published()
+    {
+        var workflowVersion = WorkflowVersion(Node("write-one", SecretBindingCompilerFixture.Secret("Text")));
+
+        var result = await Handler(workflowVersion, CredentialWriteLineActivity()).Handle(new PublishWorkflow(workflowVersion.Id), CancellationToken.None);
 
         Assert.True(result.WasCreated);
         Assert.NotNull(await _store.FindAsync(result.ArtifactId));
@@ -1357,6 +1412,11 @@ public sealed class PublishWorkflowRequestHandlerTests
 
     private static WorkflowArgumentState Text(string value) =>
         new("Text", new ArgumentValue(value, "Literal"), null, null, null, null);
+
+    /// <summary>The write-line activity with its <c>Text</c> input declared a credential in the catalog.</summary>
+    private static ActivityDefinitionVersion CredentialWriteLineActivity() =>
+        ActivityVersion("activity-write-line", "Test.WriteLine",
+            [new InputDefinition("Text", "Text", new TypeReference("String"), null, "Text", null, false) with { IsSensitive = true, IsCredential = true }]);
 
     private static ActivityDefinitionVersion ActivityVersion(string id, string inputName, TypeReference inputType) =>
         ActivityVersion(id, "Test.WriteLine", [new InputDefinition(inputName, inputName, inputType, null, inputName, null, false)]);

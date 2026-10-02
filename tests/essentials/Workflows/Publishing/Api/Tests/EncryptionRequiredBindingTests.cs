@@ -3,6 +3,8 @@ using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Primitives.Models;
+using Elsa.Workflows.Design.Validations.Core.Exceptions;
+using Elsa.Workflows.Design.Validations.Core.Models;
 using Elsa.Workflows.Publishing.Services;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -21,8 +23,9 @@ namespace Elsa.Workflows.Publishing.Api.Tests;
 /// input require encryption, and the pinned-contract overload, where a contract's policy can require encryption on an
 /// input that is not a credential. A binding that carries no value, such as an empty or null literal, leaves the input
 /// unbound and compiles exactly as an unbound input does (spec 188 edge case). A non-credential sensitive input does not
-/// require encryption and takes a literal or an expression (T104). Slice 6 places the credential rule ahead of this one
-/// for credential inputs (T060).
+/// require encryption and takes a literal or an expression (T104). On a credential input the credential-literal rule
+/// (<c>Inputs/CredentialLiteral</c>, FR-008) is applied first, so it, not <c>VF-ACT-011</c>, refuses a binding there
+/// (T060); <c>VF-ACT-011</c> remains the refusal on an input that requires encryption without being a credential.
 /// </summary>
 public sealed class EncryptionRequiredBindingTests
 {
@@ -48,17 +51,21 @@ public sealed class EncryptionRequiredBindingTests
         PinnedEncryptionRequired
     }
 
-    public static TheoryData<InputShape, string> RefusedBindings
+    private static readonly string[] RefusedBindingKinds = ["Literal", "Object", "Variable", "WorkflowRequest", "JavaScript", "Default"];
+
+    public static TheoryData<InputShape, string> RefusedBindingsOnCredentialInputs
     {
         get
         {
             var data = new TheoryData<InputShape, string>();
-            foreach (var shape in Enum.GetValues<InputShape>())
-            foreach (var binding in new[] { "Literal", "Object", "Variable", "WorkflowRequest", "JavaScript", "Default" })
+            foreach (var shape in new[] { InputShape.CatalogCredential, InputShape.PinnedCredential })
+            foreach (var binding in RefusedBindingKinds)
                 data.Add(shape, binding);
             return data;
         }
     }
+
+    public static TheoryData<string> RefusedBindingsOnEncryptionRequiredInputs => new(RefusedBindingKinds);
 
     private static readonly string[] EmptyBindingKinds = ["EmptyLiteral", "NullLiteral", "JsonNullLiteral", "NullValue"];
 
@@ -91,10 +98,20 @@ public sealed class EncryptionRequiredBindingTests
     public static TheoryData<InputShape> Shapes => new(Enum.GetValues<InputShape>());
 
     [Theory]
-    [MemberData(nameof(RefusedBindings))]
-    public void Anything_but_a_secret_reference_is_refused_without_echoing_the_binding(InputShape shape, string binding)
+    [MemberData(nameof(RefusedBindingsOnCredentialInputs))]
+    public void On_a_credential_input_the_credential_literal_rule_refuses_anything_but_a_secret_reference(InputShape shape, string binding)
     {
-        var exception = Assert.Throws<ArgumentException>(() => CompileAll(shape, hasDefault: false, Authored(binding)));
+        var exception = Assert.Throws<CredentialLiteralRefusedException>(() => CompileAll(shape, hasDefault: false, Authored(binding)));
+
+        Assert.Equal(CredentialLiteralFinding.For(NodeId, InputKey, "ApiKey"), Assert.Single(exception.Findings));
+        Assert.DoesNotContain(Sentinel, exception.ToString(), StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [MemberData(nameof(RefusedBindingsOnEncryptionRequiredInputs))]
+    public void On_an_encryption_required_input_that_is_not_a_credential_anything_but_a_secret_reference_is_refused(string binding)
+    {
+        var exception = Assert.Throws<ArgumentException>(() => CompileAll(InputShape.PinnedEncryptionRequired, hasDefault: false, Authored(binding)));
 
         Assert.Equal(SecretBindingDiagnostics.EncryptionRequiredBindingRefused(NodeId, InputKey).Message, exception.Message);
         Assert.DoesNotContain(Sentinel, exception.ToString(), StringComparison.Ordinal);
@@ -212,13 +229,15 @@ public sealed class EncryptionRequiredBindingTests
     }
 
     [Fact]
-    public async Task Publication_refuses_a_literal_on_a_declared_credential_input()
+    public async Task Publication_refuses_a_literal_on_a_declared_credential_input_with_the_credential_literal_rule()
     {
         var exception = await AssertRefusedAsync(
             Node(typeof(DeclaredInputsActivity), State(nameof(DeclaredInputsActivity.ApiKey), "Literal")),
             [typeof(DeclaredInputsActivity)]);
 
-        Assert.Equal(SecretBindingDiagnostics.EncryptionRequiredBindingRefused(NodeId, nameof(DeclaredInputsActivity.ApiKey)).Message, exception.Message);
+        var finding = CredentialLiteralFinding.For(NodeId, nameof(DeclaredInputsActivity.ApiKey), nameof(DeclaredInputsActivity.ApiKey));
+        Assert.Equal(finding.Message, exception.Message);
+        Assert.Equal(finding, Assert.Single(Assert.IsType<CredentialLiteralRefusedException>(exception.InnerException).Findings));
         Assert.DoesNotContain(Sentinel, exception.ToString(), StringComparison.Ordinal);
     }
 

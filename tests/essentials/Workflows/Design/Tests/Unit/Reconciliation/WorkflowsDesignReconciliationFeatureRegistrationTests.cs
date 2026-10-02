@@ -14,6 +14,8 @@ using Elsa.Workflows.Design.Core.Reconciliation;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Elsa.Workflows.Design.Tests.Infrastructure;
+using Elsa.Workflows.Design.Validations.Core.Contracts;
 using Xunit;
 
 namespace Elsa.Workflows.Design.Tests.Unit.Reconciliation;
@@ -73,6 +75,8 @@ public sealed class WorkflowsDesignReconciliationFeatureRegistrationTests
         // reconciling handler depends on them, so the smoke test supplies the real implementations.
         services.AddSingleton<IWorkflowDefinitionFactory, WorkflowDefinitionFactory>();
         services.AddSingleton<IWorkflowDefinitionVersionFactory, WorkflowDefinitionVersionFactory>();
+        // WorkflowDesignValidations, which the concrete reconciliation features depend on, registers the rule in a host.
+        services.AddSingleton<ICredentialLiteralValidator>(CredentialLiteralTestSupport.Validator(CredentialLiteralTestSupport.Catalog()));
         return services;
     }
 

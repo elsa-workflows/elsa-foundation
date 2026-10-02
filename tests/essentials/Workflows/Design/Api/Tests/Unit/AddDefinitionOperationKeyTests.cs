@@ -6,6 +6,7 @@ using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Services;
 using Xunit;
 using Elsa.Workflows.Design.Api.Endpoints.Definitions.Add;
+using Elsa.Workflows.Design.Api.Tests.Support;
 
 namespace Elsa.Workflows.Design.Api.Tests.Unit;
 
@@ -28,7 +29,8 @@ public sealed class AddDefinitionOperationKeyTests
         _handler = new Endpoint(
             new WorkflowDefinitionFactory(identities),
             new WorkflowDefinitionDraftFactory(identities),
-            _persistence);
+            _persistence,
+            CredentialActivityCatalog.Validator());
     }
 
     [Fact]

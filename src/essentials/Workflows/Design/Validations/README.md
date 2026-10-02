@@ -45,15 +45,56 @@ persisted.
 | `RequiredInputOutputValidator` | Catalog-backed root + nested (recurses) | `{NodeId}/inputs/{ReferenceKey}` · `InputOutput/MissingRequired` |
 | `VariableExpressionResolverValidator` | Root + nested (recurses) | `{NodeId}/inputs|outputs/{ReferenceKey}` · `Expressions/UnresolvedVariable` |
 | `ValueFlowValidator` | Workflow-scope graph | `$workflow/variables/{Name}` etc. · `ValueFlow/*` (ConcurrentWrite, UnavailableProducer, ScopeBoundary, CyclicBackEdge, UnstableCollectionIdentity) |
+| `CredentialLiteralValidator` | Catalog-backed root + nested (recurses) | `{NodeId}/inputs/{ReferenceKey}` · `Inputs/CredentialLiteral` (reporting only here; see below) |
 
 Catalog-consulting validators resolve `ActivityVersionId`s through the scoped, memoizing
 `CatalogVersionResolver` (Internal), which translates the version store's throwing Get contract
 into a nullable result — see the Faulting note in `EXTENSION_POINTS.md` before writing a new
 catalog-consulting validator.
 
+## The credential-literal rule (spec 188, FR-008, FR-009)
+
+An input the activity declares a credential (`[ActivityInput(IsCredential = true)]`, read from the catalog's
+`InputDefinition.IsCredential`) accepts only a secret reference or no binding. A literal, an object, a request for
+the declared default, a value read and any expression are refused with the rule id `Inputs/CredentialLiteral`; an
+empty or null literal leaves the input unbound and is accepted. The acceptance predicate is
+`CredentialInputBinding.IsAccepted` in `Elsa.Workflows.Design.Core`, and each refusal is a
+`CredentialLiteralFinding`: path `{NodeId}/inputs/{ReferenceKey}`, a message that starts with the rule id and names
+the input and the activity node, and never the bound value.
+
+The rule runs only in the application layer, never in a persistence store, at four integration points that cover
+the seven definition entry points:
+
+| Integration point | Entry points | On a refusal |
+|---|---|---|
+| Design API admission (`Elsa.Workflows.Design.Api`): Definitions/Add, Drafts/Replace, Definitions/Update, Versions/Add, Definitions/Submit, Drafts/Promote | draft save, add-version, submit, promote | `CredentialLiteralRefusedException` before the command runs, so nothing is stored (400, errors keyed by path) |
+| `WorkflowsVersionReconciler` (`Elsa.Workflows.Design.Reconciliation`), per item | file-based reconciliation, git import | that item only: nothing is written for it, its claim is dropped, a value-free warning is logged, and the pass goes on |
+| `GitWorkflowExporter` (`Elsa.Workflows.Design.Reconciliation.Git`), per version | git export | that version only: no file, commit or tag, a value-free warning, and the pass goes on |
+| `RuntimeInputBindingCompiler.CompileAll` (`Elsa.Workflows.Publishing`), per node | publish, publish-on-reconcile, draft test runs | `CredentialLiteralRefusedException`, ahead of `VF-ACT-011`, reported as a compile error (400) |
+
+Every caller of the first three takes the rule's contract, `ICredentialLiteralValidator`
+(`Elsa.Workflows.Design.Validations.Core`). A Design API caller admits the incoming or stored state through
+`WorkflowStateAdmission.AdmitAsync`, a static helper over the contract (like `DraftValidationGate`) that throws the
+refusal and holds no rule of its own; the reconciler and the exporter read the findings and skip the item.
+Publication applies the predicate itself, because it already holds each input's declaration. Draft save blocking on this rule is the one deliberate exception to "draft save records validation
+errors without blocking": the exception is the Design API's admission, and `DraftValidating` stays non-blocking for
+every validator, this one included.
+
+The validator judges only a node whose activity version the catalog holds, down to `MaxRecursionDepth`, as the other
+tree-walking validators do. A node of an activity that is not installed cannot be judged until publication, which refuses it because it cannot compile it; until then a literal on
+it can be stored and exported (the residual of research R7). `UnknownActivityVersionValidator` reports such a node.
+Promote judges the draft it reads and passes that draft's `WorkflowDraftStateHash` to the promotion command, which
+refuses with a conflict (409) when the draft changed in between, so it promotes exactly what was admitted.
+
+`WorkflowDesignValidations` registers the validator once, as `ICredentialLiteralValidator` and as an `IDraftValidator`
+(so the validation panel reports the same findings; no entry point relies on that registration). `WorkflowsDesignApi`, `JsonWorkflowReconciliation` and `WorkflowsDesignGitReconciliation`
+declare `DependsOn` on this feature. A host that composes a second `ICredentialLiteralValidator` does not start: a
+Prepare-phase shell initializer fails activation naming every registration, whatever order they were registered in.
+
 ## Tasks registered
 
-None (no startup / recurring / scheduled tasks).
+None (no startup / recurring / scheduled tasks). The feature registers one shell initializer, the
+`ICredentialLiteralValidator` composition check above.
 
 ## Notes
 

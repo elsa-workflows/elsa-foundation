@@ -1,9 +1,12 @@
+using CShells.Lifecycle;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Events.Core.Contracts;
+using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Core.Services;
 using Elsa.Workflows.Design.Validations;
 using Elsa.Workflows.Design.Validations.Core.Contracts;
+using Elsa.Workflows.Design.Validations.Core.Models;
 using Elsa.Workflows.Design.Validations.Core.Events;
 using Elsa.Workflows.Design.Validations.Handlers;
 using Elsa.Workflows.Design.Validations.Validators;
@@ -78,7 +81,49 @@ public sealed class ValidationsFeatureRegistrationTests
         Assert.Equal(7, options.MaxRecursionDepth);
     }
 
-    private static ServiceProvider BuildProvider(Action<WorkflowDesignValidationsFeature> configureFeature)
+    [Fact]
+    public void Feature_registers_the_credential_literal_validator_once_as_its_contract_and_as_a_draft_validator()
+    {
+        using var provider = BuildProvider(_ => { });
+        using var scope = provider.CreateScope();
+
+        var contract = Assert.Single(scope.ServiceProvider.GetServices<ICredentialLiteralValidator>());
+        Assert.IsType<CredentialLiteralValidator>(contract);
+        Assert.Same(contract, Assert.Single(scope.ServiceProvider.GetServices<IDraftValidator>().OfType<CredentialLiteralValidator>()));
+    }
+
+    [Fact]
+    public async Task A_host_composing_one_credential_literal_validator_starts()
+    {
+        using var provider = BuildProvider(_ => { });
+
+        Assert.Null(await Record.ExceptionAsync(() => InitializeShellAsync(provider)));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task A_second_credential_literal_validator_fails_shell_activation_whatever_the_registration_order(bool registeredBefore)
+    {
+        using var provider = BuildProvider(_ => { }, services => services.AddScoped<ICredentialLiteralValidator, SecondValidator>(), registeredBefore);
+
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => InitializeShellAsync(provider));
+
+        Assert.Contains(nameof(ICredentialLiteralValidator), failure.Message, StringComparison.Ordinal);
+        Assert.Contains(typeof(SecondValidator).FullName!, failure.Message, StringComparison.Ordinal);
+        Assert.Contains("a factory registration", failure.Message, StringComparison.Ordinal);
+    }
+
+    private static async Task InitializeShellAsync(IServiceProvider provider)
+    {
+        foreach (var initializer in provider.GetServices<IShellInitializer>())
+            await initializer.InitializeAsync();
+    }
+
+    private static ServiceProvider BuildProvider(
+        Action<WorkflowDesignValidationsFeature> configureFeature,
+        Action<IServiceCollection>? hostRegistrations = null,
+        bool hostRegistersFirst = false)
     {
         var feature = new WorkflowDesignValidationsFeature();
         configureFeature(feature);
@@ -86,8 +131,18 @@ public sealed class ValidationsFeatureRegistrationTests
         var services = new ServiceCollection();
         services.AddOptions();
         services.AddSingleton<IActivityDefinitionLookup>(new BaselineValidatorTests.StubActivityCatalog());
+        if (hostRegistersFirst)
+            hostRegistrations?.Invoke(services);
         feature.ConfigureServices(services);
+        if (!hostRegistersFirst)
+            hostRegistrations?.Invoke(services);
 
         return services.BuildServiceProvider();
+    }
+
+    private sealed class SecondValidator : ICredentialLiteralValidator
+    {
+        public ValueTask<IReadOnlyList<ValidationError>> Validate(WorkflowDefinitionState state, CancellationToken cancellationToken) =>
+            ValueTask.FromResult<IReadOnlyList<ValidationError>>([]);
     }
 }
