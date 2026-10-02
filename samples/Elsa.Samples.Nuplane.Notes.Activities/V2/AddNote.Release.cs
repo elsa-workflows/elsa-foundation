@@ -1,4 +1,3 @@
-using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Cluster.Core.Contracts;
 using Elsa.Cluster.Core.Models;
@@ -6,28 +5,18 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Samples.Nuplane.Notes.Activities;
 
-/// <summary>Release 1.1.0: a note may also carry tags, stored in the column release 1.1.0 of the Notes module adds.</summary>
-internal static class NotesActivitiesRelease
-{
-    public const string ActivityVersion = "1.1.0";
-
-    /// <summary>The tags are written through the feature that serves them, and are dormant with it.</summary>
-    public const string RequiredFeature = NotesModule.TagsFeature;
-
-    public const string Description = "Adds a note with a text and, optionally, comma-separated tags.";
-
-    public static readonly InputDefinition[] AddedInputs = [NotesActivityReconciliationSource.StringInput(nameof(AddNote.Tags), "Tags (comma-separated)")];
-}
-
 public sealed partial class AddNote
 {
+    /// <summary>Optional, so a workflow pinned to version 1.0.0, which has no such input, runs on this release unchanged.</summary>
     [ActivityInput(Key = nameof(Tags))]
     public string? Tags { get; set; }
 
     /// <summary>
     /// Writes the note, then its tags. With tags, the dormancy of <see cref="NotesModule.TagsFeature"/> is checked before
-    /// anything is written: while schema version 2.0.0 is not finalized the activity faults with the reason, and no note
-    /// is added without the tags it was asked to carry.
+    /// anything is written: while schema version 2.0.0 is not finalized the activity faults with the reason and writes
+    /// nothing. Once it is available, the note and its tags are two saves, as <c>POST /demo/notes</c> and
+    /// <c>POST /demo/notes/{id}/tags</c> are: a failure between them leaves the note added without its tags. Without tags it
+    /// writes the note as release 1.0.0 does.
     /// </summary>
     private async Task WriteAsync(IServiceProvider services, string text, CancellationToken cancellationToken)
     {

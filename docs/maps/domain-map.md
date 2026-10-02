@@ -7,9 +7,9 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 ## Summary
 
 - Source projects: 140
-- Test projects: 136
+- Test projects: 137
 - Domains: 32
-- Direct cross-domain references: 793
+- Direct cross-domain references: 796
 
 ## Domains
 
@@ -36,7 +36,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | Elsa.Persistence | 2 | 8 | feature/implementation<br>test |
 | Elsa.Pipelines | 1 | 0 | contract |
 | Elsa.Primitives | 2 | 2 | feature/implementation<br>test |
-| Elsa.Samples | 0 | 2 | test |
+| Elsa.Samples | 0 | 3 | test |
 | Elsa.Secrets | 5 | 7 | contract<br>feature/implementation<br>test |
 | Elsa.Serialization | 3 | 1 | contract<br>feature/implementation<br>test |
 | Elsa.Studio | 3 | 3 | contract<br>feature/implementation<br>test |
@@ -287,6 +287,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Primitives.Hosting.Tests](../../tests/essentials/Primitives/Hosting/Tests/Elsa.Primitives.Hosting.Tests.csproj) | test | Elsa.Primitives | Hosting.Tests | test | Elsa.Primitives.Hosting |
 | [Elsa.Primitives.Tests](../../tests/essentials/Primitives/Tests/Elsa.Primitives.Tests.csproj) | test | Elsa.Primitives | Tests | test | Elsa.Primitives |
 | [Elsa.Samples.Nuplane.Activities.Tests](../../tests/essentials/Samples/Nuplane/Activities/Tests/Elsa.Samples.Nuplane.Activities.Tests.csproj) | test | Elsa.Samples | Nuplane.Activities.Tests | test | Elsa.Activities.Design.Core<br>Elsa.Activities.Runtime.Core<br>Elsa.Samples.Nuplane.Activities |
+| [Elsa.Samples.Nuplane.Notes.Activities.Tests](../../tests/essentials/Samples/Nuplane/Notes/Activities/Tests/Elsa.Samples.Nuplane.Notes.Activities.Tests.csproj) | test | Elsa.Samples | Nuplane.Notes.Activities.Tests | test | Elsa.Activities.Design.Core<br>Elsa.Activities.Runtime.Core<br>Elsa.Cluster.InProcess<br>Elsa.Samples.Nuplane.Notes<br>Elsa.Samples.Nuplane.Notes.Activities |
 | [Elsa.Samples.Nuplane.Notes.Tests](../../tests/essentials/Samples/Nuplane/Notes/Tests/Elsa.Samples.Nuplane.Notes.Tests.csproj) | test | Elsa.Samples | Nuplane.Notes.Tests | test | Elsa.Samples.Nuplane.Notes |
 | [Elsa.Secrets.Nuplane.Tests](../../tests/essentials/Secrets/Nuplane/Tests/Elsa.Secrets.Nuplane.Tests.csproj) | test | Elsa.Secrets | Nuplane.Tests | test | Elsa.Secrets<br>Elsa.Secrets.Nuplane |
 | [Elsa.Secrets.Persistence.EntityFrameworkCore.MySql.Tests](../../tests/essentials/Secrets/Persistence/EntityFrameworkCore/MySql/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.MySql.Tests.csproj) | test | Elsa.Secrets | Persistence.EntityFrameworkCore.MySql.Tests | test | Elsa.Secrets<br>Elsa.Secrets.Persistence.EntityFrameworkCore |
@@ -763,6 +764,9 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Persistence.EntityFrameworkCore.SharedResources.Tests](../../tests/essentials/Persistence/EntityFrameworkCore/SharedResources/Tests/Elsa.Persistence.EntityFrameworkCore.SharedResources.Tests.csproj) | Elsa.Persistence | [Elsa.Workbench.Tests](../../tests/essentials/Workbench/Tests/Elsa.Workbench.Tests.csproj) | Elsa.Workbench |
 | [Elsa.Samples.Nuplane.Activities.Tests](../../tests/essentials/Samples/Nuplane/Activities/Tests/Elsa.Samples.Nuplane.Activities.Tests.csproj) | Elsa.Samples | [Elsa.Activities.Design.Core](../../src/essentials/Activities/Design/Core/Elsa.Activities.Design.Core.csproj) | Elsa.Activities |
 | [Elsa.Samples.Nuplane.Activities.Tests](../../tests/essentials/Samples/Nuplane/Activities/Tests/Elsa.Samples.Nuplane.Activities.Tests.csproj) | Elsa.Samples | [Elsa.Activities.Runtime.Core](../../src/essentials/Activities/Runtime/Core/Elsa.Activities.Runtime.Core.csproj) | Elsa.Activities |
+| [Elsa.Samples.Nuplane.Notes.Activities.Tests](../../tests/essentials/Samples/Nuplane/Notes/Activities/Tests/Elsa.Samples.Nuplane.Notes.Activities.Tests.csproj) | Elsa.Samples | [Elsa.Activities.Design.Core](../../src/essentials/Activities/Design/Core/Elsa.Activities.Design.Core.csproj) | Elsa.Activities |
+| [Elsa.Samples.Nuplane.Notes.Activities.Tests](../../tests/essentials/Samples/Nuplane/Notes/Activities/Tests/Elsa.Samples.Nuplane.Notes.Activities.Tests.csproj) | Elsa.Samples | [Elsa.Activities.Runtime.Core](../../src/essentials/Activities/Runtime/Core/Elsa.Activities.Runtime.Core.csproj) | Elsa.Activities |
+| [Elsa.Samples.Nuplane.Notes.Activities.Tests](../../tests/essentials/Samples/Nuplane/Notes/Activities/Tests/Elsa.Samples.Nuplane.Notes.Activities.Tests.csproj) | Elsa.Samples | [Elsa.Cluster.InProcess](../../src/essentials/Cluster/InProcess/Elsa.Cluster.InProcess.csproj) | Elsa.Cluster |
 | [Elsa.Secrets](../../src/essentials/Secrets/Elsa.Secrets.csproj) | Elsa.Secrets | [Elsa.Attention.Core](../../src/essentials/Attention/Core/Elsa.Attention.Core.csproj) | Elsa.Attention |
 | [Elsa.Secrets](../../src/essentials/Secrets/Elsa.Secrets.csproj) | Elsa.Secrets | [Elsa.Expressions.Core](../../src/essentials/Expressions/Core/Elsa.Expressions.Core.csproj) | Elsa.Expressions |
 | [Elsa.Secrets](../../src/essentials/Secrets/Elsa.Secrets.csproj) | Elsa.Secrets | [Elsa.Serialization.Core](../../src/essentials/Serialization/Core/Elsa.Serialization.Core.csproj) | Elsa.Serialization |

@@ -25,6 +25,7 @@
     <Authors>Elsa Workflows</Authors>
     <Description>Sample Nuplane-loaded workflow activity for the schema-rollout demo: "Add note" writes a note through the Notes module, and in release 1.1.0 also its tags.</Description>
     <PackageTags>elsa;cshells;nuplane;sample;activities;schema-rollout</PackageTags>
+    <PackageReadmeFile>PACKAGE.md</PackageReadmeFile>
     <NoWarn>$(NoWarn);NU5104;NU5128</NoWarn>
   </PropertyGroup>
 
@@ -44,6 +45,11 @@
       <ReferencePath Include="$(PkgCShells_Abstractions)/lib/$(TargetFramework)/CShells.Abstractions.dll" Condition="'$(PkgCShells_Abstractions)' != '' and Exists('$(PkgCShells_Abstractions)/lib/$(TargetFramework)/CShells.Abstractions.dll')" />
     </ItemGroup>
   </Target>
+
+  <ItemGroup>
+    <!-- The repository README links to files a feed does not carry, so the package has a short readme of its own. -->
+    <None Include="PACKAGE.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
 
   <ItemGroup>
     <!-- The Notes release of the same DemoVersion: a dependency of the package, acquired from the same feed. -->
