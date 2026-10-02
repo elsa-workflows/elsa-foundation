@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "f02354068b8a9ed2382286685ead9faf018331dc",
+  "last_publish_commit": "6de16bc7d4fa6be41e97706e519bace4df971f57",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -404,8 +404,8 @@
     },
     {
       "package_id": "Elsa.Persistence.EntityFramework",
-      "version": "4.0.22-preview",
-      "commit": "12645190b855f6833f9e4decfa4150b47b04c302"
+      "version": "4.0.23-preview",
+      "commit": "6de16bc7d4fa6be41e97706e519bace4df971f57"
     },
     {
       "package_id": "Elsa.Persistence.Schema",
@@ -674,8 +674,8 @@
     },
     {
       "package_id": "dotnet-elsa",
-      "version": "4.0.8-preview",
-      "commit": "12645190b855f6833f9e4decfa4150b47b04c302"
+      "version": "4.0.9-preview",
+      "commit": "6de16bc7d4fa6be41e97706e519bace4df971f57"
     }
   ]
 }
