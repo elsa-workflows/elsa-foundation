@@ -12,14 +12,19 @@ and only turns on the feature that needs the new schema once **every host** that
 - **Act 2, two hosts, PostgreSQL (about 8 minutes).** Two hosts share one database. Host B is upgraded first: its new feature
   stays dormant (409) because host A cannot read the new schema yet, and `persistence status` says so by name. Host A is
   upgraded in place, and the moment it can read the new schema the feature goes live on both hosts.
+- **Act 3, the same upgrade from the designer (about 7 minutes).** The Workbench, the host that runs workflows, has the Notes
+  module too, with an **Add note** activity released in step with it. In Studio, the workflow designer, a workflow adds a note
+  with Add note 1.0.0. Release 1.1.0 is published, the Workbench installs it, refuses to switch until the migration is applied,
+  then switches without a restart; in the designer the node is moved to the exact version 1.1.0, which has a Tags input.
 
 The whole thing is scripted in `tools/demo/rehearse.sh`. It runs this runbook end to end, and it uses the same helpers you type
-(`tools/demo/helpers.sh`: `note`, `notes`, `withtags`, `tag`, `reload`, `status`, `waitfor`, `rows`), so what it asserts is what you see: the status codes
-and the output lines the **Expect** items below promise, in setup and in both acts, and the cells of the package board at the steps that name them. The one thing it does not rehearse is `prepack.sh` (minutes long); it
-requires that to have run. Run it before every presentation (see the last section).
+(`tools/demo/helpers.sh`: `note`, `notes`, `withtags`, `tag`, `reload`, `status`, `waitfor`, `rows`, `wbreload`, `addnote`), so what it asserts is what you see: the status codes
+and the output lines the **Expect** items below promise, in setup and in all three acts, and the cells of the package board at the steps that name them. The one thing it does not rehearse is `prepack.sh` (minutes long); it
+requires that to have run. Run it before every presentation (see the last section). It does not drive Studio either: what you do in
+the designer in Act 3 it does through the same API calls Studio makes (`addnote`, the Act 3 fallback), so Studio's own screens are yours to check by eye.
 
 The demo also answers the three questions the customer asked at the demo of 2026-09-21: see "Your three questions from last time" below. Each act carries a
-boxed line to say at the step that answers a question, and Act 2 ends with a recap.
+boxed line to say at the step that answers a question, Act 2 ends with a recap, and Act 3 shows two of the answers again from the designer.
 
 ## The cast
 
@@ -28,12 +33,14 @@ boxed line to say at the step that answers a question, and Act 2 ends with a rec
 | Act 1 | `solo` | 5101 | Sqlite file `artifacts/demo/notes.db` | none | **S** | `artifacts/demo/logs/solo.log` |
 | Act 2 | `a` | 5201 | PostgreSQL container `elsa-demo-pg` | `host-a` | **A** | `artifacts/demo/logs/a.log` |
 | Act 2 | `b` | 5202 | the same PostgreSQL database | `host-b` | **B** | `artifacts/demo/logs/b.log` |
+| Act 3 | `wb` (Elsa.Workbench) | 5301 | its own Sqlite file `artifacts/demo/hosts/wb/elsa.db` | none | **W** | `artifacts/demo/logs/wb.log` |
+| Act 3 | Studio (the designer) | 5302 | none: it calls the Workbench | none | **Studio** | `artifacts/demo/logs/studio.log` |
 
-Three more tabs face the audience: **1** for the Act 1 commands, **2** for the Act 2 commands, and **P** (packages), the package board, which sits beside whichever of the two is on screen (a split pane at half width) and shows each host's
-feed, installed release and served release as they change. Tabs **S**, **A** and **B** run the hosts and stay off screen: their logs are long and are not written for an audience (see "Screen hygiene"). A seventh tab, **awake**, keeps
-the laptop from sleeping.
+Four more tabs face the audience: **1** for the Act 1 commands, **2** for the Act 2 commands, **3** for the Act 3 commands, and **P** (packages), the package board, which sits beside whichever of them is on screen (a split pane at half width) and shows each host's
+feed, installed release and served release as they change. Tabs **S**, **A**, **B**, **W** and **Studio** run the hosts and stay off screen: their logs are long and are not written for an audience (see "Screen hygiene"). A tenth tab, **awake**, keeps
+the laptop from sleeping. In Act 3 the browser faces the audience too: Studio, at `http://localhost:5302`, with tab 3 and the board beside it.
 
-Ports 5101, 5201 and 5202 and the container name `elsa-demo-pg` are the demo's. All commands run from the repository root.
+Ports 5101, 5201, 5202, 5301 and 5302 and the container name `elsa-demo-pg` are the demo's. All commands run from the repository root.
 
 Every `bash` block below is meant to be pasted into an interactive zsh: none contains a `#` comment or a backtick (zsh does not treat `#` as a
 comment on the command line unless `interactive_comments` is set, so a pasted comment is run as a command and fails).
@@ -48,6 +55,7 @@ promised then. Each step that answers a question carries a boxed line to say, ma
 | **1. "How about hot reload, can it still run?"** | Act 1, steps 1.3 to 1.6; Act 2, step 2.5 | A new module version is installed by a host that keeps running. It is held back while its database migration is pending. Host A then switches with no restart and no reload |
 | **2. "What when we have multiple pods?"** | Act 2, steps 2.1 to 2.6 | Two hosts on one database. The new version is turned on only once every live host can read it, and `status` names the host that holds it back |
 | **3. "Multiple module versions needing different schemas"** | Act 2, steps 2.2 to 2.7 | Version 1 and version 2 run side by side against one table, and `rows` shows each row's stored version. Version 2 reads old rows, keeps its new feature dormant with a reason, and, for a family whose author wrote the upcaster and the rewriter, a background pass brings the old rows up to date |
+| **1 and 3 again, from the designer** | Act 3, steps 3.2 to 3.6 | The Workbench installs a new activity release while it runs, refuses to switch while its migration is pending, then switches with no restart; the designer keeps both versions of the activity, and a workflow moves to the new one only when someone changes its exact version |
 
 What has changed since the last demo, in one line each (presenter's reference, not for the screen):
 
@@ -64,9 +72,11 @@ The limits that remain. Say them plainly; the customer will respect it, and each
   library's default policy (`AutoMigrate`) the host applies the migration itself at that point; either way the new version never runs against a schema it has not got.
 - **Every host must be configured as a cluster member.** A host that is not counts only itself, and nothing warns about it.
 - **Finalization is one way.** After a version is finalized, a host still on the older release is refused, and a finalized version only ever moves forward: there is no rollback of it.
-- **Hot reload is the Foundation.Host feed model.** The Workbench does not reload a running shell when a package arrives; it takes effect at its next restart. A replaced release stays in memory until the host restarts.
+- **The Workbench switches at a shell reload, not by itself.** It installs a package the moment it arrives in its feed and refreshes its catalog of features at once, but it keeps running the old release until its shell is
+  reloaded (`POST /_admin/shells/reload/default`, the `wbreload` helper of Act 3); the Foundation host reloads by itself (`Elsa:Shells:ReloadOnPackageChange`, which the Workbench can turn on too but leaves off). A replaced release stays in memory until the host restarts.
   When the shell is swapped, the previous generation is drained: CShells waits for its open scopes (in-flight requests) to finish, and gives up after 30 seconds by default, so a request still running then is cut off. Elsa adds nothing above that:
   it registers no drain handler and no workflow-level quiescence, so work that does not hold a scope of the old shell is not waited for.
+- **An activity version is a catalog entry, not a separate copy of the code.** The designer keeps Add note 1.0.0 beside 1.1.0, and a workflow pinned to 1.0.0 keeps its inputs and keeps running, but it runs the code of the release the host has loaded, 1.1.0: the host loads one release of a package at a time.
 - **The background rewrite covers only the families that ask for it.** It runs for a family that declares an upcaster and a rewriter, and the module author writes both. Rows that are content-addressed are never rewritten, and they keep the family from being recorded as complete.
 - **A narrow timing window.** A shell that is being built while the platform decides whether every host can read the new version is invisible to that decision until it reaches its first initializer. It needs an upstream CShells change, planned after this demo.
 
@@ -74,7 +84,7 @@ Presenter only (do not screen-share this block; the issue numbers are for you):
 
 - Issue 2164: the reload bridge skips its catalog refresh while no shell is active, so a host whose start-up activation failed can keep serving the old release after an upgrade until a reload. The narrow timing window above is also 2164.
 
-## Setup (before the audience, about 20 minutes, most of it waiting)
+## Setup (before the audience, about 25 minutes, most of it waiting)
 
 ### S1. First, every time: reset
 
@@ -92,29 +102,33 @@ closure feed, and prints what it removed. Nothing of an earlier run (a host, a c
 ### S2. The day before, and again after any code change: prepack
 
 Everything slow happens here, not on stage: it builds the host and the `dotnet elsa` tool, warms the tool up, packs **both**
-releases into `artifacts/demo/staging/`, and fills the closure feed the hosts resolve EF Core and the database engines from. On the day itself
+releases into `artifacts/demo/staging/`, and fills the closure feed the hosts resolve EF Core and the database engines from. For Act 3 it then
+builds the Workbench and packs both releases of the Add note activity beside the Notes ones (`--no-act3` skips that part, and leaves Acts 1 and 2 exactly as they were). On the day itself
 it is needed only when the staged releases are missing (`ls artifacts/demo/staging/1 artifacts/demo/staging/2`).
 
 ```bash
 bash tools/demo/prepack.sh
 ```
 
-- **Expect:** the last lines are the two staged packages and `ready in N s`:
-  `artifacts/demo/staging/1/Elsa.Samples.Nuplane.Notes.1.0.0.nupkg` and `artifacts/demo/staging/2/Elsa.Samples.Nuplane.Notes.1.1.0.nupkg`.
+- **Expect:** the last lines are the four staged packages and `ready in N s`:
+  `artifacts/demo/staging/1/Elsa.Samples.Nuplane.Notes.1.0.0.nupkg`, `artifacts/demo/staging/2/Elsa.Samples.Nuplane.Notes.1.1.0.nupkg`,
+  `artifacts/demo/staging/1/Elsa.Samples.Nuplane.Notes.Activities.1.0.0.nupkg` and `artifacts/demo/staging/2/Elsa.Samples.Nuplane.Notes.Activities.1.1.0.nupkg`.
 - **Time:** a few minutes on a quiet laptop; a quarter of an hour when other builds compete for the machine (measured: 16 min at a
-  load average above 500). Never on stage. Check `uptime` first: a load average far above the core count means everything below is slow.
+  load average above 500). Act 3's part, the Workbench build and the two packs, adds about two minutes (it says how long it took). Never on stage. Check `uptime` first: a load average far above the core count means everything below is slow.
 - **If it goes wrong:** the failing command's own output is printed. A missing `python3`, `rsync`, `jq` or `curl` is named by the scripts; install it and run again.
   A build that fails on a dirty checkout: `git status` and get back to the commit you mean to present.
 
 ### S3. Check the tools, and keep the laptop awake
 
 ```bash
-command -v docker jq curl python3 rsync caffeinate
+command -v docker jq curl python3 rsync sqlite3 caffeinate
 docker info >/dev/null && echo docker ok
 docker image inspect postgres:16-alpine >/dev/null && echo image ok
+ls ../elsa-foundation-studio-demo/src/apps/Elsa.Studio.Web/bin/Release/net10.0/Elsa.Studio.Web.dll
 ```
 
-- **Expect:** six paths, then `docker ok` and `image ok`. The image is used from the cache and nothing is pulled: with Wi-Fi off, an evicted image is a dead demo, so check it here.
+- **Expect:** seven paths, then `docker ok` and `image ok`, then the path of the Studio build (Act 3; a checkout elsewhere is named by `DEMO_STUDIO_DIR`). The image is used from the cache and nothing is pulled: with Wi-Fi off, an evicted image is a dead demo, so check it here.
+- **If it goes wrong:** no Studio build: build the Studio checkout (its `README.md`: `pnpm install`, `pnpm build`, then `dotnet build -c Release src/apps/Elsa.Studio.Web`), or present Acts 1 and 2 and do Act 3 by its fallback.
 
 Plug in the power adapter and open a new terminal tab, **awake**. Run this in it and leave it running until the demo is over:
 
@@ -127,7 +141,7 @@ Ctrl-C ends it. A sleeping laptop stalls the hosts' heartbeats, which the other 
 
 ### S4. Open the tabs
 
-Seven terminal tabs (1, 2, P, S, A, B, awake), all in the repository root, named as in the cast table. Paste this into **1** and **2** (it defines the helpers the acts use, and
+Ten terminal tabs (1, 2, 3, P, S, A, B, W, Studio, awake), all in the repository root, named as in the cast table. Paste this into **1**, **2** and **3** (it defines the helpers the acts use, and
 it puts a bare `$ ` prompt on the screen instead of your user name, host name and folder; the audience never sees the paste):
 
 ```bash
@@ -136,7 +150,7 @@ DEMO_PROMPT=$PROMPT DEMO_RPROMPT=$RPROMPT
 PROMPT='$ ' RPROMPT=''
 ```
 
-To get the old prompt back: `PROMPT=$DEMO_PROMPT RPROMPT=$DEMO_RPROMPT`. A prompt theme that redraws the prompt by itself (powerlevel10k does) undoes the change: start those two tabs as
+To get the old prompt back: `PROMPT=$DEMO_PROMPT RPROMPT=$DEMO_RPROMPT`. A prompt theme that redraws the prompt by itself (powerlevel10k does) undoes the change: start those three tabs as
 a plain shell instead, with `zsh -f`, and paste the three lines there.
 
 The helpers, and the two scripts that show packages, all typed from the repository root:
@@ -148,14 +162,17 @@ The helpers, and the two scripts that show packages, all typed from the reposito
 | `withtags PORT` | `GET /demo/notes/with-tags`: `HTTP` and the code, then the body |
 | `tag PORT TAG` | tags the first note |
 | `reload PORT` | `POST /_module-management/reload`: the code, then the answer, with paths shown relative to the repository |
-| `status HOST` | `dotnet elsa persistence status` for host `solo` (Sqlite) or `a` or `b` (PostgreSQL, with the 2 s skew allowance the hosts' `--fast-membership` needs) |
+| `status HOST` | `dotnet elsa persistence status` for host `solo` or `wb` (Sqlite) or `a` or `b` (PostgreSQL, with the 2 s skew allowance the hosts' `--fast-membership` needs) |
 | `waitfor PORT` | waits until the host on that port answers `with-tags` with anything but 404, and says so |
 | `pgconn` | points this tab's `ELSA_EF_CONNECTION` at the PostgreSQL container (never printed) |
-| `bash tools/demo/board.sh HOST... [--watch]` | the package board, in tab **P**: one row per host (`solo`, `a`, `b`) with the Notes versions **in the feed**, **installed** (Nuplane's own record) and **serving** (what `with-tags` answers: 404 is 1.0.0, 409 or 200 is 1.1.0, with the reason when it is dormant). Read-only; `--watch` redraws every second and marks a cell that just changed |
+| `bash tools/demo/board.sh HOST... [--watch]` | the package board, in tab **P**: one row per host (`solo`, `a`, `b`, `wb`) with the Notes versions **in the feed**, **installed** (Nuplane's own record) and **serving** (what `with-tags` answers: 404 is 1.0.0, 409 or 200 is 1.1.0, with the reason when it is dormant). The Workbench serves the Notes endpoints too, and its Add note activity is released in step with Notes, so its row stands for both. Read-only; `--watch` redraws every second and marks a cell that just changed |
 | `bash tools/demo/show-package.sh 1\|2` | opens a staged release, which is a zip: its id, version, description and dependencies, the files inside, and its `nuplane.json` |
-| `rows HOST` | the Notes table itself, one line per note: the version stamp each row was written in, and its tags as stored. `solo` reads the Sqlite file, `a` and `b` ask the PostgreSQL container (`docker exec` and `psql`; one database, so both show the same rows) |
+| `rows HOST` | the Notes table itself, one line per note: the version stamp each row was written in, and its tags as stored. `solo` reads the Sqlite file, `a` and `b` ask the PostgreSQL container (`docker exec` and `psql`; one database, so both show the same rows), `wb` reads the Workbench's own Sqlite file |
+| `wbreload PORT` | Act 3: `POST /_admin/shells/reload/default` on the Workbench, which rebuilds its shell from the packages it installed. The Workbench answers `HTTP 200` either way; the helper shows the answer as `"reloaded": false` with the module, the pending migrations and the command it names, or `"reloaded": true` with the shell's generation and the Notes release it now serves (asked of the host: `with-tags` is 404 on 1.0.0) |
+| `addnote PORT VERSION TEXT [TAGS]` | Act 3's fallback (`tools/demo/addnote.sh`): runs the workflow "Add note (API)" with its Add note node pinned to that exact version, through the calls Studio makes: it creates the workflow the first time, changes the node's exact version when it is pinned to another, sets Text (and Tags), runs it, and says how the run ended. It signs in as the Workbench's development admin without printing anything of it |
+| `bash tools/demo/run-workbench.sh`, `run-studio.sh` | Act 3's two servers, in tabs **W** and **Studio** (S8, S9) |
 
-Tab **1** must not have a database connection in its environment (Act 1 uses the default Sqlite file):
+Tabs **1** and **3** must not have a database connection in its environment (Act 1 uses the default Sqlite file, and Act 3's Workbench its own file, which `elsa.sh` finds by itself and refuses to replace with a connection set in the tab):
 
 ```bash
 unset ELSA_EF_CONNECTION
@@ -170,6 +187,8 @@ Four browser tabs, each showing the raw response:
 2. `http://127.0.0.1:5201/demo/notes/with-tags` (Act 2, host A: blank 404, then the 409 reason, then the notes)
 3. `http://127.0.0.1:5202/demo/notes/with-tags` (Act 2, host B: blank 404, then the 409 reason, then the notes)
 4. `http://127.0.0.1:5101/demo/notes` (Act 1: the plain list)
+
+and, for Act 3, Studio (`http://localhost:5302`), opened and signed in at S9.
 
 ### S5. Host `solo` (Sqlite), in tab 1, then start it in tab S
 
@@ -257,6 +276,52 @@ bash tools/demo/board.sh solo --watch
 
 - **Expect:** a frame at most 50 columns wide, redrawn every second, with a clock: one row for `solo` that reads `1.0.0` in the feed, `1.0.0` installed and `1.0.0` serving. It only reads (a folder, the host's Nuplane record and `GET with-tags`); it never calls `/reload`.
 - **If it goes wrong:** `down` under serving: the host is not up yet, wait for `/health/ready` 200 (S5). `-` under installed: the host has not written its Nuplane record yet, which a running host has. Ctrl-C leaves the board.
+
+### S8. The Workbench (Act 3), in tab 3, then start it in tab W
+
+In tab **3** (the paste of S4, and no `ELSA_EF_CONNECTION`):
+
+```bash
+bash tools/demo/publish.sh 1 --host wb
+bash tools/demo/run-workbench.sh wb --port 5301 --management-key-env DEMO_KEY --prepare-only
+bash tools/demo/elsa.sh persistence apply --restore --host artifacts/demo/hosts/wb --environment Development --provider Sqlite --from-host
+```
+
+- **Expect:** two `published` lines, one per package of release 1: `Elsa.Samples.Nuplane.Notes.1.0.0.nupkg` and `Elsa.Samples.Nuplane.Notes.Activities.1.0.0.nupkg`, both to `artifacts/demo/hosts/wb/feed`. Then
+  `restore: 21 package(s) installed under ...` and a table of thirteen modules, every one with migrations applied: `Samples.Notes` with `1`, and the Workbench's own (`Workflows.Runtime`, `Workflows.Design`, `Identity.Iam` and the rest).
+- **Why:** the Workbench runs under `Validate` like the other hosts, so it will not start on a database that is not migrated. `--from-host` applies every module its shell enables, the Notes module included, in one go: the Workbench keeps all of them in one
+  Sqlite file, `artifacts/demo/hosts/wb/elsa.db`. No connection is needed in the tab: `elsa.sh` gives the tool that file for this host directory (and refuses if the tab has `ELSA_EF_CONNECTION` set).
+- **Time:** publish under a second; the apply 30 to 90 s.
+- **If it goes wrong:** `is a Workbench host ... ELSA_EF_CONNECTION set`: this is tab 2, or tab 3 kept a connection; `unset ELSA_EF_CONNECTION` and repeat. The restore line shows the checkout's absolute path: this is setup, off screen.
+
+In tab **W**:
+
+```bash
+source tools/demo/helpers.sh
+bash tools/demo/run-workbench.sh wb --port 5301 --management-key-env DEMO_KEY 2>&1 | tee artifacts/demo/logs/wb.log
+```
+
+Wait until it is ready, from tab 3: `curl -s -o /dev/null -w '%{http_code}\n' localhost:5301/health/ready` prints `200` (20 to 30 s on a quiet laptop, 70 to 90 s under load). The log says `Default shell default generation 1 is ready after ...`.
+
+### S9. Studio, in tab Studio, and the browser
+
+In tab **Studio** (after S8, so the logs folder exists):
+
+```bash
+bash tools/demo/run-studio.sh 2>&1 | tee artifacts/demo/logs/studio.log
+```
+
+- **Expect:** `studio: http://localhost:5302`, `workbench: http://localhost:5301`, then the host's own `Now listening on: http://localhost:5302`. It runs the Studio checkout `../elsa-foundation-studio-demo` (`DEMO_STUDIO_DIR` names another). On the presenter's machine that checkout is built in place, on Studio main `86a99789`, which contains the designer fix (PR #547), so no `assets: ...` line should appear. `run-studio.sh` still carries a workaround for a checkout that was built in another folder and then moved (it runs a re-based copy of the static web asset manifest, kept under `artifacts/demo/hosts/studio`, and says so in an `assets: ...` line): it is now a no-op safety net, and the line, if it ever appears, is harmless. To rebuild the checkout after pulling Studio, run `dotnet build -c Release src/apps/Elsa.Studio.Web` in it (`pnpm install && pnpm build` first only when the front end changed), never on stage.
+- **If it goes wrong:** `There is no Studio checkout` or `is not built`: the message gives the build commands. Never run them on stage.
+
+In the browser, open a new tab on `http://localhost:5302`. Studio sends you to the Workbench's sign-in page (`localhost:5301/_elsa/identity/login`) and, once signed in, back to Studio. Sign in with the Workbench's **development admin**: the
+user name and the password are the values of `SeedAdminUserName` and `SeedAdminPassword` in `artifacts/demo/hosts/wb/shells.json`, under the feature `FoundationIdentityAspNetCoreIdentityEntityFrameworkCore` (the Workbench's own development seed, copied from `src/apps/Elsa.Workbench/shells.json`).
+Read them in an editor, off screen; never print that file on the screen, the password is in it. Sign in now, before the audience arrives: the sign-in page shows nothing sensitive, but it is a wasted minute on stage, and nothing is then typed but the demo. Then open **Workflows**, and leave the tab there.
+
+Then look at the bottom of the Studio page. Its bottom panel (**Console** / **Structured Logs**) may be open, and it shows the Studio checkout's absolute path, with your user name. Collapse it with the chevron at the panel's right edge before the audience sees the screen.
+
+- **Expect:** back on Studio, signed in; **Workflows** lists no workflow. The session lasts through the shell reloads of Act 3 (checked: the same sign-in and the same token still work after a reload), so you do not sign in again on stage.
+- **If it goes wrong:** the sign-in page does not appear, or the browser console shows a CORS error: the Workbench was started for another Studio port (`run-workbench.sh --studio-port`, default `DEMO_PORT_STUDIO`, else 5302); stop it (Ctrl-C in tab W) and start it again with the S8 command.
 
 Setup is done. Open tab **1** full screen, board beside it; the audience arrives.
 
@@ -646,7 +711,7 @@ Read this out, or show it. Two sentences per question, the limits included.
 
 > **1. "How about hot reload, can it still run?"**
 > Yes: a running host installs a new module version from its feed and switches to it in place, with no restart; it is held back while its database migration is pending, a contracting migration is refused until its version is finalized, the new feature stays dormant until the schema version is finalized, and a package that needs a newer host is refused when the host declares that package as its own and carries it in its deps.json.
-> The limits are that this is how the Foundation host works (the Workbench picks a new package up at its next restart), that a replaced release stays in memory until the host restarts, and that the old shell is drained, not cut off: in-flight requests are waited for up to 30 seconds by default, and Elsa adds no workflow-level quiescence on top.
+> The limits are that the Foundation host switches by itself while the Workbench installs the package at once and switches at its next shell reload (Act 3 shows it), that a replaced release stays in memory until the host restarts, and that the old shell is drained, not cut off: in-flight requests are waited for up to 30 seconds by default, and Elsa adds no workflow-level quiescence on top.
 >
 > **2. "What when we have multiple pods?"**
 > Hosts that share a database form a cluster and a new module version is turned on only once every live host can read it, so the order you upgrade in does not matter, `persistence status` names the host still holding it back, and a crashed host stops counting once its membership expires (12 seconds here, 35 by default).
@@ -666,24 +731,197 @@ A host that is killed instead of stopped stays counted until its membership expi
 
 ---
 
+## Act 3: the same upgrade, from the designer
+
+Put the browser on screen, on the Studio tab (signed in at S9, on **Workflows**), with tab **3** beside it. In tab **P**, Ctrl-C the Act 2 board and start the Act 3 one:
+
+```bash
+bash tools/demo/board.sh wb --watch
+```
+
+It reads `1.0.0` in all three cells.
+
+> "So far the module was upgraded under an API. The same thing happens under a workflow designer. This is the Workbench, the host that runs workflows, and Studio, its designer. The Notes module is installed here too, with a workflow activity, **Add note**, that ships in a package of its own and is released in step with the module."
+
+### 3.1 Release 1.0.0 in the designer: a workflow with Add note
+
+In Studio:
+
+1. **Workflows**, **Create**: name it `Add note demo`, and create it. The designer opens on the new, empty workflow.
+2. In the palette, category **Notes**, drag **Add note** onto the canvas. Select it: the inspector shows one input, **Text**. Type `hello from the designer`.
+3. **Run**, in the editor's toolbar (a test run of the current design). The runtime panel opens and shows the run completed.
+
+Then in tab 3:
+
+```bash
+rows wb
+```
+
+- **Audience sees:** the activity and its one input, the run, and the Workbench's Notes table: the note, stamped `1.0.0`, and no tags column yet.
+- **Say:** "Version 1 of the activity has one input, Text. The note it wrote is stamped with schema version 1.0.0, as on the first host."
+- **Expect:** `rows wb` prints the header `note schema tags` and `hello from the designer  1.0.0  (no column yet)`.
+- **Time:** a minute in Studio; `rows` is instant. To save the minute, create the workflow at the end of setup (steps 1 and 2) and start here at **Run**. A run started from the designer takes a few seconds to store its note: if `rows wb` prints only the header and `(no notes yet)`, say that the run is still writing and repeat `rows wb` until the note is there.
+- **If it goes wrong:** no **Notes** category in the palette: the Workbench did not load release 1 (the board says `-` or nothing under installed; the log in tab W says why), or the page was opened before the host was ready (refresh it). The run fails, or the
+  designer misbehaves: the Act 3 fallback below.
+
+### 3.2 Publish release 1.1.0 into the Workbench's feed
+
+```bash
+bash tools/demo/publish.sh 2 --host wb
+```
+
+> **Your question 1, from the designer:** "The Workbench is running, with a designer open on it. I drop the next release into its feed: the module and its activity, version 1.1.0. Nothing is restarted."
+
+- **Audience sees:** two lines, one per package.
+- **Board shows:** `in the feed` reads `1.0.0, 1.1.0` at once; about ten seconds later `installed` turns to `1.1.0` while `serving` stays `1.0.0`, with "1.1.0 installed, not switched" under the row.
+- **Say:** "The host installs both packages while it runs, and reads the features they bring at once. It does not switch the running workflows to them by itself: that is an operator's decision here, and the next step."
+- **Expect:** `published Elsa.Samples.Nuplane.Notes.1.1.0.nupkg to artifacts/demo/hosts/wb/feed` and `published Elsa.Samples.Nuplane.Notes.Activities.1.1.0.nupkg to artifacts/demo/hosts/wb/feed`.
+- **Time:** the publish under a second; the install about 11 s (12 s measured under load; the host's log says `Refreshed runtime feature catalog after a Nuplane reconcile` when it is done).
+- **If it goes wrong:** `installed` stays `1.0.0` after 40 s: `ls artifacts/demo/hosts/wb/feed`, and the log in tab W.
+
+### 3.3 Reload the Workbench's shell: refused, the migration is pending
+
+Once the board shows `installed` `1.1.0`:
+
+```bash
+wbreload 5301
+```
+
+- **Audience sees:** `HTTP 200` and the refusal: `"reloaded": false`, the module, the pending migration and the command to run.
+- **Say:** "The same rule as on the first host. The new version needs a column the database does not have, so the Workbench refuses to switch, and it refuses to migrate underneath us. It names the module, the migration and the command. Everything keeps running on release 1, the designer included."
+- **Expect:**
+
+  ```
+  HTTP 200
+  {
+    "reloaded": false,
+    "error": "EfPendingMigrationsException",
+    "module": "Samples.Notes",
+    "pendingMigrations": [
+      "…_AddTags"
+    ],
+    "command": "dotnet elsa persistence apply --host \"<host directory>\" --modules Samples.Notes --provider Sqlite --connection-env ELSA_EF_CONNECTION"
+  }
+  ```
+
+  The Workbench's management API answers `200` with `"success": false` and the error where the Foundation host answers `409`; the helper shows that answer in this form. The command is the Workbench's own message, which names the host directory with a placeholder.
+- **Time:** 1 to 3 s.
+- **If it goes wrong:** `"reloaded": true` with `"serving": "Notes 1.0.0"`: the reload came before the host had installed 1.1.0, and rebuilt release 1; wait until the board shows `installed` `1.1.0`, and `wbreload 5301` again. `HTTP 401`: the key differs (`echo $DEMO_KEY` in tabs 3 and W), or the Workbench was started without `--management-key-env DEMO_KEY` and expects its own development key; restart it with the S8 command.
+
+### 3.4 Apply the migration; reload again
+
+```bash
+bash tools/demo/elsa.sh persistence apply --host artifacts/demo/hosts/wb --environment Development --provider Sqlite --modules Samples.Notes
+wbreload 5301
+```
+
+- **Audience sees:** the apply table with one migration applied, then `"reloaded": true` and `"serving": "Notes 1.1.0"`.
+- **Board shows:** `serving` turns to `1.1.0`, "tags dormant" for a second or two, then "tags live".
+- **Say:** "The same command as before, pointed at the Workbench's folder. Now the reload goes through, and the host runs release 1.1.0. Still no restart."
+- **Expect:**
+
+  ```
+  provider: Sqlite   schema: (none)
+  #   MODULE         CONTEXT               HISTORY TABLE                           APPLIED
+  01  Samples.Notes  NotesSqliteDbContext  __EFMigrationsHistory_ElsaSamplesNotes  1
+  ```
+
+  then `HTTP 200` and `{ "reloaded": true, "generation": N, "serving": "Notes 1.1.0" }` (four lines of JSON; the generation counts the shell's rebuilds, refused ones included).
+- **Time:** the apply 3 to 20 s, the reload 2 to 5 s; 2.0.0 finalizes within about a second after it (this host is a cluster of one).
+- **If it goes wrong:** `is a Workbench host ... ELSA_EF_CONNECTION set`: you are in tab 2; use tab 3. The reload refused again: the apply did not run against the Workbench's file; read its table and repeat.
+
+### 3.5 In the designer: move the node to Add note 1.1.0
+
+In Studio:
+
+1. Refresh the page (the designer reads the activity catalog when it loads).
+2. Select the **Add note** node, then its **Version** tab: it is pinned to the exact version `1.0.0`.
+3. **Change exact version**. The review dialog shows `v1.0.0` to `v1.1.0`, **Compatible**, **Minor**, and "Input 'Tags' was added".
+4. Scroll the dialog to the bottom and click **Apply to this occurrence**.
+5. The inspector's inputs are now **Text** and **Tags (comma-separated)**.
+
+> **Your question 3, from the designer:** "Both versions of the activity are there side by side, 1.0.0 and 1.1.0. A workflow is pinned to an exact version and moves only when someone decides it should, after the designer has shown what changes: here, one input added, a compatible change."
+
+- **Say:** "The workflows that use version 1 keep working: nothing moved them. This one I move on purpose."
+- **Known quirks (presenter only):** after the upgrade the **Version** tab also says "Recommended v1.0.0 available", and a node freshly dragged from the palette is still `1.0.0`: a version a package adds becomes the activity's newest version, not its recommended one. Ignore both; use **Change exact version**, never the recommendation.
+  And a workflow left pinned to `1.0.0` keeps running, but on the code of release 1.1.0 (the host loads one release of a package at a time): if asked, "it keeps its inputs; the code underneath is the release the host runs".
+- **Time:** under a minute.
+- **If it goes wrong:** the dialog offers no `1.1.0`: the page was not refreshed after the reload, or the reload did not go through (3.4); refresh. **Apply** does nothing: scroll the dialog to its bottom and click it once more; still nothing, the Act 3 fallback.
+
+### 3.6 Run it with tags
+
+In Studio: **Text** `tagged from the designer`, **Tags** `demo, designer`, then **Run**. In tab 3:
+
+```bash
+rows wb
+```
+
+- **Audience sees:** the run completes; `rows` shows the new note stamped `2.0.0` with `["demo","designer"]`, and the note from 3.1 rewritten to `2.0.0` with `[]`.
+- **Say:** "Version 1.1.0 wrote the new format, tags included. The note version 1 wrote has been brought up to date by the host itself, in the background, the way the two hosts did it."
+- **Expect:**
+
+  ```
+  note                      schema  tags
+  hello from the designer   2.0.0   []
+  tagged from the designer  2.0.0   ["demo","designer"]
+  ```
+
+  By the time you are back from the designer the host has rewritten the first row; if it still reads `1.0.0` and `NULL`, run `rows wb` again in a few seconds. The new note takes a few seconds to be stored after **Run**: if it is not there yet, repeat `rows wb`.
+- **Time:** the run a second or two, its note a few seconds more; the old row is rewritten within seconds of the reload, long before 3.6.
+- **If it goes wrong:** the run faults with a reason that names a dormant feature: the reload was a second ago and 2.0.0 is not finalized yet; run again. Anything else: the fallback.
+
+> **Recap, if there is time:** "That was questions one and three again, from the designer. A running host took a new version of a module and of an activity, held it back until the database was ready, and switched without a restart. Two versions of the activity live side by side, and a workflow moves to the new one when someone decides it should."
+
+### Act 3 fallback: the API instead of the designer
+
+When the designer misbehaves (a page that does not load, a dialog that does not apply), do its part in tab 3 with `addnote`, which makes the calls Studio makes: it runs a workflow of its own, `Add note (API)`, created on first use. Instead of 3.1:
+
+```bash
+addnote 5301 1.0.0 "hello from the API"
+rows wb
+```
+
+and instead of 3.5 and 3.6:
+
+```bash
+addnote 5301 1.1.0 "tagged from the API" "demo, api"
+rows wb
+```
+
+- **Expect:** the first prints `workflow "Add note (API)": created, its Add note node pinned to 1.0.0`, `inputs: Text "hello from the API"` and `run: Completed`; the second
+  `workflow "Add note (API)": its Add note node changed from exact version 1.0.0 to 1.1.0`, the two inputs and `run: Completed`. `rows wb` as in 3.1 and 3.6.
+- **Say:** "This is what the designer does underneath: it changes the exact version the node is pinned to, and runs it."
+- **If it goes wrong:** `Add note 1.1.0 is not in the activity catalog`: the reload of 3.4 has not gone through. `nothing answers on port 5301`: the Workbench is down (tab W).
+
+`bash tools/demo/rehearse.sh --act 3` rehearses Act 3 this way, through the same helper.
+
+---
+
 ## After the demo, and between rehearsals
 
 ```bash
 bash tools/demo/reset.sh
 ```
 
-It stops the demo hosts it started (by the process ids `run-host.sh` recorded, and only a process that is still a demo host; a clean stop, killed only after 30 s),
-removes the `elsa-demo-pg` container, and removes everything under `artifacts/demo` except the staged releases and the closure feed. It prints each host, container and
-folder it stopped or removed. `bash tools/demo/reset.sh --all` removes the staged releases too: run `prepack.sh` again afterwards.
+It stops the demo hosts it started (by the process ids `run-host.sh`, `run-workbench.sh` and `run-studio.sh` recorded, and only a process that is still a demo host; a clean stop, killed only after 30 s),
+removes the `elsa-demo-pg` container, and removes everything under `artifacts/demo` except the staged releases and the closure feed: the Workbench's database and the workflows made in Studio go with it. It prints each host, container and
+folder it stopped or removed. `bash tools/demo/reset.sh --all` removes the staged releases too: run `prepack.sh` again afterwards. Nothing is written into the Studio checkout, so there is nothing to clean there.
 
 Nothing here uses `pkill`, `killall` or a process name.
 
 ## Rehearse it without an audience
 
-Both acts, about 6 minutes; needs Docker and the staged releases:
+All three acts, about 12 minutes; needs Docker, the staged releases and the Workbench build (both from `prepack.sh`), but no Studio:
 
 ```bash
 bash tools/demo/rehearse.sh
+```
+
+One act (`--act 1`, `2` or `3`), or Acts 1 and 2 only after a `prepack.sh --no-act3`:
+
+```bash
+bash tools/demo/rehearse.sh --act 3
+bash tools/demo/rehearse.sh --no-act3
 ```
 
 Act 1 by its fallback route only:
@@ -694,7 +932,7 @@ bash tools/demo/rehearse.sh --act 1 --fallback
 
 It begins with `reset.sh`, follows this runbook step by step (hosts started one after the other, in-place upgrades, no interaction), runs the very helpers of `tools/demo/helpers.sh` that you type,
 asserts the status codes and output lines above, the cells of the package board at the steps that move it (`board.sh`, once per step instead of `--watch`), that `show-package.sh 2` prints the package id and `1.1.0`, and the schema version stored on each row (`rows`) before the upgrade, after the finalization and after the backfill, checks that nothing the audience sees shows the repository path or a home folder, prints the time of every step and the moments measured (install, finalization, completion), lists any spec or requirement numbers a host logged, and cleans up on exit,
-success or failure. Its host logs are kept in `artifacts/demo-rehearsal/`. It uses the ports 5101, 5201 and 5202 (`DEMO_PORT_SOLO`, `DEMO_PORT_A`, `DEMO_PORT_B` change them): stop a live demo first.
+success or failure. Act 3's designer steps are done with `addnote` (the fallback, which makes Studio's calls), and the rehearsal also runs a second workflow left pinned to `1.0.0` after the upgrade, to hold the quirk of 3.5 to what it says. Its host logs are kept in `artifacts/demo-rehearsal/`. It uses the ports 5101, 5201, 5202 and 5301 (`DEMO_PORT_SOLO`, `DEMO_PORT_A`, `DEMO_PORT_B`, `DEMO_PORT_WB` change them): stop a live demo first.
 
 ## Troubleshooting
 
@@ -717,17 +955,29 @@ success or failure. Its host logs are kept in `artifacts/demo-rehearsal/`. It us
 | `rows a` or `rows b` says `No such container`, or prints nothing | The PostgreSQL container is not running (`rows a` and `rows b` ask it through `docker exec`), or `DEMO_PG_CONTAINER` renamed it | `docker ps --filter name=elsa-demo-pg`; start Docker and redo S6 if it is gone. `rows solo` reads the Sqlite file `artifacts/demo/notes.db` and needs no container |
 | `persistence status` shows `Cluster.Membership has migrations not applied` | The command lacks `--modules Samples.Notes,Cluster.Membership` | Use the `status` helper (it always passes both modules), not a hand-typed command |
 | `status` shows no `waits for:` line while A is still on 1.0.0 | A hand-typed command lacks `--skew-allowance 00:00:02`, so members are judged with 5 s instead of the hosts' 2 s | Use the `status` helper, which passes it |
-| The board (tab **P**) shows **down** under serving | The host is not up (yet), or listens on another port (the board reads `DEMO_PORT_SOLO`, `DEMO_PORT_A` and `DEMO_PORT_B` like the rehearsal) | `curl -s -o /dev/null -w '%{http_code}\n' localhost:5101/health/ready`; start the host (S5, S6). The board needs no restart: it picks the host up when it answers |
+| The board (tab **P**) shows **down** under serving | The host is not up (yet), or listens on another port (the board reads `DEMO_PORT_SOLO`, `DEMO_PORT_A`, `DEMO_PORT_B` and `DEMO_PORT_WB` like the rehearsal) | `curl -s -o /dev/null -w '%{http_code}\n' localhost:5101/health/ready`; start the host (S5, S6, S8). The board needs no restart: it picks the host up when it answers |
 | The board shows **-** under installed, or `installed` stays `1.0.0` while the feed has `1.1.0` | `-`: the host has not written its Nuplane record (`.nuplane/store-state.json`) yet. Otherwise the host has not installed the package yet (about ten seconds), or its watcher missed it | Wait ten seconds. Still `1.0.0` after 40 s: `ls artifacts/demo/hosts/solo/feed` and look at the host's log in tab S, A or B |
-| Host takes over a minute to be ready | The machine is loaded | `uptime`; wait; start the presentation after `/health/ready` is 200 on all three hosts |
+| Host takes over a minute to be ready | The machine is loaded | `uptime`; wait; start the presentation after `/health/ready` is 200 on all four hosts (the Workbench takes longest: 70 to 90 s under load) |
+| The Workbench's `/health/ready` says **503** `shell_activation_failed`, and its log says `EF module '...' has pending migrations` | The database was not migrated before the start (S8's `apply --restore ... --from-host` skipped, or run in a tab with `ELSA_EF_CONNECTION` set, which `elsa.sh` refuses) | Ctrl-C in tab W, run S8's apply in tab 3, start the Workbench again |
+| `wbreload` says `"reloaded": true` but `"serving": "Notes 1.0.0"` | The reload came before the Workbench had installed 1.1.0, so it rebuilt release 1 | Wait until the board shows `installed` `1.1.0` (about ten seconds after the publish), then `wbreload 5301` again: it is refused for the migration, as in 3.3 |
+| `wbreload` answers **401** | The key differs, or the Workbench was started without `--management-key-env DEMO_KEY` (then it expects its own development key) | `echo $DEMO_KEY` in tabs 3 and W; restart the Workbench with the S8 command |
+| `elsa.sh` says `artifacts/demo/hosts/wb is a Workbench host ... ELSA_EF_CONNECTION set` | The command was run in a tab with a database connection (tab 2, after `pgconn`) | Run it in tab 3, or `unset ELSA_EF_CONNECTION` first: the Workbench's database is its own file, which `elsa.sh` finds by itself |
+| Studio: `run-studio.sh` says **no Studio checkout** or **not built** | `DEMO_STUDIO_DIR` (default `../elsa-foundation-studio-demo`) is missing or unbuilt | The message has the build commands; never on stage. Without Studio, Act 3 runs by its fallback (`addnote`) |
+| Studio does not reach the sign-in page, or the browser console shows a **CORS** error | The Workbench was started for another Studio port | Start the Workbench with the Studio's port (`--studio-port`, default `DEMO_PORT_STUDIO`, else 5302) |
+| Studio asks to **sign in again** on stage | The session lapsed or was lost | Sign in with the development admin (S9); the values are in the Workbench's `shells.json`, never on screen: read them on the laptop's other screen, or switch to the Act 3 fallback |
+| The designer's **Change exact version** offers no `1.1.0` | The page was loaded before the reload, or the reload did not go through | Refresh the page; check `wbreload 5301` says `"reloaded": true` and `"serving": "Notes 1.1.0"` |
+| An Add note run with tags **faults**, naming a dormant feature | 2.0.0 is not finalized yet: the reload was a second or two ago | Run again. `status wb` says what the version waits for |
 
 ## Screen hygiene
 
 Nothing the audience is meant to see carries an internal requirement number. The one exception found is a host log line, which is why the host tabs stay off screen:
 
-- `Schema family SamplesNotes of EF module Samples.Notes is complete at 2.0.0: no row below it remains (spec 186, FR-014).` (host log, about 20 s after the version finalizes, on both acts)
+- `Schema family SamplesNotes of EF module Samples.Notes is complete at 2.0.0: no row below it remains (spec 186, FR-014).` (host log, about 20 s after the version finalizes, in every act)
 
 The host logs are also very long (package resolution and catalog lines by the hundred per change); the answers in tab 1 and tab 2 tell the story. `rehearse.sh` reports these lines at
 the end of every run, so a new one shows up there. No personal path or name is on the audience's screen: the `reload` helper shows the `command` of the 409 relative to the repository (`--host "artifacts/demo/hosts/solo"`), the
 prompt of tabs 1 and 2 is a bare `$ ` (S4), and `rehearse.sh` fails when anything it runs for the audience prints the repository path or a home folder (the package board and `show-package.sh` print relative paths only, and are covered by it). The one command that does print the absolute path of the
 checkout, with the user name, is `elsa.sh persistence apply --restore`, which is setup and stays off screen. The tab and window titles and the browser's history are yours to check.
+
+Act 3 adds four things to check. Studio's bottom panel (**Console** / **Structured Logs**) can be open and shows the Studio checkout's absolute path with your user name: collapse it with the chevron at the panel's right edge (S9). Tab **Studio** prints the Studio checkout's absolute path (`Content root path: ...`): it stays off screen like the host tabs. The Workbench's refusal names its command with a placeholder, `--host "<host directory>"`, so `wbreload` shows no path at all. And the
+development admin's password is in `artifacts/demo/hosts/wb/shells.json`: never open that file on screen, and sign in before the audience arrives (S9). The browser's address bar shows only `localhost:5302` (and `localhost:5301` on the sign-in page).
