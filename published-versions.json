@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "b4d8ab8905c29e5ed6a8656f3ce2eff24299ad79",
+  "last_publish_commit": "b6cc88f94f1a8e742215583d1e590fcddce6762e",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -289,8 +289,8 @@
     },
     {
       "package_id": "Elsa.ExtensionBuilder.Api",
-      "version": "4.0.0-preview",
-      "commit": "95d351da1928dc64bfc11afb2894fd87b0625796"
+      "version": "4.0.1-preview",
+      "commit": "b6cc88f94f1a8e742215583d1e590fcddce6762e"
     },
     {
       "package_id": "Elsa.Foundation.DataProtection.EntityFrameworkCore",
