@@ -196,56 +196,34 @@ public sealed class OidcBearerNormalizationTests
         Assert.Equal(Provider, mappings.LastProvider);
     }
 
-    [Fact]
-    public async Task Prior_message_received_no_result_stays_a_refusal_and_does_not_map()
+    [Theory]
+    [InlineData(CallbackStage.MessageReceived, CallbackDisposition.Fail)]
+    [InlineData(CallbackStage.MessageReceived, CallbackDisposition.NoResult)]
+    [InlineData(CallbackStage.MessageReceived, CallbackDisposition.Exception)]
+    [InlineData(CallbackStage.TokenValidated, CallbackDisposition.Fail)]
+    [InlineData(CallbackStage.TokenValidated, CallbackDisposition.NoResult)]
+    [InlineData(CallbackStage.TokenValidated, CallbackDisposition.Exception)]
+    [InlineData(CallbackStage.AuthenticationFailed, CallbackDisposition.Fail)]
+    [InlineData(CallbackStage.AuthenticationFailed, CallbackDisposition.NoResult)]
+    [InlineData(CallbackStage.AuthenticationFailed, CallbackDisposition.Exception)]
+    public async Task Prior_callback_refusals_never_publish_a_ticket_or_expose_their_values(
+        CallbackStage stage, CallbackDisposition disposition)
     {
         var mappings = new TestClaimMappingStore();
+        var callbacks = CallbacksFor(stage, disposition);
         await using var host = await NormalizationTestHost.StartAsync(
             mappings: mappings,
-            configureEvents: events => events.OnMessageReceived = context =>
+            configureEvents: events =>
             {
-                context.NoResult();
-                return Task.CompletedTask;
+                events.OnMessageReceived = callbacks.MessageReceived;
+                events.OnTokenValidated = callbacks.TokenValidated;
+                events.OnAuthenticationFailed = callbacks.AuthenticationFailed;
             });
+        var token = host.CreateToken();
+        if (stage == CallbackStage.AuthenticationFailed)
+            token = Tamper(token);
 
-        using var response = await host.SendBearerAsync(host.CreateToken());
-
-        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
-        Assert.Equal(0, mappings.Calls);
-        AssertBareChallenge(response);
-    }
-
-    [Fact]
-    public async Task Prior_message_received_failure_keeps_the_refusal_without_exposing_its_value()
-    {
-        var mappings = new TestClaimMappingStore();
-        await using var host = await NormalizationTestHost.StartAsync(
-            mappings: mappings,
-            configureEvents: events => events.OnMessageReceived = context =>
-            {
-                context.Fail(Canary);
-                return Task.CompletedTask;
-            });
-
-        using var response = await host.SendBearerAsync(host.CreateToken());
-        var body = await response.Content.ReadAsStringAsync();
-
-        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
-        Assert.Equal(0, mappings.Calls);
-        Assert.False(body.Contains(Canary, StringComparison.Ordinal));
-        AssertBareChallenge(response);
-    }
-
-    [Fact]
-    public async Task Prior_callback_failure_and_exception_are_replaced_with_value_free_challenges()
-    {
-        var mappings = new TestClaimMappingStore();
-        await using var host = await NormalizationTestHost.StartAsync(
-            mappings: mappings,
-            configureEvents: events => events.OnTokenValidated = _ =>
-                throw new InvalidOperationException(Canary));
-
-        using var response = await host.SendBearerAsync(host.CreateToken());
+        using var response = await host.SendBearerAsync(token);
         var body = await response.Content.ReadAsStringAsync();
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
@@ -615,7 +593,7 @@ public sealed class OidcBearerNormalizationTests
         var normalizer = TestClaimsNormalizer.Sync(_ => throw new Xunit.Sdk.XunitException("Normalization must not run after prior refusal."));
         var unit = CreateDirectEventUnit(normalizer, mappings);
         unit.Registration.CapturedCallbacks.Remove(unit.Options);
-        unit.Registration.CapturedCallbacks.Add(unit.Options, DirectCallbacks(stage, disposition));
+        unit.Registration.CapturedCallbacks.Add(unit.Options, CallbacksFor(stage, disposition));
 
         var result = await InvokeDirectCallbackAsync(stage, unit.Events, unit.Options);
 
@@ -1094,12 +1072,12 @@ public sealed class OidcBearerNormalizationTests
     private static ClaimsNormalizationResult Result(ClaimsPrincipal principal) =>
         new(principal, new HashSet<string>(StringComparer.OrdinalIgnoreCase), new HashSet<string>(StringComparer.OrdinalIgnoreCase));
 
-    private static OidcBearerCallbacks DirectCallbacks(CallbackStage stage, CallbackDisposition disposition) => new(
-        context => ApplyDirectCallback(stage, CallbackStage.MessageReceived, disposition, context.Fail, context.NoResult),
-        context => ApplyDirectCallback(stage, CallbackStage.TokenValidated, disposition, context.Fail, context.NoResult),
-        context => ApplyDirectCallback(stage, CallbackStage.AuthenticationFailed, disposition, context.Fail, context.NoResult));
+    private static OidcBearerCallbacks CallbacksFor(CallbackStage stage, CallbackDisposition disposition) => new(
+        context => ApplyCallback(stage, CallbackStage.MessageReceived, disposition, context.Fail, context.NoResult),
+        context => ApplyCallback(stage, CallbackStage.TokenValidated, disposition, context.Fail, context.NoResult),
+        context => ApplyCallback(stage, CallbackStage.AuthenticationFailed, disposition, context.Fail, context.NoResult));
 
-    private static Task ApplyDirectCallback(
+    private static Task ApplyCallback(
         CallbackStage selectedStage,
         CallbackStage callbackStage,
         CallbackDisposition disposition,
