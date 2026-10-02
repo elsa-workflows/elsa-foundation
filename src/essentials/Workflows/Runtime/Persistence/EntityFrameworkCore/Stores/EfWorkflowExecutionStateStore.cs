@@ -15,9 +15,10 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 public sealed class EfWorkflowExecutionStateStore(
     RuntimeDbContext context,
     IPersistenceAccessContextAccessor accessContextAccessor,
-    IRuntimeRecoveryContinuationCodec continuationCodec) : IWorkflowExecutionStateStore
+    IRuntimeRecoveryContinuationCodec continuationCodec) : IWorkflowExecutionStateStore, IWorkflowHealthQuery
 {
     private const string HistoryCursorPurpose = "ef-runtime-workflow-execution-history-v1";
+    private const string HealthCursorPurpose = "ef-runtime-workflow-execution-health-history-v1";
     private const string CaptureCursorPurpose = "ef-runtime-workflow-execution-capture-v1";
 
     public async ValueTask<WorkflowExecutionState> SaveAsync(WorkflowExecutionState state, CancellationToken cancellationToken = default)
@@ -95,9 +96,23 @@ public sealed class EfWorkflowExecutionStateStore(
         catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception)) { throw Normalize("listing", "<all>", exception); }
     }
 
-    public async ValueTask<WorkflowExecutionStatePage> QueryPageAsync(WorkflowExecutionStatePageQuery query, CancellationToken cancellationToken = default)
+    public ValueTask<WorkflowExecutionStatePage> QueryPageAsync(WorkflowExecutionStatePageQuery query, CancellationToken cancellationToken = default) =>
+        QueryHistoryPageAsync(query, health: null, cancellationToken: cancellationToken);
+
+    public ValueTask<WorkflowExecutionStatePage> QueryHealthPageAsync(
+        WorkflowExecutionStatePageQuery query,
+        IncidentHealth health,
+        CancellationToken cancellationToken = default) =>
+        QueryHistoryPageAsync(query, health, cancellationToken);
+
+    private async ValueTask<WorkflowExecutionStatePage> QueryHistoryPageAsync(
+        WorkflowExecutionStatePageQuery query,
+        IncidentHealth? health,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(query);
+        if (health is { } requestedHealth)
+            ValidateHealth(requestedHealth);
         query.Validate();
         ValidatePageSize(query.PageSize);
         if (query.TenantId is not null)
@@ -106,12 +121,18 @@ public sealed class EfWorkflowExecutionStateStore(
         try
         {
             var scope = RequireScope();
-            var cursor = DecodeHistoryCursor(query.Cursor, query, scope);
+            var filterScope = health is { } incidentHealth
+                ? HealthCursorScope(query, incidentHealth)
+                : WorkflowExecutionStateHistory.Scope(query);
+            var cursorPurpose = health is null ? HistoryCursorPurpose : HealthCursorPurpose;
+            var cursor = DecodeHistoryCursor(query.Cursor, scope, filterScope, cursorPurpose);
             // Decode first so a cursor bound to another filter is reported as
             // cursor misuse; a tenant mismatch without a cursor still fails
             // closed below before any query is executed.
             accessContextAccessor.Current.EnsureTenantScope(query.TenantId);
             var source = HistoryQuery(query, scope);
+            if (health is { } requiredHealth)
+                source = ApplyIncidentHealth(source, scope, requiredHealth);
             var total = await source.LongCountAsync(cancellationToken);
             if (cursor is not null)
                 source = source.Where(x => x.SortTimestampUtcTicks < cursor.SortTicks || x.SortTimestampUtcTicks == cursor.SortTicks && string.Compare(x.WorkflowExecutionIdOrderKey, cursor.OrderKey) > 0);
@@ -120,13 +141,51 @@ public sealed class EfWorkflowExecutionStateStore(
             if (hasNext) rows = rows[..query.PageSize];
             var items = rows.Select(x => ReadChecked(x, scope, Decode(x.WorkflowExecutionId))).ToArray();
             return new WorkflowExecutionStatePage(items,
-                hasNext && rows.Length > 0 ? EncodeHistoryCursor(rows[^1], query, scope) : null,
+                hasNext && rows.Length > 0 ? EncodeHistoryCursor(rows[^1], scope, filterScope, cursorPurpose) : null,
                 hasNext, total);
         }
         catch (OperationCanceledException) { throw; }
         catch (InvalidDataException) { throw; }
         catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception)) { throw Normalize("querying", "<history>", exception); }
     }
+
+    private IQueryable<WorkflowExecutionStateEntity> ApplyIncidentHealth(
+        IQueryable<WorkflowExecutionStateEntity> executions,
+        string scope,
+        IncidentHealth health)
+    {
+        var incidents = context.IncidentStates.AsNoTracking()
+            .Where(x => x.ScopeKeyHash == Hash(scope) && x.ScopeKey == Encode(scope));
+        var resolved = (int)IncidentStatus.Resolved;
+        var suppressed = (int)IncidentStatus.Suppressed;
+        var blocking = (int)IncidentStatus.Blocking;
+
+        return health switch
+        {
+            IncidentHealth.Active => executions.Where(execution => incidents.Any(incident =>
+                incident.WorkflowExecutionIdHash == execution.WorkflowExecutionIdHash &&
+                incident.WorkflowExecutionId == execution.WorkflowExecutionId &&
+                incident.Status != resolved && incident.Status != suppressed)),
+            IncidentHealth.Blocking => executions.Where(execution => incidents.Any(incident =>
+                incident.WorkflowExecutionIdHash == execution.WorkflowExecutionIdHash &&
+                incident.WorkflowExecutionId == execution.WorkflowExecutionId &&
+                incident.Status == blocking)),
+            IncidentHealth.None => executions.Where(execution => !incidents.Any(incident =>
+                incident.WorkflowExecutionIdHash == execution.WorkflowExecutionIdHash &&
+                incident.WorkflowExecutionId == execution.WorkflowExecutionId &&
+                incident.Status != resolved && incident.Status != suppressed)),
+            _ => throw new ArgumentOutOfRangeException(nameof(health), health, "The incident health filter is invalid.")
+        };
+    }
+
+    private static void ValidateHealth(IncidentHealth health)
+    {
+        if (health is not (IncidentHealth.Active or IncidentHealth.Blocking or IncidentHealth.None))
+            throw new ArgumentOutOfRangeException(nameof(health), health, "The incident health filter is invalid.");
+    }
+
+    private static string HealthCursorScope(WorkflowExecutionStatePageQuery query, IncidentHealth health) =>
+        $"{WorkflowExecutionStateHistory.Scope(query)}:{(int)health}";
 
     public async ValueTask<WorkflowExecutionAlterationCapturePage> QueryAlterationCapturePageAsync(WorkflowExecutionAlterationCaptureQuery query, CancellationToken cancellationToken = default)
     {
@@ -357,13 +416,13 @@ public sealed class EfWorkflowExecutionStateStore(
     private static WorkflowExecutionStateEntityFrameworkPersistenceException Normalize(string action, string id, Exception exception) =>
         new(action, id, $"EF workflow execution state {action} failed for '{id}'.", exception);
 
-    private HistoryCursor? DecodeHistoryCursor(string? token, WorkflowExecutionStatePageQuery query, string scope)
+    private HistoryCursor? DecodeHistoryCursor(string? token, string scope, string filterScope, string purpose)
     {
         if (token is null) return null;
-        try { var cursor = RuntimeArtifactJson.Deserialize<HistoryCursor>(Encoding.UTF8.GetString(continuationCodec.Decode(HistoryCursorPurpose, token))); if (cursor.Version != 1 || cursor.ScopeHash != Hash(scope) || cursor.FilterScope != WorkflowExecutionStateHistory.Scope(query) || cursor.OrderKey != OrderKey(cursor.ExecutionId)) throw new FormatException(); return cursor; }
+        try { var cursor = RuntimeArtifactJson.Deserialize<HistoryCursor>(Encoding.UTF8.GetString(continuationCodec.Decode(purpose, token))); if (cursor.Version != 1 || cursor.ScopeHash != Hash(scope) || cursor.FilterScope != filterScope || cursor.OrderKey != OrderKey(cursor.ExecutionId)) throw new FormatException(); return cursor; }
         catch (Exception ex) when (ex is ArgumentException or FormatException or JsonException or InvalidDataException or InvalidOperationException) { throw new ArgumentException("The workflow execution history cursor is invalid or does not belong to this query.", nameof(token), ex); }
     }
-    private string EncodeHistoryCursor(WorkflowExecutionStateEntity row, WorkflowExecutionStatePageQuery query, string scope) => continuationCodec.Encode(HistoryCursorPurpose, Encoding.UTF8.GetBytes(RuntimeArtifactJson.Serialize(new HistoryCursor(1, Hash(scope), WorkflowExecutionStateHistory.Scope(query), Decode(row.WorkflowExecutionId), row.SortTimestampUtcTicks, row.WorkflowExecutionIdOrderKey))));
+    private string EncodeHistoryCursor(WorkflowExecutionStateEntity row, string scope, string filterScope, string purpose) => continuationCodec.Encode(purpose, Encoding.UTF8.GetBytes(RuntimeArtifactJson.Serialize(new HistoryCursor(1, Hash(scope), filterScope, Decode(row.WorkflowExecutionId), row.SortTimestampUtcTicks, row.WorkflowExecutionIdOrderKey))));
     private CaptureCursor? DecodeCaptureCursor(string? token, WorkflowExecutionAlterationCaptureQuery query, string scope)
     {
         if (token is null) return null;

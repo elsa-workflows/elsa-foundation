@@ -1,3 +1,4 @@
+using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Models.Alterations;
@@ -138,6 +139,90 @@ public sealed class EfWorkflowExecutionStateStoreTests
         Assert.Equal(["c", "d"], second.Items.Select(x => x.WorkflowExecutionId));
         await Assert.ThrowsAsync<ArgumentException>(() => fixture.Store.QueryPageAsync(new WorkflowExecutionStatePageQuery(2, TenantId: "other", Cursor: first.NextCursor)).AsTask());
         await Assert.ThrowsAsync<InvalidOperationException>(() => fixture.Store.QueryPageAsync(new WorkflowExecutionStatePageQuery(2, TenantId: "other")).AsTask());
+    }
+
+    [Fact]
+    public async Task Health_pages_filter_before_count_and_bind_cursors_to_health_and_scope()
+    {
+        await using var database = await Database.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        var timestamp = DateTimeOffset.UtcNow;
+
+        for (var index = 0; index < 110; index++)
+        {
+            var id = $"blocking-{index:D3}";
+            await fixture.Store.SaveAsync(State(id, "tenant-a", timestamp.AddSeconds(index)));
+            await fixture.Incidents.TryAddAsync(HealthIncident($"incident-{id}", id, IncidentStatus.Blocking, timestamp));
+        }
+
+        for (var index = 0; index < 10; index++)
+        {
+            var id = $"open-{index:D3}";
+            await fixture.Store.SaveAsync(State(id, "tenant-a", timestamp.AddMinutes(2).AddSeconds(index)));
+            await fixture.Incidents.TryAddAsync(HealthIncident($"incident-{id}", id, IncidentStatus.Open, timestamp));
+        }
+
+        for (var index = 0; index < 5; index++)
+        {
+            var id = $"none-{index:D3}";
+            var terminalStatus = index % 2 == 0 ? IncidentStatus.Resolved : IncidentStatus.Suppressed;
+            await fixture.Store.SaveAsync(State(id, "tenant-a", timestamp.AddMinutes(3).AddSeconds(index)));
+            await fixture.Incidents.TryAddAsync(HealthIncident($"incident-{id}", id, terminalStatus, timestamp));
+        }
+
+        var activeQuery = new WorkflowExecutionStatePageQuery(50, TenantId: "tenant-a");
+        var firstActive = await fixture.Store.QueryHealthPageAsync(activeQuery, IncidentHealth.Active);
+        var secondActive = await fixture.Store.QueryHealthPageAsync(activeQuery with { Cursor = firstActive.NextCursor }, IncidentHealth.Active);
+        var thirdActive = await fixture.Store.QueryHealthPageAsync(activeQuery with { Cursor = secondActive.NextCursor }, IncidentHealth.Active);
+
+        Assert.Equal(120, firstActive.TotalCount);
+        Assert.Equal(120, secondActive.TotalCount);
+        Assert.Equal(120, thirdActive.TotalCount);
+        Assert.True(firstActive.HasNext);
+        Assert.True(secondActive.HasNext);
+        Assert.False(thirdActive.HasNext);
+        var allActive = firstActive.Items.Concat(secondActive.Items).Concat(thirdActive.Items).ToArray();
+        Assert.Equal(120, allActive.Select(x => x.WorkflowExecutionId).Distinct(StringComparer.Ordinal).Count());
+        Assert.DoesNotContain(allActive, x => x.WorkflowExecutionId.StartsWith("none-", StringComparison.Ordinal));
+        Assert.Equal(110, allActive.Count(x => x.WorkflowExecutionId.StartsWith("blocking-", StringComparison.Ordinal)));
+        Assert.Equal(10, allActive.Count(x => x.WorkflowExecutionId.StartsWith("open-", StringComparison.Ordinal)));
+
+        var blocking = await fixture.Store.QueryHealthPageAsync(new WorkflowExecutionStatePageQuery(200, TenantId: "tenant-a"), IncidentHealth.Blocking);
+        Assert.Equal(110, blocking.TotalCount);
+        Assert.Equal(110, blocking.Items.Count);
+        Assert.All(blocking.Items, x => Assert.StartsWith("blocking-", x.WorkflowExecutionId, StringComparison.Ordinal));
+
+        var noActive = await fixture.Store.QueryHealthPageAsync(new WorkflowExecutionStatePageQuery(10, TenantId: "tenant-a"), IncidentHealth.None);
+        Assert.Equal(5, noActive.TotalCount);
+        Assert.Equal(5, noActive.Items.Count);
+        Assert.All(noActive.Items, x => Assert.StartsWith("none-", x.WorkflowExecutionId, StringComparison.Ordinal));
+
+        await Assert.ThrowsAsync<ArgumentException>(() => fixture.Store.QueryHealthPageAsync(
+            activeQuery with { Cursor = firstActive.NextCursor }, IncidentHealth.Blocking).AsTask());
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => fixture.Store.QueryHealthPageAsync(
+            activeQuery, (IncidentHealth)99).AsTask());
+        await using (var otherScope = database.Open("tenant-b"))
+        {
+            await Assert.ThrowsAsync<ArgumentException>(() => otherScope.Store.QueryHealthPageAsync(
+                new WorkflowExecutionStatePageQuery(50, TenantId: "tenant-b", Cursor: firstActive.NextCursor),
+                IncidentHealth.Active).AsTask());
+        }
+
+        // A health page uses relational status and identity projections only. Neither inactive incident content nor
+        // a nonmatching workflow document is needed to exclude a run before count and paging.
+        const string inactiveExecutionId = "none-000";
+        var executionRow = await fixture.Context.WorkflowExecutionStates.SingleAsync(x =>
+            x.WorkflowExecutionIdHash == EfRelationalIdentity.Hash(inactiveExecutionId));
+        executionRow.ContentJson = "not valid execution JSON";
+        var incidentRow = await fixture.Context.IncidentStates.SingleAsync(x =>
+            x.WorkflowExecutionIdHash == EfRelationalIdentity.Hash(inactiveExecutionId));
+        incidentRow.ContentJson = "not valid incident JSON";
+        await fixture.Context.SaveChangesAsync();
+        fixture.Context.ChangeTracker.Clear();
+
+        var filteredWithCorruptNonmatch = await fixture.Store.QueryHealthPageAsync(activeQuery, IncidentHealth.Active);
+        Assert.Equal(120, filteredWithCorruptNonmatch.TotalCount);
+        Assert.DoesNotContain(filteredWithCorruptNonmatch.Items, x => x.WorkflowExecutionId == inactiveExecutionId);
     }
 
     [Fact]
@@ -452,12 +537,15 @@ public sealed class EfWorkflowExecutionStateStoreTests
         private readonly SqliteConnection _connection;
         public readonly RuntimeSqliteDbContext Context;
         public readonly EfWorkflowExecutionStateStore Store;
+        public readonly EfIncidentStateStore Incidents;
         public Fixture(string connectionString, string scope, IInterceptor[] interceptors)
         {
             _connection = new SqliteConnection(connectionString);
             _connection.Open();
             Context = new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(_connection).AddInterceptors(interceptors).Options);
-            Store = new EfWorkflowExecutionStateStore(Context, new Accessor(scope), new HmacRuntimeRecoveryContinuationCodec(Options.Create(new RuntimeRecoveryContinuationOptions { SigningKey = "01234567890123456789012345678901" })));
+            var accessContextAccessor = new Accessor(scope);
+            Store = new EfWorkflowExecutionStateStore(Context, accessContextAccessor, new HmacRuntimeRecoveryContinuationCodec(Options.Create(new RuntimeRecoveryContinuationOptions { SigningKey = "01234567890123456789012345678901" })));
+            Incidents = new EfIncidentStateStore(Context, accessContextAccessor);
         }
         public async ValueTask DisposeAsync()
         {
@@ -466,4 +554,29 @@ public sealed class EfWorkflowExecutionStateStoreTests
         }
     }
     private sealed class Accessor(string value) : IPersistenceAccessContextAccessor { public PersistenceAccessContext Current { get; } = PersistenceAccessContext.Scoped(new PersistenceScope(value)); }
+
+    private static IncidentState HealthIncident(string id, string workflowExecutionId, IncidentStatus status, DateTimeOffset createdAt)
+    {
+        var isTerminal = status is IncidentStatus.Resolved or IncidentStatus.Suppressed;
+        var resolvedAt = isTerminal ? createdAt.AddMinutes(1) : null;
+        var resolution = status switch
+        {
+            IncidentStatus.Resolved => new IncidentResolutionOutcome("resolve", resolvedAt!.Value, null, "test"),
+            IncidentStatus.Suppressed => new IncidentResolutionOutcome("suppress", resolvedAt!.Value, null, "test"),
+            _ => null
+        };
+
+        return new IncidentState(
+            id,
+            workflowExecutionId,
+            null,
+            null,
+            IncidentSeverity.Critical,
+            status,
+            resolution,
+            "TestFailure",
+            "Incident health query test",
+            createdAt,
+            resolvedAt);
+    }
 }
