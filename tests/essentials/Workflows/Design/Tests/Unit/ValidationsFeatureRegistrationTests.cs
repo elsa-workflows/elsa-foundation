@@ -6,6 +6,7 @@ using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Core.Services;
 using Elsa.Workflows.Design.Validations;
 using Elsa.Workflows.Design.Validations.Core.Contracts;
+using Elsa.Workflows.Design.Validations.Core.Exceptions;
 using Elsa.Workflows.Design.Validations.Core.Models;
 using Elsa.Workflows.Design.Validations.Core.Events;
 using Elsa.Workflows.Design.Validations.Handlers;
@@ -93,6 +94,10 @@ public sealed class ValidationsFeatureRegistrationTests
     }
 
     [Fact]
+    public void The_credential_literal_validator_is_declared_a_replacement_contract() =>
+        Assert.True(typeof(ICredentialLiteralValidator).IsDefined(typeof(CredentialLiteralValidatorReplacementContractAttribute), inherit: false));
+
+    [Fact]
     public async Task A_host_composing_one_credential_literal_validator_starts()
     {
         using var provider = BuildProvider(_ => { });
@@ -107,11 +112,11 @@ public sealed class ValidationsFeatureRegistrationTests
     {
         using var provider = BuildProvider(_ => { }, services => services.AddScoped<ICredentialLiteralValidator, SecondValidator>(), registeredBefore);
 
-        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => InitializeShellAsync(provider));
+        var failure = await Assert.ThrowsAsync<MultipleCredentialLiteralValidatorsException>(() => InitializeShellAsync(provider));
 
         Assert.Contains(nameof(ICredentialLiteralValidator), failure.Message, StringComparison.Ordinal);
-        Assert.Contains(typeof(SecondValidator).FullName!, failure.Message, StringComparison.Ordinal);
-        Assert.Contains("a factory registration", failure.Message, StringComparison.Ordinal);
+        Assert.Contains($"'{typeof(SecondValidator).FullName}'", failure.Implementations);
+        Assert.Contains("a factory registration", failure.Implementations);
     }
 
     private static async Task InitializeShellAsync(IServiceProvider provider)

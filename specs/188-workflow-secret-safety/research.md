@@ -526,9 +526,14 @@ none writes workflow state.
 contracts, and two persistence-layer writers write workflow state without one. The Elsa 3 reusable-collection import
 (`EfReusableActivityImportCommand`, `src/extensions/Elsa3`) constructs `EfMaterializeWorkflowDefinitionVersionCommand`
 itself and stores the workflow versions it maps from Elsa 3 definitions, input values included; it is a definition
-import the seven entry points do not name, and it runs no admission, so a literal on an input an installed activity
-declares a credential is stored, and refused when that version is published or exported (follow-up in T090). An
-activity upgrade (`EfActivityUpgradePlanStore`) rewrites drafts directly, re-pointing nodes to another activity
+import the seven entry points do not name. Slice 6 first recorded it as a follow-up; its review admitted it instead
+(spec FR-008 note), the same way file reconciliation is admitted: the import's application-layer service,
+`ReusableActivityCollectionImporter`, judges every mapped state (each workflow version's and each reusable activity's
+body) through `ICredentialLiteralValidator` before it calls its commit port, and the EF command holds no rule. Its
+apply is all or nothing, so a refusal refuses the whole apply through the import's existing 400 (`ArgumentException`)
+arm. That makes eight admitted entry points, and the coverage guard requires every caller of the import's commit port
+to take the rule. The import's mapping nests children under a structure kind no handler projects, so only each mapped
+state's root node is judged there (contract, Known gaps). An activity upgrade (`EfActivityUpgradePlanStore`) rewrites drafts directly, re-pointing nodes to another activity
 version and adding no authored content. The coverage guard (T055) lists every production file outside the design
 persistence project that reaches the design EF context or a design EF command, each with what it does, so a new
 bypassing writer fails it until classified.

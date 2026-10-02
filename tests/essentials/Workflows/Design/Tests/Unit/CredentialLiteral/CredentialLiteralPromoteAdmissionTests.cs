@@ -1,3 +1,4 @@
+using Elsa.Primitives.Exceptions;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
@@ -69,6 +70,20 @@ public sealed class CredentialLiteralPromoteAdmissionTests
     }
 
     [Fact]
+    public async Task In_the_standard_host_a_draft_with_an_uncataloged_node_is_refused_at_promote_with_a_conflict()
+    {
+        // The documented residual (contract, Known gaps): admission cannot judge the node, the in-lock gate's
+        // UnknownActivityVersionValidator reports it, and the translator answers DraftHasValidationErrorsException with 409.
+        await using var host = await DesignAdmissionTestHost.CreateAsync();
+        var draftId = await SeedDraftAsync(host);
+        await host.StoreDraftDirectlyAsync(draftId, State(UncatalogedActivityVersionId, Bind(CredentialKey, "Literal")));
+
+        await Assert.ThrowsAsync<DraftHasValidationErrorsException>(() => host.PromoteAsync(draftId));
+
+        Assert.Equal(0, (await host.CountRowsAsync()).Versions);
+    }
+
+    [Fact]
     public async Task A_replay_after_an_admissible_edit_returns_the_original_version()
     {
         await using var host = await DesignAdmissionTestHost.CreateAsync();
@@ -91,6 +106,34 @@ public sealed class CredentialLiteralPromoteAdmissionTests
         await host.StoreDraftDirectlyAsync(draftId, CredentialBoundAs("Literal"));
 
         await Assert.ThrowsAsync<CredentialLiteralRefusedException>(() => host.PromoteAsync(draftId, operationKey: "promote-once"));
+    }
+
+    [Fact]
+    public async Task A_replay_after_the_draft_was_discarded_returns_the_original_version()
+    {
+        await using var host = await DesignAdmissionTestHost.CreateAsync();
+        var draftId = await SeedDraftAsync(host);
+        var first = await host.PromoteAsync(draftId, operationKey: "promote-once");
+        await host.InScopeAsync(async services =>
+        {
+            await services.GetRequiredService<IDiscardDraftCommand>().Execute(DesignOperationKey.CreateOrGenerate(null), draftId);
+            return true;
+        });
+
+        var replay = await host.PromoteAsync(draftId, operationKey: "promote-once");
+
+        Assert.Equal(first.Id, replay.Id);
+        Assert.Equal(1, (await host.CountRowsAsync()).Versions);
+    }
+
+    [Fact]
+    public async Task A_first_promotion_of_a_missing_draft_is_not_found()
+    {
+        await using var host = await DesignAdmissionTestHost.CreateAsync();
+
+        await Assert.ThrowsAsync<EntityNotFoundException>(() => host.PromoteAsync("missing-draft", operationKey: "promote-once"));
+
+        Assert.Equal(0, (await host.CountRowsAsync()).Versions);
     }
 
     private static async Task<string> SeedDraftAsync(DesignAdmissionTestHost host) =>

@@ -115,6 +115,11 @@ Framework constitution v4.0.0:
   contribution seam; folding it into either domain creates a forbidden dependency).
 - **§2.17**: the `"Secret"` expression-type literal is duplicated in the compiler and the predicate rather than
   creating a Publishing or Design dependency on Secrets; a test pins equality.
+- **§2.17, deliberately not applied (slice 6 review)**: `CredentialInputBinding.IsAccepted` is a domain decision in a
+  `.Core` project (`Elsa.Workflows.Design.Core`) with two production consumers, the design-time validator and the
+  publish compiler, which §2.17 would normally leave duplicated in each. It stays as one shared definition because its
+  whole point is that save and publish never disagree about a binding: two copies could drift, and a binding one
+  accepts and the other refuses is exactly the defect the rule exists to prevent.
 - **§2.21.1 golden rule**: no test objective is removed. Extracting `IsBound` from `RequiredInputOutputValidator` is a
   refactor under its existing tests. Test hosts that construct the Design API callers, the reconciler or the
   exporter are rewired to compose the validator; their objectives are unchanged.

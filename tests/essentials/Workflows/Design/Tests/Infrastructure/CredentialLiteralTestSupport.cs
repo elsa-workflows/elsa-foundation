@@ -1,19 +1,22 @@
 using System.Text.Json;
-using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Expressions.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Tests.Unit.BaselineValidatorTests;
-using Elsa.Workflows.Design.Validations.Validators;
 
 namespace Elsa.Workflows.Design.Tests.Infrastructure;
 
 /// <summary>
 /// One cataloged activity with a credential input, a sensitive input that is not a credential and a plain input, and the
-/// bindings the credential-literal rule (spec 188, FR-008) judges, for the tests of every entry point in this project.
+/// bindings the credential-literal rule (spec 188, FR-008) judges, for the tests of every entry point.
 /// </summary>
-internal static class CredentialLiteralTestSupport
+/// <remarks>
+/// The Design API test project compiles this file too (a linked <c>Compile</c> item, with
+/// <see cref="StubActivityCatalog"/>). Each project builds the validator in its own part,
+/// <c>CredentialLiteralTestSupport.Validator.cs</c>, because only this project has the test activity structure.
+/// </remarks>
+internal static partial class CredentialLiteralTestSupport
 {
     public const string ActivityVersionId = "av-credential";
     public const string UncatalogedActivityVersionId = "av-not-installed";
@@ -36,13 +39,9 @@ internal static class CredentialLiteralTestSupport
     /// <summary>A catalog holding the credential activity, and the root the baseline validator helpers wrap nodes in.</summary>
     public static StubActivityCatalog Catalog() => new StubActivityCatalog().Add(ActivityVersionId, Inputs);
 
-    /// <summary>The real credential-literal validator, judging against <paramref name="catalog"/>.</summary>
-    public static CredentialLiteralValidator Validator(IActivityDefinitionLookup catalog) =>
-        new(ValidatorTestHelpers.CatalogResolver(catalog), ValidatorTestHelpers.Options(), ValidatorTestHelpers.Walker());
-
     /// <summary>A state whose root is a node of <paramref name="activityVersionId"/> bound as <paramref name="inputs"/> says.</summary>
     public static WorkflowDefinitionState State(string activityVersionId = ActivityVersionId, params ArgumentState[] inputs) =>
-        ValidatorTestHelpers.StateWithRoot(new ActivityNode(NodeId, activityVersionId, inputs, []));
+        new([], new ActivityNode(NodeId, activityVersionId, inputs, []), [], [], null);
 
     /// <summary>A state binding the credential input as <paramref name="binding"/> names it.</summary>
     public static WorkflowDefinitionState CredentialBoundAs(string binding) => State(ActivityVersionId, Bind(CredentialKey, binding));

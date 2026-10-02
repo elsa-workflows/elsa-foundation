@@ -23,7 +23,7 @@ internal static class ValidatorTestHelpers
     /// activity's catalog version — a fail-closed lookup fake must resolve it (as an empty version, no
     /// required args) rather than throw, so tests exercise their real nodes, not the synthetic root.
     /// </summary>
-    public const string RootActivityVersionId = "$workflow-root";
+    public const string RootActivityVersionId = StubActivityCatalog.RootActivityVersionId;
 
     /// <summary>
     /// Wraps a catalog in the scoped, memoizing <see cref="CatalogVersionResolver"/> the

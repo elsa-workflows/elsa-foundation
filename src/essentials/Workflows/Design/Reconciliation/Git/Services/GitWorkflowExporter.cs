@@ -25,9 +25,10 @@ namespace Elsa.Workflows.Design.Reconciliation.Git.Services;
 /// other writer has to build on. A writer whose push is refused because the remote moved resets onto the remote through
 /// the workspace and sweeps again, and since another writer of the same catalog pushed the same files, it normally finds
 /// nothing left to commit. A push refused for any other reason throws, as it always has.
-/// A version is written only once it passes the credential-literal rule (spec 188, FR-008),
+/// A version not yet committed is written only once it passes the credential-literal rule (spec 188, FR-008),
 /// <see cref="ICredentialLiteralValidator"/>: a refused version gets no directory, file, commit or tag, and the pass logs a
-/// value-free warning, exports everything else and does not fail.
+/// value-free warning, exports everything else and does not fail. A committed version file is skipped before the rule
+/// runs, and a node whose activity the catalog does not hold is not judged.
 /// </remarks>
 public sealed class GitWorkflowExporter(
     IGitWorkspace workspace,

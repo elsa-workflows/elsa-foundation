@@ -29,7 +29,7 @@ using DeletePermanentlyHandler = Elsa.Workflows.Design.Api.Endpoints.Definitions
 using Elsa.Workflows.Design.Api.Endpoints.Definitions.Restore;
 using RestoreHandler = Elsa.Workflows.Design.Api.Endpoints.Definitions.Restore.Endpoint;
 using Microsoft.Extensions.Time.Testing;
-using Elsa.Workflows.Design.Api.Tests.Support;
+using Elsa.Workflows.Design.Tests.Infrastructure;
 
 namespace Elsa.Workflows.Design.Api.Tests.Unit;
 
@@ -61,7 +61,7 @@ public sealed class WorkflowLifecycleHandlerTests
         var desired = new WorkflowDefinitionStateView(
             RootActivity: new ActivityNode("root", "activity-version-1", [], []));
 
-        var replaced = await new ReplaceDraftEndpoint(drafts, update, CredentialActivityCatalog.Validator()).HandleAsync(
+        var replaced = await new ReplaceDraftEndpoint(drafts, update, CredentialLiteralTestSupport.Validator()).HandleAsync(
             new ReplaceDraft("replace-1", "draft-1", desired, Layout: null),
             CancellationToken.None);
         var read = await new GetDraftEndpoint(drafts).HandleAsync(new GetDraft("draft-1"), CancellationToken.None);
@@ -132,7 +132,7 @@ public sealed class WorkflowLifecycleHandlerTests
                     drafts,
                     new ThrowingPromoteDraftCommand(failure),
                     new NeverVersionReader(),
-                    CredentialActivityCatalog.Validator()).HandleAsync(
+                    CredentialLiteralTestSupport.Validator()).HandleAsync(
                     new PromoteDraft("operation-1", "draft-1", "1.0.0"),
                     CancellationToken.None));
 

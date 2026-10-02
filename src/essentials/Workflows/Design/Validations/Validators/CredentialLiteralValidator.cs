@@ -22,7 +22,7 @@ namespace Elsa.Workflows.Design.Validations.Validators;
 /// <see cref="ActivityTreeWalker"/>; max depth is <see cref="WorkflowDesignValidatorOptions.MaxRecursionDepth"/>.
 /// </para>
 /// <para>
-/// Registered as <see cref="ICredentialLiteralValidator"/>, which every application-layer writer of workflow state reaches, and as an
+/// Registered as <see cref="ICredentialLiteralValidator"/>, which the admitting writers of workflow state take, and as an
 /// <see cref="IDraftValidator"/>, so the draft's validation panel reports the same findings. The second registration only
 /// reports: no entry point relies on it.
 /// </para>
@@ -33,6 +33,7 @@ public sealed class CredentialLiteralValidator(
     ActivityTreeWalker activityTreeWalker
 ) : ICredentialLiteralValidator, IDraftValidator
 {
+    /// <inheritdoc />
     public async ValueTask<IReadOnlyList<ValidationError>> Validate(WorkflowDefinitionState state, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(state);

@@ -13,6 +13,7 @@ applied only as a reviewed dependency-closed mutation; Runtime never consumes th
 - **Purpose:** converts a reviewed collection plan into Activity/Workflow Design mutations.
 - **Default implementation:** `Elsa3ReusableActivityImportMaterializer` from `Elsa3.Mapping`.
 - **Invariant:** exact planned reference rewrites only; recursive composition is never replaced by separate-workflow execution.
+- **Mapped bodies:** each `ImportedReusableActivity` carries its mapped workflow state as `Body` (the state its descriptor payload holds), so the importer can admit it before the commit.
 
 ### `IReusableActivityImportCommand`
 
@@ -111,6 +112,17 @@ again. This paragraph is the one statement of that behavior; the code's document
 
 Between its upload and its apply or expiry the document is at rest in the ledger, as a reviewed import needs it to be.
 The rule bounds that time; it does not encrypt the column, and it does not reach database backups.
+
+**Credential literals (spec 188, FR-008).** Before the commit, apply admits every workflow state the mapping produced
+(each imported workflow version's state and each reusable activity's `Body`) through the credential-literal rule,
+`ICredentialLiteralValidator`, registered by `WorkflowDesignValidations`, on which `Elsa3ImportJsonActivities` depends.
+The apply is all or nothing, so a literal, object, value read or expression on an input the installed activity
+declares a credential refuses the whole apply and nothing is committed: `CredentialLiteralRefusedException`, answered
+400 (`elsa3.import.request-invalid`) with the findings' messages, which name the rule, the node and the input and never
+the value, in `detail`. As at every entry point, a node whose activity the catalog does not hold is not judged; and the
+mapping nests children under `elsa3.imported-activity.structure`, for which no structure handler is registered, so
+only each mapped state's root node is judged here. Publication refuses a version it cannot compile (an uncataloged
+activity, an unhandled structure) and applies the rule to every node it compiles.
 
 ### `IActivityCollectionJsonSource` *(Feature contract — `Elsa3.Activities.Design.Import`)*
 - **Kind:** Source (opens a stream of activity JSON — pull pattern).

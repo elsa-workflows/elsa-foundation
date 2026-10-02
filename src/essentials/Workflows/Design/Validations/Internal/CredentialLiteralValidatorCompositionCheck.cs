@@ -1,5 +1,6 @@
 using CShells.Lifecycle;
 using Elsa.Workflows.Design.Validations.Core.Contracts;
+using Elsa.Workflows.Design.Validations.Core.Exceptions;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Workflows.Design.Validations.Internal;
@@ -8,8 +9,8 @@ namespace Elsa.Workflows.Design.Validations.Internal;
 internal sealed record CredentialLiteralValidatorComposition(IServiceCollection Services);
 
 /// <summary>
-/// Fails shell activation when the host composes more than one <see cref="ICredentialLiteralValidator"/>, naming every
-/// registration, whatever order they were registered in.
+/// Fails shell activation with <see cref="MultipleCredentialLiteralValidatorsException"/> when the host composes more
+/// than one <see cref="ICredentialLiteralValidator"/>, naming every registration, whatever order they were registered in.
 /// </summary>
 /// <remarks>
 /// Framework constitution §2.6.2 requires a replacement-contract conflict to be prevented at registration time or
@@ -24,9 +25,7 @@ internal sealed class CredentialLiteralValidatorCompositionCheck(CredentialLiter
             .Where(descriptor => descriptor.ServiceType == typeof(ICredentialLiteralValidator) && !descriptor.IsKeyedService)
             .ToArray();
         if (registrations.Length > 1)
-            throw new InvalidOperationException(
-                $"'{typeof(ICredentialLiteralValidator).FullName}' is a replacement contract with exactly one implementation per host, " +
-                $"but {registrations.Length} are registered: {string.Join(", ", registrations.Select(Describe))}. Register only one.");
+            throw new MultipleCredentialLiteralValidatorsException(registrations.Select(Describe).ToArray());
 
         return Task.CompletedTask;
     }

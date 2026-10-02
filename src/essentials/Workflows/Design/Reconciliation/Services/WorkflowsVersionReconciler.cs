@@ -27,8 +27,8 @@ namespace Elsa.Workflows.Design.Reconciliation.Services;
 /// and stored state (logged now; a dedicated hash-mismatch throw arrives with the persisted hash).
 /// </summary>
 /// <remarks>
-/// Each item passes the credential-literal rule (spec 188, FR-008), <see cref="ICredentialLiteralValidator"/>, before
-/// anything is written for it. A refused item is treated like an outdated one: nothing is materialized for it, its claim
+/// Each item not skipped as outdated passes the credential-literal rule (spec 188, FR-008),
+/// <see cref="ICredentialLiteralValidator"/>, before anything is written for it. A refused item is treated like an outdated one: nothing is materialized for it, its claim
 /// does not reach <see cref="WorkflowVersionsReconciled"/>, and the pass logs a value-free warning and goes on, so a
 /// refusal never fails the pass or keeps the host from becoming ready.
 /// </remarks>

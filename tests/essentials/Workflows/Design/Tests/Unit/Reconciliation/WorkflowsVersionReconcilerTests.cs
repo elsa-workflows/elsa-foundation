@@ -20,7 +20,6 @@ using Elsa.Workflows.Design.Reconciliation.Options;
 using Elsa.Workflows.Design.Reconciliation.Services;
 using Elsa.Tasks.Services;
 using Elsa.Workflows.Design.Tests.Infrastructure;
-using Elsa.Workflows.Design.Validations.Core.Contracts;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -567,8 +566,7 @@ public sealed class WorkflowsVersionReconcilerTests
         ISaveWorkflowDefinitionCommand? saveDef = null,
         ILogger<WorkflowsVersionReconciler>? logger = null,
         IPayloadSerializer? serializer = null,
-        TimeProvider? timeProvider = null,
-        ICredentialLiteralValidator? credentialLiterals = null)
+        TimeProvider? timeProvider = null)
     {
         var options = Microsoft.Extensions.Options.Options.Create(new WorkflowVersionReconcilerOptions { DuplicateHandling = duplicateHandling });
         return new WorkflowsVersionReconciler(
@@ -581,7 +579,7 @@ public sealed class WorkflowsVersionReconcilerTests
             addVer,
             saveDef ?? new SpySaveDefinitionCommand(),
             serializer ?? new FakePayloadSerializer(),
-            credentialLiterals ?? CredentialLiteralTestSupport.Validator(CredentialLiteralTestSupport.Catalog()),
+            CredentialLiteralTestSupport.Validator(CredentialLiteralTestSupport.Catalog()),
             timeProvider);
     }
 

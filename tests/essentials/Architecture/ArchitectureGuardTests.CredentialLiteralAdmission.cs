@@ -9,21 +9,21 @@ using static Elsa.Architecture.Tests.RepoPaths;
 namespace Elsa.Architecture.Tests;
 
 /// <summary>
-/// The credential-literal rule (spec 188, FR-008, T055) runs only in the application layer, and every application-layer
-/// writer of workflow definition state takes the rule's contract, <see cref="ICredentialLiteralValidator"/> (a writer that
-/// refuses a whole request admits through <see cref="WorkflowStateAdmission.AdmitAsync"/>). These guards keep a writer
-/// from bypassing it: every design command contract is classified; every constructor outside persistence that takes a
-/// state-writing command also takes the rule, and the callers found are exactly the known inventory; every git exporter
-/// takes the rule; promotion cannot be called without the admitted draft's hash; and every production file outside the
-/// design persistence project that reaches the design EF context, which writes state around the commands, is classified
-/// with a reason.
+/// The credential-literal rule (spec 188, FR-008, T055) runs only in the application layer, and the application-layer
+/// writers of workflow definition state these guards find take the rule's contract, <see cref="ICredentialLiteralValidator"/>
+/// (a writer that refuses a whole request admits through <see cref="WorkflowStateAdmission.AdmitAsync"/>). These guards
+/// keep a writer from bypassing it: every design command contract is classified; every constructor outside the design
+/// persistence project that takes a state-writing command also takes the rule, and the callers found are exactly the
+/// known inventory; every git exporter and every caller of the Elsa 3 collection import's commit port takes the rule;
+/// promotion cannot be called without the admitted draft's hash; and every production file outside the design persistence
+/// project that reaches the design EF context, which writes state around the commands, is classified with a reason.
 /// </summary>
 /// <remarks>
-/// Whether a caller calls the helper before its command is proved per entry point by the behavioral tests (T051 to T054);
-/// these guards prove the helper cannot be left out of a caller's composition, and that a new caller or a new contract
-/// turns red until someone classifies it.
+/// Whether a caller calls the helper before its command is proved per entry point by the behavioral tests (T051 to T054,
+/// and the Elsa 3 import's own tests); these guards prove the rule cannot be left out of a caller's composition, and that a
+/// new caller or a new contract turns red until someone classifies it.
 /// </remarks>
-public sealed class CredentialLiteralAdmissionCoverageTests
+public sealed partial class ArchitectureGuardTests
 {
     private const string ContractsNamespace = "Elsa.Workflows.Design.Persistence.Core.Contracts";
     private const string DesignPersistenceRoot = "src/essentials/Workflows/Design/Persistence/";
@@ -56,7 +56,7 @@ public sealed class CredentialLiteralAdmissionCoverageTests
         typeof(IDeleteWorkflowDefinitionPermanentlyCommand)
     ];
 
-    /// <summary>The types outside persistence whose constructors take an admitted command: the six Design API callers and the reconciler.</summary>
+    /// <summary>The types outside the design persistence project whose constructors take an admitted command: the six Design API callers and the reconciler.</summary>
     private static readonly string[] KnownCallers =
     [
         "src/essentials/Workflows/Design/Api/Endpoints/Definitions/Add/Endpoint.cs: Endpoint",
@@ -89,9 +89,19 @@ public sealed class CredentialLiteralAdmissionCoverageTests
             "writes drafts, exempt: an activity upgrade re-points stored nodes to another activity version and adds no authored " +
             "content; a binding the new version declares a credential is refused when the draft is promoted or published",
         ["src/extensions/Elsa3/src/Activities/Design/Import/Persistence/EntityFrameworkCore/Stores/EfReusableActivityImportCommand.cs"] =
-            "writes imported Elsa 3 workflow versions, not admitted: the Elsa 3 collection import is not one of FR-008's entry " +
-            "points; a credential literal it imports is refused when the version is published or exported (residual, tasks.md T090)"
+            "writes imported Elsa 3 workflow versions behind the import's commit port, admitted by the port's caller, " +
+            "ReusableActivityCollectionImporter, which judges every workflow state of the mutation before the commit " +
+            "(Every_caller_of_the_elsa3_collection_import_commit_takes_the_rule)"
     };
+
+    /// <summary>The Elsa 3 collection import's commit port, which stores the workflow versions the import maps.</summary>
+    private const string Elsa3ImportCommitPort = "IReusableActivityImportCommand";
+
+    /// <summary>The types whose constructors take <see cref="Elsa3ImportCommitPort"/>: the import's application-layer importer.</summary>
+    private static readonly string[] KnownElsa3ImportCommitCallers =
+    [
+        "src/extensions/Elsa3/src/Activities/Design/Import/Services/ReusableActivityCollectionImporter.cs: ReusableActivityCollectionImporter"
+    ];
 
     [Fact]
     public void Every_design_command_contract_is_classified_once()
@@ -109,7 +119,7 @@ public sealed class CredentialLiteralAdmissionCoverageTests
     }
 
     [Fact]
-    public void Every_constructor_outside_persistence_that_takes_a_state_writing_command_takes_the_rule()
+    public void Every_constructor_outside_design_persistence_that_takes_a_state_writing_command_takes_the_rule()
     {
         var admitted = AdmittedCommands.Select(type => type.Name).ToArray();
         var callers = new List<string>();
@@ -151,6 +161,26 @@ public sealed class CredentialLiteralAdmissionCoverageTests
             $"{exporter.File}: {exporter.Type} exports workflow state without {nameof(ICredentialLiteralValidator)}."));
     }
 
+    /// <summary>
+    /// The Elsa 3 collection import stores workflow versions through its own commit port, not a design command, so the
+    /// constructor scan above cannot see it: every constructor that takes the port takes the rule, and the callers found
+    /// are exactly the known ones, so a new caller turns red until it is listed.
+    /// </summary>
+    [Fact]
+    public void Every_caller_of_the_elsa3_collection_import_commit_takes_the_rule()
+    {
+        var callers = ProductionSources()
+            .SelectMany(source => ConstructorParameterLists(source.Text)
+                .Where(constructor => Mentions(constructor.Parameters, Elsa3ImportCommitPort))
+                .Select(constructor => (source.File, constructor.Type, constructor.Parameters)))
+            .ToArray();
+
+        Assert.Equal(KnownElsa3ImportCommitCallers.Order(StringComparer.Ordinal), callers.Select(caller => $"{caller.File}: {caller.Type}").Order(StringComparer.Ordinal));
+        Assert.All(callers, caller => Assert.True(
+            Mentions(caller.Parameters, nameof(ICredentialLiteralValidator)),
+            $"{caller.File}: {caller.Type} commits imported workflow state without {nameof(ICredentialLiteralValidator)}."));
+    }
+
     [Fact]
     public void Every_promotion_requires_the_admitted_drafts_state_hash()
     {
@@ -188,15 +218,16 @@ public sealed class CredentialLiteralAdmissionCoverageTests
             .Distinct(StringComparer.Ordinal)
             .ToArray();
 
+    /// <summary>Every production source outside the design persistence project, which implements the commands.</summary>
     private static IEnumerable<(string File, string Text)> NonPersistenceSources() =>
-        ProductionSources().Where(source => !source.File.Contains("/Persistence/", StringComparison.Ordinal));
+        ProductionSources().Where(source => !source.File.StartsWith(DesignPersistenceRoot, StringComparison.Ordinal));
 
     /// <summary>Every production source file under <c>src/</c>, its path repository-relative, with comments and string literals blanked.</summary>
     private static IEnumerable<(string File, string Text)> ProductionSources() =>
         ModuleRoots.ProductionSourceFiles(RepoRoot)
             .Select(path => (
                 File: Path.GetRelativePath(RepoRoot, path).Replace(Path.DirectorySeparatorChar, '/'),
-                Text: ArchitectureGuardTests.StripCommentsAndStringLiterals(File.ReadAllText(path))));
+                Text: StripCommentsAndStringLiterals(File.ReadAllText(path))));
 
     /// <summary>
     /// The parameter list of every constructor declared in <paramref name="text"/>: a primary constructor

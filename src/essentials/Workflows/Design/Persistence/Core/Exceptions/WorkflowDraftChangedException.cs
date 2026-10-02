@@ -12,5 +12,6 @@ namespace Elsa.Workflows.Design.Persistence.Core.Exceptions;
 public sealed class WorkflowDraftChangedException(string draftId)
     : InvalidOperationException($"Workflow draft '{draftId}' changed after it was read for promotion. Read the draft again and retry.")
 {
+    /// <summary>The id of the draft that changed after it was read.</summary>
     public string DraftId { get; } = draftId;
 }

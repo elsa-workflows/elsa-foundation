@@ -27,6 +27,7 @@
     <ProjectReference Include="..\..\..\..\..\..\essentials\Tasks\Schedules\Elsa.Tasks.Schedules.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\essentials\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\essentials\Workflows\Design\Persistence\Core\Elsa.Workflows.Design.Persistence.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\essentials\Workflows\Design\Validations\Core\Elsa.Workflows.Design.Validations.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -1,3 +1,4 @@
+using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Publishing.Exceptions;
 using Elsa.Workflows.Publishing.Handlers;
 using Elsa.Workflows.Publishing.Services;
@@ -22,6 +23,7 @@ using Elsa.Workflows.Design.Validations.Core.Contracts;
 using Elsa.Workflows.Design.Validations.Core.Exceptions;
 using Elsa.Workflows.Publishing.Api;
 using Elsa.Workflows.Publishing.Api.Requests;
+using Elsa.Workflows.Publishing.Api.Tests.Support;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Publishing.Core.Requests;
@@ -111,6 +113,29 @@ public sealed class PublishWorkflowRequestHandlerTests
         Assert.IsType<CredentialLiteralRefusedException>(exception.InnerException);
         Assert.Empty(await _store.ListAllAsync());
         Assert.Empty(await _publicationStore.ListBySlotAsync(DefaultSlotId));
+    }
+
+    [Fact]
+    public async Task A_credential_literal_published_over_http_is_answered_with_400_naming_the_rule_node_and_input_and_never_the_value()
+    {
+        // T062 (spec 188, FR-008): the publish route's 400 for the refusal rests on the translator's ArgumentException arm.
+        var literal = $"literal-value-{Guid.NewGuid():N}";
+        var workflowVersion = WorkflowVersion(Node("write-one", new WorkflowArgumentState("Text", new ArgumentValue(literal, "Literal"), null, null, null, null)));
+        var handler = Handler(workflowVersion, CredentialWriteLineActivity());
+        await using var host = await PublishingMinimalApiHost.StartAsync(_ => new HandlerSender(handler));
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"/publishing/workflows/{workflowVersion.Id}/publish")
+        {
+            Content = new StringContent($"{{\"versionId\":\"{workflowVersion.Id}\"}}", System.Text.Encoding.UTF8, "application/json")
+        };
+        request.Headers.TryAddWithoutValidation(PublishingCompatibilityCases.IdentityHeader, "trusted-success");
+
+        using var response = await host.Client.SendAsync(request);
+
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.Equal(System.Net.HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("Inputs/CredentialLiteral: input 'Text' on activity 'write-one'", body, StringComparison.Ordinal);
+        Assert.DoesNotContain(literal, body, StringComparison.Ordinal);
+        Assert.Empty(await _store.ListAllAsync());
     }
 
     [Fact]
@@ -1412,6 +1437,13 @@ public sealed class PublishWorkflowRequestHandlerTests
 
     private static WorkflowArgumentState Text(string value) =>
         new("Text", new ArgumentValue(value, "Literal"), null, null, null, null);
+
+    /// <summary>Sends every publish request of the HTTP host to <paramref name="handler"/>.</summary>
+    private sealed class HandlerSender(PublishWorkflowRequestHandler handler) : IRequestSender
+    {
+        public async Task<T> Send<T>(IRequest<T> request, CancellationToken cancellationToken = default) where T : notnull =>
+            (T)(object)await handler.Handle((PublishWorkflow)(object)request, cancellationToken);
+    }
 
     /// <summary>The write-line activity with its <c>Text</c> input declared a credential in the catalog.</summary>
     private static ActivityDefinitionVersion CredentialWriteLineActivity() =>

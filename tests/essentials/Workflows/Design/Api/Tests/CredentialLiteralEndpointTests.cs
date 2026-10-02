@@ -2,11 +2,10 @@ using System.Net;
 using System.Text;
 using System.Text.Json;
 using Elsa.Workflows.Design.Api.Projections;
-using Elsa.Workflows.Design.Api.Tests.Support;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Exceptions;
 using Xunit;
-using static Elsa.Workflows.Design.Api.Tests.Support.CredentialActivityCatalog;
+using static Elsa.Workflows.Design.Tests.Infrastructure.CredentialLiteralTestSupport;
 using AuthorizationHost = Elsa.Workflows.Design.Api.Tests.WorkflowsDesignApiContractTests.AuthorizationHost;
 
 namespace Elsa.Workflows.Design.Api.Tests;
@@ -22,18 +21,6 @@ namespace Elsa.Workflows.Design.Api.Tests;
 public sealed class CredentialLiteralEndpointTests
 {
     public static TheoryData<string> Routes => new() { "DefinitionsAdd", "DraftsReplace", "VersionsAdd", "DefinitionsSubmit", "DraftsPromote" };
-
-    public static TheoryData<string, string> AcceptedBindings
-    {
-        get
-        {
-            var data = new TheoryData<string, string>();
-            foreach (var route in Routes)
-            foreach (var binding in new[] { "Secret", "SensitiveLiteral" })
-                data.Add(route, binding);
-            return data;
-        }
-    }
 
     [Theory]
     [MemberData(nameof(Routes))]
@@ -54,19 +41,14 @@ public sealed class CredentialLiteralEndpointTests
     }
 
     [Theory]
-    [MemberData(nameof(AcceptedBindings))]
-    public async Task An_accepted_binding_reaches_the_command(string route, string binding)
-    {
-        await using var host = await AuthorizationHost.StartAsync();
-        var state = binding == "Secret"
-            ? State(ActivityVersionId, Bind(CredentialKey, "Secret"))
-            : State(ActivityVersionId, Bind(SensitiveKey, "Literal"));
+    [MemberData(nameof(Routes))]
+    public Task A_secret_reference_on_a_credential_input_reaches_the_command(string route) =>
+        AssertReachesTheCommandAsync(route, State(ActivityVersionId, Bind(CredentialKey, "Secret")));
 
-        using var response = await SendAsync(host, route, state);
-
-        Assert.True(response.IsSuccessStatusCode, $"{route} answered {(int)response.StatusCode}.");
-        Assert.Single(host.Domain.StateWrites);
-    }
+    [Theory]
+    [MemberData(nameof(Routes))]
+    public Task A_literal_on_a_sensitive_input_that_is_not_a_credential_reaches_the_command(string route) =>
+        AssertReachesTheCommandAsync(route, State(ActivityVersionId, Bind(SensitiveKey, "Literal")));
 
     [Fact]
     public async Task A_promotion_whose_draft_changed_after_admission_is_answered_with_409()
@@ -78,6 +60,16 @@ public sealed class CredentialLiteralEndpointTests
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
         Assert.Contains("changed after it was read for promotion", await response.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+    }
+
+    private static async Task AssertReachesTheCommandAsync(string route, WorkflowDefinitionState state)
+    {
+        await using var host = await AuthorizationHost.StartAsync();
+
+        using var response = await SendAsync(host, route, state);
+
+        Assert.True(response.IsSuccessStatusCode, $"{route} answered {(int)response.StatusCode}.");
+        Assert.Single(host.Domain.StateWrites);
     }
 
     /// <summary>

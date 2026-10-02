@@ -17,7 +17,7 @@ public sealed class ReusableActivityCollectionApplyTests
         var analyzer = new ReusableActivityCollectionAnalyzer();
         var plan = await analyzer.AnalyzeAsync(collection);
         var command = new CapturingCommand();
-        var importer = new ReusableActivityCollectionImporter(analyzer, ReusableActivityImportFixtures.Materializer(), command);
+        var importer = new ReusableActivityCollectionImporter(analyzer, ReusableActivityImportFixtures.Materializer(), command, ReusableActivityImportFixtures.Validator());
 
         var result = await importer.ApplyAsync(new(plan.PlanId, collection, ["a-v1", "b-v1", "consumer-v1"]));
 
@@ -46,7 +46,7 @@ public sealed class ReusableActivityCollectionApplyTests
         var plan = await analyzer.AnalyzeAsync(collection);
         var materializer = new CapturingMaterializer();
         var command = new CapturingCommand();
-        var importer = new ReusableActivityCollectionImporter(analyzer, materializer, command);
+        var importer = new ReusableActivityCollectionImporter(analyzer, materializer, command, ReusableActivityImportFixtures.Validator());
 
         var exception = await Assert.ThrowsAsync<ReusableActivityImportValidationException>(async () =>
             await importer.ApplyAsync(new(plan.PlanId, collection, ["b-v1"])));
@@ -64,7 +64,7 @@ public sealed class ReusableActivityCollectionApplyTests
         var plan = await analyzer.AnalyzeAsync(collection);
         var materializer = new CapturingMaterializer();
         var command = new CapturingCommand();
-        var importer = new ReusableActivityCollectionImporter(analyzer, materializer, command);
+        var importer = new ReusableActivityCollectionImporter(analyzer, materializer, command, ReusableActivityImportFixtures.Validator());
 
         var exception = await Assert.ThrowsAsync<ReusableActivityImportValidationException>(async () =>
             await importer.ApplyAsync(new(plan.PlanId, collection, [])));
@@ -84,7 +84,7 @@ public sealed class ReusableActivityCollectionApplyTests
         var analyzer = new ReusableActivityCollectionAnalyzer();
         var plan = await analyzer.AnalyzeAsync(collection);
         var command = new CapturingCommand();
-        var importer = new ReusableActivityCollectionImporter(analyzer, ReusableActivityImportFixtures.Materializer(), command);
+        var importer = new ReusableActivityCollectionImporter(analyzer, ReusableActivityImportFixtures.Materializer(), command, ReusableActivityImportFixtures.Validator());
 
         var result = await importer.ApplyAsync(new(plan.PlanId, collection, ["valid-v1"]));
 
@@ -100,7 +100,7 @@ public sealed class ReusableActivityCollectionApplyTests
         var analyzer = new ReusableActivityCollectionAnalyzer();
         var plan = await analyzer.AnalyzeAsync(collection);
         var command = new FailingCommand();
-        var importer = new ReusableActivityCollectionImporter(analyzer, ReusableActivityImportFixtures.Materializer(), command);
+        var importer = new ReusableActivityCollectionImporter(analyzer, ReusableActivityImportFixtures.Materializer(), command, ReusableActivityImportFixtures.Validator());
 
         await Assert.ThrowsAsync<InvalidOperationException>(async () =>
             await importer.ApplyAsync(new(plan.PlanId, collection, ["a-v1", "b-v1"])));
@@ -116,7 +116,7 @@ public sealed class ReusableActivityCollectionApplyTests
         var analyzer = new ReusableActivityCollectionAnalyzer();
         var plan = await analyzer.AnalyzeAsync(collection);
         collection.Definitions[0].Name = "changed after review";
-        var importer = new ReusableActivityCollectionImporter(analyzer, new CapturingMaterializer(), new CapturingCommand());
+        var importer = new ReusableActivityCollectionImporter(analyzer, new CapturingMaterializer(), new CapturingCommand(), ReusableActivityImportFixtures.Validator());
 
         var exception = await Assert.ThrowsAsync<ReusableActivityImportValidationException>(async () =>
             await importer.ApplyAsync(new(plan.PlanId, collection, ["a-v1"])));

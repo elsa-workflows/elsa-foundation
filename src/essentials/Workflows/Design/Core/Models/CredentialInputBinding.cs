@@ -1,11 +1,12 @@
 using Elsa.Expressions.Core.Models;
+using Elsa.Workflows.Design.Core.Authoring;
 
 namespace Elsa.Workflows.Design.Core.Models;
 
 /// <summary>
 /// The credential-literal rule (spec 188, FR-008, FR-009): an activity input the activity declares a credential accepts
 /// only a secret reference or no binding. This is the one acceptance predicate the design-time validator and publication
-/// both apply, so a binding is judged the same way at every entry point a definition passes through.
+/// both apply, so a binding is judged the same way at every entry point that applies the rule.
 /// </summary>
 /// <remarks>
 /// The caller says whether the input is a credential, read from the explicit declaration (the catalog's
@@ -22,8 +23,6 @@ public static class CredentialInputBinding
     /// purpose, so this project needs no reference to that module.
     /// </summary>
     public const string SecretExpressionType = "Secret";
-
-    private const string DefaultExpressionType = "Default";
 
     /// <summary>
     /// True when <paramref name="state"/> may bind an input whose credential declaration is
@@ -44,5 +43,5 @@ public static class CredentialInputBinding
 
     // A request for the declared default carries no value of its own, but it binds the default, which is a literal.
     private static bool IsDefaultRequest(ArgumentValue? value) =>
-        string.Equals(value?.ExpressionType, DefaultExpressionType, StringComparison.OrdinalIgnoreCase);
+        string.Equals(value?.ExpressionType, AuthoringExpressionTypes.Default, StringComparison.OrdinalIgnoreCase);
 }

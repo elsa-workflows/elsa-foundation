@@ -7,7 +7,7 @@ using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Xunit;
 using Elsa.Workflows.Design.Api.Endpoints.Versions.Add;
 using AddVersionEndpoint = Elsa.Workflows.Design.Api.Endpoints.Versions.Add.Endpoint;
-using Elsa.Workflows.Design.Api.Tests.Support;
+using Elsa.Workflows.Design.Tests.Infrastructure;
 
 namespace Elsa.Workflows.Design.Api.Tests.Unit;
 
@@ -17,7 +17,7 @@ public sealed class AddVersionCommandHandlerTests
     public async Task Forwards_the_caller_operation_key_and_authored_state()
     {
         var addCommand = new RecordingAddCommand("persisted-version", "3.0.0");
-        var handler = new AddVersionEndpoint(addCommand, new StubVersionStore(), CredentialActivityCatalog.Validator());
+        var handler = new AddVersionEndpoint(addCommand, new StubVersionStore(), CredentialLiteralTestSupport.Validator());
 
         await handler.HandleAsync(
             new AddVersion("publish-request-42", "definition-1", new WorkflowDefinitionStateView()),
@@ -35,7 +35,7 @@ public sealed class AddVersionCommandHandlerTests
         var handler = new AddVersionEndpoint(
             new RecordingAddCommand("first-committed-id", "2.0.0"),
             versionStore,
-            CredentialActivityCatalog.Validator());
+            CredentialLiteralTestSupport.Validator());
 
         var result = await handler.HandleAsync(
             new AddVersion("replayed-request", "definition-1", new WorkflowDefinitionStateView()),

@@ -4,8 +4,8 @@ namespace Elsa.Workflows.Design.Validations.Core.Exceptions;
 
 /// <summary>
 /// A workflow definition state binds a literal, an object, a value read or an expression to an input its activity
-/// declares a credential (spec 188, FR-008). Thrown by <see cref="WorkflowStateAdmission.AdmitAsync"/> before a design
-/// command runs, so nothing is stored, and by publication before an input is compiled. It carries one finding per refused
+/// declares a credential (spec 188, FR-008). Thrown by <see cref="WorkflowStateAdmission.AdmitAsync"/> before its caller
+/// writes, so nothing is stored, and by publication before an input is compiled. It carries one finding per refused
 /// binding; neither the findings nor the message carry the bound value.
 /// </summary>
 /// <remarks>
@@ -14,6 +14,11 @@ namespace Elsa.Workflows.Design.Validations.Core.Exceptions;
 /// </remarks>
 public sealed class CredentialLiteralRefusedException : ArgumentException
 {
+    /// <summary>
+    /// Creates the refusal for <paramref name="findings"/>, at least one. The message joins the findings' messages, none of
+    /// which carries the bound value.
+    /// </summary>
+    /// <exception cref="ArgumentException"><paramref name="findings"/> is empty.</exception>
     public CredentialLiteralRefusedException(IReadOnlyList<ValidationError> findings)
         : base(Describe(findings))
     {

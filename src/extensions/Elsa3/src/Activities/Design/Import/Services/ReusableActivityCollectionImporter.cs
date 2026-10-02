@@ -1,13 +1,28 @@
+using Elsa.Workflows.Design.Validations.Core;
+using Elsa.Workflows.Design.Validations.Core.Contracts;
 using Elsa3.Activities.Design.Import.Contracts;
 using Elsa3.Activities.Design.Import.Models;
 using Elsa3.Models;
 
 namespace Elsa3.Activities.Design.Import.Services;
 
+/// <summary>
+/// Applies a reviewed Elsa 3 collection selection: re-analyzes it, checks the selection, maps it, admits every workflow
+/// state the mapping produced through the credential-literal rule (spec 188, FR-008) and commits the mutation as one unit.
+/// </summary>
+/// <remarks>
+/// The apply is all or nothing, so a refused state refuses the whole apply before anything is committed:
+/// <see cref="WorkflowStateAdmission.AdmitAsync"/> throws <c>CredentialLiteralRefusedException</c>, which names the rule,
+/// the node and the input and never the value. The states judged are each imported workflow version's and each reusable
+/// activity's mapped body. As everywhere the rule runs, a node whose activity version the catalog does not hold is not
+/// judged, and neither is a child under a structure no registered handler projects, which includes the children the
+/// mapping nests under its imported-activity structure.
+/// </remarks>
 public sealed class ReusableActivityCollectionImporter(
     IReusableActivityCollectionAnalyzer analyzer,
     IReusableActivityImportMaterializer materializer,
-    IReusableActivityImportCommand command) : IReusableActivityCollectionImporter
+    IReusableActivityImportCommand command,
+    ICredentialLiteralValidator credentialLiterals) : IReusableActivityCollectionImporter
 {
     public ValueTask<ReusableActivityImportPlan> AnalyzeAsync(
         ReusableActivityImportCollection collection,
@@ -95,6 +110,9 @@ public sealed class ReusableActivityCollectionImporter(
         }
 
         var mutation = await materializer.MaterializeAsync(request.Collection, plan, selection, cancellationToken);
+        var states = mutation.Workflows.Select(workflow => workflow.Version.State).Concat(mutation.Activities.Select(activity => activity.Body));
+        foreach (var state in states)
+            await credentialLiterals.AdmitAsync(state, cancellationToken);
         if (request.AccessScope is not null)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(request.AccessScope.UserId);

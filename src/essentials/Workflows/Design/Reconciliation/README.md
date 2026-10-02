@@ -4,9 +4,9 @@ Reconciliation lifecycle for the workflow definition catalog. Mirrors the activi
 
 ## Credential literals refused per item
 
-Before it writes anything for an item, the reconciler judges the item's state with the credential-literal rule
-(spec 188, FR-008; `ICredentialLiteralValidator`, registered by `WorkflowDesignValidations`, on which the concrete
-reconciliation features depend). An item that binds a literal, an object, a value read or an expression to an input
+Before it writes anything for an item it does not skip as outdated, the reconciler judges the item's state with the
+credential-literal rule (spec 188, FR-008; `ICredentialLiteralValidator`, registered by `WorkflowDesignValidations`, on
+which the concrete reconciliation features depend). An item that binds a literal, an object, a value read or an expression to an input
 its activity declares a credential is refused on its own, like an outdated item: no definition record, no metadata
 update and no version row is written for it, and its claim does not reach `WorkflowVersionsReconciled`, so
 publish-on-reconcile never sees it. The pass logs one warning per refused binding, naming the rule, the definition,

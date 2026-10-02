@@ -820,7 +820,7 @@ public sealed partial class ArchitectureGuardTests
             ?? throw new InvalidOperationException($"{Path.GetFileName(path)} must contain CShells.Shells.default.Features.");
     }
 
-    internal static string StripCommentsAndStringLiterals(string text)
+    private static string StripCommentsAndStringLiterals(string text)
     {
         var sanitized = new char[text.Length];
         var state = SourceScanState.Code;

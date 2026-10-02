@@ -170,20 +170,19 @@ public sealed class WorkflowExecutableCompilerTests
             Assert.Single(exception.Findings));
     }
 
+    /// <summary>A literal, a value read and an expression, each a binding the credential-literal rule refuses.</summary>
+    public static TheoryData<ArgumentValue> RefusedCredentialBindings => new()
+    {
+        new ArgumentValue(JsonSerializer.SerializeToElement("typed-in"), "Literal"),
+        new ArgumentValue(JsonSerializer.SerializeToElement("variable-reference"), "Variable"),
+        new ArgumentValue(JsonSerializer.SerializeToElement("'typed-in'"), "JavaScript")
+    };
+
     [Theory]
-    [InlineData("Literal")]
-    [InlineData("Variable")]
-    [InlineData("JavaScript")]
-    public async Task A_literal_or_expression_on_a_credential_input_is_refused_by_the_credential_literal_rule_ahead_of_VF_ACT_011(string binding)
+    [MemberData(nameof(RefusedCredentialBindings))]
+    public async Task A_literal_or_expression_on_a_credential_input_is_refused_by_the_credential_literal_rule_ahead_of_VF_ACT_011(ArgumentValue value)
     {
         // T054 (spec 188, FR-008, FR-009): the credential rule judges the binding before VF-ACT-011 is reached.
-        var value = binding switch
-        {
-            "Literal" => new ArgumentValue(JsonSerializer.SerializeToElement("typed-in"), "Literal"),
-            "Variable" => new ArgumentValue(JsonSerializer.SerializeToElement("variable-reference"), "Variable"),
-            _ => new ArgumentValue(JsonSerializer.SerializeToElement("'typed-in'"), "JavaScript")
-        };
-
         var exception = await SecretBindingCompilerFixture.AssertRefusedAsync(
             SecretBindingCompilerFixture.Node(typeof(DeclaredInputsActivity), new WorkflowArgumentState(nameof(DeclaredInputsActivity.ApiKey), value, null, null, null, null)),
             [typeof(DeclaredInputsActivity)]);

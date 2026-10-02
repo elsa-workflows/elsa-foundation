@@ -146,7 +146,7 @@ public sealed class Elsa3ReusableActivityImportMaterializer(
             CreatedAt = lineage.CreatedAt,
             LastModifiedAt = headSource.CreatedAt
         };
-        return new(definition, version, authoring);
+        return new(definition, version, authoring, mappedState);
     }
 
     private static ImportedWorkflow BuildWorkflow(

@@ -3,10 +3,16 @@ using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Serialization.SystemText.Services;
 using Elsa.Serialization.Core;
+using Elsa.Workflows.Design.Core.Services;
+using Elsa.Workflows.Design.Validations;
+using Elsa.Workflows.Design.Validations.Core.Contracts;
+using Elsa.Workflows.Design.Validations.Internal;
+using Elsa.Workflows.Design.Validations.Validators;
 using Elsa3.Activities.Design.Import.Models;
 using Elsa3.Mapping.Mappings;
 using Elsa3.Mapping.Services;
 using Elsa3.Models;
+using Microsoft.Extensions.Options;
 
 namespace Elsa3.Mapping.Tests;
 
@@ -63,21 +69,31 @@ internal static class ReusableActivityImportFixtures
     public static ReusableActivityImportCollection Collection(params Elsa3WorkflowDefinition[] definitions) =>
         new("fixture-collection", definitions);
 
-    public static Elsa3ReusableActivityImportMaterializer Materializer()
+    public static Elsa3ReusableActivityImportMaterializer Materializer(BuiltInActivityLookup? catalog = null)
     {
         var registry = new WellKnownTypeRegistry();
         registry.RegisterType(typeof(string), "String");
         registry.RegisterType(typeof(object), "Object");
         var argumentMapper = new Elsa3ArgumentDefinitionToInputOutput(registry);
-        var activityMapper = new Elsa3ActivityToState(new BuiltInActivityLookup());
+        var activityMapper = new Elsa3ActivityToState(catalog ?? new BuiltInActivityLookup());
         var stateMapper = new Elsa3WorkflowDefinitionToState(registry, activityMapper, argumentMapper);
         return new(stateMapper, argumentMapper);
     }
 
-    private sealed class BuiltInActivityLookup : IActivityDefinitionLookup
+    /// <summary>The real credential-literal validator (spec 188, FR-008), judging against <paramref name="catalog"/>.</summary>
+    public static ICredentialLiteralValidator Validator(BuiltInActivityLookup? catalog = null) => new CredentialLiteralValidator(
+        new CatalogVersionResolver(catalog ?? new BuiltInActivityLookup()),
+        Options.Create(new WorkflowDesignValidatorOptions()),
+        new ActivityTreeWalker(new DefaultActivityStructureService([])));
+
+    /// <summary>
+    /// A catalog holding one activity, <c>builtin-version</c>, that every Elsa 3 activity type maps to, declaring
+    /// <paramref name="inputs"/>.
+    /// </summary>
+    internal sealed class BuiltInActivityLookup(params InputDefinition[] inputs) : IActivityDefinitionLookup
     {
         private readonly IActivityDefinition definition = new Definition();
-        private readonly IActivityDefinitionVersion version = new VersionModel();
+        private readonly IActivityDefinitionVersion version = new VersionModel(inputs);
 
         public Task<IActivityDefinition> GetDefinition(string idOrActivityTypeKey, CancellationToken cancellationToken = default) => Task.FromResult(definition);
         public Task<IEnumerable<IActivityDefinition>> ListDefinitions(string? id = null, string? category = null, string? searchTerm = null, string? displayName = null, string? description = null, bool? tenantAgnostic = null, CancellationToken cancellationToken = default) => Task.FromResult<IEnumerable<IActivityDefinition>>([definition]);
@@ -94,7 +110,7 @@ internal static class ReusableActivityImportFixtures
             public string? Description => null;
         }
 
-        private sealed record VersionModel : IActivityDefinitionVersion
+        private sealed record VersionModel(IEnumerable<InputDefinition> Inputs) : IActivityDefinitionVersion
         {
             public string Id => "builtin-version";
             public string Version => "1.0.0";
@@ -107,7 +123,6 @@ internal static class ReusableActivityImportFixtures
             public string SourceKind => "CLR";
             public string SourceId => "Elsa.WriteLine";
             public IActivityDefinition Definition => new Definition();
-            public IEnumerable<InputDefinition> Inputs => [];
             public IEnumerable<OutputDefinition> Outputs => [];
             public IEnumerable<ActivityDesignFacet> DesignFacets => [];
             public ActivityExecutionType ExecutionType => ActivityExecutionType.Action;

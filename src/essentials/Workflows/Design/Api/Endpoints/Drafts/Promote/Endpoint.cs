@@ -1,12 +1,10 @@
 using Elsa.Api.AspNetCore;
 using Elsa.Foundation.Identity.Authorization;
-using Elsa.Primitives.Exceptions;
 using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Workflows.Design.Api.Authorization;
 using Elsa.Workflows.Design.Api.Endpoints.Versions;
 using Elsa.Workflows.Design.Api.Models;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
-using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Validations.Core;
 using Elsa.Workflows.Design.Validations.Core.Contracts;
@@ -40,14 +38,18 @@ public sealed class Endpoint(
 
     public override async Task<WorkflowDefinitionVersionDetailsView> HandleAsync(PromoteDraft command, CancellationToken cancellationToken)
     {
-        var draft = await draftStore.FindByIdAsync(command.DraftId, cancellationToken)
-                    ?? throw EntityNotFoundException.ForEntity(typeof(WorkflowDefinitionDraft), command.DraftId);
-        await credentialLiterals.AdmitAsync(draft.State, cancellationToken);
+        // A missing draft is not refused here: the command resolves a replay of an already-succeeded promotion before it
+        // reads the draft, so a replay after the draft was discarded still returns the original version, and a first
+        // promotion of a missing draft is refused by the command's own lookup (404). The hash of an absent draft is the
+        // hash of empty content, which nothing but an empty, and therefore admissible, draft can match.
+        var draft = await draftStore.FindByIdAsync(command.DraftId, cancellationToken);
+        if (draft is not null)
+            await credentialLiterals.AdmitAsync(draft.State, cancellationToken);
         var versionId = await promoteCommand.Execute(
             DesignOperationKey.CreateOrGenerate(command.OperationKey),
             command.DraftId,
             command.RequestedVersion,
-            WorkflowDraftStateHash.Compute(draft.StateSource),
+            WorkflowDraftStateHash.Compute(draft?.StateSource),
             cancellationToken);
         return await versionReader.ReadAsync(versionId, cancellationToken);
     }
