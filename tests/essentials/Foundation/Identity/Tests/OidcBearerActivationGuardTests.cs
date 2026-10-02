@@ -1,4 +1,6 @@
+using System.Security.Claims;
 using System.Text.Encodings.Web;
+using Elsa.Foundation.Identity.Authorization;
 using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Foundation.Identity.Core.Iam;
 using Elsa.Foundation.Identity.Oidc;
@@ -138,6 +140,57 @@ public sealed class OidcBearerActivationGuardTests
         }
         fixture.Services[typeof(IOptions<FoundationIdentityOptions>)] = Options.Create(new FoundationIdentityOptions { NormalizedAuthenticationTypes = types });
         await AssertFixedRefusal(fixture);
+    }
+
+    [Fact]
+    public async Task A_case_insensitive_trusted_set_does_not_trust_a_different_case_normalized_type()
+    {
+        var fixture = new GuardFixture();
+        var ownedType = OidcBearerNormalizationEvents.NormalizedAuthenticationType;
+        var differentlyCasedType = ownedType.ToLowerInvariant();
+        Assert.NotEqual(ownedType, differentlyCasedType);
+        var types = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { differentlyCasedType };
+        var identityOptions = new FoundationIdentityOptions { NormalizedAuthenticationTypes = types };
+        fixture.Services[typeof(IOptions<FoundationIdentityOptions>)] = Options.Create(identityOptions);
+        var candidate = new ClaimsPrincipal(new ClaimsIdentity(
+            [new Claim(IdentityClaimTypes.Normalized, "v1")], ownedType));
+        var validator = new NormalizedPrincipalValidator(Options.Create(identityOptions));
+
+        Assert.False(validator.TryGetNormalizedPrincipal(candidate, out _));
+        await AssertFixedRefusal(fixture);
+        Assert.Equal(0, fixture.Mappings.Queries);
+    }
+
+    [Fact]
+    public async Task Activation_uses_ordinal_comparisons_for_raw_scheme_and_type_exclusions()
+    {
+        var fixture = new GuardFixture();
+        var ownedType = OidcBearerNormalizationEvents.NormalizedAuthenticationType;
+        const string rawAuthenticationType = "AuthenticationTypes.Federation";
+        var types = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ownedType,
+            fixture.Options.JwtBearerScheme.ToLowerInvariant(),
+            rawAuthenticationType.ToLowerInvariant()
+        };
+        var identityOptions = new FoundationIdentityOptions { NormalizedAuthenticationTypes = types };
+        fixture.Services[typeof(IOptions<FoundationIdentityOptions>)] = Options.Create(identityOptions);
+        var candidate = new ClaimsPrincipal(new ClaimsIdentity(
+            [new Claim(IdentityClaimTypes.Normalized, "v1")], ownedType));
+        var validator = new NormalizedPrincipalValidator(Options.Create(identityOptions));
+
+        Assert.True(validator.TryGetNormalizedPrincipal(candidate, out _));
+        foreach (var rawType in new[] { fixture.Options.JwtBearerScheme, rawAuthenticationType })
+        {
+            var rawCandidate = new ClaimsPrincipal(new ClaimsIdentity(
+                [new Claim(IdentityClaimTypes.Normalized, "v1")], rawType));
+            Assert.False(validator.TryGetNormalizedPrincipal(rawCandidate, out _));
+        }
+        await fixture.Guard.InitializeAsync(CancellationToken.None);
+
+        Assert.Equal(1, fixture.ScopeFactory.Created);
+        Assert.Equal(1, fixture.ScopeFactory.Disposed);
+        Assert.Equal(0, fixture.Mappings.Queries);
     }
 
     [Theory]

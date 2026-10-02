@@ -38,8 +38,8 @@ public sealed class OidcBearerActivationGuard(
                 throw Invalid();
             var trusted = services.GetRequiredService<IOptions<FoundationIdentityOptions>>().Value.NormalizedAuthenticationTypes;
             var rawType = target.TokenValidationParameters.AuthenticationType ?? "AuthenticationTypes.Federation";
-            if (!trusted.Contains(OidcBearerNormalizationEvents.NormalizedAuthenticationType) ||
-                trusted.Contains(registration.JwtBearerScheme) || trusted.Contains(rawType))
+            if (!trusted.Contains(OidcBearerNormalizationEvents.NormalizedAuthenticationType, StringComparer.Ordinal) ||
+                trusted.Contains(registration.JwtBearerScheme, StringComparer.Ordinal) || trusted.Contains(rawType, StringComparer.Ordinal))
                 throw Invalid();
             _ = services.GetRequiredService<IClaimMappingStore>();
             _ = services.GetRequiredService<IClaimsNormalizer>();
