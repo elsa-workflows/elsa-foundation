@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "95d351da1928dc64bfc11afb2894fd87b0625796",
+  "last_publish_commit": "b4d8ab8905c29e5ed6a8656f3ce2eff24299ad79",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -174,8 +174,8 @@
     },
     {
       "package_id": "Elsa.Cluster.EntityFrameworkCore",
-      "version": "4.0.11-preview",
-      "commit": "12645190b855f6833f9e4decfa4150b47b04c302"
+      "version": "4.0.12-preview",
+      "commit": "b4d8ab8905c29e5ed6a8656f3ce2eff24299ad79"
     },
     {
       "package_id": "Elsa.Cluster.InProcess",
@@ -291,6 +291,11 @@
       "package_id": "Elsa.ExtensionBuilder.Api",
       "version": "4.0.0-preview",
       "commit": "95d351da1928dc64bfc11afb2894fd87b0625796"
+    },
+    {
+      "package_id": "Elsa.Foundation.DataProtection.EntityFrameworkCore",
+      "version": "4.0.0-preview",
+      "commit": "b4d8ab8905c29e5ed6a8656f3ce2eff24299ad79"
     },
     {
       "package_id": "Elsa.Foundation.Identity",
@@ -409,8 +414,8 @@
     },
     {
       "package_id": "Elsa.Persistence.EntityFramework",
-      "version": "4.0.23-preview",
-      "commit": "6de16bc7d4fa6be41e97706e519bace4df971f57"
+      "version": "4.0.24-preview",
+      "commit": "b4d8ab8905c29e5ed6a8656f3ce2eff24299ad79"
     },
     {
       "package_id": "Elsa.Persistence.Schema",
