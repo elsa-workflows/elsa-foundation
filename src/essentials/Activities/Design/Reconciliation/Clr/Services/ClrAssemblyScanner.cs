@@ -412,11 +412,12 @@ public sealed class ClrAssemblyScanner(
         var inputKeys = new HashSet<string>(StringComparer.Ordinal);
         for (var current = (Type?)type; current is not null; current = current.BaseType)
         {
-            foreach (var attribute in current.GetCustomAttributesData().Where(attribute => attribute.AttributeType.FullName == RefusesSecretBindingAttributeFullName))
-            {
-                if (attribute.ConstructorArguments is [{ Value: string inputKey }, ..])
-                    inputKeys.Add(inputKey);
-            }
+            var declaredKeys = current.GetCustomAttributesData()
+                .Where(attribute => attribute.AttributeType.FullName == RefusesSecretBindingAttributeFullName)
+                .Select(attribute => attribute.ConstructorArguments.Count > 0 ? attribute.ConstructorArguments[0].Value as string : null)
+                .OfType<string>();
+
+            inputKeys.UnionWith(declaredKeys);
         }
 
         return inputKeys;
