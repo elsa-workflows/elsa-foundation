@@ -39,7 +39,7 @@ A host developer opts into normalization using declarative feature configuration
 1. **Given** normalization is absent, **when** an existing host is rebuilt, **then** its token processing, host-selected defaults, interactive registration and first-party token paths remain unchanged.
 2. **Given** an API audience but no interactive client, **when** a bearer-only normalized host starts, **then** bearer validation uses that audience and no interactive login handler is registered merely because an audience was configured.
 3. **Given** no explicit API audience and an existing interactive client identifier, **when** bearer options are resolved, **then** the legacy client identifier remains the audience fallback.
-4. **Given** missing or contradictory trust configuration or an incompatible event/registration replacement or response-writing callback, **when** the host activates the opt-in composition, **then** it refuses before serving requests with a stable, value-free diagnostic.
+4. **Given** missing or contradictory trust configuration or an incompatible event/registration replacement or custom Challenge/Forbidden callback, **when** the host activates the opt-in composition, **then** it refuses before serving requests with a stable, value-free diagnostic.
 5. **Given** individually selected features and operator-owned deployment settings, **when** the composition is inspected, **then** its actual feature closure, routes, authentication scheme and mapping namespace are explainable. Issuers, connection values and credentials are not embedded into an immutable starting profile.
 
 ### User Story 3 - Change owned mappings and observe truthful failures (Priority: P1)

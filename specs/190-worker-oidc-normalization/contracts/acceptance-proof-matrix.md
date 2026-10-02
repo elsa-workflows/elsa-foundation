@@ -27,4 +27,4 @@ Run one bounded mutation at a time on the production handler/options/guard path,
 
 ## Independent unit and feature gates
 
-Each new public-sealed logic-bearing implementation has direct-construction tests with stubbed dependencies covering every branch (§2.23.2), independently of real-handler and actor tests. The public non-sealed OIDC feature with virtual registration has a direct construction/registration test that builds the provider and resolves every registered owned service (§2.23.1/2.23.3). Retain existing test objectives.
+Each new or modified public-sealed logic-bearing implementation, including ConfigureOidcOptions and ConfigureOidcJwtBearerOptions, has direct-construction tests with stubbed dependencies covering every branch (§2.23.2), independently of real-handler and actor tests. The public non-sealed OIDC feature with virtual registration has a direct construction/registration test that builds the provider and resolves every registered owned service (§2.23.1/2.23.3). Retain existing test objectives.
