@@ -15,6 +15,8 @@ namespace Elsa.Persistence.EntityFramework.Tooling;
 /// reference of its own and cannot skew from the host's EF version.
 /// </summary>
 /// <remarks>
+/// Candidate inspection has separate capabilities and envelopes. The selected host owns configuration,
+/// selection reconciliation and EF preparation; the CLI owns capture and the worker owns its transport.
 /// <para>
 /// Deliberately built from EF Core and Relational alone — <see cref="IMigrator"/>,
 /// <see cref="IMigrationsAssembly"/> — because this package must keep its admitted EF package set
@@ -67,6 +69,14 @@ public static class EfToolingHost
         Stream response,
         CancellationToken cancellationToken) =>
         new EfCandidateInspectionOperation(LoadedAssemblies).RunAsync(request, response, cancellationToken);
+
+    /// <summary>Inspects a captured candidate with one explicitly supplied environment document.</summary>
+    /// <exception cref="EfToolingRefusal">The selected host closure or bounded projection is unavailable.</exception>
+    public static Task<int> RunCandidateEnvironmentInspectionAsync(
+        Stream request,
+        Stream response,
+        CancellationToken cancellationToken) =>
+        new EfCandidateEnvironmentInspectionOperation(LoadedAssemblies).RunAsync(request, response, cancellationToken);
 
     /// <summary>
     /// Runs one command, reading the request from <paramref name="request"/> to its end and writing exactly

@@ -1,10 +1,11 @@
-# Planned validation journey
+# Validation journey
 
-This feature is not implemented by the planning artifacts. The commands below define implementation validation; no feature acceptance journey has run during authoring. Local architecture and maps checks ran separately as authoring gates and do not execute this future proof matrix. Use the [proof matrix](contracts/acceptance-proof-matrix.md) for the complete case assignment.
+The commands below reproduce the implementation validation for #2292. Actual results, tested heads, causal controls and remaining delivery gates are recorded in [implementation-evidence.md](implementation-evidence.md). This guide and the [proof matrix](contracts/acceptance-proof-matrix.md) define the required journeys; their presence alone is not evidence that a command passed.
 
 ## Prerequisites
 
 - A clean implementation build of the public CLI and the actual `src/apps/Elsa.Workbench/Elsa.Workbench.csproj` output containing the declared v1 capability and Workbench enrollment attribute.
+- The actual `src/apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj` output for the unenrolled-host control; missing build artifacts fail the proof instead of skipping it.
 - Existing fixture/test output for controlled old-host, unenrolled-host, malformed-input, lifecycle, and source-drift cases.
 - A temporary source directory containing the selected Workbench JSON layers and an accepted composition.
 - A private regular environment input file. Keep its values and any canary private to the temporary fixture; do not put them in a command argument or check them into artifacts.
@@ -25,11 +26,13 @@ Create a private file such as `environment-input.json` in the temporary fixture 
 }
 ```
 
-The first run should use the actual Workbench closure and the public CLI wrapper. A fixture host may be used afterward for controlled refusal cases, but it cannot replace the actual Workbench enrollment proof.
+Use the actual Workbench closure and the public CLI wrapper. A fixture host may be used afterward for controlled refusal cases, but it cannot replace the actual Workbench enrollment proof.
+
+Declare the resource and connection names in the captured source before selecting them or supplying their private values. A syntactically valid name introduced only by the private overlay must not become a public target identity. The automated Workbench fixture retains all four real JSON layers, trims feature selections in both shell layers, and imports/accepts the four intended requested IDs; host-implied dependencies are inspected separately.
 
 ## Public command journey
 
-Run the planned command with a built Workbench output directory and a separate source directory:
+Run the command with a built Workbench output directory and a separate source directory:
 
 ```text
 dotnet elsa composition inspect \
@@ -73,12 +76,14 @@ The old command must retain candidate-v1/file-only behavior. A host without the 
 
 This journey proves an achievable external-toggle recovery. It must not assume that `composition accept` silently observes or authorizes an environment change.
 
-## Planned automated commands
+## Automated commands
 
 Run the existing affected projects after implementation, using the repository's normal build-slot wrapper and recording discovered/selected cases:
 
 ```text
 bash tools/architecture/restore-ci-project-graph.sh --locked-mode -p:WarningsNotAsErrors=NU1603
+dotnet build src/apps/Elsa.Workbench/Elsa.Workbench.csproj -c Release --no-restore -p:WarningsNotAsErrors=NU1603
+dotnet build src/apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj -c Release --no-restore -p:WarningsNotAsErrors=NU1603
 dotnet test tests/essentials/Cli/Tests/Elsa.Cli.Tests.csproj -c Release --no-restore
 dotnet test tests/essentials/Modularity/Planning/Tests/Elsa.Modularity.Planning.Tests.csproj -c Release --no-restore
 dotnet test tests/essentials/Persistence/EntityFrameworkCore/Migrations/Tests/Elsa.Persistence.EntityFrameworkCore.Migrations.Tests.csproj -c Release --no-restore
@@ -95,10 +100,10 @@ The implementation proof must include the public `DotnetElsa.cs` process wrapper
 
 Execute the rows in [acceptance-proof-matrix.md](contracts/acceptance-proof-matrix.md), including:
 
-- every eleven service-prefix family, ordinary `ConnectionStrings__` support, aliases, duplicates, Unicode/control/`=`/surrogate/NUL/null/tombstone/blank/omitted values;
+- all eleven service-prefix families, ordinary `ConnectionStrings__` support, aliases, duplicates, Unicode/control/`=`/surrogate/NUL/null/tombstone/blank/omitted values;
 - exact and one-over raw 1 MiB, per-file 1 MiB, aggregate 4 MiB, key 1,024-byte, value 65,536-byte, entry 1,024, combined participant-plus-finding projection 1,024 (1,022+2 accepted and 1,023+2 refused), serialized request 8 MiB, response 4 MiB, selection, JSON depth, and timeout limits;
 - stable reload of a detached frozen root and caller-owned document/dictionary mutation after defensive copying; separately, stale/mixed/disposed/reused captures, source drift before launch and after response, old candidate parser with an extra field, new capability absent, and actual host unenrolled;
 - cancellation during stdin write, response read, after capture before launch, and bounded child cleanup;
 - private canaries inspected across public output, logs, diagnostics, child process arguments, generated/public artifacts, and fingerprints while allowing only finite existing CLI location and assembly-loader/deps/package-root metadata needed for file checks/loading. Private values, raw configuration, private input paths, and private-input-derived fingerprints remain absent.
 
-The expected outcome for each refusal row is a fixed refusal with no partial public result, no side effect, and owned cleanup. Frozen-root reload and post-copy caller mutation are the stability controls and must remain unchanged, not refusals. This quickstart records planned validation only; it does not mark any row passed.
+The expected outcome for each refusal row is a fixed refusal with no partial public result, no side effect, and owned cleanup. Frozen-root reload and post-copy caller mutation are the stability controls and must remain unchanged, not refusals. Use the canonical implementation evidence for actual outcomes and remaining gates; this quickstart does not independently mark a row passed.

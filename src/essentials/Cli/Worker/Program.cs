@@ -36,14 +36,25 @@ else
 WorkerResponse result;
 try
 {
-    var request = candidateMode
-        ? await WorkerContract.ReadCandidateRequestAsync(Console.OpenStandardInput(), cancellation.Token)
-        : await WorkerContract.ReadRequestAsync(Console.OpenStandardInput(), cancellation.Token);
-    result = request is null
-        ? candidateMode ? Failed("candidate-request-invalid", "The candidate worker request is invalid.")
-            : Failed("invalid-request", "The worker was given an empty request.")
-        : candidateMode ? await WorkerRunner.RunCandidateAsync(request, cancellation.Token)
+    if (candidateMode)
+    {
+        var candidateRequest = await WorkerContract.ReadCandidateInspectionRequestAsync(
+            Console.OpenStandardInput(), cancellation.Token);
+        result = candidateRequest is null
+            ? Failed("candidate-request-invalid", "The candidate worker request is invalid.")
+            : candidateRequest.Environment is { } environment
+                ? await WorkerRunner.RunCandidateEnvironmentAsync(environment, cancellation.Token)
+                : candidateRequest.FileOnly is { } fileOnly
+                    ? await WorkerRunner.RunCandidateAsync(fileOnly, cancellation.Token)
+                    : Failed("candidate-request-invalid", "The candidate worker request is invalid.");
+    }
+    else
+    {
+        var request = await WorkerContract.ReadRequestAsync(Console.OpenStandardInput(), cancellation.Token);
+        result = request is null
+            ? Failed("invalid-request", "The worker was given an empty request.")
             : await WorkerRunner.RunAsync(request, cancellation.Token);
+    }
 }
 catch (JsonException)
 {
@@ -54,7 +65,9 @@ catch (WorkerRefusal refusal) when (candidateMode)
 {
     result = refusal.Code == "candidate-request-too-large"
         ? Failed("candidate-request-too-large", "The candidate request exceeds the supported size limit.")
-        : Failed("candidate-request-invalid", "The candidate worker request is invalid.");
+        : WorkerContract.IsCandidateEnvironmentInputErrorCode(refusal.Code)
+            ? Failed(refusal.Code, WorkerContract.CandidateEnvironmentInputMessage(refusal.Code))
+            : Failed("candidate-request-invalid", "The candidate worker request is invalid.");
 }
 catch (OperationCanceledException)
 {

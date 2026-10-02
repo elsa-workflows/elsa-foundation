@@ -21,6 +21,7 @@ using Xunit;
 using Xunit.Sdk;
 
 [assembly: EfToolingShellDefaults(typeof(Elsa.Persistence.EntityFrameworkCore.Migrations.Tests.EfToolingHostTestDefaults))]
+[assembly: EfCandidateEnvironmentInputs(1, "workbench-json-explicit-environment-v1")]
 
 namespace Elsa.Persistence.EntityFrameworkCore.Migrations.Tests;
 

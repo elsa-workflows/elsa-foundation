@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace Elsa.Cli.Worker;
 
 /// <summary>Admits only captured candidate requests and contains all closure diagnostics at the private boundary.</summary>
@@ -48,4 +50,82 @@ public sealed class CandidateWorkerOperation
 
     private static WorkerResponse Unavailable() => WorkerRefusal.Resolution("candidate-host-unavailable",
         "The selected installed host closure could not be inspected.").ToResponse();
+}
+
+/// <summary>Contains the additive explicit-environment lane without widening legacy candidate refusals.</summary>
+public sealed class CandidateEnvironmentWorkerOperation
+{
+    private readonly Func<CandidateEnvironmentWorkerRequestV2, CancellationToken, Task<WorkerResponse>> runHost;
+
+    public CandidateEnvironmentWorkerOperation(
+        Func<CandidateEnvironmentWorkerRequestV2, CancellationToken, Task<WorkerResponse>> runHost)
+    {
+        ArgumentNullException.ThrowIfNull(runHost);
+        this.runHost = runHost;
+    }
+
+    public async Task<WorkerResponse> RunAsync(
+        CandidateEnvironmentWorkerRequestV2 request, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        try
+        {
+            WorkerContract.ValidateCandidateEnvironmentRequest(request);
+        }
+        catch (WorkerRefusal refusal)
+        {
+            // The four explicit-input refusals are already fixed and safe. All other malformed outer shapes
+            // use the closed candidate request classification and never expose selected-host details.
+            return WorkerContract.IsCandidateEnvironmentInputErrorCode(refusal.Code)
+                ? WorkerRefusal.Usage(refusal.Code, refusal.Message).ToResponse()
+                : WorkerRefusal.Usage("candidate-request-invalid", "The candidate worker request is invalid.").ToResponse();
+        }
+        catch (JsonException)
+        {
+            return WorkerRefusal.Usage("candidate-request-invalid", "The candidate worker request is invalid.").ToResponse();
+        }
+        catch (ArgumentNullException)
+        {
+            return WorkerRefusal.Usage("candidate-request-invalid", "The candidate worker request is invalid.").ToResponse();
+        }
+
+        try
+        {
+            return await runHost(request, cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        { throw; }
+        catch (WorkerRefusal refusal)
+        {
+            return refusal.Code switch
+            {
+                "candidate-environment-input-invalid" or
+                "candidate-environment-input-too-large" or
+                "candidate-environment-key-collision" or
+                "candidate-environment-prefix-unsupported" =>
+                    WorkerRefusal.Usage(refusal.Code,
+                        WorkerContract.CandidateEnvironmentInputMessage(refusal.Code)).ToResponse(),
+                "candidate-environment-host-unenrolled" =>
+                    WorkerRefusal.Resolution(refusal.Code, "The selected host is not enrolled for explicit environment inspection.").ToResponse(),
+                "candidate-capability-unavailable" =>
+                    WorkerRefusal.Resolution(refusal.Code, "The selected host has no complete candidate inspection capability.").ToResponse(),
+                "candidate-package-unavailable" =>
+                    WorkerRefusal.Resolution(refusal.Code, "The selected host package closure could not be loaded.").ToResponse(),
+                "candidate-closure-changed" =>
+                    WorkerRefusal.Resolution(refusal.Code, "The selected installed host closure changed during inspection.").ToResponse(),
+                "candidate-response-invalid" =>
+                    WorkerRefusal.Resolution(refusal.Code, "The candidate host response is invalid.").ToResponse(),
+                "candidate-response-too-large" =>
+                    WorkerRefusal.Resolution(refusal.Code, "The candidate host response exceeds the supported bound.").ToResponse(),
+                "candidate-request-too-large" =>
+                    WorkerRefusal.Usage(refusal.Code, "The candidate host request exceeds the supported bound.").ToResponse(),
+                _ => Unavailable()
+            };
+        }
+        catch (Exception failure) when (failure is BadImageFormatException || WorkerRunner.IsNonFatal(failure))
+        { return Unavailable(); }
+    }
+
+    private static WorkerResponse Unavailable() => WorkerRefusal.Resolution(
+        "candidate-host-unavailable", "The selected installed host closure could not be inspected.").ToResponse();
 }

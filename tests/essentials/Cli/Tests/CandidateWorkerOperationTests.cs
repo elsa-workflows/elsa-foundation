@@ -52,6 +52,199 @@ public sealed class CandidateWorkerOperationTests
     }
 
     [Theory]
+    [InlineData("candidate-environment-input-invalid", 2)]
+    [InlineData("candidate-environment-input-too-large", 2)]
+    [InlineData("candidate-environment-key-collision", 2)]
+    [InlineData("candidate-environment-prefix-unsupported", 2)]
+    [InlineData("candidate-environment-host-unenrolled", 3)]
+    [InlineData("candidate-capability-unavailable", 3)]
+    [InlineData("candidate-package-unavailable", 3)]
+    [InlineData("candidate-closure-changed", 3)]
+    [InlineData("candidate-response-invalid", 3)]
+    [InlineData("candidate-response-too-large", 3)]
+    [InlineData("candidate-request-too-large", 2)]
+    public async Task Additive_environment_lane_maps_only_its_fixed_refusals(string code, int exitCode)
+    {
+        var request = EnvironmentRequest();
+        var result = await RunEnvironment(request, (_, _) =>
+            throw WorkerRefusal.Resolution(code, "private-refusal-canary", ["private-detail-canary"]));
+
+        Assert.Equal(exitCode, result.ExitCode);
+        Assert.Equal(code, result.Error?.Code);
+        Assert.DoesNotContain("canary", JsonSerializer.Serialize(result), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
+    [InlineData("worker-refusal")]
+    [InlineData("io")]
+    [InlineData("json")]
+    [InlineData("bad-image")]
+    public async Task Additive_environment_lane_falls_back_to_fixed_unavailable_for_unrecognized_failures(string kind)
+    {
+        var result = await RunEnvironment(EnvironmentRequest(), (_, _) => throw kind switch
+        {
+            "worker-refusal" => WorkerRefusal.Resolution("private-unknown-code", "private-refusal-canary", ["private-detail-canary"]),
+            "io" => new IOException("private-io-canary"),
+            "json" => new JsonException("private-json-canary"),
+            _ => new BadImageFormatException("private-image-canary")
+        });
+
+        Assert.Equal(3, result.ExitCode);
+        Assert.Equal("candidate-host-unavailable", result.Error?.Code);
+        Assert.DoesNotContain("canary", JsonSerializer.Serialize(result), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Additive_environment_operation_requires_a_delegate()
+    {
+        Assert.Throws<ArgumentNullException>(() => new CandidateEnvironmentWorkerOperation(null!));
+    }
+
+    [Theory]
+    [InlineData("null")]
+    [InlineData("invalid-version")]
+    [InlineData("in-process-unrecognized-refusal")]
+    public async Task Additive_environment_lane_contains_invalid_admission_before_closure(string kind)
+    {
+        var request = EnvironmentRequest();
+        request = kind switch
+        {
+            "null" => null!,
+            "invalid-version" => request with { Version = WorkerContract.Version + 1 },
+            _ => request with { PackageRoots = new UntrustedPackageRoots() }
+        };
+        var calls = 0;
+        var result = await RunEnvironment(request, (_, _) =>
+        {
+            calls++;
+            return Task.FromResult(new WorkerResponse());
+        });
+
+        Assert.Equal(2, result.ExitCode);
+        Assert.Equal("candidate-request-invalid", result.Error?.Code);
+        Assert.Equal(0, calls);
+        Assert.DoesNotContain("canary", JsonSerializer.Serialize(result), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Additive_environment_lane_rejects_a_malformed_private_document_before_closure()
+    {
+        var calls = 0;
+        var request = EnvironmentRequest();
+        request = request with
+        {
+            EnvironmentInput = request.EnvironmentInput! with
+            {
+                Content = Convert.ToBase64String("{}"u8.ToArray())
+            }
+        };
+
+        var result = await RunEnvironment(request, (_, _) =>
+        {
+            calls++;
+            return Task.FromResult(new WorkerResponse());
+        });
+
+        Assert.Equal(2, result.ExitCode);
+        Assert.Equal("candidate-environment-input-invalid", result.Error?.Code);
+        Assert.Equal(0, calls);
+        Assert.DoesNotContain("canary", JsonSerializer.Serialize(result), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Additive_environment_lane_passes_the_request_and_token_to_the_delegate_once()
+    {
+        var request = EnvironmentRequest();
+        var expected = new WorkerResponse { ExitCode = 0 };
+        using var cancellation = new CancellationTokenSource();
+        var expectedToken = cancellation.Token;
+        var calls = 0;
+
+        var result = await RunEnvironment(request, (actual, token) =>
+        {
+            calls++;
+            Assert.Same(request, actual);
+            Assert.Equal(expectedToken, token);
+            return Task.FromResult(expected);
+        }, expectedToken);
+
+        Assert.Same(expected, result);
+        Assert.Equal(1, calls);
+    }
+
+    [Fact]
+    public async Task Additive_environment_lane_propagates_precancellation_without_calling_the_delegate()
+    {
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+        var calls = 0;
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => RunEnvironment(EnvironmentRequest(), (_, _) =>
+        {
+            calls++;
+            return Task.FromResult(new WorkerResponse());
+        }, cancellation.Token));
+
+        Assert.Equal(0, calls);
+    }
+
+    [Fact]
+    public async Task Additive_environment_lane_propagates_inflight_cancellation_from_the_delegate()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var calls = 0;
+        var pending = RunEnvironment(EnvironmentRequest(), async (_, token) =>
+        {
+            calls++;
+            entered.SetResult();
+            await release.Task;
+            token.ThrowIfCancellationRequested();
+            return new WorkerResponse();
+        }, cancellation.Token);
+
+        try
+        {
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            cancellation.Cancel();
+            release.SetResult();
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending.WaitAsync(TimeSpan.FromSeconds(5)));
+            Assert.Equal(1, calls);
+        }
+        finally
+        {
+            release.TrySetResult();
+            try
+            {
+                await pending.WaitAsync(TimeSpan.FromSeconds(5));
+            }
+            catch (OperationCanceledException)
+            {
+                // The assertion above owns the expected cancellation; observe the task during cleanup.
+            }
+        }
+    }
+
+    [Fact]
+    public async Task Additive_environment_lane_contains_an_uncancelled_operation_cancellation()
+    {
+        var result = await RunEnvironment(EnvironmentRequest(), (_, _) =>
+            Task.FromException<WorkerResponse>(new OperationCanceledException("private-cancellation-canary")));
+
+        Assert.Equal(3, result.ExitCode);
+        Assert.Equal("candidate-host-unavailable", result.Error?.Code);
+        Assert.DoesNotContain("canary", JsonSerializer.Serialize(result), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Additive_environment_lane_does_not_swallow_a_fatal_filter_exception()
+    {
+        await Assert.ThrowsAsync<OutOfMemoryException>(() => RunEnvironment(EnvironmentRequest(), (_, _) =>
+            Task.FromException<WorkerResponse>(new OutOfMemoryException("private-fatal-canary"))));
+    }
+
+    [Theory]
     [InlineData("ordinary")]
     [InlineData("legacy-refusal")]
     [InlineData("json")]
@@ -918,6 +1111,46 @@ public sealed class CandidateWorkerOperationTests
         Func<WorkerRequest, CancellationToken, Task<WorkerResponse>> closure, CancellationToken token = default)
     {
         return new CandidateWorkerOperation(closure).RunAsync(request, token);
+    }
+
+    // Closed JSON requests have concrete lists; this stub exercises defensive admission of an
+    // untrusted in-process caller without adding a production validator seam.
+    private sealed class UntrustedPackageRoots : IReadOnlyList<string>
+    {
+        public int Count => 1;
+        public string this[int index] => "/unused";
+        public IEnumerator<string> GetEnumerator() => throw WorkerRefusal.Resolution(
+            "private-admission-code-canary", "private-admission-message-canary", ["private-detail-canary"]);
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
+    }
+
+    private static Task<WorkerResponse> RunEnvironment(
+        CandidateEnvironmentWorkerRequestV2 request,
+        Func<CandidateEnvironmentWorkerRequestV2, CancellationToken, Task<WorkerResponse>> closure,
+        CancellationToken token = default)
+    {
+        return new CandidateEnvironmentWorkerOperation(closure).RunAsync(request, token);
+    }
+
+    private static CandidateEnvironmentWorkerRequestV2 EnvironmentRequest()
+    {
+        var fileOnly = Request();
+        return new CandidateEnvironmentWorkerRequestV2
+        {
+            Version = WorkerContract.Version,
+            Command = WorkerCommands.InspectCandidateEnvironment,
+            HostDirectory = fileOnly.HostDirectory,
+            HostName = fileOnly.HostName,
+            DepsFile = fileOnly.DepsFile,
+            PackageRoots = fileOnly.PackageRoots,
+            Candidate = fileOnly.Candidate,
+            EnvironmentInput = new WorkerEnvironmentInput
+            {
+                Version = 1,
+                CaptureId = fileOnly.Candidate!.CaptureId,
+                Content = Convert.ToBase64String(CandidateInspectionFixture.EnvironmentDocument())
+            }
+        };
     }
 
     private static Dictionary<string, byte[]> SnapshotPackageFiles(string root) =>

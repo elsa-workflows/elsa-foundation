@@ -66,18 +66,51 @@ internal static class SyntheticEfModules
     {
         var builder = new PersistedAssemblyBuilder(new AssemblyName(assemblyName), typeof(object).Assembly, []);
         var module = builder.DefineDynamicModule(assemblyName);
-        var featureType = module.DefineType(
-            $"{featureName}Feature",
-            TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.Class,
-            typeof(object),
-            [typeof(IShellFeature)]);
-        featureType.DefineDefaultConstructor(MethodAttributes.Public);
+        var featureType = DefineShellFeature(module, $"{featureName}Feature");
 
         var enrollmentConstructor = typeof(EfPersistenceResourceParticipantAttribute).GetConstructor(Type.EmptyTypes)!;
         featureType.SetCustomAttribute(new CustomAttributeBuilder(enrollmentConstructor, []));
         var moduleConstructor = typeof(UsesEfModuleAttribute).GetConstructor([typeof(string)])!;
         for (var index = 0; index < moduleCount; index++)
             featureType.SetCustomAttribute(new CustomAttributeBuilder(moduleConstructor, [$"Synthetic.Legacy.Module{index:D4}"]));
+
+        featureType.CreateType();
+
+        using var image = new MemoryStream();
+        builder.Save(image);
+        return Assembly.Load(image.ToArray());
+    }
+
+    /// <summary>
+    /// Emits persisted shell feature metadata without EF enrollment. These features exercise the
+    /// normal host discovery and selection path while contributing no participant rows.
+    /// </summary>
+    public static Assembly BuildNonParticipantFeatures(string assemblyName, IReadOnlyList<string> featureNames)
+    {
+        var builder = new PersistedAssemblyBuilder(new AssemblyName(assemblyName), typeof(object).Assembly, []);
+        var module = builder.DefineDynamicModule(assemblyName);
+        var featureAttributeConstructor = typeof(ShellFeatureAttribute).GetConstructor([typeof(string)])!;
+
+        for (var index = 0; index < featureNames.Count; index++)
+        {
+            var featureType = DefineShellFeature(module, $"SyntheticNonParticipantFeature{index:D5}");
+            featureType.SetCustomAttribute(new CustomAttributeBuilder(featureAttributeConstructor, [featureNames[index]]));
+            featureType.CreateType();
+        }
+
+        using var image = new MemoryStream();
+        builder.Save(image);
+        return Assembly.Load(image.ToArray());
+    }
+
+    private static TypeBuilder DefineShellFeature(ModuleBuilder module, string typeName)
+    {
+        var featureType = module.DefineType(
+            typeName,
+            TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.Class,
+            typeof(object),
+            [typeof(IShellFeature)]);
+        featureType.DefineDefaultConstructor(MethodAttributes.Public);
 
         var contractMethod = typeof(IShellFeature).GetMethod(nameof(IShellFeature.ConfigureServices))!;
         var implementation = featureType.DefineMethod(
@@ -87,10 +120,6 @@ internal static class SyntheticEfModules
             contractMethod.GetParameters().Select(parameter => parameter.ParameterType).ToArray());
         implementation.GetILGenerator().Emit(OpCodes.Ret);
         featureType.DefineMethodOverride(implementation, contractMethod);
-        featureType.CreateType();
-
-        using var image = new MemoryStream();
-        builder.Save(image);
-        return Assembly.Load(image.ToArray());
+        return featureType;
     }
 }

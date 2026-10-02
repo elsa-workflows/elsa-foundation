@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Reflection;
 using System.Text.Json;
 using Elsa.Cli.Worker;
 using Xunit;
@@ -34,6 +35,266 @@ public sealed class CandidateProcessTests
         using var sent = JsonDocument.Parse(fixture.Handle.Input.ToArray());
         Assert.Equal(fixture.Request.Candidate!.CaptureId,
             sent.RootElement.GetProperty("candidate").GetProperty("captureId").GetString());
+        fixture.AssertClosed();
+    }
+
+    [Fact]
+    public async Task Explicit_environment_exchange_uses_the_capture_request_and_keeps_private_input_off_arguments()
+    {
+        using var environment = new EnvironmentCaptureFixture();
+        using var fixture = new ProcessFixture();
+        ConfigureEnvironmentSuccess(fixture, environment.Capture);
+
+        var result = await fixture.Runner.RunEnvironmentAsync(environment.Capture, []);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Equal(CandidateWorkerProcess.Arguments(Host, fixture.WorkerAssembly), fixture.StartInfo!.ArgumentList);
+        Assert.DoesNotContain(environment.EnvironmentPath, fixture.StartInfo.ArgumentList);
+        using var sent = JsonDocument.Parse(fixture.Handle.Input.ToArray());
+        Assert.Equal(WorkerCommands.InspectCandidateEnvironment,
+            sent.RootElement.GetProperty("command").GetString());
+        Assert.Equal(Convert.ToBase64String(environment.RawEnvironment),
+            sent.RootElement.GetProperty("environmentInput").GetProperty("content").GetString());
+        Assert.DoesNotContain(environment.EnvironmentPath, sent.RootElement.GetRawText(), StringComparison.Ordinal);
+        fixture.AssertClosed();
+    }
+
+    [Fact]
+    public async Task Precancelled_environment_request_disposes_the_capture_without_launching()
+    {
+        using var environment = new EnvironmentCaptureFixture();
+        using var fixture = new ProcessFixture();
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        var refusal = await Assert.ThrowsAsync<CliRefusal>(() =>
+            fixture.Runner.RunEnvironmentAsync(environment.Capture, [], cancellationToken: cancellation.Token));
+
+        Assert.Equal("candidate-inspection-cancelled", refusal.Code);
+        Assert.Equal(0, fixture.StartCount);
+        Assert.False(environment.Capture.HasEnvironmentInput);
+        var reused = await Assert.ThrowsAsync<CliRefusal>(() =>
+            fixture.Runner.RunEnvironmentAsync(environment.Capture, []));
+        Assert.Equal("candidate-capture-invalid", reused.Code);
+    }
+
+    [Fact]
+    public async Task Oversized_environment_request_refuses_before_launch()
+    {
+        using var environment = new EnvironmentCaptureFixture();
+        using var fixture = new ProcessFixture();
+
+        var refusal = await Assert.ThrowsAsync<CliRefusal>(() =>
+            fixture.Runner.RunEnvironmentAsync(environment.Capture, [new string('p', 8 * 1024 * 1024)]));
+
+        Assert.Equal("candidate-request-too-large", refusal.Code);
+        Assert.Equal(0, fixture.StartCount);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Explicit_environment_request_transport_enforces_the_8MiB_boundary(bool oversized)
+    {
+        const int maximumBytes = 8 * 1024 * 1024;
+        int baselineBytes;
+        using (var baseline = new EnvironmentCaptureFixture())
+        {
+            var request = baseline.Capture.BeginEnvironmentInspection(["p"]);
+            baselineBytes = JsonSerializer.SerializeToUtf8Bytes(request, WorkerContract.Json).Length;
+        }
+
+        var packageRootLength = checked(maximumBytes - baselineBytes + 1 + (oversized ? 1 : 0));
+        using var environment = new EnvironmentCaptureFixture();
+        using var fixture = new ProcessFixture();
+        ConfigureEnvironmentSuccess(fixture, environment.Capture);
+
+        if (oversized)
+        {
+            var refusal = await Assert.ThrowsAsync<CliRefusal>(() =>
+                fixture.Runner.RunEnvironmentAsync(environment.Capture, [new string('p', packageRootLength)]));
+
+            Assert.Equal("candidate-request-too-large", refusal.Code);
+            Assert.Equal(0, fixture.StartCount);
+            return;
+        }
+
+        var result = await fixture.Runner.RunEnvironmentAsync(environment.Capture, [new string('p', packageRootLength)]);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Equal(maximumBytes, fixture.Handle.Input.ToArray().Length);
+        fixture.AssertClosed();
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Explicit_environment_response_transport_enforces_the_4MiB_boundary(bool oversized)
+    {
+        const int maximumBytes = 4 * 1024 * 1024;
+        using var environment = new EnvironmentCaptureFixture();
+        using var fixture = new ProcessFixture();
+        var response = EnvironmentSuccessResponse(environment.Capture.Payload);
+        fixture.SetOutputBytes(PadResponse(response, maximumBytes + (oversized ? 1 : 0)));
+
+        if (oversized)
+        {
+            var refusal = await Assert.ThrowsAsync<CliRefusal>(() =>
+                fixture.Runner.RunEnvironmentAsync(environment.Capture, []));
+
+            Assert.Equal("candidate-response-too-large", refusal.Code);
+            Assert.Equal(3, refusal.ExitCode);
+        }
+        else
+        {
+            var result = await fixture.Runner.RunEnvironmentAsync(environment.Capture, []);
+            Assert.Equal(0, result.ExitCode);
+        }
+
+        fixture.AssertClosed();
+    }
+
+    [Fact]
+    public async Task Explicit_environment_timeout_upper_endpoint_allows_launch()
+    {
+        using var environment = new EnvironmentCaptureFixture();
+        using var fixture = new ProcessFixture();
+        fixture.SetOutputBytes(EnvironmentSuccessResponse(environment.Capture.Payload));
+
+        var result = await fixture.Runner.RunEnvironmentAsync(environment.Capture, [], timeoutSeconds: 300);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Equal(1, fixture.StartCount);
+        fixture.AssertClosed();
+    }
+
+    [Fact]
+    public async Task Explicit_environment_drift_after_dispatch_is_refused_before_render()
+    {
+        using var environment = new EnvironmentCaptureFixture();
+        using var fixture = new ProcessFixture();
+        var response = EnvironmentSuccessResponse(environment.Capture.Payload);
+        var mutated = 0;
+        var offset = 0;
+        fixture.Handle.Output = new ControlledStream
+        {
+            Read = (buffer, _) =>
+            {
+                if (Interlocked.Exchange(ref mutated, 1) == 0)
+                    File.AppendAllText(environment.EnvironmentPath, " ");
+                var read = Math.Min(buffer.Length, response.Length - offset);
+                response.AsMemory(offset, read).CopyTo(buffer);
+                offset += read;
+                fixture.StageEntered.TrySetResult();
+                return ValueTask.FromResult(read);
+            }
+        };
+
+        // The fake child has completed the mechanical exchange. This is the command's final
+        // capture recheck seam; a real Workbench child/host dispatch proof remains separate.
+        _ = await fixture.Runner.RunEnvironmentAsync(environment.Capture, []);
+        var refusal = Assert.Throws<CliRefusal>(() => environment.Capture.VerifyUnchanged());
+
+        Assert.Equal("composition-input-changed", refusal.Code);
+        Assert.False(environment.Capture.HasEnvironmentInput);
+        Assert.DoesNotContain(environment.EnvironmentPath, refusal.ToString(), StringComparison.Ordinal);
+        Assert.True(fixture.StageEntered.Task.IsCompletedSuccessfully);
+        fixture.AssertClosed();
+    }
+
+    [Theory]
+    [InlineData("write")]
+    [InlineData("flush")]
+    [InlineData("stdout")]
+    [InlineData("stderr")]
+    [InlineData("wait")]
+    public async Task Explicit_environment_cancellation_at_each_exchange_stage_cleans_the_owned_handle(string stage)
+    {
+        using var environment = new EnvironmentCaptureFixture();
+        using var fixture = new ProcessFixture();
+        fixture.Block(stage);
+        using var cancellation = new CancellationTokenSource();
+        var pending = fixture.Runner.RunEnvironmentAsync(environment.Capture, [], cancellationToken: cancellation.Token);
+        await fixture.AwaitStageOrCompletion(pending);
+
+        cancellation.Cancel();
+        var refusal = await Assert.ThrowsAsync<CliRefusal>(() => pending);
+
+        Assert.Equal("candidate-inspection-cancelled", refusal.Code);
+        Assert.Equal(2, refusal.ExitCode);
+        fixture.AssertClosed();
+        Assert.Equal(1, fixture.Handle.KillCount);
+    }
+
+    [Fact]
+    public async Task Explicit_environment_deadline_bounds_a_stdout_stream_that_ignores_cancellation()
+    {
+        using var environment = new EnvironmentCaptureFixture();
+        using var fixture = new ProcessFixture();
+        fixture.Block("stdout");
+        var pending = fixture.Runner.RunEnvironmentAsync(environment.Capture, [], timeoutSeconds: 1);
+        await fixture.AwaitStageOrCompletion(pending);
+
+        fixture.Clock.Advance(TimeSpan.FromSeconds(1));
+        var refusal = await Assert.ThrowsAsync<CliRefusal>(() => pending);
+
+        Assert.Equal("candidate-inspection-timeout", refusal.Code);
+        Assert.Equal(3, refusal.ExitCode);
+        fixture.AssertClosed();
+        Assert.Equal(1, fixture.Handle.KillCount);
+    }
+
+    [Fact]
+    public async Task Explicit_environment_late_response_is_bounded_by_cleanup_after_timeout()
+    {
+        using var environment = new EnvironmentCaptureFixture();
+        using var fixture = new ProcessFixture();
+        var never = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var readCompleted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        fixture.Handle.Output = new ControlledStream
+        {
+            Read = async (_, _) =>
+            {
+                fixture.StageEntered.TrySetResult();
+                try { return await never.Task; }
+                finally { readCompleted.TrySetResult(); }
+            }
+        };
+        fixture.Handle.Wait = token => fixture.Handle.Exited ? Task.CompletedTask : Task.Delay(Timeout.Infinite, token);
+
+        var pending = fixture.Runner.RunEnvironmentAsync(environment.Capture, [], timeoutSeconds: 1);
+        try
+        {
+            await fixture.AwaitStageOrCompletion(pending);
+            fixture.Clock.Advance(TimeSpan.FromSeconds(1));
+            await Task.WhenAny(pending, fixture.Clock.CleanupTimerCreated.Task).WaitAsync(TimeSpan.FromSeconds(30));
+            fixture.Clock.Advance(TimeSpan.FromSeconds(5));
+            var refusal = await Assert.ThrowsAsync<CliRefusal>(() => pending.WaitAsync(TimeSpan.FromSeconds(30)));
+
+            Assert.Equal("candidate-cleanup-failed", refusal.Code);
+            fixture.AssertClosed();
+        }
+        finally
+        {
+            never.TrySetResult(0);
+            if (fixture.StageEntered.Task.IsCompletedSuccessfully)
+                await readCompleted.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        }
+    }
+
+    [Fact]
+    public async Task Explicit_environment_response_from_a_different_capture_is_refused()
+    {
+        using var expected = new EnvironmentCaptureFixture();
+        using var other = new EnvironmentCaptureFixture();
+        using var fixture = new ProcessFixture();
+        ConfigureEnvironmentSuccess(fixture, other.Capture);
+
+        var refusal = await Assert.ThrowsAsync<CliRefusal>(() =>
+            fixture.Runner.RunEnvironmentAsync(expected.Capture, []));
+
+        Assert.Equal("candidate-response-invalid", refusal.Code);
+        Assert.Equal(3, refusal.ExitCode);
         fixture.AssertClosed();
     }
 
@@ -112,6 +373,56 @@ public sealed class CandidateProcessTests
         Assert.Equal(2, refusal.ExitCode);
         Assert.Equal(0, fixture.StartCount);
     }
+
+    [Fact]
+    public async Task Cancellation_observed_after_response_validation_still_refuses_and_cleans_up()
+    {
+        using var fixture = new ProcessFixture();
+        using var cancellation = new CancellationTokenSource();
+        fixture.Handle.ObserveExitCode = () =>
+        {
+            cancellation.Cancel();
+            return 0;
+        };
+
+        var refusal = await Assert.ThrowsAsync<CliRefusal>(() =>
+            fixture.Runner.RunAsync(Host, fixture.Request, cancellationToken: cancellation.Token));
+
+        Assert.Equal("candidate-inspection-cancelled", refusal.Code);
+        fixture.AssertClosed();
+    }
+
+    [Fact]
+    public void Explicit_environment_option_rejects_repeated_occurrences_at_parse_boundary()
+    {
+        var omitted = ParseCli(InspectArguments());
+        var single = ParseCli(InspectArguments("--environment-input", "one.json"));
+        var repeated = ParseCli(InspectArguments(
+            "--environment-input", "one.json", "--environment-input", "two.json"));
+
+        Assert.Empty(omitted.Errors);
+        Assert.Empty(single.Errors);
+        Assert.Contains(repeated.Errors, error => error.Message.Contains(
+            "--environment-input", StringComparison.Ordinal));
+        var errors = string.Join(Environment.NewLine, repeated.Errors.Select(error => error.Message));
+        Assert.DoesNotContain("one.json", errors, StringComparison.Ordinal);
+        Assert.DoesNotContain("two.json", errors, StringComparison.Ordinal);
+    }
+
+    private static System.CommandLine.ParseResult ParseCli(string[] arguments)
+    {
+        var cliType = typeof(RegularFileOpener).Assembly.GetType("Elsa.Cli.ElsaCli", throwOnError: true)!;
+        var build = cliType.GetMethod("Build", BindingFlags.Public | BindingFlags.Static)!;
+        var root = (System.CommandLine.RootCommand)build.Invoke(null, null)!;
+        return root.Parse(arguments);
+    }
+
+    private static string[] InspectArguments(params string[] environmentInput) =>
+    [
+        "composition", "inspect", "--host", "host", "--host-dir", "source", "--shell", "default",
+        "--environment", "Production", "--composition", "candidate", "--trust-host-code",
+        ..environmentInput
+    ];
 
     [Theory]
     [InlineData("write")]
@@ -875,6 +1186,32 @@ public sealed class CandidateProcessTests
         public void Dispose() { }
     }
 
+    private sealed class EnvironmentCaptureFixture : IDisposable
+    {
+        private readonly CompositionBridgeFixture source = new();
+
+        public EnvironmentCaptureFixture()
+        {
+            source.WriteAcceptedComposition();
+            Directory.CreateDirectory(source.CandidateDirectory);
+            EnvironmentPath = Path.Join(source.CandidateDirectory, "environment.json");
+            RawEnvironment = CandidateInspectionFixture.EnvironmentDocument(("Private", "private-environment-value"));
+            File.WriteAllBytes(EnvironmentPath, RawEnvironment);
+            Capture = CompositionInspectionCapture.OpenWithEnvironmentInput(Host, source.HostDirectory,
+                "default", "Production", source.OutputPath, EnvironmentPath, source.CatalogPath, source.ReviewPath);
+        }
+
+        public string EnvironmentPath { get; }
+        public byte[] RawEnvironment { get; }
+        public CompositionInspectionCapture Capture { get; }
+
+        public void Dispose()
+        {
+            Capture.Dispose();
+            source.Dispose();
+        }
+    }
+
     private sealed class ProcessFixture : IDisposable
     {
         public WorkerRequest Request { get; } = CandidateWorkerRequestFixture.Create();
@@ -939,6 +1276,20 @@ public sealed class CandidateProcessTests
             Assert.False(Handle.Input.CanWrite);
             Assert.False(Handle.Output.CanRead);
             Assert.False(Handle.Error.CanRead);
+        }
+
+        public void SetOutput(System.Text.Json.Nodes.JsonObject hostResponse)
+        {
+            SetOutputBytes(JsonSerializer.SerializeToUtf8Bytes(new WorkerResponse
+            {
+                Tooling = JsonSerializer.SerializeToElement(hostResponse)
+            }, WorkerContract.Json));
+        }
+
+        public void SetOutputBytes(byte[] bytes)
+        {
+            Handle.Output.Dispose();
+            Handle.Output = new MemoryStream(bytes);
         }
 
         public void Dispose()
@@ -1050,5 +1401,28 @@ public sealed class CandidateProcessTests
             public void Dispose() { lock (owner.sync) Due = TimeSpan.MaxValue; }
             public ValueTask DisposeAsync() { Dispose(); return ValueTask.CompletedTask; }
         }
+    }
+
+    private static byte[] EnvironmentSuccessResponse(WorkerCandidatePayload candidate)
+    {
+        var hostResponse = CandidateHostResponseFixtures.Success(candidate);
+        hostResponse["configurationResolution"]!["source"] = "captured-workbench-json-explicit-environment-v1";
+        hostResponse["configurationResolution"]!["externalInputs"] = "supplied-intended";
+        return JsonSerializer.SerializeToUtf8Bytes(new WorkerResponse
+        {
+            Tooling = JsonSerializer.SerializeToElement(hostResponse)
+        }, WorkerContract.Json);
+    }
+
+    private static void ConfigureEnvironmentSuccess(ProcessFixture fixture, CompositionInspectionCapture capture) =>
+        fixture.SetOutputBytes(EnvironmentSuccessResponse(capture.Payload));
+
+    private static byte[] PadResponse(byte[] response, int targetBytes)
+    {
+        Assert.True(response.Length <= targetBytes);
+        var padded = new byte[targetBytes];
+        response.CopyTo(padded, 0);
+        padded.AsSpan(response.Length).Fill((byte)' ');
+        return padded;
     }
 }

@@ -35,6 +35,11 @@ public sealed class CandidateWorkerProcess
             ["candidate-package-unavailable"] = (ToolExitCode.ResolutionFailure, "The selected host package closure could not be loaded."),
             ["candidate-inspection-failed"] = (ToolExitCode.ResolutionFailure, OperationFailedMessage),
             ["candidate-cleanup-failed"] = (ToolExitCode.ResolutionFailure, "Candidate inspection could not safely close its worker process."),
+            ["candidate-environment-input-invalid"] = (ToolExitCode.Refusal, "The explicit environment input is invalid."),
+            ["candidate-environment-input-too-large"] = (ToolExitCode.Refusal, "The explicit environment input exceeds the supported size limit."),
+            ["candidate-environment-key-collision"] = (ToolExitCode.Refusal, "The explicit environment input contains colliding keys."),
+            ["candidate-environment-prefix-unsupported"] = (ToolExitCode.Refusal, "The explicit environment input contains an unsupported service prefix."),
+            ["candidate-environment-host-unenrolled"] = (ToolExitCode.ResolutionFailure, "The selected host is not enrolled for explicit environment inspection."),
             ["resource-selection-invalid"] = (ToolExitCode.Refusal, "The persistence resource selection is invalid."),
             ["resource-not-found"] = (ToolExitCode.Refusal, "A selected persistence resource was not found."),
             ["resource-definition-invalid"] = (ToolExitCode.Refusal, "A selected persistence resource definition is invalid."),
@@ -78,8 +83,71 @@ public sealed class CandidateWorkerProcess
             throw FixedRefusal("candidate-inspection-cancelled");
 
         var requestBytes = SerializeRequest(request);
+        try
+        {
+            if (cancellationToken.IsCancellationRequested)
+                throw FixedRefusal("candidate-inspection-cancelled");
+
+            return await RunSerializedAsync(host, requestBytes, request.Candidate!, environmentInput: false,
+                timeoutSeconds, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            Array.Clear(requestBytes);
+        }
+    }
+
+    /// <summary>
+    /// Runs one capture-owned explicit-environment request without accepting an independent request.
+    /// The caller retains ownership of <paramref name="capture"/> through output rendering and must dispose it;
+    /// a prelaunch cancellation invalidates the private capture so it cannot be reused.
+    /// </summary>
+    public async Task<WorkerResponse> RunEnvironmentAsync(CompositionInspectionCapture capture,
+        IReadOnlyList<string> packageRoots, int timeoutSeconds = 60, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(capture);
+        ArgumentNullException.ThrowIfNull(packageRoots);
+        if (timeoutSeconds is < 1 or > 300)
+            throw FixedRefusal("candidate-request-invalid");
         if (cancellationToken.IsCancellationRequested)
+        {
+            capture.Dispose();
             throw FixedRefusal("candidate-inspection-cancelled");
+        }
+
+        var request = capture.BeginEnvironmentInspection(packageRoots);
+        if (cancellationToken.IsCancellationRequested)
+        {
+            capture.Dispose();
+            throw FixedRefusal("candidate-inspection-cancelled");
+        }
+
+        var host = HostLayoutFrom(request);
+        var requestBytes = SerializeEnvironmentRequest(request);
+        try
+        {
+            if (cancellationToken.IsCancellationRequested)
+            {
+                capture.Dispose();
+                throw FixedRefusal("candidate-inspection-cancelled");
+            }
+
+            return await RunSerializedAsync(host, requestBytes, request.Candidate!, environmentInput: true,
+                timeoutSeconds, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            Array.Clear(requestBytes);
+        }
+    }
+
+    private async Task<WorkerResponse> RunSerializedAsync(HostLayout host, byte[] requestBytes,
+        WorkerCandidatePayload expectedCandidate, bool environmentInput, int timeoutSeconds,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(host);
+        ArgumentNullException.ThrowIfNull(requestBytes);
+        ArgumentNullException.ThrowIfNull(expectedCandidate);
 
         ProcessStartInfo startInfo;
         try
@@ -149,8 +217,8 @@ public sealed class CandidateWorkerProcess
             if (input is null || output is null || error is null)
                 throw new InvalidOperationException();
 
-            response = await ExchangeAsync(ownedHandle, input, output, error, requestBytes, request,
-                timeoutSeconds, operationStarted, deadline.Token, cancellationToken, exchangeTasks).ConfigureAwait(false);
+            response = await ExchangeAsync(ownedHandle, input, output, error, requestBytes, expectedCandidate,
+                environmentInput, timeoutSeconds, operationStarted, deadline.Token, cancellationToken, exchangeTasks).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -195,6 +263,15 @@ public sealed class CandidateWorkerProcess
         return response ?? throw FixedRefusal("candidate-inspection-failed");
     }
 
+    private static HostLayout HostLayoutFrom(CandidateEnvironmentWorkerRequestV2 request)
+    {
+        if (request.HostDirectory is null || request.HostName is null || request.DepsFile is null)
+            throw FixedRefusal("candidate-capture-invalid");
+
+        return new HostLayout(request.HostDirectory, request.HostName,
+            Path.Join(request.HostDirectory, request.HostName + ".runtimeconfig.json"), request.DepsFile);
+    }
+
     private ICandidateProcessHandle StartProcess(ProcessStartInfo startInfo)
     {
         if (start is not null)
@@ -204,12 +281,19 @@ public sealed class CandidateWorkerProcess
     }
 
     private async Task<WorkerResponse> ExchangeAsync(ICandidateProcessHandle handle, Stream input, Stream output,
-        Stream error, byte[] requestBytes, WorkerRequest request, int timeoutSeconds, long operationStarted,
+        Stream error, byte[] requestBytes, WorkerCandidatePayload expectedCandidate, bool environmentInput,
+        int timeoutSeconds, long operationStarted,
         CancellationToken deadlineToken, CancellationToken cancellationToken, ICollection<Task> ownedTasks)
     {
         using var exchange = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadlineToken);
         var writeTask = WriteRequestAndCloseAsync(input, requestBytes, exchange.Token);
         var outputTask = ReadResponseAsync(output, exchange.Token);
+        var responseBuffer = new ResponseBufferOwner();
+        _ = outputTask.ContinueWith(completed =>
+        {
+            if (completed.Status == TaskStatus.RanToCompletion)
+                responseBuffer.Capture(completed.Result);
+        }, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
         var errorTask = DrainErrorAsync(error, exchange.Token);
         var pumps = new List<Task> { writeTask, outputTask, errorTask };
         foreach (var pump in pumps)
@@ -223,6 +307,7 @@ public sealed class CandidateWorkerProcess
         }
         catch
         {
+            responseBuffer.Finish();
             exchange.Cancel();
             ObserveFaults(pumps);
             throw;
@@ -268,12 +353,16 @@ public sealed class CandidateWorkerProcess
 
             cancellationToken.ThrowIfCancellationRequested();
             ThrowIfTimedOut(deadlineToken, operationStarted, timeoutSeconds);
-            var responseBytes = await outputTask.ConfigureAwait(false);
-            var processExitCode = handle.ExitCode;
-            WorkerResponse response;
             try
             {
-                response = WorkerContract.ParseCandidateWorkerResponse(responseBytes, request.Candidate!, processExitCode);
+                var responseBytes = await outputTask.ConfigureAwait(false);
+                var processExitCode = handle.ExitCode;
+                var response = environmentInput
+                    ? WorkerContract.ParseCandidateEnvironmentWorkerResponse(responseBytes, expectedCandidate, processExitCode)
+                    : WorkerContract.ParseCandidateWorkerResponse(responseBytes, expectedCandidate, processExitCode);
+                cancellationToken.ThrowIfCancellationRequested();
+                ThrowIfTimedOut(deadlineToken, operationStarted, timeoutSeconds);
+                return response;
             }
             catch (WorkerRefusal refusal)
             {
@@ -283,14 +372,15 @@ public sealed class CandidateWorkerProcess
             {
                 throw FixedRefusal("candidate-response-invalid");
             }
-            cancellationToken.ThrowIfCancellationRequested();
-            ThrowIfTimedOut(deadlineToken, operationStarted, timeoutSeconds);
-            return response;
         }
         catch
         {
             exchange.Cancel();
             throw;
+        }
+        finally
+        {
+            responseBuffer.Finish();
         }
     }
 
@@ -312,19 +402,26 @@ public sealed class CandidateWorkerProcess
     {
         await Task.Yield();
         var buffer = new byte[16 * 1024];
-        using var response = new MemoryStream();
-        var total = 0;
-        while (true)
+        using var response = new CandidateRequestBuffer(ResponseMaximumBytes);
+        try
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            var readSize = Math.Min(buffer.Length, ResponseMaximumBytes + 1 - total);
-            var read = await output.ReadAsync(buffer.AsMemory(0, readSize), cancellationToken).ConfigureAwait(false);
-            if (read == 0)
-                return response.ToArray();
-            total += read;
-            if (total > ResponseMaximumBytes)
-                throw FixedRefusal("candidate-response-too-large");
-            await response.WriteAsync(buffer.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
+            var total = 0;
+            while (true)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var readSize = Math.Min(buffer.Length, ResponseMaximumBytes + 1 - total);
+                var read = await output.ReadAsync(buffer.AsMemory(0, readSize), cancellationToken).ConfigureAwait(false);
+                if (read == 0)
+                    return response.ToArray();
+                total += read;
+                if (total > ResponseMaximumBytes)
+                    throw FixedRefusal("candidate-response-too-large");
+                await response.WriteAsync(buffer.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
+            }
+        }
+        finally
+        {
+            Array.Clear(buffer);
         }
     }
 
@@ -332,19 +429,26 @@ public sealed class CandidateWorkerProcess
     {
         await Task.Yield();
         var buffer = new byte[16 * 1024];
-        var completedReads = 0;
-        while (true)
+        try
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            var read = await error.ReadAsync(buffer.AsMemory(), cancellationToken).ConfigureAwait(false);
-            if (read == 0)
-                return;
-            if (++completedReads % 16 == 0)
-                await Task.Yield();
+            var completedReads = 0;
+            while (true)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var read = await error.ReadAsync(buffer.AsMemory(), cancellationToken).ConfigureAwait(false);
+                if (read == 0)
+                    return;
+                if (++completedReads % 16 == 0)
+                    await Task.Yield();
+            }
+        }
+        finally
+        {
+            Array.Clear(buffer);
         }
     }
 
-    private static byte[] SerializeRequestBytes(WorkerRequest request)
+    private static byte[] SerializeRequestBytes<TRequest>(TRequest request)
     {
         using var buffer = new CandidateRequestBuffer(RequestMaximumBytes);
         try
@@ -583,6 +687,23 @@ public sealed class CandidateWorkerProcess
         return SerializeRequestBytes(request);
     }
 
+    private static byte[] SerializeEnvironmentRequest(CandidateEnvironmentWorkerRequestV2 request)
+    {
+        try
+        {
+            WorkerContract.ValidateCandidateEnvironmentRequest(request);
+        }
+        catch (WorkerRefusal refusal)
+        {
+            throw ToCliRefusal(refusal);
+        }
+        catch (JsonException)
+        {
+            throw FixedRefusal("candidate-request-invalid");
+        }
+        return SerializeRequestBytes(request);
+    }
+
     private static CliRefusal ToCliRefusal(WorkerRefusal refusal)
     {
         if (refusal.Code is null || !FixedRefusals.TryGetValue(refusal.Code, out var fixedValue))
@@ -609,9 +730,45 @@ public sealed class CandidateWorkerProcess
 
     private sealed class CandidateTimedOutException : Exception { }
 
+    private sealed class ResponseBufferOwner
+    {
+        private readonly object gate = new();
+        private byte[]? bytes;
+        private bool finished;
+
+        public void Capture(byte[] completed)
+        {
+            ArgumentNullException.ThrowIfNull(completed);
+            lock (gate)
+            {
+                if (finished)
+                {
+                    Array.Clear(completed);
+                    return;
+                }
+
+                bytes = completed;
+            }
+        }
+
+        public void Finish()
+        {
+            byte[]? completed;
+            lock (gate)
+            {
+                finished = true;
+                completed = bytes;
+                bytes = null;
+            }
+
+            if (completed is not null)
+                Array.Clear(completed);
+        }
+    }
+
     private readonly record struct CleanupResult(bool Failed, ExceptionDispatchInfo? FatalFailure);
 
-    private sealed class CandidateRequestBuffer(int maximumBytes) : MemoryStream
+    private sealed class CandidateRequestBuffer(int maximumBytes) : MemoryStream(maximumBytes)
     {
         public bool LimitExceeded { get; private set; }
 
@@ -661,6 +818,19 @@ public sealed class CandidateWorkerProcess
         {
             LimitExceeded = true;
             throw new CandidateBufferLimitException();
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            try
+            {
+                if (TryGetBuffer(out var buffer) && buffer.Array is { } array)
+                    array.AsSpan().Clear();
+            }
+            finally
+            {
+                base.Dispose(disposing);
+            }
         }
     }
 

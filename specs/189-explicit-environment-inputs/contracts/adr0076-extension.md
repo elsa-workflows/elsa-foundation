@@ -74,3 +74,24 @@ Costs and limits:
 ## Compatibility and proof
 
 The extension is additive and leaves ADR 0076 D1/D4/D7's existing operations unchanged. The proof plan is [acceptance-proof-matrix.md](./acceptance-proof-matrix.md): it requires actual built Workbench closure plus the public CLI wrapper, existing fixture controls, runtime-preparer/private-capture parity, external-toggle accept recovery, lifecycle cancellation/cleanup, all numeric boundaries, all eleven prefix refusals, and canary scans over public/process/artifact/digest surfaces. It records planned evidence only; no ADR acceptance or implementation result is claimed here.
+
+## Incremental implementation record (#2292)
+
+The implementation branch now contains the additive public host wrapper, worker dispatch and CLI
+option, with separate closed envelopes and lane-aware response validation. Both host operations call
+one internal `EfCandidateInspectionOperation.InspectComposition` core for composition, descriptor
+discovery, selection reconciliation and configured-value preparation. The new lane retains independent
+raw-input admission, repeats capability/enrollment checks, and fences unknown overlay-only feature
+identities before error projection. The legacy lane retains its existing source and identity policy.
+
+Capture-owned process execution derives its request from one immutable private capture. The command
+retains that capture through rendering and post-exchange drift checks, then disposes it. Bounded private
+transport buffers use preallocated storage and clear owned arrays on completion or failure; managed
+JSON/configuration strings are not physically erased. The owning
+[extension-point catalog](../../../../src/essentials/Persistence/EntityFramework/EXTENSION_POINTS.md#explicit-environment-inspection-capability)
+records the new seam and enrollment contract.
+
+This is an implementation record, not ratification or acceptance. Executed evidence and remaining gates
+belong in [implementation-evidence.md](../implementation-evidence.md); the real Workbench/public-wrapper,
+recovery, adverse lifecycle, complete affected-suite and hosted delivery obligations remain open until
+their actual results are recorded.
