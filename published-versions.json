@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "530d50534addfe10cb2cb832156f436662b91014",
+  "last_publish_commit": "c0482de27884da502bdd9f0ca0afa1a992d6e976",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -439,8 +439,8 @@
     },
     {
       "package_id": "Elsa.Secrets",
-      "version": "4.0.4-preview",
-      "commit": "c331197f981fe8e0ee5003daf3b97b1cfe7d3af3"
+      "version": "4.0.5-preview",
+      "commit": "c0482de27884da502bdd9f0ca0afa1a992d6e976"
     },
     {
       "package_id": "Elsa.Secrets.Api",
