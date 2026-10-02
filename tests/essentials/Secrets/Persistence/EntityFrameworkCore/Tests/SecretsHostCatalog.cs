@@ -2,8 +2,7 @@ using System.IO;
 using System.Reflection;
 using CShells.AspNetCore.Extensions;
 using CShells.DependencyInjection;
-using CShells.Features;
-using Elsa.Secrets.Options;
+using Elsa.Secrets.Features;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
@@ -27,7 +26,10 @@ internal static class SecretsHostCatalog
     public static Assembly[] Assemblies()
     {
         var host = typeof(SecretsHostCatalog).Assembly;
-        var loaded = new HashSet<Assembly> { host };
+
+        // GetReferencedAssemblies lists only assemblies this project's code names a type from. Nothing here names one
+        // from Elsa.Secrets itself, since the contracts live in Elsa.Secrets.Core, so the feature assembly is seeded.
+        var loaded = new HashSet<Assembly> { host, typeof(SecretsFeature).Assembly };
         foreach (var name in host.GetReferencedAssemblies())
         {
             try
@@ -78,22 +80,5 @@ internal static class SecretsHostCatalog
         {
             File.Delete(path);
         }
-    }
-}
-
-/// <summary>
-/// <c>SecretsFeature</c> calls <c>AddSecrets()</c> without the host <c>IConfiguration</c>, so
-/// journeys bind the encryption key from shells.json the same way a host would configure options.
-/// </summary>
-[ShellFeature(name: "SecretsJourneyEncryption")]
-public sealed class SecretsJourneyEncryptionFeature : IShellFeature
-{
-    public string EncryptionKey { get; set; } = SecretsHostCatalog.EncryptionKey;
-
-    public void ConfigureServices(IServiceCollection services)
-    {
-        var key = EncryptionKey;
-        services.PostConfigure<SecretsOptions>(options =>
-            options.EncryptionKey = string.IsNullOrWhiteSpace(options.EncryptionKey) ? key : options.EncryptionKey);
     }
 }
