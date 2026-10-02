@@ -189,8 +189,10 @@ internal sealed partial class ExtensionBuilderPromotionService(
 
     private static bool FeedPackageExists(string feedPath, string packageId, string version)
     {
-        return Directory.Exists(feedPath) && Directory
-            .EnumerateFiles(feedPath, "*.nupkg", SearchOption.TopDirectoryOnly)
+        if (!Directory.Exists(feedPath))
+            return false;
+
+        return Directory.EnumerateFiles(feedPath, "*.nupkg", SearchOption.TopDirectoryOnly)
             .Select(TryReadPackageIdentity)
             .Any(identity => identity is not null &&
                 string.Equals(identity.Value.PackageId, packageId, StringComparison.OrdinalIgnoreCase) &&

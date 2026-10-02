@@ -92,6 +92,7 @@ not automatic constitution violations.
 | Foundation Identity (authentication providers, IAM contracts, permissions, ownership capabilities) | [`src/essentials/Foundation/Identity/Core/EXTENSION_POINTS.md`](src/essentials/Foundation/Identity/Core/EXTENSION_POINTS.md) |
 | Foundation Identity ASP.NET Core Identity EF adapter (opt-in framework stores, authentication, session invalidation, and seeding over the shared EF authority) | [`src/essentials/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/EXTENSION_POINTS.md`](src/essentials/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/EXTENSION_POINTS.md) |
 | Foundation Identity EF persistence (opt-in complete IAM authority and provider-configuration backend; OpenIddict boundary) | [`src/essentials/Foundation/Identity/Persistence/EntityFrameworkCore/README.md`](src/essentials/Foundation/Identity/Persistence/EntityFrameworkCore/README.md) |
+| Foundation Data Protection (the host's key ring: fixed application name, opt-in EF key store, certificate at rest, startup warnings) | [`src/essentials/Foundation/DataProtection/EntityFrameworkCore/EXTENSION_POINTS.md`](src/essentials/Foundation/DataProtection/EntityFrameworkCore/EXTENSION_POINTS.md) |
 | Workflow Agent (workflow explain/troubleshoot/change-proposal contribution) | [`src/extensions/Agent/src/Workflows/EXTENSION_POINTS.md`](src/extensions/Agent/src/Workflows/EXTENSION_POINTS.md) |
 
 ### Secrets

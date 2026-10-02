@@ -42,14 +42,14 @@ public sealed class WorkbenchExtensionBuilderTests
     [InlineData(StockSwitch.Null)]
     public async Task A_stock_workbench_has_no_extension_builder_routes(StockSwitch stockSwitch)
     {
-        string[] enabled = ["Elsa", "ExtensionBuilder", "Enabled"];
+        string[] switchPath = ["Elsa", "ExtensionBuilder", "Enabled"];
         await using var workbench = await WorkbenchProcess.StartAsync(WorkbenchShell.Development, contentRoot =>
         {
             var appSettings = Path.Join(contentRoot, "appsettings.json");
             if (stockSwitch == StockSwitch.Removed)
-                WorkbenchConfigurationFile.RemoveValue(appSettings, enabled);
+                WorkbenchConfigurationFile.RemoveValue(appSettings, switchPath);
             else if (stockSwitch == StockSwitch.Null)
-                WorkbenchConfigurationFile.WriteValue(appSettings, enabled, null);
+                WorkbenchConfigurationFile.WriteValue(appSettings, switchPath, null);
         });
 
         using var response = await workbench.ManagementClient.GetAsync($"{Api}/capabilities");

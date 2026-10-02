@@ -6,6 +6,7 @@ using Elsa.Activities.Design.Persistence.EntityFrameworkCore;
 using Elsa.Cluster.EntityFrameworkCore;
 using Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore;
 using Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore;
+using Elsa.Foundation.DataProtection.EntityFrameworkCore;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore;
 using Elsa.Persistence.EntityFramework;
@@ -23,7 +24,7 @@ namespace Elsa.Persistence.EntityFrameworkCore.Migrations.Tests;
 
 /// <summary>
 /// Guards the single <c>[EfModule]</c> declaration every module assembly now carries (ADR 0076 D2, spec
-/// 171 slice 1). <see cref="EfModuleCatalog.Discover"/> must find all 14 first-party modules with the
+/// 171 slice 1). <see cref="EfModuleCatalog.Discover"/> must find all 15 first-party modules with the
 /// names, base contexts and frozen history names the vocabulary table pins, and a descriptor's
 /// <c>HistoryModule</c> must never drift from the module's own frozen
 /// <c>&lt;Module&gt;EfModule.HistoryModuleName</c> constant — the exact mismatch already latent between
@@ -55,16 +56,17 @@ public sealed class EfModuleDescriptorTests
         ("Diagnostics.StructuredLogs", typeof(StructuredLogsDbContext), StructuredLogsEfModule.HistoryModuleName),
         ("Studio.Preferences", typeof(StudioPreferencesDbContext), StudioPreferencesEfModule.HistoryModuleName),
         ("Elsa3.Activities.Design.Import", typeof(Elsa3ImportDbContext), Elsa3ImportEfModule.HistoryModuleName),
-        ("Cluster.Membership", typeof(ClusterMembershipDbContext), ClusterMembershipEfModule.HistoryModuleName)
+        ("Cluster.Membership", typeof(ClusterMembershipDbContext), ClusterMembershipEfModule.HistoryModuleName),
+        ("DataProtection.Keys", typeof(DataProtectionKeysDbContext), DataProtectionKeysEfModule.HistoryModuleName)
     ];
 
     private static IReadOnlyList<EfModuleDescriptor> Discover() => EfModuleCatalog.Discover(ModuleContextCatalog.Modules);
 
     [Fact]
-    public void Discover_returns_all_14_modules_with_correct_names_contexts_and_frozen_history()
+    public void Discover_returns_all_15_modules_with_correct_names_contexts_and_frozen_history()
     {
         var descriptors = Discover();
-        Assert.Equal(14, descriptors.Count);
+        Assert.Equal(15, descriptors.Count);
 
         foreach (var (name, context, historyModule) in Expected)
         {
@@ -151,7 +153,7 @@ public sealed class EfModuleDescriptorTests
             .Select(attribute => (string)attribute.ConstructorArguments[1].Value!)
             .ToHashSet(StringComparer.Ordinal);
 
-    // One project directory per module assembly (ADR 0076 D2: twelve module projects carry fourteen
+    // One project directory per module assembly (ADR 0076 D2: thirteen module projects carry fifteen
     // [EfModule] declarations; Identity and Workflows.Runtime.Distributed each carry two in one project).
     // Repo-relative, not derived from the assembly's bin/obj output path, for the same reason
     // SecretsEfPersistencePilotArchitectureTests reads project files from the repo rather than from disk
@@ -160,6 +162,7 @@ public sealed class EfModuleDescriptorTests
     [
         (typeof(ActivitiesDesignDbContext).Assembly, "src/essentials/Activities/Design/Persistence/EntityFrameworkCore"),
         (typeof(ClusterMembershipDbContext).Assembly, "src/essentials/Cluster/EntityFrameworkCore"),
+        (typeof(DataProtectionKeysDbContext).Assembly, "src/essentials/Foundation/DataProtection/EntityFrameworkCore"),
         (typeof(EfOpenTelemetryDbContext).Assembly, "src/essentials/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore"),
         (typeof(StructuredLogsDbContext).Assembly, "src/essentials/Diagnostics/StructuredLogs/Persistence/EntityFrameworkCore"),
         (typeof(IdentityIamDbContext).Assembly, "src/essentials/Foundation/Identity/Persistence/EntityFrameworkCore"),
@@ -321,7 +324,7 @@ public sealed class EfModuleDescriptorTests
 
         var descriptors = EfModuleCatalog.Discover(ModuleContextCatalog.Modules.Append(dashboard).Append(aspNetCoreIdentity).Distinct());
 
-        Assert.Equal(14, descriptors.Count);
+        Assert.Equal(15, descriptors.Count);
         Assert.DoesNotContain(descriptors, descriptor => descriptor.Assembly == dashboard);
         Assert.DoesNotContain(descriptors, descriptor => descriptor.Assembly == aspNetCoreIdentity);
     }

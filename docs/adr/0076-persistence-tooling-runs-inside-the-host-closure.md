@@ -1,9 +1,9 @@
 ---
 status: accepted
 date: 2026-09-19
-amended: 2026-09-29
+amended: 2026-10-01
 decision_context: Design of issue #1861, owner decisions taken during the design session on 2026-09-19.
-amendment_context: 2026-09-29, decided by Sipke Schoorstra on #2093 and delivered by #2151 — Elsa.Foundation.Host may carry EF Core, the four provider engines and the EF cluster membership provider in its host closure, for cluster membership only; features still arrive from feeds.
+amendment_context: 2026-09-29, decided by Sipke Schoorstra on #2093 and delivered by #2151 — Elsa.Foundation.Host may carry EF Core, the four provider engines and the EF cluster membership provider in its host closure, for cluster membership only; features still arrive from feeds. 2026-10-01, delivered by #2191 on the direction of its program, #2203, to keep the key store in the platform's shared EF persistence, and awaiting acceptance by Sipke Schoorstra on its pull request — Elsa.Foundation.Host may also carry the EF Data Protection key store in its host closure, composed on the host container like membership; features still arrive from feeds.
 ---
 
 # Persistence tooling runs inside the host's closure
@@ -112,6 +112,27 @@ longer describes the host. Features still arrive from feeds: no EF module, EF fe
   `SharedAssemblyClosureGuardTests` requires it to share that closure under the token and major it carries.
   `FoundationHostClusterBootTests` boots two of these hosts over one database and shows a feed-loaded module's new
   schema version finalizing only once both can read it.
+
+## Amended — 2026-10-01: `Elsa.Foundation.Host` may also carry the EF Data Protection key store
+
+**`Elsa.Foundation.Host` may also carry `Elsa.Foundation.DataProtection.EntityFrameworkCore`, the host's Data Protection
+composition and its opt-in EF key store, in its host closure.**
+[#2191](https://github.com/elsa-workflows/elsa-foundation/issues/2191) delivers it, on the direction of its program,
+[#2203](https://github.com/elsa-workflows/elsa-foundation/issues/2203), to keep the key ring in the platform's shared EF
+persistence; it awaits Sipke Schoorstra's acceptance on its pull request. The amendment of 2026-09-29 above said the host
+carries EF "for cluster membership only", which no longer holds. Features still arrive from feeds.
+
+- **Why it is compiled in rather than fed.** For the reason membership is: the key ring protects every shell's sign-in
+  cookie and antiforgery tokens, so it is the host's, composed once on the host container and shared with every shell
+  CShells builds from the host's registrations. A key store a feed-loaded package brought would be per shell, and a
+  shell could not reach the host's.
+- **What the host composes.** `AddConfiguredDataProtection(configuration)`, exactly as `Elsa.Workbench` does. It always
+  fixes the application name, and enables the key store only when `Elsa:DataProtection:EntityFrameworkCore:Enabled` is
+  `true`, so an unconfigured host keeps its keys where ASP.NET Core keeps them by default and writes nothing to the
+  database. The key store is an EF module of its own, `DataProtection.Keys`, migrated by the plain-host migrator as
+  membership's is.
+- **Nothing else changes.** The module carries exactly the EF closure membership carries, so the host's reviewed EF
+  package closure in `EfCoreDependencyGuardTests` is unchanged, and the module adds no shared assembly.
 
 ## Context
 

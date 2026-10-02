@@ -1,5 +1,7 @@
 # Schema rollout demo: the presenter's runbook
 
+On stage, [CHEATSHEET.md](CHEATSHEET.md) has only the commands, in order, with what to expect; this runbook explains them.
+
 The story: a module that keeps its data in a shared database is upgraded to a new release **while the host keeps running**. The
 platform installs the release at runtime, refuses to switch to it until the database is migrated, says exactly what to run,
 and only turns on the feature that needs the new schema once **every host** that shares the database can read it.
@@ -13,7 +15,7 @@ and only turns on the feature that needs the new schema once **every host** that
 
 The whole thing is scripted in `tools/demo/rehearse.sh`. It runs this runbook end to end, and it uses the same helpers you type
 (`tools/demo/helpers.sh`: `note`, `notes`, `withtags`, `tag`, `reload`, `status`, `waitfor`, `rows`), so what it asserts is what you see: the status codes
-and the output lines the **Expect** items below promise, in setup and in both acts. The one thing it does not rehearse is `prepack.sh` (minutes long); it
+and the output lines the **Expect** items below promise, in setup and in both acts, and the cells of the package board at the steps that name them. The one thing it does not rehearse is `prepack.sh` (minutes long); it
 requires that to have run. Run it before every presentation (see the last section).
 
 The demo also answers the three questions the customer asked at the demo of 2026-09-21: see "Your three questions from last time" below. Each act carries a
@@ -27,8 +29,8 @@ boxed line to say at the step that answers a question, and Act 2 ends with a rec
 | Act 2 | `a` | 5201 | PostgreSQL container `elsa-demo-pg` | `host-a` | **A** | `artifacts/demo/logs/a.log` |
 | Act 2 | `b` | 5202 | the same PostgreSQL database | `host-b` | **B** | `artifacts/demo/logs/b.log` |
 
-Two more tabs face the audience: **1** for the Act 1 commands and **2** for the Act 2 commands. Tabs **S**, **A** and **B** run the
-hosts and stay off screen: their logs are long and are not written for an audience (see "Screen hygiene"). A sixth tab, **awake**, keeps
+Three more tabs face the audience: **1** for the Act 1 commands, **2** for the Act 2 commands, and **P** (packages), the package board, which sits beside whichever of the two is on screen (a split pane at half width) and shows each host's
+feed, installed release and served release as they change. Tabs **S**, **A** and **B** run the hosts and stay off screen: their logs are long and are not written for an audience (see "Screen hygiene"). A seventh tab, **awake**, keeps
 the laptop from sleeping.
 
 Ports 5101, 5201 and 5202 and the container name `elsa-demo-pg` are the demo's. All commands run from the repository root.
@@ -125,7 +127,7 @@ Ctrl-C ends it. A sleeping laptop stalls the hosts' heartbeats, which the other 
 
 ### S4. Open the tabs
 
-Six terminal tabs (1, 2, S, A, B, awake), all in the repository root, named as in the cast table. Paste this into **1** and **2** (it defines the helpers the acts use, and
+Seven terminal tabs (1, 2, P, S, A, B, awake), all in the repository root, named as in the cast table. Paste this into **1** and **2** (it defines the helpers the acts use, and
 it puts a bare `$ ` prompt on the screen instead of your user name, host name and folder; the audience never sees the paste):
 
 ```bash
@@ -137,7 +139,7 @@ PROMPT='$ ' RPROMPT=''
 To get the old prompt back: `PROMPT=$DEMO_PROMPT RPROMPT=$DEMO_RPROMPT`. A prompt theme that redraws the prompt by itself (powerlevel10k does) undoes the change: start those two tabs as
 a plain shell instead, with `zsh -f`, and paste the three lines there.
 
-The helpers, all typed from the repository root:
+The helpers, and the two scripts that show packages, all typed from the repository root:
 
 | Helper | What it does |
 |---|---|
@@ -149,6 +151,8 @@ The helpers, all typed from the repository root:
 | `status HOST` | `dotnet elsa persistence status` for host `solo` (Sqlite) or `a` or `b` (PostgreSQL, with the 2 s skew allowance the hosts' `--fast-membership` needs) |
 | `waitfor PORT` | waits until the host on that port answers `with-tags` with anything but 404, and says so |
 | `pgconn` | points this tab's `ELSA_EF_CONNECTION` at the PostgreSQL container (never printed) |
+| `bash tools/demo/board.sh HOST... [--watch]` | the package board, in tab **P**: one row per host (`solo`, `a`, `b`) with the Notes versions **in the feed**, **installed** (Nuplane's own record) and **serving** (what `with-tags` answers: 404 is 1.0.0, 409 or 200 is 1.1.0, with the reason when it is dormant). Read-only; `--watch` redraws every second and marks a cell that just changed |
+| `bash tools/demo/show-package.sh 1\|2` | opens a staged release, which is a zip: its id, version, description and dependencies, the files inside, and its `nuplane.json` |
 | `rows HOST` | the Notes table itself, one line per note: the version stamp each row was written in, and its tags as stored. `solo` reads the Sqlite file, `a` and `b` ask the PostgreSQL container (`docker exec` and `psql`; one database, so both show the same rows) |
 
 Tab **1** must not have a database connection in its environment (Act 1 uses the default Sqlite file):
@@ -243,7 +247,18 @@ status a
   It shows `finalized at 1.0.0` and both `host-a: Active, live` and `host-b: Active, live`, each reading `1.0.0`.
 - **Time:** the container 5 to 25 s; each host 10 to 15 s to be ready on a quiet laptop (25 to 50 s under load).
 
-Setup is done. Open tab **1** full screen; the audience arrives.
+### S7. The package board, in tab P
+
+Split tab **1** at half width (or put **P** beside it) and run, in **P**:
+
+```bash
+bash tools/demo/board.sh solo --watch
+```
+
+- **Expect:** a frame at most 50 columns wide, redrawn every second, with a clock: one row for `solo` that reads `1.0.0` in the feed, `1.0.0` installed and `1.0.0` serving. It only reads (a folder, the host's Nuplane record and `GET with-tags`); it never calls `/reload`.
+- **If it goes wrong:** `down` under serving: the host is not up yet, wait for `/health/ready` 200 (S5). `-` under installed: the host has not written its Nuplane record yet, which a running host has. Ctrl-C leaves the board.
+
+Setup is done. Open tab **1** full screen, board beside it; the audience arrives.
 
 ---
 
@@ -280,6 +295,18 @@ bash tools/demo/show-change.sh | less -R
 - **Time:** as long as you want; the script is instant.
 - **If it goes wrong:** `less` missing: drop the `| less -R` and use `| head -40`.
 
+### 1.2b Open the package
+
+```bash
+bash tools/demo/show-package.sh 2
+```
+
+- **Audience sees:** a short listing: the package id and version `1.1.0`, what it depends on, the files inside (the module's `.dll`, `nuplane.json`, `elsa-package.json`) and the content of `nuplane.json`.
+- **Say:** "This is an ordinary NuGet package: a zip with a manifest. The module's assembly, a small declaration of what it needs from the host, and its dependencies. There is nothing proprietary about the shape; it is what you would push to your own feed."
+- **Expect:** the first line is `Elsa.Samples.Nuplane.Notes 1.1.0`; the list of files includes `nuplane.json` and `elsa-package.json`.
+- **Time:** instant.
+- **If it goes wrong:** `Release 2 is not staged`: `bash tools/demo/prepack.sh` (minutes; not on stage).
+
 ### 1.3 Publish release 1.1.0 to the local feed
 
 ```bash
@@ -290,6 +317,7 @@ bash tools/demo/publish.sh 2 --host solo
 > "Yes, and this is it. The host is running right now and serves traffic. I am dropping a new module version into its feed, and I will not restart anything."
 
 - **Audience sees:** one line.
+- **Board shows:** the `in the feed` cell of `solo` goes from `1.0.0` to `1.0.0, 1.1.0` at once, with the line "1.1.0 in the feed, not installed yet" under the row. `installed` and `serving` still read `1.0.0`.
 - **Say:** "That is publishing to the feed the host watches. Nothing is restarted."
 - **Expect:** `published Elsa.Samples.Nuplane.Notes.1.1.0.nupkg to artifacts/demo/hosts/solo/feed`
 - **Time:** under a second (the same step took 15 to 86 s when the package was built live under load, which is why it is staged).
@@ -305,6 +333,7 @@ reload 5101
 ```
 
 - **Audience sees:** `HTTP 409` and the host's own explanation.
+- **Board shows:** about ten seconds after the publish, `installed` turns to `1.1.0` while `serving` stays `1.0.0`, with the line "1.1.0 installed, not switched" under the row: the host has the package and is held back. It does not change at the `reload`; only the 409 appears on the screen of tab 1.
 - **Say:** "The host found the release, installed it, and did **not** switch to it. The database is one migration behind, and the host refuses to
   migrate underneath the operator. It tells you the module, the migration, and the command to run. And it is still serving release 1.0.0:" then `notes 5101`.
 - **Expect:**
@@ -360,6 +389,7 @@ notes 5101
 > "That was hot reload: a new module version, picked up by a running host with no restart. It was held back until its database migration was applied, and the host told us so; for up to two seconds after the reload it also answered 409 while it re-checked that the new version was safe. Then it switched."
 
 - **Audience sees:** `HTTP 200`, the same notes now with `"tags":[]`, then one note with its tag, and the original endpoint unchanged. In the browser, reload tab 1: blank 404 becomes the notes.
+- **Board shows:** `serving` turns from `1.0.0` to `1.1.0`, first with the line "tags dormant: not every host reads 2.0.0 yet" for up to two seconds, then "tags live". The three cells now read `1.0.0, 1.1.0`, `1.1.0`, `1.1.0`.
 - **Say:** "The host switched to release 1.1.0 without a restart. The notes written by release 1.0.0 have no tags column value: the upcaster reads them as
   'no tags'. And the old endpoint carries on."
 - **Expect:** `reload` prints `HTTP 200` and the four lines of JSON `{`, `"features": 4,`, `"reloaded": 1` and `}`; `withtags` prints `HTTP 200` and the notes with `"tags":[]`; `tag` prints the note with `"tags":["demo"]`.
@@ -390,7 +420,13 @@ If the package is not staged and there is no time: `bash tools/demo/pack.sh 2 --
 
 ## Act 2: two hosts, one database (PostgreSQL)
 
-Switch to tab **2** (it holds `ELSA_EF_CONNECTION`). `docker ps --filter name=elsa-demo-pg` shows the container if anybody asks where the database is.
+Switch to tab **2** (it holds `ELSA_EF_CONNECTION`). `docker ps --filter name=elsa-demo-pg` shows the container if anybody asks where the database is. In tab **P**, Ctrl-C the Act 1 board and start the Act 2 one, which shows both hosts:
+
+```bash
+bash tools/demo/board.sh a b --watch
+```
+
+It reads `1.0.0` in all six cells.
 
 > **Your question 2: "What when we have multiple pods?"**
 > "Here are two hosts on one database. Watch what the platform does when they are not on the same release: we upgrade them one at a time, on purpose."
@@ -438,6 +474,7 @@ reload 5202
 > "Version 2 needs a new column. The migration only adds it, and nothing is dropped or changed, so host A, still on version 1, carries on against the migrated database. That is the rule that lets two versions share one table."
 
 - **Audience sees:** the same refusal as in Act 1 (`HTTP 409`, module, migration, apply command), the apply, then `HTTP 200`.
+- **Board shows:** host `b` only: `in the feed` gets `1.1.0` at the publish, `installed` turns to `1.1.0` about ten seconds later with "1.1.0 installed, not switched" under it (held back by the pending migration), and after the second `reload` `serving` turns to `1.1.0` with "tags dormant: not every host reads 2.0.0 yet". Host `a` does not move.
 - **Say:** "Same drill on host B, but now the database is shared. Watch host A: it is untouched, and it is still on 1.0.0." (`note 5201 "A keeps writing"` if you want to show it.)
   "The migration only adds a nullable column, so A keeps working against it."
 - **Expect:** `HTTP 409` with `"code": "pending-migrations"`; the apply prints `01  Cluster.Membership … 0` and `02  Samples.Notes … 1`; then `HTTP 200` and `{ "features": 4, "reloaded": 1 }`.
@@ -456,6 +493,7 @@ rows a
 > **Your question 3, live:** "Host B runs the new release, yet the row it just wrote is stamped with the old schema version, 1.0.0, exactly like host A's. A host writes the old format until every host can read the new one, so no row exists that any host cannot read, and the new feature stays dormant, with its reason, until then."
 
 - **Audience sees:** `HTTP 409` and a reason; refresh browser tab 3 for the same reason in the raw response. Host A keeps taking writes. Then `rows`: four notes, all stamped `1.0.0`, and an empty (`NULL`) tags column.
+- **Board shows:** nothing moves, and that is the picture: `b` serves `1.1.0` with "tags dormant: not every host reads 2.0.0 yet", `a` serves `1.0.0` and has `1.0.0` installed. Point at the two rows side by side.
 - **Say:** "Host B runs release 1.1.0 and could serve tags, but host A cannot read them. If B wrote tags, A would meet rows it cannot understand. So the feature stays
   dormant, and the request is refused whole: nothing is half-saved." Then, for `rows`: "This is the table itself, not an answer from a host. Every row carries the schema version it was written in.
   Both hosts wrote 1.0.0, including B, which runs the new release: it will not write the new format until A can read it. The tags column exists, because the migration ran, but nothing has filled it."
@@ -513,6 +551,7 @@ waitfor 5201
 
 > **Your question 1, once more:** "Host A gets the new version the same way: dropped into its feed, no restart, and this time no reload command either. Its database is already migrated, so nothing holds it back."
 
+- **Board shows:** host `a`'s `in the feed` gets `1.1.0` at the publish; about ten seconds later `installed` turns to `1.1.0` and, within a second or two, `serving` follows it. There is no "not switched" line this time: A's database is already migrated, so nothing holds it back.
 - **Audience sees:** one line, then a row of dots that ends when host A has switched. No restart, and nothing else to run: A's database was migrated by B's apply, so the host switches by itself.
   `waitfor` is the on-screen signal: it polls `with-tags` on A twice a second, which answers 404 while A still runs 1.0.0, and says `switched: with-tags answers HTTP 200 after N s` at the first answer
   that is not a 404. Refresh browser tab 2 meanwhile if you like: it too goes from the blank 404 to the notes (or, for a moment, to the 409 reason).
@@ -542,6 +581,7 @@ rows a
 >
 > **Your question 2, the rest:** "Nobody flipped a switch on either host. The moment the last live host could read the new version, it turned on everywhere."
 
+- **Board shows:** the "tags dormant" line under `b` (and for a moment under `a`) turns to "tags live" under both rows, and each host reads `1.0.0, 1.1.0`, `1.1.0`, `1.1.0`: the fleet is on one release, and `serving` has just changed on `b`.
 - **Audience sees:** `HTTP 200` on both, the notes written before the upgrade with `"tags":[]`. In the browser, reload tabs 2 and 3: 404 and the 409 reason are gone. Then `rows`: the two notes just written are stamped `2.0.0` with `[]`. The four from before are either still `1.0.0` with `NULL` or already rewritten to `2.0.0` with `[]`: the host starts its background pass within seconds of the finalization, so which one you see is a matter of timing, and both are right.
 - **Say:** "The moment every host could read 2.0.0, the platform turned the feature on, everywhere, without anybody flipping anything. The old notes read as 'no tags' through the upcaster.
   In the background the host rewrites the old rows into the new format; when none is left, the version is recorded complete." For `rows`: "The two notes I just wrote are stamped 2.0.0: from now on, a host writes the new format.
@@ -653,7 +693,7 @@ bash tools/demo/rehearse.sh --act 1 --fallback
 ```
 
 It begins with `reset.sh`, follows this runbook step by step (hosts started one after the other, in-place upgrades, no interaction), runs the very helpers of `tools/demo/helpers.sh` that you type,
-asserts the status codes and output lines above, and the schema version stored on each row (`rows`) before the upgrade, after the finalization and after the backfill, checks that nothing the audience sees shows the repository path or a home folder, prints the time of every step and the moments measured (install, finalization, completion), lists any spec or requirement numbers a host logged, and cleans up on exit,
+asserts the status codes and output lines above, the cells of the package board at the steps that move it (`board.sh`, once per step instead of `--watch`), that `show-package.sh 2` prints the package id and `1.1.0`, and the schema version stored on each row (`rows`) before the upgrade, after the finalization and after the backfill, checks that nothing the audience sees shows the repository path or a home folder, prints the time of every step and the moments measured (install, finalization, completion), lists any spec or requirement numbers a host logged, and cleans up on exit,
 success or failure. Its host logs are kept in `artifacts/demo-rehearsal/`. It uses the ports 5101, 5201 and 5202 (`DEMO_PORT_SOLO`, `DEMO_PORT_A`, `DEMO_PORT_B` change them): stop a live demo first.
 
 ## Troubleshooting
@@ -677,6 +717,8 @@ success or failure. Its host logs are kept in `artifacts/demo-rehearsal/`. It us
 | `rows a` or `rows b` says `No such container`, or prints nothing | The PostgreSQL container is not running (`rows a` and `rows b` ask it through `docker exec`), or `DEMO_PG_CONTAINER` renamed it | `docker ps --filter name=elsa-demo-pg`; start Docker and redo S6 if it is gone. `rows solo` reads the Sqlite file `artifacts/demo/notes.db` and needs no container |
 | `persistence status` shows `Cluster.Membership has migrations not applied` | The command lacks `--modules Samples.Notes,Cluster.Membership` | Use the `status` helper (it always passes both modules), not a hand-typed command |
 | `status` shows no `waits for:` line while A is still on 1.0.0 | A hand-typed command lacks `--skew-allowance 00:00:02`, so members are judged with 5 s instead of the hosts' 2 s | Use the `status` helper, which passes it |
+| The board (tab **P**) shows **down** under serving | The host is not up (yet), or listens on another port (the board reads `DEMO_PORT_SOLO`, `DEMO_PORT_A` and `DEMO_PORT_B` like the rehearsal) | `curl -s -o /dev/null -w '%{http_code}\n' localhost:5101/health/ready`; start the host (S5, S6). The board needs no restart: it picks the host up when it answers |
+| The board shows **-** under installed, or `installed` stays `1.0.0` while the feed has `1.1.0` | `-`: the host has not written its Nuplane record (`.nuplane/store-state.json`) yet. Otherwise the host has not installed the package yet (about ten seconds), or its watcher missed it | Wait ten seconds. Still `1.0.0` after 40 s: `ls artifacts/demo/hosts/solo/feed` and look at the host's log in tab S, A or B |
 | Host takes over a minute to be ready | The machine is loaded | `uptime`; wait; start the presentation after `/health/ready` is 200 on all three hosts |
 
 ## Screen hygiene
@@ -687,5 +729,5 @@ Nothing the audience is meant to see carries an internal requirement number. The
 
 The host logs are also very long (package resolution and catalog lines by the hundred per change); the answers in tab 1 and tab 2 tell the story. `rehearse.sh` reports these lines at
 the end of every run, so a new one shows up there. No personal path or name is on the audience's screen: the `reload` helper shows the `command` of the 409 relative to the repository (`--host "artifacts/demo/hosts/solo"`), the
-prompt of tabs 1 and 2 is a bare `$ ` (S4), and `rehearse.sh` fails when anything it runs for the audience prints the repository path or a home folder. The one command that does print the absolute path of the
+prompt of tabs 1 and 2 is a bare `$ ` (S4), and `rehearse.sh` fails when anything it runs for the audience prints the repository path or a home folder (the package board and `show-package.sh` print relative paths only, and are covered by it). The one command that does print the absolute path of the
 checkout, with the user name, is `elsa.sh persistence apply --restore`, which is setup and stays off screen. The tab and window titles and the browser's history are yours to check.

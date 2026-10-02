@@ -86,8 +86,9 @@
     The durable EF membership provider, so two or more of these hosts sharing one database form a cluster (#2151; ADR
     0076, amended 2026-09-29; spec 183, FR-024). AddConfiguredClusterMembership composes it only when
     Elsa:Cluster:Membership:EntityFrameworkCore:Enabled is true, with an explicit Elsa:Cluster:Membership:HostId; with
-    nothing configured this host stays a cluster of one on the in-process default. This is the only reason this host
-    carries EF Core: no feature is compiled in, and every EF module still arrives from a feed.
+    nothing configured this host stays a cluster of one on the in-process default. This and the Data Protection key store
+    below are the only reasons this host carries EF Core: no feature is compiled in, and every feature's EF module still
+    arrives from a feed.
 
     It brings Elsa.Persistence.EntityFramework, EF Core and Relational. The four provider engines are referenced here
     because the membership table lives in whichever database the operator selects, and the host binds the engine before
@@ -98,6 +99,12 @@
   -->
   <ItemGroup>
     <ProjectReference Include="..\..\essentials\Cluster\EntityFrameworkCore\Elsa.Cluster.EntityFrameworkCore.csproj" />
+    <!--
+      The host's Data Protection composition and its opt-in EF key store (#2191; ADR 0076, amended 2026-10-01): the key ring
+      is the host's, as its membership is, so it is composed on this container and never arrives through a shell's feature
+      list. It carries the same EF closure as the membership provider, and nothing more.
+    -->
+    <ProjectReference Include="..\..\essentials\Foundation\DataProtection\EntityFrameworkCore\Elsa.Foundation.DataProtection.EntityFrameworkCore.csproj" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
     <PackageReference Include="MySql.EntityFrameworkCore" />

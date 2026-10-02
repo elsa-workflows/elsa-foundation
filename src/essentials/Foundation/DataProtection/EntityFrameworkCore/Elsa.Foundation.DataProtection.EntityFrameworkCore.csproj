@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The host's ASP.NET Core Data Protection composition and its EF Core key store (#2191). Every host composes it once, on
+    its own container, never through a shell feature: the key ring signs the sign-in cookie and the antiforgery tokens of
+    every shell, and CShells builds each shell container from copies of the host's registrations. Provider-neutral module:
+    EF Core + Relational only; the host brings the one engine it selects.
+  -->
+  <PropertyGroup>
+    <Description>
+      Shares a host's ASP.NET Core Data Protection key ring through one table in the platform database, under a fixed
+      application name and, when a certificate is configured, encrypted at rest. Composed once per host from configuration.
+    </Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Whether the host is clustered: a durable membership provider's registration. -->
+    <ProjectReference Include="..\..\..\Cluster\Core\Elsa.Cluster.Core.csproj" />
+    <!-- ShareWithShells: every shell reaches the host's one key store, bound to the host's own container. -->
+    <ProjectReference Include="..\..\..\Cluster\Readability\Elsa.Cluster.Readability.csproj" />
+    <ProjectReference Include="..\..\..\Persistence\EntityFramework\Elsa.Persistence.EntityFramework.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="nuplane.json" Pack="true" PackagePath="/" />
+  </ItemGroup>
+
+</Project>

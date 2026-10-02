@@ -132,6 +132,9 @@ can override it. Standard .NET double-underscore (`__`) env keys override any co
 | `CShells__Shells__default__Features__FoundationIdentityOpenIddict__SigningKey` | Base64 PKCS#8 RSA private key that signs access tokens; whitespace in the value is ignored. The overlay turns off OpenIddict development mode, so without a usable key the default shell fails activation (`/health/ready` returns `503 shell_activation_failed`). See [identity configuration](reference/identity-configuration.md#foundationidentityopeniddict). | a demo key committed in the compose files |
 | `ConnectionStrings__Elsa` | The relational connection every EF module falls back to **except** OpenTelemetry and the Elsa 3 import lane, which look for `ConnectionStrings__ElsaOpenTelemetry` and `ConnectionStrings__ElsaElsa3Import` unless the feature names a connection — see [Demo persistence composition](#demo-persistence-composition). Supplies the shared fallback without editing `appsettings.json` or the mounted `shells.json`; a feature that names its own `ConnectionString` still wins over it. | `Host=postgres;Port=5432;Database=elsa;Username=elsa;Password=elsa` |
 | `Elsa__Persistence__EntityFramework__Schema` | Optional database schema for every EF module's tables and history tables, for a deployment that shares a database with an application owning the default schema. Applied on SQL Server and PostgreSQL, ignored on SQLite, **refused on MySQL** — see below. | *(unset: the provider's own default)* |
+| `Elsa__DataProtection__EntityFrameworkCore__Enabled`, `…__Provider` | Keep the Data Protection key ring — what the sign-in cookie and the antiforgery tokens are protected with — in the platform database, so it survives the container and is shared by every container on that database. Connects through `ConnectionStrings__Elsa` unless `…__ConnectionString` or `…__ConnectionName` names another. See [Data Protection keys](#data-protection-keys). | `true`, `PostgreSql` |
+| `Elsa__DataProtection__Certificate__Path`, `…__Password` | A PKCS#12 certificate, the same on every container, that encrypts the keys at rest. Mount the file as a secret; the password is a secret too. | *(unset: the keys are stored unencrypted, which the container warns about as it starts)* |
+| `Elsa__DataProtection__ApplicationName` | The name every protected payload is bound to: the same on every container of one deployment, distinct for a deployment that must not read another's payloads. See [Data Protection keys](#data-protection-keys). | *(unset: `Elsa`)* |
 
 `Cors:AllowedOrigins` defaults (in `appsettings.json`) are localhost dev values for running the
 server outside Docker; the compose file adds the Studio container origin.
@@ -143,6 +146,81 @@ server outside Docker; the compose file adds the Studio container origin.
 | `/app/shells.json` (ro) | Shell composition. The compose stack mounts `elsa-workbench.shells.json`. |
 | `/app/packages` | Nuplane directory feed — drop `.nupkg` activity/extension packages here to load them at runtime (watched). Backed by a named volume in compose. |
 | `/app/workflow-definitions` (ro) | Workflow definition JSON files deployed at startup by the `JsonWorkflowReconciliation` feature (`FolderPath` + optional `PublishOnReconcile`). Path is conventional — it is whatever the feature's `FolderPath` points at. See [Deploying workflow definitions from files](docker-hub-quickstart.md#deploying-workflow-definitions-from-files). |
+| `/app/data` | SQLite files meant to outlive the container; the image creates it writable by its runtime user. The published-images stack keeps its Data Protection key ring there, on the `elsa-data` volume. See [Data Protection keys](#data-protection-keys). |
+
+### Data Protection keys
+
+ASP.NET Core Data Protection signs and encrypts the sign-in cookie and the antiforgery tokens. Its key ring is the
+host's, composed once on the host container and shared with every shell. Without configuration ASP.NET Core keeps it
+in the runtime user's home directory inside the container, which no volume covers. Two things then fail:
+
+- **A recreated container signs everyone out.** It starts with an empty key ring, so every cookie the old one issued is
+  refused.
+- **Two containers behind one load balancer refuse each other's cookies.** Without sticky sessions, a sign-in on one
+  container fails on the next request that reaches the other, and so does a form post's antiforgery check.
+
+The reference stack keeps the key ring in its PostgreSQL database instead (`Elsa__DataProtection__EntityFrameworkCore__Enabled`
+in `docker-compose.yml`), in the `elsa_data_protection_keys` table of the `DataProtection.Keys` EF module. Every container
+on that database then reads one key ring under one application name, `Elsa` unless `Elsa__DataProtection__ApplicationName`
+says otherwise, whatever directory it runs from:
+
+```yaml
+Elsa__DataProtection__EntityFrameworkCore__Enabled: "true"
+Elsa__DataProtection__EntityFrameworkCore__Provider: PostgreSql      # the engine ConnectionStrings__Elsa reaches
+Elsa__DataProtection__Certificate__Path: /run/secrets/data-protection.pfx
+Elsa__DataProtection__Certificate__Password: "…"                     # a secret, like the certificate
+```
+
+- **Encrypt the keys at rest.** Without a certificate each key's secret is stored as written, so whoever can read the
+  table can forge a sign-in; the container warns about that every time it starts. Give every container the same
+  PKCS#12 certificate with its private key. A relative path is read from the content root, `/app`. A certificate that
+  cannot be loaded, or holds no private key, stops the container at startup, naming the key.
+- **Migrations.** The key table is an EF module of its own. Under `AutoMigrate`, as in the compose stacks, the container
+  creates it as it starts; under `Validate` it refuses to start until `dotnet elsa persistence apply --modules DataProtection.Keys`
+  has created it, like any other module.
+- **Half a configuration is refused.** Settings under `Elsa__DataProtection__EntityFrameworkCore__` without `Enabled`, and
+  a certificate without the key store, stop the container at startup, naming the key.
+- **A cluster without it is warned about.** A host that enables durable cluster membership but keeps its key ring to
+  itself logs a warning as it starts, naming the switch to set. It still starts: a cluster whose features sign nobody in
+  has nothing to share.
+- **Separate deployments need separate names or separate stores.** The key table records no application, so two
+  deployments that share a database, or containers that share a mounted home directory without the key store, read each
+  other's cookies when their application names match. Give a deployment that must stay apart, staging beside
+  production say, its own `Elsa__DataProtection__ApplicationName`, its own database, or both.
+- **Upgrading signs everyone out once.** Images built before the application name was fixed named it after the content
+  root, so the cookies and antiforgery tokens they issued are refused by the upgraded container: users sign in again.
+  Changing the application name later does the same.
+
+The published-images stack (`docker-compose.images.yml`, and the `docker run` examples of the
+[Docker Hub quickstart](docker-hub-quickstart.md) and `docker/compose/README.md`) keeps its data in SQLite files inside
+the container, which a recreate discards. Its key ring is the exception: the key store has a connection of its own to a
+SQLite file on the `elsa-data` volume, mounted at `/app/data`, which the image creates writable by its runtime user:
+
+```yaml
+Elsa__DataProtection__EntityFrameworkCore__Enabled: "true"
+Elsa__DataProtection__EntityFrameworkCore__ConnectionString: "Data Source=/app/data/data-protection.db"
+volumes:
+  - elsa-data:/app/data
+```
+
+The keys survive a restart and a recreate of the container for as long as the volume exists; `docker compose down -v`,
+or `docker volume rm elsa-data`, discards them.
+
+- **A recreate still signs everyone out in this stack.** Its identity store is SQLite inside the container too, so a
+  recreated container seeds its users again, and a session issued before no longer matches a user. Only a stack whose
+  identity store is on a persistent database, such as the PostgreSQL reference stack, keeps everyone signed in across a
+  recreate.
+- **The volume needs an image built after #2191,** which creates `/app/data` owned by the image's `$APP_UID` (1654).
+  With an older image, Docker creates the volume's root owned by root, and the container cannot write its key store.
+  Pull the newer image (`docker pull elsaworkflows/elsa-workbench:latest`), or give the volume to `$APP_UID` once before
+  starting: `docker run --rm --user root --entrypoint chown -v elsa-data:/app/data elsaworkflows/elsa-workbench:latest 1654:1654 /app/data`
+  (with Compose: `docker compose -f docker-compose.images.yml run --rm --no-deps --user root --entrypoint chown elsa-workbench 1654:1654 /app/data`).
+
+These stacks migrate as they start
+(`Elsa__Persistence__EntityFramework__Migrate__Policy=AutoMigrate`). Under the image's own `Validate` policy a container
+on an empty volume exits as it starts, with `EfPendingMigrationsException: EF module 'DataProtection.Keys' has pending
+migrations`, until the table exists: run `dotnet elsa persistence apply --host "<host directory>" --modules
+DataProtection.Keys --provider Sqlite --connection-env ELSA_EF_CONNECTION` against that file first, or set the policy.
 
 ---
 
