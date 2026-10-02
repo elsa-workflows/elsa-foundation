@@ -14,6 +14,12 @@ public sealed class RuntimeSecretResolutionTests
     private const string Value = "resolved-secret-value";
 
     [Fact]
+    public void The_resolver_contract_declares_single_implementation_replacement_semantics()
+    {
+        Assert.True(typeof(IRuntimeSecretResolver).IsDefined(typeof(RuntimeSecretResolverReplacementContractAttribute), inherit: false));
+    }
+
+    [Fact]
     public void A_success_carries_the_value_and_no_failure()
     {
         var resolution = RuntimeSecretResolution.Success(Value);

@@ -18,7 +18,8 @@ namespace Elsa.Activities.Runtime.Tests;
 /// <summary>
 /// The input paths of research R3a that activation-time secret resolution owns (spec 188, T091): structural parent
 /// evaluation (IP5), child-completion re-materialization (IP6), the boundary retry (IP9) and the operator reschedule
-/// (IP10). Each path that activates a CLR activity resolves the reference again, and none persists a value. Invoke and
+/// (IP10), whose successor is invoked through the real scheduler work handlers. Each path that activates a CLR activity
+/// resolves the reference again, and none persists a value. Invoke and
 /// bookmark resume (IP3, IP4) are covered by <see cref="ClrActivityActivatorTests"/> and
 /// <see cref="WorkflowInvokeActivitySchedulerWorkHandlerTests"/>.
 /// </summary>
@@ -87,7 +88,8 @@ public sealed class SecretInputPathCoverageTests
     {
         const string boundaryId = "boundary";
         const string retryId = "boundary-retry";
-        await using var harness = NewHarness([]);
+        var activator = new RecordingActivityActivator();
+        await using var harness = NewHarness([], services => services.AddScoped<IActivityActivator>(_ => activator));
         var services = harness.Services;
         var identity = WorkflowExecutionHarness.Identity;
         await services.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(WorkflowExecutionHarness.NewExecutable(
@@ -106,6 +108,10 @@ public sealed class SecretInputPathCoverageTests
             await durableValues.ListAllDurableValueStatesAsync(harness.ExecutionId),
             value => StringComparer.Ordinal.Equals(value.SourceActivityExecutionId, retryId));
         Assert.Equal("input", cloned.Metadata[RuntimeMetadataKeys.BoundaryValueRole]);
+        // The clone is the boundary's own input, not the boundary's withheld snapshot envelope.
+        var clonedJson = JsonSerializer.Serialize(cloned);
+        Assert.DoesNotContain(SecretResolutionTestSupport.ReferenceName, clonedJson, StringComparison.Ordinal);
+        Assert.DoesNotContain(nameof(ValuePresence.Withheld), clonedJson, StringComparison.Ordinal);
         Assert.True(JsonElement.DeepEquals(order, cloned.InlineValue!.Value));
         var commit = Assert.Single(services.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>().ListCommits()).Commit;
         // No activity state, so not the boundary's withheld snapshot either, is carried over: the retried execution
@@ -113,6 +119,7 @@ public sealed class SecretInputPathCoverageTests
         Assert.Empty(commit.StateChanges.ActivityExecutions);
         var scheduled = Assert.Single(commit.PostCommitIntents).Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>()!;
         Assert.Equal(WorkflowExecutionCommandKind.ScheduleActivity, scheduled.CommandKind);
+        Assert.Empty(activator.Requests);
         Assert.Empty(_resolver.Requests);
     }
 
@@ -143,17 +150,36 @@ public sealed class SecretInputPathCoverageTests
         Assert.Same(source.InputSnapshot, successor.InputSnapshot);
         SecretResolutionTestSupport.AssertSnapshotWithheld(successor);
 
-        // The successor's invoke activates it from that snapshot through the activator, which resolves the reference.
-        var node = (await scope.ServiceProvider.GetRequiredService<IWorkflowExecutableStore>().FindAsync(executable.Identity.ArtifactId))!.NodesById[WaitNodeId];
-        await using var lease = await scope.ServiceProvider.GetRequiredService<IActivityActivator>().ActivateAsync(new ActivityActivationRequest(
-            harness.ExecutionId,
-            node.ActivityContract!,
-            successor.InputSnapshot!,
-            new ActivityAttempt("successor-attempt-1", successor.InvocationId, 1, ActivityAttemptReason.Initial, DateTimeOffset.UnixEpoch),
-            Descriptor: node.Descriptor));
+        // Commit the reschedule's activity states, then deliver its continuation through the real scheduler work
+        // handlers: the successor's start enqueues its invoke, whose activation resolves the reference again.
+        var activityStates = scope.ServiceProvider.GetRequiredService<IActivityExecutionStateStore>();
+        foreach (var change in builder.ActivityExecutions)
+            await activityStates.SaveAsync(change.State);
+        await DispatchAsync(scope.ServiceProvider, Assert.Single(builder.PostCommitIntents).MaterializedSchedulerWorkItem!);
 
-        Assert.Equal(FakeRuntimeSecretResolver.SequenceValue(2), Assert.IsType<SecretWaitingActivity>(lease.Activity).Token);
+        Assert.Equal(
+            [
+                (SecretValueRecorder.Execute, FakeRuntimeSecretResolver.SequenceValue(1)),
+                (SecretValueRecorder.Execute, FakeRuntimeSecretResolver.SequenceValue(2))
+            ],
+            _recorder.Entries);
         Assert.Equal(2, _resolver.Requests.Count);
+        var invoked = (await activityStates.FindAsync(harness.ExecutionId, successor.Execution.ActivityExecutionId))!;
+        Assert.Equal(ActivityExecutionStatus.Suspended, invoked.Status);
+        SecretResolutionTestSupport.AssertSnapshotWithheld(invoked);
+        await SecretResolutionTestSupport.AssertNotPersistedAsync(harness, _recorder.Values);
+    }
+
+    /// <summary>
+    /// Runs <paramref name="workItem"/> and then every item it queues through the registered scheduler work handlers,
+    /// choosing a handler as the scheduler drainer does: a specific handler before a fallback one.
+    /// </summary>
+    private static async Task DispatchAsync(IServiceProvider services, RuntimeSchedulerWorkItem workItem)
+    {
+        var handlers = services.GetServices<IWorkflowSchedulerWorkHandler>().OrderBy(handler => handler is IFallbackWorkflowSchedulerWorkHandler).ToArray();
+        var queue = services.GetRequiredService<IWorkflowSchedulerWorkQueue>();
+        for (RuntimeSchedulerWorkItem? item = workItem; item is not null; item = await queue.DequeueAsync(workItem.WorkflowExecutionId))
+            await handlers.First(handler => handler.CanHandle(item)).HandleAsync(item);
     }
 
     private WorkflowExecutionHarness NewHarness(IReadOnlyCollection<string> activityExecutionIds, Action<IServiceCollection>? configure = null) =>
@@ -235,6 +261,28 @@ public sealed class SecretInputPathCoverageTests
             new Dictionary<string, string>(),
             new Dictionary<string, string>(),
             boundaryId);
+
+    /// <summary>An activator that records every request and refuses it: the path under test must not activate anything.</summary>
+    private sealed class RecordingActivityActivator : IActivityActivator
+    {
+        private readonly List<ActivityActivationRequest> _requests = [];
+
+        public IReadOnlyList<ActivityActivationRequest> Requests
+        {
+            get
+            {
+                lock (_requests)
+                    return _requests.ToArray();
+            }
+        }
+
+        public ValueTask<ActivityActivationLease> ActivateAsync(ActivityActivationRequest request, CancellationToken cancellationToken = default)
+        {
+            lock (_requests)
+                _requests.Add(request);
+            throw new InvalidOperationException("This path must not activate an activity.");
+        }
+    }
 
     private sealed class Staging : IWorkflowAlterationStagingWorkspace
     {

@@ -12,6 +12,7 @@ using Elsa.Serialization.SystemText.Services;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
+using Elsa.Workflows.Runtime.Extensions;
 using Elsa.Workflows.Runtime.Services.Values;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -23,6 +24,7 @@ public sealed class ClrActivityActivatorTests : IAsyncDisposable
     private const string WorkflowExecutionId = "wfexec-1";
     private const string Partition = "tenant-a";
     private const string ReferenceName = SecretResolutionTestSupport.ReferenceName;
+    private const string ResolverSentinel = "resolver-detail-sentinel";
     private static readonly ValueTypeDescriptor StringType = new("String");
     private static readonly ValueTypeDescriptor Int32Type = new("Int32");
 
@@ -30,7 +32,7 @@ public sealed class ClrActivityActivatorTests : IAsyncDisposable
 
     // Secret resolution: the instance runs under partition 'tenant-a' and records no tenant of its own.
     private readonly FakeRuntimeSecretResolver _resolver = new();
-    private readonly ContextPartitionAccessor _partition = new(PersistenceAccessContext.Scoped(new PersistenceScope(Partition)));
+    private readonly CountingPartitionAccessor _partition = new(Partition);
     private readonly SingleInstanceStateStore _instances = new(Instance(tenantId: null));
     private readonly RecordingConversionExecutor _conversions = new();
 
@@ -92,17 +94,25 @@ public sealed class ClrActivityActivatorTests : IAsyncDisposable
         Assert.Empty(_resolver.Requests);
     }
 
-    [Fact]
-    public async Task A_secret_reference_in_a_host_without_a_resolver_is_refused_as_a_missing_capability()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_secret_reference_in_a_host_without_a_resolver_is_refused_as_a_missing_capability(bool composeSecretInputResolver)
     {
-        // A missing resolver is a composition fault, which parks the activity, not a resolution failure (T031).
-        var activator = new ActivityActivator([ClrStrategy(_root)], new ActivityInputHydrator());
+        // A missing resolver is a composition fault, which parks the activity, not a resolution failure (T031). The
+        // runtime composes the activator's secret input collaborator without a resolver; a hand-built activator may
+        // compose no collaborator at all, and fails closed the same way.
+        var activator = new ActivityActivator(
+            [ClrStrategy(_root)],
+            new ActivityInputHydrator(),
+            secretInputResolver: composeSecretInputResolver ? new ActivitySecretInputResolver(_partition, _instances, _conversions) : null);
 
         var exception = await Assert.ThrowsAsync<RuntimeSecretResolverNotFoundException>(() =>
             activator.ActivateAsync(WithheldRequest(Withheld())).AsTask());
 
         Assert.Equal("message", exception.InputKey);
         Assert.Equal(0, ScopedDependency.DisposeCount);
+        Assert.Equal(0, _instances.Reads);
     }
 
     [Fact]
@@ -127,7 +137,7 @@ public sealed class ClrActivityActivatorTests : IAsyncDisposable
         // A strategy that skips hydration (graph activation) never reads the input, so only the activator's own
         // refusal stops a withheld value from passing silently, even with a resolver composed (spec 188, T008).
         var strategy = new NonHydratingStrategy();
-        var activator = new ActivityActivator([strategy], new ActivityInputHydrator(), secretResolver: _resolver);
+        var activator = new ActivityActivator([strategy], new ActivityInputHydrator(), secretInputResolver: SecretInputResolver(_partition));
         var contract = Contract(typeof(ServiceBearingActivity), "message");
 
         var exception = await Assert.ThrowsAsync<WithheldValueException>(() => activator.ActivateAsync(WithheldRequest(
@@ -181,11 +191,16 @@ public sealed class ClrActivityActivatorTests : IAsyncDisposable
     [MemberData(nameof(ContextsWithoutOnePartition))]
     public async Task A_context_without_one_partition_refuses_before_the_resolver_is_called(PersistenceAccessContext context)
     {
-        _partition.Context = context;
+        // The runtime's own partition accessor, bound to the context, is what refuses: a double here would prove only itself.
+        await using var runtime = new ServiceCollection().AddWorkflowRuntime().BuildServiceProvider();
+        await using var scope = runtime.CreateAsyncScope();
+        scope.ServiceProvider.GetRequiredService<IPersistenceAccessContextBinder>().Bind(context);
+        var activator = SecretActivator(scope.ServiceProvider.GetRequiredService<IWorkflowExecutionPartitionAccessor>());
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => SecretActivator().ActivateAsync(WithheldRequest(Withheld())).AsTask());
+        await Assert.ThrowsAsync<InvalidOperationException>(() => activator.ActivateAsync(WithheldRequest(Withheld())).AsTask());
 
         Assert.Empty(_resolver.Requests);
+        Assert.Equal(0, _instances.Reads);
         Assert.Equal(1, ScopedDependency.DisposeCount);
     }
 
@@ -226,27 +241,6 @@ public sealed class ClrActivityActivatorTests : IAsyncDisposable
             SecretActivator().ActivateAsync(WithheldRequest(Withheld())).AsTask());
 
         Assert.Contains($"Workflow execution '{WorkflowExecutionId}' is not found", exception.Message, StringComparison.Ordinal);
-        Assert.Empty(_resolver.Requests);
-    }
-
-    [Theory]
-    [InlineData(false, true, nameof(IWorkflowExecutionPartitionAccessor))]
-    [InlineData(true, false, nameof(IWorkflowExecutionStateStore))]
-    public async Task A_host_that_cannot_read_the_executing_tenant_refuses_before_the_resolver_is_called(
-        bool composePartitionAccessor,
-        bool composeStateStore,
-        string missingService)
-    {
-        var activator = new ActivityActivator(
-            [ClrStrategy(_root)],
-            new ActivityInputHydrator(),
-            secretResolver: _resolver,
-            partitionAccessor: composePartitionAccessor ? _partition : null,
-            workflowExecutionStateStore: composeStateStore ? _instances : null);
-
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => activator.ActivateAsync(WithheldRequest(Withheld())).AsTask());
-
-        Assert.Contains(missingService, exception.Message, StringComparison.Ordinal);
         Assert.Empty(_resolver.Requests);
     }
 
@@ -349,6 +343,41 @@ public sealed class ClrActivityActivatorTests : IAsyncDisposable
         Assert.Single(_resolver.Requests);
         Assert.True(resolverToken.IsCancellationRequested, "The resolver must receive the activation's cancellation token.");
         Assert.Equal(1, ScopedDependency.DisposeCount);
+    }
+
+    [Fact]
+    public async Task A_resolver_that_throws_reports_ResolverFailed_without_what_it_threw()
+    {
+        // A resolver may only throw a cancellation; anything else may carry the value or store detail in its message.
+        _resolver.Respond = (_, _) => throw new InvalidOperationException(ResolverSentinel, new InvalidOperationException(ResolverSentinel));
+
+        var exception = await Assert.ThrowsAsync<RuntimeSecretResolutionException>(() =>
+            SecretActivator().ActivateAsync(WithheldRequest(Withheld())).AsTask());
+
+        Assert.Equal(RuntimeSecretResolutionException.ResolverFailed, exception.FailureCode);
+        Assert.False(exception.IsRetryable);
+        Assert.Equal($"Secret '{ReferenceName}' could not be resolved (ResolverFailed).", exception.Message);
+        Assert.Null(exception.InnerException);
+        Assert.DoesNotContain(ResolverSentinel, exception.ToString(), StringComparison.Ordinal);
+        Assert.Equal(1, ScopedDependency.DisposeCount);
+    }
+
+    [Fact]
+    public async Task A_classified_resolution_failure_keeps_its_classification_when_lease_disposal_also_fails()
+    {
+        _resolver.Respond = (_, _) => RuntimeSecretResolution.Failure("StoreUnavailable", isRetryable: true);
+        var activator = new ActivityActivator([new FailingDisposalStrategy()], new ActivityInputHydrator(), secretInputResolver: SecretInputResolver(_partition));
+
+        var exception = await Assert.ThrowsAnyAsync<AggregateException>(() => activator.ActivateAsync(WithheldRequest(Withheld())).AsTask());
+
+        // The fault recorder reads retryability and the code through the classification contract (T032).
+        var classification = Assert.IsAssignableFrom<IRuntimeFaultClassification>(exception);
+        Assert.True(classification.IsRetryable);
+        Assert.Equal("StoreUnavailable", classification.FailureCode);
+        Assert.Collection(
+            exception.InnerExceptions,
+            inner => Assert.IsType<RuntimeSecretResolutionException>(inner),
+            inner => Assert.Equal("Scope disposal failed.", inner.Message));
     }
 
     [Fact]
@@ -612,14 +641,11 @@ public sealed class ClrActivityActivatorTests : IAsyncDisposable
         (new ActivityActivator([ClrStrategy(services)], new ActivityInputHydrator(), externalPayloadStore),
             Contract(typeof(ServiceBearingActivity), "message"));
 
-    private ActivityActivator SecretActivator() =>
-        new(
-            [ClrStrategy(_root)],
-            new ActivityInputHydrator(),
-            secretResolver: _resolver,
-            partitionAccessor: _partition,
-            workflowExecutionStateStore: _instances,
-            valueConversionExecutor: _conversions);
+    private ActivityActivator SecretActivator(IWorkflowExecutionPartitionAccessor? partitionAccessor = null) =>
+        new([ClrStrategy(_root)], new ActivityInputHydrator(), secretInputResolver: SecretInputResolver(partitionAccessor ?? _partition));
+
+    private ActivitySecretInputResolver SecretInputResolver(IWorkflowExecutionPartitionAccessor partitionAccessor) =>
+        new(partitionAccessor, _instances, _conversions, _resolver);
 
     private static ClrActivityActivator ClrStrategy(IServiceProvider services)
     {
@@ -708,14 +734,9 @@ public sealed class ClrActivityActivatorTests : IAsyncDisposable
             },
             DateTimeOffset.UtcNow);
 
-    /// <summary>
-    /// Mirrors the engine's partition accessor: the partition is the scope of the current persistence context, which a
-    /// global or across-scope context does not have.
-    /// </summary>
-    private sealed class ContextPartitionAccessor(PersistenceAccessContext context) : IWorkflowExecutionPartitionAccessor
+    /// <summary>Reports one partition and counts its reads.</summary>
+    private sealed class CountingPartitionAccessor(string partition) : IWorkflowExecutionPartitionAccessor
     {
-        public PersistenceAccessContext Context { get; set; } = context;
-
         public int Reads { get; private set; }
 
         public WorkflowExecutionPartition Current
@@ -723,7 +744,7 @@ public sealed class ClrActivityActivatorTests : IAsyncDisposable
             get
             {
                 Reads++;
-                return new(Context.RequireScope().Value);
+                return new(partition);
             }
         }
     }
@@ -771,6 +792,21 @@ public sealed class ClrActivityActivatorTests : IAsyncDisposable
             Conversions.Add((source, plan));
             return Failure is null ? _inner.Convert(source, plan) : throw Failure(plan);
         }
+    }
+
+    /// <summary>A hydrating CLR strategy whose lease fails to dispose its scope.</summary>
+    private sealed class FailingDisposalStrategy : IActivityActivationStrategy
+    {
+        public string ConsumerKey => WellKnownRuntimeActivityConsumers.ClrActivity;
+
+        public IReadOnlyCollection<string> SupportedSchemaVersions { get; } = [RuntimeActivityDescriptor.InitialSchemaVersion];
+
+        public bool RequiresInputHydration => true;
+
+        public ValueTask<ActivityActivationLease> ActivateAsync(
+            ActivityActivationStrategyRequest request,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(new ActivityActivationLease(new OptionalInitializerActivity(), new ThrowingAsyncDisposableScope()));
     }
 
     private sealed class NonHydratingStrategy : IActivityActivationStrategy

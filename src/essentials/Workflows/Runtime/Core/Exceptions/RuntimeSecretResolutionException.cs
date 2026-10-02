@@ -7,8 +7,8 @@ namespace Elsa.Workflows.Runtime.Core.Exceptions;
 /// secret reference and the failure code only: never a value, and never the store's error text.
 /// </summary>
 /// <remarks>
-/// The code is a resolver's failure code (only <c>StoreUnavailable</c> is retryable), <see cref="TenantMismatch"/> or
-/// <see cref="ConversionFailed"/>. The classification reaches the recorded fault through
+/// The code is a resolver's failure code (only <c>StoreUnavailable</c> is retryable), <see cref="TenantMismatch"/>,
+/// <see cref="ConversionFailed"/> or <see cref="ResolverFailed"/>. The classification reaches the recorded fault through
 /// <see cref="IRuntimeFaultClassification"/>.
 /// </remarks>
 public sealed class RuntimeSecretResolutionException : Exception, IRuntimeFaultClassification
@@ -24,6 +24,12 @@ public sealed class RuntimeSecretResolutionException : Exception, IRuntimeFaultC
     /// </summary>
     public const string ConversionFailed = "ConversionFailed";
 
+    /// <summary>
+    /// The resolver threw instead of returning a result, which breaks its contract. What it threw is dropped, because
+    /// its message may carry the value or store-private detail.
+    /// </summary>
+    public const string ResolverFailed = "ResolverFailed";
+
     public RuntimeSecretResolutionException(string referenceName, string failureCode, bool isRetryable)
         : base(FormatMessage(referenceName, failureCode))
     {
@@ -37,8 +43,6 @@ public sealed class RuntimeSecretResolutionException : Exception, IRuntimeFaultC
     public string FailureCode { get; }
 
     public bool IsRetryable { get; }
-
-    string? IRuntimeFaultClassification.FailureCode => FailureCode;
 
     private static string FormatMessage(string referenceName, string failureCode)
     {

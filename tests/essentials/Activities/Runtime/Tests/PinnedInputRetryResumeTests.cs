@@ -1,7 +1,9 @@
 using System.Text.Json;
 using Elsa.Activities.Testing;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Elsa.Activities.Runtime.Tests;
@@ -92,5 +94,28 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
         // The instance records no tenant, so both activations resolve under the partition the execution runs under.
         Assert.All(resolver.Requests, request => Assert.Equal(WorkflowExecutionPartition.DefaultValue, request.TenantId));
         Assert.Equal(2, resolver.Requests.Count);
+    }
+
+    /// <summary>
+    /// A resolver that throws instead of returning a result faults the activity with <c>ResolverFailed</c>, and nothing
+    /// it threw reaches the persisted fault or the incident (spec 188, FR-003).
+    /// </summary>
+    [Fact]
+    public async Task A_resolver_that_throws_faults_the_activity_with_ResolverFailed_and_persists_nothing_it_threw()
+    {
+        const string nodeId = "node-wait";
+        const string sentinel = "resolver-detail-sentinel";
+        var resolver = new FakeRuntimeSecretResolver { Respond = (_, _) => throw new InvalidOperationException(sentinel) };
+        await using var harness = SecretResolutionTestSupport.NewHarness(resolver, new SecretValueRecorder(), ["actexec-wait"]);
+
+        var faulted = (await harness.RunAsync(SecretResolutionTestSupport.NewWaitingExecutable(nodeId))).State(nodeId);
+
+        Assert.Equal(ActivityExecutionStatus.Faulted, faulted.Status);
+        Assert.Equal(RuntimeSecretResolutionException.ResolverFailed, faulted.Fault!.Code);
+        Assert.False(faulted.Fault.IsRetryable);
+        Assert.Equal($"Secret '{SecretResolutionTestSupport.ReferenceName}' could not be resolved (ResolverFailed).", faulted.Fault.Message);
+        var incident = Assert.Single(await harness.Services.GetRequiredService<IIncidentStateStore>().ListAsync(harness.ExecutionId));
+        Assert.DoesNotContain(sentinel, JsonSerializer.Serialize(faulted), StringComparison.Ordinal);
+        Assert.DoesNotContain(sentinel, JsonSerializer.Serialize(incident), StringComparison.Ordinal);
     }
 }

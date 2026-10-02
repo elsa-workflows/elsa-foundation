@@ -3,20 +3,33 @@ using Elsa.Workflows.Runtime.Core.Models;
 namespace Elsa.Workflows.Runtime.Core.Contracts;
 
 /// <summary>
+/// Declares <see cref="IRuntimeSecretResolver"/> as a single-implementation replacement contract (framework constitution
+/// §2.6.2).
+/// </summary>
+[AttributeUsage(AttributeTargets.Interface, Inherited = false)]
+public sealed class RuntimeSecretResolverReplacementContractAttribute : Attribute;
+
+/// <summary>
 /// Resolves one secret reference for one tenant when an activity is activated. The runtime owns this contract so it
 /// never references a secrets module; a bridge feature implements it over the host's secret store.
 /// </summary>
 /// <remarks>
 /// <para>
-/// This is a <b>replacement contract</b> (framework constitution §2.6.2): at most one implementation is composed per
-/// container. A host that composes none cannot resolve secrets at all, which activation reports as a missing
-/// capability that parks the activity, not as a resolution failure.
+/// This is a <b>replacement contract</b> (framework constitution §2.6.2), declared by
+/// <see cref="RuntimeSecretResolverReplacementContractAttribute"/>: at most one implementation is meaningful per
+/// container. The runtime registers none and does not itself detect a second registration; the feature that registers
+/// the implementation (the Secrets bridge, spec 188 slice 4) must refuse one. A host that composes none cannot resolve
+/// secrets at all, which activation reports as a missing capability that parks the activity, not as a resolution
+/// failure.
 /// </para>
 /// <para>
-/// The tenant always comes from the executing workflow instance: activation reads it from
-/// <see cref="IWorkflowExecutionPartitionAccessor"/>. No binding, request payload, setting or default supplies it.
+/// The tenant is the partition the execution runs under (<see cref="IWorkflowExecutionPartitionAccessor"/>), which is
+/// the scope the instance's own rows are stored under. When the instance records a tenant, it must match that partition,
+/// or resolution refuses with <c>TenantMismatch</c> before the resolver is called. No binding, request payload, setting
+/// or default selects it.
 /// </para>
 /// </remarks>
+[RuntimeSecretResolverReplacementContract]
 public interface IRuntimeSecretResolver
 {
     /// <summary>
@@ -38,7 +51,7 @@ public sealed record RuntimeSecretResolutionRequest
         Reference = reference;
     }
 
-    /// <summary>The tenant of the executing workflow instance, never one a binding chose.</summary>
+    /// <summary>The partition the execution runs under, never one a binding chose.</summary>
     public string TenantId { get; }
 
     public RuntimeSecretReference Reference { get; }

@@ -11,9 +11,10 @@ properties exactly once. The activity returns one closed `ActivityTransition<TRe
 are projected and committed atomically.
 
 A `Secret` binding never puts a value in that snapshot: the materializer records a withheld envelope holding the
-secret reference and its conversion plan from text. `ActivityActivator` resolves it each time it hydrates an activity
-(invoke, bookmark resume, structural parent evaluation, and the re-materialized activation after a child completes)
-through `IRuntimeSecretResolver`, for the partition the execution runs under, and refuses with `TenantMismatch`
+secret reference and its conversion plan from text. `ActivityActivator` resolves it, through its
+`ActivitySecretInputResolver` collaborator, each time it hydrates an activity (invoke, bookmark resume, structural
+parent evaluation, and the re-materialized activation after a child completes) through `IRuntimeSecretResolver`, for
+the partition the execution runs under, which is the scope the instance's own rows are stored under, and refuses with `TenantMismatch`
 before reading anything when the instance records a different tenant. It converts the resolved text with the envelope's
 plan and hydrates the activity from a transient copy of the snapshot; nothing resolved is written back or kept. A
 failed resolution faults the activity with `RuntimeSecretResolutionException`, which names the reference and the
