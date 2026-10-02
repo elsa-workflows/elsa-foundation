@@ -1235,7 +1235,8 @@ public sealed class BpmnExecutionEngine(
         if (envelope.Presence is ValuePresence.Absent or ValuePresence.ExplicitNull)
             return (state, [], null);
 
-        // A withheld value is neither empty nor stored elsewhere: it is not here to read, so the loop has no items.
+        // A withheld value is neither empty nor stored elsewhere: it is not here to read, so the element faults with
+        // VF-ACT-010 instead of running the loop.
         if (envelope.Presence == ValuePresence.Withheld)
         {
             var message = SecretBindingDiagnostics.WithheldVariableNotResolved(variableName).Message;

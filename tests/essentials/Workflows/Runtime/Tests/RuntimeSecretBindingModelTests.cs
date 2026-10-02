@@ -189,6 +189,26 @@ public sealed class RuntimeSecretBindingModelTests
     }
 
     [Fact]
+    public void The_executable_hash_formats_a_withheld_literal_by_its_reference()
+    {
+        // Only an imported artifact can carry a literal whose envelope is withheld; two that differ only in the
+        // secret they withhold must not share a hash.
+        var hasher = new WorkflowExecutableHasher();
+        var contract = new WorkflowExecutableInputContract(WorkflowExecutableInputContract.CurrentVersion, []);
+
+        ExecutableNode WithheldNode(RuntimeSecretReference reference) => Node(new(
+            "apiKey", StringType, SecretPolicy, RuntimeInputBindingSource.Literal,
+            literal: ValueEnvelope.Withheld(StringType, WithheldValue.SecretReference(reference, IdentityPlan), SecretPolicy)));
+        string NodeHash(RuntimeSecretReference reference) => hasher.ComputeHash(WithheldNode(reference));
+        string BehavioralHash(RuntimeSecretReference reference) => hasher.ComputeHash(WithheldNode(reference), contract, []);
+
+        Assert.Equal(NodeHash(Reference), NodeHash(new("payments.api-key", "text")));
+        Assert.NotEqual(NodeHash(Reference), NodeHash(new("payments.other-key", "text")));
+        Assert.Equal(BehavioralHash(Reference), BehavioralHash(new("payments.api-key", "text")));
+        Assert.NotEqual(BehavioralHash(Reference), BehavioralHash(new("payments.other-key", "text")));
+    }
+
+    [Fact]
     public void The_binding_resolver_passes_a_secret_read_through_as_a_withheld_reference()
     {
         var resolved = new RuntimeInputBindingResolver().Resolve(

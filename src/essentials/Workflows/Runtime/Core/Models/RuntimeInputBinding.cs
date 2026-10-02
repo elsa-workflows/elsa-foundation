@@ -74,6 +74,7 @@ public sealed class RuntimeInputBinding
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public RuntimeValueConversionRequest? ConversionRequest { get; }
+
     /// <summary>
     /// The secret reference of a <see cref="RuntimeInputBindingSource.SecretRead"/> binding. Omitted when null so
     /// bindings of every other source serialize and hash exactly as before secret reads existed.
@@ -131,6 +132,7 @@ public enum RuntimeInputBindingSource
     WorkflowRequest,
     VariableRead,
     ActivityResult,
+
     /// <summary>
     /// A stored secret, by reference. Only activation may resolve it: the persisted input snapshot records a withheld
     /// envelope (<see cref="ValuePresence.Withheld"/>) instead of the value.

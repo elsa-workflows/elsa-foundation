@@ -285,8 +285,9 @@ public sealed class RuntimeInputBindingCompiler(
 
     /// <summary>
     /// Refuses (<c>VF-ACT-012</c>) a secret reference on a node that would read the value anywhere but CLR
-    /// activation, or on an input the activity type declares it persists, returns or reads at publish. Runs before
-    /// any input of the node is compiled, so the refusal wins over a conversion-plan refusal of the same input.
+    /// activation, or on an input the activity type declares it persists, returns or reads at publish. Every caller
+    /// passes all of the node's inputs at once, before any of them is compiled, so the refusal wins over a conversion
+    /// refusal of any input of the node and names the ordinally first secret input.
     /// </summary>
     public void EnsureSecretBindingsAdmissible(
         string nodeId,

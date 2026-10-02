@@ -103,10 +103,13 @@ public sealed class ActivityExecutionInspectionOutcomeTests
     /// <summary>
     /// The inspection snapshot is built on the invoke path before activation (spec 188, T012), so a withheld secret
     /// input must render there as a sensitive marker naming its reference, with no value and without throwing. The
-    /// activation that follows refuses the input loudly because this host resolves no secrets.
+    /// activation that follows refuses the input loudly because this host resolves no secrets. It renders as sensitive
+    /// even when its own policy is not.
     /// </summary>
-    [Fact]
-    public async Task A_withheld_input_renders_as_a_sensitive_marker_with_its_reference_and_no_value()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task A_withheld_input_renders_as_a_sensitive_marker_with_its_reference_and_no_value(bool policyIsSensitive)
     {
         await using var harness = NewHarness();
         var leaf = NewLeaf(typeof(WriteLine), new Dictionary<string, RuntimeInputBinding>
@@ -114,7 +117,7 @@ public sealed class ActivityExecutionInspectionOutcomeTests
             ["text"] = new(
                 "text",
                 new ValueTypeDescriptor("String"),
-                new ValueProtectionPolicy(DurableValueLifecycle.Instance, DurableValueStorage.Inline, isSensitive: true, requiresEncryption: true),
+                new ValueProtectionPolicy(DurableValueLifecycle.Instance, DurableValueStorage.Inline, isSensitive: policyIsSensitive, requiresEncryption: policyIsSensitive),
                 RuntimeInputBindingSource.SecretRead,
                 conversionPlan: ValueConversionPlan.Identity(new ValueTypeDescriptor("String"), ValueRepresentation.TextValue),
                 secret: new RuntimeSecretReference("payments.api-key", "text"))

@@ -294,7 +294,7 @@ public sealed class WorkflowExecutableCompiler(
                 throw new ArgumentException($"Activity node '{activity.NodeId}' input '{input.ReferenceKey}' does not match the published activity contract.");
 
         var authoredByKey = authored.ToDictionary(x => x.ReferenceKey, StringComparer.Ordinal);
-        var result = new Dictionary<string, RuntimeInputBinding>(StringComparer.OrdinalIgnoreCase);
+        var inputStates = new List<(Elsa.Activities.Design.Core.Models.ActivityInputContract Input, ArgumentState State)>();
         foreach (var input in contract.Inputs.OrderBy(x => x.ReferenceKey, StringComparer.Ordinal))
         {
             ArgumentState? inputState = authoredByKey.TryGetValue(input.ReferenceKey, out var state)
@@ -309,6 +309,16 @@ public sealed class WorkflowExecutableCompiler(
                 continue;
             }
 
+            inputStates.Add((input, inputState));
+        }
+
+        // A reusable boundary is activated by its template root, which for a graph template captures its inputs
+        // outside CLR activation; the check covers contract defaults as well as authored inputs, and runs once for the
+        // whole node before any input is compiled.
+        compiler.EnsureSecretBindingsAdmissible(activity.NodeId, boundaryDescriptor, inputStates.Select(x => x.State));
+        var result = new Dictionary<string, RuntimeInputBinding>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (input, inputState) in inputStates)
+        {
             var definition = new InputDefinition(
                 input.ReferenceKey,
                 input.Name,

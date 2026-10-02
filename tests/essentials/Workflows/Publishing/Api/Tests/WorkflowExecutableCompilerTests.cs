@@ -333,15 +333,62 @@ public sealed class WorkflowExecutableCompilerTests
             exception.Message);
     }
 
+    [Fact]
+    public async Task Placed_reusable_activity_refuses_a_secret_reference_before_an_earlier_input_fails_conversion()
+    {
+        // Spec 188: the secret refusal runs once for the whole boundary before any input is compiled, so it wins over
+        // the conversion refusal of an input that sorts before the secret one.
+        var compiler = PlacedReusableCompiler(
+            SecretInput("value"),
+            "String",
+            ("Int32", new WorkflowArgumentState(
+                "aaa",
+                new ArgumentValue(JsonSerializer.SerializeToElement("not-a-number"), "Literal"),
+                null, null, null, null)));
+
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(
+            () => compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow)).AsTask());
+
+        Assert.Equal(
+            Elsa.Workflows.Runtime.Core.Exceptions.SecretBindingDiagnostics.NonClrConsumerRefused(
+                "use-greet", "value", "test.boundary").Message,
+            exception.Message);
+    }
+
+    [Fact]
+    public async Task Placed_reusable_activity_refusal_names_the_ordinally_first_secret_input()
+    {
+        var compiler = PlacedReusableCompiler(SecretInput("value"), "String", ("String", SecretInput("beta")));
+
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(
+            () => compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow)).AsTask());
+
+        Assert.Equal(
+            Elsa.Workflows.Runtime.Core.Exceptions.SecretBindingDiagnostics.NonClrConsumerRefused(
+                "use-greet", "beta", "test.boundary").Message,
+            exception.Message);
+    }
+
+    private static WorkflowArgumentState SecretInput(string referenceKey) => new(
+        referenceKey,
+        new ArgumentValue(JsonSerializer.SerializeToElement(new { name = "payments.api-key" }), "Secret"),
+        null, null, null, null);
+
     /// <summary>
-    /// A workflow that places one design-owned reusable activity whose boundary has a single contract input
-    /// <c>value</c> (Int32 unless <paramref name="valueTypeAlias"/> says otherwise), authored as <paramref name="authoredInput"/>.
+    /// A workflow that places one design-owned reusable activity whose boundary has a contract input <c>value</c>
+    /// (Int32 unless <paramref name="valueTypeAlias"/> says otherwise), authored as <paramref name="authoredInput"/>, plus
+    /// one contract input per <paramref name="extraInputs"/> entry, authored as its state and typed by its alias.
     /// </summary>
-    private WorkflowExecutableCompiler PlacedReusableCompiler(WorkflowArgumentState authoredInput, string valueTypeAlias = "Int32")
+    private WorkflowExecutableCompiler PlacedReusableCompiler(
+        WorkflowArgumentState authoredInput,
+        string valueTypeAlias = "Int32",
+        params (string TypeAlias, WorkflowArgumentState State)[] extraInputs)
     {
         var contract = new DesignActivityContract("1", [new DesignActivityInputContract(
             "value", "Value", new TypeReference(valueTypeAlias), true,
-            false, null, "elsa.json")], [new ActivityOutputContract(
+            false, null, "elsa.json"), ..extraInputs.Select(extra => new DesignActivityInputContract(
+            extra.State.ReferenceKey, extra.State.ReferenceKey, new TypeReference(extra.TypeAlias), true,
+            false, null, "elsa.json"))], [new ActivityOutputContract(
             "result", "Result", new TypeReference("Int32"), true, false, "elsa.json")], []);
         var root = new ExecutableNode(
             "local-root", "local-root", "test.boundary", "1",
@@ -387,7 +434,7 @@ public sealed class WorkflowExecutableCompilerTests
             null, null, null, null);
         return TestCompiler.Create(
             new FakeVersionStore(WorkflowVersion(
-                new ActivityNode("use-greet", publication.DefinitionVersionId, [authoredInput], [outputTarget]),
+                new ActivityNode("use-greet", publication.DefinitionVersionId, [authoredInput, ..extraInputs.Select(extra => extra.State)], [outputTarget]),
                 variables: [new("caller-result", "CallerResult", new TypeReference("Int32"), null, null)])),
             new FakeActivityVersionStore([]),
             _activityStructureService,

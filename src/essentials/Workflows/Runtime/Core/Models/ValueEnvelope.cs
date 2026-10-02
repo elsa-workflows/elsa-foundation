@@ -119,6 +119,7 @@ public enum ValuePresence
     Absent,
     ExplicitNull,
     Present,
+
     /// <summary>
     /// The value is deliberately not stored here; <see cref="ValueEnvelope.WithheldValue"/> says what stands in for it.
     /// A reader that needs the value must resolve it or refuse loudly, never treat it as null.

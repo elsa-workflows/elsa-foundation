@@ -57,7 +57,8 @@ internal static class ActivityExecutionInspection
                 var input = contract.Inputs[item.Key];
                 var value = item.Value;
                 var type = new RuntimeValueTypeDescriptor("alias", value.Type.Alias, value.Type.Schema);
-                var isSensitive = value.Policy.IsSensitive || input.Policy.IsSensitive;
+                // A withheld value is sensitive whatever its policy says, as container variable evidence renders it.
+                var isSensitive = value.Presence == ValuePresence.Withheld || value.Policy.IsSensitive || input.Policy.IsSensitive;
                 var decision = payloadCapturePolicy.Decide(new RuntimePayloadCaptureRequest(
                     RuntimePayloadCaptureSubject.ActivityInput,
                     workItem.WorkflowExecutionId,

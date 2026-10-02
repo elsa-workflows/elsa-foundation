@@ -117,14 +117,17 @@ public sealed class ClrAssemblyScannerTests
     public void RefusesSecretBinding_DoesNotReachTheCatalogOrItsHash()
     {
         // Spec 188, T099: publication reads [RefusesSecretBinding] by reflection; the scanner never writes it, so
-        // annotating a built-in changes no catalog hash. The two fixtures differ only by the declarations.
+        // annotating a built-in changes no catalog hash. The two fixtures differ only by the declarations and their
+        // names (type name and display name), so once the name is normalized every scanned field that feeds the catalog
+        // hash, the descriptor included, must be identical.
         using var folder = TempAssemblyFolder.WithCopyOf(typeof(SecretRefusingFixtureActivity).Assembly);
         var models = CreateScanner().Scan(folder.Path);
         var refusing = models.Single(model => model.ActivityTypeKey == typeof(SecretRefusingFixtureActivity).FullName);
         var accepting = models.Single(model => model.ActivityTypeKey == typeof(SecretAcceptingFixtureActivity).FullName);
 
-        Assert.Equal(JsonSerializer.Serialize(accepting.Inputs), JsonSerializer.Serialize(refusing.Inputs));
-        Assert.Equal(JsonSerializer.Serialize(accepting.DesignFacets), JsonSerializer.Serialize(refusing.DesignFacets));
+        Assert.Equal(
+            JsonSerializer.Serialize(accepting),
+            JsonSerializer.Serialize(refusing).Replace("Refusing", "Accepting", StringComparison.Ordinal));
         Assert.Equal(
             CatalogVersion(accepting, accepting, typeof(SecretAcceptingFixtureActivity).Assembly).Hash,
             CatalogVersion(accepting, refusing, typeof(SecretRefusingFixtureActivity).Assembly).Hash);

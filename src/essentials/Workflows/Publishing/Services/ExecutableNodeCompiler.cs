@@ -562,16 +562,16 @@ public sealed class ExecutableNodeCompiler(
             ?? throw new ArgumentException($"Activity node '{nodeId}' has a non-object executable structure payload.");
         if (payload["variables"] is { } variablesNode)
         {
-            var authored = variablesNode.Deserialize<IReadOnlyCollection<VariableDefinition>>(ClrActivityTypeResolver.DescriptorSerializerOptions)
+            var authored = variablesNode.Deserialize<IReadOnlyCollection<VariableDefinition>>(DescriptorPayloadSerializer.Options)
                 ?? throw new ArgumentException($"Activity node '{nodeId}' has malformed variable declarations.");
             var compiled = authored.Select(variable => CompileVariableDeclaration(nodeId, variable)).ToArray();
-            payload["variables"] = JsonSerializer.SerializeToNode(compiled, ClrActivityTypeResolver.DescriptorSerializerOptions);
+            payload["variables"] = JsonSerializer.SerializeToNode(compiled, DescriptorPayloadSerializer.Options);
         }
 
         return new ExecutableActivityStructure(
             structure.Kind,
             structure.SchemaVersion,
-            JsonSerializer.SerializeToElement(payload, ClrActivityTypeResolver.DescriptorSerializerOptions));
+            JsonSerializer.SerializeToElement(payload, DescriptorPayloadSerializer.Options));
     }
 
     /// <summary>

@@ -119,14 +119,21 @@ public sealed class WorkflowExecutableHasher : IWorkflowExecutableHasher
             : string.Join(',', envelope.ExternalReference.Metadata
                 .OrderBy(item => item.Key, StringComparer.Ordinal)
                 .Select(item => $"{item.Key}={item.Value}"));
-        var payload = envelope.InlineValue.HasValue
-            ? CanonicalJson(envelope.InlineValue)
-            : envelope.ExternalReference is null
-                ? string.Empty
-                : $"{envelope.ExternalReference.StorageProfile}:{envelope.ExternalReference.Locator}[{externalMetadata}]";
+        var payload = envelope.WithheldValue is { } withheld
+            ? FormatWithheld(withheld)
+            : envelope.InlineValue.HasValue
+                ? CanonicalJson(envelope.InlineValue)
+                : envelope.ExternalReference is null
+                    ? string.Empty
+                    : $"{envelope.ExternalReference.StorageProfile}:{envelope.ExternalReference.Locator}[{externalMetadata}]";
 
         return $"{envelope.Presence}:{FormatType(envelope.Type)}:{FormatPolicy(envelope.Policy)}:{payload}";
     }
+
+    // A withheld envelope has no value; its marker's kind and reference are what stand in for it, so two envelopes
+    // that withhold different secrets hash apart. Only a withheld envelope carries a marker, so no other hash moves.
+    private static string FormatWithheld(WithheldValue withheld) =>
+        $"withheld:{withheld.Kind}:{FormatSecret(withheld.Secret)}";
 
     // A secret read hashes by reference: the binding holds no value, and the reference is what changes behavior.
     private static string FormatSecret(RuntimeSecretReference? secret) =>
@@ -348,6 +355,8 @@ public sealed class WorkflowExecutableHasher : IWorkflowExecutableHasher
             }
             else if (binding.LiteralValue is { } literalValue)
                 WriteCanonicalJson(writer, literalValue);
+            else if (binding.Literal?.WithheldValue is { } withheld)
+                writer.WriteStringValue(FormatWithheld(withheld));
             else
                 writer.WriteNullValue();
 

@@ -83,11 +83,12 @@ public static class SecretBindingDiagnostics
     public static ArgumentException ValueOutcomesInputRefused(string nodeId, string inputKey) =>
         Refused(nodeId, inputKey, "its value derives the activity's outcome ports at publish");
 
-    private static ArgumentException Refused(string nodeId, string inputKey, string reason) =>
-        new($"{SecretBindingRefusedCode}: Activity node '{nodeId}' input '{inputKey}' cannot take a secret reference: {reason}.");
-
+    /// <summary>A variable's initial value is a secret reference, which would be persisted in its variable frame.</summary>
     public static ArgumentException VariableDefaultRefused(string nodeId, string variableKey) =>
         new($"{SecretBindingRefusedCode}: Variable '{variableKey}' on activity node '{nodeId}' cannot take a secret reference as its initial value: a variable's initial value is persisted in its variable frame.");
+
+    private static ArgumentException Refused(string nodeId, string inputKey, string reason) =>
+        new($"{SecretBindingRefusedCode}: Activity node '{nodeId}' input '{inputKey}' cannot take a secret reference: {reason}.");
 
     /// <summary>
     /// The backstop every publish-time literal reader applies before reading a binding: a secret reference has no
