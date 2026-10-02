@@ -243,6 +243,7 @@
     <Project Path="src/essentials/Secrets/Core/Elsa.Secrets.Core.csproj" />
     <Project Path="src/essentials/Secrets/Elsa.Secrets.csproj" />
     <Project Path="src/essentials/Secrets/Nuplane/Elsa.Secrets.Nuplane.csproj" />
+    <Project Path="src/essentials/Secrets/Workflows/Elsa.Secrets.Workflows.csproj" />
   </Folder>
   <Folder Name="/src/essentials/Studio/" />
   <Folder Name="/src/essentials/Studio/Preferences/">
@@ -558,6 +559,9 @@
     <Project Path="tests/essentials/Secrets/Persistence/EntityFrameworkCore/SqlServer/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.SqlServer.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/essentials/Secrets/Persistence/" />
+  <Folder Name="/tests/essentials/Secrets/Workflows/">
+    <Project Path="tests/essentials/Secrets/Workflows/Tests/Elsa.Secrets.Workflows.Tests.csproj" />
+  </Folder>
   <Folder Name="/tests/essentials/Studio/" />
   <Folder Name="/tests/essentials/Studio/Preferences/">
     <Project Path="tests/essentials/Studio/Preferences/Tests/Elsa.Studio.Preferences.Tests.csproj" />

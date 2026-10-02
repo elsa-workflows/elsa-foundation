@@ -12,7 +12,8 @@ namespace Elsa.Activities.Runtime.Services;
 /// </summary>
 /// <remarks>
 /// Only <see cref="IRuntimeSecretResolver"/> is optional: a host that composes none parks the activity with the
-/// missing-resolver activation failure instead of faulting it.
+/// missing-resolver activation failure instead of faulting it. A host that composes more than one does not start:
+/// <see cref="RuntimeSecretResolverCompositionValidator"/> fails its shell activation.
 /// </remarks>
 public sealed class ActivitySecretInputResolver(
     IWorkflowExecutionPartitionAccessor partitionAccessor,

@@ -158,6 +158,7 @@
           "Primitives": {},
           "Secrets": {},
           "SecretsApi": {},
+          "SecretsWorkflows": {},
           "SecretsEntityFrameworkCore": {},
           "Serialization": {},
           "AttentionApi": {},
