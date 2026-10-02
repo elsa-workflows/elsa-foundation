@@ -101,6 +101,12 @@ services:
       # One connection for every EF module. Each module owns its own tables, migrations and history
       # table inside this database; set ConnectionString on a single feature to split one out.
       ConnectionStrings__Elsa: "Host=postgres;Port=5432;Database=elsa;Username=elsa;Password=elsa"
+      # The Data Protection key ring that protects the sign-in cookie and the antiforgery tokens, kept in the same
+      # database, so recreating this container, or running a second one against it, signs nobody out. Without it the
+      # keys live in the container and are lost with it. A deployment also encrypts them at rest with a certificate
+      # (Elsa__DataProtection__Certificate__Path and __Password); see docs/docker.md, "Data Protection keys".
+      Elsa__DataProtection__EntityFrameworkCore__Enabled: "true"
+      Elsa__DataProtection__EntityFrameworkCore__Provider: PostgreSql
     ports:
       - "13000:8080"
     volumes:

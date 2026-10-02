@@ -183,6 +183,9 @@
     <Project Path="src/essentials/Http/JavaScript/Elsa.Http.JavaScript.csproj" />
   </Folder>
   <Folder Name="/src/essentials/Foundation/" />
+  <Folder Name="/src/essentials/Foundation/DataProtection/">
+    <Project Path="src/essentials/Foundation/DataProtection/EntityFrameworkCore/Elsa.Foundation.DataProtection.EntityFrameworkCore.csproj" />
+  </Folder>
   <Folder Name="/src/essentials/Foundation/Identity/">
     <Project Path="src/essentials/Foundation/Identity/Core/Elsa.Foundation.Identity.Core.csproj" />
     <Project Path="src/essentials/Foundation/Identity/Elsa.Foundation.Identity.csproj" />
@@ -459,6 +462,11 @@
     <Project Path="tests/essentials/Expressions/Tests/Elsa.Expressions.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/essentials/Foundation/" />
+  <Folder Name="/tests/essentials/Foundation/DataProtection/" />
+  <Folder Name="/tests/essentials/Foundation/DataProtection/EntityFrameworkCore/">
+    <Project Path="tests/essentials/Foundation/DataProtection/EntityFrameworkCore/Tests/Elsa.Foundation.DataProtection.EntityFrameworkCore.Tests.csproj" />
+    <Project Path="tests/essentials/Foundation/DataProtection/EntityFrameworkCore/ProviderTests/Elsa.Foundation.DataProtection.EntityFrameworkCore.ProviderTests.csproj" />
+  </Folder>
   <Folder Name="/tests/essentials/Foundation/Identity/">
     <Project Path="tests/essentials/Foundation/Identity/Tests/Elsa.Foundation.Identity.Tests.csproj" />
   </Folder>

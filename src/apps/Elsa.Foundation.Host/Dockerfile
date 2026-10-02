@@ -36,7 +36,8 @@ WORKDIR /src
 COPY *.props *.targets NuGet.config ./
 
 # Restore inputs: the host, its shared endpoint-metadata project, Line A, its cluster membership, the EF closure that membership's
-# durable provider carries (Elsa.Persistence.EntityFramework plus the EF Core packages, #2151), and the computed-production-settings
+# durable provider carries (Elsa.Persistence.EntityFramework plus the EF Core packages, #2151), its Data Protection key store,
+# which carries the same closure (#2191), and the computed-production-settings
 # swap Elsa.Foundation.Host.csproj imports from src/apps/ (shared with Elsa.Workbench.csproj, #2126) -- MSBuild
 # treats a missing <Import> as an error, not a no-op the way it does for the root files above, so this one has
 # to be copied before restore too, or restore fails outright with MSB4019 rather than silently.
@@ -55,6 +56,7 @@ COPY src/essentials/Cluster/InProcess/Elsa.Cluster.InProcess.csproj src/essentia
 COPY src/essentials/Cluster/Readability/Elsa.Cluster.Readability.csproj src/essentials/Cluster/Readability/packages.lock.json src/essentials/Cluster/Readability/
 COPY src/essentials/Events/Core/Elsa.Events.Core.csproj src/essentials/Events/Core/packages.lock.json src/essentials/Events/Core/
 COPY src/essentials/Expressions/Core/Elsa.Expressions.Core.csproj src/essentials/Expressions/Core/packages.lock.json src/essentials/Expressions/Core/
+COPY src/essentials/Foundation/DataProtection/EntityFrameworkCore/Elsa.Foundation.DataProtection.EntityFrameworkCore.csproj src/essentials/Foundation/DataProtection/EntityFrameworkCore/packages.lock.json src/essentials/Foundation/DataProtection/EntityFrameworkCore/
 COPY src/essentials/Locking/Core/Elsa.Locking.Core.csproj src/essentials/Locking/Core/packages.lock.json src/essentials/Locking/Core/
 COPY src/essentials/Mediator/Core/Elsa.Mediator.Core.csproj src/essentials/Mediator/Core/packages.lock.json src/essentials/Mediator/Core/
 COPY src/essentials/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj src/essentials/Persistence/EntityFramework/packages.lock.json src/essentials/Persistence/EntityFramework/
@@ -80,6 +82,7 @@ COPY src/essentials/Cluster/InProcess/ src/essentials/Cluster/InProcess/
 COPY src/essentials/Cluster/Readability/ src/essentials/Cluster/Readability/
 COPY src/essentials/Events/Core/ src/essentials/Events/Core/
 COPY src/essentials/Expressions/Core/ src/essentials/Expressions/Core/
+COPY src/essentials/Foundation/DataProtection/EntityFrameworkCore/ src/essentials/Foundation/DataProtection/EntityFrameworkCore/
 COPY src/essentials/Locking/Core/ src/essentials/Locking/Core/
 COPY src/essentials/Mediator/Core/ src/essentials/Mediator/Core/
 COPY src/essentials/Persistence/EntityFramework/ src/essentials/Persistence/EntityFramework/
@@ -146,7 +149,10 @@ COPY --from=build /app/publish ./
 # Runtime write locations under the content root:
 #   /app/packages   Nuplane directory feed (watched; mount a volume here to drop .nupkg files)
 #   /app/.nuplane   Nuplane reconciliation state
-# The non-root runtime user needs write access to them.
+# The non-root runtime user needs write access to them. The Data Protection key ring is not among them: unless
+# Elsa:DataProtection:EntityFrameworkCore:Enabled keeps it in the platform database, ASP.NET Core keeps it in the
+# runtime user's home directory, which no volume covers, so a recreated container signs everyone out
+# (docs/docker.md, "Data Protection keys").
 RUN mkdir -p /app/packages /app/.nuplane && chown -R $APP_UID:$APP_UID /app
 
 # Liveness probe (process up + Kestrel serving). Deliberately /health/live, NOT

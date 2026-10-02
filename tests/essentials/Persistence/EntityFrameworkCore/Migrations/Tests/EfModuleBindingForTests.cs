@@ -2,6 +2,7 @@ using Elsa.Activities.Design.Persistence.EntityFrameworkCore;
 using Elsa.Cluster.EntityFrameworkCore;
 using Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore;
 using Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore;
+using Elsa.Foundation.DataProtection.EntityFrameworkCore;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Secrets.Persistence.EntityFrameworkCore;
@@ -17,7 +18,7 @@ namespace Elsa.Persistence.EntityFrameworkCore.Migrations.Tests;
 
 /// <summary>
 /// #1872 replaces each module's hand-written <see cref="EfModuleBinding"/> construction with <see
-/// cref="EfModuleBinding.For"/>. Behaviour must not change: for every one of the 14 modules, this proves
+/// cref="EfModuleBinding.For"/>. Behaviour must not change: for every one of the 15 modules, this proves
 /// the descriptor-derived binding equals the values the registration class used to pass by hand — same
 /// owner, history table, migrations assembly and connection defaults.
 /// </summary>
@@ -108,13 +109,19 @@ public sealed class EfModuleBindingForTests
             ClusterMembershipEfModule.HistoryTableName,
             typeof(ClusterMembershipDbContext).Assembly,
             EfConnectionDefaults.ConnectionName,
+            EfConnectionDefaults.SqliteConnectionString)),
+        (typeof(DataProtectionKeysDbContext), new EfModuleBinding(
+            "Data Protection keys",
+            DataProtectionKeysEfModule.HistoryTableName,
+            typeof(DataProtectionKeysDbContext).Assembly,
+            EfConnectionDefaults.ConnectionName,
             EfConnectionDefaults.SqliteConnectionString))
     ];
 
     [Fact]
-    public void Covers_all_14_modules()
+    public void Covers_all_15_modules()
     {
-        Assert.Equal(14, Expected.Length);
+        Assert.Equal(15, Expected.Length);
     }
 
     [Theory]

@@ -3,6 +3,7 @@ using Elsa.Activities.Design.Persistence.EntityFrameworkCore;
 using Elsa.Cluster.EntityFrameworkCore;
 using Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore;
 using Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore;
+using Elsa.Foundation.DataProtection.EntityFrameworkCore;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Secrets.Persistence.EntityFrameworkCore;
@@ -26,6 +27,7 @@ internal static class ModuleContextCatalog
     [
         typeof(ActivitiesDesignDbContext).Assembly,
         typeof(ClusterMembershipDbContext).Assembly,
+        typeof(DataProtectionKeysDbContext).Assembly,
         typeof(OpenTelemetryDbContext).Assembly,
         typeof(StructuredLogsDbContext).Assembly,
         typeof(IdentityIamDbContext).Assembly,

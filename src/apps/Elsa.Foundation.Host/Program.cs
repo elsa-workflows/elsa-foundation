@@ -4,6 +4,7 @@ using CShells.DependencyInjection;
 using Elsa.Attention.Core;
 using Elsa.Cluster.Hosting;
 using Elsa.Cluster.Readability;
+using Elsa.Foundation.DataProtection;
 using Elsa.Foundation.Host.Feed;
 using Elsa.Foundation.Host.Health;
 using Elsa.Foundation.Host.ModuleManagement;
@@ -75,8 +76,13 @@ builder.Services.AddEfSchemaReadability();
 // refuses to start without an explicit Elsa:Cluster:Membership:HostId (spec 183, FR-003a, FR-024; #2151). Hosts that
 // share one database this way count each other, so a feed-loaded EF module's new schema version is finalized only once
 // every live host can read it. Provider settings without the enabling switch are refused, never ignored. This line
-// names no EF type: the extension lives in a provider-neutral namespace, and the host's EF closure exists for it alone.
+// names no EF type: the extension lives in a provider-neutral namespace, and the host's EF closure exists for it and for
+// the Data Protection key store below, nothing else.
 builder.Services.AddConfiguredClusterMembership(configuration);
+
+// The Data Protection key ring every shell protects its cookies and antiforgery tokens with, composed once per host as
+// membership is; the Elsa:DataProtection section names it and enables its shared key store (#2191).
+builder.Services.AddConfiguredDataProtection(configuration);
 
 // ---------------------------------------------------------------------------------------------------------
 // CShells — activate shells, map them, own per-shell middleware.

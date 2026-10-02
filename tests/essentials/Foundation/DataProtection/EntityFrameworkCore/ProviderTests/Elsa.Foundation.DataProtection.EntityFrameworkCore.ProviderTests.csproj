@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The shared key ring suite of the Tests project on SQL Server, PostgreSQL and MySQL (#2191), each on a Testcontainers
+       server of its own with a database per store. Set ELSA_DATA_PROTECTION_EF_REQUIRE_NATIVE_PROVIDERS to make a missing
+       container fail instead of skip. -->
+  <PropertyGroup>
+    <IsTestProject>true</IsTestProject>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
+    <PackageReference Include="MySql.EntityFrameworkCore" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+    <PackageReference Include="Testcontainers.MsSql" />
+    <PackageReference Include="Testcontainers.MySql" />
+    <PackageReference Include="Testcontainers.PostgreSql" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="Xunit.SkippableFact" />
+    <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" />
+    <PackageReference Include="coverlet.collector" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\..\..\src\essentials\Foundation\DataProtection\EntityFrameworkCore\Elsa.Foundation.DataProtection.EntityFrameworkCore.csproj" />
+  </ItemGroup>
+
+  <!-- The suite and its harness are the Tests project's, linked rather than copied. -->
+  <ItemGroup>
+    <Compile Include="..\Tests\SharedKeyRingTests.cs;..\Tests\KeyRingDatabase.cs;..\Tests\KeyRingHost.cs;..\Tests\TestCertificate.cs" LinkBase="Shared" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+</Project>

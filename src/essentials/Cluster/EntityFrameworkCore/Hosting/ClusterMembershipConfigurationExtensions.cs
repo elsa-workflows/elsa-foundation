@@ -1,7 +1,7 @@
-using System.Globalization;
 using Elsa.Cluster.Core.Exceptions;
 using Elsa.Cluster.Core.Options;
 using Elsa.Cluster.EntityFrameworkCore;
+using Elsa.Persistence.EntityFramework;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -31,7 +31,9 @@ namespace Elsa.Cluster.Hosting;
 /// </remarks>
 public static class ClusterMembershipConfigurationExtensions
 {
-    public const string EnabledKey = "Enabled";
+    public const string EnabledKey = EfHostConfigurationReader.EnabledKey;
+
+    private static readonly EfHostConfigurationReader Reader = new(message => new ClusterMembershipConfigurationException(message));
 
     public static IServiceCollection AddConfiguredClusterMembership(this IServiceCollection services, IConfiguration configuration)
     {
@@ -40,20 +42,13 @@ public static class ClusterMembershipConfigurationExtensions
 
         var membership = configuration.GetSection(ClusterMembershipOptions.SectionName);
         var ef = membership.GetSection(EfClusterMembershipOptions.SectionKey);
-        switch (ReadBool(ef, EnabledKey))
-        {
-            case null when ef.GetChildren().Any():
-                throw new ClusterMembershipConfigurationException(
-                    $"{ef.Path} carries settings but no {EnabledKey} switch. Set {ef.Path}:{EnabledKey} to true to join a cluster " +
-                    "through the EF membership provider, or to false to stay a cluster of one.");
-            case null or false:
-                return services;
-        }
+        if (!Reader.IsEnabled(ef, "to join a cluster through the EF membership provider", "to stay a cluster of one"))
+            return services;
 
         var hostId = membership[nameof(ClusterMembershipOptions.HostId)];
-        var heartbeatInterval = ReadTimeSpan(membership, nameof(ClusterMembershipOptions.HeartbeatInterval));
-        var expiryPeriod = ReadTimeSpan(membership, nameof(ClusterMembershipOptions.ExpiryPeriod));
-        var skewAllowance = ReadTimeSpan(membership, nameof(ClusterMembershipOptions.SkewAllowance));
+        var heartbeatInterval = Reader.ReadTimeSpan(membership, nameof(ClusterMembershipOptions.HeartbeatInterval));
+        var expiryPeriod = Reader.ReadTimeSpan(membership, nameof(ClusterMembershipOptions.ExpiryPeriod));
+        var skewAllowance = Reader.ReadTimeSpan(membership, nameof(ClusterMembershipOptions.SkewAllowance));
         services.Configure<ClusterMembershipOptions>(options =>
         {
             options.HostId = hostId ?? options.HostId;
@@ -62,26 +57,8 @@ public static class ClusterMembershipConfigurationExtensions
             options.SkewAllowance = skewAllowance ?? options.SkewAllowance;
         });
 
-        var settings = new EfClusterMembershipOptions();
-        settings.Provider = ef[nameof(settings.Provider)] ?? settings.Provider;
-        settings.ConnectionString = ef[nameof(settings.ConnectionString)];
-        settings.ConnectionName = ef[nameof(settings.ConnectionName)];
-        settings.Schema = ef[nameof(settings.Schema)];
-        settings.Pooling = ReadBool(ef, nameof(settings.Pooling)) ?? settings.Pooling;
-        settings.CleanupPeriod = ReadTimeSpan(ef, nameof(settings.CleanupPeriod)) ?? settings.CleanupPeriod;
+        var settings = Reader.ReadStore(ef, new EfClusterMembershipOptions());
+        settings.CleanupPeriod = Reader.ReadTimeSpan(ef, nameof(settings.CleanupPeriod)) ?? settings.CleanupPeriod;
         return services.AddEfClusterMembership(settings);
     }
-
-    private static bool? ReadBool(IConfigurationSection section, string key) =>
-        section[key] is not { } value || string.IsNullOrWhiteSpace(value) ? null
-        : bool.TryParse(value, out var parsed) ? parsed
-        : throw Invalid(section, key, value, "true or false");
-
-    private static TimeSpan? ReadTimeSpan(IConfigurationSection section, string key) =>
-        section[key] is not { } value || string.IsNullOrWhiteSpace(value) ? null
-        : TimeSpan.TryParse(value, CultureInfo.InvariantCulture, out var parsed) ? parsed
-        : throw Invalid(section, key, value, "a time span such as 00:00:10");
-
-    private static ClusterMembershipConfigurationException Invalid(IConfigurationSection section, string key, string value, string expected) =>
-        new($"{section.Path}:{key} is '{value}', which is not {expected}.");
 }
