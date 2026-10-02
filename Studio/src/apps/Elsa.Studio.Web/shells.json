@@ -12,6 +12,8 @@
           "DashboardStudio": {},
           "AttentionStudio": {},
           "FeatureManagement": {},
+          "JavaScriptExpressionEditorStudio": {},
+          "LiquidExpressionEditorStudio": {},
           "OpenTelemetryStudio": {},
           "SecretsStudio": {},
           "StructuredLogsStudio": {},

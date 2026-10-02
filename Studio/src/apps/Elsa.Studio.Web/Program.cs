@@ -1,18 +1,8 @@
 using CShells.AspNetCore.Configuration;
 using CShells.AspNetCore.Extensions;
 using CShells.DependencyInjection;
-using Elsa.Studio.Api.Features;
 using Elsa.Studio.ConsoleStream;
 using Elsa.Studio.ConsoleStream.Extensions;
-using Elsa.Studio.Diagnostics.OpenTelemetry;
-using Elsa.Studio.Diagnostics.StructuredLogs;
-using Elsa.Studio.ExtensionBuilder;
-using Elsa.Studio.FeatureManagement;
-using Elsa.Studio.Dashboard;
-using Elsa.Studio.Attention;
-using Elsa.Studio.Workflows.Dashboard;
-using Elsa.Studio.Workflows;
-using Elsa.Studio.Weaver.Workflows;
 using Elsa.Studio.Web;
 using Nuplane;
 using Nuplane.Admin;
@@ -56,20 +46,7 @@ builder.Services.AddSingleton<StudioNuplaneAssemblyProvider>();
 builder.Services.AddCShellsAspNetCore(shells =>
 {
     shells
-        .WithAssemblyProvider<StudioNuplaneAssemblyProvider>()
-        .WithAssemblies(
-            typeof(StudioApiFeature).Assembly,
-            typeof(ConsoleStreamStudioFeature).Assembly,
-            typeof(DiagnosticsOpenTelemetryStudioFeature).Assembly,
-            typeof(DiagnosticsStructuredLogsStudioFeature).Assembly,
-            typeof(ExtensionBuilderStudioFeature).Assembly,
-            typeof(FeatureManagementStudioFeature).Assembly,
-            typeof(DashboardStudioFeature).Assembly,
-            typeof(AttentionStudioFeature).Assembly,
-            typeof(WorkflowsDashboardStudioFeature).Assembly,
-            typeof(WeaverWorkflowsStudioFeature).Assembly,
-            typeof(WorkflowsStudioFeature).Assembly,
-            typeof(ThemeStoreCoreStudioFeature).Assembly)
+        .WithStudioFeatureAssemblies()
         .WithConfigurationProvider(configuration)
         .WithWebRouting(options =>
         {

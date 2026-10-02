@@ -42,4 +42,9 @@
     <Using Include="Xunit" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- The Web host's real shell configuration, read by WebHostShellFeatureDiscoveryTests. -->
+    <None Include="..\..\src\apps\Elsa.Studio.Web\shells.json" Link="WebHost\shells.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

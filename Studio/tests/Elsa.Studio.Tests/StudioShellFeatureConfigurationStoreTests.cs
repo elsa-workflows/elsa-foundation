@@ -2,8 +2,6 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Elsa.Studio.Web;
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.FileProviders;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -178,14 +176,6 @@ public sealed class StudioShellFeatureConfigurationStoreTests : IDisposable
             new TestHostEnvironment(_contentRoot),
             configuration,
             logger ?? NullLogger<StudioShellFeatureConfigurationStore>.Instance);
-    }
-
-    private sealed class TestHostEnvironment(string contentRootPath) : IHostEnvironment
-    {
-        public string ApplicationName { get; set; } = "Elsa.Studio.Tests";
-        public string EnvironmentName { get; set; } = Environments.Development;
-        public string ContentRootPath { get; set; } = contentRootPath;
-        public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
     }
 
     private sealed class RecordingLogger<T> : ILogger<T>
