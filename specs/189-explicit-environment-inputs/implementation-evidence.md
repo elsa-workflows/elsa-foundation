@@ -577,7 +577,11 @@ it introduces no behavior change.
 ### Final implementation review and actor proof
 
 The [final PR gate](https://github.com/elsa-workflows/elsa-foundation/pull/2296#issuecomment-5944342317)
-records all 45 checks terminal: 44 successful and the conditional red-main alert skipped. CI36952915055,
+recorded a 45-check snapshot: 44 successful and the conditional red-main alert skipped. The complete
+[check-run record for f529](https://api.github.com/repos/elsa-workflows/elsa-foundation/commits/f529a5029d3bb3187ff4a2e6211c63c20f8e3717/check-runs?per_page=100)
+contains **46 terminal checks: 45 successful and that one skipped alert**. The additional successful
+check is the Copilot review runner, job110671096817 in workflow36953422466; the earlier snapshot
+omitted it. Runner success is distinct from the actual review outcome below. CI36952915055,
 Maps36952914867, filters36952914878, Code Quality36952910939 and Docker36952915526 passed on f529.
 Copilot review5387595612 on that head reported no findings, but was COMMENTED rather than an approval.
 Root and independent integrated review found no must-fix; actual inline threads were resolved and
