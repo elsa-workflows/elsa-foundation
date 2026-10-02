@@ -7,19 +7,36 @@
     acknowledged terminal checkpoint rather than duplicating an observable cancellation. This is the black-box
     acknowledgement/reconciliation proof available to a normal host: fault injection remains covered by the focused
     runtime tests because production HTTP deliberately exposes no acknowledgement-loss switch.
+
+    By default, the script starts its own already-built Workbench on a free loopback port and a fresh temporary content
+    root, and restarts only that process. -BaseUrl is the one place the server location is given: pass it to choose
+    the address the owned server listens on (the port must be free; a process this script did not start is never
+    stopped). Pass -UseExternalServer with -RestartServer:$false for the weaker replay-only run against a separately
+    started server, which this script then never stops.
 #>
 [CmdletBinding()]
 param(
-    [string] $BaseUrl = 'http://localhost:5095',
+    [string] $BaseUrl,
     [string] $Username = 'admin',
     [string] $Password = 'Password123!',
-    [int] $Port = 5095,
+    [switch] $UseExternalServer,
     [switch] $RestartServer = $true
 )
 . "$PSScriptRoot/_AlterationCommon.ps1"
-. "$PSScriptRoot/../durability/_DurabilityCommon.ps1"
+. "$PSScriptRoot/../_ServerLifecycle.ps1"
 
-Write-Host "== Runtime alteration replay + restart (real server) ==  -> $BaseUrl  (restart=$RestartServer)" -ForegroundColor Cyan
+$BaseUrl = Resolve-ElsaServerBaseUrl -BaseUrl $BaseUrl -UseExternalServer:$UseExternalServer -RestartServer:$RestartServer
+$ownsServer = -not $UseExternalServer
+$ownedContentRoot = $null
+$success = $false
+
+Write-Host "== Runtime alteration replay + restart (real server) ==  -> $BaseUrl  (restart=$RestartServer, external=$UseExternalServer)" -ForegroundColor Cyan
+try {
+if ($ownsServer) {
+    $ownedContentRoot = New-ElsaContentRoot -Prefix 'elsa-alteration'
+    Start-OwnedElsaServer -BaseUrl $BaseUrl -ContentRoot $ownedContentRoot
+}
+
 $ctx = Connect-Elsa -BaseUrl $BaseUrl -Username $Username -Password $Password
 $tag = "altreplay-$(Get-Random -Maximum 999999)"
 $replayWaiter = Invoke-Step 'create replay waiter' { New-AlterationWaiter -Ctx $ctx -NamePrefix "$tag-replay" }
@@ -54,7 +71,7 @@ if ($captureProgress.Json.counts.capturedSoFar -ne 100 -or $captureProgress.Json
 }
 
 if ($RestartServer) {
-    Invoke-Step 'restart Elsa.Workbench during durable plan progression' { Restart-ElsaServer -Port $Port }
+    Invoke-Step 'restart the owned Elsa.Workbench during durable plan progression' { Restart-OwnedElsaServer }
     $ctx = Connect-Elsa -BaseUrl $BaseUrl -Username $Username -Password $Password
 } else {
     Write-Host '(restart skipped; -RestartServer:$false gives a weaker replay/reconciliation run)' -ForegroundColor Yellow
@@ -80,3 +97,7 @@ $instance = Get-WorkflowInstance -Ctx $ctx -ExecutionId $restartWaiter.Execution
 if ($instance.instance.status -ne 'Cancelled') { throw "Restart target '$($restartWaiter.ExecutionId)' was not cancelled exactly once (status '$($instance.instance.status)')." }
 
 Write-Host "SUCCESS - idempotency replay, restart survival, target continuation, duplicate-delivery safety, and terminal checkpoint reconciliation evidence passed." -ForegroundColor Green
+$success = $true
+} finally {
+    if ($ownsServer) { Remove-OwnedElsaServer -ContentRoot $ownedContentRoot -KeepContentRoot:(-not $success) }
+}

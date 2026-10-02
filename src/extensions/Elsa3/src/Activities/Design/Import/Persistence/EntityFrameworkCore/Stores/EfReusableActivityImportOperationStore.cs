@@ -12,6 +12,10 @@ namespace Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.Stores;
 /// EF adapter for immutable collection uploads (L01) and completed apply receipts (L02). Rows are
 /// partitioned by the exact tenant-plus-user operation scope, found by hashed identity, and proven against
 /// their encoded residuals and canonical JSON before a domain value is returned.
+/// <para>
+/// The two deletes remove collection rows and read no content. The expiry sweep touches only rows at a schema
+/// version this build reads (ADR 0077), so a node behind in a rolling upgrade leaves a newer node's rows to that node.
+/// </para>
 /// </summary>
 public sealed class EfReusableActivityImportOperationStore(
     Elsa3ImportDbContext db,
@@ -98,6 +102,74 @@ public sealed class EfReusableActivityImportOperationStore(
         }
     }
 
+    public async ValueTask<bool> DeleteCollectionAsync(
+        string handle,
+        ReusableActivityImportAccessScope accessScope,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(handle);
+        ArgumentNullException.ThrowIfNull(accessScope);
+        Elsa3ImportScopeGuard.EnsureCurrent(accessContextAccessor, accessScope, hideMismatch: true, "current");
+        try
+        {
+            var tenantKey = Elsa3ImportRecordCodec.TenantKey(accessScope.TenantId);
+            var userIdHash = Elsa3ImportRecordCodec.Hash(accessScope.UserId);
+            var handleHash = Elsa3ImportRecordCodec.Hash(handle);
+            // The encoded handle beside its hash, so the delete matches the exact identity the lookup would prove.
+            var encodedHandle = EfRelationalIdentity.Encode(handle);
+            return await db.Collections
+                .Where(row => row.TenantKey == tenantKey && row.UserIdHash == userIdHash && row.HandleHash == handleHash && row.Handle == encodedHandle)
+                .ExecuteDeleteAsync(cancellationToken) > 0;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            throw new ReusableActivityImportPersistenceException("delete collection", handle, exception);
+        }
+    }
+
+    public async ValueTask<int> DeleteExpiredCollectionsAsync(
+        DateTimeOffset expiresAtOrBefore,
+        int maxCount,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxCount);
+        var tenantKey = AmbientTenantKey();
+        var cutoff = expiresAtOrBefore.UtcTicks;
+        try
+        {
+            string[] readableVersions = [.. Elsa3ImportEfModule.Chain.ReadableVersions];
+            var candidates = await db.Collections.AsNoTracking()
+                .Where(row => row.TenantKey == tenantKey && row.ExpiresAtUtcTicks <= cutoff && readableVersions.Contains(row.SchemaVersion))
+                .OrderBy(row => row.ExpiresAtUtcTicks).ThenBy(row => row.UserIdHash).ThenBy(row => row.HandleHash)
+                .Select(row => new { row.UserIdHash, row.HandleHash })
+                .Take(maxCount)
+                .ToListAsync(cancellationToken);
+            var deleted = 0;
+            foreach (var candidate in candidates)
+            {
+                // ExecuteDelete takes no row limit, so each bounded candidate is deleted by its key. The expiry is
+                // part of the delete itself: the statement removes an expired row or nothing.
+                deleted += await db.Collections
+                    .Where(row => row.TenantKey == tenantKey && row.UserIdHash == candidate.UserIdHash && row.HandleHash == candidate.HandleHash && row.ExpiresAtUtcTicks <= cutoff)
+                    .ExecuteDeleteAsync(cancellationToken);
+            }
+
+            return deleted;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            throw new ReusableActivityImportPersistenceException("delete expired collections", tenantKey, exception);
+        }
+    }
+
     public async ValueTask<ReusableActivityImportReceipt?> FindReceiptAsync(
         string idempotencyKey,
         ReusableActivityImportAccessScope accessScope,
@@ -119,6 +191,20 @@ public sealed class EfReusableActivityImportOperationStore(
         {
             throw new ReusableActivityImportPersistenceException("load receipt", receiptId, exception);
         }
+    }
+
+    /// <summary>The one partition the ambient persistence scope names: a tenant's, or the global one.</summary>
+    private string AmbientTenantKey()
+    {
+        var context = accessContextAccessor.Current;
+        if (context.Scope is { } scope)
+            return Elsa3ImportRecordCodec.TenantKey(scope.Value);
+        if (context.IsGlobal)
+            return Elsa3ImportRecordCodec.TenantKey(null);
+        throw new ReusableActivityImportPersistenceException(
+            "validate persistence scope",
+            "current",
+            new InvalidOperationException("Expired Elsa 3 import collections are deleted one persistence scope at a time."));
     }
 
     /// <summary>Reads one receipt row, proven against its canonical content, or null when absent.</summary>

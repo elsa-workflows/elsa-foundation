@@ -8,7 +8,7 @@ Records direct project references only.
 
 - Source projects: 141
 - Test projects: 139
-- Direct project references: 1331
+- Direct project references: 1333
 
 ## Projects
 
@@ -151,7 +151,7 @@ Records direct project references only.
 | [Elsa.Agent.GitHubCopilot](../../src/extensions/Agent/src/GitHubCopilot/Elsa.Agent.GitHubCopilot.csproj) | source | Elsa.Agent | - | true | Elsa.Agent.Core<br>Elsa.Agent.Workflows |
 | [Elsa.Agent.Workflows](../../src/extensions/Agent/src/Workflows/Elsa.Agent.Workflows.csproj) | source | Elsa.Agent | - | true | Elsa.Agent.Core |
 | [Elsa.Agent.Tests](../../src/extensions/Agent/tests/Tests/Elsa.Agent.Tests.csproj) | test | Elsa.Agent | - | false | Elsa.Agent.Anthropic<br>Elsa.Agent.Api<br>Elsa.Agent.Core<br>Elsa.Agent.GitHubCopilot<br>Elsa.Agent.Workflows<br>Elsa.Testing |
-| [Elsa3.Activities.Design.Import](../../src/extensions/Elsa3/src/Activities/Design/Import/Elsa3.Activities.Design.Import.csproj) | source | Elsa3 | - | true | Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Persistence.Core<br>Elsa.Api.AspNetCore<br>Elsa.Events.Core<br>Elsa.Foundation.Identity<br>Elsa.Foundation.Identity.Core<br>Elsa.Serialization.Core<br>Elsa.Workflows.Design.Persistence.Core<br>Elsa3.Models |
+| [Elsa3.Activities.Design.Import](../../src/extensions/Elsa3/src/Activities/Design/Import/Elsa3.Activities.Design.Import.csproj) | source | Elsa3 | - | true | Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Persistence.Core<br>Elsa.Api.AspNetCore<br>Elsa.Events.Core<br>Elsa.Foundation.Identity<br>Elsa.Foundation.Identity.Core<br>Elsa.Serialization.Core<br>Elsa.Tasks.Schedules<br>Elsa.Workflows.Design.Persistence.Core<br>Elsa.Workflows.Runtime.Core<br>Elsa3.Models |
 | [Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore](../../src/extensions/Elsa3/src/Activities/Design/Import/Persistence/EntityFrameworkCore/Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.csproj) | source | Elsa3 | - | true | Elsa.Activities.Design.Persistence.EntityFrameworkCore<br>Elsa.Persistence.EntityFramework<br>Elsa.Serialization.Core<br>Elsa.Workflows.Design.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Runtime.Core<br>Elsa3.Activities.Design.Import |
 | [Elsa3.Mapping](../../src/extensions/Elsa3/src/Mapping/Elsa3.Mapping.csproj) | source | Elsa3 | - | true | Elsa.Activities.Design.Persistence.Core<br>Elsa.Serialization.Core<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Design.Persistence.Core<br>Elsa3.Activities.Design.Import<br>Elsa3.Models |
 | [Elsa3.Models](../../src/extensions/Elsa3/src/Models/Elsa3.Models.csproj) | source | Elsa3 | - | true | - |

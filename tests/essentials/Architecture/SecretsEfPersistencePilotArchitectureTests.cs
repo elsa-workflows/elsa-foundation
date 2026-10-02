@@ -305,6 +305,7 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
         "tests/essentials/Secrets/Persistence/EntityFrameworkCore/Tests/SecretsEfModuleMigrationTests.cs",
         "tests/essentials/Secrets/Persistence/EntityFrameworkCore/Tests/SecretsEntityFrameworkCoreFeatureTests.cs",
         "tests/essentials/Secrets/Persistence/EntityFrameworkCore/Tests/SecretsEntityFrameworkCoreShellReloadTests.cs",
+        "tests/essentials/Secrets/Persistence/EntityFrameworkCore/Tests/SecretsFeatureKeySettingsShellTests.cs",
         "tests/essentials/Secrets/Persistence/EntityFrameworkCore/Tests/SecretsHostCatalog.cs",
         "tests/essentials/Secrets/Persistence/EntityFrameworkCore/Tests/SecretsPersistenceCompositionTests.cs",
         "tests/essentials/Secrets/Persistence/EntityFrameworkCore/Tests/SecretsPersistenceHostJourneyTests.cs",

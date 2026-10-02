@@ -232,6 +232,9 @@ reload 5202
 
 Expect `HTTP 409`, the apply table (`Cluster.Membership ... 0`, `Samples.Notes ... 1`), then `HTTP 200`.
 
+Or hand these three commands to Claude (set up before the audience: RUNBOOK.md, step 2.2). Type in its session: "Host B refuses to switch to the new release. Find out why and fix it."
+If it stalls, run the block above yourself.
+
 **2.3** B's new feature is dormant:
 
 ```bash

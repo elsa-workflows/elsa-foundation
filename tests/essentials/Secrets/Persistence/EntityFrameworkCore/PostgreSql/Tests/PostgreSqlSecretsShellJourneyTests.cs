@@ -2,13 +2,11 @@ using System.Text.Json;
 using CShells.AspNetCore.Configuration;
 using CShells.AspNetCore.Extensions;
 using CShells.DependencyInjection;
-using CShells.Features;
 using CShells.Lifecycle;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Secrets.Core.Contracts;
 using Elsa.Secrets.Core.Models;
 using Elsa.Secrets.Features;
-using Elsa.Secrets.Options;
 using Elsa.Secrets.Persistence.EntityFrameworkCore.Stores;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -153,8 +151,7 @@ public sealed class PostgreSqlSecretsShellJourneyTests(PostgresContainerFixture 
                         Configuration = new { Elsa = new { Persistence = new { EntityFramework = new { Migrate = new { Policy = migratePolicy.ToString() } } } } },
                         Features = new Dictionary<string, object>
                         {
-                            ["Secrets"] = new { },
-                            ["PostgreSqlSecretsJourneyEncryption"] = new { },
+                            ["Secrets"] = new { EncryptionKey = "phase-3-postgresql-shell-key" },
                             ["SecretsEntityFrameworkCore"] = new
                             {
                                 Provider = "PostgreSql",
@@ -177,8 +174,7 @@ public sealed class PostgreSqlSecretsShellJourneyTests(PostgresContainerFixture 
                 .WithHostAssemblies()
                 .WithAssemblies(
                     typeof(SecretsFeature).Assembly,
-                    typeof(SecretsEntityFrameworkCoreFeature).Assembly,
-                    typeof(PostgreSqlSecretsJourneyEncryptionFeature).Assembly)
+                    typeof(SecretsEntityFrameworkCoreFeature).Assembly)
                 .WithConfigurationProvider(builder.Configuration));
 
             var app = builder.Build();
@@ -213,11 +209,4 @@ public sealed class PostgreSqlSecretsShellJourneyTests(PostgresContainerFixture 
             }
         ]
     };
-}
-
-[ShellFeature(name: "PostgreSqlSecretsJourneyEncryption")]
-public sealed class PostgreSqlSecretsJourneyEncryptionFeature : IShellFeature
-{
-    public void ConfigureServices(IServiceCollection services) =>
-        services.PostConfigure<SecretsOptions>(options => options.EncryptionKey = "phase-3-postgresql-shell-key");
 }
