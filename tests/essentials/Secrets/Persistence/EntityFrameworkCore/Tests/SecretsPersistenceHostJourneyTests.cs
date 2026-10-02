@@ -212,8 +212,7 @@ public sealed class SecretsPersistenceHostJourneyTests
                   "Elsa": { "Persistence": { "EntityFramework": { "Migrate": { "Policy": "{{migratePolicy}}" } } } }
                 },
                 "Features": {
-                  "Secrets": {},
-                  "SecretsJourneyEncryption": {
+                  "Secrets": {
                     "EncryptionKey": "{{SecretsHostCatalog.EncryptionKey}}"
                   },
                   "SecretsEntityFrameworkCore": {
