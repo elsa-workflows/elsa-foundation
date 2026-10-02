@@ -71,20 +71,24 @@ FR-008's seven definition entry points and the Elsa 3 collection import, admitte
 | `WorkflowsVersionReconciler` (`Elsa.Workflows.Design.Reconciliation`), per item | file-based reconciliation, git import | that item only: nothing is written for it, its claim is dropped, a value-free warning is logged, and the pass goes on |
 | `GitWorkflowExporter` (`Elsa.Workflows.Design.Reconciliation.Git`), per version | git export | that version only: no file, commit or tag, a value-free warning, and the pass goes on |
 | `RuntimeInputBindingCompiler.CompileAll` (`Elsa.Workflows.Publishing`), per node | publish, publish-on-reconcile, draft test runs | `CredentialLiteralRefusedException`, ahead of `VF-ACT-011`, reported as a compile error (400) |
-| `ReusableActivityCollectionImporter` (`Elsa3.Activities.Design.Import`), per apply | Elsa 3 collection import | the whole apply, which is all or nothing: `CredentialLiteralRefusedException` before the commit, nothing is stored (400, the messages in the problem's `detail`) |
+| `ReusableActivityCollectionImporter` (`Elsa3.Activities.Design.Import`), every node it maps, per apply | Elsa 3 collection import | the whole apply, which is all or nothing: one `CredentialLiteralRefusedException` before the commit, nothing is stored (400, the messages in the problem's `detail`) |
 
 Every caller of the first three and the last takes the rule's contract, `ICredentialLiteralValidator`
 (`Elsa.Workflows.Design.Validations.Core`). A Design API caller admits the incoming or stored state through
 `WorkflowStateAdmission.AdmitAsync`, a static helper over the contract (like `DraftValidationGate`) that throws the
-refusal and holds no rule of its own; the Elsa 3 importer admits through it too, and the reconciler and the exporter
-read the findings and skip the item.
+refusal and holds no rule of its own. The Elsa 3 importer reads the findings for every node it maps, nested ones
+included, and throws one refusal holding all of them; the reconciler and the exporter read the findings and skip the
+item.
 Publication applies the predicate itself, because it already holds each input's declaration. Draft save blocking on this rule is the one deliberate exception to "draft save records validation
 errors without blocking": the exception is the Design API's admission, and `DraftValidating` stays non-blocking for
 every validator, this one included.
 
 The validator judges only a node whose activity version the catalog holds, down to `MaxRecursionDepth`, as the other
-tree-walking validators do, and reaches only the children a registered structure handler projects: a child under a
-structure the shell has no handler for is not judged before publication, which refuses the unhandled structure. A node of an activity that is not installed cannot be judged until publication, which refuses it because it cannot compile it; until then a literal on
+tree-walking validators do, and reaches only the children a registered structure handler projects. A child under a
+structure kind with no registered handler is therefore not judged, and publication refuses it only when the parent's
+activity declares that structure kind; otherwise publication compiles the structure opaque, without compiling or
+judging the child (the credential-literal contract's Known gaps). The Elsa 3 collection import enumerates the children
+its own mapping nests and judges each. A node of an activity that is not installed cannot be judged until publication, which refuses it because it cannot compile it; until then a literal on
 it can be stored and exported (the residual of research R7). `UnknownActivityVersionValidator` reports such a node.
 Promote judges the draft it reads and passes that draft's `WorkflowDraftStateHash` to the promotion command, which
 refuses with a conflict (409) when the draft changed in between, so it promotes exactly what was admitted.

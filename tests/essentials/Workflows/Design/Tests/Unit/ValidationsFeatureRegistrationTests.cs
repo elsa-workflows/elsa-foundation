@@ -12,6 +12,7 @@ using Elsa.Workflows.Design.Validations.Core.Events;
 using Elsa.Workflows.Design.Validations.Handlers;
 using Elsa.Workflows.Design.Validations.Validators;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using Xunit;
 
@@ -117,6 +118,17 @@ public sealed class ValidationsFeatureRegistrationTests
         Assert.Contains(nameof(ICredentialLiteralValidator), failure.Message, StringComparison.Ordinal);
         Assert.Contains($"'{typeof(SecondValidator).FullName}'", failure.Implementations);
         Assert.Contains("a factory registration", failure.Implementations);
+    }
+
+    [Fact]
+    public async Task A_host_that_replaces_the_default_after_the_feature_registers_starts_and_resolves_its_replacement()
+    {
+        using var provider = BuildProvider(_ => { }, services => services.Replace(ServiceDescriptor.Scoped<ICredentialLiteralValidator, SecondValidator>()));
+
+        Assert.Null(await Record.ExceptionAsync(() => InitializeShellAsync(provider)));
+        using var scope = provider.CreateScope();
+        Assert.IsType<SecondValidator>(Assert.Single(scope.ServiceProvider.GetServices<ICredentialLiteralValidator>()));
+        Assert.Single(scope.ServiceProvider.GetServices<IDraftValidator>().OfType<CredentialLiteralValidator>());
     }
 
     private static async Task InitializeShellAsync(IServiceProvider provider)

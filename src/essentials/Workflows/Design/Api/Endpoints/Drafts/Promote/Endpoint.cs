@@ -40,16 +40,23 @@ public sealed class Endpoint(
     {
         // A missing draft is not refused here: the command resolves a replay of an already-succeeded promotion before it
         // reads the draft, so a replay after the draft was discarded still returns the original version, and a first
-        // promotion of a missing draft is refused by the command's own lookup (404). The hash of an absent draft is the
-        // hash of empty content, which nothing but an empty, and therefore admissible, draft can match.
+        // promotion of a missing draft is refused by the command's own lookup (404). Nothing was admitted then, so the
+        // command is handed WorkflowDraftStateHash.Absent: a draft that appears in between differs from it and is
+        // refused as changed, unless its stored state source is null or empty, which holds no state to promote and which
+        // the EF command refuses to read before it writes anything.
         var draft = await draftStore.FindByIdAsync(command.DraftId, cancellationToken);
+        var admittedStateHash = WorkflowDraftStateHash.Absent;
         if (draft is not null)
+        {
             await credentialLiterals.AdmitAsync(draft.State, cancellationToken);
+            admittedStateHash = WorkflowDraftStateHash.Compute(draft.StateSource);
+        }
+
         var versionId = await promoteCommand.Execute(
             DesignOperationKey.CreateOrGenerate(command.OperationKey),
             command.DraftId,
             command.RequestedVersion,
-            WorkflowDraftStateHash.Compute(draft?.StateSource),
+            admittedStateHash,
             cancellationToken);
         return await versionReader.ReadAsync(versionId, cancellationToken);
     }

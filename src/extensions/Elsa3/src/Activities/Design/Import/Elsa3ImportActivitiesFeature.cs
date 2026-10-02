@@ -27,8 +27,8 @@ namespace Elsa3.Activities.Design.Import;
     name: "Elsa3ImportJsonActivities",
     DisplayName = "Elsa 3 Import Activities",
     Description = "Imports Elsa 3 JSON workflow activities into the design reconciliation pipeline.",
-    // The Tasks feature runs the recurring sweep that deletes expired collection uploads. The importer admits every
-    // mapped workflow state through the credential-literal rule (spec 188, FR-008), which WorkflowDesignValidations
+    // The Tasks feature runs the recurring sweep that deletes expired collection uploads. The importer judges every
+    // activity node it maps through the credential-literal rule (spec 188, FR-008), which WorkflowDesignValidations
     // registers.
     DependsOn = new object[] { "Elsa3Mapping", "Tasks", "WorkflowDesignValidations" }
 )]

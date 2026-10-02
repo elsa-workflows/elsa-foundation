@@ -1,5 +1,7 @@
-using Elsa.Workflows.Design.Validations.Core;
+using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Validations.Core.Contracts;
+using Elsa.Workflows.Design.Validations.Core.Exceptions;
+using Elsa.Workflows.Design.Validations.Core.Models;
 using Elsa3.Activities.Design.Import.Contracts;
 using Elsa3.Activities.Design.Import.Models;
 using Elsa3.Models;
@@ -7,16 +9,23 @@ using Elsa3.Models;
 namespace Elsa3.Activities.Design.Import.Services;
 
 /// <summary>
-/// Applies a reviewed Elsa 3 collection selection: re-analyzes it, checks the selection, maps it, admits every workflow
-/// state the mapping produced through the credential-literal rule (spec 188, FR-008) and commits the mutation as one unit.
+/// Applies a reviewed Elsa 3 collection selection: re-analyzes it, checks the selection, maps it, admits every activity
+/// node the mapping produced through the credential-literal rule (spec 188, FR-008) and commits the mutation as one unit.
 /// </summary>
 /// <remarks>
-/// The apply is all or nothing, so a refused state refuses the whole apply before anything is committed:
-/// <see cref="WorkflowStateAdmission.AdmitAsync"/> throws <c>CredentialLiteralRefusedException</c>, which names the rule,
-/// the node and the input and never the value. The states judged are each imported workflow version's and each reusable
-/// activity's mapped body. As everywhere the rule runs, a node whose activity version the catalog does not hold is not
-/// judged, and neither is a child under a structure no registered handler projects, which includes the children the
-/// mapping nests under its imported-activity structure.
+/// <para>
+/// The nodes judged are those of each imported workflow version's state and of each reusable activity's mapped body,
+/// from which the materializer builds that activity version's descriptor payload: the root and every node nested under
+/// it at any depth. The mapping nests child activities under <see cref="Elsa3ImportedActivityStructure.Kind"/>, which no
+/// structure handler projects, so the rule's own tree walk does not reach them; the import enumerates them through
+/// <see cref="Elsa3ImportedActivityStructure.Nodes"/> and judges each through <see cref="ICredentialLiteralValidator"/>.
+/// </para>
+/// <para>
+/// The apply is all or nothing, so a refused binding refuses the whole apply before anything is committed: one
+/// <see cref="CredentialLiteralRefusedException"/> names the rule, and the node and the input of every refused binding,
+/// never the value. As everywhere the rule runs, a binding is matched to its input by reference key, and a node whose
+/// activity version the catalog does not hold is not judged.
+/// </para>
 /// </remarks>
 public sealed class ReusableActivityCollectionImporter(
     IReusableActivityCollectionAnalyzer analyzer,
@@ -110,9 +119,7 @@ public sealed class ReusableActivityCollectionImporter(
         }
 
         var mutation = await materializer.MaterializeAsync(request.Collection, plan, selection, cancellationToken);
-        var states = mutation.Workflows.Select(workflow => workflow.Version.State).Concat(mutation.Activities.Select(activity => activity.Body));
-        foreach (var state in states)
-            await credentialLiterals.AdmitAsync(state, cancellationToken);
+        await AdmitAsync(mutation, cancellationToken);
         if (request.AccessScope is not null)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(request.AccessScope.UserId);
@@ -136,6 +143,27 @@ public sealed class ReusableActivityCollectionImporter(
         }
         var committed = await command.CommitAsync(mutation, cancellationToken);
         return new(plan.PlanId, selection.Select(x => x.SourceVersionId).ToArray(), committed.NoOp, committed.Receipt);
+    }
+
+    /// <summary>
+    /// Judges every activity node the commit would store, nested ones included, and throws one
+    /// <see cref="CredentialLiteralRefusedException"/> naming every refused binding when any node holds one.
+    /// </summary>
+    /// <remarks>
+    /// The rule judges each binding against its own node's activity declaration, so a node judged as the root of an
+    /// otherwise empty state gets the findings it would get in place.
+    /// </remarks>
+    private async Task AdmitAsync(ReusableActivityImportMutation mutation, CancellationToken cancellationToken)
+    {
+        var roots = mutation.Workflows.Select(workflow => workflow.Version.State.RootActivity)
+            .Concat(mutation.Activities.Select(activity => activity.Body.RootActivity))
+            .OfType<ActivityNode>();
+        var findings = new List<ValidationError>();
+        foreach (var node in roots.SelectMany(Elsa3ImportedActivityStructure.Nodes))
+            findings.AddRange(await credentialLiterals.Validate(new WorkflowDefinitionState([], node, [], [], null), cancellationToken));
+
+        if (findings.Count > 0)
+            throw new CredentialLiteralRefusedException(findings);
     }
 
     private static ReusableActivityImportValidationException Validation(

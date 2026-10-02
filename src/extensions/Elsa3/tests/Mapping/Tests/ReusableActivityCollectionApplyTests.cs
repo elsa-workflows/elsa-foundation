@@ -16,7 +16,7 @@ public sealed class ReusableActivityCollectionApplyTests
         var collection = ValidCollection();
         var analyzer = new ReusableActivityCollectionAnalyzer();
         var plan = await analyzer.AnalyzeAsync(collection);
-        var command = new CapturingCommand();
+        var command = new ReusableActivityImportFixtures.CapturingCommand();
         var importer = new ReusableActivityCollectionImporter(analyzer, ReusableActivityImportFixtures.Materializer(), command, ReusableActivityImportFixtures.Validator());
 
         var result = await importer.ApplyAsync(new(plan.PlanId, collection, ["a-v1", "b-v1", "consumer-v1"]));
@@ -45,7 +45,7 @@ public sealed class ReusableActivityCollectionApplyTests
         var analyzer = new ReusableActivityCollectionAnalyzer();
         var plan = await analyzer.AnalyzeAsync(collection);
         var materializer = new CapturingMaterializer();
-        var command = new CapturingCommand();
+        var command = new ReusableActivityImportFixtures.CapturingCommand();
         var importer = new ReusableActivityCollectionImporter(analyzer, materializer, command, ReusableActivityImportFixtures.Validator());
 
         var exception = await Assert.ThrowsAsync<ReusableActivityImportValidationException>(async () =>
@@ -63,7 +63,7 @@ public sealed class ReusableActivityCollectionApplyTests
         var analyzer = new ReusableActivityCollectionAnalyzer();
         var plan = await analyzer.AnalyzeAsync(collection);
         var materializer = new CapturingMaterializer();
-        var command = new CapturingCommand();
+        var command = new ReusableActivityImportFixtures.CapturingCommand();
         var importer = new ReusableActivityCollectionImporter(analyzer, materializer, command, ReusableActivityImportFixtures.Validator());
 
         var exception = await Assert.ThrowsAsync<ReusableActivityImportValidationException>(async () =>
@@ -83,7 +83,7 @@ public sealed class ReusableActivityCollectionApplyTests
         var collection = ReusableActivityImportFixtures.Collection(valid, duplicateOne, duplicateTwo);
         var analyzer = new ReusableActivityCollectionAnalyzer();
         var plan = await analyzer.AnalyzeAsync(collection);
-        var command = new CapturingCommand();
+        var command = new ReusableActivityImportFixtures.CapturingCommand();
         var importer = new ReusableActivityCollectionImporter(analyzer, ReusableActivityImportFixtures.Materializer(), command, ReusableActivityImportFixtures.Validator());
 
         var result = await importer.ApplyAsync(new(plan.PlanId, collection, ["valid-v1"]));
@@ -116,7 +116,7 @@ public sealed class ReusableActivityCollectionApplyTests
         var analyzer = new ReusableActivityCollectionAnalyzer();
         var plan = await analyzer.AnalyzeAsync(collection);
         collection.Definitions[0].Name = "changed after review";
-        var importer = new ReusableActivityCollectionImporter(analyzer, new CapturingMaterializer(), new CapturingCommand(), ReusableActivityImportFixtures.Validator());
+        var importer = new ReusableActivityCollectionImporter(analyzer, new CapturingMaterializer(), new ReusableActivityImportFixtures.CapturingCommand(), ReusableActivityImportFixtures.Validator());
 
         var exception = await Assert.ThrowsAsync<ReusableActivityImportValidationException>(async () =>
             await importer.ApplyAsync(new(plan.PlanId, collection, ["a-v1"])));
@@ -134,16 +134,6 @@ public sealed class ReusableActivityCollectionApplyTests
     }
 
     private static IPayloadSerializer Serializer() => new JsonPayloadSerializer(new JsonPayloadConverterRegistry());
-
-    private sealed class CapturingCommand : IReusableActivityImportCommand
-    {
-        public ReusableActivityImportMutation? Mutation { get; private set; }
-        public ValueTask<ReusableActivityImportCommitResult> CommitAsync(ReusableActivityImportMutation mutation, CancellationToken cancellationToken = default)
-        {
-            Mutation = mutation;
-            return ValueTask.FromResult(new ReusableActivityImportCommitResult(false));
-        }
-    }
 
     private sealed class FailingCommand : IReusableActivityImportCommand
     {

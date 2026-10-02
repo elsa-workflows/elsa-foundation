@@ -1,6 +1,7 @@
 ﻿using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Expressions.Core.Models;
 using Elsa.Workflows.Design.Core.Models;
+using Elsa3.Activities.Design.Import.Models;
 using Elsa3.Models;
 using System.Text.Json;
 using ArgumentState = Elsa.Workflows.Design.Core.Models.ArgumentState;
@@ -11,9 +12,6 @@ namespace Elsa3.Mapping.Mappings;
 /// <summary>Converts an Elsa-3 activity to an Elsa-4 <see cref="ActivityNode"/>.</summary>
 public sealed class Elsa3ActivityToState(IActivityDefinitionLookup activityLookup)
 {
-    private const string ImportedStructureKind = "elsa3.imported-activity.structure";
-    private const string ImportedStructureSchemaVersion = "1.0.0";
-
     public ValueTask<ActivityNode> Map(Elsa3Activity source, CancellationToken cancellationToken) =>
         Map(source, new Dictionary<string, Elsa3ActivityExactReplacement>(StringComparer.Ordinal), cancellationToken);
 
@@ -63,12 +61,7 @@ public sealed class Elsa3ActivityToState(IActivityDefinitionLookup activityLooku
             var outputs = new List<ArgumentState>();
             ExtractInputsAndOutputs(inputs, outputs, inputNames, outputNames, frame.Activity.AdditionalProperties);
             var childActivities = (frame.Activity.Activities ?? []).Select(x => mapped[x]).ToArray();
-            var structure = childActivities.Length == 0
-                ? null
-                : new ActivityNodeStructure(
-                    ImportedStructureKind,
-                    ImportedStructureSchemaVersion,
-                    JsonSerializer.SerializeToElement(new { activities = childActivities }));
+            var structure = Elsa3ImportedActivityStructure.Create(childActivities);
             mapped.Add(frame.Activity, new ActivityNode(
                 frame.Activity.NodeId,
                 activityVersionId,

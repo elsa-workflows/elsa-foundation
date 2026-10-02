@@ -4,6 +4,7 @@ using System.Text.Json;
 using Elsa.Workflows.Design.Api.Projections;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Exceptions;
+using Elsa.Workflows.Design.Validations.Core.Models;
 using Xunit;
 using static Elsa.Workflows.Design.Tests.Infrastructure.CredentialLiteralTestSupport;
 using AuthorizationHost = Elsa.Workflows.Design.Api.Tests.WorkflowsDesignApiContractTests.AuthorizationHost;
@@ -16,7 +17,8 @@ namespace Elsa.Workflows.Design.Api.Tests;
 /// is answered with 400 and the contract's problem body: <c>errors</c> keyed by <c>{nodeId}/inputs/{referenceKey}</c>,
 /// each message starting with the rule id, and the value nowhere; the route's command never runs. A secret reference and
 /// a literal on a sensitive input that is not a credential reach the command. A promotion whose draft changed after
-/// admission answers 409.
+/// admission answers 409, and so does one the promotion command's in-lock validation gate refuses, with the gate's
+/// errors keyed by path beside its general error.
 /// </summary>
 public sealed class CredentialLiteralEndpointTests
 {
@@ -62,6 +64,25 @@ public sealed class CredentialLiteralEndpointTests
         Assert.Contains("changed after it was read for promotion", await response.Content.ReadAsStringAsync(), StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task A_promotion_the_in_lock_validation_gate_refuses_is_answered_with_409_and_its_errors_by_path()
+    {
+        // The standard host's answer to a draft with an uncataloged node (contract, Known gaps): admission cannot judge
+        // the node, the promotion command's in-lock gate reports it, and the design translator maps the gate's refusal.
+        await using var host = await AuthorizationHost.StartAsync();
+        var finding = new ValidationError(NodeId, "Graph/UnknownActivityVersion", $"Activity '{NodeId}' references an activity version the catalog does not hold.");
+        var refusal = new DraftHasValidationErrorsException("route-draft", [finding]);
+        host.Domain.PromoteFailure = refusal;
+
+        using var response = await SendAsync(host, "DraftsPromote", State(ActivityVersionId, Bind(CredentialKey, "Secret")));
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        var errors = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement.GetProperty("errors");
+        Assert.Equal(2, errors.EnumerateObject().Count());
+        Assert.Equal(finding.Message, Assert.Single(errors.GetProperty(finding.Path).EnumerateArray()).GetString());
+        Assert.Equal(refusal.Message, Assert.Single(errors.GetProperty("generalErrors").EnumerateArray()).GetString());
+    }
+
     private static async Task AssertReachesTheCommandAsync(string route, WorkflowDefinitionState state)
     {
         await using var host = await AuthorizationHost.StartAsync();
@@ -73,23 +94,24 @@ public sealed class CredentialLiteralEndpointTests
     }
 
     /// <summary>
-    /// Sends <paramref name="state"/> to <paramref name="route"/>. Promote carries no state: the route reads the draft, so
-    /// the draft store serves <paramref name="state"/> instead.
+    /// Sends <paramref name="state"/> to <paramref name="route"/>. Each route names the state the draft store serves:
+    /// promote carries no state, because it reads the draft, so its store serves <paramref name="state"/>; every other
+    /// route's store serves the empty state it serves by default.
     /// </summary>
     private static async Task<HttpResponseMessage> SendAsync(AuthorizationHost host, string route, WorkflowDefinitionState state)
     {
         var view = state.ToStateView();
-        var (method, path, body) = route switch
+        var empty = WorkflowDefinitionState.Empty;
+        var (method, path, body, storedDraft) = route switch
         {
-            "DefinitionsAdd" => (HttpMethod.Post, "/design/workflows/definitions", (object)new { name = "Definition", initialState = view }),
-            "DraftsReplace" => (HttpMethod.Put, "/design/workflows/drafts/route-draft", new { state = view }),
-            "VersionsAdd" => (HttpMethod.Post, "/design/workflows/versions/ingest", new { definitionId = "sample-definition", state = view }),
-            "DefinitionsSubmit" => (HttpMethod.Post, "/design/workflows/definitions/submit", new { name = "Submitted", state = view }),
-            "DraftsPromote" => (HttpMethod.Post, "/design/workflows/drafts/route-draft/promote", new { }),
+            "DefinitionsAdd" => (HttpMethod.Post, "/design/workflows/definitions", (object)new { name = "Definition", initialState = view }, empty),
+            "DraftsReplace" => (HttpMethod.Put, "/design/workflows/drafts/route-draft", new { state = view }, empty),
+            "VersionsAdd" => (HttpMethod.Post, "/design/workflows/versions/ingest", new { definitionId = "sample-definition", state = view }, empty),
+            "DefinitionsSubmit" => (HttpMethod.Post, "/design/workflows/definitions/submit", new { name = "Submitted", state = view }, empty),
+            "DraftsPromote" => (HttpMethod.Post, "/design/workflows/drafts/route-draft/promote", new { }, state),
             _ => throw new ArgumentOutOfRangeException(nameof(route), route, null)
         };
-        if (route == "DraftsPromote")
-            host.Domain.DraftState = state;
+        host.Domain.DraftState = storedDraft;
 
         using var request = new HttpRequestMessage(method, path)
         {

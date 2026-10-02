@@ -69,8 +69,10 @@ public class WorkflowDesignValidationsFeature : IShellFeature
         services.AddScoped<IExpressionDraftSemanticValidator, ExpressionDraftSemanticValidator>();
         services.AddScoped<IDraftValidator, ExpressionDraftValidator>();
 
-        // The credential-literal rule (spec 188, FR-008): one validator, which every entry point reaches as
+        // The credential-literal rule (spec 188, FR-008): one validator, which every admitting writer of workflow state
+        // (the Design API callers, the version reconciler, the git exporter, the Elsa 3 collection import) reaches as
         // ICredentialLiteralValidator, also contributed to DraftValidating so the validation panel reports it.
+        // Publication does not take it: its compiler applies the same predicate, CredentialInputBinding.IsAccepted.
         services.AddScoped<CredentialLiteralValidator>();
         services.AddScoped<ICredentialLiteralValidator>(sp => sp.GetRequiredService<CredentialLiteralValidator>());
         services.AddScoped<IDraftValidator>(sp => sp.GetRequiredService<CredentialLiteralValidator>());

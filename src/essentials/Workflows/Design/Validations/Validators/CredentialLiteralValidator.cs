@@ -9,10 +9,10 @@ using Microsoft.Extensions.Options;
 namespace Elsa.Workflows.Design.Validations.Validators;
 
 /// <summary>
-/// The credential-literal rule (spec 188, FR-008, FR-009). For every catalog-backed activity in the state (root and
-/// nested), reads each input the catalog version declares a credential (<c>InputDefinition.IsCredential</c>) and refuses
-/// its binding unless <see cref="CredentialInputBinding.IsAccepted"/> accepts it. Each finding is
-/// <see cref="CredentialLiteralFinding"/>'s, keyed by <c>{NodeId}/inputs/{ReferenceKey}</c>.
+/// The credential-literal rule (spec 188, FR-008, FR-009). For every catalog-backed activity in the state (the root and
+/// the nested ones a registered structure handler projects), reads each input the catalog version declares a credential
+/// (<c>InputDefinition.IsCredential</c>) and refuses its binding unless <see cref="CredentialInputBinding.IsAccepted"/>
+/// accepts it. Each finding is <see cref="CredentialLiteralFinding"/>'s, keyed by <c>{NodeId}/inputs/{ReferenceKey}</c>.
 /// </summary>
 /// <remarks>
 /// <para>

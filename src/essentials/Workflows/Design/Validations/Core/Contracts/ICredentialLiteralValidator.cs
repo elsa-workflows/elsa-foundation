@@ -14,8 +14,8 @@ public sealed class CredentialLiteralValidatorReplacementContractAttribute : Att
 /// Finds the bindings of a workflow definition state that the credential-literal rule (spec 188, FR-008) refuses: a
 /// literal, an object, a default request, a value read or an expression on an input its activity declares a credential.
 /// The application-layer writers of workflow state the architecture suite's coverage guard knows of take it: one that
-/// refuses a whole request admits the state through <see cref="WorkflowStateAdmission.AdmitAsync"/>, and one that refuses
-/// a single item of many reads the findings here.
+/// refuses a whole request holding one state admits it through <see cref="WorkflowStateAdmission.AdmitAsync"/>, and one
+/// that refuses a single item of many, or judges many states before refusing a whole request, reads the findings here.
 /// </summary>
 /// <remarks>
 /// This is a <b>replacement contract</b> (framework constitution §2.6.2), declared by

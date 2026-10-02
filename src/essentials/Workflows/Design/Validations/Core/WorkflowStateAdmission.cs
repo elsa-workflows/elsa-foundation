@@ -12,7 +12,8 @@ namespace Elsa.Workflows.Design.Validations.Core;
 /// </summary>
 /// <remarks>
 /// A caller that handles many items and must refuse one without failing the rest (file reconciliation, git export) reads
-/// the findings from <see cref="ICredentialLiteralValidator.Validate"/> itself and skips that item. The architecture
+/// the findings from <see cref="ICredentialLiteralValidator.Validate"/> itself and skips that item; the Elsa 3 collection
+/// import reads them for every node it maps and throws one refusal holding all of them. The architecture
 /// suite's coverage guard (<c>ArchitectureGuardTests.CredentialLiteralAdmission.cs</c>) checks that every writer of
 /// workflow state it knows of takes <see cref="ICredentialLiteralValidator"/>. A static helper over the contract, like
 /// <see cref="DraftValidationGate"/>, because a <c>.Core</c> project holds no class with injected dependencies.

@@ -504,6 +504,9 @@ not trip it.
      lookup. `Elsa.Workflows.Publishing` already references `Elsa.Workflows.Design.Core` and
      `Elsa.Workflows.Design.Validations` (verified).
   4. **`GitWorkflowExporter`**, per version, before writing its file, through the findings of `ICredentialLiteralValidator`.
+
+  As built in slice 6's review, a fifth integration point, `ReusableActivityCollectionImporter`, covers an eighth entry
+  point, the Elsa 3 collection import (see "Writers that bypass the commands" below).
 - Coverage guard (T055): an architecture test classifies every `*Command` contract in
   `Elsa.Workflows.Design.Persistence.Core.Contracts` as state-writing or not, and asserts one thing about the
   state-writing ones: every non-persistence `src/` type whose constructor takes one also takes
@@ -528,12 +531,17 @@ contracts, and two persistence-layer writers write workflow state without one. T
 itself and stores the workflow versions it maps from Elsa 3 definitions, input values included; it is a definition
 import the seven entry points do not name. Slice 6 first recorded it as a follow-up; its review admitted it instead
 (spec FR-008 note), the same way file reconciliation is admitted: the import's application-layer service,
-`ReusableActivityCollectionImporter`, judges every mapped state (each workflow version's and each reusable activity's
-body) through `ICredentialLiteralValidator` before it calls its commit port, and the EF command holds no rule. Its
-apply is all or nothing, so a refusal refuses the whole apply through the import's existing 400 (`ArgumentException`)
-arm. That makes eight admitted entry points, and the coverage guard requires every caller of the import's commit port
-to take the rule. The import's mapping nests children under a structure kind no handler projects, so only each mapped
-state's root node is judged there (contract, Known gaps). An activity upgrade (`EfActivityUpgradePlanStore`) rewrites drafts directly, re-pointing nodes to another activity
+`ReusableActivityCollectionImporter`, judges every activity node it maps (each workflow version's and each reusable
+activity's body, the root and every nested node) through `ICredentialLiteralValidator` before it calls its commit
+port, and the EF command holds no rule. Its apply is all or nothing, so a refusal refuses the whole apply through the
+import's existing 400 (`ArgumentException`) arm. That makes eight admitted entry points, and the coverage guard
+requires every caller of the import's commit port to take the rule. The mapping nests children under
+`elsa3.imported-activity.structure`, which no handler projects, so the rule's own walk sees only each state's root;
+round 1 relied on that walk and judged nothing beneath the root. As built in round 2, the extension, which owns the
+shape, enumerates every nested node (`Elsa3ImportedActivityStructure.Nodes`) and the importer judges each through the
+contract. Registering a structure handler for the kind instead was rejected: every design validator, the design
+commands' tree walks and the publishing compiler would start processing the imported children. Any other structure
+kind without a handler remains a gap for hand-authored state (contract, Known gaps; T090). An activity upgrade (`EfActivityUpgradePlanStore`) rewrites drafts directly, re-pointing nodes to another activity
 version and adding no authored content. The coverage guard (T055) lists every production file outside the design
 persistence project that reaches the design EF context or a design EF command, each with what it does, so a new
 bypassing writer fails it until classified.

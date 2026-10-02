@@ -1683,6 +1683,55 @@ public sealed class EfWorkflowDesignPersistenceTests
         Assert.Equal((1, 1), await promotion.CountVersionRowsAsync());
     }
 
+    [Fact]
+    public async Task A_draft_deleted_between_admission_and_the_promotion_lock_is_not_found_and_nothing_is_written()
+    {
+        await using var promotion = await PromotionScenario.CreateAsync();
+        var admittedHash = await promotion.StoredHashAsync();
+        await promotion.DiscardDraftAsync();
+
+        await Assert.ThrowsAsync<EntityNotFoundException>(() => promotion.PromoteAsync("promote-discarded", admittedHash));
+
+        Assert.Equal((0, 0), await promotion.CountVersionRowsAsync());
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public async Task A_draft_without_state_found_where_the_caller_found_none_matches_the_absent_hash_but_is_not_promoted(string? stateSource)
+    {
+        await using var promotion = await PromotionScenario.CreateAsync();
+        await promotion.StoreStateSourceDirectlyAsync(stateSource);
+
+        var unreadable = await Assert.ThrowsAsync<DesignPersistenceException>(() => promotion.PromoteAsync("promote-without-state", WorkflowDraftStateHash.Absent));
+
+        Assert.Equal(DesignPersistenceFailureKind.Serialization, unreadable.FailureKind);
+        Assert.IsType<InvalidDataException>(unreadable.InnerException);
+        Assert.Equal((0, 0), await promotion.CountVersionRowsAsync());
+    }
+
+    [Fact]
+    public async Task A_draft_with_content_found_where_the_caller_found_none_is_refused_as_changed()
+    {
+        await using var promotion = await PromotionScenario.CreateAsync();
+
+        await Assert.ThrowsAsync<WorkflowDraftChangedException>(() => promotion.PromoteAsync("promote-unseen", WorkflowDraftStateHash.Absent));
+
+        Assert.Equal((0, 0), await promotion.CountVersionRowsAsync());
+    }
+
+    [Fact]
+    public async Task A_draft_whose_state_was_removed_after_admission_is_refused_as_changed()
+    {
+        await using var promotion = await PromotionScenario.CreateAsync();
+        var admittedHash = await promotion.StoredHashAsync();
+        await promotion.StoreStateSourceDirectlyAsync(string.Empty);
+
+        await Assert.ThrowsAsync<WorkflowDraftChangedException>(() => promotion.PromoteAsync("promote-emptied", admittedHash));
+
+        Assert.Equal((0, 0), await promotion.CountVersionRowsAsync());
+    }
+
     /// <summary>
     /// A definition with one draft on SQLite and the EF promotion command over it, with no in-lock validation gate, so
     /// only the content precondition decides what is promoted (spec 188, research R7).
@@ -1737,6 +1786,21 @@ public sealed class EfWorkflowDesignPersistenceTests
                     DraftId,
                     new WorkflowDefinitionState([], new ActivityNode(ChangedRootId, "activity", [], []), [], [], null),
                     []));
+
+        /// <summary>Discards the draft, as a concurrent Drafts/Discard would.</summary>
+        public Task DiscardDraftAsync() =>
+            new EfDiscardDraftCommand(Db, _accessor, _writer, new TestLockProvider())
+                .Execute(new DesignOperationKey($"discard-{Guid.NewGuid():N}"), DraftId);
+
+        /// <summary>
+        /// Overwrites the draft's stored state source in SQL. No store API writes a null or empty one (every command
+        /// serializes a state), so this is how a damaged row is constructed.
+        /// </summary>
+        public Task StoreStateSourceDirectlyAsync(string? stateSource) =>
+            Db.Database.ExecuteSqlRawAsync(
+                $"UPDATE {WorkflowsDesignEfModule.DraftTable} SET StateSource = @stateSource WHERE Id = @draftId",
+                new SqliteParameter("@stateSource", (object?)stateSource ?? DBNull.Value),
+                new SqliteParameter("@draftId", DraftId));
 
         public async Task<(int Versions, int Layouts)> CountVersionRowsAsync() =>
             (await Db.Versions.CountAsync(), await Db.VersionLayouts.CountAsync());

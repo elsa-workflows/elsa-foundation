@@ -38,7 +38,8 @@ The rule runs in the application layer only. Every application-layer writer of w
 finds takes the rule's contract, `ICredentialLiteralValidator` (`Elsa.Workflows.Design.Validations.Core`). A caller that refuses a whole
 request admits through the shared helper `WorkflowStateAdmission.AdmitAsync(validator, state)`, which throws
 `CredentialLiteralRefusedException`; a per-item caller reads the same findings from `ICredentialLiteralValidator.Validate`
-and skips the item. As built in slice 6, `WorkflowStateAdmission` is a static helper over the contract, like
+and skips the item; the Elsa 3 collection import reads the findings for every node it maps and throws one
+`CredentialLiteralRefusedException` holding all of them. As built in slice 6, `WorkflowStateAdmission` is a static helper over the contract, like
 `DraftValidationGate` beside it, rather than a sealed class with an injected validator: the architecture suite's
 `.Core` shape ratchet (`Core_projects_contain_no_implementation_shaped_types`) admits no new class with injected
 dependencies in a `.Core` project. It still holds no rule and cannot be replaced. No design persistence command and no
@@ -54,7 +55,7 @@ rejected.
 | 5 | Submit (Definitions/Submit) | Design API admission before `ISubmitWorkflowDefinitionCommand` | same as row 1 | 400 |
 | 6 | File-based reconciliation import (and git import, which feeds it) | `WorkflowsVersionReconciler.ReconcileVersion`, per item, before any catalog mutation for that item | that item only is refused; see "Per-item behavior" below | n/a |
 | 7 | Git export | `GitWorkflowExporter`, per version not yet committed, before writing its file | that version file only is skipped; see "Per-item behavior" below | n/a |
-| 8 | Elsa 3 collection import (`POST migration/elsa3/reusable-activities/collections/{collectionHandle}/apply`; admitted in slice 6's review) | `ReusableActivityCollectionImporter.ApplyAsync`, the import's application-layer service, after mapping and before its commit port (`IReusableActivityImportCommand`) runs: every imported workflow version's state and every reusable activity's mapped body | the apply is all or nothing, so the whole apply is refused with `CredentialLiteralRefusedException` and nothing is committed | 400 through the import's existing problem ladder (`elsa3.import.request-invalid`, its `ArgumentException` arm), the findings' messages in `detail`; that problem body has no `errors` map |
+| 8 | Elsa 3 collection import (`POST migration/elsa3/reusable-activities/collections/{collectionHandle}/apply`; admitted in slice 6's review) | `ReusableActivityCollectionImporter.ApplyAsync`, the import's application-layer service, after mapping and before its commit port (`IReusableActivityImportCommand`) runs: every activity node of each imported workflow version's state and of each reusable activity's mapped body (from which the materializer builds that activity version's descriptor payload), the root and every node nested under it at any depth. The mapping nests children under `elsa3.imported-activity.structure`, which no handler projects, so the import enumerates them itself (`Elsa3ImportedActivityStructure.Nodes`) and judges each node through `ICredentialLiteralValidator` (review round 2) | the apply is all or nothing, so the whole apply is refused with one `CredentialLiteralRefusedException` naming every refused binding, and nothing is committed | 400 through the import's existing problem ladder (`elsa3.import.request-invalid`, its `ArgumentException` arm), the findings' messages in `detail`; that problem body has no `errors` map |
 
 Each refusal carries the rule identifier, the activity (node) id and the input name. Entry point 8 is not one of
 FR-008's seven: it was found in slice 6 and admitted in its review, as file reconciliation is (spec FR-008 note).
@@ -102,7 +103,8 @@ the reconciler materializes the definition record before the version (verified i
 The draft row has no revision or concurrency token, so the precondition is a content hash: the SHA-256 of the
 draft's stored `StateSource` (empty when null), computed by the endpoint from the draft it admitted, through
 `WorkflowDraftStateHash.Compute` (`Elsa.Workflows.Design.Persistence.Core`), which the command uses for its in-lock
-read as well.
+read as well. When the endpoint finds no draft it admits nothing and passes `WorkflowDraftStateHash.Absent`, the hash
+of empty content.
 
 - **Required.** `IPromoteDraftToVersionCommand` has one method, `Execute(key, draftId, requestedVersion,
   expectedStateHash, ct)`, with a non-nullable `expectedStateHash`. The overloads without it are removed (their only
@@ -116,9 +118,13 @@ read as well.
   the operation marker before it takes the locks or runs the delegate. This loses no safety, because a replay writes
   nothing. Through the endpoint, a replay whose draft still exists is admitted first, so a replay after an edit that
   put a credential literal into the draft is refused with 400 before the command runs. A replay whose draft was
-  discarded has nothing to admit: the endpoint passes the hash of empty content, and the command's marker lookup
+  discarded has nothing to admit: the endpoint passes `WorkflowDraftStateHash.Absent`, and the command's marker lookup
   returns the original version id. A first promotion of a missing draft finds no marker and is refused by the
-  command's own draft lookup (404). Only an empty draft, which binds nothing, could match that hash.
+  command's own draft lookup (404), as is one whose draft was deleted after the endpoint admitted it. A draft that
+  appears after the endpoint found none is not promoted either: one whose stored `StateSource` is null or empty matches
+  `Absent`, but the EF command cannot read it into a state (`EfDesignSupport.ReadState` refuses a missing state source)
+  and throws before any row is added; any other draft differs from `Absent` and is refused as changed (409). Pinned at
+  the command level in `EfWorkflowDesignPersistenceTests`.
 
 ## Composition
 
@@ -185,7 +191,9 @@ bite-proofs remove the call.
   whether their inputs are credentials. Draft save, add-version, submit, file reconciliation and git export
   cannot judge such nodes and accept them, and so does the Elsa 3 collection import. Promote accepts one only in a host
   with no publisher composed; in a standard host `UnknownActivityVersionValidator` reports the uncataloged node and
-  promote answers 409 (pinned by `CredentialLiteralPromoteAdmissionTests`). A draft or version holding such a literal can therefore be stored and
+  promote answers 409 (the gate's `DraftHasValidationErrorsException` pinned over the real EF store by
+  `CredentialLiteralPromoteAdmissionTests`, its 409 and problem shape over HTTP by `CredentialLiteralEndpointTests`). A
+  draft or version holding such a literal can therefore be stored and
   exported: storage does not stop it, and what keeps it from running is publish, which cannot compile an activity
   version the catalog does not hold and, once the activity is installed, applies the rule. Proved by T112
   (A22).
@@ -194,13 +202,28 @@ bite-proofs remove the call.
   an input as requiring encryption, R8's producer withholding, the `VF-ACT-010` activation refusal and the commit
   backstop keep such a value out of persisted runtime state; an artifact that does not mark it is not caught, and the
   literal stays in the imported file.
-- **Children under a structure the shell has no handler for.** The admission walk reaches only the children the
-  structure service projects, and `DefaultActivityStructureService.ProjectChildren` returns none for a structure kind
-  with no registered handler. A credential literal on such a child is not judged before publication, at any entry
-  point; publication refuses the node because it cannot compile an unhandled structure, and once the handler is
-  installed it compiles the children and applies the rule. This includes the Elsa 3 collection import: its mapping
-  nests children under `elsa3.imported-activity.structure`, for which no handler is registered, so its admission
-  judges each mapped state's root node and not those children.
+- **Children under a structure kind with no registered handler.** The rule's tree walk reaches only the children a
+  registered structure handler projects: `DefaultActivityStructureService.ProjectChildren` returns none for a kind
+  without one. So a credential literal on such a child is not judged at draft save, add-version, submit, promote, file
+  reconciliation or git export. Publication does not close the gap in general:
+  `ExecutableNodeCompiler.EnsureDeclaredStructureHasHandler` refuses the parent node, the one carrying the structure,
+  only when its activity's catalog design facets declare that structure kind (the feature providing the activity is
+  missing from the shell). Otherwise the
+  compiler treats the structure as opaque (spec 071 FR-008): it compiles none of its children into executable nodes,
+  so none is judged, and it carries the payload, the children's bindings included, into the compiled executable; the
+  definition is stored and exported with them. Once a handler for the kind is installed, the walk and
+  the compiler reach the children and the rule applies to them. Since slice 6's review round 2 the Elsa 3 collection
+  import does not depend on that walk: it enumerates the children its mapping nests under
+  `elsa3.imported-activity.structure` and judges each like any other node (entry point 8). A hand-authored state can
+  still store such a child: draft save, add-version and submit through the Design API, and a workflow file read by
+  file reconciliation or git import, accept a structure of any kind. A follow-up is recorded in T090.
+- **An Elsa 3 binding stored under a key other than the declared one.** The Elsa 3 mapping keeps a property as an
+  input when its name matches a declared input's name ignoring case, and stores the binding under the Elsa 3
+  property's name. The rule, like publication, matches a binding to its input by reference key, ordinally, so a
+  credential literal whose Elsa 3 property name differs from the declared reference key (in case, or because the
+  activity declares a key other than the input's name) is not judged at the import or at git export; publication
+  refuses the node, because the binding matches no declared input. Found in slice 6's review round 2; a follow-up is
+  recorded in T090.
 - **A `Secret` binding with a null or malformed payload.** The rule accepts any binding whose expression type is
   `Secret`, so such a binding passes it at save (drafts may be incomplete, and no value is involved). Publication
   refuses it: the compiler's secret-reference parser requires an object payload with a `name`.
@@ -212,4 +235,4 @@ bite-proofs remove the call.
   input the new version declares a credential stays stored; promotion and publication refuse it.
 - **Nesting beyond `MaxRecursionDepth`.** The validator walks the activity tree as the other validators do, to the
   configured depth (default 100); a credential literal nested deeper is not judged by the admission paths and is
-  refused at publication, which compiles every node.
+  refused at publication, whose walk has no depth bound (for the children registered handlers project; see above).

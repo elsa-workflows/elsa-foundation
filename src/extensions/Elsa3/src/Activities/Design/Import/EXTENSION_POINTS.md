@@ -113,16 +113,20 @@ again. This paragraph is the one statement of that behavior; the code's document
 Between its upload and its apply or expiry the document is at rest in the ledger, as a reviewed import needs it to be.
 The rule bounds that time; it does not encrypt the column, and it does not reach database backups.
 
-**Credential literals (spec 188, FR-008).** Before the commit, apply admits every workflow state the mapping produced
-(each imported workflow version's state and each reusable activity's `Body`) through the credential-literal rule,
-`ICredentialLiteralValidator`, registered by `WorkflowDesignValidations`, on which `Elsa3ImportJsonActivities` depends.
-The apply is all or nothing, so a literal, object, value read or expression on an input the installed activity
-declares a credential refuses the whole apply and nothing is committed: `CredentialLiteralRefusedException`, answered
-400 (`elsa3.import.request-invalid`) with the findings' messages, which name the rule, the node and the input and never
-the value, in `detail`. As at every entry point, a node whose activity the catalog does not hold is not judged; and the
-mapping nests children under `elsa3.imported-activity.structure`, for which no structure handler is registered, so
-only each mapped state's root node is judged here. Publication refuses a version it cannot compile (an uncataloged
-activity, an unhandled structure) and applies the rule to every node it compiles.
+**Credential literals (spec 188, FR-008).** Before the commit, apply judges every activity node the commit would store
+through the credential-literal rule, `ICredentialLiteralValidator`, registered by `WorkflowDesignValidations`, on which
+`Elsa3ImportJsonActivities` depends: the nodes of each imported workflow version's state and of each reusable
+activity's `Body` (from which the materializer builds that activity version's descriptor payload), the root and every
+node nested under it at any depth. The mapping nests child activities under `elsa3.imported-activity.structure`, which
+no structure handler projects, so the rule's own tree walk sees only each root. `Elsa3ImportedActivityStructure`
+(`Models`) is the one definition of that shape: the mapping writes it through `Create`, and the importer reads every
+nested node back through `Nodes` and judges each as the root of its own state. The apply is all or nothing, so a
+literal, object, value read or expression on an input the installed activity declares a credential refuses the whole
+apply and nothing is committed: one `CredentialLiteralRefusedException`, answered 400 (`elsa3.import.request-invalid`)
+with the messages of every refused binding, which name the rule, the node and the input and never the value, in
+`detail`. As at every entry point, a binding is matched to its input by reference key, so one the mapping stores under
+an Elsa 3 property name that differs from the declared key is not judged (spec 188 credential-literal contract, Known
+gaps), and a node whose activity the catalog does not hold is not judged; publication refuses a version holding either.
 
 ### `IActivityCollectionJsonSource` *(Feature contract — `Elsa3.Activities.Design.Import`)*
 - **Kind:** Source (opens a stream of activity JSON — pull pattern).

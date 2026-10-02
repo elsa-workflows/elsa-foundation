@@ -28,7 +28,9 @@ definition entry points, through four integration points: Design API admission b
 (promote included), the version reconciler (per item), the input-binding compiler, and the git exporter (per
 version). Every caller of a state-writing design command, and the exporter, takes the rule's contract,
 `ICredentialLiteralValidator`, and a caller that refuses a whole request admits through one shared helper,
-`WorkflowStateAdmission`. No persistence project gains a rule or a reference.
+`WorkflowStateAdmission`. As built in slice 6's review, the rule also runs at an eighth entry point, the Elsa 3
+collection import, through a fifth integration point, `ReusableActivityCollectionImporter`, which judges every activity
+node it maps (spec FR-008 note). No persistence project gains a rule or a reference.
 An input whose policy requires encryption accepts only a secret reference; anything else that requires encryption
 is withheld at the producer and refused at the checkpoint-commit backstop. Values resolved during an activation are
 masked in fault, incident and log text without changing the fault's classification. A canary test proves all of it
@@ -326,4 +328,4 @@ reviewer can challenge them:
 |---|---|---|
 | New `Elsa.Secrets.Workflows` project | keeps Secrets types and failure classification out of the runtime contract (R1) | a direct Runtime to `Elsa.Secrets.Core` reference is viable and is the named fallback; it was not chosen because it moves Secrets vocabulary into the runtime |
 | A new `ValuePresence.Withheld` | the persisted snapshot needs a value-free shape that every consumer must handle explicitly (R3) | reusing external references conflates runtime payload storage with secrets and has no tenant parameter |
-| Four application-layer integration points for one rule, one shared admission helper, and a coverage guard that asserts every state-writing caller takes the helper | business rules stay out of persistence (R7), and promote must not depend on the promotion command's optional publisher | a guarded writer inside the EF commands is a single choke point but puts the rule in persistence; decorators over the command contracts conflict with the design backend's exclusive ownership of those contracts; the in-lock promotion gate runs only when `IInlineEventPublisher` is composed |
+| Four application-layer integration points for one rule (five as built in slice 6's review, the Elsa 3 collection importer being the fifth), one shared admission helper, and a coverage guard that asserts every state-writing caller takes the helper | business rules stay out of persistence (R7), and promote must not depend on the promotion command's optional publisher | a guarded writer inside the EF commands is a single choke point but puts the rule in persistence; decorators over the command contracts conflict with the design backend's exclusive ownership of those contracts; the in-lock promotion gate runs only when `IInlineEventPublisher` is composed |

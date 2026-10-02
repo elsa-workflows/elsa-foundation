@@ -90,7 +90,7 @@ public sealed partial class ArchitectureGuardTests
             "content; a binding the new version declares a credential is refused when the draft is promoted or published",
         ["src/extensions/Elsa3/src/Activities/Design/Import/Persistence/EntityFrameworkCore/Stores/EfReusableActivityImportCommand.cs"] =
             "writes imported Elsa 3 workflow versions behind the import's commit port, admitted by the port's caller, " +
-            "ReusableActivityCollectionImporter, which judges every workflow state of the mutation before the commit " +
+            "ReusableActivityCollectionImporter, which judges every activity node of the mutation, nested ones included, before the commit " +
             "(Every_caller_of_the_elsa3_collection_import_commit_takes_the_rule)"
     };
 
