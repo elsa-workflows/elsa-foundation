@@ -15,7 +15,7 @@ public sealed class WorkerOidcHostTests
     private const string ExecutePath = "/runtime/workflows/executables/{0}/execute";
     private const string ExecutePermission = WorkflowRuntimePermissions.WorkflowRuntimeExecute;
 
-    [Fact]
+    [UnixPtyFact]
     public async Task Real_shell_activation_refuses_a_scope_that_disagrees_with_the_configured_tenant()
     {
         await using var fixture = await WorkerOidcHostFixture.CreateAsync();
@@ -29,7 +29,7 @@ public sealed class WorkerOidcHostTests
         await AssertNoUserOrExternalIdentityRowsAsync(valid);
     }
 
-    [Fact]
+    [UnixPtyFact]
     public async Task Real_bearer_actor_executes_resumes_revokes_and_reloads_across_a_child_process_restart()
     {
         await using var fixture = await WorkerOidcHostFixture.CreateAsync();
@@ -206,7 +206,7 @@ public sealed class WorkerOidcHostTests
         await AssertNoUserOrExternalIdentityRowsAsync(second);
     }
 
-    [Fact]
+    [UnixPtyFact]
     public async Task Edited_candidate_controls_feature_removal_and_capabilities_audience()
     {
         await using var fixture = await WorkerOidcHostFixture.CreateAsync();
@@ -422,5 +422,14 @@ public sealed class WorkerOidcHostTests
         var snapshot = await SnapshotAsync(host);
         Assert.Equal(0, snapshot.GetProperty("userCount").GetInt32());
         Assert.Equal(0, snapshot.GetProperty("externalIdentityCount").GetInt32());
+    }
+}
+
+internal sealed class UnixPtyFactAttribute : FactAttribute
+{
+    public UnixPtyFactAttribute()
+    {
+        if (OperatingSystem.IsWindows())
+            Skip = "The generated-candidate actor requires the shared Unix PTY helper; a Windows skip is not acceptance evidence.";
     }
 }

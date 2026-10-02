@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 using Elsa.Cli.Tests;
 using Elsa.Modularity.Planning.Bridge;
 using Xunit;
@@ -122,9 +123,9 @@ internal sealed record WorkerProfileCandidate(
         // source host files and must survive the generator as local configuration.
         var authoredNode = JsonNode.Parse(await File.ReadAllTextAsync(authoredPath))!.AsObject();
         authoredNode["settings"] = new JsonObject();
-        authoredNode["resources"] = new JsonObject();
+        authoredNode["resources"] = null;
         await File.WriteAllTextAsync(authoredPath, authoredNode.ToJsonString(s_json));
-        Assert.Empty(authoredNode["resources"]!.AsObject());
+        Assert.Null(authoredNode["resources"]);
 
         var expected = removeControlFlow
             ? s_workerFeatures.Where(id => id != "ActivitiesControlFlow").Order(StringComparer.Ordinal).ToArray()
@@ -146,14 +147,12 @@ internal sealed record WorkerProfileCandidate(
         var accepted = await PseudoTerminalCli.RunElsaAsync(
             "Type accept to write the accepted composition: ", "accept",
             ["composition", "accept", "--composition", authoredPath, "--output", acceptedPath]);
-        Assert.Equal(0, accepted.ExitCode);
-        Assert.True(accepted.ResponseSent);
-        Assert.False(accepted.TimedOut);
+        AssertInteractiveSuccess(accepted);
         var acceptedNode = JsonNode.Parse(await File.ReadAllTextAsync(acceptedPath))!.AsObject();
         Assert.Equal(expected, Strings(acceptedNode["accepted"]!["featureIds"]!.AsArray()));
         AssertPinnedIdentity(authoredNode, acceptedNode);
         Assert.Empty(acceptedNode["settings"]!.AsObject());
-        Assert.Empty(acceptedNode["resources"]!.AsObject());
+        Assert.Null(acceptedNode["resources"]);
 
         WriteSourceFiles(sourceDirectory, authority, audience, runtimeDatabasePath, iamDatabasePath, locksDirectory);
         var sourceFiles = ReadSourceFiles(sourceDirectory);
@@ -163,9 +162,7 @@ internal sealed record WorkerProfileCandidate(
             "Type generate to write the candidate: ", "generate",
             ["composition", "generate", "--host-dir", sourceDirectory, "--shell", DefaultShellId,
                 "--environment", CandidateEnvironment, "--composition", acceptedPath, "--output-dir", candidateDirectory]);
-        Assert.Equal(0, generated.ExitCode);
-        Assert.True(generated.ResponseSent);
-        Assert.False(generated.TimedOut);
+        AssertInteractiveSuccess(generated);
         AssertSourceUnchanged(sourceFiles, sourceDirectory);
         Assert.True(Directory.Exists(candidateDirectory));
 
@@ -216,6 +213,13 @@ internal sealed record WorkerProfileCandidate(
         ["appsettings.json", $"appsettings.{CandidateEnvironment}.json", "shells.json", $"shells.{CandidateEnvironment}.json"];
 
     public static string HashAudience(string audience) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(audience)));
+
+    private static void AssertInteractiveSuccess(PseudoTerminalCliRun run)
+    {
+        var code = Regex.Match(run.Output + run.Error, @"error \[([a-z0-9-]{1,96})\]").Groups[1].Value;
+        Assert.True(run.ExitCode == 0 && run.ResponseSent && !run.TimedOut,
+            $"Interactive CLI exit={run.ExitCode}, refusalCode={code}, responseSent={run.ResponseSent}, timedOut={run.TimedOut}.");
+    }
 
     private static void WriteSourceFiles(
         string directory,
