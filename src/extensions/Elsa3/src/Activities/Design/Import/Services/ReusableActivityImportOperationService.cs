@@ -4,6 +4,8 @@ using Elsa.Primitives.Exceptions;
 using Elsa3.Activities.Design.Import.Contracts;
 using Elsa3.Activities.Design.Import.Models;
 using Elsa3.Models;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
 namespace Elsa3.Activities.Design.Import.Services;
@@ -32,10 +34,12 @@ public sealed class ReusableActivityImportOperationService(
     IReusableActivityImportOperationStore store,
     IReusableActivityCollectionImporter importer,
     IOptions<ReusableActivityImportOptions> options,
-    TimeProvider timeProvider) : IReusableActivityImportOperationService
+    TimeProvider timeProvider,
+    ILogger<ReusableActivityImportOperationService>? logger = null) : IReusableActivityImportOperationService
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     private readonly ReusableActivityImportOptions _options = ValidateOptions(options.Value);
+    private readonly ILogger _logger = logger ?? NullLogger<ReusableActivityImportOperationService>.Instance;
 
     /// <inheritdoc />
     public async ValueTask<ReusableActivityImportUploadResult> UploadAsync(
@@ -247,7 +251,7 @@ public sealed class ReusableActivityImportOperationService(
                 throw new ReusableActivityImportIdempotencyConflictException(idempotencyKey);
             // The apply this receipt records consumed its upload. Repeating the delete covers an apply that
             // committed and stopped before its delete ran.
-            await DiscardCollectionAsync(collectionHandle, accessScope);
+            await DiscardCollectionAsync(collectionHandle, accessScope, cancellationToken);
             return prior with { Status = ReusableActivityImportReceiptStatus.AlreadyImported };
         }
 
@@ -261,7 +265,7 @@ public sealed class ReusableActivityImportOperationService(
         }
         catch (Exception exception) when (!LeavesUploadUsable(exception))
         {
-            await DiscardCollectionAsync(collectionHandle, accessScope);
+            await DiscardCollectionAsync(collectionHandle, accessScope, cancellationToken);
             throw;
         }
 
@@ -270,7 +274,9 @@ public sealed class ReusableActivityImportOperationService(
                           "apply",
                           idempotencyKey,
                           new InvalidOperationException("The atomic import adapter did not return a durable receipt."));
-        await DiscardCollectionAsync(collectionHandle, accessScope);
+        // Not the caller's to cancel: the commit is durable and is reported as applied whatever the caller
+        // cancelled since, and the upload it consumed is deleted on the same terms.
+        await DiscardCollectionAsync(collectionHandle, accessScope, CancellationToken.None);
         return receipt;
     }
 
@@ -297,31 +303,42 @@ public sealed class ReusableActivityImportOperationService(
                          ?? throw new ReusableActivityImportNotFoundException("The Elsa 3 import collection was not found.");
         if (collection.ExpiresAt <= timeProvider.GetUtcNow())
         {
-            await DiscardCollectionAsync(handle, accessScope);
+            await DiscardCollectionAsync(handle, accessScope, cancellationToken);
             throw new ReusableActivityImportExpiredException(handle);
         }
         return collection;
     }
 
     /// <summary>
-    /// Deletes a decided or expired upload from the ledger. It does not take the caller's cancellation token: a
-    /// commit that became durable is reported as applied whatever the caller cancelled since, and the upload that
-    /// commit consumed is deleted on the same terms.
+    /// Deletes a decided or expired upload from the ledger. The outcome the caller asked for (the receipt, the
+    /// refusal, the 410) stands whether or not this delete succeeds: a failed delete is logged and the upload is
+    /// left to the two backstops, the replay of the idempotency key, which repeats the delete, and the expiry
+    /// sweep. Only cancellation escapes, and only on the paths that pass the caller's token.
     /// </summary>
-    private ValueTask<bool> DiscardCollectionAsync(string handle, ReusableActivityImportAccessScope accessScope) =>
-        store.DeleteCollectionAsync(handle, accessScope, CancellationToken.None);
+    private async ValueTask DiscardCollectionAsync(string handle, ReusableActivityImportAccessScope accessScope, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await store.DeleteCollectionAsync(handle, accessScope, cancellationToken);
+        }
+        catch (ReusableActivityImportPersistenceException exception)
+        {
+            _logger.LogError(exception, "The Elsa 3 import collection upload {Handle} was decided or expired but could not be deleted from the import ledger; the expiry sweep deletes it later", handle);
+        }
+    }
 
     /// <summary>
     /// True for the apply outcomes the caller can continue from with the same upload: a corrected plan or selection,
-    /// a resolved identity collision, or a repeat after a persistence failure, a schema write refusal or a
-    /// cancellation. A persistence failure includes a commit whose outcome is unknown, where the repeat needs the
-    /// collection again. Every other outcome refuses the upload's content, such as a mapped literal on an input
+    /// a new idempotency key after a concurrent request won the same key inside the commit, a resolved identity
+    /// collision, or a repeat after a persistence failure, a schema write refusal or a cancellation. A persistence
+    /// failure includes a commit whose outcome is unknown, where the repeat needs the collection again. Every other outcome refuses the upload's content, such as a mapped literal on an input
     /// declared a credential (spec 188, FR-008), and that upload is deleted. Unknown outcomes fall on the deleting
     /// side on purpose: deleting an upload costs its owner a new upload, keeping one may keep a credential at rest.
     /// </summary>
     private static bool LeavesUploadUsable(Exception exception) => exception is
         OperationCanceledException or
         ReusableActivityImportValidationException or
+        ReusableActivityImportIdempotencyConflictException or
         ReusableActivityImportCollisionException or
         ReusableActivityImportPersistenceException or
         SchemaWriteRefusedException;

@@ -138,7 +138,8 @@ public interface IReusableActivityImportOperationService
     /// same export needs a new upload. A replay of the same idempotency key still answers from the receipt. A
     /// refused apply deletes the upload too, unless its caller can continue with the same upload: a validation,
     /// idempotency conflict, collision or persistence exception below, a schema write refusal and a cancellation
-    /// leave the upload in place for a corrected or repeated request.
+    /// leave the upload in place for a corrected or repeated request. A delete that fails never replaces that outcome:
+    /// it is logged, and the upload is left to the replay of its key and to the expiry sweep.
     /// </remarks>
     /// <exception cref="ReusableActivityImportNotFoundException">The collection does not exist in the current access scope.</exception>
     /// <exception cref="ReusableActivityImportExpiredException">The immutable collection has expired; the read that finds it expired deletes it.</exception>

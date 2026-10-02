@@ -77,8 +77,7 @@ public sealed class EfReusableActivityImportOperationStore(
         Elsa3ImportScopeGuard.EnsureCurrent(accessContextAccessor, accessScope, hideMismatch: true, "current");
         try
         {
-            var tenantKey = Elsa3ImportRecordCodec.TenantKey(accessScope.TenantId);
-            var userIdHash = Elsa3ImportRecordCodec.Hash(accessScope.UserId);
+            var (tenantKey, userIdHash) = ScopeKeys(accessScope);
             var handleHash = Elsa3ImportRecordCodec.Hash(handle);
             var candidates = await db.Collections.AsNoTracking()
                 .Where(row => row.TenantKey == tenantKey && row.UserIdHash == userIdHash && row.HandleHash == handleHash)
@@ -112,8 +111,7 @@ public sealed class EfReusableActivityImportOperationStore(
         Elsa3ImportScopeGuard.EnsureCurrent(accessContextAccessor, accessScope, hideMismatch: true, "current");
         try
         {
-            var tenantKey = Elsa3ImportRecordCodec.TenantKey(accessScope.TenantId);
-            var userIdHash = Elsa3ImportRecordCodec.Hash(accessScope.UserId);
+            var (tenantKey, userIdHash) = ScopeKeys(accessScope);
             var handleHash = Elsa3ImportRecordCodec.Hash(handle);
             // The encoded handle beside its hash, so the delete matches the exact identity the lookup would prove.
             var encodedHandle = EfRelationalIdentity.Encode(handle);
@@ -139,9 +137,9 @@ public sealed class EfReusableActivityImportOperationStore(
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxCount);
         var tenantKey = AmbientTenantKey();
         var cutoff = expiresAtOrBefore.UtcTicks;
+        string[] readableVersions = [.. Elsa3ImportEfModule.Chain.ReadableVersions];
         try
         {
-            string[] readableVersions = [.. Elsa3ImportEfModule.Chain.ReadableVersions];
             var candidates = await db.Collections.AsNoTracking()
                 .Where(row => row.TenantKey == tenantKey && row.ExpiresAtUtcTicks <= cutoff && readableVersions.Contains(row.SchemaVersion))
                 .OrderBy(row => row.ExpiresAtUtcTicks).ThenBy(row => row.UserIdHash).ThenBy(row => row.HandleHash)
@@ -151,10 +149,11 @@ public sealed class EfReusableActivityImportOperationStore(
             var deleted = 0;
             foreach (var candidate in candidates)
             {
-                // ExecuteDelete takes no row limit, so each bounded candidate is deleted by its key. The expiry is
-                // part of the delete itself: the statement removes an expired row or nothing.
+                // ExecuteDelete takes no row limit, so each bounded candidate is deleted by its key. The expiry and the
+                // version are part of the delete itself: the statement removes an expired, readable row or nothing.
                 deleted += await db.Collections
-                    .Where(row => row.TenantKey == tenantKey && row.UserIdHash == candidate.UserIdHash && row.HandleHash == candidate.HandleHash && row.ExpiresAtUtcTicks <= cutoff)
+                    .Where(row => row.TenantKey == tenantKey && row.UserIdHash == candidate.UserIdHash && row.HandleHash == candidate.HandleHash &&
+                                  row.ExpiresAtUtcTicks <= cutoff && readableVersions.Contains(row.SchemaVersion))
                     .ExecuteDeleteAsync(cancellationToken);
             }
 
@@ -193,6 +192,10 @@ public sealed class EfReusableActivityImportOperationStore(
         }
     }
 
+    /// <summary>The partition and user hash every row of <paramref name="accessScope"/> is keyed by.</summary>
+    private static (string TenantKey, string UserIdHash) ScopeKeys(ReusableActivityImportAccessScope accessScope) =>
+        (Elsa3ImportRecordCodec.TenantKey(accessScope.TenantId), Elsa3ImportRecordCodec.Hash(accessScope.UserId));
+
     /// <summary>The one partition the ambient persistence scope names: a tenant's, or the global one.</summary>
     private string AmbientTenantKey()
     {
@@ -214,8 +217,7 @@ public sealed class EfReusableActivityImportOperationStore(
         ReusableActivityImportAccessScope accessScope,
         CancellationToken cancellationToken)
     {
-        var tenantKey = Elsa3ImportRecordCodec.TenantKey(accessScope.TenantId);
-        var userIdHash = Elsa3ImportRecordCodec.Hash(accessScope.UserId);
+        var (tenantKey, userIdHash) = ScopeKeys(accessScope);
         var receiptIdHash = Elsa3ImportRecordCodec.Hash(receiptId);
         var candidates = await db.Receipts.AsNoTracking()
             .Where(row => row.TenantKey == tenantKey && row.UserIdHash == userIdHash && row.ReceiptIdHash == receiptIdHash)

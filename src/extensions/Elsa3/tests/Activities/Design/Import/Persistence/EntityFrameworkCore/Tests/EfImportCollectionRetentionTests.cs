@@ -7,6 +7,7 @@ using Elsa3.Activities.Design.Import.Models;
 using Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.Stores;
 using Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.Tests.Support;
 using Elsa3.Activities.Design.Import.Services;
+using Elsa3.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -106,32 +107,41 @@ public sealed class EfImportCollectionRetentionTests : IAsyncLifetime
 
     [Theory]
     [InlineData("stale plan")]
+    [InlineData("non-closed selection")]
+    [InlineData("idempotency conflict")]
     [InlineData("identity collision")]
     [InlineData("persistence failure")]
     [InlineData("schema write refusal")]
     [InlineData("cancellation")]
     public async Task An_outcome_the_caller_can_continue_from_keeps_the_upload(string outcome)
     {
-        Exception failure = outcome switch
+        // The first two are refused by the importer itself; the rest are what the commit port can throw.
+        Exception? failure = outcome switch
         {
+            "stale plan" or "non-closed selection" => null,
+            "idempotency conflict" => new ReusableActivityImportIdempotencyConflictException("keeps"),
             "identity collision" => new ReusableActivityImportCollisionException("The identity is owned by different content."),
             "persistence failure" => new ReusableActivityImportPersistenceException("commit", "keeps", new IOException("connection lost")),
             "schema write refusal" => new EfSchemaWriteRefusedException("Elsa3Import", "1", "2"),
-            "cancellation" => new OperationCanceledException(),
-            _ => new InvalidOperationException("The stale plan is refused before the command runs.")
+            _ => new OperationCanceledException()
         };
-        var service = Db.Service(access, clock, new ThrowingCommand(() => failure));
-        var (handle, planId) = await UploadAsync(service);
+        var service = Db.Service(access, clock, failure is null ? null : new ThrowingCommand(() => failure));
+        // Workflow b depends on a, so selecting b alone is a non-closed selection.
+        var (handle, planId) = await UploadAsync(service, Workflow("a", "a-v1", 1, true, Leaf("root")), Workflow("b", "b-v1", 1, true, Reference("b-to-a", "a-v1")));
 
-        var thrown = await Record.ExceptionAsync(async () =>
-            await service.ApplyAsync(handle, outcome == "stale plan" ? "stale-plan" : planId, ["a-v1"], "keeps", Scope));
+        var thrown = await Record.ExceptionAsync(async () => await service.ApplyAsync(
+            handle,
+            outcome == "stale plan" ? "stale-plan" : planId,
+            outcome == "non-closed selection" ? ["b-v1"] : ["a-v1", "b-v1"],
+            "keeps",
+            Scope));
 
-        if (outcome == "stale plan")
+        if (failure is null)
             Assert.IsType<ReusableActivityImportValidationException>(thrown);
         else
             Assert.Same(failure, thrown);
         Assert.Equal(1, (await Db.CountAsync()).Collections);
-        Assert.Single((await service.AnalyzeAsync(handle, 0, 10, Scope)).Items);
+        Assert.Equal(2, (await service.AnalyzeAsync(handle, 0, 10, Scope)).Items.Count);
     }
 
     [Fact]
@@ -142,6 +152,42 @@ public sealed class EfImportCollectionRetentionTests : IAsyncLifetime
 
         await Assert.ThrowsAsync<ArgumentException>(async () => await service.ApplyAsync(handle, " ", ["a-v1"], "blank-plan", Scope));
 
+        Assert.Equal(1, (await Db.CountAsync()).Collections);
+    }
+
+    /// <summary>
+    /// A delete that fails never replaces the outcome the caller asked for. The receipt, the refusal and the 410 stand,
+    /// the upload stays, and the two backstops (the replay of the key, the expiry sweep) are what remove it.
+    /// </summary>
+    [Theory]
+    [InlineData("completed apply")]
+    [InlineData("content refusal")]
+    [InlineData("expired read")]
+    public async Task A_delete_that_fails_leaves_the_callers_outcome_in_place(string path)
+    {
+        var receipt = new ReusableActivityImportReceipt("receipt", "handle", "plan", "keeps", "selection", Scope, ReusableActivityImportReceiptStatus.Applied, Now, []);
+        var refusal = new ArgumentException("The upload holds a literal on a credential input.");
+        var importer = new StubImporter(path == "content refusal" ? () => throw refusal : () => receipt);
+        var service = new ReusableActivityImportOperationService(new FailingDeleteStore(Db.OperationStore(access)), importer, Options(), clock);
+        var (handle, _) = await UploadAsync(service);
+        if (path == "expired read")
+            clock.Advance(Options().Value.CollectionLifetime);
+
+        var thrown = await Record.ExceptionAsync(async () =>
+            Assert.Same(receipt, await service.ApplyAsync(handle, "plan", ["a-v1"], "keeps", Scope)));
+
+        switch (path)
+        {
+            case "completed apply":
+                Assert.Null(thrown);
+                break;
+            case "content refusal":
+                Assert.Same(refusal, thrown);
+                break;
+            default:
+                Assert.IsType<ReusableActivityImportExpiredException>(thrown);
+                break;
+        }
         Assert.Equal(1, (await Db.CountAsync()).Collections);
     }
 
@@ -266,9 +312,9 @@ public sealed class EfImportCollectionRetentionTests : IAsyncLifetime
             new ExpiredImportCollectionSweepTask(new NoScopes(), options, clock, NullLogger<ExpiredImportCollectionSweepTask>.Instance));
     }
 
-    private async Task<(string Handle, string PlanId)> UploadAsync(IReusableActivityImportOperationService service)
+    private async Task<(string Handle, string PlanId)> UploadAsync(IReusableActivityImportOperationService service, params Elsa3WorkflowDefinition[] definitions)
     {
-        var upload = await service.UploadAsync(Json(Workflow("a", "a-v1", 1, true, Leaf("root"))), null, Scope);
+        var upload = await service.UploadAsync(Json(definitions.Length == 0 ? [Workflow("a", "a-v1", 1, true, Leaf("root"))] : definitions), null, Scope);
         return (upload.CollectionHandle, (await service.AnalyzeAsync(upload.CollectionHandle, 0, 10, Scope)).PlanId);
     }
 
@@ -282,6 +328,27 @@ public sealed class EfImportCollectionRetentionTests : IAsyncLifetime
         await using var import = Db.Import();
         var stored = await import.Collections.AsNoTracking().Select(row => row.HandleHash).ToListAsync();
         return handles.Where(handle => stored.Contains(EfRelationalIdentity.Hash(handle))).ToArray();
+    }
+
+    /// <summary>An importer whose apply is the given outcome; analysis is the real one, so the plan check still runs.</summary>
+    private sealed class StubImporter(Func<ReusableActivityImportReceipt> apply) : IReusableActivityCollectionImporter
+    {
+        public ValueTask<ReusableActivityImportPlan> AnalyzeAsync(ReusableActivityImportCollection collection, CancellationToken cancellationToken = default) =>
+            new ReusableActivityCollectionAnalyzer().AnalyzeAsync(collection, cancellationToken);
+
+        public ValueTask<ReusableActivityImportApplyResult> ApplyAsync(ReusableActivityImportApplyRequest request, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(new ReusableActivityImportApplyResult(request.PlanId, [], false, apply()));
+    }
+
+    /// <summary>The real store, with a ledger that refuses every delete.</summary>
+    private sealed class FailingDeleteStore(IReusableActivityImportOperationStore inner) : IReusableActivityImportOperationStore
+    {
+        public ValueTask<bool> TryCreateCollectionAsync(ReusableActivityImportCollectionHandle collection, CancellationToken cancellationToken = default) => inner.TryCreateCollectionAsync(collection, cancellationToken);
+        public ValueTask<ReusableActivityImportCollectionHandle?> FindCollectionAsync(string handle, ReusableActivityImportAccessScope accessScope, CancellationToken cancellationToken = default) => inner.FindCollectionAsync(handle, accessScope, cancellationToken);
+        public ValueTask<ReusableActivityImportReceipt?> FindReceiptAsync(string idempotencyKey, ReusableActivityImportAccessScope accessScope, CancellationToken cancellationToken = default) => inner.FindReceiptAsync(idempotencyKey, accessScope, cancellationToken);
+        public ValueTask<bool> DeleteCollectionAsync(string handle, ReusableActivityImportAccessScope accessScope, CancellationToken cancellationToken = default) =>
+            throw new ReusableActivityImportPersistenceException("delete collection", handle, new IOException("connection lost"));
+        public ValueTask<int> DeleteExpiredCollectionsAsync(DateTimeOffset expiresAtOrBefore, int maxCount, CancellationToken cancellationToken = default) => inner.DeleteExpiredCollectionsAsync(expiresAtOrBefore, maxCount, cancellationToken);
     }
 
     private sealed class ThrowingCommand(Func<Exception> failure) : IReusableActivityImportCommand
