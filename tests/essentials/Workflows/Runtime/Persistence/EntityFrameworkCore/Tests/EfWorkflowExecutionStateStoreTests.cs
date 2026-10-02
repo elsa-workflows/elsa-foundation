@@ -558,7 +558,7 @@ public sealed class EfWorkflowExecutionStateStoreTests
     private static IncidentState HealthIncident(string id, string workflowExecutionId, IncidentStatus status, DateTimeOffset createdAt)
     {
         var isTerminal = status is IncidentStatus.Resolved or IncidentStatus.Suppressed;
-        var resolvedAt = isTerminal ? createdAt.AddMinutes(1) : null;
+        DateTimeOffset? resolvedAt = isTerminal ? createdAt.AddMinutes(1) : null;
         var resolution = status switch
         {
             IncidentStatus.Resolved => new IncidentResolutionOutcome("resolve", resolvedAt!.Value, null, "test"),
