@@ -58,26 +58,15 @@ public sealed class CandidateWorkerOperationTests
     [InlineData("candidate-environment-prefix-unsupported", 2)]
     [InlineData("candidate-environment-host-unenrolled", 3)]
     [InlineData("candidate-capability-unavailable", 3)]
-    public async Task Additive_environment_lane_maps_only_its_fixed_refusals(string code, int exitCode)
-    {
-        var request = EnvironmentRequest();
-        var result = await RunEnvironment(request, (_, _) =>
-            throw WorkerRefusal.Resolution(code, "private-refusal-canary", ["private-detail-canary"]));
-
-        Assert.Equal(exitCode, result.ExitCode);
-        Assert.Equal(code, result.Error?.Code);
-        Assert.DoesNotContain("canary", JsonSerializer.Serialize(result), StringComparison.OrdinalIgnoreCase);
-    }
-
-    [Theory]
     [InlineData("candidate-package-unavailable", 3)]
     [InlineData("candidate-closure-changed", 3)]
     [InlineData("candidate-response-invalid", 3)]
     [InlineData("candidate-response-too-large", 3)]
     [InlineData("candidate-request-too-large", 2)]
-    public async Task Additive_environment_lane_maps_remaining_known_refusals_without_details(string code, int exitCode)
+    public async Task Additive_environment_lane_maps_only_its_fixed_refusals(string code, int exitCode)
     {
-        var result = await RunEnvironment(EnvironmentRequest(), (_, _) =>
+        var request = EnvironmentRequest();
+        var result = await RunEnvironment(request, (_, _) =>
             throw WorkerRefusal.Resolution(code, "private-refusal-canary", ["private-detail-canary"]));
 
         Assert.Equal(exitCode, result.ExitCode);
@@ -111,11 +100,21 @@ public sealed class CandidateWorkerOperationTests
         Assert.Throws<ArgumentNullException>(() => new CandidateEnvironmentWorkerOperation(null!));
     }
 
-    [Fact]
-    public async Task Additive_environment_lane_rejects_null_or_malformed_outer_requests_before_closure()
+    [Theory]
+    [InlineData("null")]
+    [InlineData("invalid-version")]
+    [InlineData("in-process-unrecognized-refusal")]
+    public async Task Additive_environment_lane_contains_invalid_admission_before_closure(string kind)
     {
+        var request = EnvironmentRequest();
+        request = kind switch
+        {
+            "null" => null!,
+            "invalid-version" => request with { Version = WorkerContract.Version + 1 },
+            _ => request with { PackageRoots = new UntrustedPackageRoots() }
+        };
         var calls = 0;
-        var result = await RunEnvironment(null!, (_, _) =>
+        var result = await RunEnvironment(request, (_, _) =>
         {
             calls++;
             return Task.FromResult(new WorkerResponse());
@@ -125,18 +124,6 @@ public sealed class CandidateWorkerOperationTests
         Assert.Equal("candidate-request-invalid", result.Error?.Code);
         Assert.Equal(0, calls);
         Assert.DoesNotContain("canary", JsonSerializer.Serialize(result), StringComparison.OrdinalIgnoreCase);
-
-        calls = 0;
-        var malformed = EnvironmentRequest() with { Version = WorkerContract.Version + 1 };
-        result = await RunEnvironment(malformed, (_, _) =>
-        {
-            calls++;
-            return Task.FromResult(new WorkerResponse());
-        });
-
-        Assert.Equal(2, result.ExitCode);
-        Assert.Equal("candidate-request-invalid", result.Error?.Code);
-        Assert.Equal(0, calls);
     }
 
     [Fact]
@@ -219,10 +206,10 @@ public sealed class CandidateWorkerOperationTests
 
         try
         {
-            await entered.Task;
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
             cancellation.Cancel();
             release.SetResult();
-            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending);
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending.WaitAsync(TimeSpan.FromSeconds(5)));
             Assert.Equal(1, calls);
         }
         finally
@@ -230,7 +217,7 @@ public sealed class CandidateWorkerOperationTests
             release.TrySetResult();
             try
             {
-                await pending;
+                await pending.WaitAsync(TimeSpan.FromSeconds(5));
             }
             catch (OperationCanceledException)
             {
@@ -1124,6 +1111,17 @@ public sealed class CandidateWorkerOperationTests
         Func<WorkerRequest, CancellationToken, Task<WorkerResponse>> closure, CancellationToken token = default)
     {
         return new CandidateWorkerOperation(closure).RunAsync(request, token);
+    }
+
+    // Closed JSON requests have concrete lists; this stub exercises defensive admission of an
+    // untrusted in-process caller without adding a production validator seam.
+    private sealed class UntrustedPackageRoots : IReadOnlyList<string>
+    {
+        public int Count => 1;
+        public string this[int index] => "/unused";
+        public IEnumerator<string> GetEnumerator() => throw WorkerRefusal.Resolution(
+            "private-admission-code-canary", "private-admission-message-canary", ["private-detail-canary"]);
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
     }
 
     private static Task<WorkerResponse> RunEnvironment(

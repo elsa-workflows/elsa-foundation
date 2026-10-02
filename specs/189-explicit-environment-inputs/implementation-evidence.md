@@ -485,3 +485,43 @@ parser/copy/capture loops keep early refusal, runtime-state exclusion and per-fi
 No detach wrapper, LINQ-only churn or additional test/project was introduced. PR #2296 remains the
 notification record for direct replies and final review/hosted evidence; no unreturned final review
 or main result is claimed.
+
+
+## Copilot review round 2: direct wrapper coverage gap
+
+Copilot review `5387124085` on exact visibility-fix head `e309d8824` resolved the first visibility
+finding but raised a summary-only concern: the additive worker operation had only six direct refusal
+mapping cases. Root confirmed the source-level gap against framework §2.23.2; broader protocol,
+process and Workbench integration proof does not replace direct stubbed branch coverage. T032 was
+reopened for null/malformed admission, successful delegation, cancellation, remaining fixed
+refusals and fallback cases in the existing CLI project. The summary's “Findings: None” label is not
+treated as a clean review while that concrete concern remains. No new project or suite is required.
+
+
+Root integrated the bounded test slice `93dd83fbb` as `482d32c6f`, then folded the remaining fixed
+refusals into the existing theory and gave the cancellation handshake and task observation finite
+waits. The full existing Release CLI project returned **1,062 executed/passed, zero failed/skipped**
+(`runtime-2292-cli-review-branches.trx`; log: `/tmp/runtime-2292-cli-review-branches.log`).
+
+Independent source audit confirmed that wire-originated validation can produce only the four fixed
+environment `WorkerRefusal` codes; malformed outer/null admission produces JsonException or
+ArgumentNullException. Root additionally exercised the defensive generic WorkerRefusal fallback
+with a tiny test-owned IReadOnlyList that throws an unrecognized private refusal during enumeration.
+This is an in-process public-operation control, not a claim that the closed JSON parser admits custom
+collections. No production seam or API was added. Null, malformed version and this defensive case
+share one theory. The final complete operation class returned **58 executed/passed, zero
+failed/skipped** (`runtime-2292-worker-operation-review-restored.trx`; log:
+`/tmp/runtime-2292-worker-operation-review-restored.log`), including successful delegation/token,
+all fixed mappings, invalid admission before the closure, pre/in-flight versus uncancelled
+cancellation, unknown/nonfatal/BadImageFormat fallback, constructor guard and a synthetic thrown
+OutOfMemoryException propagating through the fatal filter. No actual resource exhaustion is induced.
+T032 is restored complete after this evidence; T046 remains open. Production and provider sources
+are unchanged by this test-only review correction; previous 495/118/634/15 gates retain their exact
+tested sources.
+
+Before final delivery, root rechecked [the canonical spec lifecycle](../../docs/reference/spec-lifecycle.md).
+It requires the implementation-merging PR itself to carry Implemented status. PR #2296 therefore
+includes that merge-time metadata and removes the completed specification-quality checklist as
+required by the same lifecycle. Main still carries Approved until merge. The branch status is not
+a claim of an already merged PR, passed final-head CI/review or passed resulting-main gate. T046 and
+public issue/project delivery remain open until those actual outcomes return.

@@ -11,7 +11,7 @@ description: "Dependency-ordered implementation and proof tasks for explicit pri
 
 **Scope**: One additive production leaf covering all three P1 stories. Existing projects and fixtures are extended; no new project, provider, permanent test cadence, or transport is introduced.
 
-**Evidence status**: Implementation and local configuration/operator proof are complete under #2292 after #2277 authoring and #2282 correction delivery. T001–T045 have reviewed implementation and executed evidence in [implementation-evidence.md](implementation-evidence.md); hosted delivery task T046 remains open. Spec189 remains Approved until its implementation-delivery gate is complete.
+**Evidence status**: Implementation and local configuration/operator proof are complete under #2292 after #2277 authoring and #2282 correction delivery. T001–T045 have reviewed implementation and executed evidence in [implementation-evidence.md](implementation-evidence.md), including the direct worker-operation coverage added after review reopened T032. Hosted delivery task T046 remains open. The proposed Implemented status ships with the implementation merge under the canonical spec lifecycle; it does not claim that PR #2296 has already merged or that resulting-main gates have passed.
 
 ## Phase 1: Setup
 

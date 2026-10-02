@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-01
 
-**Status**: Approved — #2277 authoring and #2282 correction delivery passed; implementation is active under #2292
+**Status**: Implemented — ships with the #2292 implementation merge through PR #2296; final hosted and resulting-main delivery evidence remains tracked by T046
 
 **Input**: User description: Define a bounded first lane for explicitly supplied, private intended environment inputs during composition inspection while preserving candidate v1 and file-only compatibility.
 
