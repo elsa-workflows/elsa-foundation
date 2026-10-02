@@ -32,13 +32,15 @@ public sealed class CompositionFileReader
     {
         if (maximumBytes < 0 || maximumBytes > MaximumFileBytes)
             throw LimitExceeded();
+        // A fixed capacity avoids leaving private bytes in abandoned arrays during stream growth.
+        using var captured = new MemoryStream(maximumBytes);
+        byte[]? buffer = null;
         try
         {
             using var anchor = _usesNativeOpenRead ? RegularFileOpener.Capture(path) : null;
             _ensureRegularFile(path);
             using var input = anchor?.OpenRead() ?? _openRead(path) ?? throw Unreadable();
-            using var captured = new MemoryStream();
-            var buffer = new byte[Math.Min(81920, maximumBytes + 1)];
+            buffer = new byte[Math.Min(81920, maximumBytes + 1)];
             while (true)
             {
                 // Probe at most one byte past the remaining bound, without seeking or using Length.
@@ -61,6 +63,13 @@ public sealed class CompositionFileReader
                                          NotSupportedException or InvalidOperationException)
         {
             throw Unreadable();
+        }
+        finally
+        {
+            if (buffer is not null)
+                Array.Clear(buffer);
+            if (captured.TryGetBuffer(out var bytes))
+                bytes.AsSpan().Clear();
         }
     }
 

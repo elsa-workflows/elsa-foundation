@@ -52,6 +52,36 @@ actions; the declared composer remains arbitrary trusted code, without a sandbox
 [the candidate contract](../../../../specs/187-effective-persistence-preview/contracts/candidate-inspection-v1.md);
 operators use [`composition inspect`](../../Cli/README.md#inspecting-an-accepted-runtime-candidate).
 
+### Explicit environment inspection capability
+
+`EfCandidateEnvironmentInspectionContract.Version` and
+`EfToolingHost.RunCandidateEnvironmentInspectionAsync(Stream, Stream, CancellationToken)` define a
+separate capability for one captured private environment document. Its request and response lane does
+not widen the file-only operation above. The CLI worker binds the exact capability in the selected
+persistence assembly before checking the actual loaded host's enrollment metadata; it never falls back
+to the legacy operation or the live process configuration reader.
+
+Enrollment requires exactly one assembly-level
+`EfCandidateEnvironmentInputsAttribute(1, "workbench-json-explicit-environment-v1")` from that selected
+persistence assembly, with no named arguments. The public sealed attribute has read-only `Version` and
+`Policy` properties. It permits multiple declarations in metadata so admission can explicitly refuse
+duplicates. Admission reads `CustomAttributeData` without constructing attributes. Workbench carries
+the reviewed declaration; a shared EF reference alone does not enroll another host.
+
+The host repeats admission before constructing configuration or its declared composer. Its supported
+order is appsettings base/environment, shells base/environment, then the explicitly supplied overlay.
+It reconciles the accepted exact feature selection before calling the existing shared EF preparation
+with configured-value checks. Ambient environment variables, custom providers and command-line
+configuration are outside this policy. Output labels supplied input as intended; connectivity, schema,
+migration readiness and activation remain unverified or unobserved.
+
+The original private file remains operator-owned. Captured bytes travel over bounded private streams;
+the path, values and input-derived fingerprints are not public evidence. Selected composer code remains
+trusted code, without a sandbox or physical-memory-erasure claim. See the
+[explicit-input contracts](../../../../specs/189-explicit-environment-inputs/contracts/environment-input-v1.md)
+and [acceptance proof matrix](../../../../specs/189-explicit-environment-inputs/contracts/acceptance-proof-matrix.md)
+for bounds, compatibility and required delivery evidence.
+
 ## Module descriptor
 
 An assembly-level `[EfModule(name, contextType, ...)]` (`AllowMultiple`) is a module's single,

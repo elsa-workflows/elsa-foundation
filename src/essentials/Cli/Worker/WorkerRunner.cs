@@ -70,34 +70,18 @@ internal static class WorkerRunner
     internal static Task<WorkerResponse> RunCandidateAsync(WorkerRequest request, CancellationToken cancellationToken) =>
         new CandidateWorkerOperation(ExecuteCandidateAsync).RunAsync(request, cancellationToken);
 
+    internal static Task<WorkerResponse> RunCandidateEnvironmentAsync(
+        CandidateEnvironmentWorkerRequestV2 request, CancellationToken cancellationToken) =>
+        new CandidateEnvironmentWorkerOperation(ExecuteCandidateEnvironmentAsync).RunAsync(request, cancellationToken);
+
     private static async Task<WorkerResponse> ExecuteCandidateAsync(WorkerRequest request, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var directory = Path.GetFullPath(request.HostDirectory!);
-        var name = request.HostName!;
-        if (name.Length > 128 || name.Length == 0 ||
-            !(char.IsAsciiLetter(name[0]) || name[0] == '_') ||
-            name.Any(character => !(char.IsAsciiLetterOrDigit(character) || character is '_' or '-' or '.')))
-            throw WorkerRefusal.Resolution("candidate-host-unavailable", "The compiled host layout is invalid.");
-        var depsPath = Path.Join(directory, name + ".deps.json");
-        if (!(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal)
-            .Equals(Path.GetFullPath(request.DepsFile!), depsPath))
-            throw WorkerRefusal.Resolution("candidate-host-unavailable", "The compiled host layout is invalid.");
-
-        var observation = new CandidateClosureObservation();
-        var depsBytes = File.ReadAllBytes(depsPath);
-        observation.ObserveCapturedFile(depsPath, depsBytes);
-        var deps = HostDepsFile.ReadCaptured(depsBytes);
-        observation.ObserveFile(Path.Join(directory, name + ".runtimeconfig.json"), required: true);
-        observation.ObserveFile(Path.Join(directory, name + ".dll"), required: true);
-        observation.VerifyUnchanged();
-
-        // The same loader decides its state/probe route from observed presence and captures selected
-        // install metadata before loading. No restore, feed or legacy configuration-context path runs.
-        var packages = await NuplanePackageSet.LoadAsync(request.PackageRoots, directory, cancellationToken, observation);
-        if (packages.Failures.Count != 0)
-            throw WorkerRefusal.Resolution("candidate-package-unavailable", "The selected host package closure could not be loaded.");
-        HostClosure.Preload(deps);
+        var closure = await PrepareCandidateClosureAsync(
+            request.HostDirectory!, request.HostName!, request.DepsFile!, request.PackageRoots, cancellationToken);
+        var directory = closure.Directory;
+        var name = closure.Name;
+        var observation = closure.Observation;
         HostClosure.LoadHostAssembly(directory, name);
         var persistence = HostClosure.LoadPersistence();
         var operation = ToolingEntryPoint.BindCandidateInspection(
@@ -106,6 +90,88 @@ internal static class WorkerRunner
         cancellationToken.ThrowIfCancellationRequested();
         observation.VerifyUnchanged();
         return await ToolingEntryPoint.InvokeCandidateInspectionAsync(operation, name, directory, request.Candidate!, cancellationToken);
+    }
+
+    private static async Task<WorkerResponse> ExecuteCandidateEnvironmentAsync(
+        CandidateEnvironmentWorkerRequestV2 request, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var closure = await PrepareCandidateClosureAsync(
+            request.HostDirectory!, request.HostName!, request.DepsFile!, request.PackageRoots!, cancellationToken);
+        var directory = closure.Directory;
+        var name = closure.Name;
+        var observation = closure.Observation;
+        var hostAssembly = HostClosure.LoadHostAssemblyForInspection(directory, name);
+        Assembly persistence;
+        try
+        {
+            persistence = HostClosure.LoadPersistence();
+        }
+        catch (WorkerRefusal refusal) when (refusal.Code == "host-persistence-missing")
+        {
+            throw WorkerRefusal.Resolution("candidate-capability-unavailable",
+                "The selected host has no complete candidate inspection capability.");
+        }
+
+        // Capability negotiation is deliberately before enrollment. An old or partial persistence assembly
+        // cannot be enrolled through the legacy API, and never gets a fallback operation.
+        var operation = ToolingEntryPoint.ResolveCandidateEnvironmentInspection(persistence);
+        ToolingEntryPoint.ValidateCandidateEnvironmentEnrollment(hostAssembly, persistence);
+
+        cancellationToken.ThrowIfCancellationRequested();
+        observation.VerifyUnchanged();
+        return await ToolingEntryPoint.InvokeCandidateEnvironmentInspectionAsync(
+            operation, name, directory, request.Candidate!, request.EnvironmentInput!, cancellationToken);
+    }
+
+    private sealed record CandidateClosureState(
+        string Directory,
+        string Name,
+        CandidateClosureObservation Observation);
+
+    /// <summary>Prepares one observed installed closure for either candidate lane without choosing its host API.</summary>
+    private static async Task<CandidateClosureState> PrepareCandidateClosureAsync(
+        string hostDirectory,
+        string hostName,
+        string depsFile,
+        IReadOnlyList<string> packageRoots,
+        CancellationToken cancellationToken)
+    {
+        var directory = Path.GetFullPath(hostDirectory);
+        var name = hostName;
+        if (name.Length > 128 || name.Length == 0 ||
+            !(char.IsAsciiLetter(name[0]) || name[0] == '_') ||
+            name.Any(character => !(char.IsAsciiLetterOrDigit(character) || character is '_' or '-' or '.')))
+            throw WorkerRefusal.Resolution("candidate-host-unavailable", "The compiled host layout is invalid.");
+        var depsPath = Path.Join(directory, name + ".deps.json");
+        if (!(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal)
+            .Equals(Path.GetFullPath(depsFile), depsPath))
+            throw WorkerRefusal.Resolution("candidate-host-unavailable", "The compiled host layout is invalid.");
+
+        var observation = new CandidateClosureObservation();
+        var depsBytes = File.ReadAllBytes(depsPath);
+        HostDepsFile deps;
+        try
+        {
+            observation.ObserveCapturedFile(depsPath, depsBytes);
+            deps = HostDepsFile.ReadCaptured(depsBytes);
+        }
+        finally
+        {
+            // ReadCaptured materializes only parsed package facts; it retains no reference to this byte array.
+            Array.Clear(depsBytes);
+        }
+
+        observation.ObserveFile(Path.Join(directory, name + ".runtimeconfig.json"), required: true);
+        observation.ObserveFile(Path.Join(directory, name + ".dll"), required: true);
+        observation.VerifyUnchanged();
+
+        // The same loader decides its state/probe route and observes the selected install metadata before loading.
+        var packages = await NuplanePackageSet.LoadAsync(packageRoots, directory, cancellationToken, observation);
+        if (packages.Failures.Count != 0)
+            throw WorkerRefusal.Resolution("candidate-package-unavailable", "The selected host package closure could not be loaded.");
+        HostClosure.Preload(deps);
+        return new(directory, name, observation);
     }
 
     /// <summary>

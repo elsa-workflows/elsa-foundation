@@ -15,6 +15,12 @@ public sealed class WorkerProtocolTests
     private const string CandidateRequestJson = """
         {"version":2,"command":"inspect-candidate","hostDirectory":"/compiled-host","hostName":"FixtureHost","depsFile":"/compiled-host/FixtureHost.deps.json","packageRoots":[],"restore":false,"candidate":{"version":1,"source":"captured-workbench-json-v1","invocationId":"11111111111111111111111111111111","captureId":"22222222222222222222222222222222","shell":"default","environment":"Production","acceptedFeatureIds":["ResourceProbe"],"removedFeatureIds":[],"files":[{"name":"appsettings.json","captureId":"22222222222222222222222222222222","content":"e30="},{"name":"shells.json","captureId":"22222222222222222222222222222222","content":"e30="},{"name":"shells.Production.json","captureId":"22222222222222222222222222222222","content":"e30="},{"name":"appsettings.Production.json","captureId":"22222222222222222222222222222222","content":"e30="}]}}
         """;
+    private static IEnumerable<JsonNode?> EnvironmentInputVariants =>
+    [
+        null,
+        JsonNode.Parse(CandidateInspectionFixture.EnvironmentDocument(
+            ("Unknown", CandidateInspectionFixture.SafePrivateEnvironmentCanary)))
+    ];
     private static string CandidateHostSuccessJson => CandidateHostResponseFixtures.SuccessJson(CandidateInvocationId, CandidateCaptureId);
     private const string CandidateHostRefusalJson = """
         {"version":1,"invocationId":"11111111111111111111111111111111","captureId":"22222222222222222222222222222222","status":"refused","exitCode":2,"error":{"code":"candidate-selection-conflict","reason":"required-disabled","feature":"ResourceProbe","resource":"primary"}}
@@ -47,6 +53,229 @@ public sealed class WorkerProtocolTests
     }
 
     [Fact]
+    public async Task Candidate_inspection_reader_dispatches_the_additive_command_without_widening_the_legacy_shape()
+    {
+        var environment = EnvironmentRequest(CandidateInspectionFixture.EnvironmentDocument()).ToJsonString();
+        using var input = new MemoryStream(Encoding.UTF8.GetBytes(environment));
+        var dispatched = await WorkerContract.ReadCandidateInspectionRequestAsync(input, CancellationToken.None);
+
+        Assert.Null(dispatched!.FileOnly);
+        Assert.Equal(WorkerCommands.InspectCandidateEnvironment, dispatched.Environment!.Command);
+
+        var oldCommand = EnvironmentRequest(CandidateInspectionFixture.EnvironmentDocument());
+        oldCommand["command"] = WorkerCommands.InspectCandidate;
+        using var oldInput = new MemoryStream(Encoding.UTF8.GetBytes(oldCommand.ToJsonString()));
+        await Assert.ThrowsAsync<JsonException>(() => WorkerContract.ReadCandidateInspectionRequestAsync(
+            oldInput, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Environment_reader_accepts_a_closed_separately_typed_envelope_and_preserves_raw_bytes()
+    {
+        var raw = CandidateInspectionFixture.EnvironmentDocument(("ConnectionStrings__Primary", ""));
+        var request = await ReadEnvironmentRequestAsync(EnvironmentRequest(raw).ToJsonString());
+
+        Assert.Equal(2, request.Version);
+        Assert.Equal(WorkerCommands.InspectCandidateEnvironment, request.Command);
+        Assert.Equal(CandidateCaptureId, request.EnvironmentInput!.CaptureId);
+        Assert.Equal(raw, Convert.FromBase64String(request.EnvironmentInput.Content!));
+        Assert.Equal("captured-workbench-json-v1", request.Candidate!.Source);
+    }
+
+    [Theory]
+    [InlineData("outer-extra")]
+    [InlineData("outer-version")]
+    [InlineData("old-command")]
+    [InlineData("input-absent")]
+    [InlineData("input-null")]
+    [InlineData("input-version")]
+    [InlineData("input-capture")]
+    [InlineData("input-extra")]
+    [InlineData("candidate-extra")]
+    [InlineData("file-extra")]
+    public async Task Environment_reader_refuses_shape_and_correlation_skew(string mutation)
+    {
+        var request = EnvironmentRequest(CandidateInspectionFixture.EnvironmentDocument());
+        Assert.NotNull(await ReadEnvironmentRequestAsync(request.ToJsonString()));
+        switch (mutation)
+        {
+            case "outer-extra": request["restore"] = false; break;
+            case "outer-version": request["version"] = 1; break;
+            case "old-command": request["command"] = WorkerCommands.InspectCandidate; break;
+            case "input-absent": request.Remove("environmentInput"); break;
+            case "input-null": request["environmentInput"] = null; break;
+            case "input-version": request["environmentInput"]!["version"] = 2; break;
+            case "input-capture": request["environmentInput"]!["captureId"] = CandidateInvocationId; break;
+            case "input-extra": request["environmentInput"]!["sourcePath"] = "private-path-canary"; break;
+            case "candidate-extra": request["candidate"]!["environmentInput"] = null; break;
+            case "file-extra": request["candidate"]!["files"]![0]!["environmentInput"] = null; break;
+        }
+        var refusal = await Assert.ThrowsAsync<JsonException>(() => ReadEnvironmentRequestAsync(request.ToJsonString()));
+        Assert.Equal("The candidate worker request is invalid.", refusal.Message);
+    }
+
+    [Theory]
+    [InlineData("outer")]
+    [InlineData("input")]
+    public async Task Environment_reader_refuses_duplicate_properties_at_each_new_boundary(string boundary)
+    {
+        var json = EnvironmentRequest(CandidateInspectionFixture.EnvironmentDocument()).ToJsonString();
+        Assert.NotNull(await ReadEnvironmentRequestAsync(json));
+        json = boundary == "outer"
+            ? json.Insert(1, "\"version\":2,")
+            : json.Replace("\"environmentInput\":{", "\"environmentInput\":{\"version\":1,", StringComparison.Ordinal);
+        await Assert.ThrowsAsync<JsonException>(() => ReadEnvironmentRequestAsync(json));
+    }
+
+    [Theory]
+    [InlineData("noncanonical")]
+    [InlineData("oversized")]
+    [InlineData("raw-invalid")]
+    public async Task Environment_reader_independently_validates_the_original_document(string mutation)
+    {
+        var request = EnvironmentRequest(CandidateInspectionFixture.EnvironmentDocument());
+        Assert.NotNull(await ReadEnvironmentRequestAsync(request.ToJsonString()));
+        request["environmentInput"]!["content"] = mutation switch
+        {
+            "noncanonical" => "e31=",
+            "oversized" => Convert.ToBase64String(new byte[1024 * 1024 + 1]),
+            _ => Convert.ToBase64String(Encoding.UTF8.GetBytes("{\"version\":1,\"entries\":[{\"key\":\"Unknown\",\"value\":null}]}"))
+        };
+        var refusal = await Assert.ThrowsAsync<WorkerRefusal>(() => ReadEnvironmentRequestAsync(request.ToJsonString()));
+        Assert.Equal(mutation == "oversized" ? "candidate-environment-input-too-large" :
+            "candidate-environment-input-invalid", refusal.Code);
+        Assert.Equal(2, refusal.ExitCode);
+        Assert.DoesNotContain("Unknown", refusal.Message);
+    }
+
+    [Fact]
+    public void Environment_response_lane_preserves_correlation_and_rejects_old_source_and_wrong_mode()
+    {
+        var request = EnvironmentRequest(CandidateInspectionFixture.EnvironmentDocument())
+            .Deserialize<CandidateEnvironmentWorkerRequestV2>(WorkerContract.Json)!;
+        var response = CandidateHostResponseFixtures.Success(request.Candidate!);
+        response["configurationResolution"]!["source"] = "captured-workbench-json-explicit-environment-v1";
+        response["configurationResolution"]!["externalInputs"] = "supplied-intended";
+        var valid = JsonSerializer.SerializeToElement(response);
+        WorkerContract.ValidateCandidateEnvironmentHostResponse(valid, request.Candidate!, 0);
+        Assert.Throws<WorkerRefusal>(() => WorkerContract.ValidateCandidateHostResponse(valid, request.Candidate!, 0));
+        foreach (var field in new[] { "source", "externalInputs", "runtimeParity", "targetVerification" })
+        {
+            var changed = response.DeepClone();
+            changed["configurationResolution"]![field] = field switch
+            {
+                "source" => "captured-workbench-json-v1", "externalInputs" => "unverified",
+                "runtimeParity" => "observed", _ => "verified"
+            };
+            var refusal = Assert.Throws<WorkerRefusal>(() => WorkerContract.ValidateCandidateEnvironmentHostResponse(
+                JsonSerializer.SerializeToElement(changed), request.Candidate!, 0));
+            Assert.Equal("candidate-response-invalid", refusal.Code);
+        }
+    }
+
+    [Fact]
+    public void Environment_response_lane_admits_only_a_closed_correlated_unenrolled_exit_three()
+    {
+        var request = EnvironmentRequest(CandidateInspectionFixture.EnvironmentDocument())
+            .Deserialize<CandidateEnvironmentWorkerRequestV2>(WorkerContract.Json)!;
+        var response = JsonNode.Parse(CandidateHostRefusalJson)!;
+        response["exitCode"] = 3;
+        response["error"] = new JsonObject { ["code"] = "candidate-environment-host-unenrolled" };
+        var valid = JsonSerializer.SerializeToElement(response);
+        WorkerContract.ValidateCandidateEnvironmentHostResponse(valid, request.Candidate!, 3);
+        Assert.Throws<WorkerRefusal>(() => WorkerContract.ValidateCandidateHostResponse(valid, request.Candidate!, 3));
+        var wrongExit = response.DeepClone();
+        wrongExit["exitCode"] = 2;
+        Assert.Throws<WorkerRefusal>(() => WorkerContract.ValidateCandidateEnvironmentHostResponse(
+            JsonSerializer.SerializeToElement(wrongExit), request.Candidate!, 2));
+        foreach (var mutation in new[] { "code", "identity", "capture", "exit" })
+        {
+            var changed = response.DeepClone();
+            switch (mutation)
+            {
+                case "code": changed["error"]!["code"] = "resource-not-found"; break;
+                case "identity": changed["error"]!["resource"] = CandidateInspectionFixture.SafePrivateEnvironmentCanary; break;
+                case "capture": changed["captureId"] = CandidateInvocationId; break;
+                case "exit": changed["exitCode"] = 2; break;
+            }
+            Assert.Throws<WorkerRefusal>(() => WorkerContract.ValidateCandidateEnvironmentHostResponse(
+                JsonSerializer.SerializeToElement(changed), request.Candidate!, 3));
+        }
+    }
+
+    [Theory]
+    [InlineData("candidate-environment-input-invalid", 2)]
+    [InlineData("candidate-environment-input-too-large", 2)]
+    [InlineData("candidate-environment-key-collision", 2)]
+    [InlineData("candidate-environment-prefix-unsupported", 2)]
+    [InlineData("candidate-environment-host-unenrolled", 3)]
+    public void Environment_worker_response_uses_fixed_local_messages_and_keeps_the_old_lane_closed(string code, int exit)
+    {
+        var request = EnvironmentRequest(CandidateInspectionFixture.EnvironmentDocument())
+            .Deserialize<CandidateEnvironmentWorkerRequestV2>(WorkerContract.Json)!;
+        var response = JsonSerializer.SerializeToUtf8Bytes(new WorkerResponse
+        {
+            ExitCode = exit, Error = new WorkerError { Code = code, Message = CandidateInspectionFixture.PrivateEnvironmentCanary }
+        }, WorkerContract.Json);
+        var accepted = WorkerContract.ParseCandidateEnvironmentWorkerResponse(response, request.Candidate!, exit);
+        Assert.Equal(code, accepted.Error!.Code);
+        Assert.DoesNotContain(CandidateInspectionFixture.PrivateEnvironmentCanary, accepted.Error.Message);
+        Assert.Empty(accepted.Error.Details);
+        Assert.Throws<WorkerRefusal>(() => WorkerContract.ParseCandidateWorkerResponse(response, request.Candidate!, exit));
+        Assert.Throws<WorkerRefusal>(() => WorkerContract.ParseCandidateEnvironmentWorkerResponse(response, request.Candidate!, exit == 2 ? 3 : 2));
+    }
+
+    [Fact]
+    public async Task Environment_reader_accepts_exact_raw_and_serialized_bounds_then_refuses_one_more_byte()
+    {
+        var request = EnvironmentRequest(CandidateInspectionFixture.EnvironmentDocumentOfSize(1024 * 1024));
+        var json = request.ToJsonString();
+        Assert.NotNull(await ReadEnvironmentRequestAsync(json));
+        var exact = json + new string(' ', 8 * 1024 * 1024 - Encoding.UTF8.GetByteCount(json));
+        Assert.NotNull(await ReadEnvironmentRequestAsync(exact));
+        var refusal = await Assert.ThrowsAsync<WorkerRefusal>(() => ReadEnvironmentRequestAsync(exact + " "));
+        Assert.Equal("candidate-request-too-large", refusal.Code);
+        Assert.Equal(2, refusal.ExitCode);
+    }
+
+    [Fact]
+    public async Task Environment_host_response_reader_bounds_the_actual_serialized_response()
+    {
+        var candidate = EnvironmentRequest(CandidateInspectionFixture.EnvironmentDocument())
+            .Deserialize<CandidateEnvironmentWorkerRequestV2>(WorkerContract.Json)!.Candidate!;
+        var response = CandidateHostResponseFixtures.Success(candidate);
+        response["configurationResolution"]!["source"] = "captured-workbench-json-explicit-environment-v1";
+        response["configurationResolution"]!["externalInputs"] = "supplied-intended";
+        var json = response.ToJsonString();
+        var exact = Encoding.UTF8.GetBytes(json + new string(' ', CandidateHostResponseMaxBytes - Encoding.UTF8.GetByteCount(json)));
+        using (var input = new MemoryStream(exact))
+            WorkerContract.ValidateCandidateEnvironmentHostResponse(await WorkerContract.ReadCandidateEnvironmentHostResponseAsync(
+                input, CandidateInvocationId, CandidateCaptureId, 0, CancellationToken.None), candidate, 0);
+        using var oversized = new MemoryStream([.. exact, (byte)' ']);
+        var refusal = await Assert.ThrowsAsync<WorkerRefusal>(() => WorkerContract.ReadCandidateEnvironmentHostResponseAsync(
+            oversized, CandidateInvocationId, CandidateCaptureId, 0, CancellationToken.None));
+        Assert.Equal("candidate-response-too-large", refusal.Code);
+    }
+
+    private static JsonObject EnvironmentRequest(byte[] raw)
+    {
+        var request = JsonNode.Parse(CandidateRequestJson)!.AsObject();
+        request.Remove("restore");
+        request["command"] = WorkerCommands.InspectCandidateEnvironment;
+        request["environmentInput"] = JsonSerializer.SerializeToNode(new WorkerEnvironmentInput
+        {
+            Version = 1, CaptureId = CandidateCaptureId, Content = Convert.ToBase64String(raw)
+        }, WorkerContract.Json);
+        return request;
+    }
+
+    private static async Task<CandidateEnvironmentWorkerRequestV2> ReadEnvironmentRequestAsync(string json)
+    {
+        using var input = new MemoryStream(Encoding.UTF8.GetBytes(json));
+        return await WorkerContract.ReadCandidateEnvironmentRequestAsync(input, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task Legacy_reader_does_not_admit_the_candidate_command_or_payload()
     {
         using var input = new MemoryStream(Encoding.UTF8.GetBytes(CandidateRequestJson));
@@ -60,6 +289,56 @@ public sealed class WorkerProtocolTests
         using var input = new MemoryStream(Encoding.UTF8.GetBytes("{\"version\":2,\"command\":\"list\",\"candidate\":null}"));
 
         await Assert.ThrowsAsync<JsonException>(() => WorkerContract.ReadRequestAsync(input, CancellationToken.None));
+    }
+
+    [Theory]
+    [InlineData("list")]
+    [InlineData("plan")]
+    [InlineData("script")]
+    [InlineData("apply")]
+    [InlineData("validate")]
+    [InlineData("post-migrate")]
+    [InlineData("hold")]
+    [InlineData("release")]
+    [InlineData("status")]
+    public async Task Old_command_reader_rejects_environment_input_even_when_null(string command)
+    {
+        var baseline = new JsonObject { ["version"] = 2, ["command"] = command };
+        using (var input = new MemoryStream(Encoding.UTF8.GetBytes(baseline.ToJsonString())))
+            Assert.NotNull(await WorkerContract.ReadRequestAsync(input, CancellationToken.None));
+
+        foreach (var value in EnvironmentInputVariants)
+        {
+            var request = (JsonObject)baseline.DeepClone();
+            request["environmentInput"] = value;
+            using var input = new MemoryStream(Encoding.UTF8.GetBytes(request.ToJsonString()));
+            var refusal = await Assert.ThrowsAsync<JsonException>(() =>
+                WorkerContract.ReadRequestAsync(input, CancellationToken.None));
+            Assert.DoesNotContain(CandidateInspectionFixture.SafePrivateEnvironmentCanary, refusal.Message);
+        }
+    }
+
+    [Theory]
+    [InlineData("outer")]
+    [InlineData("candidate")]
+    [InlineData("file")]
+    public async Task Old_candidate_reader_rejects_environment_input_at_every_object_boundary(string boundary)
+    {
+        Assert.NotNull(await ReadCandidateRequestAsync(CandidateRequestJson));
+        foreach (var value in EnvironmentInputVariants)
+        {
+            var request = JsonNode.Parse(CandidateRequestJson)!;
+            var target = boundary switch
+            {
+                "candidate" => request["candidate"]!,
+                "file" => request["candidate"]!["files"]![0]!,
+                _ => request
+            };
+            target["environmentInput"] = value;
+            var refusal = await Assert.ThrowsAsync<JsonException>(() =>
+                ReadCandidateRequestAsync(request.ToJsonString()));
+            Assert.Equal("The candidate worker request is invalid.", refusal.Message);
+        }
     }
 
     [Fact]

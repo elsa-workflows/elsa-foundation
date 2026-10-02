@@ -1,4 +1,6 @@
 using System.Buffers;
+using System.Collections.ObjectModel;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -10,6 +12,8 @@ namespace Elsa.Cli.Worker;
 /// front end did not ask for.
 /// </summary>
 /// <remarks>
+/// Candidate-v1 stays file-only. Explicit environment inspection uses a separate closed command and host
+/// capability; sharing this transport must not broaden any old command reader or response validator.
 /// Deliberately separate from the frozen <c>EfToolingContract</c> the worker speaks on the other side. That
 /// one is a contract with an assembly inside the host's closure, versioned independently of this tool; this
 /// one is private to the two halves of one package and carries what only the front end knows (where the
@@ -28,6 +32,15 @@ public static class WorkerContract
     private const string CandidateHostResponseInvalidMessage = "The candidate host response is invalid.";
     private const int CandidateFileMaxBytes = 1024 * 1024;
     private const int CandidateFilesMaxBytes = 4 * 1024 * 1024;
+    private static readonly HashSet<string> CandidateEnvironmentRequestFields = new(StringComparer.Ordinal)
+    {
+        "version", "command", "hostDirectory", "hostName", "depsFile", "packageRoots", "candidate", "environmentInput"
+    };
+    private static readonly HashSet<string> CandidateEnvironmentInputErrorCodes = new(StringComparer.Ordinal)
+    {
+        "candidate-environment-input-invalid", "candidate-environment-input-too-large",
+        "candidate-environment-key-collision", "candidate-environment-prefix-unsupported"
+    };
     private static readonly HashSet<string> CandidateHostResponseFields = new(StringComparer.Ordinal)
     {
         "version", "invocationId", "captureId", "status", "exitCode", "configurationResolution", "error"
@@ -148,13 +161,165 @@ public static class WorkerContract
         }
     }
 
+    /// <summary>Reads only the additive explicit-environment command; old DTOs remain closed.</summary>
+    public static async Task<CandidateEnvironmentWorkerRequestV2> ReadCandidateEnvironmentRequestAsync(
+        Stream stream, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await ReadBoundedCandidateJsonAsync(stream, CandidateRequestMaxBytes,
+                () => WorkerRefusal.Usage("candidate-request-too-large", "The candidate request exceeds the supported size limit."),
+                root =>
+                {
+                    if (!HasExactlyFields(root, CandidateEnvironmentRequestFields) || HasDuplicateFields(root))
+                        throw InvalidCandidateRequest();
+                    var request = root.Deserialize<CandidateEnvironmentWorkerRequestV2>(Json);
+                    if (request is null)
+                        throw InvalidCandidateRequest();
+                    ValidateCandidateEnvironmentRequest(request);
+                    return request;
+                }, cancellationToken);
+        }
+        catch (JsonException)
+        {
+            throw InvalidCandidateRequest();
+        }
+    }
+
+    /// <summary>
+    /// Reads the two candidate commands from one bounded input stream. The command discriminator is inspected
+    /// before deserialization so the legacy closed reader remains closed while the additive lane can carry its
+    /// one extra envelope field.
+    /// </summary>
+    internal static async Task<CandidateInspectionRequest?> ReadCandidateInspectionRequestAsync(
+        Stream stream, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await ReadBoundedCandidateJsonAsync(stream, CandidateRequestMaxBytes,
+                () => WorkerRefusal.Usage("candidate-request-too-large", "The candidate request exceeds the supported size limit."),
+                root =>
+                {
+                    if (root.ValueKind != JsonValueKind.Object ||
+                        !root.TryGetProperty("version", out _) || HasDuplicateFields(root))
+                        throw InvalidCandidateRequest();
+
+                    if (root.TryGetProperty("command", out var command) &&
+                        command.ValueKind == JsonValueKind.String &&
+                        command.GetString() == WorkerCommands.InspectCandidateEnvironment)
+                    {
+                        var environment = ParseCandidateEnvironmentRequest(root);
+                        return new CandidateInspectionRequest(null, environment);
+                    }
+
+                    var candidate = root.Deserialize<WorkerRequest>(Json);
+                    if (candidate is null)
+                        throw InvalidCandidateRequest();
+                    ValidateCandidateRequest(root, candidate);
+                    return new CandidateInspectionRequest(candidate, null);
+                },
+                cancellationToken);
+        }
+        catch (Exception failure) when (failure is JsonException or InvalidOperationException or ArgumentException or FormatException)
+        {
+            throw InvalidCandidateRequest();
+        }
+    }
+
+    /// <summary>Independently rechecks candidate correlation and the original raw private document.</summary>
+    public static void ValidateCandidateEnvironmentRequest(CandidateEnvironmentWorkerRequestV2 request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (request.Version != Version || request.Command != WorkerCommands.InspectCandidateEnvironment)
+            throw InvalidCandidateRequest();
+        ValidateCandidateFields(request.FileOnlyClosureRequest());
+        ValidateCandidateEnvironmentInput(request.Candidate!, request.EnvironmentInput);
+    }
+
+    /// <summary>Validates the inner environment value independently before it crosses the host reflection boundary.</summary>
+    internal static void ValidateCandidateEnvironmentInput(
+        WorkerCandidatePayload candidate, WorkerEnvironmentInput? environmentInput)
+    {
+        ArgumentNullException.ThrowIfNull(candidate);
+        if (environmentInput is null || environmentInput.Version != 1 ||
+            environmentInput.CaptureId != candidate.CaptureId || environmentInput.Content is null)
+            throw InvalidCandidateRequest();
+
+        var bytes = DecodeEnvironmentInput(environmentInput.Content);
+        try
+        {
+            _ = ExplicitEnvironmentInput.Parse(bytes);
+        }
+        finally
+        {
+            Array.Clear(bytes);
+        }
+    }
+
+    internal static bool IsCandidateEnvironmentInputErrorCode(string? code) =>
+        code is not null && CandidateEnvironmentInputErrorCodes.Contains(code);
+
+    internal static string CandidateEnvironmentInputMessage(string code) =>
+        CandidateWorkerErrorMessage(code);
+
+    private static CandidateEnvironmentWorkerRequestV2 ParseCandidateEnvironmentRequest(JsonElement root)
+    {
+        if (!HasExactlyFields(root, CandidateEnvironmentRequestFields) || HasDuplicateFields(root))
+            throw InvalidCandidateRequest();
+        var request = root.Deserialize<CandidateEnvironmentWorkerRequestV2>(Json);
+        if (request is null)
+            throw InvalidCandidateRequest();
+        ValidateCandidateEnvironmentRequest(request);
+        return request;
+    }
+
+    /// <summary>Shared frontend/worker admission of raw supplied bytes; it reads no ambient sources.</summary>
+    public static IReadOnlyDictionary<string, string> ParseEnvironmentInputDocument(ReadOnlyMemory<byte> document) =>
+        ExplicitEnvironmentInput.Parse(document);
+
+    internal static WorkerRefusal EnvironmentInputRefusal(string code) =>
+        WorkerRefusal.Usage(code, CandidateWorkerErrorMessage(code));
+
+    private static byte[] DecodeEnvironmentInput(string content)
+    {
+        var maximumEncodedLength = ((ExplicitEnvironmentInput.MaximumBytes + 2) / 3) * 4;
+        if (content.Length > maximumEncodedLength)
+            throw EnvironmentInputRefusal("candidate-environment-input-too-large");
+        if (content.Length % 4 != 0)
+            throw EnvironmentInputRefusal("candidate-environment-input-invalid");
+
+        // Count padding before allocation: the final base64 block can encode one or two bytes above the raw bound.
+        var decodedLength = content.Length / 4 * 3 - (content.EndsWith("==", StringComparison.Ordinal) ? 2 :
+            content.EndsWith('=') ? 1 : 0);
+        if (decodedLength > ExplicitEnvironmentInput.MaximumBytes)
+            throw EnvironmentInputRefusal("candidate-environment-input-too-large");
+        var bytes = new byte[Math.Max(0, decodedLength)];
+        if (!Convert.TryFromBase64String(content, bytes, out var written) || written != bytes.Length ||
+            !StringComparer.Ordinal.Equals(Convert.ToBase64String(bytes), content))
+        {
+            Array.Clear(bytes);
+            throw EnvironmentInputRefusal("candidate-environment-input-invalid");
+        }
+        return bytes;
+    }
+
     /// <summary>Reads and validates the private candidate host envelope while preserving its original JSON value.</summary>
-    public static async Task<JsonElement> ReadCandidateHostResponseAsync(
-        Stream stream,
-        string expectedInvocationId,
-        string expectedCaptureId,
-        int processExitCode,
-        CancellationToken cancellationToken)
+    public static Task<JsonElement> ReadCandidateHostResponseAsync(
+        Stream stream, string expectedInvocationId, string expectedCaptureId, int processExitCode,
+        CancellationToken cancellationToken) =>
+        ReadCandidateHostResponseCoreAsync(stream, expectedInvocationId, expectedCaptureId,
+            processExitCode, environmentInput: false, cancellationToken);
+
+    /// <summary>Reads only the explicit-environment projection and its correlated fixed refusals.</summary>
+    public static Task<JsonElement> ReadCandidateEnvironmentHostResponseAsync(
+        Stream stream, string expectedInvocationId, string expectedCaptureId, int processExitCode,
+        CancellationToken cancellationToken) =>
+        ReadCandidateHostResponseCoreAsync(stream, expectedInvocationId, expectedCaptureId,
+            processExitCode, environmentInput: true, cancellationToken);
+
+    private static async Task<JsonElement> ReadCandidateHostResponseCoreAsync(
+        Stream stream, string expectedInvocationId, string expectedCaptureId, int processExitCode,
+        bool environmentInput, CancellationToken cancellationToken)
     {
         try
         {
@@ -162,7 +327,7 @@ public static class WorkerContract
                 () => WorkerRefusal.Resolution("candidate-response-too-large", "The candidate host response exceeds the supported size limit."),
                 root =>
                 {
-                    ValidateCandidateHostResponse(root, expectedInvocationId, expectedCaptureId, processExitCode);
+                    ValidateCandidateHostResponse(root, expectedInvocationId, expectedCaptureId, processExitCode, environmentInput);
                     return root.Clone();
                 },
                 cancellationToken);
@@ -175,9 +340,16 @@ public static class WorkerContract
 
     /// <summary>Parses the bounded private worker response returned by a candidate inspection process.</summary>
     public static WorkerResponse ParseCandidateWorkerResponse(
-        ReadOnlyMemory<byte> utf8Response,
-        WorkerCandidatePayload expectedCandidate,
-        int processExitCode)
+        ReadOnlyMemory<byte> utf8Response, WorkerCandidatePayload expectedCandidate, int processExitCode) =>
+        ParseCandidateWorkerResponseCore(utf8Response, expectedCandidate, processExitCode, environmentInput: false);
+
+    /// <summary>Parses the additive worker lane without widening candidate-v1 response admission.</summary>
+    public static WorkerResponse ParseCandidateEnvironmentWorkerResponse(
+        ReadOnlyMemory<byte> utf8Response, WorkerCandidatePayload expectedCandidate, int processExitCode) =>
+        ParseCandidateWorkerResponseCore(utf8Response, expectedCandidate, processExitCode, environmentInput: true);
+
+    private static WorkerResponse ParseCandidateWorkerResponseCore(
+        ReadOnlyMemory<byte> utf8Response, WorkerCandidatePayload expectedCandidate, int processExitCode, bool environmentInput)
     {
         ArgumentNullException.ThrowIfNull(expectedCandidate);
         if (utf8Response.Length > CandidateHostResponseMaxBytes)
@@ -212,7 +384,7 @@ public static class WorkerContract
 
             if (hasTooling)
             {
-                ValidateCandidateHostResponse(tooling, expectedCandidate, processExitCode);
+                ValidateCandidateHostResponseCore(tooling, expectedCandidate, processExitCode, environmentInput);
                 return new WorkerResponse
                 {
                     Version = Version,
@@ -221,7 +393,7 @@ public static class WorkerContract
                 };
             }
 
-            var code = ReadCandidateWorkerErrorCode(error, exitCodeValue);
+            var code = ReadCandidateWorkerErrorCode(error, exitCodeValue, environmentInput);
             return new WorkerResponse
             {
                 Version = Version,
@@ -239,7 +411,7 @@ public static class WorkerContract
         }
     }
 
-    private static string ReadCandidateWorkerErrorCode(JsonElement error, int exitCode)
+    private static string ReadCandidateWorkerErrorCode(JsonElement error, int exitCode, bool environmentInput)
     {
         if (error.ValueKind != JsonValueKind.Object || HasDuplicateFields(error) ||
             error.EnumerateObject().Any(property => !CandidateWorkerErrorFields.Contains(property.Name)) ||
@@ -253,9 +425,11 @@ public static class WorkerContract
             throw InvalidCandidateHostResponse();
 
         var code = codeElement.GetString()!;
-        var isUsageRefusal = code is "candidate-request-invalid" or "candidate-request-too-large";
+        var isUsageRefusal = code is "candidate-request-invalid" or "candidate-request-too-large" ||
+            environmentInput && CandidateEnvironmentInputErrorCodes.Contains(code);
         var isResolutionRefusal = code is "candidate-host-unavailable" or "candidate-package-unavailable" or "candidate-closure-changed" or
-            "candidate-capability-unavailable" or "candidate-response-invalid" or "candidate-response-too-large";
+            "candidate-capability-unavailable" or "candidate-response-invalid" or "candidate-response-too-large" ||
+            environmentInput && code == "candidate-environment-host-unenrolled";
         if (isUsageRefusal && exitCode == ToolExitCode.Refusal ||
             isResolutionRefusal && exitCode == ToolExitCode.ResolutionFailure)
             return code;
@@ -273,6 +447,11 @@ public static class WorkerContract
         "candidate-capability-unavailable" => "The selected host has no complete candidate inspection capability.",
         "candidate-response-invalid" => CandidateHostResponseInvalidMessage,
         "candidate-response-too-large" => "The candidate host response exceeds the supported bound.",
+        "candidate-environment-input-invalid" => "The explicit environment input is invalid.",
+        "candidate-environment-input-too-large" => "The explicit environment input exceeds the supported size limit.",
+        "candidate-environment-key-collision" => "The explicit environment input contains colliding keys.",
+        "candidate-environment-prefix-unsupported" => "The explicit environment input contains an unsupported service prefix.",
+        "candidate-environment-host-unenrolled" => "The selected host is not enrolled for explicit environment inspection.",
         _ => throw InvalidCandidateHostResponse()
     };
 
@@ -311,9 +490,16 @@ public static class WorkerContract
     /// <summary>Validates the full host exchange against the candidate whose bytes were sent.</summary>
     /// <exception cref="WorkerRefusal">The host exchange does not describe that candidate.</exception>
     public static void ValidateCandidateHostResponse(
-        JsonElement root,
-        WorkerCandidatePayload candidate,
-        int processExitCode)
+        JsonElement root, WorkerCandidatePayload candidate, int processExitCode) =>
+        ValidateCandidateHostResponseCore(root, candidate, processExitCode, environmentInput: false);
+
+    /// <summary>Validates the new lane against the same immutable candidate/context and exact projection.</summary>
+    public static void ValidateCandidateEnvironmentHostResponse(
+        JsonElement root, WorkerCandidatePayload candidate, int processExitCode) =>
+        ValidateCandidateHostResponseCore(root, candidate, processExitCode, environmentInput: true);
+
+    private static void ValidateCandidateHostResponseCore(
+        JsonElement root, WorkerCandidatePayload candidate, int processExitCode, bool environmentInput)
     {
         ArgumentNullException.ThrowIfNull(candidate);
         try
@@ -325,7 +511,7 @@ public static class WorkerContract
             throw InvalidCandidateHostResponse();
         }
         ValidateCandidateHostResponse(root, candidate.InvocationId ?? string.Empty,
-            candidate.CaptureId ?? string.Empty, processExitCode);
+            candidate.CaptureId ?? string.Empty, processExitCode, environmentInput);
 
         if (root.GetProperty("status").GetString() != "ok")
             return;
@@ -346,7 +532,8 @@ public static class WorkerContract
         JsonElement root,
         string expectedInvocationId,
         string expectedCaptureId,
-        int processExitCode)
+        int processExitCode,
+        bool environmentInput)
     {
         if (!IsToken(expectedInvocationId) || !IsToken(expectedCaptureId) ||
             string.Equals(expectedInvocationId, expectedCaptureId, StringComparison.Ordinal) ||
@@ -371,21 +558,24 @@ public static class WorkerContract
             if (processExitCode != ToolExitCode.Success || !hasResolution || hasError ||
                 resolution.ValueKind != JsonValueKind.Object)
                 throw InvalidCandidateHostResponse();
-            ValidateCandidateConfigurationResolution(resolution);
+            ValidateCandidateConfigurationResolution(resolution, environmentInput);
             return;
         }
 
-        if (statusValue != "refused" || processExitCode != ToolExitCode.Refusal ||
+        var unenrolled = environmentInput && error.ValueKind == JsonValueKind.Object &&
+            HasStringValue(error, "code", "candidate-environment-host-unenrolled");
+        var expectedRefusalExit = unenrolled ? ToolExitCode.ResolutionFailure : ToolExitCode.Refusal;
+        if (statusValue != "refused" || processExitCode != expectedRefusalExit ||
             hasResolution || !hasError || error.ValueKind != JsonValueKind.Object)
             throw InvalidCandidateHostResponse();
 
-        ValidateCandidateHostError(error);
+        ValidateCandidateHostError(error, environmentInput);
     }
 
-    private static void ValidateCandidateConfigurationResolution(JsonElement resolution)
+    private static void ValidateCandidateConfigurationResolution(JsonElement resolution, bool environmentInput)
     {
         if (!HasExactlyFields(resolution, CandidateConfigurationResolutionFields) ||
-            !HasStringValue(resolution, "source", "captured-workbench-json-v1") ||
+            !HasStringValue(resolution, "source", environmentInput ? "captured-workbench-json-explicit-environment-v1" : "captured-workbench-json-v1") ||
             !TryGetString(resolution, "shell", out var shell) || !IsSafeCandidateReference(shell) ||
             !TryGetString(resolution, "environment", out var environment) || !IsSafeEnvironment(environment) ||
             !TryGetString(resolution, "resolution", out var resolutionValue) ||
@@ -399,7 +589,7 @@ public static class WorkerContract
             !HasStringValue(resolution, "schemaReadiness", "unverified") ||
             !HasStringValue(resolution, "migrationReadiness", "unverified") ||
             !HasStringValue(resolution, "activation", "unobserved") ||
-            !HasStringValue(resolution, "externalInputs", "unverified") ||
+            !HasStringValue(resolution, "externalInputs", environmentInput ? "supplied-intended" : "unverified") ||
             !resolution.TryGetProperty("selection", out var selection) ||
             !TryValidateCandidateResolutionSelection(selection, out var acceptedFeatureIds) ||
             !resolution.TryGetProperty("participants", out var participants) || participants.ValueKind != JsonValueKind.Array ||
@@ -594,16 +784,20 @@ public static class WorkerContract
         return result is not null;
     }
 
-    private static void ValidateCandidateHostError(JsonElement error)
+    private static void ValidateCandidateHostError(JsonElement error, bool environmentInput)
     {
         if (HasDuplicateFields(error) ||
             error.EnumerateObject().Any(property => !CandidateHostErrorFields.Contains(property.Name)) ||
             !error.TryGetProperty("code", out var code) || code.ValueKind != JsonValueKind.String ||
-            !CandidateHostErrorCodes.Contains(code.GetString() ?? string.Empty))
+            !(CandidateHostErrorCodes.Contains(code.GetString() ?? string.Empty) ||
+              environmentInput && (CandidateEnvironmentInputErrorCodes.Contains(code.GetString() ?? string.Empty) ||
+                                   code.GetString() == "candidate-environment-host-unenrolled")))
             throw InvalidCandidateHostResponse();
 
         var codeValue = code.GetString();
-        if (codeValue is "candidate-request-invalid" or "candidate-request-too-large" or "candidate-capture-invalid" &&
+        if ((codeValue is "candidate-request-invalid" or "candidate-request-too-large" or "candidate-capture-invalid" ||
+             environmentInput && (CandidateEnvironmentInputErrorCodes.Contains(codeValue!) ||
+                                  codeValue == "candidate-environment-host-unenrolled")) &&
             error.EnumerateObject().Count() != 1)
             throw InvalidCandidateHostResponse();
         var hasReason = error.TryGetProperty("reason", out var reason);
@@ -766,6 +960,224 @@ public static class WorkerContract
     }
 }
 
+/// <summary>Admits the one explicit private environment overlay without consulting ambient configuration.</summary>
+internal static class ExplicitEnvironmentInput
+{
+    internal const int MaximumBytes = 1_048_576;
+    internal const int MaximumEntries = 1_024;
+    internal const int MaximumKeyBytes = 1_024;
+    internal const int MaximumValueBytes = 65_536;
+
+    private const int JsonMaximumDepth = 64;
+    private static readonly UTF8Encoding StrictUtf8 = new(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
+    private static readonly JsonDocumentOptions JsonOptions = new()
+    {
+        MaxDepth = JsonMaximumDepth,
+        AllowTrailingCommas = false,
+        CommentHandling = JsonCommentHandling.Disallow
+    };
+    private static readonly string[] UnsupportedServicePrefixes =
+    [
+        "MYSQLCONNSTR_",
+        "SQLAZURECONNSTR_",
+        "SQLCONNSTR_",
+        "CUSTOMCONNSTR_",
+        "POSTGRESQLCONNSTR_",
+        "APIHUBCONNSTR_",
+        "DOCDBCONNSTR_",
+        "EVENTHUBCONNSTR_",
+        "NOTIFICATIONHUBCONNSTR_",
+        "REDISCACHECONNSTR_",
+        "SERVICEBUSCONNSTR_"
+    ];
+
+    internal static IReadOnlyDictionary<string, string> Parse(ReadOnlyMemory<byte> document)
+    {
+        if (document.Length > MaximumBytes)
+            throw TooLarge();
+
+        try
+        {
+            var utf8 = document.Span;
+            if (utf8.StartsWith("\uFEFF"u8))
+            {
+                utf8 = utf8[3..];
+                if (utf8.StartsWith("\uFEFF"u8))
+                    throw Invalid();
+            }
+
+            var json = StrictUtf8.GetString(utf8);
+            if (json.StartsWith('\uFEFF'))
+                throw Invalid();
+
+            using var parsed = JsonDocument.Parse(json, JsonOptions);
+            return ParseRoot(parsed.RootElement);
+        }
+        catch (WorkerRefusal)
+        {
+            throw;
+        }
+        catch (DecoderFallbackException)
+        {
+            throw Invalid();
+        }
+        catch (JsonException)
+        {
+            throw Invalid();
+        }
+        catch (EncoderFallbackException)
+        {
+            throw Invalid();
+        }
+        catch (InvalidOperationException)
+        {
+            // A malformed escaped Unicode scalar may be refused by JsonElement.GetString itself.
+            throw Invalid();
+        }
+    }
+
+    private static IReadOnlyDictionary<string, string> ParseRoot(JsonElement root)
+    {
+        ReadClosedPair(root, "version", "entries", out var version, out var entries);
+        if (version.ValueKind != JsonValueKind.Number || version.GetRawText() != "1" ||
+            entries.ValueKind != JsonValueKind.Array)
+            throw Invalid();
+
+        var values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var count = 0;
+        foreach (var entry in entries.EnumerateArray())
+        {
+            if (++count > MaximumEntries)
+                throw TooLarge();
+            ParseEntry(entry, values);
+        }
+
+        return new ReadOnlyDictionary<string, string>(values);
+    }
+
+    private static void ParseEntry(JsonElement entry, IDictionary<string, string> values)
+    {
+        ReadClosedPair(entry, "key", "value", out var keyElement, out var valueElement);
+        if (keyElement.ValueKind != JsonValueKind.String || valueElement.ValueKind != JsonValueKind.String)
+            throw Invalid();
+
+        var key = keyElement.GetString() ?? throw Invalid();
+        var value = valueElement.GetString() ?? throw Invalid();
+        ValidateString(keyElement, key, key: true);
+        ValidateString(valueElement, value, key: false);
+
+        if (StrictUtf8.GetByteCount(key) > MaximumKeyBytes || StrictUtf8.GetByteCount(value) > MaximumValueBytes)
+            throw TooLarge();
+
+        if (UnsupportedServicePrefixes.Any(prefix => key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)))
+            throw PrefixUnsupported();
+
+        var normalized = key.Replace("__", ":", StringComparison.Ordinal);
+        if (StrictUtf8.GetByteCount(normalized) > MaximumKeyBytes)
+            throw TooLarge();
+
+        if (!values.TryAdd(normalized, value))
+            throw KeyCollision();
+    }
+
+    private static void ReadClosedPair(JsonElement value, string firstName, string secondName,
+        out JsonElement first, out JsonElement second)
+    {
+        first = second = default;
+        if (value.ValueKind != JsonValueKind.Object || value.EnumerateObject().Count() != 2 ||
+            !value.TryGetProperty(firstName, out first) || !value.TryGetProperty(secondName, out second))
+            throw Invalid();
+    }
+
+    private static void ValidateString(JsonElement element, string value, bool key)
+    {
+        if (key && value.Length == 0)
+            throw Invalid();
+        var raw = element.GetRawText();
+        for (var index = 1; index < raw.Length - 1; index++)
+        {
+            if (raw[index] != '\\')
+                continue;
+
+            if (raw[index + 1] != 'u')
+            {
+                index++;
+                continue;
+            }
+
+            if (!TryReadUnicodeEscape(raw, index, out var codeUnit))
+                throw Invalid();
+            if (char.IsHighSurrogate(codeUnit))
+            {
+                if (!TryReadUnicodeEscape(raw, index + 6, out var low) || !char.IsLowSurrogate(low))
+                    throw Invalid();
+                index += 11;
+            }
+            else if (char.IsLowSurrogate(codeUnit))
+            {
+                throw Invalid();
+            }
+            else
+            {
+                index += 5;
+            }
+        }
+
+        for (var index = 0; index < value.Length; index++)
+        {
+            var character = value[index];
+            if (char.IsHighSurrogate(character))
+            {
+                if (index + 1 >= value.Length || !char.IsLowSurrogate(value[index + 1]))
+                    throw Invalid();
+                index++;
+                continue;
+            }
+
+            if (char.IsLowSurrogate(character) || key && char.IsControl(character) || key && character == '=' ||
+                !key && character == '\0')
+                throw Invalid();
+        }
+    }
+
+    private static bool TryReadUnicodeEscape(string raw, int slash, out char codeUnit)
+    {
+        codeUnit = default;
+        if (slash < 0 || slash + 5 >= raw.Length || raw[slash] != '\\' || raw[slash + 1] != 'u')
+            return false;
+
+        var value = 0;
+        for (var index = slash + 2; index <= slash + 5; index++)
+        {
+            var digit = raw[index] switch
+            {
+                >= '0' and <= '9' => raw[index] - '0',
+                >= 'a' and <= 'f' => raw[index] - 'a' + 10,
+                >= 'A' and <= 'F' => raw[index] - 'A' + 10,
+                _ => -1
+            };
+            if (digit < 0)
+                return false;
+            value = (value << 4) | digit;
+        }
+
+        codeUnit = (char)value;
+        return true;
+    }
+
+    private static WorkerRefusal Invalid() =>
+        WorkerContract.EnvironmentInputRefusal("candidate-environment-input-invalid");
+
+    private static WorkerRefusal TooLarge() =>
+        WorkerContract.EnvironmentInputRefusal("candidate-environment-input-too-large");
+
+    private static WorkerRefusal KeyCollision() =>
+        WorkerContract.EnvironmentInputRefusal("candidate-environment-key-collision");
+
+    private static WorkerRefusal PrefixUnsupported() =>
+        WorkerContract.EnvironmentInputRefusal("candidate-environment-prefix-unsupported");
+}
+
 /// <summary>The commands this worker backs.</summary>
 public static class WorkerCommands
 {
@@ -787,6 +1199,9 @@ public static class WorkerCommands
 
     /// <summary>The private, configuration-only candidate inspection operation.</summary>
     public const string InspectCandidate = "inspect-candidate";
+
+    /// <summary>The additive command carrying one explicit private environment document.</summary>
+    public const string InspectCandidateEnvironment = "inspect-candidate-environment";
 
     public static readonly string[] All = [List, Plan, Script, Apply, Validate, PostMigrate, Hold, Release, Status];
 
@@ -917,6 +1332,42 @@ public sealed record WorkerRequest
 
     /// <summary>Versioned, file-only input accepted exclusively by <see cref="WorkerCommands.InspectCandidate"/>.</summary>
     public WorkerCandidatePayload? Candidate { get; init; }
+}
+
+/// <summary>Closed additive v2 request. It never broadens the legacy <see cref="WorkerRequest"/> reader.</summary>
+public sealed record CandidateEnvironmentWorkerRequestV2
+{
+    [JsonRequired] public int Version { get; init; }
+    [JsonRequired] public string? Command { get; init; }
+    [JsonRequired] public string? HostDirectory { get; init; }
+    [JsonRequired] public string? HostName { get; init; }
+    [JsonRequired] public string? DepsFile { get; init; }
+    [JsonRequired] public IReadOnlyList<string>? PackageRoots { get; init; }
+    [JsonRequired] public WorkerCandidatePayload? Candidate { get; init; }
+    [JsonRequired] public WorkerEnvironmentInput? EnvironmentInput { get; init; }
+
+    // Reuse only existing layout/payload admission. Execution always negotiates the additive capability.
+    internal WorkerRequest FileOnlyClosureRequest() => new()
+    {
+        Version = Version, Command = WorkerCommands.InspectCandidate, HostDirectory = HostDirectory,
+        HostName = HostName, DepsFile = DepsFile, PackageRoots = PackageRoots!, Candidate = Candidate
+    };
+}
+
+/// <summary>Discriminated candidate request selected after the command field is read from the bounded envelope.</summary>
+internal sealed record CandidateInspectionRequest(
+    WorkerRequest? FileOnly,
+    CandidateEnvironmentWorkerRequestV2? Environment)
+{
+    public bool IsEnvironment => Environment is not null;
+}
+
+/// <summary>Private raw captured document, bound to its candidate; no source path or public fingerprint.</summary>
+public sealed record WorkerEnvironmentInput
+{
+    [JsonRequired] public int Version { get; init; }
+    [JsonRequired] public string? CaptureId { get; init; }
+    [JsonRequired] public string? Content { get; init; }
 }
 
 /// <summary>Closed v1 candidate payload for the configuration-only worker operation.</summary>

@@ -171,6 +171,7 @@ COPY --from=build /app/publish ./
 #   /app/packages            Nuplane directory feed (watched; optionally a volume mount)
 #   /app/.elsa               GitHubCopilotAgent working directory
 #   /app/data                SQLite files meant to outlive the container (mount a named volume here)
+#   /app/extension-builder   Extension Builder workspaces (only when enabled with a relative Elsa:ExtensionBuilder:StoragePath)
 #   *.db / *.sqlite*.db      SQLite fallback stores (only when a SQLite lane is composed)
 # so the non-root runtime user needs write access to the app directory. /app/data exists in the image, owned by that
 # user, so a named volume mounted there starts out writable by it. The Data Protection key ring is not among them

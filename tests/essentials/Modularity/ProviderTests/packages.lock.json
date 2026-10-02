@@ -1318,6 +1318,18 @@
           "Elsa.Events.Core": "[4.0.0-dev, )"
         }
       },
+      "elsa.extensionbuilder.api": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Api.AspNetCore": "[4.0.0-dev, )",
+          "Elsa.Cluster.Readability": "[4.0.0-dev, )",
+          "Elsa.Foundation.Identity": "[4.0.0-dev, )",
+          "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )",
+          "Elsa.Git": "[4.0.0-dev, )",
+          "Elsa.Modularity.Core": "[4.0.0-dev, )",
+          "Nuplane.Admin": "[0.0.11-preview.94, )"
+        }
+      },
       "elsa.foundation.dataprotection.entityframeworkcore": {
         "type": "Project",
         "dependencies": {
@@ -1411,6 +1423,9 @@
           "Microsoft.EntityFrameworkCore": "[10.0.10, )",
           "Microsoft.EntityFrameworkCore.Relational": "[10.0.10, )"
         }
+      },
+      "elsa.git": {
+        "type": "Project"
       },
       "elsa.http": {
         "type": "Project",
@@ -1694,6 +1709,7 @@
           "Elsa.Expressions.JavaScript": "[4.0.0-dev, )",
           "Elsa.Expressions.JavaScript.Jint": "[4.0.0-dev, )",
           "Elsa.Expressions.JavaScript.Rendering": "[4.0.0-dev, )",
+          "Elsa.ExtensionBuilder.Api": "[4.0.0-dev, )",
           "Elsa.Foundation.DataProtection.EntityFrameworkCore": "[4.0.0-dev, )",
           "Elsa.Foundation.Identity": "[4.0.0-dev, )",
           "Elsa.Foundation.Identity.Api": "[4.0.0-dev, )",

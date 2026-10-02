@@ -10,6 +10,7 @@ namespace Elsa.Persistence.EntityFramework.Tooling;
 /// unknown enumerated value is a usage error, never a silent no-op.
 /// </summary>
 /// <remarks>
+/// Candidate inspection is independently versioned and is not an extension of these persistence-command DTOs.
 /// <para>
 /// Frozen means closed, not unchanging: an additive optional field does not move <see cref="Version"/>. A request field is
 /// sent only to a host build that declares it, as the worker does for <see cref="EfToolingRequest.CapabilitySelection"/>,

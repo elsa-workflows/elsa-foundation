@@ -169,6 +169,35 @@ verdict. The complete boundary and proof requirements are in
 [spec 187](../../../specs/187-effective-persistence-preview/spec.md) and its
 [candidate-inspection contract](../../../specs/187-effective-persistence-preview/contracts/candidate-inspection-v1.md).
 
+### Supplying intended environment values
+
+For an enrolled Workbench build, add `--environment-input ./private-environment.json` to the inspection
+command above. Supply exactly one regular JSON file:
+
+```json
+{"version":1,"entries":[{"key":"ConnectionStrings__Elsa","value":"Data Source=example.db"}]}
+```
+
+The file supplies intended configuration values; the command does not read or change the process
+environment. Its entries apply after appsettings base/environment and shells base/environment.
+`__` becomes `:`, blank string values are allowed, and case/alias collisions are refused. Null/deletion
+entries and the eleven service-specific connection prefixes are unsupported. Ordinary
+`ConnectionStrings__<name>` entries are supported.
+
+Declare public resource and connection labels in the source configuration before supplying private
+values or selecting those references. An overlay-only name cannot become a public target label solely
+by passing syntax validation. If the overlay changes feature selection, inspection refuses; edit the
+authored selection, run `composition accept`, and inspect again with a fresh capture. The command does
+not silently accept that change.
+
+This lane requires its separate host capability and the explicit Workbench enrollment declaration;
+other hosts refuse instead of falling back. The safe result identifies
+`captured-workbench-json-explicit-environment-v1` and `externalInputs: supplied-intended`. That does not
+establish deployment, connectivity or readiness. Private file content, its path and input-derived
+fingerprints are excluded from public output, and the original file remains in place. Omitting the
+option keeps the file-only operation above. See the
+[explicit-input contract](../../../specs/189-explicit-environment-inputs/contracts/environment-input-v1.md).
+
 ## Restoring a host's package set (`--restore`)
 
 Every command reads the package set already on disk and downloads nothing

@@ -35,6 +35,29 @@ internal static class DotnetElsa
     public static string Host(string fixture) =>
         Path.Join(RepoRoot, "tests", "essentials", "Cli", "Fixtures", fixture, "bin", Configuration, "net10.0");
 
+    /// <summary>The actual Workbench build output used by the public candidate-inspection acceptance path.</summary>
+    public static string Workbench()
+    {
+        var directory = Path.Join(RepoRoot, "src", "apps", "Elsa.Workbench", "bin", Configuration, "net10.0");
+        Assert.True(Directory.Exists(directory), $"The actual Workbench output directory is missing: {directory}");
+        foreach (var file in new[] { "Elsa.Workbench.dll", "Elsa.Workbench.deps.json", "Elsa.Workbench.runtimeconfig.json" })
+            Assert.True(File.Exists(Path.Join(directory, file)), $"The actual Workbench output is missing {file}: {directory}");
+        return directory;
+    }
+
+    /// <summary>The actual Foundation Host build output used as an unenrolled-host control.</summary>
+    public static string FoundationHost()
+    {
+        var directory = Path.Join(RepoRoot, "src", "apps", "Elsa.Foundation.Host", "bin", Configuration, "net10.0");
+        Assert.True(Directory.Exists(directory), $"The actual Foundation Host output directory is missing: {directory}");
+        foreach (var file in new[] { "Elsa.Foundation.Host.dll", "Elsa.Foundation.Host.deps.json", "Elsa.Foundation.Host.runtimeconfig.json" })
+            Assert.True(File.Exists(Path.Join(directory, file)), $"The actual Foundation Host output is missing {file}: {directory}");
+        return directory;
+    }
+
+    /// <summary>The checked-in Workbench source files copied into a disposable inspection source directory.</summary>
+    public static string WorkbenchSource() => Path.Join(RepoRoot, "src", "apps", "Elsa.Workbench");
+
     public static CliRun Run(params string[] arguments) => Run(environment: null, arguments);
 
     /// <summary>Runs the tool with extra environment variables, for the inputs an operator supplies that way.</summary>

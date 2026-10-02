@@ -62,6 +62,7 @@
       "src/essentials/Foundation/Identity/OpenIddict/Behavior/Elsa.Foundation.Identity.OpenIddict.Behavior.csproj",
       "src/essentials/Foundation/Identity/OpenIddict/Elsa.Foundation.Identity.OpenIddict.csproj",
       "src/essentials/Foundation/Identity/Persistence/EntityFrameworkCore/Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.csproj",
+      "src/essentials/Git/Elsa.Git.csproj",
       "src/essentials/Http/Core/Elsa.Http.Core.csproj",
       "src/essentials/Http/Elsa.Http.csproj",
       "src/essentials/Http/JavaScript/Elsa.Http.JavaScript.csproj",
@@ -125,6 +126,7 @@
       "src/extensions/Agent/src/Core/Elsa.Agent.Core.csproj",
       "src/extensions/Agent/src/GitHubCopilot/Elsa.Agent.GitHubCopilot.csproj",
       "src/extensions/Agent/src/Workflows/Elsa.Agent.Workflows.csproj",
+      "src/extensions/ExtensionBuilder/src/Api/Elsa.ExtensionBuilder.Api.csproj",
       "tests/essentials/Workbench/Tests/Elsa.Workbench.Tests.csproj"
     ]
   }

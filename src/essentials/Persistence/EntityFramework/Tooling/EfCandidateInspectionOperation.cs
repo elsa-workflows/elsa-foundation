@@ -13,17 +13,17 @@ namespace Elsa.Persistence.EntityFramework.Tooling;
 /// <summary>Inspects one captured composition candidate inside its selected host closure.</summary>
 public sealed class EfCandidateInspectionOperation
 {
-    private const int MaximumRequestBytes = 8 * 1024 * 1024;
-    private const int MaximumFileBytes = 1024 * 1024;
-    private const int MaximumFilesBytes = 4 * 1024 * 1024;
-    private const int MaximumResponseBytes = 4 * 1024 * 1024;
-    private const int MaximumJsonDepth = 64;
-    private const int MaximumSelectionIds = 4096;
-    private const int MaximumRows = 1024;
-    private const int MaximumIdentityLength = 128;
-    private const string Source = "captured-workbench-json-v1";
+    internal const int MaximumRequestBytes = 8 * 1024 * 1024;
+    internal const int MaximumFileBytes = 1024 * 1024;
+    internal const int MaximumFilesBytes = 4 * 1024 * 1024;
+    internal const int MaximumResponseBytes = 4 * 1024 * 1024;
+    internal const int MaximumJsonDepth = 64;
+    internal const int MaximumSelectionIds = 4096;
+    internal const int MaximumRows = 1024;
+    internal const int MaximumIdentityLength = 128;
+    internal const string Source = "captured-workbench-json-v1";
 
-    private static readonly HashSet<string> ResourceRefusalCodes = new(StringComparer.Ordinal)
+    internal static readonly HashSet<string> ResourceRefusalCodes = new(StringComparer.Ordinal)
     {
         "resource-selection-invalid",
         "resource-not-found",
@@ -35,7 +35,7 @@ public sealed class EfCandidateInspectionOperation
         "resource-context-conflict"
     };
 
-    private static readonly HashSet<string> UnresolvedCodes = new(StringComparer.Ordinal)
+    internal static readonly HashSet<string> UnresolvedCodes = new(StringComparer.Ordinal)
     {
         "legacy-target-unprojected",
         "exact-file-provenance-unavailable",
@@ -70,7 +70,7 @@ public sealed class EfCandidateInspectionOperation
                     return EfToolingExitCode.Refusal;
                 if (length > MaximumRequestBytes)
                 {
-                    await WriteErrorAsync(response, correlation, "candidate-request-too-large", null, null, null, cancellationToken);
+                    await WriteErrorAsync(response, correlation, "candidate-request-too-large", null, null, cancellationToken);
                     return EfToolingExitCode.Refusal;
                 }
 
@@ -81,7 +81,7 @@ public sealed class EfCandidateInspectionOperation
                 catch (CandidateInputRefusal refusal)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    await WriteErrorAsync(response, correlation, refusal.Code, null, null, null, cancellationToken);
+                    await WriteErrorAsync(response, correlation, refusal.Code, null, null, cancellationToken);
                     return EfToolingExitCode.Refusal;
                 }
             }
@@ -96,7 +96,7 @@ public sealed class EfCandidateInspectionOperation
                 }
                 catch (CandidateInputRefusal refusal)
                 {
-                    await WriteErrorAsync(response, candidate.Correlation, refusal.Code, null, null, null, cancellationToken);
+                    await WriteErrorAsync(response, candidate.Correlation, refusal.Code, null, null, cancellationToken);
                     return EfToolingExitCode.Refusal;
                 }
 
@@ -108,13 +108,13 @@ public sealed class EfCandidateInspectionOperation
                     if (result.Conflict is { } conflict)
                     {
                         await WriteErrorAsync(response, candidate.Correlation, "candidate-selection-conflict",
-                            conflict.Reason, conflict.Feature, null, cancellationToken);
+                            conflict.Reason, conflict.Feature, cancellationToken);
                         return EfToolingExitCode.Refusal;
                     }
 
                     if (result.RefusalCode is { } refusalCode)
                     {
-                        await WriteErrorAsync(response, candidate.Correlation, refusalCode, null, null, null, cancellationToken);
+                        await WriteErrorAsync(response, candidate.Correlation, refusalCode, null, null, cancellationToken);
                         return EfToolingExitCode.Refusal;
                     }
 
@@ -157,6 +157,23 @@ public sealed class EfCandidateInspectionOperation
             throw HostUnavailable();
         var hostAssembly = matchingHostAssemblies[0];
 
+        return InspectComposition(candidate.Shell, candidate.Environment, candidate.AcceptedFeatureIds,
+            candidate.RemovedFeatureIds, configuration, hostAssembly, closure,
+            _ => SafeIdentityOrNull, cancellationToken);
+    }
+
+    /// <summary>Runs the shared host composition, reconciliation and EF preparation core for either candidate lane.</summary>
+    internal static InspectionResult InspectComposition(
+        string shell,
+        string environment,
+        IReadOnlyList<string> acceptedFeatureIds,
+        IReadOnlyList<string> removedFeatureIds,
+        IConfigurationRoot configuration,
+        Assembly hostAssembly,
+        Assembly[] closure,
+        Func<IReadOnlyDictionary<string, ShellFeatureDescriptor>, Func<string, string?>?>? publicFeatureFactory,
+        CancellationToken cancellationToken)
+    {
         IEfToolingShellDefaults defaults;
         IReadOnlyDictionary<string, ShellFeatureDescriptor> descriptors;
         ShellSettings settings;
@@ -167,13 +184,11 @@ public sealed class EfCandidateInspectionOperation
             defaults = EfToolingShellDefaultsDeclaration.Construct(composerType);
 
             var discovered = FeatureDiscovery.DiscoverFeatures(closure).ToArray();
-            if (discovered.Any(feature => !IsSafeIdentity(feature.Id)))
-                throw HostUnavailable();
-            if (discovered.GroupBy(feature => feature.Id, StringComparer.OrdinalIgnoreCase).Any(group => group.Count() != 1))
+            if (discovered.Any(feature => !IsSafeIdentity(feature.Id)) ||
+                discovered.GroupBy(feature => feature.Id, StringComparer.OrdinalIgnoreCase).Any(group => group.Count() != 1))
                 throw HostUnavailable();
             descriptors = discovered.ToDictionary(feature => feature.Id, StringComparer.OrdinalIgnoreCase);
-
-            settings = EfToolingConfigurationContext.ComposeShell(defaults, configuration, candidate.Shell);
+            settings = EfToolingConfigurationContext.ComposeShell(defaults, configuration, shell);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -202,7 +217,8 @@ public sealed class EfCandidateInspectionOperation
             return InspectionResult.Conflicted(new SelectionConflict("unavailable", null));
         }
 
-        var conflict = Reconcile(candidate, requested, effective, disabled, descriptors);
+        var conflict = Reconcile(acceptedFeatureIds, removedFeatureIds, requested, effective, disabled, descriptors,
+            publicFeatureFactory?.Invoke(descriptors));
         if (conflict is not null)
             return InspectionResult.Conflicted(conflict);
 
@@ -236,7 +252,8 @@ public sealed class EfCandidateInspectionOperation
 
         try
         {
-            return InspectionResult.Resolved(BuildResolution(candidate, settings, prepared));
+            return InspectionResult.Resolved(BuildResolution(shell, environment,
+                acceptedFeatureIds, settings, prepared));
         }
         catch (CandidateInputRefusal refusal) when (ResourceRefusalCodes.Contains(refusal.Code))
         {
@@ -244,20 +261,23 @@ public sealed class EfCandidateInspectionOperation
         }
     }
 
-    private static SelectionConflict? Reconcile(
-        CandidateRequest candidate,
+    internal static SelectionConflict? Reconcile(
+        IReadOnlyList<string> accepted,
+        IReadOnlyList<string> removed,
         IReadOnlyList<string> requested,
         IReadOnlyList<string> effective,
         IReadOnlyList<string> disabled,
-        IReadOnlyDictionary<string, ShellFeatureDescriptor> descriptors)
+        IReadOnlyDictionary<string, ShellFeatureDescriptor> descriptors,
+        Func<string, string?>? publicFeature = null)
     {
-        foreach (var id in candidate.AcceptedFeatureIds.Concat(candidate.RemovedFeatureIds).Concat(disabled))
+        publicFeature ??= SafeIdentityOrNull;
+        foreach (var id in accepted.Concat(removed).Concat(disabled))
         {
             if (!descriptors.ContainsKey(id))
-                return new SelectionConflict("unknown", SafeIdentityOrNull(id));
+                return new SelectionConflict("unknown", publicFeature(id));
             if (!string.Equals(descriptors.Keys.First(key => StringComparer.OrdinalIgnoreCase.Equals(key, id)), id,
                     StringComparison.Ordinal))
-                return new SelectionConflict("case-collision", SafeIdentityOrNull(id));
+                return new SelectionConflict("case-collision", publicFeature(id));
         }
 
         if (requested.Any(id => !IsSafeIdentity(id)) || effective.Any(id => !IsSafeIdentity(id)) || disabled.Any(id => !IsSafeIdentity(id)))
@@ -265,50 +285,54 @@ public sealed class EfCandidateInspectionOperation
 
         var unavailableRequested = requested.FirstOrDefault(id => !descriptors.ContainsKey(id));
         if (unavailableRequested is not null)
-            return new SelectionConflict("unknown", SafeIdentityOrNull(unavailableRequested));
+            return new SelectionConflict("unknown", publicFeature(unavailableRequested));
 
         var requestedCollision = FindCaseCollision(requested);
         var effectiveCollision = FindCaseCollision(effective);
         var disabledCollision = FindCaseCollision(disabled);
-        if (requestedCollision is not null || effectiveCollision is not null || disabledCollision is not null)
-            return new SelectionConflict("case-collision", SafeIdentityOrNull(requestedCollision ?? effectiveCollision ?? disabledCollision));
+        var collision = requestedCollision ?? effectiveCollision ?? disabledCollision;
+        if (collision is not null)
+            return new SelectionConflict("case-collision", publicFeature(collision));
 
-        var removedActive = candidate.RemovedFeatureIds.Intersect(requested.Concat(effective), StringComparer.Ordinal).FirstOrDefault();
+        var removedActive = removed.Intersect(requested.Concat(effective), StringComparer.Ordinal).FirstOrDefault();
         if (removedActive is not null)
-            return new SelectionConflict("required-disabled", removedActive);
+            return new SelectionConflict("required-disabled", publicFeature(removedActive));
 
         var disabledActive = disabled.Intersect(effective, StringComparer.Ordinal).FirstOrDefault();
         if (disabledActive is not null)
-            return new SelectionConflict("required-disabled", disabledActive);
+            return new SelectionConflict("required-disabled", publicFeature(disabledActive));
 
-        foreach (var removed in candidate.RemovedFeatureIds)
-            if (!disabled.Contains(removed, StringComparer.Ordinal))
-                return new SelectionConflict("required-disabled", removed);
+        foreach (var removedId in removed)
+            if (!disabled.Contains(removedId, StringComparer.Ordinal))
+                return new SelectionConflict("required-disabled", publicFeature(removedId));
 
-        var requestedMismatch = CompareIds(candidate.AcceptedFeatureIds, requested);
+        var requestedMismatch = CompareIds(accepted, requested, publicFeature);
         if (requestedMismatch is { } requestedConflict)
             return requestedConflict;
-        var effectiveMismatch = CompareIds(candidate.AcceptedFeatureIds, effective);
+        var effectiveMismatch = CompareIds(accepted, effective, publicFeature);
         if (effectiveMismatch is { } effectiveConflict)
             return effectiveConflict with { Reason = effectiveConflict.Reason == "requested-extra" ? "expanded-extra" : effectiveConflict.Reason };
 
         return null;
     }
 
-    private static SelectionConflict? CompareIds(IReadOnlyList<string> accepted, IReadOnlyList<string> observed)
+    private static SelectionConflict? CompareIds(
+        IReadOnlyList<string> accepted,
+        IReadOnlyList<string> observed,
+        Func<string, string?> publicFeature)
     {
         var acceptedSet = accepted.ToHashSet(StringComparer.Ordinal);
         var observedSet = observed.ToHashSet(StringComparer.Ordinal);
         var caseAlias = accepted.FirstOrDefault(id => observed.Any(value =>
             StringComparer.OrdinalIgnoreCase.Equals(id, value) && !StringComparer.Ordinal.Equals(id, value)));
         if (caseAlias is not null)
-            return new SelectionConflict("case-collision", SafeIdentityOrNull(caseAlias));
+            return new SelectionConflict("case-collision", publicFeature(caseAlias));
 
         var extra = observed.Where(id => !acceptedSet.Contains(id)).Order(StringComparer.Ordinal).FirstOrDefault();
         if (extra is not null)
-            return new SelectionConflict("requested-extra", SafeIdentityOrNull(extra));
+            return new SelectionConflict("requested-extra", publicFeature(extra));
         var missing = accepted.Where(id => !observedSet.Contains(id)).Order(StringComparer.Ordinal).FirstOrDefault();
-        return missing is null ? null : new SelectionConflict("requested-missing", SafeIdentityOrNull(missing));
+        return missing is null ? null : new SelectionConflict("requested-missing", publicFeature(missing));
     }
 
     private static CandidateRequest ParseRequest(JsonElement root, Correlation correlation)
@@ -392,18 +416,23 @@ public sealed class EfCandidateInspectionOperation
         return new CandidateRequest(correlation, hostName, hostDirectory, shell, environment, accepted, removed, decoded);
     }
 
-    private static ConfigurationRoot BuildConfiguration(CandidateRequest candidate)
+    private static ConfigurationRoot BuildConfiguration(CandidateRequest candidate) =>
+        BuildConfiguration(candidate.Files, candidate.Environment);
+
+    internal static ConfigurationRoot BuildConfiguration(
+        IReadOnlyDictionary<string, byte[]> files,
+        string environment)
     {
         var builder = new ConfigurationBuilder();
         var sourceNames = new[]
         {
             "appsettings.json",
-            $"appsettings.{candidate.Environment}.json",
+            $"appsettings.{environment}.json",
             "shells.json",
-            $"shells.{candidate.Environment}.json"
+            $"shells.{environment}.json"
         };
-        var streams = sourceNames.Where(candidate.Files.ContainsKey)
-            .Select(name => new MemoryStream(candidate.Files[name], writable: false)).ToArray();
+        var streams = sourceNames.Where(files.ContainsKey)
+            .Select(name => new MemoryStream(files[name], writable: false)).ToArray();
         try
         {
             foreach (var stream in streams)
@@ -421,8 +450,53 @@ public sealed class EfCandidateInspectionOperation
         }
     }
 
-    private static CandidateResolution BuildResolution(
-        CandidateRequest candidate,
+    internal static ConfigurationRoot BuildConfiguration(
+        IConfigurationRoot captured,
+        IReadOnlyDictionary<string, string> explicitOverlay)
+    {
+        var builder = new ConfigurationBuilder()
+            .AddConfiguration(captured)
+            .AddInMemoryCollection(explicitOverlay.Select(entry =>
+                new KeyValuePair<string, string?>(entry.Key, entry.Value)));
+        return (ConfigurationRoot)builder.Build();
+    }
+
+    internal static CapturedPublicIdentities ReadCapturedPublicIdentities(IConfigurationRoot captured)
+    {
+        var resources = captured.GetSection("Elsa:Persistence:Resources").GetChildren()
+            .Select(section => section.Key)
+            .Where(IsLogicalIdentity)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var connections = captured.GetSection("ConnectionStrings").GetChildren()
+            .Select(section => section.Key)
+            .Where(IsLogicalIdentity)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var resource in resources)
+        {
+            var connection = captured[$"Elsa:Persistence:Resources:{resource}:ConnectionName"];
+            if (IsLogicalIdentity(connection))
+                connections.Add(connection!);
+        }
+
+        return new CapturedPublicIdentities(resources, connections);
+    }
+
+    internal static bool HasOnlyCapturedPublicIdentities(
+        CandidateResolution resolution,
+        CapturedPublicIdentities publicIdentities)
+    {
+        return resolution.Participants.All(participant =>
+            participant.Resource is null ||
+            publicIdentities.Resources.Contains(participant.Resource) &&
+            participant.ConnectionReference is not null &&
+            publicIdentities.Connections.Contains(participant.ConnectionReference));
+    }
+
+    internal static CandidateResolution BuildResolution(
+        string shell,
+        string environment,
+        IReadOnlyList<string> acceptedFeatureIds,
         ShellSettings settings,
         EfPersistencePreparationResult prepared)
     {
@@ -480,16 +554,16 @@ public sealed class EfCandidateInspectionOperation
         var requested = settings.EnabledFeatures.Order(StringComparer.Ordinal).ToArray();
         var effective = prepared.ActiveFeatureIds.Order(StringComparer.Ordinal).ToArray();
         var disabled = settings.DisabledFeatures.Order(StringComparer.Ordinal).ToArray();
-        if (candidate.AcceptedFeatureIds.Length > MaximumSelectionIds || requested.Length > MaximumSelectionIds ||
+        if (acceptedFeatureIds.Count > MaximumSelectionIds || requested.Length > MaximumSelectionIds ||
             effective.Length > MaximumSelectionIds || disabled.Length > MaximumSelectionIds)
             throw HostUnavailable();
 
         return new CandidateResolution(
-            candidate.Shell,
-            candidate.Environment,
+            shell,
+            environment,
             partial ? "partial" : "resolved",
             prepared.HasApplicableResource ? "checked" : "not-applicable",
-            candidate.AcceptedFeatureIds,
+            acceptedFeatureIds.ToArray(),
             requested,
             effective,
             disabled,
@@ -498,20 +572,28 @@ public sealed class EfCandidateInspectionOperation
             orderedUnresolved);
     }
 
-    private static byte[] WriteResolution(Correlation correlation, CandidateResolution resolution)
+    private static byte[] WriteResolution(Correlation correlation, CandidateResolution resolution) =>
+        WriteResolution(correlation.InvocationId, correlation.CaptureId, resolution, Source, "unverified");
+
+    internal static byte[] WriteResolution(
+        string invocationId,
+        string captureId,
+        CandidateResolution resolution,
+        string source,
+        string externalInputs)
     {
         using var output = new MemoryStream();
         using (var writer = new Utf8JsonWriter(output))
         {
             writer.WriteStartObject();
             writer.WriteNumber("version", EfCandidateInspectionContract.Version);
-            writer.WriteString("invocationId", correlation.InvocationId);
-            writer.WriteString("captureId", correlation.CaptureId);
+            writer.WriteString("invocationId", invocationId);
+            writer.WriteString("captureId", captureId);
             writer.WriteString("status", "ok");
             writer.WriteNumber("exitCode", EfToolingExitCode.Success);
             writer.WritePropertyName("configurationResolution");
             writer.WriteStartObject();
-            writer.WriteString("source", Source);
+            writer.WriteString("source", source);
             writer.WriteString("shell", resolution.Shell);
             writer.WriteString("environment", resolution.Environment);
             writer.WriteString("resolution", resolution.Resolution);
@@ -531,7 +613,7 @@ public sealed class EfCandidateInspectionOperation
             writer.WriteString("schemaReadiness", "unverified");
             writer.WriteString("migrationReadiness", "unverified");
             writer.WriteString("activation", "unobserved");
-            writer.WriteString("externalInputs", "unverified");
+            writer.WriteString("externalInputs", externalInputs);
             writer.WritePropertyName("participants");
             writer.WriteStartArray();
             foreach (var row in resolution.Participants)
@@ -562,7 +644,6 @@ public sealed class EfCandidateInspectionOperation
         string code,
         string? reason,
         string? feature,
-        string? resource,
         CancellationToken cancellationToken)
     {
         using var output = new MemoryStream();
@@ -579,7 +660,6 @@ public sealed class EfCandidateInspectionOperation
             writer.WriteString("code", code);
             if (reason is not null) writer.WriteString("reason", reason);
             if (feature is not null && IsSafeIdentity(feature)) writer.WriteString("feature", feature);
-            if (resource is not null && IsLogicalIdentity(resource)) writer.WriteString("resource", resource);
             writer.WriteEndObject();
             writer.WriteEndObject();
         }
@@ -758,13 +838,13 @@ public sealed class EfCandidateInspectionOperation
     private static bool IsToken(string value) => value.Length == 32 && value.All(character =>
         character is >= '0' and <= '9' or >= 'a' and <= 'f');
 
-    private static bool IsSafeIdentity(string? value) =>
+    internal static bool IsSafeIdentity(string? value) =>
         value is { Length: > 0 and <= MaximumIdentityLength } && value.All(character =>
             char.IsAsciiLetterOrDigit(character) || character is '.' or '_' or '-' or '/' or '+');
 
-    private static string? SafeIdentityOrNull(string? value) => IsSafeIdentity(value) ? value : null;
+    internal static string? SafeIdentityOrNull(string? value) => IsSafeIdentity(value) ? value : null;
 
-    private static bool IsLogicalIdentity(string? value) =>
+    internal static bool IsLogicalIdentity(string? value) =>
         value is { Length: > 0 and <= MaximumIdentityLength } &&
         (char.IsAsciiLetter(value[0]) || value[0] == '_') &&
         !value.Equals("true", StringComparison.OrdinalIgnoreCase) &&
@@ -772,12 +852,12 @@ public sealed class EfCandidateInspectionOperation
         !value.Equals("null", StringComparison.OrdinalIgnoreCase) &&
         value.All(character => char.IsAsciiLetterOrDigit(character) || character is '_' or '-' or '.');
 
-    private static bool IsProvider(string? value) => value is "Sqlite" or "SqlServer" or "PostgreSql" or "MySql";
+    internal static bool IsProvider(string? value) => value is "Sqlite" or "SqlServer" or "PostgreSql" or "MySql";
 
-    private static string? Scope(string? scope) => scope is "root" or "shell-composed" or "shell-authored" or "feature"
+    internal static string? Scope(string? scope) => scope is "root" or "shell-composed" or "shell-authored" or "feature"
         ? scope : "unavailable";
 
-    private static string? FindCaseCollision(IReadOnlyList<string> values)
+    internal static string? FindCaseCollision(IReadOnlyList<string> values)
     {
         var seen = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var value in values)
@@ -789,7 +869,7 @@ public sealed class EfCandidateInspectionOperation
         return null;
     }
 
-    private static void WriteIds(Utf8JsonWriter writer, string name, IEnumerable<string> values)
+    internal static void WriteIds(Utf8JsonWriter writer, string name, IEnumerable<string> values)
     {
         writer.WritePropertyName(name);
         writer.WriteStartArray();
@@ -804,12 +884,12 @@ public sealed class EfCandidateInspectionOperation
             CryptographicOperations.ZeroMemory(buffer);
     }
 
-    private static EfToolingRefusal HostUnavailable() =>
+    internal static EfToolingRefusal HostUnavailable() =>
         EfToolingRefusal.Resolution("candidate-host-unavailable", "Candidate inspection could not be completed by this host.");
 
     private sealed record Correlation(string InvocationId, string CaptureId);
-    private sealed record SelectionConflict(string Reason, string? Feature);
-    private sealed record ParticipantRow(
+    internal sealed record SelectionConflict(string Reason, string? Feature);
+    internal sealed record ParticipantRow(
         string Feature,
         string Module,
         string Selection,
@@ -819,7 +899,12 @@ public sealed class EfCandidateInspectionOperation
         string? SelectorScope,
         string? ResourceScope,
         string ExactFileProvenance);
-    private sealed record CandidateResolution(
+
+    internal sealed record CapturedPublicIdentities(
+        IReadOnlySet<string> Resources,
+        IReadOnlySet<string> Connections);
+
+    internal sealed record CandidateResolution(
         string Shell,
         string Environment,
         string Resolution,
@@ -835,7 +920,7 @@ public sealed class EfCandidateInspectionOperation
         public static CandidateResolution Refused(string code) => throw new CandidateInputRefusal(code);
     }
 
-    private sealed record InspectionResult(CandidateResolution? Resolution, string? RefusalCode, SelectionConflict? Conflict)
+    internal sealed record InspectionResult(CandidateResolution? Resolution, string? RefusalCode, SelectionConflict? Conflict)
     {
         public static InspectionResult Resolved(CandidateResolution value) => new(value, null, null);
         public static InspectionResult Refused(string code) => new(null, code, null);
@@ -863,7 +948,7 @@ public sealed class EfCandidateInspectionOperation
         public void Dispose() => Clear(Files.Values);
     }
 
-    private sealed class CandidateInputRefusal(string code) : Exception
+    internal sealed class CandidateInputRefusal(string code) : Exception
     {
         public string Code { get; } = code;
         public static CandidateInputRefusal RequestInvalid() => new("candidate-request-invalid");

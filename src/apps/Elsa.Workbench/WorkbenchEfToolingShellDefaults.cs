@@ -5,6 +5,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.Configuration;
 
 [assembly: EfToolingShellDefaults(typeof(Elsa.Workbench.WorkbenchEfToolingShellDefaults))]
+[assembly: EfCandidateEnvironmentInputs(1, "workbench-json-explicit-environment-v1")]
 
 namespace Elsa.Workbench;
 
