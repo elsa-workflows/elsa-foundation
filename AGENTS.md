@@ -259,5 +259,5 @@ New work should move toward this rule:
 <!-- SPECKIT START -->
 For additional context about technologies, project structure, shell commands, contracts, and
 validation scenarios for the active work unit, read
-`specs/189-explicit-environment-inputs/plan.md`.
+`specs/190-worker-oidc-normalization/plan.md`.
 <!-- SPECKIT END -->

@@ -1,0 +1,75 @@
+# Research decisions: Worker external bearer normalization
+
+Source baseline: fetched main `0bb61d9990c23d426e92d2ea0ac0ea13fd71b828`. This is source/design evidence, not executed adapter acceptance.
+
+## R1 — Keep the existing OIDC owner and opt in through settings
+
+**Decision**: Add `NormalizeBearerClaims=false` and `Audience` to existing OIDC options/feature, expose existing `ProviderId` and `TenantId` in feature configuration, and retain the same package/handler. `Audience` absent uses legacy `ClientId`; supplied blank refuses in opt-in mode. Only `ClientId` controls interactive-handler registration.
+
+**Rationale**: [OIDC registration](../../src/essentials/Foundation/Identity/Oidc/Extensions/OidcAuthenticationServiceCollectionExtensions.cs) already captures the configure delegate to register named handlers; the feature passes bound settings through that delegate. [Current bearer options](../../src/essentials/Foundation/Identity/Oidc/ConfigureOidcOptions.cs) couple Audience to ClientId. A default-false setting offers declarative and C# parity without a new feature hierarchy or project.
+
+**Alternatives**: C#-only adapter would exclude the builder; a new identity system duplicates existing seams; adding an audience while using it as the interactive-registration trigger retains the current Worker fault.
+
+## R2 — Fixed host namespace, durable owned mapping rules
+
+**Decision**: Capture configured ProviderId/TenantId, load `IClaimMappingStore.ListForProviderAsync` per validated request, filter incoming internal claims, then call `IClaimsNormalizer` with a distinct adapter-owned normalized authentication type. Namespace changes never come from claims. Preserve current normalizer behavior for other callers.
+
+**Rationale**: [Normalizer/evaluator](../../src/essentials/Foundation/Identity/Authorization/AuthorizationServices.cs) supports provider/tenant rule matching and normalized claim authorization without user lookup. Its shared normalizer evaluates rules before filtering internal claims, so the OIDC boundary must filter its input first. [NormalizedPrincipalValidator](../../src/essentials/Foundation/Identity/Authorization/NormalizedPrincipalValidator.cs) requires exactly one authenticated trusted-type identity with exactly one marker; merely adding the scheme to trusted types is insufficient.
+
+**Alternatives**: Reuse the ASP.NET Identity principal factory would provision/link users; derive namespace from JWT claims would let callers choose authority; changing the shared normalizer broadens compatibility scope. Dynamic tenancy remains deferred until trusted context sourcing has its own contract.
+
+## R3 — Guard the complete bearer event boundary
+
+**Decision**: Install an owned scoped `JwtBearerEvents` type in opt-in mode, capture ordinary existing callback delegates before installation, and validate final named-options ownership. Reject foreign event types/subclasses rather than guessing how to compose them. Preserve earlier Fail/NoResult; reject a successful short circuit from MessageReceived, AuthenticationFailed or a prior TokenValidated callback. Call ordinary token-validated callbacks first, then filter/map/validate as the final principal-changing operation. Preserve existing token extraction but require real validation before mapping.
+
+**Rationale**: The official [.NET10 JwtBearerHandler](https://github.com/dotnet/aspnetcore/blob/v10.0.10/src/Security/Authentication/JwtBearer/src/JwtBearerHandler.cs) returns non-null event results from MessageReceived before validation, TokenValidated after validation and AuthenticationFailed after failure. A lone OnTokenValidated wrapper cannot protect every success route. [JwtBearerEvents](https://github.com/dotnet/aspnetcore/blob/v10.0.10/src/Security/Authentication/JwtBearer/src/JwtBearerEvents.cs) provides virtual boundaries for an owned adapter.
+
+**Alternatives**: Silent callback replacement loses existing refusal; accepting all EventsType replacements allows bypass; general decorator discovery invents support for unreviewed custom handlers. Ordinary extraction/validation/failure callbacks may be composed under the explicit guarded contract. Challenge/Forbidden response callbacks are unsupported in this first opt-in layout and activation rejects custom delegates; the adapter owns safe401/403. Host-provided collaborators remain trusted host code; this is not a sandbox against arbitrary host mutation.
+
+## R4 — Validate final registration instead of trusting declaration order
+
+**Decision**: The existing configure-delegate path explicitly selects opt-in registration and the scheme snapshot. Validate final OIDC/JWT named options and actual handler/event type before serving. Late options that enable normalization without its adapter, change its enrolled scheme or replace its guarded event type refuse. Namespace/audience configuration must be frozen for an activated host; reconfiguration requires fresh activation. Do not silently enroll another scheme on option reload.
+
+**Rationale**: Existing OIDC registration makes decisions before later options resolution. Enrollment detached from the guarded handler could trust an unnormalized principal. The output uses `Elsa.Foundation.Identity.Oidc.Bearer.Normalized`, distinct from the raw token identity type; the JWT scheme still binds the adapter to the actual named handler. Raw identity type is governed by token-validation parameters/handler behavior, not assumed equal to the scheme name. Repeated opt-in registration is explicitly refused, not silently deduplicated or replaced. Final options validation plus host activation verification makes that mismatch explicit. Existing FoundationIdentityAbstractionsFeature owns shell authentication middleware; its selected shell must resolve the actual adapter/store. DevelopmentOrDemoGuard demonstrates the existing dual hosted-startup/IShellInitializer gate pattern, which is preferable to assuming root options validation runs for shells.
+
+The rule store already has explicit replacement guards. IClaimsNormalizer is unmarked and registered with TryAddScoped today; opt-in activation must separately require exactly one normalizer descriptor, while consuming rather than replacing it.
+
+**Alternatives**: Assume registration order is safe; broaden trust to all JWT schemes; introduce a new multi-provider options system. All add uncertainty or weaken the reviewed trust boundary.
+
+## R5 — Preserve failure and cancellation ownership
+
+**Decision**: Bad trust configuration refuses activation. Store/normalizer or malformed-result failures use a fixed authentication failure, no raw exception, and no successful ticket. RequestAborted cancellation is propagated and rechecked at await/publication boundaries; the owned AuthenticationFailed event must not suppress observed cancellation or turn it into success. Evaluator/resource exceptions retain Spec151 FR-024 propagation, while ordinary denial returns403. Disable detailed challenge error descriptions for the opt-in lane.
+
+**Rationale**: Existing [PermissionAuthorizationService](../../src/essentials/Foundation/Identity/Authorization/AuthorizationServices.cs) links request cancellation and propagates operational errors. The stock bearer handler invokes AuthenticationFailed after a thrown exception; real-handler cancellation tests must prove the adapter does not swallow it. The bridge can control its own fixed failures/evidence, not make a blanket assertion about arbitrary host logging.
+
+## R6 — Preserve capability metadata and store ownership
+
+**Decision**: Keep ExternalOidcDefault TokenRefreshBoundary. Load current local rules per request, prove same-token rule removal, and report those observations separately. First host proof explicitly configures the complete IAM EF authority backend, provisions its schema, and uses named Runtime SQLite persistence; no automatic IAM enrollment or bearer user writes.
+
+**Rationale**: [OIDC provider module](../../src/essentials/Foundation/Identity/Oidc/OidcAuthenticationProviderModule.cs) and [effective capabilities resolver](../../src/essentials/Foundation/Identity/Ownership/DefaultEffectiveCapabilitiesResolver.cs) govern the upstream-token boundary. [IAM feature](../../src/essentials/Foundation/Identity/Persistence/EntityFrameworkCore/IdentityIamEntityFrameworkCoreFeature.cs) does not carry shared-resource participant enrollment; [EfClaimMappingStore](../../src/essentials/Foundation/Identity/Persistence/EntityFrameworkCore/Stores/EfClaimMappingStore.cs) is the existing durable rule backend. Claims evaluation does not require provisioning.
+
+## Deferred outcomes and triggers
+
+- Dynamic tenancy: revisit before more than one static tenant is required.
+- Multi-provider/scheme arbitration: revisit before a host chooses more than one normalized external scheme.
+- Interactive normalization and IdP interoperability: separate real interactive/deployed-provider journeys.
+- Worker profile publication: only after adapter actor proof and exact profile membership/prerequisite review.
+- Builder human study, unknown-setting export and Authoring API scope: existing program gates; this leaf cannot answer them.
+
+## R7 — Host-owned static persistence scope
+
+**Decision**: The host initializes the actual shell request persistence context with an ordinary scope equal to configured TenantId, before default registrations/store resolution. Existing `AddPersistenceCore(defaultScope: tenant)` or an equivalent fixed host-owned accessor provides it. The adapter checks the existing Runtime.Core accessor at activation and before mapping lookup; absent/conflicting/global/privileged/across-scope contexts refuse before store invocation. It never rebinds or overwrites existing context. OIDC consumes these Core contracts, not EF implementation types.
+
+**Rationale**: [EfClaimMappingStore](../../src/essentials/Foundation/Identity/Persistence/EntityFrameworkCore/Stores/EfClaimMappingStore.cs) calls Prepare/EnsureTenant before reading. [IdentityEntityFrameworkAccessGuard](../../src/essentials/Foundation/Identity/Persistence/EntityFrameworkCore/IdentityEntityFrameworkAccessGuard.cs) requires ambient scope agreement, while [AddPersistenceCore](../../src/essentials/Workflows/Runtime/Core/Extensions/PersistenceCoreServiceCollectionExtensions.cs) defaults to `default`. Merely passing `tenant-a` to ListForProviderAsync would fail with untouched defaults. [PersistenceAccessContext](../../src/essentials/Workflows/Runtime/Core/Models/PersistenceAccessContext.cs) distinguishes ordinary, privileged/global/across-scope access. Test a nondefault tenant and conflicting context with real IAM queries; do not conceal the gap with tenant=`default`.
+
+**Alternatives**: Automatically overwrite/rebind context could replace an authoritative partition and is rejected. Inferring it from token claims crosses the authority boundary. A new tenant resolver or generic persistence abstraction is unnecessary for this fixed-host layout. A future dynamic host requires a separate trusted context contract.
+
+**Dependency decision**: Keep the existing Runtime.Core persistence-access contracts as the source of truth. Framework §2.1 permits feature implementations to consume another domain's Core; Runtime.Core references other Core packages and lightweight DI/logging abstractions, not an EF provider or runtime implementation. This adds a package dependency (also for legacy consumers), but does not activate Runtime features or change their selection. A host callback or duplicate scope interface would hide the actual selected store context or create another agreement to keep synchronized. Extracting these shared persistence contracts into a narrower owner remains a separate architectural unit if that dependency envelope becomes unacceptable; this bounded adapter does not move public types or introduce a second scope model.
+
+## R8 — Keep the mandatory fresh-process proof
+
+**Decision**: Allocate one non-test, non-packable WorkerOidcHost fixture executable under the existing Runtime EF area; keep assertions in its existing Tests project. The parent owns a stable local issuer/key/token and two sequential child lifetimes. The child composes real Kestrel/declarative shell authentication, explicit IAM and named Runtime databases, and initializes the nondefault static scope before AddCShells. Reopen the same files after verified first-process exit, then query persisted rules/workflow state and reassert the same-token revoked grant through the second process. Private fixture controls may set up and inspect actual activated stores; actor requests use production routes.
+
+**Source evidence**: [WorkbenchProcess](../../tests/essentials/Workbench/Tests/WorkbenchProcess.cs) launches a real HTTP child and owns its HttpClient/lifetime, but hardcodes Workbench, whose root does not initialize the required nondefault persistence scope. [FoundationHostProcess](../../tests/essentials/Cluster/EntityFrameworkCore/Tests/FoundationHostProcess.cs) offers narrower management requests/feed-loaded modules, without the combined root-scope/arbitrary bearer HTTP controls. The [ResourceAwareLiveHost project](../../tests/essentials/Cli/Fixtures/ResourceAwareLiveHost/Elsa.Cli.Fixtures.ResourceAwareLiveHost.csproj) and [CLI Tests build-only references](../../tests/essentials/Cli/Tests/Elsa.Cli.Tests.csproj) demonstrate fixture executables built without adding a test suite. Tests/Directory.Build.props deliberately leaves IsTestProject unset because support executables are not suites. Elsa.Testing has no generic child-process host helper covering this layout. Reuse suitable setup/lifetime patterns rather than duplicate whole harnesses. This bounded source inspection has not executed the new actor.
+
+**Alternatives**: Same-process service-provider/TestServer recreation cannot reveal process-static state and would weaken FR-011. Adding a production Workbench scope-setting seam solely for this test broadens product scope. A new test project/provider matrix/CI job is unnecessary; a non-test executable is the smallest faithful host allocation. Keep sensitive input out of argv and retained output, expose only bounded safe receipts, and terminate/dispose owned child processes and files deterministically.

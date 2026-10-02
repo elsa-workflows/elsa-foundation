@@ -18,6 +18,8 @@ This evolves the existing Feature Composition Readiness bucket in place. Its cla
 
 The [program issue](https://github.com/elsa-workflows/elsa-foundation/issues/1959) captures the initial design investigation. Its expression-count improvements are synthetic evidence, not proof of deployed layouts or usability. The [persistence-boundary report](../reports/runtime-composition/persistence-boundaries.md) grounds the next delivery slice in current module ownership and transaction constraints. The [effective-configuration report](../reports/runtime-composition/effective-configuration.md) defines the proposed runtime/tooling seam and the remaining specification decisions.
 
+The Worker identity follow-up [#2304](https://github.com/elsa-workflows/elsa-foundation/issues/2304) owns [Spec190](../../specs/190-worker-oidc-normalization/spec.md), [plan](../../specs/190-worker-oidc-normalization/plan.md) and [acceptance matrix](../../specs/190-worker-oidc-normalization/contracts/acceptance-proof-matrix.md). It specifies explicit opt-in external bearer normalization for one static host provider/tenant using the existing OIDC handler and owned durable IAM mappings. A distinct normalized identity type, guarded event success paths, bearer-only audience configuration and unchanged legacy/default behavior require actual implementation proof. No adapter delivery or Worker profile publication is claimed by the specification. The issue and Project51 own current scheduling and publication state.
+
 ## In Scope
 
 - Shared persistence defaults and explicit feature bindings for reviewed consumer/layout sets.
