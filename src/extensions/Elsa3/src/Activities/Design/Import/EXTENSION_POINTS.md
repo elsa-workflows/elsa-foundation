@@ -35,11 +35,16 @@ applied only as a reviewed dependency-closed mutation; Runtime never consumes th
 ### `IReusableActivityImportOperationStore`
 
 - **Kind:** scoped durable operation store.
-- **Purpose:** stores immutable expiring collection handles and reads completed apply receipts.
+- **Purpose:** stores immutable expiring collection handles, deletes them, and reads completed apply receipts.
 - **Default implementation:** `EfReusableActivityImportOperationStore`; opt-in EF Core
   implementation `EfReusableActivityImportOperationStore`.
 - **Invariant:** collection and receipt writes are append-only, and reads are bound to the exact
   ambient tenant plus user scope; authorization mismatches are indistinguishable from absence.
+- **Deletes:** a stored row is never rewritten, and a collection upload is deleted rather than kept.
+  `DeleteCollectionAsync` removes one upload in its exact tenant-plus-user scope; `DeleteExpiredCollectionsAsync`
+  removes a bounded batch of the ambient persistence scope's uploads, every user's, whose stored expiry has passed,
+  oldest first. Both remove rows and decide nothing: when an upload is deleted is the operation service's rule (see
+  "Upload retention" below). An implementation must delete the content, not mark the row.
 - **Idempotency boundary:** the key namespace is the exact tenant-plus-user operation scope. The same
   textual key is independent for two users in one tenant, while each user can reconcile only their own receipt.
 
@@ -64,6 +69,35 @@ Uploads default to 16 MiB, 20,000 source versions, a 24-hour lifetime, and analy
 most 500 rows. Hosts may lower or raise these finite bounds through `ReusableActivityImportOptions`.
 Apply never falls back to `ExecuteWorkflow`; recursive reusable composition remains a blocking
 diagnostic with a complete typed cycle.
+
+**Upload retention (#2330).** An upload is stored verbatim, every property of every activity included, so it can hold
+literal credentials (an `Authorization` header value on an Elsa 3 HTTP request activity, for example). It is
+review-session state: it lives until its apply is decided or its lifetime runs out, whichever comes first, and is then
+deleted from the import ledger. `ReusableActivityImportOperationService` owns that rule:
+
+- **A completed apply consumes the upload.** The collection row is deleted once the commit returns its receipt. The
+  receipt is self-contained, so a replay of the same idempotency key and `GET .../imports/{idempotencyKey}` still
+  answer; the replay repeats the delete, which covers an apply that committed and stopped before its delete ran. After
+  an apply, analysis, selection and a second apply against that handle answer 404: importing a further subset of the
+  same export needs a new upload.
+- **A refused apply deletes the upload, unless its caller can continue with the same upload.** The outcomes that keep
+  it are a stale plan or an invalid or non-closed selection (422), an identity collision (409), a persistence failure
+  (which includes a commit whose outcome is unknown, where the repeat needs the collection again), a schema write
+  refusal and a cancellation. Every other outcome refuses the upload's content and deletes it; unknown outcomes fall
+  on the deleting side on purpose. A malformed request (a blank plan ID or idempotency key) is refused before the
+  upload is read and leaves it alone.
+- **An expired upload is deleted, not only refused.** The read that finds an upload past its expiry deletes it and
+  answers 410; later reads of that handle answer 404.
+- **A recurring sweep deletes the expired uploads nobody reads again.** `ExpiredImportCollectionSweepTask` is an
+  `IRecurringTask`, which is why this feature depends on `Tasks`. Every
+  `ReusableActivityImportOptions.ExpiredCollectionSweepInterval` (15 minutes by default) it visits each persistence
+  scope the host supplies (`IPersistenceScopeRunner`) and deletes at most `ExpiredCollectionSweepBatchSize` (100)
+  expired uploads in each. Every node runs it; the delete is idempotent. It does not visit the global partition, which
+  no host-supplied scope names: an upload stored under a global persistence context is deleted by its apply or by the
+  read that finds it expired.
+
+Between its upload and its apply or expiry the document is at rest in the ledger, as a reviewed import needs it to be.
+The rule bounds that time; it does not encrypt the column, and it does not reach database backups.
 
 ### `IActivityCollectionJsonSource` *(Feature contract — `Elsa3.Activities.Design.Import`)*
 - **Kind:** Source (opens a stream of activity JSON — pull pattern).

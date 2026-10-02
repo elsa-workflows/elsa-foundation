@@ -4,6 +4,7 @@ using Elsa.Secrets.Core.Contracts;
 using Elsa.Secrets.Core.Models;
 using Elsa.Secrets.Extensions;
 using Elsa.Secrets.Features;
+using Elsa.Secrets.Options;
 using Elsa.Secrets.Services;
 using Elsa.Secrets.Stores;
 using Microsoft.Extensions.DependencyInjection;
@@ -61,4 +62,58 @@ public sealed class SecretsFeatureRegistrationTests
         provider.GetRequiredService<ISecretManager>();
     }
 
+    [Fact]
+    public void Secrets_feature_builds_the_key_ring_from_its_settings()
+    {
+        using var provider = Compose(new SecretsFeature
+        {
+            EncryptionKey = "first-key",
+            Keys = new Dictionary<string, string> { ["2026-10"] = "rotated-key" },
+            ActiveKeyId = "2026-10"
+        });
+
+        var keyRing = provider.GetRequiredService<ISecretKeyRing>();
+        Assert.Equal("2026-10", keyRing.ActiveKey.KeyId);
+        Assert.True(keyRing.TryGetKey(SecretEncryptionKey.LegacyKeyId, out _));
+    }
+
+    [Fact]
+    public void Secrets_feature_with_only_an_encryption_key_can_protect_values()
+    {
+        using var provider = Compose(new SecretsFeature { EncryptionKey = "only-key" });
+
+        var protector = provider.GetRequiredService<ISecretValueProtector>();
+        Assert.Equal("value", protector.Unprotect(protector.Protect("value")));
+        Assert.Equal(SecretEncryptionKey.LegacyKeyId, provider.GetRequiredService<ISecretKeyRing>().ActiveKey.KeyId);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData(" ")]
+    public void Secrets_feature_without_key_settings_keeps_the_host_configured_keys(string? unset)
+    {
+        // A host that configures SecretsOptions itself must not have its keys blanked by a feature whose settings are unset.
+        using var provider = Compose(
+            new SecretsFeature { EncryptionKey = unset, ActiveKeyId = unset },
+            options =>
+            {
+                options.EncryptionKey = "host-first-key";
+                options.Keys.Add(new SecretEncryptionKeyOptions { KeyId = "host-rotated", Key = "host-rotated-key" });
+                options.ActiveKeyId = "host-rotated";
+            });
+
+        var keyRing = provider.GetRequiredService<ISecretKeyRing>();
+        Assert.Equal("host-rotated", keyRing.ActiveKey.KeyId);
+        Assert.True(keyRing.TryGetKey(SecretEncryptionKey.LegacyKeyId, out _));
+    }
+
+    private static ServiceProvider Compose(SecretsFeature feature, Action<SecretsOptions>? hostOptions = null)
+    {
+        var services = new ServiceCollection();
+        if (hostOptions is not null)
+            services.Configure(hostOptions);
+
+        feature.ConfigureServices(services);
+        return services.BuildServiceProvider();
+    }
 }

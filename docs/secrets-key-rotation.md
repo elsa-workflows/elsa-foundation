@@ -16,6 +16,48 @@ Protected values are stored in a colon-delimited format:
 
 ## Configuration
 
+### Shell feature settings
+
+A shell supplies its keys as settings of the `Secrets` feature. `Keys` maps a key id to its key material.
+
+```jsonc
+{
+  "CShells": {
+    "Shells": {
+      "Default": {
+        "Features": {
+          "Secrets": {
+            // Single key. When set it is added to the ring under the reserved id "legacy".
+            "EncryptionKey": "old-master-key",
+
+            // The key-ring: key id to key material.
+            "Keys": {
+              "2026-01": "first-rotation-key",
+              "2026-07": "second-rotation-key"
+            },
+
+            // The key new values are encrypted with. Must reference a key in the ring (or "legacy").
+            "ActiveKeyId": "2026-07"
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+`EncryptionKey` and `Keys` are declared secret, so the feature catalog masks them. Supply them through a secret
+store or environment variables outside development, never in committed configuration.
+
+A setting that is left unset is not applied, so a host that configures `SecretsOptions` itself keeps its keys when
+the shell sets none. A key id declared by both the host and the shell is refused as a duplicate.
+
+### Host options
+
+A host that composes the module with `AddSecrets()` instead of the feature configures `SecretsOptions` itself, for
+example with `services.Configure<SecretsOptions>(configuration.GetSection("Elsa:Secrets"))`. `AddSecrets(configuration)`
+on its own reads only `Elsa:Secrets:EncryptionKey`. Here `Keys` is a list:
+
 ```jsonc
 {
   "Elsa": {
