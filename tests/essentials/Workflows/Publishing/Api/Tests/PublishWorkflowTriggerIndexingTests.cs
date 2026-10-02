@@ -84,20 +84,20 @@ public sealed class PublishWorkflowTriggerIndexingTests
     {
         await Handler("old", new StubTriggerProvider("Event", "hash-old")).Handle(new PublishWorkflow("version-1"), CancellationToken.None);
 
-        // The replacing publish stops for good once its slot transition commits, before its binding is switched on and
-        // the old one off (#2193): the slot names it, but the old publication keeps serving.
+        // The replacing publish stops for good once its switch commits, before its journal is written. The slot and its
+        // bindings switched in that one commit (#2230), so the interrupted publication serves and the old one does not.
         var extractor = new WorkflowTriggerBindingExtractor([new StubTriggerProvider("Event", "hash-interrupted")]);
-        var stopping = new PauseAfterSlotTransition(_activationAuthority);
+        PauseAfterSwitch? stopping = null;
         var interrupted = Handler(
                 WorkflowVersion(TriggerNode("trigger-node", [Input("EventName", "interrupted")])),
                 TriggerActivityVersion(),
                 extractor,
                 new WorkflowTriggerIndexer(extractor, _bindingStore),
-                coordinatorAuthority: stopping)
+                wrapSwitch: inner => stopping = new PauseAfterSwitch(inner))
             .Handle(new PublishWorkflow("version-1"), CancellationToken.None);
-        Assert.Same(stopping.Paused, await Task.WhenAny(interrupted, stopping.Paused));
-        Assert.Single(await ServingAsync("hash-old"));
-        Assert.Empty(await ServingAsync("hash-interrupted"));
+        Assert.Same(stopping!.Paused, await Task.WhenAny(interrupted, stopping.Paused));
+        Assert.Empty(await ServingAsync("hash-old"));
+        Assert.Single(await ServingAsync("hash-interrupted"));
 
         var view = await Handler("new", new StubTriggerProvider("Event", "hash-new")).Handle(new PublishWorkflow("version-1"), CancellationToken.None);
 
@@ -420,7 +420,7 @@ public sealed class PublishWorkflowTriggerIndexingTests
         IWorkflowTriggerBindingExtractor extractor,
         IWorkflowTriggerIndexer indexer,
         Type? clrType = null,
-        IWorkflowActivationAuthority? coordinatorAuthority = null)
+        Func<IWorkflowActivationSwitch, IWorkflowActivationSwitch>? wrapSwitch = null)
     {
         // The activation coordinator commits trigger bindings and recurring schedules as one serving
         // projection. Even scenarios without recurring providers must prepare the intentionally empty
@@ -436,15 +436,17 @@ public sealed class PublishWorkflowTriggerIndexingTests
                 NullLogger<RecurringTriggerScheduleIndexer>.Instance);
         }
 
+        var activationSwitch = new InMemoryWorkflowActivationSwitch(_activationAuthority, _referenceStore, TimeProvider.System, _bindingStore, _scheduleStore);
         var coordinator = new WorkflowActivationCoordinator(
-            coordinatorAuthority ?? _activationAuthority,
+            _activationAuthority,
+            wrapSwitch?.Invoke(activationSwitch) ?? activationSwitch,
             _referenceStore,
             TestRootWriteLeases.Create(_executableStore),
             TimeProvider.System,
             indexer,
             _bindingStore,
             _scheduleStore);
-        var activator = new PublicationActivator(coordinator, _publicationStore, coordinatorAuthority ?? _activationAuthority, _referenceStore, TimeProvider.System);
+        var activator = new PublicationActivator(coordinator, _publicationStore, _activationAuthority, _referenceStore, TimeProvider.System);
         return new PublishWorkflowRequestHandler(
             Compiler(workflowVersion, triggerActivity, clrType),
             _executableStore,

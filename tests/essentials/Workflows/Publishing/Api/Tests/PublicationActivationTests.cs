@@ -307,23 +307,6 @@ public sealed class PublicationActivationTests
     }
 
     [Fact]
-    public async Task CompletionDoesNotRetireTheReportedReplacedPublicationWhenCompensationHandedTheSlotBackToIt()
-    {
-        // The slot names the predecessor again, but the completion that reported it replaced was overtaken: its report is stale.
-        await SeedAsync("publication-old", PublicationStatus.Active, occupiesSlot: true);
-        var reported = await SeedAsync("publication-new", PublicationStatus.Active);
-        var slot = (await _authority.FindAsync("definition-1", "default"))! with { ActiveActivationId = reported.PublicationId };
-        var activator = new PublicationActivator(
-            new ReportingCoordinator(new WorkflowActivationResult(true, WorkflowActivationOutcome.Activated, slot, ReplacedActivationId: "publication-old")),
-            _publications, _authority, _references, new FakeTimeProvider(_now));
-
-        var completion = await activator.CompleteAsync("definition-1", "default");
-
-        Assert.True(completion.Succeeded);
-        Assert.Equal(PublicationStatus.Active, (await _publications.FindAsync("publication-old"))!.Status);
-    }
-
-    [Fact]
     public async Task ParallelCompletionsConvergeToOneJournalState()
     {
         await SeedAsync("publication-old", PublicationStatus.Active, ReferenceState.Retired);
@@ -393,9 +376,12 @@ public sealed class PublicationActivationTests
     private PublicationActivator NewActivator(IWorkflowTriggerIndexer? indexer = null, IWorkflowActivationAuthority? authority = null) =>
         new(NewCoordinator(indexer), _publications, authority ?? _authority, _references, new FakeTimeProvider(_now));
 
+    // These tests follow the journal, not serving: the projection stores are no-ops, so the switch moves the slot and the
+    // references alone.
     private WorkflowActivationCoordinator NewCoordinator(IWorkflowTriggerIndexer? indexer = null) =>
         new(
             _authority,
+            new InMemoryWorkflowActivationSwitch(_authority, _references, new FakeTimeProvider(_now)),
             _references,
             TestRootWriteLeases.Create(_executables),
             new FakeTimeProvider(_now),
@@ -537,19 +523,6 @@ public sealed class PublicationActivationTests
             WorkflowExecutableReferenceScope.Published,
             ActivationId: record.PublicationId,
             SlotId: record.SlotId);
-
-    /// <summary>A coordinator whose completion answers with a fixed report, as a completion that read the slot earlier would.</summary>
-    private sealed class ReportingCoordinator(WorkflowActivationResult completion) : IWorkflowActivationCoordinator
-    {
-        public ValueTask<WorkflowActivationResult> CompleteAsync(string workflowDefinitionId, string slotName, CancellationToken cancellationToken = default) =>
-            ValueTask.FromResult(completion);
-
-        public ValueTask<WorkflowActivationResult> ActivateAsync(WorkflowActivationCommand command, CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
-
-        public ValueTask<WorkflowActivationResult> DeactivateAsync(WorkflowDeactivationCommand command, CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
-    }
 
     private sealed class NoopTriggerIndexer : IWorkflowTriggerIndexer
     {

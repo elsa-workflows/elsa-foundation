@@ -86,6 +86,7 @@ public class WorkflowsPublishingFeature : IShellFeature
         // feature normally supplies these services; keep provider-neutral fallbacks here for engine-only
         // compositions that do not mount the complete runtime feature.
         services.TryAddSingleton<IWorkflowActivationAuthority, InMemoryWorkflowActivationAuthority>();
+        services.TryAddScoped<IWorkflowActivationSwitch, InMemoryWorkflowActivationSwitch>();
         services.TryAddScoped<IWorkflowActivationCoordinator, WorkflowActivationCoordinator>();
         // Publishing operations consume provider-overridable stores. Durable providers register those stores as
         // scoped services, so their aggregators must share the request scope instead of capturing it globally.

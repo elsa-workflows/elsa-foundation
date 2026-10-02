@@ -7,17 +7,16 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 /// </summary>
 /// <remarks>
 /// <para>
-/// A caller-requested cancellation is rethrown after best-effort compensation whenever a lifecycle write may have
-/// run. Compensation uses an uncancelled token so cancellation cannot leave the slot, projections, and references
-/// split. Cancellation observed before the first write performs no lifecycle mutation of its own.
+/// The slot transition, the projection switch and the replaced activation's reference retirement are one commit of the
+/// <see cref="IWorkflowActivationSwitch"/> (#2230), so a process that stops at any point leaves them agreeing: before the
+/// commit nothing serves differently, and after it the activation is whole.
 /// </para>
 /// <para>
-/// The slot transition commits before the projections switch, so a process that dies between the two leaves the
-/// slot naming an activation whose trigger bindings and recurring schedules still serve nothing, or still serve the
-/// activation it replaced. Every activation therefore first completes the activation the slot already names (see
-/// <see cref="CompleteAsync"/>); a same-artifact request reports <see cref="WorkflowActivationOutcome.AlreadyActive"/>
-/// only once that activation serves. Deactivation completes nothing: it turns off every activation that serves the
-/// slot, whatever the slot's history.
+/// A caller-requested cancellation is rethrown. One observed before the switch commits is rethrown after the call's
+/// activation is discarded, with an uncancelled token, unless it serves because a call sharing its activation id switched
+/// it on. One observed after the switch commits leaves the activation activated, as a process that stopped there would:
+/// the caller learns only that it stopped, and a caller that keeps its own record of the activation brings it into line
+/// as it would after a crash. Cancellation observed before the first write performs no lifecycle mutation of its own.
 /// </para>
 /// </remarks>
 public interface IWorkflowActivationCoordinator
@@ -31,16 +30,15 @@ public interface IWorkflowActivationCoordinator
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Finishes the activation the slot names when an interrupted call left it half done. Before the projection switch,
-    /// it switches the activation's projections on and the replaced activation's off, notifies trigger observers, and
-    /// retires the replaced activation's source reference. After the switch, it retires a replaced activation's
-    /// reference that is still live. Changes nothing when neither applies.
+    /// Reports whether the activation the slot names serves. Since #2230 there is nothing to complete, because a slot and
+    /// its projections switch in one commit; this writes nothing. A slot that a version before #2230 left half done, naming
+    /// an activation that does not serve, is reported as failed with the remedy, so nothing builds on it.
     /// </summary>
     /// <returns>
-    /// <see cref="WorkflowActivationOutcome.Activated"/> when this call completed the activation, naming the activation
-    /// it replaced; <see cref="WorkflowActivationOutcome.AlreadyActive"/> when there was nothing to complete or another
-    /// writer moved the slot first; <see cref="WorkflowActivationOutcome.AlreadyInactive"/> for an empty slot; and
-    /// <see cref="WorkflowActivationOutcome.Failed"/> when the activation could not be completed.
+    /// <see cref="WorkflowActivationOutcome.AlreadyActive"/> when the slot's activation serves;
+    /// <see cref="WorkflowActivationOutcome.AlreadyInactive"/> for an empty slot; and
+    /// <see cref="WorkflowActivationOutcome.Failed"/> at <see cref="WorkflowActivationStep.ProjectionActivation"/> for a
+    /// slot left half done, or when whether it serves could not be read.
     /// </returns>
     ValueTask<WorkflowActivationResult> CompleteAsync(
         string workflowDefinitionId,

@@ -48,9 +48,8 @@
     <!-- Holds reconciliation passes at their race points; shared with the workflow design reconciliation tests. -->
     <Compile Include="..\..\..\..\Design\Tests\Infrastructure\ReconciliationRaceSupport.cs" Link="ReconciliationRaceSupport.cs" />
     <!-- #2223: the crash double the Runtime crash-repair contract uses, shared rather than copied. -->
-    <Compile Include="..\..\..\..\Runtime\Persistence\EntityFrameworkCore\Tests\PauseAfterSlotTransition.cs" Link="PauseAfterSlotTransition.cs" />
+    <Compile Include="..\..\..\..\Runtime\Persistence\EntityFrameworkCore\Tests\PauseAfterSwitch.cs" Link="PauseAfterSwitch.cs" />
     <!-- #2251: the reference-store failure the Runtime crash-repair contract injects after completion's switch. -->
-    <Compile Include="..\..\..\..\Runtime\Persistence\EntityFrameworkCore\Tests\ReferencesThatCannotRetire.cs" Link="ReferencesThatCannotRetire.cs" />
   </ItemGroup>
   <ItemGroup>
     <!-- Fails any unordered Skip or Take (EF warning 10102) in this suite. -->

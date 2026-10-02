@@ -8,19 +8,21 @@ namespace Elsa.Workflows.Publishing.Services;
 
 /// <summary>
 /// At shell start, brings the publication journal of every slot publishing owns into line with the slot (#2223): a
-/// process that stopped after the slot transition left the slot's publication a candidate and the one it replaced active.
+/// process that stopped after the runtime's switch left the slot's publication serving but a candidate, and the one it
+/// replaced active.
 /// </summary>
 /// <remarks>
 /// <para>
 /// A workflow published from the designer is published again only when someone does, so without this pass its journal
-/// would stay behind until then. The pass visits the slots the runtime's own pass does (<see cref="OccupiedActivationSlots"/>)
-/// and calls <see cref="IPublicationActivator.CompleteAsync"/> for each one publishing owns, which completes the
-/// activation through the runtime first. Failures are logged and never stop the shell from starting.
+/// would stay behind until then. The pass visits every occupied slot (<see cref="OccupiedActivationSlots"/>) and calls
+/// <see cref="IPublicationActivator.CompleteAsync"/> for each one publishing owns, which checks with the runtime that the
+/// slot's activation serves first. The runtime has nothing to complete itself, because the slot and its projections
+/// switch in one commit (#2230). Failures are logged and never stop the shell from starting.
 /// </para>
 /// <para>
-/// <b>Ordered after</b> <see cref="CompleteInterruptedActivationsStartupTask"/> (<c>[Order(5)]</c>), so the runtime's
-/// pass has normally completed the activation already and this one finds only the journal to update. Like that pass, it
-/// runs on every node: every transition is a compare-and-swap, so two nodes converging one slot write it once.
+/// <b>Ordered after the startup reconcilers</b> (<c>[Order(5)]</c>): the design-side reconcilers and export (orders 1 to
+/// 3) publish through the same journal, so this pass finds only what nothing else brought into line. It runs on every
+/// node: every transition is a compare-and-swap, so two nodes converging one slot write it once.
 /// </para>
 /// </remarks>
 [Order(5)]

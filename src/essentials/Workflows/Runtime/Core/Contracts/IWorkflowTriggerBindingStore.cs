@@ -54,8 +54,8 @@ public interface IWorkflowTriggerBindingStore
     /// <summary>
     /// Reports where one activation's projection stands: missing, prepared but never served, serving, or switched off
     /// by the activation that replaced it. It must answer for an activation with no bindings. The activation
-    /// coordinator reads it to find an activation whose slot transition committed but whose projection was never
-    /// switched on, and a replaced activation whose reference was never retired, because a process died in between.
+    /// coordinator reads it to check that the activation a slot names serves, which a slot and its projections switched
+    /// in one commit always do (#2230), unless a version before #2230 stopped between its slot transition and its switch.
     /// </summary>
     ValueTask<WorkflowActivationProjectionState> FindActivationStateAsync(
         string activationId,

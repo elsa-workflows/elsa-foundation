@@ -1,6 +1,8 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
+using Elsa.Workflows.Runtime.Services.Executables;
 using Microsoft.Extensions.DependencyInjection;
 using Elsa.Persistence.EntityFramework;
 
@@ -149,6 +151,7 @@ public static class RuntimeEntityFrameworkCoreRegistration
             services.AddRuntimeWorkflowTriggerBindingEntityFrameworkCore();
             services.AddRuntimeRecurringTriggerScheduleEntityFrameworkCore();
             services.AddRuntimeWorkflowActivationAuthorityEntityFrameworkCore();
+            UseEntityFrameworkActivationSwitch(services);
 
             return services;
         }
@@ -161,6 +164,24 @@ public static class RuntimeEntityFrameworkCoreRegistration
                 snapshot.Rollback();
             throw;
         }
+    }
+
+    /// <summary>
+    /// The slot authority, both projection stores and the source-reference store are EF over the one shared context by now,
+    /// so a slot and its serving projections switch in one transaction of it (#2230). The in-memory switch the Runtime
+    /// composes by default could not commit them, so it is replaced; a switch registered by anyone else is refused.
+    /// </summary>
+    private static void UseEntityFrameworkActivationSwitch(IServiceCollection services)
+    {
+        var switches = services.Where(descriptor => descriptor.ServiceType == typeof(IWorkflowActivationSwitch)).ToArray();
+        if (switches.Length == 1 && switches[0].ImplementationType == typeof(EfWorkflowActivationSwitch))
+            return;
+        if (switches.Any(descriptor => descriptor.ImplementationType != typeof(InMemoryWorkflowActivationSwitch)))
+            throw new InvalidOperationException("An explicit workflow activation switch registration is already present; Runtime EF persistence refuses to replace it implicitly.");
+
+        foreach (var descriptor in switches)
+            services.Remove(descriptor);
+        services.AddScoped<IWorkflowActivationSwitch, EfWorkflowActivationSwitch>();
     }
 }
 

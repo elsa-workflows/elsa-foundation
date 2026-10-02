@@ -19,12 +19,12 @@ namespace Elsa.Workflows.Publishing.Services;
 /// failure vocabulary.
 /// </para>
 /// <para>
-/// The journal follows the slot; it never decides serving. The slot transition commits before the projections switch
-/// and before the journal is written, so a process that stops in between leaves the slot's publication a candidate
-/// and the one it replaced active (#2223). <see cref="CompleteAsync"/> brings the journal back into line once the
-/// runtime has completed the slot's activation. It runs before every activation, on a same-version republish that
-/// finds the journal lagging, and at shell start (<see cref="CompleteInterruptedPublicationsStartupTask"/>). It reads
-/// the slot and the source references, which the runtime owns, and writes only publication records.
+/// The journal follows the slot; it never decides serving. The runtime's switch commits the slot, the projections and
+/// the replaced publication's source reference together (#2230), before the journal is written, so a process that stops
+/// in between leaves the slot's publication serving but a candidate, and the one it replaced active (#2223).
+/// <see cref="CompleteAsync"/> brings the journal back into line. It runs before every activation, on a same-version
+/// republish that finds the journal lagging, and at shell start (<see cref="CompleteInterruptedPublicationsStartupTask"/>).
+/// It reads the slot and the source references, which the runtime owns, and writes only publication records.
 /// </para>
 /// </remarks>
 public sealed class PublicationActivator(
@@ -151,7 +151,9 @@ public sealed class PublicationActivator(
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowDefinitionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(slotName);
 
-        // The runtime first: the journal may say a publication serves only once its activation does.
+        // The runtime first: the journal may say a publication serves only once its activation does. The slot and its
+        // projections switch in one commit (#2230), so the runtime has nothing to complete; it fails for a slot that a
+        // version before #2230 left naming a publication that does not serve.
         var completion = await activationCoordinator.CompleteAsync(workflowDefinitionId, slotName, cancellationToken);
         var slot = completion.Slot;
         if (!completion.Succeeded)
@@ -161,21 +163,7 @@ public sealed class PublicationActivator(
             await publicationStore.FindAsync(publicationId, cancellationToken) is not { } publication)
             return new(true, slot);
 
-        // The runtime names the activation its completion switched off even when it could not retire that one's source
-        // reference, which then reads as live (#2251). Its record is therefore retired on the runtime's report, as
-        // ActivateAsync retires the record its activation replaced, rather than on the reference. The completion that
-        // finally retires a leaked reference reports it too, usually once the slot's own record no longer lags, so this
-        // comes before the lag check.
         var now = timeProvider.GetUtcNow();
-        //
-        // The report can be stale: a completion that was overtaken (compensation handed the slot back to the activation it
-        // reported as replaced) names a predecessor that serves again. The slot is read again, and a report naming the
-        // activation it now serves retires nothing.
-        if (completion.ReplacedActivationId is { } replacedId &&
-            !StringComparer.Ordinal.Equals(replacedId, publicationId) &&
-            !(await activationAuthority.FindAsync(slot.WorkflowDefinitionId, slot.SlotName, cancellationToken) is { } served &&
-              StringComparer.Ordinal.Equals(served.ActiveActivationId, replacedId)))
-            await PublicationRecordRetirement.RetireAsync(publicationStore, await publicationStore.FindAsync(replacedId, cancellationToken), now, cancellationToken);
 
         // A publication the slot names that is already active is the common case and costs one read. One still a
         // candidate, or retired while the slot names it again, lags the slot. Marking it active is the last write, so a

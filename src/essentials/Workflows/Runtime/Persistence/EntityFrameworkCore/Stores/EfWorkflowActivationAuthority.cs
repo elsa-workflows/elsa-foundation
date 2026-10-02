@@ -79,49 +79,10 @@ public sealed class EfWorkflowActivationAuthority(
     {
         ValidateRequest(request);
         cancellationToken.ThrowIfCancellationRequested();
-        var scope = RequireScope();
-        var rowId = RowId(scope, request.WorkflowDefinitionId, request.SlotName);
-        return await Transitions.RunAsync(context, async () =>
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            context.ChangeTracker.Clear();
-            var row = await context.WorkflowActivationSlots.SingleOrDefaultAsync(x => x.Id == rowId, cancellationToken);
-            var current = row is null
-                ? Empty(request.WorkflowDefinitionId, request.SlotName, request.UpdatedAt)
-                : Read(row, scope, request.WorkflowDefinitionId, request.SlotName);
-            if (current.Revision != request.ExpectedRevision)
-                return Conflict(current, WorkflowActivationConflict.RevisionMismatch, "The activation slot revision changed; another writer moved it first.");
-            if (current.ActiveActivationId is not null && current.Source is not null &&
-                request.OwnershipIntent != WorkflowActivationOwnershipIntent.TakeOver &&
-                !current.Source.IsSameOwnerAs(request.Source))
-                return Conflict(current, WorkflowActivationConflict.ForeignSource,
-                    $"Definition '{request.WorkflowDefinitionId}' slot '{request.SlotName}' is owned by activation source '{current.Source.Describe()}'; '{request.Source.Describe()}' cannot activate a different artifact on it. Ownership transfer is an explicit operator action.");
-            if (await IsLiveInAnotherSlotAsync(scope, request.ActivationId, rowId, cancellationToken))
-                return Conflict(current, WorkflowActivationConflict.RevisionMismatch, "The activation is already live in another slot.");
-
-            var next = current with
-            {
-                ActiveActivationId = request.ActivationId,
-                Source = request.Source,
-                Revision = checked(current.Revision + 1),
-                UpdatedAt = request.UpdatedAt
-            };
-            if (row is null)
-                context.WorkflowActivationSlots.Add(ToEntity(next, scope, rowId));
-            else
-                Copy(row, next, scope);
-            try
-            {
-                await context.SaveChangesAsync(cancellationToken);
-                context.ChangeTracker.Clear();
-                return new WorkflowActivationTransition(true, next, current.ActiveActivationId, ReplacedSource: current.Source);
-            }
-            catch (Exception exception) when (Transitions.ShouldRetry(context, exception))
-            {
-                context.ChangeTracker.Clear();
-                throw;
-            }
-        }, _ => SettledConflictAsync(request.WorkflowDefinitionId, request.SlotName, request.UpdatedAt, cancellationToken), cancellationToken);
+        return await CommitAsync(
+            () => StageActivationAsync(request, cancellationToken),
+            _ => SettledConflictAsync(request.WorkflowDefinitionId, request.SlotName, request.UpdatedAt, cancellationToken),
+            cancellationToken);
     }
 
     public async ValueTask<WorkflowActivationTransition> TryDeactivateAsync(
@@ -132,48 +93,114 @@ public sealed class EfWorkflowActivationAuthority(
         DateTimeOffset updatedAt,
         CancellationToken cancellationToken = default)
     {
-        ValidateIdentity(workflowDefinitionId, nameof(workflowDefinitionId));
-        ValidateIdentity(slotName, nameof(slotName));
-        ValidateSource(source);
-        ArgumentOutOfRangeException.ThrowIfNegative(expectedRevision);
+        var request = new WorkflowDeactivationSlotRequest(workflowDefinitionId, slotName, source, expectedRevision, updatedAt);
+        ValidateRequest(request);
         cancellationToken.ThrowIfCancellationRequested();
+        return await CommitAsync(
+            () => StageDeactivationAsync(request, cancellationToken),
+            _ => SettledConflictAsync(workflowDefinitionId, slotName, updatedAt, cancellationToken),
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// Stages <see cref="TryActivateAsync"/>'s transition in the caller's unit of work: the slot row is tracked as changed
+    /// when it succeeds, and nothing is tracked on a refusal. The caller saves and commits, and retries a lost race;
+    /// <c>EfWorkflowActivationSwitch</c> stages the projection switch beside it (#2230).
+    /// </summary>
+    internal async ValueTask<WorkflowActivationTransition> StageActivationAsync(WorkflowActivationSlotRequest request, CancellationToken cancellationToken)
+    {
+        ValidateRequest(request);
         var scope = RequireScope();
-        var rowId = RowId(scope, workflowDefinitionId, slotName);
-        return await Transitions.RunAsync(context, async () =>
+        var rowId = RowId(scope, request.WorkflowDefinitionId, request.SlotName);
+        var (row, current) = await ReadForWriteAsync(scope, rowId, request.WorkflowDefinitionId, request.SlotName, request.UpdatedAt, cancellationToken);
+        if (current.Revision != request.ExpectedRevision)
+            return Conflict(current, WorkflowActivationConflict.RevisionMismatch, "The activation slot revision changed; another writer moved it first.");
+        if (current.ActiveActivationId is not null && current.Source is not null &&
+            request.OwnershipIntent != WorkflowActivationOwnershipIntent.TakeOver &&
+            !current.Source.IsSameOwnerAs(request.Source))
+            return Conflict(current, WorkflowActivationConflict.ForeignSource,
+                $"Definition '{request.WorkflowDefinitionId}' slot '{request.SlotName}' is owned by activation source '{current.Source.Describe()}'; '{request.Source.Describe()}' cannot activate a different artifact on it. Ownership transfer is an explicit operator action.");
+        if (await IsLiveInAnotherSlotAsync(scope, request.ActivationId, rowId, cancellationToken))
+            return Conflict(current, WorkflowActivationConflict.RevisionMismatch, "The activation is already live in another slot.");
+
+        return Stage(row, current, current with
+        {
+            ActiveActivationId = request.ActivationId,
+            Source = request.Source,
+            Revision = checked(current.Revision + 1),
+            UpdatedAt = request.UpdatedAt
+        }, scope, rowId);
+    }
+
+    /// <summary>Stages <see cref="TryDeactivateAsync"/>'s transition in the caller's unit of work, as <see cref="StageActivationAsync"/> does.</summary>
+    internal async ValueTask<WorkflowActivationTransition> StageDeactivationAsync(WorkflowDeactivationSlotRequest request, CancellationToken cancellationToken)
+    {
+        ValidateRequest(request);
+        var scope = RequireScope();
+        var rowId = RowId(scope, request.WorkflowDefinitionId, request.SlotName);
+        var (row, current) = await ReadForWriteAsync(scope, rowId, request.WorkflowDefinitionId, request.SlotName, request.UpdatedAt, cancellationToken);
+        if (current.Revision != request.ExpectedRevision)
+            return Conflict(current, WorkflowActivationConflict.RevisionMismatch, "The activation slot revision changed; another writer moved it first.");
+        if (current.ActiveActivationId is not null && current.Source is not null && !current.Source.IsSameOwnerAs(request.Source))
+            return Conflict(current, WorkflowActivationConflict.ForeignSource,
+                $"Definition '{request.WorkflowDefinitionId}' slot '{request.SlotName}' is owned by activation source '{current.Source.Describe()}'; '{request.Source.Describe()}' cannot deactivate it.");
+
+        return Stage(row, current, current with
+        {
+            ActiveActivationId = null,
+            Source = null,
+            Revision = checked(current.Revision + 1),
+            UpdatedAt = request.UpdatedAt
+        }, scope, rowId);
+    }
+
+    /// <summary>The context every staged transition writes through; a switch commits only stores that share it.</summary>
+    internal RuntimeDbContext Context => context;
+
+    /// <summary>Saves one staged slot transition on its own, retrying a lost race.</summary>
+    private ValueTask<WorkflowActivationTransition> CommitAsync(
+        Func<ValueTask<WorkflowActivationTransition>> stage,
+        Func<Exception?, ValueTask<WorkflowActivationTransition>> exhausted,
+        CancellationToken cancellationToken) =>
+        Transitions.RunAsync(context, async () =>
         {
             cancellationToken.ThrowIfCancellationRequested();
             context.ChangeTracker.Clear();
-            var row = await context.WorkflowActivationSlots.SingleOrDefaultAsync(x => x.Id == rowId, cancellationToken);
-            var current = row is null ? Empty(workflowDefinitionId, slotName, updatedAt) : Read(row, scope, workflowDefinitionId, slotName);
-            if (current.Revision != expectedRevision)
-                return Conflict(current, WorkflowActivationConflict.RevisionMismatch, "The activation slot revision changed; another writer moved it first.");
-            if (current.ActiveActivationId is not null && current.Source is not null && !current.Source.IsSameOwnerAs(source))
-                return Conflict(current, WorkflowActivationConflict.ForeignSource,
-                    $"Definition '{workflowDefinitionId}' slot '{slotName}' is owned by activation source '{current.Source.Describe()}'; '{source.Describe()}' cannot deactivate it.");
-
-            var next = current with
-            {
-                ActiveActivationId = null,
-                Source = null,
-                Revision = checked(current.Revision + 1),
-                UpdatedAt = updatedAt
-            };
-            if (row is null)
-                context.WorkflowActivationSlots.Add(ToEntity(next, scope, rowId));
-            else
-                Copy(row, next, scope);
+            var transition = await stage();
+            if (!transition.Succeeded)
+                return transition;
             try
             {
                 await context.SaveChangesAsync(cancellationToken);
                 context.ChangeTracker.Clear();
-                return new WorkflowActivationTransition(true, next, current.ActiveActivationId, ReplacedSource: current.Source);
+                return transition;
             }
             catch (Exception exception) when (Transitions.ShouldRetry(context, exception))
             {
                 context.ChangeTracker.Clear();
                 throw;
             }
-        }, _ => SettledConflictAsync(workflowDefinitionId, slotName, updatedAt, cancellationToken), cancellationToken);
+        }, exhausted, cancellationToken);
+
+    private async ValueTask<(WorkflowActivationSlotEntity? Row, WorkflowActivationSlot Current)> ReadForWriteAsync(
+        string scope,
+        string rowId,
+        string workflowDefinitionId,
+        string slotName,
+        DateTimeOffset updatedAt,
+        CancellationToken cancellationToken)
+    {
+        var row = await context.WorkflowActivationSlots.SingleOrDefaultAsync(x => x.Id == rowId, cancellationToken);
+        return (row, row is null ? Empty(workflowDefinitionId, slotName, updatedAt) : Read(row, scope, workflowDefinitionId, slotName));
+    }
+
+    private WorkflowActivationTransition Stage(WorkflowActivationSlotEntity? row, WorkflowActivationSlot current, WorkflowActivationSlot next, string scope, string rowId)
+    {
+        if (row is null)
+            context.WorkflowActivationSlots.Add(ToEntity(next, scope, rowId));
+        else
+            Copy(row, next, scope);
+        return new WorkflowActivationTransition(true, next, current.ActiveActivationId, ReplacedSource: current.Source);
     }
 
     private async ValueTask<WorkflowActivationTransition> SettledConflictAsync(
@@ -311,6 +338,16 @@ public sealed class EfWorkflowActivationAuthority(
         ValidateSource(request.Source);
         ArgumentOutOfRangeException.ThrowIfNegative(request.ExpectedRevision);
         if (!Enum.IsDefined(request.OwnershipIntent)) throw new ArgumentOutOfRangeException(nameof(request.OwnershipIntent));
+    }
+
+    private static void ValidateRequest(WorkflowDeactivationSlotRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ValidateIdentity(request.WorkflowDefinitionId, nameof(request.WorkflowDefinitionId));
+        ValidateIdentity(request.SlotName, nameof(request.SlotName));
+        ArgumentNullException.ThrowIfNull(request.Source);
+        ValidateSource(request.Source);
+        ArgumentOutOfRangeException.ThrowIfNegative(request.ExpectedRevision);
     }
 
     private static void ValidateSource(WorkflowActivationSource? source)

@@ -282,6 +282,22 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
         catch { context.ChangeTracker.Clear(); throw; }
     }
 
+    /// <summary>
+    /// Stages a move of one source reference in the caller's transaction, which <c>EfWorkflowActivationSwitch</c> shares
+    /// with a slot switch (#2230): <paramref name="next"/> says what the reference becomes, or <see langword="null"/> to leave
+    /// it. The row is written at the revision read, so a writer that changed it first makes the caller's commit lose.
+    /// </summary>
+    internal async ValueTask StageMoveAsync(
+        string sourceReferenceId,
+        Func<WorkflowExecutableSourceReference, WorkflowExecutableSourceReference?> next,
+        CancellationToken cancellationToken)
+    {
+        var scope = RequireScope();
+        var row = await RowsOf(scope, sourceReferenceId).SingleOrDefaultAsync(cancellationToken);
+        if (row is not null && next(Read(row, scope, sourceReferenceId)) is { } moved)
+            Copy(row, moved, scope);
+    }
+
     public async ValueTask<bool> TryDeleteDoomedAsync(WorkflowExecutableSourceReference expectedDoomedReference, DateTimeOffset now, CancellationToken cancellationToken = default)
     {
         context.ChangeTracker.Clear();

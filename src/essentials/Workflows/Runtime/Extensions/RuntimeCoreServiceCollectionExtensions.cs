@@ -124,6 +124,9 @@ public static class RuntimeCoreServiceCollectionExtensions
 
         services.TryAddSingleton<IWorkflowExecutableStore, InMemoryWorkflowExecutableStore>();
         services.TryAddSingleton<IWorkflowActivationAuthority, InMemoryWorkflowActivationAuthority>();
+        // Commits a slot and its serving projections together over the in-memory stores (#2230); a durable provider that
+        // owns the slot and the projections replaces it with its own.
+        services.TryAddScoped<IWorkflowActivationSwitch, InMemoryWorkflowActivationSwitch>();
         services.TryAddScoped<IWorkflowActivationCoordinator, WorkflowActivationCoordinator>();
         services.TryAddScoped<IWorkflowExecutableHasher, WorkflowExecutableHasher>();
         // Burst-scoped reconstructible cache (ADR 0031 item b, spec 111). The accessor is a singleton AsyncLocal (like

@@ -10,7 +10,7 @@ namespace Elsa.Workflows.Runtime.Services.Triggers;
 /// composed in. Suitable for tests and single-process hosts; a restart loses the trigger index, which
 /// is why production hosts swap in the durable store.
 /// </summary>
-public sealed class InMemoryWorkflowTriggerBindingStore : IWorkflowTriggerBindingStore
+public sealed class InMemoryWorkflowTriggerBindingStore : IWorkflowTriggerBindingStore, IInMemoryActivationProjection
 {
     private const string ProjectionName = "trigger-binding";
     private readonly object _syncRoot = new();
@@ -82,16 +82,36 @@ public sealed class InMemoryWorkflowTriggerBindingStore : IWorkflowTriggerBindin
         cancellationToken.ThrowIfCancellationRequested();
 
         lock (_syncRoot)
-        {
-            if (!_activations.Activate(activationId, replacedActivationId, ProjectionName))
-                return ValueTask.CompletedTask;
-
-            SetRowsActive(activationId, true);
-            if (replacedActivationId is not null && !StringComparer.Ordinal.Equals(replacedActivationId, activationId))
-                SetRowsActive(replacedActivationId, false);
-        }
+            Switch(activationId, replacedActivationId);
 
         return ValueTask.CompletedTask;
+    }
+
+    object IInMemoryActivationProjection.SyncRoot => _syncRoot;
+
+    bool IInMemoryActivationProjection.Serves(string activationId) => _activations.Serves(activationId);
+
+    void IInMemoryActivationProjection.CheckSwitch(string activationId, string? replacedActivationId) =>
+        _activations.CheckActivation(activationId, replacedActivationId, ProjectionName);
+
+    void IInMemoryActivationProjection.Delete(string activationId) => Delete(activationId);
+
+    void IInMemoryActivationProjection.Switch(string activationId, string? replacedActivationId) => Switch(activationId, replacedActivationId);
+
+    private void Switch(string activationId, string? replacedActivationId)
+    {
+        if (!_activations.Activate(activationId, replacedActivationId, ProjectionName))
+            return;
+
+        SetRowsActive(activationId, true);
+        if (replacedActivationId is not null && !StringComparer.Ordinal.Equals(replacedActivationId, activationId))
+            SetRowsActive(replacedActivationId, false);
+    }
+
+    private void Delete(string activationId)
+    {
+        RemoveByActivation(activationId);
+        _activations.Remove(activationId);
     }
 
     public ValueTask<WorkflowActivationProjectionState> FindActivationStateAsync(
@@ -131,10 +151,7 @@ public sealed class InMemoryWorkflowTriggerBindingStore : IWorkflowTriggerBindin
         cancellationToken.ThrowIfCancellationRequested();
 
         lock (_syncRoot)
-        {
-            RemoveByActivation(activationId);
-            _activations.Remove(activationId);
-        }
+            Delete(activationId);
 
         return ValueTask.CompletedTask;
     }

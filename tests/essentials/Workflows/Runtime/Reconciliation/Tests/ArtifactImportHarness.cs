@@ -80,13 +80,14 @@ internal static class ArtifactImportHarness
 
     /// <summary>
     /// Puts a <b>different</b> activation source in charge of a definition's default slot, through the production
-    /// authority and the production reference store.
+    /// reference store, trigger indexer and activation switch.
     /// </summary>
     /// <remarks>
     /// Written directly rather than by running a second importer because two <c>JsonWorkflowArtifactReconciliation</c>
     /// features on one container share a single <c>IOptions</c> registration and would therefore read the same
     /// mount. This is real engine state, not a double: the reconciler reads the slot and the live reference exactly
-    /// as it would for any incumbent, and the reference is what makes the latest-wins comparison run at all.
+    /// as it would for any incumbent, and the reference is what makes the latest-wins comparison run at all. The
+    /// incumbent's projections are prepared and switched on with the slot, as every activation's are (#2230).
     /// </remarks>
     public static async Task GiveTheSlotToAsync(
         WorkflowExecutionHarness harness,
@@ -96,8 +97,10 @@ internal static class ArtifactImportHarness
     {
         var definitionId = executable.Identity.DefinitionId;
         var slotId = WorkflowActivationSlotIdentity.Create(definitionId, WorkflowArtifactReconciler.DefaultSlotName);
-        await harness.Services.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(executable);
-        await harness.Services.GetRequiredService<IWorkflowExecutableSourceReferenceStore>().SaveAsync(
+        await using var scope = harness.Services.CreateAsyncScope();
+        var services = scope.ServiceProvider;
+        await services.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(executable);
+        await services.GetRequiredService<IWorkflowExecutableSourceReferenceStore>().SaveAsync(
             new WorkflowExecutableSourceReference(
                 SourceReferenceId: WorkflowActivationReferenceIdentity.Create(activationId),
                 ArtifactId: executable.Identity.ArtifactId,
@@ -116,7 +119,8 @@ internal static class ArtifactImportHarness
                 ActivationId: activationId,
                 SlotId: slotId));
 
-        var claimed = await harness.Services.GetRequiredService<IWorkflowActivationAuthority>().TryActivateAsync(
+        await services.GetRequiredService<IWorkflowTriggerIndexer>().PrepareActivationAsync(executable, activationId, slotId);
+        var claimed = await services.GetRequiredService<IWorkflowActivationSwitch>().TryActivateAsync(
             new WorkflowActivationSlotRequest(
                 definitionId,
                 WorkflowArtifactReconciler.DefaultSlotName,

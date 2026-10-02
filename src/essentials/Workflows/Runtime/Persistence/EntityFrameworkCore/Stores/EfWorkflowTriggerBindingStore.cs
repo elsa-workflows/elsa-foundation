@@ -15,7 +15,9 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 /// whether a row serves, or the projection's immutable content, moves the state in the transaction that writes the rows:
 /// preparing, switching and deleting a projection create, move or delete its state. So rows read while the state stood
 /// still belong to it, and a state that moved while they were read is read again, never taken for a corrupt projection:
-/// two completions of one slot, as two nodes starting together run them, make the same switch (#2265).
+/// two calls can make the same switch at once (#2265). <c>EfWorkflowActivationSwitch</c> stages the switch and the
+/// deletion through <see cref="StageSwitchAsync"/> and <see cref="StageDeletionAsync"/> in the transaction that moves the
+/// slot (#2230).
 /// <see cref="SaveAsync"/> writes a binding row and moves no state. That is safe: it serves the artifact-scoped index,
 /// whose rows belong to no projection; one that rewrote an activation's row would leave it disagreeing with a state that
 /// stood still, which is reported as the corruption it is; and the row's own revision moves, so a switch that read the row
@@ -164,6 +166,28 @@ public sealed class EfWorkflowTriggerBindingStore(
     {
         context.ChangeTracker.Clear();
         await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+        switch (await StageSwitchAsync(scope, activationId, replacedActivationId, deleteReplaced: false, cancellationToken))
+        {
+            case ProjectionStaging.Moved:
+                await context.RollbackAndClearAsync(transaction);
+                return EfWriteAttempt<bool>.Retry();
+            case ProjectionStaging.Unchanged:
+                await context.CommitAndClearAsync(transaction, cancellationToken, noChanges: true);
+                return true;
+        }
+        return await context.TryCommitAndClearAsync(transaction, EfRuntimeOperationalStoreSupport.ProjectionSwitches, operation, cancellationToken) is { } conflict
+            ? EfWriteAttempt<bool>.Retry(conflict)
+            : true;
+    }
+
+    /// <summary>
+    /// Stages <see cref="ActivateAsync"/>'s switch in the caller's transaction, which <c>EfWorkflowActivationSwitch</c>
+    /// shares with the slot transition (#2230). It reads both projections and decides only once neither state moved while
+    /// they were read. The caller saves, commits, and reads again on <see cref="ProjectionStaging.Moved"/> or a lost write.
+    /// With <paramref name="deleteReplaced"/> the replaced projection is deleted rather than switched off, as a revert does.
+    /// </summary>
+    internal async ValueTask<ProjectionStaging> StageSwitchAsync(string scope, string activationId, string? replacedActivationId, bool deleteReplaced, CancellationToken cancellationToken)
+    {
         var candidate = await context.WorkflowTriggerBindingProjectionStates.SingleOrDefaultAsync(x => x.Id == ProjectionId(scope, activationId), cancellationToken);
         var candidateRows = candidate is null ? [] : await RowsForActivation(scope, activationId, cancellationToken);
         var distinct = replacedActivationId is not null && !StringComparer.Ordinal.Equals(activationId, replacedActivationId);
@@ -171,42 +195,68 @@ public sealed class EfWorkflowTriggerBindingStore(
         var replacedRows = replaced is null ? [] : await RowsForActivation(scope, replacedActivationId!, cancellationToken);
         if (await StateMovedAsync(scope, activationId, candidate, cancellationToken) ||
             distinct && await StateMovedAsync(scope, replacedActivationId!, replaced, cancellationToken))
-        {
-            await context.RollbackAndClearAsync(transaction);
-            return EfWriteAttempt<bool>.Retry();
-        }
+            return ProjectionStaging.Moved;
 
         if (candidate is null)
             throw new InvalidOperationException($"Activation '{activationId}' has no prepared trigger-binding projection.");
         EnsureProjection(candidate, candidateRows, scope, activationId);
         if (replaced is not null)
             EnsureProjection(replaced, replacedRows, scope, replacedActivationId!);
-        // The candidate is checked first, so a switch that already happened is a no-op whoever made it: the activation's
-        // own sequence and a completion of that activation (IWorkflowActivationCoordinator.CompleteAsync) may race (#2193).
+        // The candidate is checked first, so a switch that already happened is a no-op whoever made it.
         if (candidate.IsActive)
         {
             if (replaced is not { IsActive: true })
-            {
-                await context.CommitAndClearAsync(transaction, cancellationToken, noChanges: true);
-                return true;
-            }
+                return ProjectionStaging.Unchanged;
             throw new InvalidOperationException($"Activation '{activationId}' is active while replaced activation '{replacedActivationId}' is still active.");
         }
-        // Switching a candidate on is refused once its replaced activation no longer serves: that fences a late
-        // completion against a writer that has since completed the candidate and replaced it in turn.
+        // Switching a candidate on is refused once its replaced activation no longer serves: two activations never serve
+        // one slot through a switch.
         if (distinct && replaced is not { IsActive: true })
             throw new InvalidOperationException($"Activation '{activationId}' cannot replace a projection that is missing or no longer active.");
         foreach (var row in candidateRows) SetActive(row, true);
         candidate.IsActive = true; candidate.Revision = checked(candidate.Revision + 1);
-        if (replaced is not null)
+        if (replaced is not null && deleteReplaced)
+        {
+            context.WorkflowTriggerBindings.RemoveRange(replacedRows);
+            context.WorkflowTriggerBindingProjectionStates.Remove(replaced);
+        }
+        else if (replaced is not null)
         {
             foreach (var row in replacedRows) SetActive(row, false);
             replaced.IsActive = false; replaced.Revision = checked(replaced.Revision + 1);
         }
-        return await context.TryCommitAndClearAsync(transaction, EfRuntimeOperationalStoreSupport.ProjectionSwitches, operation, cancellationToken) is { } conflict
-            ? EfWriteAttempt<bool>.Retry(conflict)
-            : true;
+        return ProjectionStaging.Staged;
     }
+
+    /// <summary>
+    /// Stages the deletion of an activation's projection in the caller's transaction (#2230). Unlike
+    /// <see cref="DeleteByActivationAsync"/>, it reads the state before the rows and again after them, so a switch committed
+    /// meanwhile is read again rather than taken for a corrupt projection; with <paramref name="unlessServing"/> a projection
+    /// that serves is left alone. Every row and the state are deleted at the revisions read, so a switch that commits before
+    /// the caller does makes its commit lose, and the caller reads again.
+    /// </summary>
+    internal async ValueTask<ProjectionStaging> StageDeletionAsync(string scope, string activationId, bool unlessServing, CancellationToken cancellationToken)
+    {
+        var state = await context.WorkflowTriggerBindingProjectionStates.SingleOrDefaultAsync(x => x.Id == ProjectionId(scope, activationId), cancellationToken);
+        var rows = await RowsForActivation(scope, activationId, cancellationToken);
+        if (await StateMovedAsync(scope, activationId, state, cancellationToken))
+            return ProjectionStaging.Moved;
+        if (unlessServing && state is { IsActive: true })
+            return ProjectionStaging.Serves;
+
+        foreach (var row in rows)
+            _ = Read(row, scope, Decode(row.TriggerBindingId));
+        if (state is not null)
+        {
+            EnsureProjection(state, rows, scope, activationId);
+            context.WorkflowTriggerBindingProjectionStates.Remove(state);
+        }
+        context.WorkflowTriggerBindings.RemoveRange(rows);
+        return state is null && rows.Length == 0 ? ProjectionStaging.Unchanged : ProjectionStaging.Staged;
+    }
+
+    /// <summary>The context every staged change writes through; a switch commits only stores that share it.</summary>
+    internal RuntimeDbContext Context => context;
 
     public async ValueTask<WorkflowActivationProjectionState> FindActivationStateAsync(string activationId, CancellationToken cancellationToken = default)
     {

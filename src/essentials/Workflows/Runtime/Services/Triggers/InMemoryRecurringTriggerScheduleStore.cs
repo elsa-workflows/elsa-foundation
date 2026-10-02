@@ -10,7 +10,7 @@ namespace Elsa.Workflows.Runtime.Services.Triggers;
 /// to make recurring schedules survive restarts.
 /// </summary>
 [RuntimeDefaultRegistration]
-public sealed class InMemoryRecurringTriggerScheduleStore(TimeProvider? timeProvider = null) : IRecurringTriggerScheduleStore
+public sealed class InMemoryRecurringTriggerScheduleStore(TimeProvider? timeProvider = null) : IRecurringTriggerScheduleStore, IInMemoryActivationProjection
 {
     private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
     private const string ProjectionName = "recurring-schedule";
@@ -116,26 +116,46 @@ public sealed class InMemoryRecurringTriggerScheduleStore(TimeProvider? timeProv
         cancellationToken.ThrowIfCancellationRequested();
 
         lock (_syncRoot)
-        {
-            if (!_activations.Activate(activationId, replacedActivationId, ProjectionName))
-                return ValueTask.CompletedTask;
-
-            // The activation switches on here, and only here, so each schedule it activates takes over a due occurrence from
-            // the replaced schedule of its trigger, read before the replaced schedules are deactivated; the deactivation then
-            // changes them, so a claim in flight on one is stale from then on (#2198).
-            var replacing = replacedActivationId is not null && !StringComparer.Ordinal.Equals(replacedActivationId, activationId);
-            var replaced = replacing ? SchedulesOf(replacedActivationId!).Where(schedule => schedule.IsActive).ToArray() : [];
-            var activatedAt = _timeProvider.GetUtcNow();
-            foreach (var schedule in SchedulesOf(activationId))
-            {
-                var predecessor = replaced.SingleOrDefault(schedule.IsSameTriggerAs);
-                _schedules[schedule.ScheduleId] = (predecessor is null ? schedule : schedule.TakeOverFrom(predecessor, activatedAt)) with { IsActive = true };
-            }
-            if (replacing)
-                SetRowsActive(replacedActivationId!, false);
-        }
+            Switch(activationId, replacedActivationId);
 
         return ValueTask.CompletedTask;
+    }
+
+    object IInMemoryActivationProjection.SyncRoot => _syncRoot;
+
+    bool IInMemoryActivationProjection.Serves(string activationId) => _activations.Serves(activationId);
+
+    void IInMemoryActivationProjection.CheckSwitch(string activationId, string? replacedActivationId) =>
+        _activations.CheckActivation(activationId, replacedActivationId, ProjectionName);
+
+    void IInMemoryActivationProjection.Delete(string activationId) => Delete(activationId);
+
+    void IInMemoryActivationProjection.Switch(string activationId, string? replacedActivationId) => Switch(activationId, replacedActivationId);
+
+    private void Switch(string activationId, string? replacedActivationId)
+    {
+        if (!_activations.Activate(activationId, replacedActivationId, ProjectionName))
+            return;
+
+        // The activation switches on here, and only here, so each schedule it activates takes over a due occurrence from
+        // the replaced schedule of its trigger, read before the replaced schedules are deactivated; the deactivation then
+        // changes them, so a claim in flight on one is stale from then on (#2198).
+        var replacing = replacedActivationId is not null && !StringComparer.Ordinal.Equals(replacedActivationId, activationId);
+        var replaced = replacing ? SchedulesOf(replacedActivationId!).Where(schedule => schedule.IsActive).ToArray() : [];
+        var activatedAt = _timeProvider.GetUtcNow();
+        foreach (var schedule in SchedulesOf(activationId))
+        {
+            var predecessor = replaced.SingleOrDefault(schedule.IsSameTriggerAs);
+            _schedules[schedule.ScheduleId] = (predecessor is null ? schedule : schedule.TakeOverFrom(predecessor, activatedAt)) with { IsActive = true };
+        }
+        if (replacing)
+            SetRowsActive(replacedActivationId!, false);
+    }
+
+    private void Delete(string activationId)
+    {
+        RemoveByActivation(activationId);
+        _activations.Remove(activationId);
     }
 
     public ValueTask<WorkflowActivationProjectionState> FindActivationStateAsync(
@@ -175,10 +195,7 @@ public sealed class InMemoryRecurringTriggerScheduleStore(TimeProvider? timeProv
         cancellationToken.ThrowIfCancellationRequested();
 
         lock (_syncRoot)
-        {
-            RemoveByActivation(activationId);
-            _activations.Remove(activationId);
-        }
+            Delete(activationId);
 
         return ValueTask.CompletedTask;
     }

@@ -66,8 +66,7 @@ public sealed record WorkflowExecutableSourceReferencePageQuery : RuntimeStorePa
     public DateTimeOffset? Now { get; }
 
     /// <summary>
-    /// Restricts the page to references minted for one workflow definition. The activation coordinator lists one
-    /// slot's activations through it (#2193).
+    /// Restricts the page to references minted for one workflow definition (#2193).
     /// </summary>
     public string? DefinitionId
     {
