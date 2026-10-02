@@ -125,7 +125,7 @@ public sealed class ActivityContract
 
     private static IReadOnlyDictionary<string, object?> BuildInputFingerprintProjection(ActivityInputContract input)
     {
-        return new Dictionary<string, object?>(StringComparer.Ordinal)
+        var projection = new Dictionary<string, object?>(StringComparer.Ordinal)
         {
             [nameof(input.Key)] = input.Key,
             [nameof(input.Type)] = input.Type,
@@ -135,6 +135,13 @@ public sealed class ActivityContract
             [nameof(input.DefaultValue)] = input.DefaultValue,
             [nameof(input.Policy)] = input.Policy
         };
+
+        // A credential declaration is a contract change, so it moves the fingerprint; an input that declares none keeps
+        // the canonical shape, and the fingerprint, it had before the flag existed.
+        if (input.IsCredential)
+            projection[nameof(input.IsCredential)] = true;
+
+        return projection;
     }
 
     private IReadOnlyDictionary<string, object?> BuildResultFingerprintProjection()
@@ -208,7 +215,8 @@ public sealed class ActivityInputContract
         bool hasDefault,
         JsonElement? defaultValue,
         ActivityValuePolicy policy,
-        IReadOnlyDictionary<string, string>? editorMetadata = null)
+        IReadOnlyDictionary<string, string>? editorMetadata = null,
+        bool isCredential = false)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
@@ -229,6 +237,7 @@ public sealed class ActivityInputContract
         EditorMetadata = editorMetadata is null
             ? new Dictionary<string, string>()
             : new Dictionary<string, string>(editorMetadata, StringComparer.Ordinal);
+        IsCredential = isCredential;
     }
 
     public string Key { get; }
@@ -240,6 +249,16 @@ public sealed class ActivityInputContract
     public JsonElement? DefaultValue { get; }
     public ActivityValuePolicy Policy { get; }
     public IReadOnlyDictionary<string, string> EditorMetadata { get; }
+
+    /// <summary>
+    /// The activity declares the input a credential (<c>[ActivityInput(IsCredential = true)]</c>): it accepts only a
+    /// secret reference or no binding. Set explicitly from the declaration when the contract is pinned, and never
+    /// inferred from <see cref="ActivityValuePolicy.RequiresEncryption"/>, which a non-credential input can carry too.
+    /// Omitted from the serialized shape, and from the fingerprint, while false, so a contract whose inputs declare no
+    /// credential keeps the document and fingerprint it had before the flag existed.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool IsCredential { get; }
 }
 
 public sealed class ActivityResultContract

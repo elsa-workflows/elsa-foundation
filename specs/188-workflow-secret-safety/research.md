@@ -362,7 +362,9 @@ single string or canonical any-typed input, and the scanner declares no CLR inpu
 credential of any other CLR type could never be bound). Graph activities and intrinsics have no declaration surface: the only other producer of catalog
 `InputDefinition`s is the Activities Design API (`AddDefinitionCommandHandler`, `AddVersionCommandHandler`, whose
 commands accept `InputDefinition`s for any consumer), and it refuses an input with `isCredential: true`, because in
-phase 0 a credential is declared only through `[ActivityInput(IsCredential = true)]`. Intrinsic descriptors report
+phase 0 a credential is declared only through `[ActivityInput(IsCredential = true)]`. (Corrected in slice 5: JSON
+activity reconciliation is another producer, and `JsonActivityReconciliationSource` refuses `isCredential` the same
+way; a reconciliation source contributed by another feature is not checked, see T090.) Intrinsic descriptors report
 `false` for both flags. `ActivityInputDescriptorView` gains non-null `IsSensitive` and `IsCredential` so Studio and
 validators read them (FR-006).
 

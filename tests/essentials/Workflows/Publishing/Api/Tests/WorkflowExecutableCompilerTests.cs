@@ -31,6 +31,7 @@ using Elsa.Workflows.Publishing.Core.Events;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Resolvers;
 using Elsa.Workflows.Runtime.Services.ActivityExecutions;
@@ -77,6 +78,161 @@ public sealed class WorkflowExecutableCompilerTests
         ]);
 
         Assert.NotNull(constructor);
+    }
+
+    /// <summary>
+    /// Spec 188, FR-007: each row of the effective-policy table, compiled through publication. The binding and the pinned
+    /// contract input take their policy from one function, so they agree; a secret reference adds its own minimum to the
+    /// binding only. Columns: the input (<c>Label</c> undeclared, <c>Note</c> sensitive, <c>ApiKey</c> credential), the
+    /// authored binding (null when unbound), the authored IsSensitive, then the contract's and the binding's
+    /// IsSensitive and RequiresEncryption.
+    /// </summary>
+    public static TheoryData<string, string?, bool?, bool, bool, bool, bool> EffectivePolicyRows => new()
+    {
+        { nameof(DeclaredInputsActivity.Label), "Literal", null, false, false, false, false },
+        { nameof(DeclaredInputsActivity.Label), "Literal", false, false, false, false, false },
+        { nameof(DeclaredInputsActivity.Label), "Literal", true, true, false, true, false },
+        { nameof(DeclaredInputsActivity.Label), "Secret", null, false, false, true, true },
+        { nameof(DeclaredInputsActivity.Note), "Literal", null, true, false, true, false },
+        { nameof(DeclaredInputsActivity.Note), "Literal", true, true, false, true, false },
+        { nameof(DeclaredInputsActivity.Note), "Secret", null, true, false, true, true },
+        { nameof(DeclaredInputsActivity.ApiKey), null, null, true, true, true, true },
+        { nameof(DeclaredInputsActivity.ApiKey), "Secret", null, true, true, true, true },
+        { nameof(DeclaredInputsActivity.ApiKey), "Secret", true, true, true, true, true }
+    };
+
+    [Theory]
+    [MemberData(nameof(EffectivePolicyRows))]
+    public async Task Both_compile_paths_apply_the_declaration_and_agree(
+        string inputKey,
+        string? binding,
+        bool? authoredIsSensitive,
+        bool contractIsSensitive,
+        bool contractRequiresEncryption,
+        bool bindingIsSensitive,
+        bool bindingRequiresEncryption)
+    {
+        var node = await CompileDeclaredInputAsync(inputKey, binding, authoredIsSensitive);
+
+        var contractPolicy = node.ActivityContract!.Inputs[inputKey].Policy;
+        var bindingPolicy = node.InputBindings[inputKey].EffectivePolicy;
+        Assert.Equal((contractIsSensitive, contractRequiresEncryption), (contractPolicy.IsSensitive, contractPolicy.RequiresEncryption));
+        Assert.Equal((bindingIsSensitive, bindingRequiresEncryption), (bindingPolicy.IsSensitive, bindingPolicy.RequiresEncryption));
+        Assert.True(bindingPolicy.Satisfies(ValuePolicyCombiner.ToProtectionPolicy(contractPolicy)));
+    }
+
+    [Theory]
+    [InlineData(nameof(DeclaredInputsActivity.Note), "Literal")]
+    [InlineData(nameof(DeclaredInputsActivity.ApiKey), "Secret")]
+    public async Task Publication_refuses_a_binding_that_marks_a_declared_sensitive_input_not_sensitive(string inputKey, string binding)
+    {
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() =>
+            CompileDeclaredInputAsync(inputKey, binding, authoredIsSensitive: false));
+
+        Assert.Equal(
+            $"VF-ACT-005: Input '{inputKey}' on activity node '{SecretBindingCompilerFixture.NodeId}' is declared sensitive, so its binding cannot mark it not sensitive.",
+            exception.Message);
+    }
+
+    [Fact]
+    public async Task The_pinned_contract_carries_the_credential_flag_only_where_declared()
+    {
+        var node = await CompileDeclaredInputAsync(nameof(DeclaredInputsActivity.Label), "Literal", null);
+
+        Assert.Equal(
+            [nameof(DeclaredInputsActivity.ApiKey)],
+            node.ActivityContract!.Inputs.Values.Where(input => input.IsCredential).Select(input => input.Key));
+    }
+
+    [Fact]
+    public void A_source_owned_template_root_pins_the_declaration_and_its_occurrences_refuse_a_literal_on_the_credential()
+    {
+        // The pinned-contract path (ActivityTemplatePlacer) has no catalog input: it reads the template root's contract.
+        var types = TestWellKnownTypeRegistry.Create();
+        types.RegisterType(typeof(DeclaredInputsActivity), TypeAliasConvention.CanonicalAlias(typeof(DeclaredInputsActivity)));
+        var compiler = new RuntimeInputBindingCompiler(types);
+        var root = new ExecutableNodeCompiler(ActivityStructureService(), types, compiler, LeafOutputCompiler())
+            .CompileSourceOwnedRoot(SecretBindingCompilerFixture.ClrActivityVersion(typeof(DeclaredInputsActivity)));
+
+        var inputs = root.ActivityContract!.Inputs;
+        Assert.True(inputs[nameof(DeclaredInputsActivity.ApiKey)].IsCredential);
+        Assert.Equal((true, true), (inputs[nameof(DeclaredInputsActivity.ApiKey)].Policy.IsSensitive, inputs[nameof(DeclaredInputsActivity.ApiKey)].Policy.RequiresEncryption));
+        Assert.False(inputs[nameof(DeclaredInputsActivity.Note)].IsCredential);
+        Assert.Equal((true, false), (inputs[nameof(DeclaredInputsActivity.Note)].Policy.IsSensitive, inputs[nameof(DeclaredInputsActivity.Note)].Policy.RequiresEncryption));
+
+        var exception = Assert.Throws<ArgumentException>(() =>
+            compiler.CompileAll("occurrence-1", inputs.Values, [new WorkflowArgumentState(nameof(DeclaredInputsActivity.ApiKey), new ArgumentValue("typed-in", "Literal"), null, null, null, null)]));
+        Assert.Equal(SecretBindingDiagnostics.EncryptionRequiredBindingRefused("occurrence-1", nameof(DeclaredInputsActivity.ApiKey)).Message, exception.Message);
+    }
+
+    [Fact]
+    public void The_pinned_contract_path_reads_the_credential_flag_and_never_infers_it_from_encryption()
+    {
+        // A pinned input whose policy asks for encryption without the input being a credential stays not sensitive, so
+        // an authored IsSensitive false is no downgrade. The same policy flagged a credential is sensitive.
+        var compiler = new RuntimeInputBindingCompiler(TestWellKnownTypeRegistry.Create());
+        var policy = new ActivityValuePolicy(IsPersistable: true, IsSensitive: false, RequiresEncryption: true);
+        var secret = SecretBindingCompilerFixture.Secret("token") with { IsSensitive = false };
+
+        var notCredential = Assert.Single(compiler.CompileAll("node-1", [PinnedInput(policy, isCredential: false)], [secret])).Value;
+        var unbound = Assert.Single(compiler.CompileAll("node-1", [PinnedInput(policy, isCredential: false)], [])).Value;
+        var unboundCredential = Assert.Single(compiler.CompileAll("node-1", [PinnedInput(policy, isCredential: true)], [])).Value;
+        var downgrade = Assert.Throws<InvalidOperationException>(() => compiler.CompileAll("node-1", [PinnedInput(policy, isCredential: true)], [secret]));
+
+        Assert.Equal(RuntimeInputBindingSource.SecretRead, notCredential.Source);
+        Assert.Equal((false, true), (unbound.EffectivePolicy.IsSensitive, unbound.EffectivePolicy.RequiresEncryption));
+        Assert.Equal((true, true), (unboundCredential.EffectivePolicy.IsSensitive, unboundCredential.EffectivePolicy.RequiresEncryption));
+        Assert.StartsWith("VF-ACT-005: Input 'token' on activity node 'node-1' is declared sensitive", downgrade.Message, StringComparison.Ordinal);
+
+        static Elsa.Activities.Runtime.Core.Models.ActivityInputContract PinnedInput(ActivityValuePolicy policy, bool isCredential) =>
+            new("token", "Token", new ValueTypeDescriptor("String"), false, true, false, null, policy, isCredential: isCredential);
+    }
+
+    [Fact]
+    public async Task An_undeclared_input_keeps_its_contract_fingerprint_and_artifact_hash()
+    {
+        // Captured before the sensitivity declaration existed (spec 188, slice 5): neither the contract fingerprint nor
+        // the artifact hash of a node whose inputs declare nothing may move.
+        var unbound = await SecretBindingCompilerFixture.CompileAsync(SecretBindingCompilerFixture.Node(typeof(TestWriteLineActivity)), [typeof(TestWriteLineActivity)]);
+        var literal = await SecretBindingCompilerFixture.CompileAsync(
+            SecretBindingCompilerFixture.Node(typeof(TestWriteLineActivity), new WorkflowArgumentState("Text", new ArgumentValue(JsonSerializer.SerializeToElement("hello"), "Literal"), null, null, null, null)),
+            [typeof(TestWriteLineActivity)]);
+
+        Assert.Equal("sha256:d4c0e91ccccf8bfd0650d563b933c2dc24fa6acf5db71de7614cd82adecd3cb5", unbound.RootActivity.ActivityContract!.SchemaFingerprint);
+        Assert.Equal(unbound.RootActivity.ActivityContract.SchemaFingerprint, literal.RootActivity.ActivityContract!.SchemaFingerprint);
+        Assert.Equal("sha256:05ae620ba51b3ae51f212e1506b691ba358561d42f10ab7286ed4cfbac11cce5", unbound.Identity.ArtifactHash);
+        Assert.Equal("sha256:6657ac74698170e3b3a592a64184c0a32edefa8db169fbf14fbb5578e2eb8edc", literal.Identity.ArtifactHash);
+    }
+
+    [Fact]
+    public void A_credential_declaration_moves_the_contract_fingerprint()
+    {
+        Assert.NotEqual(SingleInputContract(isCredential: false).SchemaFingerprint, SingleInputContract(isCredential: true).SchemaFingerprint);
+
+        static Elsa.Activities.Runtime.Core.Models.ActivityContract SingleInputContract(bool isCredential) =>
+            new(
+                "test.activity",
+                "1.0.0",
+                "test",
+                JsonSerializer.SerializeToElement(new { type = "test" }),
+                [new Elsa.Activities.Runtime.Core.Models.ActivityInputContract("token", "Token", new ValueTypeDescriptor("String"), false, true, false, null, ActivityValuePolicy.Default, isCredential: isCredential)],
+                new ActivityResultContract(new ValueTypeDescriptor("Elsa.Unit"), true, ActivityValuePolicy.Default, []),
+                [ActivityOutcomes.Done],
+                new ActivityActivationRequirement("test", "test.activity"));
+    }
+
+    private static async Task<ExecutableNode> CompileDeclaredInputAsync(string inputKey, string? binding, bool? authoredIsSensitive)
+    {
+        WorkflowArgumentState[] inputs = binding switch
+        {
+            null => [],
+            "Secret" => [SecretBindingCompilerFixture.Secret(inputKey) with { IsSensitive = authoredIsSensitive }],
+            _ => [new WorkflowArgumentState(inputKey, new ArgumentValue("authored", binding), null, null, null, authoredIsSensitive)]
+        };
+        var executable = await SecretBindingCompilerFixture.CompileAsync(
+            SecretBindingCompilerFixture.Node(typeof(DeclaredInputsActivity), inputs),
+            [typeof(DeclaredInputsActivity)]);
+        return executable.RootActivity;
     }
 
     private readonly ActivityDefinitionVersion _writeLineActivity = ActivityVersion("activity-write-line", "Text", new TypeReference("String"));

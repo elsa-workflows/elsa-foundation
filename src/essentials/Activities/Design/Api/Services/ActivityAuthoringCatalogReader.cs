@@ -113,7 +113,9 @@ public sealed class ActivityAuthoringCatalogReader(
             input.UiHint,
             input.DefaultValue,
             input.DefaultSyntax,
-            input.UISpecifications);
+            input.UISpecifications,
+            IsSensitive: input.IsSensitive == true || input.IsCredential == true,
+            IsCredential: input.IsCredential == true);
 
     private static ActivityOutputDescriptorView ToView(OutputDefinition output) =>
         new(

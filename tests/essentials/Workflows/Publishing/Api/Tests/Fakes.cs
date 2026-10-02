@@ -86,6 +86,29 @@ internal sealed class TestWriteLineActivity : Activity<ActivityUnit>
         ValueTask.FromResult(ActivityTransition.Complete(ActivityUnit.Value));
 }
 
+/// <summary>
+/// Declares a sensitive input, a credential input and an undeclared input (spec 188, slice 5). It refuses a secret
+/// reference on <see cref="Persisted"/>, a separate input, so a node can hit <c>VF-ACT-012</c> and <c>VF-ACT-011</c> at once.
+/// </summary>
+[RefusesSecretBinding(nameof(Persisted), SecretBindingRefusalReason.PersistedByActivity)]
+internal sealed class DeclaredInputsActivity : Activity<ActivityUnit>
+{
+    [ActivityInput(Key = nameof(Note), IsSensitive = true)]
+    public string? Note { get; set; }
+
+    [ActivityInput(Key = nameof(ApiKey), IsCredential = true)]
+    public string? ApiKey { get; set; }
+
+    [ActivityInput(Key = nameof(Label))]
+    public string? Label { get; set; }
+
+    [ActivityInput(Key = nameof(Persisted))]
+    public string? Persisted { get; set; }
+
+    protected override ValueTask<ActivityTransition<ActivityUnit>> ExecuteAsync(ActivityExecutionContext context) =>
+        ValueTask.FromResult(ActivityTransition.Complete(ActivityUnit.Value));
+}
+
 internal sealed class TestWriteLinesActivity : Activity<ActivityUnit>
 {
     [ActivityInput(Key = "Lines")]

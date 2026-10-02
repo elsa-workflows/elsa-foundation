@@ -21,6 +21,7 @@ public sealed class AddVersionCommandHandler(
 {
     public async Task<ActivityDefinitionVersionDetailsView> Handle(AddVersion command, CancellationToken cancellationToken)
     {
+        CredentialInputDeclarations.Refuse(command.Inputs);
         var definition = await definitionStore.GetAsync(command.DefinitionId, cancellationToken);
 
         // A version added through the API is API-sourced; provenance is keyed on the definition's

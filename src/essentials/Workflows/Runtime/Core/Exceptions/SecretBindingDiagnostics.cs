@@ -6,7 +6,8 @@ namespace Elsa.Workflows.Runtime.Core.Exceptions;
 /// <summary>
 /// The fixed diagnostics for secret bindings and withheld values, so publication, literal readers, value resolution
 /// and activation refuse a secret the same way. No message carries a value or a reference payload. A
-/// <see cref="SecretBindingRefusedCode"/> refusal names the node, the input and the reason; a
+/// <see cref="SecretBindingRefusedCode"/> refusal names the node, the input and the reason; an
+/// <see cref="EncryptionRequiredBindingCode"/> refusal names the node and the input; a
 /// <see cref="WithheldInputCode"/> refusal names the input, the variable or the conversion target that met a withheld
 /// value.
 /// </summary>
@@ -18,6 +19,13 @@ public static class SecretBindingDiagnostics
     /// reports deterministic faults instead of throwing records a fault with this code and the same message.
     /// </summary>
     public const string WithheldInputCode = "VF-ACT-010";
+
+    /// <summary>
+    /// An input whose effective policy requires encryption is bound to something other than a secret reference. Only a
+    /// secret, resolved when the activity runs, can reach such an input without its value being persisted first, so a
+    /// literal, an object, a declared default, a variable or another value read, and an expression are all refused.
+    /// </summary>
+    public const string EncryptionRequiredBindingCode = "VF-ACT-011";
 
     /// <summary>A secret reference is bound where the value would be persisted or must be known at publish time.</summary>
     public const string SecretBindingRefusedCode = "VF-ACT-012";
@@ -52,6 +60,23 @@ public static class SecretBindingDiagnostics
             RuntimeInputBindingSource.WorkflowRequest or RuntimeInputBindingSource.ActivityResult => WithheldSourceNotResolved(binding.InputName),
             _ => WithheldInputNotResolved(binding.InputName)
         };
+
+    /// <summary>
+    /// The input's effective policy requires encryption and its authored binding is not a secret reference. The message
+    /// carries neither the bound value nor the expression text.
+    /// </summary>
+    public static ArgumentException EncryptionRequiredBindingRefused(string nodeId, string inputKey) =>
+        EncryptionRequired(nodeId, inputKey, string.Empty);
+
+    /// <summary>
+    /// The input's effective policy requires encryption, it is not bound, and its contract declares a default, which
+    /// would be compiled as a literal. The message does not carry the default.
+    /// </summary>
+    public static ArgumentException EncryptionRequiredDefaultRefused(string nodeId, string inputKey) =>
+        EncryptionRequired(nodeId, inputKey, ", and its declared default is a literal");
+
+    private static ArgumentException EncryptionRequired(string nodeId, string inputKey, string detail) =>
+        new($"{EncryptionRequiredBindingCode}: Activity node '{nodeId}' input '{inputKey}' requires encryption, so it accepts only a secret reference or no binding{detail}.");
 
     /// <summary>The input is named by the activity's <see cref="RefusesSecretBindingAttribute"/>.</summary>
     public static ArgumentException SecretBindingRefused(string nodeId, string inputKey, SecretBindingRefusalReason reason) =>

@@ -20,9 +20,10 @@ using WorkflowArgumentState = Elsa.Workflows.Design.Core.Models.ArgumentState;
 namespace Elsa.Workflows.Publishing.Api.Tests;
 
 /// <summary>
-/// Compiles a one-node workflow through the real executable compiler so the secret binding rules (spec 188, slice 2)
-/// are exercised where publication applies them. Activity versions are reflected from CLR activity types the way the
-/// catalog scanner declares them: one input per <c>[ActivityInput]</c>, keyed and typed as the activity declares.
+/// Compiles a one-node workflow through the real executable compiler so the secret binding rules (spec 188, slices 2
+/// and 5) are exercised where publication applies them. Activity versions are reflected from CLR activity types the way
+/// the catalog scanner declares them: one input per <c>[ActivityInput]</c>, keyed, typed and declared sensitive or
+/// credential as the activity declares (a credential is sensitive too, and an undeclared flag stays null).
 /// </summary>
 // Twin: SecretBindingTestSupport in Elsa.Activities.Testing, which this project does not reference.
 internal static class SecretBindingCompilerFixture
@@ -119,7 +120,8 @@ internal static class SecretBindingCompilerFixture
         Assert.ThrowsAsync<WorkflowExecutableCompilationException>(
             () => CompileAsync(root, activityTypes, otherVersions, variables));
 
-    private static ActivityDefinitionVersion ClrActivityVersion(Type activityType) =>
+    /// <summary>The catalog version the CLR scanner would reconcile for <paramref name="activityType"/>.</summary>
+    public static ActivityDefinitionVersion ClrActivityVersion(Type activityType) =>
         ActivityVersion(
             activityType.FullName!,
             WellKnownRuntimeActivityConsumers.ClrActivity,
@@ -134,6 +136,8 @@ internal static class SecretBindingCompilerFixture
                     StorageDriverType: null,
                     DisplayName: candidate.Property.Name,
                     Category: null,
-                    IsNullable: true))
+                    IsNullable: true,
+                    IsSensitive: candidate.Attribute.IsSensitive || candidate.Attribute.IsCredential ? true : null,
+                    IsCredential: candidate.Attribute.IsCredential ? true : null))
                 .ToArray());
 }

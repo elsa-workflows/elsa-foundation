@@ -1,3 +1,4 @@
+using Elsa.Activities.Design.Reconciliation.Json.Exceptions;
 using Elsa.Activities.Design.Reconciliation.Json.Options;
 using Elsa.Activities.Design.Reconciliation.Json.Services;
 using Elsa.Serialization.Core;
@@ -89,6 +90,34 @@ public sealed class JsonReconciliationTests : IDisposable
         Assert.Equal("1.2.3", store.Versions.Single(v => v.DefinitionId == sendEmail.Id).Version);
     }
 
+    [Fact]
+    public async Task JsonSource_RefusesAnEntryThatDeclaresACredentialInput()
+    {
+        // Spec 188, research R5: in phase 0 only [ActivityInput(IsCredential = true)] on a CLR activity declares a
+        // credential, because only CLR reconciliation checks the input could be bound to a secret reference.
+        var file = WriteTempJson("[" + WriteLineJson() + "," + SendEmailJson(DeclaredInputJson("isCredential")) + "]");
+
+        var exception = await Assert.ThrowsAsync<InvalidActivityCatalogJsonException>(
+            () => JsonSourceFromFilePath("json-catalog", file).Read(CancellationToken.None).AsTask());
+
+        Assert.Equal(file, exception.FilePath);
+        Assert.Contains("input 'apiKey' of activity 'Acme.Activities.SendEmail' declares isCredential", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task JsonSource_ReconcilesASensitiveInputDeclaration()
+    {
+        var file = WriteTempJson("[" + SendEmailJson(DeclaredInputJson("isSensitive")) + "]");
+        var store = new InMemoryReconcilerHarness.CatalogStore();
+        var reconciler = InMemoryReconcilerHarness.BuildReconciler(store, JsonSourceFromFilePath("json-catalog", file));
+
+        await reconciler.Reconcile(CancellationToken.None);
+
+        var input = Assert.Single(Assert.Single(store.Versions).Inputs);
+        Assert.True(input.IsSensitive);
+        Assert.Null(input.IsCredential);
+    }
+
     private static JsonActivityReconciliationSource JsonSource(string sourceId, params (int Order, string FilePath)[] files)
     {
         var options = Options.Create(new JsonReconciliationOptions
@@ -121,8 +150,13 @@ public sealed class JsonReconciliationTests : IDisposable
         return path;
     }
 
-    private static string SendEmailJson() =>
-        """
+    private static string DeclaredInputJson(string flag) =>
+        $$"""
+        { "referenceKey": "apiKey", "name": "ApiKey", "type": { "alias": "String" }, "displayName": "API key", "isNullable": true, "{{flag}}": true }
+        """;
+
+    private static string SendEmailJson(string? input = null) =>
+        $$"""
         {
           "version": "1.2.3",
           "activityTypeKey": "Acme.Activities.SendEmail",
@@ -141,7 +175,7 @@ public sealed class JsonReconciliationTests : IDisposable
               "assemblyVersion": "1.2.3.0"
             }
           },
-          "inputs": [],
+          "inputs": [{{input}}],
           "outputs": [],
           "designFacets": [
             {

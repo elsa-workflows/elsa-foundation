@@ -25,6 +25,41 @@ activation. A
 value withheld because its policy requires encryption cannot be recovered and is refused with `VF-ACT-010`, as is
 any withheld input of a strategy that does not hydrate inputs.
 
+## Sensitive and credential inputs
+
+An activity author declares the sensitivity of an input on its `[ActivityInput]` attribute:
+
+```csharp
+[ActivityInput(IsSensitive = true)]
+public string? CustomerNote { get; set; }
+
+[ActivityInput(IsCredential = true, DisplayName = "API key")]
+public string? ApiKey { get; set; }
+```
+
+`IsSensitive` marks data that must not appear in logs, evidence or inspection output. `IsCredential` marks an input
+that accepts only a secret reference or no binding; it implies `IsSensitive`. CLR reconciliation records the
+declaration on the input's catalog entry (`InputDefinition.IsSensitive`, `InputDefinition.IsCredential`, null when
+not declared, so an activity that declares nothing keeps its catalog hash), and the Activities Design API's authoring
+catalog reports both flags for every input. Reconciliation refuses a credential declaration that could never be
+bound to a secret reference: one with a `DefaultValue`, one on an input that is not a `string`, one on an input the
+type names in `[RefusesSecretBinding]`, and any on a type that implements `IRuntimeActivityCheckpointParticipant`. The
+Activities Design API and the JSON activity catalog refuse a credential declaration, because neither can check that
+the input could be bound to a secret reference.
+
+Publication compiles each input's effective policy as the stricter of the declaration and the author's per-binding
+choice (`ArgumentState.IsSensitive`). A sensitive declaration makes every binding sensitive; a credential
+declaration makes it sensitive and requires encryption. An authored `IsSensitive: false` on a declared input is a
+downgrade and is refused with `VF-ACT-005`. The pinned `ActivityContract` carries the same policy for each input and
+an explicit `ActivityInputContract.IsCredential` flag, which nothing infers from `RequiresEncryption`.
+
+An input whose effective policy requires encryption accepts only a secret reference or no binding: no other value
+can reach the activity without the input snapshot persisting it first. Publication refuses a literal, an object, a
+variable or other value read, an expression, and the declared default of an unbound input on such an input with
+`VF-ACT-011`, naming the node and the input and never the value. A sensitive input that is not a credential does not
+require encryption, so it takes a literal or an expression, and its value is materialized like any other, marked
+sensitive.
+
 `RegisterActivityTypesStartupTask` discovers CLR activity types plus their annotated input/result types and
 registers canonical aliases in `IWellKnownTypeRegistry`. It runs on every shell (re)build and registers from the
 assemblies of the features the shell was composed from first, then from the `IFeatureAssemblyProvider` assemblies, then

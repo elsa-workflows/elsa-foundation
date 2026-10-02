@@ -290,7 +290,8 @@
       "elsa.activities.design.tests.clrfixture": {
         "type": "Project",
         "dependencies": {
-          "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )"
+          "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
         }
       },
       "elsa.activities.dispatchworkflow.runtime": {

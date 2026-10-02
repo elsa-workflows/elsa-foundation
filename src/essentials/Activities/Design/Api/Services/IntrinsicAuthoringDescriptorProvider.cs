@@ -216,7 +216,10 @@ public sealed class IntrinsicAuthoringDescriptorProvider : IBuiltInAuthoringDesc
             UiHint: uiHint,
             DefaultValue: null,
             DefaultSyntax: null,
-            UiSpecifications: null);
+            UiSpecifications: null,
+            // An intrinsic input has no declaration surface.
+            IsSensitive: false,
+            IsCredential: false);
 
     private static ActivityAuthoringTemplateView IntrinsicTemplate(string versionId) =>
         new(

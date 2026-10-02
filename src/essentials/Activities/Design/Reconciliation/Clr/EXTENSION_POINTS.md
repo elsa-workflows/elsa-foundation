@@ -52,7 +52,10 @@ holding application-wide static state (§2.5.1).
 - **`IClrAssemblyScanner` → `ClrAssemblyScanner`** — the reflection-only folder scanner that produces
   one `ActivityVersionReconciliationModel` per discovered `IActivity`. Re-register to change the
   scanning strategy without touching `ClrActivityReconciliationSource`, which depends only on the
-  contract.
+  contract. The scanner is where a credential input declaration (`[ActivityInput(IsCredential = true)]`) is
+  checked to be bindable to a secret reference (spec 188, FR-006), so a replacement that copies the declaration
+  into the catalog must refuse the same unbindable declarations: a default value, a property that is not a
+  `string`, an input named in `[RefusesSecretBinding]`, and a checkpoint participant.
 
 ---
 

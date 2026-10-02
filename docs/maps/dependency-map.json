@@ -10951,6 +10951,11 @@
           "type": "internal",
           "id": "Elsa.Activities.Runtime.Core",
           "path": "src/essentials/Activities/Runtime/Core/Elsa.Activities.Runtime.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Runtime.Core",
+          "path": "src/essentials/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj"
         }
       ]
     },

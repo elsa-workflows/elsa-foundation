@@ -309,7 +309,8 @@ public sealed class ExecutableNodeCompiler(
                 input.IsNullable,
                 input.DefaultValue.HasValue,
                 input.DefaultValue,
-                CompileActivityPolicy(input.StorageDriverType, state, $"Input '{input.ReferenceKey}' on activity node '{activity.NodeId}'"));
+                RuntimeInputBindingCompiler.EffectivePolicy(activity.NodeId, input, state),
+                isCredential: input.IsCredential == true);
         });
         var outputDefinitions = activityVersion.Outputs.ToDictionary(output => output.ReferenceKey, StringComparer.Ordinal);
         var outputStates = activity.Outputs.ToDictionary(output => output.ReferenceKey, StringComparer.Ordinal);

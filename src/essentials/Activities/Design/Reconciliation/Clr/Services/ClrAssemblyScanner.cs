@@ -36,6 +36,8 @@ public sealed class ClrAssemblyScanner(
     public const string ProviderKey = "elsa.clr-activity";
     public const string SchemaVersion = "1";
     private const long MaxJavaScriptSafeInteger = 9007199254740991L;
+    // Matched by name: this project does not reference Elsa.Workflows.Runtime.Core, which declares the interface.
+    private const string CheckpointParticipantInterfaceFullName = "Elsa.Workflows.Runtime.Core.Contracts.IRuntimeActivityCheckpointParticipant";
     private static readonly string ActivityInterfaceFullName = typeof(IActivity).FullName!;
     private static readonly string ActivityResultInterfaceFullName = typeof(IActivityResult<>).FullName!;
     private static readonly string RequiredAttributeFullName = typeof(RequiredAttribute).FullName!;
@@ -47,6 +49,8 @@ public sealed class ClrAssemblyScanner(
     private static readonly string ActivityChildSlotAttributeFullName = typeof(ActivityChildSlotAttribute).FullName!;
     private static readonly string ActivityOutcomeAttributeFullName = typeof(ActivityOutcomeAttribute).FullName!;
     private static readonly string ActivityValueOutcomesAttributeFullName = typeof(ActivityValueOutcomesAttribute).FullName!;
+    private static readonly string RefusesSecretBindingAttributeFullName = typeof(RefusesSecretBindingAttribute).FullName!;
+    private static readonly string StringTypeFullName = typeof(string).FullName!;
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
 
     public IReadOnlyList<ActivityVersionReconciliationModel> Scan(string folderPath)
@@ -139,6 +143,11 @@ public sealed class ClrAssemblyScanner(
             var metadata = ReadActivityInputMetadata(property, property.PropertyType, inputNames, type.FullName!);
             var attribute = ReflectionOnlyAttributes.FindAttributeUpPropertyChain(property, ActivityInputAttributeFullName)!;
             var key = ReadNamedStringArgument(attribute, nameof(ActivityInputAttribute.Key)) ?? property.Name;
+            var isCredential = ReadNamedBoolArgument(attribute, nameof(ActivityInputAttribute.IsCredential));
+            var isSensitive = isCredential || ReadNamedBoolArgument(attribute, nameof(ActivityInputAttribute.IsSensitive));
+            if (isCredential)
+                EnsureCredentialCanBeBound(type, property, key, metadata);
+
             inputs.Add(new InputDefinition(
                 ReferenceKey: key,
                 Name: property.Name,
@@ -153,7 +162,10 @@ public sealed class ClrAssemblyScanner(
                 UISpecifications: metadata.UiSpecifications,
                 IsRequired: HasRequired(property),
                 DefaultValue: metadata.DefaultValue,
-                DefaultSyntax: metadata.DefaultSyntax));
+                DefaultSyntax: metadata.DefaultSyntax,
+                // Null rather than false when not declared, so an input that declares nothing keeps its catalog hash.
+                IsSensitive: isSensitive ? true : null,
+                IsCredential: isCredential ? true : null));
         }
 
         var resultType = FindTypedActivityResult(type);
@@ -370,6 +382,48 @@ public sealed class ClrAssemblyScanner(
             _ => null
         };
     }
+
+    /// <summary>
+    /// Refuses a credential declaration on an input that could never be bound. A credential input accepts only a secret
+    /// reference, so it cannot declare a default (that would be a literal credential in the catalog), and it must sit where
+    /// publication accepts a secret reference: a <see cref="string"/> input (a resolved secret is text, and the scanner
+    /// declares no CLR input any-typed), not named by the type's <see cref="RefusesSecretBindingAttribute"/>, on a type that
+    /// is not a checkpoint participant. <see cref="RefusesSecretBindingAttribute"/> is read for this check only and is never
+    /// written to the catalog.
+    /// </summary>
+    private static void EnsureCredentialCanBeBound(Type type, PropertyInfo property, string inputKey, ActivityInputMetadata metadata)
+    {
+        if (metadata.DefaultValue.HasValue)
+            throw InvalidCredentialDeclaration(type, property, "a credential input cannot declare a default value, which would be a literal credential in the activity catalog.");
+
+        if (!StringComparer.Ordinal.Equals(property.PropertyType.FullName, StringTypeFullName))
+            throw InvalidCredentialDeclaration(type, property, $"a credential input must be of type '{StringTypeFullName}', because a secret reference converts only to text; '{property.PropertyType.FullName}' could never be bound.");
+
+        if (ReadSecretRefusingInputKeys(type).Contains(inputKey))
+            throw InvalidCredentialDeclaration(type, property, "the activity type names the input in [RefusesSecretBinding], so publication refuses a secret reference on it and a credential input could never be bound.");
+
+        if (type.GetInterfaces().Any(candidate => candidate.FullName == CheckpointParticipantInterfaceFullName))
+            throw InvalidCredentialDeclaration(type, property, "the activity type is a checkpoint participant, which reads its inputs outside activation, so publication refuses a secret reference on every input and a credential input could never be bound.");
+    }
+
+    // [RefusesSecretBinding] is inherited, which a reflection-only load does not apply, so the type chain is walked.
+    private static HashSet<string> ReadSecretRefusingInputKeys(Type type)
+    {
+        var inputKeys = new HashSet<string>(StringComparer.Ordinal);
+        for (var current = (Type?)type; current is not null; current = current.BaseType)
+        {
+            foreach (var attribute in current.GetCustomAttributesData().Where(attribute => attribute.AttributeType.FullName == RefusesSecretBindingAttributeFullName))
+            {
+                if (attribute.ConstructorArguments is [{ Value: string inputKey }, ..])
+                    inputKeys.Add(inputKey);
+            }
+        }
+
+        return inputKeys;
+    }
+
+    private static InvalidOperationException InvalidCredentialDeclaration(Type type, PropertyInfo property, string reason) =>
+        new($"Invalid credential input declaration for '{type.FullName}.{property.Name}': {reason}");
 
     private static bool IsActivityType(Type type) =>
         type is { IsClass: true, IsAbstract: false }

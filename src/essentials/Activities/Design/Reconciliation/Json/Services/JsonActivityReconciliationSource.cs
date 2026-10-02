@@ -1,6 +1,7 @@
 using Elsa.Activities.Design.Core.Reconciliation;
 using Elsa.Activities.Design.Core.Reconciliation.Models;
 using Elsa.Activities.Design.Reconciliation.Json.Contracts;
+using Elsa.Activities.Design.Reconciliation.Json.Exceptions;
 using Elsa.Activities.Design.Reconciliation.Json.Options;
 using Microsoft.Extensions.Options;
 
@@ -15,7 +16,11 @@ namespace Elsa.Activities.Design.Reconciliation.Json.Services;
 /// The either/or shape of <see cref="JsonReconciliationOptions"/> (a single <c>FilePath</c> or an
 /// ordered <c>Files</c> list) and the required <c>SourceId</c> are validated by
 /// <see cref="JsonActivityReconciliationFeature"/> at registration, so this source can assume a valid
-/// configuration and simply read whichever was supplied.
+/// configuration and simply read whichever was supplied. An entry whose input declares <c>isCredential</c> is refused
+/// (spec 188, research R5): in phase 0 the credential declaration is reserved for
+/// <c>[ActivityInput(IsCredential = true)]</c> on a CLR activity, which CLR reconciliation checks can be bound to a
+/// secret reference, and a JSON entry has no such check. The refusal is made here rather than in the replaceable <see cref="IJsonActivityCatalogReader"/>, so a
+/// replacement reader cannot skip it.
 /// </remarks>
 public sealed class JsonActivityReconciliationSource(
     IJsonActivityCatalogReader reader,
@@ -32,9 +37,27 @@ public sealed class JsonActivityReconciliationSource(
         var result = new List<ActivityVersionReconciliationModel>();
 
         foreach (var file in EffectiveFiles())
-            result.AddRange(reader.Read(file.FilePath, cancellationToken));
+        {
+            var models = reader.Read(file.FilePath, cancellationToken);
+            RefuseCredentialDeclarations(file.FilePath, models);
+            result.AddRange(models);
+        }
 
         return new ValueTask<IEnumerable<ActivityVersionReconciliationModel>>(result);
+    }
+
+    private static void RefuseCredentialDeclarations(string filePath, IEnumerable<ActivityVersionReconciliationModel> models)
+    {
+        foreach (var model in models)
+        {
+            var credential = (model.Inputs ?? []).FirstOrDefault(input => input.IsCredential == true);
+            if (credential is not null)
+            {
+                throw new InvalidActivityCatalogJsonException(
+                    filePath,
+                    $"input '{credential.ReferenceKey}' of activity '{model.ActivityTypeKey}' declares isCredential, which a JSON activity catalog cannot declare. Declare a credential input with [ActivityInput(IsCredential = true)] on a CLR activity.");
+            }
+        }
     }
 
     /// <summary>

@@ -10,6 +10,7 @@ using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
+using ActivityValuePolicy = Elsa.Activities.Runtime.Core.Models.ActivityValuePolicy;
 using ArgumentValue = Elsa.Expressions.Core.Models.ArgumentValue;
 using RuntimeActivityDescriptor = Elsa.Activities.Runtime.Core.Models.RuntimeActivityDescriptor;
 using RuntimeActivityInputContract = Elsa.Activities.Runtime.Core.Models.ActivityInputContract;
@@ -74,7 +75,7 @@ public sealed class RuntimeInputBindingCompiler(
         foreach (var definition in definitions.Where(x => !bindings.ContainsKey(x.ReferenceKey)))
         {
             var binding = definition.DefaultValue.HasValue
-                ? Compile(nodeId, definition, new ArgumentValue(null, DefaultExpressionType))
+                ? CompileDefault(nodeId, definition, DeclaredPolicy(definition), new ArgumentValue(null, DefaultExpressionType))
                 : !definition.IsRequired
                     ? CompileOmitted(definition)
                     : throw MissingRequiredInput(nodeId, definition.ReferenceKey);
@@ -98,32 +99,22 @@ public sealed class RuntimeInputBindingCompiler(
             if (!contractsByKey.TryGetValue(state.ReferenceKey, out var contract))
                 throw new ArgumentException($"Activity node '{nodeId}' input '{state.ReferenceKey}' does not match any pinned activity input contract.");
 
-            var definition = ToInputDefinition(contract);
-            var owner = contract.Policy;
-            var authored = ValuePolicyCombiner.FromAuthoredStorage(state.StorageDriverType, state.IsSensitive == true);
-            var effective = ValuePolicyCombiner.Combine(owner, authored, $"Input '{contract.Key}' on activity node '{nodeId}'");
-            var binding = Compile(
-                nodeId,
-                definition,
-                state.Value,
-                ValuePolicyCombiner.ToProtectionPolicy(effective),
-                state.Conversion);
-            AddBinding(bindings, binding, nodeId, contract.Key);
+            var effective = ValuePolicyCombiner.CombineAuthoredInput(
+                DeclaredPolicy(contract),
+                state.StorageDriverType,
+                state.IsSensitive,
+                InputRole(nodeId, contract.Key));
+            AddBinding(bindings, CompileBound(nodeId, ToInputDefinition(contract), state.Value, effective, state.Conversion), nodeId, contract.Key);
         }
 
         foreach (var contract in contracts.Where(x => !bindings.ContainsKey(x.Key)))
         {
             var definition = ToInputDefinition(contract);
-            var policy = ValuePolicyCombiner.ToProtectionPolicy(contract.Policy);
+            var owner = DeclaredPolicy(contract);
             var binding = contract.HasDefault
-                ? Compile(
-                    nodeId,
-                    definition,
-                    new ArgumentValue(contract.DefaultValue, LiteralExpressionType),
-                    policy,
-                    conversion: null)
+                ? CompileDefault(nodeId, definition, owner, new ArgumentValue(contract.DefaultValue, LiteralExpressionType))
                 : !contract.IsRequired
-                    ? CompileOmitted(definition, policy)
+                    ? CompileOmitted(definition, ValuePolicyCombiner.ToProtectionPolicy(owner))
                     : throw MissingRequiredInput(nodeId, contract.Key);
             AddBinding(bindings, binding, nodeId, contract.Key);
         }
@@ -134,19 +125,11 @@ public sealed class RuntimeInputBindingCompiler(
     public RuntimeInputBinding Compile(string nodeId, InputDefinition inputDefinition, ArgumentState state)
     {
         ArgumentNullException.ThrowIfNull(state);
-        var owner = ValuePolicyCombiner.FromAuthoredStorage(inputDefinition.StorageDriverType);
-        var authored = ValuePolicyCombiner.FromAuthoredStorage(state.StorageDriverType, state.IsSensitive == true);
-        var effective = ValuePolicyCombiner.Combine(owner, authored, $"Input '{inputDefinition.ReferenceKey}' on activity node '{nodeId}'");
-        return Compile(nodeId, inputDefinition, state.Value, ValuePolicyCombiner.ToProtectionPolicy(effective), state.Conversion);
+        return CompileBound(nodeId, inputDefinition, state.Value, EffectivePolicy(nodeId, inputDefinition, state), state.Conversion);
     }
 
     public RuntimeInputBinding Compile(string nodeId, InputDefinition inputDefinition, ArgumentValue value) =>
-        Compile(
-            nodeId,
-            inputDefinition,
-            value,
-            ValuePolicyCombiner.ToProtectionPolicy(ValuePolicyCombiner.FromAuthoredStorage(inputDefinition.StorageDriverType)),
-            conversion: null);
+        CompileBound(nodeId, inputDefinition, value, DeclaredPolicy(inputDefinition), conversion: null);
 
     /// <summary>
     /// Preserves an omitted optional argument as a canonical absent literal. Only nullable CLR targets
@@ -155,8 +138,67 @@ public sealed class RuntimeInputBindingCompiler(
     public RuntimeInputBinding CompileOmitted(InputDefinition inputDefinition)
     {
         ArgumentNullException.ThrowIfNull(inputDefinition);
-        var policy = ValuePolicyCombiner.ToProtectionPolicy(ValuePolicyCombiner.FromAuthoredStorage(inputDefinition.StorageDriverType));
-        return CompileOmitted(inputDefinition, policy);
+        return CompileOmitted(inputDefinition, ValuePolicyCombiner.ToProtectionPolicy(DeclaredPolicy(inputDefinition)));
+    }
+
+    /// <summary>
+    /// The effective policy of an activity input (spec 188, FR-007): its storage policy with the activity's
+    /// sensitivity declaration applied, combined with the author's per-binding choice when the input is bound
+    /// (<paramref name="state"/> is null for an unbound input). Publication pins this same policy into the activity's
+    /// input contract, so the contract and the binding of an input cannot disagree.
+    /// </summary>
+    public static ActivityValuePolicy EffectivePolicy(string nodeId, InputDefinition inputDefinition, ArgumentState? state)
+    {
+        ArgumentNullException.ThrowIfNull(inputDefinition);
+        var declared = DeclaredPolicy(inputDefinition);
+        return state is null
+            ? declared
+            : ValuePolicyCombiner.CombineAuthoredInput(declared, state.StorageDriverType, state.IsSensitive, InputRole(nodeId, inputDefinition.ReferenceKey));
+    }
+
+    private static ActivityValuePolicy DeclaredPolicy(InputDefinition inputDefinition) =>
+        ValuePolicyCombiner.ApplyInputDeclaration(
+            ValuePolicyCombiner.FromAuthoredStorage(inputDefinition.StorageDriverType),
+            inputDefinition.IsSensitive == true,
+            inputDefinition.IsCredential == true);
+
+    // A pinned contract's policy already carries what publication pinned. Its credential flag is applied again from
+    // the flag itself, which is read explicitly and never inferred from the policy's RequiresEncryption.
+    private static ActivityValuePolicy DeclaredPolicy(RuntimeActivityInputContract contract) =>
+        ValuePolicyCombiner.ApplyInputDeclaration(contract.Policy, isSensitive: false, contract.IsCredential);
+
+    /// <summary>
+    /// Compiles an authored value under its effective policy. An input whose effective policy requires encryption
+    /// accepts only a secret reference (<c>VF-ACT-011</c>). That is decided before the value is compiled, so a refused
+    /// binding never reaches a conversion diagnostic, some of which describe the authored value.
+    /// </summary>
+    private RuntimeInputBinding CompileBound(
+        string nodeId,
+        InputDefinition inputDefinition,
+        ArgumentValue value,
+        ActivityValuePolicy effectivePolicy,
+        AuthoredValueConversionRequest? conversion)
+    {
+        if (effectivePolicy.RequiresEncryption && !IsSecretBinding(value))
+            throw SecretBindingDiagnostics.EncryptionRequiredBindingRefused(nodeId, inputDefinition.ReferenceKey);
+
+        return Compile(nodeId, inputDefinition, value, ValuePolicyCombiner.ToProtectionPolicy(effectivePolicy), conversion);
+    }
+
+    /// <summary>
+    /// Compiles the declared default of an unbound input. A default is a literal, so an input whose policy requires
+    /// encryption refuses it (<c>VF-ACT-011</c>) just as it refuses an authored literal.
+    /// </summary>
+    private RuntimeInputBinding CompileDefault(
+        string nodeId,
+        InputDefinition inputDefinition,
+        ActivityValuePolicy policy,
+        ArgumentValue defaultValue)
+    {
+        if (policy.RequiresEncryption)
+            throw SecretBindingDiagnostics.EncryptionRequiredDefaultRefused(nodeId, inputDefinition.ReferenceKey);
+
+        return Compile(nodeId, inputDefinition, defaultValue, ValuePolicyCombiner.ToProtectionPolicy(policy), conversion: null);
     }
 
     private RuntimeInputBinding CompileOmitted(InputDefinition inputDefinition, ValueProtectionPolicy policy)
@@ -364,7 +406,7 @@ public sealed class RuntimeInputBindingCompiler(
             effectivePolicy: ValuePolicyCombiner.Combine(
                 effectivePolicy,
                 SecretPolicyMinimum,
-                $"Input '{inputDefinition.ReferenceKey}' on activity node '{nodeId}'"),
+                InputRole(nodeId, inputDefinition.ReferenceKey)),
             source: RuntimeInputBindingSource.SecretRead,
             metadata: BuildInputMetadata(inputDefinition),
             conversionPlan: conversionPlan,
@@ -769,6 +811,8 @@ public sealed class RuntimeInputBindingCompiler(
             throw nonText(propertyName);
         return null;
     }
+
+    private static string InputRole(string nodeId, string inputKey) => $"Input '{inputKey}' on activity node '{nodeId}'";
 
     private static ValueConversionBindingContext InputBindingContext(string nodeId, InputDefinition inputDefinition) =>
         new(nodeId, inputDefinition.ReferenceKey, ValueConversionBindingKind.Input);
