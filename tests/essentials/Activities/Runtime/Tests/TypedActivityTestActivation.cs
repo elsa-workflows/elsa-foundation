@@ -91,7 +91,7 @@ internal static class TypedActivityTestActivation
             services.GetRequiredService<IServiceScopeFactory>(),
             registry,
             serializer);
-        var activator = new ActivityActivator([strategy], new ActivityInputHydrator(), SecretResolutionTestSupport.SecretInputResolver());
+        var activator = new ActivityActivator([strategy], new ActivityInputHydrator(), SecretResolutionTestSupport.NoResolverSecretInputResolver());
         return await activator.ActivateAsync(request);
     }
 

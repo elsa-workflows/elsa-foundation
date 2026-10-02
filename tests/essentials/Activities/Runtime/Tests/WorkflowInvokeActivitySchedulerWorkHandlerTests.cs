@@ -253,6 +253,55 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
     }
 
     [Fact]
+    public async Task HandleAsync_ActivationCanceledWhileResolvingASecretAndLeaseDisposalFails_RecordsNoFault()
+    {
+        // The activation's cancellation is not a resolution failure or a fault, even when disposing the lease fails too.
+        // The disposal failure leaves the handler as one from its own lease does during a cancellation.
+        using var cancellation = new CancellationTokenSource();
+        var resolver = new FakeRuntimeSecretResolver
+        {
+            Respond = (_, token) =>
+            {
+                cancellation.Cancel();
+                token.ThrowIfCancellationRequested();
+                return RuntimeSecretResolution.Failure("StoreUnavailable", isRetryable: true);
+            }
+        };
+        var scope = new ThrowingAsyncDisposable();
+        var activator = new ActivityActivator(
+            [new FixedLeaseStrategy(new ActivityActivationLease(new CountingActivity(), scope))],
+            new ActivityInputHydrator(),
+            new ActivitySecretInputResolver(
+                new CountingPartitionAccessor(WorkflowExecutionPartition.DefaultValue),
+                CanonicalWorkflowStateTestData.EnsureRunning(new InMemoryWorkflowExecutionStateStore()),
+                new RuntimeValueConversionExecutor(),
+                resolver));
+        var executable = NewTypedExecutable();
+        await _executableStore.SaveAsync(executable);
+        await _activityStateStore.SaveAsync(NewRunningState(executable, new Dictionary<string, ValueEnvelope>
+        {
+            ["text"] = SecretResolutionTestSupport.Withheld()
+        }));
+        await using var provider = NewProvider(activator);
+
+        var exception = await Assert.ThrowsAsync<AggregateException>(() =>
+            NewHandler(provider).HandleAsync(NewInvokeWorkItem(NewIdentity()), cancellation.Token).AsTask());
+
+        Assert.StartsWith("Activity activation cancellation and disposal both failed.", exception.Message, StringComparison.Ordinal);
+        Assert.Collection(
+            exception.InnerExceptions,
+            inner => Assert.Equal(cancellation.Token, Assert.IsAssignableFrom<OperationCanceledException>(inner).CancellationToken),
+            inner => Assert.Equal("Scope disposal failed.", inner.Message));
+        Assert.Single(resolver.Requests);
+        Assert.True(scope.DisposeAttempted);
+        var state = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
+        Assert.Equal(ActivityExecutionStatus.Running, state!.Status);
+        Assert.Null(state.Fault);
+        Assert.Empty(state.IncidentIds);
+        Assert.Empty(await _incidentStateStore.ListAsync("wfexec-1"));
+    }
+
+    [Fact]
     public async Task HandleAsync_UnsolicitedOperationCancellation_FaultsDurablyWithoutReactivation()
     {
         var activity = new UnsolicitedCancellationActivity();
@@ -1047,6 +1096,21 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
             ActivateCalls++;
             return ValueTask.FromResult(new ActivityActivationLease(activity));
         }
+    }
+
+    /// <summary>A hydrating strategy for the typed node that hands out <paramref name="lease"/>.</summary>
+    private sealed class FixedLeaseStrategy(ActivityActivationLease lease) : IActivityActivationStrategy
+    {
+        public string ConsumerKey => "typed";
+
+        public IReadOnlyCollection<string> SupportedSchemaVersions { get; } = [RuntimeActivityDescriptor.InitialSchemaVersion];
+
+        public bool RequiresInputHydration => true;
+
+        public ValueTask<ActivityActivationLease> ActivateAsync(
+            ActivityActivationStrategyRequest request,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(lease);
     }
 
     private sealed class ThrowingDisposeActivator : IActivityActivator

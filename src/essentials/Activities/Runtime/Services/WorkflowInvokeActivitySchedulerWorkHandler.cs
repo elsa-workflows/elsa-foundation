@@ -222,7 +222,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
         }
         catch (OperationCanceledException cancellationException) when (cancellationToken.IsCancellationRequested)
         {
-            var disposalException = await ActivityActivationLeaseDisposer.TryDisposeAsync(activationLease);
+            var disposalException = await ActivityActivationLeaseDisposer.TryDisposeAfterCancellationAsync(activationLease, cancellationException);
             activationLease = null;
             if (disposalException is not null)
                 throw new AggregateException("Activity activation cancellation and disposal both failed.", cancellationException, disposalException);
@@ -234,7 +234,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
             activationLease = null;
             var fault = disposalException is null
                 ? exception
-                : ActivityActivationLeaseDisposer.Combine(exception, disposalException);
+                : ActivityActivationLeaseDisposer.CombineActivationFailure(exception, disposalException, cancellationToken);
             var subStatus = disposalException is null ? "ActivityConstructionFailed" : "ActivityDisposalFailed";
             await RecordFaultAsync(activityFaultIncidentRecorder, activityExecutionStateStore, checkpointCommitter, workItem, invokePayload, state, fault, subStatus, valueSnapshots, cancellationToken);
             return;
@@ -470,7 +470,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
             activationLease = null;
             var fault = disposalException is null
                 ? exception
-                : ActivityActivationLeaseDisposer.Combine(exception, disposalException);
+                : ActivityActivationLeaseDisposer.CombineExecutionFailure(exception, disposalException);
             var subStatus = disposalException is null ? "ActivityFaulted" : "ActivityDisposalFailed";
             await RecordFaultAsync(activityFaultIncidentRecorder, activityExecutionStateStore, checkpointCommitter, workItem, invokePayload, state, fault, subStatus, valueSnapshots, cancellationToken);
             return;

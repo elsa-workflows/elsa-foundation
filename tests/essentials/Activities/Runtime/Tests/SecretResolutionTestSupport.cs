@@ -48,11 +48,17 @@ internal static class SecretResolutionTestSupport
         ValueEnvelope.Withheld(StringType, WithheldValue.SecretReference(Reference(referenceName), TextPlan), SecretBindingTestSupport.SecretPolicy);
 
     /// <summary>
-    /// An activator's secret input collaborator for a test that activates no withheld input, composed as a host without
-    /// a resolver composes it: a withheld secret is refused with the missing-resolver activation failure.
+    /// An activator's secret input collaborator composed as a host without a resolver composes it: a withheld secret is
+    /// refused with the missing-resolver activation failure. A test that observes a collaborator passes its own.
     /// </summary>
-    public static ActivitySecretInputResolver SecretInputResolver() =>
-        new(new CountingPartitionAccessor(WorkflowExecutionPartition.DefaultValue), new SingleInstanceStateStore(null), new RuntimeValueConversionExecutor());
+    public static ActivitySecretInputResolver NoResolverSecretInputResolver(
+        IWorkflowExecutionPartitionAccessor? partitionAccessor = null,
+        IWorkflowExecutionStateStore? workflowExecutionStateStore = null,
+        IRuntimeValueConversionExecutor? valueConversionExecutor = null) =>
+        new(
+            partitionAccessor ?? new CountingPartitionAccessor(WorkflowExecutionPartition.DefaultValue),
+            workflowExecutionStateStore ?? new SingleInstanceStateStore(null),
+            valueConversionExecutor ?? new RuntimeValueConversionExecutor());
 
     /// <summary>
     /// A harness whose host composes <paramref name="resolver"/> and the recorder the test activities write to. The

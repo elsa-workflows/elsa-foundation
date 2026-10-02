@@ -81,7 +81,7 @@ public sealed class ActivityActivator(
         {
             var disposalException = await ActivityActivationLeaseDisposer.TryDisposeAsync(lease);
             if (disposalException is not null)
-                throw ActivityActivationLeaseDisposer.Combine(activationException, disposalException);
+                throw ActivityActivationLeaseDisposer.CombineActivationFailure(activationException, disposalException, cancellationToken);
 
             throw;
         }

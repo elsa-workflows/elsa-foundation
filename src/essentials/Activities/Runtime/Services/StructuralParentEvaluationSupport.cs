@@ -79,7 +79,7 @@ internal static class StructuralParentEvaluationSupport
         {
             var disposalException = await ActivityActivationLeaseDisposer.TryDisposeAsync(activationLease);
             if (disposalException is not null)
-                throw ActivityActivationLeaseDisposer.Combine(exception, disposalException);
+                throw ActivityActivationLeaseDisposer.CombineActivationFailure(exception, disposalException, cancellationToken);
             throw;
         }
 

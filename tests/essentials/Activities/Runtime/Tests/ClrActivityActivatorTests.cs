@@ -131,7 +131,7 @@ public sealed class ClrActivityActivatorTests : IAsyncDisposable
         // A strategy that skips hydration (graph activation) never reads the input, so only the activator's own
         // refusal stops a withheld value from passing silently, even with a resolver composed (spec 188, T008).
         var strategy = new NonHydratingStrategy();
-        var activator = new ActivityActivator([strategy], new ActivityInputHydrator(), SecretInputResolver(_partition));
+        var activator = new ActivityActivator([strategy], new ActivityInputHydrator(), ResolvingSecretInputResolver(_partition));
         var contract = Contract(typeof(ServiceBearingActivity), "message");
 
         var exception = await Assert.ThrowsAsync<WithheldValueException>(() => activator.ActivateAsync(WithheldRequest(
@@ -396,10 +396,12 @@ public sealed class ClrActivityActivatorTests : IAsyncDisposable
     public async Task A_classified_resolution_failure_keeps_its_classification_when_lease_disposal_also_fails()
     {
         _resolver.Respond = (_, _) => RuntimeSecretResolution.Failure("StoreUnavailable", isRetryable: true);
-        var activator = new ActivityActivator([new FailingDisposalStrategy()], new ActivityInputHydrator(), SecretInputResolver(_partition));
+        var activator = new ActivityActivator([new FailingDisposalStrategy()], new ActivityInputHydrator(), ResolvingSecretInputResolver(_partition));
 
         var exception = await Assert.ThrowsAnyAsync<AggregateException>(() => activator.ActivateAsync(WithheldRequest(Withheld())).AsTask());
 
+        // Nothing ran: the activation failed, and the message says so.
+        Assert.StartsWith("Activity activation and activation disposal both failed.", exception.Message, StringComparison.Ordinal);
         // The fault recorder reads retryability and the code through the classification contract (T032).
         var classification = Assert.IsAssignableFrom<IRuntimeFaultClassification>(exception);
         Assert.True(classification.IsRetryable);
@@ -408,6 +410,29 @@ public sealed class ClrActivityActivatorTests : IAsyncDisposable
             exception.InnerExceptions,
             inner => Assert.IsType<RuntimeSecretResolutionException>(inner),
             inner => Assert.Equal("Scope disposal failed.", inner.Message));
+    }
+
+    [Fact]
+    public async Task A_canceled_resolution_stays_a_cancellation_when_lease_disposal_also_fails()
+    {
+        // A handler recognizes the activation's cancellation only as an OperationCanceledException for its token; a
+        // combined cleanup failure would be recorded as a fault (contracts/runtime-secret-resolution.md).
+        using var cancellation = new CancellationTokenSource();
+        _resolver.Respond = (_, token) =>
+        {
+            cancellation.Cancel();
+            token.ThrowIfCancellationRequested();
+            return RuntimeSecretResolution.Failure("StoreUnavailable", isRetryable: true);
+        };
+        var activator = new ActivityActivator([new FailingDisposalStrategy()], new ActivityInputHydrator(), ResolvingSecretInputResolver(_partition));
+
+        var exception = await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            activator.ActivateAsync(WithheldRequest(Withheld()), cancellation.Token).AsTask());
+
+        Assert.Equal(cancellation.Token, exception.CancellationToken);
+        Assert.Equal("Activity activation was canceled, and disposing its activation lease failed.", exception.Message);
+        Assert.IsNotAssignableFrom<IRuntimeFaultClassification>(exception);
+        Assert.IsAssignableFrom<OperationCanceledException>(exception.InnerException);
     }
 
     [Fact]
@@ -668,17 +693,18 @@ public sealed class ClrActivityActivatorTests : IAsyncDisposable
     private static (IActivityActivator Activator, ActivityContract Contract) Activator(
         IServiceProvider services,
         IExternalPayloadStore? externalPayloadStore = null) =>
-        (new ActivityActivator([ClrStrategy(services)], new ActivityInputHydrator(), SecretResolutionTestSupport.SecretInputResolver(), externalPayloadStore),
+        (new ActivityActivator([ClrStrategy(services)], new ActivityInputHydrator(), SecretResolutionTestSupport.NoResolverSecretInputResolver(), externalPayloadStore),
             Contract(typeof(ServiceBearingActivity), "message"));
 
     private ActivityActivator SecretActivator(IWorkflowExecutionPartitionAccessor? partitionAccessor = null) =>
-        new([ClrStrategy(_root)], new ActivityInputHydrator(), SecretInputResolver(partitionAccessor ?? _partition));
+        new([ClrStrategy(_root)], new ActivityInputHydrator(), ResolvingSecretInputResolver(partitionAccessor ?? _partition));
 
     /// <summary>An activator whose secret input collaborator is composed as a host without a resolver composes it.</summary>
     private ActivityActivator NoResolverActivator() =>
-        new([ClrStrategy(_root)], new ActivityInputHydrator(), new ActivitySecretInputResolver(_partition, _instances, _conversions));
+        new([ClrStrategy(_root)], new ActivityInputHydrator(), SecretResolutionTestSupport.NoResolverSecretInputResolver(_partition, _instances, _conversions));
 
-    private ActivitySecretInputResolver SecretInputResolver(IWorkflowExecutionPartitionAccessor partitionAccessor) =>
+    /// <summary>A secret input collaborator that resolves through <see cref="_resolver"/> under <paramref name="partitionAccessor"/>.</summary>
+    private ActivitySecretInputResolver ResolvingSecretInputResolver(IWorkflowExecutionPartitionAccessor partitionAccessor) =>
         new(partitionAccessor, _instances, _conversions, _resolver);
 
     private static ClrActivityActivator ClrStrategy(IServiceProvider services)

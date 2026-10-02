@@ -313,7 +313,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
         }
         catch (OperationCanceledException cancellationException) when (cancellationToken.IsCancellationRequested)
         {
-            var disposalException = await ActivityActivationLeaseDisposer.TryDisposeAsync(activationLease);
+            var disposalException = await ActivityActivationLeaseDisposer.TryDisposeAfterCancellationAsync(activationLease, cancellationException);
             activationLease = null;
             if (disposalException is not null)
                 throw new AggregateException("Structural callback cancellation and activation disposal both failed.", cancellationException, disposalException);
@@ -325,7 +325,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
             activationLease = null;
             var fault = disposalException is null
                 ? exception
-                : ActivityActivationLeaseDisposer.Combine(exception, disposalException);
+                : ActivityActivationLeaseDisposer.CombineExecutionFailure(exception, disposalException);
             var subStatus = disposalException is null ? "ParentCompletionFaulted" : "ActivityDisposalFailed";
             if (checkpointCommitter is null)
             {
