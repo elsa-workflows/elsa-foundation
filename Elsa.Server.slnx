@@ -37,6 +37,14 @@
   <Folder Name="/src/extensions/Elsa3/tests/Mapping/">
     <Project Path="src/extensions/Elsa3/tests/Mapping/Tests/Elsa3.Mapping.Tests.csproj" />
   </Folder>
+  <Folder Name="/src/extensions/ExtensionBuilder/" />
+  <Folder Name="/src/extensions/ExtensionBuilder/src/">
+    <Project Path="src/extensions/ExtensionBuilder/src/Api/Elsa.ExtensionBuilder.Api.csproj" />
+  </Folder>
+  <Folder Name="/src/extensions/ExtensionBuilder/tests/" />
+  <Folder Name="/src/extensions/ExtensionBuilder/tests/Api/">
+    <Project Path="src/extensions/ExtensionBuilder/tests/Api/Tests/Elsa.ExtensionBuilder.Api.Tests.csproj" />
+  </Folder>
   <Folder Name="/samples/">
     <Project Path="samples/Elsa.Samples.Nuplane.Activities/Elsa.Samples.Nuplane.Activities.csproj" />
     <Project Path="samples/Elsa.Samples.Nuplane.Notes/Elsa.Samples.Nuplane.Notes.csproj" />

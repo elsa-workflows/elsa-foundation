@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json.Nodes;
 using CShells.Lifecycle;
+using Elsa.Api.AspNetCore;
 using Elsa.Workbench;
 using Elsa.Workbench.Readiness;
 using Xunit;

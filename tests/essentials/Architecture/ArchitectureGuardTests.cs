@@ -24,6 +24,11 @@ public sealed partial class ArchitectureGuardTests
     // recorded at the declaration site (csproj comment) and here. Additions require architect review.
     private static readonly HashSet<(string Project, string Target)> AllowedInternalsVisibleTo =
     [
+        // The Extension Builder subsystem is a host-private surface of ~80 interlocking internal types;
+        // publicizing it to satisfy §2.23.3 would promote host-only contracts into public API. It lives in
+        // its own optional extension (Elsa.ExtensionBuilder.Api, #2294) which exposes those internals to
+        // the extension's own test project (MD-3, Elsa 4 architecture review 2026-07).
+        ("Elsa.ExtensionBuilder.Api", "Elsa.ExtensionBuilder.Api.Tests"),
         // Elsa.Workbench keeps a narrow exception for the host-only module-management registry builder
         // (ModuleManagementRegistryBuilder), exercised by ModuleManagementRegistryBuilderTests.
         ("Elsa.Workbench", "Elsa.Modularity.Tests"),
@@ -665,9 +670,10 @@ public sealed partial class ArchitectureGuardTests
         reference.Name.StartsWith("Elsa.", StringComparison.Ordinal) &&
         reference.Name.Contains(".Design", StringComparison.Ordinal);
 
-    // ExtensionBuilder wrote runtime-generated scratch projects under this path. The feature
-    // is retired, but the prune scan still skips those files if they reappear so generated
-    // output cannot look like a reintroduced public contract.
+    // Extension Builder writes runtime-generated scratch projects under guid-named project/snapshot folders
+    // (gitignored, never part of the solution) when its storage path is relative to a content root in the
+    // tree. Skipped so generated output is neither held to the domain-tree convention nor read as a
+    // reintroduced public contract.
     private static bool IsGeneratedScratchFile(string filePath) =>
         filePath.Replace(Path.DirectorySeparatorChar, '/').Contains("/extension-builder/projects/", StringComparison.Ordinal);
 
@@ -744,6 +750,7 @@ public sealed partial class ArchitectureGuardTests
     private static IEnumerable<ProjectInfo> ProjectFiles() =>
         ModuleRoots.Resolve(RepoRoot, ModuleRoots.All)
             .SelectMany(directory => Directory.EnumerateFiles(directory, "*.csproj", SearchOption.AllDirectories))
+            .Where(file => !IsGeneratedScratchFile(file))
             .Select(file => ProjectInfo.From(RepoRoot, file));
 
     /// <summary>Production source files across every module root, excluding test and build output.</summary>
@@ -1069,6 +1076,7 @@ public sealed partial class ArchitectureGuardTests
     [
         ("Elsa3.", "Elsa3"),
         ("Elsa.Agent.", "Agent"),
+        ("Elsa.ExtensionBuilder.", "ExtensionBuilder"),
     ];
 
     private static string ExpectedProjectPath(ProjectInfo project)

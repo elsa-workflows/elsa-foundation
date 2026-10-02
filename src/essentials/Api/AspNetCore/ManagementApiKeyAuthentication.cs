@@ -4,13 +4,15 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Elsa.Workbench;
+namespace Elsa.Api.AspNetCore;
 
 /// <summary>
-/// Authentication primitive for the Workbench host-control surfaces (module management and CShells
-/// management). Both surfaces gate their endpoints behind the same configured API key; this type is
-/// the single source of truth for the header name, configuration key, key comparison and validation
-/// flow so the surfaces cannot drift apart.
+/// Authentication primitive for the host-control surfaces a host maps on its root route builder (module
+/// management, CShells management, and the optional Extension Builder). Every such surface gates its endpoints
+/// behind the same configured API key; this type is the single source of truth for the header name,
+/// configuration key, key comparison and validation flow so the surfaces cannot drift apart. It lives in a
+/// library rather than in a host so an optional extension that maps a host-control surface can validate the
+/// same key.
 /// </summary>
 public static class ManagementApiKeyAuthentication
 {

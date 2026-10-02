@@ -32,6 +32,8 @@ using Elsa.Diagnostics.StructuredLogs;
 using Elsa.Events;
 using Elsa.Expressions;
 using Elsa.Expressions.Api;
+using Elsa.ExtensionBuilder.Api;
+using Elsa.ExtensionBuilder.Api.Extensions;
 using Elsa.Foundation.Identity;
 using Elsa.Foundation.Identity.Api;
 using Elsa.Foundation.Identity.AspNetCoreIdentity;
@@ -197,6 +199,14 @@ builder.Services
 builder.Services.AddSingleton(new ShellReadinessState(TimeProvider.System));
 builder.Services.AddSingleton<DefaultShellWarmup>();
 builder.Services.AddHostedService(services => services.GetRequiredService<DefaultShellWarmup>());
+
+// Extension Builder is an optional extension (#2294) and a root-hosted subsystem: root singletons, a background build
+// worker and management endpoints mapped on the root route builder below, none of which can live in a shell container.
+// Both the composition here and the mapping (MapElsaExtensionBuilderApi below) honor the switch, so a host that leaves
+// it off has no trace of the subsystem; a change takes effect on the next startup.
+var extensionBuilderEnabled = ExtensionBuilderServiceCollectionExtensions.IsEnabled(configuration);
+if (extensionBuilderEnabled)
+    builder.Services.AddElsaExtensionBuilder(configuration);
 
 builder.Services.AddNuplane(nuplaneConfiguration, nuplane =>
 {
@@ -434,6 +444,8 @@ app.MapGet("/", () => Results.Ok(new { status = "Healthy", service = "elsa-workb
     .AllowPublic("health", "Reports whether the Workbench root host is responding.");
 app.MapShellReadiness();
 app.MapElsaModuleManagementApi();
+if (extensionBuilderEnabled)
+    app.MapElsaExtensionBuilderApi();
 app.MapShells();
 
 // Explicit auth middleware placed after MapShells: ShellMiddleware (added by MapShells) swaps

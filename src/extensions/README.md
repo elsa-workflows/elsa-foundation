@@ -20,6 +20,26 @@ src/extensions/
 `<Name>` is the module bucket, not a project name: `src/extensions/Diagnostics` holds all eight diagnostics
 projects, `src/extensions/Elsa3` holds all four Elsa 3 import projects.
 
+## Extensions a host composes at its root
+
+Most extensions are CShells features: a shell lists them in `shells.json`, and nothing else is needed. One
+is a root-hosted subsystem the host has to compose itself:
+
+- **ExtensionBuilder** (`Elsa.ExtensionBuilder.Api`): see *Extension Builder* in the
+  [Elsa glossary](../../docs/glossary/elsa.md). Its root singletons, build worker and host-mapped routes cannot
+  live in a shell container, so a host calls `AddElsaExtensionBuilder(configuration)` and
+  `MapElsaExtensionBuilderApi()` itself. Its settings, under `Elsa:ExtensionBuilder`:
+  - `Enabled`: the Workbench composes it only when `true` (`Elsa__ExtensionBuilder__Enabled=true` as an
+    environment variable); off when absent.
+  - `TrustedRoles`: every route but `/capabilities` needs the caller to hold one; the management key's
+    principal is given them.
+  - `StoragePath`: workspaces and build output; outside the tree by default.
+  - `GitExecutable`, `DotNetExecutable`, `ServerLocalRepositoryRoots`.
+
+  The routes also need the Elsa host management key (`Elsa:ModuleManagement:ApiKey`, sent as
+  `X-Elsa-Module-Management-Key`): with no key configured they answer 404, with a wrong or missing header 401.
+  The Studio relay (studio ADR 0037) names these routes, so `Elsa.ExtensionBuilder.Api.Tests` pins them.
+
 ## What a move does and does not change
 
 Project names, assembly names, root namespaces and NuGet package ids are all driven by the `.csproj`

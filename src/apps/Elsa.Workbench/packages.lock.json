@@ -1357,6 +1357,18 @@
           "Elsa.Events.Core": "[4.0.0-dev, )"
         }
       },
+      "elsa.extensionbuilder.api": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Api.AspNetCore": "[4.0.0-dev, )",
+          "Elsa.Cluster.Readability": "[4.0.0-dev, )",
+          "Elsa.Foundation.Identity": "[4.0.0-dev, )",
+          "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )",
+          "Elsa.Git": "[4.0.0-dev, )",
+          "Elsa.Modularity.Core": "[4.0.0-dev, )",
+          "Nuplane.Admin": "[0.0.11-preview.94, )"
+        }
+      },
       "elsa.foundation.identity": {
         "type": "Project",
         "dependencies": {
@@ -1440,6 +1452,9 @@
           "Microsoft.EntityFrameworkCore": "[10.0.10, )",
           "Microsoft.EntityFrameworkCore.Relational": "[10.0.10, )"
         }
+      },
+      "elsa.git": {
+        "type": "Project"
       },
       "elsa.http": {
         "type": "Project",
