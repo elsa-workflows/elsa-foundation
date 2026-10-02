@@ -89,3 +89,4 @@ Numbers are not unique: the folder holds two independent sequences (an early Ext
 | 0076 | [Persistence tooling runs inside the host's closure](0076-persistence-tooling-runs-inside-the-host-closure.md) | Accepted |
 | 0077 | [A module upgrades in place only when its persisted schema is unchanged](0077-a-module-upgrades-in-place-only-when-its-persisted-schema-is-unchanged.md) | Accepted |
 | 0078 | [Workflow executions are virtual actors, and cluster membership is a foundation contract](0078-workflow-executions-are-virtual-actors-and-cluster-membership-is-a-foundation-contract.md) | Accepted |
+| 0079 | [Foundation.Host package sets are declared by a manifest, with a policy per package](0079-foundation-host-package-sets-are-declared-by-a-manifest-with-a-policy-per-package.md) | Accepted |

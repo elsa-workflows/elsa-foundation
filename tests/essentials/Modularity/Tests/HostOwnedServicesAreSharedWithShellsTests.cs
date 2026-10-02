@@ -5,6 +5,7 @@ using CShells.Lifecycle;
 using Elsa.Attention.Core;
 using Elsa.Cluster.Core.Contracts;
 using Elsa.Cluster.Core.Models;
+using Elsa.Cluster.Readability;
 using Elsa.Foundation.DataProtection.EntityFrameworkCore;
 using Elsa.ExtensionBuilder.Api.Extensions;
 using Elsa.Foundation.Host.ModuleManagement;
@@ -76,6 +77,10 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
             IntentionallyPerShell + "holds no state; each shell's permission catalog aggregates the contributors of its own container, the host's root-registered ones copied in",
             "Elsa.Foundation.Identity.Core.Authorization.IPermissionContributor"),
         Entries(
+            IntentionallyPerShell + "holds no state; a shell's startup validation runs the host's options checks again, in the shell's own container (#2331)",
+            "Nuplane.Feeds.Configuration.FeedCredentialOptionsValidator",
+            "Nuplane.Loading.LoadingOptionsValidator"),
+        Entries(
             "unreachable from shell code: a hosted service the host starts once, and a shell container never starts its copy (a disposable one could not be shared in any case)",
             "Elsa.Persistence.EntityFramework.EfModuleMigrator<Elsa.Cluster.EntityFrameworkCore.ClusterMembershipDbContext>",
             "Elsa.Persistence.EntityFramework.EfModuleMigrator<Elsa.Foundation.DataProtection.EntityFrameworkCore.DataProtectionKeysDbContext>",
@@ -99,13 +104,12 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
         "Nuplane.Capabilities.CapabilityContributionLedger", "Nuplane.Capabilities.CapabilityDesiredStateContributor",
         "Nuplane.Events.IObserverEventDispatcher", "Nuplane.Events.ObserverEventDispatcher",
         "Nuplane.Feeds.IRemotePackageAcquirer",
-        "Nuplane.Feeds.Configuration.FeedCredentialOptionsValidator",
         "Nuplane.Feeds.Credentials.ISecretReferenceProvider", "Nuplane.Feeds.Credentials.ISecretReferenceResolver", "Nuplane.Feeds.Credentials.SecretReferenceResolver",
         "Nuplane.Feeds.Policy.FeedResolutionPolicy",
         "Nuplane.Feeds.Versioning.IFeedVersionEnumerator", "Nuplane.Feeds.Versioning.IVersionRangeEvaluator", "Nuplane.Feeds.Versioning.NuGetFeedVersionEnumerator",
         "Nuplane.Health.IReconciliationHealthEvaluator", "Nuplane.Health.ObservationDegradationTracker", "Nuplane.Health.ReconciliationHealthEvaluator",
         "Nuplane.Hosting.ILastKnownGoodStartupRecoveryService", "Nuplane.Hosting.ReconciliationTriggerQueue", "Nuplane.Hosting.StartupRecoveryState",
-        "Nuplane.Loading.AssemblyScanCandidateProjector", "Nuplane.Loading.HostIntegratedAssemblyResolutionCatalog", "Nuplane.Loading.HostIntegratedAssemblyResolver", "Nuplane.Loading.IPackageAssemblyCatalog", "Nuplane.Loading.IPackageLoadModeAdvisor", "Nuplane.Loading.IPackageLoadStateCatalog", "Nuplane.Loading.IPackageTypeFinder", "Nuplane.Loading.LoadingCatalog", "Nuplane.Loading.LoadingCatalogRefreshTracker", "Nuplane.Loading.LoadingEventDispatcher", "Nuplane.Loading.LoadingFailureTracker", "Nuplane.Loading.LoadingOptionsValidator", "Nuplane.Loading.PackageAssemblyCatalog", "Nuplane.Loading.PackageAssemblyProvider", "Nuplane.Loading.PackageLoadModeSelector", "Nuplane.Loading.PackageLoader", "Nuplane.Loading.PackageMetadataLoadModeAdvisor", "Nuplane.Loading.PackageMetadataLoadModeReader", "Nuplane.Loading.PackageTypeFinder", "Nuplane.Loading.PackageUnloadCoordinator", "Nuplane.Loading.SharedAssemblyPolicyMatcher",
+        "Nuplane.Loading.AssemblyScanCandidateProjector", "Nuplane.Loading.HostIntegratedAssemblyResolutionCatalog", "Nuplane.Loading.HostIntegratedAssemblyResolver", "Nuplane.Loading.IPackageAssemblyCatalog", "Nuplane.Loading.IPackageLoadModeAdvisor", "Nuplane.Loading.IPackageLoadStateCatalog", "Nuplane.Loading.IPackageTypeFinder", "Nuplane.Loading.LoadingCatalog", "Nuplane.Loading.LoadingCatalogRefreshTracker", "Nuplane.Loading.LoadingEventDispatcher", "Nuplane.Loading.LoadingFailureTracker", "Nuplane.Loading.PackageAssemblyCatalog", "Nuplane.Loading.PackageAssemblyProvider", "Nuplane.Loading.PackageLoadModeSelector", "Nuplane.Loading.PackageLoader", "Nuplane.Loading.PackageMetadataLoadModeAdvisor", "Nuplane.Loading.PackageMetadataLoadModeReader", "Nuplane.Loading.PackageTypeFinder", "Nuplane.Loading.PackageUnloadCoordinator", "Nuplane.Loading.SharedAssemblyPolicyMatcher",
         "Nuplane.Metadata.IPackageMetadataReader", "Nuplane.Metadata.NuplanePackageMetadataReader",
         "Nuplane.Observability.IReconciliationLogger", "Nuplane.Observability.ReconciliationLogger", "Nuplane.Observability.ReconciliationMetrics", "Nuplane.Observability.ReconciliationTelemetry",
         "Nuplane.Operational.ActivePackageCatalog", "Nuplane.Operational.IOperationalStateContributor", "Nuplane.Operational.OperationalSnapshotProjector",
@@ -208,6 +212,33 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
         var inShell = shell.GetRequiredService<IDataProtectionProvider>().CreateProtector(nameof(HostOwnedServicesAreSharedWithShellsTests));
         Assert.Equal("from the shell", atRoot.Unprotect(inShell.Protect("from the shell")));
         Assert.Equal("from the host", inShell.Unprotect(atRoot.Protect("from the host")));
+    }
+
+    /// <summary>
+    /// A check a shell feature registers with <c>ValidateOnStart</c> runs only where the host composes
+    /// <c>AddShellStartupValidation</c>, and that call is in each host's own entry point (#2331). So a shell of each real
+    /// composition holds the initializer, ordered ahead of every other one the host registers (the probe shell enables no
+    /// feature), and has run the validator of its own container, the host's checks copied into it included, by the time it
+    /// is active.
+    /// </summary>
+    [Theory]
+    [InlineData("Elsa.Foundation.Host")]
+    [InlineData("Elsa.Workbench")]
+    public async Task A_shell_of_the_real_composition_runs_its_startup_validation_ahead_of_every_initializer_the_host_registers(string host)
+    {
+        using var content = ContentRoot.For(host);
+        using var built = BuiltHost.Run(EntryAssembly(host), content.Arguments(durableMembership: false));
+
+        var shell = (await built.Host.Services.GetRequiredService<IShellRegistry>().GetOrActivateAsync(ProbeShell)).ServiceProvider;
+
+        var registrations = shell.GetServices<ShellInitializerRegistration>().OrderBy(registration => registration.Phase).ThenBy(registration => registration.Order).ToArray();
+        Assert.True(
+            registrations.FirstOrDefault()?.InitializerType == typeof(ShellStartupValidation),
+            $"{host} does not compose AddShellStartupValidation ahead of every shell initializer it registers; the first is {registrations.FirstOrDefault()?.InitializerType.Name ?? "none"}.");
+        Assert.True(registrations.Length == 1 || (registrations[0].Phase, registrations[0].Order) != (registrations[1].Phase, registrations[1].Order), "Another initializer shares the startup validation's phase and order.");
+        using var scope = shell.CreateScope();
+        Assert.Single(scope.ServiceProvider.GetServices<IShellInitializer>().OfType<ShellStartupValidation>());
+        Assert.NotNull(shell.GetService<IStartupValidator>());
     }
 
     /// <summary>
