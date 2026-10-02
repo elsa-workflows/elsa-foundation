@@ -145,7 +145,7 @@ public sealed class WorkflowSchedulerPoisonDrainTests
         await fixture.Drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1", maxWorkItems: 1));
 
         var record = Assert.Single(await fixture.PoisonStore.ListAsync("wfexec-1"));
-        Assert.Equal(RuntimeSchedulerPoisonDisposition.Poisoned, record.Disposition);
+        Assert.Equal(RuntimeSchedulerPoisonDisposition.RetryScheduled, record.Disposition);
         Assert.Equal("activity-1", record.Metadata[RuntimeMetadataKeys.ActivityExecutionId]);
         Assert.Equal("node-1", record.Metadata[RuntimeMetadataKeys.ExecutableNodeId]);
         Assert.False(record.Metadata.ContainsKey(RuntimeMetadataKeys.InputFailureCode));

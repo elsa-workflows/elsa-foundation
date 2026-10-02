@@ -51,7 +51,9 @@ public sealed class WriteLineJavaScriptInputEndToEndTests
         await using var harness = NewHarness("wl-failed-input");
 
         var run = await harness.RunAsync(
-            WorkflowExecutionHarness.NewExecutable(WriteLineNode("node-wl", "qaMissingVariable")));
+            WorkflowExecutionHarness.NewExecutable(WriteLineNode("node-wl", "qaMissingVariable")),
+            allowPendingWorkOnTerminalCompletion: false,
+            allowAcceptedButFaulted: true);
 
         var activity = run.State("node-wl");
         Assert.Equal(ActivityExecutionStatus.Scheduled, activity.Status);
