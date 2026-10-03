@@ -618,6 +618,16 @@
           "Elsa.Primitives": "[4.0.0-dev, )"
         }
       },
+      "elsa.expressions.javascript": {
+        "type": "Project",
+        "dependencies": {
+          "Acornima": "[1.6.1, )",
+          "CShells.Abstractions": "[0.0.30-preview.159, )",
+          "Elsa.Events.Core": "[4.0.0-dev, )",
+          "Elsa.Expressions.JavaScript.Core": "[4.0.0-dev, )",
+          "Elsa.Serialization.Core": "[4.0.0-dev, )"
+        }
+      },
       "elsa.expressions.javascript.core": {
         "type": "Project",
         "dependencies": {
@@ -642,6 +652,16 @@
         "type": "Project",
         "dependencies": {
           "Elsa.Events.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.expressions.liquid": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.30-preview.159, )",
+          "Elsa.Events.Core": "[4.0.0-dev, )",
+          "Elsa.Expressions.Core": "[4.0.0-dev, )",
+          "Elsa.Serialization.Core": "[4.0.0-dev, )",
+          "Fluid.Core": "[2.31.0, )"
         }
       },
       "elsa.foundation.identity": {

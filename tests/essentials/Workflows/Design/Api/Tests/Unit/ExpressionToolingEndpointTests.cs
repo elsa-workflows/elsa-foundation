@@ -162,9 +162,108 @@ public sealed class ExpressionToolingEndpointTests
         Assert.Equal("no-store", response.CacheControl);
     }
 
+    [Fact]
+    public async Task Context_endpoint_authorization_fingerprint_ignores_rotating_token_claims_and_claim_order()
+    {
+        var policy = new RecordingAuthorizationPolicy();
+        await using var host = ExpressionToolingHost.Create(new RecordingProvider(), policy);
+        var claims = AuthorizationClaims();
+        var firstPrincipal = CreatePrincipal([.. claims, .. TokenMetadataClaims("token-1", "1000", "2000")]);
+        var reorderedPrincipal = CreatePrincipal([.. claims.Reverse(), .. TokenMetadataClaims("token-1", "1000", "2000")]);
+        var refreshedPrincipal = CreatePrincipal([.. claims, .. TokenMetadataClaims("token-2", "1100", "2100")]);
+
+        var firstResponse = await host.InvokeAsync("POST", ContextRoute, ContextBody, "application/json", firstPrincipal);
+        var reorderedResponse = await host.InvokeAsync("POST", ContextRoute, ContextBody, "application/json", reorderedPrincipal);
+        var refreshedResponse = await host.InvokeAsync("POST", ContextRoute, ContextBody, "application/json", refreshedPrincipal);
+
+        Assert.Equal(StatusCodes.Status200OK, firstResponse.StatusCode);
+        Assert.Equal(StatusCodes.Status200OK, reorderedResponse.StatusCode);
+        Assert.Equal(StatusCodes.Status200OK, refreshedResponse.StatusCode);
+        Assert.Equal(3, policy.Authorizations.Count);
+        var firstAuthorization = policy.Authorizations[0];
+        Assert.False(string.IsNullOrWhiteSpace(firstAuthorization.PermissionRevision));
+        foreach (var authorization in policy.Authorizations)
+        {
+            Assert.Equal(firstAuthorization.PermissionRevision, authorization.PermissionRevision);
+            Assert.Equal(firstAuthorization.PermissionRevision, authorization.PolicyFingerprint);
+        }
+    }
+
+    [Fact]
+    public async Task Context_endpoint_authorization_fingerprint_changes_when_substantive_claims_change()
+    {
+        var policy = new RecordingAuthorizationPolicy();
+        await using var host = ExpressionToolingHost.Create(new RecordingProvider(), policy);
+        var claims = AuthorizationClaims();
+
+        var baselineResponse = await host.InvokeAsync("POST", ContextRoute, ContextBody, "application/json", CreatePrincipal(claims));
+        Assert.Equal(StatusCodes.Status200OK, baselineResponse.StatusCode);
+        var baselineAuthorization = Assert.Single(policy.Authorizations);
+
+        foreach (var (claimType, value) in AuthorizationClaimMutations)
+        {
+            var changedClaims = claims.Select(claim => claim.Type == claimType ? new Claim(claim.Type, value) : claim).ToArray();
+            var response = await host.InvokeAsync("POST", ContextRoute, ContextBody, "application/json", CreatePrincipal(changedClaims));
+
+            Assert.Equal(StatusCodes.Status200OK, response.StatusCode);
+            var changedAuthorization = policy.Authorizations[^1];
+            Assert.NotEqual(baselineAuthorization.PermissionRevision, changedAuthorization.PermissionRevision);
+            Assert.NotEqual(baselineAuthorization.PolicyFingerprint, changedAuthorization.PolicyFingerprint);
+        }
+    }
+
     private const string CompletionBody = "{\"contractVersion\":{\"major\":1,\"minor\":0},\"workflowDraftId\":\"draft\",\"nodeId\":\"node\",\"propertyKey\":\"text\",\"expressionType\":\"JavaScript\",\"documentRevision\":\"document\",\"source\":\"args.symbol500\",\"cursor\":{\"line\":0,\"character\":14}}";
     private const string HoverBody = "{\"contractVersion\":{\"major\":1,\"minor\":0},\"workflowDraftId\":\"draft\",\"nodeId\":\"node\",\"propertyKey\":\"text\",\"expressionType\":\"JavaScript\",\"documentRevision\":\"document\",\"source\":\"args.symbol500\",\"position\":{\"line\":0,\"character\":14}}";
     private const string ValidateBody = "{\"contractVersion\":{\"major\":1,\"minor\":0},\"workflowDraftId\":\"draft\",\"nodeId\":\"node\",\"propertyKey\":\"text\",\"expressionType\":\"JavaScript\",\"documentRevision\":\"document\",\"source\":\"args.symbol500\"}";
+    private const string ContextRoute = "/design/workflows/expression-tooling/context";
+    private const string ContextBody = "{\"contractVersion\":{\"major\":1,\"minor\":0},\"workflowDraftId\":\"draft\",\"nodeId\":\"node\",\"propertyKey\":\"text\",\"expressionType\":\"JavaScript\",\"documentRevision\":\"document\"}";
+
+    private static Claim[] AuthorizationClaims() =>
+    [
+        new("sub", "author-1"),
+        new("role", "editor"),
+        new("permission", "workflow.read"),
+        new("iss", "https://identity.example/"),
+        new("aud", "elsa"),
+        new("tenant_id", "tenant-1"),
+        new("security_stamp", "stamp-1"),
+        new("custom_policy", "policy-1"),
+        new("oi_scp", "workflow.read"),
+        new("oi_aud", "elsa"),
+        new("oi_prst", "principal-1"),
+        new("oi_au_id", "authorization-1"),
+        new("oi_tkn_typ", "access_token")
+    ];
+
+    private static Claim[] TokenMetadataClaims(string tokenId, string issuedAt, string expiresAt) =>
+    [
+        new("jti", tokenId),
+        new("iat", issuedAt),
+        new("nbf", issuedAt),
+        new("exp", expiresAt),
+        new("oi_tkn_id", tokenId),
+        new("oi_crt_dt", issuedAt),
+        new("oi_exp_dt", expiresAt)
+    ];
+
+    private static readonly (string ClaimType, string Value)[] AuthorizationClaimMutations =
+    [
+        ("sub", "author-2"),
+        ("role", "admin"),
+        ("permission", "workflow.write"),
+        ("iss", "https://identity.example/other"),
+        ("aud", "other-client"),
+        ("tenant_id", "tenant-2"),
+        ("security_stamp", "stamp-2"),
+        ("custom_policy", "policy-2"),
+        ("oi_scp", "workflow.write"),
+        ("oi_aud", "other-client"),
+        ("oi_prst", "principal-2"),
+        ("oi_au_id", "authorization-2"),
+        ("oi_tkn_typ", "other-token-type")
+    ];
+
+    private static ClaimsPrincipal CreatePrincipal(IEnumerable<Claim> claims) => new(new ClaimsIdentity(claims, "test"));
 
     private static string ReadState(string json)
     {
@@ -187,7 +286,12 @@ public sealed class ExpressionToolingEndpointTests
             return new(services);
         }
 
-        public async Task<Response> InvokeAsync(string method, string path, string? body, string? contentType)
+        public async Task<Response> InvokeAsync(
+            string method,
+            string path,
+            string? body,
+            string? contentType,
+            ClaimsPrincipal? user = null)
         {
             var endpoint = WorkflowDesignEndpointTestSupport.MapEndpoints().Single(candidate =>
                 string.Equals(candidate.RoutePattern.RawText, path.TrimStart('/'), StringComparison.Ordinal));
@@ -197,7 +301,7 @@ public sealed class ExpressionToolingEndpointTests
             context.Request.ContentType = contentType;
             context.Request.Body = new MemoryStream(body is null ? [] : Encoding.UTF8.GetBytes(body));
             context.Response.Body = new MemoryStream();
-            context.User = new ClaimsPrincipal(new ClaimsIdentity([new Claim("sub", "author-1")], "test"));
+            context.User = user ?? CreatePrincipal([new("sub", "author-1")]);
             await endpoint.RequestDelegate!(context);
             context.Response.Body.Position = 0;
             using var reader = new StreamReader(context.Response.Body, leaveOpen: true);
@@ -247,6 +351,17 @@ public sealed class ExpressionToolingEndpointTests
     {
         public ValueTask<ExpressionAuthoringAuthorization> AuthorizeAsync(ExpressionAuthoringAuthorization caller, CancellationToken cancellationToken) =>
             ValueTask.FromResult(caller with { IsAuthorized = true, PolicyFingerprint = "policy" });
+    }
+
+    private sealed class RecordingAuthorizationPolicy : IExpressionAuthoringAuthorizationPolicy
+    {
+        public List<ExpressionAuthoringAuthorization> Authorizations { get; } = [];
+
+        public ValueTask<ExpressionAuthoringAuthorization> AuthorizeAsync(ExpressionAuthoringAuthorization caller, CancellationToken cancellationToken)
+        {
+            Authorizations.Add(caller);
+            return ValueTask.FromResult(caller with { IsAuthorized = true });
+        }
     }
 
     private sealed class ProviderResolver(RecordingProvider? provider) : IExpressionToolingProviderResolver
