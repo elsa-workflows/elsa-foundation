@@ -7,6 +7,10 @@ using Elsa.Expressions.Api;
 using Elsa.Expressions.Api.Capabilities;
 using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Core.Models;
+using Elsa.Expressions;
+using Elsa.Expressions.JavaScript;
+using Elsa.Expressions.Liquid;
+using Elsa.Expressions.Services;
 using Elsa.Workflows.Design.Api;
 using Elsa.Workflows.Design.Api.Capabilities;
 using Elsa.Workflows.Design.Core.Contracts;
@@ -93,6 +97,11 @@ public sealed class DomainApiCapabilityRegistrationTests
                 expressionTooling: context,
                 expressionToolingProviders: [provider]).GetCapabilitiesAsync(),
             declaration => declaration.CapabilityId == "expressions.tooling.v1");
+        Assert.DoesNotContain(
+            await new WorkflowDesignOperationalCapabilitySource(
+                expressionTooling: context,
+                expressionToolingResolver: new ExpressionToolingProviderResolver([])).GetCapabilitiesAsync(),
+            declaration => declaration.CapabilityId == "expressions.tooling.v1");
 
         var tooling = Assert.Single((await new WorkflowDesignOperationalCapabilitySource(
             expressionTooling: context,
@@ -102,6 +111,25 @@ public sealed class DomainApiCapabilityRegistrationTests
         Assert.Equal(
             ["expression-tooling-completions", "expression-tooling-context", "expression-tooling-descriptors", "expression-tooling-hover", "expression-tooling-symbols", "expression-tooling-validate"],
             tooling.Links.Select(link => link.Rel).Order(StringComparer.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("JavaScript")]
+    [InlineData("Liquid")]
+    public void Each_expression_language_feature_composes_its_tooling_provider_independently(string expressionType)
+    {
+        var services = new ServiceCollection();
+        new ExpressionsFeature().ConfigureServices(services);
+        if (expressionType == "JavaScript")
+            new JavaScriptFeature().ConfigureServices(services);
+        else
+            new LiquidExpressionsFeature().ConfigureServices(services);
+
+        using var provider = services.BuildServiceProvider();
+        var toolingProvider = Assert.Single(provider.GetServices<IExpressionToolingProvider>());
+
+        Assert.Equal(expressionType, toolingProvider.ExpressionType);
+        Assert.Same(toolingProvider, provider.GetRequiredService<IExpressionToolingProviderResolver>().Find(expressionType));
     }
 
     [Fact]
