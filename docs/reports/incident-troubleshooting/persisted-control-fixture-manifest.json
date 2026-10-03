@@ -1,0 +1,71 @@
+{
+  "setId": "backend-v3-20261003",
+  "expectedPersistenceScope": "default",
+  "expectedRuntimeDbDataSource": "/tmp/incident-troubleshooting-acceptance-20261003/backend-v3/elsa.db",
+  "protectedRuntimeProofExecutionIds": [
+    "143KJ6sPp9N",
+    "143KJCCZt0a",
+    "143KJCflLWi",
+    "143KZBAevSx",
+    "143KnHqppaF"
+  ],
+  "cases": [
+    {
+      "name": "resolved-nested-writer",
+      "kind": "Resolved",
+      "workflowExecutionId": "143KuRW12R5",
+      "expectedPinnedArtifactId": "artifact-f441883c0567",
+      "activityExecutionId": "143KuReo3vH",
+      "expectedExecutableNodeId": "nested-writer",
+      "expectedAuthoredActivityId": "nested-writer",
+      "expectedActivityType": "Elsa.Activities.Primitives.Activities.WriteLine",
+      "expectedActivityTypeVersion": "1.0.0+afcf8c7da851e964b7230551bf64c253b9ef6ab6",
+      "expectedParentActivityExecutionId": "143KuRdJios",
+      "expectedParentExecutableNodeId": "nested-sequence",
+      "expectedParentActivityType": "Elsa.Activities.Sequence.Activities.Sequence",
+      "expectedGrandparentActivityExecutionId": "143KuRZ9HrX"
+    },
+    {
+      "name": "open-nonblocking-nested-writer",
+      "kind": "OpenNonblocking",
+      "workflowExecutionId": "143KuSJuVeK",
+      "expectedPinnedArtifactId": "artifact-f441883c0567",
+      "activityExecutionId": "143KuSPEpZf",
+      "expectedExecutableNodeId": "nested-writer",
+      "expectedAuthoredActivityId": "nested-writer",
+      "expectedActivityType": "Elsa.Activities.Primitives.Activities.WriteLine",
+      "expectedActivityTypeVersion": "1.0.0+afcf8c7da851e964b7230551bf64c253b9ef6ab6",
+      "expectedParentActivityExecutionId": "143KuSNvKfq",
+      "expectedParentExecutableNodeId": "nested-sequence",
+      "expectedParentActivityType": "Elsa.Activities.Sequence.Activities.Sequence",
+      "expectedGrandparentActivityExecutionId": "143KuSM9f3I"
+    },
+    {
+      "name": "run-level-unassociated",
+      "kind": "RunLevelUnassociated",
+      "workflowExecutionId": "143KuSsxwwN",
+      "expectedPinnedArtifactId": "artifact-f441883c0567"
+    },
+    {
+      "name": "retry-scheduled-no-active-incident",
+      "kind": "RetryScheduledNoActive",
+      "workflowExecutionId": "143KuTRWv2b",
+      "expectedPinnedArtifactId": "artifact-f441883c0567"
+    },
+    {
+      "name": "repeated-node-historical-incident",
+      "kind": "OpenNonblocking",
+      "workflowExecutionId": "143LLQjGk4w",
+      "expectedPinnedArtifactId": "artifact-c92dd0ed7357",
+      "activityExecutionId": "143LLQmiKjp",
+      "expectedExecutableNodeId": "repeated-writer",
+      "expectedAuthoredActivityId": "repeated-writer",
+      "expectedActivityType": "Elsa.Activities.Primitives.Activities.WriteLine",
+      "expectedActivityTypeVersion": "1.0.0+afcf8c7da851e964b7230551bf64c253b9ef6ab6",
+      "expectedParentActivityExecutionId": "143LLQk82jl",
+      "expectedParentExecutableNodeId": "for-root",
+      "expectedParentActivityType": "Elsa.Activities.For.Activities.For",
+      "requireRepeatedExecutableNode": true
+    }
+  ]
+}
