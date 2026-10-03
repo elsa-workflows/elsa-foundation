@@ -10,12 +10,14 @@ The passing evidence below is historical baseline evidence. It does not prove th
 
 ### Program #2310 implementation checkpoint, 2026-10-03
 
-On the uncommitted `claude/2351-expression-normal-host` implementation over local planning/map revision `aec970fb2`:
+On `claude/2351-expression-normal-host`, with draft PR #2373 stacked on the Program #2310 planning branch:
 
 - The filtered real-Workbench run built successfully and executed two cases: the missing-Liquid-provider case passed; the persisted-draft JavaScript/Liquid case timed out at the existing ten-minute readiness limit before any test-body assertions.
 - An isolated diagnostic rerun of the persisted-draft case also timed out before its test body. A direct readiness request returned HTTP 503 with `status: starting` and `code: shell_activation_pending`; shared-machine load remained above 700. This proves an unfinished warmup, not a passing expression journey or a diagnosed expression regression.
-- The fixture now resolves the WriteLine input reference from the live activity contract as well as the ReadLine output metadata. Those latest fixture edits still require a source rebuild and execution.
-- Focused architecture composition checks and generated-map checks remain pending. `git diff --check` passed.
+- The fixture resolves the WriteLine input reference from the live activity contract as well as the ReadLine output metadata. That version rebuilt successfully. Subsequent review refinements assert the exact EF design feature and `elsa.db`, plus consistent nonempty document/context revisions across all four tooling responses; those latest assertions still require rebuilt execution.
+- The scoped `DomainApiCapabilityRegistrationTests` Architecture suite passed all 11 tests, including independent JavaScript/Liquid composition and zero-provider capability omission.
+- Current-head manual CI exposed stale Architecture and two inherited Modularity test-project locks. The Architecture lock was restored locally; the two Modularity locks were reconciled to the already-restored Workbench dependency entries while locked-restore confirmation remained queued. This is not a locked-restore pass.
+- The manual Maps run identified five stale generated files. Deliberate regeneration changed six map files, including the manifest; the generated findings reports were reviewed and unchanged. The final local freshness check passed: `Generated maps still describe the tree.` `git diff --check` passed.
 
 T026-T031 remain open. The coordinated Studio browser suite collects its four normal-host scenarios but has not yet produced live passing evidence.
 

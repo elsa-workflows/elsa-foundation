@@ -20,6 +20,7 @@ public sealed class ExpressionToolingHostEvidenceTests
         var catalog = (await workbench.ReadFeatureCatalogAsync()).ToDictionary(feature => feature.Id, StringComparer.Ordinal);
         Assert.True(catalog.TryGetValue("JavaScriptExpressions", out var javascript) && javascript.Runs);
         Assert.True(catalog.TryGetValue("Liquid", out var liquid) && liquid.Runs);
+        Assert.True(catalog.TryGetValue("WorkflowsDesignEntityFrameworkCore", out var designPersistence) && designPersistence.Runs);
 
         using var clientHandler = new HttpClientHandler { UseCookies = true };
         using var client = new HttpClient(clientHandler) { BaseAddress = workbench.Client.BaseAddress };
@@ -87,7 +88,7 @@ public sealed class ExpressionToolingHostEvidenceTests
         using var reopened = JsonDocument.Parse(await reopenedResponse.Content.ReadAsStringAsync());
         Assert.Equal(draftId, reopened.RootElement.GetProperty("id").GetString());
         Assert.Equal("target", reopened.RootElement.GetProperty("state").GetProperty("rootActivity").GetProperty("structure").GetProperty("payload").GetProperty("activities")[1].GetProperty("nodeId").GetString());
-        Assert.True(File.Exists(Path.Combine(workbench.ContentRoot, "authoring.db")) || Directory.EnumerateFiles(workbench.ContentRoot, "*.db").Any(), "The real Workbench persistence resource did not create a SQLite database.");
+        Assert.True(File.Exists(Path.Combine(workbench.ContentRoot, "elsa.db")), "The real Workbench EF design persistence resource did not create elsa.db.");
 
         using (var anonymous = new HttpClient { BaseAddress = workbench.Client.BaseAddress })
         using (var denied = await anonymous.PostAsJsonAsync("/design/workflows/expression-tooling/context", ContextBody(draftId, "JavaScript", textInput.ReferenceKey)))
@@ -101,33 +102,41 @@ public sealed class ExpressionToolingHostEvidenceTests
             var result = contextDocument.RootElement.GetProperty("result");
             Assert.Equal(0, result.GetProperty("state").GetInt32());
             var payload = result.GetProperty("payload");
+            var contextRevision = AssertRevisionEnvelope(result);
+            Assert.Equal("persisted-draft", payload.GetProperty("document").GetProperty("documentRevision").GetString());
+            Assert.Equal(contextRevision, payload.GetProperty("contextRevision").GetString());
             var symbols = payload.GetProperty("rootSymbols").EnumerateArray().ToArray();
             Assert.Contains(symbols, symbol => symbol.GetProperty("name").GetString() == "customerName");
             Assert.Contains(symbols, symbol => symbol.GetProperty("name").GetString() == "globalLabel");
             Assert.Contains(symbols, symbol => symbol.GetProperty("name").GetString() == "scopedLabel");
             Assert.Contains(symbols, symbol => symbol.GetProperty("name").GetString() == $"predecessor.{output.Name}");
 
-            var contextRevision = payload.GetProperty("contextRevision").GetString();
             var completionSource = syntax == "JavaScript" ? "args.predecessor." : "predecessor.";
             using var completionResponse = await client.PostAsJsonAsync("/design/workflows/expression-tooling/completions", SourceBody(draftId, syntax, textInput.ReferenceKey, completionSource, contextRevision, completionSource.Length));
             Assert.Equal(HttpStatusCode.OK, completionResponse.StatusCode);
             using var completionDocument = JsonDocument.Parse(await completionResponse.Content.ReadAsStringAsync());
-            Assert.Equal(0, completionDocument.RootElement.GetProperty("result").GetProperty("state").GetInt32());
-            Assert.Contains(completionDocument.RootElement.GetProperty("result").GetProperty("payload").GetProperty("items").EnumerateArray(), item => item.GetProperty("label").GetString() == output.Name);
+            var completionResult = completionDocument.RootElement.GetProperty("result");
+            Assert.Equal(0, completionResult.GetProperty("state").GetInt32());
+            AssertRevisionEnvelope(completionResult, contextRevision);
+            Assert.Contains(completionResult.GetProperty("payload").GetProperty("items").EnumerateArray(), item => item.GetProperty("label").GetString() == output.Name);
 
             var hoverSource = syntax == "JavaScript" ? $"args.predecessor.{output.Name}" : $"predecessor.{output.Name}";
             using var hoverResponse = await client.PostAsJsonAsync("/design/workflows/expression-tooling/hover", SourceBody(draftId, syntax, textInput.ReferenceKey, hoverSource, contextRevision, hoverSource.Length, hover: true));
             Assert.Equal(HttpStatusCode.OK, hoverResponse.StatusCode);
             using var hoverDocument = JsonDocument.Parse(await hoverResponse.Content.ReadAsStringAsync());
-            Assert.Equal(0, hoverDocument.RootElement.GetProperty("result").GetProperty("state").GetInt32());
-            Assert.Contains("predecessor.", hoverDocument.RootElement.GetProperty("result").GetProperty("payload").GetProperty("contents").GetString(), StringComparison.Ordinal);
+            var hoverResult = hoverDocument.RootElement.GetProperty("result");
+            Assert.Equal(0, hoverResult.GetProperty("state").GetInt32());
+            AssertRevisionEnvelope(hoverResult, contextRevision);
+            Assert.Contains("predecessor.", hoverResult.GetProperty("payload").GetProperty("contents").GetString(), StringComparison.Ordinal);
 
             var invalid = syntax == "JavaScript" ? "if (" : "{{ customerName";
             using var validationResponse = await client.PostAsJsonAsync("/design/workflows/expression-tooling/validate", SourceBody(draftId, syntax, textInput.ReferenceKey, invalid, contextRevision));
             Assert.Equal(HttpStatusCode.OK, validationResponse.StatusCode);
             using var validationDocument = JsonDocument.Parse(await validationResponse.Content.ReadAsStringAsync());
-            Assert.Equal(0, validationDocument.RootElement.GetProperty("result").GetProperty("state").GetInt32());
-            Assert.NotEmpty(validationDocument.RootElement.GetProperty("result").GetProperty("payload").GetProperty("diagnostics").EnumerateArray());
+            var validationResult = validationDocument.RootElement.GetProperty("result");
+            Assert.Equal(0, validationResult.GetProperty("state").GetInt32());
+            AssertRevisionEnvelope(validationResult, contextRevision);
+            Assert.NotEmpty(validationResult.GetProperty("payload").GetProperty("diagnostics").EnumerateArray());
         }
     }
 
@@ -204,6 +213,16 @@ public sealed class ExpressionToolingHostEvidenceTests
         cursor = hover ? null : new { line = 0, character = cursor },
         position = hover ? new { line = 0, character = cursor } : null
     };
+
+    private static string AssertRevisionEnvelope(JsonElement outcome, string? expectedContextRevision = null)
+    {
+        Assert.Equal("persisted-draft", outcome.GetProperty("documentRevision").GetString());
+        var contextRevision = outcome.GetProperty("contextRevision").GetString();
+        Assert.False(string.IsNullOrWhiteSpace(contextRevision));
+        if (expectedContextRevision is not null)
+            Assert.Equal(expectedContextRevision, contextRevision);
+        return contextRevision!;
+    }
 
     private sealed record ActivityVersion(string VersionId, IReadOnlyList<ActivityInput> ContractInputs, IReadOnlyList<ActivityOutput> ContractOutputs);
     private sealed record ActivityInput(string ReferenceKey, string Name, string Type);
