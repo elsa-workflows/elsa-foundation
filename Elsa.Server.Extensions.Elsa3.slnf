@@ -24,6 +24,7 @@
       "src/essentials/Workflows/Design/Persistence/Core/Elsa.Workflows.Design.Persistence.Core.csproj",
       "src/essentials/Workflows/Design/Persistence/EntityFrameworkCore/Elsa.Workflows.Design.Persistence.EntityFrameworkCore.csproj",
       "src/essentials/Workflows/Design/Validations/Core/Elsa.Workflows.Design.Validations.Core.csproj",
+      "src/essentials/Workflows/Design/Validations/Elsa.Workflows.Design.Validations.csproj",
       "src/essentials/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj",
       "src/extensions/Elsa3/src/Activities/Design/Import/Elsa3.Activities.Design.Import.csproj",
       "src/extensions/Elsa3/src/Activities/Design/Import/Persistence/EntityFrameworkCore/Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.csproj",
