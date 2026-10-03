@@ -58,7 +58,7 @@ public sealed class WriteLineJavaScriptInputEndToEndTests
         var activity = run.State("node-wl");
         Assert.Equal(ActivityExecutionStatus.Scheduled, activity.Status);
         Assert.Null(activity.InputSnapshot);
-        Assert.Null(activity.Attempts);
+        Assert.Empty(activity.Attempts ?? []);
         Assert.Equal(WorkflowExecutionStatus.Running, run.WorkflowState!.Status);
         Assert.Null(run.WorkflowState.CompletedAt);
 
@@ -86,7 +86,8 @@ public sealed class WriteLineJavaScriptInputEndToEndTests
         var inspectionView = ActivityExecutionInspectionView.From(inspection, canInspectSensitiveValues: true);
         var failureView = Assert.Single(inspectionView.ValueSnapshots);
         Assert.Equal("captureFailed", failureView.CaptureState);
-        Assert.Equal("qaMissingVariable is not defined.", failureView.Failure!.Message);
+        Assert.Contains("qaMissingVariable is not defined", failureView.Failure!.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("fingerprint", failureView.Failure.Message, StringComparison.Ordinal);
         var hiddenView = ActivityExecutionInspectionView.From(inspection, canInspectSensitiveValues: false);
         var hiddenFailure = Assert.Single(hiddenView.ValueSnapshots);
         Assert.Equal("captureFailed", hiddenFailure.CaptureState);

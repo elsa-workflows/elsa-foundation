@@ -116,7 +116,8 @@ public sealed class PoisonedSchedulerWorkIncidentObserverTests
 
         var withheldView = ActivityExecutionInspectionView.From(projection, canInspectSensitiveValues: false);
         var withheldFailure = Assert.Single(withheldView.ValueSnapshots);
-        Assert.Equal("unavailable", withheldFailure.CaptureState);
+        Assert.Equal("captureFailed", withheldFailure.CaptureState);
+        Assert.Equal("unavailable", withheldFailure.AccessState);
         Assert.Null(withheldFailure.Failure);
 
         var successfulNoValue = failure with { EvaluationId = "successful-evaluation", Failure = null };

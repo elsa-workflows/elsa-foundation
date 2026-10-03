@@ -133,6 +133,13 @@ public class ActivityExecutionInspectionProjectionTests
 
         Assert.Equal("captureFailed", view.CaptureState);
         Assert.Equal("unavailable", view.AccessState);
+        Assert.Null(view.Failure);
+        Assert.Null(view.Payload);
+        Assert.Null(view.Snapshot);
+
+        var authorizedView = ActivityExecutionInspectionValueSnapshotView.From(snapshot, canInspectSensitiveValues: true);
+        Assert.Equal("captureFailed", authorizedView.CaptureState);
+        Assert.Equal("InputEvaluationFailed", authorizedView.Failure!.Code);
     }
 
     [Fact]
