@@ -26,6 +26,7 @@ public sealed class StrippedAmbientCapabilityDiagnosticTests
     [InlineData("Math.random()", "Math.random")]
     [InlineData("\"multi \" +\n    Math.random()", "Math.random")]
     [InlineData("Math.abs(1) + Math.random()", "Math.random")]
+    [InlineData("(() => { globalThis = { Date: {} }; return typeof globalThis.Date?.[Math.random()]; })()", "Math.random")]
     public async Task Reaching_for_a_stripped_ambient_capability_yields_an_actionable_error(string source, string capability)
     {
         var exception = await Assert.ThrowsAsync<JavaScriptBindingEvaluationException>(
@@ -62,7 +63,16 @@ public sealed class StrippedAmbientCapabilityDiagnosticTests
     [Theory]
     [InlineData("typeof Math?.random")]
     [InlineData("typeof globalThis?.Math.random")]
-    public async Task Optional_typeof_probes_for_available_roots_still_evaluate(string source)
+    [InlineData("typeof Date?.now")]
+    [InlineData("typeof globalThis?.Date?.now")]
+    [InlineData("typeof globalThis.Date?.now")]
+    [InlineData("typeof Date?.()")]
+    [InlineData("typeof Date?.now()")]
+    [InlineData("typeof Date?.now(Math.random())")]
+    [InlineData("typeof Date?.[Math.random()]")]
+    [InlineData("typeof globalThis.Date?.[Math.random()]")]
+    [InlineData("typeof Math.random?.(Date.now())")]
+    public async Task Optional_typeof_probes_short_circuit_without_ambient_access(string source)
     {
         var result = await EvaluateAsync(source);
 
